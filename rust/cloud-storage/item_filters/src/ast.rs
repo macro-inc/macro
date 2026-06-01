@@ -2,12 +2,13 @@
 //! This is used to construct a strictly typed ast for the input filters, allowing consumers to have a logical represenation of the required operations
 
 use crate::{
-    CallFilters, ChannelFilters, ChatFilters, DocumentFilters, EmailFilters, EntityFilters,
-    ForeignEntityFilters, ProjectFilters, PropertyFilter,
+    CallFilters, ChannelFilters, ChatFilters, CrmCompanyFilters, DocumentFilters, EmailFilters,
+    EntityFilters, ForeignEntityFilters, ProjectFilters, PropertyFilter,
     ast::{
         call::CallLiteral,
         channel::{ChannelLiteral, ChannelTypeFilter},
         chat::{ChatLiteral, ChatRole},
+        crm_company::CrmCompanyLiteral,
         email::EmailLiteral,
         foreign_entity::ForeignEntityLiteral,
         project::ProjectLiteral,
@@ -27,6 +28,8 @@ pub mod call;
 pub mod channel;
 /// contains the ast literal value for chat
 pub mod chat;
+/// contains the ast literal value for crm companies
+pub mod crm_company;
 /// contains the date comparison literal type
 pub mod date;
 /// contains the ast literal value for documents
@@ -196,6 +199,10 @@ pub struct EntityFilterAst {
     #[serde(default, rename = "callf")]
     #[cfg_attr(feature = "schema", schema(value_type = serde_json::Value))]
     pub call_filter: LiteralTree<CallLiteral>,
+    /// the filters that should be applied to the crm_company entity
+    #[serde(default, rename = "ccf")]
+    #[cfg_attr(feature = "schema", schema(value_type = serde_json::Value))]
+    pub crm_company_filter: LiteralTree<CrmCompanyLiteral>,
     /// the filters that should be applied to foreign entity records
     #[serde(default, rename = "fef")]
     #[cfg_attr(feature = "schema", schema(value_type = serde_json::Value))]
@@ -235,6 +242,8 @@ impl EntityFilterAst {
             channel_filter: ChannelFilters::expand_ast(entity_filter.channel_filters)?
                 .map(Arc::new),
             call_filter: CallFilters::expand_ast(entity_filter.call_filters)?.map(Arc::new),
+            crm_company_filter: CrmCompanyFilters::expand_ast(entity_filter.crm_company_filters)?
+                .map(Arc::new),
             foreign_entity_filter: ForeignEntityFilters::expand_ast(
                 entity_filter.foreign_entity_filters,
             )?
@@ -254,6 +263,7 @@ impl EntityFilterAst {
             email_filter: EmailFilterAst::default(),
             channel_filter: None,
             call_filter: None,
+            crm_company_filter: None,
             foreign_entity_filter: None,
             properties_filter: None,
         }
@@ -269,6 +279,7 @@ impl IsEmpty for EntityFilterAst {
             email_filter,
             channel_filter,
             call_filter,
+            crm_company_filter,
             foreign_entity_filter,
             properties_filter,
         } = self;
@@ -278,6 +289,7 @@ impl IsEmpty for EntityFilterAst {
             && email_filter.is_empty()
             && channel_filter.is_none()
             && call_filter.is_none()
+            && crm_company_filter.is_none()
             && foreign_entity_filter.is_none()
             && properties_filter.is_none()
     }

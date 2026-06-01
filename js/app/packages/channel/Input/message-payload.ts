@@ -1,8 +1,8 @@
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
 import { STATIC_IMAGE, STATIC_VIDEO } from '@core/store/cacheChannelInput';
-import type { PostMessageRequest } from '@service-comms/generated/models';
-import type { NewAttachment } from '@service-comms/generated/models/newAttachment';
-import type { SimpleMention } from '@service-comms/generated/models/simpleMention';
+import type { NewChannelAttachment as NewAttachment } from '@service-storage/generated/schemas/newChannelAttachment';
+import type { PostMessageRequest } from '@service-storage/generated/schemas/postMessageRequest';
+import type { SimpleMention } from '@service-storage/generated/schemas/simpleMention';
 import { match } from 'ts-pattern';
 import type { InputAttachmentData, InputSnapshot } from './types';
 

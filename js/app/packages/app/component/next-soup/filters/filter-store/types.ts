@@ -21,6 +21,7 @@ export type ArrayFieldFilters = {
   projectId?: string[];
   documentOwnerId?: string[];
   threadId?: string[];
+  emailLinkId?: string[];
   emailProjectId?: string[];
   emailSender?: string[];
   channelId?: string[];
@@ -35,6 +36,7 @@ export type ArrayFieldFilters = {
   callChannelId?: string[];
   callSpeakerId?: string[];
   foreignEntityRecordId?: string[];
+  crmCompanyId?: string[];
   properties?: PropertyFilter[];
 };
 

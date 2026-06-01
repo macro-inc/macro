@@ -20,34 +20,36 @@ function SidebarNavContent(props: LessonContentProps) {
   });
 
   return (
-    <div class="flex flex-col gap-3 onboarding-stagger">
-      <p>Use the sidebar to quickly jump between views.</p>
-      <p>
-        Try navigating to <strong>Emails</strong>.
-      </p>
-      <div class="mt-2">
+    <div class="flex flex-col gap-8 onboarding-stagger">
+      <div class="mt-2 text-ink-muted text-base">
+        <p>Use the sidebar to quickly jump between views.</p>
+        <p>
+          Try navigating to <strong>Emails</strong>.
+        </p>
+      </div>
+      <div class="flex flex-col gap-2">
         <HotkeyCallout
           keys={['G', 'E']}
           separator="then"
           label=""
           completed={done()}
         />
+        <div class="flex items-center gap-3 text-sm text-ink/40">
+          <div class="h-px w-8 bg-edge-muted" />
+          or
+          <div class="h-px flex-1 bg-edge-muted" />
+        </div>
+        <ClickCallout
+          icon={AnimatedEmailIcon}
+          label="in the sidebar"
+          completed={done()}
+        />
       </div>
-      <div class="flex items-center gap-3 text-sm text-ink/40">
-        <div class="h-px w-8 bg-edge-muted" />
-        or
-        <div class="h-px flex-1 bg-edge-muted" />
-      </div>
-      <ClickCallout
-        icon={AnimatedEmailIcon}
-        label="in the sidebar"
-        completed={done()}
-      />
     </div>
   );
 }
 
-function SidebarNavDemo() {
+function SidebarNavDemo(props: LessonContentProps) {
   const soup = createSoupState({ wrapNavigation: true });
 
   createEffect(() => {
@@ -59,7 +61,7 @@ function SidebarNavDemo() {
   });
 
   return (
-    <MockAppChrome highlightId="mail">
+    <MockAppChrome highlightId="mail" scopeId={props.scopeId}>
       <OnboardingEntityList soup={soup} />
     </MockAppChrome>
   );

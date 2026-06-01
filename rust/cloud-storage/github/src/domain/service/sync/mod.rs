@@ -9,7 +9,8 @@ mod handle_pr;
 
 use crate::domain::{
     models::{
-        EnrichedGithubPullRequest, GithubError, GithubInstallationAccessToken, GithubKey,
+        EnrichedGithubPullRequest, GithubAppInstallationSource, GithubError,
+        GithubInstallationAccessToken, GithubKey, GithubPullRequestDetails,
         GithubPullRequestStatus, GithubWebhookEventType, MacroTaskId, TeamTaskReference,
         ValidatedGithubWebhookEvent,
     },
@@ -111,7 +112,7 @@ impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient, F: ForeignEntit
         ) {
             (Some(i), Some(o), Some(r), Some(p)) => (i, o, r, p),
             _ => {
-                tracing::warn!("missing PR metadata, cannot post comments");
+                tracing::warn!("missing PR metadata, cannot access GitHub pull request");
                 return None;
             }
         };
@@ -140,7 +141,7 @@ impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient, F: ForeignEntit
             Err(e) => {
                 tracing::error!(
                     error=?e,
-                    "failed to generate installation access token for PR comment"
+                    "failed to generate installation access token for GitHub pull request"
                 );
                 None
             }
@@ -192,7 +193,105 @@ impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient, F: ForeignEntit
             deletions: pull_request
                 .and_then(|pr| pr.get("deletions"))
                 .and_then(|value| value.as_u64()),
+            comments: None,
+            checks: None,
         })
+    }
+
+    /// Build pull request metadata from live GitHub details when possible,
+    /// falling back to the webhook payload if the live request fails.
+    async fn enriched_pull_request_metadata(
+        &self,
+        event: &ValidatedGithubWebhookEvent,
+    ) -> Option<EnrichedGithubPullRequest> {
+        let fallback = Self::enriched_pull_request_from_event(event)?;
+        let requires_live_metadata = event.parsed_event_type() == GithubWebhookEventType::CheckRun;
+        let Some(pr_meta) = self.acquire_pr_meta(event).await else {
+            return (!requires_live_metadata).then_some(fallback);
+        };
+
+        match self
+            .client
+            .get_pull_request_details(
+                &pr_meta.token.token,
+                &pr_meta.owner,
+                &pr_meta.repo,
+                pr_meta.pull_number,
+            )
+            .await
+        {
+            Ok(details) => Some(Self::enriched_pull_request_from_details(fallback, details)),
+            Err(error) if requires_live_metadata => {
+                tracing::warn!(
+                    error=?error,
+                    owner=%pr_meta.owner,
+                    repo=%pr_meta.repo,
+                    pull_number=pr_meta.pull_number,
+                    "failed to fetch live PR metadata for check_run event"
+                );
+                None
+            }
+            Err(error) => {
+                tracing::warn!(
+                    error=?error,
+                    owner=%pr_meta.owner,
+                    repo=%pr_meta.repo,
+                    pull_number=pr_meta.pull_number,
+                    "failed to fetch live PR metadata, falling back to webhook payload"
+                );
+                Some(fallback)
+            }
+        }
+    }
+
+    /// Build enriched pull request metadata from live GitHub pull request details.
+    fn enriched_pull_request_from_details(
+        fallback: EnrichedGithubPullRequest,
+        details: GithubPullRequestDetails,
+    ) -> EnrichedGithubPullRequest {
+        let status = details.status();
+
+        EnrichedGithubPullRequest {
+            github_key: fallback.github_key,
+            owner: fallback.owner,
+            repo: fallback.repo,
+            number: fallback.number,
+            url: fallback.url,
+            display_name: fallback.display_name,
+            name: Some(details.title),
+            status: Some(status),
+            additions: Some(details.additions),
+            deletions: Some(details.deletions),
+            comments: details.comments,
+            checks: details.checks,
+        }
+    }
+
+    /// Preserve existing metadata arrays when a partial refresh omits them.
+    fn metadata_with_preserved_partial_arrays(
+        mut metadata: serde_json::Value,
+        existing_metadata: Option<&serde_json::Value>,
+    ) -> serde_json::Value {
+        let Some(existing_object) = existing_metadata.and_then(|value| value.as_object()) else {
+            return metadata;
+        };
+        let Some(metadata_object) = metadata.as_object_mut() else {
+            return metadata;
+        };
+
+        for field in ["comments", "checks"] {
+            if metadata_object.contains_key(field) {
+                continue;
+            }
+
+            if let Some(existing_value) = existing_object.get(field)
+                && existing_value.is_array()
+            {
+                metadata_object.insert(field.to_string(), existing_value.clone());
+            }
+        }
+
+        metadata
     }
 
     /// Derive a normalized pull request status from the webhook payload.
@@ -218,6 +317,41 @@ impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient, F: ForeignEntit
         }
 
         GithubPullRequestStatus::Open
+    }
+
+    /// Backfill foreign entity rows for open pull requests visible to a GitHub App installation.
+    #[tracing::instrument(skip(self, stored_for_sources), err)]
+    async fn backfill_open_pull_request_foreign_entities(
+        &self,
+        installation_id: u64,
+        stored_for_sources: &[GithubAppInstallationSource],
+    ) -> Result<(), GithubError> {
+        if stored_for_sources.is_empty() {
+            tracing::trace!(
+                installation_id,
+                "no GitHub App installation sources found for PR backfill"
+            );
+            return Ok(());
+        }
+
+        let token = self
+            .generate_installation_access_token(installation_id)
+            .await?;
+        let pull_requests = self.client.list_open_pull_requests(&token.token).await?;
+
+        tracing::info!(
+            installation_id,
+            pull_request_count = pull_requests.len(),
+            source_count = stored_for_sources.len(),
+            "backfilling open pull request foreign entities"
+        );
+
+        for pull_request in pull_requests {
+            self.upsert_enriched_pull_request_foreign_entities(pull_request, stored_for_sources)
+                .await;
+        }
+
+        Ok(())
     }
 
     /// Create or refresh foreign entity rows for a pull request, scoped to the
@@ -250,12 +384,23 @@ impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient, F: ForeignEntit
             return;
         }
 
-        let Some(pull_request) = Self::enriched_pull_request_from_event(event) else {
+        let Some(pull_request) = self.enriched_pull_request_metadata(event).await else {
             tracing::warn!("missing PR metadata, cannot upsert foreign entity");
             return;
         };
 
-        let metadata = match serde_json::to_value(&pull_request) {
+        self.upsert_enriched_pull_request_foreign_entities(pull_request, &stored_for_sources)
+            .await;
+    }
+
+    /// Create or refresh foreign entity rows from already-enriched pull request metadata.
+    #[tracing::instrument(skip(self, pull_request, stored_for_sources))]
+    async fn upsert_enriched_pull_request_foreign_entities(
+        &self,
+        pull_request: EnrichedGithubPullRequest,
+        stored_for_sources: &[GithubAppInstallationSource],
+    ) {
+        let base_metadata = match serde_json::to_value(&pull_request) {
             Ok(metadata) => metadata,
             Err(error) => {
                 tracing::error!(error=?error, "failed to serialize PR foreign entity metadata");
@@ -290,13 +435,20 @@ impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient, F: ForeignEntit
                 entity.stored_for_id.as_str() == stored_for_id.as_str()
                     && entity.stored_for_auth_entity.as_str() == stored_for_auth_entity.as_str()
             });
+            let existing_metadata = existing_entity
+                .map(|entity| &entity.metadata)
+                .or_else(|| existing.first().map(|entity| &entity.metadata));
+            let metadata = Self::metadata_with_preserved_partial_arrays(
+                base_metadata.clone(),
+                existing_metadata,
+            );
 
             if let Some(entity) = existing_entity {
                 self.foreign_entity_service
                     .patch_foreign_entity(
                         entity.id,
                         PatchForeignEntity {
-                            metadata: Some(metadata.clone()),
+                            metadata: Some(metadata),
                             ..PatchForeignEntity::default()
                         },
                     )
@@ -318,7 +470,7 @@ impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient, F: ForeignEntit
                 .create_foreign_entity(CreateForeignEntity {
                     foreign_entity_id: pull_request.github_key.clone(),
                     foreign_entity_source: GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE.to_string(),
-                    metadata: metadata.clone(),
+                    metadata,
                     stored_for_id: stored_for_id.clone(),
                     stored_for_auth_entity: stored_for_auth_entity.clone(),
                 })
@@ -590,7 +742,22 @@ impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient, F: ForeignEntit
             GithubWebhookEventType::IssueComment
             | GithubWebhookEventType::PullRequestReview
             | GithubWebhookEventType::PullRequestReviewComment => {
+                if webhook_event.is_associated_with_pull_request() {
+                    self.upsert_pull_request_foreign_entities(webhook_event)
+                        .await;
+                }
+
                 self.handle_comment_event(webhook_event).await
+            }
+            GithubWebhookEventType::CheckRun => {
+                if webhook_event.is_associated_with_pull_request() {
+                    self.upsert_pull_request_foreign_entities(webhook_event)
+                        .await;
+                } else {
+                    tracing::debug!("skipping check_run event without an associated PR");
+                }
+
+                Ok(())
             }
             GithubWebhookEventType::Installation => match action {
                 Some("created") => self.handle_installation_created(webhook_event).await,

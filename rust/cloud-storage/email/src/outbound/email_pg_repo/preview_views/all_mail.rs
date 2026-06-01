@@ -11,7 +11,7 @@ use uuid::Uuid;
 #[tracing::instrument(skip(pool), err)]
 pub(crate) async fn all_mail_preview_cursor(
     pool: &PgPool,
-    link_id: &Uuid,
+    link_ids: &[Uuid],
     limit: u32,
     query: &Query<Uuid, SimpleSortMethod, ()>,
 ) -> Result<Vec<ThreadPreviewCursorDbRow>, sqlx::Error> {
@@ -22,14 +22,14 @@ pub(crate) async fn all_mail_preview_cursor(
     sqlx::query_as!(
         ThreadPreviewCursorDbRow,
         r#"
-        WITH spam_label AS (
-            SELECT id FROM email_labels WHERE link_id = $1 AND name = 'SPAM'
+        WITH spam_labels AS (
+            SELECT id, link_id FROM email_labels WHERE link_id = ANY($1) AND name = 'SPAM'
         ),
-        trash_label AS (
-            SELECT id FROM email_labels WHERE link_id = $1 AND name = 'TRASH'
+        trash_labels AS (
+            SELECT id, link_id FROM email_labels WHERE link_id = ANY($1) AND name = 'TRASH'
         ),
-        important_label AS (
-            SELECT id FROM email_labels WHERE link_id = $1 AND name = 'IMPORTANT'
+        important_labels AS (
+            SELECT id, link_id FROM email_labels WHERE link_id = ANY($1) AND name = 'IMPORTANT'
         )
         SELECT
             t.id,
@@ -48,8 +48,8 @@ pub(crate) async fn all_mail_preview_cursor(
                 SELECT 1
                 FROM email_messages m_imp
                 JOIN email_message_labels ml ON m_imp.id = ml.message_id
+                JOIN important_labels il ON ml.label_id = il.id
                 WHERE m_imp.thread_id = t.id
-                  AND ml.label_id = (SELECT id FROM important_label)
             ) AS "is_important!",
             c.email_address AS "sender_email?",
             COALESCE(lmp.from_name, c.name) AS "sender_name?",
@@ -76,9 +76,9 @@ pub(crate) async fn all_mail_preview_cursor(
             FROM email_threads t
             LEFT JOIN email_user_history uh ON uh.thread_id = t.id AND uh.link_id = t.link_id
             WHERE
-                t.link_id = $1
+                t.link_id = ANY($1)
               AND t.latest_non_spam_message_ts IS NOT NULL
-              
+
               -- Cursor logic is moved inside for maximum efficiency
               AND (($3::timestamptz IS NULL) OR (
                   -- This CASE must exactly match the one that defines `effective_ts`
@@ -103,13 +103,13 @@ pub(crate) async fn all_mail_preview_cursor(
             WHERE m.thread_id = t.id
               AND NOT EXISTS (
                   SELECT 1 FROM email_message_labels ml
+                  JOIN spam_labels sl ON ml.label_id = sl.id
                   WHERE ml.message_id = m.id
-                    AND ml.label_id = (SELECT id FROM spam_label)
               )
               AND NOT EXISTS (
                   SELECT 1 FROM email_message_labels ml
+                  JOIN trash_labels tl ON ml.label_id = tl.id
                   WHERE ml.message_id = m.id
-                    AND ml.label_id = (SELECT id FROM trash_label)
               )
             ORDER BY m.internal_date_ts DESC
             LIMIT 1
@@ -119,7 +119,7 @@ pub(crate) async fn all_mail_preview_cursor(
         JOIN email_links el ON t.link_id = el.id
         ORDER BY t.effective_ts DESC, t.updated_at DESC
         "#,
-        link_id,            // $1
+        link_ids,           // $1
         query_limit,        // $2
         cursor_timestamp,   // $3
         cursor_id,          // $4

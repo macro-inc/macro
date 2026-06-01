@@ -2805,6 +2805,7 @@ dependencies = [
  "sha2",
  "strum",
  "tauri",
+ "tauri-plugin-device-info",
  "thiserror 2.0.18",
  "tokio",
  "tracing",

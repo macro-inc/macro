@@ -15,17 +15,14 @@ use axum::{
 use axum_extra::{either::Either, extract::Cached};
 use email::{
     domain::{
-        models::{Link, PreviewView},
+        models::{EmailErr, PreviewView},
         ports::EmailService,
     },
-    inbound::axum::{
-        axum_impls::{EmailLinkErr, EmailLinkExtractor},
-        previews_router::EmailRouterState,
-    },
+    inbound::axum::previews_router::EmailRouterState,
 };
 use entity_access::{
     domain::{
-        models::{EntityAccessReceipt, MemberTeamRole},
+        models::{AdminTeamRole, EntityAccessReceipt, MemberTeamRole},
         ports::EntityAccessService,
     },
     inbound::axum_extractors::OptionalMacroUserTeamExtractor,
@@ -38,6 +35,7 @@ use item_filters::{
         call::CallLiteral,
         channel::ChannelLiteral,
         chat::ChatLiteral,
+        crm_company::CrmCompanyLiteral,
         document::DocumentLiteral,
         email::EmailLiteral,
         foreign_entity::ForeignEntityLiteral,
@@ -312,7 +310,7 @@ where
     async fn handle<R>(
         &self,
         macro_user_id: MacroUserIdStr<'static>,
-        email_link: Option<Link>,
+        link_ids: Vec<Uuid>,
         team_receipt_option: Option<EntityAccessReceipt<MemberTeamRole>>,
         ApiSoupRequestInner {
             filters,
@@ -323,7 +321,7 @@ where
     ) -> Result<Json<PaginatedOpaqueCursor<SoupApiItem>>, SoupHandlerErr>
     where
         SoupRequest<R>: IntoSoupReqAst,
-        R: Clone + Serialize + Send + RequestsCrmScope,
+        R: Clone + Serialize + Send + RequestsCrmScope + RequestsCrmAdmin,
     {
         let create_fallback = move || -> SoupQuery<R> {
             let params_sort = params
@@ -354,6 +352,7 @@ where
         // miss CRM scope on follow-up pages.
         let team_receipt =
             resolve_crm_team_receipt(cursor.filter().requests_crm_scope(), team_receipt_option)?;
+        require_crm_admin_role(cursor.filter().requests_crm_admin(), &team_receipt)?;
 
         let res = self
             .service
@@ -367,7 +366,7 @@ where
                     cursor,
                     user: macro_user_id,
                     email_preview_view: email_view,
-                    link_id: email_link.map(|l| l.id),
+                    link_ids,
                 },
                 team_receipt,
             )
@@ -463,6 +462,45 @@ impl RequestsCrmScope for ApiEntityFilterAst {
     }
 }
 
+/// Filter bodies that may opt into admin-only CRM data (currently:
+/// hidden CRM companies) implement this so the soup handler can gate
+/// the request on an admin/owner team role.
+pub trait RequestsCrmAdmin {
+    /// True when this filter asks for data only admin/owner team
+    /// members may see — e.g. `crm_company_filters.hidden = Some(true)`.
+    fn requests_crm_admin(&self) -> bool;
+}
+
+impl RequestsCrmAdmin for EntityFilters {
+    fn requests_crm_admin(&self) -> bool {
+        matches!(self.crm_company_filters.hidden, Some(true))
+    }
+}
+
+impl RequestsCrmAdmin for ApiEntityFilterAst {
+    fn requests_crm_admin(&self) -> bool {
+        self.crm_company_filter
+            .as_deref()
+            .is_some_and(ast_requests_crm_admin)
+    }
+}
+
+/// Walks a `CrmCompanyLiteral` AST checking for any `Hidden(true)`
+/// literal. Mirrors the conservative shape the request-time extractor
+/// in `models::extract_crm_company_filter` allows: `And`/`Or` recurse;
+/// `Not` would invert and fail closed downstream, but for the *role
+/// gate* we still must inspect under `Not` to avoid a `Not(Hidden(false))`
+/// sneaking past — treat any path reaching a `Hidden(true)` literal as
+/// admin-required.
+fn ast_requests_crm_admin(expr: &Expr<CrmCompanyLiteral>) -> bool {
+    match expr {
+        Expr::Literal(CrmCompanyLiteral::Hidden(true)) => true,
+        Expr::Literal(_) => false,
+        Expr::And(a, b) | Expr::Or(a, b) => ast_requests_crm_admin(a) || ast_requests_crm_admin(b),
+        Expr::Not(a) => ast_requests_crm_admin(a),
+    }
+}
+
 pub fn soup_router<T, U, EAS, S>(state: SoupRouterState<T, U, EAS>) -> Router<S>
 where
     T: SoupService,
@@ -505,13 +543,15 @@ pub enum SoupHandlerErr {
     #[error("An internal server error has occurred")]
     Internal(SoupErr),
     #[error("An internal email server error has occurred")]
-    EmailLinkErr(#[from] EmailLinkErr),
+    EmailErr(#[from] EmailErr),
     #[error("Invalid filter arguments provided")]
     ExpandErr(ExpandErr),
     #[error("Invalid compound filter could not be expanded")]
     Expand,
     #[error("CRM-scoped queries require team membership")]
     CrmScopeForbidden,
+    #[error("Querying hidden CRM companies requires admin/owner team role")]
+    CrmAdminRequired,
 }
 
 impl From<SoupErr> for SoupHandlerErr {
@@ -527,7 +567,9 @@ impl IntoResponse for SoupHandlerErr {
     fn into_response(self) -> axum::response::Response {
         let status_code = match &self {
             SoupHandlerErr::ExpandErr(_) | SoupHandlerErr::Expand => StatusCode::BAD_REQUEST,
-            SoupHandlerErr::CrmScopeForbidden => StatusCode::FORBIDDEN,
+            SoupHandlerErr::CrmScopeForbidden | SoupHandlerErr::CrmAdminRequired => {
+                StatusCode::FORBIDDEN
+            }
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         };
         (
@@ -538,6 +580,28 @@ impl IntoResponse for SoupHandlerErr {
         )
             .into_response()
     }
+}
+
+async fn fetch_caller_link_ids<T, U, EAS>(
+    service: &SoupRouterState<T, U, EAS>,
+    macro_user_id: &str,
+) -> Result<Vec<Uuid>, SoupHandlerErr>
+where
+    T: SoupService,
+    U: EmailService,
+    EAS: EntityAccessService,
+{
+    let macro_id = MacroUserIdStr::parse_from_str(macro_user_id).map_err(|e| {
+        SoupHandlerErr::Internal(SoupErr::SoupDbErr(anyhow::anyhow!(
+            "invalid macro_user_id from extractor: {e}"
+        )))
+    })?;
+    let links = service
+        .email
+        .service()
+        .get_inboxes_for_macro_id(macro_id)
+        .await?;
+    Ok(links.into_iter().map(|l| l.id).collect())
 }
 
 /// Gets the items the user has access to
@@ -551,13 +615,13 @@ impl IntoResponse for SoupHandlerErr {
     ),
     responses(
             (status = 200, body=SoupPage),
+            (status = 403, description = "CRM-scoped queries require team membership, or requesting hidden CRM companies requires admin/owner team role", body=ErrorResponse),
             (status = 500, body=ErrorResponse),
     )
 )]
 pub async fn get_soup_handler<T, U, EAS>(
     State(service): State<SoupRouterState<T, U, EAS>>,
     Cached(MacroUserExtractor { macro_user_id, .. }): Cached<MacroUserExtractor>,
-    email_link: Result<Cached<EmailLinkExtractor<U>>, EmailLinkErr>,
     team: OptionalMacroUserTeamExtractor<MemberTeamRole, EAS>,
     Query(params): Query<Params>,
     cursor: SoupCursor<EntityFilters>,
@@ -567,18 +631,14 @@ where
     U: EmailService,
     EAS: EntityAccessService,
 {
-    let link = match email_link {
-        Ok(l) => Some(l.0.0),
-        Err(EmailLinkErr::NotFound) => None,
-        Err(e) => Err(e)?,
-    };
+    let link_ids = fetch_caller_link_ids(&service, macro_user_id.as_ref()).await?;
     // Team receipt is plumbed through even for GET so that paginating a
     // team-scoped query via a cursor (which carries the original filter)
     // continues to authorize correctly.
     service
         .handle(
             macro_user_id,
-            link,
+            link_ids,
             team.entity_access_receipt,
             ApiSoupRequestInner {
                 params,
@@ -624,6 +684,7 @@ type SoupCursor<R> = axum_extra::either::Either<
     ),
     responses(
             (status = 200, body=SoupPage),
+            (status = 403, description = "CRM-scoped queries require team membership, or requesting hidden CRM companies requires admin/owner team role", body=ErrorResponse),
             (status = 500, body=ErrorResponse),
     )
 )]
@@ -631,7 +692,6 @@ type SoupCursor<R> = axum_extra::either::Either<
 pub async fn post_soup_handler<T, U, EAS>(
     State(service): State<SoupRouterState<T, U, EAS>>,
     Cached(MacroUserExtractor { macro_user_id, .. }): Cached<MacroUserExtractor>,
-    email_link: Result<Cached<EmailLinkExtractor<U>>, EmailLinkErr>,
     team: OptionalMacroUserTeamExtractor<MemberTeamRole, EAS>,
     cursor: SoupCursor<EntityFilters>,
     Json(PostSoupRequest {
@@ -645,18 +705,14 @@ where
     U: EmailService,
     EAS: EntityAccessService,
 {
-    let link = match email_link {
-        Ok(l) => Some(l.0.0),
-        Err(EmailLinkErr::NotFound) => None,
-        Err(e) => Err(e)?,
-    };
+    let link_ids = fetch_caller_link_ids(&service, macro_user_id.as_ref()).await?;
     // Pass the raw extractor receipt through — `handle` resolves the
     // CRM-scope check against the *effective* filter (which may come from
     // the cursor on follow-up pages), not the request body.
     service
         .handle(
             macro_user_id,
-            link,
+            link_ids,
             team.entity_access_receipt,
             ApiSoupRequestInner {
                 filters,
@@ -692,6 +748,7 @@ pub struct PostSoupAstRequest {
     request_body = PostSoupAstRequest,
     responses(
         (status = 200, body=SoupPage),
+        (status = 403, description = "CRM-scoped queries require team membership, or requesting hidden CRM companies requires admin/owner team role", body=ErrorResponse),
         (status = 500, body=ErrorResponse),
     )
 )]
@@ -699,7 +756,6 @@ pub struct PostSoupAstRequest {
 pub async fn post_soup_ast_handler<T, U, EAS>(
     State(service): State<SoupRouterState<T, U, EAS>>,
     Cached(MacroUserExtractor { macro_user_id, .. }): Cached<MacroUserExtractor>,
-    email_link: Result<Cached<EmailLinkExtractor<U>>, EmailLinkErr>,
     team: OptionalMacroUserTeamExtractor<MemberTeamRole, EAS>,
     cursor: SoupCursor<ApiEntityFilterAst>,
     Json(PostSoupAstRequest {
@@ -713,18 +769,14 @@ where
     U: EmailService,
     EAS: EntityAccessService,
 {
-    let link = match email_link {
-        Ok(l) => Some(l.0.0),
-        Err(EmailLinkErr::NotFound) => None,
-        Err(e) => Err(e)?,
-    };
+    let link_ids = fetch_caller_link_ids(&service, macro_user_id.as_ref()).await?;
     // Pass the raw extractor receipt through — `handle` resolves the
     // CRM-scope check against the *effective* filter (which may come from
     // the cursor on follow-up pages), not the request body.
     service
         .handle(
             macro_user_id,
-            link,
+            link_ids,
             team.entity_access_receipt,
             ApiSoupRequestInner {
                 filters,
@@ -759,6 +811,7 @@ pub struct PostGroupedSoupAstRequest {
     request_body = PostGroupedSoupAstRequest,
     responses(
         (status = 200, body=GroupedSoupPage),
+        (status = 403, description = "CRM-scoped queries require team membership, or requesting hidden CRM companies requires admin/owner team role", body=ErrorResponse),
         (status = 500, body=ErrorResponse),
     )
 )]
@@ -818,6 +871,28 @@ fn resolve_crm_team_receipt(
     Ok(receipt)
 }
 
+/// Companion to [`resolve_crm_team_receipt`] for the admin-only CRM
+/// data path (currently: hidden CRM companies). `admin_requested` is
+/// the result of [`RequestsCrmAdmin::requests_crm_admin`] on the
+/// effective filter. Returns `Err(CrmAdminRequired)` when the request
+/// asks for admin-only data but the receipt is missing or the user's
+/// actual team role doesn't satisfy [`AdminTeamRole`].
+fn require_crm_admin_role(
+    admin_requested: bool,
+    receipt: &Option<EntityAccessReceipt<MemberTeamRole>>,
+) -> Result<(), SoupHandlerErr> {
+    if !admin_requested {
+        return Ok(());
+    }
+    let Some(receipt) = receipt else {
+        return Err(SoupHandlerErr::CrmAdminRequired);
+    };
+    if !receipt.entity_permission().satisfies::<AdminTeamRole>() {
+        return Err(SoupHandlerErr::CrmAdminRequired);
+    }
+    Ok(())
+}
+
 #[derive(Debug, Default, Serialize, Deserialize, Clone, ToSchema)]
 pub struct ApiEntityFilterAst {
     /// the filters that should be applied to the document entity
@@ -851,6 +926,11 @@ pub struct ApiEntityFilterAst {
     #[serde(default, rename = "callf")]
     #[schema(value_type = serde_json::Value)]
     pub call_filter: LiteralTree<CallLiteral>,
+    /// Filters applied to the crm_company entity (wire key `ccf`).
+    /// Empty/omitted = team's full visible list.
+    #[serde(default, rename = "ccf")]
+    #[schema(value_type = serde_json::Value)]
+    pub crm_company_filter: LiteralTree<CrmCompanyLiteral>,
     /// the filters that should be applied based on entity properties
     #[serde(default, rename = "propf")]
     #[schema(value_type = serde_json::Value)]
@@ -890,7 +970,7 @@ impl IntoSoupReqAst for SoupRequest<ApiEntityFilterAst> {
             cursor,
             user,
             email_preview_view,
-            link_id,
+            link_ids,
         } = self;
 
         let cursor = match cursor {
@@ -910,7 +990,7 @@ impl IntoSoupReqAst for SoupRequest<ApiEntityFilterAst> {
             cursor,
             user,
             email_preview_view,
-            link_id,
+            link_ids,
         })
     }
 }
@@ -933,6 +1013,7 @@ impl ApiEntityFilterAst {
             channel_filter,
             foreign_entity_filter,
             call_filter,
+            crm_company_filter,
             properties_filter,
             email_crm_domains,
             email_crm_addresses,
@@ -997,6 +1078,7 @@ impl ApiEntityFilterAst {
             },
             channel_filter,
             call_filter,
+            crm_company_filter,
             foreign_entity_filter,
             properties_filter,
         })

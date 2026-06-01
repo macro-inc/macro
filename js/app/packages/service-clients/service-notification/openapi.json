@@ -1220,7 +1220,7 @@
       },
       "ChannelType": {
         "type": "string",
-        "enum": ["public", "organization", "private", "directMessage", "team"]
+        "enum": ["public", "private", "directMessage", "team"]
       },
       "CommentedOnDocumentMetadata": {
         "type": "object",
@@ -1474,7 +1474,8 @@
           "team",
           "call",
           "foreign_entity",
-          "static_file"
+          "static_file",
+          "crm_company"
         ]
       },
       "ErrorResponse": {

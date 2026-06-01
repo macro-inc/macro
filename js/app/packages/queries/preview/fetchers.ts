@@ -5,6 +5,7 @@ import { emailClient } from '@service-email/client';
 import { storageServiceClient } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import { formatDocumentName } from '@service-storage/util/filename';
+import { normalizeMessageSender } from '../channel/message-sender';
 import type { ItemEntity, MessageContext, PreviewItem } from './types';
 
 async function fetchChannelPreviews(
@@ -69,7 +70,7 @@ export async function fetchMessageContext(
     return null;
   }
 
-  return message;
+  return normalizeMessageSender(message);
 }
 
 async function fetchDocumentPreviews(ids: string[]): Promise<PreviewItem[]> {

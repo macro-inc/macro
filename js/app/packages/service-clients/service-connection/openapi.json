@@ -239,7 +239,8 @@
           "team",
           "call",
           "foreign_entity",
-          "static_file"
+          "static_file",
+          "crm_company"
         ]
       },
       "GenericErrorResponse": {

@@ -2,7 +2,7 @@ use super::notify::notify_completion;
 use std::sync::Arc;
 
 use agent::types::{AssistantMessagePart, ChatMessage, ChatMessageContent, Role};
-use agent::{AgentLoop, StreamPart};
+use agent::{AgentLoop, StreamAccumulator};
 use ai_tools::{ToolServiceContext, ToolSetWithPrompt, all_tools};
 use ai_toolset::ToolSet as AiToolSet;
 use anyhow::{Context, Result};
@@ -151,41 +151,13 @@ async fn run_tool_loop(
         .context("failed to start agent stream")?;
 
     let idle_timeout = std::time::Duration::from_secs(3 * 60);
-    let mut yielded_parts: Vec<AssistantMessagePart> = Vec::new();
+    let mut accumulator = StreamAccumulator::new();
 
     loop {
         match tokio::time::timeout(idle_timeout, stream.next()).await {
-            Ok(Some(Ok(part))) => match part {
-                StreamPart::Content(text) if !text.is_empty() => {
-                    yielded_parts.push(AssistantMessagePart::Text { text });
-                }
-                StreamPart::ToolCall(call) => {
-                    yielded_parts.push(AssistantMessagePart::ToolCall {
-                        name: call.name,
-                        json: call.json,
-                        id: call.id,
-                    });
-                }
-                StreamPart::ToolResponse(agent::ToolResponse::Json { id, json, name }) => {
-                    yielded_parts.push(AssistantMessagePart::ToolCallResponseJson {
-                        name,
-                        json,
-                        id,
-                    });
-                }
-                StreamPart::ToolResponse(agent::ToolResponse::Err {
-                    id,
-                    name,
-                    description,
-                }) => {
-                    yielded_parts.push(AssistantMessagePart::ToolCallErr {
-                        name,
-                        description,
-                        id,
-                    });
-                }
-                _ => {}
-            },
+            Ok(Some(Ok(part))) => {
+                accumulator.push(part);
+            }
             Ok(Some(Err(e))) => {
                 tracing::error!(error=?e, "agent stream error");
                 break;
@@ -198,7 +170,7 @@ async fn run_tool_loop(
         }
     }
 
-    Ok(yielded_parts)
+    Ok(accumulator.into_parts())
 }
 
 async fn store_conversation(

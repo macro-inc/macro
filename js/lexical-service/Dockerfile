@@ -1,4 +1,4 @@
-FROM oven/bun:1
+FROM oven/bun:1.3.6
 WORKDIR /app
 
 ARG GITHUB_PACKAGES_TOKEN

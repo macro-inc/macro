@@ -40,6 +40,15 @@ export const documentGithubPullRequestsKeys = createQueryKeys(
   }
 );
 
+export const attachmentReferencesKeys = createQueryKeys(
+  'attachmentReferences',
+  {
+    list: (entityType: string, entityId: string) => ({
+      queryKey: [entityType, entityId],
+    }),
+  }
+);
+
 // Scoped under `entity` so `invalidateQueries({ queryKey: ['entity'] })`
 // (fired from the move/rename mutations) refreshes every key below.
 export const entityKeys = createQueryKeys('entity', {
@@ -49,7 +58,23 @@ export const entityKeys = createQueryKeys('entity', {
   projectData: (projectId: string) => ({
     queryKey: [projectId],
   }),
+  taskDuplicates: (documentId: string) => ({
+    queryKey: [documentId, 'duplicates'],
+  }),
 });
+
+export const taskSimilaritySearchKeys = createQueryKeys(
+  'taskSimilaritySearch',
+  {
+    forInput: (input: {
+      title: string;
+      markdown: string;
+      shareWithTeam: boolean;
+    }) => ({
+      queryKey: [input.title, input.markdown, input.shareWithTeam],
+    }),
+  }
+);
 
 export const instructionsMdKeys = createQueryKeys('instructionsMd', {
   id: null,

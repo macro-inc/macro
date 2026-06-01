@@ -26,6 +26,8 @@ export interface BaseListEntityProps<E extends EntityData = EntityData> {
   highlighted?: boolean;
   hovered?: boolean;
   hideContentHits?: boolean;
+  /** Hide the multi-select checkbox (e.g. read-only embeds outside soup). */
+  hideCheckbox?: boolean;
   onChecked?: (checked: boolean, shiftKey: boolean) => void;
   onMouseMove?: () => void;
   onProjectClick?: (
@@ -44,6 +46,7 @@ const WIDE_BREAKPOINT = 512; // @lg container query = 32rem
 export interface LayoutProps {
   entity: WithNotification<EntityData>;
   checked?: boolean;
+  hideCheckbox?: boolean;
   onChecked?: (checked: boolean, shiftKey: boolean) => void;
   unread: boolean;
   isShared: boolean;

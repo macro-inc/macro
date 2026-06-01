@@ -32,8 +32,6 @@ pub struct AiResponseMetadata {
 pub enum ChannelType {
     #[serde(alias = "Public", alias = "public")]
     Public,
-    #[serde(alias = "Organization", alias = "organization")]
-    Organization,
     #[serde(alias = "Private", alias = "private")]
     Private,
     #[serde(alias = "DirectMessage", alias = "direct_message")]
@@ -46,7 +44,6 @@ impl ChannelType {
     pub fn to_model_comms(self) -> models_comms::channel::ChannelType {
         match self {
             ChannelType::Public => models_comms::channel::ChannelType::Public,
-            ChannelType::Organization => models_comms::channel::ChannelType::Organization,
             ChannelType::Private => models_comms::channel::ChannelType::Private,
             ChannelType::DirectMessage => models_comms::channel::ChannelType::DirectMessage,
             ChannelType::Team => models_comms::channel::ChannelType::Team,

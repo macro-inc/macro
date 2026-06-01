@@ -4,7 +4,8 @@ use std::sync::{Arc, Mutex};
 use crate::domain::{
     models::{
         EnrichedGithubPullRequest, GithubAppInstallationSource, GithubError,
-        GithubInstallationAccessToken, GithubKey, GithubPullRequestStatus, MacroTaskId,
+        GithubInstallationAccessToken, GithubKey, GithubPullRequestCheckRun,
+        GithubPullRequestComment, GithubPullRequestDetails, GithubPullRequestStatus, MacroTaskId,
         TeamTaskReference, ValidatedGithubWebhookEvent,
     },
     ports::{GithubSyncClient, GithubSyncRepo, GithubSyncService},
@@ -21,7 +22,7 @@ use documents::domain::{
     },
 };
 use entity_access::domain::models::{
-    EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
+    EditAccessLevel, EntityAccessReceipt, EntityType, OwnerAccessLevel, ViewAccessLevel,
 };
 use foreign_entity::domain::{
     models::{
@@ -467,19 +468,64 @@ struct PrCommentCall {
     body: String,
 }
 
+/// Recorded pull request details call.
+#[derive(Debug, Clone)]
+struct PullRequestDetailsCall {
+    owner: String,
+    repo: String,
+    number: u64,
+}
+
 struct StubSyncClient {
     pr_comments: Mutex<Vec<PrCommentCall>>,
+    pull_request_details: Mutex<HashMap<String, GithubPullRequestDetails>>,
+    pull_request_details_calls: Mutex<Vec<PullRequestDetailsCall>>,
+    open_pull_requests: Mutex<Vec<EnrichedGithubPullRequest>>,
+    list_open_pull_requests_calls: Mutex<Vec<String>>,
 }
 
 impl StubSyncClient {
     fn new() -> Self {
         Self {
             pr_comments: Mutex::new(Vec::new()),
+            pull_request_details: Mutex::new(HashMap::new()),
+            pull_request_details_calls: Mutex::new(Vec::new()),
+            open_pull_requests: Mutex::new(Vec::new()),
+            list_open_pull_requests_calls: Mutex::new(Vec::new()),
         }
     }
 
     fn pr_comments(&self) -> Vec<PrCommentCall> {
         self.pr_comments.lock().unwrap().clone()
+    }
+
+    fn pull_request_details_calls(&self) -> Vec<PullRequestDetailsCall> {
+        self.pull_request_details_calls.lock().unwrap().clone()
+    }
+
+    fn list_open_pull_requests_calls(&self) -> Vec<String> {
+        self.list_open_pull_requests_calls.lock().unwrap().clone()
+    }
+
+    fn set_open_pull_requests(&self, pull_requests: Vec<EnrichedGithubPullRequest>) {
+        *self.open_pull_requests.lock().unwrap() = pull_requests;
+    }
+
+    fn set_pull_request_details(
+        &self,
+        owner: &str,
+        repo: &str,
+        number: u64,
+        details: GithubPullRequestDetails,
+    ) {
+        self.pull_request_details
+            .lock()
+            .unwrap()
+            .insert(Self::pull_request_details_key(owner, repo, number), details);
+    }
+
+    fn pull_request_details_key(owner: &str, repo: &str, number: u64) -> String {
+        GithubKey::new(owner, repo, number).to_string()
     }
 }
 
@@ -511,6 +557,58 @@ impl GithubSyncClient for StubSyncClient {
         });
         Ok(())
     }
+
+    async fn get_pull_request_details(
+        &self,
+        _access_token: &str,
+        owner: &str,
+        repo: &str,
+        number: u64,
+    ) -> Result<GithubPullRequestDetails, GithubError> {
+        self.pull_request_details_calls
+            .lock()
+            .unwrap()
+            .push(PullRequestDetailsCall {
+                owner: owner.to_string(),
+                repo: repo.to_string(),
+                number,
+            });
+
+        self.pull_request_details
+            .lock()
+            .unwrap()
+            .get(&Self::pull_request_details_key(owner, repo, number))
+            .cloned()
+            .ok_or_else(|| GithubError::Internal(anyhow::anyhow!("missing stub PR details")))
+    }
+
+    async fn list_open_pull_requests(
+        &self,
+        access_token: &str,
+    ) -> Result<Vec<EnrichedGithubPullRequest>, GithubError> {
+        self.list_open_pull_requests_calls
+            .lock()
+            .unwrap()
+            .push(access_token.to_string());
+
+        Ok(self.open_pull_requests.lock().unwrap().clone())
+    }
+}
+
+fn foreign_entity_id_from_receipt(
+    receipt: EntityAccessReceipt<ViewAccessLevel>,
+) -> Result<uuid::Uuid, ForeignEntityError> {
+    let entity = receipt.entity();
+    if entity.entity_type != EntityType::ForeignEntity {
+        return Err(ForeignEntityError::BadRequest(format!(
+            "expected ForeignEntity receipt, got {:?}",
+            entity.entity_type
+        )));
+    }
+
+    uuid::Uuid::parse_str(&entity.entity_id).map_err(|_| {
+        ForeignEntityError::BadRequest("foreign entity receipt id must be a valid UUID".to_string())
+    })
 }
 
 struct StubForeignEntityService {
@@ -542,6 +640,14 @@ impl StubForeignEntityService {
 }
 
 impl ForeignEntityService for StubForeignEntityService {
+    async fn get_foreign_entity(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<ForeignEntity, ForeignEntityError> {
+        let id = foreign_entity_id_from_receipt(receipt)?;
+        self.get_foreign_entity_by_id(id).await
+    }
+
     async fn get_foreign_entity_by_id(
         &self,
         id: uuid::Uuid,
@@ -742,8 +848,92 @@ fn expected_pull_request_metadata(
         status: Some(status),
         additions,
         deletions,
+        comments: None,
+        checks: None,
     })
     .unwrap()
+}
+
+fn backfilled_pull_request(title: &str) -> EnrichedGithubPullRequest {
+    EnrichedGithubPullRequest {
+        github_key: "my-org/my-repo/pull/42".to_string(),
+        owner: "my-org".to_string(),
+        repo: "my-repo".to_string(),
+        number: 42,
+        url: "https://github.com/my-org/my-repo/pull/42".to_string(),
+        display_name: "my-org/my-repo#42".to_string(),
+        name: Some(title.to_string()),
+        status: Some(GithubPullRequestStatus::Open),
+        additions: None,
+        deletions: None,
+        comments: None,
+        checks: None,
+    }
+}
+
+fn expected_pull_request_metadata_from_details(
+    details: &GithubPullRequestDetails,
+) -> serde_json::Value {
+    serde_json::to_value(EnrichedGithubPullRequest {
+        github_key: "my-org/my-repo/pull/42".to_string(),
+        owner: "my-org".to_string(),
+        repo: "my-repo".to_string(),
+        number: 42,
+        url: "https://github.com/my-org/my-repo/pull/42".to_string(),
+        display_name: "my-org/my-repo#42".to_string(),
+        name: Some(details.title.clone()),
+        status: Some(details.status()),
+        additions: Some(details.additions),
+        deletions: Some(details.deletions),
+        comments: details.comments.clone(),
+        checks: details.checks.clone(),
+    })
+    .unwrap()
+}
+
+fn pull_request_comment(id: u64, body: &str, source: &str) -> GithubPullRequestComment {
+    GithubPullRequestComment {
+        id,
+        body: body.to_string(),
+        author_login: Some("octocat".to_string()),
+        author_association: Some("MEMBER".to_string()),
+        url: Some(format!(
+            "https://github.com/my-org/my-repo/pull/42#comment-{id}"
+        )),
+        created_at: None,
+        updated_at: None,
+        source: source.to_string(),
+    }
+}
+
+fn pull_request_check_run(id: u64, name: &str, status: &str) -> GithubPullRequestCheckRun {
+    GithubPullRequestCheckRun {
+        id,
+        name: name.to_string(),
+        status: status.to_string(),
+        conclusion: Some("success".to_string()),
+        url: Some(format!("https://github.com/my-org/my-repo/runs/{id}")),
+        started_at: None,
+        completed_at: None,
+    }
+}
+
+fn pull_request_details(
+    title: &str,
+    additions: u64,
+    deletions: u64,
+    comments: Option<Vec<GithubPullRequestComment>>,
+    checks: Option<Vec<GithubPullRequestCheckRun>>,
+) -> GithubPullRequestDetails {
+    GithubPullRequestDetails {
+        title: title.to_string(),
+        state: "open".to_string(),
+        merged_at: None,
+        additions,
+        deletions,
+        comments,
+        checks,
+    }
 }
 
 #[tokio::test]
@@ -1775,6 +1965,329 @@ async fn unhandled_pr_action_still_upserts_foreign_entity() {
     assert!(foreign_entity_service.patch_calls().is_empty());
 }
 
+#[tokio::test]
+async fn foreign_entity_metadata_includes_comments_and_checks_from_sync_client() {
+    let (service, foreign_entity_service) = make_sync_service_with_foreign_entity_service();
+    let details = pull_request_details(
+        "live pull request title",
+        30,
+        8,
+        Some(vec![pull_request_comment(
+            101,
+            "Looks good",
+            "issue_comment",
+        )]),
+        Some(vec![pull_request_check_run(201, "ci", "completed")]),
+    );
+    service
+        .client
+        .set_pull_request_details("my-org", "my-repo", 42, details.clone());
+
+    let event = ValidatedGithubWebhookEvent::new(
+        "pull_request".to_string(),
+        serde_json::json!({
+            "action": "opened",
+            "pull_request": {
+                "number": 42,
+                "title": "webhook title",
+                "body": null,
+                "head": { "ref": "feature/some-branch" },
+                "state": "open",
+                "merged": false,
+                "additions": 10,
+                "deletions": 2
+            },
+            "repository": {
+                "name": "my-repo",
+                "owner": { "login": "my-org" }
+            },
+            "installation": { "id": 12345 }
+        }),
+    );
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    let foreign_entities = foreign_entity_service.foreign_entities();
+    assert_eq!(foreign_entities.len(), 1);
+    assert_eq!(
+        foreign_entities[0].metadata,
+        expected_pull_request_metadata_from_details(&details)
+    );
+
+    let detail_calls = service.client.pull_request_details_calls();
+    assert_eq!(detail_calls.len(), 1);
+    assert_eq!(detail_calls[0].owner, "my-org");
+    assert_eq!(detail_calls[0].repo, "my-repo");
+    assert_eq!(detail_calls[0].number, 42);
+}
+
+#[tokio::test]
+async fn foreign_entity_metadata_comment_event_refreshes_without_task_id() {
+    let (service, foreign_entity_service) = make_sync_service_with_foreign_entity_service();
+    let initial_details = pull_request_details("initial title", 10, 2, None, None);
+    service
+        .client
+        .set_pull_request_details("my-org", "my-repo", 42, initial_details);
+
+    let opened_event = ValidatedGithubWebhookEvent::new(
+        "pull_request".to_string(),
+        serde_json::json!({
+            "action": "opened",
+            "pull_request": {
+                "number": 42,
+                "title": "initial title",
+                "body": null,
+                "head": { "ref": "feature/some-branch" },
+                "state": "open",
+                "merged": false,
+                "additions": 10,
+                "deletions": 2
+            },
+            "repository": {
+                "name": "my-repo",
+                "owner": { "login": "my-org" }
+            },
+            "installation": { "id": 12345 }
+        }),
+    );
+    service.process_webhook_event(&opened_event).await.unwrap();
+
+    let refreshed_details = pull_request_details(
+        "refreshed title",
+        12,
+        3,
+        Some(vec![pull_request_comment(
+            102,
+            "A new comment",
+            "issue_comment",
+        )]),
+        Some(vec![pull_request_check_run(202, "ci", "completed")]),
+    );
+    service
+        .client
+        .set_pull_request_details("my-org", "my-repo", 42, refreshed_details.clone());
+
+    let comment_event = ValidatedGithubWebhookEvent::new(
+        "issue_comment".to_string(),
+        serde_json::json!({
+            "action": "created",
+            "issue": {
+                "number": 42,
+                "title": "initial title",
+                "body": null,
+                "state": "open",
+                "pull_request": {
+                    "url": "https://api.github.com/repos/my-org/my-repo/pulls/42"
+                }
+            },
+            "comment": {
+                "body": "No task reference in this comment"
+            },
+            "repository": {
+                "name": "my-repo",
+                "owner": { "login": "my-org" }
+            },
+            "installation": { "id": 12345 }
+        }),
+    );
+    service.process_webhook_event(&comment_event).await.unwrap();
+
+    let expected_metadata = expected_pull_request_metadata_from_details(&refreshed_details);
+    let foreign_entities = foreign_entity_service.foreign_entities();
+    assert_eq!(foreign_entities.len(), 1);
+    assert_eq!(foreign_entities[0].metadata, expected_metadata);
+    assert!(service.client.pr_comments().is_empty());
+
+    let patch_calls = foreign_entity_service.patch_calls();
+    assert_eq!(patch_calls.len(), 1);
+    assert_eq!(patch_calls[0].1.metadata, Some(expected_metadata));
+}
+
+#[tokio::test]
+async fn foreign_entity_metadata_check_run_refreshes_pull_request() {
+    let (service, foreign_entity_service) = make_sync_service_with_foreign_entity_service();
+    let initial_details = pull_request_details("initial title", 10, 2, None, None);
+    service
+        .client
+        .set_pull_request_details("my-org", "my-repo", 42, initial_details);
+
+    let opened_event = ValidatedGithubWebhookEvent::new(
+        "pull_request".to_string(),
+        serde_json::json!({
+            "action": "opened",
+            "pull_request": {
+                "number": 42,
+                "title": "initial title",
+                "body": null,
+                "head": { "ref": "feature/some-branch" },
+                "state": "open",
+                "merged": false,
+                "additions": 10,
+                "deletions": 2
+            },
+            "repository": {
+                "name": "my-repo",
+                "owner": { "login": "my-org" }
+            },
+            "installation": { "id": 12345 }
+        }),
+    );
+    service.process_webhook_event(&opened_event).await.unwrap();
+
+    let refreshed_details = pull_request_details(
+        "initial title",
+        10,
+        2,
+        None,
+        Some(vec![pull_request_check_run(203, "lint", "completed")]),
+    );
+    service
+        .client
+        .set_pull_request_details("my-org", "my-repo", 42, refreshed_details.clone());
+
+    let check_run_event = ValidatedGithubWebhookEvent::new(
+        "check_run".to_string(),
+        serde_json::json!({
+            "action": "completed",
+            "check_run": {
+                "pull_requests": [
+                    { "number": 42 }
+                ]
+            },
+            "repository": {
+                "name": "my-repo",
+                "owner": { "login": "my-org" }
+            },
+            "installation": { "id": 12345 }
+        }),
+    );
+    service
+        .process_webhook_event(&check_run_event)
+        .await
+        .unwrap();
+
+    let expected_metadata = expected_pull_request_metadata_from_details(&refreshed_details);
+    let foreign_entities = foreign_entity_service.foreign_entities();
+    assert_eq!(foreign_entities.len(), 1);
+    assert_eq!(foreign_entities[0].metadata, expected_metadata);
+
+    let patch_calls = foreign_entity_service.patch_calls();
+    assert_eq!(patch_calls.len(), 1);
+    assert_eq!(patch_calls[0].1.metadata, Some(expected_metadata));
+}
+
+#[tokio::test]
+async fn foreign_entity_metadata_preserves_existing_comments_when_refresh_omits_them() {
+    let (service, foreign_entity_service) = make_sync_service_with_foreign_entity_service();
+    let initial_details = pull_request_details(
+        "initial title",
+        10,
+        2,
+        Some(vec![pull_request_comment(
+            103,
+            "Keep this comment",
+            "review",
+        )]),
+        Some(vec![pull_request_check_run(204, "ci", "completed")]),
+    );
+    service
+        .client
+        .set_pull_request_details("my-org", "my-repo", 42, initial_details.clone());
+
+    let opened_event = ValidatedGithubWebhookEvent::new(
+        "pull_request".to_string(),
+        serde_json::json!({
+            "action": "opened",
+            "pull_request": {
+                "number": 42,
+                "title": "initial title",
+                "body": null,
+                "head": { "ref": "feature/some-branch" },
+                "state": "open",
+                "merged": false,
+                "additions": 10,
+                "deletions": 2
+            },
+            "repository": {
+                "name": "my-repo",
+                "owner": { "login": "my-org" }
+            },
+            "installation": { "id": 12345 }
+        }),
+    );
+    service.process_webhook_event(&opened_event).await.unwrap();
+
+    let mut partial_details = pull_request_details(
+        "partial refresh title",
+        11,
+        4,
+        None,
+        Some(vec![pull_request_check_run(205, "ci", "completed")]),
+    );
+    service
+        .client
+        .set_pull_request_details("my-org", "my-repo", 42, partial_details.clone());
+
+    let edited_event = ValidatedGithubWebhookEvent::new(
+        "pull_request".to_string(),
+        serde_json::json!({
+            "action": "edited",
+            "pull_request": {
+                "number": 42,
+                "title": "partial refresh title",
+                "body": null,
+                "head": { "ref": "feature/some-branch" },
+                "state": "open",
+                "merged": false,
+                "additions": 11,
+                "deletions": 4
+            },
+            "repository": {
+                "name": "my-repo",
+                "owner": { "login": "my-org" }
+            },
+            "installation": { "id": 12345 }
+        }),
+    );
+    service.process_webhook_event(&edited_event).await.unwrap();
+
+    partial_details.comments = initial_details.comments.clone();
+    let expected_metadata = expected_pull_request_metadata_from_details(&partial_details);
+    let foreign_entities = foreign_entity_service.foreign_entities();
+    assert_eq!(foreign_entities.len(), 1);
+    assert_eq!(foreign_entities[0].metadata, expected_metadata);
+}
+
+#[tokio::test]
+async fn foreign_entity_metadata_non_pr_issue_comment_does_not_create_pull_request() {
+    let (service, foreign_entity_service) = make_sync_service_with_foreign_entity_service();
+    let event = ValidatedGithubWebhookEvent::new(
+        "issue_comment".to_string(),
+        serde_json::json!({
+            "action": "created",
+            "issue": {
+                "number": 42,
+                "title": "plain issue",
+                "body": null,
+                "state": "open"
+            },
+            "comment": {
+                "body": "No task reference in this issue comment"
+            },
+            "repository": {
+                "name": "my-repo",
+                "owner": { "login": "my-org" }
+            },
+            "installation": { "id": 12345 }
+        }),
+    );
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    assert!(foreign_entity_service.foreign_entities().is_empty());
+    assert!(service.client.pull_request_details_calls().is_empty());
+}
+
 // ---------------------------------------------------------------------------
 // New behavioral tests
 // ---------------------------------------------------------------------------
@@ -2037,6 +2550,130 @@ async fn installation_created_associates_teams() {
 }
 
 #[tokio::test]
+async fn installation_created_backfills_open_pr_for_single_source() {
+    let repo = StubSyncRepo::new().with_github_link("12345", "macro|user@user.com");
+
+    let service = make_sync_service_with_repo(repo);
+    let doc_service = service.document_service.clone();
+    let foreign_entity_service = service.foreign_entity_service.clone();
+    let pull_request = backfilled_pull_request("fixes MACRO-2BuyvtY3aeEvHx4uG8iD51");
+    let expected_metadata = serde_json::to_value(&pull_request).unwrap();
+    service.client.set_open_pull_requests(vec![pull_request]);
+    let event = installation_created_event(12345, 99999);
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    assert_eq!(
+        service.client.list_open_pull_requests_calls(),
+        vec!["test-token".to_string()]
+    );
+
+    let foreign_entities = foreign_entity_service.foreign_entities();
+    assert_eq!(foreign_entities.len(), 1);
+
+    let foreign_entity = &foreign_entities[0];
+    assert_eq!(foreign_entity.foreign_entity_id, "my-org/my-repo/pull/42");
+    assert_eq!(
+        foreign_entity.foreign_entity_source,
+        GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE
+    );
+    assert_eq!(foreign_entity.stored_for_id, "macro|user@user.com");
+    assert_eq!(foreign_entity.stored_for_auth_entity, "user");
+    assert_eq!(foreign_entity.metadata, expected_metadata);
+    assert_eq!(foreign_entity_service.create_calls().len(), 1);
+    assert!(foreign_entity_service.patch_calls().is_empty());
+    assert!(service.client.pr_comments().is_empty());
+    assert!(doc_service.task_status_calls().is_empty());
+}
+
+#[tokio::test]
+async fn installation_created_backfills_open_pr_for_multiple_sources() {
+    let team_a: uuid::Uuid = "dddddddd-dddd-dddd-dddd-dddddddddddd".parse().unwrap();
+    let team_b: uuid::Uuid = "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee".parse().unwrap();
+    let repo = StubSyncRepo::new()
+        .with_github_link("12345", "macro|user@user.com")
+        .with_user_teams("macro|user@user.com", vec![team_a, team_b]);
+
+    let service = make_sync_service_with_repo(repo);
+    let doc_service = service.document_service.clone();
+    let foreign_entity_service = service.foreign_entity_service.clone();
+    let pull_request = backfilled_pull_request("backfilled PR");
+    let expected_metadata = serde_json::to_value(&pull_request).unwrap();
+    service.client.set_open_pull_requests(vec![pull_request]);
+    let event = installation_created_event(12345, 99999);
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    assert_eq!(
+        service.client.list_open_pull_requests_calls(),
+        vec!["test-token".to_string()]
+    );
+
+    let mut foreign_entities = foreign_entity_service.foreign_entities();
+    foreign_entities.sort_by(|left, right| left.stored_for_id.cmp(&right.stored_for_id));
+    assert_eq!(foreign_entities.len(), 2);
+
+    for foreign_entity in &foreign_entities {
+        assert_eq!(foreign_entity.foreign_entity_id, "my-org/my-repo/pull/42");
+        assert_eq!(
+            foreign_entity.foreign_entity_source,
+            GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE
+        );
+        assert_eq!(foreign_entity.stored_for_auth_entity, "team");
+        assert_eq!(foreign_entity.metadata, expected_metadata);
+    }
+
+    assert_eq!(foreign_entities[0].stored_for_id, team_a.to_string());
+    assert_eq!(foreign_entities[1].stored_for_id, team_b.to_string());
+    assert_eq!(foreign_entity_service.create_calls().len(), 2);
+    assert!(foreign_entity_service.patch_calls().is_empty());
+    assert!(service.client.pr_comments().is_empty());
+    assert!(doc_service.task_status_calls().is_empty());
+}
+
+#[tokio::test]
+async fn installation_created_backfill_is_idempotent() {
+    let team_id: uuid::Uuid = "dddddddd-dddd-dddd-dddd-dddddddddddd".parse().unwrap();
+    let repo = StubSyncRepo::new()
+        .with_github_link("12345", "macro|user@user.com")
+        .with_user_teams("macro|user@user.com", vec![team_id]);
+
+    let service = make_sync_service_with_repo(repo);
+    let doc_service = service.document_service.clone();
+    let foreign_entity_service = service.foreign_entity_service.clone();
+    let pull_request = backfilled_pull_request("fixes MACRO-2BuyvtY3aeEvHx4uG8iD51");
+    let expected_metadata = serde_json::to_value(&pull_request).unwrap();
+    service.client.set_open_pull_requests(vec![pull_request]);
+    let event = installation_created_event(12345, 99999);
+
+    service.process_webhook_event(&event).await.unwrap();
+    service.process_webhook_event(&event).await.unwrap();
+
+    assert_eq!(
+        service.client.list_open_pull_requests_calls(),
+        vec!["test-token".to_string(), "test-token".to_string()]
+    );
+
+    let foreign_entities = foreign_entity_service.foreign_entities();
+    assert_eq!(foreign_entities.len(), 1);
+    assert_eq!(
+        foreign_entities[0].foreign_entity_id,
+        "my-org/my-repo/pull/42"
+    );
+    assert_eq!(foreign_entities[0].stored_for_id, team_id.to_string());
+    assert_eq!(foreign_entities[0].stored_for_auth_entity, "team");
+    assert_eq!(foreign_entities[0].metadata, expected_metadata);
+    assert_eq!(foreign_entity_service.create_calls().len(), 1);
+
+    let patch_calls = foreign_entity_service.patch_calls();
+    assert_eq!(patch_calls.len(), 1);
+    assert_eq!(patch_calls[0].0, foreign_entities[0].id);
+    assert_eq!(patch_calls[0].1.metadata, Some(expected_metadata));
+    assert!(service.client.pr_comments().is_empty());
+    assert!(doc_service.task_status_calls().is_empty());
+}
+
+#[tokio::test]
 async fn installation_created_no_github_link() {
     let service = make_sync_service();
     let event = installation_created_event(99999, 11111);
@@ -2045,6 +2682,7 @@ async fn installation_created_no_github_link() {
     service.process_webhook_event(&event).await.unwrap();
 
     assert!(service.repo.installation_sources().is_empty());
+    assert!(service.client.list_open_pull_requests_calls().is_empty());
 }
 
 #[tokio::test]

@@ -1,4 +1,5 @@
-import type { ApiChannelMessage } from '@service-comms/client';
+import { senderFromStorageId } from '@queries/channel/message-sender';
+import type { ApiChannelMessage } from '@service-storage/generated/schemas/apiChannelMessage';
 import { describe, expect, it } from 'vitest';
 import { buildChannelMessageListMeta } from '../message-list-meta';
 
@@ -13,6 +14,7 @@ function createMessage(
     content: '',
     created_at: createdAt,
     updated_at: createdAt,
+    sender: senderFromStorageId(senderId),
     sender_id: senderId,
     attachments: [],
     reactions: [],

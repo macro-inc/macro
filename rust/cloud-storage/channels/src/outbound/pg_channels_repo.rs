@@ -9,8 +9,8 @@ use crate::domain::{
         ChannelMetadata, ChannelParticipant, ChannelPreviewRow, ChannelType, CountedReaction,
         CreateChannelRequest, CreateEntityMentionOptions, EntityMention, MessageAttachment,
         MessagePageDirection, MutatedAttachment, MutatedMessage, NewChannelAttachment,
-        ParticipantRole, PatchChannelRequest, ResolvedChannelMessage, SimpleMention, ThreadData,
-        ThreadReplyRow, TopLevelMessageRow,
+        ParticipantRole, PatchChannelRequest, ResolvedChannelMessage, Sender, SimpleMention,
+        ThreadData, ThreadReplyRow, TopLevelMessageRow,
     },
     ports::{ChannelRepo, TopLevelMessagesQueryResult},
 };
@@ -171,7 +171,7 @@ struct MutatedMessageRow {
     id: Uuid,
     channel_id: Uuid,
     thread_id: Option<Uuid>,
-    sender_id: MacroUserIdStr<'static>,
+    sender_id: String,
     content: String,
     created_at: chrono::DateTime<chrono::Utc>,
     updated_at: chrono::DateTime<chrono::Utc>,
@@ -228,12 +228,12 @@ struct UserIdRow {
 
 #[derive(Debug, sqlx::FromRow)]
 struct MacroUserIdRow {
-    user_id: MacroUserIdStr<'static>,
+    user_id: String,
 }
 
 #[derive(Debug, sqlx::FromRow)]
 struct SenderIdRow {
-    sender_id: MacroUserIdStr<'static>,
+    sender_id: String,
 }
 
 #[derive(Debug, sqlx::FromRow)]
@@ -246,20 +246,20 @@ struct ExistsRow {
     exists: bool,
 }
 
-impl From<MutatedMessageRow> for MutatedMessage {
-    fn from(row: MutatedMessageRow) -> Self {
-        Self {
-            id: row.id,
-            channel_id: row.channel_id,
-            thread_id: row.thread_id,
-            sender_id: row.sender_id,
-            content: row.content,
-            created_at: row.created_at,
-            updated_at: row.updated_at,
-            edited_at: row.edited_at,
-            deleted_at: row.deleted_at,
-        }
-    }
+fn mutated_message_from_row(row: MutatedMessageRow) -> anyhow::Result<MutatedMessage> {
+    let sender_id = Sender::parse_storage_str(&row.sender_id)
+        .with_context(|| format!("invalid message sender_id {}", row.sender_id))?;
+    Ok(MutatedMessage {
+        id: row.id,
+        channel_id: row.channel_id,
+        thread_id: row.thread_id,
+        sender_id,
+        content: row.content,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+        edited_at: row.edited_at,
+        deleted_at: row.deleted_at,
+    })
 }
 
 impl From<MutatedAttachmentRow> for MutatedAttachment {
@@ -415,7 +415,7 @@ async fn get_message_owner(
     let row = sqlx::query_as!(
         SenderIdRow,
         r#"
-        SELECT sender_id AS "sender_id: MacroUserIdStr"
+        SELECT sender_id
         FROM comms_messages
         WHERE id = $1 AND channel_id = $2
         ORDER BY created_at ASC
@@ -436,7 +436,7 @@ async fn get_channel_participants_for_thread_id(
     let rows = sqlx::query_as!(
         MacroUserIdRow,
         r#"
-        SELECT DISTINCT id AS "user_id!: MacroUserIdStr" FROM (
+        SELECT DISTINCT id AS "user_id!" FROM (
             SELECT m.sender_id AS id
             FROM comms_channel_participants cp
             JOIN comms_channels c ON c.id = cp.channel_id
@@ -458,7 +458,10 @@ async fn get_channel_participants_for_thread_id(
     )
     .fetch_all(pool)
     .await?;
-    Ok(rows.into_iter().map(|row| row.user_id).collect())
+    Ok(rows
+        .into_iter()
+        .filter_map(|row| MacroUserIdStr::try_from(row.user_id).ok())
+        .collect())
 }
 
 fn static_channel_name(
@@ -471,10 +474,6 @@ fn static_channel_name(
     }
 
     match channel_type {
-        ChannelType::Organization => {
-            tracing::warn!(channel_id=%channel_id, "organization channel should have a name");
-            "Organization".to_string()
-        }
         ChannelType::Public => {
             tracing::warn!(channel_id=%channel_id, "public channel should have a name");
             "Public".to_string()
@@ -493,9 +492,11 @@ async fn resolve_channel_display_name(
     viewer_user_id: MacroUserIdStr<'_>,
 ) -> anyhow::Result<String> {
     match info.channel_type {
-        ChannelType::Organization | ChannelType::Public | ChannelType::Team => Ok(
-            static_channel_name(info.channel_type, info.name.as_deref(), info.id),
-        ),
+        ChannelType::Public | ChannelType::Team => Ok(static_channel_name(
+            info.channel_type,
+            info.name.as_deref(),
+            info.id,
+        )),
         ChannelType::Private
             if info
                 .name
@@ -1134,12 +1135,15 @@ impl ChannelRepo for PgChannelsRepo {
 
         Ok(rows
             .into_iter()
-            .map(|row| ChannelParticipant {
-                channel_id: row.channel_id,
-                user_id: row.user_id,
-                role: row.role,
-                joined_at: row.joined_at,
-                left_at: row.left_at,
+            .filter_map(|row| {
+                let user_id = MacroUserIdStr::try_from(row.user_id).ok()?;
+                Some(ChannelParticipant {
+                    channel_id: row.channel_id,
+                    user_id: user_id.as_ref().to_string(),
+                    role: row.role,
+                    joined_at: row.joined_at,
+                    left_at: row.left_at,
+                })
             })
             .collect())
     }
@@ -1254,10 +1258,11 @@ impl ChannelRepo for PgChannelsRepo {
         entity_id: &str,
         user_id: &str,
     ) -> Result<Vec<AttachmentEntityReference>, Self::Err> {
-        let attachment_references = sqlx::query_as!(
-            AttachmentChannelReference,
-            r#"
-                SELECT 
+        let attachment_references_fut = async {
+            sqlx::query_as!(
+                AttachmentChannelReference,
+                r#"
+                SELECT
                     a.channel_id                     AS "channel_id: uuid::Uuid",
                     c.name                           AS "channel_name?",            -- Option<String>
                     a.message_id                     AS "message_id: uuid::Uuid",
@@ -1277,18 +1282,20 @@ impl ChannelRepo for PgChannelsRepo {
                   AND m.deleted_at IS NULL
                 ORDER BY a.created_at DESC
                 "#,
-            entity_type,
-            entity_id,
-            user_id,
-        )
-        .fetch_all(&self.pool)
-        .await
-        .context("failed to get attachment references")?;
+                entity_type,
+                entity_id,
+                user_id,
+            )
+            .fetch_all(&self.pool)
+            .await
+            .context("failed to get attachment references")
+        };
 
-        let mention_references = sqlx::query_as!(
-            AttachmentChannelReference,
-            r#"
-                SELECT 
+        let mention_references_fut = async {
+            sqlx::query_as!(
+                AttachmentChannelReference,
+                r#"
+                SELECT
                     m.channel_id                     AS "channel_id: uuid::Uuid",
                     c.name                           AS "channel_name?",            -- Option<String>
                     m.id                             AS "message_id: uuid::Uuid",
@@ -1308,17 +1315,19 @@ impl ChannelRepo for PgChannelsRepo {
                   AND m.deleted_at IS NULL
                 ORDER BY em.created_at DESC
                 "#,
-            entity_type,
-            entity_id,
-            user_id,
-        )
-        .fetch_all(&self.pool)
-        .await
-        .context("failed to get mention references")?;
+                entity_type,
+                entity_id,
+                user_id,
+            )
+            .fetch_all(&self.pool)
+            .await
+            .context("failed to get mention references")
+        };
 
-        let generic_references = sqlx::query!(
-            r#"
-                SELECT 
+        let generic_references_fut = async {
+            sqlx::query!(
+                r#"
+                SELECT
                     em.source_entity_type,
                     em.source_entity_id,
                     em.entity_type,
@@ -1331,22 +1340,31 @@ impl ChannelRepo for PgChannelsRepo {
                   AND em.source_entity_type != 'message'
                 ORDER BY em.created_at DESC
                 "#,
-            entity_type,
-            entity_id,
-        )
-        .fetch_all(&self.pool)
-        .await
-        .context("failed to get generic entity references")?
-        .into_iter()
-        .map(|row| AttachmentGenericReference {
-            source_entity_type: row.source_entity_type,
-            source_entity_id: row.source_entity_id,
-            entity_type: row.entity_type,
-            entity_id: row.entity_id,
-            user_id: row.user_id,
-            created_at: row.created_at,
-        })
-        .collect::<Vec<_>>();
+                entity_type,
+                entity_id,
+            )
+            .fetch_all(&self.pool)
+            .await
+            .context("failed to get generic entity references")
+        };
+
+        let (attachment_references, mention_references, generic_rows) = tokio::try_join!(
+            attachment_references_fut,
+            mention_references_fut,
+            generic_references_fut,
+        )?;
+
+        let generic_references = generic_rows
+            .into_iter()
+            .map(|row| AttachmentGenericReference {
+                source_entity_type: row.source_entity_type,
+                source_entity_id: row.source_entity_id,
+                entity_type: row.entity_type,
+                entity_id: row.entity_id,
+                user_id: row.user_id,
+                created_at: row.created_at,
+            })
+            .collect::<Vec<_>>();
 
         let mut references: Vec<AttachmentEntityReference> = attachment_references
             .into_iter()
@@ -1586,7 +1604,7 @@ impl ChannelRepo for PgChannelsRepo {
         &self,
         channel_ids: &[String],
         viewer_user_id: &str,
-        org_id: Option<i64>,
+        _org_id: Option<i64>,
     ) -> Result<Vec<ChannelPreviewRow>, Self::Err> {
         let rows = sqlx::query_as!(
             ChannelPreviewQueryRow,
@@ -1600,8 +1618,6 @@ impl ChannelRepo for PgChannelsRepo {
                 CASE WHEN (
                     c.channel_type = 'public'
                     OR
-                    (c.channel_type = 'organization' AND $3::bigint IS NOT NULL AND c.org_id = $3)
-                    OR
                     (c.channel_type IN ('private', 'direct_message', 'team') AND EXISTS (
                         SELECT 1 FROM comms_channel_participants cp
                         WHERE cp.channel_id = c.id
@@ -1611,11 +1627,9 @@ impl ChannelRepo for PgChannelsRepo {
                 ) THEN true ELSE false END AS "has_access!: bool"
             FROM comms_channels c
             WHERE c.id::text = ANY($1)
-              AND (c.channel_type != 'organization' OR $3::bigint IS NOT NULL)
             "#,
             channel_ids,
             viewer_user_id,
-            org_id,
         )
         .fetch_all(&self.pool)
         .await
@@ -1664,7 +1678,7 @@ impl ChannelRepo for PgChannelsRepo {
     async fn create_channel(
         &self,
         owner_id: String,
-        org_id: Option<i64>,
+        _org_id: Option<i64>,
         req: CreateChannelRequest,
     ) -> Result<Uuid, Self::Err> {
         let channel_id = macro_uuid::generate_uuid_v7();
@@ -1677,7 +1691,7 @@ impl ChannelRepo for PgChannelsRepo {
             channel_id,
             req.name.as_deref(),
             &owner_id,
-            org_id,
+            None::<i64>,
             req.team_id,
             req.channel_type as ChannelType,
         )
@@ -1921,7 +1935,7 @@ impl ChannelRepo for PgChannelsRepo {
             RETURNING
                 id,
                 channel_id,
-                sender_id AS "sender_id: MacroUserIdStr",
+                sender_id,
                 content,
                 created_at,
                 updated_at,
@@ -1938,7 +1952,7 @@ impl ChannelRepo for PgChannelsRepo {
         .fetch_one(&self.pool)
         .await
         .context("unable to create message")?;
-        Ok(row.into())
+        mutated_message_from_row(row)
     }
 
     async fn touch_channel_updated_at(&self, channel_id: Uuid) -> Result<(), Self::Err> {
@@ -2156,7 +2170,7 @@ impl ChannelRepo for PgChannelsRepo {
             RETURNING
                 id,
                 channel_id,
-                sender_id AS "sender_id: MacroUserIdStr",
+                sender_id,
                 content,
                 created_at,
                 updated_at,
@@ -2170,7 +2184,7 @@ impl ChannelRepo for PgChannelsRepo {
         .fetch_one(&self.pool)
         .await
         .context("unable to update message")?;
-        Ok(row.into())
+        mutated_message_from_row(row)
     }
 
     async fn patch_message(
@@ -2188,7 +2202,7 @@ impl ChannelRepo for PgChannelsRepo {
             RETURNING
                 id,
                 channel_id,
-                sender_id AS "sender_id: MacroUserIdStr",
+                sender_id,
                 content,
                 created_at,
                 updated_at,
@@ -2203,7 +2217,7 @@ impl ChannelRepo for PgChannelsRepo {
         .fetch_one(&self.pool)
         .await
         .context("unable to update message")?;
-        Ok(row.into())
+        mutated_message_from_row(row)
     }
     async fn delete_message(
         &self,
@@ -2219,7 +2233,7 @@ impl ChannelRepo for PgChannelsRepo {
             RETURNING
                 id,
                 channel_id,
-                sender_id AS "sender_id: MacroUserIdStr",
+                sender_id,
                 content,
                 created_at,
                 updated_at,
@@ -2233,7 +2247,7 @@ impl ChannelRepo for PgChannelsRepo {
         .fetch_one(&self.pool)
         .await
         .context("unable to delete message")?;
-        Ok(row.into())
+        mutated_message_from_row(row)
     }
 
     async fn get_message_owner(
@@ -2268,12 +2282,18 @@ impl ChannelRepo for PgChannelsRepo {
 
         Ok(rows
             .into_iter()
-            .map(|row| ChannelParticipant {
-                channel_id: row.channel_id,
-                user_id: row.user_id,
-                role: row.role,
-                joined_at: row.joined_at,
-                left_at: row.left_at,
+            .filter_map(|row| {
+                if row.left_at.is_some() {
+                    return None;
+                }
+                let user_id = MacroUserIdStr::try_from(row.user_id).ok()?;
+                Some(ChannelParticipant {
+                    channel_id: row.channel_id,
+                    user_id: user_id.as_ref().to_string(),
+                    role: row.role,
+                    joined_at: row.joined_at,
+                    left_at: row.left_at,
+                })
             })
             .collect())
     }
@@ -2305,7 +2325,7 @@ impl ChannelRepo for PgChannelsRepo {
     async fn get_activities(&self, user_id: String) -> Result<Vec<Activity>, Self::Err> {
         let activities = sqlx::query!(
             r#"
-        SELECT 
+        SELECT
             a.id as "id!: Uuid",
             a.user_id as "user_id!: String",
             a.channel_id as "channel_id!: Uuid",
@@ -2315,7 +2335,7 @@ impl ChannelRepo for PgChannelsRepo {
             a.updated_at as "updated_at!: DateTime<Utc>"
         FROM comms_activity a
         WHERE a.user_id = $1
-        ORDER BY 
+        ORDER BY
             GREATEST(
                 COALESCE(a.viewed_at, '1970-01-01'::timestamp),
                 COALESCE(a.interacted_at, '1970-01-01'::timestamp)
@@ -2359,11 +2379,11 @@ impl ChannelRepo for PgChannelsRepo {
                 VALUES (
                     $1, $2, $3, NOW()
                 )
-                ON CONFLICT (user_id, channel_id) DO UPDATE 
-                SET 
+                ON CONFLICT (user_id, channel_id) DO UPDATE
+                SET
                     viewed_at = NOW(),
                     updated_at = NOW()
-                RETURNING 
+                RETURNING
                     id as "id!: Uuid",
                     user_id as "user_id!: String",
                     channel_id as "channel_id!: Uuid",
@@ -2392,11 +2412,11 @@ impl ChannelRepo for PgChannelsRepo {
                 VALUES (
                     $1, $2, $3, NOW()
                 )
-                ON CONFLICT (user_id, channel_id) DO UPDATE 
-                SET 
+                ON CONFLICT (user_id, channel_id) DO UPDATE
+                SET
                     interacted_at = NOW(),
                     updated_at = NOW()
-                RETURNING 
+                RETURNING
                     id as "id!: Uuid",
                     user_id as "user_id!: String",
                     channel_id as "channel_id!: Uuid",

@@ -94,3 +94,46 @@ pub(super) async fn link_by_macro_id(
         .transpose()
         .map_err(|e| sqlx::Error::Decode(Box::new(e)))
 }
+
+#[tracing::instrument(err, skip(pool))]
+pub(super) async fn inboxes_for_macro_id(
+    pool: &PgPool,
+    macro_id: MacroUserIdStr<'_>,
+) -> Result<Vec<Link>, sqlx::Error> {
+    let db_links: Vec<DbLink> = sqlx::query_as!(
+        DbLink,
+        r#"
+        SELECT id as "id!", macro_id as "macro_id!",
+               fusionauth_user_id as "fusionauth_user_id!",
+               email_address as "email_address!",
+               provider as "provider!: _",
+               is_sync_active as "is_sync_active!",
+               created_at as "created_at!",
+               updated_at as "updated_at!"
+        FROM (
+            SELECT el.id, el.macro_id, el.fusionauth_user_id, el.email_address,
+                   el.provider, el.is_sync_active, el.created_at, el.updated_at
+            FROM email_links el
+            WHERE el.macro_id = $1
+            UNION
+            SELECT el.id, el.macro_id, el.fusionauth_user_id, el.email_address,
+                   el.provider, el.is_sync_active, el.created_at, el.updated_at
+            FROM email_links el
+            JOIN macro_user_links mul ON el.macro_id = mul.child_macro_id
+            WHERE mul.primary_macro_id = $1
+        ) AS combined
+        ORDER BY created_at DESC
+        "#,
+        macro_id.as_ref()
+    )
+    .fetch_all(pool)
+    .await?;
+
+    db_links
+        .into_iter()
+        .map(|v| {
+            v.try_into_model()
+                .map_err(|e| sqlx::Error::Decode(Box::new(e)))
+        })
+        .collect()
+}

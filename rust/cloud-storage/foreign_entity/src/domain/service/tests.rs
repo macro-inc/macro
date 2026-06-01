@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use chrono::{DateTime, Utc};
+use entity_access::domain::models::{EntityAccessReceipt, EntityType, ViewAccessLevel};
 use models_pagination::{Query, SimpleSortMethod};
 use serde_json::json;
 use uuid::Uuid;
@@ -210,6 +211,17 @@ fn listing_query(sort_method: SimpleSortMethod) -> ForeignEntityListQuery {
     Query::Sort(sort_method, None)
 }
 
+fn foreign_entity_receipt(entity_id: &str) -> EntityAccessReceipt<ViewAccessLevel> {
+    receipt_for_type(entity_id, EntityType::ForeignEntity)
+}
+
+fn receipt_for_type(
+    entity_id: &str,
+    entity_type: EntityType,
+) -> EntityAccessReceipt<ViewAccessLevel> {
+    EntityAccessReceipt::dangerously_assert_internal_user(entity_id, entity_type)
+}
+
 fn assert_bad_request(error: ForeignEntityError, expected_message: &str) {
     let ForeignEntityError::BadRequest(message) = error else {
         panic!("expected bad request error, got {error:?}");
@@ -251,6 +263,60 @@ async fn create_persists_foreign_entity_with_generated_id() {
         .expect("created foreign entity should be fetched");
 
     assert_eq!(fetched, created);
+}
+
+#[tokio::test]
+async fn get_foreign_entity_returns_matching_record_from_receipt() {
+    let service = service();
+    let created = service
+        .create_foreign_entity(valid_create())
+        .await
+        .expect("valid foreign entity should be created");
+
+    let fetched = service
+        .get_foreign_entity(foreign_entity_receipt(&created.id.to_string()))
+        .await
+        .expect("created foreign entity should be fetched by receipt");
+
+    assert_eq!(fetched, created);
+}
+
+#[tokio::test]
+async fn get_foreign_entity_missing_row_returns_not_found() {
+    let service = service();
+    let id = Uuid::new_v4();
+
+    let error = service
+        .get_foreign_entity(foreign_entity_receipt(&id.to_string()))
+        .await
+        .expect_err("missing foreign entity should return not found");
+
+    assert_not_found(error, id);
+}
+
+#[tokio::test]
+async fn get_foreign_entity_rejects_invalid_uuid_receipt() {
+    let service = service();
+
+    let error = service
+        .get_foreign_entity(foreign_entity_receipt("not-a-uuid"))
+        .await
+        .expect_err("invalid receipt UUID should be rejected");
+
+    assert_bad_request(error, "valid UUID");
+}
+
+#[tokio::test]
+async fn get_foreign_entity_rejects_wrong_entity_type_receipt() {
+    let service = service();
+    let id = Uuid::new_v4();
+
+    let error = service
+        .get_foreign_entity(receipt_for_type(&id.to_string(), EntityType::Document))
+        .await
+        .expect_err("wrong receipt entity type should be rejected");
+
+    assert_bad_request(error, "ForeignEntity");
 }
 
 #[tokio::test]

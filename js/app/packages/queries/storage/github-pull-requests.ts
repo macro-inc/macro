@@ -51,6 +51,8 @@ function toStorageGithubPullRequest(
 ): GithubPullRequest {
   return {
     additions: pullRequest.additions,
+    checks: pullRequest.checks,
+    comments: pullRequest.comments,
     deletions: pullRequest.deletions,
     displayName: pullRequest.displayName,
     githubKey: pullRequest.githubKey,

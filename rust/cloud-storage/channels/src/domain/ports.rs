@@ -8,8 +8,8 @@ use crate::domain::models::{
     MessageAttachment, MessagePageDirection, MutatedAttachment, MutatedMessage,
     NewChannelAttachment, PatchChannelRequest, PatchMessageRequest, PostMessageRequest,
     PostMessageResponse, PostReactionRequest, PostTypingRequest, ReferencedShareItem,
-    RemoveParticipantsRequest, ResolvedChannelMessage, SimpleMention, ThreadData, ThreadReply,
-    ThreadReplyRow, TopLevelMessageRow,
+    RemoveParticipantsRequest, ResolvedChannelMessage, Sender, SimpleMention, ThreadData,
+    ThreadReply, ThreadReplyRow, TopLevelMessageRow,
 };
 use crate::domain::side_effects::{
     ChannelDocumentMention, ChannelNotificationEffect, ChannelRealtimeEffect,
@@ -136,7 +136,7 @@ pub trait ChannelRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<ChannelMetadata, Self::Err>> + Send;
 
     /// Batch fetch channel preview rows for the requested ids, computing
-    /// per-channel access for the given viewer/org.
+    /// per-channel access for the given viewer.
     fn batch_get_channel_previews(
         &self,
         channel_ids: &[String],
@@ -401,6 +401,20 @@ pub trait ChannelService: Send + Sync + 'static {
         channel_id: Uuid,
     ) -> impl Future<Output = Result<Vec<ChannelParticipant>, ChannelMessagesErr>> + Send;
 
+    /// Fetch channel metadata (type + resolved display name) from the viewer's perspective.
+    fn get_channel_metadata(
+        &self,
+        channel_id: Uuid,
+        viewer_user_id: MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<ChannelMetadata, ChannelMessagesErr>> + Send {
+        let _ = (channel_id, viewer_user_id);
+        async move {
+            Err(ChannelMessagesErr::Repo(anyhow::anyhow!(
+                "get_channel_metadata is not configured"
+            )))
+        }
+    }
+
     /// Batch fetch channel previews for the requested ids.
     fn batch_get_channel_previews(
         &self,
@@ -474,7 +488,7 @@ pub trait ChannelService: Send + Sync + 'static {
     /// Create a channel.
     fn create_channel(
         &self,
-        _actor: MacroUserIdStr<'static>,
+        _actor: Sender,
         _actor_org_id: Option<i64>,
         _req: CreateChannelRequest,
     ) -> impl Future<Output = Result<CreateChannelResponse, ChannelMutationErr>> + Send {
@@ -488,7 +502,7 @@ pub trait ChannelService: Send + Sync + 'static {
     /// Get or create a direct message channel.
     fn get_or_create_dm(
         &self,
-        _actor: MacroUserIdStr<'static>,
+        _actor: Sender,
         _req: GetOrCreateDmRequest,
     ) -> impl Future<Output = Result<GetOrCreateChannelResponse, ChannelMutationErr>> + Send {
         async move {
@@ -501,7 +515,7 @@ pub trait ChannelService: Send + Sync + 'static {
     /// Get or create a private channel.
     fn get_or_create_private(
         &self,
-        _actor: MacroUserIdStr<'static>,
+        _actor: Sender,
         _req: GetOrCreatePrivateRequest,
     ) -> impl Future<Output = Result<GetOrCreateChannelResponse, ChannelMutationErr>> + Send {
         async move {
@@ -514,7 +528,7 @@ pub trait ChannelService: Send + Sync + 'static {
     /// Patch a channel.
     fn patch_channel(
         &self,
-        _actor: MacroUserIdStr<'static>,
+        _actor: Sender,
         _channel_id: Uuid,
         _req: PatchChannelRequest,
     ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send {
@@ -528,7 +542,7 @@ pub trait ChannelService: Send + Sync + 'static {
     /// Delete a channel.
     fn delete_channel(
         &self,
-        _actor: MacroUserIdStr<'static>,
+        _actor: Sender,
         _channel_id: Uuid,
     ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send {
         async move {
@@ -541,7 +555,7 @@ pub trait ChannelService: Send + Sync + 'static {
     /// Send a message.
     fn post_message(
         &self,
-        _actor: MacroUserIdStr<'static>,
+        _actor: Sender,
         _channel_id: Uuid,
         _req: PostMessageRequest,
     ) -> impl Future<Output = Result<PostMessageResponse, ChannelMutationErr>> + Send {
@@ -555,7 +569,7 @@ pub trait ChannelService: Send + Sync + 'static {
     /// Patch a message.
     fn patch_message(
         &self,
-        _actor: MacroUserIdStr<'static>,
+        _actor: Sender,
         _actor_role: super::models::ParticipantRole,
         _channel_id: Uuid,
         _message_id: Uuid,
@@ -571,7 +585,7 @@ pub trait ChannelService: Send + Sync + 'static {
     /// Delete a message.
     fn delete_message(
         &self,
-        _actor: MacroUserIdStr<'static>,
+        _actor: Sender,
         _actor_role: super::models::ParticipantRole,
         _channel_id: Uuid,
         _message_id: Uuid,
@@ -587,7 +601,7 @@ pub trait ChannelService: Send + Sync + 'static {
     /// Mutate a reaction.
     fn post_reaction(
         &self,
-        _actor: MacroUserIdStr<'static>,
+        _actor: Sender,
         _channel_id: Uuid,
         _req: PostReactionRequest,
     ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send {
@@ -601,7 +615,7 @@ pub trait ChannelService: Send + Sync + 'static {
     /// Emit a typing update.
     fn post_typing(
         &self,
-        _actor: MacroUserIdStr<'static>,
+        _actor: Sender,
         _channel_id: Uuid,
         _req: PostTypingRequest,
     ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send {
@@ -615,7 +629,7 @@ pub trait ChannelService: Send + Sync + 'static {
     /// Add participants to a channel.
     fn add_participants(
         &self,
-        _actor: MacroUserIdStr<'static>,
+        _actor: Sender,
         _channel_id: Uuid,
         _req: AddParticipantsRequest,
     ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send {
@@ -629,6 +643,7 @@ pub trait ChannelService: Send + Sync + 'static {
     /// Remove participants from a channel.
     fn remove_participants(
         &self,
+        _actor: Sender,
         _channel_id: Uuid,
         _req: RemoveParticipantsRequest,
     ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send {
@@ -642,7 +657,7 @@ pub trait ChannelService: Send + Sync + 'static {
     /// Join a channel.
     fn join_channel(
         &self,
-        _actor: MacroUserIdStr<'static>,
+        _actor: Sender,
         _channel_id: Uuid,
     ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send {
         async move {
@@ -655,7 +670,7 @@ pub trait ChannelService: Send + Sync + 'static {
     /// Leave a channel.
     fn leave_channel(
         &self,
-        _actor: MacroUserIdStr<'static>,
+        _actor: Sender,
         _channel_id: Uuid,
     ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send {
         async move {
@@ -704,7 +719,7 @@ pub trait ChannelService: Send + Sync + 'static {
     /// Upsert the user's activity (view/interaction) for a channel.
     fn post_activity(
         &self,
-        _user_id: String,
+        _actor: Sender,
         _channel_id: Uuid,
         _activity_type: ActivityType,
     ) -> impl Future<Output = Result<Activity, ChannelMutationErr>> + Send {

@@ -77,6 +77,9 @@ impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient, F: ForeignEntit
             .await
             .map_err(|e| GithubError::Internal(e.into()))?;
 
+        self.backfill_open_pull_request_foreign_entities(installation_id, &sources)
+            .await?;
+
         Ok(())
     }
 }

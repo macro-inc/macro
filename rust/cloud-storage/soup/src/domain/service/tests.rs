@@ -5,6 +5,7 @@ use chrono::{DateTime, Utc};
 use comms::domain::models::GetChannelsRequest;
 use cool_asserts::assert_matches;
 use email::domain::models::{EnrichedEmailThreadPreview, PreviewView};
+use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
 use filter_ast::Expr;
 use foreign_entity::domain::{
     models::{
@@ -85,10 +86,35 @@ impl CallRecordQueryService for NoopCallRecordQueryService {
     }
 }
 
+fn foreign_entity_id_from_receipt(
+    receipt: EntityAccessReceipt<ViewAccessLevel>,
+) -> Result<Uuid, ForeignEntityError> {
+    let entity = receipt.entity();
+    if entity.entity_type != EntityType::ForeignEntity {
+        return Err(ForeignEntityError::BadRequest(format!(
+            "expected ForeignEntity receipt, got {:?}",
+            entity.entity_type
+        )));
+    }
+
+    Uuid::parse_str(&entity.entity_id).map_err(|_| {
+        ForeignEntityError::BadRequest("foreign entity receipt id must be a valid UUID".to_string())
+    })
+}
+use crm::domain::service::NoOpCrmService;
+
 #[derive(Clone)]
 struct NoopForeignEntityService;
 
 impl ForeignEntityService for NoopForeignEntityService {
+    async fn get_foreign_entity(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<ForeignEntity, ForeignEntityError> {
+        let id = foreign_entity_id_from_receipt(receipt)?;
+        self.get_foreign_entity_by_id(id).await
+    }
+
     async fn get_foreign_entity_by_id(
         &self,
         id: Uuid,
@@ -201,6 +227,14 @@ impl RecordingForeignEntityService {
 }
 
 impl ForeignEntityService for RecordingForeignEntityService {
+    async fn get_foreign_entity(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<ForeignEntity, ForeignEntityError> {
+        let id = foreign_entity_id_from_receipt(receipt)?;
+        self.get_foreign_entity_by_id(id).await
+    }
+
     async fn get_foreign_entity_by_id(
         &self,
         id: Uuid,
@@ -394,6 +428,7 @@ async fn simple_soup_includes_foreign_entities() {
         NoopEmailPreviewService,
         NoopCommsService,
         NoopCallRecordQueryService,
+        NoOpCrmService,
         foreign_entity_service.clone(),
     )
     .get_user_soup(
@@ -401,7 +436,7 @@ async fn simple_soup_includes_foreign_entities() {
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
-            link_id: None,
+            link_ids: vec![],
             soup_type: SoupType::UnExpanded,
             limit: 20,
             cursor: SoupQuery::new_sort_simple(
@@ -474,6 +509,7 @@ async fn frecency_soup_does_not_query_foreign_entities() {
         NoopEmailPreviewService,
         NoopCommsService,
         NoopCallRecordQueryService,
+        NoOpCrmService,
         foreign_entity_service.clone(),
     )
     .get_user_soup(
@@ -481,7 +517,7 @@ async fn frecency_soup_does_not_query_foreign_entities() {
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
-            link_id: None,
+            link_ids: vec![],
             soup_type: SoupType::UnExpanded,
             limit: 20,
             cursor: SoupQuery::new_sort_frecency(Frecency, EntityFilters::default()),
@@ -519,6 +555,7 @@ async fn team_receipt_contributes_team_foreign_entity_source_id() {
         NoopEmailPreviewService,
         NoopCommsService,
         NoopCallRecordQueryService,
+        NoOpCrmService,
         foreign_entity_service.clone(),
     )
     .get_user_soup(
@@ -526,7 +563,7 @@ async fn team_receipt_contributes_team_foreign_entity_source_id() {
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
-            link_id: None,
+            link_ids: vec![],
             soup_type: SoupType::UnExpanded,
             limit: 20,
             cursor: SoupQuery::new_sort_simple(
@@ -574,6 +611,7 @@ async fn foreign_entity_filter_suppresses_non_matching_foreign_entities() {
         NoopEmailPreviewService,
         NoopCommsService,
         NoopCallRecordQueryService,
+        NoOpCrmService,
         foreign_entity_service.clone(),
     )
     .get_user_soup(
@@ -581,7 +619,7 @@ async fn foreign_entity_filter_suppresses_non_matching_foreign_entities() {
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
-            link_id: None,
+            link_ids: vec![],
             soup_type: SoupType::UnExpanded,
             limit: 20,
             cursor: SoupQuery::new_sort_simple(
@@ -646,6 +684,7 @@ async fn it_should_not_query_frecency() {
         NoopEmailPreviewService,
         NoopCommsService,
         NoopCallRecordQueryService,
+        NoOpCrmService,
         NoopForeignEntityService,
     )
     .get_user_soup(
@@ -653,7 +692,7 @@ async fn it_should_not_query_frecency() {
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
-            link_id: Some(Uuid::new_v4()),
+            link_ids: vec![Uuid::new_v4()],
             soup_type: SoupType::UnExpanded,
             limit: 0,
             cursor: SoupQuery::new_sort_simple(
@@ -732,6 +771,7 @@ async fn it_should_query_frecency() {
         NoopEmailPreviewService,
         NoopCommsService,
         NoopCallRecordQueryService,
+        NoOpCrmService,
         NoopForeignEntityService,
     )
     .get_user_soup(
@@ -739,7 +779,7 @@ async fn it_should_query_frecency() {
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
-            link_id: Some(Uuid::new_v4()),
+            link_ids: vec![Uuid::new_v4()],
             soup_type: SoupType::UnExpanded,
             limit: u16::MAX,
             cursor: SoupQuery::new_sort_frecency(Frecency, EntityFilters::default()),
@@ -815,6 +855,7 @@ async fn it_should_sort_frecency_descending() {
         NoopEmailPreviewService,
         NoopCommsService,
         NoopCallRecordQueryService,
+        NoOpCrmService,
         NoopForeignEntityService,
     )
     .get_user_soup(
@@ -822,7 +863,7 @@ async fn it_should_sort_frecency_descending() {
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
-            link_id: Some(Uuid::new_v4()),
+            link_ids: vec![Uuid::new_v4()],
             soup_type: SoupType::UnExpanded,
             limit: u16::MAX,
             cursor: SoupQuery::new_sort_frecency(Frecency, EntityFilters::default()),
@@ -912,6 +953,7 @@ async fn frecency_should_fallback() {
         NoopEmailPreviewService,
         NoopCommsService,
         NoopCallRecordQueryService,
+        NoOpCrmService,
         NoopForeignEntityService,
     )
     .get_user_soup(
@@ -919,7 +961,7 @@ async fn frecency_should_fallback() {
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
-            link_id: Some(Uuid::new_v4()),
+            link_ids: vec![Uuid::new_v4()],
             soup_type: SoupType::UnExpanded,
             limit: 100,
             cursor: SoupQuery::new_sort_frecency(Frecency, EntityFilters::default()),
@@ -993,6 +1035,7 @@ async fn frecency_should_paginate() {
         NoopEmailPreviewService,
         NoopCommsService,
         NoopCallRecordQueryService,
+        NoOpCrmService,
         NoopForeignEntityService,
     )
     .get_user_soup(
@@ -1000,7 +1043,7 @@ async fn frecency_should_paginate() {
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
-            link_id: Some(Uuid::new_v4()),
+            link_ids: vec![Uuid::new_v4()],
             soup_type: SoupType::UnExpanded,
             limit: 100,
             cursor: SoupQuery::new_sort_frecency(Frecency, EntityFilters::default()),
@@ -1076,6 +1119,7 @@ async fn frecency_should_resume_cursor() {
         NoopEmailPreviewService,
         NoopCommsService,
         NoopCallRecordQueryService,
+        NoOpCrmService,
         NoopForeignEntityService,
     )
     .get_user_soup(
@@ -1083,7 +1127,7 @@ async fn frecency_should_resume_cursor() {
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
-            link_id: Some(Uuid::new_v4()),
+            link_ids: vec![Uuid::new_v4()],
             soup_type: SoupType::UnExpanded,
             limit: 100,
             cursor: SoupQuery::new_cursor_frecency(CursorWithValAndFilter {
@@ -1175,6 +1219,7 @@ async fn frecency_fallback_cursor_should_resume() {
         NoopEmailPreviewService,
         NoopCommsService,
         NoopCallRecordQueryService,
+        NoOpCrmService,
         NoopForeignEntityService,
     )
     .get_user_soup(
@@ -1182,7 +1227,7 @@ async fn frecency_fallback_cursor_should_resume() {
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
-            link_id: Some(Uuid::new_v4()),
+            link_ids: vec![Uuid::new_v4()],
             soup_type: SoupType::UnExpanded,
             limit: 100,
             cursor: SoupQuery::new_cursor_frecency(CursorWithValAndFilter {
@@ -1250,6 +1295,7 @@ async fn cursor_should_return_simple_sort() {
         NoopEmailPreviewService,
         NoopCommsService,
         NoopCallRecordQueryService,
+        NoOpCrmService,
         NoopForeignEntityService,
     )
     .get_user_soup(
@@ -1257,7 +1303,7 @@ async fn cursor_should_return_simple_sort() {
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
-            link_id: Some(Uuid::new_v4()),
+            link_ids: vec![Uuid::new_v4()],
             soup_type: SoupType::UnExpanded,
             limit: 0,
             cursor: SoupQuery::new_sort_simple(
@@ -1321,6 +1367,7 @@ async fn cursor_should_return_frecency() {
         NoopEmailPreviewService,
         NoopCommsService,
         NoopCallRecordQueryService,
+        NoOpCrmService,
         NoopForeignEntityService,
     )
     .get_user_soup(
@@ -1328,7 +1375,7 @@ async fn cursor_should_return_frecency() {
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
-            link_id: Some(Uuid::new_v4()),
+            link_ids: vec![Uuid::new_v4()],
             soup_type: SoupType::UnExpanded,
             limit: 100,
             cursor: SoupQuery::new_sort_frecency(Frecency, EntityFilters::default()),
@@ -1382,6 +1429,7 @@ async fn it_should_return_is_completed_true_for_completed_tasks() {
         NoopEmailPreviewService,
         NoopCommsService,
         NoopCallRecordQueryService,
+        NoOpCrmService,
         NoopForeignEntityService,
     )
     .get_user_soup(
@@ -1389,7 +1437,7 @@ async fn it_should_return_is_completed_true_for_completed_tasks() {
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
-            link_id: Some(Uuid::new_v4()),
+            link_ids: vec![Uuid::new_v4()],
             soup_type: SoupType::UnExpanded,
             limit: 0,
             cursor: SoupQuery::new_sort_simple(
@@ -1433,6 +1481,7 @@ async fn it_should_return_is_completed_false_for_incomplete_tasks() {
         NoopEmailPreviewService,
         NoopCommsService,
         NoopCallRecordQueryService,
+        NoOpCrmService,
         NoopForeignEntityService,
     )
     .get_user_soup(
@@ -1440,7 +1489,7 @@ async fn it_should_return_is_completed_false_for_incomplete_tasks() {
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
-            link_id: Some(Uuid::new_v4()),
+            link_ids: vec![Uuid::new_v4()],
             soup_type: SoupType::UnExpanded,
             limit: 0,
             cursor: SoupQuery::new_sort_simple(
@@ -1484,6 +1533,7 @@ async fn it_should_return_is_completed_none_for_non_tasks() {
         NoopEmailPreviewService,
         NoopCommsService,
         NoopCallRecordQueryService,
+        NoOpCrmService,
         NoopForeignEntityService,
     )
     .get_user_soup(
@@ -1491,7 +1541,7 @@ async fn it_should_return_is_completed_none_for_non_tasks() {
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
-            link_id: Some(Uuid::new_v4()),
+            link_ids: vec![Uuid::new_v4()],
             soup_type: SoupType::UnExpanded,
             limit: 0,
             cursor: SoupQuery::new_sort_simple(
@@ -1547,6 +1597,7 @@ async fn it_should_preserve_is_completed_for_mixed_items() {
         NoopEmailPreviewService,
         NoopCommsService,
         NoopCallRecordQueryService,
+        NoOpCrmService,
         NoopForeignEntityService,
     )
     .get_user_soup(
@@ -1554,7 +1605,7 @@ async fn it_should_preserve_is_completed_for_mixed_items() {
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
-            link_id: Some(Uuid::new_v4()),
+            link_ids: vec![Uuid::new_v4()],
             soup_type: SoupType::UnExpanded,
             limit: 0,
             cursor: SoupQuery::new_sort_simple(
@@ -1629,6 +1680,7 @@ async fn it_should_preserve_is_completed_in_by_ids_queries() {
         NoopEmailPreviewService,
         NoopCommsService,
         NoopCallRecordQueryService,
+        NoOpCrmService,
         NoopForeignEntityService,
     )
     .get_user_soup(
@@ -1636,7 +1688,7 @@ async fn it_should_preserve_is_completed_in_by_ids_queries() {
             email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
-            link_id: Some(Uuid::new_v4()),
+            link_ids: vec![Uuid::new_v4()],
             soup_type: SoupType::UnExpanded,
             limit: 3,
             cursor: SoupQuery::new_sort_frecency(Frecency, EntityFilters::default()),

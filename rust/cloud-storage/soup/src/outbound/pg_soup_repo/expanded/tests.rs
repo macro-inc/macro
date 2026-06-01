@@ -366,6 +366,7 @@ async fn test_expanded_soup_by_ids(pool: Pool<Postgres>) {
             | SoupItem::EmailThread(_)
             | SoupItem::Channel(_)
             | SoupItem::Call(_)
+            | SoupItem::CrmCompany(_)
             | SoupItem::ForeignEntity(_) => None,
         })
         .expect("The document should exist");
@@ -5455,6 +5456,7 @@ fn mock_empty_ast() -> EntityFilterAst {
         email_filter: item_filters::ast::EmailFilterAst::default(),
         channel_filter: None,
         call_filter: None,
+        crm_company_filter: None,
         foreign_entity_filter: None,
         properties_filter: None,
     }

@@ -22,6 +22,7 @@ pub mod channel_role;
 pub mod channel_users;
 pub mod chat_access;
 pub mod document_access;
+pub mod foreign_entity_access;
 pub mod project_access;
 pub mod team_access;
 pub mod thread_access;

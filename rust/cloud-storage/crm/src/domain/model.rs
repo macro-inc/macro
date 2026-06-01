@@ -1,6 +1,21 @@
 //! Domain models for CRM companies and their related records.
 
 use chrono::{DateTime, Utc};
+use serde_json::Value;
+
+/// A [`CrmCompany`] bundled with display metadata resolved from
+/// `crm_domain_directory` against the primary (earliest-created) domain.
+/// `name` / `description` are `None` when no directory row exists or
+/// the row is in negative-cache state (NULL fields).
+#[derive(Debug, Clone)]
+pub struct CrmCompanyForSoup {
+    /// The underlying company record.
+    pub company: CrmCompany,
+    /// Display name from the primary domain's directory entry.
+    pub name: Option<String>,
+    /// Display description from the primary domain's directory entry.
+    pub description: Option<String>,
+}
 
 /// A known external company tracked by a team (CRM-style record). A company
 /// aggregates one or more email domains and individual contacts that are
@@ -30,24 +45,76 @@ pub struct CrmCompany {
     pub domains: Vec<CrmDomain>,
 }
 
-/// Cached metadata about a company keyed on its email domain. Populated
-/// lazily by [`crate::domain::company_metadata_resolver::CompanyMetadataResolver`] (typically
-/// an unfurl of `https://{domain}`) and stored in `crm_domain_directory`.
+/// Cached metadata about a company keyed on its email domain. Resolved
+/// by [`CompanyMetadataResolver`] (the Apollo.io organization-enrichment
+/// adapter) and stored in `crm_domain_directory`.
 ///
-/// Every field is `Option` because the resolver may succeed with the
-/// page returning no useful metadata, or fail entirely — both cases
-/// are represented as a row with all-NULL fields so the cache is a
-/// negative cache as well as a positive one.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+/// Every scalar is `Option` and every list defaults empty: the resolver
+/// may succeed with little data or fail entirely, and both collapse to an
+/// all-empty row so the directory doubles as a negative cache.
+///
+/// [`CompanyMetadataResolver`]: crate::domain::company_metadata_resolver::CompanyMetadataResolver
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct DomainMetadata {
-    /// Display name of the company (typically the page `<title>` /
-    /// `og:title`).
+    /// Company display name (Apollo `name`).
     pub name: Option<String>,
-    /// Short description of the company (typically `og:description`).
+    /// Short company description (Apollo `short_description`).
     pub description: Option<String>,
-    /// URL of a logo / icon for the company (favicon resolved from the
-    /// page's `<link rel="icon">`, falling back to `/favicon.ico`).
+    /// Logo / icon URL (Apollo `logo_url`).
     pub icon_url: Option<String>,
+    /// Apollo's organization id, for re-enrichment / linking.
+    pub apollo_organization_id: Option<String>,
+    /// Canonical company website (Apollo `website_url`).
+    pub website_url: Option<String>,
+    /// LinkedIn company URL.
+    pub linkedin_url: Option<String>,
+    /// Twitter / X URL.
+    pub twitter_url: Option<String>,
+    /// Facebook URL.
+    pub facebook_url: Option<String>,
+    /// Primary industry (Apollo `industry`).
+    pub industry: Option<String>,
+    /// Free-text keywords / tags (Apollo `keywords`).
+    pub keywords: Vec<String>,
+    /// Detected technologies (Apollo `technology_names`).
+    pub technologies: Vec<String>,
+    /// Estimated headcount.
+    pub estimated_num_employees: Option<i32>,
+    /// Estimated annual revenue, in dollars.
+    pub annual_revenue: Option<i64>,
+    /// Human-readable annual revenue (e.g. "100M").
+    pub annual_revenue_printed: Option<String>,
+    /// Total funding raised, in dollars.
+    pub total_funding: Option<i64>,
+    /// Human-readable total funding (e.g. "251.2M").
+    pub total_funding_printed: Option<String>,
+    /// Latest funding stage (e.g. "Series D").
+    pub latest_funding_stage: Option<String>,
+    /// Date of the latest funding round.
+    pub latest_funding_round_date: Option<DateTime<Utc>>,
+    /// Year the company was founded.
+    pub founded_year: Option<i32>,
+    /// Ticker symbol if publicly traded.
+    pub publicly_traded_symbol: Option<String>,
+    /// Exchange if publicly traded.
+    pub publicly_traded_exchange: Option<String>,
+    /// Company phone number.
+    pub phone: Option<String>,
+    /// Full formatted HQ address.
+    pub raw_address: Option<String>,
+    /// HQ street address.
+    pub street_address: Option<String>,
+    /// HQ city.
+    pub city: Option<String>,
+    /// HQ state / region.
+    pub state: Option<String>,
+    /// HQ postal code.
+    pub postal_code: Option<String>,
+    /// HQ country.
+    pub country: Option<String>,
+    /// Full Apollo `organization` payload (minus our workspace `account`),
+    /// kept so fields we don't model yet aren't lost.
+    pub raw: Option<Value>,
 }
 
 /// A domain (e.g. "acme.com") associated with a [`CrmCompany`]. A company
@@ -62,6 +129,29 @@ pub struct CrmDomain {
     pub domain: String,
     /// When the domain record was created
     pub created_at: DateTime<Utc>,
+}
+
+/// A contact (individual external party) belonging to a [`CrmCompany`].
+/// Tracked per `(company_id, email)`; `name` is the first non-NULL display
+/// name observed across the team's populates.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct CrmContact {
+    /// The id of the contact record
+    pub id: uuid::Uuid,
+    /// The id of the company the contact belongs to
+    pub company_id: uuid::Uuid,
+    /// The contact's email address
+    pub email: String,
+    /// Display name observed for the contact, if any
+    pub name: Option<String>,
+    /// Earliest known interaction with this contact
+    pub first_interaction: DateTime<Utc>,
+    /// Most recent known interaction with this contact
+    pub last_interaction: DateTime<Utc>,
+    /// When the contact record was created
+    pub created_at: DateTime<Utc>,
+    /// When the contact record was last updated
+    pub updated_at: DateTime<Utc>,
 }
 
 /// Result of [`crate::domain::companies_repo::CompaniesRepository::crm_scope_precheck`].
@@ -131,6 +221,16 @@ pub enum CrmError {
     /// Contact id is not owned by the requesting team.
     #[error("crm contact not found for team")]
     ContactNotFoundForTeam,
+    /// Comment thread id does not exist, is deleted, or does not belong
+    /// to the addressed entity / team.
+    #[error("crm comment thread not found")]
+    ThreadNotFound,
+    /// Comment id does not exist or does not belong to the team.
+    #[error("crm comment not found for team")]
+    CommentNotFound,
+    /// Request rejected for a client-side reason (e.g. blank comment text).
+    #[error("{0}")]
+    InvalidRequest(String),
     /// Tried to mutate a CRM company in a way that contradicts its
     /// `hidden = true` state — currently raised when attempting to
     /// re-enable `email_sync` on a hidden company.

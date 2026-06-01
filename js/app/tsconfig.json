@@ -104,9 +104,6 @@
       "@service-notification/*": [
         "./packages/service-clients/service-notification/*"
       ],
-      "@service-comms/*": [
-        "./packages/service-clients/service-comms/*"
-      ],
       "@service-unfurl/*": [
         "./packages/service-clients/service-unfurl/*"
       ],

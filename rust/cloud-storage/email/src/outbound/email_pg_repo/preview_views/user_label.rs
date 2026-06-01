@@ -10,7 +10,7 @@ use uuid::Uuid;
 #[tracing::instrument(skip(pool), err)]
 pub(crate) async fn user_label_preview_cursor(
     pool: &PgPool,
-    link_id: &Uuid,
+    link_ids: &[Uuid],
     limit: u32,
     query: &Query<Uuid, SimpleSortMethod, ()>,
     label_name: &str,
@@ -77,16 +77,16 @@ pub(crate) async fn user_label_preview_cursor(
                 FROM email_messages m
                 JOIN email_message_labels ml ON m.id = ml.message_id
                 JOIN email_labels l ON ml.label_id = l.id
-                WHERE m.link_id = $1 AND l.name = $5
+                WHERE m.link_id = ANY($1) AND l.name = $5
                   AND NOT EXISTS (
                       SELECT 1 FROM email_message_labels ml2
                       JOIN email_labels l2 ON ml2.label_id = l2.id
-                      WHERE ml2.message_id = m.id AND l2.name = 'TRASH' AND l2.link_id = $1
+                      WHERE ml2.message_id = m.id AND l2.name = 'TRASH' AND l2.link_id = m.link_id
                   )
                 GROUP BY m.thread_id
             ) llpt
             JOIN email_threads t ON llpt.thread_id = t.id
-            LEFT JOIN email_user_history uh ON uh.thread_id = t.id AND uh.link_id = $1
+            LEFT JOIN email_user_history uh ON uh.thread_id = t.id AND uh.link_id = t.link_id
             WHERE
                 (($3::timestamptz IS NULL) OR (
                     CASE $6 -- sort_method_str
@@ -123,7 +123,7 @@ pub(crate) async fn user_label_preview_cursor(
         JOIN email_links el ON t.link_id = el.id
         ORDER BY t.effective_ts DESC, t.updated_at DESC
         "#,
-        link_id,            // $1
+        link_ids,           // $1
         query_limit,              // $2
         cursor_timestamp,   // $3
         cursor_id,          // $4

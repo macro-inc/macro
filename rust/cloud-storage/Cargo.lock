@@ -1704,6 +1704,45 @@ dependencies = [
 ]
 
 [[package]]
+name = "bot_id"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "sqlx",
+ "thiserror 2.0.18",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
+name = "bots"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "bot_id",
+ "chrono",
+ "entity_access",
+ "hex",
+ "macro_db_migrator",
+ "macro_user_id",
+ "macro_uuid",
+ "model-error-response",
+ "model_user",
+ "rand 0.9.4",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tower 0.5.3",
+ "tracing",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
 name = "bs58"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1959,6 +1998,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "axum",
+ "bot_id",
  "chrono",
  "connection_gateway_client",
  "contacts",
@@ -2232,79 +2272,6 @@ dependencies = [
  "strum",
  "tracing",
  "utoipa",
- "uuid",
-]
-
-[[package]]
-name = "comms_service"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "aws-sdk-secretsmanager",
- "aws-sdk-sqs",
- "axum",
- "axum-extra",
- "axum-macros",
- "chrono",
- "comms",
- "comms_db_client",
- "connection_gateway_client",
- "contacts",
- "doppleganger",
- "entity_access",
- "entity_access_db_utils",
- "frecency",
- "futures",
- "http-body-util",
- "jsonwebtoken 10.3.0",
- "last_online_tracker",
- "macro_auth",
- "macro_db_client",
- "macro_env",
- "macro_env_var",
- "macro_middleware",
- "macro_user_id",
- "macro_uuid",
- "model",
- "model-entity",
- "model_notifications",
- "models_comms",
- "models_opensearch",
- "models_permissions",
- "notification",
- "reqwest 0.13.3",
- "rootcause",
- "secretsmanager_client",
- "serde",
- "serde_json",
- "sqlx",
- "sqs_client",
- "thiserror 2.0.18",
- "tokio",
- "tower 0.5.3",
- "tower-http",
- "tracing",
- "utoipa",
- "utoipa-swagger-ui",
- "uuid",
-]
-
-[[package]]
-name = "comms_service_client"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "chrono",
- "model",
- "models_comms",
- "reqwest 0.13.3",
- "serde",
- "serde_json",
- "thiserror 2.0.18",
- "tracing",
- "urlencoding",
  "uuid",
 ]
 
@@ -2698,7 +2665,9 @@ dependencies = [
  "macro_db_migrator",
  "macro_uuid",
  "model-error-response",
+ "reqwest 0.13.3",
  "serde",
+ "serde_json",
  "sqlx",
  "thiserror 2.0.18",
  "tokio",
@@ -3325,7 +3294,6 @@ dependencies = [
  "chat",
  "chrono",
  "comms",
- "comms_service_client",
  "connection_gateway",
  "cookie",
  "crm",
@@ -3413,6 +3381,7 @@ dependencies = [
  "axum",
  "axum-extra",
  "base64 0.22.1",
+ "bots",
  "bytes",
  "bzip2",
  "cal",
@@ -3422,7 +3391,6 @@ dependencies = [
  "cloudfront_sign",
  "comms",
  "comms_db_client",
- "comms_service",
  "connection",
  "connection_gateway_client",
  "contacts",
@@ -3495,6 +3463,7 @@ dependencies = [
  "sync_service",
  "sync_service_client",
  "system_properties",
+ "task_dedup",
  "thiserror 2.0.18",
  "tokio",
  "tower 0.5.3",
@@ -3633,6 +3602,7 @@ dependencies = [
  "sha2 0.10.9",
  "sqlx",
  "sync_service_client",
+ "task_dedup",
  "thiserror 2.0.18",
  "tokio",
  "tower 0.5.3",
@@ -4460,18 +4430,25 @@ name = "foreign_entity"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "axum",
  "chrono",
+ "entity_access",
  "filter_ast",
+ "http-body-util",
  "item_filters",
  "macro_db_migrator",
+ "macro_user_id",
  "macro_uuid",
+ "model-error-response",
  "models_pagination",
  "serde",
  "serde_json",
  "sqlx",
  "thiserror 2.0.18",
  "tokio",
+ "tower 0.5.3",
  "tracing",
+ "utoipa",
  "uuid",
 ]
 
@@ -7284,6 +7261,7 @@ dependencies = [
  "call",
  "chrono",
  "comms",
+ "crm",
  "document_sub_type",
  "doppleganger",
  "email",
@@ -11423,6 +11401,27 @@ name = "tagptr"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7b2093cf4c8eb1e67749a6762251bc9cd836b6fc171623bd0a9d324d37af2417"
+
+[[package]]
+name = "task_dedup"
+version = "0.1.0"
+dependencies = [
+ "agent",
+ "anyhow",
+ "async-trait",
+ "connection_gateway_client",
+ "macro_db_migrator",
+ "model-entity",
+ "reqwest 0.13.3",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "utoipa",
+ "uuid",
+]
 
 [[package]]
 name = "teams"

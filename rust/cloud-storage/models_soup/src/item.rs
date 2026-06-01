@@ -1,4 +1,5 @@
 use crate::call_record::SoupCallRecord;
+use crate::crm_company::SoupCrmCompany;
 use crate::document::SoupDocument;
 use crate::email_thread::SoupEnrichedEmailThreadPreview;
 use crate::foreign_entity::SoupForeignEntity;
@@ -21,6 +22,7 @@ pub enum SoupItem {
     EmailThread(SoupEnrichedEmailThreadPreview),
     Channel(SoupChannel),
     Call(SoupCallRecord),
+    CrmCompany(SoupCrmCompany),
     ForeignEntity(SoupForeignEntity),
 }
 
@@ -46,6 +48,9 @@ impl SoupItem {
             SoupItem::Call(record) => {
                 EntityType::Call.with_entity_string(record.call_id.to_string())
             }
+            SoupItem::CrmCompany(company) => {
+                EntityType::CrmCompany.with_entity_string(company.id.to_string())
+            }
             SoupItem::ForeignEntity(foreign_entity) => {
                 EntityType::ForeignEntity.with_entity_string(foreign_entity.id.to_string())
             }
@@ -60,6 +65,7 @@ impl SoupItem {
             SoupItem::EmailThread(soup_thread) => soup_thread.thread.updated_at,
             SoupItem::Channel(soup_channel) => soup_channel.channel.channel.updated_at,
             SoupItem::Call(record) => record.ended_at.unwrap_or(record.started_at),
+            SoupItem::CrmCompany(company) => company.updated_at,
             SoupItem::ForeignEntity(foreign_entity) => foreign_entity.updated_at,
         }
     }
@@ -120,6 +126,9 @@ impl SoupItem {
                 .unwrap_or(soup_channel.channel.channel.updated_at),
             (SoupItem::Call(record), SimpleSortMethod::CreatedAt) => record.started_at,
             (SoupItem::Call(record), _) => record.ended_at.unwrap_or(record.started_at),
+            // No viewed_at signal for CrmCompany yet — fall back to updated_at.
+            (SoupItem::CrmCompany(company), SimpleSortMethod::CreatedAt) => company.created_at,
+            (SoupItem::CrmCompany(company), _) => company.updated_at,
             (SoupItem::ForeignEntity(foreign_entity), SimpleSortMethod::CreatedAt) => {
                 foreign_entity.created_at
             }
@@ -139,6 +148,7 @@ impl Identify for SoupItem {
             SoupItem::EmailThread(thread) => thread.thread.id,
             SoupItem::Channel(soup_channel) => soup_channel.channel.channel.id.0,
             SoupItem::Call(record) => record.call_id,
+            SoupItem::CrmCompany(company) => company.id,
             SoupItem::ForeignEntity(foreign_entity) => foreign_entity.id,
         }
     }
@@ -182,6 +192,8 @@ impl SoupItem {
             )),
             SoupItem::Channel(_) => None,
             SoupItem::Call(_) => None,
+            // CRM companies are not in entity_properties.
+            SoupItem::CrmCompany(_) => None,
             SoupItem::ForeignEntity(_) => None,
         }
     }

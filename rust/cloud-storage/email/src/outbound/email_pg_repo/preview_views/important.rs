@@ -11,7 +11,7 @@ use uuid::Uuid;
 #[tracing::instrument(skip(pool), err)]
 pub(crate) async fn important_preview_cursor(
     pool: &PgPool,
-    link_id: &Uuid,
+    link_ids: &[Uuid],
     limit: u32,
     query: &Query<Uuid, SimpleSortMethod, ()>,
 ) -> Result<Vec<ThreadPreviewCursorDbRow>, sqlx::Error> {
@@ -25,7 +25,7 @@ pub(crate) async fn important_preview_cursor(
         WITH ApplicableLabelIDs AS (
             SELECT id
             FROM email_labels
-            WHERE link_id = $1
+            WHERE link_id = ANY($1)
               AND (name = 'INBOX')
         ),
         QualifyingMessages AS (
@@ -38,14 +38,14 @@ pub(crate) async fn important_preview_cursor(
                    m.from_contact_id,
                    m.from_name
             FROM email_messages m
-            WHERE m.link_id = $1
+            WHERE m.link_id = ANY($1)
               AND NOT EXISTS (
                   SELECT 1
                   FROM email_message_labels ml
                   JOIN email_labels l ON ml.label_id = l.id
                   WHERE ml.message_id = m.id
                     AND l.name = 'TRASH'
-                    AND l.link_id = $1
+                    AND l.link_id = m.link_id
               )
               AND EXISTS (
                   SELECT 1
@@ -72,7 +72,7 @@ pub(crate) async fn important_preview_cursor(
                    m.from_contact_id,
                    m.from_name
             FROM email_messages m
-            WHERE m.link_id = $1
+            WHERE m.link_id = ANY($1)
               AND m.is_draft = TRUE
               AND NOT EXISTS (
                   SELECT 1
@@ -80,7 +80,7 @@ pub(crate) async fn important_preview_cursor(
                   JOIN email_labels l ON ml.label_id = l.id
                   WHERE ml.message_id = m.id
                     AND l.name = 'TRASH'
-                    AND l.link_id = $1
+                    AND l.link_id = m.link_id
               )
         ),
         AllImportantThreads AS (
@@ -121,8 +121,9 @@ pub(crate) async fn important_preview_cursor(
                     ELSE COALESCE(ait.internal_date_ts, ait.fallback_ts)
                 END AS effective_ts
             FROM AllImportantThreads ait
+            JOIN email_threads tt ON tt.id = ait.thread_id
             -- This has to be a left join to support all sort methods.
-            LEFT JOIN email_user_history uh ON uh.thread_id = ait.thread_id AND uh.link_id = $1
+            LEFT JOIN email_user_history uh ON uh.thread_id = ait.thread_id AND uh.link_id = tt.link_id
         )
         SELECT
                isk.thread_id as "id!",
@@ -152,7 +153,7 @@ pub(crate) async fn important_preview_cursor(
         ORDER BY isk.effective_ts DESC, isk.thread_id DESC
         LIMIT $2
         "#,
-        link_id,            // $1
+        link_ids,           // $1
         query_limit,              // $2
         cursor_timestamp,   // $3
         cursor_id,          // $4

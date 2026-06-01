@@ -12,7 +12,7 @@ use crate::service::get_chat::get_chat;
 use crate::service::notification::notify;
 use agent::AgentModel;
 use agent::types::{AssistantMessagePart, ChatMessage, ChatMessageContent};
-use agent::{AgentLoop, StreamPart};
+use agent::{AgentLoop, StreamAccumulator};
 use async_stream::stream;
 use attachment::FormattedParts;
 use axum::Json;
@@ -514,7 +514,7 @@ fn stream_and_save_message(
         let mut is_first_token = false;
         let idle_timeout = std::time::Duration::from_secs(3 * 60);
         let mut was_cancelled = false;
-        let mut yielded_parts: Vec<AssistantMessagePart> = Vec::new();
+        let mut accumulator = StreamAccumulator::new();
 
         loop {
             let next_item = tokio::select! {
@@ -551,54 +551,13 @@ fn stream_and_save_message(
 
             match response {
                 Ok(response_chunk) => {
-                    let message_part = match response_chunk {
-                        StreamPart::Content(content) => {
-                            if content.is_empty() {
-                                continue;
-                            }
-                            AssistantMessagePart::Text { text: content }
-                        }
-                        StreamPart::Thinking(thinking) => {
-                            if thinking.is_empty() {
-                                continue;
-                            }
-                            AssistantMessagePart::Thinking { thinking }
-                        }
-                        StreamPart::ToolCall(call) => match call.mcp {
-                            Some(mcp) => AssistantMessagePart::McpToolCall {
-                                name: mcp.tool_name,
-                                service: mcp.service,
-                                display_name: mcp.display_name,
-                                json: call.json,
-                                id: call.id,
-                            },
-                            None => AssistantMessagePart::ToolCall {
-                                name: call.name,
-                                json: call.json,
-                                id: call.id,
-                            },
-                        },
-                        StreamPart::Usage(usage) => {
-                            tracing::debug!(?usage, "usage");
-                            continue;
-                        }
-                        StreamPart::ToolResponse(agent::ToolResponse::Json {
-                            id,
-                            json,
-                            name,
-                        }) => AssistantMessagePart::ToolCallResponseJson { name, json, id },
-                        StreamPart::ToolResponse(agent::ToolResponse::Err {
-                            id,
-                            name,
-                            description,
-                        }) => AssistantMessagePart::ToolCallErr {
-                            name,
-                            description,
-                            id,
-                        },
+                    // Accumulate the part for persistence; the accumulator merges
+                    // consecutive text/thinking when accessed below. Parts with no
+                    // persistable content (usage, empty deltas) are skipped here and
+                    // are not forwarded to the client.
+                    let Some(message_part) = accumulator.push(response_chunk).cloned() else {
+                        continue;
                     };
-
-                    yielded_parts.push(message_part.clone());
 
                     let response = ChatStream::ChatMessageResponse {
                         stream_id: stream_id.clone(),
@@ -636,9 +595,7 @@ fn stream_and_save_message(
         // Build the set of messages to persist from the parts we yielded.
         // This matches exactly what the user saw in the streamed chunks.
         let new_messages = {
-            let resolved_parts = resolve_pending_tool_calls(
-                agent::merge_consecutive_parts(yielded_parts),
-            );
+            let resolved_parts = resolve_pending_tool_calls(accumulator.into_parts());
             if resolved_parts.is_empty() {
                 vec![]
             } else {

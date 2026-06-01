@@ -19,8 +19,12 @@ const RECENTLY_VIEWED_GC_TIME = 10 * 60 * 1000; // 10 minutes
 const recentlyViewedArgs: SoupItemsQueryArgs = {
   params: { sort_method: 'viewed_at', limit: RECENTLY_VIEWED_LIMIT },
   body: {
+    // No viewed_at signal on calls or crm_companies — exclude both.
     call_filters: {
       call_ids: ['00000000-0000-0000-0000-000000000000'],
+    },
+    crm_company_filters: {
+      company_ids: ['00000000-0000-0000-0000-000000000000'],
     },
   },
 };
@@ -42,7 +46,13 @@ export function useRecentlyViewedSoupQuery() {
           })
       );
       return page.items.flatMap((item): RecentlyViewedItem[] => {
-        if (item.tag === 'call' || item.tag === 'foreignEntity') return [];
+        if (
+          item.tag === 'call' ||
+          item.tag === 'crmCompany' ||
+          item.tag === 'foreignEntity'
+        ) {
+          return [];
+        }
 
         return [
           {

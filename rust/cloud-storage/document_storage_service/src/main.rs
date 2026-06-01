@@ -60,7 +60,7 @@ use email::{
     outbound::EmailPgRepo,
 };
 use foreign_entity::{
-    domain::service::ForeignEntityServiceImpl,
+    domain::service::ForeignEntityServiceImpl, inbound::axum_router::ForeignEntityRouterState,
     outbound::pg_foreign_entity_repo::PgForeignEntityRepo,
 };
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
@@ -87,6 +87,14 @@ use sqlx::postgres::PgPoolOptions;
 use std::sync::Arc;
 use sync_service_client::SyncServiceClient;
 use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImpl};
+use task_dedup::{
+    TaskDedupConfig, TaskDedupService,
+    outbound::{
+        connection_gateway::ConnectionGatewayTaskDedupNotifier,
+        embedding::OpenAiOrLocalTaskEmbedder, judge::AgentDuplicateJudge,
+        postgres::PgTaskDedupRepo,
+    },
+};
 
 mod api;
 mod config;
@@ -113,11 +121,6 @@ async fn main() -> anyhow::Result<()> {
 
     let document_permission_jwt_secret = secretsmanager_client
         .get_maybe_secret_value(env, DocumentPermissionJwtSecretKey::new()?)
-        .await?;
-
-    // Also get it with the comms_service type for CommsHandlerState
-    let comms_permissions_token_secret = secretsmanager_client
-        .get_maybe_secret_value(env, comms_service::DocumentPermissionJwtSecretKey::new()?)
         .await?;
 
     // Parse our configuration from the environment.
@@ -321,7 +324,7 @@ async fn main() -> anyhow::Result<()> {
         frecency_storage.clone(),
     );
 
-    // Create the CommsRouterState for comms_service routes
+    // Create the CommsRouterState for the comms hex routes mounted under /comms.
     let comms_state = CommsRouterState::new(channel_service_for_comms);
 
     let s3 = Arc::new(S3::new(
@@ -406,9 +409,14 @@ async fn main() -> anyhow::Result<()> {
             sync_app_client_id: config.vars.github_sync_app_client_id.to_string(),
         },
         document_service.clone(),
-        foreign_entity_service,
+        foreign_entity_service.clone(),
         PgGithubSyncRepo::new(db.clone()),
         GithubSyncClientImpl::default(),
+    );
+
+    let foreign_entity_state = ForeignEntityRouterState::new(
+        foreign_entity_service.clone(),
+        entity_access_service.clone(),
     );
 
     // Cal.com webhooks → Meta Lead events. Both secrets are loaded here
@@ -563,7 +571,22 @@ async fn main() -> anyhow::Result<()> {
 
     let sqs_client = Arc::new(sqs_client);
     let conn_gateway_client = Arc::new(conn_gateway_client);
+    let task_dedup_config = TaskDedupConfig::default();
+    let task_dedup_service = Arc::new(TaskDedupService::new(
+        task_dedup_config.clone(),
+        Arc::new(PgTaskDedupRepo::new(db.clone())),
+        Arc::new(OpenAiOrLocalTaskEmbedder::new(
+            task_dedup_config.embedding_model.clone(),
+        )),
+        Arc::new(AgentDuplicateJudge::new(0.56)),
+        Arc::new(ConnectionGatewayTaskDedupNotifier::new(
+            conn_gateway_client.clone(),
+        )),
+    ));
     let channels_repo = PgChannelsRepo::new(db.clone());
+    let bots_service = bots::domain::service::BotServiceImpl::new(
+        bots::outbound::pg_bots_repo::PgBotsRepo::new(db.clone()),
+    );
 
     let channels_service = ChannelServiceImpl::with_dependencies(
         channels_repo,
@@ -586,12 +609,14 @@ async fn main() -> anyhow::Result<()> {
                 readonly_email_service,
                 channel_service_for_soup,
                 call_record_query_service,
+                crm_service.clone(),
                 foreign_entity_service_for_soup,
             ),
             email_service,
             entity_access_service.clone(),
         ),
         github_sync_service: Arc::new(github_sync_service_impl),
+        foreign_entity_state,
         db: db.clone(),
         readonly_db: readonly_pool::ReadOnlyPool(readonly_db.clone()),
         redis_client: Arc::new(Redis::new(redis_client)),
@@ -611,12 +636,12 @@ async fn main() -> anyhow::Result<()> {
         // Comms service fields
         frecency_storage,
         comms_state,
-        permissions_token_secret: comms_permissions_token_secret,
         entity_access_service: entity_access_service.clone(),
         documents_state: DocumentRouterState {
             service: document_service.clone(),
             access_service: entity_access_service.clone(),
             pool: db.clone(),
+            task_dedup_service,
             creator: documents_hex::domain::create::DocumentCreator::new(
                 document_service,
                 markdown_initializer,
@@ -625,6 +650,10 @@ async fn main() -> anyhow::Result<()> {
         },
         channels_state: ChannelsRouterState::new(
             channels_service,
+            (*entity_access_service).clone(),
+        ),
+        bots_state: bots::inbound::axum_router::BotsRouterState::new(
+            bots_service.clone(),
             (*entity_access_service).clone(),
         ),
         call_state,

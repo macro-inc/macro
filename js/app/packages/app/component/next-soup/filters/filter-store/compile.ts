@@ -24,6 +24,7 @@ type QueryTarget =
   | 'pf'
   | 'callf'
   | 'fef'
+  | 'ccf'
   | 'propf';
 
 export type TargetAstMap = {
@@ -80,6 +81,7 @@ const FIELD_CONFIG: Record<
   documentDone: { target: 'df', field: 'nd' },
   isEmailAttachment: { target: 'df', field: 'iea' },
   threadId: { target: 'ef', field: 'ThreadId' },
+  emailLinkId: { target: 'ef', field: 'Owner' },
   emailSeen: { target: 'ef', field: 'NotificationSeen' },
   emailDone: { target: 'ef', field: 'NotificationDone' },
   emailImportance: { target: 'ef', field: 'Importance' },
@@ -111,6 +113,7 @@ const FIELD_CONFIG: Record<
   callSpeakerId: { target: 'callf', field: 'Speaker' },
   callAttended: { target: 'callf', field: 'Attended' },
   foreignEntityRecordId: { target: 'fef', field: 'id' },
+  crmCompanyId: { target: 'ccf', field: 'id' },
 };
 
 const DATE_RANGE_FIELDS: Record<
@@ -161,6 +164,7 @@ export function compileToAst(state: QueryState): TargetAstMap {
     pf: [],
     callf: [],
     fef: [],
+    ccf: [],
     propf: [],
   };
 
@@ -284,6 +288,11 @@ export function compileToAst(state: QueryState): TargetAstMap {
     result.emailView = state.emailView;
   }
 
+  // crm companies are opt-in: excluded unless a view sets `crmCompanyId`.
+  if (!result.ccf) {
+    result.ccf = AST.literal('id', NIL_UUID);
+  }
+
   return result;
 }
 
@@ -295,6 +304,7 @@ const ID_FIELD_NAMES: Partial<Record<QueryTarget, FieldName>> = {
   pf: 'folderId',
   callf: 'callId',
   fef: 'foreignEntityRecordId',
+  ccf: 'crmCompanyId',
 };
 
 type DefineQueryFiltersOptions = {

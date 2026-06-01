@@ -52,6 +52,8 @@ pub enum EntityType {
     ForeignEntity,
     /// A public file in the static file service
     StaticFile,
+    /// The entity is a CRM company tracked by a team
+    CrmCompany,
 }
 
 impl EntityType {
@@ -71,6 +73,8 @@ impl EntityType {
             EntityType::Call => true,
             EntityType::ForeignEntity => false,
             EntityType::StaticFile => false,
+            // CRM companies are gated by team membership, not entity_access.
+            EntityType::CrmCompany => false,
         }
     }
     /// provide an entity string slice to upgrade this type into an [Entity]

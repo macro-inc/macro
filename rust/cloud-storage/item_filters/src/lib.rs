@@ -218,6 +218,11 @@ pub struct EmailFilters {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub email_thread_ids: Vec<String>,
 
+    /// Restrict to specific inboxes by email_links.id. Empty means "any inbox the
+    /// caller can access" (soup expands to the full set at the router edge).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub link_ids: Vec<String>,
+
     /// A list of project ids to search within. Empty to ignore project filtering.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub project_ids: Vec<String>,
@@ -280,6 +285,7 @@ impl IsEmpty for EmailFilters {
             bcc,
             recipients,
             email_thread_ids,
+            link_ids,
             project_ids,
             importance,
             notification_filters,
@@ -295,6 +301,7 @@ impl IsEmpty for EmailFilters {
             && bcc.is_empty()
             && recipients.is_empty()
             && email_thread_ids.is_empty()
+            && link_ids.is_empty()
             && project_ids.is_empty()
             && importance.is_none()
             && notification_filters.is_empty()
@@ -458,6 +465,32 @@ impl IsEmpty for PropertyFilter {
     }
 }
 
+/// The crm company filters used to narrow which CRM companies appear in soup.
+#[derive(Debug, Serialize, Deserialize, Default, PartialEq, Clone)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
+pub struct CrmCompanyFilters {
+    /// CRM company ids to filter by. Examples: ['11111111-...']. Empty to
+    /// include all of the team's visible CRM companies.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub company_ids: Vec<String>,
+    /// Optional `crm_companies.hidden` filter. `None` = visible only
+    /// (default for back-compat with non-admin callers). `Some(false)` =
+    /// visible only (explicit). `Some(true)` = hidden only — requires
+    /// admin/owner team role; enforced upstream in soup's axum router.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hidden: Option<bool>,
+}
+
+impl IsEmpty for CrmCompanyFilters {
+    fn is_empty(&self) -> bool {
+        let CrmCompanyFilters {
+            company_ids,
+            hidden,
+        } = self;
+        company_ids.is_empty() && hidden.is_none()
+    }
+}
+
 /// The project filters used to filter down what projects you search over.
 #[derive(Debug, Serialize, Deserialize, Default, PartialEq, Clone)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
@@ -522,6 +555,9 @@ pub struct EntityFilters {
     /// the bundled [EmailFilters]
     #[serde(default)]
     pub email_filters: EmailFilters,
+    /// the bundled [CrmCompanyFilters]
+    #[serde(default)]
+    pub crm_company_filters: CrmCompanyFilters,
     /// the bundled [ForeignEntityFilters]
     #[serde(default)]
     pub foreign_entity_filters: ForeignEntityFilters,
@@ -539,6 +575,7 @@ impl IsEmpty for EntityFilters {
             channel_filters,
             call_filters,
             email_filters,
+            crm_company_filters,
             foreign_entity_filters,
             property_filters,
         } = self;
@@ -548,6 +585,7 @@ impl IsEmpty for EntityFilters {
             && channel_filters.is_empty()
             && call_filters.is_empty()
             && email_filters.is_empty()
+            && crm_company_filters.is_empty()
             && foreign_entity_filters.is_empty()
             && property_filters.iter().all(IsEmpty::is_empty)
     }

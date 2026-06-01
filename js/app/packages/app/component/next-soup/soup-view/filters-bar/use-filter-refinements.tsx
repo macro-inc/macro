@@ -70,8 +70,14 @@ const TAB_ONLY_FILTERS = new Set([
  * and a function to reset filters to the current tab's default state.
  */
 export function useFilterRefinements() {
-  const { soup, queryFilters, assigneeFilter, setAssigneeFilter, activeTab } =
-    useSoupView();
+  const {
+    soup,
+    items,
+    queryFilters,
+    assigneeFilter,
+    setAssigneeFilter,
+    activeTab,
+  } = useSoupView();
   const filterData = () => queryFilters.state;
   const panel = useSplitPanelOrThrow();
   const user = useUserContext();
@@ -746,6 +752,71 @@ export function useFilterRefinements() {
     assignees: assigneeFilter(),
   });
 
+  /**
+   * Does at least one item pass the BASE preset's client predicates? Used to
+   * decide whether the empty-state banner should claim items are hidden.
+   * Short-circuits at the first match.
+   *
+   * Note: items() is already server-filtered by current query filters, so if
+   * the user has tightened the server query this may return false even when
+   * items exist. `hasHiddenItems` below compensates by being sticky.
+   */
+  const baseHasItems = createMemo(() => {
+    const preset = currentPreset();
+    if (!preset) return false;
+    const baseAnd = preset.clientFilters.and ?? [];
+    const baseOr = preset.clientFilters.or ?? [];
+    if (baseAnd.length === 0 && baseOr.length === 0) return items().length > 0;
+
+    const ctx = getFilterContext();
+    for (const entity of items()) {
+      let andOk = true;
+      for (const id of baseAnd) {
+        const cfg = soup.predicates.getConfig(id);
+        if (cfg && !cfg.predicate(entity, ctx)) {
+          andOk = false;
+          break;
+        }
+      }
+      if (!andOk) continue;
+      if (baseOr.length > 0) {
+        let orOk = false;
+        for (const id of baseOr) {
+          const cfg = soup.predicates.getConfig(id);
+          if (cfg?.predicate(entity, ctx)) {
+            orOk = true;
+            break;
+          }
+        }
+        if (!orOk) continue;
+      }
+      return true;
+    }
+    return false;
+  });
+
+  /**
+   * Sticky-true while refinements are active so the banner doesn't flicker
+   * off when a server refetch transiently zeroes out items(). Resets on
+   * view/tab change, and snaps to the live state whenever refinements clear.
+   *
+   * Imperfect by design: if the user mounts with refinements already active
+   * and the server returns zero items, this stays false. Getting a true
+   * answer would need a separate base-preset query.
+   */
+  const hasHiddenItems = createMemo<{ key: string; value: boolean }>((prev) => {
+    const key = `${currentView() ?? ''}|${activeTab() ?? ''}`;
+    const refinementsActive = hasActiveRefinements();
+    const itemsExist = baseHasItems();
+
+    if (prev?.key !== key || !refinementsActive) {
+      return { key, value: itemsExist };
+    }
+    return { key, value: prev.value || itemsExist };
+  });
+
+  const hasHiddenItemsValue = () => hasHiddenItems().value;
+
   const getFilterQuery = (optionId: string) => {
     const filter = soup.predicates.getConfig(optionId);
     if (!filter?.query) return undefined;
@@ -791,6 +862,7 @@ export function useFilterRefinements() {
 
   return {
     hasActiveRefinements,
+    hasHiddenItems: hasHiddenItemsValue,
     resetToTabDefaults,
     currentView,
     consolidatedFiltersList,

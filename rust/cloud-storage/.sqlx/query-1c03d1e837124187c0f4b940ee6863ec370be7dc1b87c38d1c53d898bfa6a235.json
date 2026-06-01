@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            cp.role::text as \"role?\",\n            c.channel_type::text as \"channel_type!\",\n            c.org_id as \"org_id?\"\n        FROM comms_channels c\n        LEFT JOIN comms_channel_participants cp\n            ON cp.channel_id = c.id AND cp.user_id = $2 AND cp.left_at IS NULL\n        WHERE c.id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "role?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "channel_type!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "org_id?",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      true
+    ]
+  },
+  "hash": "1c03d1e837124187c0f4b940ee6863ec370be7dc1b87c38d1c53d898bfa6a235"
+}

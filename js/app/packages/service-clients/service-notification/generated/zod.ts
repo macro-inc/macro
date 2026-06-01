@@ -118,6 +118,7 @@ export const listTypedNotificationsResponse = zod
                 'call',
                 'foreign_entity',
                 'static_file',
+                'crm_company',
               ])
               .describe('The type of an entity in Macro'),
           })
@@ -151,7 +152,6 @@ export const listTypedNotificationsResponse = zod
                           channelName: zod.string().optional(),
                           channelType: zod.enum([
                             'public',
-                            'organization',
                             'private',
                             'directMessage',
                             'team',
@@ -185,7 +185,6 @@ export const listTypedNotificationsResponse = zod
                           channelName: zod.string().optional(),
                           channelType: zod.enum([
                             'public',
-                            'organization',
                             'private',
                             'directMessage',
                             'team',
@@ -396,7 +395,6 @@ export const listTypedNotificationsResponse = zod
                           channelName: zod.string().optional(),
                           channelType: zod.enum([
                             'public',
-                            'organization',
                             'private',
                             'directMessage',
                             'team',
@@ -428,7 +426,6 @@ export const listTypedNotificationsResponse = zod
                           channelName: zod.string().optional(),
                           channelType: zod.enum([
                             'public',
-                            'organization',
                             'private',
                             'directMessage',
                             'team',
@@ -635,6 +632,7 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                 'call',
                 'foreign_entity',
                 'static_file',
+                'crm_company',
               ])
               .describe('The type of an entity in Macro'),
           })
@@ -668,7 +666,6 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                           channelName: zod.string().optional(),
                           channelType: zod.enum([
                             'public',
-                            'organization',
                             'private',
                             'directMessage',
                             'team',
@@ -702,7 +699,6 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                           channelName: zod.string().optional(),
                           channelType: zod.enum([
                             'public',
-                            'organization',
                             'private',
                             'directMessage',
                             'team',
@@ -913,7 +909,6 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                           channelName: zod.string().optional(),
                           channelType: zod.enum([
                             'public',
-                            'organization',
                             'private',
                             'directMessage',
                             'team',
@@ -945,7 +940,6 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                           channelName: zod.string().optional(),
                           channelType: zod.enum([
                             'public',
-                            'organization',
                             'private',
                             'directMessage',
                             'team',
@@ -1146,6 +1140,7 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                 'call',
                 'foreign_entity',
                 'static_file',
+                'crm_company',
               ])
               .describe('The type of an entity in Macro'),
           })
@@ -1179,7 +1174,6 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                           channelName: zod.string().optional(),
                           channelType: zod.enum([
                             'public',
-                            'organization',
                             'private',
                             'directMessage',
                             'team',
@@ -1213,7 +1207,6 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                           channelName: zod.string().optional(),
                           channelType: zod.enum([
                             'public',
-                            'organization',
                             'private',
                             'directMessage',
                             'team',
@@ -1424,7 +1417,6 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                           channelName: zod.string().optional(),
                           channelType: zod.enum([
                             'public',
-                            'organization',
                             'private',
                             'directMessage',
                             'team',
@@ -1456,7 +1448,6 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                           channelName: zod.string().optional(),
                           channelType: zod.enum([
                             'public',
-                            'organization',
                             'private',
                             'directMessage',
                             'team',
@@ -1668,6 +1659,7 @@ export const getTypedNotificationByIdResponse = zod
         'call',
         'foreign_entity',
         'static_file',
+        'crm_company',
       ])
       .describe('The type of an entity in Macro'),
   })
@@ -1701,7 +1693,6 @@ export const getTypedNotificationByIdResponse = zod
                   channelName: zod.string().optional(),
                   channelType: zod.enum([
                     'public',
-                    'organization',
                     'private',
                     'directMessage',
                     'team',
@@ -1733,7 +1724,6 @@ export const getTypedNotificationByIdResponse = zod
                   channelName: zod.string().optional(),
                   channelType: zod.enum([
                     'public',
-                    'organization',
                     'private',
                     'directMessage',
                     'team',
@@ -1926,7 +1916,6 @@ export const getTypedNotificationByIdResponse = zod
                   channelName: zod.string().optional(),
                   channelType: zod.enum([
                     'public',
-                    'organization',
                     'private',
                     'directMessage',
                     'team',
@@ -1956,7 +1945,6 @@ export const getTypedNotificationByIdResponse = zod
                   channelName: zod.string().optional(),
                   channelType: zod.enum([
                     'public',
-                    'organization',
                     'private',
                     'directMessage',
                     'team',

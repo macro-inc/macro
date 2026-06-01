@@ -12,8 +12,8 @@ use item_filters::{
     SharedEmailFilter,
     ast::{
         EntityFilterAst, LiteralTree, call::CallLiteral, channel::ChannelLiteral,
-        chat::ChatLiteral, document::DocumentLiteral, email::EmailLiteral,
-        foreign_entity::ForeignEntityLiteral, project::ProjectLiteral,
+        chat::ChatLiteral, crm_company::CrmCompanyLiteral, document::DocumentLiteral,
+        email::EmailLiteral, foreign_entity::ForeignEntityLiteral, project::ProjectLiteral,
         properties::PropertiesLiteral,
     },
 };
@@ -131,6 +131,11 @@ impl From<SoupItem> for EntityItem {
                 id: record.call_id,
                 created_by: record.created_by,
             },
+            // `entity_filter_ast` force-filters CrmCompany out — kept
+            // loud here so a contract break is obvious, not silent.
+            SoupItem::CrmCompany(_) => {
+                unreachable!("ListEntities tool does not surface CrmCompany rows")
+            }
             SoupItem::ForeignEntity(foreign_entity) => EntityItem::ForeignEntity {
                 id: foreign_entity.id,
                 foreign_entity_id: foreign_entity.foreign_entity_id,
@@ -262,6 +267,9 @@ impl ListEntities {
             },
             channel_filter: self.channel_filter.clone(),
             call_filter: self.call_filter.clone(),
+            // CrmCompany not in the tool surface — force-filter so the
+            // AI never sees one.
+            crm_company_filter: Some(Arc::new(Expr::val(CrmCompanyLiteral::Id(Uuid::nil())))),
             foreign_entity_filter: self.foreign_entity_filter.clone(),
             properties_filter: self.properties_filter.clone(),
         };
@@ -311,6 +319,9 @@ impl ListEntities {
             } else {
                 Some(Arc::new(Expr::val(CallLiteral::CallId(Uuid::nil()))))
             },
+            // Preserve the upstream nil filter — no ItemType::CrmCompany
+            // to toggle against.
+            crm_company_filter: ast.crm_company_filter,
             foreign_entity_filter: if include_types.contains(&ItemType::ForeignEntity) {
                 ast.foreign_entity_filter
             } else {
@@ -363,15 +374,17 @@ where
             .unwrap_or(RESULT_LIMIT)
             .clamp(1, MAX_RESULT_LIMIT);
 
-        let link_id = service_context
+        let link_ids: Vec<uuid::Uuid> = service_context
             .email_service
-            .get_link_by_macro_id(request_context.user_id.copied())
+            .get_inboxes_for_macro_id(request_context.user_id.copied())
             .await
             .map_err(|e| ToolCallError {
-                description: format!("Failed to resolve email link: {e}"),
+                description: format!("Failed to resolve email links: {e}"),
                 internal_error: e.into(),
             })?
-            .map(|link| link.id);
+            .into_iter()
+            .map(|link| link.id)
+            .collect();
 
         let result = service_context
             .service
@@ -382,7 +395,7 @@ where
                     cursor: SoupQuery::new_sort_simple(sort_method, filters),
                     user: request_context.user_id,
                     email_preview_view,
-                    link_id,
+                    link_ids,
                 },
                 None,
             )

@@ -320,12 +320,12 @@ const MOCK_CHANNEL_DIRECT_MESSAGE: ChannelEntity = {
   frecencyScore: 0.87,
 };
 
-const MOCK_CHANNEL_ORGANIZATION: ChannelEntity = {
+const MOCK_CHANNEL_ANNOUNCEMENTS: ChannelEntity = {
   type: 'channel',
-  id: 'channel_org_1',
+  id: 'channel_announcements_1',
   name: 'company-announcements',
   ownerId: MOCK_USER_IDS.owner,
-  channelType: 'organization',
+  channelType: 'private',
   createdAt: MOCK_TIMESTAMPS.lastYear,
   updatedAt: MOCK_TIMESTAMPS.lastWeek,
   interactedAt: MOCK_TIMESTAMPS.lastWeek,
@@ -710,7 +710,7 @@ const ALL_CHANNEL_ENTITIES = [
   MOCK_CHANNEL_PUBLIC,
   MOCK_CHANNEL_PRIVATE,
   MOCK_CHANNEL_DIRECT_MESSAGE,
-  MOCK_CHANNEL_ORGANIZATION,
+  MOCK_CHANNEL_ANNOUNCEMENTS,
   MOCK_CHANNEL_EMPTY_MESSAGE,
 ];
 

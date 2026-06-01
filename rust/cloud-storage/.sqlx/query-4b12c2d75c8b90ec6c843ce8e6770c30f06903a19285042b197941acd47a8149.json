@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO task_duplicate_match (\n                id,\n                task_id,\n                duplicate_task_id,\n                status,\n                vector_score,\n                rerank_score,\n                judge_model,\n                judge_reason\n            )\n            VALUES ($1, $2, $3, 'active', $4, $5, $6, $7)\n            ON CONFLICT (task_id, duplicate_task_id) DO UPDATE\n            SET status = 'active',\n                vector_score = EXCLUDED.vector_score,\n                rerank_score = EXCLUDED.rerank_score,\n                judge_model = EXCLUDED.judge_model,\n                judge_reason = EXCLUDED.judge_reason,\n                updated_at = NOW()\n            WHERE task_duplicate_match.status <> 'dismissed'\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Float8",
+        "Float8",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4b12c2d75c8b90ec6c843ce8e6770c30f06903a19285042b197941acd47a8149"
+}

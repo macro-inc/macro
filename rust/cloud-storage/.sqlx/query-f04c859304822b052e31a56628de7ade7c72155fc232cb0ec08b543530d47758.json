@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO task_duplicate_embedding (document_id, model, content, embedding)\n            VALUES ($1, $2, $3, $4::text::vector)\n            ON CONFLICT (document_id) DO UPDATE\n            SET model = EXCLUDED.model,\n                content = EXCLUDED.content,\n                embedding = EXCLUDED.embedding,\n                updated_at = NOW()\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f04c859304822b052e31a56628de7ade7c72155fc232cb0ec08b543530d47758"
+}

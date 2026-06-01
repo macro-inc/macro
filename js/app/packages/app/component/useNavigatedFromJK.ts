@@ -12,7 +12,9 @@ export function useNavigatedFromJK() {
       rows.length > 0 &&
       document.documentElement.getAttribute('data-modality') === 'keyboard' &&
       (lastExecutedCommand()?.hotkeyToken === TOKENS.entity.step.end ||
-        lastExecutedCommand()?.hotkeyToken === TOKENS.entity.select.end)
+        lastExecutedCommand()?.hotkeyToken === TOKENS.entity.step.start ||
+        lastExecutedCommand()?.hotkeyToken === TOKENS.entity.select.end ||
+        lastExecutedCommand()?.hotkeyToken === TOKENS.entity.select.start)
     );
   });
   return { navigatedFromJK };

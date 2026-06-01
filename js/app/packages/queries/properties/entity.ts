@@ -82,10 +82,12 @@ function optimisticUpdateSoupEntityProperty(
   value: SoupPropertyValue
 ): SoupTransaction | undefined {
   const current = getSoupEntityById(entityId);
+  // crmCompany has no properties; channel / call are also property-less.
   if (
     !current ||
     current.tag === 'channel' ||
     current.tag === 'call' ||
+    current.tag === 'crmCompany' ||
     current.tag === 'foreignEntity' ||
     !current.data.properties
   ) {

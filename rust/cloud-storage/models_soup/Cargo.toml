@@ -13,6 +13,7 @@ anyhow = { workspace = true }
 call = { path = "../call", default-features = false }
 chrono = { workspace = true }
 comms = { path = "../comms" }
+crm = { path = "../crm", default-features = false }
 document_sub_type = { path = "../document_sub_type" }
 doppleganger = { workspace = true, features = ["chrono", "uuid"] }
 email = { path = "../email" }

@@ -442,6 +442,7 @@ pub type ToolSoupService = SoupImpl<
     email::domain::ports::ReadonlyEmailPreviewAdapter<ToolEmailService>,
     ToolCommsService,
     call::domain::ports::NoOpCallRecordQueryService,
+    crm::domain::service::NoOpCrmService,
     ToolForeignEntityService,
 >;
 
