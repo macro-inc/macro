@@ -8,18 +8,24 @@ use axum::routing::{get, patch, post};
 use crate::api::ApiContext;
 
 pub fn router(state: ApiContext) -> Router<ApiContext> {
-    let required_link_routes = Router::new()
-        .nest(
-            "/previews",
-            email::inbound::axum::previews_router::router(state.email_service.clone()),
-        )
+    // Mutating routes operate on exactly one inbox, resolved by the
+    // X-Email-Link-Id header (or the primary inbox) via attach_link_context.
+    let single_inbox_routes = Router::new()
         .route("/{id}/seen", post(seen::seen_handler))
-        .route("/{id}/messages", get(get::get_thread_messages_handler))
         .route("/{id}/archived", patch(archived::archived_handler))
         .layer(axum::middleware::from_fn_with_state(
             state.email_service.clone(),
             crate::api::middleware::link::attach_link_context,
         ));
+
+    // Read routes union across every inbox the caller owns and resolve their own
+    // link set, so they must not carry the single-inbox middleware.
+    let union_read_routes = Router::new()
+        .nest(
+            "/previews",
+            email::inbound::axum::previews_router::router(state.email_service.clone()),
+        )
+        .route("/{id}/messages", get(get::get_thread_messages_handler));
 
     let hex_thread_routes =
         email::inbound::axum::get_thread_router::thread_router(state.email_thread_state.clone());
@@ -36,7 +42,8 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         );
 
     Router::new()
-        .merge(required_link_routes)
+        .merge(single_inbox_routes)
+        .merge(union_read_routes)
         .merge(hex_thread_routes)
         .merge(hex_thread_labels_routes)
         .merge(hex_thread_project_routes)
