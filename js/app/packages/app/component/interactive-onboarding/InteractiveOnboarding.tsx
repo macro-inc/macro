@@ -239,9 +239,26 @@ function InteractiveOnboardingInner(props: InteractiveOnboardingProps) {
       };
       shellRef.addEventListener('keydown', stopKeyboardPropagation);
       shellRef.addEventListener('keyup', stopKeyboardPropagation);
+
+      // Keep focus inside the shell so the detached `onboarding-shell` scope
+      // stays the active hotkey scope. Whenever a lesson advances the Continue
+      // button is disabled (and lesson elements unmount), which drops focus to
+      // <body> — deactivating the scope and silently breaking lesson hotkeys
+      // like the `g` then `e` sidebar-nav leader until the user clicks back in.
+      // A null relatedTarget means focus was lost rather than moved to a real
+      // element, so reclaim it. Focus intentionally handed to the sandbox
+      // command-k dialog (a portal outside the shell) has a non-null
+      // relatedTarget and is left alone — that flow restores focus on close.
+      const reclaimLostFocus = (event: FocusEvent) => {
+        if (event.relatedTarget || commandKOpen()) return;
+        shellRef?.focus();
+      };
+      shellRef.addEventListener('focusout', reclaimLostFocus);
+
       onCleanup(() => {
         shellRef?.removeEventListener('keydown', stopKeyboardPropagation);
         shellRef?.removeEventListener('keyup', stopKeyboardPropagation);
+        shellRef?.removeEventListener('focusout', reclaimLostFocus);
       });
     }
   });
@@ -309,30 +326,6 @@ function InteractiveOnboardingInner(props: InteractiveOnboardingProps) {
         shellRef?.focus();
       }
     })
-  );
-
-  // Keep the detached `onboarding-shell` scope active as the user moves
-  // between lessons. Advancing resets readyToContinue, which disables the
-  // Continue button that held focus — so focus falls back to <body> and the
-  // active hotkey scope drifts off the shell. That leaves lesson hotkeys like
-  // the `g` then `e` sidebar-nav leader inert until the user clicks into the
-  // demo. Re-assert focus on the shell, but only when it has actually escaped
-  // so we don't steal focus from lessons that focus their own input (e.g. the
-  // markdown-mentions editor).
-  createEffect(
-    on(
-      () => state.currentIndex(),
-      () => {
-        if (isTouch) return;
-        requestAnimationFrame(() => {
-          if (!shellRef) return;
-          const active = document.activeElement;
-          if (!active || !shellRef.contains(active)) {
-            shellRef.focus();
-          }
-        });
-      }
-    )
   );
 
   createEffect(
