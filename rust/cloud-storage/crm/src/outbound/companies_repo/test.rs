@@ -316,24 +316,27 @@ async fn returns_company_when_email_sync_is_false(pool: PgPool) -> anyhow::Resul
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn set_email_sync_disable_clears_contacts_and_sources(pool: PgPool) -> anyhow::Result<()> {
+async fn set_email_sync_disable_preserves_contacts_and_sources(pool: PgPool) -> anyhow::Result<()> {
+    // Disabling email_sync only stops new populates — it must not
+    // touch existing contacts. Visibility is controlled by `hidden`;
+    // teams that want to drop contacts should hide the company.
     let team_id = Uuid::now_v7();
     let owner_id = "macro|owner@test.com";
     seed_team(&pool, team_id, owner_id).await?;
     let company_id = insert_company(&pool, team_id, true, &["acme.com"]).await?;
     let link_id = insert_email_link(&pool, owner_id, "owner@macro.test").await?;
-    insert_contact_with_source(&pool, company_id, "alice@acme.com", link_id).await?;
-    insert_contact_with_source(&pool, company_id, "bob@acme.com", link_id).await?;
-
-    assert_eq!(count_contacts(&pool, company_id).await?, 2);
-    assert_eq!(count_sources_for_company(&pool, company_id).await?, 2);
+    let alice = insert_contact_with_source(&pool, company_id, "alice@acme.com", link_id).await?;
+    let bob = insert_contact_with_source(&pool, company_id, "bob@acme.com", link_id).await?;
 
     let repo = CompaniesRepositoryImpl::new(pool.clone());
     repo.set_email_sync(&team_id, &company_id, false).await?;
 
     assert_eq!(fetch_email_sync(&pool, company_id).await?, Some(false));
-    assert_eq!(count_contacts(&pool, company_id).await?, 0);
-    assert_eq!(count_sources_for_company(&pool, company_id).await?, 0);
+    // Contacts + sources stay put; their hidden state is untouched.
+    assert_eq!(count_contacts(&pool, company_id).await?, 2);
+    assert_eq!(count_sources_for_company(&pool, company_id).await?, 2);
+    assert_eq!(fetch_contact_hidden(&pool, alice).await?, Some(false));
+    assert_eq!(fetch_contact_hidden(&pool, bob).await?, Some(false));
     Ok(())
 }
 
@@ -399,6 +402,8 @@ async fn set_email_sync_isolates_companies_across_teams(pool: PgPool) -> anyhow:
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn set_email_sync_disable_handles_multi_domain_company(pool: PgPool) -> anyhow::Result<()> {
+    // Multi-domain companies lock each (team, domain) on disable; the
+    // flag flips but contacts/sources/domains are preserved.
     let team_id = Uuid::now_v7();
     let owner_id = "macro|owner@test.com";
     seed_team(&pool, team_id, owner_id).await?;
@@ -412,8 +417,8 @@ async fn set_email_sync_disable_handles_multi_domain_company(pool: PgPool) -> an
     repo.set_email_sync(&team_id, &company_id, false).await?;
 
     assert_eq!(fetch_email_sync(&pool, company_id).await?, Some(false));
-    assert_eq!(count_contacts(&pool, company_id).await?, 0);
-    assert_eq!(count_sources_for_company(&pool, company_id).await?, 0);
+    assert_eq!(count_contacts(&pool, company_id).await?, 2);
+    assert_eq!(count_sources_for_company(&pool, company_id).await?, 2);
     // Company + its domain rows survive the disable so future populates short-circuit.
     let (domain_count,): (i64,) =
         sqlx::query_as(r#"SELECT COUNT(*) FROM crm_domains WHERE company_id = $1"#)
@@ -566,16 +571,19 @@ async fn set_email_sync_disable_allowed_on_hidden_company(pool: PgPool) -> anyho
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn service_set_company_hidden_true_also_disables_email_sync(
+async fn service_set_company_hidden_true_soft_hides_contacts_and_disables_email_sync(
     pool: PgPool,
 ) -> anyhow::Result<()> {
+    // Hide flips the company flag, forces email_sync = false, and
+    // cascades hidden = TRUE onto every contact. Contact rows AND
+    // contact_sources are preserved so un-hide can restore them.
     let team_id = Uuid::now_v7();
     let owner_id = "macro|owner@test.com";
     seed_team(&pool, team_id, owner_id).await?;
     let company_id = insert_company(&pool, team_id, true, &["acme.com"]).await?;
     let link_id = insert_email_link(&pool, owner_id, "owner@macro.test").await?;
-    insert_contact_with_source(&pool, company_id, "alice@acme.com", link_id).await?;
-    insert_contact_with_source(&pool, company_id, "bob@acme.com", link_id).await?;
+    let alice = insert_contact_with_source(&pool, company_id, "alice@acme.com", link_id).await?;
+    let bob = insert_contact_with_source(&pool, company_id, "bob@acme.com", link_id).await?;
 
     let service = CrmServiceImpl::new(
         CompaniesRepositoryImpl::new(pool.clone()),
@@ -587,8 +595,45 @@ async fn service_set_company_hidden_true_also_disables_email_sync(
 
     assert_eq!(fetch_company_hidden(&pool, company_id).await?, Some(true));
     assert_eq!(fetch_email_sync(&pool, company_id).await?, Some(false));
-    assert_eq!(count_contacts(&pool, company_id).await?, 0);
-    assert_eq!(count_sources_for_company(&pool, company_id).await?, 0);
+    // Contacts and sources preserved; both contacts now hidden.
+    assert_eq!(count_contacts(&pool, company_id).await?, 2);
+    assert_eq!(count_sources_for_company(&pool, company_id).await?, 2);
+    assert_eq!(fetch_contact_hidden(&pool, alice).await?, Some(true));
+    assert_eq!(fetch_contact_hidden(&pool, bob).await?, Some(true));
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn set_company_hidden_false_cascades_contacts_visible(pool: PgPool) -> anyhow::Result<()> {
+    // After un-hide, every contact under the company becomes visible —
+    // including ones an admin previously hid individually. Cascade
+    // overwrites individual hide state by design.
+    let team_id = Uuid::now_v7();
+    let owner_id = "macro|owner@test.com";
+    seed_team(&pool, team_id, owner_id).await?;
+    let company_id = insert_company(&pool, team_id, true, &["acme.com"]).await?;
+    let link_id = insert_email_link(&pool, owner_id, "owner@macro.test").await?;
+    let alice = insert_contact_with_source(&pool, company_id, "alice@acme.com", link_id).await?;
+    let bob = insert_contact_with_source(&pool, company_id, "bob@acme.com", link_id).await?;
+
+    let repo = CompaniesRepositoryImpl::new(pool.clone());
+    // Individually hide `alice` before any company-level toggling.
+    repo.set_contact_hidden(&team_id, &alice, true).await?;
+    // Then hide the whole company (cascades `bob` to hidden too).
+    repo.set_company_hidden(&team_id, &company_id, true).await?;
+    assert_eq!(fetch_contact_hidden(&pool, alice).await?, Some(true));
+    assert_eq!(fetch_contact_hidden(&pool, bob).await?, Some(true));
+
+    // Un-hide cascades EVERY contact back to visible, blowing away
+    // alice's individual hide too.
+    repo.set_company_hidden(&team_id, &company_id, false)
+        .await?;
+
+    assert_eq!(fetch_company_hidden(&pool, company_id).await?, Some(false));
+    assert_eq!(fetch_contact_hidden(&pool, alice).await?, Some(false));
+    assert_eq!(fetch_contact_hidden(&pool, bob).await?, Some(false));
+    // Un-hide does NOT re-enable email_sync; that's a separate action.
+    assert_eq!(fetch_email_sync(&pool, company_id).await?, Some(false));
     Ok(())
 }
 
@@ -1412,24 +1457,24 @@ async fn populate_contact_team_killswitch_off_noops_both_directions(
     Ok(())
 }
 
-/// Per-domain killswitch (`crm_companies.email_sync = false`)
-/// short-circuits populate in both directions: interaction columns
-/// stay at the stored baseline and no contact / source rows land.
+/// `email_sync = false` no longer gates populate. The flag is now
+/// purely a visibility/permission check consumed at read time
+/// (soup, email permissions). Populate updates interaction columns
+/// and writes contact / source rows just like it would with
+/// `email_sync = true`, so re-enabling sync exposes the full history
+/// with zero backfill.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn populate_contact_per_domain_killswitch_noops_both_directions(
-    pool: PgPool,
-) -> anyhow::Result<()> {
+async fn populate_contact_runs_regardless_of_email_sync_flag(pool: PgPool) -> anyhow::Result<()> {
     let team_id = Uuid::now_v7();
     let owner_id = "macro|owner@test.com";
     seed_team(&pool, team_id, owner_id).await?;
     enable_crm_for_team(&pool, team_id).await?;
     let link_id = insert_email_link(&pool, owner_id, "user@macro.com").await?;
 
-    // Seed a killswitched company for the domain. Baseline timestamp
-    // is parsed from a string so it has zero sub-microsecond precision
-    // — Postgres `TIMESTAMPTZ` only stores microseconds, and
-    // `chrono::Utc::now()` would carry nanos that get silently
-    // truncated and break the `assert_eq` below.
+    // Seed a sync-off company. Baseline timestamp parsed from a string
+    // (no sub-microsecond precision — Postgres `TIMESTAMPTZ` only
+    // stores micros and `chrono::Utc::now()`'s nanos would get
+    // silently truncated and break the `assert_eq` below).
     let company_id = insert_company(&pool, team_id, false, &["acme.com"]).await?;
     let baseline: chrono::DateTime<chrono::Utc> = "2024-01-01T00:00:00Z".parse()?;
     sqlx::query(
@@ -1448,31 +1493,31 @@ async fn populate_contact_per_domain_killswitch_noops_both_directions(
     );
 
     let later: chrono::DateTime<chrono::Utc> = "2024-01-08T00:00:00Z".parse()?;
+    service
+        .populate_contact(
+            &team_id,
+            &link_id,
+            "user@macro.com",
+            "alice@acme.com",
+            None,
+            later,
+            later,
+            true,
+        )
+        .await?;
 
-    for is_sent in [true, false] {
-        service
-            .populate_contact(
-                &team_id,
-                &link_id,
-                "user@macro.com",
-                "alice@acme.com",
-                None,
-                later,
-                later,
-                is_sent,
-            )
-            .await?;
-    }
-
-    // Killswitch must keep the company's interaction columns at the
-    // baseline and prevent contact / source inserts.
+    // Company `last_interaction` advances; first_interaction
+    // LEAST-merges on is_sent=true so it stays at the earlier
+    // baseline. Contact + source rows land regardless of email_sync.
     let (first, last) = fetch_company_interactions(&pool, company_id)
         .await?
         .expect("company");
     assert_eq!(first, baseline);
-    assert_eq!(last, baseline);
-    assert_eq!(count_contacts(&pool, company_id).await?, 0);
-    assert_eq!(count_sources_for_company(&pool, company_id).await?, 0);
+    assert_eq!(last, later);
+    assert_eq!(count_contacts(&pool, company_id).await?, 1);
+    assert_eq!(count_sources_for_company(&pool, company_id).await?, 1);
+    // email_sync itself is unchanged — populate never touches it.
+    assert_eq!(fetch_email_sync(&pool, company_id).await?, Some(false));
     Ok(())
 }
 
@@ -1546,6 +1591,188 @@ async fn populate_contact_seed_style_range_merges_into_existing(
         .expect("interactions");
     assert_eq!(contact_first, seed_first);
     assert_eq!(contact_last, seed_last);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn email_sync_disable_then_re_enable_preserves_full_history_with_no_backfill(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    // Regression: the whole point of decoupling populate from
+    // email_sync. While sync is OFF, new emails arriving for this
+    // company must still write CRM rows. Re-enabling sync must surface
+    // the complete history without any explicit backfill step.
+    let team_id = Uuid::now_v7();
+    let owner_id = "macro|owner@test.com";
+    seed_team(&pool, team_id, owner_id).await?;
+    enable_crm_for_team(&pool, team_id).await?;
+    let link_id = insert_email_link(&pool, owner_id, "user@macro.com").await?;
+
+    let service = CrmServiceImpl::new(
+        CompaniesRepositoryImpl::new(pool.clone()),
+        NoOpCompanyMetadataResolver,
+    );
+    let repo = CompaniesRepositoryImpl::new(pool.clone());
+
+    // Phase 1: sync ON. First contact lands normally.
+    let t1: chrono::DateTime<chrono::Utc> = "2024-01-01T00:00:00Z".parse()?;
+    service
+        .populate_contact(
+            &team_id,
+            &link_id,
+            "user@macro.com",
+            "alice@acme.com",
+            None,
+            t1,
+            t1,
+            true,
+        )
+        .await?;
+    let company_id = fetch_company_for_domain(&pool, team_id, "acme.com")
+        .await?
+        .expect("company");
+    assert_eq!(count_contacts(&pool, company_id).await?, 1);
+
+    // Phase 2: admin disables sync. Existing data stays put.
+    repo.set_email_sync(&team_id, &company_id, false).await?;
+    assert_eq!(count_contacts(&pool, company_id).await?, 1);
+    assert_eq!(count_sources_for_company(&pool, company_id).await?, 1);
+
+    // Phase 3: a new email arrives during the sync-off window. This
+    // is the critical assertion — populate must still write the new
+    // contact + source so there's no gap to backfill later.
+    let t2: chrono::DateTime<chrono::Utc> = "2024-02-15T00:00:00Z".parse()?;
+    service
+        .populate_contact(
+            &team_id,
+            &link_id,
+            "user@macro.com",
+            "bob@acme.com",
+            None,
+            t2,
+            t2,
+            true,
+        )
+        .await?;
+    assert_eq!(count_contacts(&pool, company_id).await?, 2);
+    assert_eq!(count_sources_for_company(&pool, company_id).await?, 2);
+    assert_eq!(fetch_email_sync(&pool, company_id).await?, Some(false));
+
+    // Phase 4: admin re-enables sync. No backfill is run — but the
+    // history written during the off-window is already there.
+    repo.set_email_sync(&team_id, &company_id, true).await?;
+    assert_eq!(fetch_email_sync(&pool, company_id).await?, Some(true));
+    assert_eq!(count_contacts(&pool, company_id).await?, 2);
+    assert_eq!(count_sources_for_company(&pool, company_id).await?, 2);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn populate_contact_into_hidden_company_inserts_hidden_contact(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    // Defensive: new contacts inserted into a hidden company must
+    // inherit `hidden = TRUE` so a populate-vs-hide race can't sneak a
+    // visible contact under an otherwise-hidden company. The happy
+    // path is killswitched by `email_sync = false`; this test
+    // simulates the race by manually putting the row in the unusual
+    // `hidden = TRUE, email_sync = TRUE` state.
+    let team_id = Uuid::now_v7();
+    let owner_id = "macro|owner@test.com";
+    seed_team(&pool, team_id, owner_id).await?;
+    enable_crm_for_team(&pool, team_id).await?;
+    let link_id = insert_email_link(&pool, owner_id, "user@macro.com").await?;
+    let company_id = insert_company(&pool, team_id, true, &["acme.com"]).await?;
+    sqlx::query(r#"UPDATE crm_companies SET hidden = TRUE WHERE id = $1"#)
+        .bind(company_id)
+        .execute(&pool)
+        .await?;
+
+    let service = CrmServiceImpl::new(
+        CompaniesRepositoryImpl::new(pool.clone()),
+        NoOpCompanyMetadataResolver,
+    );
+    let now: chrono::DateTime<chrono::Utc> = "2024-01-15T00:00:00Z".parse()?;
+    service
+        .populate_contact(
+            &team_id,
+            &link_id,
+            "user@macro.com",
+            "alice@acme.com",
+            None,
+            now,
+            now,
+            true,
+        )
+        .await?;
+
+    let alice = fetch_contact_id(&pool, company_id, "alice@acme.com")
+        .await?
+        .expect("alice should have been inserted");
+    assert_eq!(fetch_contact_hidden(&pool, alice).await?, Some(true));
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn populate_contact_upsert_does_not_overwrite_individual_hide(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    // Populate upsert (ON CONFLICT path) must preserve a contact's
+    // existing `hidden` so individual `set_contact_hidden` actions
+    // survive subsequent email activity.
+    let team_id = Uuid::now_v7();
+    let owner_id = "macro|owner@test.com";
+    seed_team(&pool, team_id, owner_id).await?;
+    enable_crm_for_team(&pool, team_id).await?;
+    let link_id = insert_email_link(&pool, owner_id, "user@macro.com").await?;
+
+    let service = CrmServiceImpl::new(
+        CompaniesRepositoryImpl::new(pool.clone()),
+        NoOpCompanyMetadataResolver,
+    );
+    let first_at: chrono::DateTime<chrono::Utc> = "2024-01-01T00:00:00Z".parse()?;
+    let later: chrono::DateTime<chrono::Utc> = "2024-02-01T00:00:00Z".parse()?;
+
+    // Seed the contact via a normal populate.
+    service
+        .populate_contact(
+            &team_id,
+            &link_id,
+            "user@macro.com",
+            "alice@acme.com",
+            None,
+            first_at,
+            first_at,
+            true,
+        )
+        .await?;
+    let company_id = fetch_company_for_domain(&pool, team_id, "acme.com")
+        .await?
+        .expect("company");
+    let alice = fetch_contact_id(&pool, company_id, "alice@acme.com")
+        .await?
+        .expect("alice");
+
+    // Admin hides alice individually.
+    let repo = CompaniesRepositoryImpl::new(pool.clone());
+    repo.set_contact_hidden(&team_id, &alice, true).await?;
+    assert_eq!(fetch_contact_hidden(&pool, alice).await?, Some(true));
+
+    // A later populate (new email from alice) must NOT un-hide her.
+    service
+        .populate_contact(
+            &team_id,
+            &link_id,
+            "user@macro.com",
+            "alice@acme.com",
+            None,
+            later,
+            later,
+            true,
+        )
+        .await?;
+
+    assert_eq!(fetch_contact_hidden(&pool, alice).await?, Some(true));
     Ok(())
 }
 
@@ -2017,6 +2244,108 @@ async fn list_contacts_does_not_leak_across_teams(pool: PgPool) -> anyhow::Resul
         result,
         Err(crate::domain::model::CrmError::CompanyNotFoundForTeam)
     ));
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn get_contact_returns_owned_visible_contact(pool: PgPool) -> anyhow::Result<()> {
+    let team_id = Uuid::now_v7();
+    let owner_id = "macro|owner@test.com";
+    seed_team(&pool, team_id, owner_id).await?;
+    let company_id = insert_company(&pool, team_id, true, &["acme.com"]).await?;
+    let link_id = insert_email_link(&pool, owner_id, "owner@macro.test").await?;
+    let contact_id =
+        insert_contact_with_source(&pool, company_id, "alice@acme.com", link_id).await?;
+    sqlx::query(r#"UPDATE crm_contacts SET name = 'Alice Adams' WHERE id = $1"#)
+        .bind(contact_id)
+        .execute(&pool)
+        .await?;
+
+    let repo = CompaniesRepositoryImpl::new(pool);
+    let contact = repo
+        .get_contact_for_team(&team_id, &contact_id)
+        .await?
+        .expect("contact should be returned");
+
+    assert_eq!(contact.id, contact_id);
+    assert_eq!(contact.company_id, company_id);
+    assert_eq!(contact.email, "alice@acme.com");
+    assert_eq!(contact.name.as_deref(), Some("Alice Adams"));
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn get_contact_returns_none_for_unknown_id(pool: PgPool) -> anyhow::Result<()> {
+    let team_id = Uuid::now_v7();
+    seed_team(&pool, team_id, "macro|owner@test.com").await?;
+
+    let repo = CompaniesRepositoryImpl::new(pool);
+    let result = repo.get_contact_for_team(&team_id, &Uuid::now_v7()).await?;
+    assert!(result.is_none());
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn get_contact_does_not_leak_across_teams(pool: PgPool) -> anyhow::Result<()> {
+    let team_a = Uuid::now_v7();
+    let team_b = Uuid::now_v7();
+    seed_team(&pool, team_a, "macro|a@test.com").await?;
+    seed_team(&pool, team_b, "macro|b@test.com").await?;
+    let company_a = insert_company(&pool, team_a, true, &["acme.com"]).await?;
+    let link_a = insert_email_link(&pool, "macro|a@test.com", "a@macro.test").await?;
+    let contact_a = insert_contact_with_source(&pool, company_a, "alice@acme.com", link_a).await?;
+
+    // Team B fetching team A's contact must get None, not the row.
+    let repo = CompaniesRepositoryImpl::new(pool);
+    let result = repo.get_contact_for_team(&team_b, &contact_a).await?;
+    assert!(result.is_none());
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn get_contact_returns_none_for_hidden_contact(pool: PgPool) -> anyhow::Result<()> {
+    let team_id = Uuid::now_v7();
+    let owner_id = "macro|owner@test.com";
+    seed_team(&pool, team_id, owner_id).await?;
+    let company_id = insert_company(&pool, team_id, true, &["acme.com"]).await?;
+    let link_id = insert_email_link(&pool, owner_id, "owner@macro.test").await?;
+    let contact_id =
+        insert_contact_with_source(&pool, company_id, "alice@acme.com", link_id).await?;
+    sqlx::query(r#"UPDATE crm_contacts SET hidden = TRUE WHERE id = $1"#)
+        .bind(contact_id)
+        .execute(&pool)
+        .await?;
+
+    let repo = CompaniesRepositoryImpl::new(pool);
+    let result = repo.get_contact_for_team(&team_id, &contact_id).await?;
+    assert!(result.is_none());
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn get_contact_returns_none_when_parent_company_is_hidden(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    // Defensive: a non-hidden contact whose parent company is hidden
+    // must not be reachable. In practice `set_company_hidden` tears
+    // down contacts on hide, but the query enforces the invariant.
+    let team_id = Uuid::now_v7();
+    let owner_id = "macro|owner@test.com";
+    seed_team(&pool, team_id, owner_id).await?;
+    let company_id = insert_company(&pool, team_id, true, &["acme.com"]).await?;
+    let link_id = insert_email_link(&pool, owner_id, "owner@macro.test").await?;
+    let contact_id =
+        insert_contact_with_source(&pool, company_id, "alice@acme.com", link_id).await?;
+    // Force company hidden directly (bypassing the service cascade)
+    // to simulate a stale row from a prior buggy code path.
+    sqlx::query(r#"UPDATE crm_companies SET hidden = TRUE WHERE id = $1"#)
+        .bind(company_id)
+        .execute(&pool)
+        .await?;
+
+    let repo = CompaniesRepositoryImpl::new(pool);
+    let result = repo.get_contact_for_team(&team_id, &contact_id).await?;
+    assert!(result.is_none());
     Ok(())
 }
 

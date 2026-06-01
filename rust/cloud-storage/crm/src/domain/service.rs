@@ -26,9 +26,11 @@ pub trait CrmService: Clone + Send + Sync + 'static {
     /// identified by `link_id`, for the team `team_id`. Upserts
     /// `crm_companies` (+ `crm_domains`), `crm_contacts`, and
     /// `crm_contact_sources` in a single transaction. The call is a
-    /// no-op when either killswitch is engaged: the team-level
-    /// `team_crm_settings.crm_enabled = false`, or the per-domain
-    /// `crm_companies.email_sync = false` for the contact's domain.
+    /// no-op only when the team-level
+    /// `team_crm_settings.crm_enabled = false` killswitch is engaged.
+    /// The per-company `email_sync` flag is a visibility gate only —
+    /// populate writes regardless, so re-enabling sync exposes the
+    /// full history with no backfill.
     ///
     /// `name` is the display name observed for `email` on this user's
     /// link — typically `email_contacts.name`, which the caller looks up
@@ -64,13 +66,13 @@ pub trait CrmService: Clone + Send + Sync + 'static {
     /// `is_sent` flags whether the populating message was sent by the
     /// user. The write matrix:
     ///
-    /// | `is_sent` | No `crm_companies` row | Existing `crm_companies` row (`email_sync=true`) |
+    /// | `is_sent` | No `crm_companies` row | Existing `crm_companies` row |
     /// |---|---|---|
     /// | `true`  | INSERT company + contact + source; `first_interaction = $first_at`, `last_interaction = $last_at`. | UPDATE company `first=LEAST(stored, $first_at), last=GREATEST(stored, $last_at)` + upsert contact (same merge) + upsert source. |
     /// | `false` | **No-op** — no domain-metadata resolve, no inserts. | UPDATE company `last=GREATEST(stored, $last_at)` only (do NOT touch `first_interaction`) + upsert contact (INSERT sets both endpoints; ON CONFLICT bumps `last` only) + upsert source. |
     ///
-    /// The `email_sync=false` per-domain killswitch short-circuits in
-    /// both directions.
+    /// `email_sync` is *not* consulted by this method — it's purely a
+    /// read-side visibility gate.
     #[allow(clippy::too_many_arguments)]
     fn populate_contact(
         &self,
@@ -134,8 +136,9 @@ pub trait CrmService: Clone + Send + Sync + 'static {
         macro_id: &str,
     ) -> impl Future<Output = Result<Option<uuid::Uuid>, CrmError>> + Send;
 
-    /// Toggle `email_sync` for `(company_id, team_id)`. Disable cascades
-    /// to contacts and contact_sources; see
+    /// Toggle `email_sync` for `(company_id, team_id)`. Purely a
+    /// visibility/permission flag — populate continues to write CRM
+    /// rows regardless. See
     /// [`crate::domain::companies_repo::CompaniesRepository::set_email_sync`].
     /// Authorization is the caller's responsibility.
     fn set_email_sync(
@@ -146,12 +149,13 @@ pub trait CrmService: Clone + Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), CrmError>> + Send;
 
     /// Toggle the `hidden` flag on a CRM company for `(company_id,
-    /// team_id)`. Hiding (`true`) also forces `email_sync = false` and
-    /// tears down contacts/sources atomically; see
+    /// team_id)`. The company's contacts cascade with the flag — hide
+    /// soft-hides every contact (`hidden = TRUE`), un-hide soft-restores
+    /// them (`hidden = FALSE`). Contact rows and `crm_contact_sources`
+    /// are preserved across the cycle. Hide additionally forces
+    /// `email_sync = false`; un-hide leaves `email_sync` as-is. See
     /// [`crate::domain::companies_repo::CompaniesRepository::set_company_hidden`].
-    /// Un-hiding (`false`) leaves `email_sync` as-is — the team must
-    /// re-enable sync explicitly. Authorization is the caller's
-    /// responsibility.
+    /// Authorization is the caller's responsibility.
     fn set_company_hidden(
         &self,
         team_id: &uuid::Uuid,
@@ -198,6 +202,14 @@ pub trait CrmService: Clone + Send + Sync + 'static {
         team_id: &uuid::Uuid,
         company_id: &uuid::Uuid,
     ) -> impl Future<Output = Result<Vec<CrmContact>, CrmError>> + Send;
+
+    /// Fetch a single non-hidden CRM contact by id, scoped to `team_id`.
+    /// See [`CompaniesRepository::get_contact_for_team`].
+    fn get_contact_for_team(
+        &self,
+        team_id: &uuid::Uuid,
+        contact_id: &uuid::Uuid,
+    ) -> impl Future<Output = Result<Option<CrmContact>, CrmError>> + Send;
 
     /// Create a comment on a CRM company or contact, optionally as a reply
     /// to an existing thread. See
@@ -515,6 +527,17 @@ where
             .await
     }
 
+    #[tracing::instrument(skip(self), err)]
+    async fn get_contact_for_team(
+        &self,
+        team_id: &uuid::Uuid,
+        contact_id: &uuid::Uuid,
+    ) -> Result<Option<CrmContact>, CrmError> {
+        self.companies_repository
+            .get_contact_for_team(team_id, contact_id)
+            .await
+    }
+
     #[tracing::instrument(skip(self, thread_metadata, text, metadata), err)]
     #[allow(clippy::too_many_arguments)]
     async fn create_crm_comment(
@@ -683,6 +706,14 @@ impl CrmService for NoOpCrmService {
         _company_id: &uuid::Uuid,
     ) -> Result<Vec<CrmContact>, CrmError> {
         Ok(Vec::new())
+    }
+
+    async fn get_contact_for_team(
+        &self,
+        _team_id: &uuid::Uuid,
+        _contact_id: &uuid::Uuid,
+    ) -> Result<Option<CrmContact>, CrmError> {
+        Ok(None)
     }
 
     #[allow(clippy::too_many_arguments)]
