@@ -1,9 +1,9 @@
 import type { ToolName } from '@service-cognition/generated/tools/tool';
 import { For } from 'solid-js';
 import { ChatInputProvider, ChatProvider } from '../../context';
+import { RenderTool } from '../tool/handler';
 import { McpToolCall } from '../tool/McpToolCall';
 import { Tool } from '../tool/Tool';
-import { RenderTool } from '../tool/handler';
 
 type ToolCase = {
   name: ToolName;
@@ -380,7 +380,11 @@ const toolCases: ToolCase[] = [
   },
 ];
 
-function ToolCaseRow(props: { item: ToolCase; index: number; grouped?: boolean }) {
+function ToolCaseRow(props: {
+  item: ToolCase;
+  index: number;
+  grouped?: boolean;
+}) {
   const id = () => `tool-showcase-${props.index}`;
   const renderContext = () => ({
     renderContext: {

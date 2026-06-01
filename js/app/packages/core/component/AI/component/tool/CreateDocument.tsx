@@ -19,10 +19,10 @@ const handler = createToolRenderer({
               {' '}
               <span class="text-ink-placeholder">·</span>{' '}
               <Suspense>
-              <InlineItemPreview
-                id={response().data.documentId}
-                type="document"
-              />
+                <InlineItemPreview
+                  id={response().data.documentId}
+                  type="document"
+                />
               </Suspense>
             </>
           )}

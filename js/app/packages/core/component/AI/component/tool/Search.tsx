@@ -1,11 +1,11 @@
 import { getEntityClickContent } from '@channel/Attachments/attachment-utils';
 import {
+  type EntityData,
   EntityRowIcon,
   EntityRowTitle,
   SearchContent,
   SearchSender,
   SearchTimestamp,
-  type EntityData,
   type WithSearch,
 } from '@entity';
 import MagnifyingGlass from '@phosphor-icons/core/regular/magnifying-glass.svg';
@@ -29,10 +29,7 @@ const getToolSearchQuery = (
   return 'query' in ctx.tool.data ? ctx.tool.data.query : ctx.tool.data.name;
 };
 
-function SearchResultRow(props: {
-  entity: SearchEntity;
-  onClick: () => void;
-}) {
+function SearchResultRow(props: { entity: SearchEntity; onClick: () => void }) {
   const hit = () => props.entity.search.contentHitData?.[0];
 
   return (

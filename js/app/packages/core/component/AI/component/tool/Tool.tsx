@@ -1,5 +1,5 @@
-import { Button, Layer } from '@ui';
 import CaretRight from '@phosphor/caret-right.svg?component-solid';
+import { Button, Layer } from '@ui';
 import type { Component, JSX } from 'solid-js';
 import { Show } from 'solid-js';
 
