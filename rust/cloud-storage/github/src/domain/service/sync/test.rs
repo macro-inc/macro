@@ -34,6 +34,10 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model::document::{DocumentBasic, DocumentMetadata};
 use model_entity::Entity;
 use models_permissions::share_permission::access_level::AccessLevel;
+use notification::domain::{
+    models::{Notification, NotificationResult, SendNotificationRequest},
+    service::{NotificationIngress, SendNotificationError},
+};
 
 use super::*;
 
@@ -264,6 +268,8 @@ struct StubSyncRepo {
     github_links: Mutex<HashMap<String, String>>,
     /// Maps macro_id -> team_ids for installation event lookups.
     user_teams: Mutex<HashMap<String, Vec<uuid::Uuid>>>,
+    /// Maps team_id -> Macro user IDs for notification recipient lookups.
+    team_members: Mutex<HashMap<uuid::Uuid, Vec<MacroUserIdStr<'static>>>>,
     /// Current github_app_installation source rows keyed by installation id.
     installation_source_rows: Mutex<HashMap<String, HashSet<GithubAppInstallationSource>>>,
     /// Recorded installation source upserts: (installation_id, sources).
@@ -277,6 +283,7 @@ impl StubSyncRepo {
             team_task_references: Mutex::new(HashMap::new()),
             github_links: Mutex::new(HashMap::new()),
             user_teams: Mutex::new(HashMap::new()),
+            team_members: Mutex::new(HashMap::new()),
             installation_source_rows: Mutex::new(HashMap::new()),
             installation_sources: Mutex::new(Vec::new()),
         }
@@ -295,6 +302,18 @@ impl StubSyncRepo {
             .lock()
             .unwrap()
             .insert(macro_id.to_string(), team_ids);
+        self
+    }
+
+    fn with_team_members(self, team_id: uuid::Uuid, member_ids: Vec<&str>) -> Self {
+        let member_ids = member_ids
+            .into_iter()
+            .map(|member_id| MacroUserIdStr::try_from(member_id.to_string()).unwrap())
+            .collect();
+        self.team_members
+            .lock()
+            .unwrap()
+            .insert(team_id, member_ids);
         self
     }
 
@@ -428,6 +447,21 @@ impl GithubSyncRepo for StubSyncRepo {
             .unwrap_or_default())
     }
 
+    async fn get_team_member_ids(
+        &self,
+        team_id: uuid::Uuid,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, Self::Err> {
+        let mut member_ids = self
+            .team_members
+            .lock()
+            .unwrap()
+            .get(&team_id)
+            .cloned()
+            .unwrap_or_default();
+        member_ids.sort_by(|left, right| left.as_ref().cmp(right.as_ref()));
+        Ok(member_ids)
+    }
+
     async fn get_installation_sources(
         &self,
         installation_id: &str,
@@ -457,6 +491,30 @@ impl GithubSyncRepo for StubSyncRepo {
             .push((installation_id.to_string(), sources.to_vec()));
         Ok(())
     }
+}
+
+#[tokio::test]
+async fn test_get_team_member_ids_stub_returns_fixture_members() {
+    let team_id: uuid::Uuid = "dddddddd-dddd-dddd-dddd-dddddddddddd".parse().unwrap();
+    let repo = StubSyncRepo::new()
+        .with_team_members(team_id, vec!["macro|zeta@user.com", "macro|alpha@user.com"]);
+
+    let member_ids = repo.get_team_member_ids(team_id).await.unwrap();
+    let member_ids: Vec<String> = member_ids.into_iter().map(String::from).collect();
+
+    assert_eq!(
+        member_ids,
+        vec![
+            "macro|alpha@user.com".to_string(),
+            "macro|zeta@user.com".to_string(),
+        ]
+    );
+    assert!(
+        repo.get_team_member_ids(uuid::Uuid::nil())
+            .await
+            .unwrap()
+            .is_empty()
+    );
 }
 
 /// Recorded PR comment call.
@@ -769,11 +827,61 @@ impl ForeignEntityService for StubForeignEntityService {
     }
 }
 
+struct StubNotificationIngress {
+    requests: Mutex<Vec<serde_json::Value>>,
+    fail_sends: bool,
+}
+
+impl StubNotificationIngress {
+    fn new() -> Self {
+        Self {
+            requests: Mutex::new(Vec::new()),
+            fail_sends: false,
+        }
+    }
+
+    fn failing() -> Self {
+        Self {
+            requests: Mutex::new(Vec::new()),
+            fail_sends: true,
+        }
+    }
+
+    fn requests(&self) -> Vec<serde_json::Value> {
+        self.requests.lock().unwrap().clone()
+    }
+
+    fn clear_requests(&self) {
+        self.requests.lock().unwrap().clear();
+    }
+}
+
+impl NotificationIngress for StubNotificationIngress {
+    async fn send_notification<
+        'a,
+        T: Notification + Clone + 'static,
+        U: serde::Serialize + Send + Sync + 'static,
+    >(
+        &'a self,
+        request: SendNotificationRequest<'a, T, U>,
+    ) -> Result<Option<NotificationResult<'a>>, rootcause::Report<SendNotificationError>> {
+        let snapshot = serde_json::to_value(&request).unwrap();
+        self.requests.lock().unwrap().push(snapshot);
+
+        if self.fail_sends {
+            return Err(rootcause::Report::new(SendNotificationError::Other));
+        }
+
+        Ok(None)
+    }
+}
+
 type TestGithubSyncService = GithubSyncServiceImpl<
     StubDocumentService,
     StubSyncRepo,
     StubSyncClient,
     StubForeignEntityService,
+    StubNotificationIngress,
 >;
 type TestServiceWithForeignEntityService = (TestGithubSyncService, Arc<StubForeignEntityService>);
 
@@ -782,6 +890,13 @@ fn make_sync_service() -> TestGithubSyncService {
 }
 
 fn make_sync_service_with_repo(repo: StubSyncRepo) -> TestGithubSyncService {
+    make_sync_service_with_repo_and_notification_ingress(repo, StubNotificationIngress::new())
+}
+
+fn make_sync_service_with_repo_and_notification_ingress(
+    repo: StubSyncRepo,
+    notification_ingress: StubNotificationIngress,
+) -> TestGithubSyncService {
     let doc_service = Arc::new(StubDocumentService::new());
     let foreign_entity_service = Arc::new(StubForeignEntityService::new());
 
@@ -794,6 +909,7 @@ fn make_sync_service_with_repo(repo: StubSyncRepo) -> TestGithubSyncService {
         },
         doc_service,
         foreign_entity_service,
+        notification_ingress,
         repo,
         StubSyncClient::new(),
     )
@@ -812,6 +928,7 @@ fn make_sync_service_with_doc_service() -> (TestGithubSyncService, Arc<StubDocum
         },
         doc_service.clone(),
         foreign_entity_service,
+        StubNotificationIngress::new(),
         StubSyncRepo::new(),
         StubSyncClient::new(),
     );
@@ -852,6 +969,91 @@ fn expected_pull_request_metadata(
         checks: None,
     })
     .unwrap()
+}
+
+fn notification_request_content(request: &serde_json::Value) -> &serde_json::Value {
+    request
+        .pointer("/req/notification/content")
+        .expect("notification request content")
+}
+
+fn notification_request_recipients(request: &serde_json::Value) -> Vec<String> {
+    let mut recipient_ids: Vec<String> = request
+        .pointer("/req/recipient_ids")
+        .expect("notification recipients")
+        .as_array()
+        .expect("recipient_ids is an array")
+        .iter()
+        .map(|value| {
+            value
+                .as_str()
+                .expect("recipient id is a string")
+                .to_string()
+        })
+        .collect();
+    recipient_ids.sort();
+    recipient_ids
+}
+
+fn assert_github_pr_notification_delivery_enabled(request: &serde_json::Value) {
+    assert_eq!(
+        request
+            .pointer("/req/notification/tag")
+            .and_then(|value| value.as_str()),
+        Some("github_pr_event")
+    );
+    assert_eq!(
+        request
+            .pointer("/send_conn_gateway")
+            .and_then(|value| value.as_bool()),
+        Some(true)
+    );
+    assert!(
+        !request
+            .pointer("/build_apns")
+            .expect("build_apns field")
+            .is_null(),
+        "GitHub PR notifications should include APNS payloads"
+    );
+}
+
+fn notification_pull_request_event(
+    action: &str,
+    title: &str,
+    state: &str,
+    merged: bool,
+    merged_at: Option<&str>,
+    sender_id: u64,
+    sender_login: &str,
+) -> ValidatedGithubWebhookEvent {
+    ValidatedGithubWebhookEvent::new(
+        "pull_request".to_string(),
+        serde_json::json!({
+            "action": action,
+            "pull_request": {
+                "number": 42,
+                "title": title,
+                "body": null,
+                "head": { "ref": "feature/some-branch" },
+                "base": { "ref": "main" },
+                "state": state,
+                "merged": merged,
+                "merged_at": merged_at,
+                "additions": 10,
+                "deletions": 2
+            },
+            "repository": {
+                "name": "my-repo",
+                "owner": { "login": "my-org" }
+            },
+            "installation": { "id": 12345 },
+            "sender": {
+                "login": sender_login,
+                "id": sender_id,
+                "avatar_url": format!("https://avatars.example/{sender_login}.png")
+            }
+        }),
+    )
 }
 
 fn backfilled_pull_request(title: &str) -> EnrichedGithubPullRequest {
@@ -1731,6 +1933,313 @@ async fn pr_opened_upserts_foreign_entity_for_user_installation_source() {
     assert_eq!(foreign_entities.len(), 1);
     assert_eq!(foreign_entities[0].stored_for_id, "macro|solo@user.com");
     assert_eq!(foreign_entities[0].stored_for_auth_entity, "user");
+}
+
+#[tokio::test]
+async fn github_pr_event_opened_team_source_notifies_team_members() {
+    let team_id: uuid::Uuid = "dddddddd-dddd-dddd-dddd-dddddddddddd".parse().unwrap();
+    let repo = StubSyncRepo::new()
+        .with_installation_sources("12345", vec![GithubAppInstallationSource::Team(team_id)])
+        .with_team_members(team_id, vec!["macro|alice@user.com", "macro|bob@user.com"])
+        .with_github_link("222", "macro|alice@user.com");
+    let service = make_sync_service_with_repo(repo);
+    let event = notification_pull_request_event(
+        "opened",
+        "Add GitHub notifications",
+        "open",
+        false,
+        None,
+        222,
+        "octocat",
+    );
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    let foreign_entity_id = service.foreign_entity_service.foreign_entities()[0].id;
+    let requests = service.notification_ingress.requests();
+    assert_eq!(requests.len(), 1);
+
+    let request = &requests[0];
+    assert_github_pr_notification_delivery_enabled(request);
+    assert_eq!(
+        request
+            .pointer("/req/notification_entity/entity_type")
+            .and_then(|value| value.as_str()),
+        Some("foreign_entity")
+    );
+    assert_eq!(
+        request
+            .pointer("/req/notification_entity/entity_id")
+            .and_then(|value| value.as_str()),
+        Some(foreign_entity_id.to_string().as_str())
+    );
+    assert_eq!(
+        request
+            .pointer("/req/sender_id")
+            .and_then(|value| value.as_str()),
+        Some("macro|alice@user.com")
+    );
+    assert_eq!(
+        notification_request_recipients(request),
+        vec![
+            "macro|alice@user.com".to_string(),
+            "macro|bob@user.com".to_string(),
+        ]
+    );
+
+    let content = notification_request_content(request);
+    assert_eq!(
+        content
+            .get("foreignEntityId")
+            .and_then(|value| value.as_str()),
+        Some(foreign_entity_id.to_string().as_str())
+    );
+    assert_eq!(
+        content.get("githubKey").and_then(|value| value.as_str()),
+        Some("my-org/my-repo/pull/42")
+    );
+    assert_eq!(
+        content.get("owner").and_then(|value| value.as_str()),
+        Some("my-org")
+    );
+    assert_eq!(
+        content.get("repo").and_then(|value| value.as_str()),
+        Some("my-repo")
+    );
+    assert_eq!(
+        content.get("number").and_then(|value| value.as_u64()),
+        Some(42)
+    );
+    assert_eq!(
+        content.get("url").and_then(|value| value.as_str()),
+        Some("https://github.com/my-org/my-repo/pull/42")
+    );
+    assert_eq!(
+        content.get("displayName").and_then(|value| value.as_str()),
+        Some("my-org/my-repo#42")
+    );
+    assert_eq!(
+        content.get("title").and_then(|value| value.as_str()),
+        Some("Add GitHub notifications")
+    );
+    assert_eq!(
+        content.get("status").and_then(|value| value.as_str()),
+        Some("open")
+    );
+    assert_eq!(
+        content.get("action").and_then(|value| value.as_str()),
+        Some("opened")
+    );
+    assert!(content.get("previousStatus").unwrap().is_null());
+    assert_eq!(
+        content
+            .get("senderGithubLogin")
+            .and_then(|value| value.as_str()),
+        Some("octocat")
+    );
+    assert_eq!(
+        content
+            .get("senderGithubUserId")
+            .and_then(|value| value.as_str()),
+        Some("222")
+    );
+    assert_eq!(
+        content
+            .get("senderGithubAvatarUrl")
+            .and_then(|value| value.as_str()),
+        Some("https://avatars.example/octocat.png")
+    );
+    assert_eq!(
+        content.get("headBranch").and_then(|value| value.as_str()),
+        Some("feature/some-branch")
+    );
+    assert_eq!(
+        content.get("baseBranch").and_then(|value| value.as_str()),
+        Some("main")
+    );
+    assert!(content.get("mergedAt").unwrap().is_null());
+}
+
+#[tokio::test]
+async fn github_pr_event_merged_user_source_notifies_user() {
+    let repo = StubSyncRepo::new()
+        .with_installation_sources(
+            "12345",
+            vec![GithubAppInstallationSource::User(
+                "macro|reviewer@user.com".to_string(),
+            )],
+        )
+        .with_github_link("333", "macro|merger@user.com");
+    let service = make_sync_service_with_repo(repo);
+    let opened_event = notification_pull_request_event(
+        "opened",
+        "Add GitHub notifications",
+        "open",
+        false,
+        None,
+        333,
+        "monalisa",
+    );
+    service.process_webhook_event(&opened_event).await.unwrap();
+    service.notification_ingress.clear_requests();
+
+    let merged_event = notification_pull_request_event(
+        "closed",
+        "Add GitHub notifications",
+        "closed",
+        true,
+        Some("2026-05-27T19:00:00Z"),
+        333,
+        "monalisa",
+    );
+    service.process_webhook_event(&merged_event).await.unwrap();
+
+    let foreign_entity_id = service.foreign_entity_service.foreign_entities()[0].id;
+    let requests = service.notification_ingress.requests();
+    assert_eq!(requests.len(), 1);
+
+    let request = &requests[0];
+    assert_github_pr_notification_delivery_enabled(request);
+    assert_eq!(
+        notification_request_recipients(request),
+        vec!["macro|reviewer@user.com".to_string()]
+    );
+    assert_eq!(
+        request
+            .pointer("/req/sender_id")
+            .and_then(|value| value.as_str()),
+        Some("macro|merger@user.com")
+    );
+    assert_eq!(
+        request
+            .pointer("/req/notification_entity/entity_id")
+            .and_then(|value| value.as_str()),
+        Some(foreign_entity_id.to_string().as_str())
+    );
+
+    let content = notification_request_content(request);
+    assert_eq!(
+        content
+            .get("foreignEntityId")
+            .and_then(|value| value.as_str()),
+        Some(foreign_entity_id.to_string().as_str())
+    );
+    assert_eq!(
+        content.get("status").and_then(|value| value.as_str()),
+        Some("merged")
+    );
+    assert_eq!(
+        content
+            .get("previousStatus")
+            .and_then(|value| value.as_str()),
+        Some("open")
+    );
+    assert_eq!(
+        content.get("action").and_then(|value| value.as_str()),
+        Some("closed")
+    );
+    assert_eq!(
+        content.get("mergedAt").and_then(|value| value.as_str()),
+        Some("2026-05-27T19:00:00Z")
+    );
+    assert_eq!(
+        content
+            .get("senderGithubLogin")
+            .and_then(|value| value.as_str()),
+        Some("monalisa")
+    );
+}
+
+#[tokio::test]
+async fn github_pr_event_edited_does_not_notify() {
+    let team_id: uuid::Uuid = "dddddddd-dddd-dddd-dddd-dddddddddddd".parse().unwrap();
+    let repo = StubSyncRepo::new()
+        .with_installation_sources("12345", vec![GithubAppInstallationSource::Team(team_id)])
+        .with_team_members(team_id, vec!["macro|alice@user.com"]);
+    let service = make_sync_service_with_repo(repo);
+    let event = notification_pull_request_event(
+        "edited",
+        "Update title",
+        "open",
+        false,
+        None,
+        222,
+        "octocat",
+    );
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    assert_eq!(service.foreign_entity_service.foreign_entities().len(), 1);
+    assert!(service.notification_ingress.requests().is_empty());
+}
+
+#[tokio::test]
+async fn github_pr_event_installation_backfill_does_not_notify() {
+    let repo = StubSyncRepo::new().with_github_link("12345", "macro|user@user.com");
+    let service = make_sync_service_with_repo(repo);
+    service
+        .client
+        .set_open_pull_requests(vec![backfilled_pull_request("Backfilled PR")]);
+    let event = installation_created_event(12345, 12345);
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    assert_eq!(service.foreign_entity_service.foreign_entities().len(), 1);
+    assert!(service.notification_ingress.requests().is_empty());
+}
+
+#[tokio::test]
+async fn github_pr_event_unchanged_status_does_not_notify() {
+    let team_id: uuid::Uuid = "dddddddd-dddd-dddd-dddd-dddddddddddd".parse().unwrap();
+    let repo = StubSyncRepo::new()
+        .with_installation_sources("12345", vec![GithubAppInstallationSource::Team(team_id)])
+        .with_team_members(team_id, vec!["macro|alice@user.com"]);
+    let service = make_sync_service_with_repo(repo);
+    let event = notification_pull_request_event(
+        "opened",
+        "Add GitHub notifications",
+        "open",
+        false,
+        None,
+        222,
+        "octocat",
+    );
+
+    service.process_webhook_event(&event).await.unwrap();
+    service.notification_ingress.clear_requests();
+    service.process_webhook_event(&event).await.unwrap();
+
+    assert_eq!(service.foreign_entity_service.foreign_entities().len(), 1);
+    assert!(service.notification_ingress.requests().is_empty());
+}
+
+#[tokio::test]
+async fn github_pr_event_send_failure_does_not_fail_webhook_processing() {
+    let repo = StubSyncRepo::new().with_installation_sources(
+        "12345",
+        vec![GithubAppInstallationSource::User(
+            "macro|recipient@user.com".to_string(),
+        )],
+    );
+    let service = make_sync_service_with_repo_and_notification_ingress(
+        repo,
+        StubNotificationIngress::failing(),
+    );
+    let event = notification_pull_request_event(
+        "opened",
+        "Add GitHub notifications",
+        "open",
+        false,
+        None,
+        222,
+        "octocat",
+    );
+
+    let result = service.process_webhook_event(&event).await;
+
+    assert!(result.is_ok());
+    assert_eq!(service.foreign_entity_service.foreign_entities().len(), 1);
+    assert_eq!(service.notification_ingress.requests().len(), 1);
 }
 
 #[tokio::test]

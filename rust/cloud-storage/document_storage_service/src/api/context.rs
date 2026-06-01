@@ -285,6 +285,7 @@ pub(crate) type GithubSyncServiceType = GithubSyncServiceImpl<
     PgGithubSyncRepo,
     GithubSyncClientImpl,
     ForeignEntityServiceType,
+    NotificationIngressType,
 >;
 
 /// Type alias for the cal.com webhook service.

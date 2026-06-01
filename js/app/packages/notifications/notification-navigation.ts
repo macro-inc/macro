@@ -12,6 +12,7 @@ import {
   resolveBlockAlias,
 } from '@core/constant/allBlocks';
 import type { NotificationType } from '@core/types';
+import { openExternalUrl } from '@core/util/url';
 import { getNotificationById } from '@queries/notification/user-notifications';
 import { errAsync, ResultAsync } from 'neverthrow';
 import { match, P } from 'ts-pattern';
@@ -235,6 +236,13 @@ function getSupportedHandler(
       if (meta.tag !== 'task_assigned') return null;
       return async (lm: SplitManager, newSplit: boolean = false) => {
         openSplitIfNotOpen(lm, 'task', meta.content.taskId, { newSplit });
+      };
+    })
+    .with('github_pr_event', () => {
+      const meta = notification.notification_metadata;
+      if (meta.tag !== 'github_pr_event') return null;
+      return async () => {
+        openExternalUrl(meta.content.url);
       };
     })
     .with('mentioned_in_document_comment', () => {

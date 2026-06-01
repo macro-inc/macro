@@ -167,6 +167,10 @@ fn push_include_types_filter(builder: &mut QueryBuilder<'_, Postgres>, include_t
                 .iter()
                 .any(|t| t == "call")
                 .then_some("n.event_item_type = 'call'"),
+            include_types
+                .iter()
+                .any(|t| t == "github")
+                .then_some("n.notification_event_type = 'github_pr_event'"),
         ]
         .into_iter()
         .flatten()
@@ -212,6 +216,10 @@ fn push_entities_filter<'a>(builder: &mut QueryBuilder<'a, Postgres>, entity_tok
         builder.push(")) OR ");
 
         builder.push("(n.event_item_type = 'call' AND 'call:' || n.event_item_id = ANY(");
+        builder.push_bind(entity_tokens);
+        builder.push(")) OR ");
+
+        builder.push("(n.event_item_type = 'foreign_entity' AND n.notification_event_type = 'github_pr_event' AND 'github:' || n.event_item_id = ANY(");
         builder.push_bind(entity_tokens);
         builder.push(")) OR ");
 

@@ -6,11 +6,17 @@ use crate::domain::{
 };
 use documents::domain::ports::DocumentService;
 use foreign_entity::domain::ports::ForeignEntityService;
+use notification::domain::service::NotificationIngress;
 
 use super::GithubSyncServiceImpl;
 
-impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient, F: ForeignEntityService>
-    GithubSyncServiceImpl<D, R, C, F>
+impl<
+    D: DocumentService,
+    R: GithubSyncRepo,
+    C: GithubSyncClient,
+    F: ForeignEntityService,
+    N: NotificationIngress,
+> GithubSyncServiceImpl<D, R, C, F, N>
 {
     /// Handle `issue_comment`, `pull_request_review`, and
     /// `pull_request_review_comment` events.

@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use doppleganger::Doppleganger;
 pub use invite_email::{ChannelInviteMetadata, InviteToTeamMetadata};
 use macro_user_id::cowlike::CowLike;
@@ -24,6 +25,147 @@ mod test;
 pub struct AiResponseMetadata {
     pub summary: String,
     pub message_id: String,
+}
+
+/// The normalized lifecycle status for a GitHub pull request notification.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ToSchema, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum GithubPrEventStatus {
+    /// The pull request is open.
+    Open,
+    /// The pull request is closed without being merged.
+    Closed,
+    /// The pull request is closed and merged.
+    Merged,
+}
+
+/// The GitHub pull request webhook action that triggered the notification.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ToSchema, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum GithubPrEventAction {
+    /// The pull request was opened.
+    Opened,
+    /// The pull request was reopened.
+    Reopened,
+    /// The pull request was closed.
+    Closed,
+}
+
+/// Metadata for a GitHub pull request lifecycle notification.
+#[derive(Debug, Clone, PartialEq, Eq, ToSchema, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GithubPrEvent {
+    /// The source-specific internal foreign entity row id for this pull request.
+    pub foreign_entity_id: Uuid,
+    /// The external GitHub key, in `owner/repo/pull/number` format.
+    pub github_key: String,
+    /// The GitHub repository owner or organization.
+    pub owner: String,
+    /// The GitHub repository name.
+    pub repo: String,
+    /// The GitHub pull request number.
+    pub number: u64,
+    /// The public GitHub URL for the pull request.
+    pub url: String,
+    /// A compact label suitable for display in the UI.
+    pub display_name: String,
+    /// The GitHub pull request title. Falls back to `display_name` when GitHub has no title.
+    pub title: String,
+    /// The current normalized pull request status.
+    pub status: GithubPrEventStatus,
+    /// The webhook action that triggered this notification.
+    pub action: GithubPrEventAction,
+    /// The prior normalized pull request status, when known.
+    pub previous_status: Option<GithubPrEventStatus>,
+    /// The GitHub login for the sender, when available.
+    pub sender_github_login: Option<String>,
+    /// The stable GitHub numeric user id for the sender, serialized as a string.
+    pub sender_github_user_id: Option<String>,
+    /// The GitHub avatar URL for the sender, when available.
+    pub sender_github_avatar_url: Option<String>,
+    /// The pull request head branch, when available.
+    pub head_branch: Option<String>,
+    /// The pull request base branch, when available.
+    pub base_branch: Option<String>,
+    /// When the pull request was merged, when available.
+    pub merged_at: Option<DateTime<Utc>>,
+}
+
+impl GithubPrEvent {
+    /// Build a required title value, falling back to the display name when GitHub has no title.
+    pub fn title_or_display_name(title: Option<String>, display_name: &str) -> String {
+        match title {
+            Some(title) if !title.trim().is_empty() => title,
+            _ => display_name.to_string(),
+        }
+    }
+
+    fn action_verb(&self) -> &'static str {
+        if self.status == GithubPrEventStatus::Merged {
+            return "merged";
+        }
+
+        match self.action {
+            GithubPrEventAction::Opened => "opened",
+            GithubPrEventAction::Reopened => "reopened",
+            GithubPrEventAction::Closed => "closed",
+        }
+    }
+
+    fn actor_name(&self, sender_id: Option<MacroUserIdStr<'_>>) -> Option<String> {
+        sender_id
+            .map(|sender| sender.email_part().local_part().to_string())
+            .or_else(|| self.sender_github_login.clone())
+    }
+}
+
+impl Notification for GithubPrEvent {
+    const TYPE_NAME: &'static str = "github_pr_event";
+}
+
+impl NotificationTitle for GithubPrEvent {
+    fn format_title(
+        &self,
+        sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        let verb = self.action_verb();
+        let title = match self.actor_name(sender_id) {
+            Some(actor) => format!("{actor} {verb} a pull request"),
+            None => format!("Pull request {verb}"),
+        };
+
+        Ok(title)
+    }
+
+    fn format_body(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        if self.title == self.display_name {
+            return Ok(self.display_name.clone());
+        }
+
+        Ok(format!("{}: {}", self.display_name, self.title))
+    }
+}
+
+impl NotificationExtIos for GithubPrEvent {
+    type NotifData = ::notification::domain::models::apple::PushNotificationData;
+
+    fn collapse_key(&self, entity: &Entity<'_>) -> NotifCollapseKey {
+        let entity_type: &'static str = entity.entity_type.into();
+        NotifCollapseKey::new(entity_type).append(&entity.entity_id)
+    }
+
+    fn as_apns<'a>(
+        &self,
+        sender_id: Option<MacroUserIdStr<'a>>,
+        _entity: &Entity<'_>,
+        notification_id: Uuid,
+    ) -> Option<APNSPushNotification<Self::NotifData>> {
+        let avatar_url = self.sender_github_avatar_url.clone();
+        alert_apns(self, sender_id, notification_id, avatar_url).ok()
+    }
 }
 
 #[derive(Debug, Clone, Copy, ToSchema, Doppleganger, Serialize, Deserialize)]

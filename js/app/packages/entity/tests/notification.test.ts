@@ -1,3 +1,4 @@
+import type { GithubPrEvent } from '@service-notification/generated/schemas';
 import { describe, expect, it } from 'vitest';
 import type { Notification } from '../src/types/notification';
 import {
@@ -8,6 +9,42 @@ import {
   getNotificationActionText,
   isNotificationUnread,
 } from '../src/utils/notification';
+
+const GITHUB_PR_FOREIGN_ENTITY_ID = '123e4567-e89b-12d3-a456-426614174000';
+
+type GithubPrNotification = Notification & {
+  notification_metadata: {
+    content: GithubPrEvent;
+    tag: 'github_pr_event';
+  };
+};
+
+function githubPrEvent(overrides: Partial<GithubPrEvent> = {}): GithubPrEvent {
+  return {
+    action: 'opened',
+    displayName: 'macro/macro#42',
+    foreignEntityId: GITHUB_PR_FOREIGN_ENTITY_ID,
+    githubKey: 'macro/macro/pull/42',
+    number: 42,
+    owner: 'macro',
+    repo: 'macro',
+    status: 'open',
+    title: 'Add notification support',
+    url: 'https://github.com/macro/macro/pull/42',
+    ...overrides,
+  };
+}
+
+function githubPrNotification(
+  overrides: Partial<GithubPrEvent> = {}
+): GithubPrNotification {
+  return {
+    notification_metadata: {
+      content: githubPrEvent(overrides),
+      tag: 'github_pr_event',
+    },
+  } as GithubPrNotification;
+}
 
 describe('notification utils', () => {
   describe('filterValidNotifications', () => {
@@ -248,6 +285,10 @@ describe('notification utils', () => {
       } as Notification;
       expect(getNotificationActionText(notification)).toBe('assigned');
     });
+
+    it('returns correct action text for github_pr_event', () => {
+      expect(getNotificationActionText(githubPrNotification())).toBe('updated');
+    });
   });
 
   describe('extractMessageContent', () => {
@@ -328,6 +369,23 @@ describe('notification utils', () => {
       } as any;
 
       expect(extractMessageContent(notification)).toBe('Review PR');
+    });
+
+    it('extracts GitHub PR title and preserves foreignEntityId', () => {
+      const notification = githubPrNotification();
+
+      expect(extractMessageContent(notification)).toBe(
+        'Add notification support'
+      );
+      expect(notification.notification_metadata.content.foreignEntityId).toBe(
+        GITHUB_PR_FOREIGN_ENTITY_ID
+      );
+    });
+
+    it('falls back to GitHub PR display name when title is empty', () => {
+      expect(extractMessageContent(githubPrNotification({ title: '' }))).toBe(
+        'macro/macro#42'
+      );
     });
 
     it('returns empty string for channel_invite', () => {

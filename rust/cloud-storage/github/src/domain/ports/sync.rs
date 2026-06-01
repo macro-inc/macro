@@ -2,6 +2,8 @@
 
 use std::future::Future;
 
+use macro_user_id::user_id::MacroUserIdStr;
+
 use crate::domain::models::{
     EnrichedGithubPullRequest, GithubAppInstallationSource, GithubError,
     GithubInstallationAccessToken, GithubKey, GithubPullRequestDetails, MacroTaskId,
@@ -67,6 +69,12 @@ pub trait GithubSyncRepo: Send + Sync + 'static {
         &self,
         installation_id: &str,
     ) -> impl Future<Output = Result<Vec<GithubAppInstallationSource>, Self::Err>> + Send;
+
+    /// Returns all Macro user IDs that belong to the given team.
+    fn get_team_member_ids(
+        &self,
+        team_id: uuid::Uuid,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, Self::Err>> + Send;
 
     /// Upserts associations between a GitHub App installation and its sources.
     /// Ignores conflicts (idempotent).

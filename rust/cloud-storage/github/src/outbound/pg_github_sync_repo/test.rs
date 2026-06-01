@@ -370,6 +370,133 @@ async fn test_get_user_team_ids_no_teams(pool: Pool<Postgres>) {
 }
 
 // ---------------------------------------------------------------------------
+// get_team_member_ids
+// ---------------------------------------------------------------------------
+
+async fn insert_user_account(
+    pool: &Pool<Postgres>,
+    user_id: &str,
+    macro_user_id: Uuid,
+    username: &str,
+    email: &str,
+    stripe_customer_id: &str,
+) {
+    sqlx::query(
+        r#"
+        INSERT INTO public.macro_user (id, username, email, stripe_customer_id)
+        VALUES ($1, $2, $3, $4)
+        "#,
+    )
+    .bind(macro_user_id)
+    .bind(username)
+    .bind(email)
+    .bind(stripe_customer_id)
+    .execute(pool)
+    .await
+    .unwrap();
+
+    sqlx::query(
+        r#"
+        INSERT INTO public."User" (id, email, macro_user_id)
+        VALUES ($1, $2, $3)
+        "#,
+    )
+    .bind(user_id)
+    .bind(email)
+    .bind(macro_user_id)
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+async fn insert_team_member(pool: &Pool<Postgres>, team_id: Uuid, user_id: &str) {
+    sqlx::query(
+        r#"
+        INSERT INTO public.team_user (user_id, team_id, team_role)
+        VALUES ($1, $2, 'member')
+        "#,
+    )
+    .bind(user_id)
+    .bind(team_id)
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("github_installation_test_data"))
+)]
+async fn test_get_team_member_ids(pool: Pool<Postgres>) {
+    let team_id = "dddddddd-dddd-dddd-dddd-dddddddddddd"
+        .parse::<Uuid>()
+        .unwrap();
+
+    insert_user_account(
+        &pool,
+        "macro|zeta@user.com",
+        "11111111-1111-1111-1111-111111111111".parse().unwrap(),
+        "zeta",
+        "zeta@test.com",
+        "cus_zeta",
+    )
+    .await;
+    insert_user_account(
+        &pool,
+        "macro|alpha@user.com",
+        "22222222-2222-2222-2222-222222222222".parse().unwrap(),
+        "alpha",
+        "alpha@test.com",
+        "cus_alpha",
+    )
+    .await;
+    insert_user_account(
+        &pool,
+        "github-user-without-macro-prefix",
+        "33333333-3333-3333-3333-333333333333".parse().unwrap(),
+        "invalid",
+        "invalid@test.com",
+        "cus_invalid",
+    )
+    .await;
+    insert_team_member(&pool, team_id, "macro|zeta@user.com").await;
+    insert_team_member(&pool, team_id, "macro|alpha@user.com").await;
+    insert_team_member(&pool, team_id, "github-user-without-macro-prefix").await;
+
+    let empty_team_id = "44444444-4444-4444-4444-444444444444"
+        .parse::<Uuid>()
+        .unwrap();
+    sqlx::query(
+        r#"
+        INSERT INTO public.team (id, name, owner_id)
+        VALUES ($1, $2, $3)
+        "#,
+    )
+    .bind(empty_team_id)
+    .bind("Empty Team")
+    .bind("macro|solo@user.com")
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let repo = PgGithubSyncRepo::new(pool);
+
+    let member_ids = repo.get_team_member_ids(team_id).await.unwrap();
+    let member_ids: Vec<String> = member_ids.into_iter().map(String::from).collect();
+    assert_eq!(
+        member_ids,
+        vec![
+            "macro|alpha@user.com".to_string(),
+            "macro|user@user.com".to_string(),
+            "macro|zeta@user.com".to_string(),
+        ]
+    );
+
+    let empty_member_ids = repo.get_team_member_ids(empty_team_id).await.unwrap();
+    assert!(empty_member_ids.is_empty());
+}
+
+// ---------------------------------------------------------------------------
 // upsert_installation_sources
 // ---------------------------------------------------------------------------
 

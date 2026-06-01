@@ -1521,6 +1521,113 @@
           }
         }
       },
+      "GithubPrEvent": {
+        "type": "object",
+        "description": "Metadata for a GitHub pull request lifecycle notification.",
+        "required": [
+          "foreignEntityId",
+          "githubKey",
+          "owner",
+          "repo",
+          "number",
+          "url",
+          "displayName",
+          "title",
+          "status",
+          "action"
+        ],
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/GithubPrEventAction",
+            "description": "The webhook action that triggered this notification."
+          },
+          "baseBranch": {
+            "type": ["string", "null"],
+            "description": "The pull request base branch, when available."
+          },
+          "displayName": {
+            "type": "string",
+            "description": "A compact label suitable for display in the UI."
+          },
+          "foreignEntityId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The source-specific internal foreign entity row id for this pull request."
+          },
+          "githubKey": {
+            "type": "string",
+            "description": "The external GitHub key, in `owner/repo/pull/number` format."
+          },
+          "headBranch": {
+            "type": ["string", "null"],
+            "description": "The pull request head branch, when available."
+          },
+          "mergedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the pull request was merged, when available."
+          },
+          "number": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The GitHub pull request number.",
+            "minimum": 0
+          },
+          "owner": {
+            "type": "string",
+            "description": "The GitHub repository owner or organization."
+          },
+          "previousStatus": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GithubPrEventStatus",
+                "description": "The prior normalized pull request status, when known."
+              }
+            ]
+          },
+          "repo": {
+            "type": "string",
+            "description": "The GitHub repository name."
+          },
+          "senderGithubAvatarUrl": {
+            "type": ["string", "null"],
+            "description": "The GitHub avatar URL for the sender, when available."
+          },
+          "senderGithubLogin": {
+            "type": ["string", "null"],
+            "description": "The GitHub login for the sender, when available."
+          },
+          "senderGithubUserId": {
+            "type": ["string", "null"],
+            "description": "The stable GitHub numeric user id for the sender, serialized as a string."
+          },
+          "status": {
+            "$ref": "#/components/schemas/GithubPrEventStatus",
+            "description": "The current normalized pull request status."
+          },
+          "title": {
+            "type": "string",
+            "description": "The GitHub pull request title. Falls back to `display_name` when GitHub has no title."
+          },
+          "url": {
+            "type": "string",
+            "description": "The public GitHub URL for the pull request."
+          }
+        }
+      },
+      "GithubPrEventAction": {
+        "type": "string",
+        "description": "The GitHub pull request webhook action that triggered the notification.",
+        "enum": ["opened", "reopened", "closed"]
+      },
+      "GithubPrEventStatus": {
+        "type": "string",
+        "description": "The normalized lifecycle status for a GitHub pull request notification.",
+        "enum": ["open", "closed", "merged"]
+      },
       "InviteToTeamMetadata": {
         "type": "object",
         "description": "Metadata for when a user is invited to a team.",
@@ -1848,6 +1955,21 @@
               "tag": {
                 "type": "string",
                 "enum": ["ai_response"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A GitHub pull request changed lifecycle state.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/GithubPrEvent",
+                "description": "A GitHub pull request changed lifecycle state."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["github_pr_event"]
               }
             }
           }
