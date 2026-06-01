@@ -1,3 +1,5 @@
+import Plus from '@phosphor/plus.svg';
+import DeleteIcon from '@phosphor/x.svg';
 import { Property as PropertyNS, useProperty } from '@property';
 import { Modals } from '@property/component/modal';
 import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
@@ -13,8 +15,6 @@ import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity'
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { Button } from '@ui';
 import { cn } from '@ui/utils/classname';
-import Plus from '@phosphor/plus.svg';
-import DeleteIcon from '@phosphor/x.svg';
 import {
   createEffect,
   createMemo,

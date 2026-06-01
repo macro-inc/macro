@@ -42,8 +42,8 @@ import {
   onCleanup,
   Show,
 } from 'solid-js';
-import { TaskDuplicateMatchesSidePanelSection } from '../TaskDuplicateMatches';
 import { mdStore } from '../../signal/markdownBlockData';
+import { TaskDuplicateMatchesSidePanelSection } from '../TaskDuplicateMatches';
 
 interface MarkdownSidePanelSectionsProps {
   canEdit: boolean;
