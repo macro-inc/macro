@@ -3,8 +3,9 @@
 use std::future::Future;
 
 use crate::domain::models::{
-    GithubAppInstallationSource, GithubError, GithubInstallationAccessToken, GithubKey,
-    GithubPullRequestDetails, MacroTaskId, TeamTaskReference, ValidatedGithubWebhookEvent,
+    EnrichedGithubPullRequest, GithubAppInstallationSource, GithubError,
+    GithubInstallationAccessToken, GithubKey, GithubPullRequestDetails, MacroTaskId,
+    TeamTaskReference, ValidatedGithubWebhookEvent,
 };
 
 /// Repository for accessing github sync data from the database.
@@ -106,6 +107,12 @@ pub trait GithubSyncClient: Send + Sync + 'static {
         repo: &str,
         number: u64,
     ) -> impl Future<Output = Result<GithubPullRequestDetails, GithubError>> + Send;
+
+    /// Lists open pull requests for repositories accessible to a GitHub App installation token.
+    fn list_open_pull_requests(
+        &self,
+        access_token: &str,
+    ) -> impl Future<Output = Result<Vec<EnrichedGithubPullRequest>, GithubError>> + Send;
 }
 
 /// Service interface for github sync operations (webhooks and sync app).

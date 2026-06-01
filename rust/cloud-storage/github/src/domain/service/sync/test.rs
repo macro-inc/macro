@@ -480,6 +480,8 @@ struct StubSyncClient {
     pr_comments: Mutex<Vec<PrCommentCall>>,
     pull_request_details: Mutex<HashMap<String, GithubPullRequestDetails>>,
     pull_request_details_calls: Mutex<Vec<PullRequestDetailsCall>>,
+    open_pull_requests: Mutex<Vec<EnrichedGithubPullRequest>>,
+    list_open_pull_requests_calls: Mutex<Vec<String>>,
 }
 
 impl StubSyncClient {
@@ -488,6 +490,8 @@ impl StubSyncClient {
             pr_comments: Mutex::new(Vec::new()),
             pull_request_details: Mutex::new(HashMap::new()),
             pull_request_details_calls: Mutex::new(Vec::new()),
+            open_pull_requests: Mutex::new(Vec::new()),
+            list_open_pull_requests_calls: Mutex::new(Vec::new()),
         }
     }
 
@@ -497,6 +501,14 @@ impl StubSyncClient {
 
     fn pull_request_details_calls(&self) -> Vec<PullRequestDetailsCall> {
         self.pull_request_details_calls.lock().unwrap().clone()
+    }
+
+    fn list_open_pull_requests_calls(&self) -> Vec<String> {
+        self.list_open_pull_requests_calls.lock().unwrap().clone()
+    }
+
+    fn set_open_pull_requests(&self, pull_requests: Vec<EnrichedGithubPullRequest>) {
+        *self.open_pull_requests.lock().unwrap() = pull_requests;
     }
 
     fn set_pull_request_details(
@@ -568,6 +580,18 @@ impl GithubSyncClient for StubSyncClient {
             .get(&Self::pull_request_details_key(owner, repo, number))
             .cloned()
             .ok_or_else(|| GithubError::Internal(anyhow::anyhow!("missing stub PR details")))
+    }
+
+    async fn list_open_pull_requests(
+        &self,
+        access_token: &str,
+    ) -> Result<Vec<EnrichedGithubPullRequest>, GithubError> {
+        self.list_open_pull_requests_calls
+            .lock()
+            .unwrap()
+            .push(access_token.to_string());
+
+        Ok(self.open_pull_requests.lock().unwrap().clone())
     }
 }
 
@@ -828,6 +852,23 @@ fn expected_pull_request_metadata(
         checks: None,
     })
     .unwrap()
+}
+
+fn backfilled_pull_request(title: &str) -> EnrichedGithubPullRequest {
+    EnrichedGithubPullRequest {
+        github_key: "my-org/my-repo/pull/42".to_string(),
+        owner: "my-org".to_string(),
+        repo: "my-repo".to_string(),
+        number: 42,
+        url: "https://github.com/my-org/my-repo/pull/42".to_string(),
+        display_name: "my-org/my-repo#42".to_string(),
+        name: Some(title.to_string()),
+        status: Some(GithubPullRequestStatus::Open),
+        additions: None,
+        deletions: None,
+        comments: None,
+        checks: None,
+    }
 }
 
 fn expected_pull_request_metadata_from_details(
@@ -2509,6 +2550,130 @@ async fn installation_created_associates_teams() {
 }
 
 #[tokio::test]
+async fn installation_created_backfills_open_pr_for_single_source() {
+    let repo = StubSyncRepo::new().with_github_link("12345", "macro|user@user.com");
+
+    let service = make_sync_service_with_repo(repo);
+    let doc_service = service.document_service.clone();
+    let foreign_entity_service = service.foreign_entity_service.clone();
+    let pull_request = backfilled_pull_request("fixes MACRO-2BuyvtY3aeEvHx4uG8iD51");
+    let expected_metadata = serde_json::to_value(&pull_request).unwrap();
+    service.client.set_open_pull_requests(vec![pull_request]);
+    let event = installation_created_event(12345, 99999);
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    assert_eq!(
+        service.client.list_open_pull_requests_calls(),
+        vec!["test-token".to_string()]
+    );
+
+    let foreign_entities = foreign_entity_service.foreign_entities();
+    assert_eq!(foreign_entities.len(), 1);
+
+    let foreign_entity = &foreign_entities[0];
+    assert_eq!(foreign_entity.foreign_entity_id, "my-org/my-repo/pull/42");
+    assert_eq!(
+        foreign_entity.foreign_entity_source,
+        GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE
+    );
+    assert_eq!(foreign_entity.stored_for_id, "macro|user@user.com");
+    assert_eq!(foreign_entity.stored_for_auth_entity, "user");
+    assert_eq!(foreign_entity.metadata, expected_metadata);
+    assert_eq!(foreign_entity_service.create_calls().len(), 1);
+    assert!(foreign_entity_service.patch_calls().is_empty());
+    assert!(service.client.pr_comments().is_empty());
+    assert!(doc_service.task_status_calls().is_empty());
+}
+
+#[tokio::test]
+async fn installation_created_backfills_open_pr_for_multiple_sources() {
+    let team_a: uuid::Uuid = "dddddddd-dddd-dddd-dddd-dddddddddddd".parse().unwrap();
+    let team_b: uuid::Uuid = "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee".parse().unwrap();
+    let repo = StubSyncRepo::new()
+        .with_github_link("12345", "macro|user@user.com")
+        .with_user_teams("macro|user@user.com", vec![team_a, team_b]);
+
+    let service = make_sync_service_with_repo(repo);
+    let doc_service = service.document_service.clone();
+    let foreign_entity_service = service.foreign_entity_service.clone();
+    let pull_request = backfilled_pull_request("backfilled PR");
+    let expected_metadata = serde_json::to_value(&pull_request).unwrap();
+    service.client.set_open_pull_requests(vec![pull_request]);
+    let event = installation_created_event(12345, 99999);
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    assert_eq!(
+        service.client.list_open_pull_requests_calls(),
+        vec!["test-token".to_string()]
+    );
+
+    let mut foreign_entities = foreign_entity_service.foreign_entities();
+    foreign_entities.sort_by(|left, right| left.stored_for_id.cmp(&right.stored_for_id));
+    assert_eq!(foreign_entities.len(), 2);
+
+    for foreign_entity in &foreign_entities {
+        assert_eq!(foreign_entity.foreign_entity_id, "my-org/my-repo/pull/42");
+        assert_eq!(
+            foreign_entity.foreign_entity_source,
+            GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE
+        );
+        assert_eq!(foreign_entity.stored_for_auth_entity, "team");
+        assert_eq!(foreign_entity.metadata, expected_metadata);
+    }
+
+    assert_eq!(foreign_entities[0].stored_for_id, team_a.to_string());
+    assert_eq!(foreign_entities[1].stored_for_id, team_b.to_string());
+    assert_eq!(foreign_entity_service.create_calls().len(), 2);
+    assert!(foreign_entity_service.patch_calls().is_empty());
+    assert!(service.client.pr_comments().is_empty());
+    assert!(doc_service.task_status_calls().is_empty());
+}
+
+#[tokio::test]
+async fn installation_created_backfill_is_idempotent() {
+    let team_id: uuid::Uuid = "dddddddd-dddd-dddd-dddd-dddddddddddd".parse().unwrap();
+    let repo = StubSyncRepo::new()
+        .with_github_link("12345", "macro|user@user.com")
+        .with_user_teams("macro|user@user.com", vec![team_id]);
+
+    let service = make_sync_service_with_repo(repo);
+    let doc_service = service.document_service.clone();
+    let foreign_entity_service = service.foreign_entity_service.clone();
+    let pull_request = backfilled_pull_request("fixes MACRO-2BuyvtY3aeEvHx4uG8iD51");
+    let expected_metadata = serde_json::to_value(&pull_request).unwrap();
+    service.client.set_open_pull_requests(vec![pull_request]);
+    let event = installation_created_event(12345, 99999);
+
+    service.process_webhook_event(&event).await.unwrap();
+    service.process_webhook_event(&event).await.unwrap();
+
+    assert_eq!(
+        service.client.list_open_pull_requests_calls(),
+        vec!["test-token".to_string(), "test-token".to_string()]
+    );
+
+    let foreign_entities = foreign_entity_service.foreign_entities();
+    assert_eq!(foreign_entities.len(), 1);
+    assert_eq!(
+        foreign_entities[0].foreign_entity_id,
+        "my-org/my-repo/pull/42"
+    );
+    assert_eq!(foreign_entities[0].stored_for_id, team_id.to_string());
+    assert_eq!(foreign_entities[0].stored_for_auth_entity, "team");
+    assert_eq!(foreign_entities[0].metadata, expected_metadata);
+    assert_eq!(foreign_entity_service.create_calls().len(), 1);
+
+    let patch_calls = foreign_entity_service.patch_calls();
+    assert_eq!(patch_calls.len(), 1);
+    assert_eq!(patch_calls[0].0, foreign_entities[0].id);
+    assert_eq!(patch_calls[0].1.metadata, Some(expected_metadata));
+    assert!(service.client.pr_comments().is_empty());
+    assert!(doc_service.task_status_calls().is_empty());
+}
+
+#[tokio::test]
 async fn installation_created_no_github_link() {
     let service = make_sync_service();
     let event = installation_created_event(99999, 11111);
@@ -2517,6 +2682,7 @@ async fn installation_created_no_github_link() {
     service.process_webhook_event(&event).await.unwrap();
 
     assert!(service.repo.installation_sources().is_empty());
+    assert!(service.client.list_open_pull_requests_calls().is_empty());
 }
 
 #[tokio::test]

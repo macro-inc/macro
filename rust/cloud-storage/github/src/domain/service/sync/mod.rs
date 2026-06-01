@@ -9,9 +9,10 @@ mod handle_pr;
 
 use crate::domain::{
     models::{
-        EnrichedGithubPullRequest, GithubError, GithubInstallationAccessToken, GithubKey,
-        GithubPullRequestDetails, GithubPullRequestStatus, GithubWebhookEventType, MacroTaskId,
-        TeamTaskReference, ValidatedGithubWebhookEvent,
+        EnrichedGithubPullRequest, GithubAppInstallationSource, GithubError,
+        GithubInstallationAccessToken, GithubKey, GithubPullRequestDetails,
+        GithubPullRequestStatus, GithubWebhookEventType, MacroTaskId, TeamTaskReference,
+        ValidatedGithubWebhookEvent,
     },
     ports::{GithubSyncClient, GithubSyncRepo, GithubSyncService},
 };
@@ -318,6 +319,41 @@ impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient, F: ForeignEntit
         GithubPullRequestStatus::Open
     }
 
+    /// Backfill foreign entity rows for open pull requests visible to a GitHub App installation.
+    #[tracing::instrument(skip(self, stored_for_sources), err)]
+    async fn backfill_open_pull_request_foreign_entities(
+        &self,
+        installation_id: u64,
+        stored_for_sources: &[GithubAppInstallationSource],
+    ) -> Result<(), GithubError> {
+        if stored_for_sources.is_empty() {
+            tracing::trace!(
+                installation_id,
+                "no GitHub App installation sources found for PR backfill"
+            );
+            return Ok(());
+        }
+
+        let token = self
+            .generate_installation_access_token(installation_id)
+            .await?;
+        let pull_requests = self.client.list_open_pull_requests(&token.token).await?;
+
+        tracing::info!(
+            installation_id,
+            pull_request_count = pull_requests.len(),
+            source_count = stored_for_sources.len(),
+            "backfilling open pull request foreign entities"
+        );
+
+        for pull_request in pull_requests {
+            self.upsert_enriched_pull_request_foreign_entities(pull_request, stored_for_sources)
+                .await;
+        }
+
+        Ok(())
+    }
+
     /// Create or refresh foreign entity rows for a pull request, scoped to the
     /// Macro source (team or user) associated with the GitHub App installation.
     #[tracing::instrument(skip(self, event))]
@@ -353,6 +389,17 @@ impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient, F: ForeignEntit
             return;
         };
 
+        self.upsert_enriched_pull_request_foreign_entities(pull_request, &stored_for_sources)
+            .await;
+    }
+
+    /// Create or refresh foreign entity rows from already-enriched pull request metadata.
+    #[tracing::instrument(skip(self, pull_request, stored_for_sources))]
+    async fn upsert_enriched_pull_request_foreign_entities(
+        &self,
+        pull_request: EnrichedGithubPullRequest,
+        stored_for_sources: &[GithubAppInstallationSource],
+    ) {
         let base_metadata = match serde_json::to_value(&pull_request) {
             Ok(metadata) => metadata,
             Err(error) => {

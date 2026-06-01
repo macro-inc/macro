@@ -5,7 +5,8 @@ use std::time::Duration;
 use serde::de::DeserializeOwned;
 
 use crate::domain::models::{
-    GithubPullRequestCheckRun, GithubPullRequestComment, GithubPullRequestDetails,
+    EnrichedGithubPullRequest, GithubKey, GithubPullRequestCheckRun, GithubPullRequestComment,
+    GithubPullRequestDetails, GithubPullRequestStatus,
 };
 
 const GITHUB_API_BASE_URL: &str = "https://api.github.com";
@@ -41,6 +42,98 @@ pub(crate) async fn fetch_pull_request_metadata(
         comments,
         checks,
     })
+}
+
+/// Fetch open pull requests for every repository accessible to an installation token.
+pub(crate) async fn fetch_open_pull_requests_for_installation(
+    client: &reqwest::Client,
+    access_token: &str,
+) -> Result<Vec<EnrichedGithubPullRequest>, anyhow::Error> {
+    let repositories = fetch_installation_repositories(client, access_token).await?;
+    let mut open_pull_requests = Vec::new();
+
+    for repository in repositories {
+        match fetch_open_pull_requests_for_repository(client, access_token, &repository).await {
+            Ok(repository_pull_requests) => open_pull_requests.extend(repository_pull_requests),
+            Err(error) => {
+                tracing::warn!(
+                    error=?error,
+                    owner=%repository.owner.login,
+                    repo=%repository.name,
+                    "failed to fetch GitHub open pull requests for repository"
+                );
+            }
+        }
+    }
+
+    Ok(open_pull_requests)
+}
+
+async fn fetch_installation_repositories(
+    client: &reqwest::Client,
+    access_token: &str,
+) -> Result<Vec<GithubInstallationRepositoryResponse>, anyhow::Error> {
+    fetch_paginated_github_items(
+        client,
+        access_token,
+        |page| {
+            format!(
+                "{GITHUB_API_BASE_URL}/installation/repositories?per_page={METADATA_PAGE_SIZE}&page={page}"
+            )
+        },
+        "installation repositories",
+        |response: GithubInstallationRepositoriesResponse| response.repositories,
+    )
+    .await
+}
+
+async fn fetch_open_pull_requests_for_repository(
+    client: &reqwest::Client,
+    access_token: &str,
+    repository: &GithubInstallationRepositoryResponse,
+) -> Result<Vec<EnrichedGithubPullRequest>, anyhow::Error> {
+    let owner = repository.owner.login.as_str();
+    let repo = repository.name.as_str();
+    let pull_requests = fetch_paginated_github_items(
+        client,
+        access_token,
+        |page| {
+            format!(
+                "{GITHUB_API_BASE_URL}/repos/{owner}/{repo}/pulls?state=open&per_page={METADATA_PAGE_SIZE}&page={page}"
+            )
+        },
+        "open pull requests",
+        |pull_requests: Vec<GithubOpenPullRequestResponse>| pull_requests,
+    )
+    .await?;
+
+    Ok(pull_requests
+        .into_iter()
+        .map(|pull_request| pull_request.into_enriched_pull_request(owner, repo))
+        .collect())
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct GithubInstallationRepositoriesResponse {
+    repositories: Vec<GithubInstallationRepositoryResponse>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct GithubInstallationRepositoryResponse {
+    name: String,
+    owner: GithubRepositoryOwnerResponse,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct GithubRepositoryOwnerResponse {
+    login: String,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct GithubOpenPullRequestResponse {
+    number: u64,
+    title: String,
+    html_url: String,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -368,6 +461,25 @@ fn github_get(
         .header("User-Agent", USER_AGENT)
         .header("X-GitHub-Api-Version", "2022-11-28")
         .timeout(REQUEST_TIMEOUT)
+}
+
+impl GithubOpenPullRequestResponse {
+    fn into_enriched_pull_request(self, owner: &str, repo: &str) -> EnrichedGithubPullRequest {
+        EnrichedGithubPullRequest {
+            github_key: GithubKey::new(owner, repo, self.number).to_string(),
+            owner: owner.to_string(),
+            repo: repo.to_string(),
+            number: self.number,
+            url: self.html_url,
+            display_name: format!("{owner}/{repo}#{}", self.number),
+            name: Some(self.title),
+            status: Some(GithubPullRequestStatus::Open),
+            additions: None,
+            deletions: None,
+            comments: None,
+            checks: None,
+        }
+    }
 }
 
 impl GithubCommentResponse {
