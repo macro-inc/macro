@@ -4,6 +4,7 @@ import LogoIcon from '@icon/macro-logo.svg';
 import ArrowRightIcon from '@phosphor/arrow-right.svg';
 import CloseIcon from '@phosphor/x.svg';
 import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
+import { globalSplitManager } from '@app/signal/splitLayout';
 import { Button, Dialog, Hotkey } from '@ui';
 import { type Component, createSignal, Match, Show, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -307,11 +308,11 @@ export function InteractiveOnboardingModal(
       position="center"
       // Let the shell keep the focus it grabs in onMount (keeps its scope active).
       onOpenAutoFocus={(e) => e.preventDefault()}
-      // Auto-opened on login: hand focus to the app body (global hotkey scope)
-      // on close since Kobalte has nothing to restore to.
+      // Auto-opened on login, so Kobalte has nothing to restore to: return
+      // focus to the active split so the app stays keyboard-usable on close.
       onCloseAutoFocus={(e) => {
         e.preventDefault();
-        document.body.focus();
+        globalSplitManager()?.returnFocus();
       }}
       class="w-[min(1600px,calc(100vw-32px))] h-[min(900px,calc(100vh-32px))] max-w-none rounded-xl bg-surface shadow-2xl"
     >
