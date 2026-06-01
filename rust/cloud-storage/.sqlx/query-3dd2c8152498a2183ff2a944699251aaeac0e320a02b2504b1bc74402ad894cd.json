@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            UPDATE crm_comment c\n            SET text = $3, updated_at = now()\n            FROM crm_thread t\n            WHERE c.id = $1\n              AND c.thread_id = t.id\n              AND c.deleted_at IS NULL\n              AND (\n                EXISTS (\n                    SELECT 1 FROM crm_companies co\n                    WHERE co.id = t.company_id AND co.team_id = $2\n                )\n                OR EXISTS (\n                    SELECT 1 FROM crm_contacts ct\n                    JOIN crm_companies co2 ON co2.id = ct.company_id\n                    WHERE ct.id = t.contact_id AND co2.team_id = $2\n                )\n              )\n            RETURNING c.id, c.thread_id, c.\"order\", c.owner, c.sender, c.text,\n                      c.metadata, c.created_at, c.updated_at, c.deleted_at\n            ",
+  "query": "\n            UPDATE crm_comment c\n            SET text = $3, updated_at = now()\n            FROM crm_thread t\n            WHERE c.id = $1\n              AND c.thread_id = t.id\n              AND c.deleted_at IS NULL\n              AND (\n                EXISTS (\n                    SELECT 1 FROM crm_companies co\n                    WHERE co.id = t.company_id\n                      AND co.team_id = $2\n                      AND ($4 OR co.hidden = FALSE)\n                )\n                OR EXISTS (\n                    SELECT 1 FROM crm_contacts ct\n                    JOIN crm_companies co2 ON co2.id = ct.company_id\n                    WHERE ct.id = t.contact_id\n                      AND co2.team_id = $2\n                      AND ($4 OR (ct.hidden = FALSE AND co2.hidden = FALSE))\n                )\n              )\n            RETURNING c.id, c.thread_id, c.\"order\", c.owner, c.sender, c.text,\n                      c.metadata, c.created_at, c.updated_at, c.deleted_at\n            ",
   "describe": {
     "columns": [
       {
@@ -58,7 +58,8 @@
       "Left": [
         "Uuid",
         "Uuid",
-        "Text"
+        "Text",
+        "Bool"
       ]
     },
     "nullable": [
@@ -74,5 +75,5 @@
       true
     ]
   },
-  "hash": "ac97a0c3a3884599c3e6cb44445cc09a263823432506cf86961d68ea124ef1b8"
+  "hash": "3dd2c8152498a2183ff2a944699251aaeac0e320a02b2504b1bc74402ad894cd"
 }

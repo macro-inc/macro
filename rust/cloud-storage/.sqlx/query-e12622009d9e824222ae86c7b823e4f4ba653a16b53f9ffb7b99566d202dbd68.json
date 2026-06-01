@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                ct.id,\n                ct.company_id,\n                ct.email,\n                ct.name,\n                ct.first_interaction,\n                ct.last_interaction,\n                ct.created_at,\n                ct.updated_at\n            FROM crm_contacts ct\n            JOIN crm_companies co ON co.id = ct.company_id\n            WHERE ct.id = $1\n              AND co.team_id = $2\n              AND ct.hidden = FALSE\n              AND co.hidden = FALSE\n            ",
+  "query": "\n            SELECT\n                id,\n                company_id,\n                email,\n                name,\n                hidden,\n                first_interaction,\n                last_interaction,\n                created_at,\n                updated_at\n            FROM crm_contacts\n            WHERE company_id = $1\n              AND ($2 OR hidden = FALSE)\n            ORDER BY LOWER(COALESCE(name, email)) ASC, id DESC\n            ",
   "describe": {
     "columns": [
       {
@@ -25,21 +25,26 @@
       },
       {
         "ordinal": 4,
+        "name": "hidden",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
         "name": "first_interaction",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 5,
+        "ordinal": 6,
         "name": "last_interaction",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 6,
+        "ordinal": 7,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -47,7 +52,7 @@
     "parameters": {
       "Left": [
         "Uuid",
-        "Uuid"
+        "Bool"
       ]
     },
     "nullable": [
@@ -58,8 +63,9 @@
       false,
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "535121455543c0aa07ee6b9e4132025fa22c6862758fa8dcefae327bcc8d150e"
+  "hash": "e12622009d9e824222ae86c7b823e4f4ba653a16b53f9ffb7b99566d202dbd68"
 }

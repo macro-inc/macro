@@ -3174,3 +3174,107 @@ async fn edit_delete_crm_comment_block_member_on_hidden_entity(pool: PgPool) -> 
     repo.delete_crm_comment(&team_id, &comment_id, true).await?;
     Ok(())
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn crm_comment_visibility_on_hidden_contact_with_visible_company(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    // Closes the contact-side dimension of the hide matrix:
+    // company is visible, but `crm_contacts.hidden = TRUE`. Members
+    // 404 on every read/write touching the contact; admins reach
+    // everything. Without this case the `entity_owned_by_team` helper's
+    // contact arm (which checks BOTH `c.hidden` and `co.hidden`) is
+    // only exercised end-to-end via the cascade — this pins
+    // contact-only hide as a first-class state.
+    let team_id = Uuid::now_v7();
+    let owner = "macro|owner@test.com";
+    seed_team(&pool, team_id, owner).await?;
+    let company_id = insert_company(&pool, team_id, true, &["acme.com"]).await?;
+    let contact_id = insert_contact(&pool, company_id, "alice@acme.com").await?;
+
+    let repo = CompaniesRepositoryImpl::new(pool.clone());
+    // Seed a thread on the contact while it's visible.
+    let thread = repo
+        .create_crm_comment(
+            &team_id,
+            CrmCommentEntityType::CrmContact,
+            &contact_id,
+            owner,
+            None,
+            None,
+            "first",
+            None,
+            false,
+        )
+        .await?;
+    let comment_id = thread.comments[0].comment_id;
+
+    // Hide just the contact; parent company stays visible.
+    sqlx::query(r#"UPDATE crm_contacts SET hidden = TRUE WHERE id = $1"#)
+        .bind(contact_id)
+        .execute(&pool)
+        .await?;
+
+    // Member view: every operation on the now-hidden contact 404s.
+    let member_list = repo
+        .get_crm_comment_threads(
+            &team_id,
+            CrmCommentEntityType::CrmContact,
+            &contact_id,
+            false,
+        )
+        .await;
+    assert!(matches!(
+        member_list,
+        Err(crate::domain::model::CrmError::ContactNotFoundForTeam)
+    ));
+
+    let member_create = repo
+        .create_crm_comment(
+            &team_id,
+            CrmCommentEntityType::CrmContact,
+            &contact_id,
+            owner,
+            None,
+            None,
+            "blocked",
+            None,
+            false,
+        )
+        .await;
+    assert!(matches!(
+        member_create,
+        Err(crate::domain::model::CrmError::ContactNotFoundForTeam)
+    ));
+
+    assert!(matches!(
+        repo.edit_crm_comment(&team_id, &comment_id, "edited", false)
+            .await,
+        Err(crate::domain::model::CrmError::CommentNotFound)
+    ));
+    assert!(matches!(
+        repo.delete_crm_comment(&team_id, &comment_id, false).await,
+        Err(crate::domain::model::CrmError::CommentNotFound)
+    ));
+
+    // Admin view: everything reachable. Thread + comment survive,
+    // edit + delete succeed in sequence.
+    let admin_threads = repo
+        .get_crm_comment_threads(
+            &team_id,
+            CrmCommentEntityType::CrmContact,
+            &contact_id,
+            true,
+        )
+        .await?;
+    assert_eq!(admin_threads.len(), 1);
+    assert_eq!(admin_threads[0].comments.len(), 1);
+
+    let edited = repo
+        .edit_crm_comment(&team_id, &comment_id, "edited by admin", true)
+        .await?;
+    assert_eq!(edited.text, "edited by admin");
+
+    repo.delete_crm_comment(&team_id, &comment_id, true).await?;
+    Ok(())
+}
