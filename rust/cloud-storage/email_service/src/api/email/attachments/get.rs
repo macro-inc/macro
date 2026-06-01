@@ -8,7 +8,6 @@ use cloudfront_sign::{SignedOptions, get_signed_url};
 use model::response::ErrorResponse;
 use model::user::UserContext;
 use models_email::email::service::attachment;
-use models_email::email::service::link::Link;
 use models_email::service;
 use std::time::{SystemTime, UNIX_EPOCH};
 use utoipa::ToSchema;
@@ -37,47 +36,66 @@ pub struct GetAttachmentResponse {
             (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, user_context, link, gmail_token), fields(user_id=user_context.user_id, fusionauth_user_id=user_context.fusion_user_id
+#[tracing::instrument(skip(ctx, user_context), fields(user_id=user_context.user_id, fusionauth_user_id=user_context.fusion_user_id
 ))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     user_context: Extension<UserContext>,
-    link: Extension<Link>,
-    gmail_token: Extension<String>,
     Path(attachment_id): Path<Uuid>,
 ) -> Result<Response, Response> {
-    // get attachment metadata from db
-    let (mut db_attachment, message_provider_id) =
-        email_db_client::attachments::provider::fetch_attachment_by_id(
-            &ctx.db,
-            attachment_id,
-            link.id,
+    // Resolve which of the caller's inboxes owns this attachment. Each inbox is a
+    // distinct Google account, so the owning link also determines the Gmail token.
+    let links = email_db_client::links::get::fetch_links_by_fusionauth_user_id(
+        &ctx.db,
+        &user_context.fusion_user_id,
+    )
+    .await
+    .map_err(|e| {
+        tracing::warn!(error=?e, "error fetching links");
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                message: "error fetching attachment".into(),
+            }),
         )
-        .await
-        .map_err(|e| {
-            tracing::warn!(error=?e, "error fetching attachment from db");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    message: "error fetching attachment".into(),
-                }),
-            )
-                .into_response()
-        })?
-        .ok_or_else(|| {
-            tracing::warn!(
-                "attachment with id {} for link {} not found",
+            .into_response()
+    })?;
+
+    let mut owned = None;
+    for link in links {
+        if let Some((db_attachment, message_provider_id)) =
+            email_db_client::attachments::provider::fetch_attachment_by_id(
+                &ctx.db,
                 attachment_id,
-                link.id
-            );
-            (
-                StatusCode::BAD_REQUEST,
-                Json(ErrorResponse {
-                    message: "attachment does not exist".into(),
-                }),
+                link.id,
             )
-                .into_response()
-        })?;
+            .await
+            .map_err(|e| {
+                tracing::warn!(error=?e, "error fetching attachment from db");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorResponse {
+                        message: "error fetching attachment".into(),
+                    }),
+                )
+                    .into_response()
+            })?
+        {
+            owned = Some((db_attachment, message_provider_id, link));
+            break;
+        }
+    }
+
+    let (mut db_attachment, message_provider_id, link) = owned.ok_or_else(|| {
+        tracing::warn!("attachment with id {} not found for caller", attachment_id);
+        (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                message: "attachment does not exist".into(),
+            }),
+        )
+            .into_response()
+    })?;
 
     let bucket = &ctx.config.attachment_bucket;
 
@@ -112,7 +130,25 @@ pub async fn handler(
             })?;
         presigned_request.to_string()
     } else {
-        // Object doesn't exist, need to fetch from Gmail and upload
+        // Object doesn't exist, need to fetch from Gmail and upload.
+        // Use the owning inbox's own token, not the caller's primary inbox token.
+        let gmail_token = email_service::util::gmail::auth::fetch_gmail_access_token_from_link(
+            &link,
+            &ctx.redis_client,
+            &ctx.auth_service_client,
+        )
+        .await
+        .map_err(|e| {
+            tracing::warn!(error=?e, "error fetching gmail token for attachment inbox");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    message: "error fetching attachment".into(),
+                }),
+            )
+                .into_response()
+        })?;
+
         // fetch attachment data from gmail api
         let attachment_data = ctx
             .gmail_client
