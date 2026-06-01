@@ -438,9 +438,9 @@ async fn get_channel_participants_for_thread_id(
         r#"
         SELECT DISTINCT id AS "user_id!" FROM (
             SELECT m.sender_id AS id
-            FROM comms_channel_participants cp
-            JOIN comms_channels c ON c.id = cp.channel_id
-            JOIN comms_messages m ON m.channel_id = c.id
+            FROM comms_messages m
+            JOIN comms_channel_participants cp
+              ON cp.channel_id = m.channel_id AND cp.user_id = m.sender_id
             WHERE (m.id = $1 OR m.thread_id = $1) AND cp.left_at IS NULL
             UNION
             SELECT em.entity_id AS id
@@ -2272,7 +2272,7 @@ impl ChannelRepo for PgChannelsRepo {
                 left_at::timestamptz AS "left_at?",
                 role AS "role: ParticipantRole"
             FROM comms_channel_participants
-            WHERE channel_id = $1
+            WHERE channel_id = $1 AND left_at IS NULL
             ORDER BY joined_at DESC
             "#,
             channel_id,
@@ -2283,9 +2283,6 @@ impl ChannelRepo for PgChannelsRepo {
         Ok(rows
             .into_iter()
             .filter_map(|row| {
-                if row.left_at.is_some() {
-                    return None;
-                }
                 let user_id = MacroUserIdStr::try_from(row.user_id).ok()?;
                 Some(ChannelParticipant {
                     channel_id: row.channel_id,
