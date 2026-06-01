@@ -1,44 +1,24 @@
-import LogoIcon from '@icon/macro-logo.svg';
-import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { DashboardAiInput } from '@app/component/dashboard/dashboard-chat-input';
 import { DashboardSectionBoundary } from '@app/component/dashboard/dashboard-section-boundary';
 import { PromptTemplatesSection } from '@app/component/dashboard/sections/prompt-templates';
-import { QUERY_FILTERS_BASE } from '@app/component/next-soup/filters/query-filters';
-import { openEntityInSplitFromUnifiedList } from '@app/component/next-soup/utils';
-import { globalSplitManager } from '@app/signal/splitLayout';
+import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
-import {
-  EntityIcon,
-  type EntityIconSelector,
-} from '@core/component/EntityIcon';
-import { UserIcon } from '@core/component/UserIcon';
+import { ItemPreview } from '@core/component/ItemPreview';
 import { useUserContext, useUserId } from '@core/context/user';
-import { useDisplayName } from '@core/user/displayName';
-import { tryMacroId } from '@core/user/macroId';
-import { ProjectBreadCrumb } from '@entity/components/ProjectBreadCrumb';
 import { PulsingStar } from '@entity/components/PulsingStar';
-import {
-  Entity,
-  type EntityData,
-  isCallEntity,
-  isChannelEntity,
-  isEmailEntity,
-  isProjectContainedEntity,
-  isTaskEntity,
-} from '@entity';
+import LogoIcon from '@icon/macro-logo.svg';
 import {
   getNotificationAction,
   getNotificationContent,
   getNotificationTargetName,
   notificationIsRead,
 } from '@notifications';
-import { useSoupItemsQuery } from '@queries/soup/items';
+import WarningIcon from '@phosphor/warning.svg';
 import { useUserTeamsQuery } from '@queries/team';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { AgentModel } from '@service-cognition/generated/schemas/agentModel';
-import type { PostSoupRequest } from '@service-storage/generated/schemas';
 import { useQuery } from '@tanstack/solid-query';
-import { createMemo, For, Match, Show, Switch } from 'solid-js';
+import { createMemo, For, Show } from 'solid-js';
 
 type RelevantDashboardItem = {
   id: string;
@@ -54,10 +34,9 @@ type RelevantDashboardItem = {
 };
 
 type RelevantDashboardItems = {
-  items: RelevantDashboardItem[];
+  actionItems: RelevantDashboardItem[];
+  suggestedItems: RelevantDashboardItem[];
 };
-
-const NIL_ID = '00000000-0000-0000-0000-000000000000';
 
 const relevantItemSchema = {
   type: 'object',
@@ -84,12 +63,18 @@ const relevantItemSchema = {
 const relevantItemsSchema = {
   type: 'object',
   additionalProperties: false,
-  required: ['items'],
+  required: ['actionItems', 'suggestedItems'],
   properties: {
-    items: {
+    actionItems: {
       type: 'array',
-      minItems: 1,
-      maxItems: 8,
+      minItems: 0,
+      maxItems: 5,
+      items: relevantItemSchema,
+    },
+    suggestedItems: {
+      type: 'array',
+      minItems: 0,
+      maxItems: 5,
       items: relevantItemSchema,
     },
   },
@@ -113,180 +98,38 @@ function isRelevantDashboardItems(
   if (!value || typeof value !== 'object') return false;
   const result = value as Partial<RelevantDashboardItems>;
   return (
-    Array.isArray(result.items) && result.items.every(isRelevantDashboardItem)
+    Array.isArray(result.actionItems) &&
+    result.actionItems.every(isRelevantDashboardItem) &&
+    Array.isArray(result.suggestedItems) &&
+    result.suggestedItems.every(isRelevantDashboardItem)
   );
 }
 
-function iconType(type: RelevantDashboardItem['type']): EntityIconSelector {
-  if (type === 'email_thread') return 'email';
-  if (type === 'document') return 'md';
-  return type as EntityIconSelector;
-}
-
-function splitType(type: RelevantDashboardItem['type']) {
+function previewType(type: RelevantDashboardItem['type']) {
   if (type === 'email_thread') return 'email';
   if (type === 'task') return 'document';
-  if (type === 'document') return 'md';
   return type;
-}
-
-function entityMatchesItem(
-  entity: EntityData | undefined,
-  item: RelevantDashboardItem
-) {
-  if (!entity || entity.id !== item.id) return false;
-  if (item.type === 'email_thread') return entity.type === 'email';
-  if (item.type === 'task') {
-    return entity.type === 'document' && entity.subType?.type === 'task';
-  }
-  return entity.type === item.type;
-}
-
-function openPlaceholderItem(item: RelevantDashboardItem, event: MouseEvent) {
-  const type = splitType(item.type);
-  if (!item.id || !type) return;
-
-  globalSplitManager()?.openWithSplit(
-    { type: type as any, id: item.id },
-    {
-      activate: true,
-      referredFrom: 'dashboard',
-      preferNewSplit: event.shiftKey,
-    }
-  );
-}
-
-function PlaceholderItemRow(props: { item: RelevantDashboardItem }) {
-  return (
-    <button
-      class="group relative flex w-full items-center gap-3 rounded-lg p-2.5 text-left transition hover:bg-active/60 hover:ring hover:ring-edge hover:ring-inset focus:outline-none focus-visible:bg-active/60 focus-visible:ring focus-visible:ring-edge focus-visible:ring-inset"
-      onClick={(event) => openPlaceholderItem(props.item, event)}
-    >
-      <div class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-hover text-ink-muted">
-        <EntityIcon targetType={iconType(props.item.type)} size="sm" />
-      </div>
-      <div class="min-w-0 flex-1">
-        <div class="truncate text-sm font-medium text-ink">
-          {props.item.name}
-        </div>
-        <div class="mt-1 flex items-center gap-2">
-          <div class="skeleton-shimmer h-2.5 w-28 rounded-full bg-ink/5" />
-          <div class="skeleton-shimmer h-2.5 w-16 rounded-full bg-ink/5" />
-        </div>
-      </div>
-    </button>
-  );
-}
-
-function ChannelSecondary(props: {
-  entity: Extract<EntityData, { type: 'channel' }>;
-}) {
-  const senderId = () => props.entity.latestMessage?.senderId;
-  const senderMacroId = () => tryMacroId(senderId() ?? '');
-  const [senderName] = useDisplayName(senderMacroId());
-
-  return (
-    <span class="flex min-w-0 items-center gap-1.5">
-      <Show when={senderId()}>
-        {(id) => (
-          <UserIcon id={id()} size="sm" suppressClick showTooltip={false} />
-        )}
-      </Show>
-      <Show when={senderName()}>
-        {(name) => (
-          <span class="shrink-0 font-semibold text-ink-muted">{name()}</span>
-        )}
-      </Show>
-      <span class="min-w-0 truncate">
-        {props.entity.latestMessage?.content?.trim() || 'No recent messages'}
-      </span>
-    </span>
-  );
-}
-
-function EntitySecondary(props: { entity: EntityData }) {
-  return (
-    <Switch>
-      <Match when={isEmailEntity(props.entity) && props.entity}>
-        {(entity) => (
-          <span class="flex min-w-0 items-center gap-1.5">
-            <Entity.EmailParticipants entity={entity()} />
-            <span class="truncate text-ink-extra-muted">
-              {entity().snippet}
-            </span>
-          </span>
-        )}
-      </Match>
-      <Match when={isChannelEntity(props.entity) && props.entity}>
-        {(entity) => <ChannelSecondary entity={entity()} />}
-      </Match>
-      <Match when={isCallEntity(props.entity) && props.entity}>
-        {(entity) => entity().channelName || 'Call'}
-      </Match>
-      <Match when={isProjectContainedEntity(props.entity) && props.entity}>
-        {(entity) => <ProjectBreadCrumb entity={entity() as any} />}
-      </Match>
-    </Switch>
-  );
-}
-
-function EntityMeta(props: { entity: EntityData }) {
-  return (
-    <Show when={isTaskEntity(props.entity) && props.entity}>
-      {(entity) => <Entity.Properties entity={entity()} />}
-    </Show>
-  );
-}
-
-function RelevantHydratedRow(props: { entity: EntityData }) {
-  const open = (event: MouseEvent) => {
-    void openEntityInSplitFromUnifiedList(props.entity, {
-      openInNewSplit: event.shiftKey,
-    });
-  };
-
-  return (
-    <button
-      class="soup-list-entity group/narrow group relative mr-1 flex min-h-10 w-[calc(100%+1rem)] rounded-lg py-0.5 text-left transition hover:bg-active/60 hover:ring hover:ring-edge hover:ring-inset focus:outline-none focus-visible:bg-active/60 focus-visible:ring focus-visible:ring-edge focus-visible:ring-inset"
-      onClick={open}
-    >
-      <div class="grid min-h-[inherit] w-full grid-cols-[minmax(0,1fr)_auto] grid-rows-[auto_auto_auto] items-center gap-x-2 gap-y-1 px-4 py-2 text-sm @2xl/dashboard:grid-cols-[fit-content(18rem)_minmax(0,1fr)_auto] @2xl/dashboard:grid-rows-1">
-        <div class="ph-no-capture col-start-1 row-start-1 flex min-w-0 items-center gap-2 truncate font-semibold">
-          <div class="size-4 shrink-0">
-            <Entity.Icon entity={props.entity} />
-          </div>
-          <div class="min-w-0 truncate">
-            <Entity.Title entity={props.entity} />
-          </div>
-        </div>
-
-        <span class="col-start-2 row-start-1 justify-self-end text-xs font-medium text-ink-extra-muted @2xl/dashboard:hidden">
-          <Entity.Timestamp entity={props.entity} />
-        </span>
-
-        <div class="col-span-2 col-start-1 row-start-2 min-w-0 truncate font-medium text-ink/50 @2xl/dashboard:col-span-1 @2xl/dashboard:col-start-2 @2xl/dashboard:row-start-1">
-          <EntitySecondary entity={props.entity} />
-        </div>
-
-        <div class="col-span-2 col-start-1 row-start-3 flex min-w-0 items-center gap-2 overflow-hidden text-xs text-ink-muted @2xl/dashboard:col-span-1 @2xl/dashboard:col-start-3 @2xl/dashboard:row-start-1 @2xl/dashboard:justify-self-end">
-          <EntityMeta entity={props.entity} />
-          <span class="hidden shrink-0 text-xs font-medium text-ink-extra-muted @2xl/dashboard:inline">
-            <Entity.Timestamp entity={props.entity} />
-          </span>
-        </div>
-      </div>
-    </button>
-  );
 }
 
 function RelevantItemRow(props: {
   item: RelevantDashboardItem;
-  entity?: EntityData;
+  attention?: boolean;
 }) {
   return (
-    <Show when={props.entity}>
-      {(entity) => <RelevantHydratedRow entity={entity()} />}
-    </Show>
+    <div class="flex w-full items-center gap-2">
+      <Show when={props.attention}>
+        <WarningIcon class="size-3.5 shrink-0 text-alert-ink" />
+      </Show>
+      <ItemPreview
+        id={props.item.id}
+        type={previewType(props.item.type) as any}
+        disableHoverCard
+        class="group relative mr-1 flex h-auto min-h-10 min-w-0 flex-1 justify-start rounded-lg border-0 bg-transparent px-4 py-2 text-left ring-0 transition hover:bg-active/60 hover:ring hover:ring-edge hover:ring-inset focus:outline-none focus-visible:bg-active/60 focus-visible:ring focus-visible:ring-edge focus-visible:ring-inset"
+        iconClass="size-4 shrink-0"
+        textClass="min-w-0 truncate text-sm font-semibold text-ink"
+        maxLength={120}
+      />
+    </div>
   );
 }
 
@@ -322,59 +165,6 @@ function RelevantItemsSkeleton() {
       </div>
     </div>
   );
-}
-
-function buildSoupRequest(items: RelevantDashboardItem[]): PostSoupRequest {
-  const documentIds: string[] = [];
-  const emailThreadIds: string[] = [];
-  const channelIds: string[] = [];
-  const chatIds: string[] = [];
-  const projectIds: string[] = [];
-  const callIds: string[] = [];
-
-  for (const item of items) {
-    switch (item.type) {
-      case 'document':
-      case 'task':
-        documentIds.push(item.id);
-        break;
-      case 'email_thread':
-        emailThreadIds.push(item.id);
-        break;
-      case 'channel':
-        channelIds.push(item.id);
-        break;
-      case 'chat':
-        chatIds.push(item.id);
-        break;
-      case 'project':
-        projectIds.push(item.id);
-        break;
-      case 'call':
-        callIds.push(item.id);
-        break;
-    }
-  }
-
-  console.log(items);
-
-  return {
-    ...QUERY_FILTERS_BASE,
-    limit: Math.max(items.length, 1),
-    document_filters: {
-      document_ids: documentIds.length ? documentIds : [NIL_ID],
-    },
-    email_filters: {
-      email_thread_ids: emailThreadIds.length ? emailThreadIds : [NIL_ID],
-    },
-    channel_filters: { channel_ids: channelIds.length ? channelIds : [NIL_ID] },
-    chat_filters: { chat_ids: chatIds.length ? chatIds : [NIL_ID] },
-    project_filters: {
-      project_ids: projectIds.length ? projectIds : [NIL_ID],
-      include_root: true,
-    },
-    call_filters: { call_ids: callIds.length ? callIds : [NIL_ID] },
-  };
 }
 
 function RelevantItemsList() {
@@ -430,18 +220,23 @@ function RelevantItemsList() {
         toolset: { type: 'all' },
         output_schema: {
           name: 'DashboardRelevantItems',
-          description: 'A list of entity-backed dashboard items relevant now.',
+          description:
+            'Entity-backed dashboard action items and suggested review items.',
           schema: relevantItemsSchema,
         },
         prompt: `You are selecting entity-backed items for a dashboard list.
 
 Use tools as needed to inspect recent workspace activity and search/list real entities. Return only real entities with ids that can be opened in the app. Do not invent ids.
 
+Return two sets:
+- actionItems: items that require the current user's attention or action now. Prioritize assigned tasks, direct mentions, unread/urgent notifications, unanswered questions, requested reviews/approvals, emails needing replies, call action items, and blocked work waiting on the current user.
+- suggestedItems: items that are useful suggestions for the current user to review or follow up on, but are less urgent or not clearly assigned. Include recent team work, active projects, relevant channels/chats, important documents, calls, or email threads worth checking.
+
 Return only each entity's type, id, and current display name. Do not summarize or explain each item; the UI will fetch details separately.
 
-If hasTeam is true, choose items likely relevant to the user from recent team activity and/or important team work. If hasTeam is false, choose items the current user recently interacted with plus items they may need to address based on notifications.
+If hasTeam is true, use recent team activity and important team work to select both sets. If hasTeam is false, use the current user's recent interactions and notifications.
 
-Return 6-8 items when possible.
+Avoid duplicates between actionItems and suggestedItems. Prefer actionItems when an item clearly needs the current user's attention. Return up to 3-5 items in each set when possible. Empty arrays are allowed when there is not enough evidence.
 
 JSON context:\n${context}`,
       });
@@ -455,37 +250,21 @@ JSON context:\n${context}`,
     staleTime: Infinity,
   }));
 
-  const aiItems = createMemo(() => resultQuery.data?.items ?? []);
-  const soupQuery = useSoupItemsQuery(
-    () => ({
-      params: {
-        limit: Math.max(aiItems().length, 1),
-        sort_method: 'updated_at',
-      },
-      body: buildSoupRequest(aiItems()),
-    }),
-    () => ({ enabled: aiItems().length > 0 })
+  const actionItems = createMemo(() => resultQuery.data?.actionItems ?? []);
+  const suggestedItems = createMemo(
+    () => resultQuery.data?.suggestedItems ?? []
   );
-
-  const entityById = createMemo(() => {
-    const map = new Map<string, EntityData>();
-    for (const entity of soupQuery.data ?? []) map.set(entity.id, entity);
-    return map;
-  });
+  const groupedItems = createMemo(() => [
+    ...actionItems().map((item) => ({ item, attention: true })),
+    ...suggestedItems().map((item) => ({ item, attention: false })),
+  ]);
 
   return (
     <Show when={!resultQuery.isLoading} fallback={<RelevantItemsSkeleton />}>
       <div class="flex w-full flex-col gap-1 px-4 sm:px-0">
-        <For each={aiItems()}>
-          {(item) => (
-            <RelevantItemRow
-              item={item}
-              entity={
-                entityMatchesItem(entityById().get(item.id), item)
-                  ? entityById().get(item.id)
-                  : undefined
-              }
-            />
+        <For each={groupedItems()}>
+          {({ item, attention }) => (
+            <RelevantItemRow item={item} attention={attention} />
           )}
         </For>
       </div>
@@ -521,15 +300,15 @@ export function BottomView() {
     } else {
       chatEditor.controls.setMarkdown(text);
     }
-    chatEditor.controls.focus();
+    requestAnimationFrame(() => chatEditor.controls.focus());
   };
 
   return (
-    <div class="flex min-h-full w-full flex-col justify-between gap-8">
+    <div class="max-w-4xl mx-auto flex min-h-full w-full flex-col justify-between gap-8">
       <div class="flex flex-col w-full flex-1 flex-col gap-6">
-        <div class="flex gap-4">
-          <LogoIcon class="hidden @max-sm:hidden sm:size-8 self-center text-accent sm:block" />
-          <h1 class="text-balance text-2xl font-semibold tracking-tight text-ink">
+        <div class="flex gap-2">
+          <LogoIcon class="hidden @max-sm:hidden sm:size-6 self-center text-accent sm:block" />
+          <h1 class="text-balance text-xl font-semibold tracking-tight text-ink">
             {greeting()}, <span class="capitalize">{firstName()}.</span>
           </h1>
         </div>
