@@ -27,6 +27,36 @@ use url::Url;
 mod share_target;
 mod staged_upload;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AppEnvironment {
+    Development,
+    Production,
+}
+
+impl AppEnvironment {
+    fn current() -> Self {
+        match env!("MACRO_TAURI_APP_ENV") {
+            "development" => Self::Development,
+            "production" => Self::Production,
+            other => unreachable!("invalid MACRO_TAURI_APP_ENV: {other}"),
+        }
+    }
+
+    fn auth_service_url(self) -> &'static str {
+        match self {
+            Self::Development => "https://auth-service-dev.macro.com/",
+            Self::Production => "https://auth-service.macro.com/",
+        }
+    }
+
+    fn web_origin(self) -> &'static str {
+        match self {
+            Self::Development => "https://dev.macro.com",
+            Self::Production => "https://macro.com",
+        }
+    }
+}
+
 /// This module provides debuging utilities and should not be compiled in prodiction builds
 #[cfg(debug_assertions)] // do not remove this
 mod debug;
@@ -39,6 +69,7 @@ static ALLOWED_DOMAINS: &[&str] = &[
     "http://tauri.localhost",
     "tauri://localhost",
     "https://macro.com",
+    "https://dev.macro.com",
     "http://localhost:3000",
     "http://localhost:3001",
     "http://localhost:3002",
@@ -129,13 +160,10 @@ pub fn run() {
         .plugin(MacroNavigationPlugin::new(ALLOWED_DOMAINS).expect("Domains must be valid urls"))
         .plugin(
             macro_bundle_updater_plugin::inbound::plugin::MacroBundleUpdaterPlugin::new(
-                if cfg!(debug_assertions) {
-                    "https://auth-service-dev.macro.com/"
-                } else {
-                    "https://auth-service.macro.com/"
-                }
-                .parse()
-                .expect("valid url"),
+                AppEnvironment::current()
+                    .auth_service_url()
+                    .parse()
+                    .expect("valid url"),
             ),
         );
 
@@ -282,20 +310,17 @@ fn merge_header_callback<R: Runtime>(url: String, headers: &mut HeaderMap, handl
         return;
     };
 
-    // Origin headers are required for service auth and must be set unconditionally,
-    // independent of whether cookie state is available.
+    // These services (including the macroverse.workers.dev sync service) validate
+    // Origin for auth, so set it to our web origin unconditionally — independent of
+    // whether cookie state is available.
     match parsed_url.host_str() {
-        Some("services.macro.com") | Some("services-dev.macro.com") => {
-            headers.insert(ORIGIN, HeaderValue::from_static("https://macro.com"));
-        }
-        // The sync service (macroverse.workers.dev) also validates Origin.
-        Some("macroverse.workers.dev") => {
-            let origin = if cfg!(debug_assertions) {
-                "https://dev.macro.com"
-            } else {
-                "https://macro.com"
-            };
-            headers.insert(ORIGIN, HeaderValue::from_static(origin));
+        Some("services.macro.com")
+        | Some("services-dev.macro.com")
+        | Some("macroverse.workers.dev") => {
+            headers.insert(
+                ORIGIN,
+                HeaderValue::from_static(AppEnvironment::current().web_origin()),
+            );
         }
         _ => {}
     }
