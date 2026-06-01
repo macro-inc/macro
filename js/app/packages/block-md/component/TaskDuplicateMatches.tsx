@@ -51,9 +51,9 @@ export function TaskDuplicateMatchesSidePanelSection() {
       <Show when={matches.count() > 0}>
         <SidePanel.Section
           id="duplicates"
-          title="Matches"
+          title="Duplicate Tasks"
           defaultOpen
-          order={30}
+          order={60}
         >
           <TaskDuplicateMatchesSidePanel matches={matches} />
         </SidePanel.Section>
@@ -128,7 +128,7 @@ function TaskDuplicateMatchesSidePanel(props: {
   matches: TaskDuplicateMatchesState;
 }) {
   return (
-    <div class="flex flex-col gap-1 py-2">
+    <div class="flex flex-col gap-1">
       <For each={props.matches.matches()}>
         {(match) => (
           <TaskDuplicateRow
