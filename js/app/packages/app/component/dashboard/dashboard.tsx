@@ -12,8 +12,8 @@ export function Dashboard() {
       </SplitHeaderLeft>
 
       <div class="@container/dashboard size-full px-0 pb-10 sm:p-8">
-        {/* <CenteredView /> */}
-        <BottomView />
+        <CenteredView />
+        {/* <BottomView /> */}
       </div>
     </main>
   );

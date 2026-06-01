@@ -2,7 +2,7 @@ import { Tooltip as KobalteTooltip } from '@kobalte/core/tooltip';
 import type { HotkeyToken } from '@core/hotkey/tokens';
 import { Hotkey } from '../../ui/components/Hotkey';
 import type { Placement } from '@floating-ui/dom';
-import type { ParentProps } from 'solid-js';
+import type { JSX, ParentProps } from 'solid-js';
 import { For, Show } from 'solid-js';
 import { Surface } from '@ui';
 
@@ -15,7 +15,7 @@ type TooltipProps = ParentProps<{
   shortcut?: string | string[];
   placement?: Placement;
   as?: 'div' | 'span';
-  label: string;
+  label: JSX.Element;
 }>;
 
 /**

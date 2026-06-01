@@ -131,7 +131,7 @@ export function ChatInput(props: ChatInputComponentProps) {
     attachments.attached().length > 0 || uploadQueue.uploading().length > 0;
 
   const LeftButton = () => (
-    <div ref={setAttachMenuAnchorRef} class="shrink-0">
+    <div ref={setAttachMenuAnchorRef} class="shrink-0 flex">
       <Button
         variant="ghost"
         size="icon-sm"

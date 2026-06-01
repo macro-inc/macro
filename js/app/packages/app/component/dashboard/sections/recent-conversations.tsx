@@ -10,7 +10,10 @@ import {
   StaticMarkdown,
   StaticMarkdownContext,
 } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import { EntityIcon } from '@core/component/EntityIcon';
+import {
+  EntityIcon,
+  type EntityIconSelector,
+} from '@core/component/EntityIcon';
 import { UserIcon } from '@core/component/UserIcon';
 import { useUserId } from '@core/context/user';
 import { useDisplayName } from '@core/user/displayName';
@@ -82,7 +85,7 @@ export function RecentConversationCard(props: {
         fallback={
           <div class="col-start-1 row-span-2 row-start-1 flex size-9 shrink-0 items-center justify-center rounded-lg bg-hover text-ink-muted transition group-hover:bg-active group-hover:text-ink">
             <EntityIcon
-              targetType={props.conversation.type || 'channel'}
+              targetType={(props.conversation.type || 'channel') as EntityIconSelector}
               size="sm"
               class="shrink-0"
             />

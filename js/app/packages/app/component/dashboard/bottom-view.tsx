@@ -2,9 +2,11 @@ import LogoIcon from '@icon/macro-logo.svg';
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { DashboardAiInput } from '@app/component/dashboard/dashboard-chat-input';
 import { DashboardSectionBoundary } from '@app/component/dashboard/dashboard-section-boundary';
+import { PromptTemplatesSection } from '@app/component/dashboard/sections/prompt-templates';
 import { QUERY_FILTERS_BASE } from '@app/component/next-soup/filters/query-filters';
 import { openEntityInSplitFromUnifiedList } from '@app/component/next-soup/utils';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
 import {
   EntityIcon,
   type EntityIconSelector,
@@ -468,7 +470,6 @@ JSON context:\n${context}`,
   const entityById = createMemo(() => {
     const map = new Map<string, EntityData>();
     for (const entity of soupQuery.data ?? []) map.set(entity.id, entity);
-    console.log(map);
     return map;
   });
 
@@ -505,6 +506,23 @@ export function BottomView() {
     return 'evening';
   });
   const greeting = createMemo(() => `Good ${timeOfDay()}`);
+  const chatEditor = buildChatEditor();
+  const fillChatInput = (
+    text: string,
+    mode: 'replace' | 'append' = 'replace'
+  ) => {
+    if (mode === 'append') {
+      const current = chatEditor.controls.getMarkdown().trimEnd();
+      if (!current.includes(text)) {
+        chatEditor.controls.setMarkdown(
+          current ? `${current}\n\n${text}` : text
+        );
+      }
+    } else {
+      chatEditor.controls.setMarkdown(text);
+    }
+    chatEditor.controls.focus();
+  };
 
   return (
     <div class="flex min-h-full w-full flex-col justify-between gap-8">
@@ -522,9 +540,13 @@ export function BottomView() {
         </div>
       </div>
 
-      <div class="mx-auto w-full px-4 sm:px-0">
+      <div class="mx-auto flex w-full flex-col gap-3 px-4 sm:px-0">
+        <DashboardSectionBoundary title="prompt templates">
+          <PromptTemplatesSection onSelect={fillChatInput} />
+        </DashboardSectionBoundary>
+
         <DashboardSectionBoundary title="hero">
-          <DashboardAiInput />
+          <DashboardAiInput editor={chatEditor} />
         </DashboardSectionBoundary>
       </div>
     </div>

@@ -11,7 +11,7 @@ export function CenteredView() {
     <div class="grid grid-cols-1 gap-24 ">
       <div class="hidden @7xl/dashboard:block" />
 
-      <div class="mx-auto flex w-full min-w-0 max-w-3xl flex-col gap-10">
+      <div class="mx-auto flex w-full min-w-0 max-w-2xl flex-col gap-10">
         <div class="pt-[50vh] -translate-y-[30vh] flex flex-col gap-8 px-4 sm:px-0">
           <DashboardSectionBoundary title="hero">
             <Hero />
@@ -27,17 +27,17 @@ export function CenteredView() {
             </DashboardSectionBoundary>
           </div>
 
-          <div class="hidden px-4 sm:block sm:px-0">
-            <DashboardSectionBoundary title="notifications">
-              <NotificationsSection />
-            </DashboardSectionBoundary>
-          </div>
+          {/* <div class="hidden px-4 sm:block sm:px-0"> */}
+          {/*   <DashboardSectionBoundary title="notifications"> */}
+          {/*     <NotificationsSection /> */}
+          {/*   </DashboardSectionBoundary> */}
+          {/* </div> */}
 
-          <div class="px-4 sm:px-0">
-            <DashboardSectionBoundary title="recent and shared">
-              <RecentSharedSection />
-            </DashboardSectionBoundary>
-          </div>
+          {/* <div class="px-4 sm:px-0"> */}
+          {/*   <DashboardSectionBoundary title="recent and shared"> */}
+          {/*     <RecentSharedSection /> */}
+          {/*   </DashboardSectionBoundary> */}
+          {/* </div> */}
 
           <div class="px-4 sm:px-0 @6xl/dashboard:hidden">
             <DashboardSectionBoundary title="quick links">

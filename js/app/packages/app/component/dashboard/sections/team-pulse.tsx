@@ -1,29 +1,21 @@
-import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
-import { AdaptiveScroller } from '@app/component/dashboard/adaptive-scroller';
 import { DashboardSectionError } from '@app/component/dashboard/dashboard-section-error';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import {
   EntityIcon,
   type EntityIconSelector,
 } from '@core/component/EntityIcon';
+import { UserIcon } from '@core/component/UserIcon';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useUserId } from '@core/context/user';
-import {
-  getNotificationAction,
-  getNotificationContent,
-  getNotificationTargetName,
-  notificationIsRead,
-} from '@notifications';
-import { useAutomationEntities } from '@queries/agent-schedule/entities';
-import { useTeamQuery, useUserTeamsQuery } from '@queries/team';
-import { cognitionApiServiceClient } from '@service-cognition/client';
-import { AgentModel } from '@service-cognition/generated/schemas/agentModel';
-import { TeamRole } from '@service-auth/generated/schemas/teamRole';
-import RefreshIcon from '@phosphor/arrow-clockwise.svg';
-import ArrowRightIcon from '@phosphor/arrow-right.svg';
 import { PulsingStar } from '@entity/components/PulsingStar';
 import { AnimatedStarIcon } from '@icon/wide-star';
-import { Button, HoverCard } from '@ui';
+import RefreshIcon from '@phosphor/arrow-clockwise.svg';
+import { useTeamQuery, useUserTeamsQuery } from '@queries/team';
+import { TeamRole } from '@service-auth/generated/schemas/teamRole';
+import { cognitionApiServiceClient } from '@service-cognition/client';
+import { AgentModel } from '@service-cognition/generated/schemas/agentModel';
+import { ToolSetOneOfType } from '@service-cognition/generated/schemas/toolSetOneOfType';
+import { Button } from '@ui';
 import {
   type Accessor,
   createMemo,
@@ -37,18 +29,30 @@ import {
   Switch,
 } from 'solid-js';
 
-type PulseEntity = {
+type TeamPulseReference = {
   id: string;
   type: string;
   label: string;
-  reason: string;
-  category: 'working_on' | 'needs_attention' | 'recent_signal';
+};
+
+type TeamPulseSummary = {
+  memberId: string;
+  memberLabel: string;
+  summary: string;
+  references: TeamPulseReference[];
+};
+
+type TeamPulseActionItem = {
+  title: string;
+  action: string;
+  references: TeamPulseReference[];
 };
 
 type TeamPulse = {
   overview: string;
   health: string;
-  entities: PulseEntity[];
+  summaries: TeamPulseSummary[];
+  actionItems: TeamPulseActionItem[];
 };
 
 type TeamPulseResourceSource = {
@@ -56,33 +60,50 @@ type TeamPulseResourceSource = {
   refreshToken: number;
 };
 
-const TEAM_PULSE_CACHE_PREFIX = 'dashboard:team-pulse:entity-first:v2:';
-const TEAM_PULSE_CACHE_TTL_MS = 10 * 60 * 1000;
+const TEAM_PULSE_CACHE_PREFIX = 'dashboard:team-pulse:summaries-actions:v1:';
+const TEAM_PULSE_CACHE_TTL_MS = 999 * 60 * 1000;
 
-const pulseEntitySchema = {
+const teamPulseReferenceSchema = {
   type: 'object',
   additionalProperties: false,
-  required: ['id', 'type', 'label', 'reason', 'category'],
+  required: ['id', 'type', 'label'],
   properties: {
     id: { type: 'string' },
     type: {
       type: 'string',
-      enum: [
-        'channel',
-        'email',
-        'task',
-        'document',
-        'project',
-        'chat',
-        'automation',
-        'call',
-      ],
+      enum: ['channel', 'email', 'task', 'document', 'project', 'chat', 'call'],
     },
     label: { type: 'string' },
-    reason: { type: 'string' },
-    category: {
-      type: 'string',
-      enum: ['working_on', 'needs_attention', 'recent_signal'],
+  },
+};
+
+const teamPulseSummarySchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['memberId', 'memberLabel', 'summary', 'references'],
+  properties: {
+    memberId: { type: 'string' },
+    memberLabel: { type: 'string' },
+    summary: { type: 'string' },
+    references: {
+      type: 'array',
+      maxItems: 3,
+      items: teamPulseReferenceSchema,
+    },
+  },
+};
+
+const teamPulseActionItemSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['title', 'action', 'references'],
+  properties: {
+    title: { type: 'string' },
+    action: { type: 'string' },
+    references: {
+      type: 'array',
+      maxItems: 3,
+      items: teamPulseReferenceSchema,
     },
   },
 };
@@ -90,15 +111,21 @@ const pulseEntitySchema = {
 const teamPulseSchema = {
   type: 'object',
   additionalProperties: false,
-  required: ['overview', 'health', 'entities'],
+  required: ['overview', 'health', 'summaries', 'actionItems'],
   properties: {
     overview: { type: 'string' },
     health: { type: 'string' },
-    entities: {
+    summaries: {
       type: 'array',
-      minItems: 1,
-      maxItems: 8,
-      items: pulseEntitySchema,
+      minItems: 0,
+      maxItems: 10,
+      items: teamPulseSummarySchema,
+    },
+    actionItems: {
+      type: 'array',
+      minItems: 0,
+      maxItems: 10,
+      items: teamPulseActionItemSchema,
     },
   },
 };
@@ -115,17 +142,36 @@ function cacheKey(context: string) {
   return `${TEAM_PULSE_CACHE_PREFIX}${hashString(context)}`;
 }
 
-function isPulseEntity(value: unknown): value is PulseEntity {
+function isTeamPulseReference(value: unknown): value is TeamPulseReference {
   if (!value || typeof value !== 'object') return false;
-  const entity = value as Partial<PulseEntity>;
+  const reference = value as Partial<TeamPulseReference>;
   return (
-    typeof entity.id === 'string' &&
-    typeof entity.type === 'string' &&
-    typeof entity.label === 'string' &&
-    typeof entity.reason === 'string' &&
-    (entity.category === 'working_on' ||
-      entity.category === 'needs_attention' ||
-      entity.category === 'recent_signal')
+    typeof reference.id === 'string' &&
+    typeof reference.type === 'string' &&
+    typeof reference.label === 'string'
+  );
+}
+
+function isTeamPulseSummary(value: unknown): value is TeamPulseSummary {
+  if (!value || typeof value !== 'object') return false;
+  const item = value as Partial<TeamPulseSummary>;
+  return (
+    typeof item.memberId === 'string' &&
+    typeof item.memberLabel === 'string' &&
+    typeof item.summary === 'string' &&
+    Array.isArray(item.references) &&
+    item.references.every(isTeamPulseReference)
+  );
+}
+
+function isTeamPulseActionItem(value: unknown): value is TeamPulseActionItem {
+  if (!value || typeof value !== 'object') return false;
+  const item = value as Partial<TeamPulseActionItem>;
+  return (
+    typeof item.title === 'string' &&
+    typeof item.action === 'string' &&
+    Array.isArray(item.references) &&
+    item.references.every(isTeamPulseReference)
   );
 }
 
@@ -135,8 +181,10 @@ function isTeamPulse(value: unknown): value is TeamPulse {
   return (
     typeof pulse.overview === 'string' &&
     typeof pulse.health === 'string' &&
-    Array.isArray(pulse.entities) &&
-    pulse.entities.every(isPulseEntity)
+    Array.isArray(pulse.summaries) &&
+    pulse.summaries.every(isTeamPulseSummary) &&
+    Array.isArray(pulse.actionItems) &&
+    pulse.actionItems.every(isTeamPulseActionItem)
   );
 }
 
@@ -183,23 +231,15 @@ function splitType(type: string) {
   return type;
 }
 
-function categoryLabel(category: PulseEntity['category']) {
-  switch (category) {
-    case 'working_on':
-      return 'Working on';
-    case 'needs_attention':
-      return 'Needs attention';
-    case 'recent_signal':
-      return 'Recent signal';
-  }
-}
-
-function openPulseEntity(entity: PulseEntity, event: MouseEvent) {
-  const type = splitType(entity.type);
-  if (!entity.id || !type) return;
+function openPulseReference(
+  reference: TeamPulseReference,
+  event: { shiftKey: boolean }
+) {
+  const type = splitType(reference.type);
+  if (!reference.id || !type) return;
 
   globalSplitManager()?.openWithSplit(
-    { type: type as any, id: entity.id },
+    { type: type as any, id: reference.id },
     {
       activate: true,
       referredFrom: 'dashboard',
@@ -208,39 +248,118 @@ function openPulseEntity(entity: PulseEntity, event: MouseEvent) {
   );
 }
 
-function PulseEntityRow(props: { entity: PulseEntity }) {
+function TeamPulseReferencePill(props: { reference: TeamPulseReference }) {
   return (
     <button
-      class="group flex min-h-24 w-64 shrink-0 snap-start flex-col justify-between rounded-xl border border-edge-muted p-3 text-left transition hover:bg-active/60 hover:ring hover:ring-edge hover:ring-inset focus:outline-none focus-visible:bg-active/60 focus-visible:ring focus-visible:ring-edge focus-visible:ring-inset @3xl/dashboard:w-auto @3xl/dashboard:min-w-0"
-      onClick={(event) => openPulseEntity(props.entity, event)}
+      class="group/pill relative flex min-w-0 items-center justify-between gap-2 rounded-md border border-edge-muted bg-hover/60 px-2 py-1 text-left transition hover:border-edge hover:bg-hover focus:outline-none focus-visible:border-accent"
+      onClick={(event) => {
+        event.stopPropagation();
+        openPulseReference(props.reference, event);
+      }}
     >
-      <div class="flex w-full items-center justify-between gap-2">
-        <span class="inline-flex w-fit max-w-[calc(100%-1.5rem)] items-center gap-1.5 rounded-md bg-hover px-1.5 py-0.5 text-xxs font-semibold text-ink-muted">
-          <span class="size-3.5 shrink-0">
-            <EntityIcon targetType={iconType(props.entity.type)} size="fill" />
-          </span>
-          <span class="truncate">{categoryLabel(props.entity.category)}</span>
-        </span>
-        <ArrowRightIcon class="size-4 shrink-0 text-ink-extra-muted opacity-0 transition group-hover:translate-x-0.5 group-hover:opacity-100" />
-      </div>
-      <div class="mt-3 min-w-0">
-        <p class="truncate text-sm font-semibold text-ink">
-          {props.entity.label}
-        </p>
-        <HoverCard
-          placement="top"
-          contentClass="max-w-80 items-start text-left leading-5"
-          content={<p>{props.entity.reason}</p>}
-        >
-          <span
-            class="mt-1 inline-flex rounded-md text-xxs text-ink-extra-muted underline decoration-current/20 underline-offset-2 opacity-0 transition hover:text-ink-muted group-hover:opacity-100"
-            onClick={(event) => event.stopPropagation()}
-          >
-            Details
-          </span>
-        </HoverCard>
-      </div>
+      <span class="size-3 min-w-3 shrink-0">
+        <EntityIcon targetType={iconType(props.reference.type)} size="fill" />
+      </span>
+      <span class="text-xs font-medium">{props.reference.label}</span>
     </button>
+  );
+}
+
+function PulseClickableRow(props: {
+  references: TeamPulseReference[];
+  icon: 'entity' | 'user';
+  memberId?: string;
+  title: string;
+  description: string;
+}) {
+  const primaryReference = () => props.references[0];
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      class="group relative w-full rounded-lg py-2.5 text-left transition hover:bg-active/60 hover:ring hover:ring-edge hover:ring-inset focus:outline-none focus-visible:bg-active/60 focus-visible:ring focus-visible:ring-edge focus-visible:ring-inset sm:p-2.5"
+      classList={{ 'cursor-default': !primaryReference() }}
+      onClick={(event) => {
+        const reference = primaryReference();
+        if (reference) openPulseReference(reference, event);
+      }}
+      onKeyDown={(event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        const reference = primaryReference();
+        if (!reference) return;
+
+        event.preventDefault();
+        openPulseReference(reference, event);
+      }}
+    >
+      <div class="flex items-start gap-2">
+        <Show
+          when={props.icon === 'user' && props.memberId}
+          fallback={
+            <div class="flex size-7 shrink-0 items-center justify-center rounded-lg bg-hover transition touch:size-9 group-hover:bg-active">
+              <Show when={primaryReference()}>
+                {(reference) => (
+                  <EntityIcon
+                    targetType={iconType(reference().type)}
+                    size="sm"
+                    class="shrink-0 touch:size-5"
+                  />
+                )}
+              </Show>
+            </div>
+          }
+        >
+          {(id) => (
+            <UserIcon
+              id={id()}
+              size="md"
+              class="touch:size-9"
+              suppressClick
+              showTooltip={false}
+            />
+          )}
+        </Show>
+        <div class="min-w-0 flex-1">
+          <p class="truncate text-[0.8125rem] font-semibold text-ink">
+            {props.title}
+          </p>
+          <p class="mt-1 text-xs/5 text-ink-muted">{props.description}</p>
+          <Show when={props.references.length > 0}>
+            <div class="mt-2 flex max-w-full flex-wrap items-center gap-2">
+              <For each={props.references}>
+                {(reference) => (
+                  <TeamPulseReferencePill reference={reference} />
+                )}
+              </For>
+            </div>
+          </Show>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TeamPulseSummaryRow(props: { item: TeamPulseSummary }) {
+  return (
+    <PulseClickableRow
+      references={props.item.references}
+      icon="user"
+      memberId={props.item.memberId}
+      title={props.item.memberLabel || props.item.memberId}
+      description={props.item.summary}
+    />
+  );
+}
+
+function TeamPulseActionItemRow(props: { item: TeamPulseActionItem }) {
+  return (
+    <PulseClickableRow
+      references={props.item.references}
+      icon="entity"
+      title={props.item.title}
+      description={props.item.action}
+    />
   );
 }
 
@@ -261,15 +380,16 @@ function TeamPulseSkeleton() {
           </div>
         </div>
       </div>
-      <div class="mt-3 flex snap-x scroll-pl-4 gap-2 overflow-x-auto px-4 pb-1 scrollbar-hidden sm:px-0 @3xl/dashboard:grid @3xl/dashboard:grid-cols-2 @3xl/dashboard:overflow-visible @3xl/dashboard:pb-0 @6xl/dashboard:grid-cols-4">
+      <div class="mt-3 space-y-1 px-4 sm:px-0">
         <For each={[0, 1, 2, 3]}>
           {() => (
-            <div class="skeleton-shimmer h-24 w-64 shrink-0 snap-start rounded-xl border border-edge-muted p-3 @3xl/dashboard:w-auto">
-              <div class="mb-4 flex items-center justify-between gap-2">
-                <div class="skeleton-shimmer h-5 w-24 rounded-md bg-hover" />
-                <div class="skeleton-shimmer size-4 rounded bg-ink/5" />
+            <div class="flex items-start gap-3 rounded-lg px-2 py-2.5">
+              <div class="skeleton-shimmer size-8 shrink-0 rounded-full bg-ink/10" />
+              <div class="min-w-0 flex-1">
+                <div class="skeleton-shimmer mb-2 h-3 w-28 rounded-full bg-ink/10" />
+                <div class="skeleton-shimmer mb-2 h-3 w-4/5 rounded-full bg-ink/5" />
+                <div class="skeleton-shimmer h-2.5 w-2/3 rounded-full bg-ink/5" />
               </div>
-              <div class="skeleton-shimmer h-3 w-2/3 rounded-full bg-ink/10" />
             </div>
           )}
         </For>
@@ -280,8 +400,6 @@ function TeamPulseSkeleton() {
 
 function TeamPulseContent(props: { refreshToken: Accessor<number> }) {
   const userTeamsQuery = useUserTeamsQuery();
-  const notificationSource = useGlobalNotificationSource();
-  const automations = useAutomationEntities();
   const userId = useUserId();
 
   const firstTeam = createMemo(() => userTeamsQuery.data?.[0]);
@@ -292,36 +410,6 @@ function TeamPulseContent(props: { refreshToken: Accessor<number> }) {
     if (!team || !teamQuery.data) return undefined;
 
     const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-
-    const notificationSignals = notificationSource
-      .notifications()
-      .filter((notification) => !notification.done)
-      .filter((notification) => notification.created_at >= since)
-      .sort(
-        (a, b) =>
-          Number(!notificationIsRead(b)) - Number(!notificationIsRead(a)) ||
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      )
-      .slice(0, 24)
-      .map((notification) => ({
-        id: notification.entity_id,
-        type:
-          notification.notification_metadata.tag === 'task_assigned'
-            ? 'task'
-            : notification.entity_type === 'email_thread'
-              ? 'email'
-              : notification.entity_type === 'channel_message'
-                ? 'channel'
-                : notification.entity_type,
-        label:
-          getNotificationTargetName(notification) ||
-          getNotificationContent(notification) ||
-          notification.entity_type,
-        action: getNotificationAction(notification),
-        content: getNotificationContent(notification),
-        unread: !notificationIsRead(notification),
-        createdAt: notification.created_at,
-      }));
 
     return JSON.stringify({
       currentUserId: userId(),
@@ -334,19 +422,6 @@ function TeamPulseContent(props: { refreshToken: Accessor<number> }) {
         label: member.user_id,
         role: member.role,
       })),
-      availableEntities: [
-        ...notificationSignals,
-        ...automations()
-          .slice(0, 10)
-          .map((automation) => ({
-            id: automation.id,
-            type: 'automation',
-            label: automation.name,
-            enabled: automation.enabled,
-            running: automation.isRunning,
-            nextRunAt: automation.nextRunAt,
-          })),
-      ],
     });
   });
 
@@ -364,27 +439,42 @@ function TeamPulseContent(props: { refreshToken: Accessor<number> }) {
 
     const result = await cognitionApiServiceClient.structuredCompletion({
       model: AgentModel.fast,
+      toolset: { type: ToolSetOneOfType.all },
       output_schema: {
-        name: 'EntityFirstTeamPulse',
-        description: 'An entity-first team dashboard pulse.',
+        name: 'TeamPulseWithCurrentUserActions',
+        description:
+          'Team member work summaries plus action items the current user needs to follow up on.',
         schema: teamPulseSchema,
       },
-      prompt: `You are generating an entity-first team pulse for a team dashboard.
+      prompt: `You are generating a team pulse for the current user's dashboard.
 
-Use ONLY the JSON context. This section is for the entire team over the last 7 days, not a personal inbox for the current user. Do not over-prioritize the currentUserId except when it helps identify team membership. Prefer team-level work, shared channels, shared tasks, automations, and cross-member activity from the provided timeframe over personal follow-ups.
+Use the JSON context for currentUserId, team membership, and timeframe. Then use your available tools to gather the information yourself. The goal is to return both: (1) concise summaries of what active team members are working on, and (2) concrete things the current user needs to follow up on or do now.
 
-The context includes availableEntities. Select the most useful real entities for the team as a whole and copy id, type, and label from availableEntities exactly. Do not create fake entity ids. Use the semantic entity type from availableEntities.
+You must actively search across tasks, calls, channels, emails, chats, documents, and projects. Use multiple relevant tools when needed instead of relying on one source. For summaries, look for signals authored by, assigned to, mentioning, or clearly involving team members. For action items, look for tasks assigned to the current user, direct mentions, unanswered questions, requests for review/approval, promised follow-ups, blocked work needing the current user's input, emails needing replies, call action items, and channel/chat discussions that clearly assign work to the current user.
 
 Return the same shape every time:
-- overview: one concise paragraph about what the team appears to have been working on over the last week.
-- health: one short sentence on whether the team looks active, quiet, blocked, or waiting on responses.
-- entities: exactly 6 important real entities when at least 6 are available, otherwise return every available useful entity. Each reason should explain why this item matters to the team now, not just to one user. Categorize each as working_on, needs_attention, or recent_signal.
+- overview: one concise paragraph summarizing team activity and the current user's follow-up workload.
+- health: one short sentence on whether the team/current user looks clear, busy, blocked, waiting on others, or has urgent follow-ups.
+- summaries: team member work summaries. Include members with recent activity first. Omit inactive members unless discovered chat, email, channel, or call evidence explicitly indicates why they are inactive, such as vacation, out of office, sick leave, parental leave, travel, focus time, or another availability reason. Return an empty summaries array if there is not enough evidence for any member.
+- actionItems: actionable follow-ups for currentUserId, ordered by urgency and specificity. Return an empty actionItems array if there is not enough evidence for any action item.
 
-Rules:
-- Prefer concrete entity-backed output over generic text.
-- Include items that represent active team work and items that may need team-level follow-up.
+For each summaries item:
+- memberId must exactly match a member id from members.
+- memberLabel should be a short readable label for the member; use the id if no better label is available.
+- summary should be a short present-tense summary of what they appear to be working on, e.g. "Following up on onboarding tasks". For an explicitly inactive member, summarize the reason, e.g. "Out on vacation this week".
+- references should contain up to 3 real entities found with tools that support the summary. Return each reference with id, type, and label. The label must be the entity's actual name/title/subject from the tool result, not a custom summary or generated label. Allowed reference types are channel, email, task, document, project, chat, and call.
+
+For each actionItems item:
+- title should be a short action-oriented title, e.g. "Reply to onboarding thread" or "Review launch task".
+- action should be a concise description of what the current user should do next and why.
+- references should contain up to 3 real entities found with tools that support the action item. Return each reference with id, type, and label. The label must be the entity's actual name/title/subject from the tool result, not a custom summary or generated label. Allowed reference types are channel, email, task, document, project, chat, and call.
+
+Inference rules:
+- Prefer concrete, entity-backed summaries and action items over generic text.
 - Use cautious language when inferring.
-- Do not invent projects, deadlines, people, ids, types, or labels.
+- Do not include FYI-only updates as action items unless the current user clearly needs to act.
+- Do not include a member just to say they are quiet or have no data.
+- Do not invent projects, deadlines, people, ids, types, labels, activity, action items, availability reasons, or references.
 - Avoid generic productivity advice.
 
 JSON context:\n${source.context}`,
@@ -430,24 +520,44 @@ JSON context:\n${source.context}`,
                   </div>
                 </div>
 
-                <AdaptiveScroller scrollAmount={280} class="relative">
-                  <AdaptiveScroller.Viewport class="mt-3 scroll-pl-4 px-4 pb-1 sm:px-0 @3xl/dashboard:grid @3xl/dashboard:grid-cols-2 @3xl/dashboard:overflow-visible @3xl/dashboard:pb-0 @6xl/dashboard:grid-cols-4">
-                    <For each={data().entities}>
-                      {(entity) => <PulseEntityRow entity={entity} />}
-                    </For>
-                  </AdaptiveScroller.Viewport>
-                  <AdaptiveScroller.FadeEdges class="bottom-10 top-3 hidden sm:block @3xl/dashboard:hidden" />
-                  <AdaptiveScroller.Controls class="mt-2 @3xl/dashboard:hidden">
-                    <AdaptiveScroller.Control
-                      direction="left"
-                      class="hidden sm:inline-flex @3xl/dashboard:hidden"
-                    />
-                    <AdaptiveScroller.Control
-                      direction="right"
-                      class="hidden sm:inline-flex @3xl/dashboard:hidden"
-                    />
-                  </AdaptiveScroller.Controls>
-                </AdaptiveScroller>
+                <Show
+                  when={
+                    data().summaries.length > 0 || data().actionItems.length > 0
+                  }
+                  fallback={
+                    <div class="mt-3 px-4 text-sm text-ink-muted sm:px-0">
+                      No clear team activity or follow-ups surfaced yet.
+                    </div>
+                  }
+                >
+                  <div class="mt-4 space-y-5 px-4 sm:px-0">
+                    <Show when={data().summaries.length > 0}>
+                      <div>
+                        <h3 class="mb-1 px-2 text-xs font-semibold uppercase tracking-wide text-ink-extra-muted">
+                          Team activity
+                        </h3>
+                        <div class="space-y-1">
+                          <For each={data().summaries}>
+                            {(item) => <TeamPulseSummaryRow item={item} />}
+                          </For>
+                        </div>
+                      </div>
+                    </Show>
+
+                    <Show when={data().actionItems.length > 0}>
+                      <div>
+                        <h3 class="mb-1 px-2 text-xs font-semibold uppercase tracking-wide text-ink-extra-muted">
+                          Follow-ups
+                        </h3>
+                        <div class="space-y-1">
+                          <For each={data().actionItems}>
+                            {(item) => <TeamPulseActionItemRow item={item} />}
+                          </For>
+                        </div>
+                      </div>
+                    </Show>
+                  </div>
+                </Show>
               </div>
             )}
           </Match>
@@ -474,7 +584,7 @@ export function TeamPulseSection() {
   const isOwner = createMemo(() => currentMember()?.role === TeamRole.owner);
 
   return (
-    <section>
+    <section class="mx-auto w-full max-w-3xl">
       <div class="flex items-start justify-between gap-3 px-4 sm:px-0">
         <div class="flex min-w-0 items-center gap-2">
           <h2 class="truncate text-lg font-semibold tracking-tight text-ink">

@@ -9,7 +9,7 @@ import { AnimatedStarIcon } from '@icon/wide-star';
 import { AnimatedTaskIcon } from '@icon/wide-task';
 import { notificationIsRead } from '@notifications/notification-helpers';
 import ArrowRightIcon from '@phosphor/arrow-right.svg';
-import { Layer } from '@ui';
+import { cn, Layer } from '@ui';
 import { type Component, createMemo, createSignal } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 
@@ -23,13 +23,13 @@ function QuickLinkButton(props: {
   const colorClass = () => {
     switch (props.color) {
       case 'agent':
-        return 'text-chat';
+        return 'bg-chat/10 text-chat border-chat/15';
       case 'document':
-        return 'text-note';
+        return 'bg-note/10 text-note border-note/15';
       case 'folder':
-        return 'text-folder';
+        return 'bg-folder/10 text-folder border-folder/15';
       case 'task':
-        return 'text-task';
+        return 'bg-task/10 text-task border-task/15';
       default:
         return 'text-ink-muted group-hover:text-ink';
     }
@@ -37,33 +37,26 @@ function QuickLinkButton(props: {
 
   return (
     <button
-      class="group relative flex h-20 flex-col items-start justify-between rounded-2xl border border-edge-muted bg-hover/60 p-3 text-left transition hover:border-edge hover:bg-hover focus:outline-none focus-visible:border-accent"
+      class={cn(
+        'group relative flex flex-col items-start justify-between rounded-md border border-edge-muted bg-hover/60 px-2 py-1 text-left transition hover:border-edge hover:bg-hover focus:outline-none focus-visible:border-accent',
+        colorClass()
+      )}
       onPointerEnter={() => setHovering(true)}
       onPointerLeave={() => setHovering(false)}
     >
-      <div class="flex w-full items-start justify-between gap-2">
+      <div class="flex w-full items-center justify-between gap-2">
         <div class="relative">
           <Dynamic
             component={props.icon}
-            class={`size-5 transition ${colorClass()}`}
+            class="size-3 transition"
             triggerAnimation={hovering()}
           />
           {(props.notificationCount ?? 0) > 0 && (
             <span class="absolute -right-1 -top-1 size-2.5 rounded-full border-2 border-hover bg-accent" />
           )}
         </div>
-      </div>
-      <div class="flex w-full min-w-0 items-end justify-between gap-2">
-        <span class="min-w-0 truncate text-sm font-medium text-ink">
-          {props.label}
-        </span>
-        <div class="pointer-events-none absolute right-3 top-3 opacity-0 transition group-hover:opacity-100">
-          <Layer depth={3} class="rounded-xl">
-            <div class="flex size-8 items-center justify-center rounded-xl bg-hover text-ink-muted transition group-hover:text-ink">
-              <ArrowRightIcon class="size-4" />
-            </div>
-          </Layer>
-        </div>
+
+        <span class="min-w-0 text-xs font-medium">{props.label}</span>
       </div>
     </button>
   );
@@ -108,14 +101,8 @@ export function QuickLinksSection() {
   );
 
   return (
-    <section class="@container/quick-links">
-      <div class="grid grid-cols-2 gap-2 @md/quick-links:grid-cols-4 @4xl/quick-links:grid-cols-8">
-        <QuickLinkButton
-          label="Inbox"
-          icon={AnimatedInboxIcon}
-          notificationCount={inboxNotificationCount()}
-        />
-        <QuickLinkButton label="Search" icon={AnimatedSearchIcon} />
+    <section class="@container/quick-links w-full flex items-center justify-center">
+      <div class="flex items-center gap-2">
         <QuickLinkButton label="Agents" icon={AnimatedStarIcon} color="agent" />
         <QuickLinkButton
           label="Email"
@@ -132,11 +119,6 @@ export function QuickLinksSection() {
           icon={AnimatedTaskIcon}
           color="task"
           notificationCount={taskNotificationCount()}
-        />
-        <QuickLinkButton
-          label="Channels"
-          icon={AnimatedChannelIcon}
-          notificationCount={channelNotificationCount()}
         />
         <QuickLinkButton
           label="Folders"
