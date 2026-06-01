@@ -144,6 +144,10 @@ pub struct CrmContact {
     pub email: String,
     /// Display name observed for the contact, if any
     pub name: Option<String>,
+    /// Whether the contact is hidden from CRM listings for the owning
+    /// team. Set via [`crate::domain::service::CrmService::set_contact_hidden`]
+    /// (individual hide) or cascaded from a company-level hide.
+    pub hidden: bool,
     /// Earliest known interaction with this contact
     pub first_interaction: DateTime<Utc>,
     /// Most recent known interaction with this contact
