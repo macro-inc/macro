@@ -1,3 +1,4 @@
+import { BottomView } from '@app/component/dashboard/bottom-view';
 import { CenteredView } from '@app/component/dashboard/centered-view';
 import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
 
@@ -11,7 +12,8 @@ export function Dashboard() {
       </SplitHeaderLeft>
 
       <div class="@container/dashboard size-full px-0 pb-10 sm:p-8">
-        <CenteredView />
+        {/* <CenteredView /> */}
+        <BottomView />
       </div>
     </main>
   );
