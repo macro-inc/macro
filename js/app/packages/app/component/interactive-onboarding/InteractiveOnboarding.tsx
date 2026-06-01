@@ -7,6 +7,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
 import { useLocation, useNavigate } from '@solidjs/router';
 import {
+  batch,
   createEffect,
   createMemo,
   createSignal,
@@ -211,9 +212,12 @@ function InteractiveOnboardingInner(props: InteractiveOnboardingProps) {
   };
 
   const resetTutorial = () => {
-    state.reset();
-    setReadyToContinue(false);
-    setContinueLabel(undefined);
+    batch(() => {
+      state.reset();
+      resetSandbox();
+      setReadyToContinue(false);
+      setContinueLabel(undefined);
+    });
   };
 
   // cmd+enter hotkey to continue
