@@ -7,10 +7,24 @@ use axum::{
     response::{IntoResponse, Json, Response},
 };
 use model::{response::ErrorResponse, user::UserContext};
-use models_email::service::link::Link;
 use sqlx::types::Uuid;
+use std::collections::HashSet;
 use strum_macros::AsRefStr;
 use thiserror::Error;
+
+/// The set of link ids the caller owns — every message read unions across these.
+async fn owned_link_ids(
+    ctx: &ApiContext,
+    fusionauth_user_id: &str,
+) -> anyhow::Result<HashSet<Uuid>> {
+    Ok(
+        email_db_client::links::get::fetch_links_by_fusionauth_user_id(&ctx.db, fusionauth_user_id)
+            .await?
+            .into_iter()
+            .map(|link| link.id)
+            .collect(),
+    )
+}
 
 #[derive(Debug, Error, AsRefStr)]
 pub enum GetMessageError {
@@ -66,25 +80,25 @@ pub struct PathParams {
             (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, user_context, link), fields(user_id=user_context.user_id, fusionauth_user_id=user_context.fusion_user_id, link_id=%link.id))]
+#[tracing::instrument(skip(ctx, user_context), fields(user_id=user_context.user_id, fusionauth_user_id=user_context.fusion_user_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     user_context: Extension<UserContext>,
-    link: Extension<Link>,
     Path(PathParams { id }): Path<PathParams>,
 ) -> Result<Response, GetMessageError> {
     let message = email_db_client::messages::get_parsed::get_parsed_message_by_id(&ctx.db, &id)
         .await
         .context("Failed to get message by id")?;
 
-    if let Some(message) = message {
-        if message.link_id == link.id {
-            Ok(Json(message).into_response())
-        } else {
-            Err(GetMessageError::Unauthorized)
-        }
+    let Some(message) = message else {
+        return Err(GetMessageError::MessageNotFound);
+    };
+
+    let link_ids = owned_link_ids(&ctx, &user_context.fusion_user_id).await?;
+    if link_ids.contains(&message.link_id) {
+        Ok(Json(message).into_response())
     } else {
-        Err(GetMessageError::MessageNotFound)
+        Err(GetMessageError::Unauthorized)
     }
 }
 
@@ -102,11 +116,10 @@ pub async fn handler(
             (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, user_context, link), fields(user_id=user_context.user_id, fusionauth_user_id=user_context.fusion_user_id, link_id=%link.id))]
+#[tracing::instrument(skip(ctx, user_context), fields(user_id=user_context.user_id, fusionauth_user_id=user_context.fusion_user_id))]
 pub async fn batch_handler(
     State(ctx): State<ApiContext>,
     user_context: Extension<UserContext>,
-    link: Extension<Link>,
     Json(ids): Json<Vec<Uuid>>,
 ) -> Result<Response, GetMessageError> {
     let messages =
@@ -119,9 +132,10 @@ pub async fn batch_handler(
         return Err(GetMessageError::MessageNotFound);
     }
 
+    let link_ids = owned_link_ids(&ctx, &user_context.fusion_user_id).await?;
     let accessible_messages = messages
         .into_iter()
-        .filter(|msg| msg.link_id == link.id)
+        .filter(|msg| link_ids.contains(&msg.link_id))
         .collect::<Vec<_>>();
 
     if accessible_messages.is_empty() {
