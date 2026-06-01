@@ -16,6 +16,7 @@ import {
   DEV_MODE_ENV,
   ENABLE_AUTO_UPDATE_UI,
   ENABLE_EMAIL,
+  ENABLE_INBOX_RESYNC,
   ENABLE_MULTI_INBOX,
   ENABLE_PROFILE_PICTURES,
   ENABLE_NEW_PRICING_OVERRIDE,
@@ -847,18 +848,20 @@ function InboxRow(props: {
         </span>
       </div>
       <div class="flex items-center gap-2 shrink-0">
-        <Tooltip label="Force sync">
-          <Button
-            variant="base"
-            size="sm"
-            depth={3}
-            disabled={props.resyncing || props.link.sync_status === 'SYNCING'}
-            onClick={props.onResync}
-            aria-label={`Force sync ${props.link.email_address}`}
-          >
-            <ArrowsClockwiseIcon class="size-4" />
-          </Button>
-        </Tooltip>
+        <Show when={ENABLE_INBOX_RESYNC}>
+          <Tooltip label="Force sync">
+            <Button
+              variant="base"
+              size="sm"
+              depth={3}
+              disabled={props.resyncing || props.link.sync_status === 'SYNCING'}
+              onClick={props.onResync}
+              aria-label={`Force sync ${props.link.email_address}`}
+            >
+              <ArrowsClockwiseIcon class="size-4" />
+            </Button>
+          </Tooltip>
+        </Show>
         <Tooltip label="Remove inbox">
           <Button
             variant="base"

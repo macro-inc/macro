@@ -241,6 +241,11 @@ export const ENABLE_MULTI_INBOX = resolveFeatureFlag(
   DEV_MODE_ENV
 );
 
+export const ENABLE_INBOX_RESYNC = resolveFeatureFlag(
+  'ENABLE_INBOX_RESYNC',
+  false
+);
+
 const _ENABLE_TASKS_TABS = resolveFeatureFlag('ENABLE_TASKS_TABS', true);
 
 export const ENABLE_EMAIL_SHARING = resolveFeatureFlag(
