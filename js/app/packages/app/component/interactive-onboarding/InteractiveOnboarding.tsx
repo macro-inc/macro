@@ -249,9 +249,13 @@ function InteractiveOnboardingInner(props: InteractiveOnboardingProps) {
       // element, so reclaim it. Focus intentionally handed to the sandbox
       // command-k dialog (a portal outside the shell) has a non-null
       // relatedTarget and is left alone — that flow restores focus on close.
+      // Skip once the shell is detaching (modal closing): there's nothing to
+      // hold focus in, and grabbing it would fight the modal's focus restore.
       const reclaimLostFocus = (event: FocusEvent) => {
-        if (event.relatedTarget || commandKOpen()) return;
-        shellRef?.focus();
+        if (event.relatedTarget || commandKOpen() || !shellRef?.isConnected) {
+          return;
+        }
+        shellRef.focus();
       };
       shellRef.addEventListener('focusout', reclaimLostFocus);
 

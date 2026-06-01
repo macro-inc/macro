@@ -308,6 +308,13 @@ export function InteractiveOnboardingModal(
       // Let the onboarding shell keep the focus it grabs in onMount so its
       // hotkey scope stays active.
       onOpenAutoFocus={(e) => e.preventDefault()}
+      // The tutorial auto-opens on login, so Kobalte has no meaningful element
+      // to restore focus to on close. Hand focus back to the app body (which
+      // owns the global hotkey scope) so app hotkeys work without a click.
+      onCloseAutoFocus={(e) => {
+        e.preventDefault();
+        document.body.focus();
+      }}
       class="w-[min(1600px,calc(100vw-32px))] h-[min(900px,calc(100vh-32px))] max-w-none rounded-xl bg-surface shadow-2xl"
     >
       <div class="relative size-full overflow-hidden rounded-xl flex flex-col">
