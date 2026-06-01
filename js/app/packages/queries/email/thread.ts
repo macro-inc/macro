@@ -151,7 +151,11 @@ export function useThreadQuery<Options extends UseThreadQueryOptions>(
   }));
 }
 
-type MarkThreadAsSeenParams = { threadId: string };
+type MarkThreadAsSeenParams = {
+  threadId: string;
+  /** Target inbox for a non-primary inbox; sent as the X-Email-Link-Id header. */
+  linkId?: string;
+};
 
 /**
  * Optimistically update soup queries when marking as seen.
@@ -177,7 +181,10 @@ export function useMarkThreadAsSeenMutation(
   return useMutation(() => ({
     mutationFn: async (params: MarkThreadAsSeenParams) => {
       await throwOnErr(() =>
-        emailClient.markThreadAsSeen({ thread_id: params.threadId })
+        emailClient.markThreadAsSeen(
+          { thread_id: params.threadId },
+          params.linkId
+        )
       );
     },
     ...withCallbacks<void, Error, MarkThreadAsSeenParams>(

@@ -366,11 +366,12 @@ export const emailClient = {
       )
     ).map((result) => result);
   },
-  async markThreadAsSeen(args: { thread_id: string }) {
+  async markThreadAsSeen(args: { thread_id: string }, linkId?: string) {
     const { thread_id } = args;
     return (
       await emailFetch<EmptyResponse>(`/email/threads/${thread_id}/seen`, {
         method: 'POST',
+        headers: emailLinkHeaders(linkId),
       })
     ).map((result) => result);
   },

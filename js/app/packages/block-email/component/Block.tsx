@@ -39,6 +39,7 @@ export default function BlockEmail() {
                   <EmailDebouncedReadMarker
                     notificationSource={notificationSource}
                     threadId={id()}
+                    linkId={threadQuery.data?.thread?.link_id}
                     debounceTime={isPreview ? 1_500 : 100}
                   />
                   <Suspense>
