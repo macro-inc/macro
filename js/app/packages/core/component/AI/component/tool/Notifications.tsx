@@ -18,6 +18,7 @@ const NOTIFICATION_TYPE_LABELS: Record<NotificationFilterType, string> = {
   chat: 'chats',
   call: 'calls',
   task: 'tasks',
+  github: 'GitHub',
 };
 
 const formatList = (items: string[]) => {
