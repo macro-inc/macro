@@ -12,9 +12,16 @@ export type SendActionProps = JSX.ButtonHTMLAttributes<HTMLButtonElement> & {
 export function SendAction(props: SendActionProps) {
   const input = useInput();
   const commands = useInputCommands();
-  const [local, rest] = splitProps(props, ['class', 'tooltip', 'hidden']);
+  const [local, rest] = splitProps(props, [
+    'class',
+    'disabled',
+    'tooltip',
+    'hidden',
+  ]);
   const isBlockedByPending = () => !!input().hasPendingAttachments;
   const isBlockedByEmptyInput = () => !hasSendableInputContent(input());
+  const isDisabled = () =>
+    !!local.disabled || isBlockedByPending() || isBlockedByEmptyInput();
 
   const tooltipText = () => local.tooltip ?? 'Send message';
 
@@ -25,7 +32,7 @@ export function SendAction(props: SendActionProps) {
       aria-label={tooltipText()}
       data-input-action="send"
       pending={isBlockedByPending()}
-      disabled={isBlockedByPending() || isBlockedByEmptyInput()}
+      disabled={isDisabled()}
       hidden={isMobile() && isBlockedByEmptyInput()}
       class={local.class}
       onPointerDown={(event) => {
