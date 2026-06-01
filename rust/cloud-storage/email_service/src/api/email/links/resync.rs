@@ -1,8 +1,8 @@
 use crate::api::context::ApiContext;
-use crate::api::email::links::access::authorize_inbox_access;
+use crate::api::email::links::access::{InboxActionError, authorize_inbox_access};
+use anyhow::Context;
 use axum::Extension;
 use axum::extract::{Path, State};
-use axum::http::StatusCode;
 use axum::response::{IntoResponse, Json, Response};
 use model::response::ErrorResponse;
 use model::user::UserContext;
@@ -42,21 +42,18 @@ pub struct ResyncResponse {
             (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, user_context), fields(user_id=user_context.user_id, fusionauth_user_id=user_context.fusion_user_id))]
+#[tracing::instrument(skip(ctx, user_context), fields(user_id=user_context.user_id, fusionauth_user_id=user_context.fusion_user_id), err)]
 pub async fn resync_link_handler(
     State(ctx): State<ApiContext>,
     user_context: Extension<UserContext>,
     Path(link_id): Path<Uuid>,
-) -> Result<Response, Response> {
+) -> Result<Response, InboxActionError> {
     let (link, _access) = authorize_inbox_access(&ctx, &user_context.user_id, link_id).await?;
 
     if let Some(active) =
         email_db_client::backfill::job::get::get_active_backfill_job(&ctx.db, link.id)
             .await
-            .map_err(|e| {
-                tracing::error!(error=?e, link_id=?link.id, "failed to check active backfill job");
-                internal_error("failed to start re-sync")
-            })?
+            .context("failed to check active backfill job")?
     {
         return Ok(Json(ResyncResponse {
             backfill_job_id: active.id,
@@ -72,10 +69,7 @@ pub async fn resync_link_handler(
         None,
     )
     .await
-    .map_err(|e| {
-        tracing::error!(error=?e, link_id=?link.id, "failed to create backfill job");
-        internal_error("failed to start re-sync")
-    })?;
+    .context("failed to create backfill job")?;
 
     let ps_message = BackfillPubsubMessage {
         backfill_operation: BackfillOperation::Init(JobScopedPayload {
@@ -90,8 +84,6 @@ pub async fn resync_link_handler(
         .enqueue_email_backfill_message(ps_message)
         .await
     {
-        tracing::error!(error=?e, backfill_id=%backfill_job.id, "failed to enqueue backfill message");
-
         if let Err(update_err) = email_db_client::backfill::job::update::update_backfill_job_status(
             &ctx.db,
             backfill_job.id,
@@ -102,7 +94,7 @@ pub async fn resync_link_handler(
             tracing::error!(error=?update_err, backfill_id=%backfill_job.id, "failed to mark backfill job failed");
         }
 
-        return Err(internal_error("failed to start re-sync"));
+        return Err(e.context("failed to enqueue backfill message").into());
     }
 
     Ok(Json(ResyncResponse {
@@ -110,14 +102,4 @@ pub async fn resync_link_handler(
         already_in_progress: false,
     })
     .into_response())
-}
-
-fn internal_error(message: &str) -> Response {
-    (
-        StatusCode::INTERNAL_SERVER_ERROR,
-        Json(ErrorResponse {
-            message: message.to_string().into(),
-        }),
-    )
-        .into_response()
 }
