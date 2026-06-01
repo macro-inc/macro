@@ -14,7 +14,7 @@ import { handleFileFolderDrop } from '@core/util/upload';
 import PaperclipIcon from '@phosphor/paperclip.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { Button, cn, Surface, SendButton as UiSendButton } from '@ui';
-import { createEffect, createSignal, Show } from 'solid-js';
+import { createEffect, createMemo, createSignal, Show } from 'solid-js';
 import { AttachmentList } from './Attachment';
 import { ChatAttachMenu } from './ChatAttachMenu';
 import { useAiDataConsentGate } from './useAiDataConsent';
@@ -30,6 +30,7 @@ type ChatInputProps = {
 };
 
 type ChatInputComponentProps = {
+  variant?: 'default' | 'tall';
   editor: EditorConfigBuilder;
   initialValue?: string;
   onChange?: (markdown: string) => void;
@@ -180,6 +181,8 @@ export function ChatInput(props: ChatInputComponentProps) {
     </div>
   );
 
+  const isTallVariant = createMemo(() => props.variant === 'tall');
+
   return (
     <Surface active={isFocused()} class="rounded-xl" depth={2} solid>
       <div
@@ -220,14 +223,19 @@ export function ChatInput(props: ChatInputComponentProps) {
           />
         </Show>
 
-        <div class="relative px-2 py-1.5">
+        <div
+          class={cn('relative px-2 py-1.5', {
+            'flex flex-col': isTallVariant(),
+          })}
+        >
           <div
             id="chat-input-text-area"
             class={cn('text-sm sm:text-sm text-ink')}
             classList={{
-              'pl-8': !isMultiline(),
-              'pr-12': !isMultiline(),
-              'px-0  pb-8': isMultiline(),
+              'pl-8': !isMultiline() && !isTallVariant(),
+              'pr-12': !isMultiline() && !isTallVariant(),
+              'px-0 pb-8': isMultiline() && !isTallVariant(),
+              'pb-4': isTallVariant(),
             }}
             ref={mdRef}
           >
@@ -243,16 +251,24 @@ export function ChatInput(props: ChatInputComponentProps) {
             />
           </div>
 
-          <div class="absolute left-2 bottom-1.5">
-            <LeftButton />
-          </div>
+          <div
+            class={cn({
+              'flex justify-between items-center': isTallVariant(),
+            })}
+          >
+            <div class={cn(!isTallVariant() && 'absolute left-2 bottom-1.5')}>
+              <LeftButton />
+            </div>
 
-          <div class="absolute right-1.5 bottom-1.5">
-            <RightControls />
+            <div
+              class={cn(!isTallVariant() && 'absolute right-1.5 bottom-1.5')}
+            >
+              <RightControls />
+            </div>
           </div>
         </div>
-        <ConsentDialog />
       </div>
+      <ConsentDialog />
     </Surface>
   );
 }

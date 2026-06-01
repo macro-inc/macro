@@ -66,7 +66,12 @@ function DashboardAiInput() {
 
   return (
     <ChatInputProvider>
-      <ChatInput editor={editor} onSend={handleSend} isPersistent />
+      <ChatInput
+        variant="tall"
+        editor={editor}
+        onSend={handleSend}
+        isPersistent
+      />
     </ChatInputProvider>
   );
 }
