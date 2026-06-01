@@ -18,8 +18,8 @@ export function AgentBadge(props: AgentBadgeProps) {
     <Show when={isAgent()}>
       <span
         class={cn(
-          'shrink-0 rounded-md border border-ink/15 px-1 py-px',
-          'text-[10px] font-medium uppercase leading-none tracking-wide text-ink-muted',
+          'inline-flex shrink-0 items-center rounded-sm bg-hover px-2 py-0.5',
+          'text-xs font-medium leading-none text-ink-muted',
           props.class
         )}
       >

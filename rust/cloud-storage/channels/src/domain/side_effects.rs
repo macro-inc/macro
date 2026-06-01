@@ -44,6 +44,7 @@ pub type SharedBotDispatcher = Arc<OnceLock<Arc<dyn ChannelBotDispatcher>>>;
 /// the user-mention UI, so a `user` mention whose id is exactly the Macro AI
 /// bot is recognized as a bot mention too.
 fn bot_mention_ids(mentions: &[SimpleMention]) -> Vec<BotId> {
+    let mut seen = HashSet::new();
     mentions
         .iter()
         .filter_map(|mention| match mention.entity_type.as_str() {
@@ -53,6 +54,7 @@ fn bot_mention_ids(mentions: &[SimpleMention]) -> Vec<BotId> {
                 .filter(|id| *id == bot_id::MACRO_AI_BOT_ID),
             _ => None,
         })
+        .filter(|id| seen.insert(*id))
         .collect()
 }
 
@@ -1492,16 +1494,23 @@ mod tests {
         let mentions = vec![
             // Macro AI surfaced through the user-mention UI.
             mention("user", &macro_ai),
+            // Duplicate bot mentions are dispatched once.
+            mention("user", &macro_ai),
             // A real user mention is ignored.
             mention("user", "macro|teo@macro.com"),
             // An explicitly bot-tagged mention.
             mention(BOT_MENTION_ENTITY_TYPE, &other_bot),
+            mention(BOT_MENTION_ENTITY_TYPE, &other_bot),
         ];
 
         let bots = bot_mention_ids(&mentions);
-        assert_eq!(bots.len(), 2);
-        assert!(bots.contains(&bot_id::MACRO_AI_BOT_ID));
-        assert!(bots.contains(&BotId::parse_uuid_str(&other_bot).unwrap()));
+        assert_eq!(
+            bots,
+            vec![
+                bot_id::MACRO_AI_BOT_ID,
+                BotId::parse_uuid_str(&other_bot).unwrap()
+            ]
+        );
     }
 
     #[test]

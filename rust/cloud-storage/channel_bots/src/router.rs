@@ -28,7 +28,7 @@ impl BotTriggerRouter {
     /// Create a router with the built-in system bots registered.
     pub fn new(poster: Arc<dyn ChannelBotPoster>, responder: Arc<dyn AgentResponder>) -> Self {
         let mut system_bots: HashMap<BotId, Arc<dyn SystemBotHandler>> = HashMap::new();
-        // Macro Agent: the built-in, code-defined system bot.
+        // Macro: the built-in, code-defined system bot.
         system_bots.insert(
             bot_id::MACRO_AI_BOT_ID,
             Arc::new(MacroAiHandler::new(poster, responder)),

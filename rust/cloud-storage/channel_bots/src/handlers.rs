@@ -90,11 +90,10 @@ pub trait SystemBotHandler: Send + Sync {
     async fn handle(&self, event: &BotEvent) -> anyhow::Result<()>;
 }
 
-/// Message Macro Agent posts immediately, then replaces with its answer.
+/// Message Macro posts immediately, then replaces with its answer.
 ///
 /// Rendered by the channel markdown as the existing pulsing AwaitNode.
-const THINKING_MESSAGE: &str =
-    r#"<m-await>{"text":"Macro Agent is thinking…","inline":true}</m-await>"#;
+const THINKING_MESSAGE: &str = r#"<m-await>{"text":"Macro is thinking…","inline":true}</m-await>"#;
 const EMPTY_RESPONSE_FALLBACK: &str = "I wasn't able to come up with a response.";
 const ERROR_FALLBACK: &str = "Sorry — I ran into an error while responding.";
 
@@ -185,7 +184,7 @@ impl SystemBotHandler for MacroAiHandler {
             Ok(_) => EMPTY_RESPONSE_FALLBACK.to_string(),
             Err(err) => {
                 tracing::error!(error=?err, "macro ai responder failed");
-                format!("{ERROR_FALLBACK}\n\n```\n{err:#}\n```")
+                ERROR_FALLBACK.to_string()
             }
         };
 

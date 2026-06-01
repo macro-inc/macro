@@ -1,4 +1,3 @@
-import MacroLogo from '@icon/macro-logo.svg';
 import { ENABLE_PROFILE_PICTURES } from '@core/constant/featureFlags';
 import { isMacroAgentId } from '@core/constant/macroAgent';
 import { staticFileSizedUrl } from '@core/constant/servers';
@@ -10,9 +9,10 @@ import {
   useDisplayName,
   useDisplayNameParts,
 } from '@core/user';
+import MacroLogo from '@icon/macro-logo.svg';
 import Trash from '@phosphor-icons/core/regular/trash.svg?component-solid';
 import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-create-dm';
-import { Avatar, type AvatarSize } from '@ui';
+import { Avatar, type AvatarSize, cn } from '@ui';
 import {
   createMemo,
   createSignal,
@@ -172,8 +172,14 @@ export function UserIcon(props: UserIconProps) {
   return (
     <Switch>
       <Match when={isMacroAgentId(props.id)}>
-        <Avatar size={size()} class={props.class}>
-          <Avatar.Fallback class="bg-accent/10 text-accent">
+        <Avatar
+          size={size()}
+          class={cn(
+            'bg-surface text-accent ring-1 ring-edge-muted',
+            props.class
+          )}
+        >
+          <Avatar.Fallback>
             <MacroLogo class="size-[62%]" />
           </Avatar.Fallback>
         </Avatar>

@@ -34,9 +34,9 @@ pub struct ChannelAgentResponse {
     pub text: String,
 }
 
-const CHANNEL_SYSTEM_PROMPT: &str = "You are Macro Agent, a helpful assistant participating in a Macro channel. \
-You were mentioned in a message and are replying in a thread. The prompt includes recent \
-channel and thread messages for context, labeled by sender. \
+const CHANNEL_SYSTEM_PROMPT: &str = "You are Macro, a helpful assistant participating in a Macro channel. \
+You were mentioned in a message and are replying in a thread. The prompt includes channel \
+messages around the mention for context, labeled by sender. \
 Be concise and directly useful. Use your tools to look things up when helpful. \
 Respond in Markdown.";
 
@@ -85,7 +85,10 @@ pub async fn channel_respond(
             Ok(_) => {}
             Err(err) => {
                 tracing::error!(error=?err, "channel agent stream error");
-                break;
+                return Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "agent stream failed".to_string(),
+                ));
             }
         }
     }

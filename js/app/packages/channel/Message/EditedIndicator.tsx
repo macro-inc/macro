@@ -9,7 +9,7 @@ type EditedIndicatorProps = {
 export function EditedIndicator(props: EditedIndicatorProps) {
   const message = useMessage();
 
-  // Macro Agent edits its own "thinking" message into the answer; that isn't a
+  // Macro edits its own "thinking" message into the answer; that isn't a
   // user edit, so don't surface an "(edited)" marker for bot senders.
   return (
     <Show
