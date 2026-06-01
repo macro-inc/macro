@@ -55,6 +55,8 @@ dependencies = [
  "attachment",
  "futures",
  "macro_user_id",
+ "model-entity",
+ "non_empty",
  "rig-core",
  "schemars 1.2.1",
  "serde",
