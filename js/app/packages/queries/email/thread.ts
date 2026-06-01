@@ -266,7 +266,11 @@ export function useArchiveThreadMutation(
   }));
 }
 
-type SendMessageParams = { message: ApiDraftInput };
+type SendMessageParams = {
+  message: ApiDraftInput;
+  /** Target inbox for a non-primary inbox; sent as the X-Email-Link-Id header. */
+  linkId?: string;
+};
 
 /**
  * Mutation to send an email message.
@@ -279,7 +283,8 @@ export function useSendMessageMutation(
   return useMutation(() => ({
     mutationFn: async (vars: SendMessageParams) =>
       await throwOnErr(
-        async () => await emailClient.sendMessage({ message: vars.message })
+        async () =>
+          await emailClient.sendMessage({ message: vars.message }, vars.linkId)
       ),
     ...withCallbacks<SendMessageResponse, Error, SendMessageParams>(
       {
@@ -344,7 +349,11 @@ function _useScheduleMessageMutation(
   }));
 }
 
-type UnscheduleMessageParams = { draftID: string };
+type UnscheduleMessageParams = {
+  draftID: string;
+  /** Target inbox for a non-primary inbox; sent as the X-Email-Link-Id header. */
+  linkId?: string;
+};
 
 /**
  * Mutation to send an email message.
@@ -356,9 +365,12 @@ export function useUnscheduleMessageMutation(
     mutationFn: async (vars: UnscheduleMessageParams) => {
       await throwOnErr(
         async () =>
-          await emailClient.unscheduleMessage({
-            draftID: vars.draftID,
-          })
+          await emailClient.unscheduleMessage(
+            {
+              draftID: vars.draftID,
+            },
+            vars.linkId
+          )
       );
     },
     ...withCallbacks<void, Error, UnscheduleMessageParams>(

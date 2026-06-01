@@ -68,7 +68,10 @@ import {
   useSaveDraftMutation,
 } from '@queries/email/draft';
 import { emailKeys } from '@queries/email/keys';
-import { useEmailLinksQuery } from '@queries/email/link';
+import {
+  useEmailLinksQuery,
+  useNonPrimaryEmailLinkIdHeader,
+} from '@queries/email/link';
 import {
   useSendMessageMutation,
   useUnscheduleMessageMutation,
@@ -429,6 +432,14 @@ export function BaseInput(props: {
   const blockId = useBlockId();
   const emailLinksQuery = useEmailLinksQuery();
 
+  const toHeaderLinkId = useNonPrimaryEmailLinkIdHeader();
+  // The inbox this input acts in: the open thread's inbox, else the default
+  // inbox for a new message. Mutations send it as X-Email-Link-Id when it's a
+  // non-primary inbox so the draft/send targets the right account.
+  const activeLinkId = () =>
+    ctx.thread()?.link_id ?? emailLinksQuery.data?.links[0]?.id;
+  const headerLinkId = () => toHeaderLinkId(activeLinkId());
+
   const [bodyMacro, setBodyMacro] = createSignal<string>('');
   const [expandedRecipientsRef, setExpandedRecipientsRef] =
     createSignal<HTMLDivElement>();
@@ -691,7 +702,10 @@ export function BaseInput(props: {
     if (!draftToSave) {
       const draftId = savedDraftId();
       if (draftId) {
-        await deleteDraftMutation.mutateAsync({ draftId });
+        await deleteDraftMutation.mutateAsync({
+          draftId,
+          linkId: headerLinkId(),
+        });
         refetchThreadMessages();
       }
       setSavedDraftId(undefined);
@@ -721,6 +735,7 @@ export function BaseInput(props: {
         provider_thread_id: currentThread?.provider_id,
         thread_db_id: currentThread?.db_id,
       },
+      linkId: headerLinkId(),
     });
 
     const draftId = draftResponse.draft.db_id;
@@ -739,6 +754,7 @@ export function BaseInput(props: {
         const uploaded = await uploadAttachmentMutation.mutateAsync({
           draftID: draftId,
           attachments: attachments.map((a) => a.file),
+          linkId: headerLinkId(),
         });
 
         // Assign the attachment ids to attachments for later use
@@ -764,6 +780,7 @@ export function BaseInput(props: {
           attachments: forwardedAttachments.map((a) => ({
             attachmentID: a.attachmentID,
           })),
+          linkId: headerLinkId(),
         });
       }
 
@@ -1007,6 +1024,7 @@ export function BaseInput(props: {
         thread_db_id: currentThread?.db_id,
         to,
       },
+      linkId: toHeaderLinkId(linkId),
     });
 
     // Block any save scheduled by reset side effects (form().reset() callDirty,
@@ -1047,7 +1065,10 @@ export function BaseInput(props: {
     const draftId = savedDraftId();
     try {
       if (draftId) {
-        await deleteDraftMutation.mutateAsync({ draftId });
+        await deleteDraftMutation.mutateAsync({
+          draftId,
+          linkId: headerLinkId(),
+        });
         refetchThreadMessages();
       }
       resetState();
@@ -1246,11 +1267,13 @@ export function BaseInput(props: {
       removeForwardedAttachmentMutation.mutate({
         draftID: currentDraftID,
         attachmentID: attachment.attachmentID,
+        linkId: headerLinkId(),
       });
     } else {
       removeAttachmentMutation.mutate({
         draftID: currentDraftID,
         attachmentID: attachment.attachmentID,
+        linkId: headerLinkId(),
       });
     }
   };
@@ -1272,6 +1295,7 @@ export function BaseInput(props: {
     if (!date && currentSendTime && currentDraft) {
       unscheduleMessageMutation.mutate({
         draftID: currentDraft,
+        linkId: headerLinkId(),
       });
       form().setSendTime(date);
       return;
@@ -1289,15 +1313,21 @@ export function BaseInput(props: {
         return;
       }
 
-      await emailClient.scheduleMessage({
-        draftID,
-        send_time: date.toISOString(),
-      });
+      await emailClient.scheduleMessage(
+        {
+          draftID,
+          send_time: date.toISOString(),
+        },
+        headerLinkId()
+      );
 
       // Mark the thread as done
       const threadID = ctx.thread()?.db_id;
       if (threadID) {
-        await emailClient.flagArchived({ id: threadID, value: true });
+        await emailClient.flagArchived(
+          { id: threadID, value: true },
+          headerLinkId()
+        );
       }
     }
   };
