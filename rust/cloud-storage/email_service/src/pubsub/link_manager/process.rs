@@ -263,6 +263,30 @@ async fn handle_delete(
         tracing::error!(error=?e, link_id=?link.id, "Failed to set deleted_at on email link history");
     }
 
+    // If this was the owner's last inbox, prune any delegation edges pointing at
+    // them so grantees don't retain dangling references. A delegation edge grants
+    // access to all of the owner's inboxes, so only clean up once none remain.
+    // Best-effort: leftover edges are harmless (they resolve to nothing).
+    match email_db_client::links::get::fetch_link_by_macro_id(&ctx.db, link.macro_id.as_ref()).await
+    {
+        Ok(None) => {
+            if let Err(e) = macro_db_client::macro_user_links::delete_edges_for_child(
+                &ctx.db,
+                link.macro_id.as_ref(),
+            )
+            .await
+            {
+                tracing::error!(error=?e, "Failed to prune delegation edges after deleting owner's last inbox");
+            }
+        }
+        Ok(Some(_)) => {
+            tracing::debug!("Owner has remaining inboxes; keeping delegation edges");
+        }
+        Err(e) => {
+            tracing::error!(error=?e, "Failed to check remaining inboxes for delegation edge cleanup");
+        }
+    }
+
     tracing::info!("Successfully deleted link");
 
     Ok(())
