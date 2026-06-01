@@ -35,46 +35,40 @@ pub async fn list_contacts_handler(
     State(ctx): State<ApiContext>,
     user_context: Extension<UserContext>,
 ) -> Result<Response, Response> {
-    let link = email_db_client::links::get::fetch_link_by_macro_id(&ctx.db, &user_context.user_id)
-        .await
-        .map_err(|e| {
-            tracing::error!(error=?e, "unable to fetch links");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    message: "unable to fetch links".into(),
-                }),
-            )
-                .into_response()
-        })?
-        .ok_or_else(|| {
-            (
-                StatusCode::NOT_FOUND,
-                Json(ErrorResponse {
-                    message: "link not found".into(),
-                }),
-            )
-                .into_response()
-        })?;
-
-    let contacts = email_db_client::contacts::get::fetch_contacts_by_link_id(&ctx.db, link.id)
-        .await
-        .map_err(|e| {
-            tracing::error!(error=?e, "unable to fetch contacts");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    message: "unable to fetch contacts".into(),
-                }),
-            )
-                .into_response()
-        })?;
-
-    Ok((
-        StatusCode::OK,
-        Json(ListContactsResponse {
-            contacts: HashMap::from([(link.id, contacts)]),
-        }),
+    let links = email_db_client::links::get::fetch_links_by_fusionauth_user_id(
+        &ctx.db,
+        &user_context.fusion_user_id,
     )
-        .into_response())
+    .await
+    .map_err(|e| {
+        tracing::error!(error=?e, "unable to fetch links");
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                message: "unable to fetch links".into(),
+            }),
+        )
+            .into_response()
+    })?;
+
+    let mut contacts: HashMap<Uuid, Vec<ContactInfoWithInteraction>> =
+        HashMap::with_capacity(links.len());
+    for link in links {
+        let link_contacts =
+            email_db_client::contacts::get::fetch_contacts_by_link_id(&ctx.db, link.id)
+                .await
+                .map_err(|e| {
+                    tracing::error!(error=?e, "unable to fetch contacts");
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(ErrorResponse {
+                            message: "unable to fetch contacts".into(),
+                        }),
+                    )
+                        .into_response()
+                })?;
+        contacts.insert(link.id, link_contacts);
+    }
+
+    Ok((StatusCode::OK, Json(ListContactsResponse { contacts })).into_response())
 }
