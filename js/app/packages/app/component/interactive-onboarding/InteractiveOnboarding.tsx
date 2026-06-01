@@ -311,6 +311,30 @@ function InteractiveOnboardingInner(props: InteractiveOnboardingProps) {
     })
   );
 
+  // Keep the detached `onboarding-shell` scope active as the user moves
+  // between lessons. Advancing resets readyToContinue, which disables the
+  // Continue button that held focus — so focus falls back to <body> and the
+  // active hotkey scope drifts off the shell. That leaves lesson hotkeys like
+  // the `g` then `e` sidebar-nav leader inert until the user clicks into the
+  // demo. Re-assert focus on the shell, but only when it has actually escaped
+  // so we don't steal focus from lessons that focus their own input (e.g. the
+  // markdown-mentions editor).
+  createEffect(
+    on(
+      () => state.currentIndex(),
+      () => {
+        if (isTouch) return;
+        requestAnimationFrame(() => {
+          if (!shellRef) return;
+          const active = document.activeElement;
+          if (!active || !shellRef.contains(active)) {
+            shellRef.focus();
+          }
+        });
+      }
+    )
+  );
+
   createEffect(
     on(
       () => state.isFinished(),
