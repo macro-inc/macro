@@ -31,9 +31,10 @@ pub struct SetCompanyHiddenRequest {
 }
 
 /// Toggle `hidden` on a CRM company. Hiding also disables
-/// `email_sync` and soft-hides every contact under the company; both
-/// flags cascade back on un-hide. Contact rows and contact sources
-/// survive the cycle.
+/// `email_sync` and soft-hides every contact under the company.
+/// Un-hide restores contact visibility only; `email_sync` is left
+/// untouched (the team must re-enable it explicitly). Contact rows
+/// and contact sources survive the cycle.
 #[utoipa::path(
     put,
     path = "/crm/companies/{company_id}/hidden",

@@ -2902,10 +2902,12 @@ export const createCrmCommentResponse = zod
   );
 
 /**
- * @summary List the non-hidden contacts of a CRM company, scoped to the
-requesting user's team. Returns 404 when the company isn't owned by
-the team (so existence doesn't leak across teams); an owned company
-with no visible contacts returns `200 []`.
+ * @summary List the contacts of a CRM company, scoped to the requesting user's
+team. Returns 404 when the company isn't owned by the team (so
+existence doesn't leak across teams). Non-admin viewers also 404 on
+hidden companies and see only non-hidden contacts; admin/owner
+viewers reach hidden companies and see every owned contact
+regardless of `hidden` so they can render the right unhide UI.
  */
 export const listCompanyContactsParams = zod.object({
   company_id: zod.uuid().describe('The CRM company whose contacts to list'),
@@ -2923,6 +2925,11 @@ export const listCompanyContactsResponseItem = zod
     firstInteraction: zod.iso
       .datetime({})
       .describe('Earliest known interaction with this contact.'),
+    hidden: zod
+      .boolean()
+      .describe(
+        'Whether the contact is hidden from CRM listings for the\nrequesting team. Non-admin viewers never see `hidden = true`\nrows (the endpoint filters them out); admin\/owner callers see\nhidden contacts so they can render the right toggle state.'
+      ),
     id: zod.uuid().describe('The id of the contact record.'),
     lastInteraction: zod.iso
       .datetime({})
@@ -2985,9 +2992,10 @@ export const setCompanyHiddenBody = zod
 
 /**
  * @summary Fetch a single CRM contact by id, scoped to the requesting user's
-team. Returns 404 when the contact doesn't exist, isn't owned by the
-team, or is hidden — so existence and hidden-state don't leak across
-teams or to non-admin viewers.
+team. Returns 404 when the contact doesn't exist or isn't owned by
+the team. Non-admin viewers also 404 on hidden contacts or hidden
+parent companies (so existence doesn't leak); admin/owner viewers
+reach every owned contact regardless of `hidden`.
  */
 export const getContactParams = zod.object({
   contact_id: zod.uuid().describe('The CRM contact to fetch'),
@@ -3005,6 +3013,11 @@ export const getContactResponse = zod
     firstInteraction: zod.iso
       .datetime({})
       .describe('Earliest known interaction with this contact.'),
+    hidden: zod
+      .boolean()
+      .describe(
+        'Whether the contact is hidden from CRM listings for the\nrequesting team. Non-admin viewers never see `hidden = true`\nrows (the endpoint filters them out); admin\/owner callers see\nhidden contacts so they can render the right toggle state.'
+      ),
     id: zod.uuid().describe('The id of the contact record.'),
     lastInteraction: zod.iso
       .datetime({})
