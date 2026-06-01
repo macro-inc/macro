@@ -20,6 +20,7 @@ import {
   createMemo,
   createSignal,
   For,
+  type JSX,
   Match,
   Show,
   Switch,
@@ -31,6 +32,10 @@ export interface EntityPropertiesSectionProps {
   entityType: EntityType;
   canEdit: boolean;
   documentName?: string;
+  includeMetadata?: boolean;
+  propertyFilter?: (property: Property) => boolean;
+  getEmptyLabel?: (property: Property) => JSX.Element | undefined;
+  showAddProperty?: boolean;
   defaultPinnedPropertyIds?: () => readonly string[];
   pinnedPropertyIds?: () => string[];
   pinnedPropertyDefinitionOrder?: readonly string[];
@@ -42,18 +47,26 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
   const { properties, isLoading, error, refetch } = useEntityProperties(
     props.entityId,
     props.entityType,
-    false
+    props.includeMetadata ?? false
   );
 
   const filteredPinnedProperties = createMemo(() => {
     const defaultPinnedIds = props.defaultPinnedPropertyIds?.() ?? [];
     const pinnedIds = props.pinnedPropertyIds?.() ?? [];
-    const pinned = properties().filter(
-      (property) =>
-        !property.isMetadata &&
-        (defaultPinnedIds.includes(property.propertyDefinitionId) ||
-          pinnedIds.includes(property.propertyId))
-    );
+    const usesPinnedFilter =
+      props.defaultPinnedPropertyIds !== undefined ||
+      props.pinnedPropertyIds !== undefined;
+    const pinned = properties().filter((property) => {
+      if (props.propertyFilter && !props.propertyFilter(property)) {
+        return false;
+      }
+      if (property.isMetadata) return props.includeMetadata === true;
+      if (!usesPinnedFilter) return true;
+      return (
+        defaultPinnedIds.includes(property.propertyDefinitionId) ||
+        pinnedIds.includes(property.propertyId)
+      );
+    });
 
     return sortPinnedProperties(pinned, props.pinnedPropertyDefinitionOrder);
   });
@@ -151,11 +164,12 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
           </Show>
 
           <Show when={gridPinnedProperties().length > 0}>
-            <SidePanel.Grid class="py-2">
+            <SidePanel.Grid class="auto-rows-[minmax(1.75rem,auto)]">
               <For each={gridPinnedProperties()}>
                 {(property) => (
                   <SidePanelPropertyRow
                     entityId={props.entityId}
+                    getEmptyLabel={props.getEmptyLabel}
                     property={property}
                   />
                 )}
@@ -176,8 +190,10 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
             </div>
           </Show>
 
-          <Show when={props.canEdit}>
-            <AddPinnedPropertyButton />
+          <Show when={props.canEdit && props.showAddProperty !== false}>
+            <div class="mt-2">
+              <AddPinnedPropertyButton />
+            </div>
           </Show>
           <Modals />
         </PropertiesProvider>
@@ -225,7 +241,11 @@ function isNonUserMultiEntityProperty(property: Property): boolean {
   );
 }
 
-function SidePanelPropertyRow(props: { entityId: string; property: Property }) {
+function SidePanelPropertyRow(props: {
+  entityId: string;
+  getEmptyLabel?: (property: Property) => JSX.Element | undefined;
+  property: Property;
+}) {
   const ctx = usePropertiesContext();
   const t = () => props.property.valueType;
   const isMulti = () => !!props.property.isMultiSelect;
@@ -235,23 +255,40 @@ function SidePanelPropertyRow(props: { entityId: string; property: Property }) {
     (t() === 'SELECT_STRING' || t() === 'SELECT_NUMBER' || t() === 'ENTITY');
   const isInputType = () =>
     t() === 'STRING' || t() === 'NUMBER' || t() === 'LINK' || t() === 'BOOLEAN';
+  const isMultilineRow = () => t() === 'STRING' && hasValue(props.property);
 
   return (
     <>
       <span
-        class="text-ink-muted truncate self-center"
+        class={cn('text-ink-muted truncate', {
+          'self-start pt-[0.3125rem]': isMultilineRow(),
+          'self-center': !isMultilineRow(),
+        })}
         title={props.property.displayName}
       >
         {props.property.displayName}
       </span>
-      <div class="min-w-0 self-center">
+      <div
+        class={cn('min-w-0 max-w-full overflow-hidden', {
+          'self-start py-0.5': isMultilineRow(),
+          'self-center': !isMultilineRow(),
+        })}
+      >
         <PropertyNS.Root
+          class="min-w-0 max-w-full overflow-hidden"
           property={props.property}
           canEdit={ctx.canEdit}
           onSave={ctx.saveHandler.saveProperty}
           onRefresh={ctx.onRefresh}
         >
-          <Switch fallback={<SinglePill property={props.property} />}>
+          <Switch
+            fallback={
+              <SinglePill
+                getEmptyLabel={props.getEmptyLabel}
+                property={props.property}
+              />
+            }
+          >
             <Match when={isInputType()}>
               <InputValue />
             </Match>
@@ -271,7 +308,10 @@ function SidePanelPropertyRow(props: { entityId: string; property: Property }) {
   );
 }
 
-function SinglePill(props: { property: Property }) {
+function SinglePill(props: {
+  getEmptyLabel?: (property: Property) => JSX.Element | undefined;
+  property: Property;
+}) {
   const ctx = usePropertiesContext();
   const isReadOnly = () => !ctx.canEdit || props.property.isMetadata;
   const empty = () => !hasValue(props.property);
@@ -293,11 +333,18 @@ function SinglePill(props: { property: Property }) {
   return (
     <PropertyNS.Tooltip property={props.property}>
       <PropertyNS.EditTrigger
-        class={cn(SidePanel.pillClass, 'w-fit', {
+        class={cn(SidePanel.pillClass, 'w-fit overflow-hidden', {
           'hover:bg-hover': !isReadOnly(),
         })}
       >
-        <Show when={!empty()} fallback={<SidePanel.EmptyPill />}>
+        <Show
+          when={!empty()}
+          fallback={
+            <SidePanel.EmptyPill
+              label={props.getEmptyLabel?.(props.property)}
+            />
+          }
+        >
           <Show
             when={isNonUserEntity() && entity()}
             fallback={
@@ -306,17 +353,19 @@ function SinglePill(props: { property: Property }) {
                   property={props.property}
                   class="size-3 shrink-0"
                 />
-                <PropertyNS.Text property={props.property} />
+                <PropertyNS.Text property={props.property} class="min-w-0" />
               </>
             }
           >
             <span class="shrink-0 flex items-center">
               {entityDisplay.icon()}
             </span>
-            <span class="truncate">{entityDisplay.name()}</span>
+            <span class="min-w-0 truncate">{entityDisplay.name()}</span>
           </Show>
         </Show>
-        <PropertyNS.Caret />
+        <Show when={!isReadOnly()}>
+          <PropertyNS.Caret />
+        </Show>
       </PropertyNS.EditTrigger>
     </PropertyNS.Tooltip>
   );
@@ -336,7 +385,9 @@ function UserStackPill(props: { property: Property }) {
       >
         <Show when={!empty()} fallback={<SidePanel.EmptyPill />}>
           <PropertyNS.UserStack property={props.property} maxUsers={3} />
-          <PropertyNS.Text property={props.property} />
+          <span class="min-w-0 truncate">
+            <PropertyNS.Text property={props.property} />
+          </span>
         </Show>
         <PropertyNS.Caret />
       </PropertyNS.EditTrigger>
@@ -579,11 +630,11 @@ function NonUserEntityChip(props: {
   return (
     <div
       ref={containerRef}
-      class="inline-flex shrink-0 border h-7 items-stretch border-edge-muted rounded-md text-ink overflow-clip"
+      class="inline-flex min-w-0 max-w-full border h-7 items-stretch border-edge-muted rounded-md text-ink overflow-clip"
     >
       <button
         type="button"
-        class="flex min-w-0 max-w-[20ch] items-center gap-1.5 px-2 text-left"
+        class="flex min-w-0 max-w-full items-center gap-1.5 px-2 text-left"
         onClick={openEditor}
         disabled={!props.canEdit}
       >
@@ -611,7 +662,7 @@ function NonUserEntityChip(props: {
 
 function InputValue() {
   return (
-    <div class="min-w-0 w-full">
+    <div class="min-w-0 max-w-full overflow-hidden">
       <PropertyNS.Display />
     </div>
   );
