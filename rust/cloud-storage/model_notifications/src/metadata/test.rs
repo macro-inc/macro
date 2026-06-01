@@ -4,6 +4,140 @@ fn uid(value: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::parse_from_str(value).unwrap().into_owned()
 }
 
+fn utc_datetime(value: &str) -> DateTime<Utc> {
+    DateTime::parse_from_rfc3339(value)
+        .unwrap()
+        .with_timezone(&Utc)
+}
+
+fn github_pr_event() -> GithubPrEvent {
+    GithubPrEvent {
+        foreign_entity_id: Uuid::parse_str("11111111-1111-4111-8111-111111111111").unwrap(),
+        github_key: "macro/app/pull/42".to_string(),
+        owner: "macro".to_string(),
+        repo: "app".to_string(),
+        number: 42,
+        url: "https://github.com/macro/app/pull/42".to_string(),
+        display_name: "macro/app#42".to_string(),
+        title: "Add GitHub PR notifications".to_string(),
+        status: GithubPrEventStatus::Merged,
+        action: GithubPrEventAction::Closed,
+        previous_status: Some(GithubPrEventStatus::Open),
+        sender_github_login: Some("octocat".to_string()),
+        sender_github_user_id: Some("12345".to_string()),
+        sender_github_avatar_url: Some(
+            "https://avatars.githubusercontent.com/u/12345?v=4".to_string(),
+        ),
+        head_branch: Some("feature/github-pr-notifications".to_string()),
+        base_branch: Some("main".to_string()),
+        merged_at: Some(utc_datetime("2026-05-25T18:54:21Z")),
+    }
+}
+
+#[test]
+fn github_pr_event_serializes_with_camel_case_fields_and_lowercase_enums() {
+    let event = github_pr_event();
+
+    let value = serde_json::to_value(&event).unwrap();
+
+    assert_eq!(
+        value,
+        serde_json::json!({
+            "foreignEntityId": "11111111-1111-4111-8111-111111111111",
+            "githubKey": "macro/app/pull/42",
+            "owner": "macro",
+            "repo": "app",
+            "number": 42,
+            "url": "https://github.com/macro/app/pull/42",
+            "displayName": "macro/app#42",
+            "title": "Add GitHub PR notifications",
+            "status": "merged",
+            "action": "closed",
+            "previousStatus": "open",
+            "senderGithubLogin": "octocat",
+            "senderGithubUserId": "12345",
+            "senderGithubAvatarUrl": "https://avatars.githubusercontent.com/u/12345?v=4",
+            "headBranch": "feature/github-pr-notifications",
+            "baseBranch": "main",
+            "mergedAt": "2026-05-25T18:54:21Z"
+        })
+    );
+}
+
+#[test]
+fn github_pr_event_tagged_content_serializes_with_type_name() {
+    let event = github_pr_event();
+    let foreign_entity_id = event.foreign_entity_id.to_string();
+
+    let value =
+        serde_json::to_value(notification::domain::models::TaggedContent::new(event)).unwrap();
+
+    assert_eq!(value["tag"], "github_pr_event");
+    assert_eq!(
+        value["content"]["foreignEntityId"],
+        serde_json::json!(foreign_entity_id)
+    );
+}
+
+#[test]
+fn github_pr_event_formats_title_and_body() {
+    let event = github_pr_event();
+
+    let title = event
+        .format_title(Some(uid("macro|pr.sender@macro.com")))
+        .unwrap();
+    let body = event.format_body(None).unwrap();
+
+    assert_eq!(title, "pr.sender merged a pull request");
+    assert_eq!(body, "macro/app#42: Add GitHub PR notifications");
+}
+
+#[test]
+fn github_pr_event_title_falls_back_to_display_name() {
+    assert_eq!(
+        GithubPrEvent::title_or_display_name(None, "macro/app#42"),
+        "macro/app#42"
+    );
+    assert_eq!(
+        GithubPrEvent::title_or_display_name(Some(String::new()), "macro/app#42"),
+        "macro/app#42"
+    );
+    assert_eq!(
+        GithubPrEvent::title_or_display_name(
+            Some("Add GitHub PR notifications".to_string()),
+            "macro/app#42"
+        ),
+        "Add GitHub PR notifications"
+    );
+
+    let mut event = github_pr_event();
+    event.title = GithubPrEvent::title_or_display_name(None, &event.display_name);
+
+    assert_eq!(event.format_body(None).unwrap(), "macro/app#42");
+}
+
+#[test]
+fn github_pr_event_uses_foreign_entity_for_collapse_key_and_apns() {
+    let event = github_pr_event();
+    let entity = EntityType::ForeignEntity.with_entity_string(event.foreign_entity_id.to_string());
+    let entity_type: &'static str = EntityType::ForeignEntity.into();
+    let expected_collapse_key = NotifCollapseKey::new(entity_type)
+        .append(&event.foreign_entity_id.to_string())
+        .into_hashed()
+        .into_inner();
+
+    let collapse_key = event.collapse_key(&entity).into_hashed().into_inner();
+    let apns = event.as_apns(None, &entity, Uuid::nil()).unwrap();
+
+    assert_eq!(collapse_key, expected_collapse_key);
+    assert_eq!(
+        apns.push_notification_data
+            .sender_profile_picture_url
+            .as_deref(),
+        Some("https://avatars.githubusercontent.com/u/12345?v=4")
+    );
+}
+
 #[test]
 fn channel_reply_title_uses_reply_sender_from_metadata() {
     let notification = ChannelReplyMetadata {

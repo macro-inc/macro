@@ -5,6 +5,7 @@ mod test;
 
 use std::collections::HashSet;
 
+use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
 
 use crate::domain::{
@@ -191,6 +192,40 @@ impl GithubSyncRepo for PgGithubSyncRepo {
         .await?;
 
         Ok(team_ids)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_team_member_ids(
+        &self,
+        team_id: uuid::Uuid,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, Self::Err> {
+        let user_ids: Vec<String> = sqlx::query_scalar!(
+            r#"
+            SELECT user_id
+            FROM team_user
+            WHERE team_id = $1
+            ORDER BY user_id
+            "#,
+            team_id,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(user_ids
+            .into_iter()
+            .filter_map(|user_id| match MacroUserIdStr::try_from(user_id.clone()) {
+                Ok(user_id) => Some(user_id),
+                Err(error) => {
+                    tracing::warn!(
+                        team_id=%team_id,
+                        user_id,
+                        error=?error,
+                        "team_user.user_id is not a Macro user ID"
+                    );
+                    None
+                }
+            })
+            .collect())
     }
 
     #[tracing::instrument(skip(self), err)]

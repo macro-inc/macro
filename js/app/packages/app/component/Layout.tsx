@@ -90,7 +90,6 @@ function LayoutInner(props: RouteSectionProps) {
       isAuthenticated() === true &&
       !AUTH_URLS.includes(location.pathname)
   );
-
   useAppSquishHandlers();
 
   // save last_path to cookie

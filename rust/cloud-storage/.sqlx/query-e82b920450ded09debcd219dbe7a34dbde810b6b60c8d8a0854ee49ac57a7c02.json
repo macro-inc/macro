@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM macro_user_links\n            WHERE child_macro_id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e82b920450ded09debcd219dbe7a34dbde810b6b60c8d8a0854ee49ac57a7c02"
+}

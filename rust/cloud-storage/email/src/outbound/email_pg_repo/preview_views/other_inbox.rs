@@ -9,7 +9,7 @@ use uuid::Uuid;
 #[tracing::instrument(skip(pool), err)]
 pub(crate) async fn other_inbox_preview_cursor(
     pool: &PgPool,
-    link_id: &Uuid,
+    link_ids: &[Uuid],
     limit: u32,
     query: &Query<Uuid, SimpleSortMethod, ()>,
 ) -> Result<Vec<ThreadPreviewCursorDbRow>, sqlx::Error> {
@@ -69,7 +69,7 @@ pub(crate) async fn other_inbox_preview_cursor(
             FROM email_threads t
             LEFT JOIN email_user_history uh ON uh.thread_id = t.id AND uh.link_id = t.link_id
             WHERE
-                t.link_id = $1
+                t.link_id = ANY($1)
               AND t.latest_non_spam_message_ts IS NOT NULL
               -- Inclusion Criteria: Must have a category label.
               AND EXISTS (
@@ -116,7 +116,7 @@ pub(crate) async fn other_inbox_preview_cursor(
         JOIN email_links el ON t.link_id = el.id
         ORDER BY t.effective_ts DESC, t.updated_at DESC
         "#,
-        link_id,            // $1
+        link_ids,           // $1
         query_limit,              // $2
         cursor_timestamp,   // $3
         cursor_id,          // $4

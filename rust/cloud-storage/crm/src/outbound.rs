@@ -1,3 +1,5 @@
+/// Apollo.io-backed implementation of the company metadata resolver
+pub mod apollo_resolver;
 /// Postgres implementation of the companies repository
 pub mod companies_repo;
 /// Resolver stub for binaries that don't populate the CRM

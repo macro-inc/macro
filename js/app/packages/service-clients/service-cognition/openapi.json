@@ -1679,7 +1679,7 @@
       },
       "ChannelType": {
         "type": "string",
-        "enum": ["public", "organization", "private", "direct_message", "team"]
+        "enum": ["public", "private", "direct_message", "team"]
       },
       "Chat": {
         "type": "object",

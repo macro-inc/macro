@@ -1,5 +1,6 @@
 use semver::Version;
 use tauri::{Manager, Runtime};
+use tauri_plugin_device_info::DeviceInfoExt;
 
 use crate::domain::{
     models::{AppInfo, Arch, Target},
@@ -61,6 +62,15 @@ impl<R: Runtime> SystemQuery for SystemInfo<R> {
             arch: self.get_arch(),
             target: self.get_target(),
         })
+    }
+
+    async fn get_network_type(&self) -> Result<Option<String>, rootcause::Report> {
+        let network_info = self
+            .app_handle
+            .device_info()
+            .get_network_info()
+            .map_err(|e| rootcause::report!("Failed to read network info: {e}"))?;
+        Ok(network_info.network_type)
     }
 
     async fn get_update_dir(&self) -> Result<std::path::PathBuf, std::io::Error> {

@@ -6417,6 +6417,16 @@
               }
             }
           },
+          "403": {
+            "description": "CRM-scoped queries require team membership, or requesting hidden CRM companies requires admin/owner team role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "500": {
             "description": "",
             "content": {
@@ -6461,6 +6471,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SoupPage"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CRM-scoped queries require team membership, or requesting hidden CRM companies requires admin/owner team role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -6511,6 +6531,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SoupPage"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CRM-scoped queries require team membership, or requesting hidden CRM companies requires admin/owner team role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -9995,7 +10025,7 @@
       "ChannelType": {
         "type": "string",
         "description": "Type of channel.",
-        "enum": ["public", "organization", "private", "direct_message", "team"]
+        "enum": ["public", "private", "direct_message", "team"]
       },
       "ChannelWithParticipants": {
         "type": "object",
@@ -10833,6 +10863,10 @@
               "type": "string"
             },
             "description": "CRM company ids to filter by. Examples: ['11111111-...']. Empty to\ninclude all of the team's visible CRM companies."
+          },
+          "hidden": {
+            "type": ["boolean", "null"],
+            "description": "Optional `crm_companies.hidden` filter. `None` = visible only\n(default for back-compat with non-admin callers). `Some(false)` =\nvisible only (explicit). `Some(true)` = hidden only — requires\nadmin/owner team role; enforced upstream in soup's axum router."
           }
         }
       },
@@ -12027,6 +12061,13 @@
               "type": "string"
             },
             "description": "Only include emails that have at least one of these labels. Supports both Gmail system labels (e.g. \"INBOX\", \"CATEGORY_PROMOTIONS\") and user-created labels (e.g. \"github\"). Empty to not filter by included labels.\nNote: SPAM and TRASH emails are not indexed in OpenSearch, so they will never appear in results regardless of this filter."
+          },
+          "link_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Restrict to specific inboxes by email_links.id. Empty means \"any inbox the\ncaller can access\" (soup expands to the full set at the router edge)."
           },
           "notification_filters": {
             "$ref": "#/components/schemas/NotificationFilters",

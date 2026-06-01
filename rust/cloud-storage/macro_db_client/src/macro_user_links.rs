@@ -52,6 +52,53 @@ pub async fn delete_edge(
     Ok(())
 }
 
+/// Removes every edge granting access to `child_macro_id`'s inboxes. Used when a
+/// macro user's last inbox is torn down so dangling delegation edges don't linger.
+/// Returns the number of edges removed.
+#[tracing::instrument(skip(db), err)]
+pub async fn delete_edges_for_child(
+    db: &Pool<Postgres>,
+    child_macro_id: &str,
+) -> anyhow::Result<u64> {
+    let result = sqlx::query!(
+        r#"
+            DELETE FROM macro_user_links
+            WHERE child_macro_id = $1
+        "#,
+        child_macro_id,
+    )
+    .execute(db)
+    .await?;
+
+    Ok(result.rows_affected())
+}
+
+/// Returns whether the edge `(primary, child)` exists. Used to authorize a
+/// primary macro user acting on an inbox delegated to them.
+#[tracing::instrument(skip(db), err)]
+pub async fn edge_exists(
+    db: &Pool<Postgres>,
+    primary_macro_id: &str,
+    child_macro_id: &str,
+) -> anyhow::Result<bool> {
+    let exists = sqlx::query_scalar!(
+        r#"
+            SELECT EXISTS(
+                SELECT 1
+                FROM macro_user_links
+                WHERE primary_macro_id = $1
+                  AND child_macro_id = $2
+            ) AS "exists!"
+        "#,
+        primary_macro_id,
+        child_macro_id,
+    )
+    .fetch_one(db)
+    .await?;
+
+    Ok(exists)
+}
+
 /// Returns the `child_macro_id`s the given primary delegates from.
 /// Used by email-service to union linked inboxes with the user's own.
 #[tracing::instrument(skip(db), err)]

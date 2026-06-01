@@ -34,6 +34,7 @@ import { useUpsertToHistoryMutation } from '@queries/history/history';
 import { refetchSoupEntity } from '@queries/soup/cache';
 import { propertiesServiceClient } from '@service-properties/client';
 import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
+import type { TaskSimilarityResult } from '@service-storage/client';
 import { debounce } from '@solid-primitives/scheduled';
 import { useQuery } from '@tanstack/solid-query';
 import { Button, Hotkey, Scroll, ToggleSwitch } from '@ui';
@@ -55,6 +56,7 @@ import {
   updateDraftTimestamp,
 } from '../util/taskComposerStorage';
 import { InlinePropertyValue } from './InlinePropertyValue';
+import { SimilarTasksSection } from './TaskDuplicatesPill';
 
 // Show these props in the composer (Linear-style left-to-right order).
 const COMPOSER_PROPERTIES = [
@@ -222,6 +224,7 @@ export function ComposeTask(props: ComposeTaskProps) {
           content: draft.content,
           editorState: draft.editorState,
           propertyValues: draft.propertyValues,
+          similarTasks: draft.similarTasks ?? [],
           isDraftLoaded: true,
         };
       }
@@ -231,6 +234,7 @@ export function ComposeTask(props: ComposeTaskProps) {
       content: props.initialContent ?? '',
       editorState: undefined,
       propertyValues: getDefaultPropertyValues(),
+      similarTasks: [] as TaskSimilarityResult[],
       isDraftLoaded: false,
     };
   };
@@ -250,6 +254,9 @@ export function ComposeTask(props: ComposeTaskProps) {
   const [createMore, setCreateMore] = createSignal(false);
   const [errorMessage, setErrorMessage] = createSignal<string>('');
   const [isCreating, setIsCreating] = createSignal(false);
+  const [similarTasks, setSimilarTasks] = createSignal<TaskSimilarityResult[]>(
+    initialState.similarTasks
+  );
   let attachInputRef: HTMLInputElement | undefined;
 
   const handleAttachFiles = async (event: Event) => {
@@ -283,6 +290,7 @@ export function ComposeTask(props: ComposeTaskProps) {
     // so without this the draft only saved when title/content changed.
     JSON.stringify(propertyValues);
     const currentProperties = structuredClone(unwrap(propertyValues));
+    const currentSimilarTasks = similarTasks();
 
     if (hasInitializedFromDraft) {
       hasInitializedFromDraft = false;
@@ -294,6 +302,7 @@ export function ComposeTask(props: ComposeTaskProps) {
       content: currentContent,
       editorState: bodyEditor()?.getEditorState().toJSON(),
       propertyValues: currentProperties,
+      similarTasks: currentSimilarTasks,
     });
   });
 
@@ -575,6 +584,17 @@ export function ComposeTask(props: ComposeTaskProps) {
     props.onClose?.();
   };
 
+  const handleOpenSimilarTask = (taskId: string) => {
+    // Closing snapshots the draft (incl. these results); open the existing task
+    // in a new split so the composer's work isn't lost.
+    splitPanel.handle.close();
+    props.onClose?.();
+    openWithSplit(
+      { type: 'task', id: taskId },
+      { referredFrom: null, preferNewSplit: true }
+    );
+  };
+
   const handleClearDraft = () => {
     clearTaskComposerDraft();
     setTitle('');
@@ -846,6 +866,14 @@ export function ComposeTask(props: ComposeTaskProps) {
           </Button>
         </div>
       </div>
+
+      <SimilarTasksSection
+        title={title}
+        content={content}
+        initialResults={initialState.similarTasks}
+        onResults={setSimilarTasks}
+        onOpenTask={handleOpenSimilarTask}
+      />
     </div>
   );
 }

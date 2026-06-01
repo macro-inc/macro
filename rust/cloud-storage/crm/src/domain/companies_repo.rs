@@ -299,14 +299,18 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
     /// Lists a team's CRM companies for the soup feed, hydrated with
     /// domains and primary-domain directory metadata. Honors the
     /// team-level killswitch (missing or `crm_enabled = false` →
-    /// empty) and excludes `hidden = true` rows. Empty `company_ids`
-    /// = all non-hidden companies; non-empty = whitelist. Both sort
-    /// orders tiebreak on `id DESC`. `cursor` seeks strictly past the
-    /// previous soup page's last row (`None` = first page).
+    /// empty). `hidden = None` or `Some(false)` returns visible
+    /// companies; `Some(true)` returns hidden companies — the caller
+    /// is responsible for enforcing admin/owner role before reaching
+    /// this method (soup's axum router does this). Empty `company_ids`
+    /// = all rows matching the `hidden` filter; non-empty = whitelist.
+    /// `cursor` seeks strictly past the previous soup page's last row
+    /// (`None` = first page). Both sort orders tiebreak on `id DESC`.
     fn list_companies_for_soup(
         &self,
         team_id: &uuid::Uuid,
         company_ids: &[uuid::Uuid],
+        hidden: Option<bool>,
         sort: CrmCompanyListSort,
         cursor: Option<CrmCompanySoupCursor>,
         limit: i64,

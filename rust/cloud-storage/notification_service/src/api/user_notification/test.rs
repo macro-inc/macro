@@ -3,7 +3,7 @@ use chrono::Utc;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
-use model_notifications::ChannelMentionMetadata;
+use model_notifications::{ChannelMentionMetadata, GithubPrEventAction, GithubPrEventStatus};
 use notification::domain::models::UserNotificationRow;
 
 /// Build a [`UserNotificationRow<serde_json::Value>`] with the given event type
@@ -163,6 +163,47 @@ fn to_typed_row_task_assigned() {
         typed.notification_metadata,
         NotifEvent::TaskAssigned(_)
     ));
+}
+
+#[test]
+fn to_typed_row_github_pr_event() {
+    let foreign_entity_id = uuid::Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000")
+        .expect("valid foreign entity id");
+    let metadata = serde_json::json!({
+        "foreignEntityId": foreign_entity_id,
+        "githubKey": "macro/repo/pull/42",
+        "owner": "macro",
+        "repo": "repo",
+        "number": 42,
+        "url": "https://github.com/macro/repo/pull/42",
+        "displayName": "macro/repo#42",
+        "title": "Add GitHub PR notifications",
+        "status": "merged",
+        "action": "closed",
+        "previousStatus": "open",
+        "senderGithubLogin": "octocat",
+        "senderGithubUserId": "12345",
+        "senderGithubAvatarUrl": "https://avatars.githubusercontent.com/u/12345?v=4",
+        "headBranch": "feature/github-pr-notifications",
+        "baseBranch": "main",
+        "mergedAt": "2026-06-01T16:00:00Z"
+    });
+
+    let mut row = make_row("github_pr_event", metadata);
+    row.entity = EntityType::ForeignEntity.with_entity_string(foreign_entity_id.to_string());
+
+    let typed = to_typed_row(row).expect("should deserialize github_pr_event");
+
+    match typed.notification_metadata {
+        NotifEvent::GithubPrEvent(event) => {
+            assert_eq!(event.foreign_entity_id, foreign_entity_id);
+            assert_eq!(event.github_key, "macro/repo/pull/42");
+            assert_eq!(event.status, GithubPrEventStatus::Merged);
+            assert_eq!(event.action, GithubPrEventAction::Closed);
+            assert_eq!(event.previous_status, Some(GithubPrEventStatus::Open));
+        }
+        other => panic!("expected GithubPrEvent variant, got {other:?}"),
+    }
 }
 
 #[test]

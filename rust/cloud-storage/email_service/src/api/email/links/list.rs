@@ -82,6 +82,17 @@ pub async fn list_links_handler(
                 .await
                 .map_err(ListLinksError::DatabaseError)?;
 
+            let latest_job =
+                email_db_client::backfill::job::get::get_latest_backfill_job_by_link_id(
+                    &ctx.db, link.id,
+                )
+                .await
+                .map_err(ListLinksError::DatabaseError)?;
+            let sync_status = api::link::SyncStatus::derive(
+                link.is_sync_active,
+                latest_job.map(|job| job.status),
+            );
+
             let signature = if query_params.include_signature {
                 let access_token = fetch_gmail_access_token_from_link(
                     &link,
@@ -103,6 +114,7 @@ pub async fn list_links_handler(
                 link,
                 signature,
                 api::settings::Settings::from(settings),
+                sync_status,
             ))
         }
     });

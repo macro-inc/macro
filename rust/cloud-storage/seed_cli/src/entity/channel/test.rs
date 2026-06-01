@@ -33,7 +33,6 @@ fn parse_channel_create_minimal() {
                 assert!(matches!(create.channel_type, CliChannelType::Public));
                 assert!(create.channel_name.is_none());
                 assert!(create.channel_members.is_empty());
-                assert!(create.org_id.is_none());
             }
             other => panic!("expected Create, got {other:?}"),
         },
@@ -52,11 +51,9 @@ fn parse_channel_create_full() {
         "--channel-owner",
         "macro|alice@example.com",
         "--channel-type",
-        "organization",
+        "private",
         "--channel-members",
         "macro|bob@example.com,macro|charlie@example.com",
-        "--org-id",
-        "42",
     ])
     .unwrap();
 
@@ -65,12 +62,11 @@ fn parse_channel_create_full() {
             ChannelCommand::Create(create) => {
                 assert_eq!(create.channel_name.as_deref(), Some("general"));
                 assert_eq!(create.channel_owner, "macro|alice@example.com");
-                assert!(matches!(create.channel_type, CliChannelType::Organization));
+                assert!(matches!(create.channel_type, CliChannelType::Private));
                 assert_eq!(
                     create.channel_members,
                     vec!["macro|bob@example.com", "macro|charlie@example.com"]
                 );
-                assert_eq!(create.org_id, Some(42));
             }
             other => panic!("expected Create, got {other:?}"),
         },
@@ -130,6 +126,36 @@ fn parse_channel_create_invalid_type_fails() {
         "macro|alice@example.com",
         "--channel-type",
         "bogus",
+    ]);
+    assert!(result.is_err());
+}
+
+#[test]
+fn parse_channel_create_organization_type_fails() {
+    let result = Cli::try_parse_from([
+        "seed_cli",
+        "channel",
+        "create",
+        "--channel-owner",
+        "macro|alice@example.com",
+        "--channel-type",
+        "organization",
+    ]);
+    assert!(result.is_err());
+}
+
+#[test]
+fn parse_channel_create_org_id_argument_fails() {
+    let result = Cli::try_parse_from([
+        "seed_cli",
+        "channel",
+        "create",
+        "--channel-owner",
+        "macro|alice@example.com",
+        "--channel-type",
+        "private",
+        "--org-id",
+        "42",
     ]);
     assert!(result.is_err());
 }
@@ -200,7 +226,6 @@ async fn create_channel_success() {
             channel_owner: "macro|alice@example.com".to_string(),
             channel_type: CliChannelType::Public,
             channel_members: vec!["macro|bob@example.com".to_string()],
-            org_id: None,
         }),
     };
 
@@ -223,7 +248,6 @@ async fn create_channel_without_name() {
             channel_owner: "macro|alice@example.com".to_string(),
             channel_type: CliChannelType::DirectMessage,
             channel_members: vec!["macro|bob@example.com".to_string()],
-            org_id: None,
         }),
     };
 
@@ -245,7 +269,6 @@ async fn create_channel_db_failure_propagates_error() {
             channel_owner: "macro|alice@example.com".to_string(),
             channel_type: CliChannelType::Public,
             channel_members: vec![],
-            org_id: None,
         }),
     };
 

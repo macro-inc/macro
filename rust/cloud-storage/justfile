@@ -99,6 +99,7 @@ setup_test_envs:
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./entity_access_db_utils/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./mcp_client/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./document_storage_service/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./task_dedup/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crm/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./bots/.env
 

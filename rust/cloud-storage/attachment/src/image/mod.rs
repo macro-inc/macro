@@ -2,7 +2,7 @@
 
 mod base_64_image;
 
-pub use base_64_image::{Base64Image, ImageFormat};
+pub use base_64_image::Base64Image;
 /// An image that can be included in an attachment.
 #[derive(PartialEq, Eq, Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub enum ImageData {

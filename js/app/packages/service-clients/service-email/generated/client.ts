@@ -40,6 +40,7 @@ import type {
   PatchSettingsRequest,
   PatchSettingsResponse,
   PreviewsInboxCursorParams,
+  ResyncResponse,
   SendMessageRequest,
   SendMessageResponse,
   UnblockSenderRequest,
@@ -1751,6 +1752,145 @@ export const listLinks = async (
     status: res.status,
     headers: res.headers,
   } as listLinksResponse;
+};
+
+/**
+ * For an inbox the caller owns this enqueues a full cascade teardown
+(`LinkManagerMessage::DeleteLink`). For an inbox reached via delegation it
+only drops the `macro_user_links` edge, leaving the owner's data intact.
+ * @summary Removes a linked inbox.
+ */
+export type deleteLinkResponse204 = {
+  data: EmptyResponse;
+  status: 204;
+};
+
+export type deleteLinkResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type deleteLinkResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type deleteLinkResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type deleteLinkResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type deleteLinkResponseSuccess = deleteLinkResponse204 & {
+  headers: Headers;
+};
+export type deleteLinkResponseError = (
+  | deleteLinkResponse401
+  | deleteLinkResponse403
+  | deleteLinkResponse404
+  | deleteLinkResponse500
+) & {
+  headers: Headers;
+};
+
+export type deleteLinkResponse =
+  | deleteLinkResponseSuccess
+  | deleteLinkResponseError;
+
+export const getDeleteLinkUrl = (linkId: string) => {
+  return `/email/links/${linkId}`;
+};
+
+export const deleteLink = async (
+  linkId: string,
+  options?: RequestInit
+): Promise<deleteLinkResponse> => {
+  const res = await fetch(getDeleteLinkUrl(linkId), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: deleteLinkResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as deleteLinkResponse;
+};
+
+/**
+ * Idempotent: if a backfill is already `Init`/`InProgress` for the inbox this is
+a no-op and returns that job.
+ * @summary Re-syncs a linked inbox by enqueuing a fresh backfill.
+ */
+export type resyncLinkResponse200 = {
+  data: ResyncResponse;
+  status: 200;
+};
+
+export type resyncLinkResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type resyncLinkResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type resyncLinkResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type resyncLinkResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type resyncLinkResponseSuccess = resyncLinkResponse200 & {
+  headers: Headers;
+};
+export type resyncLinkResponseError = (
+  | resyncLinkResponse401
+  | resyncLinkResponse403
+  | resyncLinkResponse404
+  | resyncLinkResponse500
+) & {
+  headers: Headers;
+};
+
+export type resyncLinkResponse =
+  | resyncLinkResponseSuccess
+  | resyncLinkResponseError;
+
+export const getResyncLinkUrl = (linkId: string) => {
+  return `/email/links/${linkId}/resync`;
+};
+
+export const resyncLink = async (
+  linkId: string,
+  options?: RequestInit
+): Promise<resyncLinkResponse> => {
+  const res = await fetch(getResyncLinkUrl(linkId), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: resyncLinkResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as resyncLinkResponse;
 };
 
 /**

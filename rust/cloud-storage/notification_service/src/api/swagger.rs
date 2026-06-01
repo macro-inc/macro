@@ -8,7 +8,8 @@ use model::{
 use model_notifications::{
     ChannelInviteMetadata, ChannelMentionMetadata, ChannelMessageSendMetadata,
     ChannelReplyMetadata, CommentedOnDocumentMetadata, CommonChannelMetadata, DeviceType,
-    DocumentMentionMetadata, InviteToTeamMetadata, ItemSharedMetadata, NewEmailMetadata,
+    DocumentMentionMetadata, GithubPrEvent, GithubPrEventAction, GithubPrEventStatus,
+    InviteToTeamMetadata, ItemSharedMetadata, NewEmailMetadata,
     RepliedToDocumentCommentThreadMetadata, UserUnsubscribe,
 };
 use utoipa::OpenApi;
@@ -81,6 +82,9 @@ use crate::{
                         DocumentMentionMetadata,
                         RepliedToDocumentCommentThreadMetadata,
                         CommentedOnDocumentMetadata,
+                        GithubPrEvent,
+                        GithubPrEventStatus,
+                        GithubPrEventAction,
 
                         // v2 typed notifications
                         model_notifications::NotifEvent,

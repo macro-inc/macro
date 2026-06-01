@@ -13,5 +13,6 @@ export const NOTIFICATION_LABEL_BY_TYPE: Record<NotificationType, string> = {
   invite_to_team: 'INVITE',
   task_assigned: 'ASSIGNED',
   ai_response: 'AI',
+  github_pr_event: 'GITHUB',
   'call-started': 'CALL',
 } as const;

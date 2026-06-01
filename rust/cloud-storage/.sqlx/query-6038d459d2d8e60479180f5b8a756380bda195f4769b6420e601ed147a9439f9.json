@@ -42,7 +42,6 @@
             "kind": {
               "Enum": [
                 "public",
-                "organization",
                 "private",
                 "direct_message",
                 "team"

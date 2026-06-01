@@ -305,6 +305,14 @@ const ANTHROPIC_API_KEY = aws.secretsmanager
     return secret.secretString;
   });
 
+// OpenAI key used by task duplicate-detection embeddings (task_dedup). Resolved
+// at deploy time and baked into the task definition, like ANTHROPIC_API_KEY.
+const OPENAI_API_KEY = aws.secretsmanager
+  .getSecretVersionOutput({
+    secretId: config.get('openai_api_key') ?? '',
+  })
+  .apply((secret) => secret.secretString);
+
 // Cal.com webhook — HMAC secret, resolved at runtime via Secrets Manager.
 const CAL_WEBHOOK_SECRET_KEY = config.require('cal_webhook_secret_key');
 const calWebhookSecretKeyArn: pulumi.Output<string> = aws.secretsmanager
@@ -417,6 +425,10 @@ const cloudStorageService = new CloudStorageService(
       {
         name: 'ANTHROPIC_API_KEY',
         value: pulumi.interpolate`${ANTHROPIC_API_KEY}`,
+      },
+      {
+        name: 'OPENAI_API_KEY',
+        value: pulumi.interpolate`${OPENAI_API_KEY}`,
       },
       {
         name: 'LIVEKIT_SERVER_URL',

@@ -87,6 +87,13 @@ use sqlx::postgres::PgPoolOptions;
 use std::sync::Arc;
 use sync_service_client::SyncServiceClient;
 use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImpl};
+use task_dedup::{
+    TaskDedupConfig, TaskDedupService,
+    outbound::{
+        connection_gateway::ConnectionGatewayTaskDedupNotifier, embedding::OpenAiTaskEmbedder,
+        judge::AgentDuplicateJudge, postgres::PgTaskDedupRepo, reranker::NoOpTaskReranker,
+    },
+};
 
 mod api;
 mod config;
@@ -402,6 +409,7 @@ async fn main() -> anyhow::Result<()> {
         },
         document_service.clone(),
         foreign_entity_service.clone(),
+        (*notification_ingress_service).clone(),
         PgGithubSyncRepo::new(db.clone()),
         GithubSyncClientImpl::default(),
     );
@@ -563,6 +571,19 @@ async fn main() -> anyhow::Result<()> {
 
     let sqs_client = Arc::new(sqs_client);
     let conn_gateway_client = Arc::new(conn_gateway_client);
+    let task_dedup_config = TaskDedupConfig::default();
+    let task_dedup_service = Arc::new(TaskDedupService::new(
+        task_dedup_config.clone(),
+        Arc::new(PgTaskDedupRepo::new(db.clone())),
+        Arc::new(OpenAiTaskEmbedder::new(
+            task_dedup_config.embedding_model.clone(),
+        )),
+        Arc::new(NoOpTaskReranker),
+        Arc::new(AgentDuplicateJudge::new()),
+        Arc::new(ConnectionGatewayTaskDedupNotifier::new(
+            conn_gateway_client.clone(),
+        )),
+    ));
     let channels_repo = PgChannelsRepo::new(db.clone());
     let bots_service = bots::domain::service::BotServiceImpl::new(
         bots::outbound::pg_bots_repo::PgBotsRepo::new(db.clone()),
@@ -621,6 +642,7 @@ async fn main() -> anyhow::Result<()> {
             service: document_service.clone(),
             access_service: entity_access_service.clone(),
             pool: db.clone(),
+            task_dedup_service,
             creator: documents_hex::domain::create::DocumentCreator::new(
                 document_service,
                 markdown_initializer,

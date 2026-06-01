@@ -9,6 +9,8 @@ config:
   email-service:internal_auth_key: document-storage-service-auth-key-dev
   email-service:cf_private_key: email-attachments-private-key-dev
   email-service:notifications_enabled: true
+  email-service:use_apollo_crm_enrichment: true
+  email-service:apollo_api_key_secret_name: apollo-io-api-key-master
   email-service:sent_undo_delay_secs: 5
   email-service:redis_rate_limit_reqs: 14000
   email-service:redis_rate_limit_reqs_backfill: 13000

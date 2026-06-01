@@ -136,7 +136,7 @@ pub trait ChannelRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<ChannelMetadata, Self::Err>> + Send;
 
     /// Batch fetch channel preview rows for the requested ids, computing
-    /// per-channel access for the given viewer/org.
+    /// per-channel access for the given viewer.
     fn batch_get_channel_previews(
         &self,
         channel_ids: &[String],

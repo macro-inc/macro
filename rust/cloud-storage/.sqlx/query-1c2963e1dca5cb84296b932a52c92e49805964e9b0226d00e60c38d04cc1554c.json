@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT COUNT(*) AS \"count!\"\n        FROM \"Document\" d\n        JOIN document_sub_type dst\n          ON dst.document_id = d.id AND dst.sub_type = 'task'\n        LEFT JOIN task_duplicate_embedding e ON e.document_id = d.id\n        WHERE d.\"deletedAt\" IS NULL\n          AND ($1::bool OR e.document_id IS NULL)\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bool"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "1c2963e1dca5cb84296b932a52c92e49805964e9b0226d00e60c38d04cc1554c"
+}

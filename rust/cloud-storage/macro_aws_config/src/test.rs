@@ -109,3 +109,39 @@ fn test_transform_url_default_port_localhost() {
     let result = transform_local_url(input);
     assert_eq!(result, expected);
 }
+
+#[test]
+fn test_internal_fetch_rewrites_localhost_to_localstack() {
+    let input = "http://localhost:4566/doc-storage/macro%7Cteo%40macro.com/doc/1";
+    let expected = "http://localstack:4566/doc-storage/macro%7Cteo%40macro.com/doc/1";
+
+    let result = transform_internal_url(input);
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn test_internal_fetch_preserves_query_params() {
+    let input = "http://localhost:4566/doc-storage/key?versionId=123";
+    let expected = "http://localstack:4566/doc-storage/key?versionId=123";
+
+    let result = transform_internal_url(input);
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn test_internal_fetch_localstack_is_idempotent() {
+    let input = "http://localstack:4566/doc-storage/key";
+    let expected = "http://localstack:4566/doc-storage/key";
+
+    let result = transform_internal_url(input);
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn test_internal_fetch_leaves_remote_url_untouched() {
+    let input = "https://d123.cloudfront.net/doc-storage/key?Signature=abc";
+    let expected = "https://d123.cloudfront.net/doc-storage/key?Signature=abc";
+
+    let result = transform_internal_url(input);
+    assert_eq!(result, expected);
+}

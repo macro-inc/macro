@@ -35,6 +35,7 @@ import { InlineTaskProperties } from './InlineTaskProperties';
 import { InstructionsEditor } from './InstructionsEditor';
 import { MarkdownEditor } from './MarkdownEditor';
 import { TaskDiscussion } from './TaskDiscussion';
+import { TaskDuplicateMatchPill } from './TaskDuplicateMatches';
 import { TitleEditor } from './TitleEditor';
 import { registerMarkdownCommands } from './useMarkdownCommands';
 
@@ -267,6 +268,7 @@ export function Notebook() {
         <div class="mb-6 flex flex-row flex-wrap items-center gap-2 text-sm empty:hidden">
           <InlineTaskProperties />
           <InlineTaskGithubPullRequests />
+          <TaskDuplicateMatchPill />
         </div>
         <ParamsProvider>
           <MarkdownEditor />
