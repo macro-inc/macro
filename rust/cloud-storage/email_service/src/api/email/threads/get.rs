@@ -89,7 +89,7 @@ const MESSAGE_MAX: i64 = 100;
         (status = 500, description = "Internal Server Error", body = ErrorResponse),
     ),
 )]
-#[tracing::instrument(skip(ctx, user_context), fields(user_id=user_context.user_id, fusionauth_user_id=user_context.fusion_user_id))]
+#[tracing::instrument(skip(ctx, user_context), fields(user_id=user_context.user_id, fusionauth_user_id=user_context.fusion_user_id), err)]
 pub async fn get_thread_messages_handler(
     State(ctx): State<ApiContext>,
     user_context: Extension<UserContext>,
