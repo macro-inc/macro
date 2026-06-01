@@ -90,9 +90,8 @@ use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImp
 use task_dedup::{
     TaskDedupConfig, TaskDedupService,
     outbound::{
-        connection_gateway::ConnectionGatewayTaskDedupNotifier,
-        embedding::OpenAiOrLocalTaskEmbedder, judge::AgentDuplicateJudge,
-        postgres::PgTaskDedupRepo,
+        connection_gateway::ConnectionGatewayTaskDedupNotifier, embedding::OpenAiTaskEmbedder,
+        judge::AgentDuplicateJudge, postgres::PgTaskDedupRepo, reranker::NoOpTaskReranker,
     },
 };
 
@@ -575,10 +574,11 @@ async fn main() -> anyhow::Result<()> {
     let task_dedup_service = Arc::new(TaskDedupService::new(
         task_dedup_config.clone(),
         Arc::new(PgTaskDedupRepo::new(db.clone())),
-        Arc::new(OpenAiOrLocalTaskEmbedder::new(
+        Arc::new(OpenAiTaskEmbedder::new(
             task_dedup_config.embedding_model.clone(),
         )),
-        Arc::new(AgentDuplicateJudge::new(0.56)),
+        Arc::new(NoOpTaskReranker),
+        Arc::new(AgentDuplicateJudge::new()),
         Arc::new(ConnectionGatewayTaskDedupNotifier::new(
             conn_gateway_client.clone(),
         )),

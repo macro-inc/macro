@@ -9,10 +9,11 @@ use serde_json::json;
 use crate::domain::models::JudgeResult;
 use crate::domain::ports::TaskDuplicateJudge;
 
-/// Judge that uses the agent structured completion path and falls back to
-/// deterministic rerank thresholds otherwise.
+/// Judge that decides duplicates via the agent structured completion path.
+///
+/// When the model call fails it defaults to *not* a duplicate, so an outage
+/// can't fabricate matches.
 pub struct AgentDuplicateJudge {
-    fallback_threshold: f64,
     model: AgentModel,
 }
 
@@ -23,37 +24,38 @@ struct DuplicateJudgeOutput {
 }
 
 impl AgentDuplicateJudge {
-    /// Creates a new judge.
-    pub fn new(fallback_threshold: f64) -> Self {
+    /// Creates a new judge using the fast agent model.
+    pub fn new() -> Self {
         Self {
-            fallback_threshold,
             model: AgentModel::Fast,
         }
     }
 
     /// Creates a new judge with an explicit agent model.
-    pub fn with_model(fallback_threshold: f64, model: AgentModel) -> Self {
-        Self {
-            fallback_threshold,
-            model,
-        }
+    pub fn with_model(model: AgentModel) -> Self {
+        Self { model }
     }
 
-    fn fallback(&self, rerank_score: f64, model: Option<String>, reason: &str) -> JudgeResult {
+    fn unavailable(&self, reason: &str) -> JudgeResult {
         JudgeResult {
-            is_duplicate: rerank_score >= self.fallback_threshold,
-            model,
+            is_duplicate: false,
+            model: Some(self.model.to_string()),
             reason: Some(reason.to_string()),
         }
     }
 }
 
+impl Default for AgentDuplicateJudge {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[async_trait]
 impl TaskDuplicateJudge for AgentDuplicateJudge {
-    async fn judge(&self, left: &str, right: &str, rerank_score: f64) -> JudgeResult {
+    async fn judge(&self, left: &str, right: &str) -> JudgeResult {
         let model_name = self.model.to_string();
-        let prompt =
-            format!("Task A:\n{left}\n\nTask B:\n{right}\n\nRerank score: {rerank_score:.3}");
+        let prompt = format!("Task A:\n{left}\n\nTask B:\n{right}");
         let schema = DynamicSchema {
             name: "TaskDuplicateJudgeOutput".to_string(),
             description: Some(
@@ -85,11 +87,7 @@ impl TaskDuplicateJudge for AgentDuplicateJudge {
         .await;
 
         let Ok(value) = value else {
-            return self.fallback(
-                rerank_score,
-                Some(model_name),
-                "judge request failed; local rerank fallback",
-            );
+            return self.unavailable("judge request failed; treated as not duplicate");
         };
 
         match serde_json::from_value::<DuplicateJudgeOutput>(value) {
@@ -98,34 +96,35 @@ impl TaskDuplicateJudge for AgentDuplicateJudge {
                 model: Some(model_name),
                 reason: Some(parsed.reason),
             },
-            Err(_) => self.fallback(
-                rerank_score,
-                Some(model_name),
-                "judge JSON parse failed; local rerank fallback",
-            ),
+            Err(_) => self.unavailable("judge JSON parse failed; treated as not duplicate"),
         }
     }
 }
 
-/// Local judge for tests.
-pub struct LocalDuplicateJudge {
-    threshold: f64,
-}
+/// Deterministic judge for tests: treats two tasks as duplicates only when their
+/// embedding content is identical.
+pub struct LocalDuplicateJudge;
 
 impl LocalDuplicateJudge {
-    /// Creates a local threshold judge.
-    pub fn new(threshold: f64) -> Self {
-        Self { threshold }
+    /// Creates a local judge.
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Default for LocalDuplicateJudge {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
 #[async_trait]
 impl TaskDuplicateJudge for LocalDuplicateJudge {
-    async fn judge(&self, _left: &str, _right: &str, rerank_score: f64) -> JudgeResult {
+    async fn judge(&self, left: &str, right: &str) -> JudgeResult {
         JudgeResult {
-            is_duplicate: rerank_score >= self.threshold,
+            is_duplicate: left.trim() == right.trim(),
             model: None,
-            reason: Some("local rerank fallback".to_string()),
+            reason: Some("local exact-match judge".to_string()),
         }
     }
 }

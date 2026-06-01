@@ -1,12 +1,17 @@
 //! Domain service for task duplicate detection.
 
-use std::collections::{HashMap, HashSet};
+#[cfg(test)]
+mod test;
+
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use uuid::Uuid;
 
 use super::models::{NewTask, TaskDedupError, TaskDuplicate, TaskSimilarityResult};
-use super::ports::{TaskDedupNotifier, TaskDedupRepo, TaskDuplicateJudge, TaskEmbedder};
+use super::ports::{
+    TaskDedupNotifier, TaskDedupRepo, TaskDuplicateJudge, TaskEmbedder, TaskReranker,
+};
 
 /// Configuration for the task duplicate detection pipeline.
 #[derive(Debug, Clone)]
@@ -17,10 +22,11 @@ pub struct TaskDedupConfig {
     pub vector_candidate_limit: i64,
     /// Maximum active duplicate matches to keep per task.
     pub duplicate_limit: i64,
-    /// Minimum vector score before reranking.
+    /// Minimum vector similarity for a candidate to be considered.
     pub min_vector_similarity: f64,
-    /// Minimum deterministic rerank score before judging.
-    pub min_rerank_score: f64,
+    /// Maximum candidates sent to the LLM judge per new task, in vector-score
+    /// order. Bounds judge calls now that the cheap lexical pre-filter is gone.
+    pub max_judge_candidates: usize,
 }
 
 impl Default for TaskDedupConfig {
@@ -30,7 +36,7 @@ impl Default for TaskDedupConfig {
             vector_candidate_limit: 24,
             duplicate_limit: 5,
             min_vector_similarity: 0.74,
-            min_rerank_score: 0.42,
+            max_judge_candidates: 10,
         }
     }
 }
@@ -41,6 +47,7 @@ pub struct TaskDedupService {
     config: TaskDedupConfig,
     repo: Arc<dyn TaskDedupRepo>,
     embedder: Arc<dyn TaskEmbedder>,
+    reranker: Arc<dyn TaskReranker>,
     judge: Arc<dyn TaskDuplicateJudge>,
     notifier: Arc<dyn TaskDedupNotifier>,
 }
@@ -51,6 +58,7 @@ impl TaskDedupService {
         config: TaskDedupConfig,
         repo: Arc<dyn TaskDedupRepo>,
         embedder: Arc<dyn TaskEmbedder>,
+        reranker: Arc<dyn TaskReranker>,
         judge: Arc<dyn TaskDuplicateJudge>,
         notifier: Arc<dyn TaskDedupNotifier>,
     ) -> Self {
@@ -58,6 +66,7 @@ impl TaskDedupService {
             config,
             repo,
             embedder,
+            reranker,
             judge,
             notifier,
         }
@@ -69,26 +78,6 @@ impl TaskDedupService {
         document_id: &str,
     ) -> Result<Vec<TaskDuplicate>, TaskDedupError> {
         self.repo.active_duplicates(document_id).await
-    }
-
-    /// Dismisses a visible match.
-    pub async fn dismiss_match(
-        &self,
-        document_id: &str,
-        match_id: Uuid,
-        dismissed_by: &str,
-    ) -> Result<(), TaskDedupError> {
-        let affected_document_ids = self.match_document_ids(match_id).await?;
-        let dismissed = self
-            .repo
-            .dismiss_match(document_id, match_id, dismissed_by)
-            .await?;
-        if dismissed {
-            self.notify_documents(affected_document_ids).await;
-            Ok(())
-        } else {
-            Err(TaskDedupError::MatchNotFound)
-        }
     }
 
     /// Dismisses visible matches.
@@ -138,18 +127,6 @@ impl TaskDedupService {
         }
     }
 
-    /// Returns the other task in a duplicate match.
-    pub async fn other_task_id(
-        &self,
-        document_id: &str,
-        match_id: Uuid,
-    ) -> Result<String, TaskDedupError> {
-        self.repo
-            .other_task_id(document_id, match_id)
-            .await?
-            .ok_or(TaskDedupError::MatchNotFound)
-    }
-
     /// Dismisses a match by id.
     pub async fn dismiss_match_by_id(&self, match_id: Uuid) -> Result<(), TaskDedupError> {
         let affected_document_ids = self.match_document_ids(match_id).await?;
@@ -158,24 +135,11 @@ impl TaskDedupService {
         Ok(())
     }
 
-    /// Marks a match dismissed by a user.
-    pub async fn dismiss_match_by_id_for_user(
-        &self,
-        match_id: Uuid,
-        dismissed_by: &str,
-    ) -> Result<(), TaskDedupError> {
-        let affected_document_ids = self.match_document_ids(match_id).await?;
-        self.repo
-            .dismiss_match_by_id_for_user(match_id, dismissed_by)
-            .await?;
-        self.notify_documents(affected_document_ids).await;
-        Ok(())
-    }
-
     /// Finds existing tasks similar to an unsaved draft as the user composes it.
     ///
-    /// Runs vector retrieval + deterministic rerank only (no judge) and
-    /// persists nothing: the embedding is computed in memory and discarded.
+    /// Runs vector retrieval + rerank only (no judge) and persists nothing: the
+    /// embedding is computed in memory and discarded. Results are ordered by the
+    /// reranker's relevance score.
     pub async fn similarity_search(
         &self,
         owner: &str,
@@ -196,38 +160,24 @@ impl TaskDedupService {
             )
             .await?;
 
-        let mut results = Vec::new();
-        for candidate in candidates {
-            if candidate.vector_score < self.config.min_vector_similarity {
-                continue;
-            }
+        let candidates = candidates
+            .into_iter()
+            .filter(|candidate| candidate.vector_score >= self.config.min_vector_similarity)
+            .collect::<Vec<_>>();
 
-            let rerank_score = lexical_rerank_score(&content, &candidate.content);
-            if rerank_score < self.config.min_rerank_score {
-                continue;
-            }
+        let ranked = self
+            .rerank(&content, candidates, |candidate| candidate.content.as_str())
+            .await?;
 
-            results.push(TaskSimilarityResult {
+        Ok(ranked
+            .into_iter()
+            .take(self.config.duplicate_limit.max(0) as usize)
+            .map(|candidate| TaskSimilarityResult {
                 task_id: candidate.document_id,
                 task_name: candidate.name,
                 vector_score: candidate.vector_score,
-                rerank_score,
-            });
-        }
-
-        results.sort_by(|a, b| {
-            b.rerank_score
-                .partial_cmp(&a.rerank_score)
-                .unwrap_or(std::cmp::Ordering::Equal)
-                .then_with(|| {
-                    b.vector_score
-                        .partial_cmp(&a.vector_score)
-                        .unwrap_or(std::cmp::Ordering::Equal)
-                })
-        });
-        results.truncate(self.config.duplicate_limit.max(0) as usize);
-
-        Ok(results)
+            })
+            .collect())
     }
 
     /// Detects duplicates for a newly-created task and sends live updates for
@@ -251,20 +201,20 @@ impl TaskDedupService {
             .candidates(&task, &embedding, self.config.vector_candidate_limit)
             .await?;
 
-        for candidate in candidates {
-            if candidate.vector_score < self.config.min_vector_similarity {
-                continue;
-            }
+        // Gate by the vector-similarity floor, rerank the survivors, then send
+        // only the top `max_judge_candidates` (by rerank score) to the LLM judge.
+        let candidates = candidates
+            .into_iter()
+            .filter(|candidate| candidate.vector_score >= self.config.min_vector_similarity)
+            .collect::<Vec<_>>();
+        let judge_candidates = self
+            .rerank(&content, candidates, |candidate| candidate.content.as_str())
+            .await?
+            .into_iter()
+            .take(self.config.max_judge_candidates);
 
-            let rerank_score = lexical_rerank_score(&content, &candidate.content);
-            if rerank_score < self.config.min_rerank_score {
-                continue;
-            }
-
-            let judge = self
-                .judge
-                .judge(&content, &candidate.content, rerank_score)
-                .await;
+        for candidate in judge_candidates {
+            let judge = self.judge.judge(&content, &candidate.content).await;
             if !judge.is_duplicate {
                 continue;
             }
@@ -281,7 +231,6 @@ impl TaskDedupService {
                         left,
                         right,
                         candidate.vector_score,
-                        rerank_score,
                         judge.model.as_deref(),
                         Some(&reason),
                     )
@@ -312,6 +261,40 @@ impl TaskDedupService {
 
         self.notify_documents(active_document_ids.clone()).await;
         Ok(active_document_ids)
+    }
+
+    /// Reranks `candidates` against `query` and returns them ordered by
+    /// descending relevance score. Candidates with equal scores keep their input
+    /// (vector-similarity) order. An empty input skips the reranker entirely.
+    async fn rerank<C: Send>(
+        &self,
+        query: &str,
+        candidates: Vec<C>,
+        content_of: impl Fn(&C) -> &str,
+    ) -> Result<Vec<C>, TaskDedupError> {
+        if candidates.is_empty() {
+            return Ok(candidates);
+        }
+
+        let documents = candidates
+            .iter()
+            .map(|candidate| content_of(candidate).to_string())
+            .collect::<Vec<_>>();
+        let scores = self.reranker.rerank(query, &documents).await?;
+        if scores.len() != candidates.len() {
+            return Err(TaskDedupError::Dependency(anyhow::anyhow!(
+                "reranker returned {} scores for {} documents",
+                scores.len(),
+                candidates.len()
+            )));
+        }
+
+        let mut scored = candidates.into_iter().zip(scores).collect::<Vec<_>>();
+        scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        Ok(scored
+            .into_iter()
+            .map(|(candidate, _score)| candidate)
+            .collect())
     }
 
     async fn notify_documents<I>(&self, document_ids: I)
@@ -360,7 +343,7 @@ impl TaskDedupService {
 
 /// Builds the text embedded for a task.
 pub fn task_embedding_content(title: &str, markdown: &str) -> String {
-    format!("Title: {}\n\n{}", title.trim(), markdown.trim())
+    format!("{}\n{}", title.trim(), markdown.trim())
 }
 
 /// Returns a stable ordered pair.
@@ -384,88 +367,5 @@ fn inferred_judge_reason(reason: Option<&str>) -> String {
             format!("duplicate graph closure: {}", reason.trim())
         }
         _ => "duplicate graph closure".to_string(),
-    }
-}
-
-/// Deterministic lexical rerank score.
-pub fn lexical_rerank_score(left: &str, right: &str) -> f64 {
-    let left_tokens = tokenize(left);
-    let right_tokens = tokenize(right);
-    if left_tokens.is_empty() || right_tokens.is_empty() {
-        return 0.0;
-    }
-
-    let left_counts = token_counts(&left_tokens);
-    let right_counts = token_counts(&right_tokens);
-    let left_set: HashSet<&str> = left_tokens.iter().map(String::as_str).collect();
-    let right_set: HashSet<&str> = right_tokens.iter().map(String::as_str).collect();
-
-    let overlap = left_set.intersection(&right_set).count() as f64;
-    let union = left_set.union(&right_set).count() as f64;
-    let jaccard = if union > 0.0 { overlap / union } else { 0.0 };
-
-    let mut dot = 0.0;
-    for (token, left_count) in &left_counts {
-        if let Some(right_count) = right_counts.get(token) {
-            dot += f64::from(*left_count) * f64::from(*right_count);
-        }
-    }
-    let left_norm = left_counts
-        .values()
-        .map(|count| f64::from(*count) * f64::from(*count))
-        .sum::<f64>()
-        .sqrt();
-    let right_norm = right_counts
-        .values()
-        .map(|count| f64::from(*count) * f64::from(*count))
-        .sum::<f64>()
-        .sqrt();
-    let cosine = if left_norm > 0.0 && right_norm > 0.0 {
-        dot / (left_norm * right_norm)
-    } else {
-        0.0
-    };
-
-    (jaccard * 0.35) + (cosine * 0.65)
-}
-
-fn token_counts(tokens: &[String]) -> HashMap<&str, u16> {
-    let mut counts = HashMap::new();
-    for token in tokens {
-        *counts.entry(token.as_str()).or_insert(0) += 1;
-    }
-    counts
-}
-
-fn tokenize(text: &str) -> Vec<String> {
-    text.split(|ch: char| !ch.is_alphanumeric())
-        .map(str::to_lowercase)
-        .filter(|token| token.len() > 2 && !STOP_WORDS.contains(&token.as_str()))
-        .collect()
-}
-
-const STOP_WORDS: &[&str] = &[
-    "the", "and", "for", "with", "that", "this", "from", "into", "task", "todo", "make", "add",
-    "fix", "use", "using", "should", "would", "could", "will", "are", "was", "were", "has", "have",
-    "had", "you", "your", "our", "not", "but", "all", "any", "can",
-];
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn lexical_rerank_separates_similar_and_unrelated_tasks() {
-        let similar = lexical_rerank_score(
-            "Use pgvector embeddings to detect duplicate tasks and show a duplicates pill",
-            "Detect duplicate tasks with pgvector embeddings and show duplicate suggestions",
-        );
-        let unrelated = lexical_rerank_score(
-            "Use pgvector embeddings to detect duplicate tasks and show a duplicates pill",
-            "Fix billing email copy and update subscription receipt text",
-        );
-
-        assert!(similar > TaskDedupConfig::default().min_rerank_score);
-        assert!(unrelated < TaskDedupConfig::default().min_rerank_score);
     }
 }

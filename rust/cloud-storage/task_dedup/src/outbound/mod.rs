@@ -4,3 +4,4 @@ pub mod connection_gateway;
 pub mod embedding;
 pub mod judge;
 pub mod postgres;
+pub mod reranker;

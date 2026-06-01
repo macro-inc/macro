@@ -187,7 +187,6 @@ export type TaskDuplicate = {
   taskId: string;
   taskName: string;
   vectorScore: number;
-  rerankScore: number;
   judgeReason?: string | null;
 };
 
@@ -199,7 +198,6 @@ export type TaskSimilarityResult = {
   taskId: string;
   taskName: string;
   vectorScore: number;
-  rerankScore: number;
 };
 
 export type TaskSimilaritySearchResponse = {

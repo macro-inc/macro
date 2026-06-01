@@ -15,12 +15,25 @@ pub trait TaskEmbedder: Send + Sync {
     async fn embed(&self, content: &str) -> anyhow::Result<Vec<f32>>;
 }
 
-/// Applies a semantic duplicate judgement after retrieval and deterministic
-/// reranking.
+/// Reranks retrieved candidates against the query task before judging or
+/// surfacing them.
+///
+/// This is the cross-encoder stage of the retrieve → rerank → judge pipeline: a
+/// trained relevance model (e.g. a Cohere/Voyage/Jina rerank connection) scores
+/// each candidate jointly with the query, which a bi-encoder vector search
+/// cannot. Implementations return one score per document, aligned by index.
+#[async_trait]
+pub trait TaskReranker: Send + Sync {
+    /// Returns a relevance score for each entry of `documents` against `query`,
+    /// in the same order. Higher means more relevant.
+    async fn rerank(&self, query: &str, documents: &[String]) -> anyhow::Result<Vec<f64>>;
+}
+
+/// Applies a semantic duplicate judgement after vector retrieval and reranking.
 #[async_trait]
 pub trait TaskDuplicateJudge: Send + Sync {
     /// Judges whether `left` and `right` represent the same task.
-    async fn judge(&self, left: &str, right: &str, rerank_score: f64) -> JudgeResult;
+    async fn judge(&self, left: &str, right: &str) -> JudgeResult;
 }
 
 /// Persists embeddings, retrieves candidates, and manages match state.
@@ -59,7 +72,6 @@ pub trait TaskDedupRepo: Send + Sync {
         task_id: &str,
         duplicate_task_id: &str,
         vector_score: f64,
-        rerank_score: f64,
         judge_model: Option<&str>,
         judge_reason: Option<&str>,
     ) -> Result<(), TaskDedupError>;
@@ -95,25 +107,11 @@ pub trait TaskDedupRepo: Send + Sync {
         match_id: Uuid,
     ) -> Result<bool, TaskDedupError>;
 
-    /// Returns the other task id in a match.
-    async fn other_task_id(
-        &self,
-        document_id: &str,
-        match_id: Uuid,
-    ) -> Result<Option<String>, TaskDedupError>;
-
     /// Returns the task document ids in a match.
     async fn match_document_ids(&self, match_id: Uuid) -> Result<Vec<String>, TaskDedupError>;
 
     /// Dismisses a match without document-side filtering.
     async fn dismiss_match_by_id(&self, match_id: Uuid) -> Result<(), TaskDedupError>;
-
-    /// Marks a match dismissed by a user.
-    async fn dismiss_match_by_id_for_user(
-        &self,
-        match_id: Uuid,
-        dismissed_by: &str,
-    ) -> Result<(), TaskDedupError>;
 }
 
 /// Sends live updates for documents whose duplicate state changed.

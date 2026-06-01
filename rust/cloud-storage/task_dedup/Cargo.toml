@@ -7,10 +7,10 @@ version = "0.1.0"
 [dependencies]
 agent = { path = "../agent" }
 anyhow = { workspace = true }
+async-openai = { workspace = true }
 async-trait = { workspace = true }
 connection_gateway_client = { path = "../connection_gateway_client" }
 model-entity = { path = "../model-entity" }
-reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }

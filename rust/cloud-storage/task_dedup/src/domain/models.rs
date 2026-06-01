@@ -30,14 +30,11 @@ pub struct TaskDuplicate {
     pub task_name: String,
     /// Cosine similarity from vector search.
     pub vector_score: f64,
-    /// Deterministic rerank score.
-    pub rerank_score: f64,
     /// LLM judge explanation when available.
     pub judge_reason: Option<String>,
 }
 
-/// Candidate returned by the retrieval layer before deterministic rerank and
-/// judging.
+/// Candidate returned by the retrieval layer before judging.
 #[derive(Debug, Clone)]
 pub struct TaskDuplicateCandidate {
     /// Candidate task document id.
@@ -59,8 +56,6 @@ pub struct TaskSimilarityResult {
     pub task_name: String,
     /// Cosine similarity from vector search.
     pub vector_score: f64,
-    /// Deterministic rerank score.
-    pub rerank_score: f64,
 }
 
 /// Candidate returned by the similarity-search retrieval layer, carrying the

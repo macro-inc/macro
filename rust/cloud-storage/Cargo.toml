@@ -61,6 +61,7 @@ async-openai = { version = "0.36.1", features = [
   "byot",
   "chat-completion",
   "completions",
+  "embedding",
 ] }
 async-stream = "0.3.6"
 async-trait = "0.1.86"

@@ -13,6 +13,10 @@ path = "src/main.rs"
 name = "document_storage_service_openapi"
 path = "src/openapi.rs"
 
+[[bin]]
+name = "backfill_task_embeddings"
+path = "src/bin/backfill_task_embeddings.rs"
+
 [features]
 connection_gateway = []
 default = ["connection_gateway", "location_check"]
@@ -40,6 +44,7 @@ cal = { path = "../cal", features = ["axum", "outbound"] }
 call = { path = "../call" }
 channels = { path = "../channels", features = ["inbound", "outbound"] }
 chrono = { workspace = true }
+clap = { workspace = true }
 cloudfront_sign = { workspace = true }
 comms = { path = "../comms", features = ["inbound", "outbound"] }
 comms_db_client = { path = "../comms_db_client" }
