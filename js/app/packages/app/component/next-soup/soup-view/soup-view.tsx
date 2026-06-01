@@ -600,7 +600,8 @@ export const SoupViewList = (props: SoupViewListProps) => {
     activeTab,
     setActiveTab,
   } = useSoupView();
-  const { hasActiveRefinements, resetToTabDefaults } = useFilterRefinements();
+  const { hasActiveRefinements, hasHiddenItems, resetToTabDefaults } =
+    useFilterRefinements();
 
   const { isKeypressActive } = useIsKeyPressActive();
 
@@ -1073,6 +1074,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                       listView={currentView()}
                       search={!!searchText()}
                       hasRefinementsFromBase={hasActiveRefinements()}
+                      hasHiddenItems={hasHiddenItems()}
                       onClearFilters={resetToTabDefaults}
                     />
                   </Match>

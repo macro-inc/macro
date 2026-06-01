@@ -10,12 +10,15 @@ import {
 } from '@app/component/next-soup/utils';
 import type { BlockTool } from '@app/component/ResponsiveBlockToolbar';
 import { ResponsiveBlockToolbar } from '@app/component/ResponsiveBlockToolbar';
+import { SidePanel, useSidePanel } from '@app/component/side-panel';
 import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
 import {
   SplitHeaderBadge,
   StaticSplitLabel,
 } from '@app/component/split-layout/components/SplitLabel';
+import { SplitToolbarLeft } from '@app/component/split-layout/components/SplitToolbar';
 import { useSplitLayout } from '@app/component/split-layout/layout';
+import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
 import {
   getShareDrawerRecipientInput,
@@ -23,6 +26,7 @@ import {
   useShareDialogContext,
 } from '@core/component/TopBar/ShareButton';
 import { ENABLE_EMAIL_SHARING } from '@core/constant/featureFlags';
+import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { getActiveCommandByToken, runCommand } from '@core/hotkey/utils';
 import { isMobile } from '@core/mobile/isMobile';
@@ -31,11 +35,12 @@ import { AnimatedTaskIcon } from '@icon/wide-task';
 import { buildMentionMarkdownString } from '@lexical-core';
 import CheckIcon from '@phosphor/check.svg';
 import ProhibitIcon from '@phosphor/prohibit.svg';
+import SidePanelIcon from '@phosphor/square-half.svg';
 import TrashIcon from '@phosphor/trash.svg';
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { useEmailLinksQuery } from '@queries/email/link';
-import { Button } from '@ui';
-import { createSignal } from 'solid-js';
+import { Button, cn } from '@ui';
+import { createSignal, onCleanup, Show } from 'solid-js';
 import { useEmailContext } from './EmailContext';
 
 export function TopBar(props: {
@@ -44,10 +49,28 @@ export function TopBar(props: {
   isDraft?: boolean;
 }) {
   const { popoverSplit } = useSplitLayout();
+  const splitPanel = useSplitPanel();
   const shareCtx = useShareDialogContext();
   const emailCtx = useEmailContext();
   const soup = useMaybeSoup();
   const linksQuery = useEmailLinksQuery();
+  const sidePanel = useSidePanel();
+
+  if (splitPanel?.splitHotkeyScope) {
+    const reg = registerHotkey({
+      hotkey: ']',
+      scopeId: splitPanel.splitHotkeyScope,
+      hotkeyToken: TOKENS.block.toggleSidePanel,
+      description: 'Toggle Side Panel',
+      keyDownHandler: () => {
+        if (!sidePanel) return false;
+        if (!sidePanel.hasSections()) return false;
+        sidePanel.toggle();
+        return true;
+      },
+    });
+    onCleanup(() => reg.dispose());
+  }
 
   const isInvite = () => {
     const row = soup?.items.get(props.id);
@@ -198,6 +221,37 @@ export function TopBar(props: {
       buttonComponent: () => <ShareTrigger />,
       focusTarget: getShareDrawerRecipientInput,
     },
+    {
+      label: () =>
+        sidePanel?.isOpen() ? 'Hide Side Panel' : 'Show Side Panel',
+      icon: SidePanelIcon,
+      action: () => sidePanel?.toggle(),
+      isActive: () => sidePanel?.isOpen() ?? false,
+      condition: () => !(sidePanel?.isNarrow() ?? isMobile()),
+      buttonComponent: () => (
+        <Show when={sidePanel}>
+          {(panel) => (
+            <Button
+              depth={2}
+              variant="base"
+              size="icon-sm"
+              class={cn('bg-surface order-20', {
+                'bg-active': sidePanel?.isOpen(),
+              })}
+              tooltip={
+                sidePanel?.isOpen() ? 'Hide Side Panel' : 'Show Side Panel'
+              }
+              hotkey={TOKENS.block.toggleSidePanel}
+              onClick={() => {
+                panel().toggle();
+              }}
+            >
+              <SidePanelIcon />
+            </Button>
+          )}
+        </Show>
+      ),
+    },
   ];
 
   return (
@@ -228,6 +282,9 @@ export function TopBar(props: {
         itemType="email"
         name={props.title}
       />
+      <SplitToolbarLeft>
+        <SidePanel.NarrowTabs />
+      </SplitToolbarLeft>
     </>
   );
 }

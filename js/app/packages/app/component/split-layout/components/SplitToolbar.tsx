@@ -17,7 +17,7 @@ export function SplitToolbar(props: { ref: Setter<HTMLDivElement | null> }) {
   // into.
   return (
     <div
-      class="flex items-start justify-between w-full"
+      class="flex items-center justify-between w-full"
       data-split-toolbar
       ref={props.ref}
     >

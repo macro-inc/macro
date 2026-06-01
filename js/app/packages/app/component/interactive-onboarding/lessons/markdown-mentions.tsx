@@ -16,17 +16,18 @@ const [completed, setCompleted] = createSignal(false);
 
 function MarkdownMentionsContent(_props: LessonContentProps) {
   return (
-    <div class="flex flex-col gap-3 onboarding-stagger">
+    <div class="flex flex-col gap-8 onboarding-stagger">
+      <p class="text-ink-muted mt-2">
+        Macro's editor supports rich markdown, mentions, and emoji. Try
+        mentioning someone or something by typing <strong>@</strong> in the
+        editor.
+      </p>
+
       <HotkeyCallout
         keys={['@']}
         label="to mention someone or something"
         completed={completed()}
       />
-      <p>
-        Macro's editor supports rich markdown, mentions, and emoji. Try
-        mentioning someone or something by typing <strong>@</strong> in the
-        editor.
-      </p>
     </div>
   );
 }
@@ -67,7 +68,7 @@ function MarkdownMentionsDemo(props: LessonContentProps) {
     .withSkipPreviewFetch();
 
   return (
-    <MockAppChrome>
+    <MockAppChrome scopeId={props.scopeId}>
       <div class="h-full flex flex-col px-8 py-6">
         <h1 class="text-3xl font-semibold text-ink mb-4">Daily Note</h1>
         <MarkdownShell

@@ -97,7 +97,6 @@ pub struct ChannelParticipant {
 #[dg(backward = models_comms::channel::ChannelType)]
 pub enum ChannelType {
     Public,
-    Organization,
     Private,
     DirectMessage,
     Team,

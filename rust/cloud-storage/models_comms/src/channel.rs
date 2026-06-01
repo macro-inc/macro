@@ -11,7 +11,6 @@ use uuid::Uuid;
 #[serde(rename_all = "snake_case")]
 pub enum ChannelType {
     Public,
-    Organization,
     Private,
     DirectMessage,
     Team,

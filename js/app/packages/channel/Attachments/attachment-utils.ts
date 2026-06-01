@@ -2,8 +2,8 @@ import type { SplitContent } from '@app/component/split-layout/layoutManager';
 import { getChannelParams } from '@channel/Channel/link';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import type { EntityData } from '@entity';
-import type { ApiChannelAttachment } from '@service-comms/client';
 import { stringToItemType } from '@service-storage/client';
+import type { ApiChannelAttachment } from '@service-storage/generated/schemas/apiChannelAttachment';
 import { match } from 'ts-pattern';
 
 /** size-23 = 92px */

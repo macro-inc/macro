@@ -474,10 +474,6 @@ fn static_channel_name(
     }
 
     match channel_type {
-        ChannelType::Organization => {
-            tracing::warn!(channel_id=%channel_id, "organization channel should have a name");
-            "Organization".to_string()
-        }
         ChannelType::Public => {
             tracing::warn!(channel_id=%channel_id, "public channel should have a name");
             "Public".to_string()
@@ -496,9 +492,11 @@ async fn resolve_channel_display_name(
     viewer_user_id: MacroUserIdStr<'_>,
 ) -> anyhow::Result<String> {
     match info.channel_type {
-        ChannelType::Organization | ChannelType::Public | ChannelType::Team => Ok(
-            static_channel_name(info.channel_type, info.name.as_deref(), info.id),
-        ),
+        ChannelType::Public | ChannelType::Team => Ok(static_channel_name(
+            info.channel_type,
+            info.name.as_deref(),
+            info.id,
+        )),
         ChannelType::Private
             if info
                 .name
@@ -1260,9 +1258,10 @@ impl ChannelRepo for PgChannelsRepo {
         entity_id: &str,
         user_id: &str,
     ) -> Result<Vec<AttachmentEntityReference>, Self::Err> {
-        let attachment_references = sqlx::query_as!(
-            AttachmentChannelReference,
-            r#"
+        let attachment_references_fut = async {
+            sqlx::query_as!(
+                AttachmentChannelReference,
+                r#"
                 SELECT
                     a.channel_id                     AS "channel_id: uuid::Uuid",
                     c.name                           AS "channel_name?",            -- Option<String>
@@ -1283,17 +1282,19 @@ impl ChannelRepo for PgChannelsRepo {
                   AND m.deleted_at IS NULL
                 ORDER BY a.created_at DESC
                 "#,
-            entity_type,
-            entity_id,
-            user_id,
-        )
-        .fetch_all(&self.pool)
-        .await
-        .context("failed to get attachment references")?;
+                entity_type,
+                entity_id,
+                user_id,
+            )
+            .fetch_all(&self.pool)
+            .await
+            .context("failed to get attachment references")
+        };
 
-        let mention_references = sqlx::query_as!(
-            AttachmentChannelReference,
-            r#"
+        let mention_references_fut = async {
+            sqlx::query_as!(
+                AttachmentChannelReference,
+                r#"
                 SELECT
                     m.channel_id                     AS "channel_id: uuid::Uuid",
                     c.name                           AS "channel_name?",            -- Option<String>
@@ -1314,16 +1315,18 @@ impl ChannelRepo for PgChannelsRepo {
                   AND m.deleted_at IS NULL
                 ORDER BY em.created_at DESC
                 "#,
-            entity_type,
-            entity_id,
-            user_id,
-        )
-        .fetch_all(&self.pool)
-        .await
-        .context("failed to get mention references")?;
+                entity_type,
+                entity_id,
+                user_id,
+            )
+            .fetch_all(&self.pool)
+            .await
+            .context("failed to get mention references")
+        };
 
-        let generic_references = sqlx::query!(
-            r#"
+        let generic_references_fut = async {
+            sqlx::query!(
+                r#"
                 SELECT
                     em.source_entity_type,
                     em.source_entity_id,
@@ -1337,22 +1340,31 @@ impl ChannelRepo for PgChannelsRepo {
                   AND em.source_entity_type != 'message'
                 ORDER BY em.created_at DESC
                 "#,
-            entity_type,
-            entity_id,
-        )
-        .fetch_all(&self.pool)
-        .await
-        .context("failed to get generic entity references")?
-        .into_iter()
-        .map(|row| AttachmentGenericReference {
-            source_entity_type: row.source_entity_type,
-            source_entity_id: row.source_entity_id,
-            entity_type: row.entity_type,
-            entity_id: row.entity_id,
-            user_id: row.user_id,
-            created_at: row.created_at,
-        })
-        .collect::<Vec<_>>();
+                entity_type,
+                entity_id,
+            )
+            .fetch_all(&self.pool)
+            .await
+            .context("failed to get generic entity references")
+        };
+
+        let (attachment_references, mention_references, generic_rows) = tokio::try_join!(
+            attachment_references_fut,
+            mention_references_fut,
+            generic_references_fut,
+        )?;
+
+        let generic_references = generic_rows
+            .into_iter()
+            .map(|row| AttachmentGenericReference {
+                source_entity_type: row.source_entity_type,
+                source_entity_id: row.source_entity_id,
+                entity_type: row.entity_type,
+                entity_id: row.entity_id,
+                user_id: row.user_id,
+                created_at: row.created_at,
+            })
+            .collect::<Vec<_>>();
 
         let mut references: Vec<AttachmentEntityReference> = attachment_references
             .into_iter()
@@ -1592,7 +1604,7 @@ impl ChannelRepo for PgChannelsRepo {
         &self,
         channel_ids: &[String],
         viewer_user_id: &str,
-        org_id: Option<i64>,
+        _org_id: Option<i64>,
     ) -> Result<Vec<ChannelPreviewRow>, Self::Err> {
         let rows = sqlx::query_as!(
             ChannelPreviewQueryRow,
@@ -1606,8 +1618,6 @@ impl ChannelRepo for PgChannelsRepo {
                 CASE WHEN (
                     c.channel_type = 'public'
                     OR
-                    (c.channel_type = 'organization' AND $3::bigint IS NOT NULL AND c.org_id = $3)
-                    OR
                     (c.channel_type IN ('private', 'direct_message', 'team') AND EXISTS (
                         SELECT 1 FROM comms_channel_participants cp
                         WHERE cp.channel_id = c.id
@@ -1617,11 +1627,9 @@ impl ChannelRepo for PgChannelsRepo {
                 ) THEN true ELSE false END AS "has_access!: bool"
             FROM comms_channels c
             WHERE c.id::text = ANY($1)
-              AND (c.channel_type != 'organization' OR $3::bigint IS NOT NULL)
             "#,
             channel_ids,
             viewer_user_id,
-            org_id,
         )
         .fetch_all(&self.pool)
         .await
@@ -1670,7 +1678,7 @@ impl ChannelRepo for PgChannelsRepo {
     async fn create_channel(
         &self,
         owner_id: String,
-        org_id: Option<i64>,
+        _org_id: Option<i64>,
         req: CreateChannelRequest,
     ) -> Result<Uuid, Self::Err> {
         let channel_id = macro_uuid::generate_uuid_v7();
@@ -1683,7 +1691,7 @@ impl ChannelRepo for PgChannelsRepo {
             channel_id,
             req.name.as_deref(),
             &owner_id,
-            org_id,
+            None::<i64>,
             req.team_id,
             req.channel_type as ChannelType,
         )

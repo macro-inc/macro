@@ -1,4 +1,19 @@
+# iOS: dev-facing, for testing in Simulator
+ios-dev:
+    cd tauri/src-tauri && cargo tauri ios dev --open -- --no-default-features
+
+# iOS: prod-facing build, with bundle auto-update turned off, for testing locally on actual iPhone
+ios-build-no-update:
+    cd tauri/src-tauri && cargo tauri ios build --open -- --no-default-features
+
+# iOS: build for release
+ios-build:
+    cd tauri/src-tauri && cargo tauri ios build --open
+
+# Tauri build hook (run automatically via beforeDevCommand) — not meant to be run directly
+[private]
 dev-tauri:
+    printf development > tauri/src-tauri/.macro-tauri-env
     cd packages/app && bun run --bun dev
 
 # List available local service names
@@ -34,7 +49,10 @@ build-staging:
 build-prod:
     cd packages/app && MODE=production NODE_ENV=production bun run --bun build
 
+# Tauri build hook (run automatically via beforeBuildCommand) — not meant to be run directly
+[private]
 build-tauri:
+    printf production > tauri/src-tauri/.macro-tauri-env
     cd packages/app && MODE=production NODE_ENV=production bun run --bun build
 
 # Build the bundle, zip it, and install it at

@@ -12,9 +12,10 @@ pub use device::DeviceType;
 pub use metadata::{
     AiResponseMetadata, ChannelInviteMetadata, ChannelMentionMetadata, ChannelMessageSendMetadata,
     ChannelReplyMetadata, ChannelType, CommentedOnDocumentMetadata, CommonChannelMetadata,
-    DocumentMentionMetadata, InviteToTeamMetadata, ItemSharedMetadata,
-    MentionedInDocumentCommentMetadata, NewEmailMetadata, NotificationDocumentSubType,
-    NotificationTitle, RepliedToDocumentCommentThreadMetadata, TaskAssignedMetadata,
+    DocumentMentionMetadata, GithubPrEvent, GithubPrEventAction, GithubPrEventStatus,
+    InviteToTeamMetadata, ItemSharedMetadata, MentionedInDocumentCommentMetadata, NewEmailMetadata,
+    NotificationDocumentSubType, NotificationTitle, RepliedToDocumentCommentThreadMetadata,
+    TaskAssignedMetadata,
 };
 pub use unsubscribe::UserUnsubscribe;
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -200,6 +201,9 @@ define_notif_event!(
 
         /// An AI assistant responded to a chat.
         AiResponse(AiResponseMetadata),
+
+        /// A GitHub pull request changed lifecycle state.
+        GithubPrEvent(GithubPrEvent),
     }
 );
 
@@ -235,6 +239,7 @@ impl NotificationTitle for NotifEvent {
             NotifEvent::AiResponse(ai_response_metadata) => {
                 ai_response_metadata.format_title(sender_id)
             }
+            NotifEvent::GithubPrEvent(github_pr_event) => github_pr_event.format_title(sender_id),
         }
     }
 
@@ -269,6 +274,7 @@ impl NotificationTitle for NotifEvent {
             NotifEvent::AiResponse(ai_response_metadata) => {
                 ai_response_metadata.format_body(sender_id)
             }
+            NotifEvent::GithubPrEvent(github_pr_event) => github_pr_event.format_body(sender_id),
         }
     }
 }

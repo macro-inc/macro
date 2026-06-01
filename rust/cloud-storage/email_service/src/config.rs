@@ -65,6 +65,15 @@ pub struct Config {
     /// Notification-service functionality
     pub notifications_enabled: bool,
 
+    /// Use Apollo.io for CRM company enrichment. When `false`, fall back
+    /// to the unfurl-based resolver.
+    pub use_apollo_crm_enrichment: bool,
+
+    /// Apollo.io API key for CRM enrichment. Locally this is the key
+    /// itself; in deployed envs it's the name of the Secrets Manager
+    /// secret holding it (resolved at startup). Empty disables enrichment.
+    pub apollo_api_key: String,
+
     /// The queue max messages per poll
     pub queue_max_messages: i32,
 
@@ -216,6 +225,13 @@ impl Config {
             .parse::<bool>()
             .context("NOTIFICATIONS_ENABLED must be a boolean value")?;
 
+        let use_apollo_crm_enrichment: bool = std::env::var("USE_APOLLO_CRM_ENRICHMENT")
+            .unwrap_or("false".to_string())
+            .parse::<bool>()
+            .context("USE_APOLLO_CRM_ENRICHMENT must be a boolean value")?;
+
+        let apollo_api_key = std::env::var("APOLLO_API_KEY").unwrap_or_default();
+
         let queue_max_messages: i32 = std::env::var("QUEUE_MAX_MESSAGES")
             .unwrap_or("10".to_string())
             .parse::<i32>()
@@ -349,6 +365,8 @@ impl Config {
             attachment_bucket,
             sent_undo_delay_secs,
             notifications_enabled,
+            use_apollo_crm_enrichment,
+            apollo_api_key,
             queue_max_messages,
             queue_wait_time_seconds,
             backfill_queue_workers,

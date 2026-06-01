@@ -2,14 +2,15 @@ use tokio::sync::Mutex;
 
 use rootcause::Report;
 use serde::Serialize;
+use std::time::Duration;
 use tauri::{Emitter, Manager, Runtime, plugin::Plugin};
 use url::Url;
 
 use crate::{
     domain::{
-        models::{UpdateApproval, UpdateDenied, UpdateError, UpdateGranted, UpdateStatus},
+        models::{UpdateError, UpdateStatus},
         ports::AutoUpdateService,
-        service::Service,
+        service::{ApplyUpdateResult, Service},
     },
     outbound::{api_client::BundleClient, fs::FileSystem, system_info::SystemInfo},
 };
@@ -18,6 +19,7 @@ use crate::{
 pub type PluginService = Service<FileSystem>;
 
 const EVENT_NAME: &str = "bundle-update-status";
+const WIFI_RETRY_INTERVAL: Duration = Duration::from_secs(30);
 
 /// Serializable event emitted to the frontend via Tauri's event system.
 #[derive(Clone, Serialize)]
@@ -34,6 +36,8 @@ pub enum BundleUpdateEvent {
         /// Optional release notes.
         notes: Option<String>,
     },
+    /// An update is available, but download is deferred until Wi-Fi or Ethernet is available.
+    WaitingForWifi,
     /// Already on the latest version.
     NoUpdateNeeded,
     /// Bundle download in progress.
@@ -64,6 +68,7 @@ impl BundleUpdateEvent {
                 version: found.bundle.version.to_string(),
                 notes: found.bundle.notes.clone(),
             },
+            Ok(UpdateStatus::WaitingForWifi(_found)) => BundleUpdateEvent::WaitingForWifi,
             Ok(UpdateStatus::NoUpdateNeeded) => BundleUpdateEvent::NoUpdateNeeded,
             Ok(UpdateStatus::DownloadingBundle(dl)) => BundleUpdateEvent::Downloading {
                 progress: dl.progress.value(),
@@ -97,16 +102,34 @@ pub async fn grant_bundle_update(
     service: tauri::State<'_, Mutex<PluginService>>,
     approved: bool,
 ) -> Result<(), String> {
-    let mut service = service.lock().await;
-    let grant_tx = service.try_recv_grant_sender().map_err(|e| e.to_string())?;
-    let approval = if approved {
-        UpdateApproval::Granted(UpdateGranted::default())
-    } else {
-        UpdateApproval::Denied(UpdateDenied::default())
+    let service = service.lock().await;
+    service
+        .approve_pending_update(approved)
+        .map_err(|e| e.to_string())
+}
+
+/// Retry a bundle update that is waiting for Wi-Fi or Ethernet.
+pub async fn retry_waiting_for_wifi<R: Runtime>(
+    app_handle: &tauri::AppHandle<R>,
+) -> Result<bool, String> {
+    let Some(service_state) = app_handle.try_state::<Mutex<PluginService>>() else {
+        return Ok(false);
     };
-    grant_tx
-        .send(approval)
-        .map_err(|_| "Worker dropped the grant receiver".to_string())
+
+    let service = service_state.lock().await;
+    service.retry_waiting_for_wifi().map_err(|e| e.to_string())
+}
+
+/// Allow a pending bundle update reload to be dispatched again.
+pub async fn allow_update_reload_retry<R: Runtime>(
+    app_handle: &tauri::AppHandle<R>,
+) -> Result<bool, String> {
+    let Some(service_state) = app_handle.try_state::<Mutex<PluginService>>() else {
+        return Ok(false);
+    };
+
+    let mut service = service_state.lock().await;
+    Ok(service.allow_update_reload_retry())
 }
 
 /// Apply a completed bundle update to the live webview.
@@ -125,34 +148,63 @@ pub async fn apply_completed_update<R: Runtime>(
         .app_cache_dir()
         .map_err(|e| e.to_string())?;
 
-    let mut service = service_state.lock().await;
+    let apply_result = {
+        let mut service = service_state.lock().await;
+        let result = service
+            .apply_update(&cache_dir)
+            .await
+            .map_err(|e| e.to_string())?;
+        if result == ApplyUpdateResult::ReloadNeeded {
+            service.mark_update_reload_dispatched();
+        }
+        result
+    };
 
-    let applied = service
-        .apply_update(&cache_dir)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    drop(service);
-
-    if applied {
+    if apply_result == ApplyUpdateResult::ReloadNeeded {
         // Reload to pick up the new bundle. Using location.reload() instead of
         // navigating to a new URL preserves WKWebView's cookie store.
         if let Some(webview) = app_handle.webview_windows().values().next() {
             tracing::info!("Bundle update complete, reloading to pick up new assets");
-            let _ = webview.eval("window.location.reload();");
+            if let Err(e) = webview.eval("window.location.reload();") {
+                tracing::warn!(error=?e, "Failed to dispatch bundle update reload");
+                service_state
+                    .lock()
+                    .await
+                    .unmark_update_reload_dispatched();
+            }
+        } else {
+            tracing::warn!(
+                "Completed bundle update applied but no webview was available to reload"
+            );
+            service_state
+                .lock()
+                .await
+                .unmark_update_reload_dispatched();
         }
     }
-    Ok(applied)
+    Ok(apply_result != ApplyUpdateResult::NoUpdate)
 }
 
 /// Apply a completed bundle update: set the bundle root and navigate to it.
+///
+/// Returns `true` if a completed update was applied, or `false` when there is
+/// no completed update pending.
 #[tauri::command]
 #[tracing::instrument(err, skip(app_handle))]
-pub async fn perform_update<R: Runtime>(app_handle: tauri::AppHandle<R>) -> Result<(), String> {
-    match apply_completed_update(&app_handle).await? {
-        true => Ok(()),
-        false => Err("No pending update".into()),
-    }
+pub async fn perform_update<R: Runtime>(app_handle: tauri::AppHandle<R>) -> Result<bool, String> {
+    apply_completed_update(&app_handle).await
+}
+
+/// Acknowledge that the webview mounted after an applied bundle update reload.
+#[tauri::command]
+pub async fn ack_bundle_update_reload(
+    service: tauri::State<'_, Mutex<PluginService>>,
+) -> Result<bool, String> {
+    service
+        .lock()
+        .await
+        .acknowledge_update_reload()
+        .map_err(|e| e.to_string())
 }
 
 /// Trigger a manual check for bundle updates.
@@ -215,6 +267,7 @@ impl<R: Runtime> Plugin<R> for MacroBundleUpdaterPlugin {
 
         let service = Service::new(client, fs, system_info);
         let mut status_rx = service.status().clone();
+        let mut wifi_retry_status_rx = service.status().clone();
 
         let _ = service.start();
         app.manage(tokio::sync::Mutex::new(service));
@@ -233,6 +286,40 @@ impl<R: Runtime> Plugin<R> for MacroBundleUpdaterPlugin {
                 }
                 let event = status_rx.borrow_and_update();
                 let _ = app_handle.emit(EVENT_NAME, BundleUpdateEvent::new(&event));
+            }
+        });
+
+        let app_handle = app.clone();
+        tauri::async_runtime::spawn(async move {
+            loop {
+                if !matches!(
+                    &*wifi_retry_status_rx.borrow(),
+                    Ok(UpdateStatus::WaitingForWifi(_))
+                ) {
+                    if wifi_retry_status_rx.changed().await.is_err() {
+                        return;
+                    }
+                    continue;
+                }
+
+                tokio::select! {
+                    _ = tokio::time::sleep(WIFI_RETRY_INTERVAL) => {
+                        match retry_waiting_for_wifi(&app_handle).await {
+                            Ok(true) => tracing::info!(
+                                "[bundle-update] retrying bundle download after Wi-Fi wait"
+                            ),
+                            Ok(false) => {}
+                            Err(e) => tracing::warn!(
+                                "[bundle-update] failed to retry bundle download after Wi-Fi wait: {e}"
+                            ),
+                        }
+                    }
+                    changed = wifi_retry_status_rx.changed() => {
+                        if changed.is_err() {
+                            return;
+                        }
+                    }
+                }
             }
         });
 

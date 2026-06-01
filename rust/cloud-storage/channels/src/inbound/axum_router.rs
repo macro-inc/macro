@@ -4,7 +4,7 @@ mod test;
 use crate::domain::models::{
     Activity, ActivityType, AttachmentChannelReference, AttachmentEntityReference,
     AttachmentGenericReference, ChannelAttachment, ChannelAttachmentType, ChannelContextMessage,
-    ChannelMessage, ChannelMessageKind, ChannelParticipant, CountedReaction,
+    ChannelMessage, ChannelMessageKind, ChannelParticipant, ChannelType, CountedReaction,
     CreateEntityMentionOptions, MessageAttachment, MessagePageDirection, ParticipantRole,
     ResolvedChannelMessage, Sender, ThreadInfo, ThreadReply,
 };
@@ -303,6 +303,7 @@ where
     T: Send + Sync,
 {
     channel_mutation_router::<S, Svc>()
+        .route("/{channel_id}", get(get_channel_handler::<S, Svc>))
         .route(
             "/{channel_id}/messages",
             get(get_channel_messages_handler::<S, Svc>)
@@ -1287,6 +1288,83 @@ pub async fn get_channel_attachments_handler<S: ChannelService, Svc: EntityAcces
         .await?;
 
     Ok(Json(page.type_erase().map(ApiChannelAttachment::from)))
+}
+
+/// Channel detail: metadata, active participants, and a recent page of messages.
+///
+/// `messages` is the newest-first first page (size controlled by `limit`); use the
+/// dedicated `/{channel_id}/messages` endpoint for cursor pagination.
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct ApiChannelDetail {
+    /// Channel id.
+    channel_id: Uuid,
+    /// Channel type.
+    channel_type: ChannelType,
+    /// Resolved display name from the viewer's perspective.
+    channel_name: String,
+    /// Active participants.
+    participants: Vec<ApiChannelParticipant>,
+    /// Recent messages (newest-first first page).
+    messages: Vec<ApiChannelMessage>,
+}
+
+/// Handler for `GET /channels/{channel_id}`.
+#[utoipa::path(
+    get,
+    operation_id = "get_channel",
+    path = "/channels/{channel_id}",
+    params(
+        ("channel_id" = Uuid, Path, description = "Channel ID"),
+        ("limit" = Option<u16>, Query, description = "Recent message page size (1-100, default 50)"),
+    ),
+    responses(
+        (status = 200, body = ApiChannelDetail),
+        (status = 401, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(err, skip_all, fields(channel_id = tracing::field::Empty))]
+pub async fn get_channel_handler<S: ChannelService, Svc: EntityAccessService>(
+    State(state): State<ChannelsRouterState<S, Svc>>,
+    access: ChannelAccessLevelExtractor<MemberParticipantRole, Svc>,
+    Query(params): Query<Params>,
+) -> Result<Json<ApiChannelDetail>, ChannelsHandlerErr> {
+    let channel_id = channel_id_from_receipt(&access.entity_access_receipt)?;
+    tracing::Span::current().record("channel_id", tracing::field::display(channel_id));
+    let viewer = access
+        .entity_access_receipt
+        .get_authenticated_user()
+        .cloned()
+        .map_err(|_| ChannelsHandlerErr::BadRequest("authenticated user required"))?;
+
+    let metadata = state
+        .service
+        .get_channel_metadata(channel_id, viewer)
+        .await?;
+    let participants = state.service.get_channel_participants(channel_id).await?;
+    let messages = channel_messages_response(
+        &state,
+        params,
+        None,
+        channel_id,
+        &ChannelMessageFilters::default(),
+        None,
+    )
+    .await?
+    .0
+    .items;
+
+    Ok(Json(ApiChannelDetail {
+        channel_id,
+        channel_type: metadata.channel_type,
+        channel_name: metadata.channel_name,
+        participants: participants
+            .into_iter()
+            .map(ApiChannelParticipant::from)
+            .collect(),
+        messages,
+    }))
 }
 
 /// Handler for `GET /channels/{channel_id}/participants`.

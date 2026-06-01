@@ -23,6 +23,9 @@ sync = [
   "dep:documents",
   "dep:entity_access",
   "dep:foreign_entity",
+  "dep:model-entity",
+  "dep:model_notifications",
+  "dep:notification",
   "dep:reqwest",
   "ports",
 ]
@@ -44,6 +47,9 @@ hmac = { workspace = true }
 jsonwebtoken = { workspace = true }
 macro_env = { path = "../macro_env" }
 macro_service_urls = { path = "../macro_service_urls" }
+model-entity = { path = "../model-entity", optional = true }
+model_notifications = { path = "../model_notifications", optional = true }
+notification = { path = "../notification", optional = true }
 regex = { workspace = true }
 reqwest = { workspace = true, optional = true }
 serde = { workspace = true }
@@ -68,12 +74,12 @@ model-error-response = { path = "../model-error-response", optional = true }
 utoipa = { workspace = true, optional = true }
 
 [dev-dependencies]
-model-entity = { path = "../model-entity"}
 document_sub_type = { path = "../document_sub_type" }
 http-body-util = { workspace = true }
 macro_db_migrator = { path = "../macro_db_migrator" }
 mockall = { workspace = true }
 model = { path = "../model" }
 models_permissions = { path = "../models_permissions" }
+rootcause = { workspace = true }
 tokio = { workspace = true }
 tower = { workspace = true }

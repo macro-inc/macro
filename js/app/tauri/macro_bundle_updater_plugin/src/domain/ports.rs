@@ -2,7 +2,7 @@ use rootcause::Report;
 
 use crate::domain::models::{
     AppInfo, BundleUpdate, DownloadBundleError, DownloadBundleRequest, UnzipError, UnzipRequest,
-    UpdateApproval, UpdateError, UpdateStatus,
+    UpdateError, UpdateStatus,
 };
 use std::path::{Path, PathBuf};
 
@@ -78,6 +78,10 @@ pub trait FsRepo: Clone + Send + Sync + 'static {
 pub trait SystemQuery: Send + Sync + 'static {
     /// Return the current app version, architecture, and OS target.
     fn get_system_info(&self) -> impl Future<Output = Result<AppInfo, rootcause::Report>> + Send;
+    /// Return the current network type, such as `wifi`, `ethernet`, or `cellular`.
+    fn get_network_type(
+        &self,
+    ) -> impl Future<Output = Result<Option<String>, rootcause::Report>> + Send;
     /// Return the directory where update bundles should be stored.
     fn get_update_dir(&self) -> impl Future<Output = Result<PathBuf, std::io::Error>> + Send;
 }
@@ -87,11 +91,10 @@ pub trait AutoUpdateService: 'static {
     /// Get a receiver for the current update status.
     fn status(&self) -> &tokio::sync::watch::Receiver<Result<UpdateStatus, Report<UpdateError>>>;
 
-    /// Try to receive the oneshot sender the worker offered for grant/deny.
-    /// Returns `Err` if the worker hasn't offered one yet.
-    fn try_recv_grant_sender(
-        &mut self,
-    ) -> Result<tokio::sync::oneshot::Sender<UpdateApproval>, Report>;
+    /// Approve or deny a pending update that has not started downloading.
+    fn approve_pending_update(&self, approved: bool) -> Result<(), Report>;
+    /// Resume the worker if it is waiting for a Wi-Fi or Ethernet connection.
+    fn retry_waiting_for_wifi(&self) -> Result<bool, Report>;
     /// Signal the worker to start the checker loop from Idle.
     fn start(&self) -> Result<(), Report>;
 }

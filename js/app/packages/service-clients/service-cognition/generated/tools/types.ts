@@ -157,7 +157,8 @@ export type NotificationItemType =
   | 'project'
   | 'chat'
   | 'call'
-  | 'task';
+  | 'task'
+  | 'github';
 /**
  * Direction for reading more messages around a cursor.
  */

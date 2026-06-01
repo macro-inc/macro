@@ -35,7 +35,7 @@ where
     {
         let GetEmailsRequest {
             view,
-            link_id,
+            link_ids,
             macro_id,
             limit,
             query,
@@ -56,7 +56,7 @@ where
 
         let query = PreviewCursorQuery {
             view,
-            link_id,
+            link_ids,
             limit,
             query,
             team_id,

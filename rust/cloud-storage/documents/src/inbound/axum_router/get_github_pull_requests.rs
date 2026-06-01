@@ -58,6 +58,8 @@ mod tests {
         paths(super::get_github_pull_requests_handler),
         components(schemas(
             crate::domain::models::GithubPullRequest,
+            crate::domain::models::GithubPullRequestCheckRun,
+            crate::domain::models::GithubPullRequestComment,
             crate::domain::models::GithubPullRequestsResponse,
         ))
     )]

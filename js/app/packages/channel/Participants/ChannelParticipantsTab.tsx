@@ -9,7 +9,7 @@ import {
   useAddParticipantsMutation,
   useRemoveParticipantsMutation,
 } from '@queries/channel/participants';
-import { ChannelType } from '@service-comms/generated/models/channelType';
+import { ChannelType } from '@service-storage/generated/schemas/channelType';
 import { Panel } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import { ParticipantsAddPanel } from './ParticipantsAddPanel';
@@ -27,10 +27,8 @@ export function ChannelParticipantsTab(props: { channelId: string }) {
   const [searchQuery, setSearchQuery] = createSignal('');
 
   const participants = () => participantsQuery.data ?? [];
-  const canManageParticipants = () =>
-    channelType() !== ChannelType.organization;
-  const canAddParticipants = () =>
-    canManageParticipants() && channelType() === ChannelType.private;
+  const canAddParticipants = () => channelType() === ChannelType.private;
+  const isEditable = () => canAddParticipants();
 
   const filteredParticipants = () => {
     const query = searchQuery().trim().toLowerCase();
@@ -47,7 +45,7 @@ export function ChannelParticipantsTab(props: { channelId: string }) {
   };
 
   const addParticipants = (participantIds: string[]) => {
-    if (participantIds.length === 0) return;
+    if (!isEditable() || participantIds.length === 0) return;
 
     addParticipantsMutation.mutate({
       channelId: props.channelId,
@@ -56,6 +54,8 @@ export function ChannelParticipantsTab(props: { channelId: string }) {
   };
 
   const removeParticipant = (participantId: string) => {
+    if (!isEditable()) return;
+
     removeParticipantsMutation.mutate({
       channelId: props.channelId,
       participants: [participantId],
@@ -88,7 +88,7 @@ export function ChannelParticipantsTab(props: { channelId: string }) {
           </Panel.Toolbar>
           <Panel.Body>
             <div class="flex h-full flex-col">
-              <Show when={canAddParticipants()}>
+              <Show when={isEditable()}>
                 <div class="px-6 py-3 border-b border-edge-muted shrink-0">
                   <ParticipantsAddPanel
                     participants={participants}
@@ -101,7 +101,7 @@ export function ChannelParticipantsTab(props: { channelId: string }) {
                   participants={filteredParticipants}
                   searchQuery={searchQuery}
                   currentUserId={userId() ?? undefined}
-                  editable={canManageParticipants()}
+                  editable={isEditable()}
                   onParticipantClick={openDirectMessage}
                   onRemoveParticipant={removeParticipant}
                 />

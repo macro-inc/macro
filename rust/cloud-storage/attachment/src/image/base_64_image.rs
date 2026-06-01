@@ -1,136 +1,81 @@
-use anyhow::{anyhow, bail};
+#[cfg(test)]
+mod test;
+
+use anyhow::{Result, anyhow};
 use base64::Engine;
 use base64::engine::general_purpose;
 use image::{DynamicImage, GenericImageView};
-use model_file_type::FileType;
 use serde::{Deserialize, Serialize};
 use webp::Encoder;
 
 const ENCODING_QUALITY: f32 = 75.0;
-const MAX_SIZE_W: u32 = 1080;
-const MAX_SIZE_H: u32 = 720;
+/// The maximum length, in pixels, of an image's longest side.
+const MAX_DIMENSION: u32 = 1080;
 
-/// A base64-encoded image with a known format.
+/// A base64-encoded WebP image.
 ///
-/// Images are optionally downscaled to fit within 1080x720 and re-encoded as
-/// WebP at 75% quality to reduce token cost when sent to an AI model.
+/// All images are normalized on construction: downscaled so their longest side
+/// is at most [`MAX_DIMENSION`] pixels and (re-)encoded as WebP at 75% quality
+/// to reduce token cost when sent to an AI model. The type itself is the
+/// guarantee that its data is a downscaled WebP — there is no other format to
+/// track.
 #[derive(Eq, PartialEq, Clone, Serialize, Deserialize)]
 pub struct Base64Image {
+    /// Raw base64-encoded WebP data, without any `data:` URI prefix.
     data: String,
-    format: ImageFormat,
 }
 
-/// Supported image formats for base64 encoding.
-#[derive(Clone, Debug, Copy, Eq, PartialEq, Serialize, Deserialize)]
-pub enum ImageFormat {
-    /// WebP format.
-    WebP,
-    /// JPG format (three-letter extension).
-    Jpg,
-    /// JPEG format (four-letter extension).
-    Jpeg,
-    /// PNG format.
-    Png,
-}
+impl Base64Image {
+    /// Normalize raw image bytes of any format into a downscaled base64 WebP.
+    ///
+    /// Bytes that are already a WebP within the size bound are kept verbatim;
+    /// anything else is decoded, downscaled, and re-encoded as WebP.
+    pub fn downscale_and_reencode(bytes: Vec<u8>) -> Result<Self> {
+        let img = image::load_from_memory(&bytes)?;
+        let (width, height) = img.dimensions();
 
-impl TryFrom<FileType> for ImageFormat {
-    type Error = anyhow::Error;
-    fn try_from(value: FileType) -> Result<Self, Self::Error> {
-        match value {
-            FileType::Jpg => Ok(Self::Jpg),
-            FileType::Jpeg => Ok(Self::Jpeg),
-            FileType::Png => Ok(Self::Png),
-            FileType::Webp => Ok(Self::WebP),
-            _ => bail!("No conversion"),
+        let already_webp = image::guess_format(&bytes).ok() == Some(image::ImageFormat::WebP);
+        if already_webp && width <= MAX_DIMENSION && height <= MAX_DIMENSION {
+            return Ok(Self::from_webp_bytes(&bytes));
         }
+
+        let resized = Self::resize_if_needed(img);
+        let rgb = resized.to_rgb8();
+        let encoder = Encoder::from_rgb(&rgb, rgb.width(), rgb.height());
+        let webp = encoder.encode(ENCODING_QUALITY);
+        Ok(Self::from_webp_bytes(&webp))
     }
-}
 
-impl Base64Image {
-    /// Compress and re-encode raw image bytes into a base64 WebP.
-    pub fn downscale_and_reencode(bytes: Vec<u8>) -> Result<Self, anyhow::Error> {
-        Self::make_downscaled_base64_webp(bytes)
+    /// Parse a base64 `data:` URI and normalize it into a downscaled WebP.
+    pub(crate) fn try_from_string(s: &str) -> Result<Self> {
+        let base64 = s
+            .strip_prefix("data:")
+            .and_then(|rest| rest.split_once(";base64,"))
+            .map(|(_, data)| data)
+            .ok_or_else(|| anyhow!("not a base64-encoded data URI"))?;
+        let bytes = general_purpose::STANDARD.decode(base64)?;
+        Self::downscale_and_reencode(bytes)
     }
 
-    pub(crate) fn try_from_string(s: &str) -> Result<Self, anyhow::Error> {
-        if s.starts_with("data:") {
-            let prefix = s.split_once(";").ok_or(anyhow!("Unexpected format"))?.0;
-            let image = prefix
-                .split_once("/")
-                .ok_or(anyhow!("Unexpected format"))?
-                .1;
-            let format = ImageFormat::try_from(image)?;
+    /// The raw base64-encoded WebP data, without any `data:` URI prefix.
+    pub fn base64_data(&self) -> &str {
+        &self.data
+    }
 
-            Ok(Self {
-                data: s.to_owned(),
-                format,
-            })
-        } else {
-            Err(anyhow::anyhow!("not a base64 encoded image"))
+    fn from_webp_bytes(webp: &[u8]) -> Self {
+        Self {
+            data: general_purpose::STANDARD.encode(webp),
         }
-    }
-}
-
-impl Base64Image {
-    fn prefix(&self) -> String {
-        format!("data:image/{};base64,", self.format)
-    }
-}
-
-impl std::fmt::Display for Base64Image {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}{}", self.prefix(), self.data)
-    }
-}
-
-impl std::fmt::Display for ImageFormat {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                Self::WebP => "webp",
-                Self::Jpg => "jpg",
-                Self::Jpeg => "jpeg",
-                Self::Png => "png",
-            }
-        )
-    }
-}
-
-impl std::fmt::Debug for Base64Image {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}[{} bytes]", self.prefix(), self.data.len())
-    }
-}
-
-impl Base64Image {
-    fn make_downscaled_base64_webp(image_bytes: Vec<u8>) -> Result<Self, anyhow::Error> {
-        let img = image::load_from_memory(&image_bytes)?;
-        let resized_img = Self::resize_if_needed(img);
-        let rgb_img = resized_img.to_rgb8();
-        let encoder = Encoder::from_rgb(&rgb_img, rgb_img.width(), rgb_img.height());
-        let webp_data = encoder.encode(ENCODING_QUALITY);
-        let base64_string = general_purpose::STANDARD.encode(&*webp_data);
-        Ok(Self {
-            data: base64_string,
-            format: ImageFormat::WebP,
-        })
     }
 
     fn resize_if_needed(img: DynamicImage) -> DynamicImage {
         let (width, height) = img.dimensions();
-
-        // Check if resize is needed
-        if width <= MAX_SIZE_W && height <= MAX_SIZE_H {
+        if width <= MAX_DIMENSION && height <= MAX_DIMENSION {
             return img;
         }
 
-        // Calculate new dimensions while maintaining aspect ratio
-        let width_ratio = MAX_SIZE_W as f32 / width as f32;
-        let height_ratio = MAX_SIZE_H as f32 / height as f32;
-        let ratio = width_ratio.min(height_ratio);
-
+        // Scale the longest side down to MAX_DIMENSION, preserving aspect ratio.
+        let ratio = (MAX_DIMENSION as f32 / width as f32).min(MAX_DIMENSION as f32 / height as f32);
         let new_width = (width as f32 * ratio) as u32;
         let new_height = (height as f32 * ratio) as u32;
 
@@ -138,26 +83,14 @@ impl Base64Image {
     }
 }
 
-impl From<ImageFormat> for image::ImageFormat {
-    fn from(value: ImageFormat) -> Self {
-        match value {
-            ImageFormat::Jpeg => Self::Jpeg,
-            ImageFormat::Jpg => Self::Jpeg,
-            ImageFormat::WebP => Self::WebP,
-            ImageFormat::Png => Self::Png,
-        }
+impl std::fmt::Display for Base64Image {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "data:image/webp;base64,{}", self.data)
     }
 }
 
-impl TryFrom<&str> for ImageFormat {
-    type Error = anyhow::Error;
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
-        match value {
-            "webp" => Ok(Self::WebP),
-            "jpg" => Ok(Self::Jpg),
-            "jpeg" => Ok(Self::Jpeg),
-            "png" => Ok(Self::Png),
-            _ => bail!("No conversion"),
-        }
+impl std::fmt::Debug for Base64Image {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "data:image/webp;base64,[{} bytes]", self.data.len())
     }
 }

@@ -33,6 +33,7 @@ axum = [
   "dep:axum-extra",
   "dep:model-error-response",
   "dep:model_user",
+  "dep:task_dedup",
   "dep:utoipa",
   "entity_access/axum",
 ]
@@ -112,6 +113,7 @@ futures = { workspace = true }
 hex = { workspace = true, optional = true }
 sqlx = { workspace = true, optional = true }
 sync_service_client = { path = "../sync_service_client" }
+task_dedup = { path = "../task_dedup", optional = true }
 urlencoding = { workspace = true }
 
 # AI Tool dependencies

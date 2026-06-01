@@ -17,6 +17,7 @@ export function getNotificationAction(n: UnifiedNotification): string {
     .with('new_email', () => 'sent a new email')
     .with('invite_to_team', () => 'invited you to')
     .with('task_assigned', () => 'assigned you a task')
+    .with('github_pr_event', () => 'updated a pull request')
     .exhaustive();
 }
 
@@ -38,6 +39,10 @@ export function getNotificationTargetName(
     .with({ tag: 'commented_on_document' }, (m) => m.content.documentName)
     .with({ tag: 'invite_to_team' }, (m) => m.content.teamName)
     .with({ tag: 'task_assigned' }, (m) => m.content.taskName ?? undefined)
+    .with(
+      { tag: 'github_pr_event' },
+      (m) => `${m.content.owner}/${m.content.repo}#${m.content.number}`
+    )
     .with({ tag: 'channel_mention' }, () => undefined)
     .with({ tag: 'channel_message_send' }, () => undefined)
     .with({ tag: 'ai_response' }, () => undefined)
@@ -61,6 +66,10 @@ export function getNotificationContent(
     .with({ tag: 'commented_on_document' }, (m) => m.content.text)
     .with({ tag: 'new_email' }, (m) => m.content.subject)
     .with({ tag: 'task_assigned' }, (m) => m.content.taskName ?? undefined)
+    .with(
+      { tag: 'github_pr_event' },
+      (m) => m.content.title || m.content.displayName
+    )
     .with({ tag: 'channel_invite' }, () => undefined)
     .with({ tag: 'invite_to_team' }, () => undefined)
     .exhaustive();
@@ -84,6 +93,7 @@ export function shouldShowNotificationTarget(n: UnifiedNotification): boolean {
     .with({ tag: 'ai_response' }, () => false)
     .with({ tag: 'new_email' }, () => false)
     .with({ tag: 'task_assigned' }, () => true)
+    .with({ tag: 'github_pr_event' }, () => true)
     .with({ tag: 'document_mention' }, () => true)
     .with({ tag: 'mentioned_in_document_comment' }, () => true)
     .with({ tag: 'replied_to_document_comment_thread' }, () => true)

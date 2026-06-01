@@ -29,6 +29,7 @@ pub enum NotificationItemType {
     Chat,
     Call,
     Task,
+    Github,
 }
 
 impl NotificationItemType {
@@ -42,6 +43,7 @@ impl NotificationItemType {
             Self::Chat => "chat",
             Self::Call => "call",
             Self::Task => "task",
+            Self::Github => "github",
         }
     }
 }

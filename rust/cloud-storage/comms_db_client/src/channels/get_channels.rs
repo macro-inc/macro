@@ -1,8 +1,5 @@
 use cached::proc_macro::cached;
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
-#[allow(unused_imports)]
-use model::comms::{Channel, ChannelParticipant, ChannelType, ChannelWithParticipants};
-use model::comms::{ChannelId, OrganizationId};
+use model::comms::Channel;
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
@@ -30,7 +27,7 @@ pub async fn check_channels_for_user(
     Ok(channels)
 }
 
-#[tracing::instrument(skip(db))]
+#[tracing::instrument(skip(db, _user_org_id))]
 #[cached(
     time = 5,
     result = true,
@@ -40,30 +37,22 @@ pub async fn check_channels_for_user(
 pub async fn get_user_channel_ids(
     db: &Pool<Postgres>,
     user_id: &str,
-    user_org_id: Option<i64>,
+    _user_org_id: Option<i64>,
 ) -> Result<Vec<Uuid>, sqlx::Error> {
     let channels = sqlx::query!(
         r#"
         WITH user_channels AS (
-            SELECT DISTINCT c.*
+            SELECT DISTINCT c.id, c.created_at
             FROM comms_channels c
             INNER JOIN comms_channel_participants cp ON cp.channel_id = c.id
             WHERE cp.user_id = $1 AND cp.left_at IS NULL
-            
-            UNION
-            
-            SELECT c.*
-            FROM comms_channels c
-            WHERE c.channel_type = 'organization'::comms_channel_type
-            AND c.org_id = $2::bigint
         )
-        SELECT 
+        SELECT
             id as "id!"
         FROM user_channels
         ORDER BY created_at DESC
         "#,
         user_id,
-        user_org_id
     )
     .map(|row| row.id)
     .fetch_all(db)
@@ -73,43 +62,10 @@ pub async fn get_user_channel_ids(
 }
 
 pub async fn get_org_channels(
-    db: &Pool<Postgres>,
-    org_id: &i64,
+    _db: &Pool<Postgres>,
+    _org_id: &i64,
 ) -> Result<Vec<Channel>, sqlx::Error> {
-    let channels = sqlx::query!(
-        r#"
-        SELECT 
-            id as "id!",
-            name as "name!",
-            channel_type as "channel_type!: ChannelType",
-            org_id,  -- This can be NULL
-            created_at as "created_at!",
-            updated_at as "updated_at!",
-            owner_id as "owner_id!"
-        FROM comms_channels
-        WHERE channel_type = 'organization'::comms_channel_type
-        AND org_id = $1::bigint
-        ORDER BY created_at DESC
-        "#,
-        org_id
-    )
-    .try_map(|row| {
-        Ok(Channel {
-            id: ChannelId(row.id),
-            name: Some(row.name),
-            channel_type: row.channel_type,
-            org_id: row.org_id.map(|id| OrganizationId(id as u32)),
-            created_at: row.created_at,
-            updated_at: row.updated_at,
-            owner_id: MacroUserIdStr::parse_from_str(&row.owner_id)
-                .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
-                .into_owned(),
-        })
-    })
-    .fetch_all(db)
-    .await?;
-
-    Ok(channels)
+    Ok(Vec::new())
 }
 
 /// Returns a paginated list of project IDs, sorting by ascending so we don't miss new ones

@@ -1586,6 +1586,150 @@
         }
       }
     },
+    "/email/links/{link_id}": {
+      "delete": {
+        "tags": ["Links"],
+        "summary": "Removes a linked inbox.",
+        "description": "For an inbox the caller owns this enqueues a full cascade teardown\n(`LinkManagerMessage::DeleteLink`). For an inbox reached via delegation it\nonly drops the `macro_user_links` edge, leaving the owner's data intact.",
+        "operationId": "delete_link",
+        "parameters": [
+          {
+            "name": "link_id",
+            "in": "path",
+            "description": "Inbox link ID.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/email/links/{link_id}/resync": {
+      "post": {
+        "tags": ["Links"],
+        "summary": "Re-syncs a linked inbox by enqueuing a fresh backfill.",
+        "description": "Idempotent: if a backfill is already `Init`/`InProgress` for the inbox this is\na no-op and returns that job.",
+        "operationId": "resync_link",
+        "parameters": [
+          {
+            "name": "link_id",
+            "in": "path",
+            "description": "Inbox link ID.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResyncResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/email/messages": {
       "post": {
         "tags": ["Messages"],
@@ -3993,6 +4137,7 @@
           "email_address",
           "provider",
           "is_sync_active",
+          "sync_status",
           "settings",
           "created_at",
           "updated_at"
@@ -4026,6 +4171,9 @@
           },
           "signature": {
             "type": ["string", "null"]
+          },
+          "sync_status": {
+            "$ref": "#/components/schemas/SyncStatus"
           },
           "updated_at": {
             "type": "string",
@@ -4403,6 +4551,22 @@
           "other"
         ]
       },
+      "ResyncResponse": {
+        "type": "object",
+        "description": "The response returned from the resync endpoint.",
+        "required": ["backfill_job_id", "already_in_progress"],
+        "properties": {
+          "already_in_progress": {
+            "type": "boolean",
+            "description": "True when a backfill was already running and this call was a no-op."
+          },
+          "backfill_job_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The backfill job driving the (re-)sync. Either the freshly enqueued job or\nthe one already in progress."
+          }
+        }
+      },
       "SendMessageRequest": {
         "type": "object",
         "description": "Request body for sending a message (backward-compatible with `{ message: MessageToSend }`).",
@@ -4432,6 +4596,11 @@
             "type": ["boolean", "null"]
           }
         }
+      },
+      "SyncStatus": {
+        "type": "string",
+        "description": "Coarse sync state for an inbox, used to render a one-line hint in the\nmulti-inbox settings list. Derived from the link's `is_sync_active` flag and\nits most recent backfill job.",
+        "enum": ["SYNCING", "UP_TO_DATE", "ERROR", "INACTIVE"]
       },
       "Thread": {
         "type": "object",

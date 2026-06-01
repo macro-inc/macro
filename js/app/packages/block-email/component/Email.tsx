@@ -1,3 +1,4 @@
+import { SidePanel } from '@app/component/side-panel';
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { EmailCompose } from '@block-email/component/compose/Compose';
 import {
@@ -37,6 +38,7 @@ import { EmailFormContextProvider } from './EmailFormContext';
 import { EmailParticipants } from './EmailParticipants';
 import { MessageList } from './MessageList';
 import { ModalsProvider } from './ModalsProvider';
+import { EmailSidePanelSections } from './sidepanel/EmailSidePanelSections';
 import { TopBar } from './TopBar';
 
 const TARGET_MESSAGE_HIGHLIGHT_MS = 800;
@@ -51,7 +53,13 @@ type EmailViewProps = {
 export function EmailView(props: EmailViewProps) {
   return (
     <EmailProvider threadID={props.threadId()}>
-      <EmailContent {...props} />
+      <SidePanel.Layout>
+        <EmailContent {...props} />
+        <EmailSidePanelSections
+          threadId={props.threadId()}
+          title={props.title}
+        />
+      </SidePanel.Layout>
     </EmailProvider>
   );
 }

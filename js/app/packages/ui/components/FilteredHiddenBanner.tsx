@@ -1,29 +1,31 @@
 import XIcon from '@phosphor/x.svg';
 import { Show } from 'solid-js';
+import { cn } from '../utils/classname';
 
 export interface FilteredHiddenBannerProps {
-  hiddenCount?: number;
-  itemLabel?: string;
+  /**
+   * Whether to surface the "Some items are hidden by filters" message.
+   * When false the banner collapses to fit just the Clear Filters button.
+   * When undefined, defaults to showing the message.
+   */
+  hasHiddenItems?: boolean;
   onClearFilters: () => void;
 }
 
 export function FilteredHiddenBanner(props: FilteredHiddenBannerProps) {
+  const showMessage = () => props.hasHiddenItems !== false;
   return (
-    <div class="flex w-full max-w-md flex-wrap items-center justify-between gap-3 rounded-md border border-edge-muted bg-input/50 px-4 py-3">
-      <div class="flex items-baseline gap-2 text-sm">
-        <Show
-          when={props.hiddenCount !== undefined}
-          fallback={
-            <span class="text-ink-muted">Some items are hidden by filters</span>
-          }
-        >
-          <span class="font-semibold text-ink">
-            {props.hiddenCount}{' '}
-            {props.itemLabel ?? (props.hiddenCount === 1 ? 'item' : 'items')}
-          </span>
-          <span class="text-ink-muted">hidden by filters</span>
-        </Show>
-      </div>
+    <div
+      class={cn(
+        'flex flex-wrap items-center gap-3 rounded-md border border-edge-muted bg-input/50 px-4 py-3',
+        showMessage() ? 'w-full max-w-md justify-between' : 'w-fit'
+      )}
+    >
+      <Show when={showMessage()}>
+        <span class="text-sm text-ink-muted">
+          Some items are hidden by filters
+        </span>
+      </Show>
       <button
         type="button"
         onClick={props.onClearFilters}

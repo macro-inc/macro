@@ -21,7 +21,6 @@ pub use dynamic::get_user_channels_dynamic;
 #[dg(forward = models_comms::channel::ChannelType)]
 pub enum ChannelType {
     Public,
-    Organization,
     Private,
     DirectMessage,
     Team,

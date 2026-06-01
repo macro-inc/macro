@@ -11,10 +11,10 @@ import {
   useSetCallRecordShareWithTeamMutation,
   useToggleShareWithTeamMutation,
 } from '@queries/call/call';
-import { storageServiceClient } from '@service-storage/client';
+import { useAttachmentReferencesQuery } from '@queries/storage/attachment-references';
 import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
 import { cn } from '@ui';
-import { type Accessor, createResource, Show, Suspense } from 'solid-js';
+import { type Accessor, Show, Suspense } from 'solid-js';
 import { formatCallDuration } from '../../utils';
 
 interface CallSidePanelSectionsProps {
@@ -175,24 +175,12 @@ function SharingSectionContent(props: { record: Accessor<CallRecord> }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function ReferencesSectionConditional(props: { callId: string }) {
-  const [references] = createResource(
+  const references = useAttachmentReferencesQuery(
     () => props.callId,
-    async (id) => {
-      const response = await storageServiceClient.attachmentReferences({
-        entity_type: 'call',
-        entity_id: id,
-      });
-
-      if (response.isErr()) {
-        console.error(response);
-        return [];
-      }
-
-      return response.value.references;
-    }
+    () => 'call'
   );
 
-  const count = () => references()?.length ?? 0;
+  const count = () => references.data?.length ?? 0;
 
   return (
     <Show when={count() > 0}>

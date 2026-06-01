@@ -231,6 +231,11 @@ impl<DSvc: DocumentService, ESvc: EntityAccessService> DocumentAttachmentService
 }
 
 pub(super) async fn fetch_url_bytes(url: &str) -> Result<Vec<u8>, AttachmentError> {
+    // Presigned/distribution URLs are minted with the browser-facing `localhost`
+    // host; rewrite to the in-network LocalStack host so this server-side fetch
+    // works inside Docker. No-op outside local AWS.
+    let url = macro_aws_config::transform_aws_url_for_internal_fetch(url);
+    let url = url.as_str();
     let response = reqwest::get(url)
         .await
         .map_err(|e| AttachmentError::Internal(e.into()))?;

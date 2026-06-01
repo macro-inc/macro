@@ -1,9 +1,8 @@
 -- Channels for dynamic query tests
--- Note: org_id can only be set when channel_type = 'organization'
 INSERT INTO comms_channels (id, name, channel_type, org_id, owner_id, created_at, updated_at)
 VALUES
-    ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Org Channel A', 'organization', 1, 'macro|user-1@test.com', '2024-01-01 10:00:00', '2024-01-10 10:00:00'),
-    ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'Org Channel B', 'organization', 1, 'macro|user-1@test.com', '2024-01-02 10:00:00', '2024-01-09 10:00:00'),
+    ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Private Channel A', 'private', NULL, 'macro|user-1@test.com', '2024-01-01 10:00:00', '2024-01-10 10:00:00'),
+    ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'Private Channel B', 'private', NULL, 'macro|user-1@test.com', '2024-01-02 10:00:00', '2024-01-09 10:00:00'),
     ('cccccccc-cccc-cccc-cccc-cccccccccccc', 'Public Channel C', 'public', NULL, 'macro|user-2@test.com', '2024-01-03 10:00:00', '2024-01-08 10:00:00'),
     ('dddddddd-dddd-dddd-dddd-dddddddddddd', NULL, 'direct_message', NULL, 'macro|user-1@test.com', '2024-01-04 10:00:00', '2024-01-07 10:00:00');
 

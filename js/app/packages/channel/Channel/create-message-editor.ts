@@ -1,7 +1,7 @@
 import type { InputSnapshot } from '@channel/Input';
 import { toast } from '@core/component/Toast/Toast';
-import type { NewAttachment } from '@service-comms/generated/models/newAttachment';
-import type { SimpleMention } from '@service-comms/generated/models/simpleMention';
+import type { NewChannelAttachment as NewAttachment } from '@service-storage/generated/schemas/newChannelAttachment';
+import type { SimpleMention } from '@service-storage/generated/schemas/simpleMention';
 import { type Accessor, createSignal } from 'solid-js';
 import { expandMentions } from '../Input/message-payload';
 import type { MessageData } from '../Message';

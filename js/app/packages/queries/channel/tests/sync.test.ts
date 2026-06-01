@@ -2,11 +2,11 @@
  * @vitest-environment jsdom
  */
 
-import type { Attachment as ApiAttachment } from '@service-comms/generated/models';
 import type {
   ApiChannelMessage,
   ApiThreadReply,
 } from '@service-storage/client';
+import type { ApiMessageAttachment as ApiAttachment } from '@service-storage/generated/schemas/apiMessageAttachment';
 import { QueryClient } from '@tanstack/solid-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 

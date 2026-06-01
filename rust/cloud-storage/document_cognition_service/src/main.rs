@@ -9,7 +9,6 @@ use call::outbound::s3_recording_storage::S3RecordingStorage;
 use comms::domain::service::ChannelServiceImpl;
 use comms::outbound::postgres::comms_repo::PgCommsRepo;
 use comms::outbound::postgres::user_repo::PgUserRepo;
-use comms_service_client::CommsServiceClient;
 use config::{Config, EnvVars, Environment};
 use document_storage_service_client::DocumentStorageServiceClient;
 use documents::{
@@ -104,10 +103,6 @@ async fn main() -> anyhow::Result<()> {
     );
 
     tracing::info!("initialized dss client");
-    // Comms service is now served from document_storage_service under /comms prefix
-    let comms_service_client = CommsServiceClient::new(config.document_storage_service_url.clone());
-
-    tracing::info!("initialized comms client");
     let sync_service_auth_key = match config.environment {
         Environment::Local => config.sync_service_auth_key.clone(),
         _ => secretsmanager_client
@@ -434,7 +429,6 @@ async fn main() -> anyhow::Result<()> {
         email_service_client_external,
         sqs_client: Arc::new(sqs_client),
         document_storage_client: Arc::new(document_storage_client),
-        comms_service_client: Arc::new(comms_service_client),
         search_service_client,
         jwt_args,
         config: Arc::new(config),

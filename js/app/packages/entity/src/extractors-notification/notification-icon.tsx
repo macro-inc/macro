@@ -1,4 +1,5 @@
 import type { NotificationType } from '@core/types';
+import GithubIcon from '@icon/mcp-github.svg';
 import PhoneIcon from '@icon/wide-call.svg';
 import type { NotificationStack } from '@notifications';
 import ArrowBendUpLeftIcon from '@phosphor/arrow-bend-up-left.svg';
@@ -39,6 +40,7 @@ function getNotificationIcon(
     .with('invite_to_team', () => UserPlusIcon)
     .with('task_assigned', () => CheckIcon)
     .with('ai_response', () => ChatIcon)
+    .with('github_pr_event', () => GithubIcon)
     .with('call-started', () => PhoneIcon)
     .exhaustive();
 }

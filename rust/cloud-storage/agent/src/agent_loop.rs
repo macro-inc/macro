@@ -1,7 +1,7 @@
 /// The main entry point: [`AgentLoop`] and [`Session`].
 use crate::anthropic_model::AnthropicModel;
 use crate::error::AgentError;
-use crate::hook::StreamBridge;
+use crate::hook::{StreamBridge, ToolRouter};
 use crate::model::AgentModel;
 use crate::stream::{ChatCompletionStream, StreamPart};
 use crate::tool_adapter::DynToolSetAdapter;
@@ -86,6 +86,13 @@ impl AgentLoop {
     {
         let request_context = Arc::new(RwLock::new(RequestContext { user_id }));
 
+        // Keep a handle to the toolset so the stream bridge can resolve MCP
+        // routing info (service / display name) for tool calls. This is the
+        // authoritative source rig itself doesn't expose to the hook.
+        let routing_toolset = toolset.clone();
+        let routing: ToolRouter =
+            Arc::new(move |name: &str| routing_toolset.routing_description(name));
+
         let adapters = DynToolSetAdapter::from_toolset(toolset, context, request_context);
 
         let handle = ToolServer::new().run();
@@ -111,6 +118,7 @@ impl AgentLoop {
             agent,
             history: Vec::new(),
             max_turns: self.max_turns,
+            routing,
         }
     }
 }
@@ -120,6 +128,7 @@ pub struct Session {
     agent: Agent<AnthropicModel>,
     history: Vec<Message>,
     max_turns: usize,
+    routing: ToolRouter,
 }
 
 impl Session {
@@ -140,7 +149,7 @@ impl Session {
             )));
         };
 
-        let (bridge, mut rx) = StreamBridge::channel();
+        let (bridge, mut rx) = StreamBridge::channel(self.routing.clone());
 
         let mut rig_stream = self
             .agent

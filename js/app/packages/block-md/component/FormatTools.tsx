@@ -11,7 +11,6 @@ import {
 import { CREATE_DRAFT_COMMENT_COMMAND } from '@core/component/LexicalMarkdown/plugins/comments/commentPlugin';
 import { editorFocusSignal } from '@core/component/LexicalMarkdown/utils';
 import { ENABLE_MARKDOWN_COMMENTS } from '@core/constant/featureFlags';
-import { TOKENS } from '@core/hotkey/tokens';
 import { useCanComment, useCanEdit } from '@core/signal/permissions';
 import type { ElementName } from '@lexical-core';
 import CaretRight from '@phosphor/caret-right.svg';
@@ -44,7 +43,7 @@ import TextSub from '@phosphor/text-subscript.svg';
 import TextSuper from '@phosphor/text-superscript.svg';
 import TextT from '@phosphor/text-t.svg';
 import TextUnderline from '@phosphor/text-underline.svg';
-import { Button, Dropdown, Hotkey } from '@ui';
+import { Button, Dropdown, Hotkey, SingleSelectCheck } from '@ui';
 import { toast } from 'core/component/Toast/Toast';
 import type { ValidHotkey } from 'core/hotkey/types';
 import {
@@ -174,6 +173,37 @@ const InlineShortcuts: Partial<Record<InlineFormat, ValidHotkey>> = {
   code: 'cmd+e',
 } as const;
 
+const InlineLabels: Record<InlineFormat, string> = {
+  bold: 'Bold',
+  italic: 'Italic',
+  underline: 'Underline',
+  strikethrough: 'Strikethrough',
+  highlight: 'Highlight',
+  code: 'Inline code',
+  superscript: 'Superscript',
+  subscript: 'Subscript',
+} as const;
+
+const isInlineFormatActive = (
+  selection: SelectionData | undefined,
+  format: InlineFormat
+) => !!selection?.[format];
+
+const hasActiveInlineFormat = (
+  selection: SelectionData | undefined,
+  formats: InlineFormat[]
+) => formats.some((format) => isInlineFormatActive(selection, format));
+
+const isElementFormatActive = (
+  selection: SelectionData | undefined,
+  format: ElementName
+) => !!selection?.elementsInRange?.has(format);
+
+const hasActiveElementFormat = (
+  selection: SelectionData | undefined,
+  formats: ElementName[]
+) => formats.some((format) => isElementFormatActive(selection, format));
+
 const InlineFormatButton = (props: {
   format: InlineFormat;
   selection: () => SelectionData | undefined;
@@ -181,17 +211,15 @@ const InlineFormatButton = (props: {
   buttonIsDisabled: Accessor<boolean>;
 }) => {
   const icon = InlineIcons[props.format];
+  const isActive = () => isInlineFormatActive(props.selection(), props.format);
   return (
     <Button
-      label={props.format}
-      hotkey={TOKENS.global.commandMenu}
+      label={InlineLabels[props.format]}
+      shortcut={InlineShortcuts[props.format]}
       size="icon-sm"
-      variant="ghost"
+      variant={isActive() ? 'active' : 'ghost'}
       class="rounded-md"
       depth={3}
-      classList={{
-        'bg-active text-ink': !!props.selection()?.[props.format],
-      }}
       onClick={(e: MouseEvent | KeyboardEvent) =>
         props.onClick(e as MouseEvent)
       }
@@ -209,19 +237,23 @@ const InlineFormatMenuItem = (props: {
   buttonIsDisabled: Accessor<boolean>;
 }) => {
   const icon = InlineIcons[props.format];
+  const isActive = () => isInlineFormatActive(props.selection(), props.format);
   return (
-    <Dropdown.Item onSelect={props.onClick} disabled={props.buttonIsDisabled()}>
+    <Dropdown.Item
+      onSelect={props.onClick}
+      disabled={props.buttonIsDisabled()}
+      class={isActive() ? 'text-ink' : ''}
+      role="menuitemradio"
+      aria-checked={isActive()}
+    >
       <Dynamic component={icon} class="size-4 shrink-0" />
-      <span class="flex-1 truncate capitalize">{props.format}</span>
+      <span class="flex-1 truncate">{InlineLabels[props.format]}</span>
       <Show when={InlineShortcuts[props.format]}>
-        {(_shortcut) => (
-          <Hotkey
-            token={TOKENS.global.commandMenu}
-            class="text-ink-muted"
-            showPlus
-          />
+        {(shortcut) => (
+          <Hotkey shortcut={shortcut()} class="text-ink-muted" showPlus />
         )}
       </Show>
+      <SingleSelectCheck active={isActive()} />
     </Dropdown.Item>
   );
 };
@@ -240,12 +272,11 @@ export const ElementFormatButton = (props: {
       size="icon-sm"
       class="rounded-md"
       depth={3}
-      variant="ghost"
-      classList={{
-        'bg-active text-ink': !!props
-          .selection()
-          ?.elementsInRange?.has(props.format),
-      }}
+      variant={
+        isElementFormatActive(props.selection(), props.format)
+          ? 'active'
+          : 'ghost'
+      }
       onClick={(e: MouseEvent | KeyboardEvent) =>
         props.onClick(e as MouseEvent)
       }
@@ -269,6 +300,7 @@ const ElementFormatMenuItem = (
   const name = NodeMenuOptions[props.format]?.label || 'Text';
   const themeClass = NodeMenuOptions[props.format]?.themeClass || '';
   const before = NodeMenuOptions[props.format]?.before;
+  const isActive = () => isElementFormatActive(props.selection(), props.format);
   const inner = () => {
     if (props.useStyle) {
       return (
@@ -283,7 +315,13 @@ const ElementFormatMenuItem = (
   const icon = () =>
     props.useIcon ? NodeMenuOptions[props.format]?.icon : undefined;
   return (
-    <Dropdown.Item onSelect={props.onClick} disabled={props.buttonIsDisabled()}>
+    <Dropdown.Item
+      onSelect={props.onClick}
+      disabled={props.buttonIsDisabled()}
+      class={isActive() ? 'text-ink' : ''}
+      role="menuitemradio"
+      aria-checked={isActive()}
+    >
       <Show when={icon()}>
         {(IconComp) => (
           <Dynamic
@@ -295,6 +333,7 @@ const ElementFormatMenuItem = (
         )}
       </Show>
       <span class="flex-1 truncate">{inner()}</span>
+      <SingleSelectCheck active={isActive()} />
     </Dropdown.Item>
   );
 };
@@ -445,10 +484,13 @@ export function FormatTools(props: { withinPopup?: boolean }) {
 
   const FormatDropDown = (props: { buttonIsDisabled: Accessor<boolean> }) => {
     const [menuOpen, setMenuOpen] = createSignal(false);
+    const isActive = () =>
+      hasActiveInlineFormat(selection(), InlineFormats) ||
+      hasActiveElementFormat(selection(), MainFormatOptions);
     return (
       <Dropdown open={menuOpen()} onOpenChange={setMenuOpen}>
         <Dropdown.Trigger
-          variant="ghost"
+          variant={isActive() ? 'active' : 'ghost'}
           size="icon-sm"
           class="rounded-md"
           depth={3}
@@ -508,10 +550,11 @@ export function FormatTools(props: { withinPopup?: boolean }) {
     buttonIsDisabled: Accessor<boolean>;
   }) => {
     const [menuOpen, setMenuOpen] = createSignal(false);
+    const isActive = () => hasActiveInlineFormat(selection(), props.formats);
     return (
       <Dropdown open={menuOpen()} onOpenChange={setMenuOpen}>
         <Dropdown.Trigger
-          variant="ghost"
+          variant={isActive() ? 'active' : 'ghost'}
           size="icon-sm"
           class="rounded-md"
           depth={3}
@@ -561,7 +604,16 @@ export function FormatTools(props: { withinPopup?: boolean }) {
   }) => (
     <Dropdown>
       <Dropdown.Trigger
-        variant="ghost"
+        variant={
+          hasActiveInlineFormat(
+            selection(),
+            (Object.keys(InlineIcons) as InlineFormat[]).filter(
+              (format) => !props.excludes?.includes(format)
+            )
+          )
+            ? 'active'
+            : 'ghost'
+        }
         size="icon-sm"
         class="rounded-md"
         depth={3}
@@ -606,7 +658,11 @@ export function FormatTools(props: { withinPopup?: boolean }) {
   }) => (
     <Dropdown>
       <Dropdown.Trigger
-        variant="ghost"
+        variant={
+          hasActiveElementFormat(selection(), props.elements)
+            ? 'active'
+            : 'ghost'
+        }
         size="icon-sm"
         class="rounded-md"
         depth={3}

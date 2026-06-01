@@ -72,6 +72,7 @@ export type EntityWithValidIcon =
   | BlockName
   | BlockAlias
   | ChannelType
+  | 'organization'
   | 'default'
   | 'sharedProject'
   | 'emailRead'
@@ -120,7 +121,7 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     icon: Building,
     foreground: 'text-default',
     background: 'bg-default/20',
-    prettyName: 'Organization Channel',
+    prettyName: 'Organization',
   },
   private: {
     icon: WideChannel,

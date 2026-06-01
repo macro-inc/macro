@@ -8,7 +8,6 @@ members = [
   "bot_id",
   "bots",
   "channel_bots",
-  "comms_service",
   "connection_gateway",
   "contacts_service",
   "convert_service",
@@ -47,6 +46,7 @@ members = [
   "seed_cli",
   "sha_cleanup_worker",
   "static_file_service",
+  "task_dedup",
   "tools/native_app_server",
   "unfurl",
   "unfurl_service",
@@ -63,6 +63,7 @@ async-openai = { version = "0.36.1", features = [
   "byot",
   "chat-completion",
   "completions",
+  "embedding",
 ] }
 async-stream = "0.3.6"
 async-trait = "0.1.86"

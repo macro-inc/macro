@@ -22,7 +22,6 @@ import type {
   SearchData,
   WithSearch,
 } from '@entity';
-import type { ChannelType } from '@service-comms/generated/models';
 import type {
   CallRecordSearchResult,
   ChannelSearchResult,
@@ -36,6 +35,7 @@ import type {
   SoupDocument,
   SoupPage,
 } from '@service-storage/generated/schemas';
+import type { ChannelType } from '@service-storage/generated/schemas/channelType';
 import type { UseQueryResult } from '@tanstack/solid-query';
 import { differenceInMilliseconds } from 'date-fns';
 

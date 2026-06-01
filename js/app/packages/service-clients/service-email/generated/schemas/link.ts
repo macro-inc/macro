@@ -7,6 +7,7 @@
 
 import type { LinkSignature } from './linkSignature';
 import type { Settings } from './settings';
+import type { SyncStatus } from './syncStatus';
 import type { UserProvider } from './userProvider';
 
 export interface Link {
@@ -19,5 +20,6 @@ export interface Link {
   provider: UserProvider;
   settings: Settings;
   signature?: LinkSignature;
+  sync_status: SyncStatus;
   updated_at: string;
 }
