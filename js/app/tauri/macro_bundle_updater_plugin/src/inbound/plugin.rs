@@ -59,17 +59,42 @@ pub enum BundleUpdateEvent {
     },
 }
 
+/// Debug metadata about the currently effective JavaScript bundle.
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BundleDebugInfo {
+    /// Current effective bundle build.
+    bundle_build: u64,
+    /// Bundle build embedded in this native app.
+    embedded_bundle_build: u64,
+    /// Whether the effective bundle came from OTA cache or embedded assets.
+    source: BundleDebugSource,
+    /// Runtime native app build number.
+    native_build: u64,
+}
+
+/// Source of the currently effective JavaScript bundle.
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum BundleDebugSource {
+    /// The native app's embedded bundle is active.
+    Embedded,
+    /// A cached OTA bundle is active.
+    Ota,
+}
+
 impl BundleUpdateEvent {
     fn new(cur: &Result<UpdateStatus, Report<UpdateError>>) -> Self {
         match cur.as_ref() {
             Ok(UpdateStatus::Idle) => BundleUpdateEvent::Idle,
             Ok(UpdateStatus::CheckingForDownload(_)) => BundleUpdateEvent::CheckingForUpdate,
             Ok(UpdateStatus::UpdateFound(found)) => BundleUpdateEvent::UpdateFound {
-                version: found.bundle.version.to_string(),
+                version: found.bundle.bundle_build.to_string(),
                 notes: found.bundle.notes.clone(),
             },
             Ok(UpdateStatus::WaitingForWifi(_found)) => BundleUpdateEvent::WaitingForWifi,
             Ok(UpdateStatus::NoUpdateNeeded) => BundleUpdateEvent::NoUpdateNeeded,
+            Ok(UpdateStatus::ClearRequired(_clear)) => BundleUpdateEvent::Completed,
             Ok(UpdateStatus::DownloadingBundle(dl)) => BundleUpdateEvent::Downloading {
                 progress: dl.progress.value(),
             },
@@ -167,19 +192,13 @@ pub async fn apply_completed_update<R: Runtime>(
             tracing::info!("Bundle update complete, reloading to pick up new assets");
             if let Err(e) = webview.eval("window.location.reload();") {
                 tracing::warn!(error=?e, "Failed to dispatch bundle update reload");
-                service_state
-                    .lock()
-                    .await
-                    .unmark_update_reload_dispatched();
+                service_state.lock().await.unmark_update_reload_dispatched();
             }
         } else {
             tracing::warn!(
                 "Completed bundle update applied but no webview was available to reload"
             );
-            service_state
-                .lock()
-                .await
-                .unmark_update_reload_dispatched();
+            service_state.lock().await.unmark_update_reload_dispatched();
         }
     }
     Ok(apply_result != ApplyUpdateResult::NoUpdate)
@@ -226,6 +245,26 @@ pub async fn get_bundle_update_status(
     Ok(BundleUpdateEvent::new(&status))
 }
 
+/// Return debug metadata for the currently effective JavaScript bundle.
+#[tauri::command]
+pub async fn get_bundle_debug_info(
+    service: tauri::State<'_, Mutex<PluginService>>,
+) -> Result<BundleDebugInfo, String> {
+    let service = service.lock().await;
+    let embedded_bundle_build = crate::domain::service::embedded_bundle_build();
+    let cached_bundle_build = service.bundle_build().await;
+    Ok(BundleDebugInfo {
+        bundle_build: cached_bundle_build.unwrap_or(embedded_bundle_build),
+        embedded_bundle_build,
+        source: if cached_bundle_build.is_some() {
+            BundleDebugSource::Ota
+        } else {
+            BundleDebugSource::Embedded
+        },
+        native_build: crate::outbound::system_info::native_build(),
+    })
+}
+
 /// Clear the downloaded bundle and revert to built-in assets.
 #[tauri::command]
 pub async fn clear_bundle<R: Runtime>(
@@ -269,7 +308,6 @@ impl<R: Runtime> Plugin<R> for MacroBundleUpdaterPlugin {
         let mut status_rx = service.status().clone();
         let mut wifi_retry_status_rx = service.status().clone();
 
-        let _ = service.start();
         app.manage(tokio::sync::Mutex::new(service));
 
         let app_handle = app.clone();

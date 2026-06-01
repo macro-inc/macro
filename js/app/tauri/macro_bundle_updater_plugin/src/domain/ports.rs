@@ -1,18 +1,18 @@
 use rootcause::Report;
 
 use crate::domain::models::{
-    AppInfo, BundleUpdate, DownloadBundleError, DownloadBundleRequest, UnzipError, UnzipRequest,
+    AppInfo, BundleAction, DownloadBundleError, DownloadBundleRequest, UnzipError, UnzipRequest,
     UpdateError, UpdateStatus,
 };
 use std::path::{Path, PathBuf};
 
 /// Port for communicating with the update server.
 pub trait UpdateRepo: Send + Sync + 'static {
-    /// Check whether a newer bundle version is available.
+    /// Check whether a bundle action is available.
     fn check_for_update(
         &self,
         request: AppInfo,
-    ) -> impl Future<Output = Result<Option<BundleUpdate>, rootcause::Report>> + Send;
+    ) -> impl Future<Output = Result<Option<BundleAction>, rootcause::Report>> + Send;
 
     /// Download the bundle zip to a local path, streaming progress.
     fn get_update_bundle<P: AsRef<Path> + Send>(
@@ -43,16 +43,11 @@ pub trait FsRepo: Clone + Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), std::io::Error>> + Send;
 
     /// List the names of immediate children in `dir`.
-    fn list_dir_names(
-        &self,
-        dir: &Path,
-    ) -> impl Future<Output = Vec<String>> + Send;
+    fn list_dir_names(&self, dir: &Path) -> impl Future<Output = Vec<String>> + Send;
 
     /// Recursively remove a directory.
-    fn remove_dir_all(
-        &self,
-        dir: &Path,
-    ) -> impl Future<Output = Result<(), std::io::Error>> + Send;
+    fn remove_dir_all(&self, dir: &Path)
+    -> impl Future<Output = Result<(), std::io::Error>> + Send;
 
     /// Read a file's contents as a string.
     fn read_to_string(
@@ -68,10 +63,7 @@ pub trait FsRepo: Clone + Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), std::io::Error>> + Send;
 
     /// Remove a file. Returns `Ok(())` if the file does not exist.
-    fn remove_file(
-        &self,
-        path: &Path,
-    ) -> impl Future<Output = Result<(), std::io::Error>> + Send;
+    fn remove_file(&self, path: &Path) -> impl Future<Output = Result<(), std::io::Error>> + Send;
 }
 
 /// Port for querying system metadata (version, arch, cache dirs).

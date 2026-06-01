@@ -6,8 +6,9 @@
   "version": "2.5.0",
   "scripts": {
     "dev": "vite -c vite.config.ts",
-    "build": "vite build -c vite.config.ts && bun run postbuild:semver",
+    "build": "vite build -c vite.config.ts && bun run postbuild:semver && bun run postbuild:bundle-manifest",
     "postbuild:semver": "echo $npm_package_version+$(git rev-parse --short HEAD) > ./dist/semver.txt",
+    "postbuild:bundle-manifest": "bun ./scripts/write-bundle-manifest.mjs",
     "preview:dev": "vite preview -c vite.config.ts --outDir dist --base /app",
     "preview:prod": "vite preview -c vite.config.ts --outDir dist --base /app",
     "check": "tsc --noEmit --skipLibCheck",

@@ -1,7 +1,8 @@
 use crate::domain::{
     models::{
-        BundleRoot, CompletedStatus, ProgressPercentage, UnzipRequest, UnzipStatus,
-        UpdateDownloadingStatus, UpdateError, UpdateFoundStatus, UpdateGranted, UpdateStatus,
+        BundleAction, BundleManifest, BundleRoot, ClearRequiredStatus, CompletedStatus,
+        ProgressPercentage, UnzipRequest, UnzipStatus, UpdateDownloadingStatus, UpdateError,
+        UpdateFoundStatus, UpdateGranted, UpdateStatus,
     },
     ports::{AutoUpdateService, FsRepo, SystemQuery, UpdateRepo},
 };
@@ -104,7 +105,10 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
             let Ok(status) = self.status_tx.borrow().as_ref().cloned() else {
                 break;
             };
-            if let UpdateStatus::NoUpdateNeeded | UpdateStatus::Completed(_) = status {
+            if let UpdateStatus::NoUpdateNeeded
+            | UpdateStatus::Completed(_)
+            | UpdateStatus::ClearRequired(_) = status
+            {
                 break;
             }
 
@@ -114,6 +118,7 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
                 Ok(UpdateStatus::NoUpdateNeeded)
                     | Ok(UpdateStatus::WaitingForWifi(_))
                     | Ok(UpdateStatus::Completed(_))
+                    | Ok(UpdateStatus::ClearRequired(_))
                     | Err(_)
             );
 
@@ -142,6 +147,7 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
                 Ok(UpdateStatus::CheckingForDownload(app_info))
             }
             UpdateStatus::CheckingForDownload(app_info) => {
+                let native_build = app_info.native_build;
                 let res = self
                     .update_repo
                     .check_for_update(app_info)
@@ -149,17 +155,26 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
                     .context(UpdateError::DownloadErr)?;
 
                 match res {
-                    Some(update) => {
-                        // Check if this version was already downloaded in a previous session.
+                    Some(BundleAction::Update(update)) => {
+                        // Check if this bundle build was already downloaded in a previous session.
                         if let Ok(update_dir) = self.system_query.get_update_dir().await
-                            && let Some(entrypoint) =
-                                find_cached_bundle(&self.fs_repo, &update_dir, &update.version)
-                                    .await
+                            && let Some(entrypoint) = find_cached_bundle(
+                                &self.fs_repo,
+                                &update_dir,
+                                update.bundle_build,
+                                native_build,
+                            )
+                            .await
                         {
                             return Ok(UpdateStatus::Completed(CompletedStatus { entrypoint }));
                         }
                         Ok(UpdateStatus::UpdateFound(UpdateFoundStatus {
                             bundle: update,
+                        }))
+                    }
+                    Some(BundleAction::Clear(clear)) => {
+                        Ok(UpdateStatus::ClearRequired(ClearRequiredStatus {
+                            reason: clear.reason,
                         }))
                     }
                     None => Ok(UpdateStatus::NoUpdateNeeded),
@@ -192,6 +207,7 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
                 }
             }
             UpdateStatus::NoUpdateNeeded => Ok(UpdateStatus::NoUpdateNeeded),
+            UpdateStatus::ClearRequired(clear) => Ok(UpdateStatus::ClearRequired(clear)),
             UpdateStatus::DownloadingBundle(status) => {
                 let update_dir = self
                     .system_query
@@ -204,6 +220,8 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
                     .await
                     .context(UpdateError::IoErr)?;
 
+                let expected_bundle_build = status.update.bundle_build;
+                let expected_min_native_build = status.update.min_native_build;
                 let expected_checksum = status.update.checksum.clone();
                 let (req, rx) = status.update.into_download_request(&download_filename);
 
@@ -223,6 +241,8 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
                     .context(UpdateError::DownloadErr)?;
                 Ok(UpdateStatus::UnzippingBundle(UnzipStatus {
                     zip_filename: download_filename,
+                    expected_bundle_build,
+                    expected_min_native_build,
                     expected_checksum,
                     progress: ProgressPercentage::default(),
                 }))
@@ -249,7 +269,21 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
                     _ => false,
                 }));
 
-                let mut entrypoint = self.fs_repo.unzip(req).await.context(UpdateError::Unzip)?;
+                let bundle_dir = self.fs_repo.unzip(req).await.context(UpdateError::Unzip)?;
+                validate_bundle_dir(
+                    &self.fs_repo,
+                    &bundle_dir,
+                    unzip_status.expected_bundle_build,
+                    unzip_status.expected_min_native_build,
+                    self.system_query
+                        .get_system_info()
+                        .await
+                        .context(UpdateError::Other)?
+                        .native_build,
+                )
+                .await
+                .context(UpdateError::Unzip)?;
+                let mut entrypoint = bundle_dir;
                 entrypoint.push(ENTRYPOINT_NAME);
                 Ok(UpdateStatus::Completed(CompletedStatus { entrypoint }))
             }
@@ -300,45 +334,79 @@ pub(crate) fn next_bundle_index(names: &[String]) -> u64 {
         .map_or(0, |m| m + 1)
 }
 
-/// Search existing numeric bundle directories for one whose `semver.txt`
-/// matches `version`. Returns the entrypoint path if found.
+/// Search existing numeric bundle directories for one whose manifest matches
+/// `bundle_build` and is compatible with this native app.
 async fn find_cached_bundle(
     fs: &impl FsRepo,
     update_dir: &std::path::Path,
-    version: &semver::Version,
+    bundle_build: u64,
+    native_build: u64,
 ) -> Option<PathBuf> {
-    let version_str = version.to_string();
     let names = fs.list_dir_names(update_dir).await;
     tracing::info!(
-        "find_cached_bundle: looking for version {version_str} in {update_dir:?}, found dirs: {names:?}"
+        "find_cached_bundle: looking for bundle build {bundle_build} in {update_dir:?}, found dirs: {names:?}"
     );
     for name in names {
         if name.parse::<u64>().is_err() {
             continue;
         }
         let dir = update_dir.join(&name);
-        let semver_path = dir.join("semver.txt");
-        match fs.read_to_string(&semver_path).await {
-            Ok(contents) => {
-                tracing::info!(
-                    "find_cached_bundle: {semver_path:?} contains {:?}, want {version_str:?}",
-                    contents.trim()
-                );
-                if contents.trim() == version_str {
-                    let entrypoint = dir.join(ENTRYPOINT_NAME);
-                    if fs.read_to_string(&entrypoint).await.is_ok() {
-                        tracing::info!("find_cached_bundle: hit — reusing {entrypoint:?}");
-                        return Some(entrypoint);
-                    }
-                }
-            }
-            Err(e) => {
-                tracing::debug!("find_cached_bundle: no semver.txt in {dir:?}: {e}");
+        let Some(manifest) = BundleManifest::read(&dir.join("bundle-manifest.json"), fs).await
+        else {
+            tracing::debug!("find_cached_bundle: no valid manifest in {dir:?}");
+            continue;
+        };
+        if manifest.bundle_build == bundle_build && manifest.min_native_build <= native_build {
+            let entrypoint = dir.join(ENTRYPOINT_NAME);
+            if fs.read_to_string(&entrypoint).await.is_ok() {
+                tracing::info!("find_cached_bundle: hit reusing {entrypoint:?}");
+                return Some(entrypoint);
             }
         }
     }
-    tracing::info!("find_cached_bundle: no cached bundle found for {version_str}");
+    tracing::info!("find_cached_bundle: no cached bundle found for {bundle_build}");
     None
+}
+
+async fn validate_bundle_dir(
+    fs: &impl FsRepo,
+    bundle_dir: &Path,
+    expected_bundle_build: u64,
+    expected_min_native_build: u64,
+    native_build: u64,
+) -> Result<(), rootcause::Report> {
+    let manifest = BundleManifest::read(&bundle_dir.join("bundle-manifest.json"), fs)
+        .await
+        .ok_or_else(|| report!("Missing or invalid bundle-manifest.json in {bundle_dir:?}"))?;
+    if manifest.bundle_build != expected_bundle_build {
+        return Err(report!(
+            "Downloaded bundle build {} did not match expected {}",
+            manifest.bundle_build,
+            expected_bundle_build
+        ));
+    }
+    if manifest.min_native_build != expected_min_native_build {
+        return Err(report!(
+            "Downloaded min native build {} did not match expected {}",
+            manifest.min_native_build,
+            expected_min_native_build
+        ));
+    }
+    if manifest.min_native_build > native_build {
+        return Err(report!(
+            "Downloaded bundle requires native build {}, current native build is {}",
+            manifest.min_native_build,
+            native_build
+        ));
+    }
+    if fs
+        .read_to_string(&bundle_dir.join(ENTRYPOINT_NAME))
+        .await
+        .is_err()
+    {
+        return Err(report!("Downloaded bundle missing {ENTRYPOINT_NAME}"));
+    }
+    Ok(())
 }
 
 /// helper function which pipes the progress of an event from one channel into another
@@ -376,8 +444,15 @@ impl<Fs: FsRepo> Service<Fs> {
     }
 
     /// Load persisted bundle root from the given cache directory.
-    pub async fn load_bundle_root(&mut self, cache_dir: &Path) {
+    pub async fn load_bundle_root(&mut self, cache_dir: &Path, native_build: u64) {
         self.bundle_root = BundleRoot::load(cache_dir, &self.fs_repo).await;
+        if !self
+            .current_bundle_is_usable(embedded_bundle_build(), native_build)
+            .await
+        {
+            tracing::warn!("Clearing unusable persisted bundle root");
+            let _ = self.clear_bundle_root(cache_dir).await;
+        }
     }
 
     /// Get the current bundle root path, if an OTA update has been applied.
@@ -397,6 +472,17 @@ impl<Fs: FsRepo> Service<Fs> {
             } else {
                 ApplyUpdateResult::ReloadNeeded
             });
+        }
+
+        let should_clear = {
+            let status = self.status().borrow();
+            matches!(status.as_ref(), Ok(UpdateStatus::ClearRequired(_)))
+        };
+        if should_clear {
+            self.clear_bundle_root(cache_dir).await?;
+            self.reload_pending = true;
+            self.reload_dispatched_at = None;
+            return Ok(ApplyUpdateResult::ReloadNeeded);
         }
 
         let entrypoint = {
@@ -498,9 +584,12 @@ impl<Fs: FsRepo> Service<Fs> {
         self.bundle_root.persist(cache_dir, &self.fs_repo).await
     }
 
-    /// Read the bundle version from `semver.txt` inside the current bundle root.
-    pub async fn bundle_version(&self) -> Option<semver::Version> {
-        self.bundle_root.version(&self.fs_repo).await
+    /// Read the bundle build from `bundle-manifest.json` inside the current bundle root.
+    pub async fn bundle_build(&self) -> Option<u64> {
+        self.bundle_root
+            .manifest(&self.fs_repo)
+            .await
+            .map(|manifest| manifest.bundle_build)
     }
 
     /// Remove all numeric bundle subdirectories under `dir` except `keep`.
@@ -518,6 +607,34 @@ impl<Fs: FsRepo> Service<Fs> {
             }
         }
     }
+
+    async fn current_bundle_is_usable(
+        &self,
+        embedded_bundle_build: u64,
+        native_build: u64,
+    ) -> bool {
+        let Some(path) = self.bundle_root.path() else {
+            return true;
+        };
+        if self
+            .fs_repo
+            .read_to_string(&path.join(ENTRYPOINT_NAME))
+            .await
+            .is_err()
+        {
+            return false;
+        }
+        let Some(manifest) = self.bundle_root.manifest(&self.fs_repo).await else {
+            return false;
+        };
+        manifest.bundle_build >= embedded_bundle_build && manifest.min_native_build <= native_build
+    }
+}
+
+pub(crate) fn embedded_bundle_build() -> u64 {
+    option_env!("MACRO_EMBEDDED_BUNDLE_BUILD")
+        .and_then(|value| value.parse::<u64>().ok())
+        .unwrap_or(0)
 }
 
 impl<Fs: FsRepo> AutoUpdateService for Service<Fs> {
@@ -602,8 +719,8 @@ mod tests {
     use super::*;
     use crate::domain::{
         models::{
-            AppInfo, Arch, BundleUpdate, DownloadBundleError, DownloadBundleRequest, Target,
-            UnzipError,
+            AppInfo, Arch, BundleAction, BundleUpdate, DownloadBundleError, DownloadBundleRequest,
+            Target, UnzipError,
         },
         ports::AutoUpdateService,
     };
@@ -615,7 +732,7 @@ mod tests {
 
     #[derive(Clone)]
     struct FakeUpdateRepo {
-        update: Option<BundleUpdate>,
+        update: Option<BundleAction>,
         block_download: bool,
     }
 
@@ -623,7 +740,7 @@ mod tests {
         async fn check_for_update(
             &self,
             _request: AppInfo,
-        ) -> Result<Option<BundleUpdate>, rootcause::Report> {
+        ) -> Result<Option<BundleAction>, rootcause::Report> {
             Ok(self.update.clone())
         }
 
@@ -710,7 +827,8 @@ mod tests {
     impl SystemQuery for FakeSystemQuery {
         async fn get_system_info(&self) -> Result<AppInfo, rootcause::Report> {
             Ok(AppInfo {
-                current_version: semver::Version::new(0, 0, 0),
+                current_bundle_build: 0,
+                native_build: 0,
                 arch: Arch::Aarch64,
                 target: Target::Ios,
             })
@@ -730,7 +848,8 @@ mod tests {
 
     fn bundle_update() -> BundleUpdate {
         BundleUpdate {
-            version: semver::Version::new(1, 2, 3),
+            bundle_build: 1,
+            min_native_build: 0,
             notes: None,
             url: "https://example.com/bundle.zip".parse().unwrap(),
             checksum: "checksum".to_string(),
@@ -741,7 +860,7 @@ mod tests {
         let system_query = FakeSystemQuery::new(network_type);
         let service = Service::new(
             FakeUpdateRepo {
-                update: Some(bundle_update()),
+                update: Some(BundleAction::Update(bundle_update())),
                 block_download: true,
             },
             FakeFs,
@@ -772,6 +891,12 @@ mod tests {
     fn completed_status() -> UpdateStatus {
         UpdateStatus::Completed(CompletedStatus {
             entrypoint: PathBuf::from("/tmp/macro-bundle-test/1/index.html"),
+        })
+    }
+
+    fn clear_required_status() -> UpdateStatus {
+        UpdateStatus::ClearRequired(ClearRequiredStatus {
+            reason: "bundle_revoked".to_string(),
         })
     }
 
@@ -924,6 +1049,17 @@ mod tests {
         let applied = service.apply_update(Path::new("/tmp")).await.unwrap();
 
         assert_eq!(applied, ApplyUpdateResult::NoUpdate);
+    }
+
+    #[tokio::test]
+    async fn apply_update_clears_bundle_root_when_server_revokes_active_bundle() {
+        let (mut service, _start_rx) = service_with_status(clear_required_status());
+
+        let applied = service.apply_update(Path::new("/tmp")).await.unwrap();
+
+        assert_eq!(applied, ApplyUpdateResult::ReloadNeeded);
+        assert!(service.reload_pending);
+        assert!(service.bundle_root_path().is_none());
     }
 
     #[tokio::test]

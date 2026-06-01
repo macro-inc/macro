@@ -1,7 +1,9 @@
 use logger::Logger;
+use macro_bundle_updater_plugin::domain::ports::AutoUpdateService;
 use macro_bundle_updater_plugin::inbound::plugin::{
     PluginService, allow_update_reload_retry, apply_completed_update, retry_waiting_for_wifi,
 };
+use macro_bundle_updater_plugin::outbound::system_info::native_build;
 use navigation_plugin::MacroNavigationPlugin;
 use navigation_plugin::scheme::MacroScheme;
 use reqwest::cookie::CookieStore;
@@ -205,7 +207,7 @@ pub fn run() {
                         if let Some(s) = app.try_state::<tokio::sync::Mutex<PluginService>>() {
                             tauri::async_runtime::block_on(async {
                                 let mut service = s.lock().await;
-                                service.load_bundle_root(&cache_dir).await;
+                                service.load_bundle_root(&cache_dir, native_build()).await;
                             });
                         }
                     }
@@ -220,6 +222,7 @@ pub fn run() {
             macro_bundle_updater_plugin::inbound::plugin::perform_update,
             macro_bundle_updater_plugin::inbound::plugin::ack_bundle_update_reload,
             macro_bundle_updater_plugin::inbound::plugin::check_for_update,
+            macro_bundle_updater_plugin::inbound::plugin::get_bundle_debug_info,
             macro_bundle_updater_plugin::inbound::plugin::get_bundle_update_status,
             macro_bundle_updater_plugin::inbound::plugin::clear_bundle,
             get_pending_share_filenames,
@@ -235,11 +238,12 @@ pub fn run() {
             {
                 tauri::async_runtime::block_on(async {
                     let mut service = s.lock().await;
-                    service.load_bundle_root(&cache_dir).await;
+                    service.load_bundle_root(&cache_dir, native_build()).await;
                     tracing::info!(
                         "Setup: restored bundle root to {:?}",
                         service.bundle_root_path()
                     );
+                    let _ = service.start();
                 });
             }
 

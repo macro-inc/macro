@@ -2,7 +2,7 @@
 use analytics_client::{
     AnalyticsClient, AnalyticsClientConfig, GoogleAnalyticsConfig, MetaConfig, PostHogConfig,
 };
-use anyhow::Context;
+use anyhow::{Context, anyhow};
 use config::{Config, Environment};
 use document_storage_service_client::DocumentStorageServiceClient;
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
@@ -319,6 +319,10 @@ async fn main() -> anyhow::Result<()> {
             referral_service: Arc::new(referral_service),
             native_app_service: Arc::new(NativeAppServiceImpl {
                 bundle_fetcher: DefaultBundleFetcher::new(config.environment.app()),
+                bundle_policy: native_app_service::domain::models::BundleUpdatePolicy::from_env()
+                    .map_err(|err| {
+                    anyhow!("failed to load bundle update policy: {err}")
+                })?,
                 platform_data: PlatformData {
                     ios_development_team_id: IOS_DEVELOPMENT_TEAM_ID.to_string(),
                     ios_app_bundle_id: IOS_APP_BUNDLE_ID.to_string(),
