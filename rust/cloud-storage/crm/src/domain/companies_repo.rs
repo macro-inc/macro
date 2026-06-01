@@ -166,12 +166,14 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
     /// source rows remain for that contact, then `crm_companies` (cascading
     /// to `crm_domains`) if no other contact rows remain for that company
     /// **and** the company has `email_sync = true`. Companies with
-    /// `email_sync = false` (the killswitch opt-out) are kept so the
-    /// team's configuration survives teardown — a future populate will
-    /// re-discover the row and short-circuit on the same flag.
+    /// `email_sync = false` are kept because that flag is an explicit
+    /// team-side opt-out (the team turned off email sharing for this
+    /// company) — preserving the row makes the choice survive a link
+    /// teardown so a future populate doesn't re-discover the company
+    /// in a "default sync = true" state.
     ///
     /// Source and contact rows are derived data and are always cleaned
-    /// up regardless of the killswitch.
+    /// up regardless of the company's `email_sync`.
     ///
     /// The whole cascade runs in a single transaction that begins by
     /// acquiring the same advisory lock [`populate_contact`] takes (key
@@ -201,8 +203,8 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
     ///   3. Delete every `crm_companies` row in `team_id` that has no
     ///      remaining `crm_contacts` AND `email_sync = true`. Companies
     ///      with `email_sync = false` are preserved so the team's
-    ///      killswitch configuration survives teardown. `crm_domains`
-    ///      falls out via FK cascade.
+    ///      explicit "off" choice survives the link teardown.
+    ///      `crm_domains` falls out via FK cascade.
     ///
     /// Scoping every query to `team_id` keeps the blast radius bounded
     /// — sources the link contributed to a *different* team (from a
@@ -260,13 +262,19 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
     /// via [`set_contact_hidden`]; un-hide blanket-resets contacts to
     /// visible regardless of how each one got hidden.
     ///
-    /// Hide additionally forces `email_sync = false` to stop populate
-    /// adding new contacts to a hidden company. Un-hide leaves
-    /// `email_sync` alone — re-enable explicitly via [`set_email_sync`].
+    /// Hide additionally forces `email_sync = false` — purely a
+    /// product/UX coupling that says "hide = full opt-out, including
+    /// team email sharing". Populate doesn't read `email_sync`, so the
+    /// flip has no write-side effect by itself; the contact-cascade
+    /// is what stops a hidden company from accumulating visible
+    /// contacts. Un-hide leaves `email_sync` alone — re-enable
+    /// explicitly via [`set_email_sync`].
     ///
     /// Both branches hold the same per-`(team, domain)` advisory locks
-    /// [`set_email_sync`] takes so a populate-vs-hide race can't slip
-    /// past the killswitch.
+    /// [`populate_contact`] takes so a populate-vs-hide race can't
+    /// observe a stale `hidden` value mid-cascade — without the lock,
+    /// a populate could read `hidden = false` then write a visible
+    /// contact under a company that's about to commit `hidden = true`.
     ///
     /// Returns [`CrmError::CompanyNotFoundForTeam`] on a non-matching
     /// pair.

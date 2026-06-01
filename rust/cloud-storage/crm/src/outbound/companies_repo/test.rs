@@ -317,9 +317,11 @@ async fn returns_company_when_email_sync_is_false(pool: PgPool) -> anyhow::Resul
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn set_email_sync_disable_preserves_contacts_and_sources(pool: PgPool) -> anyhow::Result<()> {
-    // Disabling email_sync only stops new populates — it must not
-    // touch existing contacts. Visibility is controlled by `hidden`;
-    // teams that want to drop contacts should hide the company.
+    // Disabling email_sync only affects read-side visibility /
+    // permission checks — it must not touch existing contacts.
+    // Populate continues to write while sync is off; visibility is
+    // controlled by `hidden`. Teams that want to drop contacts should
+    // hide the company.
     let team_id = Uuid::now_v7();
     let owner_id = "macro|owner@test.com";
     seed_team(&pool, team_id, owner_id).await?;
@@ -1673,10 +1675,10 @@ async fn populate_contact_into_hidden_company_inserts_hidden_contact(
 ) -> anyhow::Result<()> {
     // Defensive: new contacts inserted into a hidden company must
     // inherit `hidden = TRUE` so a populate-vs-hide race can't sneak a
-    // visible contact under an otherwise-hidden company. The happy
-    // path is killswitched by `email_sync = false`; this test
-    // simulates the race by manually putting the row in the unusual
-    // `hidden = TRUE, email_sync = TRUE` state.
+    // visible contact under an otherwise-hidden company. Populate
+    // doesn't itself gate on `hidden` (it always writes when the
+    // team-level CRM killswitch is on), so this is the only line of
+    // defense.
     let team_id = Uuid::now_v7();
     let owner_id = "macro|owner@test.com";
     seed_team(&pool, team_id, owner_id).await?;

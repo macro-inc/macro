@@ -742,13 +742,15 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
-        if !email_sync {
-            // Hold the same per-domain locks populate_contact takes so
-            // an in-flight populate can't slip past our killswitch.
-            Self::lock_company_domains(&mut tx, team_id, company_id).await?;
-        } else {
-            // Refuse enable on hidden — populate would recreate under a
-            // hidden company. FOR UPDATE blocks concurrent hide.
+        if email_sync {
+            // Refuse enable on a hidden company. Populate doesn't care
+            // about either flag now, so the constraint is purely a
+            // product/UX one — "hide" should mean "team has fully
+            // opted out of this company"; enabling team-visible
+            // emails for a company the team can't see in CRM is
+            // nonsensical. Un-hide first if you really want sync on.
+            // FOR UPDATE blocks a concurrent hide flipping `hidden`
+            // out from under us between the SELECT and the UPDATE.
             let row = sqlx::query!(
                 r#"
                 SELECT hidden
@@ -791,11 +793,12 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             return Err(CrmError::CompanyNotFoundForTeam);
         }
 
-        // Disabling sync only stops new populates — existing contacts
-        // are preserved (the company itself is still visible). Teams
-        // that want to drop contact visibility entirely should hide the
-        // company instead; that path soft-hides contacts (preserving
-        // data for un-hide).
+        // `email_sync` is a read-side visibility/permission gate only —
+        // populate continues to write CRM history regardless of its
+        // value. Toggling this flag is therefore non-destructive in
+        // either direction. Teams that want to drop contact visibility
+        // entirely should hide the company instead; that path
+        // soft-hides contacts (preserving data for un-hide).
 
         tx.commit()
             .await
@@ -1283,10 +1286,12 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         // Team scope is enforced via the company join (same pattern as
         // set_contact_hidden). A hidden contact OR a hidden parent
         // company is treated as "not found" so non-admins can't probe
-        // for existence. The company-hidden guard is defensive —
-        // `set_company_hidden` already tears down contacts atomically,
-        // so in practice a hidden company has no contacts — but the
-        // query enforces the invariant directly.
+        // for existence. The dual `hidden = FALSE` guards are
+        // defensive — `set_company_hidden` cascades `hidden = TRUE`
+        // onto all child contacts, so either filter alone would
+        // suffice under the invariant — but the query enforces the
+        // parent-company-visibility invariant directly so a future
+        // cascade-bypass bug can't leak rows.
         let row = sqlx::query!(
             r#"
             SELECT
