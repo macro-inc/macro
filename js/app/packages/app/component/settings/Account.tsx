@@ -445,31 +445,38 @@ export function Account() {
                   <div class="flex items-center justify-between h-15.25 px-6">
                     <div class="text-sm">Inboxes</div>
                     <Show
-                      when={emailActive()}
+                      when={!emailLinksQuery.isLoading}
                       fallback={
-                        <Show when={!showEnableEmailModal()}>
+                        <span class="text-sm text-ink-muted">Loading…</span>
+                      }
+                    >
+                      <Show
+                        when={emailActive()}
+                        fallback={
+                          <Show when={!showEnableEmailModal()}>
+                            <Button
+                              variant="base"
+                              size="sm"
+                              depth={3}
+                              onClick={() => setShowEnableEmailModal(true)}
+                            >
+                              Enable
+                            </Button>
+                          </Show>
+                        }
+                      >
+                        <Tooltip label="Add inbox">
                           <Button
                             variant="base"
                             size="sm"
                             depth={3}
-                            onClick={() => setShowEnableEmailModal(true)}
+                            onClick={handleAddInbox}
+                            aria-label="Add inbox"
                           >
-                            Enable
+                            <PlusIcon class="size-4" />
                           </Button>
-                        </Show>
-                      }
-                    >
-                      <Tooltip label="Add inbox">
-                        <Button
-                          variant="base"
-                          size="sm"
-                          depth={3}
-                          onClick={handleAddInbox}
-                          aria-label="Add inbox"
-                        >
-                          <PlusIcon class="size-4" />
-                        </Button>
-                      </Tooltip>
+                        </Tooltip>
+                      </Show>
                     </Show>
                   </div>
                   <Show when={emailActive()}>
