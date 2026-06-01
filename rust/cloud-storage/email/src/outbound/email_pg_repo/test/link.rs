@@ -70,14 +70,14 @@ async fn test_link_by_fusionauth_and_macro_id_wrong_macro_id(
 async fn test_links_by_fusionauth_user_id_returns_all_owned_inboxes(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    sqlx::query!(
+    sqlx::query(
         r#"
         INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider, is_sync_active, created_at, updated_at)
         VALUES
             ('a1000000-0000-0000-0000-000000000001'::uuid, 'macro|alice@test.com', 'fa-alice', 'alice@test.com', 'GMAIL', true, NOW() - INTERVAL '1 hour', NOW()),
             ('a2000000-0000-0000-0000-000000000002'::uuid, 'macro|alice@test.com', 'fa-alice', 'alice.work@test.com', 'GMAIL', true, NOW(), NOW()),
             ('b1000000-0000-0000-0000-000000000001'::uuid, 'macro|bob@test.com', 'fa-bob', 'bob@test.com', 'GMAIL', true, NOW(), NOW())
-        "#
+        "#,
     )
     .execute(&pool)
     .await?;
