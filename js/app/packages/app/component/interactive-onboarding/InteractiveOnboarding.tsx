@@ -1,11 +1,11 @@
 import { useAnalytics } from '@app/component/analytics-context';
 import { CommandState } from '@app/component/command';
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
+import { ROUTER_BASE } from '@app/constants/routerBase';
 import { useTutorialCompleted } from '@core/context/user';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
-import { useLocation, useNavigate } from '@solidjs/router';
 import {
   createEffect,
   createMemo,
@@ -48,15 +48,15 @@ function InteractiveOnboardingInner(props: InteractiveOnboardingProps) {
   const splitPanel = useSplitPanel();
   const completeTutorial = useCompleteTutorialMutation();
   const tutorialCompleted = useTutorialCompleted();
-  const location = useLocation();
 
   const isTouch = isTouchDevice();
 
   const lessons = createMemo(() => LESSONS);
 
-  const testMode = new URLSearchParams(location.search).has('test');
+  const search = typeof window === 'undefined' ? '' : window.location.search;
+  const params = new URLSearchParams(search);
 
-  const params = new URLSearchParams(location.search);
+  const testMode = params.has('test');
   const slideParam = params.get('slide');
   const slideIndex =
     slideParam !== null ? Math.max(0, parseInt(slideParam, 10) - 1) : null;
@@ -87,8 +87,6 @@ function InteractiveOnboardingInner(props: InteractiveOnboardingProps) {
     undefined
   );
 
-  const navigate = useNavigate();
-
   const navigateAway = () => {
     if (props.onDismiss) {
       props.onDismiss();
@@ -97,7 +95,7 @@ function InteractiveOnboardingInner(props: InteractiveOnboardingProps) {
         next: { type: 'component', id: 'unified-list' },
       });
     } else {
-      navigate('/', { replace: true });
+      window.location.replace(ROUTER_BASE);
     }
   };
 
