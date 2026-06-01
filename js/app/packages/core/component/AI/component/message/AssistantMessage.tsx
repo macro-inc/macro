@@ -9,9 +9,9 @@ import { replaceCitations } from '@core/component/LexicalMarkdown/citationsUtils
 import { ENABLE_TTFT } from '@core/constant/featureFlags';
 import { createMarkdownFile } from '@core/util/create';
 import { PulsingStar } from '@entity/components/PulsingStar';
+import WideFileMd from '@icon/wide-file-md.svg';
 import CheckIcon from '@phosphor-icons/core/bold/check-bold.svg?component-solid';
 import ClipboardIcon from '@phosphor-icons/core/bold/clipboard-bold.svg?component-solid';
-import NotesIcon from '@phosphor-icons/core/bold/file-md-bold.svg?component-solid';
 import LoadingIcon from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 import { generateTitle } from '@service-cognition/client';
 import type { AssistantMessagePart } from '@service-cognition/generated/schemas/assistantMessagePart';
@@ -187,11 +187,17 @@ export function AssistantMessage(props: {
           </div>
           <Show when={!props.isStreaming}>
             <div class="flex flex-row w-full justify-start items-center h-8 space-x-2">
-              <div class="flex flex-row space-x-2 items-center text-xs text-ink-muted">
+              <div class="flex flex-row space-x-1 items-center text-xs text-ink-extra-muted opacity-50">
                 <Button
                   variant="ghost"
-                  size="sm"
+                  size="icon-sm"
                   noTouchResize
+                  class="p-1 text-ink-extra-muted hover:text-ink-muted"
+                  tooltip={
+                    isLoading()
+                      ? 'Opening assistant response in Notes'
+                      : 'Edit assistant response in Notes'
+                  }
                   onClick={() => {
                     !isLoading() && handleEditInMarkdown();
                   }}
@@ -200,23 +206,24 @@ export function AssistantMessage(props: {
                     when={!isLoading()}
                     fallback={<LoadingIcon class="animate-spin" />}
                   >
-                    <NotesIcon class="text-note" />
+                    <WideFileMd />
                   </Show>
-                  <span>{isLoading() ? 'Loading Notes' : 'Edit in Notes'}</span>
                 </Button>
                 <Button
                   variant="ghost"
-                  size="sm"
+                  size="icon-sm"
                   noTouchResize
+                  class="p-1 text-ink-extra-muted hover:text-ink-muted"
+                  tooltip={
+                    copied()
+                      ? 'Copied assistant response'
+                      : 'Copy assistant response'
+                  }
                   onClick={handleCopy}
                 >
-                  <Show
-                    when={!copied()}
-                    fallback={<CheckIcon class="text-success" />}
-                  >
+                  <Show when={!copied()} fallback={<CheckIcon />}>
                     <ClipboardIcon />
                   </Show>
-                  <span>{copied() ? 'Copied!' : 'Copy'}</span>
                 </Button>
                 <Show when={props.ttft && ENABLE_TTFT}>
                   <div class="flex flex-row items-center space-x-1 text-xs font-mono bg-surface px-2 py-1">

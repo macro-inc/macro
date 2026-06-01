@@ -4,7 +4,8 @@ import WideFileMd from '@icon/wide-file-md.svg';
 import List from '@phosphor-icons/core/regular/list.svg';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import { useSplitLayout } from 'app/component/split-layout/layout';
-import { createMemo, createSignal, For } from 'solid-js';
+import { createMemo, createSignal } from 'solid-js';
+import { VList } from 'virtua/solid';
 import { BaseTool } from './BaseTool';
 import { Tool } from './Tool';
 import { createToolRenderer } from './ToolRenderer';
@@ -90,30 +91,40 @@ const ListEntitiesToolResponse = (props: {
     }
   };
 
-  return (
-    <div class="max-h-120 overflow-y-auto">
-      <Tool.List>
-        <For each={results()}>
-          {(item) => {
-            const clickHandler = getClickHandler(item);
+  const itemHeight = 32;
+  const maxHeight = 240;
 
-            return (
-              <button
-                type="button"
-                class="block w-full text-left hover:bg-surface-hover"
-                onClick={clickHandler}
-              >
-                <Tool.ListItem icon={getItemIcon(item)}>
-                  <div class="truncate text-xs text-ink">
-                    {getItemTitle(item)}
-                  </div>
-                </Tool.ListItem>
-              </button>
-            );
-          }}
-        </For>
-      </Tool.List>
-    </div>
+  return (
+    <Tool.List>
+      <VList
+        class="overscroll-contain"
+        data={results()}
+        bufferSize={itemHeight * 5}
+        itemSize={itemHeight}
+        style={{
+          height: `${Math.min(results().length * itemHeight, maxHeight)}px`,
+          contain: 'content',
+        }}
+      >
+        {(item) => {
+          const clickHandler = getClickHandler(item);
+
+          return (
+            <button
+              type="button"
+              class="block w-full text-left hover:bg-surface-hover"
+              onClick={clickHandler}
+            >
+              <Tool.ListItem icon={getItemIcon(item)}>
+                <div class="truncate text-xs text-ink">
+                  {getItemTitle(item)}
+                </div>
+              </Tool.ListItem>
+            </button>
+          );
+        }}
+      </VList>
+    </Tool.List>
   );
 };
 
