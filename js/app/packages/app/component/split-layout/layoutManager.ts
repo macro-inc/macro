@@ -144,6 +144,7 @@ export type CreateNewSplitOptions = {
   activate?: boolean;
   allowDuplicate?: boolean;
   referredFrom: ReferredFrom;
+  insertIndex?: number;
   /**
    * Optional prior navigation entries to pre-populate this split's history stack.
    * The `content` field is appended as the final (current) entry.
@@ -159,6 +160,7 @@ export type OpenWithSplitOptions = {
   replaceWhenFull?: boolean;
   /** If true, prefers opening in a new split. May still replace if layout is at capacity. */
   preferNewSplit?: boolean;
+  insertIndex?: number;
   handle?: SplitHandle;
 };
 
@@ -1016,8 +1018,14 @@ export function createSplitLayout(
   };
 
   function createNewSplit(options: CreateNewSplitOptions): SplitHandle {
-    const { content, activate, referredFrom, allowDuplicate, initialHistory } =
-      options;
+    const {
+      content,
+      activate,
+      referredFrom,
+      allowDuplicate,
+      initialHistory,
+      insertIndex,
+    } = options;
     const initialContent = content ?? DEFAULT_SPLIT_CONTENT;
     const isDefault = sameContent(initialContent, DEFAULT_SPLIT_CONTENT);
 
@@ -1041,7 +1049,16 @@ export function createSplitLayout(
       initialHistory,
     });
 
-    setState('splits', (previousSplits) => [...previousSplits, split]);
+    setState('splits', (previousSplits) => {
+      if (insertIndex === undefined) return [...previousSplits, split];
+      const nextSplits = previousSplits.slice();
+      nextSplits.splice(
+        Math.max(0, Math.min(insertIndex, nextSplits.length)),
+        0,
+        split
+      );
+      return nextSplits;
+    });
 
     const handle = getSplit(split.id)!;
 
@@ -1303,6 +1320,7 @@ export function createSplitLayout(
         activate: options.activate ?? true,
         referredFrom: options.referredFrom ?? null,
         allowDuplicate: options.allowDuplicate,
+        insertIndex: options.insertIndex,
       });
     }
   }

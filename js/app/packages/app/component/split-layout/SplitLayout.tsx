@@ -88,11 +88,11 @@ function RightEdgeSplitDropTarget(props: { splitManager: SplitManager }) {
   return (
     <div
       ref={droppable}
-        class={cn(
-          'fixed right-0 top-0 h-screen w-48 z-modal-overlay pointer-events-none transition-opacity',
-          shouldShow() ? 'opacity-95' : 'opacity-0',
-          isActive() && 'opacity-100'
-        )}
+      class={cn(
+        'fixed right-0 top-0 h-screen w-48 z-modal-overlay pointer-events-none transition-opacity',
+        shouldShow() ? 'opacity-95' : 'opacity-0',
+        isActive() && 'opacity-100'
+      )}
       data-split-right-edge-drop-target
     >
       <div
@@ -341,6 +341,7 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
   const decodedPairs = () => decodePairs(props.pairs);
   const blockOrchestrator = useGlobalBlockOrchestrator();
   const splitManager = createSplitLayout(blockOrchestrator, decodedPairs());
+  const [dragDropState] = useDragDropContext() ?? [];
   const [, setTabTitle] = tabTitleSignal;
 
   // Create the mobile swipe layout once on mobile devices.
@@ -390,6 +391,20 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
               direction="horizontal"
               gutter={8}
               captureResizeCtx={splitManager.setResizeContext}
+              gutterDrop={{
+                idPrefix: 'split-resize-gutter-drop',
+                isEnabled: () =>
+                  dragDropState?.active.draggable?.data?.dragType ===
+                    'entity' && splitManager.canAppendSplit(),
+                onDrop: (insertIndex, event) => {
+                  const data = (event as EntityDragEvent).draggable?.data;
+                  if (!data || data.dragType !== 'entity') return;
+                  void openEntityInSplitFromUnifiedList(data, {
+                    openInNewSplit: true,
+                    insertIndex,
+                  });
+                },
+              }}
             >
               <For each={ids()}>
                 {(id, index) => (

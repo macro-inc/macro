@@ -1,4 +1,9 @@
 import { createElementSize } from '@solid-primitives/resize-observer';
+import {
+  createDroppable,
+  type DragEvent,
+  useDragDropContext,
+} from '@thisbeyond/solid-dnd';
 import { cn } from '@ui/utils/classname';
 import {
   createContext,
@@ -40,6 +45,11 @@ type ZoneProps = {
   id?: string;
   captureResizeCtx?: (ctx: ResizeZoneCtx) => void;
   resizable?: boolean;
+  gutterDrop?: {
+    idPrefix: string;
+    isEnabled: () => boolean;
+    onDrop: (insertIndex: number, event: DragEvent) => void;
+  };
 };
 
 /**
@@ -168,7 +178,9 @@ function Zone(props: ParentProps<ZoneProps>) {
                   <Gutter
                     offset={panel().offset + panel().size}
                     index={actualIndex}
+                    visibleIndex={visibleIndex}
                     nudge={solver.moveHandle}
+                    drop={props.gutterDrop}
                   />
                 </Show>
               );
@@ -369,8 +381,74 @@ function Panel(props: ParentProps<PanelProps>) {
 type GutterProps = {
   offset: number;
   index: number;
+  visibleIndex: number;
   nudge: (index: number, amt: number) => void;
+  drop?: ZoneProps['gutterDrop'];
 };
+
+function GutterDropTarget(props: {
+  drop: NonNullable<ZoneProps['gutterDrop']>;
+  index: number;
+  insertIndex: number;
+}) {
+  const ctx = useContext(ResizeZoneContext);
+  if (!ctx)
+    throw new Error('<Resize.GutterDropTarget> must be inside <Resize.Zone>');
+
+  const droppableId = () => `${props.drop.idPrefix}-${props.index}`;
+  const droppable = createDroppable(droppableId(), {
+    type: 'resize-gutter',
+    isDropTargetDisabled: () => !props.drop.isEnabled(),
+  });
+  const [dragDropState, { onDragEnd }] = useDragDropContext() ?? [
+    undefined,
+    { onDragEnd: () => {} },
+  ];
+  const isDropActive = createMemo(
+    () =>
+      props.drop.isEnabled() &&
+      dragDropState?.active.droppable?.id === droppableId()
+  );
+
+  onDragEnd((event) => {
+    if (event.droppable?.id !== droppableId()) return;
+    props.drop.onDrop(props.insertIndex, event);
+  });
+
+  return (
+    <div
+      ref={droppable}
+      class={cn(
+        'pointer-events-none absolute z-action-menu flex items-center justify-center',
+        ctx.direction === 'horizontal'
+          ? 'top-0 bottom-0 left-1/2 w-24 -translate-x-1/2'
+          : 'left-0 right-0 top-1/2 h-24 -translate-y-1/2'
+      )}
+    >
+      <div
+        class={cn(
+          'rounded-xl bg-surface border border-dashed border-accent/50 ring ring-accent/10 flex items-center justify-center text-accent/50 transition-all duration-150',
+          ctx.direction === 'horizontal'
+            ? 'h-[calc(100%-1rem)] w-2'
+            : 'w-[calc(100%-1rem)] h-2',
+          isDropActive() &&
+            (ctx.direction === 'horizontal'
+              ? 'w-14 shadow-lg shadow-drop-shadow'
+              : 'h-14 shadow-lg shadow-drop-shadow')
+        )}
+      >
+        <span
+          class={cn(
+            'text-3xl leading-none transition-opacity',
+            isDropActive() ? 'opacity-45' : 'opacity-0'
+          )}
+        >
+          +
+        </span>
+      </div>
+    </div>
+  );
+}
 
 function Gutter(props: GutterProps) {
   const ctx = useContext(ResizeZoneContext);
@@ -455,6 +533,15 @@ function Gutter(props: GutterProps) {
       onPointerDown={onPointerDown}
       onKeyDown={onKeyDown}
     >
+      <Show when={props.drop}>
+        {(drop) => (
+          <GutterDropTarget
+            drop={drop()}
+            index={props.index}
+            insertIndex={props.visibleIndex + 1}
+          />
+        )}
+      </Show>
       <div
         class={cn(
           'bg-accent absolute opacity-0 group-focus:opacity-100 rounded-[1px]',

@@ -84,7 +84,9 @@ function ItemDragOverlay() {
       <div class="w-auto max-w-75 flex flex-col gap-2 bg-surface p-2 rounded-lg z-drag shadow-md shadow-drop-shadow pointer-events-none">
         <div class="flex flex-row items-center gap-2">
           <EntityIcon size="xs" targetType={iconType()} />
-          <TruncatedText size="xs">{activeDraggable()?.data.name}</TruncatedText>
+          <TruncatedText size="xs">
+            {activeDraggable()?.data.name}
+          </TruncatedText>
         </div>
         {/* TODO: when multiselect exists */}
         {/* <Show when={activeDraggable()?.data.selectedItems.length > 1}>

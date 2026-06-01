@@ -303,6 +303,7 @@ interface OpenEntityOptions {
   splitHandle?: SplitHandle;
   mergeHistory?: boolean;
   allowDuplicate?: boolean;
+  insertIndex?: number;
 }
 
 /**
@@ -316,7 +317,13 @@ export const openEntityInSplitFromUnifiedList = async (
   entity: EntityData,
   options: OpenEntityOptions
 ): Promise<void> => {
-  const { allowDuplicate, openInNewSplit, splitHandle, mergeHistory } = options;
+  const {
+    allowDuplicate,
+    insertIndex,
+    openInNewSplit,
+    splitHandle,
+    mergeHistory,
+  } = options;
   let { location } = options;
 
   if (!location && isSnippetEntity(entity)) {
@@ -352,6 +359,7 @@ export const openEntityInSplitFromUnifiedList = async (
       handle: splitHandle,
       mergeHistory,
       allowDuplicate,
+      insertIndex,
     }
   );
 

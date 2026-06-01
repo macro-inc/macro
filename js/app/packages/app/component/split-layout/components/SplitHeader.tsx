@@ -1,9 +1,9 @@
-import { isListViewID } from '@app/constants/list-views';
 import { openEntityInSplitFromUnifiedList } from '@app/component/next-soup/utils';
+import { isListViewID } from '@app/constants/list-views';
+import type { BlockName } from '@core/block';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
-import type { BlockName } from '@core/block';
 import type { EntityDragEvent } from '@entity';
 import CollapseIcon from '@phosphor/arrows-in.svg';
 import ExpandIcon from '@phosphor/arrows-out.svg';
@@ -22,8 +22,8 @@ import {
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { SplitLayoutContext, SplitPanelContext } from '../context';
-import { canSpotlight } from '../utils/canSpotlight';
 import type { SplitContent } from '../layoutManager';
+import { canSpotlight } from '../utils/canSpotlight';
 
 function getEntitySplitContent(data: EntityDragEvent['draggable']['data']): {
   type: SplitContent['type'];
