@@ -33,8 +33,8 @@ impl SyncStatus {
 
         match latest_job_status {
             Some(BackfillJobStatus::Init | BackfillJobStatus::InProgress) => SyncStatus::Syncing,
-            Some(BackfillJobStatus::Failed) => SyncStatus::Error,
-            _ => SyncStatus::UpToDate,
+            Some(BackfillJobStatus::Failed | BackfillJobStatus::Cancelled) => SyncStatus::Error,
+            Some(BackfillJobStatus::Complete) | None => SyncStatus::UpToDate,
         }
     }
 }
