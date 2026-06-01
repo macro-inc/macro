@@ -1,5 +1,4 @@
 import {
-  AgentStatusNode,
   AwaitNode,
   ContactMentionNode,
   DateMentionNode,
@@ -19,7 +18,6 @@ import {
   WatermarkNode,
 } from '@lexical-core';
 import { clearDecorators, setDecorator } from '@lexical-core/decoratorRegistry';
-import { AgentStatus } from './component/decorator/AgentStatus';
 import { Await } from './component/decorator/Await';
 import { ContactMention } from './component/decorator/ContactMention';
 import { DateMention } from './component/decorator/DateMention';
@@ -47,7 +45,6 @@ export function initializeLexical() {
   setDecorator(HorizontalRuleNode, HorizontalRule);
   setDecorator(UserMentionNode, UserMention);
   setDecorator(GroupMentionNode, GroupMention);
-  setDecorator(AgentStatusNode, AgentStatus);
   setDecorator(DocumentMentionNode, DocumentMention);
   setDecorator(DocumentCardNode, DocumentCard);
   setDecorator(ContactMentionNode, ContactMention);

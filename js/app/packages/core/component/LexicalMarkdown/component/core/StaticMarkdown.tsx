@@ -11,7 +11,7 @@ import type { HeadingNode, QuoteNode } from '@lexical/rich-text';
 import type { TableCellNode, TableNode, TableRowNode } from '@lexical/table';
 import {
   $isClassedBlockNode,
-  type AgentStatusNode,
+  type AwaitNode,
   type ClassedBlockNode,
   type ContactMentionNode,
   type DateMentionNode,
@@ -69,12 +69,12 @@ import type { SearchMatchNode } from '@lexical-core/nodes/SearchMatchNode';
 import { theme as baseTheme, createTheme } from '../../theme';
 import { forceSingleLine, setEditorStateFromMarkdown } from '../../utils';
 import { StaticCodeBoxAccessory } from '../accessory/CodeBoxAccessory';
+import { Await as AwaitDecorator } from '../decorator/Await';
 import { ContactMention as ContactMentionDecorator } from '../decorator/ContactMention';
 import { DateMention as DateMentionDecorator } from '../decorator/DateMention';
 import { DocumentCard as DocumentCardDecorator } from '../decorator/DocumentCard';
 import { DocumentMention as DocumentMentionDecorator } from '../decorator/DocumentMention';
 import { Equation as EquationDecorator } from '../decorator/Equation';
-import { AgentStatus as AgentStatusDecorator } from '../decorator/AgentStatus';
 import { GroupMention as GroupMentionDecorator } from '../decorator/GroupMention';
 import { LazyDecorator } from '../decorator/LazyDecorator';
 import { MarkdownImage as ImageDecorator } from '../decorator/MarkdownImage';
@@ -370,18 +370,22 @@ const GroupMention: RenderableEntity<GroupMentionNode> = {
   ),
 };
 
-const AgentStatus: RenderableEntity<AgentStatusNode> = {
-  guard: (node: LexicalNode): node is AgentStatusNode =>
-    node.__type === 'agent-status',
-  render: (props) => (
-    <span>
-      {AgentStatusDecorator({
-        ...props.node.exportComponentProps(),
-        key: props.node.getKey(),
-        theme: props.theme,
-      })}
-    </span>
-  ),
+const Await: RenderableEntity<AwaitNode> = {
+  guard: (node: LexicalNode): node is AwaitNode => node.__type === 'await',
+  render: (props) => {
+    const componentProps = props.node.exportComponentProps();
+    return (
+      <span>
+        {AwaitDecorator({
+          awaitId: componentProps.awaitId,
+          text: componentProps.text,
+          inline: componentProps.inline ?? true,
+          key: props.node.getKey(),
+          theme: props.theme,
+        })}
+      </span>
+    );
+  },
 };
 
 const Snapshot: RenderableEntity<SnapshotNode> = {
@@ -719,7 +723,7 @@ const InlineEntities: Array<RenderableEntity> = [
   ContactMention,
   DateMention,
   GroupMention,
-  AgentStatus,
+  Await,
   Snapshot,
   Image,
   Video,

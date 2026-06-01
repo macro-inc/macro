@@ -19,26 +19,25 @@ import { CommentNode } from './nodes/CommentNode';
 import { CompletionNode } from './nodes/CompletionNode';
 import { ContactMentionNode } from './nodes/ContactMentionNode';
 import { CustomCodeNode } from './nodes/CustomCodeNode';
-import { AgentStatusNode } from './nodes/AgentStatusNode';
 import { DateMentionNode } from './nodes/DateMentionNode';
 import { DiffDeleteNode } from './nodes/DiffDeleteNode';
-import { GroupMentionNode } from './nodes/GroupMentionNode';
 import { DiffInsertNode } from './nodes/DiffInsertNode';
 import { DiffNode } from './nodes/DiffNode';
 import { DocumentCardNode } from './nodes/DocumentCardNode';
 import { DocumentMentionNode } from './nodes/DocumentMentionNode';
 import { EquationNode } from './nodes/EquationNode';
-import { SnapshotNode } from './nodes/SnapshotNode';
+import { GroupMentionNode } from './nodes/GroupMentionNode';
 import { HorizontalRuleNode } from './nodes/HorizontalRuleNode';
 import { HtmlRenderNode } from './nodes/HtmlRenderNode';
 import { ImageNode } from './nodes/ImageNode';
 import { InlineSearchNode } from './nodes/InlineSearchNode';
 import { SearchMatchNode } from './nodes/SearchMatchNode';
+import { SnapshotNode } from './nodes/SnapshotNode';
+import { ThemeMentionNode } from './nodes/ThemeMentionNode';
+import { UnknownMentionNode } from './nodes/UnknownMentionNode';
 import { UnlinkedTextNode } from './nodes/UnlinkedTextNode';
 import { UserMentionNode } from './nodes/UserMentionNode';
 import { VideoNode } from './nodes/VideoNode';
-import { ThemeMentionNode } from './nodes/ThemeMentionNode';
-import { UnknownMentionNode } from './nodes/UnknownMentionNode';
 import { WatermarkNode } from './nodes/WatermarkNode';
 
 /**
@@ -75,7 +74,6 @@ export const SupportedNodeTypes = [
   ContactMentionNode,
   DateMentionNode,
   GroupMentionNode,
-  AgentStatusNode,
   InlineSearchNode,
   UnlinkedTextNode,
   CodeHighlightNode,

@@ -92,10 +92,9 @@ pub trait SystemBotHandler: Send + Sync {
 
 /// Message Macro Agent posts immediately, then replaces with its answer.
 ///
-/// Rendered by the channel markdown as a pulsing agent-status node (see the
-/// frontend `AgentStatusNode`).
+/// Rendered by the channel markdown as the existing pulsing AwaitNode.
 const THINKING_MESSAGE: &str =
-    r#"<m-agent-status>{"statusText":"Macro Agent is thinking…"}</m-agent-status>"#;
+    r#"<m-await>{"text":"Macro Agent is thinking…","inline":true}</m-await>"#;
 const EMPTY_RESPONSE_FALLBACK: &str = "I wasn't able to come up with a response.";
 const ERROR_FALLBACK: &str = "Sorry — I ran into an error while responding.";
 
