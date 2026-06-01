@@ -19,6 +19,7 @@ const RELOAD_DISPATCH_RETRY_DELAY: Duration = Duration::from_secs(5);
 pub struct Service<Fs: FsRepo> {
     handle: WorkerHandle,
     fs_repo: Fs,
+    embedded_bundle_build: u64,
     bundle_root: BundleRoot,
     reload_pending: bool,
     reload_dispatched_at: Option<Instant>,
@@ -432,11 +433,13 @@ impl<Fs: FsRepo> Service<Fs> {
         update_repo: U,
         fs_repo: Fs,
         system_query: Q,
+        embedded_bundle_build: u64,
     ) -> Self {
         let handle = Worker::new_handle(update_repo, fs_repo.clone(), system_query);
         Service {
             handle,
             fs_repo,
+            embedded_bundle_build,
             bundle_root: BundleRoot::new(),
             reload_pending: false,
             reload_dispatched_at: None,
@@ -445,24 +448,16 @@ impl<Fs: FsRepo> Service<Fs> {
 
     /// Load persisted bundle root from the given cache directory.
     pub async fn load_bundle_root(&mut self, cache_dir: &Path, native_build: u64) {
-        self.load_bundle_root_with_embedded_build(cache_dir, native_build, embedded_bundle_build())
-            .await;
-    }
-
-    async fn load_bundle_root_with_embedded_build(
-        &mut self,
-        cache_dir: &Path,
-        native_build: u64,
-        embedded_bundle_build: u64,
-    ) {
         self.bundle_root = BundleRoot::load(cache_dir, &self.fs_repo).await;
-        if !self
-            .current_bundle_is_usable(embedded_bundle_build, native_build)
-            .await
-        {
+        if !self.current_bundle_is_usable(native_build).await {
             tracing::warn!("Clearing unusable persisted bundle root");
             let _ = self.clear_bundle_root(cache_dir).await;
         }
+    }
+
+    /// Bundle build embedded in this native app.
+    pub fn embedded_bundle_build(&self) -> u64 {
+        self.embedded_bundle_build
     }
 
     /// Get the current bundle root path, if an OTA update has been applied.
@@ -618,11 +613,7 @@ impl<Fs: FsRepo> Service<Fs> {
         }
     }
 
-    async fn current_bundle_is_usable(
-        &self,
-        embedded_bundle_build: u64,
-        native_build: u64,
-    ) -> bool {
+    async fn current_bundle_is_usable(&self, native_build: u64) -> bool {
         let Some(path) = self.bundle_root.path() else {
             return true;
         };
@@ -637,14 +628,9 @@ impl<Fs: FsRepo> Service<Fs> {
         let Some(manifest) = self.bundle_root.manifest(&self.fs_repo).await else {
             return false;
         };
-        manifest.bundle_build >= embedded_bundle_build && manifest.min_native_build <= native_build
+        manifest.bundle_build >= self.embedded_bundle_build
+            && manifest.min_native_build <= native_build
     }
-}
-
-pub(crate) fn embedded_bundle_build() -> u64 {
-    option_env!("MACRO_EMBEDDED_BUNDLE_BUILD")
-        .and_then(|value| value.parse::<u64>().ok())
-        .unwrap_or(0)
 }
 
 impl<Fs: FsRepo> AutoUpdateService for Service<Fs> {
@@ -1051,17 +1037,25 @@ mod tests {
     fn service_with_network(network_type: &str) -> (Service<FakeFs>, FakeSystemQuery) {
         let system_query = FakeSystemQuery::new(network_type);
         let (update_repo, _) = fake_update_repo(Some(BundleAction::Update(bundle_update())), true);
-        let service = Service::new(update_repo, FakeFs::default(), system_query.clone());
+        let service = Service::new(update_repo, FakeFs::default(), system_query.clone(), 0);
         (service, system_query)
     }
 
     fn service_with_status(status: UpdateStatus) -> (Service<FakeFs>, StartRx) {
-        service_with_status_and_fs(status, FakeFs::default())
+        service_with_status_fs_and_embedded_build(status, FakeFs::default(), 0)
     }
 
     fn service_with_status_and_fs(
         status: UpdateStatus,
         fs_repo: FakeFs,
+    ) -> (Service<FakeFs>, StartRx) {
+        service_with_status_fs_and_embedded_build(status, fs_repo, 0)
+    }
+
+    fn service_with_status_fs_and_embedded_build(
+        status: UpdateStatus,
+        fs_repo: FakeFs,
+        embedded_bundle_build: u64,
     ) -> (Service<FakeFs>, StartRx) {
         let (status_tx, status_rx) = tokio::sync::watch::channel(Ok(status));
         let (start_tx, start_rx) = tokio::sync::mpsc::channel(1);
@@ -1073,6 +1067,7 @@ mod tests {
                     start_tx,
                 },
                 fs_repo,
+                embedded_bundle_build,
                 bundle_root: BundleRoot::new(),
                 reload_pending: false,
                 reload_dispatched_at: None,
@@ -1167,11 +1162,10 @@ mod tests {
         let bundle_dir = seed_bundle(&fs, &cache_dir, "1", 10, 0);
         seed_persisted_bundle_root(&fs, &cache_dir, &bundle_dir);
         seed_bundle(&fs, &cache_dir, "2", 11, 0);
-        let (mut service, _start_rx) = service_with_status_and_fs(UpdateStatus::Idle, fs.clone());
+        let (mut service, _start_rx) =
+            service_with_status_fs_and_embedded_build(UpdateStatus::Idle, fs.clone(), 20);
 
-        service
-            .load_bundle_root_with_embedded_build(&cache_dir, 0, 20)
-            .await;
+        service.load_bundle_root(&cache_dir, 0).await;
 
         assert!(service.bundle_root_path().is_none());
         assert!(!fs.file_exists(cache_dir.join("bundle_root")));
@@ -1189,9 +1183,7 @@ mod tests {
         seed_persisted_bundle_root(&fs, &cache_dir, &bundle_dir);
         let (mut service, _start_rx) = service_with_status_and_fs(UpdateStatus::Idle, fs.clone());
 
-        service
-            .load_bundle_root_with_embedded_build(&cache_dir, 0, 0)
-            .await;
+        service.load_bundle_root(&cache_dir, 0).await;
 
         assert!(service.bundle_root_path().is_none());
         assert!(!fs.file_exists(cache_dir.join("bundle_root")));
@@ -1209,9 +1201,7 @@ mod tests {
         seed_persisted_bundle_root(&fs, &cache_dir, &bundle_dir);
         let (mut service, _start_rx) = service_with_status_and_fs(UpdateStatus::Idle, fs.clone());
 
-        service
-            .load_bundle_root_with_embedded_build(&cache_dir, 0, 0)
-            .await;
+        service.load_bundle_root(&cache_dir, 0).await;
 
         assert!(service.bundle_root_path().is_none());
         assert!(!fs.file_exists(cache_dir.join("bundle_root")));
@@ -1226,9 +1216,7 @@ mod tests {
         seed_persisted_bundle_root(&fs, &cache_dir, &bundle_dir);
         let (mut service, _start_rx) = service_with_status_and_fs(UpdateStatus::Idle, fs.clone());
 
-        service
-            .load_bundle_root_with_embedded_build(&cache_dir, 142, 0)
-            .await;
+        service.load_bundle_root(&cache_dir, 142).await;
 
         assert!(service.bundle_root_path().is_none());
         assert!(!fs.file_exists(cache_dir.join("bundle_root")));
@@ -1241,16 +1229,26 @@ mod tests {
         let cache_dir = cache_dir();
         let bundle_dir = seed_bundle(&fs, &cache_dir, "1", 20, 143);
         seed_persisted_bundle_root(&fs, &cache_dir, &bundle_dir);
-        let (mut service, _start_rx) = service_with_status_and_fs(UpdateStatus::Idle, fs.clone());
+        let (mut service, _start_rx) =
+            service_with_status_fs_and_embedded_build(UpdateStatus::Idle, fs.clone(), 10);
 
-        service
-            .load_bundle_root_with_embedded_build(&cache_dir, 143, 10)
-            .await;
+        service.load_bundle_root(&cache_dir, 143).await;
 
         assert_eq!(service.bundle_root_path(), Some(bundle_dir.as_path()));
         assert!(fs.file_exists(cache_dir.join("bundle_root")));
         assert!(fs.dir_exists(cache_dir.join("1")));
         assert!(fs.removed_dirs().is_empty());
+    }
+
+    #[tokio::test]
+    async fn service_reports_configured_embedded_bundle_build() {
+        let (service, _start_rx) = service_with_status_fs_and_embedded_build(
+            UpdateStatus::Idle,
+            FakeFs::default(),
+            1780346991624,
+        );
+
+        assert_eq!(service.embedded_bundle_build(), 1780346991624);
     }
 
     #[tokio::test]
@@ -1505,6 +1503,7 @@ mod tests {
                 start_tx,
             },
             fs_repo: FakeFs::default(),
+            embedded_bundle_build: 0,
             bundle_root: BundleRoot::new(),
             reload_pending: false,
             reload_dispatched_at: None,

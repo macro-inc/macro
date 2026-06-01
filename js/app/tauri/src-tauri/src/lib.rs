@@ -59,6 +59,12 @@ impl AppEnvironment {
     }
 }
 
+fn embedded_bundle_build() -> u64 {
+    env!("MACRO_EMBEDDED_BUNDLE_BUILD")
+        .parse()
+        .expect("MACRO_EMBEDDED_BUNDLE_BUILD must be an unsigned integer")
+}
+
 /// This module provides debuging utilities and should not be compiled in prodiction builds
 #[cfg(debug_assertions)] // do not remove this
 mod debug;
@@ -166,6 +172,7 @@ pub fn run() {
                     .auth_service_url()
                     .parse()
                     .expect("valid url"),
+                embedded_bundle_build(),
             ),
         );
 

@@ -404,6 +404,7 @@ export function Account() {
               </Row>
 
               <Show when={ENABLE_AUTO_UPDATE_UI}>
+                <BundleVersionRow />
                 <BundleUpdateRow />
               </Show>
 
@@ -1011,56 +1012,53 @@ function bundleUpdateAction(
 
 type BundleDebugInfo = {
   bundleBuild: number;
-  embeddedBundleBuild: number;
   source: 'embedded' | 'ota';
   nativeBuild: number;
 };
 
-function BundleUpdateRow() {
-  const tauri = useTauri();
+function BundleVersionRow() {
+  if (!isNativeMobilePlatform()) return null;
+  const [bundleDebugInfo] = createResource(() =>
+    invoke<BundleDebugInfo>('get_bundle_debug_info').catch((error) => {
+      console.error('[bundle-update] get_bundle_debug_info failed', error);
+      return null;
+    })
+  );
   return (
-    <Show when={tauri}>
-      {(ctx) => {
-        const status = () => ctx().bundleUpdateStatus();
-        const action = () => bundleUpdateAction(status());
-        const [bundleDebugInfo] = createResource(() =>
-          invoke<BundleDebugInfo>('get_bundle_debug_info').catch((error) => {
-            console.error('[bundle-update] get_bundle_debug_info failed', error);
-            return null;
-          })
-        );
-        return (
-          <Row label="App Update">
-            <div class="flex flex-col gap-1">
-              <div class="flex items-center gap-3">
-                <span class="text-sm text-ink-muted">
-                  {formatBundleUpdateStatus(status())}
-                </span>
-                <Show when={action()}>
-                  {(a) => (
-                    <Button variant="active" size="sm" depth={3} onClick={a().action}>
-                      {a().label}
-                    </Button>
-                  )}
-                </Show>
-              </div>
-              <Show when={bundleDebugInfo()}>
-                {(info) => (
-                  <span class="text-xs text-ink-faint">
-                    Bundle {info().bundleBuild} ({info().source})
-                    <Show when={info().source === 'ota'}>
-                      {' '}
-                      - embedded {info().embeddedBundleBuild}
-                    </Show>
-                    {' '}
-                    - native {info().nativeBuild}
-                  </span>
-                )}
-              </Show>
-            </div>
-          </Row>
-        );
-      }}
+    <Show when={bundleDebugInfo()}>
+      {(info) => (
+        <Row label="Version">
+          <span class="text-sm text-ink-muted">
+            {info().bundleBuild} ({info().source === 'embedded' ? 'app' : 'ota'})
+            {' '}
+            - {info().nativeBuild}
+          </span>
+        </Row>
+      )}
     </Show>
+  );
+}
+
+function BundleUpdateRow() {
+  if (!isNativeMobilePlatform()) return null;
+  const tauri = useTauri();
+  const status = (): BundleUpdateStatus =>
+    tauri?.bundleUpdateStatus() ?? { status: 'Idle' };
+  const action = () => bundleUpdateAction(status());
+  return (
+    <Row label="App Update">
+      <div class="flex items-center gap-3">
+        <span class="text-sm text-ink-muted">
+          {formatBundleUpdateStatus(status())}
+        </span>
+        <Show when={action()}>
+          {(a) => (
+            <Button variant="active" size="sm" depth={3} onClick={a().action}>
+              {a().label}
+            </Button>
+          )}
+        </Show>
+      </div>
+    </Row>
   );
 }

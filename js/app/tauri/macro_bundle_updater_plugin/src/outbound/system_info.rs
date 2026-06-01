@@ -9,12 +9,16 @@ use crate::domain::{
 /// Queries the running Tauri app for version, architecture, and OS target.
 pub struct SystemInfo<R: Runtime> {
     app_handle: tauri::AppHandle<R>,
+    embedded_bundle_build: u64,
 }
 
 impl<R: Runtime> SystemInfo<R> {
     /// Create a new system info query bound to the given app handle.
-    pub fn new(app_handle: tauri::AppHandle<R>) -> Self {
-        Self { app_handle }
+    pub fn new(app_handle: tauri::AppHandle<R>, embedded_bundle_build: u64) -> Self {
+        Self {
+            app_handle,
+            embedded_bundle_build,
+        }
     }
 
     fn get_target(&self) -> Target {
@@ -40,7 +44,7 @@ impl<R: Runtime> SystemInfo<R> {
                 return build;
             }
         }
-        crate::domain::service::embedded_bundle_build()
+        self.embedded_bundle_build
     }
 
     fn get_arch(&self) -> Arch {

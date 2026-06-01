@@ -65,8 +65,6 @@ pub enum BundleUpdateEvent {
 pub struct BundleDebugInfo {
     /// Current effective bundle build.
     bundle_build: u64,
-    /// Bundle build embedded in this native app.
-    embedded_bundle_build: u64,
     /// Whether the effective bundle came from OTA cache or embedded assets.
     source: BundleDebugSource,
     /// Runtime native app build number.
@@ -112,12 +110,16 @@ impl BundleUpdateEvent {
 /// Tauri plugin that manages OTA bundle updates.
 pub struct MacroBundleUpdaterPlugin {
     base_url: Url,
+    embedded_bundle_build: u64,
 }
 
 impl MacroBundleUpdaterPlugin {
     /// Create the plugin targeting the given update server URL.
-    pub fn new(base_url: Url) -> Self {
-        Self { base_url }
+    pub fn new(base_url: Url, embedded_bundle_build: u64) -> Self {
+        Self {
+            base_url,
+            embedded_bundle_build,
+        }
     }
 }
 
@@ -251,11 +253,10 @@ pub async fn get_bundle_debug_info(
     service: tauri::State<'_, Mutex<PluginService>>,
 ) -> Result<BundleDebugInfo, String> {
     let service = service.lock().await;
-    let embedded_bundle_build = crate::domain::service::embedded_bundle_build();
+    let embedded_bundle_build = service.embedded_bundle_build();
     let cached_bundle_build = service.bundle_build().await;
     Ok(BundleDebugInfo {
         bundle_build: cached_bundle_build.unwrap_or(embedded_bundle_build),
-        embedded_bundle_build,
         source: if cached_bundle_build.is_some() {
             BundleDebugSource::Ota
         } else {
@@ -302,9 +303,9 @@ impl<R: Runtime> Plugin<R> for MacroBundleUpdaterPlugin {
     ) -> Result<(), Box<dyn std::error::Error>> {
         let client = BundleClient::new(self.base_url.clone());
         let fs = FileSystem;
-        let system_info = SystemInfo::new(app.clone());
+        let system_info = SystemInfo::new(app.clone(), self.embedded_bundle_build);
 
-        let service = Service::new(client, fs, system_info);
+        let service = Service::new(client, fs, system_info, self.embedded_bundle_build);
         let mut status_rx = service.status().clone();
         let mut wifi_retry_status_rx = service.status().clone();
 
