@@ -66,6 +66,10 @@ run_local *ARGS:
   set -euo pipefail
 
   just create_networks
+  AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID:-test}" \
+    AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY:-test}" \
+    AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-us-east-1}" \
+    just setup_localstack
   just patch_local_fusionauth_env
 
   do_build=false
