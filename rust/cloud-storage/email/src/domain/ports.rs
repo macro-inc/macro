@@ -74,6 +74,13 @@ pub trait EmailRepo: Send + Sync + 'static {
         macro_id: MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Option<Link>, Self::Err>> + Send;
 
+    /// Returns every email_link owned by the given fusionauth user, one row per
+    /// linked inbox, ordered newest first.
+    fn links_by_fusionauth_user_id(
+        &self,
+        fusionauth_user_id: &str,
+    ) -> impl Future<Output = Result<Vec<Link>, Self::Err>> + Send;
+
     /// Returns every inbox accessible to `macro_id`: their own email_links plus
     /// any reachable via a `macro_user_links` edge (narrow-graph multi-inbox).
     fn inboxes_for_macro_id(
@@ -327,6 +334,15 @@ pub trait EmailService: Send + Sync + 'static {
     fn get_inboxes_for_macro_id(
         &self,
         macro_id: MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Vec<Link>, EmailErr>> + Send;
+
+    /// Fetch every inbox owned by the caller, keyed on their fusionauth user id
+    /// (one row per linked inbox). The read-side multi-inbox union resolves over
+    /// these; the single-inbox mutating extractor selects one by header or by
+    /// primary-email match.
+    fn get_links_by_fusionauth_user_id(
+        &self,
+        auth_id: &str,
     ) -> impl Future<Output = Result<Vec<Link>, EmailErr>> + Send;
 
     /// Fetch a thread with paginated messages, verifying access via the provided receipt.

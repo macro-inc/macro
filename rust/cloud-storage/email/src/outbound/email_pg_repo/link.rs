@@ -71,6 +71,34 @@ pub(super) async fn link_by_fusionauth_email_provider(
 }
 
 #[tracing::instrument(err, skip(pool))]
+pub(super) async fn links_by_fusionauth_user_id(
+    pool: &PgPool,
+    fusionauth_user_id: &str,
+) -> Result<Vec<Link>, sqlx::Error> {
+    let db_links: Vec<DbLink> = sqlx::query_as!(
+        DbLink,
+        r#"
+        SELECT id, macro_id, fusionauth_user_id, email_address, provider as "provider: _",
+               is_sync_active, created_at, updated_at
+        FROM email_links
+        WHERE fusionauth_user_id = $1
+        ORDER BY created_at DESC
+        "#,
+        fusionauth_user_id
+    )
+    .fetch_all(pool)
+    .await?;
+
+    db_links
+        .into_iter()
+        .map(|v| {
+            v.try_into_model()
+                .map_err(|e| sqlx::Error::Decode(Box::new(e)))
+        })
+        .collect()
+}
+
+#[tracing::instrument(err, skip(pool))]
 pub(super) async fn link_by_macro_id(
     pool: &PgPool,
     macro_id: MacroUserIdStr<'_>,

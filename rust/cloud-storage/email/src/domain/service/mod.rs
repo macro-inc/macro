@@ -159,6 +159,16 @@ where
             .map_err(|e| EmailErr::RepoErr(e.into()))
     }
 
+    async fn get_links_by_fusionauth_user_id(
+        &self,
+        auth_id: &str,
+    ) -> Result<Vec<crate::domain::models::Link>, EmailErr> {
+        self.email_repo
+            .links_by_fusionauth_user_id(auth_id)
+            .await
+            .map_err(|e| EmailErr::RepoErr(e.into()))
+    }
+
     async fn get_thread_with_messages(
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
