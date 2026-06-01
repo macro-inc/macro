@@ -56,6 +56,7 @@ pub struct ApiThreadPreviewCursorInner {
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
     viewed_at: Option<DateTime<Utc>>,
+    link_id: Uuid,
 }
 
 #[derive(Debug, ToSchema, Serialize, Deserialize, Doppleganger)]

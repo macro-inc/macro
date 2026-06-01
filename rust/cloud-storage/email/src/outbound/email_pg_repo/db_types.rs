@@ -46,6 +46,8 @@ pub struct ThreadPreviewCursorDbRow {
     pub project_id: Option<String>,
     /// The macro user ID of the thread owner, resolved from email_links.
     pub owner_id: String,
+    /// The id of the email_link (inbox) this thread belongs to.
+    pub link_id: Uuid,
 }
 
 #[derive(Debug, sqlx::Type, Clone, Copy, PartialEq, Eq, Doppleganger)]
@@ -115,6 +117,7 @@ impl ThreadPreviewCursorDbRow {
             updated_at,
             project_id,
             owner_id,
+            link_id,
         } = self;
 
         EmailThreadPreview {
@@ -137,6 +140,7 @@ impl ThreadPreviewCursorDbRow {
             updated_at,
             viewed_at,
             project_id,
+            link_id,
         }
     }
 }

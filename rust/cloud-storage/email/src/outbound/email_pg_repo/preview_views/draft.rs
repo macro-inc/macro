@@ -47,7 +47,8 @@ pub(crate) async fn drafts_preview_cursor(
             c.email_address AS "sender_email?",
             COALESCE(lmp.from_name, c.name) AS "sender_name?",
             c.sfs_photo_url as "sender_photo_url?",
-            el.macro_id AS "owner_id!"
+            el.macro_id AS "owner_id!",
+            el.id AS "link_id!"
         FROM (
             -- Step 1: Find the latest draft timestamp for each thread, calculate the
             -- effective sort key, then sort and limit the results. This is the core optimization.

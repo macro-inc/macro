@@ -276,7 +276,8 @@ fn build_query(
             c.email_address AS sender_email,
             c.name AS sender_name,
             c.sfs_photo_url as sender_photo_url,
-            el.macro_id AS owner_id
+            el.macro_id AS owner_id,
+            el.id AS link_id
         FROM (
             -- Step 1: Efficiently find and sort candidate threads
             SELECT *
@@ -530,6 +531,7 @@ pub(crate) async fn dynamic_email_thread_cursor(
                 updated_at: row.try_get("updated_at")?,
                 project_id: row.try_get("project_id")?,
                 owner_id: row.try_get("owner_id")?,
+                link_id: row.try_get("link_id")?,
             })
         })
         .fetch_all(pool)

@@ -50,7 +50,8 @@ pub(crate) async fn new_inbox_preview_cursor(
             c.email_address AS "sender_email?",
             COALESCE(lmp.from_name, c.name) AS "sender_name?",
             c.sfs_photo_url as "sender_photo_url?",
-            el.macro_id AS "owner_id!"
+            el.macro_id AS "owner_id!",
+            el.id AS "link_id!"
         FROM (
             -- Step 1: Efficiently find and sort ONLY the top N+1 candidate threads.
             -- This subquery is fast as it only touches `threads` and `user_history`.
