@@ -89,7 +89,7 @@ pub async fn handler(
     let (mut db_attachment, message_provider_id, link) = owned.ok_or_else(|| {
         tracing::warn!("attachment with id {} not found for caller", attachment_id);
         (
-            StatusCode::BAD_REQUEST,
+            StatusCode::NOT_FOUND,
             Json(ErrorResponse {
                 message: "attachment does not exist".into(),
             }),
@@ -149,13 +149,24 @@ pub async fn handler(
                 .into_response()
         })?;
 
+        let provider_attachment_id = db_attachment.provider_id.as_ref().ok_or_else(|| {
+            tracing::warn!(attachment_id=%attachment_id, "attachment is missing a provider_id");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    message: "error fetching attachment".into(),
+                }),
+            )
+                .into_response()
+        })?;
+
         // fetch attachment data from gmail api
         let attachment_data = ctx
             .gmail_client
             .get_attachment_data(
                 gmail_token.as_str(),
                 &message_provider_id,
-                db_attachment.provider_id.as_ref().unwrap(),
+                provider_attachment_id,
             )
             .await
             .map_err(|e| {
