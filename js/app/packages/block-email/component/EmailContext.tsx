@@ -21,6 +21,7 @@ import { whenSettled } from '@core/util/whenSettled';
 import { createEffectOnEntityTypeNotification } from '@notifications';
 import { queryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
+import { useNonPrimaryEmailLinkIdHeader } from '@queries/email/link';
 import {
   blockSenderWithToast,
   markSenderNoiseWithToast,
@@ -330,6 +331,8 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
     },
   });
 
+  const toHeaderLinkId = useNonPrimaryEmailLinkIdHeader();
+
   const archiveThread = () => {
     const thread = threadQuery.data;
 
@@ -338,6 +341,7 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
     archiveMutation.mutate({
       threadId: thread.db_id,
       archive: thread.inbox_visible,
+      linkId: toHeaderLinkId(thread.link_id),
     });
 
     if (!props) return false;
@@ -354,6 +358,7 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
       archiveMutation.mutate({
         threadId: thread.db_id,
         archive: thread.inbox_visible,
+        linkId: toHeaderLinkId(thread.link_id),
       });
     }
 
@@ -375,7 +380,7 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
 
     if (!senderEmail) return false;
 
-    blockSenderWithToast(senderEmail);
+    blockSenderWithToast(senderEmail, toHeaderLinkId(thread.link_id));
     return true;
   };
 

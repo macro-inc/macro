@@ -199,7 +199,12 @@ export function useMarkThreadAsSeenMutation(
   }));
 }
 
-type ArchiveThreadParams = { threadId: string; archive: boolean };
+type ArchiveThreadParams = {
+  threadId: string;
+  archive: boolean;
+  /** Target inbox for a non-primary inbox; sent as the X-Email-Link-Id header. */
+  linkId?: string;
+};
 type ArchiveThreadContext = {
   previousData: InfiniteData<Thread, number> | undefined;
 };
@@ -245,10 +250,13 @@ export function useArchiveThreadMutation(
     mutationFn: async (params: ArchiveThreadParams) =>
       void throwOnErr(
         async () =>
-          await emailClient.flagArchived({
-            id: params.threadId,
-            value: params.archive,
-          })
+          await emailClient.flagArchived(
+            {
+              id: params.threadId,
+              value: params.archive,
+            },
+            params.linkId
+          )
       ),
     ...withCallbacks<void, Error, ArchiveThreadParams, ArchiveThreadContext>(
       {
@@ -397,10 +405,16 @@ export function useUnscheduleMessageMutation(
  * Blocks a sender and shows appropriate toasts with undo support.
  * Shared by the email thread view and soup context menu.
  */
-export async function blockSenderWithToast(senderEmail: string) {
-  const result = await emailClient.blockSender({
-    email_address: senderEmail,
-  });
+export async function blockSenderWithToast(
+  senderEmail: string,
+  linkId?: string
+) {
+  const result = await emailClient.blockSender(
+    {
+      email_address: senderEmail,
+    },
+    linkId
+  );
 
   if (result.isErr()) {
     toast.failure('Failed to block sender', { subtext: senderEmail });
@@ -414,9 +428,12 @@ export async function blockSenderWithToast(senderEmail: string) {
         label: 'Undo',
         icon: ArrowCounterClockwise,
         onClick: async () => {
-          const undoResult = await emailClient.unblockSender({
-            email_address: senderEmail,
-          });
+          const undoResult = await emailClient.unblockSender(
+            {
+              email_address: senderEmail,
+            },
+            linkId
+          );
           if (undoResult.isErr()) {
             toast.failure('Failed to unblock sender', { subtext: senderEmail });
           } else {

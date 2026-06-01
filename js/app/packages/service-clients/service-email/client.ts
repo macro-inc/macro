@@ -375,16 +375,18 @@ export const emailClient = {
       })
     ).map((result) => result);
   },
-  async blockSender(args: { email_address: string }) {
+  async blockSender(args: { email_address: string }, linkId?: string) {
     return emailFetch('/email/contacts/block', {
       method: 'POST',
       body: JSON.stringify({ email_address: args.email_address }),
+      headers: emailLinkHeaders(linkId),
     });
   },
-  async unblockSender(args: { email_address: string }) {
+  async unblockSender(args: { email_address: string }, linkId?: string) {
     return emailFetch('/email/contacts/unblock', {
       method: 'POST',
       body: JSON.stringify({ email_address: args.email_address }),
+      headers: emailLinkHeaders(linkId),
     });
   },
   async listEmailFilters() {
