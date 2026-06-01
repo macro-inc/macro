@@ -1,35 +1,31 @@
-import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { setInviteModalOpen } from '@app/component/app-sidebar/invite-modal';
 import { CommandState } from '@app/component/command';
 import { DashboardNotificationList } from '@app/component/dashboard/sections/notifications';
-import { MobileDrawer } from '@app/component/mobile/MobileDrawer';
+import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { setCreateMenuOpen } from '@app/component/Launcher';
+import { MobileDrawer } from '@app/component/mobile/MobileDrawer';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { setAutomationComposerOpen } from '@block-automation/component';
 import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
 import { ChatInput } from '@core/component/AI/component/input/ChatInput';
 import { ChatInputProvider } from '@core/component/AI/context';
 import { setPendingSendData } from '@core/component/AI/signal/pendingSend';
-import { setAutomationComposerOpen } from '@block-automation/component';
 import { useSettingsState } from '@core/constant/SettingsState';
+import { useUserContext } from '@core/context/user';
+import { isMobile } from '@core/mobile/isMobile';
+import LogoIcon from '@icon/macro-logo.svg';
+import { notificationIsRead } from '@notifications';
 import BellIcon from '@phosphor/bell.svg';
 import GearIcon from '@phosphor/gear.svg';
+import SearchIcon from '@phosphor/magnifying-glass.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import RobotIcon from '@phosphor/robot.svg';
-import SearchIcon from '@phosphor/magnifying-glass.svg';
 import UsersThreeIcon from '@phosphor/users-three.svg';
 import MoreIcon from '@phosphor-icons/core/fill/dots-three-outline-fill.svg?component-solid';
-import CloudSunIcon from '@phosphor/cloud-sun.svg';
-import MoonStarsIcon from '@phosphor/moon-stars.svg';
-import SunHorizonIcon from '@phosphor/sun-horizon.svg';
-import { notificationIsRead } from '@notifications';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { Button, Dropdown } from '@ui';
 import { createMemo, createSignal, Show } from 'solid-js';
-
-import { useUserContext } from '@core/context/user';
-import { isMobile } from '@core/mobile/isMobile';
-import { Dynamic } from 'solid-js/web';
 
 function openAutomationsView() {
   globalSplitManager()?.openWithSplit(
@@ -97,11 +93,6 @@ export function Hero() {
   });
 
   const greeting = createMemo(() => `Good ${timeOfDay()}`);
-  const GreetingIcon = createMemo(() => {
-    if (timeOfDay() === 'morning') return SunHorizonIcon;
-    if (timeOfDay() === 'afternoon') return CloudSunIcon;
-    return MoonStarsIcon;
-  });
 
   const unreadNotifications = createMemo(() =>
     notificationSource
@@ -120,10 +111,7 @@ export function Hero() {
     <section class="relative py-8 sm:py-14">
       <div class="mx-auto flex max-w-3xl flex-col items-center gap-6">
         <div class="flex w-full items-start justify-between gap-3 sm:justify-center">
-          <Dynamic
-            component={GreetingIcon()}
-            class="hidden @max-sm:hidden sm:size-12 text-accent sm:block"
-          />
+          <LogoIcon class="hidden @max-sm:hidden sm:size-10 self-center text-accent sm:block" />
           <h1 class="relative min-w-0 text-balance text-4xl font-semibold tracking-tight text-ink @xl::text-center @lg:text-5xl">
             {greeting()}, <span class="capitalize">{firstName()}.</span>
           </h1>
