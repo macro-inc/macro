@@ -1,3 +1,4 @@
+import UsersIcon from '@phosphor/users.svg';
 import { DashboardSectionError } from '@app/component/dashboard/dashboard-section-error';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import {
@@ -586,36 +587,38 @@ export function TeamPulseSection() {
   return (
     <section class="mx-auto w-full max-w-3xl">
       <div class="flex items-start justify-between gap-3 px-4 sm:px-0">
-        <div class="flex min-w-0 items-center gap-2">
-          <h2 class="truncate text-lg font-semibold tracking-tight text-ink">
-            {firstTeam()?.name ?? 'Team'}
-          </h2>
-          <Show when={firstTeam()}>
-            {(team) => (
-              <span class="shrink-0 truncate text-xxs text-ink-muted">
-                @{team().slug}
-              </span>
-            )}
-          </Show>
-        </div>
+        <header>
+          <div class="flex min-w-0 items-center gap-2">
+            <h1 class="truncate text-lg font-semibold tracking-tight text-ink">
+              {firstTeam()?.name ?? 'Team'}
+            </h1>
+            <Show when={firstTeam()}>
+              {(team) => (
+                <span class="shrink-0 truncate text-xs mt-1 text-ink-muted">
+                  @{team().slug}
+                </span>
+              )}
+            </Show>
+          </div>
+          <p class="text-xs text-ink-extra-muted font-normal">
+            What's the team working on?
+          </p>
+        </header>
         <div class="flex shrink-0 items-center gap-2">
           <Button
             variant="ghost"
-            size="sm"
             class="rounded-lg"
             onClick={() => setRefreshToken((value) => value + 1)}
           >
             <RefreshIcon class="size-3.5" />
-            Refresh
           </Button>
           <Show when={firstTeam() && isOwner()}>
             <Button
-              variant="base"
-              size="sm"
-              depth={3}
-              class="h-8 rounded-lg bg-surface px-3"
+              variant="ghost"
+              class="rounded-lg"
               onClick={() => openSettings('Team')}
             >
+              <UsersIcon class="size-3.5" />
               Manage
             </Button>
           </Show>

@@ -60,11 +60,11 @@ export function Hero() {
 
   return (
     <section class="relative py-8 sm:py-14">
-      <div class="mx-auto flex max-w-3xl flex-col items-center gap-4">
-        <div class="flex w-full items-start justify-between gap-3 sm:justify-center">
-          <LogoIcon class="hidden @max-sm:hidden sm:size-8 self-center text-accent sm:block" />
-          <h1 class="relative min-w-0 text-balance text-3xl font-semibold tracking-tight text-ink">
-            {greeting()}, <span class="capitalize">{firstName()}.</span>
+      <div class="mx-auto flex max-w-3xl flex-col items-center gap-8">
+        <div class="flex w-full items-center justify-between gap-3 sm:justify-center">
+          <LogoIcon class="hidden @max-sm:hidden sm:size-6 text-accent sm:block" />
+          <h1 class="relative min-w-0 text-balance text-2xl font-medium tracking-tight text-ink">
+            {greeting()}, <span class="capitalize">{firstName()}</span>
           </h1>
           <Button
             variant="base"
@@ -84,12 +84,11 @@ export function Hero() {
           </Button>
         </div>
 
-        <div class="w-full text-left">
+        <div class="flex flex-col gap-4 w-full text-left">
           <DashboardAiInput editor={chatEditor} />
-        </div>
-
-        <div class="w-full flex items-center justify-between">
-          <PromptTemplatesSection onSelect={fillChatInput} />
+          <div class="w-full flex items-center justify-between">
+            <PromptTemplatesSection onSelect={fillChatInput} />
+          </div>
         </div>
       </div>
     </section>

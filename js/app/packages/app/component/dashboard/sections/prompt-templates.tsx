@@ -8,7 +8,7 @@ import ListBulletsIcon from '@phosphor/list-bullets.svg';
 import ListChecksIcon from '@phosphor/list-checks.svg';
 import PencilLineIcon from '@phosphor/pencil-line.svg';
 import TextAaIcon from '@phosphor/text-aa.svg';
-import { Dropdown } from '@ui';
+import { Dropdown, Layer } from '@ui';
 import { type Component, createSignal, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 
@@ -129,7 +129,7 @@ function PromptChip(props: {
 function TemplateDropdown(props: { onSelect: (prompt: string) => void }) {
   return (
     <Dropdown placement="bottom-start">
-      <Dropdown.Trigger class={pillClass}>
+      <Dropdown.Trigger class={pillClass} depth={2}>
         <div class="flex w-full items-center justify-between gap-2">
           <ListBulletsIcon class="size-4 transition" />
           <span class="min-w-0 text-xs font-medium">Templates</span>
@@ -140,7 +140,11 @@ function TemplateDropdown(props: { onSelect: (prompt: string) => void }) {
         <Dropdown.Group>
           <For each={TEMPLATES}>
             {(template) => (
-              <Dropdown.Item onSelect={() => props.onSelect(template.prompt)}>
+              <Dropdown.Item
+                onSelect={() => {
+                  setTimeout(() => props.onSelect(template.prompt));
+                }}
+              >
                 <span class="flex size-3.5 shrink-0 items-center justify-center text-ink-muted">
                   <Dynamic component={template.icon} class="size-3.5" />
                 </span>
@@ -162,15 +166,17 @@ export function PromptTemplatesSection(props: {
   return (
     <section class="@container/prompt-templates flex flex-wrap items-center justify-center gap-2 w-full">
       <TemplateDropdown onSelect={(prompt) => props.onSelect(prompt)} />
-      <For each={SUGGESTIONS}>
-        {(suggestion) => (
-          <PromptChip
-            label={suggestion.label}
-            icon={suggestion.icon}
-            onClick={() => props.onSelect(suggestion.text, 'append')}
-          />
-        )}
-      </For>
+      <Layer depth={2}>
+        <For each={SUGGESTIONS}>
+          {(suggestion) => (
+            <PromptChip
+              label={suggestion.label}
+              icon={suggestion.icon}
+              onClick={() => props.onSelect(suggestion.text, 'append')}
+            />
+          )}
+        </For>
+      </Layer>
     </section>
   );
 }

@@ -12,7 +12,7 @@ export function CenteredView() {
       <div class="hidden @7xl/dashboard:block" />
 
       <div class="mx-auto flex w-full min-w-0 max-w-2xl flex-col gap-10">
-        <div class="pt-[50vh] -translate-y-[30vh] flex flex-col gap-8 px-4 sm:px-0">
+        <div class="@md:pt-[50vh] @md:-translate-y-[30vh] flex flex-col gap-24 px-4 sm:px-0">
           <DashboardSectionBoundary title="hero">
             <Hero />
           </DashboardSectionBoundary>
@@ -38,12 +38,6 @@ export function CenteredView() {
           {/*     <RecentSharedSection /> */}
           {/*   </DashboardSectionBoundary> */}
           {/* </div> */}
-
-          <div class="px-4 sm:px-0 @6xl/dashboard:hidden">
-            <DashboardSectionBoundary title="quick links">
-              <QuickLinksSection />
-            </DashboardSectionBoundary>
-          </div>
         </div>
       </div>
     </div>

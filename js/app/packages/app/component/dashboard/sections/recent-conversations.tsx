@@ -85,7 +85,9 @@ export function RecentConversationCard(props: {
         fallback={
           <div class="col-start-1 row-span-2 row-start-1 flex size-9 shrink-0 items-center justify-center rounded-lg bg-hover text-ink-muted transition group-hover:bg-active group-hover:text-ink">
             <EntityIcon
-              targetType={(props.conversation.type || 'channel') as EntityIconSelector}
+              targetType={
+                (props.conversation.type || 'channel') as EntityIconSelector
+              }
               size="sm"
               class="shrink-0"
             />
@@ -194,13 +196,7 @@ export function useRecentConversations() {
           project_ids: ['00000000-0000-0000-0000-000000000000'],
         },
         channel_filters: {
-          channel_types: [
-            'public',
-            'organization',
-            'private',
-            'team',
-            'direct_message',
-          ],
+          channel_types: ['public', 'private', 'team', 'direct_message'],
         },
       },
     }),
@@ -377,8 +373,8 @@ export function RecentConversationsSection() {
       </div>
 
       <AdaptiveScroller scrollAmount={280} class="relative">
-        <AdaptiveScroller.Viewport class="w-full scroll-pl-4 px-4 pb-1 sm:px-0 @md/recent-conversations:grid @md/recent-conversations:grid-cols-[repeat(auto-fit,minmax(16rem,1fr))] @md/recent-conversations:gap-3 @md/recent-conversations:overflow-visible @md/recent-conversations:pb-0">
-          <RecentConversationsList variant="card" />
+        <AdaptiveScroller.Viewport class="w-full scroll-pl-4 px-4 pb-1 sm:px-0 @md/recent-conversations:grid @md/recent-conversations:grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] @md/recent-conversations:gap-3 @md/recent-conversations:overflow-visible @md/recent-conversations:pb-0">
+          <RecentConversationsList variant="row" />
         </AdaptiveScroller.Viewport>
         <AdaptiveScroller.FadeEdges class="bottom-10 top-0 hidden sm:block @md/recent-conversations:hidden" />
         <AdaptiveScroller.Controls class="mt-2 @md/recent-conversations:hidden">
