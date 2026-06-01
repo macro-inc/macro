@@ -1,15 +1,11 @@
+import { IndividualView } from '@app/component/dashboard/individual-view';
 import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
 import { TabsInset } from '@core/component/TabsInset';
-import { DashboardSectionBoundary } from './dashboard-section-boundary';
-import { DashboardSideColumn } from './dashboard-side-column';
-import { Hero } from './sections/hero';
-import { NotificationsSection } from './sections/notifications';
-import { QuickLinksSection } from './sections/quick-links';
-import { RecentConversationsSection } from './sections/recent-conversations';
-import { RecentSharedSection } from './sections/recent-shared';
-import { TeamPulseSection } from './sections/team-pulse';
+import { createSignal, Match, Switch } from 'solid-js';
 
 export function Dashboard() {
+  const [view, setView] = createSignal<'team' | 'individual'>('team');
+
   return (
     <main class="relative h-full overflow-y-auto bg-surface">
       <SplitHeaderLeft>
@@ -18,6 +14,8 @@ export function Dashboard() {
           <TabsInset
             class="inline-flex h-auto"
             defaultValue="team"
+            value={view()}
+            onChange={setView}
             list={[
               { value: 'team', label: 'Team' },
               { value: 'individual', label: 'Individual' },
@@ -27,47 +25,14 @@ export function Dashboard() {
       </SplitHeaderLeft>
 
       <div class="@container/dashboard px-0 pb-10 sm:px-8">
-        <div class="grid grid-cols-1 gap-24 @6xl/dashboard:grid-cols-[minmax(0,1fr)_minmax(22rem,26rem)] @7xl/dashboard:grid-cols-[minmax(0,8rem)_minmax(0,1fr)_minmax(22rem,26rem)] @8xl/dashboard:grid-cols-[minmax(0,22rem)_minmax(0,1fr)_minmax(22rem,26rem)]">
-          <div class="hidden @7xl/dashboard:block" />
-
-          <div class="mx-auto flex w-full min-w-0 max-w-3xl flex-col gap-10 @6xl/dashboard:mx-auto">
-            <div class="px-4 sm:px-0">
-              <DashboardSectionBoundary title="hero">
-                <Hero />
-              </DashboardSectionBoundary>
-            </div>
-
-            <DashboardSectionBoundary title="team pulse">
-              <TeamPulseSection />
-            </DashboardSectionBoundary>
-
-            <div class="@6xl/dashboard:hidden">
-              <DashboardSectionBoundary title="recent conversations">
-                <RecentConversationsSection />
-              </DashboardSectionBoundary>
-            </div>
-
-            <div class="hidden px-4 sm:block sm:px-0 @6xl/dashboard:hidden">
-              <DashboardSectionBoundary title="notifications">
-                <NotificationsSection />
-              </DashboardSectionBoundary>
-            </div>
-
-            <div class="px-4 sm:px-0">
-              <DashboardSectionBoundary title="recent and shared">
-                <RecentSharedSection />
-              </DashboardSectionBoundary>
-            </div>
-
-            <div class="px-4 sm:px-0 @6xl/dashboard:hidden">
-              <DashboardSectionBoundary title="quick links">
-                <QuickLinksSection />
-              </DashboardSectionBoundary>
-            </div>
-          </div>
-
-          <DashboardSideColumn />
-        </div>
+        <Switch>
+          <Match when={view() === 'team'}>
+            <div>Team</div>
+          </Match>
+          <Match when={true}>
+            <IndividualView />
+          </Match>
+        </Switch>
       </div>
     </main>
   );
