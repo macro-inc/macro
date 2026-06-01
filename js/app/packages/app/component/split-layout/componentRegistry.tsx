@@ -334,6 +334,10 @@ if (LOCAL_ONLY) {
     lazy(() => import('@core/component/AI/component/debug/Tool'))
   );
   registerComponent(
+    'chat-tool-showcase',
+    lazy(() => import('@core/component/AI/component/debug/ToolShowcase'))
+  );
+  registerComponent(
     'http-stream',
     lazy(() => import('@core/component/AI/component/debug/HttpStream'))
   );

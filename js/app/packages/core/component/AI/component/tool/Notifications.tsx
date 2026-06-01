@@ -62,7 +62,12 @@ const listNotificationsHandler = createToolRenderer({
     };
 
     return (
-      <BaseTool icon={List} renderContext={ctx.renderContext} type="call">
+      <BaseTool
+        align="start"
+        icon={List}
+        renderContext={ctx.renderContext}
+        type="call"
+      >
         <div class="flex min-w-0 flex-1 flex-col gap-1">
           <div class="flex min-w-0 items-center justify-between gap-3">
             <span>Read notifications</span>
@@ -74,7 +79,7 @@ const listNotificationsHandler = createToolRenderer({
               )}
             </Show>
           </div>
-          <div class="min-w-0 truncate text-xs text-ink-extra-muted">
+          <div class="min-w-0 truncate text-xs text-ink-placeholder">
             {formatNotificationFilters(ctx.tool.data)}
           </div>
         </div>
@@ -87,8 +92,7 @@ const markNotificationsSeenHandler = createToolRenderer({
   name: 'MarkNotificationsSeen',
   render: (ctx) => (
     <BaseTool icon={Check} renderContext={ctx.renderContext} type="call">
-      Mark{' '}
-      <span class="text-accent">{ctx.tool.data.notificationIds.length}</span>{' '}
+      Mark <span class="text-ink">{ctx.tool.data.notificationIds.length}</span>{' '}
       notification{ctx.tool.data.notificationIds.length === 1 ? '' : 's'} seen
     </BaseTool>
   ),
@@ -98,8 +102,7 @@ const markNotificationsDoneHandler = createToolRenderer({
   name: 'MarkNotificationsDone',
   render: (ctx) => (
     <BaseTool icon={Check} renderContext={ctx.renderContext} type="call">
-      Mark{' '}
-      <span class="text-accent">{ctx.tool.data.notificationIds.length}</span>{' '}
+      Mark <span class="text-ink">{ctx.tool.data.notificationIds.length}</span>{' '}
       notification{ctx.tool.data.notificationIds.length === 1 ? '' : 's'}{' '}
       {ctx.tool.data.done ? 'done' : 'not done'}
     </BaseTool>

@@ -303,7 +303,7 @@ function ChatInner(props: {
         <CustomScrollbar scrollContainer={scrollRef} />
       </div>
       <Show when={!disabled()}>
-        <div class="flex w-full justify-center pb-2 px-4">
+        <div class="flex w-full justify-center pb-2 px-2">
           <div class="w-3xl">
             <ChatInput
               editor={editor}

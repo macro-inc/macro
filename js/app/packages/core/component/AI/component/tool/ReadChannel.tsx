@@ -109,11 +109,16 @@ export const readChannelMessagesHandler = createToolRenderer({
       });
 
     return (
-      <BaseTool type="call" icon={EyeIcon} renderContext={ctx.renderContext}>
+      <BaseTool
+        type="call"
+        align="start"
+        icon={EyeIcon}
+        renderContext={ctx.renderContext}
+      >
         <div class="flex min-w-0 flex-1 flex-col gap-1">
           <div class="flex min-w-0 items-center justify-between gap-3">
             <span>
-              Read messages in <span class="text-accent">{channelName()}</span>
+              Read messages in <span class="text-ink">{channelName()}</span>
             </span>
             {ctx.response && (
               <span class="shrink-0 text-xs text-ink-extra-muted">
@@ -137,8 +142,7 @@ export const readChannelMessageContextHandler = createToolRenderer({
       <BaseTool type="call" icon={EyeIcon} renderContext={ctx.renderContext}>
         <div class="flex min-w-0 flex-1 items-center justify-between gap-3">
           <span>
-            Read <span class="text-accent">{channelName()}</span> message
-            context
+            Read <span class="text-ink">{channelName()}</span> message context
           </span>
         </div>
       </BaseTool>
@@ -156,7 +160,7 @@ export const readChannelThreadHandler = createToolRenderer({
       <BaseTool type="call" icon={EyeIcon} renderContext={ctx.renderContext}>
         <div class="flex min-w-0 flex-1 items-center justify-between gap-3">
           <span>
-            Read <span class="text-accent">{channelName()}</span> thread
+            Read <span class="text-ink">{channelName()}</span> thread
           </span>
           {ctx.response && (
             <span class="shrink-0 text-xs text-ink-extra-muted">

@@ -7,12 +7,17 @@ export { InlineEntity } from './composed/InlineEntity';
 export { ListEntity, ListLayoutProvider } from './composed/ListEntity';
 
 export { Entity } from './entity';
+export { EntityIcon as EntityRowIcon } from './extractors/entity-icon';
+export { EntityTitle as EntityRowTitle } from './extractors/entity-title';
 export { NotificationRow } from './extractors-notification';
 export type {} from './extractors-notification/notification-row';
 export {
   getSnippetHit,
   isSnippetEntity,
 } from './extractors-search/snippet-entity';
+export { SearchContent } from './extractors-search/search-content';
+export { SearchSender } from './extractors-search/search-sender';
+export { SearchTimestamp } from './extractors-search/search-timestamp';
 export * from './types/drag';
 export * from './types/entity';
 export * from './types/notification';

@@ -8,7 +8,7 @@ const getHandler = createToolRenderer({
   render: (ctx) => (
     <BaseTool icon={Sliders} renderContext={ctx.renderContext} type="call">
       Get properties for{' '}
-      <span class="text-accent">{ctx.tool.data.entity_type}</span>
+      <span class="text-ink">{ctx.tool.data.entity_type}</span>
     </BaseTool>
   ),
 });
@@ -18,7 +18,7 @@ const setHandler = createToolRenderer({
   render: (ctx) => (
     <BaseTool icon={PencilSimple} renderContext={ctx.renderContext} type="call">
       Update property on{' '}
-      <span class="text-accent">{ctx.tool.data.entity_type}</span>
+      <span class="text-ink">{ctx.tool.data.entity_type}</span>
     </BaseTool>
   ),
 });
