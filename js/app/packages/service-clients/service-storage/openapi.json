@@ -3874,7 +3874,7 @@
     "/crm/companies/{company_id}/hidden": {
       "put": {
         "tags": ["crm::inbound::axum_router::set_company_hidden"],
-        "summary": "Toggle `hidden` on a CRM company. Hiding also disables\n`email_sync` and soft-hides every contact under the company; both\nflags cascade back on un-hide. Contact rows and contact sources\nsurvive the cycle.",
+        "summary": "Toggle `hidden` on a CRM company. Hiding also disables\n`email_sync` and soft-hides every contact under the company.\nUn-hide restores contact visibility only; `email_sync` is left\nuntouched (the team must re-enable it explicitly). Contact rows\nand contact sources survive the cycle.",
         "operationId": "set_company_hidden",
         "parameters": [
           {

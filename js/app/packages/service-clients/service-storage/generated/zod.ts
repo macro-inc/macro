@@ -2972,9 +2972,10 @@ export const setEmailSyncBody = zod
 
 /**
  * @summary Toggle `hidden` on a CRM company. Hiding also disables
-`email_sync` and soft-hides every contact under the company; both
-flags cascade back on un-hide. Contact rows and contact sources
-survive the cycle.
+`email_sync` and soft-hides every contact under the company.
+Un-hide restores contact visibility only; `email_sync` is left
+untouched (the team must re-enable it explicitly). Contact rows
+and contact sources survive the cycle.
  */
 export const setCompanyHiddenParams = zod.object({
   company_id: zod.uuid().describe('The CRM company to update'),
