@@ -591,8 +591,7 @@ async fn main() -> anyhow::Result<()> {
         PgChannelReferenceSharePermissions::new(db.clone(), entity_access_service.clone()),
     ));
 
-    // Wire Macro AI (and other channel bots) to react to mentions. The dispatcher
-    // resolves mentioned bots and runs their handlers, posting replies through
+    // Wire Macro AI to react to mentions. The dispatcher posts replies through
     // the channel service we just built.
     let cognition_service_url = config::CognitionServiceUrl::new()
         .map(|v| v.as_ref().to_string())
@@ -602,7 +601,6 @@ async fn main() -> anyhow::Result<()> {
         internal_api_secret.as_ref().to_string(),
     );
     let bot_trigger_router = channel_bots::BotTriggerRouter::new(
-        Arc::new(bots_repo),
         channels_service.clone(),
         Arc::new(channel_bots::DcsAgentResponder::new(dcs_client)),
     );

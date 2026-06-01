@@ -4,7 +4,6 @@ use std::fmt::Write as _;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use bots::domain::models::Bot;
 use channels::domain::models::{
     MutatedMessage, ParticipantRole, PatchMessageRequest, PostMessageRequest, Sender,
 };
@@ -14,8 +13,12 @@ use uuid::Uuid;
 use crate::poster::{ChannelBotPoster, ContextMessage};
 use crate::responder::AgentResponder;
 
-/// How many recent channel messages to include as context.
-const RECENT_CONTEXT_LIMIT: u16 = 10;
+/// How many channel messages to include around the trigger.
+///
+/// Together with the trigger message itself, this yields a bounded nine-message
+/// local context window.
+const CONTEXT_MESSAGES_BEFORE: i64 = 4;
+const CONTEXT_MESSAGES_AFTER: i64 = 4;
 
 /// Human-readable label for a message sender storage id.
 fn sender_label(sender_id: &str) -> String {
@@ -63,7 +66,7 @@ pub enum BotTrigger {
     Mention,
 }
 
-/// A normalized trigger delivered to a [`BotHandler`].
+/// A normalized trigger delivered to a system bot handler.
 #[derive(Debug, Clone)]
 pub struct BotEvent {
     /// What triggered the bot.
@@ -77,14 +80,6 @@ pub struct BotEvent {
     pub reply_thread_id: Uuid,
     /// The user who triggered the bot.
     pub requesting_user: MacroUserIdStr<'static>,
-}
-
-/// Handles a trigger for an external bot (one defined by a database row, e.g. a
-/// webhook bot). New external bot behaviors implement this trait.
-#[async_trait]
-pub trait BotHandler: Send + Sync {
-    /// React to a trigger for `bot`.
-    async fn handle(&self, bot: &Bot, event: &BotEvent) -> anyhow::Result<()>;
 }
 
 /// Handles a trigger for a system bot. System bots are defined in code and
@@ -119,42 +114,30 @@ impl MacroAiHandler {
         Self { poster, responder }
     }
 
-    /// Build the prompt: who mentioned the agent, recent channel context, the
-    /// thread it was mentioned in, and the triggering message.
+    /// Build the prompt: who mentioned the agent, local channel context around
+    /// the triggering message, and the triggering message itself.
     async fn build_prompt(&self, event: &BotEvent) -> String {
         let mentioner = sender_label(event.requesting_user.as_ref());
         let trigger_id = event.message.id;
 
-        let recent = self
+        let nearby = self
             .poster
-            .recent_messages(event.channel_id, RECENT_CONTEXT_LIMIT)
+            .messages_around(
+                event.channel_id,
+                trigger_id,
+                CONTEXT_MESSAGES_BEFORE,
+                CONTEXT_MESSAGES_AFTER,
+            )
             .await
-            .inspect_err(|err| tracing::warn!(error=?err, "failed to load recent channel context"))
+            .inspect_err(|err| tracing::warn!(error=?err, "failed to load local channel context"))
             .unwrap_or_default();
-
-        // Include the thread's messages when the mention happened inside a thread.
-        let thread = if event.message.thread_id.is_some() {
-            self.poster
-                .thread_messages(event.channel_id, event.reply_thread_id)
-                .await
-                .inspect_err(|err| tracing::warn!(error=?err, "failed to load thread context"))
-                .unwrap_or_default()
-        } else {
-            Vec::new()
-        };
 
         let mut prompt = String::new();
         let _ = writeln!(prompt, "{mentioner} mentioned you (@macro) in a channel.");
         append_messages(
             &mut prompt,
-            "Recent channel messages (oldest to newest):",
-            &recent,
-            trigger_id,
-        );
-        append_messages(
-            &mut prompt,
-            "Messages in the thread you were mentioned in:",
-            &thread,
+            "Channel messages around the mention (oldest to newest):",
+            &nearby,
             trigger_id,
         );
         let _ = write!(
@@ -228,42 +211,128 @@ impl SystemBotHandler for MacroAiHandler {
     }
 }
 
-/// Delivers triggers to an external bot's webhook.
-pub struct WebhookBotHandler {
-    client: reqwest::Client,
-}
+#[cfg(test)]
+mod tests {
+    use std::sync::Mutex;
 
-impl WebhookBotHandler {
-    /// Create a webhook handler.
-    pub fn new(client: reqwest::Client) -> Self {
-        Self { client }
+    use chrono::Utc;
+
+    use super::*;
+
+    struct TestPoster {
+        around_args: Mutex<Option<(Uuid, Uuid, i64, i64)>>,
+        around_messages: Vec<ContextMessage>,
     }
-}
 
-#[async_trait]
-impl BotHandler for WebhookBotHandler {
-    #[tracing::instrument(skip(self, bot, event), fields(bot_id = %bot.id, channel_id = %event.channel_id), err)]
-    async fn handle(&self, bot: &Bot, event: &BotEvent) -> anyhow::Result<()> {
-        let Some(webhook_url) = bot.webhook_url.as_deref() else {
-            return Ok(());
+    #[async_trait]
+    impl ChannelBotPoster for TestPoster {
+        async fn post_message(
+            &self,
+            _actor: Sender,
+            _channel_id: Uuid,
+            _req: PostMessageRequest,
+        ) -> anyhow::Result<channels::domain::models::PostMessageResponse> {
+            unimplemented!("not needed for prompt tests")
+        }
+
+        async fn patch_message(
+            &self,
+            _actor: Sender,
+            _actor_role: ParticipantRole,
+            _channel_id: Uuid,
+            _message_id: Uuid,
+            _req: PatchMessageRequest,
+        ) -> anyhow::Result<()> {
+            unimplemented!("not needed for prompt tests")
+        }
+
+        async fn messages_around(
+            &self,
+            channel_id: Uuid,
+            message_id: Uuid,
+            before: i64,
+            after: i64,
+        ) -> anyhow::Result<Vec<ContextMessage>> {
+            *self.around_args.lock().unwrap() = Some((channel_id, message_id, before, after));
+            Ok(self.around_messages.clone())
+        }
+    }
+
+    struct TestResponder;
+
+    #[async_trait]
+    impl AgentResponder for TestResponder {
+        async fn respond(&self, _user_id: &str, _prompt: String) -> anyhow::Result<String> {
+            unimplemented!("not needed for prompt tests")
+        }
+    }
+
+    fn user_id(email: &str) -> MacroUserIdStr<'static> {
+        MacroUserIdStr::try_from(format!("macro|{email}")).unwrap()
+    }
+
+    #[tokio::test]
+    async fn prompt_uses_local_context_around_trigger() {
+        let channel_id = Uuid::new_v4();
+        let trigger_id = Uuid::new_v4();
+        let before_id = Uuid::new_v4();
+        let after_id = Uuid::new_v4();
+        let poster = Arc::new(TestPoster {
+            around_args: Mutex::new(None),
+            around_messages: vec![
+                ContextMessage {
+                    id: before_id,
+                    sender_id: "macro|alice@example.com".to_string(),
+                    content: "before".to_string(),
+                },
+                ContextMessage {
+                    id: trigger_id,
+                    sender_id: "macro|teo@example.com".to_string(),
+                    content: "@macro help".to_string(),
+                },
+                ContextMessage {
+                    id: after_id,
+                    sender_id: "macro|bob@example.com".to_string(),
+                    content: "after".to_string(),
+                },
+            ],
+        });
+        let handler = MacroAiHandler::new(poster.clone(), Arc::new(TestResponder));
+        let event = BotEvent {
+            trigger: BotTrigger::Mention,
+            channel_id,
+            message: MutatedMessage {
+                id: trigger_id,
+                channel_id,
+                thread_id: None,
+                sender_id: Sender::User(user_id("teo@example.com")),
+                content: "@macro help".to_string(),
+                created_at: Utc::now(),
+                updated_at: Utc::now(),
+                edited_at: None,
+                deleted_at: None,
+            },
+            reply_thread_id: trigger_id,
+            requesting_user: user_id("teo@example.com"),
         };
 
-        let payload = serde_json::json!({
-            "trigger": match event.trigger {
-                BotTrigger::Mention => "mention",
-            },
-            "bot_id": bot.id.to_string(),
-            "channel_id": event.channel_id,
-            "message_id": event.message.id,
-            "thread_id": event.reply_thread_id,
-            "content": event.message.content,
-            "sender_id": event.message.sender_id.to_storage_string(),
-        });
+        let prompt = handler.build_prompt(&event).await;
 
-        let response = self.client.post(webhook_url).json(&payload).send().await?;
-        if !response.status().is_success() {
-            anyhow::bail!("bot webhook returned {}", response.status());
-        }
-        Ok(())
+        assert_eq!(
+            *poster.around_args.lock().unwrap(),
+            Some((
+                channel_id,
+                trigger_id,
+                CONTEXT_MESSAGES_BEFORE,
+                CONTEXT_MESSAGES_AFTER
+            ))
+        );
+        assert!(prompt.contains("Channel messages around the mention"));
+        assert!(prompt.contains("alice: before"));
+        assert!(prompt.contains("bob: after"));
+        assert!(!prompt.contains("teo: @macro help"));
+        assert!(prompt.contains("teo said:\n@macro help"));
+        assert!(!prompt.contains("Recent channel messages"));
+        assert!(!prompt.contains("Messages in the thread"));
     }
 }

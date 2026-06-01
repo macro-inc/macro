@@ -75,9 +75,6 @@ pub struct Bot {
     pub description: Option<String>,
     /// Optional avatar URL.
     pub avatar_url: Option<String>,
-    /// Optional webhook URL. External bots receive triggers here; system bots
-    /// (run in-process) leave this empty.
-    pub webhook_url: Option<String>,
     /// User that created this bot.
     pub created_by: Option<String>,
     /// Creation timestamp.
