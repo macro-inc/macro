@@ -1,6 +1,7 @@
 import '@entity/composed/ListEntity.css';
 import { EntityRow, EntityRowContext } from '@app/component/mobile/EntityRow';
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
@@ -22,12 +23,18 @@ import {
 } from '@entity/composed/list-entity/shared';
 import type { EntityRowConfig } from '@entity/extractors-notification';
 import {
+  BULK_DOCUMENT_WAKEUP_FEATURE_FLAG,
+  enqueueDocumentWakeup,
+  isWakeableDocument,
+} from '@queries/preview';
+import {
   getStreamState,
   subscribeToStreamState,
 } from '@service-connection/stream-events';
 import { mergeRefs } from '@solid-primitives/refs';
 import { cn } from '@ui/utils/classname';
 import {
+  createEffect,
   createSignal,
   type JSX,
   Match,
@@ -70,6 +77,14 @@ function MaybeEntityRow(props: {
 export function TaskListEntity(props: TaskListEntityProps) {
   const unread = () => unreadFilterFn(props.entity);
   const isShared = useIsShared(props.entity);
+  const bulkWakeupEnabled = useFeatureFlag(BULK_DOCUMENT_WAKEUP_FEATURE_FLAG);
+
+  createEffect(() => {
+    if (!bulkWakeupEnabled().enabled) return;
+    if (!isWakeableDocument(props.entity)) return;
+
+    enqueueDocumentWakeup(props.entity);
+  });
 
   subscribeToStreamState(props.entity.id, props.entity.type);
   const streamState = getStreamState(props.entity.id);
