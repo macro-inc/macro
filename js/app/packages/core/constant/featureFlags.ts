@@ -246,6 +246,11 @@ export const ENABLE_INBOX_RESYNC = resolveFeatureFlag(
   false
 );
 
+export const ENABLE_INBOX_SYNC_STATUS = resolveFeatureFlag(
+  'ENABLE_INBOX_SYNC_STATUS',
+  false
+);
+
 const _ENABLE_TASKS_TABS = resolveFeatureFlag('ENABLE_TASKS_TABS', true);
 
 export const ENABLE_EMAIL_SHARING = resolveFeatureFlag(

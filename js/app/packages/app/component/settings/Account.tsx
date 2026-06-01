@@ -17,6 +17,7 @@ import {
   ENABLE_AUTO_UPDATE_UI,
   ENABLE_EMAIL,
   ENABLE_INBOX_RESYNC,
+  ENABLE_INBOX_SYNC_STATUS,
   ENABLE_MULTI_INBOX,
   ENABLE_PROFILE_PICTURES,
   ENABLE_NEW_PRICING_OVERRIDE,
@@ -837,15 +838,17 @@ function InboxRow(props: {
             <Chip label="Shared" />
           </Show>
         </div>
-        <span
-          class="text-xs"
-          classList={{
-            'text-failure': props.link.sync_status === 'ERROR',
-            'text-ink-muted': props.link.sync_status !== 'ERROR',
-          }}
-        >
-          {syncStatusLabel(props.link.sync_status)}
-        </span>
+        <Show when={ENABLE_INBOX_SYNC_STATUS}>
+          <span
+            class="text-xs"
+            classList={{
+              'text-failure': props.link.sync_status === 'ERROR',
+              'text-ink-muted': props.link.sync_status !== 'ERROR',
+            }}
+          >
+            {syncStatusLabel(props.link.sync_status)}
+          </span>
+        </Show>
       </div>
       <div class="flex items-center gap-2 shrink-0">
         <Show when={ENABLE_INBOX_RESYNC}>
@@ -854,7 +857,11 @@ function InboxRow(props: {
               variant="base"
               size="sm"
               depth={3}
-              disabled={props.resyncing || props.link.sync_status === 'SYNCING'}
+              disabled={
+                props.resyncing ||
+                (ENABLE_INBOX_SYNC_STATUS &&
+                  props.link.sync_status === 'SYNCING')
+              }
               onClick={props.onResync}
               aria-label={`Force sync ${props.link.email_address}`}
             >
