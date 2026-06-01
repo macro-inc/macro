@@ -51,7 +51,6 @@ export type SeedChannel = {
     | 'public'
     | 'private'
     | 'direct_message'
-    | 'organization'
     | 'team';
   participants: string[];
 };

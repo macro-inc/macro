@@ -1220,7 +1220,7 @@
       },
       "ChannelType": {
         "type": "string",
-        "enum": ["public", "organization", "private", "directMessage", "team"]
+        "enum": ["public", "private", "directMessage", "team"]
       },
       "CommentedOnDocumentMetadata": {
         "type": "object",

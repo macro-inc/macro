@@ -214,7 +214,6 @@ export type ChannelAttachmentType = 'static' | 'dss';
 
 export const ChannelTypeEnum = {
   Public: ChannelType.public,
-  Organization: ChannelType.organization,
   Private: ChannelType.private,
   DirectMessage: ChannelType.direct_message,
   Team: ChannelType.team,

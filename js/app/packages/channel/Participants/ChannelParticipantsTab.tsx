@@ -27,10 +27,7 @@ export function ChannelParticipantsTab(props: { channelId: string }) {
   const [searchQuery, setSearchQuery] = createSignal('');
 
   const participants = () => participantsQuery.data ?? [];
-  const canManageParticipants = () =>
-    channelType() !== ChannelType.organization;
-  const canAddParticipants = () =>
-    canManageParticipants() && channelType() === ChannelType.private;
+  const canAddParticipants = () => channelType() === ChannelType.private;
 
   const filteredParticipants = () => {
     const query = searchQuery().trim().toLowerCase();
@@ -101,7 +98,7 @@ export function ChannelParticipantsTab(props: { channelId: string }) {
                   participants={filteredParticipants}
                   searchQuery={searchQuery}
                   currentUserId={userId() ?? undefined}
-                  editable={canManageParticipants()}
+                  editable
                   onParticipantClick={openDirectMessage}
                   onRemoveParticipant={removeParticipant}
                 />

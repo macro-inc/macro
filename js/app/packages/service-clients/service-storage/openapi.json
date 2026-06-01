@@ -10025,7 +10025,7 @@
       "ChannelType": {
         "type": "string",
         "description": "Type of channel.",
-        "enum": ["public", "organization", "private", "direct_message", "team"]
+        "enum": ["public", "private", "direct_message", "team"]
       },
       "ChannelWithParticipants": {
         "type": "object",

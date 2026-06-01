@@ -1250,7 +1250,7 @@ export const ingestTranscriptBody = zod
 export const createChannelBody = zod
   .object({
     channel_type: zod
-      .enum(['public', 'organization', 'private', 'direct_message', 'team'])
+      .enum(['public', 'private', 'direct_message', 'team'])
       .describe('Type of channel.'),
     name: zod.string().nullish().describe('Optional channel name.'),
     participants: zod
@@ -1509,13 +1509,7 @@ export const getBatchChannelPreviewResponse = zod
                   .string()
                   .describe('Resolved channel display name.'),
                 channel_type: zod
-                  .enum([
-                    'public',
-                    'organization',
-                    'private',
-                    'direct_message',
-                    'team',
-                  ])
+                  .enum(['public', 'private', 'direct_message', 'team'])
                   .describe('Type of channel.'),
               })
               .describe('Preview payload returned for accessible channels.')
@@ -1582,7 +1576,7 @@ export const getChannelResponse = zod
       .string()
       .describe("Resolved display name from the viewer's perspective."),
     channel_type: zod
-      .enum(['public', 'organization', 'private', 'direct_message', 'team'])
+      .enum(['public', 'private', 'direct_message', 'team'])
       .describe('Type of channel.'),
     messages: zod
       .array(
@@ -6878,13 +6872,7 @@ export const getItemsSoupResponse = zod.object({
             .object({
               channel: zod.object({
                 channel_type: zod
-                  .enum([
-                    'public',
-                    'organization',
-                    'private',
-                    'direct_message',
-                    'team',
-                  ])
+                  .enum(['public', 'private', 'direct_message', 'team'])
                   .describe('Type of channel.'),
                 created_at: zod.iso.datetime({}),
                 id: zod.uuid(),
@@ -8731,13 +8719,7 @@ export const postItemsSoupResponse = zod.object({
             .object({
               channel: zod.object({
                 channel_type: zod
-                  .enum([
-                    'public',
-                    'organization',
-                    'private',
-                    'direct_message',
-                    'team',
-                  ])
+                  .enum(['public', 'private', 'direct_message', 'team'])
                   .describe('Type of channel.'),
                 created_at: zod.iso.datetime({}),
                 id: zod.uuid(),
@@ -10177,13 +10159,7 @@ export const postItemsSoupAstResponse = zod.object({
             .object({
               channel: zod.object({
                 channel_type: zod
-                  .enum([
-                    'public',
-                    'organization',
-                    'private',
-                    'direct_message',
-                    'team',
-                  ])
+                  .enum(['public', 'private', 'direct_message', 'team'])
                   .describe('Type of channel.'),
                 created_at: zod.iso.datetime({}),
                 id: zod.uuid(),

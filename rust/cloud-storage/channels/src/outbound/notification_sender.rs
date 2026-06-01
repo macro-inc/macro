@@ -33,7 +33,6 @@ impl<I> NotificationChannelSender<I> {
 fn to_notification_channel_type(channel_type: ChannelType) -> model_notifications::ChannelType {
     match channel_type {
         ChannelType::Public => model_notifications::ChannelType::Public,
-        ChannelType::Organization => model_notifications::ChannelType::Organization,
         ChannelType::Private => model_notifications::ChannelType::Private,
         ChannelType::DirectMessage => model_notifications::ChannelType::DirectMessage,
         ChannelType::Team => model_notifications::ChannelType::Team,

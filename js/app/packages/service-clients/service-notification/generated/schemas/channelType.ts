@@ -10,7 +10,6 @@ export type ChannelType = (typeof ChannelType)[keyof typeof ChannelType];
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const ChannelType = {
   public: 'public',
-  organization: 'organization',
   private: 'private',
   directMessage: 'directMessage',
   team: 'team',

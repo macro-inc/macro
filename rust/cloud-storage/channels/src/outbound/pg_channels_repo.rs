@@ -474,10 +474,6 @@ fn static_channel_name(
     }
 
     match channel_type {
-        ChannelType::Organization => {
-            tracing::warn!(channel_id=%channel_id, "organization channel should have a name");
-            "Organization".to_string()
-        }
         ChannelType::Public => {
             tracing::warn!(channel_id=%channel_id, "public channel should have a name");
             "Public".to_string()
@@ -496,9 +492,11 @@ async fn resolve_channel_display_name(
     viewer_user_id: MacroUserIdStr<'_>,
 ) -> anyhow::Result<String> {
     match info.channel_type {
-        ChannelType::Organization | ChannelType::Public | ChannelType::Team => Ok(
-            static_channel_name(info.channel_type, info.name.as_deref(), info.id),
-        ),
+        ChannelType::Public | ChannelType::Team => Ok(static_channel_name(
+            info.channel_type,
+            info.name.as_deref(),
+            info.id,
+        )),
         ChannelType::Private
             if info
                 .name
@@ -1606,7 +1604,7 @@ impl ChannelRepo for PgChannelsRepo {
         &self,
         channel_ids: &[String],
         viewer_user_id: &str,
-        org_id: Option<i64>,
+        _org_id: Option<i64>,
     ) -> Result<Vec<ChannelPreviewRow>, Self::Err> {
         let rows = sqlx::query_as!(
             ChannelPreviewQueryRow,
@@ -1620,8 +1618,6 @@ impl ChannelRepo for PgChannelsRepo {
                 CASE WHEN (
                     c.channel_type = 'public'
                     OR
-                    (c.channel_type = 'organization' AND $3::bigint IS NOT NULL AND c.org_id = $3)
-                    OR
                     (c.channel_type IN ('private', 'direct_message', 'team') AND EXISTS (
                         SELECT 1 FROM comms_channel_participants cp
                         WHERE cp.channel_id = c.id
@@ -1631,11 +1627,9 @@ impl ChannelRepo for PgChannelsRepo {
                 ) THEN true ELSE false END AS "has_access!: bool"
             FROM comms_channels c
             WHERE c.id::text = ANY($1)
-              AND (c.channel_type != 'organization' OR $3::bigint IS NOT NULL)
             "#,
             channel_ids,
             viewer_user_id,
-            org_id,
         )
         .fetch_all(&self.pool)
         .await
@@ -1684,7 +1678,7 @@ impl ChannelRepo for PgChannelsRepo {
     async fn create_channel(
         &self,
         owner_id: String,
-        org_id: Option<i64>,
+        _org_id: Option<i64>,
         req: CreateChannelRequest,
     ) -> Result<Uuid, Self::Err> {
         let channel_id = macro_uuid::generate_uuid_v7();
@@ -1697,7 +1691,7 @@ impl ChannelRepo for PgChannelsRepo {
             channel_id,
             req.name.as_deref(),
             &owner_id,
-            org_id,
+            None::<i64>,
             req.team_id,
             req.channel_type as ChannelType,
         )
