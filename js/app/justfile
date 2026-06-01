@@ -3,7 +3,7 @@ ios-dev:
     cd tauri/src-tauri && cargo tauri ios dev --open -- --no-default-features
 
 # iOS: prod-facing build, with auto-update turned off, for testing locally on actual iPhone
-ios-build-dev:
+ios-build-no-update:
     cd tauri/src-tauri && cargo tauri ios build --open -- --no-default-features
 
 # iOS: build for release
