@@ -51,6 +51,7 @@ import Forward from '@phosphor/arrow-bend-up-right.svg';
 
 import ChevronDown from '@phosphor/caret-down.svg';
 import Paperclip from '@phosphor/paperclip.svg';
+import PencilSimple from '@phosphor/pencil-simple.svg';
 import Quotes from '@phosphor/quotes.svg';
 
 import TextAa from '@phosphor/text-aa.svg';
@@ -323,7 +324,7 @@ function TruncatedRecipientList(props: {
   return (
     <div
       use:observedSize={{ setSize: setContainerRect }}
-      class="flex items-center text-sm overflow-hidden whitespace-nowrap mt-1 min-w-0 flex-1"
+      class="flex items-center text-sm overflow-hidden whitespace-nowrap min-w-0"
       onclick={props.onClick}
     >
       {/* Hidden measurement element - must have same font styles */}
@@ -1429,12 +1430,22 @@ export function BaseInput(props: {
         <Show
           when={showExpandedRecipients()}
           fallback={
-            <TruncatedRecipientList
-              toRecipients={form().recipients().to}
-              ccRecipients={form().recipients().cc}
-              bccRecipients={form().recipients().bcc}
+            <div
+              class="flex flex-1 items-center gap-1.5 min-w-0 mt-1 text-sm text-ink-muted"
               onClick={() => setShowExpandedRecipients(true)}
-            />
+            >
+              <TruncatedRecipientList
+                toRecipients={form().recipients().to}
+                ccRecipients={form().recipients().cc}
+                bccRecipients={form().recipients().bcc}
+                onClick={() => setShowExpandedRecipients(true)}
+              />
+              <Show when={(emailLinksQuery.data?.links.length ?? 0) > 1}>
+                <span class="shrink-0 text-ink-extra-muted">·</span>
+                <span class="shrink-0 truncate">from {activeInboxEmail()}</span>
+              </Show>
+              <PencilSimple class="size-3.5 shrink-0 text-ink-extra-muted" />
+            </div>
           }
         >
           <div
