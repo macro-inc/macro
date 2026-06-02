@@ -9,7 +9,7 @@ import ListChecksIcon from '@phosphor/list-checks.svg';
 import PencilLineIcon from '@phosphor/pencil-line.svg';
 import TextAaIcon from '@phosphor/text-aa.svg';
 import { Dropdown, Layer } from '@ui';
-import { type Component, createSignal, For, Show } from 'solid-js';
+import { type Component, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 
 type PromptTemplate = {
@@ -94,7 +94,7 @@ const SUGGESTIONS: PromptSuggestion[] = [
 ];
 
 const pillClass =
-  'group relative flex flex-col items-start justify-between rounded-md border border-edge-muted bg-hover/60 px-2 py-1 text-left text-ink-muted transition hover:border-edge hover:bg-hover hover:text-ink focus:outline-none focus-visible:border-accent';
+  'border-none group relative flex items-center gap-1 min-w-0 ring ring-edge-muted ring-inset rounded-full px-2 py-1 text-left text-ink-extra-muted hover:bg-hover focus-visible:bg-active focus-visible:border-accent';
 
 function PromptChip(props: {
   label: string;
@@ -103,22 +103,15 @@ function PromptChip(props: {
   trailingIcon?: Component<{ class?: string }>;
   animationDelay?: string;
 }) {
-  const [hovering, setHovering] = createSignal(false);
-
   return (
     <button
       class={`${pillClass} dashboard-prompt-template-item`}
-      style={{ 'animation-delay': props.animationDelay }}
+      tabIndex={0}
       onClick={props.onClick}
-      onPointerEnter={() => setHovering(true)}
-      onPointerLeave={() => setHovering(false)}
+      style={{ 'animation-delay': props.animationDelay }}
     >
       <div class="flex w-full items-center justify-between gap-2">
-        <Dynamic
-          component={props.icon}
-          class="size-3 transition"
-          triggerAnimation={hovering()}
-        />
+        <Dynamic component={props.icon} class="size-3 transition" />
         <span class="min-w-0 text-xs font-medium">{props.label}</span>
         <Show when={props.trailingIcon}>
           <Dynamic component={props.trailingIcon} class="size-2.5 shrink-0" />
@@ -144,7 +137,7 @@ function TemplateDropdown(props: { onSelect: (prompt: string) => void }) {
             {(template, index) => (
               <Dropdown.Item
                 class="dashboard-prompt-template-item"
-                style={{ 'animation-delay': `${index() * 35}ms` }}
+                style={{ 'animation-delay': `${index() * 15}ms` }}
                 onSelect={() => {
                   setTimeout(() => props.onSelect(template.prompt));
                 }}
