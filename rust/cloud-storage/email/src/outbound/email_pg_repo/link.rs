@@ -75,7 +75,7 @@ pub(super) async fn link_by_fusionauth_email_provider(
 pub(super) async fn owned_link_for_thread(
     pool: &PgPool,
     thread_id: Uuid,
-    macro_id: &str,
+    macro_id: MacroUserIdStr<'_>,
 ) -> Result<Option<Link>, sqlx::Error> {
     let db_link: Option<DbLink> = sqlx::query_as!(
         DbLink,
@@ -94,7 +94,7 @@ pub(super) async fn owned_link_for_thread(
           )
         "#,
         thread_id,
-        macro_id
+        macro_id.as_ref()
     )
     .fetch_optional(pool)
     .await?;

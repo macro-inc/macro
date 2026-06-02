@@ -161,7 +161,7 @@ where
 
     async fn get_owned_link_for_thread(
         &self,
-        macro_id: &str,
+        macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
         thread_id: uuid::Uuid,
     ) -> Result<Option<crate::domain::models::Link>, EmailErr> {
         self.email_repo

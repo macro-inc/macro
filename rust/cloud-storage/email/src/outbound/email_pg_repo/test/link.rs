@@ -212,7 +212,8 @@ async fn test_owned_link_for_thread_resolves_own_and_delegated(
         r#"
         INSERT INTO macro_user (id, username, email, stripe_customer_id) VALUES
             ('d1000000-0000-0000-0000-000000000001'::uuid, 'child', 'child@test.com', 'stripe_child'),
-            ('d2000000-0000-0000-0000-000000000002'::uuid, 'primary', 'primary@test.com', 'stripe_primary')
+            ('d2000000-0000-0000-0000-000000000002'::uuid, 'primary', 'primary@test.com', 'stripe_primary'),
+            ('d3000000-0000-0000-0000-000000000003'::uuid, 'stranger', 'stranger@test.com', 'stripe_stranger')
         "#,
     )
     .execute(&pool)
@@ -222,7 +223,8 @@ async fn test_owned_link_for_thread_resolves_own_and_delegated(
         r#"
         INSERT INTO "User" (id, email, macro_user_id) VALUES
             ('macro|child@test.com', 'child@test.com', 'd1000000-0000-0000-0000-000000000001'::uuid),
-            ('macro|primary@test.com', 'primary@test.com', 'd2000000-0000-0000-0000-000000000002'::uuid)
+            ('macro|primary@test.com', 'primary@test.com', 'd2000000-0000-0000-0000-000000000002'::uuid),
+            ('macro|stranger@test.com', 'stranger@test.com', 'd3000000-0000-0000-0000-000000000003'::uuid)
         "#,
     )
     .execute(&pool)
@@ -257,19 +259,28 @@ async fn test_owned_link_for_thread_resolves_own_and_delegated(
 
     // delegate resolves the shared inbox
     let delegated = repo
-        .owned_link_for_thread(thread_id, "macro|primary@test.com")
+        .owned_link_for_thread(
+            thread_id,
+            MacroUserIdStr::parse_from_str("macro|primary@test.com")?,
+        )
         .await?;
     assert_eq!(delegated.map(|l| l.id), Some(link_id));
 
     // owner resolves their own inbox
     let owned = repo
-        .owned_link_for_thread(thread_id, "macro|child@test.com")
+        .owned_link_for_thread(
+            thread_id,
+            MacroUserIdStr::parse_from_str("macro|child@test.com")?,
+        )
         .await?;
     assert_eq!(owned.map(|l| l.id), Some(link_id));
 
-    // an unrelated caller resolves nothing
+    // an unrelated but real user resolves nothing
     let none = repo
-        .owned_link_for_thread(thread_id, "macro|stranger@test.com")
+        .owned_link_for_thread(
+            thread_id,
+            MacroUserIdStr::parse_from_str("macro|stranger@test.com")?,
+        )
         .await?;
     assert!(none.is_none());
 

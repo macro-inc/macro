@@ -169,7 +169,7 @@ impl EmailService for MockEmail {
 
     async fn get_owned_link_for_thread(
         &self,
-        _auth_id: &str,
+        _macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
         _thread_id: uuid::Uuid,
     ) -> Result<Option<email::domain::models::Link>, email::domain::models::EmailErr> {
         Ok(None)
@@ -458,7 +458,7 @@ impl EmailService for MockEmailLinkResult {
 
     async fn get_owned_link_for_thread(
         &self,
-        _auth_id: &str,
+        _macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
         _thread_id: uuid::Uuid,
     ) -> Result<Option<email::domain::models::Link>, email::domain::models::EmailErr> {
         (self.get_link_result)()

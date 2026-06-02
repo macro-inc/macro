@@ -79,7 +79,7 @@ pub trait EmailRepo: Send + Sync + 'static {
     fn owned_link_for_thread(
         &self,
         thread_id: Uuid,
-        macro_id: &str,
+        macro_id: MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Option<Link>, Self::Err>> + Send;
 
     /// Returns every inbox accessible to `macro_id`: their own email_links plus
@@ -342,7 +342,7 @@ pub trait EmailService: Send + Sync + 'static {
     /// the thread instead of an `X-Email-Link-Id` header.
     fn get_owned_link_for_thread(
         &self,
-        macro_id: &str,
+        macro_id: MacroUserIdStr<'_>,
         thread_id: Uuid,
     ) -> impl Future<Output = Result<Option<Link>, EmailErr>> + Send;
 

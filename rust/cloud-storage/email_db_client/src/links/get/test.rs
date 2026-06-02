@@ -138,11 +138,12 @@ async fn resolves_inbox_for_owner_and_delegate(pool: Pool<Postgres>) -> anyhow::
 async fn resolves_nothing_for_unrelated_caller(pool: Pool<Postgres>) -> anyhow::Result<()> {
     insert_user(&pool, CHILD, "sharedbox@corp.test").await;
     insert_user(&pool, PRIMARY, "primary@corp.test").await;
+    insert_user(&pool, STRANGER, "stranger@corp.test").await;
     let (_link_id, thread_id, message_id) =
         insert_inbox_with_thread_and_message(&pool, CHILD, "sharedbox@corp.test").await;
     insert_delegation(&pool, PRIMARY, CHILD).await;
 
-    // STRANGER neither owns nor is delegated the inbox.
+    // STRANGER is a real user who neither owns nor is delegated the inbox.
     assert!(
         fetch_owned_link_for_thread(&pool, STRANGER, thread_id)
             .await?
