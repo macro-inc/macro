@@ -310,28 +310,6 @@
   to   { opacity: 1; }
 }
 
-/* Dashboard animations */
-@keyframes float {
-  0%, 100% { transform: translateY(0) scale(1); opacity: 0.6; }
-  50%      { transform: translateY(-8px) scale(1.1); opacity: 1; }
-}
-
-@keyframes breathe {
-  0%, 100% { transform: scale(1); }
-  50%      { transform: scale(1.05); }
-}
-
-@keyframes pulse-ring {
-  0%       { transform: scale(1); opacity: 0.5; }
-  50%      { transform: scale(1.15); opacity: 0; }
-  100%     { transform: scale(1); opacity: 0; }
-}
-
-@keyframes fadeSlideIn {
-  from { opacity: 0; transform: translateX(-8px); }
-  to   { opacity: 1; transform: translateX(0); }
-}
-
 /* Big hammer fix for cursor pointer. */
 @utility cursor-pointer {
   cursor: default;
