@@ -1,6 +1,10 @@
 import type { TextMatchTransformer } from '@lexical/markdown';
 import type { TextNode } from 'lexical';
-import { $createAwaitNode, type AwaitNodeInfo } from '../nodes/AwaitNode';
+import {
+  $createAwaitNode,
+  $isAwaitNode,
+  AwaitNode,
+} from '../nodes/AwaitNode';
 
 /**
  * Internal transformer for persisted await placeholders.
@@ -10,23 +14,15 @@ import { $createAwaitNode, type AwaitNodeInfo } from '../nodes/AwaitNode';
  * static channel markdown can render the same placeholder node.
  */
 export const I_AWAIT_NODE: TextMatchTransformer = {
-  // Keep this dependency-free to avoid a module-init cycle through the
-  // @lexical-core barrel. AwaitNode is already registered by SupportedNodeTypes.
-  dependencies: [],
+  dependencies: [AwaitNode],
   type: 'text-match',
   regExp: /<m-await>(.*?)<\/m-await>/,
   importRegExp: /<m-await>(.*?)<\/m-await>/,
   export: (node) => {
-    if (node.getType() !== 'await' || !('exportComponentProps' in node)) {
+    if (!$isAwaitNode(node)) {
       return null;
     }
-    const data = JSON.stringify(
-      (
-        node as typeof node & {
-          exportComponentProps: () => AwaitNodeInfo;
-        }
-      ).exportComponentProps()
-    );
+    const data = JSON.stringify(node.exportComponentProps());
     return `<m-await>${data}</m-await>`;
   },
   replace: (node: TextNode, match: RegExpMatchArray) => {
