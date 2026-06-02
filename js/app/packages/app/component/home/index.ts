@@ -1,1 +1,1 @@
-export { Dashboard } from './home';
+export { Home } from './home';
