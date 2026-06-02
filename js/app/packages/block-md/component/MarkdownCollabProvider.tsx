@@ -23,7 +23,6 @@ import {
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { useUserId } from '@core/context/user';
 import {
-  blockLoroManagerSignal,
   blockSourceSignal,
   blockSyncSourceSignal,
 } from '@core/signal/load';
@@ -81,6 +80,7 @@ export type MarkdownCollabProviderProps = {
   editorFocus: Accessor<boolean>;
   setEditorReady: Setter<boolean>;
   setEditorError: Setter<MarkdownEditorErrors | null>;
+  loroManager: Accessor<LoroManager | undefined>;
 };
 
 export const FROM_LORO_TAG = 'from-loro';
@@ -91,7 +91,7 @@ export const FORCE_SYNC_COMMAND = createCommand<void>('FORCE_SYNC_COMMAND');
 export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
   const [didFirstSync, setDidFirstSync] = createSignal(false);
   const docSource = blockSourceSignal.get;
-  const loroManager = blockLoroManagerSignal.get;
+  const loroManager = props.loroManager;
   const syncSource = blockSyncSourceSignal.get;
   const userId = useUserId();
   const canEdit = useCanEdit();

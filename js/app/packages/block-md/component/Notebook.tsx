@@ -22,6 +22,7 @@ import { tempRedirectLocation } from '@core/signal/location';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { makeResizeObserver } from '@solid-primitives/resize-observer';
 import {
+  type Accessor,
   createEffect,
   createMemo,
   createSignal,
@@ -30,6 +31,7 @@ import {
   Show,
   untrack,
 } from 'solid-js';
+import type { LoroManager } from '@core/collab/manager';
 import { InlineTaskGithubPullRequests } from './InlineTaskGithubPullRequests';
 import { InlineTaskProperties } from './InlineTaskProperties';
 import { InstructionsEditor } from './InstructionsEditor';
@@ -68,7 +70,7 @@ const widthToMode = (width: number): CommentLayoutMode => {
   return CommentLayoutMode.none;
 };
 
-export function Notebook() {
+export function Notebook(props: { loroManager: Accessor<LoroManager | undefined> }) {
   const blockElement = blockElementSignal.get;
   const setStore = mdStore.set;
   const setWideEnoughForComments = commentWidthSignal.set;
@@ -271,7 +273,7 @@ export function Notebook() {
           <TaskDuplicateMatchPill />
         </div>
         <ParamsProvider>
-          <MarkdownEditor />
+          <MarkdownEditor loroManager={props.loroManager} />
           <Show when={ENABLE_RAIL_CHAT_TASK_COMMENTS && isTask}>
             <TaskDiscussion />
           </Show>
@@ -292,7 +294,7 @@ export function Notebook() {
   );
 }
 
-export function InstructionsNotebook() {
+export function InstructionsNotebook(props: { loroManager: Accessor<LoroManager | undefined> }) {
   const setStore = mdStore.set;
 
   let notebookRef!: HTMLDivElement;
@@ -319,7 +321,7 @@ export function InstructionsNotebook() {
       ref={notebookRef}
     >
       <div class="grow max-w-3xl pt-12 min-w-0 mx-auto" ref={contentRef}>
-        <InstructionsEditor />
+        <InstructionsEditor loroManager={props.loroManager} />
       </div>
     </div>
   );

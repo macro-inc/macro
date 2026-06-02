@@ -1,5 +1,4 @@
-import { isInBlock } from '@core/block';
-import { blockLoroManagerSignal } from '@core/signal/load';
+import type { LoroManager } from '@core/collab/manager';
 import { createEmptyHistoryState, registerHistory } from '@lexical/history';
 import { registerList } from '@lexical/list';
 import { CODE } from '@lexical/markdown';
@@ -32,8 +31,7 @@ export function createPluginManager(editor: LexicalEditor, type: EditorType) {
   const cleanupFunctions: Array<() => void> = [];
 
   const pluginManager = {
-    history(timeGap = 400) {
-      const loroManager = isInBlock() ? blockLoroManagerSignal.get() : null;
+    history(timeGap = 400, loroManager?: LoroManager) {
       if (type === 'markdown-sync' && loroManager) {
         cleanupFunctions.push(
           registerLoroHistory(editor, loroManager.getDoc(), timeGap)

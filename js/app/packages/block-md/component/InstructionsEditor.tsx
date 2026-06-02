@@ -36,10 +36,10 @@ import {
 } from '@core/component/LexicalMarkdown/utils';
 import { ENABLE_MARKDOWN_LIVE_COLLABORATION } from '@core/constant/featureFlags';
 import { blockElementSignal } from '@core/signal/blockElement';
+import type { LoroManager } from '@core/collab/manager';
 import {
   blockFileSignal,
   blockHandleSignal,
-  blockLoroManagerSignal,
   blockSourceSignal,
 } from '@core/signal/load';
 import { useCanEdit } from '@core/signal/permissions';
@@ -74,7 +74,7 @@ import { MarkdownCollabProvider } from './MarkdownCollabProvider';
 const DEBUG = false;
 const EDITOR_PADDING_BOTTOM = 120;
 
-export function InstructionsEditor() {
+export function InstructionsEditor(props: { loroManager: Accessor<LoroManager | undefined> }) {
   const blockData = blockDataSignal.get;
   const blockId = useBlockId();
 
@@ -152,8 +152,7 @@ export function InstructionsEditor() {
     if (!IS_SYNC()) {
       return createPeerIdValidator(() => undefined, false);
     }
-    const loroManager = blockLoroManagerSignal.get;
-    const peerId = () => loroManager()?.getPeerIdStr();
+    const peerId = () => props.loroManager()?.getPeerIdStr();
     return createPeerIdValidator(peerId, true);
   };
 
@@ -168,7 +167,7 @@ export function InstructionsEditor() {
     .markdownShortcuts()
     .delete()
     .state<EditorState>(setState, 'json')
-    .history(400)
+    .history(400, props.loroManager())
     .use(userPromptPlugin)
     .use(
       emojisPlugin({
@@ -198,8 +197,7 @@ export function InstructionsEditor() {
     );
 
   if (ENABLE_MARKDOWN_LIVE_COLLABORATION) {
-    const getBlockLoroManager = blockLoroManagerSignal.get;
-    const peerId = () => getBlockLoroManager()?.getPeerIdStr();
+    const peerId = () => props.loroManager()?.getPeerIdStr();
     plugins.use(
       peerIdPlugin({
         peerId,
@@ -391,6 +389,7 @@ export function InstructionsEditor() {
             editorFocus={editorFocus}
             setEditorReady={setEditorReady}
             setEditorError={setEditorError}
+            loroManager={props.loroManager}
           />
         </Show>
 
