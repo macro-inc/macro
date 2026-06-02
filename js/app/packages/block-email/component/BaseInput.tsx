@@ -1449,14 +1449,16 @@ export function BaseInput(props: {
             class="w-full text-sm text-ink-muted"
           >
             {/* Expanded FROM */}
-            <div class="flex flex-row items-baseline py-0.5">
+            <div class="flex flex-row items-center py-0.5">
               <div class="min-w-8">from</div>
-              <FromInboxSelector
-                links={emailLinksQuery.data?.links ?? []}
-                activeLinkId={activeLinkId()}
-                onSelect={(id) => form().setSelectedFromLink(id)}
-                readonly={!!props.replyingTo()}
-              />
+              <div class="pl-4 min-w-0 flex-1">
+                <FromInboxSelector
+                  links={emailLinksQuery.data?.links ?? []}
+                  activeLinkId={activeLinkId()}
+                  onSelect={(id) => form().setSelectedFromLink(id)}
+                  readonly={!!props.replyingTo()}
+                />
+              </div>
             </div>
             {/* Expanded TO */}
 
