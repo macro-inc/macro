@@ -165,6 +165,7 @@ function CommandKDemo(props: LessonContentProps) {
             >
               <CommandMenuInner
                 items={filteredItems}
+                disableDefaultAction
                 onSelect={() => {
                   setCompleted(true);
                   props.onComplete();
