@@ -3554,7 +3554,8 @@
           "isImportant",
           "sortTs",
           "createdAt",
-          "updatedAt"
+          "updatedAt",
+          "linkId"
         ],
         "properties": {
           "createdAt": {
@@ -3576,6 +3577,10 @@
           },
           "isRead": {
             "type": "boolean"
+          },
+          "linkId": {
+            "type": "string",
+            "format": "uuid"
           },
           "name": {
             "type": ["string", "null"]
