@@ -68,9 +68,7 @@ export interface ComposeContextValue {
   fromAddress?: Accessor<string | undefined>;
   // From-inbox selection: the inboxes the user can send from, the active one,
   // and a setter to change it.
-  fromInboxes?: Accessor<
-    { id: string; email_address: string; macro_id?: string }[]
-  >;
+  fromInboxes?: Accessor<{ id: string; email_address: string }[]>;
   selectedFromLinkId?: Accessor<string | undefined>;
   onSelectFromLink?: (linkId: string) => void;
   hasPaidAccess: Accessor<boolean>;

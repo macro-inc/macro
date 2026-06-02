@@ -1,21 +1,23 @@
 import { UserIcon, type UserIconProps } from '@core/component/UserIcon';
-import { tryMacroId, useDisplayName } from '@core/user';
+import { emailToMacroId, useDisplayName } from '@core/user';
 import ChevronDown from '@phosphor/caret-down.svg';
 import Check from '@phosphor/check.svg';
 import { Dropdown } from '@ui';
 import { For, Show } from 'solid-js';
 
-type FromInbox = { id: string; email_address: string; macro_id?: string };
+type FromInbox = { id: string; email_address: string };
 
-/** The account's user icon, resolved by macro id when known, else by email. */
+// Resolve each inbox's identity from its own address, not the link's macro_id:
+// an own secondary inbox shares the parent account's macro_id, so keying on the
+// address gives each inbox its own name and icon.
 function inboxIconProps(inbox: FromInbox): UserIconProps {
-  const macroId = tryMacroId(inbox.macro_id ?? '');
+  const macroId = emailToMacroId(inbox.email_address);
   return macroId ? { id: macroId } : { email: inbox.email_address };
 }
 
 /** A single inbox: the account's user icon, name, and address. */
 function FromInboxOption(props: { inbox: FromInbox }) {
-  const [name] = useDisplayName(tryMacroId(props.inbox.macro_id ?? ''));
+  const [name] = useDisplayName(emailToMacroId(props.inbox.email_address));
   return (
     <>
       <UserIcon
