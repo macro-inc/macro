@@ -266,6 +266,8 @@ export function Account() {
     );
     if (url.isOk()) {
       window.location.href = url.value;
+    } else {
+      toast.failure('Failed to start GitHub reconnect flow');
     }
   };
 
