@@ -183,7 +183,7 @@ export function ChatInput(props: ChatInputComponentProps) {
 
   const Attachments = () => (
     <Show when={hasAttachments()}>
-      <div class="pt-2 w-full">
+      <div class={cn('px-2 pt-2 w-full', isTallVariant() && 'px-0')}>
         <AttachmentList
           attached={attachments.attached}
           removeAttachment={(id) => {
