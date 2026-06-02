@@ -441,6 +441,7 @@ export function BaseInput(props: {
   // non-primary inbox so the draft/send targets the right account.
   const activeLinkId = () =>
     ctx.thread()?.link_id ??
+    props.draft?.link_id ??
     primaryLinkId() ??
     emailLinksQuery.data?.links[0]?.id;
   const headerLinkId = () => toHeaderLinkId(activeLinkId());
