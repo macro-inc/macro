@@ -3,7 +3,7 @@ import { tryMacroId, useDisplayName } from '@core/user';
 import ChevronDown from '@phosphor/caret-down.svg';
 import Check from '@phosphor/check.svg';
 import { Dropdown } from '@ui';
-import { For, type JSX, Show } from 'solid-js';
+import { For, Show } from 'solid-js';
 
 type FromInbox = { id: string; email_address: string; macro_id?: string };
 
@@ -13,7 +13,7 @@ function inboxIconProps(inbox: FromInbox): UserIconProps {
   return macroId ? { id: macroId } : { email: inbox.email_address };
 }
 
-/** A single inbox row: the account's user icon, name, and address. */
+/** A single inbox: the account's user icon, name, and address. */
 function FromInboxOption(props: { inbox: FromInbox }) {
   const [name] = useDisplayName(tryMacroId(props.inbox.macro_id ?? ''));
   return (
@@ -34,56 +34,50 @@ function FromInboxOption(props: { inbox: FromInbox }) {
 }
 
 /**
- * Lets the user pick which linked inbox a compose/reply sends from. Renders a
- * dropdown over `links` when there's more than one inbox; otherwise falls back
- * to the static `label`.
+ * Lets the user pick which linked inbox a compose/reply sends from. Renders an
+ * identical "from" chip in every composer: the active inbox's icon, name, and
+ * address, with a dropdown over the other inboxes when there's more than one.
  */
 export function FromInboxSelector(props: {
   links: FromInbox[];
   activeLinkId: string | undefined;
-  label: JSX.Element;
   onSelect: (linkId: string) => void;
-  triggerClass?: string;
 }) {
   const activeInbox = () =>
-    props.links.find((l) => l.id === props.activeLinkId);
+    props.links.find((l) => l.id === props.activeLinkId) ?? props.links[0];
   return (
-    <Show
-      when={props.links.length > 1}
-      fallback={<span class="ml-2 truncate">{props.label}</span>}
-    >
-      <Dropdown>
-        <Dropdown.Trigger
-          class={props.triggerClass ?? 'ml-1 h-6 gap-1 text-ink-muted'}
+    <Show when={activeInbox()}>
+      {(active) => (
+        <Show
+          when={props.links.length > 1}
+          fallback={
+            <div class="flex items-center gap-2 min-w-0 text-sm text-ink-muted">
+              <FromInboxOption inbox={active()} />
+            </div>
+          }
         >
-          <Show when={activeInbox()}>
-            {(inbox) => (
-              <UserIcon
-                {...inboxIconProps(inbox())}
-                size="sm"
-                suppressClick
-                class="shrink-0"
-              />
-            )}
-          </Show>
-          <span class="truncate">{props.label}</span>
-          <ChevronDown class="size-3 shrink-0" />
-        </Dropdown.Trigger>
-        <Dropdown.Content>
-          <Dropdown.Group>
-            <For each={props.links}>
-              {(inbox) => (
-                <Dropdown.Item onSelect={() => props.onSelect(inbox.id)}>
-                  <FromInboxOption inbox={inbox} />
-                  <Show when={inbox.id === props.activeLinkId}>
-                    <Check class="size-3.5 shrink-0" />
-                  </Show>
-                </Dropdown.Item>
-              )}
-            </For>
-          </Dropdown.Group>
-        </Dropdown.Content>
-      </Dropdown>
+          <Dropdown>
+            <Dropdown.Trigger class="gap-2 text-sm text-ink-muted">
+              <FromInboxOption inbox={active()} />
+              <ChevronDown class="size-3 shrink-0" />
+            </Dropdown.Trigger>
+            <Dropdown.Content>
+              <Dropdown.Group>
+                <For each={props.links}>
+                  {(inbox) => (
+                    <Dropdown.Item onSelect={() => props.onSelect(inbox.id)}>
+                      <FromInboxOption inbox={inbox} />
+                      <Show when={inbox.id === props.activeLinkId}>
+                        <Check class="size-3.5 shrink-0" />
+                      </Show>
+                    </Dropdown.Item>
+                  )}
+                </For>
+              </Dropdown.Group>
+            </Dropdown.Content>
+          </Dropdown>
+        </Show>
+      )}
     </Show>
   );
 }

@@ -26,7 +26,7 @@ import type { UserMentionRecord } from '@core/component/LexicalMarkdown/utils/me
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_EMAIL_SCHEDULED_SEND } from '@core/constant/featureFlags';
-import { useEmail, useUserId } from '@core/context/user';
+import { useEmail } from '@core/context/user';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { fileSelector } from '@core/directive/fileSelector';
 import { observedSize } from '@core/directive/observedSize';
@@ -34,7 +34,6 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
 import { trackMention } from '@core/signal/mention';
-import { tryMacroId, useDisplayName } from '@core/user';
 import { plural } from '@core/util/string';
 import { handleFileFolderDrop } from '@core/util/upload';
 
@@ -664,9 +663,6 @@ export function BaseInput(props: {
   lazyRegister(editor, (editor) => {
     return registerToggleAppendedThread(editor);
   });
-
-  const userId = useUserId();
-  const [userName] = useDisplayName(tryMacroId(userId() ?? ''));
 
   let draftSaveTimer: number | undefined;
   let pendingDeletion = false;
@@ -1458,11 +1454,6 @@ export function BaseInput(props: {
               <FromInboxSelector
                 links={emailLinksQuery.data?.links ?? []}
                 activeLinkId={activeLinkId()}
-                label={
-                  <>
-                    {userName()} &lt;{activeInboxEmail()}&gt;
-                  </>
-                }
                 onSelect={(id) => form().setSelectedFromLink(id)}
               />
             </div>

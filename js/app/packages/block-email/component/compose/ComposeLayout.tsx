@@ -176,18 +176,14 @@ export function ComposeLayout(props: {
                 }
               >
                 <Show when={ctx.fromAddress?.()}>
-                  {(addr) => (
-                    <div class="text-xs text-ink-extra-muted/50 flex items-center">
-                      <span>from</span>
-                      <FromInboxSelector
-                        links={ctx.fromInboxes?.() ?? []}
-                        activeLinkId={ctx.selectedFromLinkId?.()}
-                        label={addr()}
-                        onSelect={(id) => ctx.onSelectFromLink?.(id)}
-                        triggerClass="ml-1 h-5 gap-1 text-ink-extra-muted/50"
-                      />
-                    </div>
-                  )}
+                  <div class="text-xs text-ink-extra-muted/50 flex items-center gap-1">
+                    <span>from</span>
+                    <FromInboxSelector
+                      links={ctx.fromInboxes?.() ?? []}
+                      activeLinkId={ctx.selectedFromLinkId?.()}
+                      onSelect={(id) => ctx.onSelectFromLink?.(id)}
+                    />
+                  </div>
                 </Show>
               </Suspense>
             }
