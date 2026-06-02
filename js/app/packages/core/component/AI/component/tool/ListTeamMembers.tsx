@@ -99,11 +99,11 @@ const listTeamMembersHandler = createToolRenderer({
           ) : undefined
         }
       >
-        <div class="flex min-w-0 flex-1 items-center justify-between gap-3">
-          <span>Read team members</span>
+        <div class="flex min-w-0 flex-1 items-center justify-between gap-3 overflow-hidden">
+          <span class="min-w-0 truncate">Read team members</span>
           <Show when={statusText()}>
             {(text) => (
-              <span class="shrink-0 text-xs text-ink-extra-muted">
+              <span class="shrink-0 whitespace-nowrap text-xs text-ink-extra-muted">
                 {text()}
               </span>
             )}

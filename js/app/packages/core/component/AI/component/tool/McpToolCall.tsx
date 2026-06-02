@@ -19,10 +19,10 @@ export function McpToolCall(props: {
       renderContext={props.renderContext.renderContext}
       type="call"
     >
-      <div class="flex min-w-0 flex-1 items-center gap-2">
-        <span class="text-ink-muted">{props.service}</span>
+      <div class="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
+        <span class="shrink-0 text-ink-muted">{props.service}</span>
         <span class="text-ink-extra-muted">/</span>
-        <span>{props.display_name ?? props.name}</span>
+        <span class="min-w-0 truncate">{props.display_name ?? props.name}</span>
       </div>
     </BaseTool>
   );
