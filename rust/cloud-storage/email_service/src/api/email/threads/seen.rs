@@ -7,7 +7,6 @@ use axum::{Extension, Json};
 use model::response::{EmptyResponse, ErrorResponse};
 use model::user::UserContext;
 use models_email::service::label::system_labels;
-use models_email::service::link::Link;
 use models_email::service::message::Message;
 use sqlx::types::Uuid;
 use strum_macros::AsRefStr;
@@ -71,9 +70,18 @@ pub struct PathParams {
 pub async fn seen_handler(
     State(ctx): State<ApiContext>,
     user_context: Extension<UserContext>,
-    link: Extension<Link>,
     Path(PathParams { id: thread_id }): Path<PathParams>,
 ) -> Result<Response, SeenThreadError> {
+    // Resolve the inbox from the thread itself, scoped to the caller's own inboxes.
+    let link = email_db_client::links::get::fetch_owned_link_for_thread(
+        &ctx.db,
+        &user_context.fusion_user_id,
+        thread_id,
+    )
+    .await
+    .context("Failed to resolve inbox for thread")?
+    .ok_or(SeenThreadError::ThreadNotFound)?;
+
     // update viewed_at value in user_history table for thread
     email_db_client::user_history::upsert_user_history(&ctx.db, link.id, thread_id)
         .await

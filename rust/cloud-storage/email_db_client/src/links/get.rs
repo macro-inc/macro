@@ -147,6 +147,61 @@ pub async fn fetch_links_by_fusionauth_user_id(
     Ok(service_links?)
 }
 
+/// Resolves the inbox (email_link) that owns a thread, but only when the thread's
+/// inbox belongs to the given fusionauth user. Returns `None` when the thread
+/// doesn't exist or its inbox isn't one the caller owns — callers map that to a
+/// not-found/unauthorized response. Lets mutating thread routes derive the inbox
+/// from the thread instead of an `X-Email-Link-Id` header.
+#[tracing::instrument(skip(pool), err)]
+pub async fn fetch_owned_link_for_thread(
+    pool: &PgPool,
+    fusionauth_user_id: &str,
+    thread_id: Uuid,
+) -> anyhow::Result<Option<link::Link>> {
+    let db_link = sqlx::query_as!(
+        DbLink,
+        r#"
+        SELECT l.id, l.macro_id, l.fusionauth_user_id, l.email_address, l.provider as "provider: _",
+               l.is_sync_active, l.created_at, l.updated_at
+        FROM email_threads t
+        JOIN email_links l ON l.id = t.link_id
+        WHERE t.id = $1 AND l.fusionauth_user_id = $2
+        "#,
+        thread_id,
+        fusionauth_user_id
+    )
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(db_link.map(service::link::Link::try_from).transpose()?)
+}
+
+/// Resolves the inbox (email_link) that owns a message, scoped to the caller's
+/// own inboxes. See [`fetch_owned_link_for_thread`].
+#[tracing::instrument(skip(pool), err)]
+pub async fn fetch_owned_link_for_message(
+    pool: &PgPool,
+    fusionauth_user_id: &str,
+    message_id: Uuid,
+) -> anyhow::Result<Option<link::Link>> {
+    let db_link = sqlx::query_as!(
+        DbLink,
+        r#"
+        SELECT l.id, l.macro_id, l.fusionauth_user_id, l.email_address, l.provider as "provider: _",
+               l.is_sync_active, l.created_at, l.updated_at
+        FROM email_messages m
+        JOIN email_links l ON l.id = m.link_id
+        WHERE m.id = $1 AND l.fusionauth_user_id = $2
+        "#,
+        message_id,
+        fusionauth_user_id
+    )
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(db_link.map(service::link::Link::try_from).transpose()?)
+}
+
 /// Fetches a link by its ID.
 /// Returns None if no link with the given ID exists.
 #[tracing::instrument(skip(pool), err)]
