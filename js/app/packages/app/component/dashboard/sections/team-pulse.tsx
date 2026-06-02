@@ -9,16 +9,16 @@ import { useSettingsState } from '@core/constant/SettingsState';
 import { useUserId } from '@core/context/user';
 import { PulsingStar } from '@entity/components/PulsingStar';
 import { AnimatedStarIcon } from '@icon/wide-star';
-import { Accordion } from '@kobalte/core/accordion';
+import { Collapsible } from '@kobalte/core/collapsible';
+import { Popover } from '@kobalte/core/popover';
 import RefreshIcon from '@phosphor/arrow-clockwise.svg';
-import ChevronDownIcon from '@phosphor/caret-down.svg?component-solid';
 import UsersIcon from '@phosphor/users.svg';
 import { useTeamQuery, useUserTeamsQuery } from '@queries/team';
 import { TeamRole } from '@service-auth/generated/schemas/teamRole';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { AgentModel } from '@service-cognition/generated/schemas/agentModel';
 import { ToolSetOneOfType } from '@service-cognition/generated/schemas/toolSetOneOfType';
-import { Button, cn, Layer } from '@ui';
+import { Button, Layer, Surface } from '@ui';
 import {
   type Accessor,
   createMemo,
@@ -254,7 +254,7 @@ function openPulseReference(
 function TeamPulseReferencePill(props: { reference: TeamPulseReference }) {
   return (
     <button
-      class="group/pill relative flex min-w-0 items-center justify-between gap-2 rounded-md border border-edge-muted bg-surface px-2 py-1 text-left transition hover:border-edge hover:bg-hover focus:outline-none focus-visible:border-accent"
+      class="group/pill relative flex min-w-0 items-center gap-1 rounded-md border border-edge-muted bg-surface px-2 py-1 text-left hover:border-edge hover:bg-hover focus:outline-none focus-visible:border-accent"
       onClick={(event) => {
         event.stopPropagation();
         openPulseReference(props.reference, event);
@@ -268,6 +268,75 @@ function TeamPulseReferencePill(props: { reference: TeamPulseReference }) {
   );
 }
 
+function TeamPulseReferenceMenuItem(props: { reference: TeamPulseReference }) {
+  return (
+    <button
+      class="group flex h-8 w-full cursor-default items-center gap-1 rounded-lg px-2 text-left text-xs font-medium outline-none hover:bg-ink/5 focus:bg-ink/5"
+      onClick={(event) => {
+        event.stopPropagation();
+        openPulseReference(props.reference, event);
+      }}
+    >
+      <span class="size-3 min-w-3 shrink-0">
+        <EntityIcon targetType={iconType(props.reference.type)} size="fill" />
+      </span>
+      <span class="truncate">{props.reference.label}</span>
+    </button>
+  );
+}
+
+function TeamPulseReferencesPopover(props: {
+  references: TeamPulseReference[];
+}) {
+  const primaryReference = () => props.references[0];
+
+  return (
+    <Show
+      when={props.references.length > 1}
+      fallback={
+        <Show when={primaryReference()}>
+          {(reference) => <TeamPulseReferencePill reference={reference()} />}
+        </Show>
+      }
+    >
+      <Popover placement="bottom-start" gutter={6}>
+        <Popover.Trigger
+          class="flex w-fit items-center gap-1 rounded-md border border-edge-muted bg-surface/60 px-2 py-1 text-xs text-ink-muted transition hover:border-edge hover:bg-surface focus:outline-none focus-visible:border-accent"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <Show when={primaryReference()}>
+            {(reference) => (
+              <span class="size-3 min-w-3 shrink-0">
+                <EntityIcon
+                  targetType={iconType(reference().type)}
+                  size="fill"
+                />
+              </span>
+            )}
+          </Show>
+          <span>{props.references.length} references</span>
+        </Popover.Trigger>
+
+        <Popover.Portal>
+          <Popover.Content class="z-action-menu">
+            <Surface depth={2} class="rounded-xl">
+              <div class="flex min-w-48 max-w-xs flex-col gap-px bg-edge-muted">
+                <div class="flex flex-col gap-0.5 bg-surface p-1.5">
+                  <For each={props.references}>
+                    {(reference) => (
+                      <TeamPulseReferenceMenuItem reference={reference} />
+                    )}
+                  </For>
+                </div>
+              </div>
+            </Surface>
+          </Popover.Content>
+        </Popover.Portal>
+      </Popover>
+    </Show>
+  );
+}
+
 function PulseClickableRow(props: {
   references: TeamPulseReference[];
   icon: 'entity' | 'user';
@@ -278,69 +347,44 @@ function PulseClickableRow(props: {
   const primaryReference = () => props.references[0];
 
   return (
-    <Accordion.Item
-      class="flex flex-col gap-2 bg-surface rounded-lg"
-      value={props.title}
-    >
-      <Accordion.Header>
-        <Accordion.Trigger
-          class={cn(
-            'group relative py-2.5 px-4 flex gap-2 items-center w-full text-left transition hover:bg-active focus:outline-none focus-visible:bg-active/60 focus-visible:ring focus-visible:ring-edge focus-visible:ring-inset rounded-t-lg data-closed:rounded-lg'
-          )}
+    <div class="flex flex-col gap-2 py-2">
+      <div class="flex min-w-0 items-start gap-2">
+        <Show
+          when={props.icon === 'user' && props.memberId}
+          fallback={
+            <Show when={primaryReference()}>
+              {(reference) => (
+                <EntityIcon
+                  targetType={iconType(reference().type)}
+                  size="sm"
+                  class="mt-0.5 shrink-0 touch:size-5"
+                />
+              )}
+            </Show>
+          }
         >
-          <Show
-            when={props.icon === 'user' && props.memberId}
-            fallback={
-              <Show when={primaryReference()}>
-                {(reference) => (
-                  <EntityIcon
-                    targetType={iconType(reference().type)}
-                    size="sm"
-                    class="shrink-0 touch:size-5"
-                  />
-                )}
-              </Show>
-            }
-          >
-            {(id) => (
-              <UserIcon
-                id={id()}
-                size="md"
-                class="touch:size-9"
-                suppressClick
-                showTooltip={false}
-              />
-            )}
-          </Show>
-          <p class="text-sm font-semibold text-ink whitespace-nowrap">
-            {props.title}
-          </p>
-          <p class="text-xs text-ink-muted truncate group-data-[expanded]:opacity-0 transition-opacity duration-50">
-            {props.description}
-          </p>
-          <ChevronDownIcon
-            class={cn(
-              'size-3 shrink-0 ml-auto group-data-[expanded]:rotate-180 transition-transform'
-            )}
-          />{' '}
-        </Accordion.Trigger>
-      </Accordion.Header>
-      <Accordion.Content class="pb-2.5 px-4 ">
-        <div class="min-w-0 flex flex-col gap-2">
-          <p class={'text-xs text-ink-muted'}>{props.description}</p>
-
-          <Show when={props.references.length > 0}>
-            <div class="flex flex-wrap items-center gap-2">
-              <For each={props.references}>
-                {(reference) => (
-                  <TeamPulseReferencePill reference={reference} />
-                )}
-              </For>
-            </div>
-          </Show>
+          {(id) => (
+            <UserIcon
+              id={id()}
+              size="md"
+              class="touch:size-9"
+              suppressClick
+              showTooltip={false}
+            />
+          )}
+        </Show>
+        <div class="min-w-0 flex-1">
+          <p class="truncate text-sm font-semibold text-ink">{props.title}</p>
+          <p class="text-xs leading-5 text-ink-muted">{props.description}</p>
         </div>
-      </Accordion.Content>
-    </Accordion.Item>
+      </div>
+
+      <Show when={props.references.length > 0}>
+        <div class="pl-10">
+          <TeamPulseReferencesPopover references={props.references} />
+        </div>
+      </Show>
+    </div>
   );
 }
 
@@ -364,6 +408,53 @@ function TeamPulseActionItemRow(props: { item: TeamPulseActionItem }) {
       title={props.item.title}
       description={props.item.action}
     />
+  );
+}
+
+function TeamPulseSummaryCard(props: { data: TeamPulse }) {
+  const [open, setOpen] = createSignal(false);
+  const hasDetails = () =>
+    props.data.summaries.length > 0 || props.data.actionItems.length > 0;
+
+  return (
+    <div class="bg-active p-4 rounded-xl flex min-w-0 items-start gap-3">
+      <AnimatedStarIcon
+        class="size-4 shrink-0 translate-y-px"
+        triggerAnimation
+      />
+      <div class="flex min-w-0 flex-1 flex-col gap-2">
+        <p class="text-sm text-ink">{props.data.health}</p>
+        <p class="text-xs leading-6 text-ink-muted">{props.data.overview}</p>
+
+        <Show
+          when={hasDetails()}
+          fallback={
+            <p class="pt-2 text-sm text-ink-muted">
+              No clear activity or follow-ups surfaced yet.
+            </p>
+          }
+        >
+          <Collapsible open={open()} onOpenChange={setOpen}>
+            <Collapsible.Content>
+              <Layer depth={3}>
+                <div class="mt-2 flex flex-col gap-2">
+                  <For each={props.data.summaries}>
+                    {(item) => <TeamPulseSummaryRow item={item} />}
+                  </For>
+                  <For each={props.data.actionItems}>
+                    {(item) => <TeamPulseActionItemRow item={item} />}
+                  </For>
+                </div>
+              </Layer>
+            </Collapsible.Content>
+
+            <Collapsible.Trigger class="mt-1 w-fit rounded text-xs font-medium text-accent transition hover:text-accent focus:outline-none focus-visible:ring focus-visible:ring-edge">
+              {open() ? 'Show less' : 'Show more'}
+            </Collapsible.Trigger>
+          </Collapsible>
+        </Show>
+      </div>
+    </div>
   );
 }
 
@@ -506,73 +597,8 @@ JSON context:\n${source.context}`,
         <Switch>
           <Match when={pulse()}>
             {(data) => (
-              <div>
-                <div class="px-4 sm:px-0">
-                  <div class="bg-active p-4 rounded-xl flex min-w-0 items-start gap-3">
-                    <AnimatedStarIcon
-                      class="size-4 shrink-0 translate-y-px"
-                      triggerAnimation
-                    />
-                    <div class="flex min-w-0 flex-col gap-2">
-                      <p class="text-sm text-ink">{data().health}</p>
-                      <p class="text-xs leading-6 text-ink-muted">
-                        {data().overview}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <Show
-                  when={
-                    data().summaries.length > 0 || data().actionItems.length > 0
-                  }
-                  fallback={
-                    <div class="mt-3 px-4 text-sm text-ink-muted sm:px-0">
-                      No clear team activity or follow-ups surfaced yet.
-                    </div>
-                  }
-                >
-                  <div class="mt-8 space-y-5 px-4 sm:px-0">
-                    <Show when={data().summaries.length > 0}>
-                      <div class="flex flex-col gap-4">
-                        <h3 class="flex gap-2 items-center text-sm font-medium tracking-wide text-ink-muted">
-                          <UsersIcon class="size-4" />
-                          Team Activity
-                        </h3>
-                        <Layer depth={3}>
-                          <Accordion
-                            class="flex flex-col gap-2"
-                            multiple
-                            collapsible
-                          >
-                            <For each={data().summaries}>
-                              {(item) => <TeamPulseSummaryRow item={item} />}
-                            </For>
-                          </Accordion>
-                        </Layer>
-                      </div>
-                    </Show>
-
-                    <Show when={data().actionItems.length > 0}>
-                      <div class="flex flex-col gap-4">
-                        <h3 class="flex gap-2 items-center text-sm font-medium tracking-wide text-ink-muted">
-                          Follow-ups
-                        </h3>
-                        <Layer depth={3}>
-                          <Accordion
-                            class="flex flex-col gap-2"
-                            multiple
-                            collapsible
-                          >
-                            <For each={data().actionItems}>
-                              {(item) => <TeamPulseActionItemRow item={item} />}
-                            </For>
-                          </Accordion>
-                        </Layer>
-                      </div>
-                    </Show>
-                  </div>
-                </Show>
+              <div class="px-4 sm:px-0">
+                <TeamPulseSummaryCard data={data()} />
               </div>
             )}
           </Match>
