@@ -140,7 +140,7 @@ function hashString(value: string) {
 }
 
 function cacheKey(context: string) {
-  return `${TEAM_PULSE_CACHE_PREFIX}${hashString(context)}`;
+  return `${TEAM_PULSE_CACHE_PREFIX}`;
 }
 
 function isTeamPulseReference(value: unknown): value is TeamPulseReference {
@@ -531,11 +531,12 @@ JSON context:\n${source.context}`,
                     </div>
                   }
                 >
-                  <div class="mt-4 space-y-5 px-4 sm:px-0">
+                  <div class="mt-8 space-y-5 px-4 sm:px-0">
                     <Show when={data().summaries.length > 0}>
-                      <div>
-                        <h3 class="mb-1 px-2 text-xs font-semibold uppercase tracking-wide text-ink-extra-muted">
-                          Team activity
+                      <div class="flex flex-col gap-4">
+                        <h3 class="flex gap-2 items-center text-sm font-medium tracking-wide text-ink-muted">
+                          <UsersIcon class="size-4" />
+                          Team Activity
                         </h3>
                         <div class="space-y-1">
                           <For each={data().summaries}>
@@ -546,8 +547,8 @@ JSON context:\n${source.context}`,
                     </Show>
 
                     <Show when={data().actionItems.length > 0}>
-                      <div>
-                        <h3 class="mb-1 px-2 text-xs font-semibold uppercase tracking-wide text-ink-extra-muted">
+                      <div class="flex flex-col gap-4">
+                        <h3 class="flex gap-2 items-center text-sm font-medium tracking-wide text-ink-muted">
                           Follow-ups
                         </h3>
                         <div class="space-y-1">
@@ -592,17 +593,8 @@ export function TeamPulseSection() {
             <h1 class="truncate text-lg font-semibold tracking-tight text-ink">
               {firstTeam()?.name ?? 'Team'}
             </h1>
-            <Show when={firstTeam()}>
-              {(team) => (
-                <span class="shrink-0 truncate text-xs mt-1 text-ink-muted">
-                  @{team().slug}
-                </span>
-              )}
-            </Show>
           </div>
-          <p class="text-xs text-ink-extra-muted font-normal">
-            What's the team working on?
-          </p>
+          <p class="text-xs text-ink-extra-muted font-normal">Team pulse</p>
         </header>
         <div class="flex shrink-0 items-center gap-2">
           <Button
