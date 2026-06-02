@@ -158,6 +158,7 @@ impl<
 > DocumentServiceImpl<R, U, T, C, Eam, F>
 {
     /// Create a document service with its repository and external service ports.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         repo: R,
         cloudfront_config: CloudFrontConfig,
