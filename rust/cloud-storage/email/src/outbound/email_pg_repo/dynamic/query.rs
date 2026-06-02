@@ -115,16 +115,19 @@ fn push_thread_candidate_select(
     // Team-scoped queries return one thread copy per team member on the
     // same conversation. Dedupe on the root message's RFC-822 Message-ID
     // (email_messages.global_id) — stable across mailboxes, unlike
-    // provider thread ids. Threads with no global_id (e.g. all-draft)
-    // fall back to their own id and never dedupe. is_own_link feeds the
-    // DISTINCT ON preference in build_query so the caller's copy wins.
+    // provider thread ids. Drafts are excluded (their Message-IDs are
+    // mailbox-local), and threads with no usable global_id fall back to
+    // their own id and never dedupe. is_own_link feeds the DISTINCT ON
+    // preference in build_query so the caller's copy wins.
     if params.team_id.is_some() {
         builder.push(
             r#",
                     COALESCE(
                         (SELECT m_root.global_id FROM email_messages m_root
-                         WHERE m_root.thread_id = t.id AND m_root.global_id IS NOT NULL
-                         ORDER BY m_root.internal_date_ts ASC NULLS LAST
+                         WHERE m_root.thread_id = t.id
+                           AND m_root.global_id IS NOT NULL
+                           AND m_root.is_draft = FALSE
+                         ORDER BY m_root.internal_date_ts ASC NULLS LAST, m_root.id ASC
                          LIMIT 1),
                         t.id::text
                     ) AS dedupe_key,

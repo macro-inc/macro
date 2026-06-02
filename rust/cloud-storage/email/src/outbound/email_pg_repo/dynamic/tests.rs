@@ -547,8 +547,16 @@ fn test_build_query_team_scoped_dedupes_on_root_global_id() {
         "dedupe key must come from root-message global_id: {sql}"
     );
     assert!(
+        sql.contains("m_root.is_draft = FALSE"),
+        "drafts carry mailbox-local Message-IDs and must not be the key: {sql}"
+    );
+    assert!(
+        sql.contains("ORDER BY m_root.internal_date_ts ASC NULLS LAST, m_root.id ASC"),
+        "root selection must be deterministic under timestamp ties: {sql}"
+    );
+    assert!(
         sql.contains("t.id::text"),
-        "threads without a global_id must fall back to their own id: {sql}"
+        "threads without a usable global_id must fall back to their own id: {sql}"
     );
     // Own copy wins, then recency, then id.
     assert!(

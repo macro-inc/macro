@@ -129,12 +129,13 @@ VALUES
      'd0000002-0000-0000-0000-000000000002', 'me4', 'c1000002-0000-0000-0000-000000000002',
      'Conv W', 'w reply (erin only)', '2026-05-01 12:00:00+00', '<w-2@acme.com>',
      false, false, false, false, NOW(), NOW()),
-    -- X draft on dave's copy — EARLIEST message in the thread but has no
-    -- global_id. Root selection must skip it (global_id IS NOT NULL) or
-    -- dave's dedupe key degrades to the thread id and X stops deduping.
+    -- X draft on dave's copy — EARLIEST message in the thread WITH a
+    -- global_id (provider-synced drafts carry a mailbox-local Message-ID).
+    -- Root selection must skip it (is_draft = FALSE) or dave's dedupe key
+    -- becomes the draft's local Message-ID and X stops deduping.
     ('66660001-0000-0000-0000-000000000005', '55550001-0000-0000-0000-000000000001',
      'd0000001-0000-0000-0000-000000000001', 'md5', NULL,
-     'Conv X', 'x draft (dave only)', '2026-05-01 06:00:00+00', NULL,
+     'Conv X', 'x draft (dave only)', '2026-05-01 06:00:00+00', '<x-draft-local@dave.beta.com>',
      true, false, false, false, NOW(), NOW());
 
 -- == Message labels — everything in INBOX, nothing trashed ==

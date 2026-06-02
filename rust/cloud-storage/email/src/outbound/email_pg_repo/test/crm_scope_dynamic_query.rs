@@ -944,11 +944,11 @@ async fn crm_scope_dedupe_stable_across_cursor_pages(pool: Pool<Postgres>) -> an
 
 // =====================================================================
 // 20. Root selection skips drafts. Dave's X copy contains a draft that
-//     is the EARLIEST message in the thread but has no global_id. If the
-//     root subquery didn't filter `global_id IS NOT NULL`, dave's key
-//     would fall back to the thread id and X would stop deduping (te1
-//     would reappear). Covered implicitly by #17's exact vector; this
-//     test names the intent.
+//     is the EARLIEST message in the thread and has a (mailbox-local)
+//     global_id. If the root subquery didn't filter `is_draft = FALSE`,
+//     dave's key would become the draft's Message-ID and X would stop
+//     deduping (te1 would reappear). Covered implicitly by #17's exact
+//     vector; this test names the intent.
 // =====================================================================
 
 #[sqlx::test(
