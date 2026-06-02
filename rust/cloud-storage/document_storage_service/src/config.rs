@@ -72,6 +72,12 @@ maybe_env_var! {
 }
 
 maybe_env_var! {
+    /// OpenAI API key used to generate task embeddings. Optional — task
+    /// embeddings will fail until it is configured.
+    pub struct OpenaiApiKey;
+}
+
+maybe_env_var! {
     /// Shared secret for internal call endpoints (e.g. transcript ingestion from the agent).
     pub struct InternalCallSecret;
 }

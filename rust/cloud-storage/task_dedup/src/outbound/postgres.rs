@@ -1,214 +1,235 @@
-//! Postgres task duplicate repo.
+//! Postgres adapters for task duplicate detection.
+//!
+//! [`PgTaskVectorDb`] implements the embedding crate's [`VectorDb`] over the
+//! `task_duplicate_embedding` table (one row per `(document_id, search_key)`
+//! field). [`PgTaskMatchRepo`] owns the duplicate match graph
+//! (`task_duplicate_match`).
 
 #[cfg(test)]
 mod test;
 
+use std::collections::HashMap;
+
+use anyhow::Context;
 use async_trait::async_trait;
+use embedding::embedding_provider::openai::DIMS;
+use embedding::{Content, KeyedEmbedding, LabeledEmbedding, Match, SearchResults, VectorStore};
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::domain::models::{
-    NewTask, TaskDedupError, TaskDuplicate, TaskDuplicateCandidate, TaskSimilarityCandidate,
-};
-use crate::domain::ports::TaskDedupRepo;
+use crate::domain::models::{TaskDedupError, TaskDuplicate, TaskSearchParameters};
+use crate::domain::ports::TaskMatchRepo;
 use crate::domain::service::ordered_pair;
 
-/// A single task embedding to upsert in bulk.
+/// Postgres/pgvector implementation of [`VectorDb`] for task embeddings.
+///
+/// Each task contributes one row per embeddable field (`title`, `body`); the
+/// composite primary key `(document_id, search_key)` keeps them distinct.
+///
+/// Duplicate detection uses a single embedding model everywhere, so no model
+/// identifier is stored per row.
 #[derive(Clone)]
-pub struct TaskEmbeddingUpsert {
-    /// Document id of the task.
-    pub document_id: String,
-    /// Embedded content (the output of `task_embedding_content`).
-    pub content: String,
-    /// Embedding vector.
-    pub embedding: Vec<f32>,
-}
-
-/// Postgres-backed task duplicate repo using pgvector.
-#[derive(Clone)]
-pub struct PgTaskDedupRepo {
+pub struct PgTaskVectorDb {
     pool: PgPool,
 }
 
-impl PgTaskDedupRepo {
-    /// Creates a Postgres repo.
+impl PgTaskVectorDb {
+    /// Creates a store over `pool`.
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
+}
 
-    /// Upserts many task embeddings in a single statement. Like
-    /// [`TaskDedupRepo::upsert_embedding`], existing rows are updated rather than
-    /// duplicated (the `document_id` primary key drives the conflict). Used by
-    /// the embedding backfill to avoid one round-trip per task.
-    pub async fn bulk_upsert_embeddings(
+impl VectorStore<DIMS> for PgTaskVectorDb {
+    type Error = anyhow::Error;
+    type Metadata = String;
+    type SearchParameters = TaskSearchParameters;
+
+    async fn upsert_embeddings<'a>(
         &self,
-        model: &str,
-        items: &[TaskEmbeddingUpsert],
-    ) -> Result<(), TaskDedupError> {
-        if items.is_empty() {
+        metadata: String,
+        embeddings: Vec<LabeledEmbedding<'a, DIMS>>,
+    ) -> anyhow::Result<()> {
+        if embeddings.is_empty() {
             return Ok(());
         }
 
-        let document_ids: Vec<String> = items.iter().map(|item| item.document_id.clone()).collect();
-        let contents: Vec<String> = items.iter().map(|item| item.content.clone()).collect();
-        let embeddings: Vec<String> = items
+        let search_keys: Vec<String> = embeddings
             .iter()
-            .map(|item| vector_sql_literal(&item.embedding))
+            .map(|field| field.search_key.to_string())
+            .collect();
+        let contents: Vec<String> = embeddings
+            .iter()
+            .map(|field| field.content.as_ref().to_string())
+            .collect();
+        let vectors: Vec<String> = embeddings
+            .iter()
+            .map(|field| vector_sql_literal(&field.embedding))
             .collect();
 
         sqlx::query!(
             r#"
-            INSERT INTO task_duplicate_embedding (document_id, model, content, embedding)
-            SELECT doc_id, $1, content, embedding_text::vector
-            FROM UNNEST($2::text[], $3::text[], $4::text[])
-                AS t(doc_id, content, embedding_text)
-            ON CONFLICT (document_id) DO UPDATE
-            SET model = EXCLUDED.model,
-                content = EXCLUDED.content,
+            INSERT INTO task_duplicate_embedding (document_id, search_key, content, embedding)
+            SELECT $1, sk, ct, emb::vector
+            FROM unnest($2::text[], $3::text[], $4::text[]) AS t(sk, ct, emb)
+            ON CONFLICT (document_id, search_key) DO UPDATE
+            SET content = EXCLUDED.content,
                 embedding = EXCLUDED.embedding,
                 updated_at = NOW()
             "#,
-            model,
-            &document_ids,
+            metadata,
+            &search_keys,
             &contents,
-            &embeddings,
+            &vectors,
         )
         .execute(&self.pool)
         .await?;
         Ok(())
+    }
+
+    async fn cosine_search(
+        &self,
+        query: Vec<KeyedEmbedding<DIMS>>,
+        params: TaskSearchParameters,
+    ) -> anyhow::Result<Vec<SearchResults<String, DIMS>>> {
+        if query.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let query_keys: Vec<String> = query.iter().map(|q| q.search_key.to_string()).collect();
+        let query_vectors: Vec<String> = query
+            .iter()
+            .map(|q| vector_sql_literal(&q.embedding))
+            .collect();
+
+        // Each candidate field is scored by its best similarity to ANY query
+        // field, giving the full query × stored cross-product (title↔title,
+        // title↔body, body↔title, body↔body). Entities are ranked by their best
+        // field score and capped at `limit`; all of a kept entity's field rows
+        // are returned so the service can reconstruct its text.
+        //
+        // Iterative index scan keeps recall high despite the owner/team,
+        // self-, and dismissed-pair filters dropping rows after the HNSW scan.
+        // SET LOCAL binds to the transaction's connection, so the search must run
+        // in the same transaction to see it.
+        let mut tx = self.pool.begin().await?;
+        sqlx::query!("SET LOCAL hnsw.iterative_scan = relaxed_order")
+            .execute(&mut *tx)
+            .await?;
+        let rows = sqlx::query!(
+            r#"
+            WITH query AS (
+                SELECT key, vec::vector AS vec
+                FROM unnest($1::text[], $2::text[]) AS t(key, vec)
+            ),
+            scored AS (
+                SELECT
+                    e.document_id,
+                    e.search_key,
+                    e.content,
+                    e.embedding::text AS embedding_text,
+                    MAX(1 - (e.embedding <=> q.vec))::real AS score
+                FROM task_duplicate_embedding e
+                JOIN "Document" d ON d.id = e.document_id
+                JOIN document_sub_type dst ON dst.document_id = d.id AND dst.sub_type = 'task'
+                LEFT JOIN team_task tt ON tt.document_id = d.id
+                CROSS JOIN query q
+                WHERE d."deletedAt" IS NULL
+                  AND (
+                    d.owner = $3
+                    OR ($4::uuid IS NOT NULL AND tt.team_id = $4)
+                  )
+                  AND ($5::text IS NULL OR e.document_id <> $5)
+                  AND (
+                    NOT $6
+                    OR NOT EXISTS (
+                        SELECT 1
+                        FROM task_duplicate_match m
+                        WHERE m.task_id = LEAST($5, e.document_id)
+                          AND m.duplicate_task_id = GREATEST($5, e.document_id)
+                          AND m.status = 'dismissed'
+                    )
+                  )
+                GROUP BY e.document_id, e.search_key, e.content, e.embedding
+            ),
+            ranked AS (
+                SELECT document_id, MAX(score) AS best
+                FROM scored
+                GROUP BY document_id
+                ORDER BY best DESC
+                LIMIT $7
+            )
+            SELECT
+                s.document_id AS "document_id!",
+                s.search_key AS "search_key!",
+                s.content AS "content!",
+                s.embedding_text AS "embedding_text!",
+                s.score AS "score!"
+            FROM scored s
+            JOIN ranked r ON r.document_id = s.document_id
+            ORDER BY r.best DESC, s.document_id, s.score DESC
+            "#,
+            &query_keys,
+            &query_vectors,
+            params.owner,
+            params.team_id,
+            params.exclude_document_id,
+            params.exclude_dismissed,
+            params.limit,
+        )
+        .fetch_all(&mut *tx)
+        .await?;
+        tx.commit().await?;
+
+        // Group the flat (document_id, field) rows into one SearchResults per
+        // entity, preserving the best-first order established by the query.
+        let mut results: Vec<SearchResults<String, DIMS>> = Vec::new();
+        for row in rows {
+            let Some(search_key) = search_key_static(&row.search_key) else {
+                tracing::warn!(
+                    search_key = %row.search_key,
+                    document_id = %row.document_id,
+                    "skipping task embedding row with unknown search_key"
+                );
+                continue;
+            };
+            let embedding = parse_vector(&row.embedding_text)
+                .with_context(|| format!("invalid stored embedding for {}", row.document_id))?;
+            let matched = Match {
+                score: row.score,
+                embedding: LabeledEmbedding {
+                    search_key,
+                    content: Content::Owned(row.content),
+                    embedding,
+                },
+            };
+            match results.last_mut() {
+                Some(last) if last.metadata == row.document_id => last.matches.push(matched),
+                _ => results.push(SearchResults {
+                    metadata: row.document_id,
+                    matches: vec![matched],
+                }),
+            }
+        }
+        Ok(results)
+    }
+}
+
+/// Postgres-backed duplicate match graph.
+#[derive(Clone)]
+pub struct PgTaskMatchRepo {
+    pool: PgPool,
+}
+
+impl PgTaskMatchRepo {
+    /// Creates a match repo over `pool`.
+    pub fn new(pool: PgPool) -> Self {
+        Self { pool }
     }
 }
 
 #[async_trait]
-impl TaskDedupRepo for PgTaskDedupRepo {
-    async fn upsert_embedding(
-        &self,
-        document_id: &str,
-        model: &str,
-        content: &str,
-        embedding: &[f32],
-    ) -> Result<(), TaskDedupError> {
-        let embedding_sql = vector_sql_literal(embedding);
-        sqlx::query!(
-            r#"
-            INSERT INTO task_duplicate_embedding (document_id, model, content, embedding)
-            VALUES ($1, $2, $3, $4::text::vector)
-            ON CONFLICT (document_id) DO UPDATE
-            SET model = EXCLUDED.model,
-                content = EXCLUDED.content,
-                embedding = EXCLUDED.embedding,
-                updated_at = NOW()
-            "#,
-            document_id,
-            model,
-            content,
-            embedding_sql,
-        )
-        .execute(&self.pool)
-        .await?;
-        Ok(())
-    }
-
-    async fn candidates(
-        &self,
-        task: &NewTask,
-        embedding: &[f32],
-        limit: i64,
-    ) -> Result<Vec<TaskDuplicateCandidate>, TaskDedupError> {
-        let embedding_sql = vector_sql_literal(embedding);
-        let rows = sqlx::query!(
-            r#"
-            SELECT
-                e.document_id,
-                e.content,
-                1 - (e.embedding <=> $2::text::vector) AS "vector_score!"
-            FROM task_duplicate_embedding e
-            JOIN "Document" d ON d.id = e.document_id
-            JOIN document_sub_type dst ON dst.document_id = d.id AND dst.sub_type = 'task'
-            LEFT JOIN team_task tt ON tt.document_id = d.id
-            WHERE e.document_id <> $1
-              AND d."deletedAt" IS NULL
-              AND (
-                d.owner = $3
-                OR ($4::uuid IS NOT NULL AND tt.team_id = $4)
-              )
-              AND NOT EXISTS (
-                SELECT 1
-                FROM task_duplicate_match m
-                WHERE (
-                  m.task_id = LEAST($1, e.document_id)
-                  AND m.duplicate_task_id = GREATEST($1, e.document_id)
-                  AND m.status = 'dismissed'
-                )
-              )
-            ORDER BY e.embedding <=> $2::text::vector
-            LIMIT $5
-            "#,
-            task.document_id.as_str(),
-            embedding_sql,
-            task.owner.as_str(),
-            task.team_id,
-            limit,
-        )
-        .fetch_all(&self.pool)
-        .await?;
-
-        Ok(rows
-            .into_iter()
-            .map(|row| TaskDuplicateCandidate {
-                document_id: row.document_id,
-                content: row.content,
-                vector_score: row.vector_score,
-            })
-            .collect())
-    }
-
-    async fn similarity_candidates(
-        &self,
-        owner: &str,
-        team_id: Option<Uuid>,
-        embedding: &[f32],
-        limit: i64,
-    ) -> Result<Vec<TaskSimilarityCandidate>, TaskDedupError> {
-        let embedding_sql = vector_sql_literal(embedding);
-        let rows = sqlx::query!(
-            r#"
-            SELECT
-                e.document_id,
-                d.name AS "name!",
-                e.content,
-                1 - (e.embedding <=> $3::text::vector) AS "vector_score!"
-            FROM task_duplicate_embedding e
-            JOIN "Document" d ON d.id = e.document_id
-            JOIN document_sub_type dst ON dst.document_id = d.id AND dst.sub_type = 'task'
-            LEFT JOIN team_task tt ON tt.document_id = d.id
-            WHERE d."deletedAt" IS NULL
-              AND (
-                d.owner = $1
-                OR ($2::uuid IS NOT NULL AND tt.team_id = $2)
-              )
-            ORDER BY e.embedding <=> $3::text::vector
-            LIMIT $4
-            "#,
-            owner,
-            team_id,
-            embedding_sql,
-            limit,
-        )
-        .fetch_all(&self.pool)
-        .await?;
-
-        Ok(rows
-            .into_iter()
-            .map(|row| TaskSimilarityCandidate {
-                document_id: row.document_id,
-                name: row.name,
-                content: row.content,
-                vector_score: row.vector_score,
-            })
-            .collect())
-    }
-
+impl TaskMatchRepo for PgTaskMatchRepo {
     async fn upsert_match(
         &self,
         task_id: &str,
@@ -433,14 +454,80 @@ impl TaskDedupRepo for PgTaskDedupRepo {
         .await?;
         Ok(())
     }
+
+    async fn task_names(
+        &self,
+        document_ids: &[String],
+    ) -> Result<HashMap<String, String>, TaskDedupError> {
+        if document_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+        let rows = sqlx::query!(
+            r#"
+            SELECT id, name
+            FROM "Document"
+            WHERE id = ANY($1)
+              AND "deletedAt" IS NULL
+            "#,
+            document_ids,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows.into_iter().map(|row| (row.id, row.name)).collect())
+    }
 }
 
-/// Converts an embedding vector into a pgvector literal.
+/// Formats an embedding as the pgvector text literal `[a,b,c]` used for the
+/// `text::vector` casts in the queries above.
 pub fn vector_sql_literal(embedding: &[f32]) -> String {
-    let values = embedding
-        .iter()
-        .map(|value| format!("{value:.8}"))
-        .collect::<Vec<_>>()
-        .join(",");
-    format!("[{values}]")
+    let mut literal = String::with_capacity(embedding.len() * 8 + 2);
+    literal.push('[');
+    for (index, value) in embedding.iter().enumerate() {
+        if index > 0 {
+            literal.push(',');
+        }
+        literal.push_str(&value.to_string());
+    }
+    literal.push(']');
+    literal
+}
+
+/// Parses a pgvector text literal (`[a,b,c]`) back into a fixed-size embedding.
+fn parse_vector(text: &str) -> anyhow::Result<[f32; DIMS]> {
+    let inner = text.trim().trim_start_matches('[').trim_end_matches(']');
+    let mut embedding = [0.0_f32; DIMS];
+    let mut count = 0usize;
+    for part in inner.split(',') {
+        let part = part.trim();
+        if part.is_empty() {
+            continue;
+        }
+        if count >= DIMS {
+            anyhow::bail!("embedding has more than {DIMS} dimensions");
+        }
+        embedding[count] = part
+            .parse()
+            .with_context(|| format!("invalid embedding component {part:?}"))?;
+        count += 1;
+    }
+    if count != DIMS {
+        anyhow::bail!("expected {DIMS} dimensions, got {count}");
+    }
+    Ok(embedding)
+}
+
+/// Maps a `search_key` string read from the database back to one of the known
+/// static keys, so it satisfies the `&'static str` [`SearchKey`](embedding::SearchKey).
+///
+/// Returns `None` for unrecognized keys (e.g. a future field written by a newer
+/// build, or bad data). Callers skip those rows rather than leaking the string
+/// into `'static`, which would grow the heap permanently on a mixed-version
+/// rollout.
+fn search_key_static(key: &str) -> Option<&'static str> {
+    match key {
+        "title" => Some("title"),
+        "body" => Some("body"),
+        _ => None,
+    }
 }

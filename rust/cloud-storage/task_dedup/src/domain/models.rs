@@ -1,5 +1,8 @@
 //! Domain models for task duplicate detection.
 
+use std::borrow::Cow;
+
+use embedding::entity::Task;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -18,6 +21,38 @@ pub struct NewTask {
     pub markdown: String,
 }
 
+impl NewTask {
+    /// Borrows this task as an [`Embeddable`](embedding::Embeddable) entity so its
+    /// title and body are embedded as separate fields.
+    pub fn as_embeddable(&self) -> Task<'_> {
+        Task {
+            title: Cow::Borrowed(self.title.as_str()),
+            body: Cow::Borrowed(self.markdown.as_str()),
+        }
+    }
+}
+
+/// Filters applied to a task vector search.
+///
+/// This is the [`VectorDb::SearchParameters`](embedding::VectorDb::SearchParameters)
+/// for the task duplicate store: it scopes a cosine search to the tasks a user is
+/// allowed to see and optionally excludes the query task itself and any pairs the
+/// user has already dismissed.
+#[derive(Debug, Clone)]
+pub struct TaskSearchParameters {
+    /// Owner whose tasks are in scope.
+    pub owner: String,
+    /// Team whose shared tasks are also in scope, when set.
+    pub team_id: Option<Uuid>,
+    /// Maximum number of candidate tasks to return.
+    pub limit: i64,
+    /// Document id to exclude from results (the query task itself), when set.
+    pub exclude_document_id: Option<String>,
+    /// When true, drop candidates already dismissed against
+    /// [`exclude_document_id`](Self::exclude_document_id).
+    pub exclude_dismissed: bool,
+}
+
 /// A duplicate task candidate shown on the task surface.
 #[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -34,17 +69,6 @@ pub struct TaskDuplicate {
     pub judge_reason: Option<String>,
 }
 
-/// Candidate returned by the retrieval layer before judging.
-#[derive(Debug, Clone)]
-pub struct TaskDuplicateCandidate {
-    /// Candidate task document id.
-    pub document_id: String,
-    /// Candidate embedding content.
-    pub content: String,
-    /// Candidate vector similarity.
-    pub vector_score: f64,
-}
-
 /// A similar existing task computed for an unsaved draft, returned to the task
 /// composer without persisting any embedding or match state.
 #[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
@@ -55,20 +79,6 @@ pub struct TaskSimilarityResult {
     /// The matching task's display name.
     pub task_name: String,
     /// Cosine similarity from vector search.
-    pub vector_score: f64,
-}
-
-/// Candidate returned by the similarity-search retrieval layer, carrying the
-/// task display name so the composer can render a match without a match row.
-#[derive(Debug, Clone)]
-pub struct TaskSimilarityCandidate {
-    /// Candidate task document id.
-    pub document_id: String,
-    /// Candidate task display name.
-    pub name: String,
-    /// Candidate embedding content.
-    pub content: String,
-    /// Candidate vector similarity.
     pub vector_score: f64,
 }
 

@@ -101,9 +101,22 @@ impl TaskDuplicateJudge for AgentDuplicateJudge {
     }
 }
 
-/// Deterministic judge for tests: treats two tasks as duplicates only when their
-/// embedding content is identical.
+/// Deterministic judge for tests: treats two tasks as duplicates when their
+/// texts contain the same set of word tokens, ignoring order and case. Order
+/// independence matters because a candidate's text is reconstructed by joining
+/// its embedded fields, whose order is not guaranteed.
 pub struct LocalDuplicateJudge;
+
+/// Lowercased word tokens of `text`, sorted, for order-insensitive comparison.
+fn token_bag(text: &str) -> Vec<String> {
+    let mut tokens = text
+        .split(|ch: char| !ch.is_alphanumeric())
+        .filter(|token| !token.is_empty())
+        .map(str::to_lowercase)
+        .collect::<Vec<_>>();
+    tokens.sort();
+    tokens
+}
 
 impl LocalDuplicateJudge {
     /// Creates a local judge.
@@ -122,9 +135,9 @@ impl Default for LocalDuplicateJudge {
 impl TaskDuplicateJudge for LocalDuplicateJudge {
     async fn judge(&self, left: &str, right: &str) -> JudgeResult {
         JudgeResult {
-            is_duplicate: left.trim() == right.trim(),
+            is_duplicate: token_bag(left) == token_bag(right),
             model: None,
-            reason: Some("local exact-match judge".to_string()),
+            reason: Some("local token-bag judge".to_string()),
         }
     }
 }

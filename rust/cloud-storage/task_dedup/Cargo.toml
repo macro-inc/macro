@@ -4,12 +4,36 @@ name = "task_dedup"
 publish = false
 version = "0.1.0"
 
+[[bin]]
+name = "backfill_task_embeddings"
+path = "src/bin/backfill_task_embeddings.rs"
+required-features = ["backfill"]
+
+[features]
+# Pulls in everything the `backfill_task_embeddings` binary needs. The library
+# itself does not require any of these, so default builds stay lean.
+backfill = [
+  "dep:aws-sdk-secretsmanager",
+  "dep:clap",
+  "dep:futures",
+  "dep:lexical_client",
+  "dep:macro_aws_config",
+  "dep:macro_entrypoint",
+  "dep:macro_env",
+  "dep:macro_middleware",
+  "dep:secretsmanager_client",
+  "dep:tokio",
+  "dep:macro_env_var"
+]
+
+default = ["backfill"]
+
 [dependencies]
 agent = { path = "../agent" }
 anyhow = { workspace = true }
-async-openai = { workspace = true }
 async-trait = { workspace = true }
 connection_gateway_client = { path = "../connection_gateway_client" }
+embedding = { path = "../embedding" }
 model-entity = { path = "../model-entity" }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -18,6 +42,24 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 utoipa = { workspace = true }
 uuid = { workspace = true }
+
+# Optional — only compiled in for the `backfill` feature (the backfill binary).
+aws-sdk-secretsmanager = { workspace = true, optional = true }
+clap = { workspace = true, optional = true }
+futures = { workspace = true, optional = true }
+lexical_client = { path = "../lexical_client", optional = true }
+macro_aws_config = { path = "../macro_aws_config", optional = true }
+macro_entrypoint = { path = "../macro_entrypoint", optional = true }
+macro_env = { path = "../macro_env", optional = true }
+macro_middleware = { path = "../macro_middleware", default-features = false, features = [
+  "auth",
+], optional = true }
+secretsmanager_client = { path = "../secretsmanager_client", optional = true }
+tokio = { workspace = true, features = [
+  "macros",
+  "rt-multi-thread",
+], optional = true }
+macro_env_var = { path = "../macro_env_var", optional = true }
 
 [dev-dependencies]
 macro_db_migrator = { path = "../macro_db_migrator" }

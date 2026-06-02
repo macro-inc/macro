@@ -1,33 +1,19 @@
 //! Ports for the task duplicate detection pipeline.
+//!
+//! Embedding, reranking, and vector storage are provided by the [`embedding`]
+//! crate's traits ([`EmbeddingModel`](embedding::EmbeddingModel),
+//! [`RerankModel`](embedding::RerankModel), [`VectorDb`](embedding::VectorDb)) and
+//! injected into [`TaskDedupService`](crate::domain::service::TaskDedupService) as
+//! generic type parameters. The ports defined here cover only the
+//! task-duplicate-specific concerns the embedding crate does not: judging,
+//! match-state persistence, and live notifications.
+
+use std::collections::HashMap;
 
 use async_trait::async_trait;
 use uuid::Uuid;
 
-use super::models::{
-    JudgeResult, NewTask, TaskDedupError, TaskDuplicate, TaskDuplicateCandidate,
-    TaskSimilarityCandidate,
-};
-
-/// Embeds task text into a vector representation.
-#[async_trait]
-pub trait TaskEmbedder: Send + Sync {
-    /// Embeds `content`.
-    async fn embed(&self, content: &str) -> anyhow::Result<Vec<f32>>;
-}
-
-/// Reranks retrieved candidates against the query task before judging or
-/// surfacing them.
-///
-/// This is the cross-encoder stage of the retrieve → rerank → judge pipeline: a
-/// trained relevance model (e.g. a Cohere/Voyage/Jina rerank connection) scores
-/// each candidate jointly with the query, which a bi-encoder vector search
-/// cannot. Implementations return one score per document, aligned by index.
-#[async_trait]
-pub trait TaskReranker: Send + Sync {
-    /// Returns a relevance score for each entry of `documents` against `query`,
-    /// in the same order. Higher means more relevant.
-    async fn rerank(&self, query: &str, documents: &[String]) -> anyhow::Result<Vec<f64>>;
-}
+use super::models::{JudgeResult, TaskDedupError, TaskDuplicate};
 
 /// Applies a semantic duplicate judgement after vector retrieval and reranking.
 #[async_trait]
@@ -36,42 +22,19 @@ pub trait TaskDuplicateJudge: Send + Sync {
     async fn judge(&self, left: &str, right: &str) -> JudgeResult;
 }
 
-/// Persists embeddings, retrieves candidates, and manages match state.
+/// Persists and queries duplicate match state.
+///
+/// Embeddings and candidate retrieval live behind the embedding crate's
+/// [`VectorDb`](embedding::VectorDb); this port owns the match graph that vector
+/// search feeds into.
 #[async_trait]
-pub trait TaskDedupRepo: Send + Sync {
-    /// Upserts the current task embedding.
-    async fn upsert_embedding(
-        &self,
-        document_id: &str,
-        model: &str,
-        content: &str,
-        embedding: &[f32],
-    ) -> Result<(), TaskDedupError>;
-
-    /// Retrieves vector candidates for a task.
-    async fn candidates(
-        &self,
-        task: &NewTask,
-        embedding: &[f32],
-        limit: i64,
-    ) -> Result<Vec<TaskDuplicateCandidate>, TaskDedupError>;
-
-    /// Retrieves vector candidates for an unsaved task scoped to `owner` and an
-    /// optional `team_id`, without any self- or dismissed-match exclusion.
-    async fn similarity_candidates(
-        &self,
-        owner: &str,
-        team_id: Option<Uuid>,
-        embedding: &[f32],
-        limit: i64,
-    ) -> Result<Vec<TaskSimilarityCandidate>, TaskDedupError>;
-
+pub trait TaskMatchRepo: Send + Sync {
     /// Upserts an active duplicate match.
     async fn upsert_match(
         &self,
         task_id: &str,
         duplicate_task_id: &str,
-        vector_score: f64,
+        similarity_score: f64,
         judge_model: Option<&str>,
         judge_reason: Option<&str>,
     ) -> Result<(), TaskDedupError>;
@@ -112,6 +75,13 @@ pub trait TaskDedupRepo: Send + Sync {
 
     /// Dismisses a match without document-side filtering.
     async fn dismiss_match_by_id(&self, match_id: Uuid) -> Result<(), TaskDedupError>;
+
+    /// Returns the display name of each requested task document, keyed by
+    /// document id. Missing or deleted documents are omitted.
+    async fn task_names(
+        &self,
+        document_ids: &[String],
+    ) -> Result<HashMap<String, String>, TaskDedupError>;
 }
 
 /// Sends live updates for documents whose duplicate state changed.
