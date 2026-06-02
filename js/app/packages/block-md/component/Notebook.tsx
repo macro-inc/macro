@@ -70,7 +70,9 @@ const widthToMode = (width: number): CommentLayoutMode => {
   return CommentLayoutMode.none;
 };
 
-export function Notebook(props: { loroManager: Accessor<LoroManager | undefined> }) {
+export function Notebook(props: {
+  loroManager: Accessor<LoroManager | undefined>;
+}) {
   const blockElement = blockElementSignal.get;
   const setStore = mdStore.set;
   const setWideEnoughForComments = commentWidthSignal.set;
@@ -294,7 +296,9 @@ export function Notebook(props: { loroManager: Accessor<LoroManager | undefined>
   );
 }
 
-export function InstructionsNotebook(props: { loroManager: Accessor<LoroManager | undefined> }) {
+export function InstructionsNotebook(props: {
+  loroManager: Accessor<LoroManager | undefined>;
+}) {
   const setStore = mdStore.set;
 
   let notebookRef!: HTMLDivElement;

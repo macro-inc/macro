@@ -74,7 +74,9 @@ import { MarkdownCollabProvider } from './MarkdownCollabProvider';
 const DEBUG = false;
 const EDITOR_PADDING_BOTTOM = 120;
 
-export function InstructionsEditor(props: { loroManager: Accessor<LoroManager | undefined> }) {
+export function InstructionsEditor(props: {
+  loroManager: Accessor<LoroManager | undefined>;
+}) {
   const blockData = blockDataSignal.get;
   const blockId = useBlockId();
 

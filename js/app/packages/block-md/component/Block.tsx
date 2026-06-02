@@ -3,8 +3,6 @@ import { useBlockEntityCommands } from '@app/component/next-soup/actions';
 import { SidePanel } from '@app/component/side-panel';
 import { useBlockId } from '@core/block';
 import { createLoroManager } from '@core/collab/manager';
-import type { InitialSync, TimeoutError } from '@core/collab/source';
-import type { Result } from 'neverthrow';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { ENABLE_MARKDOWN_SIDE_PANEL } from '@core/constant/featureFlags';
 import { blockErrorSignal } from '@core/signal/load';
@@ -27,6 +25,8 @@ import { ModalsProvider } from './ModalsProvider';
 import { InstructionsNotebook, Notebook } from './Notebook';
 import { MarkdownSidePanelSections } from './sidepanel/MarkdownSidePanelSections';
 import { InstructionsTopBar, TopBar } from './TopBar';
+import type { Result } from 'neverthrow';
+import type { InitialSync, TimeoutError } from '@core/collab/source';
 
 export default function BlockMarkdown() {
   return (
@@ -46,20 +46,22 @@ function BlockMarkdownContent() {
 
   createEffect(() => {
     const data = blockDataSignal();
-    if (!data?.initialSync) return;
+    if (!data?.doInitialSync) return;
 
-    data.initialSync.then((syncResult: Result<InitialSync, TimeoutError>) => {
+    data.doInitialSync().then((syncResult: Result<InitialSync, TimeoutError>) => {
       if (syncResult.isErr()) {
         console.error('Failed to receive initial sync', syncResult.error);
         setBlockError('INVALID');
         return;
       }
-      loroManager.initializeFromSnapshot(syncResult.value.snapshot).then((result) => {
-        if (result.isErr()) {
-          console.error('Failed to initialize loro doc', result.error);
-          setBlockError('INVALID');
-        }
-      });
+      loroManager
+        .initializeFromSnapshot(syncResult.value.snapshot)
+        .then((result) => {
+          if (result.isErr()) {
+            console.error('Failed to initialize loro doc', result.error);
+            setBlockError('INVALID');
+          }
+        });
     });
   });
 
@@ -122,7 +124,11 @@ function BlockMarkdownContent() {
                     <Suspense>
                       <Show
                         when={!isInstructionsMd()}
-                        fallback={<InstructionsNotebook loroManager={() => loroManager} />}
+                        fallback={
+                          <InstructionsNotebook
+                            loroManager={() => loroManager}
+                          />
+                        }
                       >
                         <Notebook loroManager={() => loroManager} />
                       </Show>

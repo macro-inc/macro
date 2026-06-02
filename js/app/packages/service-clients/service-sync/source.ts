@@ -1,6 +1,5 @@
 import type { RawUpdate } from '@core/collab/shared';
 import {
-  type ConnectionFailedError,
   type InitialSync,
   type MissingAckError,
   SyncError,
@@ -29,7 +28,7 @@ import {
 } from '@websocket/solid/socket-effect';
 import { createWebsocketStateSignal } from '@websocket/solid/state-signal';
 import { encodeFrontiers, type Frontiers } from 'loro-crdt';
-import { err, ok, type Result, ResultAsync } from 'neverthrow';
+import { type Result, ResultAsync } from 'neverthrow';
 import { createStore } from 'solid-js/store';
 import {
   FromPeer,
@@ -111,28 +110,26 @@ type WithCleanup<T> = T & { cleanup: () => void };
 export const createSyncServiceSource = (
   documentId: string,
   token: string
-): Result<
-  {
-    source: WithCleanup<SyncSource>;
-    initialSync: ResultAsync<InitialSync, TimeoutError>;
-  },
-  never
-> => {
+): {
+  source: WithCleanup<SyncSource>;
+  doInitialSync: () => ResultAsync<InitialSync, TimeoutError>;
+} => {
   const ws = createSyncServiceSocket(documentId, token);
 
-  const initialSync = ResultAsync.fromPromise(
-    raceTimeout(
-      untilMessage(ws, (message) => message.isRemoteInitialSync()),
-      TIMEOUTS.INITIAL_SYNC,
-      true
-    ),
-    () => SyncError.timeout(TIMEOUTS.INITIAL_SYNC)
-  ).map((message) => {
-    // Start heartbeat only after initial sync completes successfully
-    // This prevents the heartbeat from closing the connection during slow initial syncs
-    ws.startHeartbeat();
-    return message.value as InitialSync;
-  });
+  const doInitialSync = () =>
+    ResultAsync.fromPromise(
+      raceTimeout(
+        untilMessage(ws, (message) => message.isRemoteInitialSync()),
+        TIMEOUTS.INITIAL_SYNC,
+        true
+      ),
+      () => SyncError.timeout(TIMEOUTS.INITIAL_SYNC)
+    ).map((message) => {
+      // Start heartbeat only after initial sync completes successfully
+      // This prevents the heartbeat from closing the connection during slow initial syncs
+      ws.startHeartbeat();
+      return message.value as InitialSync;
+    });
 
   const eventBus = createEventBus<SyncSourceEvent>();
 
@@ -303,7 +300,7 @@ export const createSyncServiceSource = (
     ws.close();
   };
 
-  return ok({
+  return {
     source: {
       documentId,
       listen: eventBus.listen,
@@ -316,8 +313,8 @@ export const createSyncServiceSource = (
       reconnect,
       cleanup,
     },
-    initialSync,
-  });
+    doInitialSync,
+  };
 };
 
 const rawUpdateToString = (update: RawUpdate) =>

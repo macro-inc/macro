@@ -198,7 +198,10 @@ const EDITOR_PADDING_BOTTOM = 200;
 // For tasks, the click target is a small fixed pad so the activity section stays visible.
 const TASK_EDITOR_PADDING_BOTTOM = 48;
 
-export function MarkdownEditor(props: { autoFocusOnMount?: boolean; loroManager: Accessor<LoroManager | undefined> }) {
+export function MarkdownEditor(props: {
+  autoFocusOnMount?: boolean;
+  loroManager: Accessor<LoroManager | undefined>;
+}) {
   const blockData = blockDataSignal.get;
   const blockId = useBlockId();
   const userId = useUserId();
@@ -1038,7 +1041,10 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean; loroManager:
         </Show>
 
         <Show when={ENABLE_MARKDOWN_COMMENTS}>
-          <CommentsProvider activeComment={activeCommentIdParam} loroManager={props.loroManager} />
+          <CommentsProvider
+            activeComment={activeCommentIdParam}
+            loroManager={props.loroManager}
+          />
         </Show>
 
         <Show when={canEdit()}>

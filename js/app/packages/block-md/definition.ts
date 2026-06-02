@@ -81,7 +81,10 @@ export const definition = defineBlock({
         return LoadErrors.INVALID;
       }
 
-      const { source: syncSource, initialSync } = createSyncServiceSource(source.id, token)._unsafeUnwrap();
+      const { source: syncSource, doInitialSync } = createSyncServiceSource(
+        source.id,
+        token
+      )
 
       // HACK: unfortunately, most blocks still rely on a dssFile for things like
       // metadata and fileName. so I'm creating an empty blob file to get around that.
@@ -104,7 +107,7 @@ export const definition = defineBlock({
         dssFile: fileWithoutBlob,
         userAccessLevel,
         syncSource,
-        initialSync,
+        doInitialSync,
         documentMetadata,
       });
     }

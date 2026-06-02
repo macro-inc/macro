@@ -22,10 +22,7 @@ import {
 } from '@core/component/LexicalMarkdown/utils';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { useUserId } from '@core/context/user';
-import {
-  blockSourceSignal,
-  blockSyncSourceSignal,
-} from '@core/signal/load';
+import { blockSourceSignal, blockSyncSourceSignal } from '@core/signal/load';
 import { useCanComment, useCanEdit } from '@core/signal/permissions';
 import { isSourceSyncService } from '@core/util/source';
 import {
