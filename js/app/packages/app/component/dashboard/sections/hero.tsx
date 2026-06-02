@@ -1,12 +1,13 @@
-import { DashboardAiInput } from '@app/component/dashboard/dashboard-chat-input';
 import { PromptTemplatesSection } from '@app/component/dashboard/sections/prompt-templates';
-import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
+import { globalSplitManager } from '@app/signal/splitLayout';
 import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
+import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
+import { ChatInput } from '@core/component/AI/component/input/ChatInput';
+import { ChatInputProvider } from '@core/component/AI/context';
+import { setPendingSendData } from '@core/component/AI/signal/pendingSend';
 import { useUserContext } from '@core/context/user';
-import { notificationIsRead } from '@notifications';
-import BellIcon from '@phosphor/bell.svg';
-import { Button } from '@ui';
-import { createMemo, createSignal, Show } from 'solid-js';
+import { cognitionApiServiceClient } from '@service-cognition/client';
+import { createMemo } from 'solid-js';
 
 const MACRO_LOGO_PATH =
   'm6.25 4.038-2.242 0.8792v5.8184l-1.756-1.6582-2.242 0.8792v6.6766c0 0.2568 0.106 0.502 0.292 0.6784l2.794 2.6422 2.244-0.879v-5.8184l7.084 6.6974 2.244-0.879v-5.8184l7.086 6.6976 2.24-0.8792v-6.6766c0-0.2568-0.104-0.5022-0.292-0.6784l-8.124-7.6816-2.244 0.879v5.8184z';
@@ -42,8 +43,6 @@ function AnimatedHeroLogo(props: { class?: string }) {
 
 export function Hero() {
   const user = useUserContext();
-  const notificationSource = useGlobalNotificationSource();
-  const [notificationsOpen, setNotificationsOpen] = createSignal(false);
   const chatEditor = buildChatEditor();
   const fillChatInput = (
     text: string,
@@ -59,7 +58,7 @@ export function Hero() {
     } else {
       chatEditor.controls.setMarkdown(text);
     }
-    chatEditor.controls.focus();
+    requestAnimationFrame(() => chatEditor.controls.focus());
   };
 
   const firstName = createMemo(() => {
@@ -76,21 +75,30 @@ export function Hero() {
 
   const greeting = createMemo(() => `Good ${timeOfDay()}`);
 
-  const unreadNotifications = createMemo(() =>
-    notificationSource
-      .notifications()
-      .filter(
-        (notification) =>
-          !notification.done && !notificationIsRead(notification)
-      )
-      .sort(
-        (a, b) =>
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      )
-  );
+  const editor = buildChatEditor();
+
+  const handleSend = async (request: ChatSendInput) => {
+    const response = await cognitionApiServiceClient.createChat({});
+    if (response.isErr()) return;
+
+    setPendingSendData({
+      content: request.content,
+      attachments: request.attachments,
+      model: request.model,
+    });
+
+    globalSplitManager()?.openWithSplit(
+      { type: 'chat', id: response.value.id },
+      {
+        activate: true,
+        referredFrom: null,
+        preferNewSplit: request.metaKey,
+      }
+    );
+  };
 
   return (
-    <section class="relative py-8 sm:py-14">
+    <section class="relative">
       <style>{
         /*css*/ `
           @keyframes dashboard-hero-fade-up {
@@ -122,30 +130,21 @@ export function Hero() {
       }</style>
       <div class="dashboard-hero-stagger mx-auto flex max-w-3xl flex-col items-center gap-8">
         <div class="flex w-full items-center justify-between gap-3 sm:justify-center">
-          <AnimatedHeroLogo class="hidden @max-sm:hidden sm:size-6 text-accent sm:block" />
+          <AnimatedHeroLogo class="sm:size-6 text-accent" />
           <h1 class="relative min-w-0 text-balance text-2xl font-medium font-serif tracking-tight text-ink">
             {greeting()}, <span class="capitalize">{firstName()}</span>
           </h1>
-          <Button
-            variant="base"
-            size="icon-md"
-            class="relative shrink-0 rounded-lg bg-surface sm:hidden"
-            aria-label="Notifications"
-            onClick={() => setNotificationsOpen(true)}
-          >
-            <BellIcon class="size-4" />
-            <Show when={unreadNotifications().length > 0}>
-              <span class="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[0.625rem] font-bold text-surface">
-                {unreadNotifications().length > 99
-                  ? '99+'
-                  : unreadNotifications().length}
-              </span>
-            </Show>
-          </Button>
         </div>
 
         <div class="flex flex-col gap-4 w-full text-left">
-          <DashboardAiInput editor={chatEditor} />
+          <ChatInputProvider>
+            <ChatInput
+              variant="tall"
+              editor={editor}
+              onSend={handleSend}
+              isPersistent
+            />
+          </ChatInputProvider>
           <div class="w-full flex items-center justify-between">
             <PromptTemplatesSection onSelect={fillChatInput} />
           </div>
