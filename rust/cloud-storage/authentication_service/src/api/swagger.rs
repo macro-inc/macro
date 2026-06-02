@@ -20,7 +20,7 @@ use crate::api::email::generate_email_link::GenerateEmailLinkRequest;
 use crate::api::email::resend_fusionauth_verify_user_email::ResendFusionauthVerifyUserEmailRequest;
 use crate::api::jwt::macro_api_token::MacroApiTokenResponse;
 use crate::api::link::create_in_progress_link::CreateInProgressLinkResponse;
-use crate::api::link::github::InitGithubLinkResponse;
+use crate::api::link::github::{GithubLinkStatusResponse, InitGithubLinkResponse};
 use crate::api::link::gmail::InitGmailLinkResponse;
 use crate::api::merge::create_merge_request::CreateAccountMergeRequest;
 use crate::api::user::create_user::CreateUserRequest;
@@ -77,6 +77,7 @@ use model::user::{
                 link::create_in_progress_link::handler,
                 link::github::init_github_link_handler,
                 link::github::delete_github_link_handler,
+                link::github::check_github_link_status_handler,
                 link::gmail::init_gmail_link_handler,
 
                 /// /github_pull_requests
@@ -176,6 +177,7 @@ use model::user::{
                         GenerateEmailLinkRequest,
                         CreateInProgressLinkResponse,
                         InitGithubLinkResponse,
+                        GithubLinkStatusResponse,
                         InitGmailLinkResponse,
 
                         // GitHub pull requests
@@ -251,6 +253,25 @@ mod tests {
         assert_eq!(
             operation["responses"]["200"]["content"]["application/json"]["schema"]["$ref"].as_str(),
             Some("#/components/schemas/EnrichGithubPullRequestsResponse")
+        );
+        assert!(operation["responses"].get("428").is_some());
+    }
+
+    #[test]
+    fn github_link_status_openapi_includes_path_and_schema() {
+        let openapi = serde_json::to_value(ApiDoc::openapi()).unwrap();
+        let operation = &openapi["paths"]["/link/github/status"]["get"];
+
+        assert_eq!(operation["operationId"], "check_github_link_status");
+        assert_eq!(
+            operation["responses"]["200"]["content"]["application/json"]["schema"]["$ref"].as_str(),
+            Some("#/components/schemas/GithubLinkStatusResponse")
+        );
+        assert!(operation["responses"].get("428").is_some());
+        assert!(
+            openapi["components"]["schemas"]
+                .get("GithubLinkStatusResponse")
+                .is_some()
         );
     }
 

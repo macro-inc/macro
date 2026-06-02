@@ -15,6 +15,10 @@ impl axum::response::IntoResponse for crate::domain::models::GithubError {
             crate::domain::models::GithubError::NoLinkFound => {
                 (StatusCode::FORBIDDEN, "no account link found")
             }
+            crate::domain::models::GithubError::ReauthenticationRequired => (
+                StatusCode::PRECONDITION_REQUIRED,
+                "ReauthenticationRequired",
+            ),
             crate::domain::models::GithubError::AccountAlreadyLinked => {
                 (StatusCode::BAD_REQUEST, "account already linked")
             }
