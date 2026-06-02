@@ -2,7 +2,7 @@ import { useEmail } from '@core/context/user';
 import { useEmailLinksQuery } from '@queries/email/link';
 import type { ApiMessage } from '@service-email/generated/schemas';
 import type { LexicalEditor } from 'lexical';
-import { createEffect, createSignal, type Setter } from 'solid-js';
+import { createSignal, type Setter } from 'solid-js';
 import { createStore, reconcile, unwrap } from 'solid-js/store';
 import { decodeBase64Utf8 } from '../util/decodeBase64';
 import { TOGGLE_APPEND_EMAIL_THREAD_COMMAND } from '../util/prepareEmailBody';
@@ -169,24 +169,6 @@ export function createEmailFormState(
     ...getInitialState(),
   });
 
-  // getInitialState() resolves the owning inbox's email from the links query,
-  // which may still be loading — in which case the reply recipients above were
-  // computed against the account-email fallback. Recompute them once the inbox
-  // resolves, unless the recipients have already been set deliberately.
-  let recipientsSettled = false;
-  createEffect(() => {
-    const linkId = replyingTo?.link_id;
-    if (!replyingTo || draft || recipientsSettled || linkId == null) return;
-    const ownerResolved = linksQuery.data?.links.some((l) => l.id === linkId);
-    if (!ownerResolved) return;
-    const recomputed =
-      state.replyType === 'reply-all'
-        ? getReplyAllRecipients(replyingTo, inboxEmail())
-        : getReplyRecipientsFromParent(replyingTo, inboxEmail());
-    setState('recipients', recomputed);
-    recipientsSettled = true;
-  });
-
   const [onDirtyCb, setOnDirtyCb] = createSignal<(() => void) | undefined>();
 
   const [onReplyTypeAppliedCb, setOnReplyTypeAppliedCb] = createSignal<
@@ -231,7 +213,6 @@ export function createEmailFormState(
     value: EmailRecipient[]
   ) => {
     setState('recipients', field, value);
-    recipientsSettled = true;
     callDirty();
     const recipients = state.recipients;
     const all = [...recipients.to, ...recipients.cc, ...recipients.bcc];
