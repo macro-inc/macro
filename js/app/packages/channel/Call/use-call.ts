@@ -164,19 +164,25 @@ export function useCall(channelId: () => string, options?: UseCallOptions) {
           native.connectionState !== 'disconnected' &&
           native.connectionState !== 'disconnecting'
         ) {
-          console.info('[callkit] native call snapshot matched; skipping JS connect', {
-            channelId: id,
-            callId: native.callId,
-            connectionState: native.connectionState,
-          });
+          console.info(
+            '[callkit] native call snapshot matched; skipping JS connect',
+            {
+              channelId: id,
+              callId: native.callId,
+              connectionState: native.connectionState,
+            }
+          );
           callCtx.rollbackOptimisticJoin();
           return;
         }
 
-        console.info('[callkit] no matching native call snapshot; requesting JS call token', {
-          channelId: id,
-          native,
-        });
+        console.info(
+          '[callkit] no matching native call snapshot; requesting JS call token',
+          {
+            channelId: id,
+            native,
+          }
+        );
         // Call the join API directly so a timed-out join attempt cannot leave
         // `useJoinCallMutation` stuck pending and block the next retry.
         const [tokenResponse] = await Promise.all([

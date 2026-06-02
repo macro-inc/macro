@@ -10,12 +10,28 @@ struct WatchCallEndedArgs: Decodable {
     let channel: Channel
 }
 
+struct WatchConnectionStateArgs: Decodable {
+    let channel: Channel
+}
+
+struct WatchDrawerOpenedArgs: Decodable {
+    let channel: Channel
+}
+
+struct WatchParticipantIdentitiesArgs: Decodable {
+    let channel: Channel
+}
+
 struct SetVideoEnabledArgs: Decodable {
     let enabled: Bool
 }
 
 struct SetVideoOverlayModeArgs: Decodable {
     let mode: String
+}
+
+struct SetCallDrawerChannelTitleArgs: Decodable {
+    let channelTitle: String?
 }
 
 /// Tauri command/event facade; platform work lives in the coordinator/session.
@@ -27,6 +43,9 @@ class CallKitPlugin: Plugin, @unchecked Sendable {
     // Singleton channels avoid leaking listeners across webview reloads/HMR.
     private var callAnsweredChannel: Channel?
     private var callEndedChannel: Channel?
+    private var connectionStateChannel: Channel?
+    private var drawerOpenedChannel: Channel?
+    private var participantIdentitiesChannel: Channel?
 
     override public func load(webview: WKWebView) {
         print("[CallKit] Tauri CallKitPlugin loading")
@@ -37,6 +56,8 @@ class CallKitPlugin: Plugin, @unchecked Sendable {
                     return NativeLiveKitCallSession(
                         onSnapshotChanged: { _ in },
                         requestSystemEndCall: { _ in },
+                        onDrawerOpened: { _ in },
+                        onParticipantIdentitiesChanged: { _ in },
                         videoOverlay: CallVideoOverlayController()
                     )
                 }
@@ -88,6 +109,33 @@ class CallKitPlugin: Plugin, @unchecked Sendable {
         }
     }
 
+    @objc public func watchConnectionState(_ invoke: Invoke) throws {
+        let args = try invoke.parseArgs(WatchConnectionStateArgs.self)
+        onMain { [weak self] in
+            print("[CallKit] JS registered connection state watcher")
+            self?.connectionStateChannel = args.channel
+            invoke.resolve()
+        }
+    }
+
+    @objc public func watchDrawerOpened(_ invoke: Invoke) throws {
+        let args = try invoke.parseArgs(WatchDrawerOpenedArgs.self)
+        onMain { [weak self] in
+            print("[CallKit] JS registered drawer opened watcher")
+            self?.drawerOpenedChannel = args.channel
+            invoke.resolve()
+        }
+    }
+
+    @objc public func watchParticipantIdentities(_ invoke: Invoke) throws {
+        let args = try invoke.parseArgs(WatchParticipantIdentitiesArgs.self)
+        onMain { [weak self] in
+            print("[CallKit] JS registered participant identities watcher")
+            self?.participantIdentitiesChannel = args.channel
+            invoke.resolve()
+        }
+    }
+
     @objc public func getVoipToken(_ invoke: Invoke) {
         onMain { [weak self] in
             print("[CallKit] JS requested cached VoIP token")
@@ -115,6 +163,7 @@ class CallKitPlugin: Plugin, @unchecked Sendable {
             }
 
             print("[CallKit] JS requested active call state: \(snapshot.connectionState) channelId=\(snapshot.channelId) callId=\(snapshot.callId)")
+            let participantIdentities = self?.mediaSession?.currentParticipantIdentities() ?? []
             invoke.resolve([
                 "state": [
                     "channelId": snapshot.channelId,
@@ -123,6 +172,7 @@ class CallKitPlugin: Plugin, @unchecked Sendable {
                     "isAudioMuted": snapshot.isAudioMuted,
                     "isVideoMuted": snapshot.isVideoMuted,
                     "videoOverlayMode": snapshot.videoOverlayMode,
+                    "participantIdentities": participantIdentities,
                 ] as JsonObject
             ])
         }
@@ -161,6 +211,27 @@ class CallKitPlugin: Plugin, @unchecked Sendable {
         }
     }
 
+    @objc public func setCallDrawerChannelTitle(_ invoke: Invoke) throws {
+        let args = try invoke.parseArgs(SetCallDrawerChannelTitleArgs.self)
+        onMain { [weak self] in
+            print("[CallKit] JS requested call drawer channelTitle=\(args.channelTitle ?? "nil")")
+            self?.videoOverlay.setChannelTitle(args.channelTitle)
+            invoke.resolve()
+        }
+    }
+
+    @objc public func setParticipantDisplayName(_ invoke: Invoke) throws {
+        let args = try invoke.parseArgs(SetParticipantDisplayNameArgs.self)
+        onMain { [weak self] in
+            print("[CallKit] JS requested participant display name identity=\(args.identity) displayName=\(args.displayName ?? "nil")")
+            self?.getMediaSession().setParticipantDisplayName(
+                identity: args.identity,
+                displayName: args.displayName
+            )
+            invoke.resolve()
+        }
+    }
+
     @objc public func switchCamera(_ invoke: Invoke) {
         onMain { [weak self] in
             print("[CallKit] JS requested native camera switch")
@@ -170,9 +241,9 @@ class CallKitPlugin: Plugin, @unchecked Sendable {
     }
 
     private func emitConnectionState(_ snapshot: ActiveCallSnapshot?) {
-        let payload: JSObject
+        let payload: JsonObject
         if let snapshot {
-            print("[CallKit] Triggering connection-state event state=\(snapshot.connectionState) channelId=\(snapshot.channelId) callId=\(snapshot.callId)")
+            print("[CallKit] Sending connection state channel message state=\(snapshot.connectionState) channelId=\(snapshot.channelId) callId=\(snapshot.callId)")
             payload = [
                 "state": snapshot.connectionState,
                 "channelId": snapshot.channelId,
@@ -182,7 +253,7 @@ class CallKitPlugin: Plugin, @unchecked Sendable {
                 "videoOverlayMode": snapshot.videoOverlayMode,
             ]
         } else {
-            print("[CallKit] Triggering connection-state event state=disconnected")
+            print("[CallKit] Sending connection state channel message state=disconnected")
             payload = [
                 "state": "disconnected",
                 "channelId": NSNull(),
@@ -192,7 +263,31 @@ class CallKitPlugin: Plugin, @unchecked Sendable {
                 "videoOverlayMode": "hidden",
             ]
         }
-        trigger("connection-state", data: payload)
+        guard let channel = connectionStateChannel else {
+            print("[CallKit] No JS connection state channel registered")
+            return
+        }
+        channel.send(payload)
+    }
+
+    private func emitDrawerOpened(channelId: String) {
+        guard let channel = drawerOpenedChannel else {
+            print("[CallKit] No JS drawer opened channel registered channelId=\(channelId)")
+            return
+        }
+        print("[CallKit] Sending drawer opened channel message channelId=\(channelId)")
+        let payload: JsonObject = ["channelId": channelId]
+        channel.send(payload)
+    }
+
+    private func emitParticipantIdentities(_ identities: [String]) {
+        guard let channel = participantIdentitiesChannel else {
+            print("[CallKit] No JS participant identities channel registered identities=\(identities)")
+            return
+        }
+        print("[CallKit] Sending participant identities channel message identities=\(identities)")
+        let payload: JsonObject = ["identities": identities]
+        channel.send(payload)
     }
 
     private func getMediaSession() -> NativeLiveKitCallSession {
@@ -208,6 +303,12 @@ class CallKitPlugin: Plugin, @unchecked Sendable {
             },
             requestSystemEndCall: { [weak self] uuid in
                 self?.callCoordinator.requestEndCall(uuid: uuid)
+            },
+            onDrawerOpened: { [weak self] channelId in
+                self?.emitDrawerOpened(channelId: channelId)
+            },
+            onParticipantIdentitiesChanged: { [weak self] identities in
+                self?.emitParticipantIdentities(identities)
             },
             videoOverlay: videoOverlay
         )

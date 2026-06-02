@@ -11,7 +11,7 @@ enum CallVideoOverlayMode: String {
 struct NativeVideoParticipant {
     let id: String
     let title: String
-    let track: VideoTrack
+    let track: VideoTrack?
     let isSpeaking: Bool
     let isPinned: Bool
     let isScreenShare: Bool
@@ -22,7 +22,12 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, @
     private let rootView = PassthroughOverlayView()
     private let drawerView = UIView()
     private let drawerHandle = UIView()
+    private let channelTitleLabel = UILabel()
+    private let leaveButton = UIButton(type: .system)
     private let primaryVideoView = VideoView()
+    private let primaryPlaceholderView = UIView()
+    private let primaryInitialsLabel = UILabel()
+    private let primaryParticipantLabel = UILabel()
     private let stripScrollView = UIScrollView()
     private let stripStackView = UIStackView()
     private let localPreviewView = VideoView()
@@ -30,7 +35,6 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, @
     private let microphoneButton = UIButton(type: .system)
     private let cameraButton = UIButton(type: .system)
     private let switchCameraButton = UIButton(type: .system)
-    private let endCallButton = UIButton(type: .system)
     private let thumbnailView = UIView()
     private let thumbnailLocalVideoView = VideoView()
     private let thumbnailRemoteVideoView = VideoView()
@@ -42,16 +46,19 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, @
     var onSwitchCamera: (() -> Void)?
     var onEndCall: (() -> Void)?
     var onSelectRemoteParticipant: ((String) -> Void)?
+    var onOpenDrawerFromThumbnail: (() -> Void)?
 
     private var mode: CallVideoOverlayMode = .hidden
     private var thumbnailCorner: ThumbnailCorner = .topRight
     private var didAutoPresent = false
     private var isAudioMuted = false
     private var isLocalVideoEnabled = false
+    private var channelTitle = "Call"
     private var localVideoTrack: VideoTrack?
     private var renderedLocalPreviewTrack: VideoTrack?
     private var remoteVideoParticipants: [NativeVideoParticipant] = []
     private var primaryRemoteParticipantId: String?
+    private var primaryRemoteParticipantTitle: String?
     private var primaryRemoteVideoTrack: VideoTrack?
     private var renderedThumbnailLocalVideoTrack: VideoTrack?
     private var renderedThumbnailRemoteVideoTrack: VideoTrack?
@@ -85,6 +92,21 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, @
         }
     }
 
+    func setChannelTitle(_ title: String?) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            let trimmedTitle = title?.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let trimmedTitle, !trimmedTitle.isEmpty {
+                self.channelTitle = trimmedTitle
+            } else {
+                self.channelTitle = "Call"
+            }
+            self.channelTitleLabel.text = self.channelTitle
+            self.layoutOverlay()
+            print("[CallKit] Native video overlay channelTitle=\(self.channelTitle)")
+        }
+    }
+
     func presentForActiveCallIfNeeded() {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
@@ -104,6 +126,7 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, @
             self.attachToBestAvailableParent()
             self.remoteVideoParticipants = []
             self.primaryRemoteParticipantId = nil
+            self.primaryRemoteParticipantTitle = nil
             self.primaryRemoteVideoTrack = track
             self.rebuildParticipantStrip()
             self.primaryVideoView.track = track
@@ -128,6 +151,7 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, @
 
             let primary = participants.first(where: { $0.id == primaryId }) ?? participants.first
             self.primaryRemoteVideoTrack = primary?.track
+            self.primaryRemoteParticipantTitle = primary.map { $0.isScreenShare ? "Screen" : $0.title }
             self.primaryVideoView.track = primary?.track
             self.updateVideoRenderTargets()
             self.rebuildParticipantStrip()
@@ -192,6 +216,7 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, @
             self.renderedLocalPreviewTrack = nil
             self.remoteVideoParticipants = []
             self.primaryRemoteParticipantId = nil
+            self.primaryRemoteParticipantTitle = nil
             self.primaryRemoteVideoTrack = nil
             self.renderedThumbnailLocalVideoTrack = nil
             self.renderedThumbnailRemoteVideoTrack = nil
@@ -200,6 +225,8 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, @
             self.isLocalVideoEnabled = false
             self.mode = .hidden
             self.didAutoPresent = false
+            self.channelTitle = "Call"
+            self.channelTitleLabel.text = self.channelTitle
             self.configureControlState()
             self.layoutOverlay()
             print("[CallKit] Native video overlay reset")
@@ -239,9 +266,44 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, @
         drawerHandle.layer.cornerRadius = 2
         drawerView.addSubview(drawerHandle)
 
+        channelTitleLabel.text = channelTitle
+        channelTitleLabel.textColor = .white
+        channelTitleLabel.font = .systemFont(ofSize: 17, weight: .semibold)
+        channelTitleLabel.lineBreakMode = .byTruncatingTail
+        drawerView.addSubview(channelTitleLabel)
+
+        leaveButton.tintColor = .white
+        leaveButton.backgroundColor = UIColor.systemRed.withAlphaComponent(0.92)
+        leaveButton.layer.cornerRadius = 16
+        leaveButton.clipsToBounds = true
+        leaveButton.titleLabel?.font = .systemFont(ofSize: 15, weight: .semibold)
+        leaveButton.setTitle("Leave", for: .normal)
+        leaveButton.addTarget(self, action: #selector(endCall), for: .touchUpInside)
+        drawerView.addSubview(leaveButton)
+
         primaryVideoView.layoutMode = .fill
         primaryVideoView.backgroundColor = .black
         drawerView.addSubview(primaryVideoView)
+
+        primaryPlaceholderView.backgroundColor = UIColor(white: 0.06, alpha: 1)
+        drawerView.addSubview(primaryPlaceholderView)
+
+        primaryInitialsLabel.textColor = .white
+        primaryInitialsLabel.textAlignment = .center
+        primaryInitialsLabel.font = .systemFont(ofSize: 34, weight: .semibold)
+        primaryInitialsLabel.backgroundColor = UIColor.white.withAlphaComponent(0.16)
+        primaryInitialsLabel.layer.cornerRadius = 38
+        primaryInitialsLabel.clipsToBounds = true
+        primaryPlaceholderView.addSubview(primaryInitialsLabel)
+
+        primaryParticipantLabel.textColor = .white
+        primaryParticipantLabel.font = .systemFont(ofSize: 14, weight: .semibold)
+        primaryParticipantLabel.lineBreakMode = .byTruncatingTail
+        primaryParticipantLabel.backgroundColor = UIColor.black.withAlphaComponent(0.48)
+        primaryParticipantLabel.textAlignment = .left
+        primaryParticipantLabel.layer.cornerRadius = 12
+        primaryParticipantLabel.clipsToBounds = true
+        drawerView.addSubview(primaryParticipantLabel)
 
         stripScrollView.showsHorizontalScrollIndicator = false
         stripScrollView.alwaysBounceHorizontal = true
@@ -270,11 +332,9 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, @
         configureControlButton(microphoneButton, systemImageName: "mic.fill", action: #selector(toggleMicrophone))
         configureControlButton(cameraButton, systemImageName: "video.slash.fill", action: #selector(toggleCamera))
         configureControlButton(switchCameraButton, systemImageName: "camera.rotate.fill", action: #selector(switchCamera))
-        configureControlButton(endCallButton, systemImageName: "phone.down.fill", action: #selector(endCall))
         controlsView.addArrangedSubview(microphoneButton)
         controlsView.addArrangedSubview(cameraButton)
         controlsView.addArrangedSubview(switchCameraButton)
-        controlsView.addArrangedSubview(endCallButton)
         configureControlState()
 
         let minimizeTap = UITapGestureRecognizer(target: self, action: #selector(minimizeFromDrawer))
@@ -340,7 +400,6 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, @
             ? UIColor.white.withAlphaComponent(0.16)
             : UIColor.systemRed.withAlphaComponent(0.86)
         switchCameraButton.isHidden = !isLocalVideoEnabled
-        endCallButton.backgroundColor = UIColor.systemRed.withAlphaComponent(0.92)
         localPreviewView.isHidden = !isLocalVideoEnabled
     }
 
@@ -411,10 +470,18 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, @
 
         drawerView.isHidden = mode != .expanded
         thumbnailView.isHidden = mode != .minimized
-        edgeTabView.isHidden = mode != .hidden || primaryVideoView.track == nil
+        edgeTabView.isHidden = mode != .hidden || primaryRemoteParticipantTitle == nil
+        rootView.blocksBackgroundTouches = mode == .expanded
 
         drawerView.frame = drawerFrame(in: bounds)
         drawerHandle.frame = CGRect(x: (drawerView.bounds.width - 42) / 2, y: 10, width: 42, height: 4)
+        leaveButton.frame = CGRect(x: drawerView.bounds.width - 80, y: 18, width: 64, height: 32)
+        channelTitleLabel.frame = CGRect(
+            x: 16,
+            y: 18,
+            width: max(0, leaveButton.frame.minX - 28),
+            height: 32
+        )
         updateVideoRenderTargets()
 
         let stripParticipantCount = stripParticipants.count
@@ -424,9 +491,28 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, @
         let stripTop = controlsTop - stripHeight - (stripHeight > 0 ? 14 : 0)
         primaryVideoView.frame = CGRect(
             x: 0,
-            y: 24,
+            y: 62,
             width: drawerView.bounds.width,
-            height: max(0, stripTop - 24)
+            height: max(0, stripTop - 62)
+        )
+        let primaryHasParticipant = primaryRemoteParticipantTitle != nil
+        let primaryHasVideo = primaryRemoteVideoTrack != nil
+        primaryPlaceholderView.frame = primaryVideoView.frame
+        primaryPlaceholderView.isHidden = !primaryHasParticipant || primaryHasVideo
+        primaryInitialsLabel.text = primaryRemoteParticipantTitle.map(initials)
+        primaryInitialsLabel.frame = CGRect(
+            x: (primaryPlaceholderView.bounds.width - 76) / 2,
+            y: (primaryPlaceholderView.bounds.height - 76) / 2,
+            width: 76,
+            height: 76
+        )
+        primaryParticipantLabel.text = primaryRemoteParticipantTitle.map { "  \($0)  " }
+        primaryParticipantLabel.isHidden = primaryRemoteParticipantTitle == nil
+        primaryParticipantLabel.frame = CGRect(
+            x: 14,
+            y: primaryVideoView.frame.maxY - 42,
+            width: min(220, max(0, drawerView.bounds.width - 28)),
+            height: 28
         )
 
         stripScrollView.isHidden = stripHeight == 0
@@ -479,6 +565,20 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, @
         edgeTabView.text = "‹"
     }
 
+    private func initials(from title: String) -> String {
+        let words = title
+            .split { $0.isWhitespace || $0 == "@" || $0 == "." || $0 == "|" }
+            .map(String.init)
+            .filter { !$0.isEmpty && $0.lowercased() != "macro" }
+        if words.count >= 2 {
+            return "\(words[0].prefix(1))\(words[1].prefix(1))".uppercased()
+        }
+        if let first = words.first {
+            return String(first.prefix(1)).uppercased()
+        }
+        return "?"
+    }
+
     private func thumbnailFrame(
         for corner: ThumbnailCorner,
         size: CGSize,
@@ -521,6 +621,7 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, @
     }
 
     @objc private func expandFromThumbnail() {
+        onOpenDrawerFromThumbnail?()
         setMode(.expanded)
     }
 
@@ -633,6 +734,8 @@ private enum ThumbnailCorner {
 
 private final class RemoteVideoTileView: UIControl {
     private let videoView = VideoView()
+    private let placeholderView = UIView()
+    private let initialsLabel = UILabel()
     private let label = UILabel()
     private let speakingIndicator = UIView()
     private var participantId: String?
@@ -652,6 +755,8 @@ private final class RemoteVideoTileView: UIControl {
     func configure(participant: NativeVideoParticipant, isPrimary: Bool) {
         participantId = participant.id
         videoView.track = participant.track
+        placeholderView.isHidden = participant.track != nil
+        initialsLabel.text = initials(from: participant.title)
         label.text = participant.isScreenShare ? "Screen" : participant.title
         speakingIndicator.isHidden = !participant.isSpeaking
         layer.borderColor = (isPrimary ? UIColor.white : UIColor.white.withAlphaComponent(0.18)).cgColor
@@ -660,6 +765,7 @@ private final class RemoteVideoTileView: UIControl {
 
     func prepareForRemoval() {
         videoView.track = nil
+        placeholderView.isHidden = false
         onTap = nil
         participantId = nil
     }
@@ -680,6 +786,17 @@ private final class RemoteVideoTileView: UIControl {
         videoView.backgroundColor = .black
         addSubview(videoView)
 
+        placeholderView.backgroundColor = UIColor(white: 0.08, alpha: 1)
+        addSubview(placeholderView)
+
+        initialsLabel.textColor = .white
+        initialsLabel.textAlignment = .center
+        initialsLabel.font = .systemFont(ofSize: 18, weight: .semibold)
+        initialsLabel.backgroundColor = UIColor.white.withAlphaComponent(0.16)
+        initialsLabel.layer.cornerRadius = 22
+        initialsLabel.clipsToBounds = true
+        placeholderView.addSubview(initialsLabel)
+
         label.textColor = .white
         label.font = .systemFont(ofSize: 12, weight: .semibold)
         label.lineBreakMode = .byTruncatingTail
@@ -697,8 +814,29 @@ private final class RemoteVideoTileView: UIControl {
     override func layoutSubviews() {
         super.layoutSubviews()
         videoView.frame = bounds
+        placeholderView.frame = bounds
+        initialsLabel.frame = CGRect(
+            x: (bounds.width - 44) / 2,
+            y: (bounds.height - 44) / 2,
+            width: 44,
+            height: 44
+        )
         label.frame = CGRect(x: 0, y: bounds.height - 24, width: bounds.width, height: 24)
         speakingIndicator.frame = CGRect(x: bounds.width - 14, y: 8, width: 8, height: 8)
+    }
+
+    private func initials(from title: String) -> String {
+        let words = title
+            .split { $0.isWhitespace || $0 == "@" || $0 == "." || $0 == "|" }
+            .map(String.init)
+            .filter { !$0.isEmpty && $0.lowercased() != "macro" }
+        if words.count >= 2 {
+            return "\(words[0].prefix(1))\(words[1].prefix(1))".uppercased()
+        }
+        if let first = words.first {
+            return String(first.prefix(1)).uppercased()
+        }
+        return "?"
     }
 
     @objc private func tapped() {
@@ -709,6 +847,7 @@ private final class RemoteVideoTileView: UIControl {
 
 private final class PassthroughOverlayView: UIView {
     var onLayout: (() -> Void)?
+    var blocksBackgroundTouches = false
 
     override func layoutSubviews() {
         super.layoutSubviews()
@@ -717,6 +856,9 @@ private final class PassthroughOverlayView: UIView {
 
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         let hit = super.hitTest(point, with: event)
-        return hit === self ? nil : hit
+        if hit === self {
+            return blocksBackgroundTouches ? self : nil
+        }
+        return hit
     }
 }

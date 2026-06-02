@@ -114,6 +114,58 @@ Denies the get_voip_token command without any pre-configured scope.
 <tr>
 <td>
 
+`call-kit:allow-set-call-drawer-channel-title`
+
+</td>
+<td>
+
+Enables the set_call_drawer_channel_title command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`call-kit:deny-set-call-drawer-channel-title`
+
+</td>
+<td>
+
+Denies the set_call_drawer_channel_title command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`call-kit:allow-set-participant-display-name`
+
+</td>
+<td>
+
+Enables the set_participant_display_name command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`call-kit:deny-set-participant-display-name`
+
+</td>
+<td>
+
+Denies the set_participant_display_name command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
 `call-kit:allow-set-video-enabled`
 
 </td>
@@ -237,6 +289,84 @@ Enables the watch_call_ended command without any pre-configured scope.
 <td>
 
 Denies the watch_call_ended command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`call-kit:allow-watch-connection-state`
+
+</td>
+<td>
+
+Enables the watch_connection_state command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`call-kit:deny-watch-connection-state`
+
+</td>
+<td>
+
+Denies the watch_connection_state command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`call-kit:allow-watch-drawer-opened`
+
+</td>
+<td>
+
+Enables the watch_drawer_opened command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`call-kit:deny-watch-drawer-opened`
+
+</td>
+<td>
+
+Denies the watch_drawer_opened command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`call-kit:allow-watch-participant-identities`
+
+</td>
+<td>
+
+Enables the watch_participant_identities command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`call-kit:deny-watch-participant-identities`
+
+</td>
+<td>
+
+Denies the watch_participant_identities command without any pre-configured scope.
 
 </td>
 </tr>

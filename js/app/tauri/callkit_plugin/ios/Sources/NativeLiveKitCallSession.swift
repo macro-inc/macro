@@ -7,6 +7,8 @@ import LiveKit
 final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendable {
     private let onSnapshotChanged: (ActiveCallSnapshot?) -> Void
     private let requestSystemEndCall: (UUID) -> Void
+    private let onDrawerOpened: (String) -> Void
+    private let onParticipantIdentitiesChanged: ([String]) -> Void
     private let videoOverlay: CallVideoOverlayController
 
     private var room: Room?
@@ -15,6 +17,7 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
     private var activeCall: ActiveCallSnapshot?
     private var pinnedRemoteVideoParticipantId: String?
     private var speakingRemoteParticipantIds: [String] = []
+    private var participantDisplayNamesByIdentity: [String: String] = [:]
     private var didPrepareAudio = false
     private var isCallKitAudioActive = false
     private let audioEngineLogger = CallKitAudioEngineLogger()
@@ -22,10 +25,14 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
     init(
         onSnapshotChanged: @escaping (ActiveCallSnapshot?) -> Void,
         requestSystemEndCall: @escaping (UUID) -> Void,
+        onDrawerOpened: @escaping (String) -> Void,
+        onParticipantIdentitiesChanged: @escaping ([String]) -> Void,
         videoOverlay: CallVideoOverlayController
     ) {
         self.onSnapshotChanged = onSnapshotChanged
         self.requestSystemEndCall = requestSystemEndCall
+        self.onDrawerOpened = onDrawerOpened
+        self.onParticipantIdentitiesChanged = onParticipantIdentitiesChanged
         self.videoOverlay = videoOverlay
         super.init()
         configureLiveKitAudioForCallKit()
@@ -43,6 +50,11 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
         }
         videoOverlay.onSelectRemoteParticipant = { [weak self] participantId in
             self?.togglePinnedRemoteVideoParticipant(participantId)
+        }
+        videoOverlay.onOpenDrawerFromThumbnail = { [weak self] in
+            guard let channelId = self?.activeCall?.channelId else { return }
+            print("[CallKit] Native video overlay opened from thumbnail channelId=\(channelId)")
+            self?.onDrawerOpened(channelId)
         }
         print("[CallKit] NativeLiveKitCallSession initialized")
     }
@@ -113,6 +125,11 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
         activeCall
     }
 
+    func currentParticipantIdentities() -> [String] {
+        guard let room else { return [] }
+        return participantIdentities(from: room)
+    }
+
     func connect(uuid: UUID, channelId: String, serverUrl: String, token: String) {
         print("[CallKit] Native LiveKit connect requested uuid=\(uuid.uuidString) channelId=\(channelId)")
         prepareForCallKitAudio()
@@ -151,7 +168,16 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
             do {
                 print("[CallKit] Connecting LiveKit room uuid=\(uuid.uuidString)")
                 try await newRoom.connect(url: serverUrl, token: token)
+                guard self.activeCallUUID == uuid, self.room === newRoom else {
+                    print("[CallKit] Ignoring LiveKit connect completion for stale room uuid=\(uuid.uuidString)")
+                    return
+                }
                 print("[CallKit] LiveKit room connected uuid=\(uuid.uuidString) roomSid=\(self.describeOptional(newRoom.sid)) remoteCount=\(newRoom.remoteParticipants.count)")
+                print("[CallKit] LiveKit local participant \(self.describeParticipant(newRoom.localParticipant))")
+                for participant in newRoom.remoteParticipants.values {
+                    print("[CallKit] LiveKit existing remote participant \(self.describeParticipant(participant))")
+                }
+                self.emitParticipantIdentities(from: newRoom)
                 self.videoOverlay.presentForActiveCallIfNeeded()
                 self.rebuildRemoteVideoLayout(from: newRoom)
             } catch is CancellationError {
@@ -198,12 +224,17 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
         let toDisconnect: Room? = await MainActor.run {
             self.connectTask?.cancel()
             self.connectTask = nil
+            if self.isCallKitAudioActive {
+                self.deactivateAudioEngine()
+            }
             let r = self.room
             self.room = nil
             self.activeCallUUID = nil
             self.activeCall = nil
             self.pinnedRemoteVideoParticipantId = nil
             self.speakingRemoteParticipantIds = []
+            self.participantDisplayNamesByIdentity = [:]
+            self.onParticipantIdentitiesChanged([])
             self.emitSnapshot()
             self.videoOverlay.reset()
             return r
@@ -249,6 +280,28 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
                 self.updateAudioMuted(true, room: room, uuid: uuid)
             }
         }
+    }
+
+    func setParticipantDisplayName(identity: String, displayName: String?) {
+        let trimmedIdentity = identity.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedIdentity = normalizedParticipantIdentity(trimmedIdentity)
+        let trimmedName = displayName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let trimmedName, !trimmedName.isEmpty {
+            participantDisplayNamesByIdentity[trimmedIdentity] = trimmedName
+            participantDisplayNamesByIdentity[normalizedIdentity] = trimmedName
+        } else {
+            participantDisplayNamesByIdentity.removeValue(forKey: trimmedIdentity)
+            participantDisplayNamesByIdentity.removeValue(forKey: normalizedIdentity)
+        }
+
+        print("[CallKit] Native LiveKit participant display name set identity=\(trimmedIdentity) normalizedIdentity=\(normalizedIdentity) displayName=\(participantDisplayNamesByIdentity[normalizedIdentity] ?? "nil")")
+        if let room {
+            rebuildRemoteVideoLayout(from: room)
+        }
+    }
+
+    func setChannelTitle(_ title: String?) {
+        videoOverlay.setChannelTitle(title)
     }
 
     func setVideoEnabled(_ enabled: Bool) {
@@ -385,38 +438,44 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
     }
 
     func room(_ room: Room, participantDidConnect participant: RemoteParticipant) {
-        print("[CallKit] LiveKit remote participant connected participantSid=\(describeOptional(participant.sid)) remoteCount=\(room.remoteParticipants.count)")
+        print("[CallKit] LiveKit remote participant connected \(describeParticipant(participant)) remoteCount=\(room.remoteParticipants.count)")
+        emitParticipantIdentities(from: room)
         rebuildRemoteVideoLayout(from: room)
     }
 
     func room(_ room: Room, participantDidDisconnect participant: RemoteParticipant) {
-        print("[CallKit] LiveKit remote participant disconnected participantSid=\(describeOptional(participant.sid)) remoteCount=\(room.remoteParticipants.count)")
+        print("[CallKit] LiveKit remote participant disconnected \(describeParticipant(participant)) remoteCount=\(room.remoteParticipants.count)")
         let id = participantId(participant)
         if pinnedRemoteVideoParticipantId == id {
             pinnedRemoteVideoParticipantId = nil
         }
         speakingRemoteParticipantIds.removeAll { $0 == id }
+        emitParticipantIdentities(from: room)
         rebuildRemoteVideoLayout(from: room)
     }
 
     func room(_ room: Room, didUpdateSpeakingParticipants participants: [Participant]) {
         speakingRemoteParticipantIds = participants
-            .filter { $0 is RemoteParticipant }
+            .filter { $0 is RemoteParticipant && !isAgentParticipant($0) }
             .map { participantId($0) }
-        print("[CallKit] LiveKit speaking participants updated ids=\(speakingRemoteParticipantIds)")
+        print("[CallKit] LiveKit speaking participants updated participants=\(participants.map { describeParticipant($0) })")
         rebuildRemoteVideoLayout(from: room)
     }
 
     func room(_ room: Room, participant: Participant, didUpdateState state: ParticipantState) {
-        print("[CallKit] LiveKit participant state updated participantSid=\(describeOptional(participant.sid)) state=\(state)")
+        print("[CallKit] LiveKit participant state updated \(describeParticipant(participant)) state=\(state)")
     }
 
     func room(_ room: Room, participant: Participant, didUpdateConnectionQuality quality: ConnectionQuality) {
-        print("[CallKit] LiveKit participant quality updated participantSid=\(describeOptional(participant.sid)) quality=\(quality)")
+        print("[CallKit] LiveKit participant quality updated \(describeParticipant(participant)) quality=\(quality)")
     }
 
     func room(_ room: Room, participant: LocalParticipant, didPublishTrack publication: LocalTrackPublication) {
-        print("[CallKit] LiveKit local track published \(describe(publication))")
+        print("[CallKit] LiveKit local track published \(describeParticipant(participant)) \(describe(publication))")
+        guard isCurrentRoom(room) else {
+            print("[CallKit] Ignoring local track publish from stale room")
+            return
+        }
         if let track = publication.track as? VideoTrack, publication.source == .camera {
             videoOverlay.setLocalVideoTrack(track)
             updateVideoMuted(false, overlayMode: "expanded")
@@ -424,7 +483,11 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
     }
 
     func room(_ room: Room, participant: LocalParticipant, didUnpublishTrack publication: LocalTrackPublication) {
-        print("[CallKit] LiveKit local track unpublished \(describe(publication))")
+        print("[CallKit] LiveKit local track unpublished \(describeParticipant(participant)) \(describe(publication))")
+        guard isCurrentRoom(room) else {
+            print("[CallKit] Ignoring local track unpublish from stale room")
+            return
+        }
         if publication.source == .camera {
             videoOverlay.setLocalVideoTrack(nil)
             updateVideoMuted(true, overlayMode: activeCall?.videoOverlayMode)
@@ -432,18 +495,18 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
     }
 
     func room(_ room: Room, participant: LocalParticipant, remoteDidSubscribeTrack publication: LocalTrackPublication) {
-        print("[CallKit] LiveKit remote subscribed to local track \(describe(publication))")
+        print("[CallKit] LiveKit remote subscribed to local track \(describeParticipant(participant)) \(describe(publication))")
     }
 
     func room(_ room: Room, participant: RemoteParticipant, didPublishTrack publication: RemoteTrackPublication) {
-        print("[CallKit] LiveKit remote track published participantSid=\(describeOptional(participant.sid)) \(describe(publication))")
+        print("[CallKit] LiveKit remote track published \(describeParticipant(participant)) \(describe(publication))")
         if publication.kind == .video {
             rebuildRemoteVideoLayout(from: room)
         }
     }
 
     func room(_ room: Room, participant: RemoteParticipant, didSubscribeTrack publication: RemoteTrackPublication) {
-        print("[CallKit] LiveKit remote track subscribed participantSid=\(describeOptional(participant.sid)) \(describe(publication))")
+        print("[CallKit] LiveKit remote track subscribed \(describeParticipant(participant)) \(describe(publication))")
         if publication.track is VideoTrack, isRemoteVideoSource(publication.source) {
             rebuildRemoteVideoLayout(from: room)
             setVideoOverlayMode(.expanded)
@@ -451,14 +514,14 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
     }
 
     func room(_ room: Room, participant: RemoteParticipant, didUnsubscribeTrack publication: RemoteTrackPublication) {
-        print("[CallKit] LiveKit remote track unsubscribed participantSid=\(describeOptional(participant.sid)) \(describe(publication))")
+        print("[CallKit] LiveKit remote track unsubscribed \(describeParticipant(participant)) \(describe(publication))")
         if isRemoteVideoSource(publication.source) {
             rebuildRemoteVideoLayout(from: room)
         }
     }
 
     func room(_ room: Room, participant: RemoteParticipant, didFailToSubscribeTrackWithSid trackSid: Track.Sid, error: LiveKitError) {
-        print("[CallKit] LiveKit remote track subscribe failed participantSid=\(describeOptional(participant.sid)) trackSid=\(trackSid) error=\(error)")
+        print("[CallKit] LiveKit remote track subscribe failed \(describeParticipant(participant)) trackSid=\(trackSid) error=\(error)")
     }
 
     func room(
@@ -467,7 +530,7 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
         trackPublication: TrackPublication,
         didUpdateIsMuted isMuted: Bool
     ) {
-        print("[CallKit] LiveKit track mute updated participantSid=\(describeOptional(participant.sid)) \(describe(trackPublication)) muted=\(isMuted)")
+        print("[CallKit] LiveKit track mute updated \(describeParticipant(participant)) \(describe(trackPublication)) muted=\(isMuted)")
         if participant is RemoteParticipant, trackPublication.kind == .video {
             rebuildRemoteVideoLayout(from: room)
         }
@@ -489,7 +552,12 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
     }
 
     private func rebuildRemoteVideoLayout(from room: Room) {
-        let participants = room.remoteParticipants.values.compactMap { participant -> NativeVideoParticipant? in
+        guard isCurrentRoom(room) else {
+            print("[CallKit] Ignoring remote video layout rebuild from stale room")
+            return
+        }
+
+        let participants = room.remoteParticipants.values.filter { !isAgentParticipant($0) }.map { participant -> NativeVideoParticipant in
             let id = participantId(participant)
             if let track = participant.firstScreenShareVideoTrack {
                 return NativeVideoParticipant(
@@ -502,14 +570,10 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
                 )
             }
 
-            guard let track = participant.firstCameraVideoTrack else {
-                return nil
-            }
-
             return NativeVideoParticipant(
                 id: id,
                 title: displayTitle(participant),
-                track: track,
+                track: participant.firstCameraVideoTrack,
                 isSpeaking: speakingRemoteParticipantIds.contains(id),
                 isPinned: pinnedRemoteVideoParticipantId == id,
                 isScreenShare: false
@@ -529,7 +593,35 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
             ?? participants.first
 
         videoOverlay.setRemoteVideoParticipants(participants, primaryId: primary?.id)
-        print("[CallKit] Rebuilt remote video layout participants=\(participants.count) primary=\(primary?.id ?? "nil") pinned=\(pinnedRemoteVideoParticipantId ?? "nil")")
+        print("[CallKit] Rebuilt remote video layout participants=\(participants.map { "\($0.id):\($0.title)" }) primary=\(primary?.id ?? "nil") pinned=\(pinnedRemoteVideoParticipantId ?? "nil")")
+    }
+
+    private func emitParticipantIdentities(from room: Room) {
+        guard isCurrentRoom(room) else {
+            print("[CallKit] Ignoring participant identity emit from stale room")
+            return
+        }
+        onParticipantIdentitiesChanged(participantIdentities(from: room))
+    }
+
+    private func participantIdentities(from room: Room) -> [String] {
+        let identities = ([room.localParticipant.identity?.stringValue]
+            + room.remoteParticipants.values
+                .filter { !isAgentParticipant($0) }
+                .map { $0.identity?.stringValue })
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        return Array(Set(identities)).sorted()
+    }
+
+    private func isAgentParticipant(_ participant: Participant) -> Bool {
+        participant.identity?.stringValue
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .hasPrefix("agent-") == true
+    }
+
+    private func isCurrentRoom(_ room: Room) -> Bool {
+        self.room === room && activeCall != nil
     }
 
     private func isRemoteVideoSource(_ source: Track.Source) -> Bool {
@@ -543,13 +635,44 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
     }
 
     private func displayTitle(_ participant: Participant) -> String {
+        if let identity = participant.identity?.stringValue {
+            let trimmedIdentity = identity.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let displayName = participantDisplayNamesByIdentity[trimmedIdentity],
+               !displayName.isEmpty {
+                return displayName
+            }
+            let normalizedIdentity = normalizedParticipantIdentity(trimmedIdentity)
+            if let displayName = participantDisplayNamesByIdentity[normalizedIdentity],
+               !displayName.isEmpty {
+                return displayName
+            }
+        }
         if let name = participant.name, !name.isEmpty {
             return name
         }
         if let identity = participant.identity?.stringValue, !identity.isEmpty {
-            return identity
+            return fallbackParticipantName(identity: identity)
         }
         return "Participant"
+    }
+
+    private func normalizedParticipantIdentity(_ identity: String) -> String {
+        identity.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
+    private func describeParticipant(_ participant: Participant) -> String {
+        "participantSid=\(describeOptional(participant.sid)) identity=\(describeOptional(participant.identity?.stringValue)) name=\(describeOptional(participant.name)) title=\(displayTitle(participant))"
+    }
+
+    private func fallbackParticipantName(identity: String) -> String {
+        let trimmedIdentity = identity.trimmingCharacters(in: .whitespacesAndNewlines)
+        let emailOrIdentity = trimmedIdentity.hasPrefix("macro|")
+            ? String(trimmedIdentity.dropFirst("macro|".count))
+            : trimmedIdentity
+        if let localPart = emailOrIdentity.split(separator: "@").first, !localPart.isEmpty {
+            return String(localPart)
+        }
+        return trimmedIdentity.isEmpty ? "Participant" : trimmedIdentity
     }
 
     private func ensureMicrophonePermission(uuid: UUID) async -> Bool {

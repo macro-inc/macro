@@ -1,14 +1,20 @@
 import { whenSplitManagerReady } from '@app/signal/splitLayout';
 import { ENABLE_CALLKIT } from '@core/constant/featureFlags';
+import { useChannelsContext } from '@core/context/channels';
 import { isPlatform, isTauri } from '@core/util/platform';
+import { authServiceClient } from '@service-auth/client';
 import { notificationServiceClient } from '@service-notification/client';
 import type { DeviceType } from '@service-notification/generated/schemas/deviceType';
 import { addPluginListener, Channel, invoke } from '@tauri-apps/api/core';
-import { onCleanup, onMount } from 'solid-js';
+import { createEffect, createMemo, onCleanup, onMount } from 'solid-js';
 import { joinChannelCall } from './join-channel-call';
 import {
   type NativeCallSnapshot,
+  nativeCallChannelId,
+  nativeCallParticipantIdentities,
   nativeCallSnapshot,
+  setNativeCallChannelId,
+  setNativeCallParticipantIdentities,
   setNativeCallSnapshot,
 } from './native-call-state';
 import { openChannelCallTab } from './open-channel-call-tab';
@@ -20,6 +26,8 @@ const DEVICE_TYPE_IOS_VOIP = 'iosvoip' as DeviceType;
 type VoipTokenPayload = { token: string };
 type CallAnsweredPayload = { channelId: string; nativeMedia?: boolean };
 type CallEndedPayload = { callId: string };
+type DrawerOpenedPayload = { channelId: string };
+type ParticipantIdentitiesPayload = { identities: string[] };
 type CallEndedHandler = (payload: CallEndedPayload) => void | Promise<void>;
 
 type ConnectionStatePayload = {
@@ -32,7 +40,7 @@ type ConnectionStatePayload = {
 };
 
 type GetActiveCallStateResponse = {
-  state: NativeCallSnapshot | null;
+  state: (NativeCallSnapshot & { participantIdentities?: string[] }) | null;
 };
 
 type GetPendingAnsweredCallResponse = {
@@ -40,13 +48,21 @@ type GetPendingAnsweredCallResponse = {
   nativeMedia?: boolean | null;
 };
 
+type CallKitChannelMetadata = {
+  channelId: string;
+  name?: string | null;
+  participants: Array<{ user_id: string }>;
+};
+
 function applyConnectionState(payload: ConnectionStatePayload) {
-  console.info('[callkit] connection-state event', payload);
+  console.info('[callkit] connection state channel message', payload);
   if (
     !payload.channelId ||
     !payload.callId ||
     payload.state === 'disconnected'
   ) {
+    setNativeCallChannelId(null);
+    setNativeCallParticipantIdentities([]);
     setNativeCallSnapshot(null);
     return;
   }
@@ -58,6 +74,7 @@ function applyConnectionState(payload: ConnectionStatePayload) {
     isVideoMuted: payload.isVideoMuted ?? true,
     videoOverlayMode: payload.videoOverlayMode ?? 'hidden',
   };
+  setNativeCallChannelId(snapshot.channelId);
   setNativeCallSnapshot(snapshot);
 }
 
@@ -118,7 +135,12 @@ async function joinChannelCallWhenReady(
     channelId,
     nativeMedia,
   });
-  if (nativeMedia) return openChannelCallTab(channelId);
+  if (nativeMedia) {
+    console.info('[callkit] opening channel call tab for native media', {
+      channelId,
+    });
+    return openChannelCallTab(channelId);
+  }
   return joinChannelCall(channelId);
 }
 
@@ -132,6 +154,86 @@ async function joinChannelCallWhenReady(
  * Must be mounted once at app startup on iOS (no-op on all other platforms).
  */
 export function useCallKitSetup() {
+  let requestedParticipantKey: string | null = null;
+
+  createEffect(() => {
+    if (!ENABLE_CALLKIT || !isTauri() || !isPlatform('ios')) return;
+
+    const channelId = nativeCallSnapshot()?.channelId ?? nativeCallChannelId();
+    const nativeParticipantIds = nativeCallParticipantIdentities();
+    const participantIds = uniqueParticipantIds(nativeParticipantIds);
+    const participantKey = participantIds
+      .map(normalizeParticipantIdentity)
+      .sort()
+      .join('\0');
+
+    if (!participantKey) {
+      requestedParticipantKey = null;
+      return;
+    }
+    if (participantKey === requestedParticipantKey) return;
+    requestedParticipantKey = participantKey;
+
+    const fallbackNames: Record<string, string> = Object.fromEntries(
+      participantIds.map((userId) => [userId, fallbackParticipantName(userId)])
+    );
+
+    console.info('[callkit] fetching native participant display names', {
+      channelId,
+      nativeParticipantIds,
+      participantIds,
+    });
+
+    authServiceClient
+      .getUserNamesWithEmail({ user_ids: participantIds })
+      .then((result) => {
+        if (requestedParticipantKey !== participantKey) return;
+        const displayNames = buildParticipantDisplayNames(
+          participantIds,
+          fallbackNames,
+          result.isOk() ? result.value.names : []
+        );
+
+        if (result.isErr()) {
+          console.error('[callkit] failed to fetch participant display names', {
+            channelId,
+            nativeParticipantIds,
+            participantIds,
+            error: result.error,
+          });
+        }
+
+        console.info('[callkit] syncing native participant display names', {
+          channelId,
+          nativeParticipantIds,
+          participantIds,
+          displayNames,
+          fetchedNames:
+            result.isOk() &&
+            result.value.names.map((user) => ({
+              id: user.id,
+              displayName: displayNameFromUserName(user),
+            })),
+        });
+
+        for (const [identity, displayName] of Object.entries(displayNames)) {
+          setNativeCallKitParticipantDisplayName(identity, displayName).catch(
+            (err) =>
+              console.error(
+                '[callkit] failed to sync native participant display name',
+                err
+              )
+          );
+        }
+      })
+      .catch((err) =>
+        console.error(
+          '[callkit] failed to fetch participant display names',
+          err
+        )
+      );
+  });
+
   onMount(() => {
     if (!ENABLE_CALLKIT || !isTauri() || !isPlatform('ios')) return;
     console.info('[callkit] setting up iOS CallKit integration');
@@ -207,6 +309,7 @@ export function useCallKitSetup() {
         channelId,
         nativeMedia,
       });
+      setNativeCallChannelId(channelId);
       joinChannelCallWhenReady(channelId, nativeMedia).catch((err) =>
         console.error('[callkit] joinChannelCallWhenReady failed', err)
       );
@@ -224,7 +327,8 @@ export function useCallKitSetup() {
             channelId,
             nativeMedia,
           });
-          if (channelId)
+          if (channelId) {
+            setNativeCallChannelId(channelId);
             joinChannelCallWhenReady(channelId, nativeMedia ?? false).catch(
               (err) =>
                 console.error(
@@ -232,6 +336,7 @@ export function useCallKitSetup() {
                   err
                 )
             );
+          }
         });
       })
       .catch((err) =>
@@ -241,6 +346,8 @@ export function useCallKitSetup() {
     const callEndedChannel = new Channel<CallEndedPayload>();
     callEndedChannel.onmessage = (payload) => {
       console.info('[callkit] call ended channel message', payload);
+      setNativeCallChannelId(null);
+      setNativeCallParticipantIdentities([]);
       const handler = getActiveCallEndedHandler();
       if (!handler) return;
       Promise.resolve(handler(payload)).catch((err) =>
@@ -251,21 +358,50 @@ export function useCallKitSetup() {
       channel: callEndedChannel,
     }).catch((err) => console.error('[callkit] watch_call_ended failed', err));
 
-    trackListener(
-      addPluginListener<ConnectionStatePayload>(
-        'call-kit',
-        'connection-state',
-        applyConnectionState
-      ),
-      'connection-state'
+    const connectionStateChannel = new Channel<ConnectionStatePayload>();
+    connectionStateChannel.onmessage = applyConnectionState;
+    invoke<void>('plugin:call-kit|watch_connection_state', {
+      channel: connectionStateChannel,
+    }).catch((err) =>
+      console.error('[callkit] watch_connection_state failed', err)
+    );
+
+    const participantIdentitiesChannel =
+      new Channel<ParticipantIdentitiesPayload>();
+    participantIdentitiesChannel.onmessage = ({ identities }) => {
+      console.info('[callkit] participant identities channel message', {
+        identities,
+      });
+      setNativeCallParticipantIdentities(identities);
+    };
+    invoke<void>('plugin:call-kit|watch_participant_identities', {
+      channel: participantIdentitiesChannel,
+    }).catch((err) =>
+      console.error('[callkit] watch_participant_identities failed', err)
+    );
+
+    const drawerOpenedChannel = new Channel<DrawerOpenedPayload>();
+    drawerOpenedChannel.onmessage = async ({ channelId }) => {
+      console.info('[callkit] drawer opened channel message', {
+        channelId,
+      });
+      setNativeCallChannelId(channelId);
+      await joinChannelCallWhenReady(channelId, true);
+    };
+    invoke<void>('plugin:call-kit|watch_drawer_opened', {
+      channel: drawerOpenedChannel,
+    }).catch((err) =>
+      console.error('[callkit] watch_drawer_opened failed', err)
     );
 
     // Do not let a stale startup drain overwrite live listener state.
     invoke<GetActiveCallStateResponse>('plugin:call-kit|get_active_call_state')
       .then(({ state }) => {
         console.info('[callkit] initial active call state', { state });
-        if (nativeCallSnapshot() !== null) return;
         if (!state) return;
+        setNativeCallParticipantIdentities(state.participantIdentities ?? []);
+        if (nativeCallSnapshot() !== null) return;
+        setNativeCallChannelId(state.channelId);
         setNativeCallSnapshot({
           channelId: state.channelId,
           callId: state.callId,
@@ -279,6 +415,130 @@ export function useCallKitSetup() {
         console.error('[callkit] get_active_call_state failed', err)
       );
   });
+}
+
+export function CallKitChannelTitleSync() {
+  const channelsCtx = useChannelsContext();
+  let lastSyncedTitle: string | null | undefined;
+
+  const activeNativeChannelId = () =>
+    nativeCallSnapshot()?.channelId ?? nativeCallChannelId();
+
+  const channelMetadata = createMemo((): CallKitChannelMetadata | null => {
+    const channelId = activeNativeChannelId();
+    if (!channelId) return null;
+
+    const listedChannel = channelsCtx.channelsById()[channelId];
+    if (listedChannel) {
+      return {
+        channelId,
+        name: listedChannel.name,
+        participants: listedChannel.participants,
+      };
+    }
+
+    return null;
+  });
+
+  createEffect(() => {
+    if (!ENABLE_CALLKIT || !isTauri() || !isPlatform('ios')) return;
+
+    const metadata = channelMetadata();
+    if (!metadata) {
+      if (activeNativeChannelId()) return;
+      if (lastSyncedTitle === null) return;
+      lastSyncedTitle = null;
+      setNativeCallKitChannelTitle(null).catch((err) =>
+        console.error('[callkit] failed to clear native channel title', err)
+      );
+      return;
+    }
+
+    const channelTitle = metadata.name?.trim();
+    if (!channelTitle) return;
+
+    if (channelTitle === lastSyncedTitle) return;
+    lastSyncedTitle = channelTitle;
+    console.info('[callkit] syncing native channel title', {
+      channelId: metadata.channelId,
+      channelTitle,
+    });
+    setNativeCallKitChannelTitle(channelTitle).catch((err) =>
+      console.error('[callkit] failed to sync native channel title', err)
+    );
+  });
+
+  return null;
+}
+
+function buildParticipantDisplayNames(
+  participantIds: string[],
+  fallbackNames: Record<string, string>,
+  fetchedNames: Array<{
+    id: string;
+    first_name?: string | null;
+    last_name?: string | null;
+  }>
+): Record<string, string> {
+  const displayNames = { ...fallbackNames };
+  const fetchedNamesByIdentity = new Map<string, string>();
+
+  for (const user of fetchedNames) {
+    fetchedNamesByIdentity.set(
+      normalizeParticipantIdentity(user.id),
+      displayNameFromUserName(user)
+    );
+  }
+
+  for (const identity of participantIds) {
+    displayNames[identity] =
+      fetchedNamesByIdentity.get(normalizeParticipantIdentity(identity)) ??
+      fallbackNames[identity];
+  }
+
+  return displayNames;
+}
+
+function uniqueParticipantIds(ids: string[]): string[] {
+  const seen = new Set<string>();
+  const participantIds: string[] = [];
+  for (const id of ids) {
+    const trimmedId = id.trim();
+    const normalizedId = normalizeParticipantIdentity(trimmedId);
+    if (!isMacroParticipantIdentity(trimmedId) || seen.has(normalizedId)) {
+      continue;
+    }
+    seen.add(normalizedId);
+    participantIds.push(trimmedId);
+  }
+  return participantIds;
+}
+
+function isMacroParticipantIdentity(identity: string): boolean {
+  const trimmedIdentity = identity.trim();
+  return (
+    normalizeParticipantIdentity(trimmedIdentity).startsWith('macro|') &&
+    trimmedIdentity.includes('@')
+  );
+}
+
+function normalizeParticipantIdentity(identity: string): string {
+  return identity.trim().toLowerCase();
+}
+
+function displayNameFromUserName(user: {
+  id: string;
+  first_name?: string | null;
+  last_name?: string | null;
+}): string {
+  const parts = [user.first_name, user.last_name]
+    .map((part) => part?.trim())
+    .filter((part): part is string => Boolean(part) && part !== 'N/A');
+  return parts.length > 0 ? parts.join(' ') : fallbackParticipantName(user.id);
+}
+
+function fallbackParticipantName(identity: string): string {
+  return identity.split('|').at(1)?.split('@').at(0) || 'Participant';
 }
 
 /**
@@ -310,6 +570,33 @@ export async function setNativeCallKitVideoOverlayMode(
   await invoke('plugin:call-kit|set_video_overlay_mode', { mode }).catch(
     (err) =>
       console.error('[callkit] failed to set native video overlay mode', err)
+  );
+}
+
+export async function setNativeCallKitChannelTitle(
+  channelTitle: string | null
+): Promise<void> {
+  if (!ENABLE_CALLKIT || !isTauri() || !isPlatform('ios')) return;
+  await invoke('plugin:call-kit|set_call_drawer_channel_title', {
+    channelTitle,
+  }).catch((err) =>
+    console.error('[callkit] failed to set native channel title', err)
+  );
+}
+
+export async function setNativeCallKitParticipantDisplayName(
+  identity: string,
+  displayName: string | null
+): Promise<void> {
+  if (!ENABLE_CALLKIT || !isTauri() || !isPlatform('ios')) return;
+  await invoke('plugin:call-kit|set_participant_display_name', {
+    identity,
+    displayName,
+  }).catch((err) =>
+    console.error(
+      '[callkit] failed to set native participant display name',
+      err
+    )
   );
 }
 

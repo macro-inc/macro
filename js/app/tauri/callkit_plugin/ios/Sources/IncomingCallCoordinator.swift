@@ -16,7 +16,7 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
     private let callController = CXCallController()
     private var registry: PKPushRegistry!
 
-    private var pendingCalls: [UUID: String] = [:]
+    private var pendingCalls: [UUID: PendingCallInfo] = [:]
     private var pendingCallTokens: [UUID: PendingCallToken] = [:]
     private var activeCallUUID: UUID?
     private var activeNativeMediaUUID: UUID?
@@ -144,12 +144,13 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
 
         let dict = payload.dictionaryPayload
         let channelId = dict["channelId"] as? String ?? ""
+        let channelName = dict["channelName"] as? String
         let callerName = dict["callerName"] as? String ?? "Incoming Call"
         let callIdString = dict["callId"] as? String ?? ""
         let livekitServerUrl = dict["livekitServerUrl"] as? String
         let livekitToken = dict["livekitToken"] as? String
         let hasNativeCredentials = livekitServerUrl != nil && livekitToken != nil
-        print("[CallKit] Received VoIP push callId=\(callIdString) channelId=\(channelId) hasNativeCredentials=\(hasNativeCredentials)")
+        print("[CallKit] Received VoIP push callId=\(callIdString) channelId=\(channelId) channelName=\(channelName ?? "nil") hasNativeCredentials=\(hasNativeCredentials)")
 
         guard let uuid = UUID(uuidString: callIdString) else {
             // PushKit requires every VoIP push to be reported to CallKit.
@@ -174,7 +175,11 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
             pendingCallTokens.removeValue(forKey: staleUUID)
         }
 
-        pendingCalls[uuid] = channelId
+        pendingCalls[uuid] = PendingCallInfo(
+            channelId: channelId,
+            channelName: channelName,
+            callerName: callerName
+        )
         if let serverUrl = livekitServerUrl, let token = livekitToken {
             pendingCallTokens[uuid] = PendingCallToken(serverUrl: serverUrl, token: token)
         } else {
@@ -184,7 +189,7 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
         activeCallUUID = uuid
 
         let update = CXCallUpdate()
-        update.remoteHandle = CXHandle(type: .generic, value: channelId)
+        update.remoteHandle = CXHandle(type: .generic, value: channelName ?? channelId)
         update.localizedCallerName = callerName
         update.hasVideo = true
 
@@ -219,11 +224,12 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
 
     func provider(_ provider: CXProvider, perform action: CXAnswerCallAction) {
         print("[CallKit] CXAnswerCallAction received uuid=\(action.callUUID.uuidString)")
-        guard let channelId = pendingCalls[action.callUUID] else {
+        guard let pendingCall = pendingCalls[action.callUUID] else {
             print("[CallKit] Answer failed: no pending channel for uuid=\(action.callUUID.uuidString)")
             action.fail()
             return
         }
+        let channelId = pendingCall.channelId
 
         let answeredUUID = action.callUUID
         let pendingToken = pendingCallTokens[answeredUUID]
@@ -231,6 +237,8 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
         if shouldConnectNatively {
             activeNativeMediaUUID = answeredUUID
             print("[CallKit] Scheduling native LiveKit connect for answered call uuid=\(answeredUUID.uuidString) channelId=\(channelId)")
+            let mediaSession = mediaSessionProvider()
+            mediaSession.setChannelTitle(pendingCall.channelName)
         } else if pendingCallTokens[answeredUUID] != nil {
             print("[CallKit] Native LiveKit answer disabled; JS-driven join required uuid=\(answeredUUID.uuidString)")
         } else {

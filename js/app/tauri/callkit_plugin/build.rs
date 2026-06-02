@@ -9,9 +9,14 @@ const COMMANDS: &[&str] = &[
     "get_pending_answered_call",
     "watch_call_answered",
     "watch_call_ended",
+    "watch_connection_state",
+    "watch_drawer_opened",
+    "watch_participant_identities",
     "get_active_call_state",
     "set_video_enabled",
     "set_video_overlay_mode",
+    "set_call_drawer_channel_title",
+    "set_participant_display_name",
     "switch_camera",
 ];
 

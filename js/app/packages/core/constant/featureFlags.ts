@@ -367,7 +367,7 @@ export const ENABLE_AUTO_UPDATE_UI = resolveFeatureFlag(
   true
 );
 
-export const ENABLE_CALLKIT = resolveFeatureFlag('ENABLE_CALLKIT', false);
+export const ENABLE_CALLKIT = resolveFeatureFlag('ENABLE_CALLKIT', true);
 
 export const ENABLE_MARKDOWN_SIDE_PANEL = resolveFeatureFlag(
   'ENABLE_MARKDOWN_SIDE_PANEL',

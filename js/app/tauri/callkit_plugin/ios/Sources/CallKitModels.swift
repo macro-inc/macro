@@ -5,6 +5,12 @@ struct PendingCallToken {
     let token: String
 }
 
+struct PendingCallInfo {
+    let channelId: String
+    let channelName: String?
+    let callerName: String?
+}
+
 struct ActiveCallSnapshot {
     let channelId: String
     let callId: String
@@ -12,4 +18,9 @@ struct ActiveCallSnapshot {
     var isAudioMuted: Bool
     var isVideoMuted: Bool
     var videoOverlayMode: String
+}
+
+struct SetParticipantDisplayNameArgs: Decodable {
+    let identity: String
+    let displayName: String?
 }

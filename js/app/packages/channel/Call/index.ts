@@ -37,4 +37,4 @@ export {
 export { joinChannelCall } from './join-channel-call';
 export { openChannelCallTab } from './open-channel-call-tab';
 export { useCall } from './use-call';
-export { useCallKitSetup } from './use-callkit';
+export { CallKitChannelTitleSync, useCallKitSetup } from './use-callkit';
