@@ -167,13 +167,6 @@ impl EmailService for MockEmail {
         Ok(Vec::new())
     }
 
-    async fn get_links_by_fusionauth_user_id(
-        &self,
-        _auth_id: &str,
-    ) -> Result<Vec<email::domain::models::Link>, email::domain::models::EmailErr> {
-        Ok(Vec::new())
-    }
-
     async fn get_owned_link_for_thread(
         &self,
         _auth_id: &str,
@@ -459,13 +452,6 @@ impl EmailService for MockEmailLinkResult {
     async fn get_inboxes_for_macro_id(
         &self,
         _macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
-    ) -> Result<Vec<email::domain::models::Link>, email::domain::models::EmailErr> {
-        (self.get_link_result)().map(|opt| opt.into_iter().collect())
-    }
-
-    async fn get_links_by_fusionauth_user_id(
-        &self,
-        _auth_id: &str,
     ) -> Result<Vec<email::domain::models::Link>, email::domain::models::EmailErr> {
         (self.get_link_result)().map(|opt| opt.into_iter().collect())
     }

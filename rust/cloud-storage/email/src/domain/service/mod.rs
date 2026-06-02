@@ -159,16 +159,6 @@ where
             .map_err(|e| EmailErr::RepoErr(e.into()))
     }
 
-    async fn get_links_by_fusionauth_user_id(
-        &self,
-        auth_id: &str,
-    ) -> Result<Vec<crate::domain::models::Link>, EmailErr> {
-        self.email_repo
-            .links_by_fusionauth_user_id(auth_id)
-            .await
-            .map_err(|e| EmailErr::RepoErr(e.into()))
-    }
-
     async fn get_owned_link_for_thread(
         &self,
         macro_id: &str,
