@@ -1996,12 +1996,15 @@ dependencies = [
 name = "channel_bots"
 version = "0.1.0"
 dependencies = [
+ "agent",
+ "ai_tools",
+ "ai_toolset",
  "anyhow",
  "async-trait",
  "bot_id",
  "channels",
  "chrono",
- "document_cognition_service_client",
+ "futures",
  "macro_user_id",
  "models_pagination",
  "tokio",
@@ -3387,21 +3390,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "document_cognition_service_client"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "reqwest 0.13.3",
- "serde",
- "serde_json",
- "thiserror 2.0.18",
- "tracing",
-]
-
-[[package]]
 name = "document_storage_service"
 version = "0.1.0"
 dependencies = [
+ "ai_tools",
  "analytics_client",
  "anyhow",
  "aws-sdk-dynamodb",
@@ -3430,7 +3422,6 @@ dependencies = [
  "cool_asserts",
  "cowlike",
  "crm",
- "document_cognition_service_client",
  "document_sub_type",
  "documents",
  "dynamodb_client",

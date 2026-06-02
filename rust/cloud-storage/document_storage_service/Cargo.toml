@@ -26,6 +26,7 @@ location_check = []
 
 [dependencies]
 anyhow = { workspace = true }
+ai_tools = { path = "../ai_tools" }
 aws-sdk-dynamodb = { workspace = true }
 aws-sdk-s3 = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
@@ -56,7 +57,6 @@ connection = { path = "../connection", default-features = false, features = [
 connection_gateway_client = { path = "../connection_gateway_client" }
 cowlike = { path = "../cowlike" }
 crm = { path = "../crm" }
-document_cognition_service_client = { path = "../document_cognition_service_client" }
 document_sub_type = { path = "../document_sub_type" }
 documents_hex = { path = "../documents", package = "documents" }
 task_dedup = { path = "../task_dedup" }

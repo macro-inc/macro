@@ -1,5 +1,5 @@
 //! Outbound adapters for channel bot dependencies.
 
-mod dcs_agent_responder;
+mod agent_loop_responder;
 
-pub use dcs_agent_responder::DcsAgentResponder;
+pub use agent_loop_responder::AgentLoopResponder;

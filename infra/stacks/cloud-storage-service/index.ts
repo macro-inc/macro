@@ -570,8 +570,16 @@ const cloudStorageService = new CloudStorageService(
         value: getServiceUrl(ServiceUrl.CONNECTION_GATEWAY_URL),
       },
       {
-        name: 'COGNITION_SERVICE_URL',
-        value: getServiceUrl(ServiceUrl.DOCUMENT_COGNITION_SERVICE_URL),
+        name: ServiceUrl.DOCUMENT_STORAGE_SERVICE_URL,
+        value: getServiceUrl(ServiceUrl.DOCUMENT_STORAGE_SERVICE_URL),
+      },
+      {
+        name: ServiceUrl.EMAIL_SERVICE_URL,
+        value: getServiceUrl(ServiceUrl.EMAIL_SERVICE_URL),
+      },
+      {
+        name: ServiceUrl.STATIC_FILE_SERVICE_URL,
+        value: getServiceUrl(ServiceUrl.STATIC_FILE_SERVICE_URL),
       },
       {
         name: 'BULK_UPLOAD_REQUESTS_TABLE',

@@ -131,9 +131,6 @@ services:
   document_storage_service:
     <<: [*common-env, *rust-services-image]
     command: ["/app/out/document_storage_service"]
-    environment:
-      # Lets Macro AI in channels reach the agent loop in DCS.
-      - COGNITION_SERVICE_URL=http://document-cognition-service:8080
     ports:
       - "8086:8080"
     depends_on:

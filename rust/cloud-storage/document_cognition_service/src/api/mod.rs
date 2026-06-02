@@ -24,7 +24,6 @@ pub mod utils;
 
 mod attachments;
 mod chats;
-mod internal_agent;
 pub mod structured_completion;
 
 #[tracing::instrument(err, skip(state))]
@@ -55,20 +54,6 @@ pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
                 )),
         )
         .merge(health::router().layer(cors))
-        // Service-to-service route, authenticated with the internal API key and
-        // mounted outside the api-version layer (like health). Used by the
-        // document storage service to run Macro AI in channels.
-        .merge(
-            Router::new()
-                .route(
-                    "/internal/agent/channel-respond",
-                    post(internal_agent::channel_respond),
-                )
-                .layer(TraceLayer::new_for_http())
-                .layer(RequestBodyLimitLayer::new(1024 * 1024 * 1024))
-                .layer(DefaultBodyLimit::disable())
-                .with_state(state.clone()),
-        )
         .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()));
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port))

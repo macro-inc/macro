@@ -49,7 +49,6 @@ use connection::{
     outbound::connection_gateway_client::ConnectionGatewayImpl,
 };
 use connection_gateway_client::client::ConnectionGatewayClient;
-use document_cognition_service_client::DocumentCognitionServiceClient;
 use documents_hex::domain::models::CloudFrontConfig;
 use documents_hex::domain::service::DocumentServiceImpl;
 use documents_hex::inbound::axum_router::DocumentRouterState;
@@ -72,7 +71,6 @@ use lexical_client::LexicalClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
-use macro_service_urls::EnvExtMacroServiceUrls;
 use macro_sha_count_client::Redis;
 use notification::domain::service::SqsNotificationIngress;
 use notification::outbound::queue::SqsQueue;
@@ -607,17 +605,18 @@ async fn main() -> anyhow::Result<()> {
     ));
 
     // Wire Macro AI to react to mentions. The router posts replies through the
-    // channel service we just built.
-    let cognition_service_url = config::CognitionServiceUrl::new()
-        .map(|v| v.as_ref().to_string())
-        .unwrap_or_else(|| config.environment.cognition_service().to_string());
-    let dcs_client = DocumentCognitionServiceClient::new(
-        cognition_service_url,
-        internal_api_secret.as_ref().to_string(),
-    );
+    // channel service we just built and runs the agent loop in-process with the
+    // same pre-configured toolset used by other AI hosts.
+    let macro_agent_tool_context = ai_tools::build_tool_service_context_from_env(db.clone())
+        .await
+        .context("failed to build Macro agent tool context")?;
+    let macro_agent_tools = ai_tools::all_tools();
     let bot_trigger_router = channel_bots::inbound::BotTriggerRouter::new(
         channels_service.clone(),
-        Arc::new(channel_bots::outbound::DcsAgentResponder::new(dcs_client)),
+        Arc::new(channel_bots::outbound::AgentLoopResponder::new(
+            macro_agent_tool_context,
+            macro_agent_tools,
+        )),
     );
     bot_trigger_router.spawn(bot_trigger_receiver);
 
