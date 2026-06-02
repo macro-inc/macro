@@ -1,4 +1,9 @@
 import { TaskListEntity } from '@app/component/next-soup/soup-view/views/tasks/TaskListEntity';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import {
+  ENABLE_TASK_DUPLICATES_FLAG,
+  ENABLE_TASK_DUPLICATES_OVERRIDE,
+} from '@core/constant/featureFlags';
 import { ListLayoutProvider } from '@entity';
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import CopyIcon from '@phosphor/copy.svg';
@@ -139,6 +144,10 @@ export function SimilarTasksSection(props: {
   onResults: (results: TaskSimilarityResult[]) => void;
   onOpenTask: (taskId: string) => void;
 }) {
+  const flag = useFeatureFlag(ENABLE_TASK_DUPLICATES_FLAG, {
+    enabledOverride: ENABLE_TASK_DUPLICATES_OVERRIDE,
+  });
+
   const [debounced, setDebounced] = createSignal<DebouncedInput>({
     title: props.title(),
     markdown: props.content(),
@@ -154,13 +163,15 @@ export function SimilarTasksSection(props: {
   });
 
   return (
-    <Suspense>
-      <SimilarTasksInner
-        debounced={debounced}
-        initialResults={props.initialResults}
-        onResults={props.onResults}
-        onOpenTask={props.onOpenTask}
-      />
-    </Suspense>
+    <Show when={flag().enabled}>
+      <Suspense>
+        <SimilarTasksInner
+          debounced={debounced}
+          initialResults={props.initialResults}
+          onResults={props.onResults}
+          onOpenTask={props.onOpenTask}
+        />
+      </Suspense>
+    </Show>
   );
 }
