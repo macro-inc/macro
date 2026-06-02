@@ -24,14 +24,9 @@
           {
             "group": "Getting Started",
             "pages": [
-              "index"
-            ]
-          },
-          {
-            "group": "Product",
-            "pages": [
+              "index",
               {
-                "group": "AI Chat",
+                "group": "AI",
                 "pages": [
                   "product/ai-chat",
                   "AI/mcp/overview",
@@ -58,14 +53,21 @@
                     ]
                   }
                 ]
-              },
+              }
+            ]
+          },
+          {
+            "group": "Sidebar",
+            "pages": [
+              "product/inbox",
+              "product/search-1",
+              "product/agents",
               "product/email",
-              "product/channels",
               "product/docs",
-              "product/canvas",
               "product/tasks",
-              "product/search",
-              "product/files"
+              "product/channels",
+              "product/calls",
+              "product/folders"
             ]
           }
         ]
