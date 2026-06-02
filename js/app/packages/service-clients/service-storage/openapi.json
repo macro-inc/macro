@@ -13564,6 +13564,11 @@
             "type": "string",
             "description": "A compact label suitable for display in the UI."
           },
+          "foreignEntityId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The internal `foreign_entity.id` UUID for the GitHub pull request row."
+          },
           "githubKey": {
             "type": "string",
             "description": "The stored GitHub association key, in `owner/repo/pull/number` format."

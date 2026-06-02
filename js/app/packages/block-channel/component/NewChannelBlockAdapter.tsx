@@ -39,6 +39,7 @@ import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import { useChannelName, useChannelType } from '@core/context/channels';
 import { createMethodRegistration } from '@core/orchestrator';
 import { blockHandleSignal } from '@core/signal/load';
+import { useActiveCallQuery } from '@queries/call/call';
 import { useChannelParticipantsQuery } from '@queries/channel/channel-participants';
 import { ChannelTypeEnum } from '@service-storage/client';
 import { useSearchParams } from '@solidjs/router';
@@ -70,7 +71,7 @@ type ChannelPropsTargetMessage = Pick<
 function CallTabLabel() {
   return (
     <span class="flex items-center gap-1.5">
-      <span class="size-1.5 rounded-full bg-accent animate-pulse" />
+      <span class="size-1.5 rounded-full bg-success animate-pulse" />
       Call
     </span>
   );
@@ -82,6 +83,7 @@ function NewTop(props: { channelId: string }) {
   const channelType = useChannelType(props.channelId);
   const participantsQuery = useChannelParticipantsQuery(() => props.channelId);
   const call = useCall(() => props.channelId);
+  const activeCallQuery = useActiveCallQuery(() => props.channelId);
   const participants = () =>
     participantsQuery.isLoading ? [] : participantsQuery.data;
   // Show the Call tab whenever we're actually in the call, mid-join, or
@@ -89,7 +91,10 @@ function NewTop(props: { channelId: string }) {
   // `activeTab` to `call` before the join request resolves).
   const showCallTab = () =>
     ENABLE_CALLS() &&
-    (call.isInThisChannel() || call.isJoining() || activeTab() === 'call');
+    (call.isInThisChannel() ||
+      call.isJoining() ||
+      activeTab() === 'call' ||
+      !!activeCallQuery.data);
   const tabs = () => {
     let filtered = [...CHANNEL_TABS];
     if (channelType() === ChannelTypeEnum.DirectMessage)

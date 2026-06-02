@@ -1,8 +1,16 @@
 import { StackedAvatarsRow } from '@core/component/StackedAvatarsRow';
+import { useChannelsContext } from '@core/context/channels';
 import PhoneDisconnect from '@icon/wide-call-disconnect.svg';
 import ArrowsOut from '@phosphor/arrows-out.svg';
-import { cn, Surface } from '@ui';
-import { type Component, createMemo, Show } from 'solid-js';
+import { useActiveCallQuery } from '@queries/call/call';
+import { Avatar, cn, Surface, Tooltip } from '@ui';
+import {
+  type Component,
+  createMemo,
+  createSignal,
+  onCleanup,
+  Show,
+} from 'solid-js';
 import type { CallControlsVariant } from '../CallControls/CallControls';
 import { CallControls } from '../CallControls/CallControls';
 import type { InCallPanelProps } from '../InCallPanel/types';
@@ -20,12 +28,33 @@ import {
 import { profilePictureIdForMember } from './profile-picture-id-for-member';
 import { useInCallPanel } from './use-in-call-panel';
 
+function formatDuration(startedAt: string | undefined, nowMs: number) {
+  const startedAtMs = startedAt ? new Date(startedAt).getTime() : Number.NaN;
+  if (!Number.isFinite(startedAtMs)) return '';
+
+  const totalSeconds = Math.max(0, Math.floor((nowMs - startedAtMs) / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+}
+
 export const InCallPanel: Component<InCallPanelProps> = (props) => {
   const panel = useInCallPanel({
     channelId: props.channelId,
     onLeaveCall: props.onLeaveCall,
     onJoinCall: props.onJoinCall,
   });
+  const channelsCtx = useChannelsContext();
+  const [nowMs, setNowMs] = createSignal(Date.now());
+  const durationTimer = globalThis.setInterval(
+    () => setNowMs(Date.now()),
+    1000
+  );
+  onCleanup(() => globalThis.clearInterval(durationTimer));
+
   const slim = createMemo((): boolean => {
     const v = props.isSlim;
     return typeof v === 'function' ? v() : v;
@@ -76,6 +105,32 @@ export const InCallPanel: Component<InCallPanelProps> = (props) => {
   );
 
   const showExpandToFullCall = createMemo(() => !onCallPage());
+  const activeChannelId = createMemo(() => panel.callCtx.activeChannelId());
+  const activeCallQuery = useActiveCallQuery(() => activeChannelId() ?? '');
+  const activeChannelName = createMemo(() => {
+    const id = activeChannelId();
+    if (!id) return 'In call';
+    const channel = channelsCtx.channelsById()[id];
+    return channel?.name ? `#${channel.name}` : 'In call';
+  });
+  const activeChannelLetter = createMemo(() => {
+    const id = activeChannelId();
+    if (!id) return '?';
+    const name = channelsCtx.channelsById()[id]?.name ?? '';
+    return name[0]?.toUpperCase() ?? '?';
+  });
+  const memberCount = createMemo(() => orderedMembers().length);
+  const callDuration = createMemo(() =>
+    formatDuration(activeCallQuery.data?.createdAt, nowMs())
+  );
+  const slimHeaderTooltip = createMemo(() => {
+    const duration = callDuration();
+    const count = memberCount();
+    const participants = `${count} participant${count === 1 ? '' : 's'}`;
+    return [activeChannelName(), duration, participants]
+      .filter(Boolean)
+      .join(' - ');
+  });
 
   return (
     <Show when={() => panel.isActive()}>
@@ -94,11 +149,35 @@ export const InCallPanel: Component<InCallPanelProps> = (props) => {
           )}
         >
           <div class="flex min-w-0 shrink-0 items-center gap-2">
-            <Show when={showHeaderPulse()}>
-              <span class="size-1.5 shrink-0 rounded-full bg-accent animate-pulse" />
-            </Show>
-            <Show when={!slim()}>
-              <span class="text-xs font-medium text-ink truncate">In call</span>
+            <Show
+              when={!slim()}
+              fallback={
+                <Tooltip label={slimHeaderTooltip()} placement="right">
+                  <button
+                    type="button"
+                    class="relative flex items-center justify-center shrink-0 size-5 rounded-full"
+                    aria-label={slimHeaderTooltip()}
+                    onClick={() => {
+                      const id = panel.callCtx.activeChannelId();
+                      if (id) void openChannelCallTab(id);
+                    }}
+                  >
+                    <Avatar size="sm" class="bg-transparent text-ink-muted">
+                      <Avatar.Fallback class="font-semibold">
+                        {activeChannelLetter()}
+                      </Avatar.Fallback>
+                    </Avatar>
+                    <span class="absolute -top-0.5 -right-0.5 size-1.5 bg-success rounded-full ring-surface ring-2 animate-pulse" />
+                  </button>
+                </Tooltip>
+              }
+            >
+              <Show when={showHeaderPulse()}>
+                <span class="size-1.5 shrink-0 rounded-full bg-success animate-pulse" />
+              </Show>
+              <span class="text-xs font-medium text-ink truncate">
+                {activeChannelName()}
+              </span>
             </Show>
           </div>
 
@@ -127,7 +206,7 @@ export const InCallPanel: Component<InCallPanelProps> = (props) => {
         <div
           class={cn(
             'px-3 py-2.5',
-            slim() && 'flex flex-col items-center gap-2 pt-2 pb-1'
+            slim() && 'flex flex-col items-center gap-2 py-1'
           )}
         >
           <div

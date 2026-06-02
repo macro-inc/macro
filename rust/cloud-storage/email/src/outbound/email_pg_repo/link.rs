@@ -72,38 +72,10 @@ pub(super) async fn link_by_fusionauth_email_provider(
 }
 
 #[tracing::instrument(err, skip(pool))]
-pub(super) async fn links_by_fusionauth_user_id(
-    pool: &PgPool,
-    fusionauth_user_id: &str,
-) -> Result<Vec<Link>, sqlx::Error> {
-    let db_links: Vec<DbLink> = sqlx::query_as!(
-        DbLink,
-        r#"
-        SELECT id, macro_id, fusionauth_user_id, email_address, provider as "provider: _",
-               is_sync_active, created_at, updated_at
-        FROM email_links
-        WHERE fusionauth_user_id = $1
-        ORDER BY created_at DESC
-        "#,
-        fusionauth_user_id
-    )
-    .fetch_all(pool)
-    .await?;
-
-    db_links
-        .into_iter()
-        .map(|v| {
-            v.try_into_model()
-                .map_err(|e| sqlx::Error::Decode(Box::new(e)))
-        })
-        .collect()
-}
-
-#[tracing::instrument(err, skip(pool))]
 pub(super) async fn owned_link_for_thread(
     pool: &PgPool,
     thread_id: Uuid,
-    fusionauth_user_id: &str,
+    macro_id: MacroUserIdStr<'_>,
 ) -> Result<Option<Link>, sqlx::Error> {
     let db_link: Option<DbLink> = sqlx::query_as!(
         DbLink,
@@ -112,10 +84,17 @@ pub(super) async fn owned_link_for_thread(
                l.is_sync_active, l.created_at, l.updated_at
         FROM email_threads t
         JOIN email_links l ON l.id = t.link_id
-        WHERE t.id = $1 AND l.fusionauth_user_id = $2
+        WHERE t.id = $1
+          AND (
+              l.macro_id = $2
+              OR EXISTS (
+                  SELECT 1 FROM macro_user_links mul
+                  WHERE mul.child_macro_id = l.macro_id AND mul.primary_macro_id = $2
+              )
+          )
         "#,
         thread_id,
-        fusionauth_user_id
+        macro_id.as_ref()
     )
     .fetch_optional(pool)
     .await?;

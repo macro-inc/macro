@@ -98,15 +98,13 @@ pub async fn get_thread_messages_handler(
 ) -> Result<Response, GetThreadError> {
     let p = process_get_thread_params(&query_params)?;
 
-    let link_ids: HashSet<Uuid> = email_db_client::links::get::fetch_links_by_fusionauth_user_id(
-        &ctx.db,
-        &user_context.fusion_user_id,
-    )
-    .await
-    .context("Failed to fetch links")?
-    .into_iter()
-    .map(|link| link.id)
-    .collect();
+    let link_ids: HashSet<Uuid> =
+        email_db_client::links::get::fetch_inboxes_for_macro_id(&ctx.db, &user_context.user_id)
+            .await
+            .context("Failed to fetch links")?
+            .into_iter()
+            .map(|link| link.id)
+            .collect();
 
     let messages =
         email_db_client::messages::get_parsed::get_paginated_parsed_messages_by_thread_id(

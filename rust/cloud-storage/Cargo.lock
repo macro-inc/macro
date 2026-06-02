@@ -3579,6 +3579,7 @@ dependencies = [
  "entity_access",
  "entity_access_db_utils",
  "entity_access_management",
+ "foreign_entity",
  "futures",
  "hex",
  "http-body-util",

@@ -1,6 +1,8 @@
 import { throwOnErr } from '@core/util/result';
-import { useLeaveCallMutation } from '@queries/call/call';
-import { queryClient } from '@queries/client';
+import {
+  invalidateActiveCallQueries,
+  useLeaveCallMutation,
+} from '@queries/call/call';
 import { callServiceClient } from '@service-call/client';
 import { useMutation } from '@tanstack/solid-query';
 import { DisconnectReason, RoomEvent } from 'livekit-client';
@@ -181,7 +183,7 @@ export function useCall(channelId: () => string, options?: UseCallOptions) {
     onSuccess: () => {
       autoRejoinAttempts = 0;
       clearAutoRejoinTimer();
-      void queryClient.invalidateQueries({ queryKey: ['call', 'active'] });
+      void invalidateActiveCallQueries();
       attachDisconnectListener();
     },
     // Keep this handler synchronous: we undo the optimistic join and show the

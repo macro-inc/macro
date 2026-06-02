@@ -75,10 +75,11 @@ pub async fn archived_handler(
 ) -> Result<Response, ArchiveThreadError> {
     let is_archiving = body.value;
 
-    // Resolve the inbox from the thread itself, scoped to the caller's own inboxes.
+    // Resolve the inbox from the thread itself, scoped to the caller's own and
+    // delegated inboxes.
     let link = email_db_client::links::get::fetch_owned_link_for_thread(
         &ctx.db,
-        &user_context.fusion_user_id,
+        &user_context.user_id,
         thread_id,
     )
     .await?

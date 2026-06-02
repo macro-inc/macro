@@ -103,7 +103,7 @@ const UnifiedSearchToolResponse = (props: {
 
 function SearchText(props: { query: string }) {
   return (
-    <span>
+    <span class="min-w-0 truncate">
       Search <span class="text-ink"> {props.query} </span>
     </span>
   );
@@ -136,8 +136,8 @@ const createHandler = (name: 'NameSearch' | 'ContentSearch') =>
             ) : undefined
           }
         >
-          <div class="flex min-w-0 flex-1 items-center justify-between gap-3">
-            <div class="flex min-w-0 flex-1 items-center gap-2">
+          <div class="flex min-w-0 flex-1 items-center justify-between gap-3 overflow-hidden">
+            <div class="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
               <SearchText query={query()} />
             </div>
             <Tool.ResultToggle

@@ -19,7 +19,8 @@ pub async fn get_thread_access(
 ) -> Result<Option<AccessLevel>, sqlx::Error> {
     let user_id_str = user_id.map(AsRef::as_ref).unwrap_or("");
 
-    // Thread-specific: check if user is the thread owner via email_links
+    // Thread-specific: the caller owns the thread's inbox, or a macro_user_links
+    // edge delegates that inbox to the caller (the caller is its primary).
     let is_owner = sqlx::query_scalar!(
         r#"
             SELECT EXISTS (
@@ -27,7 +28,15 @@ pub async fn get_thread_access(
                 FROM public.email_threads t
                 JOIN public.email_links l ON l.id = t.link_id
                 WHERE t.id = $1::uuid
-                  AND l.macro_id = $2
+                  AND (
+                      l.macro_id = $2
+                      OR EXISTS (
+                          SELECT 1
+                          FROM public.macro_user_links mul
+                          WHERE mul.child_macro_id = l.macro_id
+                            AND mul.primary_macro_id = $2
+                      )
+                  )
             ) AS "exists!"
             "#,
         thread_id,

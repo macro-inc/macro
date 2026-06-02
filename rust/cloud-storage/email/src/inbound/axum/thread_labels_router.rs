@@ -118,11 +118,11 @@ pub async fn update_thread_labels_handler<T: EmailService, G: GmailTokenProvider
     Path(thread_id): Path<Uuid>,
     Json(body): Json<UpdateThreadLabelRequest>,
 ) -> Result<Json<UpdateThreadLabelsResponse>, UpdateThreadLabelError> {
-    // Resolve the inbox from the thread (scoped to the caller's own inboxes),
-    // then use that inbox's own Gmail token.
+    // Resolve the inbox from the thread (scoped to the caller's own and delegated
+    // inboxes), then use that inbox's own Gmail token.
     let link = state
         .inner
-        .get_owned_link_for_thread(&macro_user.user_context.fusion_user_id, thread_id)
+        .get_owned_link_for_thread(macro_user.macro_user_id, thread_id)
         .await?
         .ok_or_else(|| UpdateThreadLabelError::NotFound("Thread not found".to_string()))?;
 

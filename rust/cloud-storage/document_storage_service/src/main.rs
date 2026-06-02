@@ -386,6 +386,7 @@ async fn main() -> anyhow::Result<()> {
         },
         connection_service,
         entity_access_management_service.clone(),
+        ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone())),
     ));
 
     let github_webhook_secret = secretsmanager_client

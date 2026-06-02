@@ -6,6 +6,9 @@ use sqlx::types::Uuid;
 
 use crate::links::types::{DbLink, DbUserProvider};
 
+#[cfg(test)]
+mod test;
+
 /// fetches a link given an email address and provider.
 #[tracing::instrument(skip(pool), err)]
 pub async fn fetch_link_by_email(
@@ -147,15 +150,16 @@ pub async fn fetch_links_by_fusionauth_user_id(
     Ok(service_links?)
 }
 
-/// Resolves the inbox (email_link) that owns a thread, but only when the thread's
-/// inbox belongs to the given fusionauth user. Returns `None` when the thread
-/// doesn't exist or its inbox isn't one the caller owns — callers map that to a
-/// not-found/unauthorized response. Lets mutating thread routes derive the inbox
-/// from the thread instead of an `X-Email-Link-Id` header.
+/// Resolves the inbox (email_link) that owns a thread, but only when that inbox
+/// belongs to the given macro user or is delegated to them via macro_user_links.
+/// Returns `None` when the thread doesn't exist or its inbox isn't one the caller
+/// owns or has delegated access to — callers map that to a not-found/unauthorized
+/// response. Lets mutating thread routes derive the inbox from the thread instead
+/// of an `X-Email-Link-Id` header.
 #[tracing::instrument(skip(pool), err)]
 pub async fn fetch_owned_link_for_thread(
     pool: &PgPool,
-    fusionauth_user_id: &str,
+    macro_id: &str,
     thread_id: Uuid,
 ) -> anyhow::Result<Option<link::Link>> {
     let db_link = sqlx::query_as!(
@@ -165,10 +169,17 @@ pub async fn fetch_owned_link_for_thread(
                l.is_sync_active, l.created_at, l.updated_at
         FROM email_threads t
         JOIN email_links l ON l.id = t.link_id
-        WHERE t.id = $1 AND l.fusionauth_user_id = $2
+        WHERE t.id = $1
+          AND (
+              l.macro_id = $2
+              OR EXISTS (
+                  SELECT 1 FROM macro_user_links mul
+                  WHERE mul.child_macro_id = l.macro_id AND mul.primary_macro_id = $2
+              )
+          )
         "#,
         thread_id,
-        fusionauth_user_id
+        macro_id
     )
     .fetch_optional(pool)
     .await?;
@@ -177,11 +188,11 @@ pub async fn fetch_owned_link_for_thread(
 }
 
 /// Resolves the inbox (email_link) that owns a message, scoped to the caller's
-/// own inboxes. See [`fetch_owned_link_for_thread`].
+/// own and delegated inboxes. See [`fetch_owned_link_for_thread`].
 #[tracing::instrument(skip(pool), err)]
 pub async fn fetch_owned_link_for_message(
     pool: &PgPool,
-    fusionauth_user_id: &str,
+    macro_id: &str,
     message_id: Uuid,
 ) -> anyhow::Result<Option<link::Link>> {
     let db_link = sqlx::query_as!(
@@ -191,10 +202,17 @@ pub async fn fetch_owned_link_for_message(
                l.is_sync_active, l.created_at, l.updated_at
         FROM email_messages m
         JOIN email_links l ON l.id = m.link_id
-        WHERE m.id = $1 AND l.fusionauth_user_id = $2
+        WHERE m.id = $1
+          AND (
+              l.macro_id = $2
+              OR EXISTS (
+                  SELECT 1 FROM macro_user_links mul
+                  WHERE mul.child_macro_id = l.macro_id AND mul.primary_macro_id = $2
+              )
+          )
         "#,
         message_id,
-        fusionauth_user_id
+        macro_id
     )
     .fetch_optional(pool)
     .await?;

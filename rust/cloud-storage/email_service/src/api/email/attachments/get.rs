@@ -45,21 +45,19 @@ pub async fn handler(
 ) -> Result<Response, Response> {
     // Resolve which of the caller's inboxes owns this attachment. Each inbox is a
     // distinct Google account, so the owning link also determines the Gmail token.
-    let links = email_db_client::links::get::fetch_links_by_fusionauth_user_id(
-        &ctx.db,
-        &user_context.fusion_user_id,
-    )
-    .await
-    .map_err(|e| {
-        tracing::warn!(error=?e, "error fetching links");
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse {
-                message: "error fetching attachment".into(),
-            }),
-        )
-            .into_response()
-    })?;
+    let links =
+        email_db_client::links::get::fetch_inboxes_for_macro_id(&ctx.db, &user_context.user_id)
+            .await
+            .map_err(|e| {
+                tracing::warn!(error=?e, "error fetching links");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorResponse {
+                        message: "error fetching attachment".into(),
+                    }),
+                )
+                    .into_response()
+            })?;
 
     let mut owned = None;
     for link in links {

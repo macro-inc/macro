@@ -75,9 +75,9 @@ function Row(props: ToolRowProps) {
         class="size-4 shrink-0 text-ink-extra-muted"
         classList={{ 'mt-0.5': alignStart() }}
       />
-      <div class="min-w-0 flex-1">{props.children}</div>
+      <div class="min-w-0 flex-1 overflow-hidden">{props.children}</div>
       <Show when={props.trailing}>
-        <div class="shrink-0">{props.trailing}</div>
+        <div class="shrink-0 whitespace-nowrap">{props.trailing}</div>
       </Show>
     </div>
   );
@@ -95,7 +95,7 @@ function ResultToggle(props: ToolResultToggleProps) {
       when={canToggle()}
       fallback={
         <Show when={props.status}>
-          <span class="shrink-0 text-xs text-ink-extra-muted">
+          <span class="shrink-0 whitespace-nowrap text-xs text-ink-extra-muted">
             {props.status}
           </span>
         </Show>
@@ -106,7 +106,7 @@ function ResultToggle(props: ToolResultToggleProps) {
         variant="ghost"
         size="sm"
         noTouchResize
-        class="-mr-1 shrink-0 px-1 text-ink-extra-muted hover:text-ink-muted"
+        class="shrink-0 whitespace-nowrap px-1 text-ink-extra-muted hover:text-ink-muted"
         onClick={(event) => {
           event.preventDefault();
           event.stopPropagation();

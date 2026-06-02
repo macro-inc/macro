@@ -74,19 +74,12 @@ pub trait EmailRepo: Send + Sync + 'static {
         macro_id: MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Option<Link>, Self::Err>> + Send;
 
-    /// Returns every email_link owned by the given fusionauth user, one row per
-    /// linked inbox, ordered newest first.
-    fn links_by_fusionauth_user_id(
-        &self,
-        fusionauth_user_id: &str,
-    ) -> impl Future<Output = Result<Vec<Link>, Self::Err>> + Send;
-
     /// Resolve the inbox owning a thread, only when that inbox belongs to the
     /// given fusionauth user.
     fn owned_link_for_thread(
         &self,
         thread_id: Uuid,
-        fusionauth_user_id: &str,
+        macro_id: MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Option<Link>, Self::Err>> + Send;
 
     /// Returns every inbox accessible to `macro_id`: their own email_links plus
@@ -344,21 +337,12 @@ pub trait EmailService: Send + Sync + 'static {
         macro_id: MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Vec<Link>, EmailErr>> + Send;
 
-    /// Fetch every inbox owned by the caller, keyed on their fusionauth user id
-    /// (one row per linked inbox). The read-side multi-inbox union resolves over
-    /// these; the single-inbox mutating extractor selects one by header or by
-    /// primary-email match.
-    fn get_links_by_fusionauth_user_id(
-        &self,
-        auth_id: &str,
-    ) -> impl Future<Output = Result<Vec<Link>, EmailErr>> + Send;
-
-    /// Resolve the inbox owning a thread, scoped to the caller's own inboxes.
-    /// Lets thread-targeted mutations derive the inbox from the thread instead
-    /// of an `X-Email-Link-Id` header.
+    /// Resolve the inbox owning a thread, scoped to the caller's own and
+    /// delegated inboxes. Lets thread-targeted mutations derive the inbox from
+    /// the thread instead of an `X-Email-Link-Id` header.
     fn get_owned_link_for_thread(
         &self,
-        auth_id: &str,
+        macro_id: MacroUserIdStr<'_>,
         thread_id: Uuid,
     ) -> impl Future<Output = Result<Option<Link>, EmailErr>> + Send;
 

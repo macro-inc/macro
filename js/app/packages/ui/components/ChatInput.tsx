@@ -1,10 +1,10 @@
+import type { JSX } from 'solid-js';
 import { createContext, Show, splitProps, useContext } from 'solid-js';
 import { cn } from '../utils/classname';
-import type { JSX  } from 'solid-js';
 
 export type ChatInputRows = 1 | 2 | 3;
 
-type ChatInputContextValue = { rows: () => ChatInputRows; };
+type ChatInputContextValue = { rows: () => ChatInputRows };
 
 const ChatInputContext = createContext<ChatInputContextValue>();
 
@@ -12,13 +12,16 @@ function useChatInputContext(): ChatInputContextValue {
   const ctx = useContext(ChatInputContext);
   if (!ctx) {
     throw new Error(
-      'ChatInput.* components must be used inside <ChatInput.Root>',
+      'ChatInput.* components must be used inside <ChatInput.Root>'
     );
   }
   return ctx;
 }
 
-export type ChatInputProps = Omit<JSX.HTMLAttributes<HTMLDivElement>, 'style'> & {
+export type ChatInputProps = Omit<
+  JSX.HTMLAttributes<HTMLDivElement>,
+  'style'
+> & {
   style?: JSX.CSSProperties;
   rows?: ChatInputRows;
 };

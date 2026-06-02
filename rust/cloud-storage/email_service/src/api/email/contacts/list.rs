@@ -34,21 +34,19 @@ pub async fn list_contacts_handler(
     State(ctx): State<ApiContext>,
     user_context: Extension<UserContext>,
 ) -> Result<Response, Response> {
-    let links = email_db_client::links::get::fetch_links_by_fusionauth_user_id(
-        &ctx.db,
-        &user_context.fusion_user_id,
-    )
-    .await
-    .map_err(|e| {
-        tracing::error!(error=?e, "unable to fetch links");
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse {
-                message: "unable to fetch links".into(),
-            }),
-        )
-            .into_response()
-    })?;
+    let links =
+        email_db_client::links::get::fetch_inboxes_for_macro_id(&ctx.db, &user_context.user_id)
+            .await
+            .map_err(|e| {
+                tracing::error!(error=?e, "unable to fetch links");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorResponse {
+                        message: "unable to fetch links".into(),
+                    }),
+                )
+                    .into_response()
+            })?;
 
     let mut contacts: HashMap<Uuid, Vec<ContactInfoWithInteraction>> =
         HashMap::with_capacity(links.len());
