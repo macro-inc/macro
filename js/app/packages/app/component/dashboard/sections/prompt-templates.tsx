@@ -101,12 +101,14 @@ function PromptChip(props: {
   icon: Component<any>;
   onClick?: () => void;
   trailingIcon?: Component<{ class?: string }>;
+  animationDelay?: string;
 }) {
   const [hovering, setHovering] = createSignal(false);
 
   return (
     <button
-      class={pillClass}
+      class={`${pillClass} dashboard-prompt-template-item`}
+      style={{ 'animation-delay': props.animationDelay }}
       onClick={props.onClick}
       onPointerEnter={() => setHovering(true)}
       onPointerLeave={() => setHovering(false)}
@@ -139,8 +141,10 @@ function TemplateDropdown(props: { onSelect: (prompt: string) => void }) {
       <Dropdown.Content>
         <Dropdown.Group>
           <For each={TEMPLATES}>
-            {(template) => (
+            {(template, index) => (
               <Dropdown.Item
+                class="dashboard-prompt-template-item"
+                style={{ 'animation-delay': `${index() * 35}ms` }}
                 onSelect={() => {
                   setTimeout(() => props.onSelect(template.prompt));
                 }}
@@ -165,13 +169,28 @@ export function PromptTemplatesSection(props: {
 }) {
   return (
     <section class="@container/prompt-templates flex flex-wrap items-center justify-center gap-2 w-full">
+      <style>{
+        /*css*/ `
+          @keyframes dashboard-prompt-template-fade-up {
+            from { opacity: 0; transform: translateY(6px); }
+            to   { opacity: 1; transform: translateY(0); }
+          }
+          .dashboard-prompt-template-item {
+            animation: dashboard-prompt-template-fade-up 220ms ease-out both;
+          }
+          @media (prefers-reduced-motion: reduce) {
+            .dashboard-prompt-template-item { animation: none; }
+          }
+        `
+      }</style>
       <TemplateDropdown onSelect={(prompt) => props.onSelect(prompt)} />
       <Layer depth={2}>
         <For each={SUGGESTIONS}>
-          {(suggestion) => (
+          {(suggestion, index) => (
             <PromptChip
               label={suggestion.label}
               icon={suggestion.icon}
+              animationDelay={`${(index() + 1) * 50}ms`}
               onClick={() => props.onSelect(suggestion.text, 'append')}
             />
           )}
