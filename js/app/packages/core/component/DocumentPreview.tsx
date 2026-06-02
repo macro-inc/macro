@@ -757,11 +757,7 @@ export function PopupPreview(props: {
       onMouseEnter={props.mouseEnter}
       onMouseLeave={props.mouseLeave}
     >
-      <Surface
-        active
-        depth={3}
-        class="rounded-xl shadow-lg shadow-drop-shadow"
-      >
+      <Surface active depth={3} class="rounded-xl shadow-lg shadow-drop-shadow">
         <Switch>
           {/* Loading state */}
           <Match when={item().loading}>
