@@ -72,7 +72,6 @@ function RecipientChip(props: {
   return (
     <div
       class="flex flex-row shrink-0 py-1 pl-2 gap-1 pr-1 overflow-hidden items-center bg-active rounded-full"
-      classList={{ 'cursor-grab active:cursor-grabbing': props.draggable }}
       draggable={props.draggable}
       onDragStart={props.onDragStart}
       onDragEnd={props.onDragEnd}
