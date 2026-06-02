@@ -169,6 +169,17 @@ where
             .map_err(|e| EmailErr::RepoErr(e.into()))
     }
 
+    async fn get_owned_link_for_thread(
+        &self,
+        auth_id: &str,
+        thread_id: uuid::Uuid,
+    ) -> Result<Option<crate::domain::models::Link>, EmailErr> {
+        self.email_repo
+            .owned_link_for_thread(thread_id, auth_id)
+            .await
+            .map_err(|e| EmailErr::RepoErr(e.into()))
+    }
+
     async fn get_thread_with_messages(
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,

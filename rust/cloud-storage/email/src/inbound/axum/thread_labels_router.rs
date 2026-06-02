@@ -5,7 +5,9 @@ use axum::{
     response::IntoResponse,
     routing::patch,
 };
+use axum_extra::extract::Cached;
 use model_error_response::ErrorResponse;
+use model_user::axum_extractor::MacroUserExtractor;
 use thiserror::Error;
 use uuid::Uuid;
 
@@ -14,10 +16,7 @@ use crate::domain::{
     ports::{EmailService, GmailTokenProvider},
 };
 
-use super::{
-    axum_impls::{GmailAccessTokenExtractor, GmailTokenState},
-    previews_router::EmailRouterState,
-};
+use super::{axum_impls::GmailTokenState, previews_router::EmailRouterState};
 
 /// Request body for updating a thread's labels.
 #[derive(serde::Serialize, serde::Deserialize, Debug, utoipa::ToSchema)]
@@ -111,22 +110,27 @@ where
         (status = 500, body = ErrorResponse),
     )
 )]
-#[tracing::instrument(err, skip(state, gmail_extractor, body))]
+#[tracing::instrument(err, skip(state, token_state, macro_user, body))]
 pub async fn update_thread_labels_handler<T: EmailService, G: GmailTokenProvider>(
     State(state): State<EmailRouterState<T>>,
-    gmail_extractor: GmailAccessTokenExtractor<T, G>,
+    State(token_state): State<GmailTokenState<G>>,
+    Cached(macro_user): Cached<MacroUserExtractor>,
     Path(thread_id): Path<Uuid>,
     Json(body): Json<UpdateThreadLabelRequest>,
 ) -> Result<Json<UpdateThreadLabelsResponse>, UpdateThreadLabelError> {
+    // Resolve the inbox from the thread (scoped to the caller's own inboxes),
+    // then use that inbox's own Gmail token.
+    let link = state
+        .inner
+        .get_owned_link_for_thread(&macro_user.user_context.fusion_user_id, thread_id)
+        .await?
+        .ok_or_else(|| UpdateThreadLabelError::NotFound("Thread not found".to_string()))?;
+
+    let access_token = token_state.inner.fetch_gmail_access_token(&link).await?;
+
     let result = state
         .inner
-        .update_thread_labels(
-            &gmail_extractor.access_token,
-            &gmail_extractor.link,
-            thread_id,
-            body.label_id,
-            body.value,
-        )
+        .update_thread_labels(&access_token, &link, thread_id, body.label_id, body.value)
         .await?;
 
     Ok(Json(UpdateThreadLabelsResponse {

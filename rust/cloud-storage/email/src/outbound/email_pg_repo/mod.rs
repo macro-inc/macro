@@ -104,6 +104,14 @@ impl EmailRepo for EmailPgRepo {
         link::links_by_fusionauth_user_id(&self.pool, fusionauth_user_id).await
     }
 
+    async fn owned_link_for_thread(
+        &self,
+        thread_id: Uuid,
+        fusionauth_user_id: &str,
+    ) -> Result<Option<Link>, Self::Err> {
+        link::owned_link_for_thread(&self.pool, thread_id, fusionauth_user_id).await
+    }
+
     async fn inboxes_for_macro_id(
         &self,
         macro_id: MacroUserIdStr<'_>,
