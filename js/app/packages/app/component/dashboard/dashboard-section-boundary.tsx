@@ -1,10 +1,77 @@
-import { ErrorBoundary, type JSX, Suspense } from 'solid-js';
-import { DashboardSectionError } from './dashboard-section-error';
+import RefreshIcon from '@phosphor/arrow-clockwise.svg';
+import WarningIcon from '@phosphor/warning.svg';
+import { Button } from '@ui';
+import {
+  createSignal,
+  ErrorBoundary,
+  type JSX,
+  Show,
+  Suspense,
+} from 'solid-js';
 
 interface DashboardSectionBoundaryProps {
   title: string;
   children: JSX.Element;
   fallback?: JSX.Element;
+}
+
+interface DashboardSectionErrorProps {
+  error: Error;
+  reset: () => void;
+  title?: string;
+}
+
+function DashboardSectionError(props: DashboardSectionErrorProps) {
+  const [showDetails, setShowDetails] = createSignal(false);
+
+  return (
+    <div class="rounded-xl border border-edge-muted bg-surface p-4">
+      <div class="flex items-start gap-3">
+        <div class="flex size-8 shrink-0 items-center justify-center rounded-full bg-failure/10 text-failure [&_svg]:size-4">
+          <WarningIcon />
+        </div>
+
+        <div class="min-w-0 flex flex-1 flex-col">
+          <p class="text-sm font-medium text-ink">
+            {props.title
+              ? `Failed to load ${props.title}`
+              : 'Something went wrong'}
+          </p>
+          <p class="text-xs leading-5 text-ink-muted">
+            We couldn’t load this section. Try again, or view details if the
+            issue continues.
+          </p>
+
+          <Show when={showDetails()}>
+            <p class="mt-2 break-words rounded-lg bg-hover/50 p-2 text-xs leading-5 text-ink-extra-muted">
+              {props.error.message}
+            </p>
+          </Show>
+
+          <div class="mt-2 flex gap-2">
+            <Button
+              variant="base"
+              size="sm"
+              depth={2}
+              class="w-fit bg-surface"
+              onClick={props.reset}
+            >
+              <RefreshIcon class="size-3.5" />
+              Try again
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowDetails((value) => !value)}
+              class="w-fit"
+            >
+              {showDetails() ? 'Hide details' : 'Show details'}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function DashboardSectionFallback() {
