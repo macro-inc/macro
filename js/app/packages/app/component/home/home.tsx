@@ -19,6 +19,9 @@ import { createRenameDssEntityMutation } from '@macro-entity';
 import { invalidateAllSoup } from '@queries/soup/normalized-cache';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { createMemo } from 'solid-js';
+import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
+import { Navigate } from '@solidjs/router';
+import { ENABLE_HOME_OVERRIDE } from '@core/constant/featureFlags';
 
 const MACRO_LOGO_PATH =
   'm6.25 4.038-2.242 0.8792v5.8184l-1.756-1.6582-2.242 0.8792v6.6766c0 0.2568 0.106 0.502 0.292 0.6784l2.794 2.6422 2.244-0.879v-5.8184l7.084 6.6974 2.244-0.879v-5.8184l7.086 6.6976 2.24-0.8792v-6.6766c0-0.2568-0.104-0.5022-0.292-0.6784l-8.124-7.6816-2.244 0.879v5.8184z';
@@ -53,6 +56,18 @@ function AnimatedHeroLogo(props: { class?: string }) {
 }
 
 export function Home() {
+  return (
+    <ShowFeatureFlag
+      key="enable-home-view"
+      enabledOverride={ENABLE_HOME_OVERRIDE}
+      fallback={<Navigate href="/" />}
+    >
+      <HomeContent />
+    </ShowFeatureFlag>
+  );
+}
+
+function HomeContent() {
   const user = useUserContext();
 
   const firstName = createMemo(() => {

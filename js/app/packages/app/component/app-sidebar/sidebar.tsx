@@ -37,7 +37,7 @@ import {
   DEV_MODE_ENV,
   ENABLE_APP_STORE_QR_CODE,
   ENABLE_CALLS,
-  ENABLE_DASHBOARD_OVERRIDE,
+  ENABLE_HOME_OVERRIDE,
   ENABLE_NEW_PRICING_OVERRIDE,
   ENABLE_TEAMS_OVERRIDE,
 } from '@core/constant/featureFlags';
@@ -779,8 +779,8 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const notificationSettings = useNotificationSettings();
   const callCtx = useCallContextOptional();
 
-  const dashboardEnabled = useFeatureFlag('enable-dashboard', {
-    enabledOverride: ENABLE_DASHBOARD_OVERRIDE,
+  const homeViewEnabled = useFeatureFlag('enable-home-view', {
+    enabledOverride: ENABLE_HOME_OVERRIDE,
   });
 
   const hasPaidAccess = useHasPaidAccess();
@@ -812,7 +812,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const visibleLinks = createMemo((): SidebarItem[] => {
     let links: SidebarItem[] = [...SIDEBAR_LINKS];
 
-    if (dashboardEnabled().enabled) {
+    if (homeViewEnabled().enabled) {
       links = [DASHBOARD_LINK, ...links];
     }
 
