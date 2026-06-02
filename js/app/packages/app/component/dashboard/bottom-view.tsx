@@ -1,6 +1,6 @@
 import { DashboardAiInput } from '@app/component/dashboard/dashboard-chat-input';
 import { DashboardSectionBoundary } from '@app/component/dashboard/dashboard-section-boundary';
-import { PromptTemplatesSection } from '@app/component/dashboard/sections/prompt-templates';
+import { QuickActionsSection } from '@app/component/dashboard/sections/quick-actions';
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
 import { ItemPreview } from '@core/component/ItemPreview';
@@ -286,23 +286,6 @@ export function BottomView() {
   });
   const greeting = createMemo(() => `Good ${timeOfDay()}`);
   const chatEditor = buildChatEditor();
-  const fillChatInput = (
-    text: string,
-    mode: 'replace' | 'append' = 'replace'
-  ) => {
-    if (mode === 'append') {
-      const current = chatEditor.controls.getMarkdown().trimEnd();
-      if (!current.includes(text)) {
-        chatEditor.controls.setMarkdown(
-          current ? `${current}\n\n${text}` : text
-        );
-      }
-    } else {
-      chatEditor.controls.setMarkdown(text);
-    }
-    requestAnimationFrame(() => chatEditor.controls.focus());
-  };
-
   return (
     <div class="max-w-4xl mx-auto flex min-h-full w-full flex-col justify-between gap-8">
       <div class="flex flex-col w-full flex-1 flex-col gap-6">
@@ -320,8 +303,8 @@ export function BottomView() {
       </div>
 
       <div class="mx-auto flex w-full flex-col gap-3 px-4 sm:px-0">
-        <DashboardSectionBoundary title="prompt templates">
-          <PromptTemplatesSection onSelect={fillChatInput} />
+        <DashboardSectionBoundary title="quick actions">
+          <QuickActionsSection />
         </DashboardSectionBoundary>
 
         <DashboardSectionBoundary title="hero">

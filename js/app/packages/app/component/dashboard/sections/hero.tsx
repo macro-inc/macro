@@ -1,4 +1,4 @@
-import { PromptTemplatesSection } from '@app/component/dashboard/sections/prompt-templates';
+import { QuickActionsSection } from '@app/component/dashboard/sections/quick-actions';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
@@ -43,24 +43,6 @@ function AnimatedHeroLogo(props: { class?: string }) {
 
 export function Hero() {
   const user = useUserContext();
-  const chatEditor = buildChatEditor();
-  const fillChatInput = (
-    text: string,
-    mode: 'replace' | 'append' = 'replace'
-  ) => {
-    if (mode === 'append') {
-      const current = chatEditor.controls.getMarkdown().trimEnd();
-      if (!current.includes(text)) {
-        chatEditor.controls.setMarkdown(
-          current ? `${current}\n\n${text}` : text
-        );
-      }
-    } else {
-      chatEditor.controls.setMarkdown(text);
-    }
-    requestAnimationFrame(() => chatEditor.controls.focus());
-  };
-
   const firstName = createMemo(() => {
     const name = user.author();
     return name.includes('@') ? name.split('@')[0] : name.split(' ')[0];
@@ -128,9 +110,9 @@ export function Hero() {
           }
         `
       }</style>
-      <div class="dashboard-hero-stagger mx-auto flex max-w-3xl flex-col items-center gap-8">
-        <div class="flex w-full items-center justify-between gap-3 sm:justify-center">
-          <AnimatedHeroLogo class="sm:size-6 text-accent" />
+      <div class="dashboard-hero-stagger mx-auto flex max-w-3xl flex-col items-center gap-8 px-4 sm:px-0">
+        <div class="flex w-full items-center gap-3 justify-center">
+          <AnimatedHeroLogo class="size-6 text-accent" />
           <h1 class="relative min-w-0 text-balance text-2xl font-medium font-serif tracking-tight text-ink">
             {greeting()}, <span class="capitalize">{firstName()}</span>
           </h1>
@@ -146,7 +128,7 @@ export function Hero() {
             />
           </ChatInputProvider>
           <div class="w-full flex items-center justify-between">
-            <PromptTemplatesSection onSelect={fillChatInput} />
+            <QuickActionsSection />
           </div>
         </div>
       </div>
