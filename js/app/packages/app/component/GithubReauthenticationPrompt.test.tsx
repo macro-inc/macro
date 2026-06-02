@@ -42,6 +42,12 @@ type ToastConfig = {
   title: string;
 };
 
+type ToastOptions = {
+  duration?: number;
+  onDismiss?: () => void;
+  persistent?: boolean;
+};
+
 function renderPrompt(): () => void {
   const container = document.createElement('div');
   document.body.appendChild(container);
@@ -106,8 +112,13 @@ describe('GithubReauthenticationPrompt', () => {
     await flushPromises();
     await getReconnectAction().onClick();
 
+    const options = mocks.toastCustom.mock.calls[0]?.[1] as ToastOptions;
+
     expect(mocks.checkGithubLinkStatus).toHaveBeenCalledTimes(1);
     expect(mocks.toastCustom).toHaveBeenCalledTimes(1);
+    expect(options.persistent).toBe(true);
+    expect(options.duration).toBeUndefined();
+    expect(options.onDismiss).toEqual(expect.any(Function));
     expect(mocks.toastDismiss).toHaveBeenCalledWith(101);
     expect(mocks.reauthenticateGithub).toHaveBeenCalledWith(originalUrl);
     expect(window.location.href).toBe(authorizationUrl);

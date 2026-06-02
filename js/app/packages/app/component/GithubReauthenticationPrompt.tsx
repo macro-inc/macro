@@ -2,19 +2,10 @@ import { toast } from '@core/component/Toast/Toast';
 import { authServiceClient } from '@service-auth/client';
 import { onMount } from 'solid-js';
 
-const GITHUB_REAUTHENTICATION_TOAST_DURATION = 10_000;
-
 let githubReauthenticationToastId: number | undefined;
-let githubReauthenticationToastResetTimeout:
-  | ReturnType<typeof setTimeout>
-  | undefined;
 
 function clearGithubReauthenticationToastState(): void {
   githubReauthenticationToastId = undefined;
-
-  if (githubReauthenticationToastResetTimeout === undefined) return;
-  clearTimeout(githubReauthenticationToastResetTimeout);
-  githubReauthenticationToastResetTimeout = undefined;
 }
 
 async function handleGithubReauthenticationToastAction(): Promise<void> {
@@ -51,12 +42,10 @@ function showGithubReauthenticationToast(): void {
         },
       ],
     },
-    { duration: GITHUB_REAUTHENTICATION_TOAST_DURATION }
-  );
-
-  githubReauthenticationToastResetTimeout = setTimeout(
-    clearGithubReauthenticationToastState,
-    GITHUB_REAUTHENTICATION_TOAST_DURATION
+    {
+      persistent: true,
+      onDismiss: clearGithubReauthenticationToastState,
+    }
   );
 }
 

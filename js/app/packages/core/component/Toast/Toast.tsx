@@ -679,6 +679,7 @@ function custom(
     duration?: number;
     region?: string;
     mobile?: boolean;
+    onDismiss?: () => void;
   }
 ): number {
   const useMobile = options?.mobile && isMobile();
@@ -692,6 +693,7 @@ function custom(
         persistent={options?.persistent}
         duration={options?.duration}
         mobile={useMobile}
+        onDismiss={options?.onDismiss}
       />
     ),
     { region }
