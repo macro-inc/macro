@@ -1472,6 +1472,7 @@ export function BaseInput(props: {
               <RecipientSelector<EmailRecipient['kind']>
                 inputRef={setToRef}
                 options={ctx.recipientOptions}
+                selfEmail={activeInboxEmail()}
                 selectedOptions={form().recipients().to}
                 setSelectedOptions={withDraftSave((v) =>
                   form().setRecipients('to', v)
@@ -1496,6 +1497,7 @@ export function BaseInput(props: {
                 <RecipientSelector<EmailRecipient['kind']>
                   inputRef={setCcRef}
                   options={ctx.recipientOptions}
+                  selfEmail={activeInboxEmail()}
                   selectedOptions={form().recipients().cc}
                   setSelectedOptions={withDraftSave((v) =>
                     form().setRecipients('cc', v)
@@ -1521,6 +1523,7 @@ export function BaseInput(props: {
                 <RecipientSelector<EmailRecipient['kind']>
                   inputRef={setBccRef}
                   options={ctx.recipientOptions}
+                  selfEmail={activeInboxEmail()}
                   selectedOptions={form().recipients().bcc}
                   setSelectedOptions={withDraftSave((v) =>
                     form().setRecipients('bcc', v)

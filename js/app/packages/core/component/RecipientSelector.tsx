@@ -258,6 +258,7 @@ type RecipientSelectorProps<K extends CombinedRecipientKind> = {
   hideBorder?: boolean;
   noPadding?: boolean;
   includeSelf?: boolean;
+  selfEmail?: string;
   disabled?: boolean;
   onChipDragStart?: (option: WithCustomUserInput<K>, e: DragEvent) => void;
   onChipDragEnd?: (e: DragEvent) => void;
@@ -317,6 +318,9 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
 
   const userId = useUserId();
   const userEmail = useEmail();
+  const selfEmail = () => (props.selfEmail ?? userEmail())?.toLowerCase();
+  const selfId = () =>
+    props.selfEmail ? emailToId(props.selfEmail) : userId();
 
   function handleChange(value: CombinedRecipientItem[]) {
     let newestSelection = value.at(-1);
@@ -329,7 +333,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
     if (
       !props.includeSelf &&
       newestSelection.kind === 'user' &&
-      newestSelection.id === userId()
+      newestSelection.id === selfId()
     ) {
       const inputEl = inputRef();
       if (inputEl) inputEl.value = '';
@@ -386,6 +390,15 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
     }),
   });
 
+  const selectedEmails = createMemo(() => {
+    const set = new Set<string>();
+    for (const option of props.selectedOptions) {
+      const email = getRecipientOptionEmail(option as CombinedRecipientItem);
+      if (email) set.add(email.toLowerCase());
+    }
+    return set;
+  });
+
   const augmentUserWithDmActivity = useAugmentUserWithDmActivity();
   const recipients = createMemo(() => {
     const options: CombinedRecipientItem[] = [];
@@ -397,9 +410,10 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
 
       if (!props.includeSelf) {
         const matchesSelf =
-          (item.kind === 'user' && item.id === userId()) ||
-          (item.kind === 'contact' && email === userEmail()?.toLowerCase());
-        if (matchesSelf) {
+          (item.kind === 'user' && item.id === selfId()) ||
+          (item.kind === 'contact' && email === selfEmail());
+        const isSelected = !!email && selectedEmails().has(email.toLowerCase());
+        if (matchesSelf && !isSelected) {
           continue;
         }
       }
