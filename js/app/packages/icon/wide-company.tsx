@@ -22,8 +22,9 @@ export const AnimatedCompanyIcon = (props: {
       <style>{`
         .animated-company-icon {
           .building-center, #${maskId} .mask-center { transform-origin: 9px 6px; }
-          .building-left { transform-origin: 1.4px 7px; }
-          .building-right { transform-origin: 16.6px 8.25px; }
+          /* Origin at each L's bottom point so scaling grows them upward only */
+          .building-left { transform-origin: 0.75px 10.5px; }
+          .building-right { transform-origin: 17.25px 10.5px; }
           .building-center, .building-left, .building-right, .ground, #${maskId} .mask-center {
             transition: transform 0.4s ease;
           }
@@ -41,15 +42,17 @@ export const AnimatedCompanyIcon = (props: {
           .building-outline {
             stroke-width: 1px;
           }
-          /* Follow the zoomed building's base: 11.25 -> 6 + (11.25-6)*1.5 = 13.875 */
+          /* Keep the ground touching the door/L bottoms: door bottom 10.5 ->
+             12.75 under scale(1.5); ground top edge meets it at centerline 13.5
+             (translateY 2.25). Side L's translate down by the same amount. */
           .ground {
-            transform: translateY(2.625px);
+            transform: translateY(2.25px);
           }
           .building-left {
-            transform: translateX(4px) scale(1.2);
+            transform: translate(4px, 2.25px) scale(1.2);
           }
           .building-right {
-            transform: translateX(-4px) scale(1.2);
+            transform: translate(-4px, 2.25px) scale(1.2);
           }
         }
       `}</style>
