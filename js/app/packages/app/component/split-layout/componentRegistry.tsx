@@ -103,9 +103,9 @@ registerComponent('unified-list', () => (
 
 /** BEGIN - APP ROUTES */
 registerComponent(
-  'dashboard',
+  'home',
   withAuth(() => {
-    usePageViewTracking('dashboard');
+    usePageViewTracking('home');
     return <Dashboard />;
   })
 );

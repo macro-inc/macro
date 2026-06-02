@@ -36,9 +36,9 @@ import {
   DEV_MODE_ENV,
   ENABLE_APP_STORE_QR_CODE,
   ENABLE_CALLS,
+  ENABLE_DASHBOARD_OVERRIDE,
   ENABLE_NEW_PRICING_OVERRIDE,
   ENABLE_TEAMS_OVERRIDE,
-  ENABLE_DASHBOARD_OVERRIDE,
 } from '@core/constant/featureFlags';
 import {
   type SettingsTab,
@@ -66,12 +66,12 @@ import { AnimatedPlusIcon } from '@icon/wide-plus';
 import { AnimatedSearchIcon } from '@icon/wide-search';
 import { AnimatedStarIcon } from '@icon/wide-star';
 import { AnimatedTaskIcon } from '@icon/wide-task';
-import { AnimatedDashboardIcon } from '@icon/dashboard';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { useNotificationSettings } from '@notifications';
 import BellIcon from '@phosphor/bell.svg';
 import CaretUpIcon from '@phosphor/caret-up.svg';
 import DeviceMobileIcon from '@phosphor/device-mobile-speaker.svg';
+import HomeIcon from '@phosphor/house.svg';
 import KeyboardIcon from '@phosphor/keyboard.svg';
 import PaintBucketIcon from '@phosphor/paint-bucket.svg';
 import PlayIcon from '@phosphor/play.svg';
@@ -762,12 +762,12 @@ const CALLS_LINK: SidebarItem = {
 };
 
 const DASHBOARD_LINK: SidebarItem = {
-  id: 'dashboard',
-  label: 'Dashboard',
-  href: LIST_VIEW_PATHS.dashboard,
-  icon: AnimatedDashboardIcon,
+  id: 'home',
+  label: 'Home',
+  href: LIST_VIEW_PATHS.home,
+  icon: HomeIcon,
   hotkey: 'h',
-  hotkeyToken: TOKENS.sidebar.goTo.dashboard,
+  hotkeyToken: TOKENS.sidebar.goTo.home,
 };
 
 export const AppSidebar = (props: AppSidebarProps) => {
