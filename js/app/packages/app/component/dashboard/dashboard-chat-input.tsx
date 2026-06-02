@@ -1,10 +1,10 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
-import type { EditorConfigBuilder } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { ChatInput } from '@core/component/AI/component/input/ChatInput';
 import { ChatInputProvider } from '@core/component/AI/context';
 import { setPendingSendData } from '@core/component/AI/signal/pendingSend';
+import type { EditorConfigBuilder } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 
 export function DashboardAiInput(props: { editor?: EditorConfigBuilder }) {

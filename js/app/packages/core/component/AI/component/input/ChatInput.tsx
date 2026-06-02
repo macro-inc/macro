@@ -181,6 +181,22 @@ export function ChatInput(props: ChatInputComponentProps) {
     </div>
   );
 
+  const Attachments = () => (
+    <Show when={hasAttachments()}>
+      <div class="pt-2 w-full">
+        <AttachmentList
+          attached={attachments.attached}
+          removeAttachment={(id) => {
+            attachments.removeAttachment(id);
+          }}
+          uploading={() =>
+            uploadQueue.uploading().map((uploading) => uploading.preview)
+          }
+        />
+      </div>
+    </Show>
+  );
+
   const isTallVariant = createMemo(() => props.variant === 'tall');
 
   return (
@@ -196,18 +212,8 @@ export function ChatInput(props: ChatInputComponentProps) {
         ref={containerRef}
         id="chat-input"
       >
-        <Show when={hasAttachments()}>
-          <div class="px-2 pt-2 w-full">
-            <AttachmentList
-              attached={attachments.attached}
-              removeAttachment={(id) => {
-                attachments.removeAttachment(id);
-              }}
-              uploading={() =>
-                uploadQueue.uploading().map((uploading) => uploading.preview)
-              }
-            />
-          </div>
+        <Show when={!isTallVariant()}>
+          <Attachments />
         </Show>
 
         <Show when={showAttachMenu()}>
@@ -235,7 +241,6 @@ export function ChatInput(props: ChatInputComponentProps) {
               'pl-8': !isMultiline() && !isTallVariant(),
               'pr-12': !isMultiline() && !isTallVariant(),
               'px-0 pb-8': isMultiline() && !isTallVariant(),
-              'pb-4': isTallVariant(),
             }}
             ref={mdRef}
           >
@@ -249,6 +254,12 @@ export function ChatInput(props: ChatInputComponentProps) {
                 props.autoFocusOnMount !== false
               }
             />
+            <Show when={isTallVariant()}>
+              <div class="h-4" />
+            </Show>
+            <Show when={isTallVariant()}>
+              <Attachments />
+            </Show>
           </div>
 
           <div
@@ -256,12 +267,19 @@ export function ChatInput(props: ChatInputComponentProps) {
               'flex justify-between items-center': isTallVariant(),
             })}
           >
-            <div class={cn(!isTallVariant() && 'absolute left-2 bottom-1.5')}>
+            <div
+              class={cn(
+                !isTallVariant() && 'absolute left-2 top-1/2 -translate-y-1/2'
+              )}
+            >
               <LeftButton />
             </div>
 
             <div
-              class={cn(!isTallVariant() && 'absolute right-1.5 bottom-1.5')}
+              class={cn(
+                !isTallVariant() &&
+                  'absolute right-1.5 top-1/2 -translate-y-1/2'
+              )}
             >
               <RightControls />
             </div>

@@ -1,13 +1,26 @@
-import { QuickActionsSection } from '@app/component/dashboard/sections/quick-actions';
+import { useAnalytics } from '@app/component/analytics-context';
+import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { useHasPaidAccess } from '@core/auth';
 import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
 import { ChatInput } from '@core/component/AI/component/input/ChatInput';
-import { ChatInputProvider } from '@core/component/AI/context';
+import {
+  ChatInputProvider,
+  useChatInputContext,
+} from '@core/component/AI/context';
+import { useGetChatAttachmentInfo } from '@core/component/AI/signal/attachment';
 import { setPendingSendData } from '@core/component/AI/signal/pendingSend';
+import { deriveChatName } from '@core/component/AI/util/deriveName';
+import { usePaywallState, PaywallKey } from '@core/constant/PaywallState';
 import { useUserContext } from '@core/context/user';
+import { useHotkeyDOMScope, registerHotkey } from '@core/hotkey/hotkeys';
+import { TOKENS } from '@core/hotkey/tokens';
+import { isPaymentError } from '@core/util/handlePaymentError';
+import { createRenameDssEntityMutation } from '@macro-entity';
+import { invalidateAllSoup } from '@queries/soup/normalized-cache';
 import { cognitionApiServiceClient } from '@service-cognition/client';
-import { createMemo } from 'solid-js';
+import { createMemo, onMount } from 'solid-js';
 
 const MACRO_LOGO_PATH =
   'm6.25 4.038-2.242 0.8792v5.8184l-1.756-1.6582-2.242 0.8792v6.6766c0 0.2568 0.106 0.502 0.292 0.6784l2.794 2.6422 2.244-0.879v-5.8184l7.084 6.6974 2.244-0.879v-5.8184l7.086 6.6976 2.24-0.8792v-6.6766c0-0.2568-0.104-0.5022-0.292-0.6784l-8.124-7.6816-2.244 0.879v5.8184z';
@@ -57,28 +70,6 @@ export function Hero() {
 
   const greeting = createMemo(() => `Good ${timeOfDay()}`);
 
-  const editor = buildChatEditor();
-
-  const handleSend = async (request: ChatSendInput) => {
-    const response = await cognitionApiServiceClient.createChat({});
-    if (response.isErr()) return;
-
-    setPendingSendData({
-      content: request.content,
-      attachments: request.attachments,
-      model: request.model,
-    });
-
-    globalSplitManager()?.openWithSplit(
-      { type: 'chat', id: response.value.id },
-      {
-        activate: true,
-        referredFrom: null,
-        preferNewSplit: request.metaKey,
-      }
-    );
-  };
-
   return (
     <section class="relative">
       <style>{
@@ -100,7 +91,7 @@ export function Hero() {
           .dashboard-logo-fill-clip {
             transform-box: fill-box;
             transform-origin: left center;
-            animation: dashboard-hero-logo-fill 250ms cubic-bezier(0.2, 0.8, 0.2, 1) 50ms both;
+            animation: dashboard-hero-logo-fill 550ms cubic-bezier(0.2, 0.8, 0.2, 1) 50ms both;
           }
           @media (prefers-reduced-motion: reduce) {
             .dashboard-hero-stagger > *,
@@ -119,19 +110,111 @@ export function Hero() {
         </div>
 
         <div class="flex flex-col gap-4 w-full text-left">
-          <ChatInputProvider>
-            <ChatInput
-              variant="tall"
-              editor={editor}
-              onSend={handleSend}
-              isPersistent
-            />
-          </ChatInputProvider>
-          <div class="w-full flex items-center justify-between">
-            <QuickActionsSection />
-          </div>
+          <HomeChatInput />
         </div>
       </div>
     </section>
   );
 }
+
+const HomeChatInputInner = () => {
+  const analytics = useAnalytics();
+  const splitPanelContext = useSplitPanelOrThrow();
+  const input = useChatInputContext();
+  const hasPaid = useHasPaidAccess();
+
+  const { getAttachmentFromMention } = useGetChatAttachmentInfo();
+
+  const editor = buildChatEditor().withMentions({
+    onCreate: (mention) => {
+      analytics.track('mentions_menu_use', { itemType: 'chat' });
+      const attachment = getAttachmentFromMention(mention);
+      if (attachment) input.attachments.addAttachment(attachment);
+    },
+    block: 'chat',
+    showOpenTabs: true,
+  });
+
+  const renameMutation = createRenameDssEntityMutation();
+
+  const handleSend = async (request: ChatSendInput) => {
+    if (!hasPaid()) {
+      const { showPaywall } = usePaywallState();
+      showPaywall(PaywallKey.CHAT_LIMIT);
+      return;
+    }
+
+    const backgroundSend = request.metaKey;
+
+    // Create a new persistent chat
+    const response = await cognitionApiServiceClient.createChat({});
+    if (response.isErr()) {
+      if (isPaymentError(response)) {
+        const { showPaywall } = usePaywallState();
+        showPaywall(PaywallKey.CHAT_LIMIT);
+      }
+      return;
+    }
+    const { id: chatId } = response.value;
+
+    // Rename via mutation for optimistic cache updates (history, preview, soup)
+    const name = deriveChatName(request.content);
+    if (name) {
+      renameMutation.mutate({
+        entity: { type: 'chat', id: chatId, name: '', ownerId: '' },
+        newName: name,
+      });
+    }
+
+    if (backgroundSend) {
+      // Send the message in the background without navigating
+      cognitionApiServiceClient.sendStreamChatMessage({
+        content: request.content,
+        model: request.model,
+        chat_id: chatId,
+        attachments:
+          request.attachments.length > 0 ? request.attachments : undefined,
+        toolset: { type: 'all' },
+      });
+      invalidateAllSoup();
+    } else {
+      // Store the pending send data for the chat to pick up
+      setPendingSendData({
+        content: request.content,
+        attachments: request.attachments,
+        model: request.model,
+      });
+
+      // Replace the soup split with the chat split
+      splitPanelContext.handle.replace({
+        next: { type: 'chat', id: chatId },
+      });
+    }
+  };
+
+  return (
+    <div class="w-full max-w-3xl">
+      <div class="pointer-events-auto">
+        <ChatInput
+          variant="tall"
+          editor={editor}
+          onSend={handleSend}
+          onEscape={() => {
+            splitPanelContext.panelRef()?.focus();
+            return true;
+          }}
+          isPersistent={true}
+          autoFocusOnMount={false}
+        />
+      </div>
+    </div>
+  );
+};
+
+const HomeChatInput = () => {
+  return (
+    <ChatInputProvider>
+      <HomeChatInputInner />
+    </ChatInputProvider>
+  );
+};

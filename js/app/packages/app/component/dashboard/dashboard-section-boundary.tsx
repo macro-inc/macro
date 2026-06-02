@@ -1,4 +1,4 @@
-import { type JSX, ErrorBoundary, Suspense } from 'solid-js';
+import { ErrorBoundary, type JSX, Suspense } from 'solid-js';
 import { DashboardSectionError } from './dashboard-section-error';
 
 interface DashboardSectionBoundaryProps {
