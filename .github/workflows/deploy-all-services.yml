@@ -174,7 +174,7 @@ jobs:
 
   deploy-services:
     name: Deploy ${{ matrix.service }}
-    needs: [build-service-binaries, build-lambda-artifacts, migrate-db]
+    needs: [setup, build-service-binaries, build-lambda-artifacts, migrate-db]
     if: ${{ needs.setup.outputs.matrix != '[]' }}
     runs-on:
       [
