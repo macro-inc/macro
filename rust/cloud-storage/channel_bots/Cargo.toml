@@ -17,3 +17,4 @@ uuid = { workspace = true }
 
 [dev-dependencies]
 chrono = { workspace = true }
+models_pagination = { path = "../models_pagination" }

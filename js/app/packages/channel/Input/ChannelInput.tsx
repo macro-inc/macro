@@ -165,14 +165,12 @@ export function ChannelInput(props: ChannelInputProps) {
 
   // Macro AI is mentionable in every channel. It is surfaced through the same
   // `@`-mention typeahead as participants and re-tagged as a bot at send time.
-  const mentionUsers: Accessor<IUser[]> | undefined = props.participants
-    ? () => {
-        const base = props.participants!();
-        return base.some((user) => user.id === MACRO_AI_BOT_ID)
-          ? base
-          : [macroAiMentionUser(), ...base];
-      }
-    : undefined;
+  const mentionUsers: Accessor<IUser[]> = () => {
+    const base = props.participants?.() ?? [];
+    return base.some((user) => user.id === MACRO_AI_BOT_ID)
+      ? base
+      : [macroAiMentionUser(), ...base];
+  };
 
   const markdownEditor = createConfiguredChannelMarkdownEditor({
     namespace: props.markdownNamespace ?? 'channel-input-markdown',

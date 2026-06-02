@@ -64,6 +64,9 @@ pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
                     "/internal/agent/channel-respond",
                     post(internal_agent::channel_respond),
                 )
+                .layer(TraceLayer::new_for_http())
+                .layer(RequestBodyLimitLayer::new(1024 * 1024 * 1024))
+                .layer(DefaultBodyLimit::disable())
                 .with_state(state.clone()),
         )
         .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()));

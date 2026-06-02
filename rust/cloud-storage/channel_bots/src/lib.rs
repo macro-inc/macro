@@ -12,11 +12,9 @@
 //!   answer.
 
 mod handlers;
-mod poster;
 mod responder;
 mod router;
 
-pub use handlers::{BotEvent, BotTrigger, MacroAiHandler, SystemBotHandler};
-pub use poster::ChannelBotPoster;
+pub use handlers::{BotEvent, BotTrigger, MacroAiHandler};
 pub use responder::{AgentResponder, DcsAgentResponder};
 pub use router::BotTriggerRouter;

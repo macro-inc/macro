@@ -1,14 +1,11 @@
 //! Routes channel bot triggers to the appropriate handler.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
-use bot_id::BotId;
-use channels::domain::ports::ChannelBotDispatcher;
+use channels::domain::ports::{ChannelBotDispatcher, ChannelService};
 use channels::domain::side_effects::ChannelBotTrigger;
 
-use crate::handlers::{BotEvent, BotTrigger, MacroAiHandler, SystemBotHandler};
-use crate::poster::ChannelBotPoster;
+use crate::handlers::{BotEvent, BotTrigger, MacroAiHandler};
 use crate::responder::AgentResponder;
 
 /// Resolves the bots mentioned in a channel message and runs their handlers.
@@ -16,26 +13,29 @@ use crate::responder::AgentResponder;
 /// Wired into the channels side-effect service as a [`ChannelBotDispatcher`].
 /// Dispatch is fire-and-forget: each trigger is handled on a spawned task.
 ///
-/// System bots are defined in code (a registry keyed by [`BotId`]) and require
-/// no database row. Unknown bot ids are ignored for now; only system bots are
-/// handled by this branch.
-#[derive(Clone)]
-pub struct BotTriggerRouter {
-    system_bots: Arc<HashMap<BotId, Arc<dyn SystemBotHandler>>>,
+/// System bots are defined in code and require no database row. Unknown bot ids
+/// are ignored for now; only Macro AI is handled by this branch.
+pub struct BotTriggerRouter<C, R> {
+    macro_ai: Arc<MacroAiHandler<C, R>>,
 }
 
-impl BotTriggerRouter {
-    /// Create a router with the built-in system bots registered.
-    pub fn new(poster: Arc<dyn ChannelBotPoster>, responder: Arc<dyn AgentResponder>) -> Self {
-        let mut system_bots: HashMap<BotId, Arc<dyn SystemBotHandler>> = HashMap::new();
-        // Macro: the built-in, code-defined system bot.
-        system_bots.insert(
-            bot_id::MACRO_AI_BOT_ID,
-            Arc::new(MacroAiHandler::new(poster, responder)),
-        );
-
+impl<C, R> Clone for BotTriggerRouter<C, R> {
+    fn clone(&self) -> Self {
         Self {
-            system_bots: Arc::new(system_bots),
+            macro_ai: self.macro_ai.clone(),
+        }
+    }
+}
+
+impl<C, R> BotTriggerRouter<C, R>
+where
+    C: ChannelService,
+    R: AgentResponder,
+{
+    /// Create a router with the built-in system bots registered.
+    pub fn new(channels: Arc<C>, responder: Arc<R>) -> Self {
+        Self {
+            macro_ai: Arc::new(MacroAiHandler::new(channels, responder)),
         }
     }
 
@@ -56,8 +56,8 @@ impl BotTriggerRouter {
             };
 
             // System bots are defined in code — no database lookup required.
-            if let Some(handler) = self.system_bots.get(id) {
-                if let Err(err) = handler.handle(&event).await {
+            if *id == bot_id::MACRO_AI_BOT_ID {
+                if let Err(err) = self.macro_ai.handle(&event).await {
                     tracing::error!(error=?err, bot_id = %id, "system bot handler failed");
                 }
             } else {
@@ -67,7 +67,11 @@ impl BotTriggerRouter {
     }
 }
 
-impl ChannelBotDispatcher for BotTriggerRouter {
+impl<C, R> ChannelBotDispatcher for BotTriggerRouter<C, R>
+where
+    C: ChannelService,
+    R: AgentResponder + 'static,
+{
     fn dispatch(&self, trigger: ChannelBotTrigger) {
         let router = self.clone();
         tokio::spawn(async move {

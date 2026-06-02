@@ -1,4 +1,5 @@
 import { tryMacroId, useDisplayName } from '@core/user';
+import { senderFromStorageId } from '@queries/channel/message-sender';
 import { cn } from '@ui';
 import { Show } from 'solid-js';
 import { MACRO_AI_BOT_ID, MACRO_AI_NAME } from '../macroAi';
@@ -11,9 +12,9 @@ type SenderNameProps = {
 
 /** Resolve a bot sender's display name, or `undefined` for user senders. */
 function botName(senderId: string): string | undefined {
-  if (!senderId.startsWith('bot|')) return undefined;
-  const id = senderId.slice('bot|'.length);
-  return id === MACRO_AI_BOT_ID ? MACRO_AI_NAME : 'Bot';
+  const sender = senderFromStorageId(senderId);
+  if (sender.type !== 'bot') return undefined;
+  return sender.id === MACRO_AI_BOT_ID ? MACRO_AI_NAME : 'Bot';
 }
 
 export function SenderName(props: SenderNameProps) {

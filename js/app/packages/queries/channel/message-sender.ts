@@ -30,6 +30,10 @@ export function senderFromStorageId(senderId: string): ApiMessageSender {
   return { type: 'user', id: senderId };
 }
 
+export function isBotSenderId(senderId: string): boolean {
+  return senderFromStorageId(senderId).type === 'bot';
+}
+
 export function normalizeMessageSender<
   T extends { sender_id: string; sender?: ApiMessageSender },
 >(message: T): T & { sender: ApiMessageSender } {

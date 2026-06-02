@@ -58,7 +58,7 @@ impl DocumentCognitionServiceClient {
 
     /// Run the agent loop on behalf of `user_id` with `prompt` and return the
     /// final assistant text.
-    #[tracing::instrument(skip(self, prompt), fields(user_id = %user_id), err)]
+    #[tracing::instrument(skip(self, prompt, user_id), err)]
     pub async fn channel_respond(
         &self,
         user_id: &str,

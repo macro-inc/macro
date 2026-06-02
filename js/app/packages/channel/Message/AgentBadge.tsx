@@ -1,3 +1,4 @@
+import { isBotSenderId } from '@queries/channel/message-sender';
 import { cn } from '@ui';
 import { Show } from 'solid-js';
 import { useMessage } from './context';
@@ -12,7 +13,7 @@ type AgentBadgeProps = {
  */
 export function AgentBadge(props: AgentBadgeProps) {
   const message = useMessage();
-  const isAgent = () => message().sender_id.startsWith('bot|');
+  const isAgent = () => isBotSenderId(message().sender_id);
 
   return (
     <Show when={isAgent()}>

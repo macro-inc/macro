@@ -3,14 +3,14 @@
 use std::fmt::Write as _;
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use channels::domain::models::{
-    MutatedMessage, ParticipantRole, PatchMessageRequest, PostMessageRequest, Sender,
+    ChannelContextMessage, MutatedMessage, ParticipantRole, PatchMessageRequest,
+    PostMessageRequest, Sender,
 };
+use channels::domain::ports::ChannelService;
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
-use crate::poster::{ChannelBotPoster, ContextMessage};
 use crate::responder::AgentResponder;
 
 /// How many channel messages to include around the trigger.
@@ -40,10 +40,15 @@ fn sender_label(sender_id: &str) -> String {
         .to_string()
 }
 
-fn append_messages(prompt: &mut String, heading: &str, messages: &[ContextMessage], skip: Uuid) {
+fn append_messages(
+    prompt: &mut String,
+    heading: &str,
+    messages: &[ChannelContextMessage],
+    skip: Uuid,
+) {
     let mut wrote_heading = false;
     for message in messages {
-        if message.id == skip || message.content.trim().is_empty() {
+        if message.id == skip || message.deleted_at.is_some() || message.content.trim().is_empty() {
             continue;
         }
         if !wrote_heading {
@@ -82,14 +87,6 @@ pub struct BotEvent {
     pub requesting_user: MacroUserIdStr<'static>,
 }
 
-/// Handles a trigger for a system bot. System bots are defined in code and
-/// require no database row, so the handler is given only the event.
-#[async_trait]
-pub trait SystemBotHandler: Send + Sync {
-    /// React to a trigger for this system bot.
-    async fn handle(&self, event: &BotEvent) -> anyhow::Result<()>;
-}
-
 /// Message Macro posts immediately, then replaces with its answer.
 ///
 /// Rendered by the channel markdown as the existing pulsing AwaitNode.
@@ -101,15 +98,22 @@ const ERROR_FALLBACK: &str = "Sorry — I ran into an error while responding.";
 ///
 /// Posts an immediate "thinking" reply in a thread, runs the agent loop, then
 /// edits that same message with the final answer.
-pub struct MacroAiHandler {
-    poster: Arc<dyn ChannelBotPoster>,
-    responder: Arc<dyn AgentResponder>,
+pub struct MacroAiHandler<C, R> {
+    channels: Arc<C>,
+    responder: Arc<R>,
 }
 
-impl MacroAiHandler {
+impl<C, R> MacroAiHandler<C, R>
+where
+    C: ChannelService,
+    R: AgentResponder,
+{
     /// Create a Macro AI handler.
-    pub fn new(poster: Arc<dyn ChannelBotPoster>, responder: Arc<dyn AgentResponder>) -> Self {
-        Self { poster, responder }
+    pub fn new(channels: Arc<C>, responder: Arc<R>) -> Self {
+        Self {
+            channels,
+            responder,
+        }
     }
 
     /// Build the prompt: who mentioned the agent, local channel context around
@@ -119,8 +123,8 @@ impl MacroAiHandler {
         let trigger_id = event.message.id;
 
         let nearby = self
-            .poster
-            .messages_around(
+            .channels
+            .get_message_context(
                 event.channel_id,
                 trigger_id,
                 CONTEXT_MESSAGES_BEFORE,
@@ -145,12 +149,10 @@ impl MacroAiHandler {
         );
         prompt
     }
-}
 
-#[async_trait]
-impl SystemBotHandler for MacroAiHandler {
+    /// React to a Macro AI mention.
     #[tracing::instrument(skip(self, event), fields(channel_id = %event.channel_id), err)]
-    async fn handle(&self, event: &BotEvent) -> anyhow::Result<()> {
+    pub(crate) async fn handle(&self, event: &BotEvent) -> anyhow::Result<()> {
         let actor = Sender::Bot(bot_id::MACRO_AI_BOT_ID);
 
         // 1. Gather conversational context (before posting, so our own
@@ -159,7 +161,7 @@ impl SystemBotHandler for MacroAiHandler {
 
         // 2. Post the immediate "thinking" message in the thread.
         let thinking = self
-            .poster
+            .channels
             .post_message(
                 actor.clone(),
                 event.channel_id,
@@ -189,7 +191,7 @@ impl SystemBotHandler for MacroAiHandler {
         };
 
         // 4. Replace the "thinking" message with the answer.
-        self.poster
+        self.channels
             .patch_message(
                 actor,
                 ParticipantRole::Member,
@@ -210,127 +212,4 @@ impl SystemBotHandler for MacroAiHandler {
 }
 
 #[cfg(test)]
-mod tests {
-    use std::sync::Mutex;
-
-    use chrono::Utc;
-
-    use super::*;
-
-    struct TestPoster {
-        around_args: Mutex<Option<(Uuid, Uuid, i64, i64)>>,
-        around_messages: Vec<ContextMessage>,
-    }
-
-    #[async_trait]
-    impl ChannelBotPoster for TestPoster {
-        async fn post_message(
-            &self,
-            _actor: Sender,
-            _channel_id: Uuid,
-            _req: PostMessageRequest,
-        ) -> anyhow::Result<channels::domain::models::PostMessageResponse> {
-            unimplemented!("not needed for prompt tests")
-        }
-
-        async fn patch_message(
-            &self,
-            _actor: Sender,
-            _actor_role: ParticipantRole,
-            _channel_id: Uuid,
-            _message_id: Uuid,
-            _req: PatchMessageRequest,
-        ) -> anyhow::Result<()> {
-            unimplemented!("not needed for prompt tests")
-        }
-
-        async fn messages_around(
-            &self,
-            channel_id: Uuid,
-            message_id: Uuid,
-            before: i64,
-            after: i64,
-        ) -> anyhow::Result<Vec<ContextMessage>> {
-            *self.around_args.lock().unwrap() = Some((channel_id, message_id, before, after));
-            Ok(self.around_messages.clone())
-        }
-    }
-
-    struct TestResponder;
-
-    #[async_trait]
-    impl AgentResponder for TestResponder {
-        async fn respond(&self, _user_id: &str, _prompt: String) -> anyhow::Result<String> {
-            unimplemented!("not needed for prompt tests")
-        }
-    }
-
-    fn user_id(email: &str) -> MacroUserIdStr<'static> {
-        MacroUserIdStr::try_from(format!("macro|{email}")).unwrap()
-    }
-
-    #[tokio::test]
-    async fn prompt_uses_local_context_around_trigger() {
-        let channel_id = Uuid::new_v4();
-        let trigger_id = Uuid::new_v4();
-        let before_id = Uuid::new_v4();
-        let after_id = Uuid::new_v4();
-        let poster = Arc::new(TestPoster {
-            around_args: Mutex::new(None),
-            around_messages: vec![
-                ContextMessage {
-                    id: before_id,
-                    sender_id: "macro|alice@example.com".to_string(),
-                    content: "before".to_string(),
-                },
-                ContextMessage {
-                    id: trigger_id,
-                    sender_id: "macro|teo@example.com".to_string(),
-                    content: "@macro help".to_string(),
-                },
-                ContextMessage {
-                    id: after_id,
-                    sender_id: "macro|bob@example.com".to_string(),
-                    content: "after".to_string(),
-                },
-            ],
-        });
-        let handler = MacroAiHandler::new(poster.clone(), Arc::new(TestResponder));
-        let event = BotEvent {
-            trigger: BotTrigger::Mention,
-            channel_id,
-            message: MutatedMessage {
-                id: trigger_id,
-                channel_id,
-                thread_id: None,
-                sender_id: Sender::User(user_id("teo@example.com")),
-                content: "@macro help".to_string(),
-                created_at: Utc::now(),
-                updated_at: Utc::now(),
-                edited_at: None,
-                deleted_at: None,
-            },
-            reply_thread_id: trigger_id,
-            requesting_user: user_id("teo@example.com"),
-        };
-
-        let prompt = handler.build_prompt(&event).await;
-
-        assert_eq!(
-            *poster.around_args.lock().unwrap(),
-            Some((
-                channel_id,
-                trigger_id,
-                CONTEXT_MESSAGES_BEFORE,
-                CONTEXT_MESSAGES_AFTER
-            ))
-        );
-        assert!(prompt.contains("Channel messages around the mention"));
-        assert!(prompt.contains("alice: before"));
-        assert!(prompt.contains("bob: after"));
-        assert!(!prompt.contains("teo: @macro help"));
-        assert!(prompt.contains("teo said:\n@macro help"));
-        assert!(!prompt.contains("Recent channel messages"));
-        assert!(!prompt.contains("Messages in the thread"));
-    }
-}
+mod tests;

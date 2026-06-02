@@ -1,3 +1,4 @@
+import { isBotSenderId } from '@queries/channel/message-sender';
 import { cn } from '@ui';
 import { Show } from 'solid-js';
 import { useMessage } from './context';
@@ -13,9 +14,7 @@ export function EditedIndicator(props: EditedIndicatorProps) {
   // user edit, so don't surface an "(edited)" marker for bot senders.
   return (
     <Show
-      when={
-        message().edited_at != null && !message().sender_id.startsWith('bot|')
-      }
+      when={message().edited_at != null && !isBotSenderId(message().sender_id)}
     >
       <span class={cn('text-xs text-ink-placeholder', props.class)}>
         (edited)

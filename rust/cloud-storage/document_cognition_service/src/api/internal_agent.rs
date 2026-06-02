@@ -41,7 +41,7 @@ Be concise and directly useful. Use your tools to look things up when helpful. \
 Respond in Markdown.";
 
 /// Run the agent loop to completion and return the final text.
-#[tracing::instrument(skip(ctx, _valid, req), fields(user_id = %req.user_id), err(Debug))]
+#[tracing::instrument(skip(ctx, _valid, req), err(Debug))]
 pub async fn channel_respond(
     State(ctx): State<ApiContext>,
     _valid: ValidInternalKey,

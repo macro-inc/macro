@@ -570,6 +570,10 @@ const cloudStorageService = new CloudStorageService(
         value: getServiceUrl(ServiceUrl.CONNECTION_GATEWAY_URL),
       },
       {
+        name: 'COGNITION_SERVICE_URL',
+        value: getServiceUrl(ServiceUrl.DOCUMENT_COGNITION_SERVICE_URL),
+      },
+      {
         name: 'BULK_UPLOAD_REQUESTS_TABLE',
         // TODO: this should be interpolated from the bulk upload resource
         value: `bulk-upload-${stack}`,
