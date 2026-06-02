@@ -1,4 +1,3 @@
-import { AdaptiveScroller } from '@app/component/dashboard/adaptive-scroller';
 import {
   channelDisplayName,
   compactMarkdownTheme,
@@ -7,13 +6,13 @@ import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { getChannelParams } from '@channel/Channel/link';
 import {
-  StaticMarkdown,
-  StaticMarkdownContext,
-} from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import {
   EntityIcon,
   type EntityIconSelector,
 } from '@core/component/EntityIcon';
+import {
+  StaticMarkdown,
+  StaticMarkdownContext,
+} from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { UserIcon } from '@core/component/UserIcon';
 import { useUserId } from '@core/context/user';
 import { useDisplayName } from '@core/user/displayName';
@@ -27,12 +26,12 @@ import ArrowRightIcon from '@phosphor/arrow-right.svg';
 import { invalidateEntityNotifications } from '@queries/notification/user-notifications';
 import { useSoupItemsQuery } from '@queries/soup/items';
 import {
-  refetchSoupEntity,
   invalidateSoupEntity,
+  refetchSoupEntity,
 } from '@queries/soup/normalized-cache';
-import { Button, cn, Tooltip } from '@ui';
-import { createMemo, For, Show } from 'solid-js';
 import { ChannelType } from '@service-storage/generated/schemas';
+import { Button, Scroll, Tooltip } from '@ui';
+import { createMemo, For, Show } from 'solid-js';
 
 export type RecentConversationCardData = {
   id: string;
@@ -53,7 +52,6 @@ export type RecentConversationCardData = {
 export function RecentConversationCard(props: {
   conversation: RecentConversationCardData;
   onOpen: (conversationId: string, event: MouseEvent) => void;
-  variant?: 'card' | 'row';
 }) {
   const [senderName] = useDisplayName(
     props.conversation.latest.senderId as any
@@ -67,86 +65,79 @@ export function RecentConversationCard(props: {
 
     return senderName();
   };
-  const isCard = () => props.variant === 'card';
+
+  const conversationIcon = () => (
+    <Show
+      when={props.conversation.dmUserId}
+      fallback={
+        <div class="row-start-1 flex size-6 shrink-0 items-center justify-center self-center text-ink-muted transition group-hover:text-ink">
+          <EntityIcon
+            targetType={
+              (props.conversation.type || 'channel') as EntityIconSelector
+            }
+            size="xs"
+            class="shrink-0"
+          />
+        </div>
+      }
+    >
+      {(dmUserId) => (
+        <UserIcon
+          id={dmUserId()}
+          size="sm"
+          suppressClick
+          showTooltip={false}
+          class="row-start-1 shrink-0 self-center"
+        />
+      )}
+    </Show>
+  );
 
   return (
     <button
-      class={cn(
-        'group grid min-w-0 snap-start grid-cols-[auto_minmax(0,1fr)] grid-rows-[auto_1fr] gap-x-3 gap-y-1.5 rounded-xl text-left transition',
-        isCard()
-          ? 'w-72 shrink-0 border border-edge-muted bg-hover/40 p-2.5 hover:border-edge hover:bg-hover focus-visible:border-accent @md/recent-conversations:w-auto'
-          : 'w-full p-2.5 hover:bg-active/60 hover:ring hover:ring-edge hover:ring-inset focus-visible:bg-active/60 focus-visible:ring focus-visible:ring-edge focus-visible:ring-inset',
-        'focus:outline-none'
-      )}
+      class="group grid w-full min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] grid-rows-[auto_auto_auto] gap-x-2 rounded-lg px-2 py-1.5 text-left transition hover:bg-active/60 hover:ring hover:ring-edge hover:ring-inset focus:outline-none focus-visible:bg-active/60 focus-visible:ring focus-visible:ring-edge focus-visible:ring-inset"
       onClick={(event) => props.onOpen(props.conversation.id, event)}
     >
-      <Show
-        when={props.conversation.dmUserId}
-        fallback={
-          <div class="col-start-1 row-span-2 row-start-1 flex size-9 shrink-0 items-center justify-center rounded-lg bg-hover text-ink-muted transition group-hover:bg-active group-hover:text-ink">
-            <EntityIcon
-              targetType={
-                (props.conversation.type || 'channel') as EntityIconSelector
-              }
-              size="sm"
-              class="shrink-0"
-            />
-          </div>
-        }
-      >
-        {(dmUserId) => (
-          <UserIcon
-            id={dmUserId()}
-            size="md"
-            suppressClick
-            showTooltip={false}
-            class="col-start-1 row-span-2 row-start-1 shrink-0"
-          />
-        )}
-      </Show>
+      {conversationIcon()}
 
-      <div class="col-start-2 row-start-1 flex min-h-0 min-w-0 items-start justify-between gap-2">
-        <div class="flex min-w-0 items-center gap-1.5">
+      <div class="col-start-2 row-start-1 flex min-w-0 items-center gap-1.5">
+        <Tooltip label={props.conversation.name}>
           <h3 class="min-w-0 truncate text-sm font-medium text-ink">
             {props.conversation.name}
           </h3>
-          <Show when={props.conversation.unreadCount > 0}>
-            <span class="flex h-4 min-w-4 shrink-0 items-center justify-center rounded-sm bg-accent px-1 text-xxs font-bold text-surface">
-              {props.conversation.unreadCount}
-            </span>
-          </Show>
-        </div>
-
-        <div class="flex shrink-0 items-center gap-1.5 text-xxs text-ink-extra-muted">
-          <span>{props.conversation.updatedAt}</span>
-          <div class="hidden opacity-0 transition group-hover:opacity-100 @md/recent-conversations:block">
-            <ArrowRightIcon class="size-3.5" />
-          </div>
-        </div>
+        </Tooltip>
       </div>
 
-      <div class="col-start-2 row-start-2 flex min-w-0 flex-col gap-0.5 text-xs/5 text-ink-muted">
-        <Show when={!props.conversation.dmUserId && senderLabel()}>
-          {(label) => (
-            <Tooltip label={label()}>
-              <span class="min-w-0 truncate text-xs font-semibold text-ink-muted">
-                {label()}
-              </span>
-            </Tooltip>
-          )}
+      <Show when={senderLabel()}>
+        {(label) => (
+          <span class="col-start-2 row-start-2 min-w-0 truncate text-xs text-ink">
+            {label()}
+          </span>
+        )}
+      </Show>
+
+      <div class="col-start-2 col-end-4 row-start-3 line-clamp-2 min-w-0 text-xs text-ink-extra-muted">
+        <StaticMarkdown
+          markdown={props.conversation.latest.content}
+          theme={compactMarkdownTheme}
+        />
+      </div>
+
+      <div class="col-start-3 row-start-1 flex items-center gap-1.5 self-center">
+        <Show when={props.conversation.unreadCount > 0}>
+          <span class="flex h-4 min-w-4 shrink-0 items-center justify-center rounded-sm bg-accent px-1 text-xxs font-bold text-surface">
+            {props.conversation.unreadCount}
+          </span>
         </Show>
-        <div class="line-clamp-2 min-w-0 [&_*]:text-xs [&_*]:leading-5">
-          <StaticMarkdown
-            markdown={props.conversation.latest.content}
-            theme={compactMarkdownTheme}
-          />
-        </div>
+        <span class="shrink-0 text-xxs text-ink-extra-muted">
+          {props.conversation.updatedAt}
+        </span>
       </div>
     </button>
   );
 }
 
-export function useRecentConversations() {
+export function useRecentConversations(limit: number = 10) {
   const notificationSource = useGlobalNotificationSource();
   const currentUserId = useUserId();
 
@@ -225,7 +216,7 @@ export function useRecentConversations() {
   const channels = createMemo(() => {
     const visibleChannels = (channelsQuery.data ?? [])
       .filter(shouldShowChannel)
-      .slice(0, 10);
+      .slice(0, limit);
 
     return visibleChannels.map((channel): RecentConversationCardData => {
       const latestMessage = channel.latestMessage;
@@ -261,7 +252,7 @@ export function useRecentConversations() {
   };
 }
 
-export function RecentConversationsList(props: { variant?: 'card' | 'row' }) {
+export function RecentConversationsList() {
   const { conversations, isLoading } = useRecentConversations();
   const splitLayout = useSplitLayout();
 
@@ -290,25 +281,11 @@ export function RecentConversationsList(props: { variant?: 'card' | 'row' }) {
     <Show
       when={!isLoading()}
       fallback={
-        props.variant === 'card' ? (
-          <For each={[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]}>
-            {() => (
-              <div class="skeleton-shimmer h-20 w-72 shrink-0 snap-start rounded-xl border border-edge-muted bg-hover/60 p-2.5 @md/recent-conversations:w-auto">
-                <div class="skeleton-shimmer size-9 rounded-xl bg-surface" />
-                <div class="flex flex-col gap-2 pt-6">
-                  <div class="skeleton-shimmer h-3 w-3/4 rounded-full bg-ink/10" />
-                  <div class="skeleton-shimmer h-2.5 w-1/2 rounded-full bg-ink/5" />
-                </div>
-              </div>
-            )}
+        <div class="flex flex-col gap-0.5">
+          <For each={[0, 1, 2]}>
+            {() => <div class="h-9 rounded-lg bg-hover" />}
           </For>
-        ) : (
-          <div class="flex flex-col gap-1">
-            <For each={[0, 1, 2]}>
-              {() => <div class="h-16 rounded-lg bg-hover" />}
-            </For>
-          </div>
-        )
+        </div>
       }
     >
       <Show
@@ -320,17 +297,12 @@ export function RecentConversationsList(props: { variant?: 'card' | 'row' }) {
         }
       >
         <StaticMarkdownContext>
-          <div
-            class={cn(
-              props.variant === 'card' ? 'contents' : 'flex flex-col gap-1'
-            )}
-          >
+          <div class="flex flex-col gap-0.5">
             <For each={conversations()}>
               {(conversation) => (
                 <RecentConversationCard
                   conversation={conversation}
                   onOpen={(_, event) => openConversation(conversation, event)}
-                  variant={props.variant}
                 />
               )}
             </For>
@@ -372,22 +344,11 @@ export function RecentConversationsSection() {
         </Button>
       </div>
 
-      <AdaptiveScroller scrollAmount={280} class="relative">
-        <AdaptiveScroller.Viewport class="w-full scroll-pl-4 px-4 pb-1 sm:px-0 @md/recent-conversations:grid @md/recent-conversations:grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] @md/recent-conversations:gap-3 @md/recent-conversations:overflow-visible @md/recent-conversations:pb-0">
-          <RecentConversationsList variant="row" />
-        </AdaptiveScroller.Viewport>
-        <AdaptiveScroller.FadeEdges class="bottom-10 top-0 hidden sm:block @md/recent-conversations:hidden" />
-        <AdaptiveScroller.Controls class="mt-2 @md/recent-conversations:hidden">
-          <AdaptiveScroller.Control
-            direction="left"
-            class="hidden sm:inline-flex @md/recent-conversations:hidden"
-          />
-          <AdaptiveScroller.Control
-            direction="right"
-            class="hidden sm:inline-flex @md/recent-conversations:hidden"
-          />
-        </AdaptiveScroller.Controls>
-      </AdaptiveScroller>
+      <div class="max-h-80 px-4 pb-1 sm:px-0">
+        <Scroll>
+          <RecentConversationsList />
+        </Scroll>
+      </div>
     </section>
   );
 }

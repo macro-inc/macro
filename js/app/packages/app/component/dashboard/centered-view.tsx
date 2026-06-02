@@ -9,7 +9,7 @@ export function CenteredView() {
       <div class="hidden @7xl/dashboard:block" />
 
       <div class="mx-auto flex w-full min-w-0 max-w-2xl flex-col gap-10">
-        <div class="@md:pt-[60cqh] @sm:pt-[10cqh] pt-4 @md:-translate-y-[30vh] flex flex-col gap-24 sm:px-0">
+        <div class="@md:pt-[58cqh] sm:@sm:pt-[10cqh] pt-4 @md:-translate-y-[30vh] flex flex-col gap-24 sm:px-0">
           <DashboardSectionBoundary title="hero">
             <Hero />
           </DashboardSectionBoundary>
