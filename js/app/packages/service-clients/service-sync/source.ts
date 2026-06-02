@@ -108,38 +108,31 @@ const TIMEOUTS = {
 
 type WithCleanup<T> = T & { cleanup: () => void };
 
-export const createSyncServiceSource = async (
+export const createSyncServiceSource = (
   documentId: string,
   token: string
-): Promise<
-  Result<
-    {
-      source: WithCleanup<SyncSource>;
-      initialSync: InitialSync;
-    },
-    ConnectionFailedError | TimeoutError
-  >
+): Result<
+  {
+    source: WithCleanup<SyncSource>;
+    initialSync: ResultAsync<InitialSync, TimeoutError>;
+  },
+  never
 > => {
   const ws = createSyncServiceSocket(documentId, token);
 
-  const initialSyncResult = await ResultAsync.fromPromise(
+  const initialSync = ResultAsync.fromPromise(
     raceTimeout(
       untilMessage(ws, (message) => message.isRemoteInitialSync()),
       TIMEOUTS.INITIAL_SYNC,
       true
     ),
     () => SyncError.timeout(TIMEOUTS.INITIAL_SYNC)
-  );
-
-  if (initialSyncResult.isErr()) {
-    return err(initialSyncResult.error);
-  }
-
-  const initialSync = initialSyncResult.value;
-
-  // Start heartbeat only after initial sync completes successfully
-  // This prevents the heartbeat from closing the connection during slow initial syncs
-  ws.startHeartbeat();
+  ).map((message) => {
+    // Start heartbeat only after initial sync completes successfully
+    // This prevents the heartbeat from closing the connection during slow initial syncs
+    ws.startHeartbeat();
+    return message.value as InitialSync;
+  });
 
   const eventBus = createEventBus<SyncSourceEvent>();
 
@@ -323,7 +316,7 @@ export const createSyncServiceSource = async (
       reconnect,
       cleanup,
     },
-    initialSync: initialSync.value as InitialSync,
+    initialSync,
   });
 };
 

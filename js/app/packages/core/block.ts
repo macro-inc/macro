@@ -1,6 +1,7 @@
 import type { BlockCanvasProps } from '@block-canvas/component/Block';
 import type { BlockChannelProps } from '@block-channel/component/NewChannelBlockAdapter';
-import type { InitialSync, SyncSource } from '@core/collab/source';
+import type { InitialSync, SyncSource, TimeoutError } from '@core/collab/source';
+import type { ResultAsync } from 'neverthrow';
 import type { IDocumentStorageServiceFile } from '@filesystem/file';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { DocumentMetadata } from '@service-storage/generated/schemas/documentMetadata';
@@ -311,7 +312,7 @@ interface BlockComponentLoadData extends Record<BlockName, ObjectLike> {
   canvas: DocumentBlockData & DssFileData;
   pdf: DocumentBlockData;
   video: DocumentBlockData;
-  md: DocumentBlockData & DssFileData & { syncSource: SyncSource; initialSync: InitialSync };
+  md: DocumentBlockData & DssFileData & { syncSource: SyncSource; initialSync: ResultAsync<InitialSync, TimeoutError> };
   code: DocumentBlockData;
   project: ProjectBlockData;
   // TODO: uncomment when email block is ready, it is currently using unknown

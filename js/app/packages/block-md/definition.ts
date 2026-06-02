@@ -81,14 +81,7 @@ export const definition = defineBlock({
         return LoadErrors.INVALID;
       }
 
-      const syncServiceResult = await createSyncServiceSource(source.id, token);
-
-      if (syncServiceResult.isErr()) {
-        console.error('Failed to initialize sync');
-        return LoadErrors.INVALID;
-      }
-
-      const { source: syncSource, initialSync } = syncServiceResult.value;
+      const { source: syncSource, initialSync } = createSyncServiceSource(source.id, token)._unsafeUnwrap();
 
       // HACK: unfortunately, most blocks still rely on a dssFile for things like
       // metadata and fileName. so I'm creating an empty blob file to get around that.
