@@ -61,59 +61,11 @@ docker_up *ARGS:
 # Run all services locally using docker-compose
 # Requires .env file (from `just get_environment`) and FusionAuth setup (from `just setup`).
 # Automatically patches .env with local FusionAuth values before starting services.
+# Uses staged output by default; set MACRO_LOCAL_VERBOSE=1 to show command output.
 run_local *ARGS:
   #!/usr/bin/env bash
   set -euo pipefail
-
-  just create_networks
-  AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID:-test}" \
-    AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY:-test}" \
-    AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-us-east-1}" \
-    just setup_localstack
-  just patch_local_fusionauth_env
-
-  do_build=false
-  build_processors=false
-  filtered_args=()
-  expecting_profile_name=false
-  for arg in "$@"; do
-    if [ "$expecting_profile_name" = true ]; then
-      if [ "$arg" = "processors" ]; then
-        build_processors=true
-      fi
-      expecting_profile_name=false
-      filtered_args+=("$arg")
-      continue
-    fi
-
-    if [ "$arg" = "--build" ]; then
-      do_build=true
-    elif [ "$arg" = "--profile" ]; then
-      expecting_profile_name=true
-      filtered_args+=("$arg")
-    elif [ "$arg" = "search_processing_service" ]; then
-      build_processors=true
-      filtered_args+=("$arg")
-    else
-      filtered_args+=("$arg")
-    fi
-  done
-
-  docker compose build rust_services_image
-
-  if [ "$do_build" = true ]; then
-    docker compose build websocket_service sync_service lexical_service
-    if [ "$build_processors" = true ]; then
-      docker compose build search_processing_service
-    fi
-  fi
-
-  echo "startup docker compose"
-  if [ "${#filtered_args[@]}" -gt 0 ]; then
-    docker compose up "${filtered_args[@]}"
-  else
-    docker compose up
-  fi
+  bash scripts/run-local.sh "$@"
 
 # Reset and seed deterministic data used by local E2E tests.
 local-e2e-seed:

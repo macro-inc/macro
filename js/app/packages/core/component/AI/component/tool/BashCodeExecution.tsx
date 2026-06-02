@@ -4,6 +4,7 @@ import Terminal from '@phosphor-icons/core/regular/terminal.svg';
 import type { BashCodeExecutionResult } from '@service-cognition/generated/tools/types';
 import { createSignal, Match, Show, Switch } from 'solid-js';
 import { BaseTool } from './BaseTool';
+import { Tool } from './Tool';
 import { createToolRenderer } from './ToolRenderer';
 
 const MAX_COMMAND_LENGTH = 80;
@@ -133,22 +134,10 @@ const handler = createToolRenderer({
       >
         <div class="flex min-w-0 flex-1 items-center justify-between gap-3">
           <span>Code execution</span>
-          <button
-            type="button"
-            class="shrink-0 text-ink-muted hover:text-ink p-1"
-            onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              setIsExpanded((expanded) => !expanded);
-            }}
-          >
-            <CaretRight
-              class="size-4 transition-transform"
-              classList={{
-                'rotate-90': isExpanded(),
-              }}
-            />
-          </button>
+          <Tool.ResultToggle
+            expanded={isExpanded()}
+            onToggle={() => setIsExpanded((expanded) => !expanded)}
+          />
         </div>
       </BaseTool>
     );

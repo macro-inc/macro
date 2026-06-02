@@ -5,6 +5,7 @@ import Users from '@phosphor-icons/core/regular/users.svg';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import { For, Show } from 'solid-js';
 import { BaseTool } from './BaseTool';
+import { Tool } from './Tool';
 import { createToolRenderer } from './ToolRenderer';
 
 type ListTeamMembersResponse = NamedTool<'ListTeamMembers', 'response'>['data'];
@@ -19,31 +20,29 @@ function TeamMemberRow(props: { member: TeamMember }) {
   const name = () => displayName() || props.member.userId;
 
   return (
-    <div class="flex items-center gap-3 border-b border-edge-muted px-2 py-2 last:border-b-0">
-      <UserIcon id={props.member.userId} isDeleted={false} size="sm" />
+    <Tool.ListItem
+      icon={<UserIcon id={props.member.userId} isDeleted={false} size="sm" />}
+    >
       <div class="min-w-0 flex-1">
-        <div class="truncate text-sm text-ink">{name()}</div>
-        <div class="truncate text-xs capitalize text-ink-extra-muted">
+        <div class="truncate text-xs text-ink">{name()}</div>
+        <div class="truncate text-xs capitalize text-ink-placeholder">
           {formatRole(props.member.role)}
         </div>
       </div>
-    </div>
+    </Tool.ListItem>
   );
 }
 
 function TeamInviteRow(props: { invite: TeamInvite }) {
   return (
-    <div class="flex items-center gap-3 border-b border-edge-muted px-2 py-2 last:border-b-0">
-      <div class="flex size-6 shrink-0 items-center justify-center rounded-full bg-accent/10">
-        <Envelope class="size-4 text-accent" />
-      </div>
+    <Tool.ListItem icon={<Envelope class="size-4" />}>
       <div class="min-w-0 flex-1">
-        <div class="truncate text-sm text-ink">{props.invite.email}</div>
-        <div class="truncate text-xs capitalize text-ink-extra-muted">
+        <div class="truncate text-xs text-ink">{props.invite.email}</div>
+        <div class="truncate text-xs capitalize text-ink-placeholder">
           Invited as {formatRole(props.invite.role)}
         </div>
       </div>
-    </div>
+    </Tool.ListItem>
   );
 }
 
@@ -52,7 +51,7 @@ function TeamMembersToolResponse(props: ListTeamMembersResponse) {
   const hasInvites = () => props.invited.length > 0;
 
   return (
-    <div class="max-h-120 overflow-y-auto rounded-xs border border-edge-muted">
+    <Tool.List>
       <Show when={hasMembers()}>
         <For each={props.members}>
           {(member) => <TeamMemberRow member={member} />}
@@ -64,11 +63,9 @@ function TeamMembersToolResponse(props: ListTeamMembersResponse) {
         </For>
       </Show>
       <Show when={!hasMembers() && !hasInvites()}>
-        <div class="px-2 py-2 text-sm text-ink-extra-muted">
-          No team members found.
-        </div>
+        <Tool.ListItem>No team members found.</Tool.ListItem>
       </Show>
-    </div>
+    </Tool.List>
   );
 }
 

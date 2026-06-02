@@ -1,8 +1,8 @@
 import { ChatMessageMarkdown } from '@core/component/AI/component/message/ChatMessageMarkdown';
 import { PulsingStar } from '@entity/components/PulsingStar';
 import StarIcon from '@icon/wide-star.svg';
-import CaretRight from '@phosphor/caret-right.svg?component-solid';
 import { createSignal, Show } from 'solid-js';
+import { Tool } from './Tool';
 import { createToolRenderer, useToolError } from './ToolRenderer';
 
 const handler = createToolRenderer({
@@ -21,56 +21,37 @@ const handler = createToolRenderer({
 
     return (
       <div
-        class="relative text-sm text-ink-extra-muted border-l pl-4 border-edge"
+        class="relative overflow-hidden rounded-lg border border-edge-muted bg-surface text-xs leading-5 text-ink-extra-muted"
         classList={{ 'opacity-50': !!error }}
       >
-        <div class="flex w-full items-center gap-x-2">
+        <div class="flex min-h-9 w-full items-center gap-2 px-3 py-2">
           <div class="size-5 shrink-0 flex items-center justify-center">
             <Show
               when={!isLoading()}
               fallback={<PulsingStar kind="streamIndicator" animate />}
             >
-              <StarIcon class="size-4 text-accent" />
+              <StarIcon class="size-4 text-ink-extra-muted" />
             </Show>
           </div>
-          <div class="min-w-0 flex-1 p-2">
+          <div class="min-w-0 flex-1">
             <div class="flex min-w-0 flex-1 items-center justify-between gap-3">
               <div class="flex min-w-0 flex-1 items-center gap-2">
                 <span class="truncate">{ctx.tool.data.task}</span>
               </div>
-              <div class="flex shrink-0 items-center gap-1">
-                <Show when={statusText()}>
-                  {(text) => (
-                    <span class="text-xs text-ink-extra-muted">{text()}</span>
-                  )}
-                </Show>
-                <Show when={hasResult()}>
-                  <button
-                    type="button"
-                    class="shrink-0 text-ink-muted hover:text-ink p-1"
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      setIsExpanded((expanded) => !expanded);
-                    }}
-                  >
-                    <CaretRight
-                      class="size-4 transition-transform"
-                      classList={{
-                        'rotate-90': isExpanded(),
-                      }}
-                    />
-                  </button>
-                </Show>
-              </div>
+              <Tool.ResultToggle
+                expanded={isExpanded()}
+                onToggle={() => setIsExpanded((expanded) => !expanded)}
+                showToggle={hasResult()}
+                status={statusText()}
+              />
             </div>
           </div>
           <Show when={error}>
-            <span class="shrink-0 pr-2 text-ink-muted">Failed</span>
+            <span class="shrink-0 text-ink">Failed</span>
           </Show>
         </div>
         <Show when={hasResult() && isExpanded()}>
-          <div class="pl-8 mb-2 max-h-120 overflow-y-auto text-sm">
+          <div class="max-h-120 overflow-y-auto border-t border-edge-muted px-3 py-2 text-xs">
             <ChatMessageMarkdown text={result()!} generating={() => false} />
           </div>
         </Show>

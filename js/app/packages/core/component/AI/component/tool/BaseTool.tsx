@@ -1,7 +1,10 @@
-import { type Component, type JSX, Show } from 'solid-js';
+import type { Component, JSX } from 'solid-js';
+import { Show } from 'solid-js';
+import { Tool } from './Tool';
 import { type RenderContext, useToolError } from './ToolRenderer';
 
 type ToolCallProps = {
+  align?: 'center' | 'start';
   icon: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
   renderContext: RenderContext['renderContext'];
   type: 'call';
@@ -16,31 +19,29 @@ type ToolResponseProps = {
 
 function BaseToolCall(props: ToolCallProps) {
   const error = useToolError();
+  const grouped = () => props.renderContext.grouped === true;
 
   return (
-    <div
-      class="relative text-sm text-ink-extra-muted border-l pl-4 border-edge"
-      classList={{ 'opacity-50': !!error }}
-    >
-      <div class="flex w-full items-center gap-x-2">
-        <props.icon class="size-5 shrink-0 text-accent" />
-        <div class="min-w-0 flex-1 p-2">{props.children}</div>
-        <Show when={error}>
-          <span class="shrink-0 pr-2 text-ink-muted">Failed</span>
-        </Show>
-      </div>
+    <Tool.Root grouped={grouped()} muted={!!error}>
+      <Tool.Row
+        align={props.align}
+        icon={props.icon}
+        trailing={error ? <span class="text-ink">Failed</span> : undefined}
+      >
+        {props.children}
+      </Tool.Row>
       <Show when={props.response}>
-        <div class="pl-8 mb-2">{props.response}</div>
+        <Tool.Response>{props.response}</Tool.Response>
       </Show>
-    </div>
+    </Tool.Root>
   );
 }
 
 function BaseToolResponse(props: ToolResponseProps) {
   return (
-    <div class="relative text-sm text-ink-extra-muted border-l pl-4 border-edge mb-2">
-      <div class="pl-8">{props.children && props.children}</div>
-    </div>
+    <Tool.Root>
+      <div class="px-3 py-2">{props.children && props.children}</div>
+    </Tool.Root>
   );
 }
 

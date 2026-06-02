@@ -7,7 +7,7 @@ const handler = createToolRenderer({
   render: (ctx) => (
     <BaseTool type="call" icon={Newspaper} renderContext={ctx.renderContext}>
       Read{' '}
-      <span class="text-accent">
+      <span class="text-ink">
         {ctx.tool.data.ids.length}{' '}
         {ctx.tool.data.contentType + (ctx.tool.data.ids.length > 1 ? 's' : '')}
       </span>
