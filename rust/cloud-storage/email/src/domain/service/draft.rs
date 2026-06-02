@@ -20,13 +20,15 @@ where
     CS: crm::domain::service::CrmService,
     anyhow::Error: From<T::Err>,
 {
-    #[tracing::instrument(err, skip(self, link, input))]
+    #[tracing::instrument(err, skip(self, link, accessible_inboxes, input))]
     pub(crate) async fn create_draft_impl(
         &self,
         link: &Link,
+        accessible_inboxes: &[Link],
         input: CreateDraftInput,
     ) -> Result<CreatedDraft, EmailErr> {
-        self.prepare_and_insert_db_message(link, input, true).await
+        self.prepare_and_insert_db_message(link, accessible_inboxes, input, true)
+            .await
     }
 
     /// Shared pipeline for creating a draft or a sent message.
@@ -34,18 +36,21 @@ where
     /// Validates existing message / reply-to, decodes HTML body, upserts contacts,
     /// builds thread if needed, and inserts the message row via the repo layer.
     /// `is_draft` controls the `is_draft` flag persisted on the message row.
-    #[tracing::instrument(err, skip(self, link, input))]
+    #[tracing::instrument(err, skip(self, link, accessible_inboxes, input))]
     pub(crate) async fn prepare_and_insert_db_message(
         &self,
         link: &Link,
+        accessible_inboxes: &[Link],
         mut input: CreateDraftInput,
         is_draft: bool,
     ) -> Result<CreatedDraft, EmailErr> {
         let link_id = link.id;
+        let accessible_link_ids: Vec<Uuid> = accessible_inboxes.iter().map(|l| l.id).collect();
 
         self.validate_existing_message(link_id, &mut input).await?;
 
-        self.validate_replying_to(link_id, &mut input).await?;
+        self.validate_replying_to(link_id, &accessible_link_ids, &mut input)
+            .await?;
 
         decode_html_body(&mut input)?;
 
@@ -124,7 +129,7 @@ where
 
         let msg = self
             .email_repo
-            .get_simple_message(db_id, link_id)
+            .get_simple_message(db_id, &[link_id])
             .await
             .map_err(anyhow::Error::from)?
             .ok_or(EmailErr::MessageNotFound(db_id))?;
@@ -142,13 +147,14 @@ where
     async fn validate_replying_to(
         &self,
         link_id: Uuid,
+        accessible_link_ids: &[Uuid],
         input: &mut CreateDraftInput,
     ) -> Result<(), EmailErr> {
         let Some(replying_to_id) = input.replying_to_id else {
             return Ok(());
         };
 
-        // Check if a draft already exists replying to this message
+        // The draft replying to this message lives in the inbox being sent from.
         if let Some(existing_draft) = self
             .email_repo
             .get_draft_replying_to(link_id, replying_to_id)
@@ -157,7 +163,7 @@ where
         {
             self.apply_existing_draft(input, existing_draft);
         } else {
-            self.apply_reply_target(link_id, input, replying_to_id)
+            self.apply_reply_target(link_id, accessible_link_ids, input, replying_to_id)
                 .await?;
         }
 
@@ -178,12 +184,13 @@ where
     async fn apply_reply_target(
         &self,
         link_id: Uuid,
+        accessible_link_ids: &[Uuid],
         input: &mut CreateDraftInput,
         replying_to_id: Uuid,
     ) -> Result<(), EmailErr> {
         let reply_target = self
             .email_repo
-            .get_simple_message(replying_to_id, link_id)
+            .get_simple_message(replying_to_id, accessible_link_ids)
             .await
             .map_err(anyhow::Error::from)?
             .ok_or(EmailErr::MessageNotFound(replying_to_id))?;
@@ -192,8 +199,18 @@ where
             return Err(EmailErr::CannotReplyToDraft);
         }
 
-        input.thread_db_id = Some(reply_target.thread_db_id);
-        input.provider_thread_id = reply_target.provider_thread_id;
+        if reply_target.link_id == link_id {
+            // Same inbox: thread into the target's existing thread.
+            input.thread_db_id = Some(reply_target.thread_db_id);
+            input.provider_thread_id = reply_target.provider_thread_id;
+        } else {
+            // The target lives in a different inbox (a different provider
+            // account), so it cannot thread into that account's provider
+            // thread. Start a fresh thread in the sending inbox; the
+            // Macro-In-Reply-To header below preserves the reference.
+            input.thread_db_id = None;
+            input.provider_thread_id = None;
+        }
 
         // Generate Macro-In-Reply-To header
         input.headers_json = Some(serde_json::json!([{

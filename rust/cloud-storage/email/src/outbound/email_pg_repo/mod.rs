@@ -177,9 +177,9 @@ impl EmailRepo for EmailPgRepo {
     async fn get_simple_message(
         &self,
         message_id: Uuid,
-        link_id: Uuid,
+        link_ids: &[Uuid],
     ) -> Result<Option<SimpleMessageInfo>, Self::Err> {
-        message::get_simple_message(&self.pool, message_id, link_id).await
+        message::get_simple_message(&self.pool, message_id, link_ids).await
     }
 
     async fn get_draft_replying_to(

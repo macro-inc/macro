@@ -192,17 +192,21 @@ where
     async fn create_draft(
         &self,
         link: &Link,
+        accessible_inboxes: &[Link],
         input: CreateDraftInput,
     ) -> Result<CreatedDraft, EmailErr> {
-        self.create_draft_impl(link, input).await
+        self.create_draft_impl(link, accessible_inboxes, input)
+            .await
     }
 
     async fn send_message(
         &self,
         link: &Link,
+        accessible_inboxes: &[Link],
         input: CreateDraftInput,
     ) -> Result<CreatedDraft, EmailErr> {
-        self.send_message_impl(link, input).await
+        self.send_message_impl(link, accessible_inboxes, input)
+            .await
     }
 
     async fn list_labels(&self, link: &Link) -> Result<Vec<LinkLabel>, EmailErr> {
