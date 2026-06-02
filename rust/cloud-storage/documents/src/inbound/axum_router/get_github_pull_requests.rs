@@ -79,5 +79,14 @@ mod tests {
                 "expected {status} response to be documented"
             );
         }
+
+        let pull_request_properties = openapi
+            .pointer("/components/schemas/GithubPullRequest/properties")
+            .and_then(Value::as_object)
+            .expect("GithubPullRequest schema should document properties");
+        assert!(
+            pull_request_properties.contains_key("foreignEntityId"),
+            "GithubPullRequest schema should document foreignEntityId"
+        );
     }
 }

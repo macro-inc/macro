@@ -755,3 +755,322 @@ async fn crm_scope_collapses_to_empty_when_killswitch_off(
     );
     Ok(())
 }
+
+// =====================================================================
+// Dedupe of team-member conversation copies — fixture
+// `email_dynamic_query_crm_dedupe.sql`. Two members (Dave, Erin) and
+// four conversations keyed by root-message global_id:
+//   X — both copies; dave's is newer (extra reply).
+//   Y — erin only.   Z — dave only.
+//   W — both copies; ERIN's is newer (extra reply).
+// =====================================================================
+
+const TEAM_BETA_ID: &str = "e0000002-0000-0000-0000-000000000002";
+const DAVE_LINK_ID: &str = "d0000001-0000-0000-0000-000000000001";
+const ERIN_LINK_ID: &str = "d0000002-0000-0000-0000-000000000002";
+
+const TD1_DAVE_CONV_X: &str = "55550001-0000-0000-0000-000000000001";
+const TD2_DAVE_CONV_Z: &str = "55550001-0000-0000-0000-000000000002";
+const TD3_DAVE_CONV_W: &str = "55550001-0000-0000-0000-000000000003";
+const TE1_ERIN_CONV_X: &str = "55550002-0000-0000-0000-000000000001";
+const TE2_ERIN_CONV_Y: &str = "55550002-0000-0000-0000-000000000002";
+const TE3_ERIN_CONV_W: &str = "55550002-0000-0000-0000-000000000003";
+
+/// Run a team-scoped acme.com query for one caller and return the result
+/// thread ids in order.
+async fn run_dedupe_query(
+    pool: &Pool<Postgres>,
+    caller_link: &str,
+    caller_user: &str,
+) -> anyhow::Result<Vec<String>> {
+    let team_id = Uuid::parse_str(TEAM_BETA_ID)?;
+    let link_id = Uuid::parse_str(caller_link)?;
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox);
+    let filter = Arc::new(Expr::Literal(EmailLiteral::Sender(Email::Domain(
+        "acme.com".to_string(),
+    ))));
+    let query = Query::new(None, SimpleSortMethod::UpdatedAt, filter);
+
+    let results = dynamic::dynamic_email_thread_cursor(
+        pool,
+        &[link_id],
+        100,
+        &view,
+        query,
+        caller_user,
+        Some(team_id),
+    )
+    .await?;
+    Ok(results.into_iter().map(|r| r.id.to_string()).collect())
+}
+
+// =====================================================================
+// 17. One row per conversation; the caller's own copy wins even when the
+//     teammate's copy is newer (W), and teammate-only conversations come
+//     back via the teammate's copy (Y).
+// =====================================================================
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("email_dynamic_query_crm_dedupe")
+    )
+)]
+async fn crm_scope_dedupes_team_copies_own_copy_wins(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let ids = run_dedupe_query(&pool, DAVE_LINK_ID, "macro|dave@beta.com").await?;
+
+    // Ordered by the representative's recency: Z(11) > X(10) > Y(9) > W(7).
+    // X: dave's copy (own + newer). W: dave's copy despite erin's being
+    // newer — own-copy preference precedes recency. Y: erin's copy (dave
+    // has none).
+    assert_eq!(
+        ids,
+        vec![
+            TD2_DAVE_CONV_Z.to_string(),
+            TD1_DAVE_CONV_X.to_string(),
+            TE2_ERIN_CONV_Y.to_string(),
+            TD3_DAVE_CONV_W.to_string(),
+        ],
+        "expected one row per conversation with dave's copies preferred"
+    );
+
+    Ok(())
+}
+
+// =====================================================================
+// 18. Same fixture from Erin's perspective — symmetric preference. Erin
+//     gets her own X copy even though Dave's is newer.
+// =====================================================================
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("email_dynamic_query_crm_dedupe")
+    )
+)]
+async fn crm_scope_dedupe_is_caller_relative(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let ids = run_dedupe_query(&pool, ERIN_LINK_ID, "macro|erin@beta.com").await?;
+
+    // W(12, erin's own) > Z(11, dave-only) > Y(9, own) > X(8, erin's own
+    // copy even though dave's is at 10:00).
+    assert_eq!(
+        ids,
+        vec![
+            TE3_ERIN_CONV_W.to_string(),
+            TD2_DAVE_CONV_Z.to_string(),
+            TE2_ERIN_CONV_Y.to_string(),
+            TE1_ERIN_CONV_X.to_string(),
+        ],
+        "expected one row per conversation with erin's copies preferred"
+    );
+
+    Ok(())
+}
+
+// =====================================================================
+// 19. Dedupe is stable across cursor pages. The representative is chosen
+//     before the cursor applies, so a conversation whose non-preferred
+//     copy falls into a later page window must NOT resurface. With the
+//     cursor inside the dedupe (the naive shape), erin's X copy (08:00)
+//     would leak onto the page after dave's X copy (10:00) was returned.
+// =====================================================================
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("email_dynamic_query_crm_dedupe")
+    )
+)]
+async fn crm_scope_dedupe_stable_across_cursor_pages(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let team_id = Uuid::parse_str(TEAM_BETA_ID)?;
+    let link_id = Uuid::parse_str(DAVE_LINK_ID)?;
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox);
+    let limit = 1;
+    let make_filter = || {
+        Arc::new(Expr::Literal(EmailLiteral::Sender(Email::Domain(
+            "acme.com".to_string(),
+        ))))
+    };
+
+    let mut pages: Vec<String> = Vec::new();
+    let mut cursor: Option<Cursor<Uuid, CursorVal<SimpleSortMethod>, Arc<Expr<EmailLiteral>>>> =
+        None;
+    loop {
+        let query = Query::new(cursor.take(), SimpleSortMethod::UpdatedAt, make_filter());
+        let page = dynamic::dynamic_email_thread_cursor(
+            &pool,
+            &[link_id],
+            limit,
+            &view,
+            query,
+            "macro|dave@beta.com",
+            Some(team_id),
+        )
+        .await?;
+        let Some(last) = page.last() else {
+            break;
+        };
+        cursor = Some(Cursor {
+            id: last.id,
+            limit: limit as usize,
+            val: CursorVal {
+                sort_type: SimpleSortMethod::UpdatedAt,
+                last_val: last.sort_ts,
+            },
+            filter: make_filter(),
+        });
+        pages.extend(page.into_iter().map(|r| r.id.to_string()));
+        assert!(pages.len() <= 6, "runaway pagination: {:?}", pages);
+    }
+
+    // Every conversation exactly once, own copies preferred, and neither
+    // of erin's duplicate copies (te1, te3) ever surfaces on any page.
+    assert_eq!(
+        pages,
+        vec![
+            TD2_DAVE_CONV_Z.to_string(),
+            TD1_DAVE_CONV_X.to_string(),
+            TE2_ERIN_CONV_Y.to_string(),
+            TD3_DAVE_CONV_W.to_string(),
+        ],
+        "pages must cover each conversation exactly once with no duplicate copies"
+    );
+
+    Ok(())
+}
+
+// =====================================================================
+// 20. Root selection skips drafts. Dave's X copy contains a draft that
+//     is the EARLIEST message in the thread and has a (mailbox-local)
+//     global_id. If the root subquery didn't filter `is_draft = FALSE`,
+//     dave's key would become the draft's Message-ID and X would stop
+//     deduping (te1 would reappear). Covered implicitly by #17's exact
+//     vector; this test names the intent.
+// =====================================================================
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("email_dynamic_query_crm_dedupe")
+    )
+)]
+async fn crm_scope_dedupe_root_skips_drafts(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let ids = run_dedupe_query(&pool, DAVE_LINK_ID, "macro|dave@beta.com").await?;
+
+    assert!(
+        ids.contains(&TD1_DAVE_CONV_X.to_string()),
+        "dave's X copy must be the representative"
+    );
+    assert!(
+        !ids.contains(&TE1_ERIN_CONV_X.to_string()),
+        "X must still dedupe — the gid-less draft must not become the root"
+    );
+
+    Ok(())
+}
+
+// =====================================================================
+// 21. A copy shared from OUTSIDE the team (entity_access) collapses with
+//     the caller's own copy. Faye (non-member) has a copy of X — the
+//     newest of all X copies — directly shared with Dave. Under
+//     Shared::Include it enters via the Shared candidate branch and must
+//     dedupe into td1; a failure would put tf1 at the top of the list.
+// =====================================================================
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts(
+            "email_dynamic_query_crm_dedupe",
+            "email_dynamic_query_crm_dedupe_shared"
+        )
+    )
+)]
+async fn crm_scope_dedupe_collapses_externally_shared_copy(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    const TF1_FAYE_CONV_X: &str = "55550003-0000-0000-0000-000000000001";
+
+    let team_id = Uuid::parse_str(TEAM_BETA_ID)?;
+    let link_id = Uuid::parse_str(DAVE_LINK_ID)?;
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox);
+    let filter = Arc::new(Expr::and(
+        Expr::Literal(EmailLiteral::Sender(Email::Domain("acme.com".to_string()))),
+        Expr::Literal(EmailLiteral::Shared(
+            item_filters::SharedEmailFilter::Include,
+        )),
+    ));
+    let query = Query::new(None, SimpleSortMethod::UpdatedAt, filter);
+
+    let results = dynamic::dynamic_email_thread_cursor(
+        &pool,
+        &[link_id],
+        100,
+        &view,
+        query,
+        "macro|dave@beta.com",
+        Some(team_id),
+    )
+    .await?;
+    let ids: Vec<String> = results.into_iter().map(|r| r.id.to_string()).collect();
+
+    // Same vector as #17 — faye's tf1 entered via the Shared branch but
+    // collapsed into dave's own X copy.
+    assert_eq!(
+        ids,
+        vec![
+            TD2_DAVE_CONV_Z.to_string(),
+            TD1_DAVE_CONV_X.to_string(),
+            TE2_ERIN_CONV_Y.to_string(),
+            TD3_DAVE_CONV_W.to_string(),
+        ],
+        "externally shared copy must dedupe into the caller's own copy"
+    );
+    assert!(!ids.contains(&TF1_FAYE_CONV_X.to_string()));
+
+    Ok(())
+}
+
+// =====================================================================
+// 22. Documented degradation: a member added MID-THREAD has a copy
+//     without the root message, so root-by-date keys diverge and both
+//     copies are returned. If the dedupe key strategy ever changes,
+//     update this test alongside it.
+// =====================================================================
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts(
+            "email_dynamic_query_crm_dedupe",
+            "email_dynamic_query_crm_dedupe_divergent"
+        )
+    )
+)]
+async fn crm_scope_dedupe_mid_thread_join_copies_stay_separate(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    const TDV_DAVE_CONV_V: &str = "55550001-0000-0000-0000-000000000004";
+    const TEV_ERIN_CONV_V: &str = "55550002-0000-0000-0000-000000000004";
+
+    let ids = run_dedupe_query(&pool, DAVE_LINK_ID, "macro|dave@beta.com").await?;
+
+    // Dave's V copy lacks the root '<v-1@...>' message — its key is
+    // '<v-2@...>' while erin's is '<v-1@...>', so both rows survive.
+    assert!(ids.contains(&TDV_DAVE_CONV_V.to_string()));
+    assert!(ids.contains(&TEV_ERIN_CONV_V.to_string()));
+    assert_eq!(
+        ids.len(),
+        6,
+        "X/Y/Z/W dedupe as usual plus both divergent V copies, got: {:?}",
+        ids
+    );
+
+    Ok(())
+}

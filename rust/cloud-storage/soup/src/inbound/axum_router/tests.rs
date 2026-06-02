@@ -167,6 +167,14 @@ impl EmailService for MockEmail {
         Ok(Vec::new())
     }
 
+    async fn get_owned_link_for_thread(
+        &self,
+        _macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
+        _thread_id: uuid::Uuid,
+    ) -> Result<Option<email::domain::models::Link>, email::domain::models::EmailErr> {
+        Ok(None)
+    }
+
     async fn get_thread_with_messages(
         &self,
         _receipt: EntityAccessReceipt<ViewAccessLevel>,
@@ -446,6 +454,14 @@ impl EmailService for MockEmailLinkResult {
         _macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
     ) -> Result<Vec<email::domain::models::Link>, email::domain::models::EmailErr> {
         (self.get_link_result)().map(|opt| opt.into_iter().collect())
+    }
+
+    async fn get_owned_link_for_thread(
+        &self,
+        _macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
+        _thread_id: uuid::Uuid,
+    ) -> Result<Option<email::domain::models::Link>, email::domain::models::EmailErr> {
+        (self.get_link_result)()
     }
 
     async fn get_thread_with_messages(

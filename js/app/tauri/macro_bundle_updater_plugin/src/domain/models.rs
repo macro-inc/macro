@@ -29,13 +29,13 @@ impl BundleRoot {
     /// Load persisted bundle root from the given cache directory.
     pub(crate) async fn load(cache_dir: &Path, fs: &impl FsRepo) -> Self {
         let persist_path = cache_dir.join(BUNDLE_ROOT_FILE);
-        tracing::info!("Loading bundle root from {persist_path:?}");
+        tracing::debug!("Loading bundle root from {persist_path:?}");
         match fs.read_to_string(&persist_path).await {
             Ok(contents) => {
                 let path = PathBuf::from(contents.trim());
                 let index = path.join("index.html");
                 if fs.read_to_string(&index).await.is_ok() {
-                    tracing::info!("Restored bundle root: {path:?}");
+                    tracing::debug!("Restored bundle root: {path:?}");
                     Self(Some(path))
                 } else {
                     tracing::warn!(
@@ -48,7 +48,7 @@ impl BundleRoot {
                 }
             }
             Err(e) => {
-                tracing::info!("No persisted bundle root: {e}");
+                tracing::debug!("No persisted bundle root: {e}");
                 Self(None)
             }
         }
@@ -63,7 +63,7 @@ impl BundleRoot {
         let persist_path = cache_dir.join(BUNDLE_ROOT_FILE);
         match self.0.as_ref() {
             Some(root) => {
-                tracing::info!("Persisting bundle root {root:?} to {persist_path:?}");
+                tracing::debug!("Persisting bundle root {root:?} to {persist_path:?}");
                 fs.write(&persist_path, root.to_string_lossy().as_bytes())
                     .await
             }
@@ -81,13 +81,42 @@ impl BundleRoot {
         self.0 = None;
     }
 
-    /// Read the bundle version from `semver.txt` inside the bundle root.
-    pub(crate) async fn version(&self, fs: &impl FsRepo) -> Option<semver::Version> {
-        let semver_path = self.0.as_ref()?.join("semver.txt");
-        fs.read_to_string(&semver_path)
+    /// Read the bundle manifest inside the bundle root.
+    pub(crate) async fn manifest(&self, fs: &impl FsRepo) -> Option<BundleManifest> {
+        let manifest_path = self.0.as_ref()?.join("bundle-manifest.json");
+        BundleManifest::read(&manifest_path, fs).await
+    }
+}
+
+/// Metadata generated with each JavaScript bundle build.
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct BundleManifest {
+    /// Manifest schema version.
+    pub schema_version: u64,
+    /// Monotonic JavaScript bundle build number.
+    pub bundle_build: u64,
+    /// Minimum native app build that can safely run this bundle.
+    pub min_native_build: u64,
+    /// Short git SHA used to build the bundle.
+    pub git_sha: Option<String>,
+    /// Application package version used for the bundle.
+    pub app_version: String,
+}
+
+impl BundleManifest {
+    /// Read and validate a bundle manifest from disk.
+    pub async fn read(path: &Path, fs: &impl FsRepo) -> Option<Self> {
+        let manifest = fs
+            .read_to_string(path)
             .await
             .ok()
-            .and_then(|s| s.trim().parse().ok())
+            .and_then(|s| serde_json::from_str::<Self>(&s).ok())?;
+        if manifest.schema_version == 2 {
+            Some(manifest)
+        } else {
+            None
+        }
     }
 }
 
@@ -97,8 +126,10 @@ const MPSC_CHAN_SIZE: usize = 10;
 /// Application metadata sent to the update server.
 #[derive(Debug, Clone)]
 pub struct AppInfo {
-    /// The currently running app version.
-    pub current_version: semver::Version,
+    /// The current effective JS bundle build.
+    pub current_bundle_build: u64,
+    /// The native app build number.
+    pub native_build: u64,
     /// CPU architecture.
     pub arch: Arch,
     /// Operating system target.
@@ -138,12 +169,66 @@ pub enum Arch {
     Armv7,
 }
 
+/// Action returned by the bundle update endpoint.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(tag = "action", rename_all = "lowercase")]
+pub enum BundleAction {
+    /// Download and apply a newer compatible bundle.
+    Update(BundleUpdate),
+    /// Clear the active cached OTA bundle.
+    Clear(BundleClear),
+    /// A newer bundle exists, but the installed native app build is too old.
+    #[serde(rename = "native_update_required")]
+    NativeUpdateRequired(BundleNativeUpdateRequired),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn deserializes_native_update_required_action() {
+        let action: BundleAction = serde_json::from_str(
+            r#"{"action":"native_update_required","bundleBuild":102,"minNativeBuild":999999}"#,
+        )
+        .unwrap();
+
+        assert!(matches!(
+            action,
+            BundleAction::NativeUpdateRequired(BundleNativeUpdateRequired {
+                bundle_build: 102,
+                min_native_build: 999999,
+            })
+        ));
+    }
+}
+
+/// A response instructing the client to clear the active OTA bundle.
+#[derive(Debug, Clone, Deserialize)]
+pub struct BundleClear {
+    /// Machine-readable clear reason.
+    pub reason: String,
+}
+
+/// A response telling the client that the native app must be updated first.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BundleNativeUpdateRequired {
+    /// The newer bundle build that could not be applied.
+    pub bundle_build: u64,
+    /// The minimum native build required by that bundle.
+    pub min_native_build: u64,
+}
+
 /// a struct which indicates how to update only the javascript bundle of the application
 #[derive(Debug, Clone, Deserialize)]
 #[non_exhaustive]
+#[serde(rename_all = "camelCase")]
 pub struct BundleUpdate {
-    /// the version that we are going to update to
-    pub version: semver::Version,
+    /// the bundle build that we are going to update to
+    pub bundle_build: u64,
+    /// minimum native build required by this bundle
+    pub min_native_build: u64,
     /// some optional notes about the update
     pub notes: Option<String>,
     /// the fully qualified Url where the update bundle exists
@@ -338,6 +423,22 @@ pub struct UpdateFoundStatus {
     pub bundle: BundleUpdate,
 }
 
+/// A server-side revocation requires clearing the active bundle root.
+#[derive(Debug, Clone)]
+pub struct ClearRequiredStatus {
+    /// Machine-readable clear reason.
+    pub reason: String,
+}
+
+/// A newer bundle exists but requires a newer native app build.
+#[derive(Debug, Clone)]
+pub struct NativeUpdateRequiredStatus {
+    /// The newer bundle build that could not be applied.
+    pub bundle_build: u64,
+    /// The minimum native build required by that bundle.
+    pub min_native_build: u64,
+}
+
 /// A bundle download is in progress.
 #[derive(Debug, Clone)]
 pub struct UpdateDownloadingStatus {
@@ -354,6 +455,10 @@ pub struct UpdateDownloadingStatus {
 pub struct UnzipStatus {
     /// Path to the zip archive being extracted.
     pub zip_filename: PathBuf,
+    /// Expected bundle build in the extracted manifest.
+    pub expected_bundle_build: u64,
+    /// Expected minimum native build in the extracted manifest.
+    pub expected_min_native_build: u64,
     /// Expected SHA-256 hex digest.
     pub expected_checksum: String,
     /// Current extraction progress.
@@ -380,6 +485,10 @@ pub enum UpdateStatus {
     WaitingForWifi(UpdateFoundStatus),
     /// The app is already on the latest version.
     NoUpdateNeeded,
+    /// The active cached OTA bundle must be cleared.
+    ClearRequired(ClearRequiredStatus),
+    /// A newer bundle exists but requires a newer native app build.
+    NativeUpdateRequired(NativeUpdateRequiredStatus),
     /// The bundle zip is being downloaded.
     DownloadingBundle(UpdateDownloadingStatus),
     /// The downloaded zip is being extracted.

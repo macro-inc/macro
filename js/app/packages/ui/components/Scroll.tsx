@@ -1,5 +1,5 @@
-import { createSignal, onCleanup, onMount } from 'solid-js';
 import type { JSX } from 'solid-js';
+import { createSignal, onCleanup, onMount } from 'solid-js';
 
 const THUMB_WIDTH = 2;
 const HIDE_DELAY = 500;
@@ -20,11 +20,16 @@ export function Scroll(props: JSX.HTMLAttributes<HTMLDivElement>) {
   let maxTop = 0;
 
   function update() {
-    setTranslateY(THUMB_INSET + (maxScroll > 0 ? (scrollRef.scrollTop / maxScroll) * maxTop : 0));
+    setTranslateY(
+      THUMB_INSET +
+        (maxScroll > 0 ? (scrollRef.scrollTop / maxScroll) * maxTop : 0)
+    );
   }
 
   function reveal() {
-    if (scrollRef.scrollHeight <= scrollRef.clientHeight) { return; }
+    if (scrollRef.scrollHeight <= scrollRef.clientHeight) {
+      return;
+    }
     setVisible(true);
     clearTimeout(hideTimer);
     hideTimer = setTimeout(() => setVisible(false), HIDE_DELAY);
@@ -35,7 +40,10 @@ export function Scroll(props: JSX.HTMLAttributes<HTMLDivElement>) {
     const sh = scrollRef.scrollHeight;
     const trackHeight = Math.max(0, ch - THUMB_INSET * 2);
     const ratio = sh > 0 ? ch / sh : 1;
-    const th = Math.max(MIN_THUMB_HEIGHT, Math.min(trackHeight, trackHeight * ratio));
+    const th = Math.max(
+      MIN_THUMB_HEIGHT,
+      Math.min(trackHeight, trackHeight * ratio)
+    );
     setThumbHeight(th);
     maxScroll = Math.max(0, sh - ch);
     maxTop = Math.max(0, trackHeight - th);
@@ -48,20 +56,29 @@ export function Scroll(props: JSX.HTMLAttributes<HTMLDivElement>) {
   }
 
   function seek(localY: number) {
-    if (maxScroll <= 0 || maxTop <= 0) { return; }
-    scrollRef.scrollTop = Math.max(0, Math.min(maxTop, localY - thumbHeight() / 2 - THUMB_INSET)) / maxTop * maxScroll;
+    if (maxScroll <= 0 || maxTop <= 0) {
+      return;
+    }
+    scrollRef.scrollTop =
+      (Math.max(0, Math.min(maxTop, localY - thumbHeight() / 2 - THUMB_INSET)) /
+        maxTop) *
+      maxScroll;
     reveal();
   }
 
   function handlePointerDown(e: PointerEvent) {
-    if (e.button !== 0) { return; }
+    if (e.button !== 0) {
+      return;
+    }
     e.preventDefault();
     gutterRef.setPointerCapture(e.pointerId);
     seek(e.offsetY);
   }
 
   function handlePointerMove(e: PointerEvent) {
-    if (!gutterRef.hasPointerCapture(e.pointerId)) { return; }
+    if (!gutterRef.hasPointerCapture(e.pointerId)) {
+      return;
+    }
     seek(e.offsetY);
   }
 
@@ -80,11 +97,11 @@ export function Scroll(props: JSX.HTMLAttributes<HTMLDivElement>) {
     <div
       {...props}
       style={{
-        'position': 'relative',
+        position: 'relative',
         'min-height': '0',
         'min-width': '0',
-        'height': '100%',
-        'width': '100%',
+        height: '100%',
+        width: '100%',
       }}
     >
       <div
@@ -93,7 +110,7 @@ export function Scroll(props: JSX.HTMLAttributes<HTMLDivElement>) {
         style={{
           'scrollbar-width': 'none',
           'overflow-y': 'auto',
-          'height': '100%',
+          height: '100%',
         }}
       >
         <div ref={contentRef}>{props.children}</div>
@@ -104,26 +121,26 @@ export function Scroll(props: JSX.HTMLAttributes<HTMLDivElement>) {
         onPointerMove={handlePointerMove}
         aria-hidden="true"
         style={{
-          'width': `${GUTTER_WIDTH}px`,
+          width: `${GUTTER_WIDTH}px`,
           'touch-action': 'none',
-          'position': 'absolute',
-          'height': '100%',
-          'right': '0',
-          'top': '0',
+          position: 'absolute',
+          height: '100%',
+          right: '0',
+          top: '0',
         }}
       >
         <div
           style={{
-            'transform': `translateY(${translateY()}px)`,
-            'transition': 'opacity 150ms ease-in-out',
+            transform: `translateY(${translateY()}px)`,
+            transition: 'opacity 150ms ease-in-out',
             'border-radius': `${THUMB_WIDTH * 0.5}px`,
             'background-color': 'var(--c4)',
-            'height': `${thumbHeight()}px`,
-            'opacity': visible() ? 1 : 0,
-            'right': `${THUMB_INSET}px`,
-            'width': `${THUMB_WIDTH}px`,
+            height: `${thumbHeight()}px`,
+            opacity: visible() ? 1 : 0,
+            right: `${THUMB_INSET}px`,
+            width: `${THUMB_WIDTH}px`,
             'pointer-events': 'none',
-            'position': 'absolute',
+            position: 'absolute',
           }}
         />
       </div>

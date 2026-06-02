@@ -26,6 +26,7 @@ location_check = []
 
 [dependencies]
 anyhow = { workspace = true }
+ai_tools = { path = "../ai_tools" }
 aws-sdk-dynamodb = { workspace = true }
 aws-sdk-s3 = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
@@ -42,6 +43,7 @@ bzip2 = { workspace = true, default-features = false, features = [
 analytics_client = { path = "../analytics_client" }
 cal = { path = "../cal", features = ["axum", "outbound"] }
 call = { path = "../call" }
+channel_bots = { path = "../channel_bots" }
 channels = { path = "../channels", features = ["inbound", "outbound"] }
 chrono = { workspace = true }
 clap = { workspace = true }
@@ -84,6 +86,7 @@ macro_cors = { path = "../macro_cors" }
 macro_db_client = { path = "../macro_db_client" }
 macro_entrypoint = { path = "../macro_entrypoint" }
 macro_env = { path = "../macro_env" }
+macro_service_urls = { path = "../macro_service_urls" }
 macro_env_var = { path = "../macro_env_var" }
 macro_middleware = { path = "../macro_middleware", default-features = false, features = [
   "auth",

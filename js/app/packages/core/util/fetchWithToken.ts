@@ -6,20 +6,47 @@ import { err, ok, type Result } from 'neverthrow';
 import type { ObjectLike, ResultError } from './result';
 import {
   type BaseFetchErrorCode,
+  type ErrorResponseHandler,
   type SafeFetchInit,
   safeFetch,
 } from './safeFetch';
 
 export type FetchWithTokenErrorCode = BaseFetchErrorCode;
 
-function fetchWithCredentials<T extends ObjectLike>(
+export type FetchWithTokenInit<CustomErrorCode extends string = never> =
+  SafeFetchInit & {
+    errorResponseHandler?: ErrorResponseHandler<CustomErrorCode>;
+  };
+
+function fetchWithCredentials<
+  T extends ObjectLike,
+  CustomErrorCode extends string = never,
+>(
   input: RequestInfo,
-  init?: SafeFetchInit
-): Promise<Result<T, ResultError<BaseFetchErrorCode>[]>> {
-  return safeFetch<T>(input, {
-    ...init,
-    credentials: 'include',
-  });
+  init?: FetchWithTokenInit<CustomErrorCode>
+): Promise<Result<T, ResultError<BaseFetchErrorCode | CustomErrorCode>[]>> {
+  const { errorResponseHandler, ...fetchInit } = init ?? {};
+  let safeFetchErrorHandler: ErrorResponseHandler<CustomErrorCode> | undefined;
+  if (errorResponseHandler) {
+    safeFetchErrorHandler = async function handleFetchWithCredentialsError(
+      response
+    ) {
+      if (response.status === 401) {
+        return { code: 'UNAUTHORIZED', message: 'Unauthorized access' };
+      }
+
+      return errorResponseHandler(response);
+    };
+  }
+
+  return safeFetch<T, CustomErrorCode>(
+    input,
+    {
+      ...fetchInit,
+      credentials: 'include',
+    },
+    safeFetchErrorHandler
+  );
 }
 
 let tokenPromise: Promise<
@@ -61,9 +88,10 @@ export async function fetchToken(): Promise<
  * Performs a fetch request with automatic token refresh on unauthorized errors.
  *
  * @template T - The expected response data type.
+ * @template CustomErrorCode - Additional error codes from a custom error response handler.
  * @param {RequestInfo} input - The resource that you wish to fetch.
- * @param {SafeFetchInit} [init] - An options object containing any custom settings you want to apply to the request, including retry configuration.
- * @returns {Promise<Result<T, ResultError<FetchWithTokenErrorCode>[]>>} A promise that resolves to a Result containing either the response data or an error.
+ * @param {FetchWithTokenInit<CustomErrorCode>} [init] - An options object containing any custom settings you want to apply to the request, including retry configuration and custom error response handling.
+ * @returns {Promise<Result<T, ResultError<BaseFetchErrorCode | CustomErrorCode>[]>>} A promise that resolves to a Result containing either the response data or an error.
  *
  * @example
  * const result = await fetchWithToken<UserData>(
@@ -80,12 +108,15 @@ export async function fetchToken(): Promise<
  *   console.log('User data:', result.value);
  * }
  */
-export async function fetchWithToken<T extends ObjectLike>(
+export async function fetchWithToken<
+  T extends ObjectLike,
+  CustomErrorCode extends string = never,
+>(
   input: RequestInfo,
-  init?: SafeFetchInit
-): Promise<Result<T, ResultError<FetchWithTokenErrorCode>[]>> {
+  init?: FetchWithTokenInit<CustomErrorCode>
+): Promise<Result<T, ResultError<BaseFetchErrorCode | CustomErrorCode>[]>> {
   if (ENABLE_BEARER_TOKEN_AUTH) {
-    const result = await fetchWithAuth<T>(input, init);
+    const result = await fetchWithAuth<T, CustomErrorCode>(input, init);
     if (result.isErr()) {
       logger.error('fetchWithToken: fetchWithAuth failed', {
         input,
@@ -97,7 +128,7 @@ export async function fetchWithToken<T extends ObjectLike>(
     return result;
   }
 
-  let result = await fetchWithCredentials<T>(input, init);
+  let result = await fetchWithCredentials<T, CustomErrorCode>(input, init);
 
   if (
     result.isErr() &&
@@ -116,7 +147,7 @@ export async function fetchWithToken<T extends ObjectLike>(
     }
 
     // Retry the original request
-    result = await fetchWithCredentials<T>(input, init);
+    result = await fetchWithCredentials<T, CustomErrorCode>(input, init);
   }
 
   return result;

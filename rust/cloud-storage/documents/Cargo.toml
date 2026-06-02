@@ -60,7 +60,7 @@ outbound = [
   "ports",
 ]
 ports = ["dep:tokio"]
-service = ["dep:entity_access_management", "ports"]
+service = ["dep:entity_access_management", "dep:foreign_entity", "ports"]
 
 [dependencies]
 # Core
@@ -82,6 +82,9 @@ document_sub_type = { path = "../document_sub_type" }
 entity_access = { path = "../entity_access" }
 entity_access_management = { path = "../entity_access_management", default-features = false, features = [
   "outbound",
+  "ports",
+], optional = true }
+foreign_entity = { path = "../foreign_entity", default-features = false, features = [
   "ports",
 ], optional = true }
 macro_aws_config = { path = "../macro_aws_config", features = ["s3"] }

@@ -68,7 +68,11 @@ import {
   useSaveDraftMutation,
 } from '@queries/email/draft';
 import { emailKeys } from '@queries/email/keys';
-import { useEmailLinksQuery } from '@queries/email/link';
+import {
+  useEmailLinksQuery,
+  useNonPrimaryEmailLinkIdHeader,
+  usePrimaryEmailLinkId,
+} from '@queries/email/link';
 import {
   useSendMessageMutation,
   useUnscheduleMessageMutation,
@@ -428,6 +432,23 @@ export function BaseInput(props: {
   });
   const blockId = useBlockId();
   const emailLinksQuery = useEmailLinksQuery();
+  const userEmail = useEmail();
+
+  const toHeaderLinkId = useNonPrimaryEmailLinkIdHeader();
+  const primaryLinkId = usePrimaryEmailLinkId();
+  // The inbox this input acts in: the open thread's inbox, else the primary
+  // inbox for a new message. Mutations send it as X-Email-Link-Id when it's a
+  // non-primary inbox so the draft/send targets the right account.
+  const activeLinkId = () =>
+    ctx.thread()?.link_id ??
+    props.draft?.link_id ??
+    primaryLinkId() ??
+    emailLinksQuery.data?.links[0]?.id;
+  const headerLinkId = () => toHeaderLinkId(activeLinkId());
+  // The address of the inbox this input sends from, for the "from" display.
+  const activeInboxEmail = () =>
+    emailLinksQuery.data?.links.find((l) => l.id === activeLinkId())
+      ?.email_address ?? userEmail();
 
   const [bodyMacro, setBodyMacro] = createSignal<string>('');
   const [expandedRecipientsRef, setExpandedRecipientsRef] =
@@ -641,7 +662,6 @@ export function BaseInput(props: {
     return registerToggleAppendedThread(editor);
   });
 
-  const userEmail = useEmail();
   const userId = useUserId();
   const [userName] = useDisplayName(tryMacroId(userId() ?? ''));
 
@@ -691,7 +711,10 @@ export function BaseInput(props: {
     if (!draftToSave) {
       const draftId = savedDraftId();
       if (draftId) {
-        await deleteDraftMutation.mutateAsync({ draftId });
+        await deleteDraftMutation.mutateAsync({
+          draftId,
+          linkId: headerLinkId(),
+        });
         refetchThreadMessages();
       }
       setSavedDraftId(undefined);
@@ -721,6 +744,7 @@ export function BaseInput(props: {
         provider_thread_id: currentThread?.provider_id,
         thread_db_id: currentThread?.db_id,
       },
+      linkId: headerLinkId(),
     });
 
     const draftId = draftResponse.draft.db_id;
@@ -739,6 +763,7 @@ export function BaseInput(props: {
         const uploaded = await uploadAttachmentMutation.mutateAsync({
           draftID: draftId,
           attachments: attachments.map((a) => a.file),
+          linkId: headerLinkId(),
         });
 
         // Assign the attachment ids to attachments for later use
@@ -764,6 +789,7 @@ export function BaseInput(props: {
           attachments: forwardedAttachments.map((a) => ({
             attachmentID: a.attachmentID,
           })),
+          linkId: headerLinkId(),
         });
       }
 
@@ -929,7 +955,7 @@ export function BaseInput(props: {
         logger.error('No links found');
         return;
       }
-      linkId = linksData.links[0].id;
+      linkId = primaryLinkId() ?? linksData.links[0].id;
     }
 
     const currentEditor = editor();
@@ -1007,6 +1033,7 @@ export function BaseInput(props: {
         thread_db_id: currentThread?.db_id,
         to,
       },
+      linkId: toHeaderLinkId(linkId),
     });
 
     // Block any save scheduled by reset side effects (form().reset() callDirty,
@@ -1047,7 +1074,10 @@ export function BaseInput(props: {
     const draftId = savedDraftId();
     try {
       if (draftId) {
-        await deleteDraftMutation.mutateAsync({ draftId });
+        await deleteDraftMutation.mutateAsync({
+          draftId,
+          linkId: headerLinkId(),
+        });
         refetchThreadMessages();
       }
       resetState();
@@ -1246,11 +1276,13 @@ export function BaseInput(props: {
       removeForwardedAttachmentMutation.mutate({
         draftID: currentDraftID,
         attachmentID: attachment.attachmentID,
+        linkId: headerLinkId(),
       });
     } else {
       removeAttachmentMutation.mutate({
         draftID: currentDraftID,
         attachmentID: attachment.attachmentID,
+        linkId: headerLinkId(),
       });
     }
   };
@@ -1272,6 +1304,7 @@ export function BaseInput(props: {
     if (!date && currentSendTime && currentDraft) {
       unscheduleMessageMutation.mutate({
         draftID: currentDraft,
+        linkId: headerLinkId(),
       });
       form().setSendTime(date);
       return;
@@ -1289,15 +1322,21 @@ export function BaseInput(props: {
         return;
       }
 
-      await emailClient.scheduleMessage({
-        draftID,
-        send_time: date.toISOString(),
-      });
+      await emailClient.scheduleMessage(
+        {
+          draftID,
+          send_time: date.toISOString(),
+        },
+        headerLinkId()
+      );
 
       // Mark the thread as done
       const threadID = ctx.thread()?.db_id;
       if (threadID) {
-        await emailClient.flagArchived({ id: threadID, value: true });
+        await emailClient.flagArchived(
+          { id: threadID, value: true },
+          headerLinkId()
+        );
       }
     }
   };
@@ -1404,7 +1443,7 @@ export function BaseInput(props: {
             <div class="flex flex-row items-baseline py-0.5">
               <div class="min-w-8">from</div>
               <span class="ml-2">
-                {userName()} &lt;{userEmail()}&gt;
+                {userName()} &lt;{activeInboxEmail()}&gt;
               </span>
             </div>
             {/* Expanded TO */}

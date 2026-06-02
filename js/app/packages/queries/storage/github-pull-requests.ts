@@ -14,7 +14,6 @@ import type { Accessor } from 'solid-js';
 import { documentGithubPullRequestsKeys } from './keys';
 
 const DOCUMENT_GITHUB_PULL_REQUESTS_STALE_TIME = 60 * 1000;
-
 type DocumentIdInput =
   | string
   | null
@@ -65,7 +64,7 @@ function toStorageGithubPullRequest(
   };
 }
 
-async function fetchDocumentGithubPullRequests(
+export async function fetchDocumentGithubPullRequests(
   documentId: string
 ): Promise<GithubPullRequestsResponse> {
   const rawResponse = await throwOnErr(() =>

@@ -347,16 +347,6 @@
               }
             }
           },
-          "404": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
           "500": {
             "description": "",
             "content": {
@@ -3554,7 +3544,8 @@
           "isImportant",
           "sortTs",
           "createdAt",
-          "updatedAt"
+          "updatedAt",
+          "linkId"
         ],
         "properties": {
           "createdAt": {
@@ -3576,6 +3567,10 @@
           },
           "isRead": {
             "type": "boolean"
+          },
+          "linkId": {
+            "type": "string",
+            "format": "uuid"
           },
           "name": {
             "type": ["string", "null"]

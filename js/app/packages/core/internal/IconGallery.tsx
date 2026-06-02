@@ -1,6 +1,7 @@
 import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
 import { StaticSplitLabel } from '@app/component/split-layout/components/SplitLabel';
-import { type Component, createSignal, For } from 'solid-js';
+import { type Component, createSignal, For, Show } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 
 // Theme color swatches - uses CSS variables from the theme
 const THEME_COLORS = [
@@ -49,12 +50,6 @@ type ColorOption =
 // Note: import.meta.glob does not support TS path aliases (e.g. @design/*, @icon/*).
 // Patterns must start with '/' or './', so we use relative paths from this file.
 
-// Dynamically import all arcanum SVG icons
-const arcanumIconModules = import.meta.glob('../../design/arcanum-*.svg', {
-  eager: true,
-  query: '?component-solid',
-}) as Record<string, { default: Component }>;
-
 // Dynamically import all static SVG icons
 const staticIconModules = import.meta.glob('../../icon/wide-*.svg', {
   eager: true,
@@ -102,40 +97,33 @@ const animatedIcons: Record<
 for (const [path, module] of Object.entries(animatedIconModules)) {
   const rawName = getIconName(path);
   const normalizedName = toKebabCase(rawName);
-  // The export name follows pattern: Animated{PascalName}Icon
-  const exportName = `Animated${toPascalCase(normalizedName)}Icon`;
+  // The export name drops the `wide-` prefix and follows the pattern
+  // Animated{PascalName}Icon (e.g. wide-sliders-horizontal ->
+  // AnimatedSlidersHorizontalIcon).
+  const baseName = normalizedName.replace(/^wide-/, '');
+  const exportName = `Animated${toPascalCase(baseName)}Icon`;
   if (module[exportName]) {
     animatedIcons[normalizedName] = module[exportName];
   }
 }
 
-// Build icon pairs (icons that have both static and animated versions)
-type IconPair = {
+// Build the animated-icon list. Every icon with an animated (.tsx) version
+// belongs here; its static (.svg) version is shown alongside when one exists.
+type AnimatedIconEntry = {
   name: string;
-  static: Component;
+  static?: Component;
   animated: Component<{ triggerAnimation?: boolean }>;
 };
 
-const ICON_PAIRS: IconPair[] = [];
-const pairedStaticNames = new Set<string>();
-
-for (const [name, animatedComponent] of Object.entries(animatedIcons)) {
-  // Check if there's a matching static icon
-  const staticComponent = staticIcons[name];
-  if (staticComponent) {
-    ICON_PAIRS.push({
-      name,
-      static: staticComponent,
-      animated: animatedComponent,
-    });
-    pairedStaticNames.add(name);
-  }
+const ANIMATED_ICONS: AnimatedIconEntry[] = [];
+for (const [name, animated] of Object.entries(animatedIcons)) {
+  ANIMATED_ICONS.push({ name, static: staticIcons[name], animated });
 }
 
 // Sort alphabetically
-ICON_PAIRS.sort((a, b) => a.name.localeCompare(b.name));
+ANIMATED_ICONS.sort((a, b) => a.name.localeCompare(b.name));
 
-// Build static-only icons list (icons without animated versions)
+// Build static-only icons list (static icons without an animated version)
 type StaticIcon = {
   name: string;
   component: Component;
@@ -143,7 +131,7 @@ type StaticIcon = {
 
 const STATIC_ONLY_ICONS: StaticIcon[] = [];
 for (const [name, component] of Object.entries(staticIcons)) {
-  if (!pairedStaticNames.has(name)) {
+  if (!animatedIcons[name]) {
     STATIC_ONLY_ICONS.push({ name, component });
   }
 }
@@ -151,26 +139,12 @@ for (const [name, component] of Object.entries(staticIcons)) {
 // Sort alphabetically
 STATIC_ONLY_ICONS.sort((a, b) => a.name.localeCompare(b.name));
 
-// Build arcanum icons list
-type ArcanumIcon = {
-  name: string;
-  component: Component;
-};
-
-const ARCANUM_ICONS: ArcanumIcon[] = [];
-for (const [path, module] of Object.entries(arcanumIconModules)) {
-  const rawName = getIconName(path);
-  ARCANUM_ICONS.push({ name: rawName, component: module.default });
-}
-ARCANUM_ICONS.sort((a, b) => a.name.localeCompare(b.name));
-
 export default function IconGallery() {
   const [selectedColor, setSelectedColor] = createSignal<ColorOption>(
     THEME_COLORS[0]
   );
   const [customColor, setCustomColor] = createSignal('');
   const [iconSize, setIconSize] = createSignal(48);
-  const [arcanumSize, setArcanumSize] = createSignal(300);
   const [animationTriggers, setAnimationTriggers] = createSignal<
     Record<string, boolean>
   >({});
@@ -191,7 +165,7 @@ export default function IconGallery() {
 
   const triggerAllAnimations = () => {
     const triggers: Record<string, boolean> = {};
-    ICON_PAIRS.forEach((pair) => {
+    ANIMATED_ICONS.forEach((pair) => {
       triggers[pair.name] = true;
     });
     setAnimationTriggers(triggers);
@@ -325,25 +299,29 @@ export default function IconGallery() {
           <span class="h-px flex-1 bg-edge-muted" />
         </h2>
         <div class="mb-6 flex flex-wrap gap-3">
-          <For each={ICON_PAIRS}>
+          <For each={ANIMATED_ICONS}>
             {(pair) => (
               <div class="inline-flex flex-col items-center rounded-[1px] border border-edge-muted p-2">
                 <p class="mb-2 text-xxs text-ink">{pair.name}</p>
                 <div class="flex items-center justify-center gap-3">
-                  {/* Static version */}
-                  <div class="flex flex-col items-center">
-                    <div
-                      class="flex items-center justify-center"
-                      style={{
-                        color: getColorStyle(),
-                        width: `${iconSize()}px`,
-                        height: `${iconSize()}px`,
-                      }}
-                    >
-                      <pair.static />
-                    </div>
-                    <span class="mt-2 text-[8px] text-muted">static</span>
-                  </div>
+                  {/* Static version (shown when one exists) */}
+                  <Show when={pair.static}>
+                    {(staticComponent) => (
+                      <div class="flex flex-col items-center">
+                        <div
+                          class="flex items-center justify-center"
+                          style={{
+                            color: getColorStyle(),
+                            width: `${iconSize()}px`,
+                            height: `${iconSize()}px`,
+                          }}
+                        >
+                          <Dynamic component={staticComponent()} />
+                        </div>
+                        <span class="mt-2 text-[8px] text-muted">static</span>
+                      </div>
+                    )}
+                  </Show>
                   {/* Animated version */}
                   <div class="flex flex-col items-center">
                     <div
@@ -410,42 +388,6 @@ export default function IconGallery() {
                     color: getColorStyle(),
                     width: `${iconSize()}px`,
                     height: `${iconSize()}px`,
-                  }}
-                >
-                  <icon.component />
-                </div>
-                <span class="mt-2 text-[8px] text-muted">{icon.name}</span>
-              </div>
-            )}
-          </For>
-        </div>
-
-        {/* Arcanum icons */}
-        <div class="mt-6 mb-3 flex items-center gap-3">
-          <h2 class="text-xs font-semibold text-ink">Arcanum</h2>
-          <label class="flex items-center gap-2 text-xs text-ink">
-            <input
-              type="range"
-              min="10"
-              max="400"
-              value={arcanumSize()}
-              onInput={(e) => setArcanumSize(Number(e.currentTarget.value))}
-              class="icon-gallery-slider w-24"
-            />
-            <span class="w-8 text-xxs text-muted">{arcanumSize()}px</span>
-          </label>
-          <span class="h-px flex-1 bg-edge-muted" />
-        </div>
-        <div class="flex flex-wrap gap-3">
-          <For each={ARCANUM_ICONS}>
-            {(icon) => (
-              <div class="inline-flex flex-col items-center rounded-[1px] border border-edge-muted p-2">
-                <div
-                  class="flex items-center justify-center"
-                  style={{
-                    color: getColorStyle(),
-                    width: `${arcanumSize()}px`,
-                    height: `${arcanumSize()}px`,
                   }}
                 >
                   <icon.component />

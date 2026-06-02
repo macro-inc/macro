@@ -1,4 +1,5 @@
 import { useEmail } from '@core/context/user';
+import { useEmailLinksQuery } from '@queries/email/link';
 import type { ApiMessage } from '@service-email/generated/schemas';
 import type { LexicalEditor } from 'lexical';
 import { createSignal, type Setter } from 'solid-js';
@@ -102,6 +103,19 @@ export function createEmailFormState(
     draft = options?.getDraftForMessageReply(purpose?.messageID);
   }
 
+  const linksQuery = useEmailLinksQuery();
+  // Reply logic ("did I send this?") must be judged against the inbox that owns
+  // the thread, not the account's primary email — otherwise replying within a
+  // secondary or delegated inbox misclassifies the sender and picks the wrong
+  // recipients.
+  const inboxEmail = () => {
+    const linkId = (draft ?? replyingTo)?.link_id;
+    const ownerEmail = linkId
+      ? linksQuery.data?.links.find((l) => l.id === linkId)?.email_address
+      : undefined;
+    return ownerEmail ?? userEmail() ?? '';
+  };
+
   const draftContainsAppendedReply = () => {
     const encoded = draft?.body_html_sanitized;
     if (!encoded) return false;
@@ -135,8 +149,8 @@ export function createEmailFormState(
     } else if (replyingTo) {
       initialRecipients =
         replyType === 'reply-all'
-          ? getReplyAllRecipients(replyingTo, userEmail() ?? '')
-          : getReplyRecipientsFromParent(replyingTo, userEmail() ?? '');
+          ? getReplyAllRecipients(replyingTo, inboxEmail())
+          : getReplyRecipientsFromParent(replyingTo, inboxEmail());
     }
 
     return {
@@ -224,11 +238,11 @@ export function createEmailFormState(
 
       switch (rt) {
         case 'reply-all': {
-          calculated = getReplyAllRecipients(msg, userEmail() ?? '');
+          calculated = getReplyAllRecipients(msg, inboxEmail());
           break;
         }
         case 'reply': {
-          calculated = getReplyRecipientsFromParent(msg, userEmail() ?? '');
+          calculated = getReplyRecipientsFromParent(msg, inboxEmail());
         }
       }
 

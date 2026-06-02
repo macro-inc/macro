@@ -164,6 +164,9 @@ pub struct GithubPullRequest {
     pub url: String,
     /// A compact label suitable for display in the UI.
     pub display_name: String,
+    /// The internal `foreign_entity.id` UUID for the GitHub pull request row.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub foreign_entity_id: Option<uuid::Uuid>,
     /// The GitHub pull request title, when enrichment data is available.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
@@ -213,6 +216,7 @@ impl GithubPullRequest {
             number,
             url,
             display_name,
+            foreign_entity_id: None,
             name: None,
             status: None,
             additions: None,

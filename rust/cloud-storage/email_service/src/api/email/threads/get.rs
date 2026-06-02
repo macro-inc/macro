@@ -6,8 +6,8 @@ use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json, extract};
 use model::response::ErrorResponse;
 use model::user::UserContext;
-use models_email::service::link::Link;
 use sqlx::types::Uuid;
+use std::collections::HashSet;
 use strum_macros::AsRefStr;
 use thiserror::Error;
 use utoipa::ToSchema;
@@ -89,15 +89,22 @@ const MESSAGE_MAX: i64 = 100;
         (status = 500, description = "Internal Server Error", body = ErrorResponse),
     ),
 )]
-#[tracing::instrument(skip(ctx, user_context, link), fields(user_id=user_context.user_id, fusionauth_user_id=user_context.fusion_user_id, link_id=%link.id))]
+#[tracing::instrument(skip(ctx, user_context), fields(user_id=user_context.user_id, fusionauth_user_id=user_context.fusion_user_id), err)]
 pub async fn get_thread_messages_handler(
     State(ctx): State<ApiContext>,
     user_context: Extension<UserContext>,
-    link: Extension<Link>,
     Path(PathParams { id }): Path<PathParams>,
     extract::Query(query_params): extract::Query<GetThreadMessagesParams>,
 ) -> Result<Response, GetThreadError> {
     let p = process_get_thread_params(&query_params)?;
+
+    let link_ids: HashSet<Uuid> =
+        email_db_client::links::get::fetch_inboxes_for_macro_id(&ctx.db, &user_context.user_id)
+            .await
+            .context("Failed to fetch links")?
+            .into_iter()
+            .map(|link| link.id)
+            .collect();
 
     let messages =
         email_db_client::messages::get_parsed::get_paginated_parsed_messages_by_thread_id(
@@ -108,7 +115,7 @@ pub async fn get_thread_messages_handler(
 
     let accessible_messages = messages
         .into_iter()
-        .filter(|msg| msg.link_id == link.id)
+        .filter(|msg| link_ids.contains(&msg.link_id))
         .collect::<Vec<_>>();
 
     if accessible_messages.is_empty() {

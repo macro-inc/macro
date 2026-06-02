@@ -116,17 +116,19 @@ export const readChannelMessagesHandler = createToolRenderer({
         renderContext={ctx.renderContext}
       >
         <div class="flex min-w-0 flex-1 flex-col gap-1">
-          <div class="flex min-w-0 items-center justify-between gap-3">
-            <span>
+          <div class="flex min-w-0 items-center justify-between gap-3 overflow-hidden">
+            <span class="min-w-0 truncate">
               Read messages in <span class="text-ink">{channelName()}</span>
             </span>
             {ctx.response && (
-              <span class="shrink-0 text-xs text-ink-extra-muted">
+              <span class="shrink-0 whitespace-nowrap text-xs text-ink-extra-muted">
                 {messageCount()} messages
               </span>
             )}
           </div>
-          <div class="text-xs text-ink-placeholder">{windowLabel()}</div>
+          <div class="truncate text-xs text-ink-placeholder">
+            {windowLabel()}
+          </div>
         </div>
       </BaseTool>
     );
@@ -140,8 +142,8 @@ export const readChannelMessageContextHandler = createToolRenderer({
 
     return (
       <BaseTool type="call" icon={EyeIcon} renderContext={ctx.renderContext}>
-        <div class="flex min-w-0 flex-1 items-center justify-between gap-3">
-          <span>
+        <div class="flex min-w-0 flex-1 items-center justify-between gap-3 overflow-hidden">
+          <span class="min-w-0 truncate">
             Read <span class="text-ink">{channelName()}</span> message context
           </span>
         </div>
@@ -158,12 +160,12 @@ export const readChannelThreadHandler = createToolRenderer({
 
     return (
       <BaseTool type="call" icon={EyeIcon} renderContext={ctx.renderContext}>
-        <div class="flex min-w-0 flex-1 items-center justify-between gap-3">
-          <span>
+        <div class="flex min-w-0 flex-1 items-center justify-between gap-3 overflow-hidden">
+          <span class="min-w-0 truncate">
             Read <span class="text-ink">{channelName()}</span> thread
           </span>
           {ctx.response && (
-            <span class="shrink-0 text-xs text-ink-extra-muted">
+            <span class="shrink-0 whitespace-nowrap text-xs text-ink-extra-muted">
               {replyCount()} replies
             </span>
           )}

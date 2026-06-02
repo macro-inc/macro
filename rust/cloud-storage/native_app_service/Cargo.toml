@@ -22,3 +22,4 @@ url = { workspace = true, features = ["serde"] }
 cool_asserts = "2"
 strum = { workspace = true, features = ["derive"] }
 tokio = { workspace = true, features = ["macros", "rt"] }
+tower = { workspace = true, features = ["util"] }

@@ -1,21 +1,10 @@
-import Macro from '@icon/macro-logo.svg';
+import MacroBrandLoader from '@icon/macro-brand-loader-2.svg';
 import { createSignal, onMount } from 'solid-js';
-import { PcNoiseGrid } from './PcNoiseGrid';
 
 export function LoadingSpinner() {
   return (
-    <div class="bg-surface text-accent size-48 relative p-2">
-      <PcNoiseGrid
-        cellSize={12}
-        warp={1}
-        crunch={0.3}
-        size={[0.0, 0.8]}
-        rounding={100}
-        freq={0.003}
-        speed={[0.3, 0]}
-        circleMask={0.4}
-      />
-      <Macro class="text-surface size-48 inset-0 absolute p-14" />
+    <div class="text-accent size-48 p-14">
+      <MacroBrandLoader class="size-full" />
     </div>
   );
 }

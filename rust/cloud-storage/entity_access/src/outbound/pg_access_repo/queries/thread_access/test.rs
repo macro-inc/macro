@@ -315,6 +315,52 @@ async fn returns_none_when_thread_does_not_exist(pool: PgPool) -> anyhow::Result
     Ok(())
 }
 
+// ---------------------------------------------------------------------------
+// Delegated / shared inboxes (macro_user_links)
+// ---------------------------------------------------------------------------
+
+/// `primary_macro_id` is delegated `child_macro_id`'s inbox. Both must exist in "User".
+async fn insert_delegation(pool: &PgPool, primary_macro_id: &str, child_macro_id: &str) {
+    sqlx::query!(
+        r#"INSERT INTO macro_user_links (primary_macro_id, child_macro_id) VALUES ($1, $2)"#,
+        primary_macro_id,
+        child_macro_id,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn delegated_inbox_grants_access(pool: PgPool) -> anyhow::Result<()> {
+    // OWNER's inbox is delegated to REQUESTER via macro_user_links; the thread is
+    // owned by OWNER's inbox, so the delegate gets owner-equivalent access.
+    insert_user(&pool, OWNER, "owner@corp.test").await;
+    insert_user(&pool, REQUESTER, "requester@corp.test").await;
+    let (_link_id, thread_id) = create_link_and_thread(&pool, OWNER).await;
+    insert_delegation(&pool, REQUESTER, OWNER).await;
+
+    assert_eq!(
+        access_as_requester(&pool, &thread_id).await,
+        Some(AccessLevel::Owner)
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn delegation_scoped_to_the_primary(pool: PgPool) -> anyhow::Result<()> {
+    // The inbox is delegated to OTHER, not REQUESTER. REQUESTER neither owns nor
+    // is delegated the inbox, so it gets no access.
+    insert_user(&pool, OWNER, "owner@corp.test").await;
+    insert_user(&pool, REQUESTER, "requester@corp.test").await;
+    insert_user(&pool, OTHER, "other@corp.test").await;
+    let (_link_id, thread_id) = create_link_and_thread(&pool, OWNER).await;
+    insert_delegation(&pool, OTHER, OWNER).await;
+
+    assert_eq!(access_as_requester(&pool, &thread_id).await, None);
+    Ok(())
+}
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn unauthenticated_user_never_gets_crm_access(pool: PgPool) -> anyhow::Result<()> {
     // Even a fully-synced thread is invisible to an unauthenticated caller: with

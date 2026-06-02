@@ -1,9 +1,9 @@
 import { Checkbox as KobalteCheckbox } from '@kobalte/core/checkbox';
-import type { ComponentProps } from 'solid-js';
 import CheckIcon from '@phosphor/check.svg';
 import MinusIcon from '@phosphor/minus.svg';
-import { cn } from '../utils/classname';
+import type { ComponentProps } from 'solid-js';
 import { splitProps } from 'solid-js';
+import { cn } from '../utils/classname';
 
 /*
 <Checkbox checked={...} onChange={...}>
@@ -30,7 +30,7 @@ const CONTROL_CLASS = cn(
   'data-checked:bg-accent data-checked:border-accent',
   'data-indeterminate:bg-accent data-indeterminate:border-accent',
   'data-disabled:opacity-50 data-disabled:cursor-not-allowed',
-  'data-invalid:border-red-500',
+  'data-invalid:border-red-500'
 );
 
 function CheckboxIndicator(props: IndicatorProps) {
@@ -73,19 +73,19 @@ export const Checkbox = Object.assign(
     );
   },
   {
-    ErrorMessage: KobalteCheckbox.ErrorMessage, /* passthrough — styled via class at use sites */
-    Description: KobalteCheckbox.Description,   /* passthrough — styled via class at use sites */
-    Input: KobalteCheckbox.Input,               /* passthrough — Control already renders one */
+    ErrorMessage:
+      KobalteCheckbox.ErrorMessage /* passthrough — styled via class at use sites */,
+    Description:
+      KobalteCheckbox.Description /* passthrough — styled via class at use sites */,
+    Input:
+      KobalteCheckbox.Input /* passthrough — Control already renders one */,
     Indicator: CheckboxIndicator,
     Control: CheckboxControl,
-  },
+  }
 );
 
 export const SingleSelectCheck = (props: { active: boolean }) => (
   <CheckIcon
-    class={cn(
-      'size-3 text-accent shrink-0',
-      !props.active && 'hidden'
-    )}
+    class={cn('size-3 text-accent shrink-0', !props.active && 'hidden')}
   />
 );

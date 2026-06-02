@@ -27,6 +27,9 @@ pub mod project_access;
 pub mod team_access;
 pub mod thread_access;
 
+#[cfg(test)]
+mod test;
+
 /// Type safety for source ids for entity_access table
 #[derive(Debug, Clone)]
 pub(in crate::outbound::pg_access_repo) struct SourceIds(pub Vec<String>);
@@ -88,25 +91,36 @@ pub(in crate::outbound::pg_access_repo) async fn get_entity_users(
     entity_id: &uuid::Uuid,
     entity_type: EntityType,
 ) -> anyhow::Result<Vec<MacroUserIdStr<'static>>> {
-    // because we don't store entity_access per email we need to also grab the owner of the email to append to the list
+    // because we don't store entity_access per email we need to also grab the owner
+    // of the email to append to the list, plus any primary that delegates the inbox
+    // via macro_user_links (shared inbox)
     let mut email_owner: Vec<MacroUserIdStr> = if let EntityType::EmailThread = entity_type {
-        let owner = sqlx::query_scalar!(
+        let macro_ids = sqlx::query_scalar!(
             r#"
-        SELECT l.macro_id
+        SELECT l.macro_id AS "macro_id!"
         FROM email_threads et
         JOIN email_links l ON et.link_id = l.id
+        WHERE et.id = $1
+        UNION
+        SELECT mul.primary_macro_id
+        FROM email_threads et
+        JOIN email_links l ON et.link_id = l.id
+        JOIN macro_user_links mul ON mul.child_macro_id = l.macro_id
         WHERE et.id = $1
         "#,
             entity_id
         )
-        .fetch_one(pool)
+        .fetch_all(pool)
         .await?;
 
-        vec![
-            MacroUserIdStr::parse_from_str(owner.as_str())
-                .context("macro user id should be valid")?
-                .into_owned(),
-        ]
+        macro_ids
+            .into_iter()
+            .map(|macro_id| {
+                MacroUserIdStr::parse_from_str(macro_id.as_str())
+                    .map(|u| u.into_owned())
+                    .context("macro user id should be valid")
+            })
+            .collect::<anyhow::Result<Vec<_>>>()?
     } else {
         vec![]
     };

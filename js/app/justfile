@@ -67,6 +67,11 @@ dist-archive: build-prod
     (cd packages/app/dist && zip -qr "$TARGET" .)
     echo "Archive: $TARGET"
 
+bundle-smoke-server *ARGS:
+    # Local manual OTA smoke server. Example:
+    # just bundle-smoke-server older --host 0.0.0.0 --port 3001
+    bun scripts/smoke-bundle-updater-server.ts {{ARGS}}
+
 test-watch:
     bunx --bun vitest
 

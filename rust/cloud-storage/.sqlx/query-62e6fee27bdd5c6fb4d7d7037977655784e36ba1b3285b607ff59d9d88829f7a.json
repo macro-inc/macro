@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM github_app_installation\n            WHERE source_id = $1\n              AND source_type = 'team'::github_app_installation_source_type\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "62e6fee27bdd5c6fb4d7d7037977655784e36ba1b3285b607ff59d9d88829f7a"
+}

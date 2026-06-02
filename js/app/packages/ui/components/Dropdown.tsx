@@ -1,9 +1,9 @@
 import { DropdownMenu as KobalteDropdownMenu } from '@kobalte/core/dropdown-menu';
 import CheckIcon from '@phosphor/check.svg';
+import { type ComponentProps, splitProps } from 'solid-js';
+import { cn } from '../utils/classname';
 import { Button, type ButtonProps } from './Button';
 import { Surface, type SurfaceProps } from './Surface';
-import { cn } from '../utils/classname';
-import { splitProps, type ComponentProps } from 'solid-js';
 
 /*
 <Dropdown>
@@ -31,19 +31,47 @@ import { splitProps, type ComponentProps } from 'solid-js';
 type PortalMount = ComponentProps<typeof KobalteDropdownMenu.Portal>['mount'];
 type DropdownPortalScope = 'local';
 
-export type DropdownSubContentProps = ComponentProps<typeof KobalteDropdownMenu.SubContent> & { depth?: SurfaceProps['depth']; mount?: PortalMount; portalScope?: DropdownPortalScope; };
-export type DropdownContentProps = ComponentProps<typeof KobalteDropdownMenu.Content> & { depth?: SurfaceProps['depth']; mount?: PortalMount; portalScope?: DropdownPortalScope; };
-export type DropdownTriggerProps = ComponentProps<typeof KobalteDropdownMenu.Trigger> & ButtonProps;
-export type DropdownItemIndicatorProps = ComponentProps<typeof KobalteDropdownMenu.ItemIndicator>;
-export type DropdownCheckboxItemProps = ComponentProps<typeof KobalteDropdownMenu.CheckboxItem>;
-export type DropdownSubTriggerProps = ComponentProps<typeof KobalteDropdownMenu.SubTrigger>;
-export type DropdownRadioItemProps = ComponentProps<typeof KobalteDropdownMenu.RadioItem>;
-export type DropdownGroupLabelProps = ComponentProps<typeof KobalteDropdownMenu.GroupLabel>;
-export type DropdownGroupProps = ComponentProps<typeof KobalteDropdownMenu.Group>;
+export type DropdownSubContentProps = ComponentProps<
+  typeof KobalteDropdownMenu.SubContent
+> & {
+  depth?: SurfaceProps['depth'];
+  mount?: PortalMount;
+  portalScope?: DropdownPortalScope;
+};
+export type DropdownContentProps = ComponentProps<
+  typeof KobalteDropdownMenu.Content
+> & {
+  depth?: SurfaceProps['depth'];
+  mount?: PortalMount;
+  portalScope?: DropdownPortalScope;
+};
+export type DropdownTriggerProps = ComponentProps<
+  typeof KobalteDropdownMenu.Trigger
+> &
+  ButtonProps;
+export type DropdownItemIndicatorProps = ComponentProps<
+  typeof KobalteDropdownMenu.ItemIndicator
+>;
+export type DropdownCheckboxItemProps = ComponentProps<
+  typeof KobalteDropdownMenu.CheckboxItem
+>;
+export type DropdownSubTriggerProps = ComponentProps<
+  typeof KobalteDropdownMenu.SubTrigger
+>;
+export type DropdownRadioItemProps = ComponentProps<
+  typeof KobalteDropdownMenu.RadioItem
+>;
+export type DropdownGroupLabelProps = ComponentProps<
+  typeof KobalteDropdownMenu.GroupLabel
+>;
+export type DropdownGroupProps = ComponentProps<
+  typeof KobalteDropdownMenu.Group
+>;
 export type DropdownItemProps = ComponentProps<typeof KobalteDropdownMenu.Item>;
 export type DropdownSubProps = ComponentProps<typeof KobalteDropdownMenu.Sub>;
 
-const ROW_CLASS = 'group rounded-lg w-full flex items-center gap-2 px-2 h-8 text-left font-medium text-xs cursor-default outline-none hover:bg-ink/5 data-highlighted:bg-ink/5 data-disabled:opacity-50 data-disabled:cursor-not-allowed';
+const ROW_CLASS =
+  'group rounded-lg w-full flex items-center gap-2 px-2 h-8 text-left font-medium text-xs cursor-default outline-none hover:bg-ink/5 data-highlighted:bg-ink/5 data-disabled:opacity-50 data-disabled:cursor-not-allowed';
 
 function resolvePortalMount(
   searchRef: HTMLElement | undefined,
@@ -56,7 +84,13 @@ function resolvePortalMount(
 
 function DropdownContent(props: DropdownContentProps) {
   let searchRef: HTMLDivElement | undefined;
-  const [local, rest] = splitProps(props, ['depth', 'class', 'mount', 'portalScope', 'children']);
+  const [local, rest] = splitProps(props, [
+    'depth',
+    'class',
+    'mount',
+    'portalScope',
+    'children',
+  ]);
   return (
     <>
       <div class="hidden" ref={searchRef} />
@@ -69,7 +103,9 @@ function DropdownContent(props: DropdownContentProps) {
           as={Surface}
           {...rest}
         >
-          <div class="flex flex-col gap-px bg-edge-muted size-full">{local.children}</div>
+          <div class="flex flex-col gap-px bg-edge-muted size-full">
+            {local.children}
+          </div>
         </KobalteDropdownMenu.Content>
       </KobalteDropdownMenu.Portal>
     </>
@@ -78,7 +114,13 @@ function DropdownContent(props: DropdownContentProps) {
 
 function DropdownSubContent(props: DropdownSubContentProps) {
   let searchRef: HTMLDivElement | undefined;
-  const [local, rest] = splitProps(props, ['depth', 'class', 'mount', 'portalScope', 'children']);
+  const [local, rest] = splitProps(props, [
+    'depth',
+    'class',
+    'mount',
+    'portalScope',
+    'children',
+  ]);
   return (
     <>
       <div class="hidden" ref={searchRef} />
@@ -91,7 +133,9 @@ function DropdownSubContent(props: DropdownSubContentProps) {
           as={Surface}
           {...rest}
         >
-          <div class="flex flex-col gap-px bg-edge-muted size-full">{local.children}</div>
+          <div class="flex flex-col gap-px bg-edge-muted size-full">
+            {local.children}
+          </div>
         </KobalteDropdownMenu.SubContent>
       </KobalteDropdownMenu.Portal>
     </>
@@ -112,7 +156,10 @@ function DropdownGroupLabel(props: DropdownGroupLabelProps) {
   const [local, rest] = splitProps(props, ['class']);
   return (
     <KobalteDropdownMenu.GroupLabel
-      class={cn('px-2 h-7 flex items-center text-xs text-ink-extra-muted', local.class)}
+      class={cn(
+        'px-2 h-7 flex items-center text-xs text-ink-extra-muted',
+        local.class
+      )}
       {...rest}
     />
   );
@@ -123,7 +170,7 @@ const CHECKBOX_ITEM_BOX_CLASS = cn(
   'border border-transparent text-surface',
   'group-hover:not-hover:border-edge-muted group-data-highlighted:not-hover:border-edge-muted',
   'hover:border-accent',
-  'group-data-checked:bg-accent group-data-checked:border-accent',
+  'group-data-checked:bg-accent group-data-checked:border-accent'
 );
 
 function DropdownCheckboxItem(props: DropdownCheckboxItemProps) {
@@ -168,13 +215,7 @@ function DropdownRadioItem(props: DropdownRadioItemProps) {
 }
 
 function DropdownSub(props: DropdownSubProps) {
-  return (
-    <KobalteDropdownMenu.Sub
-      gutter={2}
-      shift={-7}
-      {...props}
-    />
-  );
+  return <KobalteDropdownMenu.Sub gutter={2} shift={-7} {...props} />;
 }
 
 function DropdownItem(props: DropdownItemProps) {
@@ -199,18 +240,25 @@ function DropdownTrigger(props: DropdownTriggerProps) {
   );
 }
 
-export const Dropdown = Object.assign((props: ComponentProps<typeof KobalteDropdownMenu>) => (<KobalteDropdownMenu gutter={4} {...props} />), {
-  RadioGroup: KobalteDropdownMenu.RadioGroup, /* passthrough — pure logical wrapper */
-  Separator: KobalteDropdownMenu.Separator, /* passthrough — styled via class at use sites */
-  ItemIndicator: DropdownItemIndicator,
-  CheckboxItem: DropdownCheckboxItem,
-  SubContent: DropdownSubContent,
-  SubTrigger: DropdownSubTrigger,
-  GroupLabel: DropdownGroupLabel,
-  RadioItem: DropdownRadioItem,
-  Content: DropdownContent,
-  Trigger: DropdownTrigger,
-  Group: DropdownGroup,
-  Item: DropdownItem,
-  Sub: DropdownSub,
-});
+export const Dropdown = Object.assign(
+  (props: ComponentProps<typeof KobalteDropdownMenu>) => (
+    <KobalteDropdownMenu gutter={4} {...props} />
+  ),
+  {
+    RadioGroup:
+      KobalteDropdownMenu.RadioGroup /* passthrough — pure logical wrapper */,
+    Separator:
+      KobalteDropdownMenu.Separator /* passthrough — styled via class at use sites */,
+    ItemIndicator: DropdownItemIndicator,
+    CheckboxItem: DropdownCheckboxItem,
+    SubContent: DropdownSubContent,
+    SubTrigger: DropdownSubTrigger,
+    GroupLabel: DropdownGroupLabel,
+    RadioItem: DropdownRadioItem,
+    Content: DropdownContent,
+    Trigger: DropdownTrigger,
+    Group: DropdownGroup,
+    Item: DropdownItem,
+    Sub: DropdownSub,
+  }
+);

@@ -527,6 +527,7 @@ export * from './githubPullRequestComments';
 export * from './githubPullRequestCommentUpdatedAt';
 export * from './githubPullRequestCommentUrl';
 export * from './githubPullRequestDeletions';
+export * from './githubPullRequestForeignEntityId';
 export * from './githubPullRequestName';
 export * from './githubPullRequestStatus';
 export * from './githubPullRequestsResponse';

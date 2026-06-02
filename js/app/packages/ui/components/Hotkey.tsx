@@ -1,9 +1,9 @@
-import { createMemo, For, type JSX, Show, splitProps } from 'solid-js';
-import { getPrettyHotkeyStringByToken } from '@core/hotkey/utils';
-import type { HotkeyToken } from '@core/hotkey/tokens';
-import type { Theme } from 'core/component/Themes';
 import { IS_MAC } from '@core/constant/isMac';
+import type { HotkeyToken } from '@core/hotkey/tokens';
+import { getPrettyHotkeyStringByToken } from '@core/hotkey/utils';
 import { cn } from '@ui';
+import type { Theme } from 'core/component/Themes';
+import { createMemo, For, type JSX, Show, splitProps } from 'solid-js';
 
 const modifierMap = {
   shift: IS_MAC ? '⇧' : 'Shift',
@@ -26,7 +26,6 @@ const symbolMap = {
 };
 
 const hotkeyStyles: Record<Theme, { label: string; hotkey: string }> = {
-
   extraMuted: {
     hotkey: 'bg-surface border border-ink-extra-muted text-ink-extra-muted',
     label: 'bg-ink-extra-muted border border-ink-extra-muted text-surface',
@@ -88,16 +87,20 @@ const hotkeyStyles: Record<Theme, { label: string; hotkey: string }> = {
     label: '',
     hotkey: '',
   },
-
 };
 
-const getSymbol = (key: string) => key.toUpperCase() in symbolMap ? symbolMap[key.toUpperCase() as keyof typeof symbolMap] : key;
+const getSymbol = (key: string) =>
+  key.toUpperCase() in symbolMap
+    ? symbolMap[key.toUpperCase() as keyof typeof symbolMap]
+    : key;
 
 const modifierKeys = Object.keys(modifierMap);
 
 function breakApartHotkeyString(hotkey: string) {
   const parts = hotkey.split('+');
-  if (parts.length === 0) { return { key: '', modifiers: [] }; }
+  if (parts.length === 0) {
+    return { key: '', modifiers: [] };
+  }
   const key = parts
     .filter((part) => !modifierKeys.includes(part))
     .map(getSymbol);
@@ -129,8 +132,12 @@ interface HotkeyProps extends JSX.HTMLAttributes<HTMLDivElement> {
  * getNormalizedKeyString({ token: TOKENS.canvas.cut }) // "⌘X"
  * getNormalizedKeyString({ shortcut: 'meta+shift+k', showPlus: true }) // "⌘ + ⇧ + K"
  */
-export function getNormalizedKeyString(props: Pick<HotkeyProps, 'token' | 'shortcut' | 'lowercase' | 'showPlus'>): string {
-  const resolvedShortcut = props.token ? getPrettyHotkeyStringByToken(props.token) : props.shortcut;
+export function getNormalizedKeyString(
+  props: Pick<HotkeyProps, 'token' | 'shortcut' | 'lowercase' | 'showPlus'>
+): string {
+  const resolvedShortcut = props.token
+    ? getPrettyHotkeyStringByToken(props.token)
+    : props.shortcut;
 
   if (!resolvedShortcut) return '';
 
@@ -148,16 +155,19 @@ export function getNormalizedKeyString(props: Pick<HotkeyProps, 'token' | 'short
     (mod) => modifierMap[mod as keyof typeof modifierMap] || mod
   );
 
-  const keyStrings = typeof normalizedKey === 'string'
-    ? (normalizedKey ? [normalizedKey] : [])
-    : normalizedKey;
+  const keyStrings =
+    typeof normalizedKey === 'string'
+      ? normalizedKey
+        ? [normalizedKey]
+        : []
+      : normalizedKey;
 
   const separator = props.showPlus ? ' + ' : '';
 
   return [...modifierStrings, ...keyStrings].join(separator);
 }
 
-export function Hotkey(props: HotkeyProps){
+export function Hotkey(props: HotkeyProps) {
   const [local, rest] = splitProps(props, [
     'lowercase',
     'children',
@@ -175,11 +185,13 @@ export function Hotkey(props: HotkeyProps){
 
   const hotkey = createMemo(() => {
     const s = resolvedShortcut();
-    if (!s) { return { key: '', modifiers: [] }; }
+    if (!s) {
+      return { key: '', modifiers: [] };
+    }
     return breakApartHotkeyString(s);
   });
 
-  function normalizedKey(){
+  function normalizedKey() {
     const key = hotkey().key;
     return props.lowercase
       ? typeof key === 'string'
@@ -188,16 +200,16 @@ export function Hotkey(props: HotkeyProps){
       : typeof key === 'string'
         ? key.toUpperCase()
         : key.map((k) => k.toUpperCase());
-  };
+  }
 
-  function hasContent(){
+  function hasContent() {
     const h = hotkey();
     const key = normalizedKey();
     return (
       h.modifiers.length > 0 ||
       (key && (typeof key === 'string' ? key.length > 0 : key.length > 0))
     );
-  };
+  }
 
   return (
     <Show when={hasContent()}>
@@ -213,9 +225,7 @@ export function Hotkey(props: HotkeyProps){
         <For each={hotkey().modifiers}>
           {(mod) => (
             <>
-              <span>
-                {modifierMap[mod as keyof typeof modifierMap] || mod}
-              </span>
+              <span>{modifierMap[mod as keyof typeof modifierMap] || mod}</span>
 
               <Show when={local.showPlus}>
                 <span> + </span>
@@ -229,4 +239,4 @@ export function Hotkey(props: HotkeyProps){
       </div>
     </Show>
   );
-};
+}

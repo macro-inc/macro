@@ -1993,6 +1993,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "channel_bots"
+version = "0.1.0"
+dependencies = [
+ "agent",
+ "ai_tools",
+ "ai_toolset",
+ "anyhow",
+ "async-trait",
+ "bot_id",
+ "channels",
+ "chrono",
+ "futures",
+ "macro_user_id",
+ "models_pagination",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "channels"
 version = "0.1.0"
 dependencies = [
@@ -3373,6 +3393,7 @@ dependencies = [
 name = "document_storage_service"
 version = "0.1.0"
 dependencies = [
+ "ai_tools",
  "analytics_client",
  "anyhow",
  "aws-sdk-dynamodb",
@@ -3388,6 +3409,7 @@ dependencies = [
  "bzip2",
  "cal",
  "call",
+ "channel_bots",
  "channels",
  "chrono",
  "clap",
@@ -3426,6 +3448,7 @@ dependencies = [
  "macro_env_var",
  "macro_middleware",
  "macro_project_utils",
+ "macro_service_urls",
  "macro_sha_count_client",
  "macro_user_id",
  "macro_uuid",
@@ -3579,6 +3602,7 @@ dependencies = [
  "entity_access",
  "entity_access_db_utils",
  "entity_access_management",
+ "foreign_entity",
  "futures",
  "hex",
  "http-body-util",
@@ -7412,6 +7436,7 @@ dependencies = [
  "strum",
  "thiserror 2.0.18",
  "tokio",
+ "tower 0.5.3",
  "tracing",
  "url",
 ]

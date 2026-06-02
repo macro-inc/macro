@@ -421,6 +421,7 @@ pub type ToolDocumentService = documents::domain::service::DocumentServiceImpl<
     TaskPropertiesAdapter,
     NoOpConnectionService,
     ToolEntityAccessManagementService,
+    ToolForeignEntityService,
 >;
 
 /// Type alias for the entity access service implementation

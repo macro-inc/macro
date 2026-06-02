@@ -149,25 +149,6 @@ impl NotificationTitle for GithubPrEvent {
     }
 }
 
-impl NotificationExtIos for GithubPrEvent {
-    type NotifData = ::notification::domain::models::apple::PushNotificationData;
-
-    fn collapse_key(&self, entity: &Entity<'_>) -> NotifCollapseKey {
-        let entity_type: &'static str = entity.entity_type.into();
-        NotifCollapseKey::new(entity_type).append(&entity.entity_id)
-    }
-
-    fn as_apns<'a>(
-        &self,
-        sender_id: Option<MacroUserIdStr<'a>>,
-        _entity: &Entity<'_>,
-        notification_id: Uuid,
-    ) -> Option<APNSPushNotification<Self::NotifData>> {
-        let avatar_url = self.sender_github_avatar_url.clone();
-        alert_apns(self, sender_id, notification_id, avatar_url).ok()
-    }
-}
-
 #[derive(Debug, Clone, Copy, ToSchema, Doppleganger, Serialize, Deserialize)]
 #[dg(backward = models_comms::channel::ChannelType)]
 #[serde(rename_all = "camelCase")]

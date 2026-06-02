@@ -82,7 +82,6 @@ impl<
                 recipient_ids,
             }
             .into_request()
-            .with_apns()
             .with_conn_gateway();
 
             if let Err(error) = self.notification_ingress.send_notification(request).await {

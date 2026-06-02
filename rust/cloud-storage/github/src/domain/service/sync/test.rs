@@ -995,7 +995,7 @@ fn notification_request_recipients(request: &serde_json::Value) -> Vec<String> {
     recipient_ids
 }
 
-fn assert_github_pr_notification_delivery_enabled(request: &serde_json::Value) {
+fn assert_github_pr_notification_realtime_enabled_apns_disabled(request: &serde_json::Value) {
     assert_eq!(
         request
             .pointer("/req/notification/tag")
@@ -1009,11 +1009,10 @@ fn assert_github_pr_notification_delivery_enabled(request: &serde_json::Value) {
         Some(true)
     );
     assert!(
-        !request
+        request
             .pointer("/build_apns")
-            .expect("build_apns field")
-            .is_null(),
-        "GitHub PR notifications should include APNS payloads"
+            .is_none_or(serde_json::Value::is_null),
+        "GitHub PR notifications should not include APNS payloads"
     );
 }
 
@@ -1960,7 +1959,7 @@ async fn github_pr_event_opened_team_source_notifies_team_members() {
     assert_eq!(requests.len(), 1);
 
     let request = &requests[0];
-    assert_github_pr_notification_delivery_enabled(request);
+    assert_github_pr_notification_realtime_enabled_apns_disabled(request);
     assert_eq!(
         request
             .pointer("/req/notification_entity/entity_type")
@@ -2099,7 +2098,7 @@ async fn github_pr_event_merged_user_source_notifies_user() {
     assert_eq!(requests.len(), 1);
 
     let request = &requests[0];
-    assert_github_pr_notification_delivery_enabled(request);
+    assert_github_pr_notification_realtime_enabled_apns_disabled(request);
     assert_eq!(
         notification_request_recipients(request),
         vec!["macro|reviewer@user.com".to_string()]
@@ -2239,7 +2238,10 @@ async fn github_pr_event_send_failure_does_not_fail_webhook_processing() {
 
     assert!(result.is_ok());
     assert_eq!(service.foreign_entity_service.foreign_entities().len(), 1);
-    assert_eq!(service.notification_ingress.requests().len(), 1);
+
+    let requests = service.notification_ingress.requests();
+    assert_eq!(requests.len(), 1);
+    assert_github_pr_notification_realtime_enabled_apns_disabled(&requests[0]);
 }
 
 #[tokio::test]
