@@ -170,7 +170,12 @@ export function CommandMenuInner(props: {
     if (!item) return;
 
     props.onSelect?.(item);
-    if (props.disableDefaultAction) return;
+    if (props.disableDefaultAction) {
+      // Close like a normal selection, just without navigating/running.
+      CommandState.close();
+      CommandState.setQuery('');
+      return;
+    }
     analytics.track('command_menu_use', { itemType: item.bucket });
 
     if (isCommandItem(item)) {
