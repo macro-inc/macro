@@ -167,16 +167,14 @@ where
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let header_link_id = parse_link_id_header(parts)?;
-        let Cached(MacroUserExtractor {
-            macro_user_id,
-            user_context,
-            ..
-        }) = parts.extract_with_state(state).await?;
+        let Cached(MacroUserExtractor { macro_user_id, .. }) =
+            parts.extract_with_state(state).await?;
+        let account_email = macro_user_id.0.email_str().to_string();
         let links = <EmailRouterState<U>>::from_ref(state)
             .inner
-            .get_links_by_fusionauth_user_id(&user_context.fusion_user_id)
+            .get_inboxes_for_macro_id(macro_user_id)
             .await?;
-        let link = resolve_target_link(links, header_link_id, macro_user_id.0.email_str())?;
+        let link = resolve_target_link(links, header_link_id, &account_email)?;
         Ok(Self(link, PhantomData))
     }
 }
