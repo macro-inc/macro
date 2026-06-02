@@ -2,6 +2,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { ThrownResultError, throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
 import { type CallRecord, callServiceClient } from '@service-call/client';
+import type { CallActiveResponse } from '@service-storage/generated/schemas/callActiveResponse';
 import { useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 
@@ -14,13 +15,85 @@ export function useActiveCallQuery(channelId: Accessor<string>) {
   }));
 }
 
+export function useActiveCallsForChannelsQuery(channelIds: Accessor<string[]>) {
+  return useQuery(() => {
+    const ids = [...new Set(channelIds())].sort();
+
+    return {
+      queryKey: ['call', 'active', 'channels', ids],
+      queryFn: async (): Promise<CallActiveResponse[]> => {
+        const activeCalls = await Promise.all(
+          ids.map(async (channelId) =>
+            throwOnErr(() => callServiceClient.checkActiveCall(channelId))
+          )
+        );
+
+        return activeCalls
+          .filter((call): call is CallActiveResponse => call !== null)
+          .sort(
+            (a, b) =>
+              new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          );
+      },
+      refetchInterval: 15_000,
+      enabled: ids.length > 0,
+    };
+  });
+}
+
+export function setActiveCallStartedCache(call: CallActiveResponse) {
+  queryClient.setQueryData<CallActiveResponse | null>(
+    ['call', 'active', call.channelId],
+    call
+  );
+
+  queryClient.setQueriesData<CallActiveResponse[]>(
+    { queryKey: ['call', 'active', 'channels'] },
+    (prev) => {
+      if (!prev) return prev;
+      const withoutDuplicate = prev.filter(
+        (activeCall) =>
+          activeCall.callId !== call.callId &&
+          activeCall.channelId !== call.channelId
+      );
+      return [call, ...withoutDuplicate].sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+    }
+  );
+}
+
+export function setActiveCallEndedCache(params: {
+  callId: string;
+  channelId: string;
+}) {
+  queryClient.setQueryData<CallActiveResponse | null>(
+    ['call', 'active', params.channelId],
+    null
+  );
+
+  queryClient.setQueriesData<CallActiveResponse[]>(
+    { queryKey: ['call', 'active', 'channels'] },
+    (prev) =>
+      prev?.filter(
+        (call) =>
+          call.callId !== params.callId && call.channelId !== params.channelId
+      )
+  );
+}
+
+export function invalidateActiveCallQueries() {
+  return queryClient.invalidateQueries({ queryKey: ['call', 'active'] });
+}
+
 function _useJoinCallMutation() {
   return useMutation(() => ({
     gcTime: 0,
     mutationFn: async (channelId: string) =>
       await throwOnErr(() => callServiceClient.getOrCreateCall(channelId)),
     onSuccess() {
-      queryClient.invalidateQueries({ queryKey: ['call', 'active'] });
+      invalidateActiveCallQueries();
     },
     onError(error: Error) {
       if (
@@ -60,7 +133,7 @@ export function useLeaveCallMutation() {
       }
     },
     onSuccess() {
-      queryClient.invalidateQueries({ queryKey: ['call', 'active'] });
+      invalidateActiveCallQueries();
     },
     onError(error: Error) {
       console.error('failed to leave call', error);

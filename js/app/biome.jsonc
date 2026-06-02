@@ -77,7 +77,9 @@
             },
             "patterns": [
               {
-                "group": ["@loro-mirror/core/*"],
+                "group": [
+                  "@loro-mirror/core/*"
+                ],
                 "message": "Use @loro-mirror/packages/* source imports; do not consume loro-mirror as an installed package."
               }
             ]
@@ -134,9 +136,14 @@
   },
   "overrides": [
     {
-      "includes": ["scripts/**", "packages/block-code/scripts/**"],
+      "includes": [
+        "scripts/**",
+        "packages/block-code/scripts/**"
+      ],
       "javascript": {
-        "globals": ["Bun"]
+        "globals": [
+          "Bun"
+        ]
       }
     },
     {
@@ -144,7 +151,6 @@
         "packages/app/component/settings/**",
         "packages/animate/**",
         "packages/theme/**",
-        "packages/ui/**"
       ],
       "formatter": {
         "enabled": false
@@ -158,7 +164,9 @@
       }
     },
     {
-      "includes": ["packages/service-clients/**/generated/**"],
+      "includes": [
+        "packages/service-clients/**/generated/**"
+      ],
       "assist": {
         "actions": {
           "source": {

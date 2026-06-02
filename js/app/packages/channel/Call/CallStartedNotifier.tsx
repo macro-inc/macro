@@ -3,6 +3,11 @@ import { useChannelsContext } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
 import { usePlatformNotificationState } from '@notifications';
 import { DefaultUserNameResolver } from '@notifications/notification-resolvers';
+import {
+  invalidateActiveCallQueries,
+  setActiveCallEndedCache,
+  setActiveCallStartedCache,
+} from '@queries/call/call';
 import { createConnectionWebsocketEffect } from '@service-connection/websocket';
 import { useCallContext } from './CallContext';
 import { joinChannelCall } from './join-channel-call';
@@ -11,6 +16,11 @@ type CallStartedPayload = {
   channel_id?: string;
   call_id?: string;
   created_by?: string | null;
+};
+
+type CallEndedPayload = {
+  channel_id?: string;
+  call_id?: string;
 };
 
 const RING_VOLUME = 0.15;
@@ -125,11 +135,22 @@ export function CallStartedNotifier() {
   const notif = usePlatformNotificationState();
 
   createConnectionWebsocketEffect((data) => {
-    if (data.type !== 'call_started') return;
     if (!ENABLE_CALLS()) return;
 
     const payload = parsePayload(data.data);
     if (!payload) return;
+
+    if (data.type === 'call_ended') {
+      const { channel_id: channelId, call_id: callId } =
+        payload as CallEndedPayload;
+      if (!channelId || !callId) return;
+
+      setActiveCallEndedCache({ channelId, callId });
+      void invalidateActiveCallQueries();
+      return;
+    }
+
+    if (data.type !== 'call_started') return;
 
     const {
       channel_id: channelId,
@@ -137,6 +158,14 @@ export function CallStartedNotifier() {
       created_by: createdBy,
     } = payload;
     if (!channelId || !callId) return;
+
+    setActiveCallStartedCache({
+      channelId,
+      callId,
+      createdAt: new Date().toISOString(),
+      createdBy: createdBy ?? '',
+    });
+    void invalidateActiveCallQueries();
 
     if (callCtx.activeCallId() === callId) return;
     if (createdBy && createdBy === userId()) return;

@@ -1,4 +1,5 @@
 import { useAnalytics } from '@app/component/analytics-context';
+import { SidebarActiveCallWidget } from '@app/component/app-sidebar/active-call-widget';
 import { ChannelsUnreadWidget } from '@app/component/app-sidebar/channels-unread-widget';
 import {
   InviteModal,
@@ -998,13 +999,23 @@ export const AppSidebar = (props: AppSidebarProps) => {
         <ChannelsUnreadWidget sidebarState={props.sidebarState ?? 'expanded'} />
       </div>
 
-      <Show when={callCtx?.isInCall()}>
-        <div class="px-2 mb-2 mt-auto" data-ui="in-call-panel">
-          <InCallPanel isSlim={panelIsSlim} />
-        </div>
-      </Show>
+      <div class="mt-auto">
+        <Show when={ENABLE_CALLS()}>
+          <div class="block max-h-[clamp(10%,60%,20rem)]">
+            <SidebarActiveCallWidget
+              sidebarState={props.sidebarState ?? 'expanded'}
+            />
+          </div>
+        </Show>
 
-      <div class={cn('px-2 w-full', !callCtx?.isInCall() && 'mt-auto')}>
+        <Show when={callCtx?.isInCall()}>
+          <div class="px-2 mb-2" data-ui="in-call-panel">
+            <InCallPanel isSlim={panelIsSlim} />
+          </div>
+        </Show>
+      </div>
+
+      <div class="px-2 w-full">
         <hr class="border-transparent mb-2" />
       </div>
 
