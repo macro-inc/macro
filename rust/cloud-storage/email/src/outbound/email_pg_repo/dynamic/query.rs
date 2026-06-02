@@ -25,6 +25,9 @@ struct QueryParams {
     /// When `Some(team_id)`, the "Owned" candidate source expands from
     /// `t.link_id = ANY($link_ids)` to `t.link_id IN (links of every member
     /// of $team_id)`. Set only after CRM scope has been validated upstream.
+    /// Also switches the candidate select into dedupe mode: team-member
+    /// copies of the same conversation collapse to one row (see
+    /// [`build_query`]).
     team_id: Option<Uuid>,
 }
 
@@ -105,13 +108,39 @@ fn push_thread_candidate_select(
                         WHEN 'viewed_at' THEN COALESCE(uh."updated_at", '1970-01-01 00:00:00+00')
                         WHEN 'viewed_updated' THEN COALESCE(uh.updated_at, {})
                         ELSE {}
-                    END AS effective_ts
+                    END AS effective_ts"#,
+        sort_ts_field, sort_ts_field
+    ));
+
+    // Team-scoped queries return one thread copy per team member on the
+    // same conversation. Dedupe on the root message's RFC-822 Message-ID
+    // (email_messages.global_id) — stable across mailboxes, unlike
+    // provider thread ids. Threads with no global_id (e.g. all-draft)
+    // fall back to their own id and never dedupe. is_own_link feeds the
+    // DISTINCT ON preference in build_query so the caller's copy wins.
+    if params.team_id.is_some() {
+        builder.push(
+            r#",
+                    COALESCE(
+                        (SELECT m_root.global_id FROM email_messages m_root
+                         WHERE m_root.thread_id = t.id AND m_root.global_id IS NOT NULL
+                         ORDER BY m_root.internal_date_ts ASC NULLS LAST
+                         LIMIT 1),
+                        t.id::text
+                    ) AS dedupe_key,
+                    t.link_id = ANY("#,
+        );
+        builder.push_bind(params.link_ids.clone());
+        builder.push(") AS is_own_link");
+    }
+
+    builder.push(
+        r#"
                 FROM email_threads t
                 LEFT JOIN email_user_history uh ON uh.thread_id = t.id AND uh.link_id = t.link_id
                 WHERE
                     "#,
-        sort_ts_field, sort_ts_field
-    ));
+    );
 
     match source {
         ThreadCandidateSource::Owned => match params.team_id {
@@ -173,6 +202,15 @@ fn push_thread_candidate_select(
     // it via `t.id IN (SELECT thread_id FROM matching_threads)`.
     if has_address_literals(email_filter) {
         build_thread_address_filter(email_filter).push_into(builder);
+    }
+
+    // Team-scoped: the cursor moves outside the dedupe wrapper (see
+    // build_query) so the representative choice is cursor-independent.
+    // Filtering before DISTINCT ON would let a copy excluded by the
+    // cursor on page N hand its conversation back to a duplicate copy
+    // on page N+1.
+    if params.team_id.is_some() {
+        return;
     }
 
     builder.push(
@@ -284,6 +322,18 @@ fn build_query(
         "#,
     );
 
+    // Team-scoped: dedupe team-member copies of a conversation before the
+    // cursor is applied, so the chosen representative is stable across
+    // pages. The caller's own copy wins; ties break by recency then id.
+    if params.team_id.is_some() {
+        builder.push(
+            r#"
+                SELECT DISTINCT ON (dedupe_key) *
+                FROM (
+        "#,
+        );
+    }
+
     match params.shared {
         SharedEmailFilter::Exclude => push_thread_candidate_select(
             &mut builder,
@@ -326,12 +376,33 @@ fn build_query(
         ),
     }
 
-    builder.push(
-        r#"
+    if params.team_id.is_some() {
+        builder.push(
+            r#"
+                ) AS candidate_threads
+                ORDER BY dedupe_key, is_own_link DESC, effective_ts DESC, id DESC
+            ) AS deduped_threads
+            -- Cursor logic (post-dedupe, on the representative row)
+            WHERE (("#,
+        );
+        builder.push_bind(params.cursor_timestamp);
+        builder.push("::timestamptz IS NULL) OR ((effective_ts, id) < (");
+        builder.push_bind(params.cursor_timestamp);
+        builder.push("::timestamptz, ");
+        builder.push_bind(params.cursor_id_str.clone());
+        builder.push(
+            r#"::uuid)))
+            ORDER BY effective_ts DESC, id DESC
+            LIMIT "#,
+        );
+    } else {
+        builder.push(
+            r#"
             ) AS candidate_threads
             ORDER BY effective_ts DESC, id DESC
             LIMIT "#,
-    );
+        );
+    }
 
     builder.push_bind(params.query_limit);
 
@@ -390,6 +461,29 @@ pub(super) fn debug_build_query_sql_with_resolved(
     email_filter: &Expr<EmailLiteral>,
     resolved: ResolvedFilters,
 ) -> String {
+    debug_build_query_sql_inner(view, email_filter, resolved, None)
+}
+
+#[cfg(test)]
+pub(super) fn debug_build_query_sql_team_scoped(
+    view: &PreviewView,
+    email_filter: &Expr<EmailLiteral>,
+) -> String {
+    debug_build_query_sql_inner(
+        view,
+        email_filter,
+        ResolvedFilters::empty(),
+        Some(Uuid::nil()),
+    )
+}
+
+#[cfg(test)]
+fn debug_build_query_sql_inner(
+    view: &PreviewView,
+    email_filter: &Expr<EmailLiteral>,
+    resolved: ResolvedFilters,
+    team_id: Option<Uuid>,
+) -> String {
     use sqlx::Execute;
 
     let shared = extract_shared_filter(email_filter);
@@ -411,7 +505,7 @@ pub(super) fn debug_build_query_sql_with_resolved(
             shared,
             user_id: "test-user".to_string(),
             resolved,
-            team_id: None,
+            team_id,
         },
     )
     .build()
