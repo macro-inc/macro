@@ -16,7 +16,7 @@ use axum::{
 };
 use entity_access::{
     domain::{
-        models::{Entity, EntityAccessReceipt, EntityType, RequiredPermission},
+        models::{AccessError, Entity, EntityAccessReceipt, EntityType, RequiredPermission},
         ports::EntityAccessService,
     },
     inbound::axum_extractors::ExtractorError,
@@ -85,13 +85,23 @@ where
         let entity_type = entity_type_for(crm_entity_type);
         let entity_id_str = entity_id.to_string();
 
-        let permission = access_service
+        // Map an "access denied" outcome to NotFound so a cross-team caller
+        // can't tell apart "this comment doesn't exist" (404) from "this
+        // comment exists but isn't yours" (401) — comment ids would
+        // otherwise be a probable existence oracle.
+        let permission = match access_service
             .get_entity_permission(Some(&macro_user_id), &entity_id_str, entity_type, None)
             .await
-            .map_err(ExtractorError::from)?;
+        {
+            Ok(p) => p,
+            Err(AccessError::Unauthorized | AccessError::UnauthorizedWithMessage(_)) => {
+                return Err(ExtractorError::NotFound("CRM comment not found"));
+            }
+            Err(e) => return Err(ExtractorError::from(e)),
+        };
 
         if !permission.satisfies::<T>() {
-            return Err(ExtractorError::Unauthorized);
+            return Err(ExtractorError::NotFound("CRM comment not found"));
         }
 
         let team_id = access_service
