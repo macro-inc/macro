@@ -4,6 +4,7 @@ import {
   type DragEvent,
   useDragDropContext,
 } from '@thisbeyond/solid-dnd';
+import { Layer } from '@ui';
 import { cn } from '@ui/utils/classname';
 import {
   createContext,
@@ -186,6 +187,26 @@ function Zone(props: ParentProps<ZoneProps>) {
               );
             }}
           </Index>
+        </Show>
+        <Show when={props.gutterDrop}>
+          {(drop) => (
+            <Show when={visibleLayouts().length > 0}>
+              <div style={{ display: 'contents' }}>
+                <GutterDropTarget
+                  drop={drop()}
+                  index={-1}
+                  insertIndex={0}
+                  edge="start"
+                />
+                <GutterDropTarget
+                  drop={drop()}
+                  index={visibleLayouts().length}
+                  insertIndex={visibleLayouts().length}
+                  edge="end"
+                />
+              </div>
+            </Show>
+          )}
         </Show>
       </ResizeZoneContext.Provider>
     </div>
@@ -390,6 +411,7 @@ function GutterDropTarget(props: {
   drop: NonNullable<ZoneProps['gutterDrop']>;
   index: number;
   insertIndex: number;
+  edge?: 'start' | 'end';
 }) {
   const ctx = useContext(ResizeZoneContext);
   if (!ctx)
@@ -398,6 +420,7 @@ function GutterDropTarget(props: {
   const droppableId = () => `${props.drop.idPrefix}-${props.index}`;
   const droppable = createDroppable(droppableId(), {
     type: 'resize-gutter',
+    dropTargetPriority: 100,
     isDropTargetDisabled: () => !props.drop.isEnabled(),
   });
   const [dragDropState, { onDragEnd }] = useDragDropContext() ?? [
@@ -416,37 +439,53 @@ function GutterDropTarget(props: {
   });
 
   return (
-    <div
-      ref={droppable}
-      class={cn(
-        'pointer-events-none absolute z-action-menu flex items-center justify-center',
-        ctx.direction === 'horizontal'
-          ? 'top-0 bottom-0 left-1/2 w-24 -translate-x-1/2'
-          : 'left-0 right-0 top-1/2 h-24 -translate-y-1/2'
-      )}
-    >
+    <Layer depth={3}>
       <div
+        ref={droppable}
         class={cn(
-          'rounded-xl bg-surface border border-dashed border-accent/50 ring ring-accent/10 flex items-center justify-center text-accent/50 transition-all duration-150',
-          ctx.direction === 'horizontal'
-            ? 'h-[calc(100%-1rem)] w-2'
-            : 'w-[calc(100%-1rem)] h-2',
-          isDropActive() &&
-            (ctx.direction === 'horizontal'
-              ? 'w-14 shadow-lg shadow-drop-shadow'
-              : 'h-14 shadow-lg shadow-drop-shadow')
+          'pointer-events-none absolute z-action-menu flex items-center justify-center transition-opacity duration-75 ease',
+          props.drop.isEnabled() ? 'opacity-100' : 'opacity-0',
+          ctx.direction === 'horizontal' &&
+            !props.edge &&
+            'top-0 bottom-0 left-1/2 w-24 -translate-x-1/2',
+          ctx.direction === 'vertical' &&
+            !props.edge &&
+            'left-0 right-0 top-1/2 h-24 -translate-y-1/2',
+          ctx.direction === 'horizontal' &&
+            props.edge === 'start' &&
+            'top-0 bottom-0 left-0 w-24 justify-start',
+          ctx.direction === 'horizontal' &&
+            props.edge === 'end' &&
+            'top-0 bottom-0 right-0 w-24 justify-end',
+          ctx.direction === 'vertical' &&
+            props.edge === 'start' &&
+            'left-0 right-0 top-0 h-24 items-start',
+          ctx.direction === 'vertical' &&
+            props.edge === 'end' &&
+            'left-0 right-0 bottom-0 h-24 items-end'
         )}
       >
-        <span
+        <div
           class={cn(
-            'text-3xl leading-none transition-opacity',
-            isDropActive() ? 'opacity-45' : 'opacity-0'
+            'rounded-md bg-surface border-dashed border-edge flex items-center justify-center text-ink-muted transition-all duration-75 ease-out',
+            ctx.direction === 'horizontal' ? 'h-full w-2' : 'w-full h-2',
+            isDropActive() &&
+              (ctx.direction === 'horizontal'
+                ? 'w-14 shadow-lg shadow-drop-shadow'
+                : 'h-14 shadow-lg shadow-drop-shadow')
           )}
         >
-          +
-        </span>
+          <span
+            class={cn(
+              'text-3xl leading-none transition-opacity duration-75 ease-out',
+              isDropActive() ? 'opacity-45' : 'opacity-0'
+            )}
+          >
+            +
+          </span>
+        </div>
       </div>
-    </div>
+    </Layer>
   );
 }
 

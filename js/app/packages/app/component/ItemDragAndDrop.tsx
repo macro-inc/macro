@@ -53,6 +53,8 @@ const pointerWithin: CollisionDetector = (_draggable, droppables, context) => {
 
   return hits.toSorted(
     (a, b) =>
+      Number(b.data.dropTargetPriority ?? 0) -
+        Number(a.data.dropTargetPriority ?? 0) ||
       a.layout.width * a.layout.height - b.layout.width * b.layout.height ||
       Number(b.id === context.activeDroppableId) -
         Number(a.id === context.activeDroppableId)
@@ -79,9 +81,22 @@ function ItemDragOverlay() {
     return getEntityIconType(data);
   });
 
+  const centeredOnPointerStyle = createMemo(() => {
+    const overlay = state?.active.overlay;
+    const sensor = state?.active.sensor;
+    if (!overlay || !sensor) return;
+
+    return {
+      transform: `translate(${sensor.coordinates.origin.x - overlay.layout.left}px, ${sensor.coordinates.origin.y - overlay.layout.top}px) translate(-50%, -50%)`,
+    };
+  });
+
   return (
     <Layer depth={2}>
-      <div class="w-auto max-w-75 flex flex-col gap-2 bg-surface p-2 rounded-lg z-drag shadow-md shadow-drop-shadow pointer-events-none">
+      <div
+        class="w-auto max-w-75 flex flex-col gap-2 bg-surface p-2 rounded-lg z-drag shadow-md shadow-drop-shadow pointer-events-none"
+        style={centeredOnPointerStyle()}
+      >
         <div class="flex flex-row items-center gap-2">
           <EntityIcon size="xs" targetType={iconType()} />
           <TruncatedText size="xs">
