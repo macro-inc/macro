@@ -189,6 +189,18 @@ const contactsQueueArn: pulumi.Output<string> = contactsServiceStack
   .getOutput('contactsQueueArn')
   .apply((arn) => arn as string);
 
+const emailServiceStack = new pulumi.StackReference('email-service-stack', {
+  name: `macro-inc/email-service/${stack}`,
+});
+
+const emailScheduledQueueName: pulumi.Output<string> = emailServiceStack
+  .getOutput('scheduledQueueName')
+  .apply((name) => name as string);
+
+const emailScheduledQueueArn: pulumi.Output<string> = emailServiceStack
+  .getOutput('scheduledQueueArn')
+  .apply((arn) => arn as string);
+
 const {
   notificationIngressQueueName,
   notificationIngressQueueArn,
@@ -376,6 +388,7 @@ const cloudStorageService = new CloudStorageService(
       deleteDocumentHandler.queue.arn,
       notificationIngressQueueArn,
       contactsQueueArn,
+      emailScheduledQueueArn,
     ],
     vpc: coparse_api_vpc,
     platform: {
@@ -594,6 +607,10 @@ const cloudStorageService = new CloudStorageService(
       {
         name: 'SYNC_SERVICE_AUTH_KEY',
         value: pulumi.interpolate`${SYNC_SERVICE_AUTH_KEY}`,
+      },
+      {
+        name: 'EMAIL_SCHEDULED_QUEUE',
+        value: pulumi.interpolate`${emailScheduledQueueName}`,
       },
       {
         name: ServiceUrl.SYNC_SERVICE_URL,
