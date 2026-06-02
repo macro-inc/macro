@@ -181,10 +181,11 @@ where
     }
 }
 
-/// Extractor that resolves *every* inbox the caller owns, for the multi-inbox
-/// read union. Read endpoints fan out over all returned links. A caller with no
-/// linked inboxes yields an empty `Vec` (and hence empty results) rather than a
-/// 404 — the union over zero inboxes is empty, not missing.
+/// Extractor that resolves *every* inbox the caller can read — their own inboxes
+/// plus any delegated/shared inboxes reachable via `macro_user_links`. Read
+/// endpoints fan out over all returned links. A caller with no inboxes yields an
+/// empty `Vec` (and hence empty results) rather than a 404 — the union over zero
+/// inboxes is empty, not missing.
 pub struct MultiEmailLinkExtractor<U>(pub Vec<Link>, pub PhantomData<U>);
 
 impl<U> Clone for MultiEmailLinkExtractor<U> {
@@ -202,11 +203,11 @@ where
     type Rejection = EmailLinkErr;
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        let Cached(MacroUserExtractor { user_context, .. }) =
+        let Cached(MacroUserExtractor { macro_user_id, .. }) =
             parts.extract_with_state(state).await?;
         let links = <EmailRouterState<U>>::from_ref(state)
             .inner
-            .get_links_by_fusionauth_user_id(&user_context.fusion_user_id)
+            .get_inboxes_for_macro_id(macro_user_id)
             .await?;
         Ok(Self(links, PhantomData))
     }

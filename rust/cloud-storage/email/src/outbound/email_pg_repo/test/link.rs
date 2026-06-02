@@ -107,6 +107,80 @@ async fn test_links_by_fusionauth_user_id_empty_when_no_inboxes(
     Ok(())
 }
 
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_inboxes_for_macro_id_includes_own_and_delegated(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    // macro_user_links FK-references "User" (which FK-references macro_user), so
+    // the delegating and delegated accounts must exist as real users.
+    sqlx::query(
+        r#"
+        INSERT INTO "macro_user" (id, username, email, stripe_customer_id) VALUES
+            ('c1000000-0000-0000-0000-000000000001', 'alice', 'alice@test.com', 'stripe_alice'),
+            ('c2000000-0000-0000-0000-000000000002', 'shared', 'shared@test.com', 'stripe_shared')
+        "#,
+    )
+    .execute(&pool)
+    .await?;
+
+    sqlx::query(
+        r#"
+        INSERT INTO "User" (id, email, name, macro_user_id) VALUES
+            ('macro|alice@test.com', 'alice@test.com', 'Alice', 'c1000000-0000-0000-0000-000000000001'),
+            ('macro|shared@test.com', 'shared@test.com', 'Shared Inbox', 'c2000000-0000-0000-0000-000000000002')
+        "#,
+    )
+    .execute(&pool)
+    .await?;
+
+    sqlx::query(
+        r#"
+        INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider, is_sync_active, created_at, updated_at) VALUES
+            ('a1000000-0000-0000-0000-000000000001'::uuid, 'macro|alice@test.com', 'fa-alice', 'alice@test.com', 'GMAIL', true, NOW() - INTERVAL '2 hours', NOW()),
+            ('a2000000-0000-0000-0000-000000000002'::uuid, 'macro|alice@test.com', 'fa-alice', 'alice.work@test.com', 'GMAIL', true, NOW() - INTERVAL '1 hour', NOW()),
+            ('5e000000-0000-0000-0000-000000000003'::uuid, 'macro|shared@test.com', 'fa-shared', 'shared@test.com', 'GMAIL', true, NOW(), NOW()),
+            ('b0000000-0000-0000-0000-000000000004'::uuid, 'macro|bob@test.com', 'fa-bob', 'bob@test.com', 'GMAIL', true, NOW(), NOW())
+        "#,
+    )
+    .execute(&pool)
+    .await?;
+
+    // alice is the primary; shared@ is delegated to her. bob is unrelated.
+    sqlx::query(
+        r#"
+        INSERT INTO macro_user_links (primary_macro_id, child_macro_id) VALUES
+            ('macro|alice@test.com', 'macro|shared@test.com')
+        "#,
+    )
+    .execute(&pool)
+    .await?;
+
+    let repo = EmailPgRepo::new(pool);
+    let macro_id = MacroUserIdStr::parse_from_str("macro|alice@test.com")?;
+    let links = repo.inboxes_for_macro_id(macro_id).await?;
+
+    let emails: std::collections::HashSet<&str> =
+        links.iter().map(|l| l.email_address.0.as_ref()).collect();
+
+    assert_eq!(
+        links.len(),
+        3,
+        "alice's two own inboxes plus the one delegated inbox"
+    );
+    assert!(emails.contains("alice@test.com"));
+    assert!(emails.contains("alice.work@test.com"));
+    assert!(
+        emails.contains("shared@test.com"),
+        "delegated inbox must be included"
+    );
+    assert!(
+        !emails.contains("bob@test.com"),
+        "unrelated inbox must be excluded"
+    );
+
+    Ok(())
+}
+
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("email_message"))

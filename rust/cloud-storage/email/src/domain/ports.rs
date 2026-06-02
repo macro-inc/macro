@@ -345,9 +345,8 @@ pub trait EmailService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<Link>, EmailErr>> + Send;
 
     /// Fetch every inbox owned by the caller, keyed on their fusionauth user id
-    /// (one row per linked inbox). The read-side multi-inbox union resolves over
-    /// these; the single-inbox mutating extractor selects one by header or by
-    /// primary-email match.
+    /// (one row per linked inbox). The single-inbox mutating extractor selects
+    /// one by header or by primary-email match.
     fn get_links_by_fusionauth_user_id(
         &self,
         auth_id: &str,
