@@ -1,5 +1,6 @@
 import { type UserItem, useQuickAccess } from '@core/context/quickAccess';
 import { useEmail } from '@core/context/user';
+import { isMacroAgentId } from '@core/constant/macroAgent';
 import type { IUser } from '@core/user';
 import { createFreshSearch, FreshSearchPresets } from '@core/util/freshSort';
 import { createLazyMemo } from '@solid-primitives/memo';
@@ -28,6 +29,12 @@ const GROUPS = [
     match: (term: string) => term === '' || 'here'.startsWith(term),
   },
 ] as const;
+
+const BOT_MENTION_BOOST = 10;
+
+function isBotMentionUser(item: UserItem): boolean {
+  return item.id.startsWith('bot|') || isMacroAgentId(item.id);
+}
 
 /**
  * Hook for managing user mentions in the mentions menu.
@@ -67,17 +74,25 @@ export function useUsersMention(
     return quickAccess.useList('person');
   });
 
-  const userSearch = () =>
-    createFreshSearch<UserItem>({
-      config: FreshSearchPresets.baseUserSearch<UserItem>(
-        currentUserDomain,
-        (item) => item.data.email
-      ),
+  const userSearch = () => {
+    const baseConfig = FreshSearchPresets.baseUserSearch<UserItem>(
+      currentUserDomain,
+      (item) => item.data.email
+    );
+
+    return createFreshSearch<UserItem>({
+      config: {
+        ...baseConfig,
+        boostFn: (item) =>
+          (baseConfig.boostFn?.(item) ?? 0) +
+          (isBotMentionUser(item) ? BOT_MENTION_BOOST : 0),
+      },
       getName: (item) => item.searchText,
       getTimestamp: (item) => ({
         lastInteraction: item.timestamps.lastInteraction,
       }),
     });
+  };
 
   const users = createLazyMemo(() => {
     const term = searchTerm();
