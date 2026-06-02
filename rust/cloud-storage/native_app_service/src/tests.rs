@@ -52,6 +52,34 @@ impl MockBundleFetcher {
 
 static POLICY_ENV_LOCK: Mutex<()> = Mutex::new(());
 
+struct PolicyEnvGuard {
+    json: Option<String>,
+    file: Option<String>,
+}
+
+impl PolicyEnvGuard {
+    fn capture() -> Self {
+        Self {
+            json: std::env::var("BUNDLE_UPDATE_POLICY_JSON").ok(),
+            file: std::env::var("BUNDLE_UPDATE_POLICY_FILE").ok(),
+        }
+    }
+}
+
+impl Drop for PolicyEnvGuard {
+    fn drop(&mut self) {
+        restore_env_var("BUNDLE_UPDATE_POLICY_JSON", self.json.as_deref());
+        restore_env_var("BUNDLE_UPDATE_POLICY_FILE", self.file.as_deref());
+    }
+}
+
+fn restore_env_var(name: &str, value: Option<&str>) {
+    match value {
+        Some(value) => unsafe { std::env::set_var(name, value) },
+        None => unsafe { std::env::remove_var(name) },
+    }
+}
+
 impl GetJsBundleManifest for MockBundleFetcher {
     async fn get_app_bundle_manifest(&self) -> Result<BundleManifest, Report<UpdateErr>> {
         Ok(self.manifest.clone())
@@ -357,6 +385,7 @@ fn missing_policy_file_fails_to_load() {
 
 fn with_policy_env(json: Option<&str>, file: Option<&str>, test: impl FnOnce()) {
     let _guard = POLICY_ENV_LOCK.lock().unwrap();
+    let _env_guard = PolicyEnvGuard::capture();
     unsafe {
         std::env::remove_var("BUNDLE_UPDATE_POLICY_JSON");
         std::env::remove_var("BUNDLE_UPDATE_POLICY_FILE");
@@ -369,9 +398,4 @@ fn with_policy_env(json: Option<&str>, file: Option<&str>, test: impl FnOnce()) 
     }
 
     test();
-
-    unsafe {
-        std::env::remove_var("BUNDLE_UPDATE_POLICY_JSON");
-        std::env::remove_var("BUNDLE_UPDATE_POLICY_FILE");
-    }
 }

@@ -24,7 +24,7 @@ fn main() {
 
     let embedded_bundle_build = match read_embedded_bundle_build() {
         Ok(bundle_build) => bundle_build,
-        Err(error) if raw_app_env == "production" => {
+        Err(error) if app_env == "production" => {
             panic!("{error}");
         }
         Err(error) => {

@@ -252,6 +252,20 @@ function notFound() {
   return new Response('not found\n', { status: 404 });
 }
 
+function badRequest(message: string) {
+  return new Response(`${message}\n`, { status: 400 });
+}
+
+function parseQueryBuildNumber(url: URL, name: string): number | null {
+  const rawValue = url.searchParams.get(name);
+  if (rawValue == null || rawValue.trim() === '') return null;
+
+  const value = Number(rawValue);
+  return Number.isFinite(value) && Number.isInteger(value) && value >= 0
+    ? value
+    : null;
+}
+
 const { host, port, scenario: initialScenario, prepareOnly, help } = parseArgs();
 if (help) {
   printHelp();
@@ -292,8 +306,11 @@ const server = Bun.serve({
     if (!match) return notFound();
 
     const [, target, arch] = match;
-    const currentBundleBuild = Number(url.searchParams.get('current_bundle_build'));
-    const nativeBuild = Number(url.searchParams.get('native_build'));
+    const currentBundleBuild = parseQueryBuildNumber(url, 'current_bundle_build');
+    const nativeBuild = parseQueryBuildNumber(url, 'native_build');
+    if (currentBundleBuild == null || nativeBuild == null) {
+      return badRequest('current_bundle_build and native_build must be non-negative integers');
+    }
     console.log(
       `[bundle-smoke] ${target}/${arch} current=${currentBundleBuild} native=${nativeBuild} scenario=${scenario}`
     );
