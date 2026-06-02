@@ -26,7 +26,6 @@ pub struct ListContactsResponse {
     responses(
             (status = 200, body=ListContactsResponse),
             (status = 401, body=ErrorResponse),
-            (status = 404, body=ErrorResponse),
             (status = 500, body=ErrorResponse),
     )
 )]
