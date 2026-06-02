@@ -1,10 +1,10 @@
+import { globalSplitManager } from '@app/signal/splitLayout';
 import MacroLogo from '@core/component/MacroLogo';
 import { isMobile } from '@core/mobile/isMobile';
 import LogoIcon from '@icon/macro-logo.svg';
 import ArrowRightIcon from '@phosphor/arrow-right.svg';
 import CloseIcon from '@phosphor/x.svg';
 import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
-import { globalSplitManager } from '@app/signal/splitLayout';
 import { Button, Dialog, Hotkey } from '@ui';
 import { type Component, createSignal, Match, Show, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
