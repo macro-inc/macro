@@ -11,21 +11,8 @@ env:
   MODE: "production"
 
 jobs:
-  migrate-db:
-    name: Run Database Migrations
-    runs-on: db-migrator
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          sparse-checkout: .github/
-      - name: Run migrations
-        uses: ./.github/actions/migrate-cloud-storage-db
-        with:
-          environment: prod
-
   deploy-cloud-storage:
     name: Deploy Cloud Storage Services
-    needs: [migrate-db]
     uses: ./.github/workflows/deploy-all-services.yml
     with:
       environment: prod
@@ -40,8 +27,7 @@ jobs:
       SCCACHE_BUCKET: ${{ secrets.SCCACHE_BUCKET }}
 
   build:
-    name: Build
-    needs: [deploy-cloud-storage]
+    name: Build Web App
     runs-on: linux-extra-beefy
     env:
       CI: "true"
@@ -72,7 +58,7 @@ jobs:
   deploy:
     name: Deploy Web App
     runs-on: linux-extra-beefy
-    needs: [build]
+    needs: [build, deploy-cloud-storage]
     env:
       CI: "true"
     steps:

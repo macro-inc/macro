@@ -224,6 +224,16 @@
               }
             }
           },
+          "428": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "500": {
             "description": "",
             "content": {
@@ -519,6 +529,65 @@
             }
           },
           "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/link/github/status": {
+      "get": {
+        "tags": ["link::github"],
+        "summary": "Checks whether the authenticated user's GitHub link token is valid.",
+        "operationId": "check_github_link_status",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GithubLinkStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "428": {
             "description": "",
             "content": {
               "application/json": {
@@ -3707,6 +3776,16 @@
           "user_id": {
             "type": "string",
             "description": "The user id"
+          }
+        }
+      },
+      "GithubLinkStatusResponse": {
+        "type": "object",
+        "required": ["reauthentication_required"],
+        "properties": {
+          "reauthentication_required": {
+            "type": "boolean",
+            "description": "Whether the user must reauthenticate their GitHub link."
           }
         }
       },

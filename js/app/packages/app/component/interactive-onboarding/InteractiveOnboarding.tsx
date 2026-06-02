@@ -239,9 +239,21 @@ function InteractiveOnboardingInner(props: InteractiveOnboardingProps) {
       };
       shellRef.addEventListener('keydown', stopKeyboardPropagation);
       shellRef.addEventListener('keyup', stopKeyboardPropagation);
+
+      // Reclaim focus when it's dropped to <body> (null relatedTarget) so the
+      // scope stays active, but not while detaching — that's the close restore.
+      const reclaimLostFocus = (event: FocusEvent) => {
+        if (event.relatedTarget || commandKOpen() || !shellRef?.isConnected) {
+          return;
+        }
+        shellRef.focus();
+      };
+      shellRef.addEventListener('focusout', reclaimLostFocus);
+
       onCleanup(() => {
         shellRef?.removeEventListener('keydown', stopKeyboardPropagation);
         shellRef?.removeEventListener('keyup', stopKeyboardPropagation);
+        shellRef?.removeEventListener('focusout', reclaimLostFocus);
       });
     }
   });

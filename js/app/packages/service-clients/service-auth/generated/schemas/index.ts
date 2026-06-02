@@ -41,6 +41,7 @@ export * from './getProfilePicturesRequestBody';
 export * from './getUserInfo';
 export * from './getUserInfoOrganizationId';
 export * from './getUserLinkExistsParams';
+export * from './githubLinkStatusResponse';
 export * from './githubPullRequestCheckRun';
 export * from './githubPullRequestCheckRunCompletedAt';
 export * from './githubPullRequestCheckRunConclusion';

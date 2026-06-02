@@ -3,20 +3,22 @@ import { ChatMessageMarkdown } from '@core/component/AI/component/message/ChatMe
 import { ThinkingBlock } from '@core/component/AI/component/message/ThinkingBlock';
 import { RenderTool } from '@core/component/AI/component/tool/handler';
 import { McpToolCall } from '@core/component/AI/component/tool/McpToolCall';
+import { Tool } from '@core/component/AI/component/tool/Tool';
 import { useChatContext } from '@core/component/AI/context';
 import { replaceCitations } from '@core/component/LexicalMarkdown/citationsUtils';
 import { ENABLE_TTFT } from '@core/constant/featureFlags';
 import { createMarkdownFile } from '@core/util/create';
 import { PulsingStar } from '@entity/components/PulsingStar';
+import WideFileMd from '@icon/wide-file-md.svg';
 import CheckIcon from '@phosphor-icons/core/bold/check-bold.svg?component-solid';
 import ClipboardIcon from '@phosphor-icons/core/bold/clipboard-bold.svg?component-solid';
-import NotesIcon from '@phosphor-icons/core/bold/file-md-bold.svg?component-solid';
 import LoadingIcon from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 import { generateTitle } from '@service-cognition/client';
 import type { AssistantMessagePart } from '@service-cognition/generated/schemas/assistantMessagePart';
 import type { ChatMessageContent } from '@service-cognition/generated/schemas/chatMessageContent';
 import type { ChatMessageWithAttachments } from '@service-cognition/generated/schemas/chatMessageWithAttachments';
 import { createCallback } from '@solid-primitives/rootless';
+import { Button } from '@ui';
 import {
   createMemo,
   createSelector,
@@ -144,7 +146,7 @@ export function AssistantMessage(props: {
     >
       <Switch>
         <Match when={!messageContentIsEmpty(props.message.content)}>
-          <div class="chat-markdown-container max-w-full px-4 w-full">
+          <div class="chat-markdown-container max-w-full w-full">
             <Switch>
               <Match
                 when={
@@ -184,38 +186,45 @@ export function AssistantMessage(props: {
             </Show>
           </div>
           <Show when={!props.isStreaming}>
-            <div class="flex flex-row w-full justify-start items-center h-8 px-4 space-x-2">
-              <div class="flex flex-row space-x-2 items-center text-xs text-ink-muted">
-                <div class="w-fit">
-                  <button
-                    class="flex flex-row items-center space-x-1 hover:bg-hover hover-transition-bg p-1 text-xs font-sans"
-                    onClick={() => {
-                      !isLoading() && handleEditInMarkdown();
-                    }}
+            <div class="flex flex-row w-full justify-start items-center h-8 space-x-2">
+              <div class="flex flex-row space-x-1 items-center text-xs text-ink-extra-muted opacity-50">
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  noTouchResize
+                  class="p-1 text-ink-extra-muted hover:text-ink-muted"
+                  tooltip={
+                    isLoading()
+                      ? 'Opening assistant response in Notes'
+                      : 'Edit assistant response in Notes'
+                  }
+                  onClick={() => {
+                    !isLoading() && handleEditInMarkdown();
+                  }}
+                >
+                  <Show
+                    when={!isLoading()}
+                    fallback={<LoadingIcon class="animate-spin" />}
                   >
-                    <Show
-                      when={!isLoading()}
-                      fallback={<LoadingIcon class="size-3 animate-spin" />}
-                    >
-                      <NotesIcon class="size-3 text-note" />
-                    </Show>
-                    <p>{isLoading() ? 'Loading Notes' : 'Edit in Notes'}</p>
-                  </button>
-                </div>
-                <div class="w-fit">
-                  <button
-                    class="flex flex-row items-center space-x-1 hover:bg-hover hover-transition-bg p-1 text-xs font-sans"
-                    onClick={handleCopy}
-                  >
-                    <Show
-                      when={!copied()}
-                      fallback={<CheckIcon class="size-3 text-success" />}
-                    >
-                      <ClipboardIcon class="size-3" />
-                    </Show>
-                    <p>{copied() ? 'Copied!' : 'Copy'}</p>
-                  </button>
-                </div>
+                    <WideFileMd />
+                  </Show>
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  noTouchResize
+                  class="p-1 text-ink-extra-muted hover:text-ink-muted"
+                  tooltip={
+                    copied()
+                      ? 'Copied assistant response'
+                      : 'Copy assistant response'
+                  }
+                  onClick={handleCopy}
+                >
+                  <Show when={!copied()} fallback={<CheckIcon />}>
+                    <ClipboardIcon />
+                  </Show>
+                </Button>
                 <Show when={props.ttft && ENABLE_TTFT}>
                   <div class="flex flex-row items-center space-x-1 text-xs font-mono bg-surface px-2 py-1">
                     <span class="text-ink-muted">Time to first token:</span>
@@ -237,7 +246,11 @@ function getAssistantPartKey(
   part: AssistantMessagePart,
   counts: Map<AssistantMessagePart['type'], number>
 ): string {
-  if (part.type === 'toolCall' || part.type === 'toolCallErr') {
+  if (
+    part.type === 'toolCall' ||
+    part.type === 'toolCallErr' ||
+    part.type === 'mcpToolCall'
+  ) {
     return `${part.type}:${part.id}`;
   }
 
@@ -309,104 +322,198 @@ function AssistantMessageParts(props: {
     return { orderedKeys, partsByKey };
   });
 
-  const stableParts = mapArray(
-    () => keyedParts().orderedKeys,
-    (key) => createMemo(() => keyedParts().partsByKey.get(key))
+  type ToolGroupEntry = {
+    key: string;
+    part: Extract<AssistantMessagePart, { type: 'toolCall' | 'mcpToolCall' }>;
+    index: number;
+  };
+  type RenderItem =
+    | {
+        type: 'toolGroup';
+        key: string;
+        entries: ToolGroupEntry[];
+      }
+    | {
+        type: 'part';
+        key: string;
+        part: AssistantMessagePart;
+        index: number;
+      };
+
+  const groupedParts = createMemo(() => {
+    const itemByKey = new Map<string, RenderItem>();
+    const orderedKeys: string[] = [];
+    let pendingToolEntries: ToolGroupEntry[] = [];
+
+    const flushToolGroup = () => {
+      if (pendingToolEntries.length === 0) return;
+      const key = `toolGroup:${pendingToolEntries[0].key}`;
+      orderedKeys.push(key);
+      itemByKey.set(key, {
+        type: 'toolGroup',
+        key,
+        entries: pendingToolEntries,
+      });
+      pendingToolEntries = [];
+    };
+
+    keyedParts().orderedKeys.forEach((key, index) => {
+      const part = keyedParts().partsByKey.get(key);
+      if (!part) return;
+
+      if (part.type === 'toolCall' || part.type === 'mcpToolCall') {
+        pendingToolEntries.push({ key, part, index });
+        return;
+      }
+
+      flushToolGroup();
+      orderedKeys.push(key);
+      itemByKey.set(key, {
+        type: 'part',
+        key,
+        part,
+        index,
+      });
+    });
+
+    flushToolGroup();
+    return { orderedKeys, itemByKey };
+  });
+
+  const stableRenderItems = mapArray(
+    () => groupedParts().orderedKeys,
+    (key) => createMemo(() => groupedParts().itemByKey.get(key))
   );
 
+  const renderToolPart = (
+    toolPart: Extract<
+      AssistantMessagePart,
+      { type: 'toolCall' | 'mcpToolCall' }
+    >,
+    index: number,
+    grouped: boolean
+  ) => {
+    if (toolPart.type === 'toolCall') {
+      return (
+        <RenderTool
+          tool_id={toolPart.id}
+          chat_id={chat.chatId()}
+          json={toolPart.json}
+          name={toolPart.name}
+          response={responseById().get(toolPart.id)}
+          message_id={props.message.id}
+          part_index={index}
+          isComplete={isCompleteSelector(toolPart.id)}
+          renderContext={{
+            renderContext: {
+              isStreaming: props.isStreaming,
+              grouped,
+            },
+          }}
+        />
+      );
+    }
+
+    return (
+      <McpToolCall
+        name={toolPart.name}
+        service={toolPart.service}
+        display_name={toolPart.display_name ?? undefined}
+        isComplete={isCompleteSelector(toolPart.id)}
+        renderContext={{
+          renderContext: {
+            isStreaming: props.isStreaming,
+            grouped,
+          },
+        }}
+      />
+    );
+  };
+
   return (
-    <For each={stableParts()}>
-      {(part, i) => {
-        const currentPart = () => part();
-        if (!currentPart()) return null;
+    <div class="flex flex-col gap-1">
+      <For each={stableRenderItems()}>
+        {(item) => {
+          const currentItem = () => item();
+          if (!currentItem()) return null;
 
-        const type = () => currentPart()?.type;
+          const type = () => currentItem()?.type;
 
-        return (
-          <Switch>
-            <Match when={type() === 'toolCall'}>
-              {(() => {
-                const toolCall = () =>
-                  currentPart() as Extract<
-                    AssistantMessagePart,
-                    { type: 'toolCall' }
-                  >;
-                return (
-                  <RenderTool
-                    tool_id={toolCall().id}
-                    chat_id={chat.chatId()}
-                    json={toolCall().json}
-                    name={toolCall().name}
-                    response={responseById().get(toolCall().id)}
-                    message_id={props.message.id}
-                    part_index={i()}
-                    isComplete={isCompleteSelector(toolCall().id)}
-                    renderContext={{
-                      renderContext: {
-                        isStreaming: props.isStreaming,
-                      },
-                    }}
-                  />
-                );
-              })()}
-            </Match>
-            <Match when={type() === 'mcpToolCall'}>
-              {(() => {
-                const mcpCall = () =>
-                  currentPart() as Extract<
-                    AssistantMessagePart,
-                    { type: 'mcpToolCall' }
-                  >;
-                return (
-                  <McpToolCall
-                    name={mcpCall().name}
-                    service={mcpCall().service}
-                    display_name={mcpCall().display_name ?? undefined}
-                    isComplete={isCompleteSelector(mcpCall().id)}
-                    renderContext={{
-                      renderContext: {
-                        isStreaming: props.isStreaming,
-                      },
-                    }}
-                  />
-                );
-              })()}
-            </Match>
-            <Match when={type() === 'text'}>
-              {(() => {
-                const text = () => {
-                  const p = currentPart();
-                  return p?.type === 'text' ? p.text : '';
-                };
-                return (
-                  <Show when={text().trim().length > 0}>
-                    <ChatMessageMarkdown
-                      text={text()}
-                      generating={() => props.isStreaming}
-                    />
-                  </Show>
-                );
-              })()}
-            </Match>
-            <Match when={type() === 'thinking'}>
-              {(() => {
-                const thinking = () => {
-                  const p = currentPart();
-                  return p?.type === 'thinking' ? p.thinking : '';
-                };
-                return (
-                  <Show when={thinking().trim().length > 0}>
-                    <ThinkingBlock
-                      thinking={thinking()}
-                      isStreaming={!isThinkingDone()}
-                    />
-                  </Show>
-                );
-              })()}
-            </Match>
-          </Switch>
-        );
-      }}
-    </For>
+          return (
+            <Switch>
+              <Match when={type() === 'toolGroup'}>
+                {(() => {
+                  const toolGroup = () =>
+                    currentItem() as Extract<RenderItem, { type: 'toolGroup' }>;
+                  const isGrouped = () => toolGroup().entries.length > 1;
+                  const singleEntry = () => toolGroup().entries[0];
+                  return (
+                    <Show
+                      when={isGrouped()}
+                      fallback={renderToolPart(
+                        singleEntry().part,
+                        singleEntry().index,
+                        false
+                      )}
+                    >
+                      <Tool.Group>
+                        <For each={toolGroup().entries}>
+                          {(entry) =>
+                            renderToolPart(entry.part, entry.index, true)
+                          }
+                        </For>
+                      </Tool.Group>
+                    </Show>
+                  );
+                })()}
+              </Match>
+              <Match when={type() === 'part'}>
+                {(() => {
+                  const partItem = () =>
+                    currentItem() as Extract<RenderItem, { type: 'part' }>;
+                  const part = () => partItem().part;
+                  return (
+                    <Switch>
+                      <Match when={part().type === 'text'}>
+                        {(() => {
+                          const text = () => {
+                            const p = part();
+                            return p.type === 'text' ? p.text : '';
+                          };
+                          return (
+                            <Show when={text().trim().length > 0}>
+                              <ChatMessageMarkdown
+                                text={text()}
+                                generating={() => props.isStreaming}
+                              />
+                            </Show>
+                          );
+                        })()}
+                      </Match>
+                      <Match when={part().type === 'thinking'}>
+                        {(() => {
+                          const thinking = () => {
+                            const p = part();
+                            return p.type === 'thinking' ? p.thinking : '';
+                          };
+                          return (
+                            <Show when={thinking().trim().length > 0}>
+                              <ThinkingBlock
+                                thinking={thinking()}
+                                isStreaming={!isThinkingDone()}
+                              />
+                            </Show>
+                          );
+                        })()}
+                      </Match>
+                    </Switch>
+                  );
+                })()}
+              </Match>
+            </Switch>
+          );
+        }}
+      </For>
+    </div>
   );
 }

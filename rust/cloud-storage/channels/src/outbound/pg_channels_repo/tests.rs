@@ -690,6 +690,29 @@ async fn participants_roles_parsed_correctly(pool: Pool<Postgres>) -> anyhow::Re
     Ok(())
 }
 
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn thread_participants_exclude_departed_senders(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    // ch3 thread parent (msg id 0x..31) was authored by an active participant,
+    // while its only reply was authored by a participant who has since left.
+    let parent = Uuid::from_u128(0x00000000_0000_0000_0000_000000000031);
+    let participants = repo.get_thread_participants(parent).await?;
+
+    let ids: Vec<&str> = participants.iter().map(|p| p.as_ref()).collect();
+    assert!(
+        ids.contains(&USER_A),
+        "active thread participant should be included"
+    );
+    assert!(
+        !ids.contains(&LEFT_USER),
+        "departed sender must not be treated as a thread participant"
+    );
+    Ok(())
+}
+
 // -- resolve_top_level_parent -------------------------------------------------
 
 #[sqlx::test(

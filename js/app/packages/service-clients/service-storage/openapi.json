@@ -3736,7 +3736,7 @@
     "/crm/companies/{company_id}/contacts": {
       "get": {
         "tags": ["crm::inbound::axum_router::list_company_contacts"],
-        "summary": "List the non-hidden contacts of a CRM company, scoped to the\nrequesting user's team. Returns 404 when the company isn't owned by\nthe team (so existence doesn't leak across teams); an owned company\nwith no visible contacts returns `200 []`.",
+        "summary": "List the contacts of a CRM company, scoped to the requesting user's\nteam. Returns 404 when the company isn't owned by the team (so\nexistence doesn't leak across teams). Non-admin viewers also 404 on\nhidden companies and see only non-hidden contacts; admin/owner\nviewers reach hidden companies and see every owned contact\nregardless of `hidden` so they can render the right unhide UI.",
         "operationId": "list_company_contacts",
         "parameters": [
           {
@@ -3800,7 +3800,7 @@
     "/crm/companies/{company_id}/email-sync": {
       "put": {
         "tags": ["crm::inbound::axum_router::set_email_sync"],
-        "summary": "Toggle `email_sync` on a CRM company. `false` disables CRM email\nsharing for the company and permanently removes its existing CRM\ncontacts and contact sources.",
+        "summary": "Toggle `email_sync` on a CRM company. Purely a visibility flag —\nit gates whether team members can see each other's emails with\nthis company. Existing CRM data is unaffected.",
         "operationId": "set_email_sync",
         "parameters": [
           {
@@ -3874,7 +3874,7 @@
     "/crm/companies/{company_id}/hidden": {
       "put": {
         "tags": ["crm::inbound::axum_router::set_company_hidden"],
-        "summary": "Toggle `hidden` on a CRM company. Hiding also disables `email_sync`\nand cascades to clearing the company's contacts and contact sources.",
+        "summary": "Toggle `hidden` on a CRM company. Hiding also disables\n`email_sync` and soft-hides every contact under the company.\nUn-hide restores contact visibility only; `email_sync` is left\nuntouched (the team must re-enable it explicitly). Contact rows\nand contact sources survive the cycle.",
         "operationId": "set_company_hidden",
         "parameters": [
           {
@@ -3901,6 +3901,67 @@
         "responses": {
           "204": {
             "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/crm/contacts/{contact_id}": {
+      "get": {
+        "tags": ["crm::inbound::axum_router::get_contact"],
+        "summary": "Fetch a single CRM contact by id, scoped to the requesting user's\nteam. Returns 404 when the contact doesn't exist or isn't owned by\nthe team. Non-admin viewers also 404 on hidden contacts or hidden\nparent companies (so existence doesn't leak); admin/owner viewers\nreach every owned contact regardless of `hidden`.",
+        "operationId": "get_contact",
+        "parameters": [
+          {
+            "name": "contact_id",
+            "in": "path",
+            "description": "The CRM contact to fetch",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrmContactResponse"
+                }
+              }
+            }
           },
           "401": {
             "description": "",
@@ -10877,6 +10938,7 @@
           "id",
           "companyId",
           "email",
+          "hidden",
           "firstInteraction",
           "lastInteraction",
           "createdAt",
@@ -10901,6 +10963,10 @@
             "type": "string",
             "format": "date-time",
             "description": "Earliest known interaction with this contact."
+          },
+          "hidden": {
+            "type": "boolean",
+            "description": "Whether the contact is hidden from CRM listings for the\nrequesting team. Non-admin viewers never see `hidden = true`\nrows (the endpoint filters them out); admin/owner callers see\nhidden contacts so they can render the right toggle state."
           },
           "id": {
             "type": "string",
@@ -15314,7 +15380,7 @@
         "properties": {
           "hidden": {
             "type": "boolean",
-            "description": "New value for `crm_companies.hidden`. Setting to `true` hides\nthe company from CRM listings AND disables `email_sync` (which\npermanently deletes the company's contacts and contact sources).\nSetting to `false` un-hides the company; `email_sync` is left\nuntouched and the team must re-enable it explicitly."
+            "description": "New value for `crm_companies.hidden`. Setting to `true` hides\nthe company from CRM listings, disables `email_sync`, and\nsoft-hides every contact under it (`crm_contacts.hidden = true`).\nContact rows and `crm_contact_sources` are preserved across the\ncycle, so un-hide is a true reverse. Setting to `false`\nun-hides the company and soft-restores its contacts;\n`email_sync` is left untouched and the team must re-enable it\nexplicitly."
           }
         }
       },
@@ -15336,7 +15402,7 @@
         "properties": {
           "email_sync": {
             "type": "boolean",
-            "description": "New value for `crm_companies.email_sync`. Setting to `false`\npermanently deletes the company's CRM contacts and contact sources."
+            "description": "New value for `crm_companies.email_sync`. Purely a read-side\nvisibility/permission gate — `soup` queries and email-permission\nchecks require `email_sync = true` before exposing the\ncompany's emails team-wide. Populate continues to write CRM\nhistory regardless, so toggling never destroys data and\nre-enabling never requires a backfill."
           }
         }
       },

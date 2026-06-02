@@ -26,6 +26,9 @@ pub enum GithubError {
     /// No Github link was found
     #[error("no link found")]
     NoLinkFound,
+    /// The Github link token has expired and the user must reauthenticate.
+    #[error("reauthentication required")]
+    ReauthenticationRequired,
     /// Github account is already linked
     #[error("github account is already linked with another")]
     AccountAlreadyLinked,

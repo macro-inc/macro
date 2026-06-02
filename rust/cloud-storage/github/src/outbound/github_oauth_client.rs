@@ -184,6 +184,34 @@ impl GithubOauth for GithubOauthImpl {
     }
 
     #[tracing::instrument(skip(self, access_token), err)]
+    async fn is_access_token_expired(&self, access_token: &str) -> Result<bool, Self::Err> {
+        let user_response = self
+            .client
+            .get("https://api.github.com/user")
+            .header("Authorization", format!("Bearer {}", access_token))
+            .header("User-Agent", "Macro-Auth-Service")
+            .timeout(Duration::from_secs(30))
+            .send()
+            .await?;
+
+        let status = user_response.status();
+
+        if status == reqwest::StatusCode::UNAUTHORIZED {
+            return Ok(true);
+        }
+
+        if !status.is_success() {
+            let error_body = user_response
+                .text()
+                .await
+                .unwrap_or_else(|_| "unknown error".to_string());
+            anyhow::bail!("failed to validate access token {}", error_body);
+        }
+
+        Ok(false)
+    }
+
+    #[tracing::instrument(skip(self, access_token), err)]
     async fn get_pull_request_details(
         &self,
         access_token: &str,

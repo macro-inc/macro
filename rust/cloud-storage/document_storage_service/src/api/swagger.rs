@@ -290,6 +290,7 @@ use utoipa::OpenApi;
         crm::inbound::axum_router::set_company_hidden::handler,
         crm::inbound::axum_router::set_contact_hidden::handler,
         crm::inbound::axum_router::list_company_contacts::handler,
+        crm::inbound::axum_router::get_contact::handler,
         crm::inbound::axum_router::comments::list_handler,
         crm::inbound::axum_router::comments::create_handler,
         crm::inbound::axum_router::comments::edit_handler,

@@ -12,6 +12,9 @@ pub mod set_contact_hidden;
 /// List the non-hidden contacts of a `crm_companies` row.
 pub mod list_company_contacts;
 
+/// Fetch a single non-hidden CRM contact by id.
+pub mod get_contact;
+
 /// Comment threads on a `crm_companies` / `crm_contacts` row.
 pub mod comments;
 
@@ -72,6 +75,10 @@ where
         .route(
             "/companies/{company_id}/contacts",
             get(list_company_contacts::handler::<C, Eas>),
+        )
+        .route(
+            "/contacts/{contact_id}",
+            get(get_contact::handler::<C, Eas>),
         )
         .route(
             "/contacts/{contact_id}/hidden",

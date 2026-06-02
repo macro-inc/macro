@@ -10,7 +10,10 @@ use axum::{
     extract::{Path, State},
 };
 use entity_access::{
-    domain::{models::MemberTeamRole, ports::EntityAccessService},
+    domain::{
+        models::{MemberTeamRole, TeamRole},
+        ports::EntityAccessService,
+    },
     inbound::axum_extractors::MacroUserTeamExtractor,
 };
 use model_error_response::ErrorResponse;
@@ -77,10 +80,14 @@ pub async fn list_handler<C: CrmService, Eas: EntityAccessService>(
 ) -> Result<Json<Vec<CrmCommentThread>>, CrmError> {
     let team_id = macro_uuid::string_to_uuid(&access.entity_access_receipt.entity().entity_id)
         .map_err(|_| CrmError::InvalidTeamId)?;
+    let include_hidden = access
+        .entity_access_receipt
+        .entity_permission()
+        .allows_team_role(TeamRole::Admin);
 
     let threads = state
         .service
-        .get_crm_comment_threads(&team_id, entity_type, &entity_id)
+        .get_crm_comment_threads(&team_id, entity_type, &entity_id, include_hidden)
         .await?;
 
     Ok(Json(threads))
@@ -115,6 +122,10 @@ pub async fn create_handler<C: CrmService, Eas: EntityAccessService>(
 ) -> Result<Json<CrmCommentThread>, CrmError> {
     let team_id = macro_uuid::string_to_uuid(&access.entity_access_receipt.entity().entity_id)
         .map_err(|_| CrmError::InvalidTeamId)?;
+    let include_hidden = access
+        .entity_access_receipt
+        .entity_permission()
+        .allows_team_role(TeamRole::Admin);
     let owner = access
         .entity_access_receipt
         .get_authenticated_user()
@@ -138,6 +149,7 @@ pub async fn create_handler<C: CrmService, Eas: EntityAccessService>(
             req.thread_metadata,
             text,
             req.metadata,
+            include_hidden,
         )
         .await?;
 
@@ -170,6 +182,10 @@ pub async fn edit_handler<C: CrmService, Eas: EntityAccessService>(
 ) -> Result<Json<CrmComment>, CrmError> {
     let team_id = macro_uuid::string_to_uuid(&access.entity_access_receipt.entity().entity_id)
         .map_err(|_| CrmError::InvalidTeamId)?;
+    let include_hidden = access
+        .entity_access_receipt
+        .entity_permission()
+        .allows_team_role(TeamRole::Admin);
 
     let text = req.text.trim();
     if text.is_empty() {
@@ -180,7 +196,7 @@ pub async fn edit_handler<C: CrmService, Eas: EntityAccessService>(
 
     let comment = state
         .service
-        .edit_crm_comment(&team_id, &comment_id, text)
+        .edit_crm_comment(&team_id, &comment_id, text, include_hidden)
         .await?;
 
     Ok(Json(comment))
@@ -211,10 +227,14 @@ pub async fn delete_handler<C: CrmService, Eas: EntityAccessService>(
 ) -> Result<Json<DeleteCrmCommentResult>, CrmError> {
     let team_id = macro_uuid::string_to_uuid(&access.entity_access_receipt.entity().entity_id)
         .map_err(|_| CrmError::InvalidTeamId)?;
+    let include_hidden = access
+        .entity_access_receipt
+        .entity_permission()
+        .allows_team_role(TeamRole::Admin);
 
     let result = state
         .service
-        .delete_crm_comment(&team_id, &comment_id)
+        .delete_crm_comment(&team_id, &comment_id, include_hidden)
         .await?;
 
     Ok(Json(result))

@@ -1,5 +1,8 @@
 //! Postgres context adapter for channel side-effect policy.
 
+#[cfg(test)]
+mod tests;
+
 use crate::domain::{
     ports::ChannelSideEffectContext,
     side_effects::{ChannelDocumentMention, ThreadNotificationContext},
@@ -197,9 +200,9 @@ async fn get_channel_participants_for_thread_id(
         r#"
         SELECT DISTINCT id AS "user_id!" FROM (
             SELECT m.sender_id AS id
-            FROM comms_channel_participants cp
-            JOIN comms_channels c ON c.id = cp.channel_id
-            JOIN comms_messages m ON m.channel_id = c.id
+            FROM comms_messages m
+            JOIN comms_channel_participants cp
+              ON cp.channel_id = m.channel_id AND cp.user_id = m.sender_id
             WHERE (m.id = $1 OR m.thread_id = $1) AND cp.left_at IS NULL
             UNION
             SELECT em.entity_id AS id
