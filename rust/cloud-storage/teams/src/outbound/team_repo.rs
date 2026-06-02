@@ -695,6 +695,8 @@ impl TeamRepository for TeamRepositoryImpl {
 
     #[tracing::instrument(skip(self), err)]
     async fn delete_team(&self, team_id: &uuid::Uuid) -> Result<(), TeamError> {
+        let mut transaction = self.pool.begin().await?;
+
         sqlx::query!(
             r#"
             DELETE FROM team
@@ -702,8 +704,21 @@ impl TeamRepository for TeamRepositoryImpl {
             "#,
             team_id,
         )
-        .execute(&self.pool)
+        .execute(&mut *transaction)
         .await?;
+
+        sqlx::query!(
+            r#"
+            DELETE FROM github_app_installation
+            WHERE source_id = $1
+              AND source_type = 'team'::github_app_installation_source_type
+            "#,
+            team_id.to_string(),
+        )
+        .execute(&mut *transaction)
+        .await?;
+
+        transaction.commit().await?;
 
         Ok(())
     }

@@ -868,6 +868,22 @@ async fn test_delete_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let team_repo = TeamRepositoryImpl::new(pool.clone());
 
     let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+    let team_source_id = team_id.to_string();
+    let other_team_source_id = "22222222-2222-2222-2222-222222222222";
+
+    sqlx::query!(
+        r#"
+        INSERT INTO github_app_installation (id, source_id, source_type)
+        VALUES
+            ('deleted-team-installation', $1, 'team'::github_app_installation_source_type),
+            ('same-source-user-installation', $1, 'user'::github_app_installation_source_type),
+            ('other-team-installation', $2, 'team'::github_app_installation_source_type)
+        "#,
+        &team_source_id,
+        other_team_source_id,
+    )
+    .execute(&pool)
+    .await?;
 
     team_repo.delete_team(&team_id).await?;
 
@@ -883,6 +899,48 @@ async fn test_delete_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
     .await?;
 
     assert!(team.is_none());
+
+    let deleted_installation = sqlx::query!(
+        r#"
+        SELECT id
+        FROM github_app_installation
+        WHERE id = 'deleted-team-installation'
+        "#,
+    )
+    .fetch_optional(&pool)
+    .await?;
+
+    assert!(deleted_installation.is_none());
+
+    let remaining_installations = sqlx::query!(
+        r#"
+        SELECT id, source_id, source_type::text AS "source_type!"
+        FROM github_app_installation
+        WHERE id IN ('other-team-installation', 'same-source-user-installation')
+        ORDER BY id
+        "#,
+    )
+    .fetch_all(&pool)
+    .await?
+    .into_iter()
+    .map(|row| (row.id, row.source_id, row.source_type))
+    .collect::<Vec<_>>();
+
+    assert_eq!(
+        remaining_installations,
+        vec![
+            (
+                "other-team-installation".to_string(),
+                other_team_source_id.to_string(),
+                "team".to_string(),
+            ),
+            (
+                "same-source-user-installation".to_string(),
+                team_source_id,
+                "user".to_string(),
+            ),
+        ]
+    );
 
     Ok(())
 }
