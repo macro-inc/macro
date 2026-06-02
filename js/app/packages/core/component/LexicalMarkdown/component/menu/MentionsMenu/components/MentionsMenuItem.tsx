@@ -7,11 +7,11 @@ import UsersIcon from '@phosphor/users.svg';
 import { cn } from '@ui';
 import { createEffect, Show } from 'solid-js';
 import type { MentionItem } from '../../../../utils/mentionsUtils';
+import { isBotMentionItem } from '../utils/botMention';
 import {
   getBlockNameFromEntity,
   getMentionItemName,
 } from '../utils/entityUtils';
-import { isBotMentionItem } from '../utils/botMention';
 
 export function MentionsMenuItem(props: {
   item: MentionItem;
