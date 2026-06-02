@@ -1,5 +1,6 @@
 import { openChannelCallTab, useCallContextOptional } from '@channel/Call';
 import { useChannelsContext } from '@core/context/channels';
+import { useUserId } from '@core/context/user';
 import PhoneIcon from '@icon/wide-call.svg';
 import { useActiveCallsForChannelsQuery } from '@queries/call/call';
 import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
@@ -36,24 +37,42 @@ function ChannelCallBadge(props: {
 }
 
 function computeChannelLetters(
-  calls: { channel: ApiChannelWithLatest | undefined; channelId: string }[]
+  calls: { channel: ApiChannelWithLatest | undefined; channelId: string }[],
+  currentUserId?: string
 ): Map<string, string> {
   const result = new Map<string, string>();
   const firstLetterCount = new Map<string, number>();
+  const getName = (channel: ApiChannelWithLatest) => {
+    const channelName = channel.name?.trim();
+    if (channelName) return channelName;
+
+    if (channel.channel_type !== ChannelTypeEnum.DirectMessage) return '';
+
+    const participant =
+      channel.participants.find((p) => p.user_id !== currentUserId) ??
+      channel.participants[0];
+    if (!participant) return '';
+
+    const displayName =
+      'displayName' in participant &&
+      typeof participant.displayName === 'string'
+        ? participant.displayName
+        : undefined;
+    return displayName?.trim() || participant.user_id;
+  };
 
   for (const call of calls) {
     const channel = call.channel;
-    if (!channel || channel.channel_type === ChannelTypeEnum.DirectMessage)
-      continue;
-    const first = channel.name?.[0]?.toUpperCase() ?? '';
+    if (!channel) continue;
+    const name = getName(channel);
+    const first = name[0]?.toUpperCase() ?? '';
     firstLetterCount.set(first, (firstLetterCount.get(first) ?? 0) + 1);
   }
 
   for (const call of calls) {
     const channel = call.channel;
-    if (!channel || channel.channel_type === ChannelTypeEnum.DirectMessage)
-      continue;
-    const name = channel.name ?? '';
+    if (!channel) continue;
+    const name = getName(channel);
     const first = name[0]?.toUpperCase() ?? '';
     const needsTwo = (firstLetterCount.get(first) ?? 0) > 1 && name.length > 1;
     result.set(
@@ -81,6 +100,7 @@ function formatDuration(startedAt: string | undefined, nowMs: number) {
 export function SidebarActiveCallWidget(props: { sidebarState: SidebarState }) {
   const channelsCtx = useChannelsContext();
   const callCtx = useCallContextOptional();
+  const userId = useUserId();
   const [nowMs, setNowMs] = createSignal(Date.now());
   const durationTimer = globalThis.setInterval(
     () => setNowMs(Date.now()),
@@ -117,7 +137,7 @@ export function SidebarActiveCallWidget(props: { sidebarState: SidebarState }) {
   );
 
   const channelLetters = createMemo(() =>
-    computeChannelLetters(activeCallChannels())
+    computeChannelLetters(activeCallChannels(), userId())
   );
 
   const isSlim = () => props.sidebarState === 'slim';

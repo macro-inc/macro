@@ -5,10 +5,11 @@ import { type CallRecord, callServiceClient } from '@service-call/client';
 import type { CallActiveResponse } from '@service-storage/generated/schemas/callActiveResponse';
 import { useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
+import { callKeys } from './keys';
 
 export function useActiveCallQuery(channelId: Accessor<string>) {
   return useQuery(() => ({
-    queryKey: ['call', 'active', channelId()],
+    queryKey: callKeys.active(channelId()).queryKey,
     queryFn: async () =>
       await throwOnErr(() => callServiceClient.checkActiveCall(channelId())),
     refetchInterval: 15_000,
@@ -20,7 +21,7 @@ export function useActiveCallsForChannelsQuery(channelIds: Accessor<string[]>) {
     const ids = [...new Set(channelIds())].sort();
 
     return {
-      queryKey: ['call', 'active', 'channels', ids],
+      queryKey: callKeys.activeChannels(ids).queryKey,
       queryFn: async (): Promise<CallActiveResponse[]> => {
         const activeCalls = await Promise.all(
           ids.map(async (channelId) =>
@@ -43,12 +44,12 @@ export function useActiveCallsForChannelsQuery(channelIds: Accessor<string[]>) {
 
 export function setActiveCallStartedCache(call: CallActiveResponse) {
   queryClient.setQueryData<CallActiveResponse | null>(
-    ['call', 'active', call.channelId],
+    callKeys.active(call.channelId).queryKey,
     call
   );
 
   queryClient.setQueriesData<CallActiveResponse[]>(
-    { queryKey: ['call', 'active', 'channels'] },
+    { queryKey: callKeys.activeChannels._def },
     (prev) => {
       if (!prev) return prev;
       const withoutDuplicate = prev.filter(
@@ -69,12 +70,12 @@ export function setActiveCallEndedCache(params: {
   channelId: string;
 }) {
   queryClient.setQueryData<CallActiveResponse | null>(
-    ['call', 'active', params.channelId],
+    callKeys.active(params.channelId).queryKey,
     null
   );
 
   queryClient.setQueriesData<CallActiveResponse[]>(
-    { queryKey: ['call', 'active', 'channels'] },
+    { queryKey: callKeys.activeChannels._def },
     (prev) =>
       prev?.filter(
         (call) =>
@@ -84,7 +85,10 @@ export function setActiveCallEndedCache(params: {
 }
 
 export function invalidateActiveCallQueries() {
-  return queryClient.invalidateQueries({ queryKey: ['call', 'active'] });
+  return Promise.all([
+    queryClient.invalidateQueries({ queryKey: callKeys.active._def }),
+    queryClient.invalidateQueries({ queryKey: callKeys.activeChannels._def }),
+  ]);
 }
 
 function _useJoinCallMutation() {
@@ -143,7 +147,7 @@ export function useLeaveCallMutation() {
 
 export function useCallRecordQuery(callId: Accessor<string>) {
   return useQuery(() => ({
-    queryKey: ['call', 'record', callId()],
+    queryKey: callKeys.record(callId()).queryKey,
     queryFn: async () =>
       await throwOnErr(() => callServiceClient.getCallRecord(callId())),
   }));
@@ -153,14 +157,17 @@ export function setCallRecordShareWithTeamCache(
   callId: string,
   shareWithTeam: boolean
 ) {
-  queryClient.setQueryData<CallRecord>(['call', 'record', callId], (prev) => {
-    if (!prev) return prev;
-    return { ...prev, shareWithTeam };
-  });
+  queryClient.setQueryData<CallRecord>(
+    callKeys.record(callId).queryKey,
+    (prev) => {
+      if (!prev) return prev;
+      return { ...prev, shareWithTeam };
+    }
+  );
 }
 
 function invalidateCallRecord(callId: string) {
-  queryClient.invalidateQueries({ queryKey: ['call', 'record', callId] });
+  queryClient.invalidateQueries({ queryKey: callKeys.record(callId).queryKey });
 }
 
 export function useSetCallRecordShareWithTeamMutation() {
