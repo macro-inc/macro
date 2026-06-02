@@ -174,11 +174,14 @@ pub trait CrmService: Clone + Send + Sync + 'static {
         addresses: &[String],
     ) -> impl Future<Output = Result<CrmScopePrecheck, CrmError>> + Send;
 
-    /// List the team's CRM companies for the soup feed. See
+    /// List the team's CRM companies for the soup feed. `user_id` is
+    /// required by the `Viewed*` sort variants (per-user
+    /// `UserHistory` join); see
     /// [`CompaniesRepository::list_companies_for_soup`].
     fn list_companies_for_soup(
         &self,
         team_id: &uuid::Uuid,
+        user_id: &str,
         company_ids: &[uuid::Uuid],
         hidden: Option<bool>,
         sort: CrmCompanyListSort,
@@ -526,6 +529,7 @@ where
     async fn list_companies_for_soup(
         &self,
         team_id: &uuid::Uuid,
+        user_id: &str,
         company_ids: &[uuid::Uuid],
         hidden: Option<bool>,
         sort: CrmCompanyListSort,
@@ -533,7 +537,7 @@ where
         limit: i64,
     ) -> Result<Vec<CrmCompanyForSoup>, CrmError> {
         self.companies_repository
-            .list_companies_for_soup(team_id, company_ids, hidden, sort, cursor, limit)
+            .list_companies_for_soup(team_id, user_id, company_ids, hidden, sort, cursor, limit)
             .await
     }
 
@@ -733,6 +737,7 @@ impl CrmService for NoOpCrmService {
     async fn list_companies_for_soup(
         &self,
         _team_id: &uuid::Uuid,
+        _user_id: &str,
         _company_ids: &[uuid::Uuid],
         _hidden: Option<bool>,
         _sort: CrmCompanyListSort,

@@ -10,14 +10,25 @@ use crate::domain::model::{
 use chrono::{DateTime, Utc};
 use serde_json::Value;
 
-/// Sort order for [`CompaniesRepository::list_companies_for_soup`].
-/// Both variants tiebreak on `id DESC` for deterministic pagination.
+/// Sort order for [`CompaniesRepository::list_companies_for_soup`]. All
+/// variants tiebreak on `id DESC` for deterministic pagination. The two
+/// `Viewed*` variants require a `user_id` (the `UserHistory` join is
+/// per-user); rows the user has never opened sort to NULL (`ViewedAt`
+/// drops them to the bottom; `ViewedUpdated` falls back to
+/// `last_interaction`).
 #[derive(Debug, Clone, Copy)]
 pub enum CrmCompanyListSort {
     /// Sort by `crm_companies.last_interaction` DESC.
     UpdatedAt,
     /// Sort by `crm_companies.first_interaction` DESC.
     CreatedAt,
+    /// Sort by the user's `UserHistory."updatedAt"` DESC (when this user
+    /// last opened the company). Unviewed rows sort to NULL (bottom).
+    ViewedAt,
+    /// Sort by `COALESCE(UserHistory."updatedAt", last_interaction)` DESC
+    /// — recently viewed bubble up, with a graceful fallback to
+    /// activity recency for unviewed rows.
+    ViewedUpdated,
 }
 
 /// Keyset cursor for [`CompaniesRepository::list_companies_for_soup`].
@@ -25,8 +36,11 @@ pub enum CrmCompanyListSort {
 /// so the next page seeks strictly past it. `None` = first page.
 #[derive(Debug, Clone, Copy)]
 pub struct CrmCompanySoupCursor {
-    /// Sort timestamp of the previous page's last row —
-    /// `first_interaction`/`last_interaction` per [`CrmCompanyListSort`].
+    /// Sort timestamp of the previous page's last row, expressed in the
+    /// sort method's units: `first_interaction` for `CreatedAt`,
+    /// `last_interaction` for `UpdatedAt`, `UserHistory."updatedAt"` for
+    /// `ViewedAt`, and `COALESCE(uh."updatedAt", last_interaction)` for
+    /// `ViewedUpdated`.
     pub last_sort_ts: DateTime<Utc>,
     /// Id of the previous page's last row; tiebreaks equal timestamps.
     pub last_id: uuid::Uuid,
@@ -318,10 +332,17 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
     /// this method (soup's axum router does this). Empty `company_ids`
     /// = all rows matching the `hidden` filter; non-empty = whitelist.
     /// `cursor` seeks strictly past the previous soup page's last row
-    /// (`None` = first page). Both sort orders tiebreak on `id DESC`.
+    /// (`None` = first page). All sort orders tiebreak on `id DESC`.
+    ///
+    /// `user_id` scopes the per-user `UserHistory` join used by the
+    /// `Viewed*` sort variants. Pass the requesting user's id verbatim
+    /// (as stored in `team_user.user_id` / `UserHistory."userId"`);
+    /// internal callers without a user can pass an empty string —
+    /// `Viewed*` sorts then collapse to NULL (no viewed-at signal).
     fn list_companies_for_soup(
         &self,
         team_id: &uuid::Uuid,
+        user_id: &str,
         company_ids: &[uuid::Uuid],
         hidden: Option<bool>,
         sort: CrmCompanyListSort,
