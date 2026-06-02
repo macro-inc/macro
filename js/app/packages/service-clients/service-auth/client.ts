@@ -3,15 +3,20 @@ import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchWithToken } from '@core/util/fetchWithToken';
 import { registerClient } from '@core/util/mockClient';
 import type { ObjectLike } from '@core/util/result';
-import { type SafeFetchInit, safeFetch } from '@core/util/safeFetch';
+import {
+  type ErrorResponseHandler,
+  type SafeFetchInit,
+  safeFetch,
+} from '@core/util/safeFetch';
 import { logger } from '@observability';
 import { makePersisted } from '@solid-primitives/storage';
-import { ok } from 'neverthrow';
+import { err, ok } from 'neverthrow';
 import { createSignal } from 'solid-js';
 import { fetchWithAuth as _fetchWithAuth } from './fetch';
 import type {
   EnrichGithubPullRequestsProxyRequest,
   EnrichGithubPullRequestsResponse,
+  GithubLinkStatusResponse,
   InitGithubLinkResponse,
   InitGmailLinkResponse,
   PatchSubscriptionTierRequest,
@@ -136,6 +141,36 @@ export type PatchSubscriptionTierErrorCode =
   | 'USER_IN_TEAM'
   | 'NO_SUBSCRIPTION'
   | 'UPDATE_IN_PROGRESS';
+
+export type GithubReauthenticationErrorCode = 'REAUTHENTICATION_REQUIRED';
+
+const githubErrorResponseHandler: ErrorResponseHandler<GithubReauthenticationErrorCode> =
+  async function handleGithubErrorResponse(response) {
+    switch (response.status) {
+      case 428:
+        return {
+          code: 'REAUTHENTICATION_REQUIRED',
+          message: 'GitHub reauthentication required',
+        };
+      case 401:
+        return { code: 'UNAUTHORIZED', message: 'Unauthorized access' };
+      case 403:
+        return { code: 'FORBIDDEN', message: 'Forbidden' };
+      case 404:
+        return { code: 'NOT_FOUND', message: 'Resource not found' };
+      case 409:
+        return { code: 'CONFLICT', message: 'Resource conflict' };
+      case 410:
+        return { code: 'GONE', message: 'Resource deleted' };
+      case 500:
+        return { code: 'SERVER_ERROR', message: 'Internal server error' };
+      default:
+        return {
+          code: 'HTTP_ERROR',
+          message: `HTTP error! status: ${response.status}`,
+        };
+    }
+  };
 
 export const authServiceClient = {
   async logout() {
@@ -323,13 +358,14 @@ export const authServiceClient = {
 
   async enrichGithubPullRequests(args: EnrichGithubPullRequestsProxyRequest) {
     return (
-      await fetchWithAuth<EnrichGithubPullRequestsResponse>(
-        `${authHost}/github_pull_requests/enrich`,
-        {
-          method: 'POST',
-          body: JSON.stringify(args),
-        }
-      )
+      await fetchWithAuth<
+        EnrichGithubPullRequestsResponse,
+        GithubReauthenticationErrorCode
+      >(`${authHost}/github_pull_requests/enrich`, {
+        method: 'POST',
+        body: JSON.stringify(args),
+        errorResponseHandler: githubErrorResponseHandler,
+      })
     ).map((result) => result);
   },
   async patchUserTutorial(args: PatchUserTutorialRequest) {
@@ -545,6 +581,18 @@ export const authServiceClient = {
     );
   },
 
+  async checkGithubLinkStatus() {
+    return (
+      await fetchWithAuth<
+        GithubLinkStatusResponse,
+        GithubReauthenticationErrorCode
+      >(`${authHost}/link/github/status`, {
+        method: 'GET',
+        errorResponseHandler: githubErrorResponseHandler,
+      })
+    ).map((result) => result);
+  },
+
   /**
    * Initializes the github account link for the user.
    * Returns the url you need to redirect user to to start the link.
@@ -587,6 +635,15 @@ export const authServiceClient = {
         method: 'DELETE',
       })
     ).map((_result) => {});
+  },
+
+  async reauthenticateGithub(originalUrl?: string) {
+    const deleteResult = await authServiceClient.deleteGithubLink();
+    if (deleteResult.isErr()) {
+      return err(deleteResult.error);
+    }
+
+    return authServiceClient.initGithubLink(originalUrl);
   },
 
   async sendMobileWelcomeEmail(email: string) {

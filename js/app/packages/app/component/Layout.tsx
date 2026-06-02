@@ -32,6 +32,7 @@ import Banner from './banner/Banner';
 import { GlobalBulkEditEntityModal } from './bulk-edit-entity/BulkEditEntityModal';
 import { CommandMenu } from './command';
 import { DevStatusBar } from './DevStatusBar';
+import { GithubReauthenticationPrompt } from './GithubReauthenticationPrompt';
 import GlobalShortcuts from './GlobalHotkeys';
 import { GlobalShareModal } from './global-share-modal/GlobalShareModal';
 import { ItemDndProvider } from './ItemDragAndDrop';
@@ -136,6 +137,9 @@ function LayoutInner(props: RouteSectionProps) {
       <BundleUpdateProgressBar />
       <Suspense>
         <Show when={isAuthenticated()}>
+          <Show when={!AUTH_URLS.includes(location.pathname)}>
+            <GithubReauthenticationPrompt />
+          </Show>
           <GlobalShortcuts />
           <Show when={!isMobile()}>
             <Suspense>

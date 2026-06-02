@@ -73,6 +73,8 @@ false && fileSelector;
 // 16 megabytes
 const MAX_PROFILE_PICTURE_SIZE = 16 * 1000 * 1000;
 
+type GithubLinkStatus = 'linked' | 'unlinked' | 'reauthentication_required';
+
 async function uploadProfilePicture(
   file: File
 ): Promise<{ id: string; url: string } | void> {
@@ -230,10 +232,21 @@ export function Account() {
     );
   };
 
-  const [githubLinkExists, { refetch: refetchGithubLink }] = createResource(async () => {
-    const response = await authServiceClient.checkLinkExists({ idp_name: 'github' });
-    return response.isOk() ? response.value.link_exists : false;
-  });
+  const [githubLinkStatus, { refetch: refetchGithubLinkStatus }] =
+    createResource(async (): Promise<GithubLinkStatus> => {
+      const response = await authServiceClient.checkGithubLinkStatus();
+
+      if (response.isOk()) {
+        return response.value.reauthentication_required
+          ? 'reauthentication_required'
+          : 'linked';
+      }
+
+      const needsReauthentication = response.error.some(
+        (error) => error.code === 'REAUTHENTICATION_REQUIRED'
+      );
+      return needsReauthentication ? 'reauthentication_required' : 'unlinked';
+    });
 
   const handleGithubEnable = async () => {
     const url = await authServiceClient.initGithubLink(window.location.href);
@@ -244,7 +257,16 @@ export function Account() {
 
   const handleGithubDisable = async () => {
     await authServiceClient.deleteGithubLink();
-    refetchGithubLink();
+    refetchGithubLinkStatus();
+  };
+
+  const handleGithubReconnect = async () => {
+    const url = await authServiceClient.reauthenticateGithub(
+      window.location.href
+    );
+    if (url.isOk()) {
+      window.location.href = url.value;
+    }
   };
 
   const firstName = () => {
@@ -530,14 +552,36 @@ export function Account() {
 
               <Row label="GitHub">
                 <Show
-                  when={!githubLinkExists.loading}
+                  when={!githubLinkStatus.loading}
                   fallback={
                     <span class="text-sm text-ink-muted">Loading…</span>
                   }
                 >
-                  <Show
-                    when={!githubLinkExists()}
+                  <Switch
                     fallback={
+                      <Button
+                        variant="base"
+                        size="sm"
+                        depth={3}
+                        onClick={handleGithubEnable}
+                      >
+                        Enable
+                      </Button>
+                    }
+                  >
+                    <Match
+                      when={githubLinkStatus() === 'reauthentication_required'}
+                    >
+                      <Button
+                        variant="base"
+                        size="sm"
+                        depth={3}
+                        onClick={handleGithubReconnect}
+                      >
+                        Reconnect
+                      </Button>
+                    </Match>
+                    <Match when={githubLinkStatus() === 'linked'}>
                       <Button
                         variant="base"
                         size="sm"
@@ -546,17 +590,8 @@ export function Account() {
                       >
                         Disable
                       </Button>
-                    }
-                  >
-                    <Button
-                      variant="base"
-                      size="sm"
-                      depth={3}
-                      onClick={handleGithubEnable}
-                    >
-                      Enable
-                    </Button>
-                  </Show>
+                    </Match>
+                  </Switch>
                 </Show>
               </Row>
 
