@@ -10,23 +10,12 @@ use crate::api::ApiContext;
 const BATCH_UPDATE_MESSAGE_LIMIT: usize = 10;
 
 pub fn router(state: ApiContext) -> Router<ApiContext> {
-    // Mutating routes operate on exactly one inbox, resolved by the
-    // X-Email-Link-Id header (or the primary inbox) via attach_link_context.
-    let single_inbox_routes = Router::new()
+    // Every route resolves its own inbox — send via EmailLinkExtractor, label
+    // batch from the messages, and the reads union across the caller's inboxes —
+    // so none carry the single-inbox X-Email-Link-Id middleware.
+    Router::new()
         .merge(send_router(state.email_service.clone()))
         .route("/labels", patch(labels::handler))
-        .layer(axum::middleware::from_fn_with_state(
-            state.email_service,
-            crate::api::middleware::link::attach_link_context,
-        ));
-
-    // Read routes union across every inbox the caller owns and resolve their own
-    // link set, so they must not carry the single-inbox middleware.
-    let union_read_routes = Router::new()
         .route("/batch", post(get::batch_handler))
-        .route("/{id}", get(get::handler));
-
-    Router::new()
-        .merge(single_inbox_routes)
-        .merge(union_read_routes)
+        .route("/{id}", get(get::handler))
 }
