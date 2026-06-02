@@ -355,6 +355,29 @@ impl TeamRepository for TeamRepositoryImpl {
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn move_github_app_installation_to_team_if_exists(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        team_id: &uuid::Uuid,
+    ) -> Result<(), CreateTeamError> {
+        sqlx::query!(
+            r#"
+            UPDATE github_app_installation
+            SET source_id = $2::text,
+                source_type = 'team'::github_app_installation_source_type
+            WHERE source_id = $1
+              AND source_type = 'user'::github_app_installation_source_type
+            "#,
+            user_id.as_ref(),
+            team_id.to_string(),
+        )
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn invite_users_to_team(
         &self,
         team_id: &uuid::Uuid,

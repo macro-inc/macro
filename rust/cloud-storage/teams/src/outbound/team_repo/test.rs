@@ -163,6 +163,187 @@ async fn test_create_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("teams"))
 )]
+async fn test_move_github_app_installation_to_team_moves_existing_user_rows(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool.clone());
+    let user_id = MacroUserIdStr::parse_from_str("macro|user3@user.com")?;
+    let unrelated_user_id = "macro|user4@user.com";
+    let existing_team_id = "22222222-2222-2222-2222-222222222222";
+
+    sqlx::query(
+        r#"
+        INSERT INTO github_app_installation (id, source_id, source_type)
+        VALUES
+            ('installation-one', $1, 'user'::github_app_installation_source_type),
+            ('installation-two', $1, 'user'::github_app_installation_source_type),
+            ('other-user-installation', $2, 'user'::github_app_installation_source_type),
+            ('existing-team-installation', $3, 'team'::github_app_installation_source_type)
+        "#,
+    )
+    .bind(user_id.as_ref())
+    .bind(unrelated_user_id)
+    .bind(existing_team_id)
+    .execute(&pool)
+    .await?;
+
+    let team = team_repo.create_team(&user_id, "GitHub Owner Team").await?;
+    let team_id = team.id().to_string();
+
+    team_repo
+        .move_github_app_installation_to_team_if_exists(&user_id, team.id())
+        .await?;
+
+    let remaining_user_row_count = sqlx::query(
+        r#"
+        SELECT COUNT(*) AS count
+        FROM github_app_installation
+        WHERE source_id = $1
+          AND source_type = 'user'::github_app_installation_source_type
+        "#,
+    )
+    .bind(user_id.as_ref())
+    .fetch_one(&pool)
+    .await?
+    .try_get::<i64, _>("count")?;
+    assert_eq!(remaining_user_row_count, 0);
+
+    let moved_rows = sqlx::query(
+        r#"
+        SELECT id, source_id, source_type::text AS source_type
+        FROM github_app_installation
+        WHERE source_id = $1
+          AND source_type = 'team'::github_app_installation_source_type
+        ORDER BY id
+        "#,
+    )
+    .bind(&team_id)
+    .fetch_all(&pool)
+    .await?
+    .into_iter()
+    .map(|row| {
+        Ok((
+            row.try_get::<String, _>("id")?,
+            row.try_get::<String, _>("source_id")?,
+            row.try_get::<String, _>("source_type")?,
+        ))
+    })
+    .collect::<Result<Vec<_>, sqlx::Error>>()?;
+
+    assert_eq!(
+        moved_rows,
+        vec![
+            (
+                "installation-one".to_string(),
+                team_id.clone(),
+                "team".to_string()
+            ),
+            ("installation-two".to_string(), team_id, "team".to_string()),
+        ]
+    );
+
+    let unrelated_rows = sqlx::query(
+        r#"
+        SELECT id, source_id, source_type::text AS source_type
+        FROM github_app_installation
+        WHERE id IN ('existing-team-installation', 'other-user-installation')
+        ORDER BY id
+        "#,
+    )
+    .fetch_all(&pool)
+    .await?
+    .into_iter()
+    .map(|row| {
+        Ok((
+            row.try_get::<String, _>("id")?,
+            row.try_get::<String, _>("source_id")?,
+            row.try_get::<String, _>("source_type")?,
+        ))
+    })
+    .collect::<Result<Vec<_>, sqlx::Error>>()?;
+
+    assert_eq!(
+        unrelated_rows,
+        vec![
+            (
+                "existing-team-installation".to_string(),
+                existing_team_id.to_string(),
+                "team".to_string()
+            ),
+            (
+                "other-user-installation".to_string(),
+                unrelated_user_id.to_string(),
+                "user".to_string()
+            ),
+        ]
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn test_move_github_app_installation_to_team_noops_when_user_has_no_rows(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool.clone());
+    let user_id = MacroUserIdStr::parse_from_str("macro|user3@user.com")?;
+    let unrelated_user_id = "macro|user4@user.com";
+
+    sqlx::query(
+        r#"
+        INSERT INTO github_app_installation (id, source_id, source_type)
+        VALUES ('other-user-installation', $1, 'user'::github_app_installation_source_type)
+        "#,
+    )
+    .bind(unrelated_user_id)
+    .execute(&pool)
+    .await?;
+
+    let team = team_repo.create_team(&user_id, "GitHub Owner Team").await?;
+
+    team_repo
+        .move_github_app_installation_to_team_if_exists(&user_id, team.id())
+        .await?;
+
+    let team_row_count = sqlx::query(
+        r#"
+        SELECT COUNT(*) AS count
+        FROM github_app_installation
+        WHERE source_id = $1
+        "#,
+    )
+    .bind(team.id().to_string())
+    .fetch_one(&pool)
+    .await?
+    .try_get::<i64, _>("count")?;
+    assert_eq!(team_row_count, 0);
+
+    let unrelated_row = sqlx::query(
+        r#"
+        SELECT source_id, source_type::text AS source_type
+        FROM github_app_installation
+        WHERE id = 'other-user-installation'
+        "#,
+    )
+    .fetch_one(&pool)
+    .await?;
+
+    assert_eq!(
+        unrelated_row.try_get::<String, _>("source_id")?,
+        unrelated_user_id
+    );
+    assert_eq!(unrelated_row.try_get::<String, _>("source_type")?, "user");
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
 async fn test_invite_users_to_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let team_repo = TeamRepositoryImpl::new(pool);
 
