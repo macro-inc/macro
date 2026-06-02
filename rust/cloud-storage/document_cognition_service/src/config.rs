@@ -22,6 +22,8 @@ pub struct Config {
     pub document_storage_bucket: String,
     /// document storage service url
     pub document_storage_service_url: String,
+    /// document storage service auth key
+    pub document_storage_service_auth_key: String,
     /// The sqs queue to send document text extract jobs to
     pub document_text_extractor_queue: String,
     /// The sqs queue to send chat delete jobs
@@ -66,6 +68,7 @@ env_var!(
         pub EmailScheduledQueue,
         pub NotificationQueue,
         pub DocumentStorageServiceUrl,
+        pub DocumentStorageServiceAuthKey,
         pub SearchEventQueue,
         pub SyncServiceUrl,
         pub SyncServiceAuthKey,
@@ -113,6 +116,7 @@ impl Config {
             email_scheduled_queue,
             notification_queue,
             document_storage_service_url,
+            document_storage_service_auth_key,
             search_event_queue,
             sync_service_url,
             sync_service_auth_key,
@@ -137,6 +141,7 @@ impl Config {
             document_batch_limit,
             document_storage_bucket: document_storage_bucket.to_string(),
             document_storage_service_url: document_storage_service_url.to_string(),
+            document_storage_service_auth_key: document_storage_service_auth_key.to_string(),
             document_text_extractor_queue: document_text_extractor_queue.to_string(),
             chat_delete_queue: chat_delete_queue.to_string(),
             email_scheduled_queue: email_scheduled_queue.to_string(),
@@ -171,6 +176,7 @@ impl Config {
             document_batch_limit: Default::default(),
             document_storage_bucket: Default::default(),
             document_storage_service_url: Default::default(),
+            document_storage_service_auth_key: Default::default(),
             document_text_extractor_queue: Default::default(),
             chat_delete_queue: Default::default(),
             email_scheduled_queue: Default::default(),
