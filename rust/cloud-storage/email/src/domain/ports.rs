@@ -86,7 +86,7 @@ pub trait EmailRepo: Send + Sync + 'static {
     fn owned_link_for_thread(
         &self,
         thread_id: Uuid,
-        fusionauth_user_id: &str,
+        macro_id: &str,
     ) -> impl Future<Output = Result<Option<Link>, Self::Err>> + Send;
 
     /// Returns every inbox accessible to `macro_id`: their own email_links plus
@@ -352,12 +352,12 @@ pub trait EmailService: Send + Sync + 'static {
         auth_id: &str,
     ) -> impl Future<Output = Result<Vec<Link>, EmailErr>> + Send;
 
-    /// Resolve the inbox owning a thread, scoped to the caller's own inboxes.
-    /// Lets thread-targeted mutations derive the inbox from the thread instead
-    /// of an `X-Email-Link-Id` header.
+    /// Resolve the inbox owning a thread, scoped to the caller's own and
+    /// delegated inboxes. Lets thread-targeted mutations derive the inbox from
+    /// the thread instead of an `X-Email-Link-Id` header.
     fn get_owned_link_for_thread(
         &self,
-        auth_id: &str,
+        macro_id: &str,
         thread_id: Uuid,
     ) -> impl Future<Output = Result<Option<Link>, EmailErr>> + Send;
 

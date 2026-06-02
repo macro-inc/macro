@@ -243,3 +243,76 @@ async fn test_link_by_fusionauth_email_provider_wrong_fusionauth(
 
     Ok(())
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_owned_link_for_thread_resolves_own_and_delegated(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    // macro_user_links FK-references "User" (which FK-references macro_user).
+    sqlx::query(
+        r#"
+        INSERT INTO macro_user (id, username, email, stripe_customer_id) VALUES
+            ('d1000000-0000-0000-0000-000000000001'::uuid, 'child', 'child@test.com', 'stripe_child'),
+            ('d2000000-0000-0000-0000-000000000002'::uuid, 'primary', 'primary@test.com', 'stripe_primary')
+        "#,
+    )
+    .execute(&pool)
+    .await?;
+
+    sqlx::query(
+        r#"
+        INSERT INTO "User" (id, email, macro_user_id) VALUES
+            ('macro|child@test.com', 'child@test.com', 'd1000000-0000-0000-0000-000000000001'::uuid),
+            ('macro|primary@test.com', 'primary@test.com', 'd2000000-0000-0000-0000-000000000002'::uuid)
+        "#,
+    )
+    .execute(&pool)
+    .await?;
+
+    sqlx::query(
+        r#"
+        INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider, is_sync_active, created_at, updated_at) VALUES
+            ('c0000000-0000-0000-0000-000000000001'::uuid, 'macro|child@test.com', 'fa-child', 'child@test.com', 'GMAIL', true, NOW(), NOW())
+        "#,
+    )
+    .execute(&pool)
+    .await?;
+
+    sqlx::query(
+        r#"INSERT INTO email_threads (id, link_id)
+           VALUES ('c0000000-0000-0000-0000-0000000000ff'::uuid, 'c0000000-0000-0000-0000-000000000001'::uuid)"#,
+    )
+    .execute(&pool)
+    .await?;
+
+    sqlx::query(
+        r#"INSERT INTO macro_user_links (primary_macro_id, child_macro_id)
+           VALUES ('macro|primary@test.com', 'macro|child@test.com')"#,
+    )
+    .execute(&pool)
+    .await?;
+
+    let repo = EmailPgRepo::new(pool);
+    let thread_id = Uuid::parse_str("c0000000-0000-0000-0000-0000000000ff")?;
+    let link_id = Uuid::parse_str("c0000000-0000-0000-0000-000000000001")?;
+
+    // delegate resolves the shared inbox
+    let delegated = repo
+        .owned_link_for_thread(thread_id, "macro|primary@test.com")
+        .await?;
+    assert_eq!(delegated.map(|l| l.id), Some(link_id));
+
+    // owner resolves their own inbox
+    let owned = repo
+        .owned_link_for_thread(thread_id, "macro|child@test.com")
+        .await?;
+    assert_eq!(owned.map(|l| l.id), Some(link_id));
+
+    // an unrelated caller resolves nothing
+    let none = repo
+        .owned_link_for_thread(thread_id, "macro|stranger@test.com")
+        .await?;
+    assert!(none.is_none());
+
+    Ok(())
+}

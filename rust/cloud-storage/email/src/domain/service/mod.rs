@@ -171,11 +171,11 @@ where
 
     async fn get_owned_link_for_thread(
         &self,
-        auth_id: &str,
+        macro_id: &str,
         thread_id: uuid::Uuid,
     ) -> Result<Option<crate::domain::models::Link>, EmailErr> {
         self.email_repo
-            .owned_link_for_thread(thread_id, auth_id)
+            .owned_link_for_thread(thread_id, macro_id)
             .await
             .map_err(|e| EmailErr::RepoErr(e.into()))
     }

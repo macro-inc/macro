@@ -103,7 +103,7 @@ pub(super) async fn links_by_fusionauth_user_id(
 pub(super) async fn owned_link_for_thread(
     pool: &PgPool,
     thread_id: Uuid,
-    fusionauth_user_id: &str,
+    macro_id: &str,
 ) -> Result<Option<Link>, sqlx::Error> {
     let db_link: Option<DbLink> = sqlx::query_as!(
         DbLink,
@@ -112,10 +112,17 @@ pub(super) async fn owned_link_for_thread(
                l.is_sync_active, l.created_at, l.updated_at
         FROM email_threads t
         JOIN email_links l ON l.id = t.link_id
-        WHERE t.id = $1 AND l.fusionauth_user_id = $2
+        WHERE t.id = $1
+          AND (
+              l.macro_id = $2
+              OR EXISTS (
+                  SELECT 1 FROM macro_user_links mul
+                  WHERE mul.child_macro_id = l.macro_id AND mul.primary_macro_id = $2
+              )
+          )
         "#,
         thread_id,
-        fusionauth_user_id
+        macro_id
     )
     .fetch_optional(pool)
     .await?;
