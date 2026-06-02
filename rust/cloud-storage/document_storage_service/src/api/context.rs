@@ -201,6 +201,7 @@ pub(crate) type DocumentService = DocumentServiceImpl<
     TaskPropertiesAdapter,
     ConnectionServiceImpl<EntityAccessService, ConnectionGatewayImpl>,
     EntityAccessManagementService,
+    ForeignEntityServiceImpl<PgForeignEntityRepo>,
 >;
 
 /// Type alias for the documents router state.

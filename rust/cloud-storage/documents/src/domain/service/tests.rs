@@ -1,5 +1,10 @@
+use foreign_entity::domain::models::{
+    CreateForeignEntity, ForeignEntity, ForeignEntityError, PatchForeignEntity, SourceId,
+};
+use foreign_entity::domain::ports::{ForeignEntityListQuery, ForeignEntityService};
 use macro_user_id::cowlike::CowLike;
 use model::document::DocumentMetadata;
+use std::sync::{Arc, Mutex};
 
 use crate::domain::models::GithubPullRequest;
 use crate::domain::ports::MockDocumentRepo;
@@ -185,15 +190,127 @@ impl EntityAccessManagementService for TestEntityAccessManagementService {
     }
 }
 
-fn make_test_service(
-    repo: MockDocumentRepo,
-) -> DocumentServiceImpl<
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ForeignEntityLookupRequest {
+    foreign_entity_id: String,
+    foreign_entity_source: Option<String>,
+}
+
+#[derive(Clone, Default)]
+struct TestForeignEntityService {
+    foreign_entities: Arc<Vec<ForeignEntity>>,
+    lookup_requests: Arc<Mutex<Vec<ForeignEntityLookupRequest>>>,
+}
+
+impl TestForeignEntityService {
+    fn new(foreign_entities: Vec<ForeignEntity>) -> Self {
+        Self {
+            foreign_entities: Arc::new(foreign_entities),
+            lookup_requests: Arc::new(Mutex::new(Vec::new())),
+        }
+    }
+
+    fn lookup_requests(&self) -> Arc<Mutex<Vec<ForeignEntityLookupRequest>>> {
+        Arc::clone(&self.lookup_requests)
+    }
+}
+
+impl ForeignEntityService for TestForeignEntityService {
+    async fn get_foreign_entity(
+        &self,
+        _receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<ForeignEntity, ForeignEntityError> {
+        unreachable!("test service only supports foreign entity lookups by external ID")
+    }
+
+    async fn get_foreign_entity_by_id(
+        &self,
+        _id: uuid::Uuid,
+    ) -> Result<ForeignEntity, ForeignEntityError> {
+        unreachable!("test service only supports foreign entity lookups by external ID")
+    }
+
+    async fn get_foreign_entities_by_foreign_entity_id(
+        &self,
+        foreign_entity_id: &str,
+        foreign_entity_source: Option<&str>,
+    ) -> Result<Vec<ForeignEntity>, ForeignEntityError> {
+        self.lookup_requests
+            .lock()
+            .unwrap()
+            .push(ForeignEntityLookupRequest {
+                foreign_entity_id: foreign_entity_id.to_string(),
+                foreign_entity_source: foreign_entity_source.map(str::to_string),
+            });
+
+        Ok(self
+            .foreign_entities
+            .iter()
+            .filter(|foreign_entity| {
+                foreign_entity.foreign_entity_id == foreign_entity_id
+                    && foreign_entity_source
+                        .is_none_or(|source| foreign_entity.foreign_entity_source == source)
+            })
+            .cloned()
+            .collect())
+    }
+
+    async fn get_foreign_entities_for_user(
+        &self,
+        _source_ids: Vec<SourceId>,
+        _limit: u32,
+        _query: ForeignEntityListQuery,
+    ) -> Result<Vec<ForeignEntity>, ForeignEntityError> {
+        unreachable!("test service only supports foreign entity lookups by external ID")
+    }
+
+    async fn create_foreign_entity(
+        &self,
+        _create: CreateForeignEntity,
+    ) -> Result<ForeignEntity, ForeignEntityError> {
+        unreachable!("test service only supports foreign entity lookups by external ID")
+    }
+
+    async fn delete_foreign_entity(&self, _id: uuid::Uuid) -> Result<(), ForeignEntityError> {
+        unreachable!("test service only supports foreign entity lookups by external ID")
+    }
+
+    async fn patch_foreign_entity(
+        &self,
+        _id: uuid::Uuid,
+        _patch: PatchForeignEntity,
+    ) -> Result<ForeignEntity, ForeignEntityError> {
+        unreachable!("test service only supports foreign entity lookups by external ID")
+    }
+}
+
+type TestDocumentService = DocumentServiceImpl<
     MockDocumentRepo,
     TestUploadUrlPort,
     TestTaskPropertiesPort,
     TestConnectionService,
     TestEntityAccessManagementService,
-> {
+    TestForeignEntityService,
+>;
+
+fn make_test_service(repo: MockDocumentRepo) -> TestDocumentService {
+    make_test_service_with_foreign_entities(repo, Vec::new())
+}
+
+fn make_test_service_with_foreign_entities(
+    repo: MockDocumentRepo,
+    foreign_entities: Vec<ForeignEntity>,
+) -> TestDocumentService {
+    make_test_service_with_foreign_entity_service(
+        repo,
+        TestForeignEntityService::new(foreign_entities),
+    )
+}
+
+fn make_test_service_with_foreign_entity_service(
+    repo: MockDocumentRepo,
+    foreign_entity_service: TestForeignEntityService,
+) -> TestDocumentService {
     DocumentServiceImpl::new(
         repo,
         test_cloudfront_config(),
@@ -205,10 +322,38 @@ fn make_test_service(
         TestTaskPropertiesPort,
         TestConnectionService,
         TestEntityAccessManagementService,
+        foreign_entity_service,
     )
 }
 
-fn assert_raw_pull_request(
+fn make_foreign_entity(
+    id: uuid::Uuid,
+    foreign_entity_id: &str,
+    foreign_entity_source: &str,
+    stored_for_id: &str,
+    stored_for_auth_entity: &str,
+) -> ForeignEntity {
+    let timestamp = chrono::Utc::now();
+
+    ForeignEntity {
+        id,
+        foreign_entity_id: foreign_entity_id.to_string(),
+        foreign_entity_source: foreign_entity_source.to_string(),
+        metadata: serde_json::json!({}),
+        stored_for_id: stored_for_id.to_string(),
+        stored_for_auth_entity: stored_for_auth_entity.to_string(),
+        created_at: timestamp,
+        updated_at: timestamp,
+    }
+}
+
+fn expect_authenticated_team_lookup(repo: &mut MockDocumentRepo, team_ids: Vec<uuid::Uuid>) {
+    repo.expect_get_team_ids_for_user()
+        .withf(|user_id| user_id == "macro|user@user.com")
+        .return_once(move |_| Box::pin(std::future::ready(Ok(team_ids))));
+}
+
+fn assert_pull_request_ref(
     pull_request: &GithubPullRequest,
     github_key: &str,
     owner: &str,
@@ -227,6 +372,17 @@ fn assert_raw_pull_request(
         pull_request.display_name.as_str(),
         expected_display_name.as_str()
     );
+}
+
+fn assert_raw_pull_request(
+    pull_request: &GithubPullRequest,
+    github_key: &str,
+    owner: &str,
+    repo: &str,
+    number: u64,
+) {
+    assert_pull_request_ref(pull_request, github_key, owner, repo, number);
+    assert!(pull_request.foreign_entity_id.is_none());
     assert!(pull_request.name.is_none());
     assert!(pull_request.status.is_none());
     assert!(pull_request.additions.is_none());
@@ -235,6 +391,7 @@ fn assert_raw_pull_request(
     assert!(pull_request.checks.is_none());
 
     let pull_request_json = serde_json::to_value(pull_request).unwrap();
+    assert!(pull_request_json.get("foreignEntityId").is_none());
     assert!(pull_request_json.get("comments").is_none());
     assert!(pull_request_json.get("checks").is_none());
 }
@@ -308,6 +465,7 @@ async fn test_get_task_github_pull_requests_returns_raw_refs_for_authenticated_u
                 "macro/repo/pull/7".to_string(),
             ])))
         });
+    expect_authenticated_team_lookup(&mut repo, Vec::new());
 
     let service = make_test_service(repo);
 
@@ -330,9 +488,10 @@ async fn test_get_task_github_pull_requests_returns_raw_refs_for_authenticated_u
 }
 
 #[tokio::test]
-async fn test_get_task_github_pull_requests_returns_raw_refs_for_internal_access() {
+async fn test_get_task_github_pull_requests_adds_user_foreign_entity_id() {
     let document_id = "00000000-0000-0000-0000-000000000002";
     let expected_short_id = short_id_for_entity_id(document_id).unwrap();
+    let foreign_entity_id = uuid::uuid!("00000000-0000-0000-0000-000000000101");
     let mut repo = make_mock_repo();
 
     repo.expect_get_task_github_pull_request_keys()
@@ -340,6 +499,200 @@ async fn test_get_task_github_pull_requests_returns_raw_refs_for_internal_access
         .return_once(|_| {
             Box::pin(std::future::ready(Ok(vec![
                 "macro/repo/pull/8".to_string(),
+            ])))
+        });
+    expect_authenticated_team_lookup(&mut repo, Vec::new());
+
+    let service = make_test_service_with_foreign_entities(
+        repo,
+        vec![make_foreign_entity(
+            foreign_entity_id,
+            "macro/repo/pull/8",
+            GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE,
+            "macro|user@user.com",
+            "user",
+        )],
+    );
+
+    let response = service
+        .get_task_github_pull_requests(
+            authenticated_receipt(document_id),
+            &task_document_context(document_id),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.pull_requests.len(), 1);
+    assert_pull_request_ref(
+        &response.pull_requests[0],
+        "macro/repo/pull/8",
+        "macro",
+        "repo",
+        8,
+    );
+    assert_eq!(
+        response.pull_requests[0].foreign_entity_id,
+        Some(foreign_entity_id)
+    );
+}
+
+#[tokio::test]
+async fn test_get_task_github_pull_requests_adds_team_foreign_entity_id() {
+    let document_id = "00000000-0000-0000-0000-000000000003";
+    let expected_short_id = short_id_for_entity_id(document_id).unwrap();
+    let team_id = uuid::uuid!("00000000-0000-0000-0000-000000000201");
+    let foreign_entity_id = uuid::uuid!("00000000-0000-0000-0000-000000000202");
+    let mut repo = make_mock_repo();
+
+    repo.expect_get_task_github_pull_request_keys()
+        .withf(move |task_short_id| task_short_id == expected_short_id)
+        .return_once(|_| {
+            Box::pin(std::future::ready(Ok(vec![
+                "macro/repo/pull/9".to_string(),
+            ])))
+        });
+    expect_authenticated_team_lookup(&mut repo, vec![team_id]);
+
+    let service = make_test_service_with_foreign_entities(
+        repo,
+        vec![make_foreign_entity(
+            foreign_entity_id,
+            "macro/repo/pull/9",
+            GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE,
+            &team_id.to_string(),
+            "team",
+        )],
+    );
+
+    let response = service
+        .get_task_github_pull_requests(
+            authenticated_receipt(document_id),
+            &task_document_context(document_id),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.pull_requests.len(), 1);
+    assert_pull_request_ref(
+        &response.pull_requests[0],
+        "macro/repo/pull/9",
+        "macro",
+        "repo",
+        9,
+    );
+    assert_eq!(
+        response.pull_requests[0].foreign_entity_id,
+        Some(foreign_entity_id)
+    );
+}
+
+#[tokio::test]
+async fn test_get_task_github_pull_requests_ignores_unrelated_foreign_entity_source() {
+    let document_id = "00000000-0000-0000-0000-000000000004";
+    let expected_short_id = short_id_for_entity_id(document_id).unwrap();
+    let unrelated_foreign_entity_id = uuid::uuid!("00000000-0000-0000-0000-000000000301");
+    let mut repo = make_mock_repo();
+
+    repo.expect_get_task_github_pull_request_keys()
+        .withf(move |task_short_id| task_short_id == expected_short_id)
+        .return_once(|_| {
+            Box::pin(std::future::ready(Ok(vec![
+                "macro/repo/pull/10".to_string(),
+            ])))
+        });
+    expect_authenticated_team_lookup(&mut repo, Vec::new());
+
+    let foreign_entity_service = TestForeignEntityService::new(vec![make_foreign_entity(
+        unrelated_foreign_entity_id,
+        "macro/repo/pull/10",
+        "linear_issue",
+        "macro|user@user.com",
+        "user",
+    )]);
+    let lookup_requests = foreign_entity_service.lookup_requests();
+    let service = make_test_service_with_foreign_entity_service(repo, foreign_entity_service);
+
+    let response = service
+        .get_task_github_pull_requests(
+            authenticated_receipt(document_id),
+            &task_document_context(document_id),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.pull_requests.len(), 1);
+    assert_raw_pull_request(
+        &response.pull_requests[0],
+        "macro/repo/pull/10",
+        "macro",
+        "repo",
+        10,
+    );
+    assert_eq!(
+        *lookup_requests.lock().unwrap(),
+        vec![ForeignEntityLookupRequest {
+            foreign_entity_id: "macro/repo/pull/10".to_string(),
+            foreign_entity_source: Some(GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE.to_string()),
+        }]
+    );
+}
+
+#[tokio::test]
+async fn test_get_task_github_pull_requests_ignores_unrelated_stored_source() {
+    let document_id = "00000000-0000-0000-0000-000000000005";
+    let expected_short_id = short_id_for_entity_id(document_id).unwrap();
+    let unrelated_foreign_entity_id = uuid::uuid!("00000000-0000-0000-0000-000000000401");
+    let mut repo = make_mock_repo();
+
+    repo.expect_get_task_github_pull_request_keys()
+        .withf(move |task_short_id| task_short_id == expected_short_id)
+        .return_once(|_| {
+            Box::pin(std::future::ready(Ok(vec![
+                "macro/repo/pull/11".to_string(),
+            ])))
+        });
+    expect_authenticated_team_lookup(&mut repo, Vec::new());
+
+    let service = make_test_service_with_foreign_entities(
+        repo,
+        vec![make_foreign_entity(
+            unrelated_foreign_entity_id,
+            "macro/repo/pull/11",
+            GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE,
+            "macro|other@user.com",
+            "user",
+        )],
+    );
+
+    let response = service
+        .get_task_github_pull_requests(
+            authenticated_receipt(document_id),
+            &task_document_context(document_id),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.pull_requests.len(), 1);
+    assert_raw_pull_request(
+        &response.pull_requests[0],
+        "macro/repo/pull/11",
+        "macro",
+        "repo",
+        11,
+    );
+}
+
+#[tokio::test]
+async fn test_get_task_github_pull_requests_returns_raw_refs_for_internal_access() {
+    let document_id = "00000000-0000-0000-0000-000000000006";
+    let expected_short_id = short_id_for_entity_id(document_id).unwrap();
+    let mut repo = make_mock_repo();
+
+    repo.expect_get_task_github_pull_request_keys()
+        .withf(move |task_short_id| task_short_id == expected_short_id)
+        .return_once(|_| {
+            Box::pin(std::future::ready(Ok(vec![
+                "macro/repo/pull/12".to_string(),
             ])))
         });
 
@@ -356,9 +709,53 @@ async fn test_get_task_github_pull_requests_returns_raw_refs_for_internal_access
     assert_eq!(response.pull_requests.len(), 1);
     assert_raw_pull_request(
         &response.pull_requests[0],
-        "macro/repo/pull/8",
+        "macro/repo/pull/12",
         "macro",
         "repo",
-        8,
+        12,
+    );
+}
+
+#[tokio::test]
+async fn test_get_task_github_pull_requests_skips_malformed_keys_before_lookup() {
+    let document_id = "00000000-0000-0000-0000-000000000007";
+    let expected_short_id = short_id_for_entity_id(document_id).unwrap();
+    let mut repo = make_mock_repo();
+
+    repo.expect_get_task_github_pull_request_keys()
+        .withf(move |task_short_id| task_short_id == expected_short_id)
+        .return_once(|_| {
+            Box::pin(std::future::ready(Ok(vec![
+                "not-a-pr-key".to_string(),
+                "macro/repo/pull/13".to_string(),
+            ])))
+        });
+
+    let foreign_entity_service = TestForeignEntityService::default();
+    let lookup_requests = foreign_entity_service.lookup_requests();
+    let service = make_test_service_with_foreign_entity_service(repo, foreign_entity_service);
+
+    let response = service
+        .get_task_github_pull_requests(
+            internal_receipt(document_id),
+            &task_document_context(document_id),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.pull_requests.len(), 1);
+    assert_raw_pull_request(
+        &response.pull_requests[0],
+        "macro/repo/pull/13",
+        "macro",
+        "repo",
+        13,
+    );
+    assert_eq!(
+        *lookup_requests.lock().unwrap(),
+        vec![ForeignEntityLookupRequest {
+            foreign_entity_id: "macro/repo/pull/13".to_string(),
+            foreign_entity_source: Some(GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE.to_string()),
+        }]
     );
 }

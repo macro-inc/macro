@@ -137,6 +137,7 @@ pub async fn build_tool_service_context(
         entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
             entity_access_management::outbound::PgRepository::new(pool.clone()),
         ),
+        ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(pool.clone())),
     );
     let document_tool_context = DocumentToolContext::new(
         document_service,

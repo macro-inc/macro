@@ -4965,6 +4965,12 @@ export const getDocumentGithubPullRequestsResponse = zod
             displayName: zod
               .string()
               .describe('A compact label suitable for display in the UI.'),
+            foreignEntityId: zod
+              .uuid()
+              .nullish()
+              .describe(
+                'The internal `foreign_entity.id` UUID for the GitHub pull request row.'
+              ),
             githubKey: zod
               .string()
               .describe(
