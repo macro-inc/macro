@@ -12,13 +12,11 @@ use std::collections::HashSet;
 use strum_macros::AsRefStr;
 use thiserror::Error;
 
-/// The set of link ids the caller owns — every message read unions across these.
-async fn owned_link_ids(
-    ctx: &ApiContext,
-    fusionauth_user_id: &str,
-) -> anyhow::Result<HashSet<Uuid>> {
+/// The set of link ids the caller can read — own plus delegated/shared inboxes;
+/// every message read unions across these.
+async fn owned_link_ids(ctx: &ApiContext, macro_id: &str) -> anyhow::Result<HashSet<Uuid>> {
     Ok(
-        email_db_client::links::get::fetch_links_by_fusionauth_user_id(&ctx.db, fusionauth_user_id)
+        email_db_client::links::get::fetch_inboxes_for_macro_id(&ctx.db, macro_id)
             .await?
             .into_iter()
             .map(|link| link.id)
@@ -94,7 +92,7 @@ pub async fn handler(
         return Err(GetMessageError::MessageNotFound);
     };
 
-    let link_ids = owned_link_ids(&ctx, &user_context.fusion_user_id).await?;
+    let link_ids = owned_link_ids(&ctx, &user_context.user_id).await?;
     if link_ids.contains(&message.link_id) {
         Ok(Json(message).into_response())
     } else {
@@ -132,7 +130,7 @@ pub async fn batch_handler(
         return Err(GetMessageError::MessageNotFound);
     }
 
-    let link_ids = owned_link_ids(&ctx, &user_context.fusion_user_id).await?;
+    let link_ids = owned_link_ids(&ctx, &user_context.user_id).await?;
     let accessible_messages = messages
         .into_iter()
         .filter(|msg| link_ids.contains(&msg.link_id))
