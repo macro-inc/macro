@@ -54,13 +54,17 @@ export function FromInboxSelector(props: {
           when={props.links.length > 1}
           fallback={
             <div class="flex items-center gap-2 min-w-0 text-sm text-ink-muted">
-              <FromInboxOption inbox={active()} />
+              <Show when={active()} keyed>
+                {(inbox) => <FromInboxOption inbox={inbox} />}
+              </Show>
             </div>
           }
         >
           <Dropdown>
             <Dropdown.Trigger class="gap-2 text-sm text-ink-muted">
-              <FromInboxOption inbox={active()} />
+              <Show when={active()} keyed>
+                {(inbox) => <FromInboxOption inbox={inbox} />}
+              </Show>
               <ChevronDown class="size-3 shrink-0" />
             </Dropdown.Trigger>
             <Dropdown.Content>
