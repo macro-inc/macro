@@ -1,9 +1,15 @@
+import { getViewPreset } from '@app/component/app-sidebar/soup-filter-presets';
 import type { FilterID } from '@app/component/next-soup/filters';
 import {
   type FilterContext,
   NO_ASSIGNEE,
 } from '@app/component/next-soup/filters/configs/';
-import type { PropertyFilter } from '@app/component/next-soup/filters/filter-store';
+import {
+  defineQueryFilters,
+  type PropertyFilter,
+  queryStateFrom,
+} from '@app/component/next-soup/filters/filter-store';
+import { mergeQuery } from '@app/component/next-soup/filters/filter-store/query-store';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import type { ListView } from '@app/constants/list-views';
@@ -16,11 +22,11 @@ import { TOKENS } from '@core/hotkey/tokens';
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import CheckIcon from '@phosphor/check.svg';
 import CircleDashedIcon from '@phosphor/circle-dashed.svg';
-import SlidersHorizontalIcon from '@phosphor-icons/core/regular/sliders-horizontal.svg?component-solid';
+import FilterIcon from '@phosphor/funnel-simple.svg';
 import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { useContacts } from '@queries/contacts/contacts';
-import { cn, Dropdown, Tooltip } from '@ui';
+import { cn, Dropdown, SingleSelectCheck, Tooltip } from '@ui';
 import {
   type Accessor,
   batch,
@@ -45,15 +51,17 @@ import {
 } from './search-filter-controls';
 import { SearchableMultiSelectInline } from './searchable-multi-select';
 
-const TypeIndicator = (props: { active: boolean }) => (
+export const TypeIndicator = (props: { active: boolean }) => (
   <span
     class={cn(
-      'size-4 flex items-center justify-center shrink-0 rounded-full border',
-      props.active ? 'bg-accent border-accent' : 'border-edge'
+      'size-3.5 flex items-center justify-center shrink-0 rounded-sm border text-surface',
+      props.active
+        ? 'bg-accent border-accent'
+        : 'border-transparent group-hover:not-hover:border-edge-muted group-data-highlighted:not-hover:border-edge-muted hover:border-accent'
     )}
   >
     <Show when={props.active}>
-      <CheckIcon class="size-2.5 text-surface" />
+      <CheckIcon class="size-2.5" />
     </Show>
   </span>
 );
@@ -71,6 +79,8 @@ export type FilterOption = {
 type FilterCategory = {
   id: string;
   label: string;
+  /** Plural form for multi-value chip display (e.g., 'Types', 'Statuses') */
+  labelPlural?: string;
   options: FilterOption[];
   multiple?: boolean;
 };
@@ -80,6 +90,7 @@ const INBOX_FILTER_CATEGORIES: FilterCategory[] = [
   {
     id: 'type',
     label: 'Type',
+    labelPlural: 'Types',
     options: [
       {
         id: 'document',
@@ -121,10 +132,19 @@ const INBOX_FILTER_CATEGORIES: FilterCategory[] = [
   },
 ];
 
+const isInboxTypeFilterId = (id: string) => {
+  for (const category of INBOX_FILTER_CATEGORIES) {
+    if (category.options.find((o) => o.id === id)) return true;
+  }
+
+  return false;
+};
+
 const MAIL_FILTER_CATEGORIES: FilterCategory[] = [
   {
     id: 'status',
     label: 'Status',
+    labelPlural: 'Statuses',
     options: [
       { id: 'unread', label: 'Unread' },
       { id: 'read', label: 'Read' },
@@ -136,6 +156,7 @@ const MAIL_FILTER_CATEGORIES: FilterCategory[] = [
   {
     id: 'attachment',
     label: 'Attachments',
+    labelPlural: 'Attachments',
     options: [
       {
         id: 'attachment-pdf',
@@ -158,6 +179,7 @@ const MAIL_FILTER_CATEGORIES: FilterCategory[] = [
   {
     id: 'calendar',
     label: 'Calendar',
+    labelPlural: 'Calendar',
     options: [{ id: 'has-calendar-invite', label: 'Has Calendar Invite' }],
     multiple: false,
   },
@@ -167,6 +189,7 @@ const TASKS_FILTER_CATEGORIES: FilterCategory[] = [
   {
     id: 'status',
     label: 'Status',
+    labelPlural: 'Statuses',
     options: [
       {
         id: 'task-not-started',
@@ -224,10 +247,11 @@ const TASKS_FILTER_CATEGORIES: FilterCategory[] = [
   {
     id: 'priority',
     label: 'Priority',
+    labelPlural: 'Priorities',
     options: [
       {
-        id: 'task-critical',
-        label: 'Critical',
+        id: 'task-urgent',
+        label: 'Urgent',
         icon: () => (
           <PropertyValueIcon
             optionId={PROPERTY_OPTION_IDS.PRIORITY.URGENT}
@@ -275,6 +299,7 @@ const DOCUMENTS_FILTER_CATEGORIES: FilterCategory[] = [
   {
     id: 'type',
     label: 'Type',
+    labelPlural: 'Types',
     options: [
       {
         id: 'doc-markdown',
@@ -453,15 +478,8 @@ function SingleValueSubmenu<T>(props: {
                   onSelect={() => props.onSelect(option.value)}
                   closeOnSelect
                 >
-                  <TypeIndicator active={active()} />
-                  <span
-                    class={cn(
-                      'flex-1 truncate',
-                      active() ? 'text-ink' : 'text-ink-muted'
-                    )}
-                  >
-                    {option.label}
-                  </span>
+                  <span class="flex-1 truncate">{option.label}</span>
+                  <SingleSelectCheck active={active()} />
                 </Dropdown.Item>
               );
             }}
@@ -577,7 +595,6 @@ const SearchIndexRowLabel = (props: {
   active: Accessor<boolean>;
 }) => (
   <>
-    <TypeIndicator active={props.active()} />
     <Show when={props.option.icon}>
       {(icon) => (
         <span class="size-4 flex items-center justify-center shrink-0">
@@ -585,14 +602,8 @@ const SearchIndexRowLabel = (props: {
         </span>
       )}
     </Show>
-    <span
-      class={cn(
-        'flex-1 truncate',
-        props.active() ? 'text-ink' : 'text-ink-muted'
-      )}
-    >
-      {props.option.label}
-    </span>
+    <span class="flex-1 truncate">{props.option.label}</span>
+    <SingleSelectCheck active={props.active()} />
   </>
 );
 
@@ -643,10 +654,27 @@ const SearchIndexSubRow = (props: {
   </Dropdown.Sub>
 );
 
-export const UnifiedFilterDropdown = () => {
-  const [open, setOpen] = createSignal(false);
+interface UnifiedFilterDropdownProps {
+  /** Optional controlled open state */
+  open?: Accessor<boolean>;
+  onOpenChange?: (open: boolean) => void;
+  /** Optional custom trigger element. If not provided, uses default Filter button. */
+  customTrigger?: JSX.Element;
+  /** Hide the default trigger entirely (useful when controlling open state externally) */
+  hideTrigger?: boolean;
+}
+
+export const UnifiedFilterDropdown = (
+  props: UnifiedFilterDropdownProps = {}
+) => {
+  const [internalOpen, setInternalOpen] = createSignal(false);
+  const open = () => props.open?.() ?? internalOpen();
+  const setOpen = (v: boolean) => {
+    setInternalOpen(v);
+    props.onOpenChange?.(v);
+  };
   const panel = useSplitPanelOrThrow();
-  const { soup, queryFilters, assigneeFilter, setAssigneeFilter } =
+  const { soup, queryFilters, assigneeFilter, setAssigneeFilter, activeTab } =
     useSoupView();
   const contacts = useContacts();
   const userId = useUserId();
@@ -682,6 +710,27 @@ export const UnifiedFilterDropdown = () => {
     };
     const query =
       typeof filter.query === 'function' ? filter.query(ctx) : filter.query;
+
+    if (currentView() === 'inbox' && isInboxTypeFilterId(optionId)) {
+      const baseQuery = getViewPreset('inbox', activeTab())?.filters;
+
+      if (!baseQuery) {
+        return;
+      }
+
+      let nextQueryState = baseQuery;
+
+      if (!wasActive) {
+        nextQueryState = mergeQuery(
+          queryStateFrom(baseQuery),
+          defineQueryFilters({}, { skipTargetsFrom: query })
+        );
+      }
+
+      queryFilters.replace(nextQueryState);
+
+      return;
+    }
 
     if (wasActive) {
       queryFilters.remove(query);
@@ -784,15 +833,51 @@ export const UnifiedFilterDropdown = () => {
     },
   });
 
+  // Capture anchor position when menu opens to prevent jumping when chips are added
+  const [anchorRect, setAnchorRect] = createSignal<DOMRect | null>(null);
+
+  const handleOpenChange = (isOpen: boolean) => {
+    if (isOpen) {
+      // Clear any stale anchor rect so it gets recaptured from trigger
+      setAnchorRect(null);
+    }
+    setOpen(isOpen);
+  };
+
+  const getAnchorRect = (anchor?: HTMLElement) => {
+    // If we have a captured rect, use it (prevents jumping)
+    const captured = anchorRect();
+    if (captured) return captured;
+
+    // Otherwise capture the current position
+    if (anchor) {
+      const rect = anchor.getBoundingClientRect();
+      setAnchorRect(rect);
+      return rect;
+    }
+    return undefined;
+  };
+
   return (
     <Show when={categories().length > 0 || isTasksView() || isSearchView()}>
-      <Dropdown open={open()} onOpenChange={setOpen}>
-        <Tooltip label="Filter" hotkey={TOKENS.soup.filter}>
-          <Dropdown.Trigger depth={2} class="bg-surface">
-            <SlidersHorizontalIcon />
-            <span>Filter</span>
-          </Dropdown.Trigger>
-        </Tooltip>
+      <Dropdown
+        open={open()}
+        onOpenChange={handleOpenChange}
+        getAnchorRect={getAnchorRect}
+      >
+        <Show when={!props.hideTrigger}>
+          <Switch>
+            <Match when={props.customTrigger}>{props.customTrigger}</Match>
+            <Match when={true}>
+              <Tooltip label="Filter" hotkey={TOKENS.soup.filter}>
+                <Dropdown.Trigger depth={2} class="bg-surface">
+                  <FilterIcon />
+                  <span>Filter</span>
+                </Dropdown.Trigger>
+              </Tooltip>
+            </Match>
+          </Switch>
+        </Show>
 
         <Dropdown.Content>
           <Dropdown.Group>
@@ -820,18 +905,7 @@ export const UnifiedFilterDropdown = () => {
                                     onSelect={() => toggleFilter(option.id)}
                                     closeOnSelect={!category.multiple}
                                   >
-                                    <span
-                                      class={cn(
-                                        'size-4 flex items-center justify-center shrink-0 rounded border',
-                                        active()
-                                          ? 'bg-accent border-accent'
-                                          : 'border-edge'
-                                      )}
-                                    >
-                                      <Show when={active()}>
-                                        <CheckIcon class="size-2.5 text-surface" />
-                                      </Show>
-                                    </span>
+                                    <TypeIndicator active={active()} />
 
                                     <Show when={option.icon}>
                                       {(icon) => (
@@ -915,15 +989,8 @@ export const UnifiedFilterDropdown = () => {
                       onSelect={() => handleIndexChange('all')}
                       closeOnSelect
                     >
-                      <TypeIndicator active={!hasActiveIndex()} />
-                      <span
-                        class={cn(
-                          'flex-1 truncate',
-                          !hasActiveIndex() ? 'text-ink' : 'text-ink-muted'
-                        )}
-                      >
-                        All
-                      </span>
+                      <span class="flex-1 truncate">All</span>
+                      <SingleSelectCheck active={!hasActiveIndex()} />
                     </Dropdown.Item>
                   </Show>
                 </>
@@ -938,16 +1005,7 @@ export const UnifiedFilterDropdown = () => {
                       onSelect={() => toggleFilter(option.id)}
                       closeOnSelect={!categories()[0]!.multiple}
                     >
-                      <span
-                        class={cn(
-                          'size-4 flex items-center justify-center shrink-0 rounded border',
-                          active() ? 'bg-accent border-accent' : 'border-edge'
-                        )}
-                      >
-                        <Show when={active()}>
-                          <CheckIcon class="size-2.5 text-surface" />
-                        </Show>
-                      </span>
+                      <TypeIndicator active={active()} />
 
                       <Show when={option.icon}>
                         {(icon) => (

@@ -20,5 +20,7 @@ export const EntityType = {
   email_thread: 'email_thread',
   team: 'team',
   call: 'call',
+  foreign_entity: 'foreign_entity',
   static_file: 'static_file',
+  crm_company: 'crm_company',
 } as const;

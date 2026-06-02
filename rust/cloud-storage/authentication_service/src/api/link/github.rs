@@ -14,6 +14,14 @@ use crate::api::{context::ApiContext, oauth2::OAuthState};
 
 use model::response::{EmptyResponse, ErrorResponse};
 
+const REAUTHENTICATION_REQUIRED_MESSAGE: &str = "ReauthenticationRequired";
+
+#[derive(serde::Deserialize, serde::Serialize, Debug, utoipa::ToSchema)]
+pub struct GithubLinkStatusResponse {
+    /// Whether the user must reauthenticate their GitHub link.
+    pub reauthentication_required: bool,
+}
+
 #[derive(serde::Deserialize, serde::Serialize, Debug, utoipa::ToSchema)]
 pub struct InitGithubLinkResponse {
     /// The OAuth authorization URL to redirect the user to
@@ -61,6 +69,66 @@ impl IntoResponse for InitGithubLinkError {
         )
             .into_response()
     }
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum GithubLinkStatusError {
+    #[error(transparent)]
+    Github(#[from] GithubError),
+}
+
+impl IntoResponse for GithubLinkStatusError {
+    fn into_response(self) -> Response {
+        let (status_code, message) = match &self {
+            Self::Github(GithubError::NoLinkFound) => {
+                (StatusCode::NOT_FOUND, "no github link found")
+            }
+            Self::Github(GithubError::ReauthenticationRequired) => (
+                StatusCode::PRECONDITION_REQUIRED,
+                REAUTHENTICATION_REQUIRED_MESSAGE,
+            ),
+            Self::Github(error) => {
+                tracing::error!(error=?error, "failed to check GitHub link status");
+                (StatusCode::INTERNAL_SERVER_ERROR, "internal error")
+            }
+        };
+
+        (
+            status_code,
+            Json(ErrorResponse {
+                message: message.into(),
+            }),
+        )
+            .into_response()
+    }
+}
+
+/// Checks whether the authenticated user's GitHub link token is valid.
+#[utoipa::path(
+        get,
+        operation_id = "check_github_link_status",
+        path = "/link/github/status",
+        responses(
+            (status = 200, body=GithubLinkStatusResponse),
+            (status = 401, body=ErrorResponse),
+            (status = 404, body=ErrorResponse),
+            (status = 428, body=ErrorResponse),
+            (status = 500, body=ErrorResponse),
+        )
+    )]
+#[tracing::instrument(skip(ctx, ip_context, user_context), fields(client_ip=%ip_context, user_id=%user_context.macro_user_id), err)]
+pub async fn check_github_link_status_handler(
+    State(ctx): State<ApiContext>,
+    ip_context: ClientIp,
+    user_context: MacroUserExtractor,
+) -> Result<Json<GithubLinkStatusResponse>, GithubLinkStatusError> {
+    ctx.github_link_service
+        .check_user_link_token(&user_context.macro_user_id)
+        .await?;
+
+    Ok(Json(GithubLinkStatusResponse {
+        reauthentication_required: false,
+    }))
 }
 
 #[derive(Debug, serde::Deserialize)]

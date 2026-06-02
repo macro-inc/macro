@@ -4,8 +4,7 @@ import { isMobile } from '@core/mobile/isMobile';
 import { Accordion } from '@kobalte/core/accordion';
 import CaretRight from '@phosphor/caret-right.svg';
 import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
-import LoadingSpinner from '@phosphor/spinner.svg';
-import { Panel, Scroll } from '@ui';
+import { Layer, Panel, Scroll } from '@ui';
 import { cn } from '@ui/utils/classname';
 import {
   type Accessor,
@@ -168,13 +167,15 @@ function SidePanelLayoutInner(
       </Show>
       <Show when={showOverlay()}>
         <div class="absolute inset-0 z-10 flex flex-col bg-surface">
-          <div class="w-full max-w-2xl mx-auto min-w-0">
-            <SidePanelOutlet
-              sections={props.sections}
-              openIds={props.openIds}
-              setOpenIds={props.setOpenIds}
-            />
-          </div>
+          <Scroll>
+            <div class="w-full max-w-2xl mx-auto min-w-0">
+              <SidePanelOutlet
+                sections={props.sections}
+                openIds={props.openIds}
+                setOpenIds={props.setOpenIds}
+              />
+            </div>
+          </Scroll>
         </div>
       </Show>
     </>
@@ -357,7 +358,7 @@ function Row(props: ParentProps<{ label: JSX.Element }>) {
  * EditTrigger, an anchor, a button) without nesting elements.
  */
 const pillClass = cn(
-  'inline-flex items-center gap-1.5 min-w-0 max-w-full',
+  'inline-flex items-center gap-1.5 min-w-0 max-w-[30ch]',
   'px-2 py-1 leading-tight text-left rounded-full'
 );
 
@@ -369,8 +370,17 @@ function Pill(props: ParentProps<{ class?: string }>) {
 }
 
 /** Empty-state indicator used inside value pills. */
-function EmptyPill() {
-  return <CircleDashedEmpty class="size-3 shrink-0 opacity-50" />;
+function EmptyPill(props: { label?: JSX.Element } = {}) {
+  return (
+    <span class="inline-flex min-w-0 items-center gap-1.5 opacity-50">
+      <Show when={!props.label}>
+        <CircleDashedEmpty class="size-3 shrink-0" />
+      </Show>
+      <Show when={props.label}>
+        <span class="truncate">{props.label}</span>
+      </Show>
+    </span>
+  );
 }
 
 /**
@@ -379,10 +389,8 @@ function EmptyPill() {
  */
 function Loading() {
   return (
-    <div class="flex items-center justify-center py-8">
-      <div class="size-5 animate-spin text-ink-muted">
-        <LoadingSpinner />
-      </div>
+    <div class="flex items-center justify-center p-2">
+      <div class="animate-pulse text-ink-muted rounded-full h-2 w-full bg-edge-muted/50"></div>
     </div>
   );
 }
@@ -403,6 +411,16 @@ function CountTitle(props: { label: JSX.Element; count: number }) {
   );
 }
 
+function Card(props: ParentProps) {
+  return (
+    <Layer depth={1}>
+      <div class="rounded-lg border border-edge-muted bg-surface overflow-hidden">
+        <div class="divide-y divide-edge-muted">{props.children}</div>
+      </div>
+    </Layer>
+  );
+}
+
 export const SidePanel = {
   Layout,
   Section,
@@ -414,5 +432,6 @@ export const SidePanel = {
   Loading,
   CountTitle,
   NarrowTabs,
+  Card,
 };
 export { useSidePanel };

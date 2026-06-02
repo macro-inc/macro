@@ -9,7 +9,7 @@ use uuid::Uuid;
 #[tracing::instrument(skip(pool), err)]
 pub(crate) async fn drafts_preview_cursor(
     pool: &PgPool,
-    link_id: &Uuid,
+    link_ids: &[Uuid],
     limit: u32,
     query: &Query<Uuid, SimpleSortMethod, ()>,
 ) -> Result<Vec<ThreadPreviewCursorDbRow>, sqlx::Error> {
@@ -47,7 +47,8 @@ pub(crate) async fn drafts_preview_cursor(
             c.email_address AS "sender_email?",
             COALESCE(lmp.from_name, c.name) AS "sender_name?",
             c.sfs_photo_url as "sender_photo_url?",
-            el.macro_id AS "owner_id!"
+            el.macro_id AS "owner_id!",
+            el.id AS "link_id!"
         FROM (
             -- Step 1: Find the latest draft timestamp for each thread, calculate the
             -- effective sort key, then sort and limit the results. This is the core optimization.
@@ -71,11 +72,11 @@ pub(crate) async fn drafts_preview_cursor(
                 SELECT m.thread_id, MAX(m.updated_at) as latest_draft_ts
                 FROM email_messages m
                 -- we only display macro drafts, not drafts created in gmail
-                WHERE m.link_id = $1 AND m.is_draft = TRUE AND m.internal_date_ts IS NULL
+                WHERE m.link_id = ANY($1) AND m.is_draft = TRUE AND m.internal_date_ts IS NULL
                   AND NOT EXISTS (
                       SELECT 1 FROM email_message_labels ml
                       JOIN email_labels l ON ml.label_id = l.id
-                      WHERE ml.message_id = m.id AND l.name = 'TRASH' AND l.link_id = $1
+                      WHERE ml.message_id = m.id AND l.name = 'TRASH' AND l.link_id = m.link_id
                   )
                 GROUP BY m.thread_id
             ) ldpt
@@ -118,7 +119,7 @@ pub(crate) async fn drafts_preview_cursor(
         JOIN email_links el ON t.link_id = el.id
         ORDER BY t.effective_ts DESC, t.updated_at DESC
         "#,
-        link_id,            // $1
+        link_ids,           // $1
         query_limit,              // $2
         cursor_timestamp,   // $3
         cursor_id,          // $4

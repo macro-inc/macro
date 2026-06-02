@@ -1,8 +1,8 @@
 use crate::api::context::ApiContext;
 use crate::model::stream::ToolSet;
 use agent::structured_output::DynamicSchema;
-use agent::types::{AssistantMessagePart, ChatMessage, ChatMessageContent, Role};
-use agent::{AgentLoop, AgentModel, StreamPart};
+use agent::types::{ChatMessage, ChatMessageContent, Role};
+use agent::{AgentLoop, AgentModel, StreamAccumulator};
 use axum::Json;
 use axum::extract::{Extension, State};
 use axum::http::StatusCode;
@@ -124,47 +124,12 @@ pub async fn structured_completion(
                 status: StatusCode::INTERNAL_SERVER_ERROR,
             })?;
 
-    let mut yielded_parts: Vec<AssistantMessagePart> = Vec::new();
+    let mut accumulator = StreamAccumulator::new();
     while let Some(item) = ai_stream.next().await {
         match item {
-            Ok(part) => match part {
-                StreamPart::Content(content) if !content.is_empty() => {
-                    yielded_parts.push(AssistantMessagePart::Text { text: content });
-                }
-                StreamPart::ToolCall(call) => match call.mcp {
-                    Some(mcp) => yielded_parts.push(AssistantMessagePart::McpToolCall {
-                        name: mcp.tool_name,
-                        service: mcp.service,
-                        display_name: mcp.display_name,
-                        json: call.json,
-                        id: call.id,
-                    }),
-                    None => yielded_parts.push(AssistantMessagePart::ToolCall {
-                        name: call.name,
-                        json: call.json,
-                        id: call.id,
-                    }),
-                },
-                StreamPart::ToolResponse(agent::ToolResponse::Json { id, json, name }) => {
-                    yielded_parts.push(AssistantMessagePart::ToolCallResponseJson {
-                        name,
-                        json,
-                        id,
-                    });
-                }
-                StreamPart::ToolResponse(agent::ToolResponse::Err {
-                    id,
-                    name,
-                    description,
-                }) => {
-                    yielded_parts.push(AssistantMessagePart::ToolCallErr {
-                        name,
-                        description,
-                        id,
-                    });
-                }
-                _ => {}
-            },
+            Ok(part) => {
+                accumulator.push(part);
+            }
             Err(e) => {
                 return Err(StructuredCompletionError {
                     error: format!("Agent loop error: {e}"),
@@ -174,6 +139,7 @@ pub async fn structured_completion(
         }
     }
     drop(ai_stream);
+    let yielded_parts = accumulator.into_parts();
 
     // Phase 2: Structured completion with the gathered context
     let conversation: Vec<ChatMessage> = vec![

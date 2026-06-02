@@ -1,6 +1,36 @@
 use super::*;
-use rig_core::message::{AssistantContent, Message, UserContent};
+use attachment::image::ImageData;
+use attachment::{AttachmentContent, AttachmentPart, Attachments};
+use model_entity::EntityType;
+use non_empty::NonEmpty;
+use rig_core::message::{AssistantContent, DocumentSourceKind, Message, UserContent};
 use serde_json::json;
+
+/// A minimal valid 1x1 PNG, used to exercise the image-normalization path.
+#[rustfmt::skip]
+const ONE_BY_ONE_PNG: &[u8] = &[
+    0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
+    0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+    0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53, 0xDE, 0x00, 0x00, 0x00,
+    0x0C, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0xF8, 0xCF, 0xC0, 0x00,
+    0x00, 0x03, 0x01, 0x01, 0x00, 0xC9, 0xFE, 0x92, 0xEF, 0x00, 0x00, 0x00,
+    0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+];
+
+/// Build a user message carrying a single resolved attachment made of `parts`.
+fn user_msg_with_attachment(text: &str, parts: Vec<AttachmentPart<'static>>) -> ChatMessage {
+    let content = AttachmentContent {
+        reference: EntityType::StaticFile.with_entity_string(String::new()),
+        name: None,
+        content: NonEmpty::new(parts).expect("at least one part"),
+    };
+    let attachments = Attachments::new(NonEmpty::one(Ok(content)));
+    ChatMessage {
+        role: Role::User,
+        content: ChatMessageContent::Text(text.to_owned()),
+        attachments: Some(attachments),
+    }
+}
 
 fn user_msg(text: &str) -> ChatMessage {
     ChatMessage {
@@ -346,6 +376,97 @@ fn full_conversation_with_tool_round_trip() {
         panic!("expected text");
     };
     assert_eq!(text.text, "Found 2 cats.");
+}
+
+#[test]
+fn user_message_with_image_url_attachment_includes_image_content() {
+    let msg = user_msg_with_attachment(
+        "what is in this image?",
+        vec![AttachmentPart::Image(ImageData::StaticUrl(
+            "https://example.com/cat.png".to_owned(),
+        ))],
+    );
+    let messages = to_rig_messages(&[msg]);
+    assert_eq!(messages.len(), 1);
+
+    let Message::User { content } = &messages[0] else {
+        panic!("expected user message");
+    };
+    // text block + image block
+    assert_eq!(content.len(), 2);
+
+    let mut iter = content.iter();
+    let UserContent::Text(text) = iter.next().unwrap() else {
+        panic!("expected leading text");
+    };
+    assert_eq!(text.text, "what is in this image?");
+
+    let UserContent::Image(image) = iter.next().unwrap() else {
+        panic!("expected image content");
+    };
+    assert!(matches!(
+        &image.data,
+        DocumentSourceKind::Url(url) if url == "https://example.com/cat.png"
+    ));
+}
+
+#[test]
+fn user_message_with_base64_image_is_sent_as_webp() {
+    // A non-WebP source is normalized to a downscaled WebP, so the model
+    // always receives base64 WebP content.
+    let image = ImageData::try_from_bytes(ONE_BY_ONE_PNG.to_vec()).expect("valid image");
+    assert!(matches!(image, ImageData::Base64(_)));
+
+    let msg = user_msg_with_attachment("look", vec![AttachmentPart::Image(image)]);
+    let messages = to_rig_messages(&[msg]);
+
+    let Message::User { content } = &messages[0] else {
+        panic!("expected user message");
+    };
+    let UserContent::Image(image) = content.iter().nth(1).unwrap() else {
+        panic!("expected image content");
+    };
+    assert_eq!(image.media_type, Some(ImageMediaType::WEBP));
+    let DocumentSourceKind::Base64(data) = &image.data else {
+        panic!("expected base64 image data");
+    };
+    assert!(!data.is_empty(), "base64 payload should not be empty");
+}
+
+#[test]
+fn user_message_with_text_attachment_appends_text_block() {
+    let msg = user_msg_with_attachment(
+        "summarize",
+        vec![AttachmentPart::Content("attached document body".to_owned())],
+    );
+    let messages = to_rig_messages(&[msg]);
+
+    let Message::User { content } = &messages[0] else {
+        panic!("expected user message");
+    };
+    assert_eq!(content.len(), 2);
+    let UserContent::Text(text) = content.iter().nth(1).unwrap() else {
+        panic!("expected attachment text");
+    };
+    assert_eq!(text.text, "attached document body");
+}
+
+#[test]
+fn user_message_with_only_attachment_and_empty_text_omits_text_block() {
+    let mut msg = user_msg_with_attachment(
+        "",
+        vec![AttachmentPart::Image(ImageData::StaticUrl(
+            "https://example.com/x.png".to_owned(),
+        ))],
+    );
+    msg.content = ChatMessageContent::Text(String::new());
+
+    let messages = to_rig_messages(&[msg]);
+    let Message::User { content } = &messages[0] else {
+        panic!("expected user message");
+    };
+    assert_eq!(content.len(), 1);
+    assert!(matches!(content.first(), UserContent::Image(_)));
 }
 
 mod merge_consecutive_parts_tests {

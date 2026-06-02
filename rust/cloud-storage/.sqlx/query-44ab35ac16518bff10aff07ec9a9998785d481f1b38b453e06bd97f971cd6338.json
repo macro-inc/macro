@@ -1,0 +1,43 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                e.document_id,\n                d.name AS \"name!\",\n                e.content,\n                1 - (e.embedding <=> $3::text::vector) AS \"vector_score!\"\n            FROM task_duplicate_embedding e\n            JOIN \"Document\" d ON d.id = e.document_id\n            JOIN document_sub_type dst ON dst.document_id = d.id AND dst.sub_type = 'task'\n            LEFT JOIN team_task tt ON tt.document_id = d.id\n            WHERE d.\"deletedAt\" IS NULL\n              AND (\n                d.owner = $1\n                OR ($2::uuid IS NOT NULL AND tt.team_id = $2)\n              )\n            ORDER BY e.embedding <=> $3::text::vector\n            LIMIT $4\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "document_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "name!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "content",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "vector_score!",
+        "type_info": "Float8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "44ab35ac16518bff10aff07ec9a9998785d481f1b38b453e06bd97f971cd6338"
+}

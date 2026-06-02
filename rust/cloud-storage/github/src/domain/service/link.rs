@@ -7,7 +7,9 @@ use macro_user_id::{
 };
 
 use crate::domain::{
-    models::{EnrichedGithubPullRequest, GithubError, GithubLink, GithubPullRequestRef},
+    models::{
+        EnrichedGithubPullRequest, GithubAccessToken, GithubError, GithubLink, GithubPullRequestRef,
+    },
     ports::{Auth, GithubLinkService, GithubOauth, GithubRepo},
 };
 
@@ -40,6 +42,51 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth> GithubLinkServiceImpl<R, U, F> {
             config,
         }
     }
+
+    fn link_lookup_error(error: R::Err) -> GithubError {
+        let error: anyhow::Error = error.into();
+
+        if error.to_string().contains("no rows returned") {
+            return GithubError::NoLinkFound;
+        }
+
+        GithubError::Internal(error)
+    }
+
+    async fn get_user_link_for_validation(
+        &self,
+        macro_user_id: &MacroUserId<Lowercase<'static>>,
+    ) -> Result<GithubLink, GithubError> {
+        self.repo
+            .get_github_link_by_user_id(macro_user_id)
+            .await
+            .map_err(Self::link_lookup_error)
+    }
+
+    async fn validated_access_token(
+        &self,
+        macro_user_id: &MacroUserId<Lowercase<'static>>,
+    ) -> Result<GithubAccessToken, GithubError> {
+        let link = self.get_user_link_for_validation(macro_user_id).await?;
+
+        let access_token = self
+            .auth
+            .retreive_access_token(&link.fusionauth_user_id, &self.config.idp_id)
+            .await
+            .map_err(|e| GithubError::Internal(e.into()))?;
+
+        let token_is_expired = self
+            .oauth
+            .is_access_token_expired(access_token.as_str())
+            .await
+            .map_err(|e| GithubError::Internal(e.into()))?;
+
+        if token_is_expired {
+            return Err(GithubError::ReauthenticationRequired);
+        }
+
+        Ok(access_token)
+    }
 }
 
 impl<R: GithubRepo, U: GithubOauth, F: Auth> GithubLinkService for GithubLinkServiceImpl<R, U, F> {
@@ -65,6 +112,15 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth> GithubLinkService for GithubLinkSer
             .map_err(|e| GithubError::Internal(e.into()))
     }
 
+    #[tracing::instrument(skip(self), err)]
+    async fn check_user_link_token(
+        &self,
+        macro_user_id: &MacroUserId<Lowercase<'static>>,
+    ) -> Result<(), GithubError> {
+        self.validated_access_token(macro_user_id).await?;
+        Ok(())
+    }
+
     #[tracing::instrument(skip(self, pull_requests), err)]
     async fn enrich_pull_requests(
         &self,
@@ -75,29 +131,7 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth> GithubLinkService for GithubLinkSer
             return Ok(Vec::new());
         }
 
-        let link = match self.repo.get_github_link_by_user_id(macro_user_id).await {
-            Ok(link) => link,
-            Err(e) => {
-                let e: anyhow::Error = e.into();
-                if let Some(db_err) = e.downcast_ref::<sqlx::Error>()
-                    && matches!(db_err, sqlx::Error::RowNotFound)
-                {
-                    return Err(GithubError::NoLinkFound);
-                }
-
-                if e.to_string().contains("no rows returned") {
-                    return Err(GithubError::NoLinkFound);
-                }
-
-                return Err(GithubError::Internal(e));
-            }
-        };
-
-        let access_token = self
-            .auth
-            .retreive_access_token(&link.fusionauth_user_id, &self.config.idp_id)
-            .await
-            .map_err(|e| GithubError::Internal(e.into()))?;
+        let access_token = self.validated_access_token(macro_user_id).await?;
 
         let mut enriched_pull_requests = Vec::with_capacity(pull_requests.len());
 
@@ -143,14 +177,12 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth> GithubLinkService for GithubLinkSer
             Ok(link) => link,
             Err(e) => {
                 let e: anyhow::Error = e.into();
-                if let Some(db_err) = e.downcast_ref::<sqlx::Error>()
-                    && matches!(db_err, sqlx::Error::RowNotFound)
-                {
+                if e.to_string().contains("no rows returned") {
                     tracing::trace!("no github link found for user");
                     return Ok(());
-                } else {
-                    return Err(GithubError::Internal(e));
                 }
+
+                return Err(GithubError::Internal(e));
             }
         };
 

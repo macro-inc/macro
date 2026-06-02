@@ -17,18 +17,18 @@ export function SplitToolbar(props: { ref: Setter<HTMLDivElement | null> }) {
   // into.
   return (
     <div
-      class="flex items-start justify-between w-full"
+      class="flex items-center justify-between w-full"
       data-split-toolbar
       ref={props.ref}
     >
       <div
-        class="flex-1 flex items-start gap-1"
+        class="flex-1 flex items-center gap-1"
         ref={(ref) => {
           panel.layoutRefs.toolbarLeft = ref;
         }}
       />
       <div
-        class="flex items-start gap-1"
+        class="flex items-center gap-1"
         ref={(ref) => {
           panel.layoutRefs.toolbarRight = ref;
         }}

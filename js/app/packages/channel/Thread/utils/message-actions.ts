@@ -3,6 +3,7 @@ import { buildSimpleEntityUrl } from '@core/util/url';
 import type { MessageData } from '../../Message';
 
 export const DEFAULT_REACTION_EMOJI = '👍';
+const EMPTY_REPLY_PARAGRAPH = ' ';
 
 export type ActionableMessage = Pick<
   MessageData,
@@ -29,7 +30,31 @@ export function canEditOrDeleteMessage(
 export function canReplyToMessage(
   message: Pick<ActionableMessage, 'thread_id' | 'deleted_at'>
 ): boolean {
-  return !message.thread_id && !message.deleted_at;
+  return !message.deleted_at;
+}
+
+export function buildQuoteReplyValue(input: {
+  quotedContent: string;
+  existingValue?: string;
+}): string {
+  const normalizedQuotedContent = input.quotedContent
+    .trim()
+    .split('\n')
+    .map((line) => line.replace(/^\s*>+\s?/, ''))
+    .join('\n')
+    .trim();
+  const existingValue = input.existingValue?.trimStart() ?? '';
+
+  if (!normalizedQuotedContent) return existingValue;
+
+  const quote = normalizedQuotedContent
+    .split('\n')
+    .map((line) => `> ${line}`)
+    .join('\n');
+
+  return existingValue
+    ? `${quote}\n\n${existingValue}`
+    : `${quote}\n\n${EMPTY_REPLY_PARAGRAPH}`;
 }
 
 export function hasReactionFromUser(

@@ -33,11 +33,5 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         .layer(axum::middleware::from_fn(
             macro_middleware::connection_drop_prevention_handler,
         ))
-        .route(
-            "/init",
-            post(init::handler).layer(axum::middleware::from_fn_with_state(
-                state,
-                crate::api::middleware::gmail_token::attach_gmail_token_no_cache,
-            )),
-        )
+        .route("/init", post(init::handler))
 }

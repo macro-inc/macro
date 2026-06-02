@@ -79,16 +79,16 @@ async fn test_get_user_channels_dynamic_filter_by_channel_id(pool: Pool<sqlx::Po
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("channels"))
 )]
-async fn test_get_user_channels_dynamic_filter_by_org_id(pool: Pool<sqlx::Postgres>) {
+async fn test_get_user_channels_dynamic_filter_by_org_id_matches_no_channels(
+    pool: Pool<sqlx::Postgres>,
+) {
     use filter_ast::ExpandFrame;
     use item_filters::ChannelFilters;
 
     let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
-    let org_id = 1i64;
 
-    // Create filter for specific organization
     let channel_filters = ChannelFilters {
-        org_id: Some(org_id),
+        org_id: Some(1),
         ..Default::default()
     };
 
@@ -105,17 +105,10 @@ async fn test_get_user_channels_dynamic_filter_by_org_id(pool: Pool<sqlx::Postgr
 
     let channels = get_user_channels_dynamic(&pool, &params).await.unwrap();
 
-    // Should get channels A and B (both have org_id = 1)
-    assert_eq!(channels.len(), 2, "Should return 2 channels with org_id=1");
-
-    // All returned channels should have the specified org_id
-    for channel in &channels {
-        assert_eq!(
-            channel.channel.org_id.as_ref().map(|o| o.0 as i64),
-            Some(org_id),
-            "All channels should belong to the specified org"
-        );
-    }
+    assert!(
+        channels.is_empty(),
+        "Legacy org filters should not match channel fixtures"
+    );
 }
 
 /// Tests that mixing supported (channel_id) and unsupported (thread_id) filters
@@ -322,15 +315,14 @@ async fn test_get_user_channels_dynamic_filter_by_notification_seen_and_done(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("channels"))
 )]
-async fn test_get_user_channels_dynamic_filter_by_channel_type(pool: Pool<sqlx::Postgres>) {
+async fn test_get_user_channels_dynamic_filter_by_private_channel_type(pool: Pool<sqlx::Postgres>) {
     use filter_ast::ExpandFrame;
     use item_filters::ChannelFilters;
 
     let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
 
-    // Filter for organization channels only
     let channel_filters = ChannelFilters {
-        channel_types: vec!["organization".to_string()],
+        channel_types: vec!["private".to_string()],
         ..Default::default()
     };
 
@@ -347,8 +339,8 @@ async fn test_get_user_channels_dynamic_filter_by_channel_type(pool: Pool<sqlx::
 
     let channels = get_user_channels_dynamic(&pool, &params).await.unwrap();
 
-    // Channels A and B are organization type
-    assert_eq!(channels.len(), 2, "Should return 2 organization channels");
+    // Channels A and B are private type.
+    assert_eq!(channels.len(), 2, "Should return 2 private channels");
 }
 
 #[sqlx::test(

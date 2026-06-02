@@ -1,7 +1,8 @@
 import { DebugSuspense } from '@channel/DebugSuspense';
 import { useChannelMessagesByIdsQuery } from '@queries/channel/channel-messages';
 import { useThreadRepliesQuery } from '@queries/channel/thread-replies';
-import type { ApiChannelMessage, ApiThreadReply } from '@service-comms/client';
+import type { ApiChannelMessage } from '@service-storage/generated/schemas/apiChannelMessage';
+import type { ApiThreadReply } from '@service-storage/generated/schemas/apiThreadReply';
 import { createSignal, type ParentProps, Show } from 'solid-js';
 import { ThreadRail } from '../Thread/ThreadRail';
 import { DEFAULT_VISIBLE_REPLY_COUNT } from '../Thread/utils/thread-reply-indicator-helpers';

@@ -1245,6 +1245,531 @@ export const ingestTranscriptBody = zod
   .describe('A transcript segment from LiveKit Inference STT.');
 
 /**
+ * @summary Handler for `POST /channels`.
+ */
+export const createChannelBody = zod
+  .object({
+    channel_type: zod
+      .enum(['public', 'private', 'direct_message', 'team'])
+      .describe('Type of channel.'),
+    name: zod.string().nullish().describe('Optional channel name.'),
+    participants: zod
+      .array(zod.string())
+      .describe('Participants to add, excluding the owner.'),
+    team_id: zod.uuid().nullish().describe('Team id for team channels.'),
+  })
+  .describe('Request to create a channel.');
+
+export const createChannelResponse = zod
+  .object({
+    id: zod.string().describe('Created channel id.'),
+  })
+  .describe('Response returned after creating a channel.');
+
+/**
+ * @summary Handler for `GET /channels/activity`.
+ */
+export const getActivityResponseItem = zod
+  .object({
+    channel_id: zod.uuid().describe('Channel id.'),
+    created_at: zod.iso
+      .datetime({})
+      .describe('When the activity row was created.'),
+    id: zod.uuid().describe('Activity id.'),
+    interacted_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('The last time the user interacted with the channel.'),
+    updated_at: zod.iso
+      .datetime({})
+      .describe('When the activity row was last updated.'),
+    user_id: zod.string().describe('User id.'),
+    viewed_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('The last time the user viewed the channel.'),
+  })
+  .describe("A user's activity (view\/interaction) within a channel.");
+export const getActivityResponse = zod.array(getActivityResponseItem);
+
+/**
+ * @summary Handler for `POST /channels/activity`.
+ */
+export const postActivityBody = zod
+  .object({
+    activity_type: zod
+      .enum(['view', 'interact'])
+      .describe('The kind of activity a user performs in a channel.'),
+    channel_id: zod.string().describe('Channel id to record activity for.'),
+  })
+  .describe('Request body for `POST \/channels\/activity`.');
+
+export const postActivityResponse = zod
+  .object({
+    channel_id: zod.uuid().describe('Channel id.'),
+    created_at: zod.iso
+      .datetime({})
+      .describe('When the activity row was created.'),
+    id: zod.uuid().describe('Activity id.'),
+    interacted_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('The last time the user interacted with the channel.'),
+    updated_at: zod.iso
+      .datetime({})
+      .describe('When the activity row was last updated.'),
+    user_id: zod.string().describe('User id.'),
+    viewed_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('The last time the user viewed the channel.'),
+  })
+  .describe("A user's activity (view\/interaction) within a channel.");
+
+/**
+ * @summary Handler for `GET /channels/attachments/{entity_type}/{entity_id}/references`.
+ */
+export const getAttachmentReferencesParams = zod.object({
+  entity_type: zod.string().describe('Type of the attachment entity'),
+  entity_id: zod.string().describe('Id of the attachment entity'),
+});
+
+export const getAttachmentReferencesResponse = zod
+  .object({
+    references: zod
+      .array(
+        zod
+          .union([
+            zod
+              .object({
+                attachment_created_at: zod.iso
+                  .datetime({})
+                  .describe('When the attachment row was created.'),
+                channel_id: zod
+                  .uuid()
+                  .describe('Channel that contains the message.'),
+                channel_name: zod
+                  .string()
+                  .nullish()
+                  .describe('Optional channel name (DMs do not have a name).'),
+                message_content: zod
+                  .string()
+                  .describe(
+                    'Full message content (might be used for preview\/snippet).'
+                  ),
+                message_created_at: zod.iso
+                  .datetime({})
+                  .describe('When the message itself was created.'),
+                message_id: zod
+                  .uuid()
+                  .describe('Message that contains the attachment reference.'),
+                sender_id: zod.string().describe('Sender of the message.'),
+                thread_id: zod
+                  .uuid()
+                  .nullish()
+                  .describe(
+                    'If the message belongs to a thread this is the parent id.'
+                  ),
+              })
+              .describe(
+                'A reference to an attachment entity from a channel message.'
+              )
+              .and(
+                zod.object({
+                  reference_type: zod.enum(['channel']),
+                })
+              )
+              .describe('Referenced from a channel message.'),
+            zod
+              .object({
+                created_at: zod.iso
+                  .datetime({})
+                  .describe('When this reference was created.'),
+                entity_id: zod
+                  .string()
+                  .describe('ID of the referenced entity.'),
+                entity_type: zod
+                  .string()
+                  .describe('Type of the referenced entity.'),
+                source_entity_id: zod
+                  .string()
+                  .describe('ID of the source entity.'),
+                source_entity_type: zod
+                  .string()
+                  .describe(
+                    'Type of the source entity (e.g., \"document\", \"chat\", etc.).'
+                  ),
+                user_id: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'User who created this reference (optional for non-user sources).'
+                  ),
+              })
+              .describe(
+                'A reference to an attachment entity from a non-message source.'
+              )
+              .and(
+                zod.object({
+                  reference_type: zod.enum(['generic']),
+                })
+              )
+              .describe('Referenced from any non-message source entity.'),
+          ])
+          .describe('An attachment reference, tagged by source kind.')
+      )
+      .describe('References to the requested entity, newest-first.'),
+  })
+  .describe('Response from the attachment-references endpoint.');
+
+/**
+ * @summary Handler for `POST /channels/get_or_create_dm`.
+ */
+export const getOrCreateDmBody = zod
+  .object({
+    recipient_id: zod.string().describe('Recipient user id.'),
+  })
+  .describe('Request to get or create a direct message channel.');
+
+export const getOrCreateDmResponse = zod
+  .object({
+    action: zod
+      .enum(['get', 'create'])
+      .describe('Result of a get-or-create channel operation.'),
+    channel_id: zod.string().describe('Channel id.'),
+  })
+  .describe('Response for get-or-create channel operations.');
+
+/**
+ * @summary Handler for `POST /channels/get_or_create_private`.
+ */
+export const getOrCreatePrivateBody = zod
+  .object({
+    recipients: zod.array(zod.string()).describe('Recipient user ids.'),
+  })
+  .describe('Request to get or create a private channel.');
+
+export const getOrCreatePrivateResponse = zod
+  .object({
+    action: zod
+      .enum(['get', 'create'])
+      .describe('Result of a get-or-create channel operation.'),
+    channel_id: zod.string().describe('Channel id.'),
+  })
+  .describe('Response for get-or-create channel operations.');
+
+/**
+ * @summary Handler for `POST /channels/mentions`.
+ */
+export const createEntityMentionBody = zod
+  .object({
+    entity_id: zod.string().describe('Id of the mentioned entity.'),
+    entity_type: zod.string().describe('Type of the mentioned entity.'),
+    source_entity_id: zod
+      .string()
+      .describe('Id of the entity that owns the mention.'),
+    source_entity_type: zod
+      .string()
+      .describe('Type of the entity that owns the mention.'),
+  })
+  .describe('Request body for `POST \/channels\/mentions`.');
+
+/**
+ * @summary Handler for `DELETE /channels/mentions/{mention_id}`.
+ */
+export const deleteEntityMentionParams = zod.object({
+  mention_id: zod.uuid().describe('Entity mention id'),
+});
+
+export const deleteEntityMentionResponse = zod
+  .object({
+    deleted: zod.boolean().describe('Whether the mention was deleted.'),
+  })
+  .describe('Response body for `DELETE \/channels\/mentions\/{mention_id}`.');
+
+/**
+ * @summary Handler for `POST /channels/preview`.
+ */
+export const getBatchChannelPreviewBody = zod
+  .object({
+    channel_ids: zod.array(zod.string()).describe('Channel ids to look up.'),
+  })
+  .describe('Request for a batched channel preview lookup.');
+
+export const getBatchChannelPreviewResponse = zod
+  .object({
+    previews: zod
+      .array(
+        zod
+          .union([
+            zod
+              .object({
+                channel_id: zod.string().describe('Channel id.'),
+                channel_name: zod
+                  .string()
+                  .describe('Resolved channel display name.'),
+                channel_type: zod
+                  .enum(['public', 'private', 'direct_message', 'team'])
+                  .describe('Type of channel.'),
+              })
+              .describe('Preview payload returned for accessible channels.')
+              .and(
+                zod.object({
+                  type: zod.enum(['access']),
+                })
+              )
+              .describe('Viewer can access the channel.'),
+            zod
+              .object({
+                channel_id: zod.string().describe('Channel id.'),
+              })
+              .describe(
+                'Preview payload returned for channels with only id information.'
+              )
+              .and(
+                zod.object({
+                  type: zod.enum(['no_access']),
+                })
+              )
+              .describe('Viewer cannot access the channel.'),
+            zod
+              .object({
+                channel_id: zod.string().describe('Channel id.'),
+              })
+              .describe(
+                'Preview payload returned for channels with only id information.'
+              )
+              .and(
+                zod.object({
+                  type: zod.enum(['does_not_exist']),
+                })
+              )
+              .describe('Channel does not exist.'),
+          ])
+          .describe('Preview entry for a single channel id.')
+      )
+      .describe('Resolved channel previews, one per requested channel id.'),
+  })
+  .describe('Response for a batched channel preview lookup.');
+
+/**
+ * @summary Handler for `GET /channels/{channel_id}`.
+ */
+export const getChannelParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+});
+
+export const getChannelQueryLimitMin = 0;
+
+export const getChannelQueryParams = zod.object({
+  limit: zod
+    .number()
+    .min(getChannelQueryLimitMin)
+    .optional()
+    .describe('Recent message page size (1-100, default 50)'),
+});
+
+export const getChannelResponse = zod
+  .object({
+    channel_id: zod.uuid().describe('Channel id.'),
+    channel_name: zod
+      .string()
+      .describe("Resolved display name from the viewer's perspective."),
+    channel_type: zod
+      .enum(['public', 'private', 'direct_message', 'team'])
+      .describe('Type of channel.'),
+    messages: zod
+      .array(
+        zod
+          .object({
+            attachments: zod
+              .array(
+                zod
+                  .object({
+                    created_at: zod.iso
+                      .datetime({})
+                      .describe('When the attachment was created.'),
+                    entity_id: zod.string().describe('Entity id.'),
+                    entity_type: zod.string().describe('Type of entity.'),
+                    height: zod
+                      .number()
+                      .nullish()
+                      .describe('Height (for images).'),
+                    id: zod.uuid().describe('Attachment id.'),
+                    width: zod
+                      .number()
+                      .nullish()
+                      .describe('Width (for images).'),
+                  })
+                  .describe('An attachment on a message.')
+              )
+              .describe('Attachments on this message.'),
+            channel_id: zod.uuid().describe('Channel id.'),
+            content: zod.string().describe('Message content.'),
+            created_at: zod.iso
+              .datetime({})
+              .describe('When the message was created.'),
+            deleted_at: zod.iso
+              .datetime({})
+              .nullish()
+              .describe('When the message was soft-deleted.'),
+            edited_at: zod.iso
+              .datetime({})
+              .nullish()
+              .describe('When the message was edited.'),
+            id: zod.uuid().describe('Message id.'),
+            reactions: zod
+              .array(
+                zod
+                  .object({
+                    emoji: zod.string().describe('The emoji string.'),
+                    users: zod
+                      .array(zod.string())
+                      .describe('User ids who added this reaction.'),
+                  })
+                  .describe('A reaction with emoji and user list.')
+              )
+              .describe('Reactions on this message.'),
+            sender: zod
+              .object({
+                id: zod
+                  .string()
+                  .describe('Sender id without the storage namespace prefix.'),
+                type: zod.enum(['user', 'bot']).describe('Public sender type.'),
+              })
+              .describe('Public sender identity for channel messages.'),
+            sender_id: zod.string().describe('Sender user id.'),
+            thread: zod
+              .object({
+                latest_reply_at: zod.iso
+                  .datetime({})
+                  .nullish()
+                  .describe('Timestamp of the latest reply.'),
+                preview: zod
+                  .array(
+                    zod
+                      .object({
+                        attachments: zod
+                          .array(
+                            zod
+                              .object({
+                                created_at: zod.iso
+                                  .datetime({})
+                                  .describe('When the attachment was created.'),
+                                entity_id: zod.string().describe('Entity id.'),
+                                entity_type: zod
+                                  .string()
+                                  .describe('Type of entity.'),
+                                height: zod
+                                  .number()
+                                  .nullish()
+                                  .describe('Height (for images).'),
+                                id: zod.uuid().describe('Attachment id.'),
+                                width: zod
+                                  .number()
+                                  .nullish()
+                                  .describe('Width (for images).'),
+                              })
+                              .describe('An attachment on a message.')
+                          )
+                          .describe('Attachments on this reply.'),
+                        content: zod.string().describe('Reply content.'),
+                        created_at: zod.iso
+                          .datetime({})
+                          .describe('When the reply was created.'),
+                        edited_at: zod.iso
+                          .datetime({})
+                          .nullish()
+                          .describe('When the reply was edited.'),
+                        id: zod.uuid().describe('Reply id.'),
+                        reactions: zod
+                          .array(
+                            zod
+                              .object({
+                                emoji: zod
+                                  .string()
+                                  .describe('The emoji string.'),
+                                users: zod
+                                  .array(zod.string())
+                                  .describe(
+                                    'User ids who added this reaction.'
+                                  ),
+                              })
+                              .describe('A reaction with emoji and user list.')
+                          )
+                          .describe('Reactions on this reply.'),
+                        sender: zod
+                          .object({
+                            id: zod
+                              .string()
+                              .describe(
+                                'Sender id without the storage namespace prefix.'
+                              ),
+                            type: zod
+                              .enum(['user', 'bot'])
+                              .describe('Public sender type.'),
+                          })
+                          .describe(
+                            'Public sender identity for channel messages.'
+                          ),
+                        sender_id: zod.string().describe('Sender user id.'),
+                        updated_at: zod.iso
+                          .datetime({})
+                          .describe('When the reply was last updated.'),
+                      })
+                      .describe('A thread reply shown in preview.')
+                  )
+                  .describe('Last N replies for thread preview.'),
+                reply_count: zod.number().describe('Total reply count.'),
+              })
+              .describe('Thread metadata and preview replies.'),
+            updated_at: zod.iso
+              .datetime({})
+              .describe('When the message was last updated.'),
+          })
+          .describe('A top-level channel message with thread info.')
+      )
+      .describe('Recent messages (newest-first first page).'),
+    participants: zod
+      .array(
+        zod
+          .object({
+            channel_id: zod.uuid().describe('Channel id.'),
+            joined_at: zod.iso.datetime({}).describe('When the user joined.'),
+            role: zod
+              .enum(['owner', 'admin', 'member'])
+              .describe('Participant role in a channel.'),
+            user_id: zod.string().describe('User id.'),
+          })
+          .describe('A channel participant.')
+      )
+      .describe('Active participants.'),
+  })
+  .describe(
+    'Channel detail: metadata, active participants, and a recent page of messages.\n\n`messages` is the newest-first first page (size controlled by `limit`); use the\ndedicated `\/{channel_id}\/messages` endpoint for cursor pagination.'
+  );
+
+/**
+ * @summary Handler for `DELETE /channels/{channel_id}`.
+ */
+export const deleteChannelParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+});
+
+/**
+ * @summary Handler for `PATCH /channels/{channel_id}`.
+ */
+export const patchChannelParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+});
+
+export const patchChannelBody = zod
+  .object({
+    channel_name: zod.string().nullish().describe('New channel name.'),
+  })
+  .describe('Request to patch a channel.');
+
+/**
  * @summary Handler for `GET /channels/{channel_id}/attachments`.
  */
 export const getChannelAttachmentsParams = zod.object({
@@ -1301,6 +1826,128 @@ export const getChannelAttachmentsResponse = zod
       .describe('Cursor for the next page, null if no more pages.'),
   })
   .describe('Paginated response of channel attachments.');
+
+/**
+ * @summary Handler for `POST /channels/{channel_id}/join`.
+ */
+export const joinChannelParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+});
+
+/**
+ * @summary Handler for `POST /channels/{channel_id}/leave`.
+ */
+export const leaveChannelParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+});
+
+/**
+ * @summary Handler for `POST /channels/{channel_id}/message`.
+ */
+export const postMessageParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+});
+
+export const postMessageBody = zod
+  .object({
+    attachments: zod
+      .array(
+        zod
+          .object({
+            entity_id: zod.string().describe('Attachment entity id.'),
+            entity_type: zod.string().describe('Attachment entity type.'),
+            height: zod
+              .number()
+              .nullish()
+              .describe('Optional rendered height.'),
+            width: zod.number().nullish().describe('Optional rendered width.'),
+          })
+          .describe('New attachment to add to a channel message.')
+      )
+      .describe('Attachments to add after message creation.'),
+    content: zod.string().describe('Message body.'),
+    mentions: zod
+      .array(
+        zod
+          .object({
+            entity_id: zod.string().describe('Mentioned entity id.'),
+            entity_type: zod.string().describe('Mentioned entity type.'),
+          })
+          .describe('Simple entity mention attached to a message.')
+      )
+      .describe('Message mentions.'),
+    nonce: zod.string().nullish().describe('Optional optimistic-update nonce.'),
+    thread_id: zod.uuid().nullish().describe('Optional thread parent id.'),
+  })
+  .describe('Request to send a channel message.');
+
+export const postMessageResponse = zod
+  .object({
+    id: zod.string().describe('Created message id.'),
+    nonce: zod.string().nullish().describe('Optional optimistic-update nonce.'),
+  })
+  .describe('Response returned after sending a message.');
+
+/**
+ * @summary Handler for `DELETE /channels/{channel_id}/message/{message_id}`.
+ */
+export const deleteMessageParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+  message_id: zod.uuid().describe('Message ID'),
+});
+
+export const deleteMessageQueryParams = zod.object({
+  nonce: zod.string().optional().describe('Optional optimistic-update nonce'),
+});
+
+/**
+ * @summary Handler for `PATCH /channels/{channel_id}/message/{message_id}`.
+ */
+export const patchMessageParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+  message_id: zod.uuid().describe('Message ID'),
+});
+
+export const patchMessageBody = zod
+  .object({
+    attachment_ids_to_delete: zod
+      .array(zod.string())
+      .nullish()
+      .describe('Attachment ids to remove.'),
+    attachments_to_add: zod
+      .array(
+        zod
+          .object({
+            entity_id: zod.string().describe('Attachment entity id.'),
+            entity_type: zod.string().describe('Attachment entity type.'),
+            height: zod
+              .number()
+              .nullish()
+              .describe('Optional rendered height.'),
+            width: zod.number().nullish().describe('Optional rendered width.'),
+          })
+          .describe('New attachment to add to a channel message.')
+      )
+      .nullish()
+      .describe('Attachments to add.'),
+    content: zod
+      .string()
+      .nullish()
+      .describe('Optional replacement message body.'),
+    mentions: zod
+      .array(
+        zod
+          .object({
+            entity_id: zod.string().describe('Mentioned entity id.'),
+            entity_type: zod.string().describe('Mentioned entity type.'),
+          })
+          .describe('Simple entity mention attached to a message.')
+      )
+      .nullish()
+      .describe('Optional replacement mentions.'),
+    nonce: zod.string().nullish().describe('Optional optimistic-update nonce.'),
+  })
+  .describe('Request to patch a channel message.');
 
 /**
  * @summary Handler for `GET /channels/{channel_id}/messages`.
@@ -1385,6 +2032,14 @@ export const getChannelMessagesResponse = zod
                   .describe('A reaction with emoji and user list.')
               )
               .describe('Reactions on this message.'),
+            sender: zod
+              .object({
+                id: zod
+                  .string()
+                  .describe('Sender id without the storage namespace prefix.'),
+                type: zod.enum(['user', 'bot']).describe('Public sender type.'),
+              })
+              .describe('Public sender identity for channel messages.'),
             sender_id: zod.string().describe('Sender user id.'),
             thread: zod
               .object({
@@ -1445,6 +2100,20 @@ export const getChannelMessagesResponse = zod
                               .describe('A reaction with emoji and user list.')
                           )
                           .describe('Reactions on this reply.'),
+                        sender: zod
+                          .object({
+                            id: zod
+                              .string()
+                              .describe(
+                                'Sender id without the storage namespace prefix.'
+                              ),
+                            type: zod
+                              .enum(['user', 'bot'])
+                              .describe('Public sender type.'),
+                          })
+                          .describe(
+                            'Public sender identity for channel messages.'
+                          ),
                         sender_id: zod.string().describe('Sender user id.'),
                         updated_at: zod.iso
                           .datetime({})
@@ -1607,6 +2276,14 @@ export const postChannelMessagesResponse = zod
                   .describe('A reaction with emoji and user list.')
               )
               .describe('Reactions on this message.'),
+            sender: zod
+              .object({
+                id: zod
+                  .string()
+                  .describe('Sender id without the storage namespace prefix.'),
+                type: zod.enum(['user', 'bot']).describe('Public sender type.'),
+              })
+              .describe('Public sender identity for channel messages.'),
             sender_id: zod.string().describe('Sender user id.'),
             thread: zod
               .object({
@@ -1667,6 +2344,20 @@ export const postChannelMessagesResponse = zod
                               .describe('A reaction with emoji and user list.')
                           )
                           .describe('Reactions on this reply.'),
+                        sender: zod
+                          .object({
+                            id: zod
+                              .string()
+                              .describe(
+                                'Sender id without the storage namespace prefix.'
+                              ),
+                            type: zod
+                              .enum(['user', 'bot'])
+                              .describe('Public sender type.'),
+                          })
+                          .describe(
+                            'Public sender identity for channel messages.'
+                          ),
                         sender_id: zod.string().describe('Sender user id.'),
                         updated_at: zod.iso
                           .datetime({})
@@ -1695,6 +2386,72 @@ export const postChannelMessagesResponse = zod
       .describe('Cursor for the previous page, null if no newer page exists.'),
   })
   .describe('Paginated response of channel messages.');
+
+/**
+ * @summary Handler for `GET /channels/{channel_id}/messages/{message_id}/context`.
+ */
+export const getMessageWithContextParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+  message_id: zod.uuid().describe('Message ID to get context around'),
+});
+
+export const getMessageWithContextQueryParams = zod.object({
+  before: zod
+    .number()
+    .optional()
+    .describe('Number of older messages to include'),
+  after: zod
+    .number()
+    .optional()
+    .describe('Number of newer messages to include'),
+});
+
+export const getMessageWithContextResponse = zod
+  .object({
+    messages: zod
+      .array(
+        zod
+          .object({
+            channel_id: zod.uuid().describe('Channel id.'),
+            content: zod.string().describe('Message content.'),
+            created_at: zod.iso
+              .datetime({})
+              .describe('When the message was created.'),
+            deleted_at: zod.iso
+              .datetime({})
+              .nullish()
+              .describe('When the message was soft-deleted.'),
+            edited_at: zod.iso
+              .datetime({})
+              .nullish()
+              .describe('When the message was edited.'),
+            id: zod.uuid().describe('Message id.'),
+            sender: zod
+              .object({
+                id: zod
+                  .string()
+                  .describe('Sender id without the storage namespace prefix.'),
+                type: zod.enum(['user', 'bot']).describe('Public sender type.'),
+              })
+              .describe('Public sender identity for channel messages.'),
+            sender_id: zod.string().describe('Sender user id.'),
+            thread_id: zod
+              .uuid()
+              .nullish()
+              .describe('Parent thread id for replies.'),
+            updated_at: zod.iso
+              .datetime({})
+              .describe('When the message was last updated.'),
+          })
+          .describe(
+            'A channel message returned by the message-context endpoint.'
+          )
+      )
+      .describe(
+        'Messages around the requested message in chronological order.'
+      ),
+  })
+  .describe('Response from the message-context endpoint.');
 
 /**
  * @summary Handler for `GET /channels/{channel_id}/messages/{message_id}/replies`.
@@ -1741,6 +2498,14 @@ export const getThreadRepliesResponseItem = zod
           .describe('A reaction with emoji and user list.')
       )
       .describe('Reactions on this reply.'),
+    sender: zod
+      .object({
+        id: zod
+          .string()
+          .describe('Sender id without the storage namespace prefix.'),
+        type: zod.enum(['user', 'bot']).describe('Public sender type.'),
+      })
+      .describe('Public sender identity for channel messages.'),
     sender_id: zod.string().describe('Sender user id.'),
     updated_at: zod.iso
       .datetime({})
@@ -1797,9 +2562,397 @@ export const getChannelParticipantsResponse = zod.array(
 );
 
 /**
- * @summary Toggle `email_sync` on a CRM company. `false` disables CRM email
-sharing for the company and permanently removes its existing CRM
-contacts and contact sources.
+ * @summary Handler for `POST /channels/{channel_id}/participants`.
+ */
+export const addParticipantsParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+});
+
+export const addParticipantsBody = zod
+  .object({
+    participants: zod.array(zod.string()).describe('User ids to add.'),
+  })
+  .describe('Request to add participants.');
+
+/**
+ * @summary Handler for `DELETE /channels/{channel_id}/participants`.
+ */
+export const removeParticipantsParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+});
+
+export const removeParticipantsBody = zod
+  .object({
+    participants: zod.array(zod.string()).describe('User ids to remove.'),
+  })
+  .describe('Request to remove participants.');
+
+/**
+ * @summary Handler for `POST /channels/{channel_id}/reaction`.
+ */
+export const postReactionParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+});
+
+export const postReactionBody = zod
+  .object({
+    action: zod.enum(['Add', 'Remove']).describe('Reaction mutation action.'),
+    emoji: zod.string().describe('Reaction emoji.'),
+    message_id: zod.string().describe('Message id to react to.'),
+    nonce: zod.string().nullish().describe('Optional optimistic-update nonce.'),
+  })
+  .describe('Request to mutate a reaction.');
+
+/**
+ * @summary Handler for `POST /channels/{channel_id}/typing`.
+ */
+export const postTypingParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+});
+
+export const postTypingBody = zod
+  .object({
+    action: zod.enum(['start', 'stop']).describe('Typing indicator action.'),
+    nonce: zod.string().nullish().describe('Optional optimistic-update nonce.'),
+    thread_id: zod.string().nullish().describe('Optional thread id.'),
+  })
+  .describe('Request to emit a typing event.');
+
+/**
+ * @summary Soft-delete a CRM comment, scoped to the requesting user's team. When it
+was the thread's last live comment, the thread is soft-deleted too
+(reported via `threadDeleted`).
+ */
+export const deleteCrmCommentParams = zod.object({
+  comment_id: zod.uuid().describe('The CRM comment to delete'),
+});
+
+export const deleteCrmCommentResponse = zod
+  .object({
+    commentId: zod.uuid().describe("The deleted comment's id."),
+    threadDeleted: zod
+      .boolean()
+      .describe(
+        'Whether the thread itself was soft-deleted because no live comments\nremained.'
+      ),
+    threadId: zod.uuid().describe('The thread the comment belonged to.'),
+  })
+  .describe(
+    'Outcome of soft-deleting a CRM comment: reports whether the parent thread\nwas soft-deleted too (it is when the deleted comment was its last live one).'
+  );
+
+/**
+ * @summary Edit a CRM comment's text, scoped to the requesting user's team via the
+comment's thread → entity → company. Returns the updated comment.
+ */
+export const editCrmCommentParams = zod.object({
+  comment_id: zod.uuid().describe('The CRM comment to edit'),
+});
+
+export const editCrmCommentBody = zod
+  .object({
+    text: zod.string().describe('The new comment body (markdown).'),
+  })
+  .describe('Request body for `PATCH \/crm\/comments\/comment\/{comment_id}`.');
+
+export const editCrmCommentResponse = zod
+  .object({
+    commentId: zod.uuid().describe('The comment id.'),
+    createdAt: zod.iso.datetime({}).describe('When the comment was created.'),
+    deletedAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('When the comment was soft-deleted, if ever.'),
+    metadata: zod.unknown().optional().describe('Arbitrary client metadata.'),
+    order: zod
+      .number()
+      .nullish()
+      .describe(
+        'Optional explicit ordering within the thread; the frontend falls\nback to `createdAt` when absent.'
+      ),
+    owner: zod.string().describe('Macro user id of the comment author.'),
+    sender: zod
+      .string()
+      .nullish()
+      .describe(
+        'Macro user id of the actual sender, when distinct from `owner`.'
+      ),
+    text: zod.string().describe('The comment body (markdown).'),
+    threadId: zod
+      .uuid()
+      .describe('The id of the thread this comment belongs to.'),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('When the comment was last updated.'),
+  })
+  .describe('A single comment within a [`CrmThread`].');
+
+/**
+ * @summary List the comment threads on a CRM company or contact, scoped to the
+requesting user's team. Returns 404 when the entity isn't owned by the
+team; an owned entity with no threads returns `200 []`.
+ */
+export const listCrmCommentsParams = zod.object({
+  entity_type: zod
+    .enum(['crm_company', 'crm_contact'])
+    .describe('Which CRM entity kind the threads hang off'),
+  entity_id: zod.uuid().describe('The CRM company or contact id'),
+});
+
+export const listCrmCommentsResponseItem = zod
+  .object({
+    comments: zod
+      .array(
+        zod
+          .object({
+            commentId: zod.uuid().describe('The comment id.'),
+            createdAt: zod.iso
+              .datetime({})
+              .describe('When the comment was created.'),
+            deletedAt: zod.iso
+              .datetime({})
+              .nullish()
+              .describe('When the comment was soft-deleted, if ever.'),
+            metadata: zod
+              .unknown()
+              .optional()
+              .describe('Arbitrary client metadata.'),
+            order: zod
+              .number()
+              .nullish()
+              .describe(
+                'Optional explicit ordering within the thread; the frontend falls\nback to `createdAt` when absent.'
+              ),
+            owner: zod
+              .string()
+              .describe('Macro user id of the comment author.'),
+            sender: zod
+              .string()
+              .nullish()
+              .describe(
+                'Macro user id of the actual sender, when distinct from `owner`.'
+              ),
+            text: zod.string().describe('The comment body (markdown).'),
+            threadId: zod
+              .uuid()
+              .describe('The id of the thread this comment belongs to.'),
+            updatedAt: zod.iso
+              .datetime({})
+              .describe('When the comment was last updated.'),
+          })
+          .describe('A single comment within a [`CrmThread`].')
+      )
+      .describe("The thread's comments, oldest first."),
+    thread: zod
+      .object({
+        createdAt: zod.iso
+          .datetime({})
+          .describe('When the thread was created.'),
+        deletedAt: zod.iso
+          .datetime({})
+          .nullish()
+          .describe('When the thread was soft-deleted, if ever.'),
+        entityId: zod
+          .uuid()
+          .describe(
+            'The id of the CRM company or contact this thread belongs to.'
+          ),
+        entityType: zod
+          .enum(['crm_company', 'crm_contact'])
+          .describe(
+            'Which CRM entity a comment thread is attached to. Serializes to\n`crm_company` \/ `crm_contact` — matching the `entityType` the frontend\nuses elsewhere when building entity URLs — and is parsed from the\n`{entity_type}` path segment on the comment routes.'
+          ),
+        metadata: zod
+          .unknown()
+          .optional()
+          .describe('Arbitrary client metadata.'),
+        owner: zod.string().describe('Macro user id of the thread creator.'),
+        resolved: zod.boolean().describe('Whether the thread is resolved.'),
+        threadId: zod.uuid().describe('The thread id.'),
+        updatedAt: zod.iso
+          .datetime({})
+          .describe('When the thread was last updated.'),
+      })
+      .describe(
+        'A CRM comment thread: the parent record one or more comments hang off.'
+      ),
+  })
+  .describe(
+    'A [`CrmThread`] with its comments nested under it — the unit the\nfrontend renders.'
+  );
+export const listCrmCommentsResponse = zod.array(listCrmCommentsResponseItem);
+
+/**
+ * @summary Create a comment on a CRM company or contact — a new thread, or a reply
+when `threadId` is supplied. Returns the full thread (with all comments)
+after the insert. Team-scoped; 404 when the entity isn't owned by the
+team or `threadId` doesn't belong to it.
+ */
+export const createCrmCommentParams = zod.object({
+  entity_type: zod
+    .enum(['crm_company', 'crm_contact'])
+    .describe('Which CRM entity kind the thread hangs off'),
+  entity_id: zod.uuid().describe('The CRM company or contact id'),
+});
+
+export const createCrmCommentBody = zod
+  .object({
+    metadata: zod
+      .unknown()
+      .optional()
+      .describe('Arbitrary client metadata for the comment.'),
+    text: zod.string().describe('The comment body (markdown).'),
+    threadId: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'Existing thread to append to. Omit to start a new thread on the\naddressed entity.'
+      ),
+    threadMetadata: zod
+      .unknown()
+      .optional()
+      .describe(
+        'Metadata to set on a newly created thread (ignored when replying\nwithout a value).'
+      ),
+  })
+  .describe(
+    'Request body for `POST \/crm\/comments\/{entity_type}\/{entity_id}`.'
+  );
+
+export const createCrmCommentResponse = zod
+  .object({
+    comments: zod
+      .array(
+        zod
+          .object({
+            commentId: zod.uuid().describe('The comment id.'),
+            createdAt: zod.iso
+              .datetime({})
+              .describe('When the comment was created.'),
+            deletedAt: zod.iso
+              .datetime({})
+              .nullish()
+              .describe('When the comment was soft-deleted, if ever.'),
+            metadata: zod
+              .unknown()
+              .optional()
+              .describe('Arbitrary client metadata.'),
+            order: zod
+              .number()
+              .nullish()
+              .describe(
+                'Optional explicit ordering within the thread; the frontend falls\nback to `createdAt` when absent.'
+              ),
+            owner: zod
+              .string()
+              .describe('Macro user id of the comment author.'),
+            sender: zod
+              .string()
+              .nullish()
+              .describe(
+                'Macro user id of the actual sender, when distinct from `owner`.'
+              ),
+            text: zod.string().describe('The comment body (markdown).'),
+            threadId: zod
+              .uuid()
+              .describe('The id of the thread this comment belongs to.'),
+            updatedAt: zod.iso
+              .datetime({})
+              .describe('When the comment was last updated.'),
+          })
+          .describe('A single comment within a [`CrmThread`].')
+      )
+      .describe("The thread's comments, oldest first."),
+    thread: zod
+      .object({
+        createdAt: zod.iso
+          .datetime({})
+          .describe('When the thread was created.'),
+        deletedAt: zod.iso
+          .datetime({})
+          .nullish()
+          .describe('When the thread was soft-deleted, if ever.'),
+        entityId: zod
+          .uuid()
+          .describe(
+            'The id of the CRM company or contact this thread belongs to.'
+          ),
+        entityType: zod
+          .enum(['crm_company', 'crm_contact'])
+          .describe(
+            'Which CRM entity a comment thread is attached to. Serializes to\n`crm_company` \/ `crm_contact` — matching the `entityType` the frontend\nuses elsewhere when building entity URLs — and is parsed from the\n`{entity_type}` path segment on the comment routes.'
+          ),
+        metadata: zod
+          .unknown()
+          .optional()
+          .describe('Arbitrary client metadata.'),
+        owner: zod.string().describe('Macro user id of the thread creator.'),
+        resolved: zod.boolean().describe('Whether the thread is resolved.'),
+        threadId: zod.uuid().describe('The thread id.'),
+        updatedAt: zod.iso
+          .datetime({})
+          .describe('When the thread was last updated.'),
+      })
+      .describe(
+        'A CRM comment thread: the parent record one or more comments hang off.'
+      ),
+  })
+  .describe(
+    'A [`CrmThread`] with its comments nested under it — the unit the\nfrontend renders.'
+  );
+
+/**
+ * @summary List the contacts of a CRM company, scoped to the requesting user's
+team. Returns 404 when the company isn't owned by the team (so
+existence doesn't leak across teams). Non-admin viewers also 404 on
+hidden companies and see only non-hidden contacts; admin/owner
+viewers reach hidden companies and see every owned contact
+regardless of `hidden` so they can render the right unhide UI.
+ */
+export const listCompanyContactsParams = zod.object({
+  company_id: zod.uuid().describe('The CRM company whose contacts to list'),
+});
+
+export const listCompanyContactsResponseItem = zod
+  .object({
+    companyId: zod
+      .uuid()
+      .describe('The id of the company the contact belongs to.'),
+    createdAt: zod.iso
+      .datetime({})
+      .describe('When the contact record was created.'),
+    email: zod.string().describe("The contact's email address."),
+    firstInteraction: zod.iso
+      .datetime({})
+      .describe('Earliest known interaction with this contact.'),
+    hidden: zod
+      .boolean()
+      .describe(
+        'Whether the contact is hidden from CRM listings for the\nrequesting team. Non-admin viewers never see `hidden = true`\nrows (the endpoint filters them out); admin\/owner callers see\nhidden contacts so they can render the right toggle state.'
+      ),
+    id: zod.uuid().describe('The id of the contact record.'),
+    lastInteraction: zod.iso
+      .datetime({})
+      .describe('Most recent known interaction with this contact.'),
+    name: zod
+      .string()
+      .nullish()
+      .describe('Display name observed for the contact, if any.'),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('When the contact record was last updated.'),
+  })
+  .describe(
+    'A CRM contact as returned by `GET \/crm\/companies\/{company_id}\/contacts`.'
+  );
+export const listCompanyContactsResponse = zod.array(
+  listCompanyContactsResponseItem
+);
+
+/**
+ * @summary Toggle `email_sync` on a CRM company. Purely a visibility flag —
+it gates whether team members can see each other's emails with
+this company. Existing CRM data is unaffected.
  */
 export const setEmailSyncParams = zod.object({
   company_id: zod.uuid().describe('The CRM company to update'),
@@ -1810,7 +2963,7 @@ export const setEmailSyncBody = zod
     email_sync: zod
       .boolean()
       .describe(
-        "New value for `crm_companies.email_sync`. Setting to `false`\npermanently deletes the company's CRM contacts and contact sources."
+        "New value for `crm_companies.email_sync`. Purely a read-side\nvisibility\/permission gate — `soup` queries and email-permission\nchecks require `email_sync = true` before exposing the\ncompany's emails team-wide. Populate continues to write CRM\nhistory regardless, so toggling never destroys data and\nre-enabling never requires a backfill."
       ),
   })
   .describe(
@@ -1818,8 +2971,11 @@ export const setEmailSyncBody = zod
   );
 
 /**
- * @summary Toggle `hidden` on a CRM company. Hiding also disables `email_sync`
-and cascades to clearing the company's contacts and contact sources.
+ * @summary Toggle `hidden` on a CRM company. Hiding also disables
+`email_sync` and soft-hides every contact under the company.
+Un-hide restores contact visibility only; `email_sync` is left
+untouched (the team must re-enable it explicitly). Contact rows
+and contact sources survive the cycle.
  */
 export const setCompanyHiddenParams = zod.object({
   company_id: zod.uuid().describe('The CRM company to update'),
@@ -1830,10 +2986,54 @@ export const setCompanyHiddenBody = zod
     hidden: zod
       .boolean()
       .describe(
-        "New value for `crm_companies.hidden`. Setting to `true` hides\nthe company from CRM listings AND disables `email_sync` (which\npermanently deletes the company's contacts and contact sources).\nSetting to `false` un-hides the company; `email_sync` is left\nuntouched and the team must re-enable it explicitly."
+        'New value for `crm_companies.hidden`. Setting to `true` hides\nthe company from CRM listings, disables `email_sync`, and\nsoft-hides every contact under it (`crm_contacts.hidden = true`).\nContact rows and `crm_contact_sources` are preserved across the\ncycle, so un-hide is a true reverse. Setting to `false`\nun-hides the company and soft-restores its contacts;\n`email_sync` is left untouched and the team must re-enable it\nexplicitly.'
       ),
   })
   .describe('Request body for `PUT \/companies\/{company_id}\/hidden`.');
+
+/**
+ * @summary Fetch a single CRM contact by id, scoped to the requesting user's
+team. Returns 404 when the contact doesn't exist or isn't owned by
+the team. Non-admin viewers also 404 on hidden contacts or hidden
+parent companies (so existence doesn't leak); admin/owner viewers
+reach every owned contact regardless of `hidden`.
+ */
+export const getContactParams = zod.object({
+  contact_id: zod.uuid().describe('The CRM contact to fetch'),
+});
+
+export const getContactResponse = zod
+  .object({
+    companyId: zod
+      .uuid()
+      .describe('The id of the company the contact belongs to.'),
+    createdAt: zod.iso
+      .datetime({})
+      .describe('When the contact record was created.'),
+    email: zod.string().describe("The contact's email address."),
+    firstInteraction: zod.iso
+      .datetime({})
+      .describe('Earliest known interaction with this contact.'),
+    hidden: zod
+      .boolean()
+      .describe(
+        'Whether the contact is hidden from CRM listings for the\nrequesting team. Non-admin viewers never see `hidden = true`\nrows (the endpoint filters them out); admin\/owner callers see\nhidden contacts so they can render the right toggle state.'
+      ),
+    id: zod.uuid().describe('The id of the contact record.'),
+    lastInteraction: zod.iso
+      .datetime({})
+      .describe('Most recent known interaction with this contact.'),
+    name: zod
+      .string()
+      .nullish()
+      .describe('Display name observed for the contact, if any.'),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('When the contact record was last updated.'),
+  })
+  .describe(
+    'A CRM contact as returned by `GET \/crm\/companies\/{company_id}\/contacts`.'
+  );
 
 /**
  * @summary Toggle `hidden` on a CRM contact. Hiding is a display-only opt-out
@@ -3628,6 +4828,10 @@ export const getDocumentGithubPullRequestsParams = zod.object({
 
 export const getDocumentGithubPullRequestsResponsePullRequestsItemAdditionsMin = 0;
 
+export const getDocumentGithubPullRequestsResponsePullRequestsItemChecksItemIdMin = 0;
+
+export const getDocumentGithubPullRequestsResponsePullRequestsItemCommentsItemIdMin = 0;
+
 export const getDocumentGithubPullRequestsResponsePullRequestsItemDeletionsMin = 0;
 
 export const getDocumentGithubPullRequestsResponsePullRequestsItemNumberMin = 0;
@@ -3647,6 +4851,108 @@ export const getDocumentGithubPullRequestsResponse = zod
               .describe(
                 'The number of added lines in the pull request, when enrichment data is available.'
               ),
+            checks: zod
+              .array(
+                zod
+                  .object({
+                    completedAt: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe(
+                        'When the check run completed, when available.'
+                      ),
+                    conclusion: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The raw GitHub check run conclusion, when the run has completed.'
+                      ),
+                    id: zod
+                      .number()
+                      .min(
+                        getDocumentGithubPullRequestsResponsePullRequestsItemChecksItemIdMin
+                      )
+                      .describe(
+                        'The unique GitHub identifier for the check run.'
+                      ),
+                    name: zod.string().describe('The check run name.'),
+                    startedAt: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe('When the check run started, when available.'),
+                    status: zod
+                      .string()
+                      .describe('The raw GitHub check run status.'),
+                    url: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The public GitHub URL for the check run, when available.'
+                      ),
+                  })
+                  .describe(
+                    'A check run associated with a GitHub pull request.'
+                  )
+              )
+              .nullish()
+              .describe(
+                'Check runs collected from the pull request head commit, when enrichment data is available.'
+              ),
+            comments: zod
+              .array(
+                zod
+                  .object({
+                    authorAssociation: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "GitHub's relationship label for the author, when available."
+                      ),
+                    authorLogin: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The GitHub login for the comment author, when available.'
+                      ),
+                    body: zod
+                      .string()
+                      .describe('The comment or review body text.'),
+                    createdAt: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe(
+                        'When the comment was created or the review was submitted.'
+                      ),
+                    id: zod
+                      .number()
+                      .min(
+                        getDocumentGithubPullRequestsResponsePullRequestsItemCommentsItemIdMin
+                      )
+                      .describe(
+                        'The unique GitHub identifier for the comment or review.'
+                      ),
+                    source: zod
+                      .string()
+                      .describe(
+                        'The GitHub source for the comment, such as `issue_comment` or `review_comment`.'
+                      ),
+                    updatedAt: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe('When the comment or review was last updated.'),
+                    url: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The public GitHub URL for the comment or review, when available.'
+                      ),
+                  })
+                  .describe('A comment associated with a GitHub pull request.')
+              )
+              .nullish()
+              .describe(
+                'Comments collected from the pull request, when enrichment data is available.'
+              ),
             deletions: zod
               .number()
               .min(
@@ -3659,6 +4965,12 @@ export const getDocumentGithubPullRequestsResponse = zod
             displayName: zod
               .string()
               .describe('A compact label suitable for display in the UI.'),
+            foreignEntityId: zod
+              .uuid()
+              .nullish()
+              .describe(
+                'The internal `foreign_entity.id` UUID for the GitHub pull request row.'
+              ),
             githubKey: zod
               .string()
               .describe(
@@ -4295,6 +5607,46 @@ export const getEntityPermissionResponse = zod
     }),
   ])
   .describe('API response envelope for entity permissions.');
+
+/**
+ * @summary Get a visible foreign entity by its internal ID.
+ */
+export const getForeignEntityParams = zod.object({
+  id: zod.uuid().describe('Foreign entity ID'),
+});
+
+export const getForeignEntityResponse = zod
+  .object({
+    createdAt: zod.iso
+      .datetime({})
+      .describe('Timestamp when the record was created.'),
+    foreignEntityId: zod
+      .string()
+      .describe('Identifier assigned by the external system.'),
+    foreignEntitySource: zod
+      .string()
+      .describe('Source system that owns the external identifier.'),
+    id: zod
+      .uuid()
+      .describe('Internal primary key for this foreign entity record.'),
+    metadata: zod
+      .unknown()
+      .describe('Arbitrary metadata stored with the mapping.'),
+    storedForAuthEntity: zod
+      .string()
+      .describe(
+        'Internal auth entity namespace this foreign entity is stored for.'
+      ),
+    storedForId: zod
+      .string()
+      .describe(
+        'Internal entity identifier this foreign entity is stored for.'
+      ),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('Timestamp when the record was last updated.'),
+  })
+  .describe('A persisted mapping to an entity owned by an external system.');
 
 /**
  * @summary Gets the users history
@@ -5579,13 +6931,9 @@ export const getItemsSoupResponse = zod.object({
           data: zod
             .object({
               channel: zod.object({
-                channel_type: zod.enum([
-                  'public',
-                  'organization',
-                  'private',
-                  'direct_message',
-                  'team',
-                ]),
+                channel_type: zod
+                  .enum(['public', 'private', 'direct_message', 'team'])
+                  .describe('Type of channel.'),
                 created_at: zod.iso.datetime({}),
                 id: zod.uuid(),
                 name: zod.string().nullish(),
@@ -5729,6 +7077,108 @@ export const getItemsSoupResponse = zod.object({
               'A call record as displayed in Soup. Excludes room_name, egress_id,\nand transcript — fields that are irrelevant for the soup feed.'
             ),
           tag: zod.enum(['call']),
+        }),
+        zod.object({
+          data: zod
+            .object({
+              createdAt: zod.iso
+                .datetime({})
+                .describe('When the company was created.'),
+              description: zod
+                .string()
+                .nullish()
+                .describe(
+                  "Display description from the primary domain's directory entry."
+                ),
+              domains: zod
+                .array(
+                  zod
+                    .object({
+                      companyId: zod
+                        .uuid()
+                        .describe(
+                          'The id of the company the domain belongs to.'
+                        ),
+                      createdAt: zod.iso
+                        .datetime({})
+                        .describe('When the domain record was created.'),
+                      domain: zod
+                        .string()
+                        .describe(
+                          'The domain (lowercased, e.g. \"acme.com\").'
+                        ),
+                      id: zod.uuid().describe('The id of the domain record.'),
+                    })
+                    .describe(
+                      "A CRM domain as displayed in Soup. Mirrors the crm crate's\n[`CrmDomain`] with a stable wire shape that the FE can rely on."
+                    )
+                )
+                .describe(
+                  'Domains associated with this company, ordered by creation time\nascending (primary first).'
+                ),
+              emailSync: zod
+                .boolean()
+                .describe('Whether email sync is enabled for this company.'),
+              hidden: zod
+                .boolean()
+                .describe(
+                  'Whether the company is hidden from CRM listings. Soup filters\nthese out by default.'
+                ),
+              id: zod.uuid().describe('The id of the company.'),
+              name: zod
+                .string()
+                .nullish()
+                .describe(
+                  "Display name from the primary domain's directory entry, or\n`None` when unresolved."
+                ),
+              teamId: zod
+                .uuid()
+                .describe('The id of the team that owns this company record.'),
+              updatedAt: zod.iso
+                .datetime({})
+                .describe('When the company was last updated.'),
+            })
+            .describe(
+              'A CRM company as displayed in Soup. Carries the core company\nfields plus display metadata resolved from `crm_domain_directory`\nagainst the primary (earliest-created) domain.'
+            ),
+          tag: zod.enum(['crmCompany']),
+        }),
+        zod.object({
+          data: zod
+            .object({
+              createdAt: zod.iso
+                .datetime({})
+                .describe('Timestamp when the record was created.'),
+              foreignEntityId: zod
+                .string()
+                .describe('Identifier assigned by the external system.'),
+              foreignEntitySource: zod
+                .string()
+                .describe('Source system that owns the external identifier.'),
+              id: zod
+                .uuid()
+                .describe(
+                  'Internal primary key for this foreign entity record.'
+                ),
+              metadata: zod
+                .object({})
+                .describe('Arbitrary metadata stored with the mapping.'),
+              storedForAuthEntity: zod
+                .string()
+                .describe(
+                  'Internal auth entity namespace this foreign entity is stored for.'
+                ),
+              storedForId: zod
+                .string()
+                .describe(
+                  'Internal entity identifier this foreign entity is stored for.'
+                ),
+              updatedAt: zod.iso
+                .datetime({})
+                .describe('Timestamp when the record was last updated.'),
+            })
+            .describe('A foreign entity record as displayed in Soup.'),
+          tag: zod.enum(['foreignEntity']),
         }),
       ])
       .and(
@@ -5904,6 +7354,25 @@ export const postItemsSoupBody = zod
       .describe(
         'The chat filters used to filter down what chats you search over.'
       ),
+    crm_company_filters: zod
+      .object({
+        company_ids: zod
+          .array(zod.string())
+          .optional()
+          .describe(
+            "CRM company ids to filter by. Examples: ['11111111-...']. Empty to\ninclude all of the team's visible CRM companies."
+          ),
+        hidden: zod
+          .boolean()
+          .nullish()
+          .describe(
+            "Optional `crm_companies.hidden` filter. `None` = visible only\n(default for back-compat with non-admin callers). `Some(false)` =\nvisible only (explicit). `Some(true)` = hidden only — requires\nadmin\/owner team role; enforced upstream in soup's axum router."
+          ),
+      })
+      .optional()
+      .describe(
+        'The crm company filters used to narrow which CRM companies appear in soup.'
+      ),
     document_filters: zod
       .object({
         document_ids: zod
@@ -6037,6 +7506,12 @@ export const postItemsSoupBody = zod
           .describe(
             'Only include emails that have at least one of these labels. Supports both Gmail system labels (e.g. \"INBOX\", \"CATEGORY_PROMOTIONS\") and user-created labels (e.g. \"github\"). Empty to not filter by included labels.\nNote: SPAM and TRASH emails are not indexed in OpenSearch, so they will never appear in results regardless of this filter.'
           ),
+        link_ids: zod
+          .array(zod.string())
+          .optional()
+          .describe(
+            'Restrict to specific inboxes by email_links.id. Empty means \"any inbox the\ncaller can access\" (soup expands to the full set at the router edge).'
+          ),
         notification_filters: zod
           .object({
             done: zod
@@ -6083,6 +7558,29 @@ export const postItemsSoupBody = zod
       .describe(
         'The email filters used to filter down what emails you search over.'
       ),
+    foreign_entity_filters: zod
+      .object({
+        foreign_entity_ids: zod
+          .array(zod.string())
+          .optional()
+          .describe(
+            'External entity identifiers to filter by. Empty to include all external IDs.'
+          ),
+        foreign_entity_sources: zod
+          .array(zod.string())
+          .optional()
+          .describe(
+            'External source names to filter by. Empty to include all sources.'
+          ),
+        ids: zod
+          .array(zod.string())
+          .optional()
+          .describe(
+            'Internal foreign entity record IDs to filter by. Empty to include all records.'
+          ),
+      })
+      .optional()
+      .describe('Filters for foreign entity records.'),
     project_filters: zod
       .object({
         importance: zod
@@ -7280,13 +8778,9 @@ export const postItemsSoupResponse = zod.object({
           data: zod
             .object({
               channel: zod.object({
-                channel_type: zod.enum([
-                  'public',
-                  'organization',
-                  'private',
-                  'direct_message',
-                  'team',
-                ]),
+                channel_type: zod
+                  .enum(['public', 'private', 'direct_message', 'team'])
+                  .describe('Type of channel.'),
                 created_at: zod.iso.datetime({}),
                 id: zod.uuid(),
                 name: zod.string().nullish(),
@@ -7431,6 +8925,108 @@ export const postItemsSoupResponse = zod.object({
             ),
           tag: zod.enum(['call']),
         }),
+        zod.object({
+          data: zod
+            .object({
+              createdAt: zod.iso
+                .datetime({})
+                .describe('When the company was created.'),
+              description: zod
+                .string()
+                .nullish()
+                .describe(
+                  "Display description from the primary domain's directory entry."
+                ),
+              domains: zod
+                .array(
+                  zod
+                    .object({
+                      companyId: zod
+                        .uuid()
+                        .describe(
+                          'The id of the company the domain belongs to.'
+                        ),
+                      createdAt: zod.iso
+                        .datetime({})
+                        .describe('When the domain record was created.'),
+                      domain: zod
+                        .string()
+                        .describe(
+                          'The domain (lowercased, e.g. \"acme.com\").'
+                        ),
+                      id: zod.uuid().describe('The id of the domain record.'),
+                    })
+                    .describe(
+                      "A CRM domain as displayed in Soup. Mirrors the crm crate's\n[`CrmDomain`] with a stable wire shape that the FE can rely on."
+                    )
+                )
+                .describe(
+                  'Domains associated with this company, ordered by creation time\nascending (primary first).'
+                ),
+              emailSync: zod
+                .boolean()
+                .describe('Whether email sync is enabled for this company.'),
+              hidden: zod
+                .boolean()
+                .describe(
+                  'Whether the company is hidden from CRM listings. Soup filters\nthese out by default.'
+                ),
+              id: zod.uuid().describe('The id of the company.'),
+              name: zod
+                .string()
+                .nullish()
+                .describe(
+                  "Display name from the primary domain's directory entry, or\n`None` when unresolved."
+                ),
+              teamId: zod
+                .uuid()
+                .describe('The id of the team that owns this company record.'),
+              updatedAt: zod.iso
+                .datetime({})
+                .describe('When the company was last updated.'),
+            })
+            .describe(
+              'A CRM company as displayed in Soup. Carries the core company\nfields plus display metadata resolved from `crm_domain_directory`\nagainst the primary (earliest-created) domain.'
+            ),
+          tag: zod.enum(['crmCompany']),
+        }),
+        zod.object({
+          data: zod
+            .object({
+              createdAt: zod.iso
+                .datetime({})
+                .describe('Timestamp when the record was created.'),
+              foreignEntityId: zod
+                .string()
+                .describe('Identifier assigned by the external system.'),
+              foreignEntitySource: zod
+                .string()
+                .describe('Source system that owns the external identifier.'),
+              id: zod
+                .uuid()
+                .describe(
+                  'Internal primary key for this foreign entity record.'
+                ),
+              metadata: zod
+                .object({})
+                .describe('Arbitrary metadata stored with the mapping.'),
+              storedForAuthEntity: zod
+                .string()
+                .describe(
+                  'Internal auth entity namespace this foreign entity is stored for.'
+                ),
+              storedForId: zod
+                .string()
+                .describe(
+                  'Internal entity identifier this foreign entity is stored for.'
+                ),
+              updatedAt: zod.iso
+                .datetime({})
+                .describe('Timestamp when the record was last updated.'),
+            })
+            .describe('A foreign entity record as displayed in Soup.'),
+          tag: zod.enum(['foreignEntity']),
+        }),
       ])
       .and(
         zod.object({
@@ -7456,6 +9052,12 @@ export const postItemsSoupAstBody = zod
       .unknown()
       .optional()
       .describe('the filters that should be applied to the call entity'),
+    ccf: zod
+      .unknown()
+      .optional()
+      .describe(
+        "Filters applied to the crm_company entity (wire key `ccf`).\nEmpty\/omitted = team's full visible list."
+      ),
     cf: zod
       .unknown()
       .optional()
@@ -7486,6 +9088,10 @@ export const postItemsSoupAstBody = zod
       .describe(
         'the filters that should be applied to the email entity (raw AST\ntree only; CRM scope is carried by the `ecd` \/ `eca` sibling\nfields). On this endpoint the email filter stays a bare tree,\nunlike the materialized [`EntityFilterAst`] used for cursors.'
       ),
+    fef: zod
+      .unknown()
+      .optional()
+      .describe('the filters that should be applied to foreign entity records'),
     pf: zod
       .unknown()
       .optional()
@@ -8612,13 +10218,9 @@ export const postItemsSoupAstResponse = zod.object({
           data: zod
             .object({
               channel: zod.object({
-                channel_type: zod.enum([
-                  'public',
-                  'organization',
-                  'private',
-                  'direct_message',
-                  'team',
-                ]),
+                channel_type: zod
+                  .enum(['public', 'private', 'direct_message', 'team'])
+                  .describe('Type of channel.'),
                 created_at: zod.iso.datetime({}),
                 id: zod.uuid(),
                 name: zod.string().nullish(),
@@ -8762,6 +10364,108 @@ export const postItemsSoupAstResponse = zod.object({
               'A call record as displayed in Soup. Excludes room_name, egress_id,\nand transcript — fields that are irrelevant for the soup feed.'
             ),
           tag: zod.enum(['call']),
+        }),
+        zod.object({
+          data: zod
+            .object({
+              createdAt: zod.iso
+                .datetime({})
+                .describe('When the company was created.'),
+              description: zod
+                .string()
+                .nullish()
+                .describe(
+                  "Display description from the primary domain's directory entry."
+                ),
+              domains: zod
+                .array(
+                  zod
+                    .object({
+                      companyId: zod
+                        .uuid()
+                        .describe(
+                          'The id of the company the domain belongs to.'
+                        ),
+                      createdAt: zod.iso
+                        .datetime({})
+                        .describe('When the domain record was created.'),
+                      domain: zod
+                        .string()
+                        .describe(
+                          'The domain (lowercased, e.g. \"acme.com\").'
+                        ),
+                      id: zod.uuid().describe('The id of the domain record.'),
+                    })
+                    .describe(
+                      "A CRM domain as displayed in Soup. Mirrors the crm crate's\n[`CrmDomain`] with a stable wire shape that the FE can rely on."
+                    )
+                )
+                .describe(
+                  'Domains associated with this company, ordered by creation time\nascending (primary first).'
+                ),
+              emailSync: zod
+                .boolean()
+                .describe('Whether email sync is enabled for this company.'),
+              hidden: zod
+                .boolean()
+                .describe(
+                  'Whether the company is hidden from CRM listings. Soup filters\nthese out by default.'
+                ),
+              id: zod.uuid().describe('The id of the company.'),
+              name: zod
+                .string()
+                .nullish()
+                .describe(
+                  "Display name from the primary domain's directory entry, or\n`None` when unresolved."
+                ),
+              teamId: zod
+                .uuid()
+                .describe('The id of the team that owns this company record.'),
+              updatedAt: zod.iso
+                .datetime({})
+                .describe('When the company was last updated.'),
+            })
+            .describe(
+              'A CRM company as displayed in Soup. Carries the core company\nfields plus display metadata resolved from `crm_domain_directory`\nagainst the primary (earliest-created) domain.'
+            ),
+          tag: zod.enum(['crmCompany']),
+        }),
+        zod.object({
+          data: zod
+            .object({
+              createdAt: zod.iso
+                .datetime({})
+                .describe('Timestamp when the record was created.'),
+              foreignEntityId: zod
+                .string()
+                .describe('Identifier assigned by the external system.'),
+              foreignEntitySource: zod
+                .string()
+                .describe('Source system that owns the external identifier.'),
+              id: zod
+                .uuid()
+                .describe(
+                  'Internal primary key for this foreign entity record.'
+                ),
+              metadata: zod
+                .object({})
+                .describe('Arbitrary metadata stored with the mapping.'),
+              storedForAuthEntity: zod
+                .string()
+                .describe(
+                  'Internal auth entity namespace this foreign entity is stored for.'
+                ),
+              storedForId: zod
+                .string()
+                .describe(
+                  'Internal entity identifier this foreign entity is stored for.'
+                ),
+              updatedAt: zod.iso
+                .datetime({})
+                .describe('Timestamp when the record was last updated.'),
+            })
+            .describe('A foreign entity record as displayed in Soup.'),
+          tag: zod.enum(['foreignEntity']),
         }),
       ])
       .and(

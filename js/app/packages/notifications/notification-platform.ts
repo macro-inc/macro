@@ -81,8 +81,13 @@ export async function maybeHandlePlatformNotification(
   notificationInterface: PlatformNotificationState,
   splitLayoutManager: SplitManager
 ) {
-  // Ignore notification types that should not show as browser notifications
-  if (notification.notification_metadata.tag === 'document_mention') {
+  // Ignore notification types that should not show as browser notifications.
+  // GitHub PR notifications should remain visible in-app, but should not
+  // render as browser/system popups.
+  if (
+    notification.notification_metadata.tag === 'document_mention' ||
+    notification.notification_metadata.tag === 'github_pr_event'
+  ) {
     return;
   }
 

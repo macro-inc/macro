@@ -10,8 +10,9 @@ use model_entity::Entity;
 use model_error_response::ErrorResponse;
 use model_notifications::{
     AiResponseMetadata, ChannelMentionMetadata, ChannelMessageSendMetadata, ChannelReplyMetadata,
-    CommentedOnDocumentMetadata, DocumentMentionMetadata, MentionedInDocumentCommentMetadata,
-    NewEmailMetadata, NotifEvent, RepliedToDocumentCommentThreadMetadata, TaskAssignedMetadata,
+    CommentedOnDocumentMetadata, DocumentMentionMetadata, GithubPrEvent,
+    MentionedInDocumentCommentMetadata, NewEmailMetadata, NotifEvent,
+    RepliedToDocumentCommentThreadMetadata, TaskAssignedMetadata,
 };
 use notification::{
     domain::{models::Notification, service::NotificationReader},
@@ -31,6 +32,7 @@ pub(crate) static BLOCKABLE_NOTIFICATIONS: LazyLock<HashSet<&'static str>> = Laz
         ChannelMentionMetadata::TYPE_NAME,
         ChannelReplyMetadata::TYPE_NAME,
         DocumentMentionMetadata::TYPE_NAME,
+        GithubPrEvent::TYPE_NAME,
         TaskAssignedMetadata::TYPE_NAME,
         MentionedInDocumentCommentMetadata::TYPE_NAME,
         RepliedToDocumentCommentThreadMetadata::TYPE_NAME,

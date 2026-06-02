@@ -1,5 +1,8 @@
 //! Postgres context adapter for channel side-effect policy.
 
+#[cfg(test)]
+mod tests;
+
 use crate::domain::{
     ports::ChannelSideEffectContext,
     side_effects::{ChannelDocumentMention, ThreadNotificationContext},
@@ -11,11 +14,11 @@ use std::collections::HashSet;
 use uuid::Uuid;
 
 struct SenderIdRow {
-    sender_id: MacroUserIdStr<'static>,
+    sender_id: String,
 }
 
 struct UserIdRow {
-    user_id: MacroUserIdStr<'static>,
+    user_id: String,
 }
 
 struct DocumentMentionRow {
@@ -161,7 +164,7 @@ async fn get_message_owner(pool: &PgPool, message_id: Uuid) -> anyhow::Result<St
     let row = sqlx::query_as!(
         SenderIdRow,
         r#"
-        SELECT sender_id AS "sender_id: MacroUserIdStr"
+        SELECT sender_id
         FROM comms_messages
         WHERE id = $1
         ORDER BY created_at ASC
@@ -171,7 +174,7 @@ async fn get_message_owner(pool: &PgPool, message_id: Uuid) -> anyhow::Result<St
     .fetch_one(pool)
     .await
     .context("unable to get message owner")?;
-    Ok(row.sender_id.to_string())
+    Ok(row.sender_id)
 }
 
 async fn get_channel_message_count(pool: &PgPool, channel_id: Uuid) -> anyhow::Result<i64> {
@@ -195,11 +198,11 @@ async fn get_channel_participants_for_thread_id(
     let rows = sqlx::query_as!(
         UserIdRow,
         r#"
-        SELECT DISTINCT id AS "user_id!: MacroUserIdStr" FROM (
+        SELECT DISTINCT id AS "user_id!" FROM (
             SELECT m.sender_id AS id
-            FROM comms_channel_participants cp
-            JOIN comms_channels c ON c.id = cp.channel_id
-            JOIN comms_messages m ON m.channel_id = c.id
+            FROM comms_messages m
+            JOIN comms_channel_participants cp
+              ON cp.channel_id = m.channel_id AND cp.user_id = m.sender_id
             WHERE (m.id = $1 OR m.thread_id = $1) AND cp.left_at IS NULL
             UNION
             SELECT em.entity_id AS id
@@ -217,5 +220,8 @@ async fn get_channel_participants_for_thread_id(
     )
     .fetch_all(pool)
     .await?;
-    Ok(rows.into_iter().map(|row| row.user_id).collect())
+    Ok(rows
+        .into_iter()
+        .filter_map(|row| MacroUserIdStr::try_from(row.user_id).ok())
+        .collect())
 }

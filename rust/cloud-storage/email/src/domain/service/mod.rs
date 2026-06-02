@@ -149,6 +149,27 @@ where
             .map_err(|e| EmailErr::RepoErr(e.into()))
     }
 
+    async fn get_inboxes_for_macro_id(
+        &self,
+        macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
+    ) -> Result<Vec<crate::domain::models::Link>, EmailErr> {
+        self.email_repo
+            .inboxes_for_macro_id(macro_id)
+            .await
+            .map_err(|e| EmailErr::RepoErr(e.into()))
+    }
+
+    async fn get_owned_link_for_thread(
+        &self,
+        macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
+        thread_id: uuid::Uuid,
+    ) -> Result<Option<crate::domain::models::Link>, EmailErr> {
+        self.email_repo
+            .owned_link_for_thread(thread_id, macro_id)
+            .await
+            .map_err(|e| EmailErr::RepoErr(e.into()))
+    }
+
     async fn get_thread_with_messages(
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,

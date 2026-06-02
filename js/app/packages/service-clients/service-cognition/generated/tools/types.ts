@@ -118,6 +118,13 @@ export type EntityItem =
       createdBy: string;
       id: string;
       type: 'call';
+    }
+  | {
+      foreignEntityId: string;
+      foreignEntitySource: string;
+      id: string;
+      metadata: unknown;
+      type: 'foreignEntity';
     };
 export type ToolEntityType =
   | 'document'
@@ -133,7 +140,8 @@ export type ItemType =
   | 'project'
   | 'email'
   | 'channel'
-  | 'call';
+  | 'call'
+  | 'foreign_entity';
 export type SortBy =
   | 'recently_viewed'
   | 'recently_updated'
@@ -149,7 +157,8 @@ export type NotificationItemType =
   | 'project'
   | 'chat'
   | 'call'
-  | 'task';
+  | 'task'
+  | 'github';
 /**
  * Direction for reading more messages around a cursor.
  */
@@ -1163,7 +1172,7 @@ export interface ListCallRecordsResponse {
   records: CallRecordSummary[];
 }
 /**
- * Browse the user's workspace to see recent items they have access to. Returns documents, AI conversations, projects, emails, and chat channels. Use this to get an overview of what the user has been working on or to find items by type. For finding specific items by name or content, use the search tool instead.
+ * Browse the user's workspace to see recent items they have access to. Returns documents, AI conversations, projects, emails, chat channels, call records, and foreign entities. Use this to get an overview of what the user has been working on or to find items by type. For finding specific items by name or content, use the search tool instead.
  */
 export interface ListEntities {
   /**
@@ -1206,6 +1215,12 @@ export interface ListEntities {
    * When the user asks about signal or important emails, use emailView="inbox" together with emailPreset="signal" — do not set emailView="important" in that case. Only override the default when the user explicitly asks for a specific mailbox or label view (e.g. "sent", "drafts", "my Foo label").
    */
   emailView?: string | null;
+  /**
+   * Full soup AST foreign entity filter (fef).
+   */
+  fef?: {
+    [k: string]: unknown;
+  };
   /**
    * Filter returned items to specific item types. If not provided, returns all types. Example: ["document", "email"] returns only documents and emails. This is folded into the AST and applied as part of cursor-level filtering.
    */
@@ -2261,7 +2276,7 @@ export interface SendEmail {
  * Tasks always have these system properties (use these property_definition_id values directly):
  * - Assignees (00000001-0000-0000-0000-000000000001): entity type, multi-select. Use entity_refs with entity_type='user' and entity_id='macro|email@domain.com'.
  * - Status (00000001-0000-0000-0000-000000000002): select_string, single. Options: Not Started (00000001-0000-0000-0002-000000000001), In Progress (...0002), In Review (...0003), Completed (...0004), Canceled (...0005).
- * - Priority (00000001-0000-0000-0000-000000000003): select_string, single. Options: Low (...0001), Medium (...0002), High (...0003), Critical (...0004). Option IDs: 00000001-0000-0000-0003-0000000000XX.
+ * - Priority (00000001-0000-0000-0000-000000000003): select_string, single. Options: Low (...0001), Medium (...0002), High (...0003), Urgent (...0004). Option IDs: 00000001-0000-0000-0003-0000000000XX.
  * - Due Date (00000001-0000-0000-0000-000000000004): date, single. Use date_value with ISO 8601.
  * - Parent Task (00000001-0000-0000-0000-000000000005): entity, single. Use entity_ref with entity_type='task'.
  * - Subtasks (00000001-0000-0000-0000-000000000006): entity, multi. Use entity_refs with entity_type='task'.

@@ -6,7 +6,7 @@ use thiserror::Error;
 use crate::domain::{models::EmailErr, ports::EmailService};
 
 use super::{
-    api_types::ApiLabel, axum_impls::EmailLinkExtractor, previews_router::EmailRouterState,
+    api_types::ApiLabel, axum_impls::MultiEmailLinkExtractor, previews_router::EmailRouterState,
 };
 
 /// Response body for listing labels.
@@ -68,9 +68,12 @@ where
 #[tracing::instrument(err, skip_all)]
 pub async fn list_labels_handler<T: EmailService>(
     State(state): State<EmailRouterState<T>>,
-    Cached(EmailLinkExtractor(link, _)): Cached<EmailLinkExtractor<T>>,
+    Cached(MultiEmailLinkExtractor(links, _)): Cached<MultiEmailLinkExtractor<T>>,
 ) -> Result<Json<ListLabelsResponse>, ListLabelsError> {
-    let labels = state.inner.list_labels(&link).await?;
+    let mut labels = Vec::new();
+    for link in &links {
+        labels.extend(state.inner.list_labels(link).await?);
+    }
     Ok(Json(ListLabelsResponse {
         labels: labels.into_iter().map(Into::into).collect(),
     }))

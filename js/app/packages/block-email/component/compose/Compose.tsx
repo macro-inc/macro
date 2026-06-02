@@ -49,7 +49,10 @@ import {
   useSaveDraftMutation,
 } from '@queries/email/draft';
 import { emailKeys } from '@queries/email/keys';
-import { useEmailLinksQuery } from '@queries/email/link';
+import {
+  useEmailLinksQuery,
+  useNonPrimaryEmailLinkIdHeader,
+} from '@queries/email/link';
 import {
   useSendMessageMutation,
   useUnscheduleMessageMutation,
@@ -101,6 +104,11 @@ export function EmailCompose(props: EmailComposeProps) {
     }
     return undefined;
   });
+
+  const toHeaderLinkId = useNonPrimaryEmailLinkIdHeader();
+  // Scope writes to the inbox this compose sends from (its X-Email-Link-Id
+  // header), so a non-primary "from" inbox drafts/sends from the right account.
+  const headerLinkId = () => toHeaderLinkId(link()?.id);
 
   const hasLinkError = createMemo(() => {
     if (emailLinksQuery.isPending) return false;
@@ -190,7 +198,10 @@ export function EmailCompose(props: EmailComposeProps) {
     if (!draftToSave) {
       const draftID = currentDraftID();
       if (draftID) {
-        await deleteDraftMutation.mutateAsync({ draftId: draftID });
+        await deleteDraftMutation.mutateAsync({
+          draftId: draftID,
+          linkId: headerLinkId(),
+        });
       }
       setCurrentDraftID(undefined);
       return;
@@ -201,6 +212,7 @@ export function EmailCompose(props: EmailComposeProps) {
         ...draftToSave,
         db_id: currentDraftID(),
       },
+      linkId: headerLinkId(),
     });
 
     const draftId = draftResponse.draft.db_id;
@@ -216,6 +228,7 @@ export function EmailCompose(props: EmailComposeProps) {
         const uploaded = await uploadAttachmentMutation.mutateAsync({
           draftID: draftId,
           attachments: attachments.map((a) => a.file),
+          linkId: headerLinkId(),
         });
 
         for (const attachment of uploaded.attachments) {
@@ -264,11 +277,13 @@ export function EmailCompose(props: EmailComposeProps) {
       removeForwardedAttachmentMutation.mutate({
         draftID: savedDraftID,
         attachmentID: attachment.attachmentID,
+        linkId: headerLinkId(),
       });
     } else {
       removeAttachmentMutation.mutate({
         draftID: savedDraftID,
         attachmentID: attachment.attachmentID,
+        linkId: headerLinkId(),
       });
     }
   };
@@ -294,7 +309,7 @@ export function EmailCompose(props: EmailComposeProps) {
 
   const undoSend = async (draftId: string) => {
     try {
-      await emailClient.unscheduleMessage({ draftID: draftId });
+      await emailClient.unscheduleMessage({ draftID: draftId }, headerLinkId());
       queryClient.invalidateQueries({
         queryKey: emailKeys.previews._def,
       });
@@ -437,6 +452,7 @@ export function EmailCompose(props: EmailComposeProps) {
         body_macro: bodyMacro,
         db_id: currentDraftID(),
       },
+      linkId: headerLinkId(),
     });
 
     cleanupWatermark();
@@ -461,6 +477,7 @@ export function EmailCompose(props: EmailComposeProps) {
     if (!date && currentSendTime && currentDraft) {
       unscheduleMessageMutation.mutate({
         draftID: currentDraft,
+        linkId: headerLinkId(),
       });
       form.setSendTime(date);
       return;
@@ -477,14 +494,20 @@ export function EmailCompose(props: EmailComposeProps) {
         return;
       }
 
-      await emailClient.scheduleMessage({
-        draftID,
-        send_time: date.toISOString(),
-      });
+      await emailClient.scheduleMessage(
+        {
+          draftID,
+          send_time: date.toISOString(),
+        },
+        headerLinkId()
+      );
 
       const threadID = saveDraftMutation.data?.draft.thread_db_id;
       if (threadID) {
-        await emailClient.flagArchived({ id: threadID, value: true });
+        await emailClient.flagArchived(
+          { id: threadID, value: true },
+          headerLinkId()
+        );
       }
     }
   };
@@ -518,7 +541,10 @@ export function EmailCompose(props: EmailComposeProps) {
   const deleteDraftAndReset = async () => {
     const draftId = currentDraftID();
     if (draftId) {
-      await deleteDraftMutation.mutateAsync({ draftId });
+      await deleteDraftMutation.mutateAsync({
+        draftId,
+        linkId: headerLinkId(),
+      });
     }
     resetState();
   };

@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT t.id\n            FROM crm_comment c\n            JOIN crm_thread t ON t.id = c.thread_id\n            WHERE c.id = $1\n              AND c.deleted_at IS NULL\n              AND (\n                EXISTS (\n                    SELECT 1 FROM crm_companies co\n                    WHERE co.id = t.company_id\n                      AND co.team_id = $2\n                      AND ($3 OR co.hidden = FALSE)\n                )\n                OR EXISTS (\n                    SELECT 1 FROM crm_contacts ct\n                    JOIN crm_companies co2 ON co2.id = ct.company_id\n                    WHERE ct.id = t.contact_id\n                      AND co2.team_id = $2\n                      AND ($3 OR (ct.hidden = FALSE AND co2.hidden = FALSE))\n                )\n              )\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "98a5db6c9f4cdfa6f855406ad26a11600e5f84094b73f3ce359c48e60b6921be"
+}

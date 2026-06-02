@@ -159,18 +159,7 @@ fn test_resolve_direct_message_channel_name_whitespace_only_display_name() {
 }
 
 #[test]
-fn test_resolve_organization_and_public_channel_name() {
-    let organization_channel = Channel {
-        id: ChannelId(Default::default()),
-        name: Some("organization_channel".to_string()),
-        channel_type: ChannelType::Organization,
-        org_id: None,
-        team_id: None,
-        created_at: chrono::Utc::now(),
-        updated_at: chrono::Utc::now(),
-        owner_id: MacroUserIdStr::parse_from_str("macro|test@test.com").unwrap(),
-    };
-
+fn test_resolve_public_channel_name() {
     let public_channel = Channel {
         id: ChannelId(Default::default()),
         name: Some("public_channel".to_string()),
@@ -182,26 +171,13 @@ fn test_resolve_organization_and_public_channel_name() {
         owner_id: MacroUserIdStr::parse_from_str("macro|test@test.com").unwrap(),
     };
 
-    let org_participants = make_participants(&organization_channel.id.0);
-    let pub_participants = make_participants(&public_channel.id.0);
-
-    assert_eq!(
-        resolve_channel_name(
-            &organization_channel.channel_type,
-            organization_channel.name.as_deref(),
-            &org_participants,
-            &organization_channel.id,
-            MacroUserIdStr::parse_from_str("macro|user1@macro.com").unwrap(),
-            &Default::default()
-        ),
-        "organization_channel"
-    );
+    let participants = make_participants(&public_channel.id.0);
 
     assert_eq!(
         resolve_channel_name(
             &public_channel.channel_type,
             public_channel.name.as_deref(),
-            &pub_participants,
+            &participants,
             &public_channel.id,
             MacroUserIdStr::parse_from_str("macro|user1@macro.com").unwrap(),
             &Default::default()

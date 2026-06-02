@@ -33,14 +33,10 @@ export function ChannelCallButton(props: { channelId: string }) {
       <Button
         onClick={handleClick}
         tooltip={tooltip()}
-        variant="base"
+        variant={isCallInProgress() ? 'success' : 'base'}
         size="sm"
         depth={2}
-        class={cn(
-          'bg-surface',
-          isCallInProgress() &&
-            'bg-accent/20 hover:bg-accent/30 text-accent border-accent/30'
-        )}
+        class={cn(!isCallInProgress() && 'bg-surface')}
       >
         <PhoneIcon />
         <span>{label()}</span>

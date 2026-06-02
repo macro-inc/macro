@@ -5,10 +5,19 @@ use crate::domain::{
     ports::{GithubSyncClient, GithubSyncRepo},
 };
 use documents::domain::ports::DocumentService;
+use foreign_entity::domain::ports::ForeignEntityService;
+use notification::domain::service::NotificationIngress;
 
 use super::GithubSyncServiceImpl;
 
-impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient> GithubSyncServiceImpl<D, R, C> {
+impl<
+    D: DocumentService,
+    R: GithubSyncRepo,
+    C: GithubSyncClient,
+    F: ForeignEntityService,
+    N: NotificationIngress,
+> GithubSyncServiceImpl<D, R, C, F, N>
+{
     /// Handle `installation` events with action `created`.
     ///
     /// Associates the GitHub App installation with the installer's team or user source.
@@ -73,6 +82,9 @@ impl<D: DocumentService, R: GithubSyncRepo, C: GithubSyncClient> GithubSyncServi
             .upsert_installation_sources(&installation_id_str, &sources)
             .await
             .map_err(|e| GithubError::Internal(e.into()))?;
+
+        self.backfill_open_pull_request_foreign_entities(installation_id, &sources)
+            .await?;
 
         Ok(())
     }

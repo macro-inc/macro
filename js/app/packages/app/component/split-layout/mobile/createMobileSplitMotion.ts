@@ -1,6 +1,5 @@
 import { cn } from '@ui';
 import { onCleanup, onMount } from 'solid-js';
-import type { SplitId } from '../layoutManager';
 import { createMobileForwardAnimation } from './createMobileForwardAnimation';
 import { createMobileSwipeBackGesture } from './createMobileSwipeBackGesture';
 import type { MobileSwipeLayout } from './createMobileSwipeLayout';
@@ -13,7 +12,6 @@ const BG_PEEK_OFFSET = 110; // px the BG panel is offset left at rest; closes to
 
 type MobileSplitMotionOptions = {
   mobileSwipeLayout: MobileSwipeLayout;
-  panelRefs: Map<SplitId, HTMLDivElement>;
 };
 
 export function createMobileSplitMotion(options: MobileSplitMotionOptions) {
@@ -23,7 +21,6 @@ export function createMobileSplitMotion(options: MobileSplitMotionOptions) {
     animationMs: SWIPE_ANIMATION_MS,
     bgPeekOffset: BG_PEEK_OFFSET,
     mobileSwipeLayout,
-    panelRefs: options.panelRefs,
   });
   const swipeBackGesture = createMobileSwipeBackGesture({
     animationMs: SWIPE_ANIMATION_MS,
@@ -47,7 +44,9 @@ export function createMobileSplitMotion(options: MobileSplitMotionOptions) {
     mobileSwipeLayout.setForwardNavigationTrigger(undefined);
   });
 
-  const forwardIsActive = () => forwardAnimation.phase() !== 'idle';
+  const forwardPhase = forwardAnimation.phase;
+  const forwardIsActive = () => forwardPhase() !== 'idle';
+  const forwardIsAnimating = () => forwardPhase() === 'animating';
 
   function styleForSlot(isForeground: boolean) {
     if (forwardIsActive()) {
@@ -63,7 +62,7 @@ export function createMobileSplitMotion(options: MobileSplitMotionOptions) {
         'z-10': isForeground && !forwardIsActive(),
         'z-0 pointer-events-none':
           (!isForeground && !forwardIsActive()) ||
-          (isForeground && forwardIsActive()),
+          (isForeground && forwardIsAnimating()),
         'z-user-highlight pointer-events-none':
           !isForeground && forwardIsActive(),
       },
@@ -78,7 +77,6 @@ export function createMobileSplitMotion(options: MobileSplitMotionOptions) {
   return {
     classForSlot,
     styleForSlot,
-    handlePanelRef: forwardAnimation.handlePanelRef,
     handleTransitionEnd: forwardAnimation.handleTransitionEnd,
     handleTouchStart: swipeBackGesture.handleTouchStart,
     handleTouchMove: swipeBackGesture.handleTouchMove,

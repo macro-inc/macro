@@ -1,3 +1,5 @@
-import type { ChannelParticipant as ApiChannelParticipant } from '@service-comms/generated/models';
+import type { ApiChannelParticipant } from '@service-storage/client';
 
-export type ChannelParticipant = ApiChannelParticipant;
+export type ChannelParticipant = ApiChannelParticipant & {
+  left_at?: string | null;
+};

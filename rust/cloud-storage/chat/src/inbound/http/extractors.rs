@@ -8,11 +8,10 @@ use axum::response::IntoResponse;
 use model::user::UserContext;
 use roles_and_permissions::domain::model::PermissionId;
 
-/// Axum extractor that resolves the best AI model a user has access to based
-/// on their permissions.
+/// Axum extractor that resolves the AI model a user is entitled to based on
+/// their permissions.
 ///
-/// The permission hierarchy is: Opus > Sonnet > Haiku.  If the user has none
-/// of these permissions the extractor rejects with `402 Payment Required`.
+/// Paid users (any AI write permission) get Opus.  Free users get Haiku.
 #[derive(Debug)]
 pub struct ChatModelAccess(AgentModel);
 
@@ -29,8 +28,6 @@ pub enum ChatModelAccessRejection {
     MissingUserContext,
     /// The `UserContext` had no permissions attached.
     MissingPermissions,
-    /// The user has no AI model permissions (free tier).
-    NoModelAccess,
 }
 
 impl IntoResponse for ChatModelAccessRejection {
@@ -42,11 +39,6 @@ impl IntoResponse for ChatModelAccessRejection {
             Self::MissingPermissions => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "missing user permissions",
-            )
-                .into_response(),
-            Self::NoModelAccess => (
-                StatusCode::PAYMENT_REQUIRED,
-                "AI features require a paid subscription",
             )
                 .into_response(),
         }
@@ -67,14 +59,14 @@ impl<S: Send + Sync> FromRequestParts<S> for ChatModelAccess {
             .as_ref()
             .ok_or(ChatModelAccessRejection::MissingPermissions)?;
 
-        let model = if permissions.contains(&PermissionId::WriteOpus.to_string()) {
+        let is_paid = permissions.contains(&PermissionId::WriteOpus.to_string())
+            || permissions.contains(&PermissionId::WriteSonnet.to_string())
+            || permissions.contains(&PermissionId::WriteHaiku.to_string());
+
+        let model = if is_paid {
             AgentModel::Opus4_7
-        } else if permissions.contains(&PermissionId::WriteSonnet.to_string()) {
-            AgentModel::Sonnet4_6
-        } else if permissions.contains(&PermissionId::WriteHaiku.to_string()) {
-            AgentModel::Haiku4_5
         } else {
-            return Err(ChatModelAccessRejection::NoModelAccess);
+            AgentModel::Haiku4_5
         };
 
         Ok(ChatModelAccess(model))

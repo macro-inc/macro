@@ -76,7 +76,7 @@ function AttachImagesAction() {
   );
 }
 
-function DefaultActions(props: { input: InputData }) {
+function DefaultActions(props: { input: InputData; isSending: boolean }) {
   return (
     <Input.Actions>
       <Input.Actions.Left>
@@ -87,7 +87,7 @@ function DefaultActions(props: { input: InputData }) {
         </Show>
       </Input.Actions.Left>
       <Input.Actions.Right>
-        <Input.SendAction tooltip="Send comment" />
+        <Input.SendAction tooltip="Send comment" disabled={props.isSending} />
       </Input.Actions.Right>
     </Input.Actions>
   );
@@ -98,6 +98,7 @@ export function DiscussionInput(props: DiscussionInputProps) {
   const [value, setValue] = createSignal(props.input.value ?? '');
   const [mentions, setMentions] = createSignal<ItemMention[]>([]);
   const [showFormatRibbon, setShowFormatRibbon] = createSignal(false);
+  const [isSending, setIsSending] = createSignal(false);
 
   const inputView = () => ({
     ...props.input,
@@ -146,10 +147,16 @@ export function DiscussionInput(props: DiscussionInputProps) {
 
   const commands = {
     send: async () => {
+      if (isSending()) return false;
       const snapshot = createSnapshot();
       if (!snapshot.value.trim()) return false;
-      await props.onSend?.(snapshot);
-      return true;
+      setIsSending(true);
+      try {
+        await props.onSend?.(snapshot);
+        return true;
+      } finally {
+        setIsSending(false);
+      }
     },
     close: () => {
       props.onClose?.(createSnapshot());
@@ -235,7 +242,7 @@ export function DiscussionInput(props: DiscussionInputProps) {
             <Switch>
               <Match when={props.children}>{props.children}</Match>
               <Match when>
-                <DefaultActions input={inputView()} />
+                <DefaultActions input={inputView()} isSending={isSending()} />
               </Match>
             </Switch>
           </Input.Footer>

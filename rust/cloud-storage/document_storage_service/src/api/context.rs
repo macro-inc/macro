@@ -3,6 +3,10 @@ use contacts::outbound::ingress::SqsContactsQueue;
 
 use crate::{config::Config, service::s3::S3};
 use axum::extract::FromRef;
+use bots::{
+    domain::service::BotServiceImpl, inbound::axum_router::BotsRouterState,
+    outbound::pg_bots_repo::PgBotsRepo,
+};
 use cal::{
     domain::service::CalWebhookServiceImpl, inbound::cal_webhook_router::CalWebhookRouterState,
     outbound::analytics_client::AnalyticsClientSink,
@@ -32,7 +36,6 @@ use comms::{
     inbound::router::CommsRouterState,
     outbound::postgres::{comms_repo::PgCommsRepo, user_repo::PgUserRepo},
 };
-use comms_service::CommsHandlerState;
 use connection::{
     domain::service::ConnectionServiceImpl,
     outbound::connection_gateway_client::ConnectionGatewayImpl,
@@ -49,6 +52,10 @@ use email::{
     outbound::EmailPgRepo,
 };
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
+use foreign_entity::{
+    domain::service::ForeignEntityServiceImpl, inbound::axum_router::ForeignEntityRouterState,
+    outbound::pg_foreign_entity_repo::PgForeignEntityRepo,
+};
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use github::domain::service::GithubSyncServiceImpl;
 use github::outbound::github_sync_client::GithubSyncClientImpl;
@@ -65,7 +72,6 @@ use properties::{
 use properties_service::PropertiesHandlerState;
 use readonly_pool::ReadOnlyPool;
 use search_service::SearchHandlerState;
-use secretsmanager_client::LocalOrRemoteSecret;
 use soup::{
     domain::service::SoupImpl, inbound::axum_router::SoupRouterState,
     outbound::pg_soup_repo::PgSoupRepo,
@@ -107,6 +113,8 @@ type DssSoupState = SoupRouterState<
         ReadonlyEmailPreviewAdapter<DssEmailService>,
         CommsChannelServiceImpl<PgCommsRepo, PgUserRepo, FrecencyPgStorage>,
         call::domain::service::CallRecordQueryServiceImpl<call::outbound::pg_call_repo::PgCallRepo>,
+        DssCrmService,
+        ForeignEntityServiceType,
     >,
     DssEmailService,
     EntityAccessService,
@@ -193,6 +201,7 @@ pub(crate) type DocumentService = DocumentServiceImpl<
     TaskPropertiesAdapter,
     ConnectionServiceImpl<EntityAccessService, ConnectionGatewayImpl>,
     EntityAccessManagementService,
+    ForeignEntityServiceImpl<PgForeignEntityRepo>,
 >;
 
 /// Type alias for the documents router state.
@@ -222,6 +231,12 @@ pub(crate) type DssChannelService = ChannelServiceImpl<
 
 /// Type alias for the channels router state.
 pub(crate) type DssChannelsState = ChannelsRouterState<DssChannelService, EntityAccessService>;
+
+/// Type alias for the bots service wired into DSS.
+pub(crate) type DssBotService = BotServiceImpl<PgBotsRepo>;
+
+/// Type alias for the bots router state.
+pub(crate) type DssBotsState = BotsRouterState<DssBotService, EntityAccessService>;
 
 /// Type alias for the call connection service.
 pub(crate) type CallConnectionService =
@@ -258,9 +273,21 @@ pub(crate) type DssCallWebhookState = WebhookRouterState<DssCallService>;
 /// Type alias for the internal call router state.
 pub(crate) type DssCallInternalState = InternalCallRouterState<DssCallService>;
 
+/// Type alias for the foreign entity service.
+pub(crate) type ForeignEntityServiceType = ForeignEntityServiceImpl<PgForeignEntityRepo>;
+
+/// Type alias for the foreign entity router state.
+pub(crate) type DssForeignEntityState =
+    ForeignEntityRouterState<ForeignEntityServiceType, EntityAccessService>;
+
 /// Type alias for the github sync service.
-pub(crate) type GithubSyncServiceType =
-    GithubSyncServiceImpl<DocumentService, PgGithubSyncRepo, GithubSyncClientImpl>;
+pub(crate) type GithubSyncServiceType = GithubSyncServiceImpl<
+    DocumentService,
+    PgGithubSyncRepo,
+    GithubSyncClientImpl,
+    ForeignEntityServiceType,
+    NotificationIngressType,
+>;
 
 /// Type alias for the cal.com webhook service.
 pub(crate) type CalWebhookServiceType = CalWebhookServiceImpl<AnalyticsClientSink>;
@@ -278,6 +305,7 @@ pub(crate) struct ApiContext {
     pub dynamodb_client: Arc<DynamodbClient>,
     pub dynamo_db: aws_sdk_dynamodb::Client,
     pub soup_router_state: DssSoupState,
+    pub foreign_entity_state: DssForeignEntityState,
     pub sqs_client: Arc<sqs_client::SQS>,
     pub contacts_ingress: Arc<SqsContactsIngress<SqsContactsQueue>>,
     pub notification_ingress_service: Arc<NotificationIngressType>,
@@ -292,11 +320,10 @@ pub(crate) struct ApiContext {
     // Comms service fields
     pub frecency_storage: FrecencyPgStorage,
     pub comms_state: CommsState,
-    pub permissions_token_secret:
-        LocalOrRemoteSecret<comms_service::DocumentPermissionJwtSecretKey>,
     pub entity_access_service: Arc<EntityAccessService>,
     pub documents_state: DocumentsState,
     pub channels_state: DssChannelsState,
+    pub bots_state: DssBotsState,
     pub call_state: DssCallState,
     pub call_webhook_state: DssCallWebhookState,
     pub call_internal_state: DssCallInternalState,
@@ -338,28 +365,5 @@ impl From<&ApiContext> for SearchHandlerState {
 impl FromRef<ApiContext> for SearchHandlerState {
     fn from_ref(ctx: &ApiContext) -> Self {
         SearchHandlerState::from(ctx)
-    }
-}
-
-impl From<&ApiContext> for CommsHandlerState {
-    fn from(ctx: &ApiContext) -> Self {
-        CommsHandlerState {
-            jwt_validation_args: ctx.jwt_validation_args.clone(),
-            db: ctx.db.clone(),
-            connection_gateway_client: ctx.conn_gateway_client.clone(),
-            notification_ingress_service: ctx.notification_ingress_service.clone(),
-            sqs_client: ctx.sqs_client.clone(),
-            contacts_ingress: ctx.contacts_ingress.clone(),
-            permissions_token_secret: ctx.permissions_token_secret.clone(),
-            frecency_storage: ctx.frecency_storage.clone(),
-            comms_state: ctx.comms_state.clone(),
-            entity_access_service: ctx.entity_access_service.clone(),
-        }
-    }
-}
-
-impl FromRef<ApiContext> for CommsHandlerState {
-    fn from_ref(ctx: &ApiContext) -> Self {
-        CommsHandlerState::from(ctx)
     }
 }

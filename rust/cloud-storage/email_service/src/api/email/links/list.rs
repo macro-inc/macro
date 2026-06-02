@@ -70,12 +70,10 @@ pub async fn list_links_handler(
     user_context: Extension<UserContext>,
     Query(query_params): Query<QueryParams>,
 ) -> Result<Response, ListLinksError> {
-    let links = email_db_client::links::get::fetch_links_by_fusionauth_user_id(
-        &ctx.db,
-        &user_context.fusion_user_id,
-    )
-    .await
-    .map_err(ListLinksError::DatabaseError)?;
+    let links =
+        email_db_client::links::get::fetch_inboxes_for_macro_id(&ctx.db, &user_context.user_id)
+            .await
+            .map_err(ListLinksError::DatabaseError)?;
 
     let tasks = links.into_iter().map(|link| {
         let ctx = ctx.clone();
@@ -83,6 +81,17 @@ pub async fn list_links_handler(
             let settings = email_db_client::settings::fetch_settings(&ctx.db, link.id)
                 .await
                 .map_err(ListLinksError::DatabaseError)?;
+
+            let latest_job =
+                email_db_client::backfill::job::get::get_latest_backfill_job_by_link_id(
+                    &ctx.db, link.id,
+                )
+                .await
+                .map_err(ListLinksError::DatabaseError)?;
+            let sync_status = api::link::SyncStatus::derive(
+                link.is_sync_active,
+                latest_job.map(|job| job.status),
+            );
 
             let signature = if query_params.include_signature {
                 let access_token = fetch_gmail_access_token_from_link(
@@ -105,6 +114,7 @@ pub async fn list_links_handler(
                 link,
                 signature,
                 api::settings::Settings::from(settings),
+                sync_status,
             ))
         }
     });

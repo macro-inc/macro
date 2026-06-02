@@ -5,6 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { EnrichedGithubPullRequestAdditions } from './enrichedGithubPullRequestAdditions';
+import type { EnrichedGithubPullRequestChecks } from './enrichedGithubPullRequestChecks';
+import type { EnrichedGithubPullRequestComments } from './enrichedGithubPullRequestComments';
 import type { EnrichedGithubPullRequestDeletions } from './enrichedGithubPullRequestDeletions';
 import type { EnrichedGithubPullRequestName } from './enrichedGithubPullRequestName';
 import type { EnrichedGithubPullRequestStatus } from './enrichedGithubPullRequestStatus';
@@ -18,6 +20,10 @@ export interface EnrichedGithubPullRequest {
    * @minimum 0
    */
   additions?: EnrichedGithubPullRequestAdditions;
+  /** Check runs collected from the pull request head commit, when enrichment includes them. */
+  checks?: EnrichedGithubPullRequestChecks;
+  /** Comments collected from the pull request, when enrichment includes them. */
+  comments?: EnrichedGithubPullRequestComments;
   /**
    * The number of deleted lines reported by GitHub, when enrichment succeeds.
    * @minimum 0

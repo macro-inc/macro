@@ -26,6 +26,7 @@ import type { SafeFetchInit } from '@core/util/safeFetch';
 import type { IDocumentStorageServiceFile } from '@filesystem/file';
 import { platformFetch } from 'core/util/platformFetch';
 import { err, ok, type Result } from 'neverthrow';
+import type { ApiChannelWithLatest } from './channel-list-types';
 import type {
   AccessLevel,
   CallRecordPreview,
@@ -36,15 +37,28 @@ import type {
   View,
   ViewsResponse,
 } from './generated/schemas';
+import type { AddParticipantsRequest } from './generated/schemas/addParticipantsRequest';
 import type { AddPinRequest } from './generated/schemas/addPinRequest';
 import type { AnchorResponse } from './generated/schemas/anchorResponse';
+import type { ApiActivity } from './generated/schemas/apiActivity';
+import type { ApiChannelAttachmentsPage } from './generated/schemas/apiChannelAttachmentsPage';
+import type { ApiChannelMessagesPage } from './generated/schemas/apiChannelMessagesPage';
+import type { ApiChannelParticipant } from './generated/schemas/apiChannelParticipant';
+import type { ApiResolvedChannelMessage } from './generated/schemas/apiResolvedChannelMessage';
+import type { ApiThreadReply } from './generated/schemas/apiThreadReply';
+import type { ChannelMessageFilters } from './generated/schemas/channelMessageFilters';
+import { ChannelType } from './generated/schemas/channelType';
 import {
   type CloudStorageItemType,
   CloudStorageItemType as CloudStorageItemTypeMap,
 } from './generated/schemas/cloudStorageItemType';
+import type { CreateChannelRequest } from './generated/schemas/createChannelRequest';
+import type { CreateChannelResponse } from './generated/schemas/createChannelResponse';
 import type { CreateCommentResponse } from './generated/schemas/createCommentResponse';
 import type { CreateDocument200 as CreateDocumentResponse } from './generated/schemas/createDocument200';
 import type { CreateDocumentRequest } from './generated/schemas/createDocumentRequest';
+import type { CreateEntityMentionRequest } from './generated/schemas/createEntityMentionRequest';
+import type { CreateEntityMentionResponse } from './generated/schemas/createEntityMentionResponse';
 import type { CreateInstructionsDocumentResponse } from './generated/schemas/createInstructionsDocumentResponse';
 import type { CreateMarkdownDocumentRequest } from './generated/schemas/createMarkdownDocumentRequest';
 import type { CreateMarkdownHandler200 } from './generated/schemas/createMarkdownHandler200';
@@ -53,6 +67,7 @@ import type { CreateTaskHandler200 } from './generated/schemas/createTaskHandler
 import type { CreateTaskRequest } from './generated/schemas/createTaskRequest';
 import type { CreateUnthreadedAnchorResponse } from './generated/schemas/createUnthreadedAnchorResponse';
 import type { DeleteCommentResponse } from './generated/schemas/deleteCommentResponse';
+import type { DeleteEntityMentionResponse } from './generated/schemas/deleteEntityMentionResponse';
 import type { DeleteUnthreadedAnchorResponse } from './generated/schemas/deleteUnthreadedAnchorResponse';
 import type { DocumentMetadata } from './generated/schemas/documentMetadata';
 import type { DocumentPreview } from './generated/schemas/documentPreview';
@@ -60,19 +75,35 @@ import type { DocumentResponseMetadataWithContent } from './generated/schemas/do
 import type { EditAnchorResponse } from './generated/schemas/editAnchorResponse';
 import type { EditCommentResponse } from './generated/schemas/editCommentResponse';
 import type { ExportDocumentResponse } from './generated/schemas/exportDocumentResponse';
+import type { GetAttachmentReferencesResponse } from './generated/schemas/getAttachmentReferencesResponse';
+import type { GetBatchChannelPreviewRequest } from './generated/schemas/getBatchChannelPreviewRequest';
+import type { GetBatchChannelPreviewResponse } from './generated/schemas/getBatchChannelPreviewResponse';
 import type { GetBatchProjectPreviewResponse } from './generated/schemas/getBatchProjectPreviewResponse';
 import type { GetDocumentPermissionsResponseDataV2 } from './generated/schemas/getDocumentPermissionsResponseDataV2';
 import type { GetDocumentProcessingResultResponse } from './generated/schemas/getDocumentProcessingResultResponse';
 import type { GetDocumentResponseData } from './generated/schemas/getDocumentResponseData';
 import type { GetDocumentSearchResponse } from './generated/schemas/getDocumentSearchResponse';
 import type { GetInstructionsDocumentResponse } from './generated/schemas/getInstructionsDocumentResponse';
+import type { GetMessageWithContextParams } from './generated/schemas/getMessageWithContextParams';
+import type { GetMessageWithContextResponse } from './generated/schemas/getMessageWithContextResponse';
+import type { GetOrCreateChannelResponse } from './generated/schemas/getOrCreateChannelResponse';
+import type { GetOrCreateDmRequest } from './generated/schemas/getOrCreateDmRequest';
+import type { GetOrCreatePrivateRequest } from './generated/schemas/getOrCreatePrivateRequest';
 import type { GetPendingProjectsHandler200 } from './generated/schemas/getPendingProjectsHandler200';
 import type { GetProjectContentResponse } from './generated/schemas/getProjectContentResponse';
 import type { GetProjectResponse } from './generated/schemas/getProjectResponse';
 import type { Item } from './generated/schemas/item';
 import type { LocationResponseV3 } from './generated/schemas/locationResponseV3';
+import type { PatchChannelRequest } from './generated/schemas/patchChannelRequest';
+import type { PatchMessageRequest } from './generated/schemas/patchMessageRequest';
 import type { PinRequest } from './generated/schemas/pinRequest';
+import type { PostActivityRequest } from './generated/schemas/postActivityRequest';
+import type { PostMessageRequest } from './generated/schemas/postMessageRequest';
+import type { PostMessageResponse } from './generated/schemas/postMessageResponse';
+import type { PostReactionRequest } from './generated/schemas/postReactionRequest';
+import type { PostTypingRequest } from './generated/schemas/postTypingRequest';
 import type { Project } from './generated/schemas/project';
+import type { RemoveParticipantsRequest } from './generated/schemas/removeParticipantsRequest';
 import type { ReorderPinRequest } from './generated/schemas/reorderPinRequest';
 import type { SaveDocumentResponseData } from './generated/schemas/saveDocumentResponseData';
 import type { SharePermissionV2 } from './generated/schemas/sharePermissionV2';
@@ -135,6 +166,56 @@ export type ItemType =
   | 'automation';
 
 export const DEFAULT_ITEM_TYPE: ItemType = 'document';
+
+export type { ApiAttachmentChannelReference } from './generated/schemas/apiAttachmentChannelReference';
+export type { ApiAttachmentEntityReference } from './generated/schemas/apiAttachmentEntityReference';
+export type { ApiAttachmentGenericReference } from './generated/schemas/apiAttachmentGenericReference';
+export type { ApiChannelAttachment } from './generated/schemas/apiChannelAttachment';
+export type { ApiChannelAttachmentsPage as ChannelAttachmentsPage } from './generated/schemas/apiChannelAttachmentsPage';
+export type { ApiChannelContextMessage } from './generated/schemas/apiChannelContextMessage';
+export type { ApiChannelMessage } from './generated/schemas/apiChannelMessage';
+export type { ApiChannelMessagesPage as ChannelMessagesPage } from './generated/schemas/apiChannelMessagesPage';
+export type { ApiChannelParticipant } from './generated/schemas/apiChannelParticipant';
+export type { ApiThreadReply } from './generated/schemas/apiThreadReply';
+export type { GetOrCreateChannelResponse } from './generated/schemas/getOrCreateChannelResponse';
+
+export type IdResponse = { id: string };
+export type MessageResponse = { message: string };
+
+export type TaskDuplicate = {
+  id: string;
+  taskId: string;
+  taskName: string;
+  vectorScore: number;
+  judgeReason?: string | null;
+};
+
+export type TaskDuplicatesResponse = {
+  duplicates: TaskDuplicate[];
+};
+
+export type TaskSimilarityResult = {
+  taskId: string;
+  taskName: string;
+  vectorScore: number;
+};
+
+export type TaskSimilaritySearchResponse = {
+  results: TaskSimilarityResult[];
+};
+
+type WithChannelId = { channel_id: string };
+type WithMessageId = { message_id: string };
+type WithMentionId = { mention_id: string };
+type WithEntity = { entity_type: string; entity_id: string };
+export type ChannelAttachmentType = 'static' | 'dss';
+
+export const ChannelTypeEnum = {
+  Public: ChannelType.public,
+  Private: ChannelType.private,
+  DirectMessage: ChannelType.direct_message,
+  Team: ChannelType.team,
+} as const satisfies Record<string, ChannelType>;
 
 const itemTypeSet = new Set([
   'document',
@@ -293,6 +374,383 @@ export const storageServiceClient = {
       method: 'POST',
       body: JSON.stringify(body),
     });
+  },
+
+  async createChannel(args: CreateChannelRequest) {
+    return (
+      await dssFetch<CreateChannelResponse>(`/channels`, {
+        method: 'POST',
+        body: JSON.stringify(args),
+      })
+    ).map((result) => result);
+  },
+
+  // The channel list is still served by the comms hex, mounted at
+  // `/comms/channels` on the same DSS host. Repoint to `/channels` once the
+  // list moves into the channels hex (alongside the comms teardown).
+  async getChannels() {
+    return (
+      await dssFetch<ApiChannelWithLatest[]>(`/comms/channels`, {
+        method: 'GET',
+      })
+    ).map((result) => result);
+  },
+
+  async getOrCreateDirectMessage(args: GetOrCreateDmRequest) {
+    const { recipient_id } = args;
+    return (
+      await dssFetch<GetOrCreateChannelResponse>(`/channels/get_or_create_dm`, {
+        method: 'POST',
+        body: JSON.stringify({ recipient_id }),
+      })
+    ).map((result) => result);
+  },
+
+  async getOrCreatePrivateChannel(args: GetOrCreatePrivateRequest) {
+    const { recipients } = args;
+    return (
+      await dssFetch<GetOrCreateChannelResponse>(
+        `/channels/get_or_create_private`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ recipients }),
+        }
+      )
+    ).map((result) => result);
+  },
+
+  async patchChannel(args: WithChannelId & PatchChannelRequest) {
+    const { channel_id, channel_name } = args;
+    return (
+      await dssFetch<MessageResponse>(`/channels/${channel_id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ channel_name }),
+      })
+    ).map((result) => result);
+  },
+
+  async deleteChannel(args: WithChannelId) {
+    const { channel_id } = args;
+    return (
+      await dssFetch<MessageResponse>(`/channels/${channel_id}`, {
+        method: 'DELETE',
+      })
+    ).map((result) => result);
+  },
+
+  async postMessage(
+    args: WithChannelId & { message: PostMessageRequest; nonce?: string }
+  ) {
+    const { channel_id, message, nonce } = args;
+    const uniqueMentions = Array.from(new Set(message.mentions));
+    const sendMessage = { ...message, mentions: uniqueMentions, nonce };
+    return (
+      await dssFetch<PostMessageResponse>(`/channels/${channel_id}/message`, {
+        method: 'POST',
+        body: JSON.stringify(sendMessage),
+      })
+    ).map((result) => result);
+  },
+
+  async patchMessage(
+    args: PatchMessageRequest &
+      WithChannelId &
+      WithMessageId & { nonce?: string }
+  ) {
+    const {
+      channel_id,
+      content,
+      message_id,
+      mentions,
+      attachment_ids_to_delete,
+      attachments_to_add,
+      nonce,
+    } = args;
+    return (
+      await dssFetch<MessageResponse>(
+        `/channels/${channel_id}/message/${message_id}`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({
+            content,
+            mentions,
+            attachment_ids_to_delete,
+            attachments_to_add,
+            nonce,
+          }),
+        }
+      )
+    ).map((result) => result);
+  },
+
+  async deleteMessage(
+    args: WithChannelId & WithMessageId & { nonce?: string }
+  ) {
+    const { channel_id, message_id, nonce } = args;
+    const params = new URLSearchParams();
+    if (nonce) params.append('nonce', nonce);
+    const query = params.toString();
+    return (
+      await dssFetch<MessageResponse>(
+        `/channels/${channel_id}/message/${message_id}${query ? `?${query}` : ''}`,
+        {
+          method: 'DELETE',
+        }
+      )
+    ).map((result) => result);
+  },
+
+  async postReaction(
+    args: PostReactionRequest & WithChannelId & { nonce?: string }
+  ) {
+    const { channel_id, action, emoji, message_id, nonce } = args;
+    return (
+      await dssFetch<MessageResponse>(`/channels/${channel_id}/reaction`, {
+        method: 'POST',
+        body: JSON.stringify({ action, emoji, message_id, nonce }),
+      })
+    ).map((result) => result);
+  },
+
+  async postTypingUpdate(
+    args: PostTypingRequest & WithChannelId & { nonce?: string }
+  ) {
+    const { channel_id, action, thread_id, nonce } = args;
+    return (
+      await dssFetch<MessageResponse>(`/channels/${channel_id}/typing`, {
+        method: 'POST',
+        body: JSON.stringify({ action, thread_id, nonce }),
+      })
+    ).map((result) => result);
+  },
+
+  async addParticipantsToChanenl(args: AddParticipantsRequest & WithChannelId) {
+    const { channel_id, participants } = args;
+    return (
+      await dssFetch<MessageResponse>(`/channels/${channel_id}/participants`, {
+        method: 'POST',
+        body: JSON.stringify({ participants }),
+      })
+    ).map((result) => result);
+  },
+
+  async addParticipantsToChannel(args: AddParticipantsRequest & WithChannelId) {
+    const { channel_id, participants } = args;
+    return (
+      await dssFetch<MessageResponse>(`/channels/${channel_id}/participants`, {
+        method: 'POST',
+        body: JSON.stringify({ participants }),
+      })
+    ).map((result) => result);
+  },
+
+  async removeParticipantsFromChannel(
+    args: RemoveParticipantsRequest & WithChannelId
+  ) {
+    const { channel_id, participants } = args;
+    return (
+      await dssFetch<MessageResponse>(`/channels/${channel_id}/participants`, {
+        method: 'DELETE',
+        body: JSON.stringify({ participants }),
+      })
+    ).map((result) => result);
+  },
+
+  async joinChannel(args: WithChannelId) {
+    const { channel_id } = args;
+    return (
+      await dssFetch<MessageResponse>(`/channels/${channel_id}/join`, {
+        method: 'POST',
+      })
+    ).map((result) => result);
+  },
+
+  async leaveChannel(args: WithChannelId) {
+    const { channel_id } = args;
+    return (
+      await dssFetch<MessageResponse>(`/channels/${channel_id}/leave`, {
+        method: 'POST',
+      })
+    ).map((result) => result);
+  },
+
+  async getBatchChannelPreviews(args: GetBatchChannelPreviewRequest) {
+    const { channel_ids } = args;
+    return (
+      await dssFetch<GetBatchChannelPreviewResponse>(`/channels/preview`, {
+        method: 'POST',
+        body: JSON.stringify({ channel_ids }),
+      })
+    ).map((result) => result);
+  },
+
+  async getChannelMessages(
+    args: WithChannelId & {
+      limit: number;
+      next_cursor: string | null;
+      previous_cursor: string | null;
+      load_around_message_id: string | null;
+    }
+  ) {
+    const {
+      channel_id,
+      limit,
+      next_cursor,
+      previous_cursor,
+      load_around_message_id,
+    } = args;
+    const params = new URLSearchParams();
+    params.append('limit', limit.toString());
+    if (load_around_message_id) {
+      params.append('load_around_message_id', load_around_message_id);
+    } else if (next_cursor) {
+      params.append('cursor', next_cursor);
+    } else if (previous_cursor) {
+      params.append('previous_cursor', previous_cursor);
+    }
+    return (
+      await dssFetch<ApiChannelMessagesPage>(
+        `/channels/${channel_id}/messages?${params.toString()}`,
+        { method: 'GET' }
+      )
+    ).map((result) => result);
+  },
+
+  async postChannelMessages(
+    args: WithChannelId & { filters: ChannelMessageFilters; limit?: number }
+  ) {
+    const { channel_id, filters, limit } = args;
+    const params = new URLSearchParams();
+    if (limit !== undefined) params.append('limit', limit.toString());
+    const query = params.toString();
+    return (
+      await dssFetch<ApiChannelMessagesPage>(
+        `/channels/${channel_id}/messages${query ? `?${query}` : ''}`,
+        {
+          method: 'POST',
+          body: JSON.stringify(filters),
+        }
+      )
+    ).map((result) => result);
+  },
+
+  async getThreadReplies(args: WithChannelId & WithMessageId) {
+    const { channel_id, message_id } = args;
+    return (
+      await dssFetch<Array<ApiThreadReply>>(
+        `/channels/${channel_id}/messages/${message_id}/replies`,
+        { method: 'GET' }
+      )
+    ).map((result) => result);
+  },
+
+  async resolveChannelMessage(args: WithChannelId & WithMessageId) {
+    const { channel_id, message_id } = args;
+    return (
+      await dssFetch<ApiResolvedChannelMessage>(
+        `/channels/${channel_id}/messages/${message_id}/resolve`,
+        { method: 'GET' }
+      )
+    ).map((result) => result);
+  },
+
+  async getMessageWithContext(
+    args: WithChannelId &
+      WithMessageId &
+      GetMessageWithContextParams & { signal?: AbortSignal }
+  ) {
+    const { channel_id, message_id, before, after, signal } = args;
+    const params = new URLSearchParams();
+    if (before !== undefined) params.append('before', before.toString());
+    if (after !== undefined) params.append('after', after.toString());
+    const query = params.toString();
+    return (
+      await dssFetch<GetMessageWithContextResponse>(
+        `/channels/${channel_id}/messages/${message_id}/context${query ? `?${query}` : ''}`,
+        { method: 'GET', signal }
+      )
+    ).map((result) => result);
+  },
+
+  async getChannelAttachments(
+    args: WithChannelId & {
+      limit: number;
+      cursor: string | null;
+      attachment_type?: ChannelAttachmentType;
+      signal?: AbortSignal;
+    }
+  ) {
+    const { channel_id, limit, cursor, attachment_type, signal } = args;
+    const params = new URLSearchParams();
+    params.append('limit', limit.toString());
+    if (cursor) params.append('cursor', cursor);
+    if (attachment_type) params.append('attachment_type', attachment_type);
+    return (
+      await dssFetch<ApiChannelAttachmentsPage>(
+        `/channels/${channel_id}/attachments?${params.toString()}`,
+        { method: 'GET', signal }
+      )
+    ).map((result) => result);
+  },
+
+  async getChannelParticipants(args: WithChannelId) {
+    const { channel_id } = args;
+    return (
+      await dssFetch<ApiChannelParticipant[]>(
+        `/channels/${channel_id}/participants`,
+        { method: 'GET' }
+      )
+    ).map((result) => result);
+  },
+
+  async createEntityMention(args: CreateEntityMentionRequest, token?: string) {
+    return (
+      await dssFetch<CreateEntityMentionResponse>(`/channels/mentions`, {
+        method: 'POST',
+        body: JSON.stringify(args),
+        headers: token ? { 'x-permissions-token': token } : undefined,
+      })
+    ).map((result) => result);
+  },
+
+  async deleteEntityMention(args: WithMentionId, token?: string) {
+    return (
+      await dssFetch<DeleteEntityMentionResponse>(
+        `/channels/mentions/${args.mention_id}`,
+        {
+          method: 'DELETE',
+          headers: token ? { 'x-permissions-token': token } : undefined,
+        }
+      )
+    ).map((result) => result);
+  },
+
+  async attachmentReferences(args: WithEntity) {
+    const { entity_type, entity_id } = args;
+    return (
+      await dssFetch<GetAttachmentReferencesResponse>(
+        `/channels/attachments/${entity_type}/${entity_id}/references`,
+        { method: 'GET' }
+      )
+    ).map((result) => result);
+  },
+
+  async getActivity() {
+    return (
+      await dssFetch<Array<ApiActivity>>(`/channels/activity`, {
+        method: 'GET',
+      })
+    ).map((result) => result);
+  },
+
+  async postActivity(args: PostActivityRequest) {
+    const { activity_type, channel_id } = args;
+    return (
+      await dssFetch<ApiActivity>(`/channels/activity`, {
+        method: 'POST',
+        body: JSON.stringify({ activity_type, channel_id }),
+      })
+    ).map((result) => result);
   },
 
   permissionsTokens: {
@@ -530,6 +988,63 @@ export const storageServiceClient = {
 
     const response = result.value;
     return ok(response);
+  },
+
+  async getTaskDuplicates(params: { documentId: string }) {
+    return (
+      await dssFetch<TaskDuplicatesResponse>(
+        `/documents/${params.documentId}/duplicates`
+      )
+    ).map((result) => result.duplicates);
+  },
+
+  async searchSimilarTasks(params: {
+    taskName: string;
+    markdown?: string;
+    shareWithTeam?: boolean;
+  }) {
+    return (
+      await dssFetch<TaskSimilaritySearchResponse>(
+        `/documents/similarity_search`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            taskName: params.taskName,
+            markdown: params.markdown,
+            shareWithTeam: params.shareWithTeam ?? false,
+          }),
+        }
+      )
+    ).map((result) => result.results);
+  },
+
+  async dismissTaskDuplicates(params: {
+    documentId: string;
+    matchIds: string[];
+  }) {
+    return (
+      await dssFetch<SuccessResponse>(
+        `/documents/${params.documentId}/duplicates/dismiss`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ matchIds: params.matchIds }),
+        }
+      )
+    ).map((result) => result.data);
+  },
+
+  async deleteThisDuplicateTask(params: {
+    documentId: string;
+    matchId: string;
+  }) {
+    return (
+      await dssFetch<SuccessResponse>(
+        `/documents/${params.documentId}/duplicates/${params.matchId}/delete_this`,
+        {
+          method: 'POST',
+        }
+      )
+    ).map((result) => result.data);
   },
 
   async copyDocument(params: {

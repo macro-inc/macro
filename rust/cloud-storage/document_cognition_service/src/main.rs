@@ -1,9 +1,6 @@
 #![recursion_limit = "256"]
 use crate::api::context::ApiContext;
-use ai_tools::{
-    NoOpCallRtcClient, NoOpConnectionService, NoOpNotificationIngress, NoOpNotificationService,
-    NoOpTaskProperties,
-};
+use ai_tools::{NoOpCallRtcClient, NoOpConnectionService, NoOpNotificationIngress};
 use anyhow::Context;
 use call::domain::service::{CallRecordQueryServiceImpl, CallServiceImpl};
 use call::inbound::toolset::CallToolContext;
@@ -12,7 +9,6 @@ use call::outbound::s3_recording_storage::S3RecordingStorage;
 use comms::domain::service::ChannelServiceImpl;
 use comms::outbound::postgres::comms_repo::PgCommsRepo;
 use comms::outbound::postgres::user_repo::PgUserRepo;
-use comms_service_client::CommsServiceClient;
 use config::{Config, EnvVars, Environment};
 use document_storage_service_client::DocumentStorageServiceClient;
 use documents::{
@@ -25,6 +21,10 @@ use email::domain::service::EmailServiceImpl;
 use email::outbound::EmailPgRepo;
 use email_service_client::{EmailServiceClient, EmailServiceClientExternal};
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
+use foreign_entity::{
+    domain::service::ForeignEntityServiceImpl,
+    outbound::pg_foreign_entity_repo::PgForeignEntityRepo,
+};
 use frecency::domain::services::FrecencyQueryServiceImpl;
 use frecency::outbound::postgres::FrecencyPgStorage;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
@@ -103,10 +103,6 @@ async fn main() -> anyhow::Result<()> {
     );
 
     tracing::info!("initialized dss client");
-    // Comms service is now served from document_storage_service under /comms prefix
-    let comms_service_client = CommsServiceClient::new(config.document_storage_service_url.clone());
-
-    tracing::info!("initialized comms client");
     let sync_service_auth_key = match config.environment {
         Environment::Local => config.sync_service_auth_key.clone(),
         _ => secretsmanager_client
@@ -220,12 +216,16 @@ async fn main() -> anyhow::Result<()> {
         frecency_storage,
     );
     let email_service_for_tools: Arc<ai_tools::ToolEmailService> = Arc::new(email_service.clone());
+    let foreign_entity_service =
+        ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone()));
     let soup_service = Arc::new(soup::domain::service::SoupImpl::new(
         soup::outbound::pg_soup_repo::PgSoupRepo::new(ReadOnlyPool(db.clone())),
         frecency_service,
         ReadonlyEmailPreviewAdapter(email_service),
         channels_service,
         call::domain::ports::NoOpCallRecordQueryService,
+        crm::domain::service::NoOpCrmService,
+        foreign_entity_service,
     ));
 
     tracing::info!("initialized soup service");
@@ -252,16 +252,21 @@ async fn main() -> anyhow::Result<()> {
         presigned_url_expiry_seconds: 3600,
         browser_cache_expiry_seconds: 86400,
     };
+    let properties_service =
+        ai_tools::build_properties_service(db.clone(), entity_access_service.clone());
+    let task_properties_service =
+        ai_tools::build_task_properties_adapter(db.clone(), properties_service.clone());
     let document_service = DocumentServiceImpl::new(
         document_repo,
         cloudfront_config,
         sync_service_client.clone(),
         s3_upload_adapter,
-        NoOpTaskProperties,
+        task_properties_service,
         NoOpConnectionService,
         entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
             entity_access_management::outbound::PgRepository::new(db.clone()),
         ),
+        ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone())),
     );
     let lexical_client_for_tools = (*lexical_client).clone();
     let document_tool_context = DocumentToolContext::new(
@@ -308,16 +313,7 @@ async fn main() -> anyhow::Result<()> {
 
     let search_service_client = Arc::new(search_service_client);
 
-    let properties_service = properties::PropertiesServiceImpl::new(
-        properties::PropertiesPgRepo::new(db.clone()),
-        Some(properties::PermissionServiceImpl::new(
-            db.clone(),
-            entity_access_service.clone(),
-        )),
-        Some(NoOpNotificationService),
-    );
-    let properties_tool_context =
-        properties::inbound::toolset::PropertiesToolContext::new(properties_service);
+    let properties_tool_context = ai_tools::build_properties_tool_context(properties_service);
 
     tracing::info!("initialized properties tool context");
 
@@ -434,7 +430,6 @@ async fn main() -> anyhow::Result<()> {
         email_service_client_external,
         sqs_client: Arc::new(sqs_client),
         document_storage_client: Arc::new(document_storage_client),
-        comms_service_client: Arc::new(comms_service_client),
         search_service_client,
         jwt_args,
         config: Arc::new(config),

@@ -74,6 +74,21 @@ pub trait EmailRepo: Send + Sync + 'static {
         macro_id: MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Option<Link>, Self::Err>> + Send;
 
+    /// Resolve the inbox owning a thread, only when that inbox belongs to the
+    /// given fusionauth user.
+    fn owned_link_for_thread(
+        &self,
+        thread_id: Uuid,
+        macro_id: MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Option<Link>, Self::Err>> + Send;
+
+    /// Returns every inbox accessible to `macro_id`: their own email_links plus
+    /// any reachable via a `macro_user_links` edge (narrow-graph multi-inbox).
+    fn inboxes_for_macro_id(
+        &self,
+        macro_id: MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Vec<Link>, Self::Err>> + Send;
+
     /// Fetch a thread by its database ID (without messages).
     fn thread_by_id(
         &self,
@@ -313,6 +328,22 @@ pub trait EmailService: Send + Sync + 'static {
     fn get_link_by_macro_id(
         &self,
         macro_id: MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Option<Link>, EmailErr>> + Send;
+
+    /// Fetch every inbox the caller can read — their own email_links rows plus
+    /// any rows reachable via a `macro_user_links` edge (narrow-graph multi-inbox).
+    fn get_inboxes_for_macro_id(
+        &self,
+        macro_id: MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Vec<Link>, EmailErr>> + Send;
+
+    /// Resolve the inbox owning a thread, scoped to the caller's own and
+    /// delegated inboxes. Lets thread-targeted mutations derive the inbox from
+    /// the thread instead of an `X-Email-Link-Id` header.
+    fn get_owned_link_for_thread(
+        &self,
+        macro_id: MacroUserIdStr<'_>,
+        thread_id: Uuid,
     ) -> impl Future<Output = Result<Option<Link>, EmailErr>> + Send;
 
     /// Fetch a thread with paginated messages, verifying access via the provided receipt.

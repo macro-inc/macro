@@ -181,6 +181,12 @@ pub struct VoipPushPayload {
     pub channel_name: String,
     /// Display name of the caller shown in the CallKit incoming-call UI.
     pub caller_name: String,
+    /// LiveKit websocket URL for native lock-screen answers.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub livekit_server_url: Option<String>,
+    /// Recipient-specific LiveKit JWT for native lock-screen answers.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub livekit_token: Option<String>,
 }
 
 /// the value we send as the payload in the ios notification

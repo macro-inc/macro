@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 use super::db_types::{AttachmentDbRow, LabelDbRow, ThreadPreviewCursorDbRow};
 
-#[tracing::instrument(err, skip(pool, query), fields(link_id = %query.link_id, view = %query.view))]
+#[tracing::instrument(err, skip(pool, query), fields(link_count = query.link_ids.len(), view = %query.view))]
 pub(super) async fn previews_for_view_cursor(
     pool: &PgPool,
     query: PreviewCursorQuery,
@@ -18,7 +18,7 @@ pub(super) async fn previews_for_view_cursor(
 ) -> Result<Vec<EmailThreadPreview>, sqlx::Error> {
     let PreviewCursorQuery {
         view,
-        link_id,
+        link_ids,
         limit,
         query,
         team_id,
@@ -30,7 +30,7 @@ pub(super) async fn previews_for_view_cursor(
         (view, Either::Right(dynamic_query)) => {
             super::dynamic::dynamic_email_thread_cursor(
                 pool,
-                &link_id,
+                &link_ids,
                 limit,
                 &view,
                 dynamic_query,
@@ -40,38 +40,42 @@ pub(super) async fn previews_for_view_cursor(
             .await?
         }
         (PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox), Either::Left(query)) => {
-            super::preview_views::new_inbox::new_inbox_preview_cursor(pool, &link_id, limit, &query)
-                .await?
+            super::preview_views::new_inbox::new_inbox_preview_cursor(
+                pool, &link_ids, limit, &query,
+            )
+            .await?
         }
         (PreviewView::StandardLabel(PreviewViewStandardLabel::Sent), Either::Left(query)) => {
-            super::preview_views::sent::sent_preview_cursor(pool, &link_id, limit, &query).await?
+            super::preview_views::sent::sent_preview_cursor(pool, &link_ids, limit, &query).await?
         }
         (PreviewView::StandardLabel(PreviewViewStandardLabel::Drafts), Either::Left(query)) => {
-            super::preview_views::draft::drafts_preview_cursor(pool, &link_id, limit, &query)
+            super::preview_views::draft::drafts_preview_cursor(pool, &link_ids, limit, &query)
                 .await?
         }
         (PreviewView::StandardLabel(PreviewViewStandardLabel::Starred), Either::Left(query)) => {
-            super::preview_views::starred::starred_preview_cursor(pool, &link_id, limit, &query)
+            super::preview_views::starred::starred_preview_cursor(pool, &link_ids, limit, &query)
                 .await?
         }
         (PreviewView::StandardLabel(PreviewViewStandardLabel::All), Either::Left(query)) => {
-            super::preview_views::all_mail::all_mail_preview_cursor(pool, &link_id, limit, &query)
+            super::preview_views::all_mail::all_mail_preview_cursor(pool, &link_ids, limit, &query)
                 .await?
         }
         (PreviewView::StandardLabel(PreviewViewStandardLabel::Important), Either::Left(query)) => {
-            super::preview_views::important::important_preview_cursor(pool, &link_id, limit, &query)
-                .await?
+            super::preview_views::important::important_preview_cursor(
+                pool, &link_ids, limit, &query,
+            )
+            .await?
         }
         (PreviewView::StandardLabel(PreviewViewStandardLabel::Other), Either::Left(query)) => {
             super::preview_views::other_inbox::other_inbox_preview_cursor(
-                pool, &link_id, limit, &query,
+                pool, &link_ids, limit, &query,
             )
             .await?
         }
         (PreviewView::UserLabel(label_name), Either::Left(query)) => {
             super::preview_views::user_label::user_label_preview_cursor(
                 pool,
-                &link_id,
+                &link_ids,
                 limit,
                 &query,
                 &label_name,

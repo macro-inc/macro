@@ -20,11 +20,13 @@ use notification::domain::models::{
 use notification::domain::ports::VoipPushSender;
 use notification::domain::service::NotificationIngress;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use uuid::Uuid;
 
-use crate::domain::models::{EditCallRecordRequest, EditCallTranscriptRequest};
+use crate::domain::models::{
+    EditCallRecordRequest, EditCallTranscriptRequest, VoipPushPayloadRequest,
+};
 
 use super::models::{
     AddParticipantError, CallActiveResponse, CallError, CallRecord, CallRecordTranscriptSegment,
@@ -489,23 +491,76 @@ impl<
                             // Send VoIP push for the native iOS incoming-call sheet first.
                             // Recipients with successful VoIP delivery do not need the regular
                             // APNS alert banner as well.
-                            let recipient_vec: Vec<MacroUserIdStr<'_>> =
-                                recipient_ids.iter().cloned().collect();
-                            let voip_payload = VoipPushPayload {
-                                aps: Default::default(),
-                                call_id: call.id.to_string(),
-                                channel_id: channel_id_str.clone(),
-                                channel_name: channel_name.clone().unwrap_or_default(),
-                                caller_name,
-                            };
-                            let voip_recipient_ids = self
+                            let recipient_vec: Vec<MacroUserIdStr<'static>> = recipient_ids
+                                .iter()
+                                .cloned()
+                                .map(CowLike::into_owned)
+                                .collect();
+
+                            // Resolve VoIP endpoints before minting tokens:
+                            // users without PushKit endpoints should not get
+                            // LiveKit tokens minted for them. If endpoint
+                            // resolution fails, fall back to normal APNS for
+                            // everyone rather than dropping the notification.
+                            let voip_targets = match self
                                 .voip_push_sender
-                                .send_voip_push(&recipient_vec, &voip_payload)
+                                .get_voip_push_targets(&recipient_vec)
+                                .await
+                            {
+                                Ok(targets) => targets,
+                                Err(e) => {
+                                    tracing::error!(
+                                        error=?e,
+                                        "failed to resolve VoIP push targets; falling back to APNS"
+                                    );
+                                    Vec::new()
+                                }
+                            };
+                            let voip_target_recipient_ids: Vec<MacroUserIdStr<'static>> =
+                                voip_targets
+                                    .iter()
+                                    .map(|target| target.recipient_id.clone())
+                                    .collect();
+
+                            let voip_channel_name = channel_name.clone().unwrap_or_default();
+                            let payloads = self
+                                .rtc_client
+                                .build_voip_push_payloads(VoipPushPayloadRequest {
+                                    recipients: &voip_target_recipient_ids,
+                                    room_name: &call.room_name,
+                                    call_id: call.id,
+                                    channel_id: &channel_id_str,
+                                    channel_name: &voip_channel_name,
+                                    caller_name: &caller_name,
+                                    livekit_server_url: &self.server_url,
+                                })
                                 .await;
+
+                            let mut payloads_by_recipient: HashMap<
+                                MacroUserIdStr<'static>,
+                                VoipPushPayload,
+                            > = payloads.into_iter().collect();
+                            // Rejoin resolved endpoints with successfully
+                            // minted payloads. A failed token mint skips only
+                            // that recipient's VoIP push.
+                            let pushes = voip_targets
+                                .into_iter()
+                                .filter_map(|target| {
+                                    payloads_by_recipient
+                                        .remove(&target.recipient_id)
+                                        .map(|payload| (target, payload))
+                                })
+                                .collect();
+
+                            let voip_recipient_ids =
+                                self.voip_push_sender.send_voip_pushes(pushes).await;
 
                             let apns_recipient_ids =
                                 exclude_voip_recipients(recipient_ids, &voip_recipient_ids);
 
+                            // APNS is the fallback/default path. Recipients
+                            // with a successful VoIP delivery skip the regular
+                            // alert to avoid duplicate incoming-call UI.
                             if !apns_recipient_ids.is_empty() {
                                 let req = SendNotificationRequestBuilder {
                                     notification_entity: EntityType::Channel

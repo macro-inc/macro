@@ -11,6 +11,7 @@ function EditBottomRow(props: {
   handleSend: () => void;
   hideHorizontalPadding?: boolean;
   hasContent?: boolean;
+  isSending?: boolean;
 }) {
   return (
     <div class="absolute bottom-1 right-1 flex items-center">
@@ -29,7 +30,7 @@ function EditBottomRow(props: {
         size="icon-sm"
         class="rounded-xs"
         variant="ghost"
-        disabled={!props.hasContent}
+        disabled={!props.hasContent || props.isSending}
         on:click={props.handleSend}
       >
         <PaperPlaneRight class={cn({ 'text-accent': props.hasContent })} />
@@ -40,7 +41,7 @@ function EditBottomRow(props: {
 
 export function EditInput(props: {
   handleCancel: () => void;
-  onSend: (newText: string) => void;
+  onSend: (newText: string) => unknown | Promise<unknown>;
   hidePadding?: boolean;
   isNewReply?: boolean;
   isNewThread?: boolean;
@@ -49,6 +50,7 @@ export function EditInput(props: {
   textValue: string;
 }) {
   const [editState, setEditState] = createSignal('');
+  const [isSending, setIsSending] = createSignal(false);
   const { setActiveThread } = useContext(CommentsContext);
   const { mentionsSignal } = useContext(ThreadContext);
   const [, setMentions] = mentionsSignal;
@@ -69,8 +71,17 @@ export function EditInput(props: {
     });
   };
 
-  const handleSend = () => {
-    props.onSend(editState());
+  const handleSend = async () => {
+    if (isSending()) return;
+    const text = editState();
+    if (text.trim().length === 0) return;
+
+    setIsSending(true);
+    try {
+      await props.onSend(text);
+    } finally {
+      setIsSending(false);
+    }
   };
 
   const onRemoveMention = (itemMention: ItemMention) => {
@@ -98,7 +109,7 @@ export function EditInput(props: {
           initialValue={props.textValue}
           type="markdown"
           onEnter={() => {
-            handleSend();
+            void handleSend();
             return true;
           }}
           placeholder="Add a comment..."
@@ -116,6 +127,7 @@ export function EditInput(props: {
           handleSend={handleSend}
           hideHorizontalPadding={props.hidePadding}
           hasContent={editState().trim().length > 0}
+          isSending={isSending()}
         />
       </div>
     </div>
@@ -123,7 +135,7 @@ export function EditInput(props: {
 }
 
 export function NewReplyInput(props: {
-  createReply: (message: string) => void;
+  createReply: (message: string) => unknown | Promise<unknown>;
   isEditing: boolean;
   setEditing: (newVal: boolean) => void;
   setTextValue: (newVal: string) => void;
@@ -150,8 +162,9 @@ export function NewReplyInput(props: {
           textValue={props.textValue}
           handleCancel={() => props.setTextValue('')}
           onSend={(message) => {
-            props.createReply(message);
+            const result = props.createReply(message);
             props.setTextValue('');
+            return result;
           }}
           isNewReply
           isReply

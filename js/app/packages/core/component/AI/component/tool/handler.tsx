@@ -142,6 +142,7 @@ export function RenderTool(props: ToolProps) {
         response={response()}
         renderContext={{
           isStreaming: props.renderContext.renderContext.isStreaming,
+          grouped: props.renderContext.renderContext.grouped,
         }}
       />
     </ToolErrorContext.Provider>

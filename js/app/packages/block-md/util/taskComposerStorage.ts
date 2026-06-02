@@ -1,4 +1,5 @@
 import type { PropertyApiValues } from '@property/types';
+import type { TaskSimilarityResult } from '@service-storage/client';
 import type { SerializedEditorState } from 'lexical';
 
 const STORAGE_KEY = 'task-composer-draft';
@@ -11,6 +12,9 @@ export interface TaskComposerDraft {
   /** Markdown text fallback (used by older drafts and for the createTask API) */
   content: string;
   propertyValues: Record<string, PropertyApiValues>;
+  /** Possible-duplicate tasks last surfaced for this draft, persisted so they
+   * reappear instantly when the draft is restored. */
+  similarTasks?: TaskSimilarityResult[];
   timestamp: number;
 }
 

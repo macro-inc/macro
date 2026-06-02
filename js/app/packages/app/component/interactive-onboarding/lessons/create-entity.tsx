@@ -106,25 +106,25 @@ function CreateEntityContent(props: LessonContentProps) {
     <div
       ref={containerRef}
       tabIndex={0}
-      class="flex flex-col gap-3 outline-none onboarding-stagger"
+      class="flex flex-col gap-8 outline-none onboarding-stagger"
     >
-      <p>
+      <p class="mt-2">
         The <strong>Create Launcher</strong> lets you create Macro Editor
         quickly, from anywhere.
       </p>
-      <div class="mt-2">
+      <div class="flex flex-col gap-3">
         <HotkeyCallout keys={['C']} label="" completed={completed()} />
+        <div class="flex items-center gap-3 text-sm text-ink/40">
+          <div class="h-px w-8 bg-edge-muted" />
+          or
+          <div class="h-px flex-1 bg-edge-muted" />
+        </div>
+        <ClickCallout
+          icon={AnimatedPlusIcon}
+          label="in the sidebar"
+          completed={completed()}
+        />
       </div>
-      <div class="flex items-center gap-3 text-sm text-ink/40">
-        <div class="h-px w-8 bg-edge-muted" />
-        or
-        <div class="h-px flex-1 bg-edge-muted" />
-      </div>
-      <ClickCallout
-        icon={AnimatedPlusIcon}
-        label="in the sidebar"
-        completed={completed()}
-      />
     </div>
   );
 }
@@ -175,6 +175,7 @@ function CreateEntityDemo(props: LessonContentProps) {
       <MockAppChrome
         onCreateClick={() => setLauncherOpen((v) => !v)}
         highlightCreate
+        scopeId={props.scopeId}
       >
         <Show when={sharedSoup()}>
           {(s) => <OnboardingEntityList soup={s()} />}

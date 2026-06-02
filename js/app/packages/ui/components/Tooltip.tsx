@@ -1,10 +1,10 @@
-import { Tooltip as KobalteTooltip } from '@kobalte/core/tooltip';
 import type { HotkeyToken } from '@core/hotkey/tokens';
-import { Hotkey } from '../../ui/components/Hotkey';
 import type { Placement } from '@floating-ui/dom';
+import { Tooltip as KobalteTooltip } from '@kobalte/core/tooltip';
+import { Surface } from '@ui';
 import type { ParentProps } from 'solid-js';
 import { For, Show } from 'solid-js';
-import { Surface } from '@ui';
+import { Hotkey } from '../../ui/components/Hotkey';
 
 type TooltipProps = ParentProps<{
   hotkey?: HotkeyToken | HotkeyToken[];
@@ -26,7 +26,11 @@ type TooltipProps = ParentProps<{
  */
 export function Tooltip(props: TooltipProps) {
   function tokens(): HotkeyToken[] {
-    return props.hotkey == null ? [] : Array.isArray(props.hotkey) ? props.hotkey : [props.hotkey];
+    return props.hotkey == null
+      ? []
+      : Array.isArray(props.hotkey)
+        ? props.hotkey
+        : [props.hotkey];
   }
 
   function shortcuts(): string[] {
@@ -71,10 +75,7 @@ export function Tooltip(props: TooltipProps) {
                   <For each={tokens()}>
                     {(token, ndx) => (
                       <>
-                        <Hotkey
-                          token={token}
-                          theme="subtle"
-                        />
+                        <Hotkey token={token} theme="subtle" />
                         <Show when={ndx() < tokens().length - 1}>
                           <span class="text-ink-extra-muted">then</span>
                         </Show>
@@ -84,10 +85,7 @@ export function Tooltip(props: TooltipProps) {
                   <For each={shortcuts()}>
                     {(shortcut, ndx) => (
                       <>
-                        <Hotkey
-                          shortcut={shortcut}
-                          theme="subtle"
-                        />
+                        <Hotkey shortcut={shortcut} theme="subtle" />
                         <Show when={ndx() < shortcuts().length - 1}>
                           <span class="text-ink-extra-muted">then</span>
                         </Show>

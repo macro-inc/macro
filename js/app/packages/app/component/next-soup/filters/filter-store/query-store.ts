@@ -50,7 +50,7 @@ const partialFieldUpdate = (updates: FieldFilters): Record<string, unknown> => {
   return out;
 };
 
-const mergeQuery = (base: QueryState, query: Query): QueryState => ({
+export const mergeQuery = (base: QueryState, query: Query): QueryState => ({
   include: addFieldValues(base.include, query.include),
   exclude: addFieldValues(base.exclude, query.exclude),
   emailView: query.emailView ?? base.emailView,

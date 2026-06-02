@@ -10,9 +10,12 @@
  */
 export interface SetCompanyHiddenRequest {
   /** New value for `crm_companies.hidden`. Setting to `true` hides
-the company from CRM listings AND disables `email_sync` (which
-permanently deletes the company's contacts and contact sources).
-Setting to `false` un-hides the company; `email_sync` is left
-untouched and the team must re-enable it explicitly. */
+the company from CRM listings, disables `email_sync`, and
+soft-hides every contact under it (`crm_contacts.hidden = true`).
+Contact rows and `crm_contact_sources` are preserved across the
+cycle, so un-hide is a true reverse. Setting to `false`
+un-hides the company and soft-restores its contacts;
+`email_sync` is left untouched and the team must re-enable it
+explicitly. */
   hidden: boolean;
 }

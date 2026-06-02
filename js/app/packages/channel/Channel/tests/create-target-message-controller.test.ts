@@ -1,10 +1,15 @@
+import { queryClient } from '@queries/client';
+import { createRoot, createSignal } from 'solid-js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('@service-storage/client', () => ({
+  storageServiceClient: {},
+}));
+
 import {
   type ChannelMessagesData,
   getChannelMessagesQueryKey,
 } from '@queries/channel/channel-messages';
-import { queryClient } from '@queries/client';
-import { createRoot, createSignal } from 'solid-js';
-import { afterEach, describe, expect, it } from 'vitest';
 import {
   createTargetMessageController,
   restoreDefaultChannelPaginationAfterTargetLoad,

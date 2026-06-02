@@ -1,0 +1,79 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE crm_comment c\n            SET text = $3, updated_at = now()\n            FROM crm_thread t\n            WHERE c.id = $1\n              AND c.thread_id = t.id\n              AND c.deleted_at IS NULL\n              AND (\n                EXISTS (\n                    SELECT 1 FROM crm_companies co\n                    WHERE co.id = t.company_id\n                      AND co.team_id = $2\n                      AND ($4 OR co.hidden = FALSE)\n                )\n                OR EXISTS (\n                    SELECT 1 FROM crm_contacts ct\n                    JOIN crm_companies co2 ON co2.id = ct.company_id\n                    WHERE ct.id = t.contact_id\n                      AND co2.team_id = $2\n                      AND ($4 OR (ct.hidden = FALSE AND co2.hidden = FALSE))\n                )\n              )\n            RETURNING c.id, c.thread_id, c.\"order\", c.owner, c.sender, c.text,\n                      c.metadata, c.created_at, c.updated_at, c.deleted_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "thread_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "order",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "owner",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "sender",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "text",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "metadata",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 7,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "deleted_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      true,
+      false,
+      true,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "3dd2c8152498a2183ff2a944699251aaeac0e320a02b2504b1bc74402ad894cd"
+}

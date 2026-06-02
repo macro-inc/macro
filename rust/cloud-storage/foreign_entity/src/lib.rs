@@ -12,5 +12,9 @@
 
 pub mod domain;
 
+/// Inbound adapters for serving foreign entity APIs.
+#[cfg(feature = "inbound")]
+pub mod inbound;
+
 #[cfg(feature = "outbound")]
 pub mod outbound;

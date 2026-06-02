@@ -236,6 +236,21 @@ const _ENABLE_DOCK_NOTITIFCATIONS = resolveFeatureFlag(
 );
 export const ENABLE_TTFT = resolveFeatureFlag('ENABLE_TTFT', DEV_MODE_ENV);
 
+export const ENABLE_MULTI_INBOX = resolveFeatureFlag(
+  'ENABLE_MULTI_INBOX',
+  DEV_MODE_ENV
+);
+
+export const ENABLE_INBOX_RESYNC = resolveFeatureFlag(
+  'ENABLE_INBOX_RESYNC',
+  false
+);
+
+export const ENABLE_INBOX_SYNC_STATUS = resolveFeatureFlag(
+  'ENABLE_INBOX_SYNC_STATUS',
+  false
+);
+
 const _ENABLE_TASKS_TABS = resolveFeatureFlag('ENABLE_TASKS_TABS', true);
 
 export const ENABLE_EMAIL_SHARING = resolveFeatureFlag(
@@ -343,6 +358,9 @@ export const ENABLE_TEAM_INVITE_TIERS_OVERRIDE = DEV_MODE_ENV
   : undefined;
 
 export const ENABLE_SOUP_GROUP_BY_OVERRIDE = DEV_MODE_ENV ? true : undefined;
+
+export const ENABLE_TASK_DUPLICATES_FLAG = 'enable-task-duplicates';
+export const ENABLE_TASK_DUPLICATES_OVERRIDE = DEV_MODE_ENV ? true : undefined;
 
 export const ENABLE_AUTO_UPDATE_UI = resolveFeatureFlag(
   'ENABLE_AUTO_UPDATE_UI',

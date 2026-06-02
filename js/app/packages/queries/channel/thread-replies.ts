@@ -1,5 +1,8 @@
 import { throwOnErr } from '@core/util/result';
-import { type ApiThreadReply, commsServiceClient } from '@service-comms/client';
+import {
+  type ApiThreadReply,
+  storageServiceClient,
+} from '@service-storage/client';
 import type { ApiCountedReaction } from '@service-storage/generated/schemas';
 import type { ApiMessageAttachment } from '@service-storage/generated/schemas/apiMessageAttachment';
 import { useQuery } from '@tanstack/solid-query';
@@ -25,7 +28,7 @@ export function threadRepliesQueryOptions(
     queryFn: async (): Promise<Array<ApiThreadReply>> => {
       return await throwOnErr(
         async () =>
-          await commsServiceClient.getThreadReplies({
+          await storageServiceClient.getThreadReplies({
             channel_id: channelId,
             message_id: messageId,
           })

@@ -1,8 +1,8 @@
 import { throwOnErr } from '@core/util/result';
 import {
   type ApiChannelParticipant,
-  commsServiceClient,
-} from '@service-comms/client';
+  storageServiceClient,
+} from '@service-storage/client';
 import { useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
@@ -14,7 +14,7 @@ function channelParticipantsQueryOptions(channelId: string) {
     queryFn: async (): Promise<ApiChannelParticipant[]> => {
       return await throwOnErr(
         async () =>
-          await commsServiceClient.getChannelParticipants({
+          await storageServiceClient.getChannelParticipants({
             channel_id: channelId,
           })
       );

@@ -58,6 +58,8 @@ mod tests {
         paths(super::get_github_pull_requests_handler),
         components(schemas(
             crate::domain::models::GithubPullRequest,
+            crate::domain::models::GithubPullRequestCheckRun,
+            crate::domain::models::GithubPullRequestComment,
             crate::domain::models::GithubPullRequestsResponse,
         ))
     )]
@@ -77,5 +79,14 @@ mod tests {
                 "expected {status} response to be documented"
             );
         }
+
+        let pull_request_properties = openapi
+            .pointer("/components/schemas/GithubPullRequest/properties")
+            .and_then(Value::as_object)
+            .expect("GithubPullRequest schema should document properties");
+        assert!(
+            pull_request_properties.contains_key("foreignEntityId"),
+            "GithubPullRequest schema should document foreignEntityId"
+        );
     }
 }

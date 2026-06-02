@@ -4,7 +4,7 @@ import { ItemPreview } from '@core/component/ItemPreview';
 import PencilIcon from '@phosphor/note-pencil.svg';
 import QuoteIcon from '@phosphor-icons/core/bold/arrow-elbow-down-right-bold.svg?component-solid';
 import type { ChatMessageWithAttachments } from '@service-cognition/generated/schemas/chatMessageWithAttachments';
-import { Button } from '@ui';
+import { Button, Layer } from '@ui';
 import { createSignal, For, Match, Show, Switch } from 'solid-js';
 import { DEFAULT_MODEL } from '../../constant';
 import { ChatMessageMarkdown } from './ChatMessageMarkdown';
@@ -118,23 +118,25 @@ export function UserMessage(props: {
         <div class="flex flex-row w-full items-center">
           <Switch>
             <Match when={!isEditing()}>
-              <div class="bg-message sender-message rounded-md px-3 py-1 my-px ring ring-edge-muted whitespace-pre-line relative ml-auto max-w-[calc(100%-8rem)]">
-                <ChatMessageMarkdown
-                  generating={() => false}
-                  text={content()!}
-                />
-                <Show when={props.edit}>
-                  <div class="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Button
-                      variant="ghost"
-                      size="icon-md"
-                      onClick={() => setIsEditing(true)}
-                    >
-                      <PencilIcon />
-                    </Button>
-                  </div>
-                </Show>
-              </div>
+              <Layer depth={0}>
+                <div class="relative ml-auto max-w-[calc(100%-8rem)] whitespace-pre-line overflow-hidden rounded-lg border border-edge-muted bg-surface px-3 py-2 text-ink">
+                  <ChatMessageMarkdown
+                    generating={() => false}
+                    text={content()!}
+                  />
+                  <Show when={props.edit}>
+                    <div class="absolute top-1 right-1 opacity-0 transition-opacity group-hover:opacity-100">
+                      <Button
+                        variant="ghost"
+                        size="icon-md"
+                        onClick={() => setIsEditing(true)}
+                      >
+                        <PencilIcon />
+                      </Button>
+                    </div>
+                  </Show>
+                </div>
+              </Layer>
             </Match>
             <Match when={isEditing()}>
               <EditableChatMessage

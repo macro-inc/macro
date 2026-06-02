@@ -16,8 +16,6 @@ use crate::{
 pub enum ChannelTypeFilter {
     /// a public channel
     Public,
-    /// an organization channel
-    Organization,
     /// a private channel
     Private,
     /// a direct message channel
@@ -30,7 +28,6 @@ impl ParseFromStr for ChannelTypeFilter {
     fn parse_from_str<T: AsRef<str>>(s: T) -> Result<Self, UnknownValue<Self>> {
         match s.as_ref() {
             "public" => Ok(Self::Public),
-            "organization" => Ok(Self::Organization),
             "private" => Ok(Self::Private),
             "direct_message" => Ok(Self::DirectMessage),
             "team" => Ok(Self::Team),

@@ -14,4 +14,5 @@ config:
   mcp-server:macro_cache_secret_key: macro-cache-dev
   mcp-server:macro_db_secret_key: macro-db-dev
   mcp-server:sync_service_auth_key: sync-service-key-dev
+  mcp-server:anthropic_api_key: anthropic-api-key-dev
   datadog:validate: "false"

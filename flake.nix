@@ -142,7 +142,6 @@
               "--locked"
               "--all-features"
               "--bin document_storage_service_openapi"
-              "--bin comms_service_openapi"
               "--bin properties_service_openapi"
               "--bin document_cognition_service_openapi"
               "--bin authentication_service_openapi"
@@ -430,7 +429,6 @@
               };
               crateToDir = {
                 document_storage_service = "service-storage";
-                comms_service = "service-comms";
                 properties_service = "service-properties";
                 document_cognition_service = "service-cognition";
                 authentication_service = "service-auth";

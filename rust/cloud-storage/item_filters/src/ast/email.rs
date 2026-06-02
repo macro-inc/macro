@@ -44,6 +44,10 @@ pub enum EmailLiteral {
     Recipient(Email),
     /// This value filters by email thread ID
     ThreadId(Uuid),
+    /// Restrict to a specific inbox (email_links.id, which is also
+    /// email_threads.link_id). Multiple `Owner` literals OR together to
+    /// narrow the search to a subset of the user's inboxes.
+    Owner(Uuid),
     /// This value filters by project ID
     ProjectId(String),
     /// This node value filters by email importance. false short-circuits to match nothing.
@@ -75,6 +79,7 @@ impl ExpandFrame<EmailLiteral> for EmailFilters {
             bcc,
             recipients,
             email_thread_ids,
+            link_ids,
             project_ids,
             importance,
             notification_filters,
@@ -122,6 +127,11 @@ impl ExpandFrame<EmailLiteral> for EmailFilters {
             .map(|s| Uuid::parse_str(s))
             .try_expand(|r| r.map(EmailLiteral::ThreadId), Expr::or)?;
 
+        let owner_nodes = link_ids
+            .iter()
+            .map(|s| Uuid::parse_str(s))
+            .try_expand(|r| r.map(EmailLiteral::Owner), Expr::or)?;
+
         let project_id_nodes = project_ids
             .into_iter()
             .expand(EmailLiteral::ProjectId, Expr::or);
@@ -148,6 +158,7 @@ impl ExpandFrame<EmailLiteral> for EmailFilters {
             bcc_nodes,
             recipient_nodes,
             thread_id_nodes,
+            owner_nodes,
             project_id_nodes,
             importance_node,
             notification_done_node,

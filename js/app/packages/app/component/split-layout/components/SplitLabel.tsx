@@ -16,7 +16,7 @@ import {
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { type BuildEntityDataArgs, buildEntityData } from '@entity';
 import { cn, Tooltip } from '@ui';
-import { createEffect, type JSX, Show } from 'solid-js';
+import { type Accessor, createEffect, type JSX, Show } from 'solid-js';
 import { useSplitPanelOrThrow } from '../layoutUtils';
 
 export function StaticSplitLabel(props: {
@@ -145,6 +145,7 @@ export function SplitPermissionsBadge() {
 
 export function BlockItemSplitLabel(props: {
   fallbackName?: string;
+  name?: Accessor<string | undefined>;
   lockRename?: boolean;
   badges?: JSX.Element;
 }) {
@@ -153,6 +154,7 @@ export function BlockItemSplitLabel(props: {
     throw new Error('<BlockItemSplitLabel> must be used within a Block');
 
   const fileName = useBlockDocumentName(props.fallbackName);
+  const displayName = () => props.name?.() ?? fileName();
   const blockName = useBlockAliasedName();
   const isOwner = useIsDocumentOwner();
 
@@ -168,7 +170,7 @@ export function BlockItemSplitLabel(props: {
   };
 
   createEffect(() => {
-    panel.handle.setDisplayName(fileName());
+    panel.handle.setDisplayName(displayName());
   });
 
   return (
@@ -176,7 +178,7 @@ export function BlockItemSplitLabel(props: {
       <EntityIcon class="shrink-0" targetType={targetType()} size="xs" />
       <Show when={props.badges}>{props.badges}</Show>
       <SplitLabel
-        label={fileName()}
+        label={displayName() ?? ''}
         lockRename={!isOwner() || props.lockRename}
       />
     </div>

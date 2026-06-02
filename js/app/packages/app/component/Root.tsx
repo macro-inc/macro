@@ -1,11 +1,19 @@
+import {
+  AnalyticsContextProvider,
+  useAnalytics,
+} from '@app/component/analytics-context';
 import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 import { ROUTER_BASE } from '@app/constants/routerBase';
+import { PosthogProvider, usePosthog } from '@app/lib/analytics/posthog';
 import { setHotkeyRoot } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { CallProvider } from '@channel/Call/CallContext';
+import { CallStartedNotifier } from '@channel/Call/CallStartedNotifier';
 import { ChatAttachmentsInit } from '@core/component/AI/signal/globalAttachments';
 import { toast } from '@core/component/Toast/Toast';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
 import { ChannelsContextProvider } from '@core/context/channels';
+import { QuickAccessProvider } from '@core/context/quickAccess';
 import {
   UserContextProvider,
   useUserId,
@@ -54,13 +62,13 @@ import {
   type RouterProps,
   useSearchParams,
 } from '@solidjs/router';
+import { Button } from '@ui';
 import { useHotKeyRoot } from 'core/hotkey/hotkeys';
 import { detect } from 'detect-browser';
 import {
   createEffect,
   createSignal,
   type JSX,
-  lazy,
   Match,
   on,
   onCleanup,
@@ -81,31 +89,13 @@ import { setCookie } from './auth/Shared';
 import { Signup } from './auth/Signup';
 import { makeEmailAuthComponents } from './EmailAuth';
 import { GlobalAppStateProvider } from './GlobalAppState';
+import { InteractiveOnboardingModal } from './interactive-onboarding/InteractiveOnboardingModal';
 import { Layout } from './Layout';
 import { SearchProvider } from './next-soup/search-context';
+import { usePendingNotificationNavigationEffect } from './PendingNotificationNavigationEffect';
 import { ReactiveFavicon } from './ReactiveFavicon';
 import { LAYOUT_ROUTE } from './split-layout/SplitLayoutRoute';
 import { TeamInviteAcceptance } from './TeamInviteAcceptance';
-
-const NewOnboarding = lazy(() => import('./onboarding/onboarding'));
-const OldOnboarding = lazy(
-  () => import('./interactive-onboarding/InteractiveOnboarding')
-);
-
-import {
-  AnalyticsContextProvider,
-  useAnalytics,
-} from '@app/component/analytics-context';
-import {
-  PosthogProvider,
-  ShowFeatureFlag,
-  usePosthog,
-} from '@app/lib/analytics/posthog';
-import { CallProvider } from '@channel/Call/CallContext';
-import { CallStartedNotifier } from '@channel/Call/CallStartedNotifier';
-import { ENABLE_NEW_ONBOARDING_OVERRIDE } from '@core/constant/featureFlags';
-import { QuickAccessProvider } from '@core/context/quickAccess';
-import { Button } from '@ui';
 
 /** Syncs login cookie with auth state. Only updates on successful query (not errors/loading). */
 function useSyncLoginCookie() {
@@ -254,10 +244,12 @@ function NotFound() {
   return '';
 }
 
-const { EmailCallback, CALLBACK_PATH } = makeEmailAuthComponents({
-  callbackPath: '/email-signup-callback',
-  successPath: '/',
-});
+const { EmailCallback, CALLBACK_PATH, EmailLinkCallback, LINK_CALLBACK_PATH } =
+  makeEmailAuthComponents({
+    callbackPath: '/email-signup-callback',
+    linkCallbackPath: '/inbox-link-callback',
+    successPath: '/',
+  });
 
 const ROUTES: RouteDefinition[] = [
   LAYOUT_ROUTE,
@@ -309,6 +301,10 @@ const ROUTES: RouteDefinition[] = [
     component: EmailCallback,
   },
   {
+    path: LINK_CALLBACK_PATH,
+    component: EmailLinkCallback,
+  },
+  {
     path: '/login/popup/success',
     component: () => {
       const channel = new BroadcastChannel('auth');
@@ -348,17 +344,7 @@ const ROUTES: RouteDefinition[] = [
   },
   {
     path: '/welcome',
-    component: () => (
-      <div class="flex *:flex-1 size-full overflow-y-hidden">
-        <ShowFeatureFlag
-          key="enable-new-onboarding"
-          enabledOverride={ENABLE_NEW_ONBOARDING_OVERRIDE}
-          fallback={<OldOnboarding />}
-        >
-          <NewOnboarding />
-        </ShowFeatureFlag>
-      </div>
-    ),
+    component: () => <Navigate href="/login" />,
   },
   {
     path: '/team-invite',
@@ -403,6 +389,7 @@ function ConfiguredGlobalAppStateProvider(props: ParentProps) {
   }
 
   const blockOrchestrator = createBlockOrchestrator();
+  usePendingNotificationNavigationEffect(notificationSource);
 
   return (
     <GlobalAppStateProvider
@@ -457,6 +444,38 @@ const clearBodyInlineStyleColor = () => {
 function QuerySyncProviderWithUserId() {
   const userId = useUserId();
   return <QuerySyncProvider userId={userId} />;
+}
+
+function InitialInteractiveOnboardingModal() {
+  const userInfoQuery = useUserInfoQuery();
+  const [open, setOpen] = createSignal(true);
+  const [onboardingStarted, setOnboardingStarted] = createSignal(false);
+
+  const modalOpen = () =>
+    open() &&
+    userInfoQuery.data?.authenticated === true &&
+    (userInfoQuery.data.tutorialComplete === false || onboardingStarted());
+
+  createEffect(() => {
+    if (modalOpen()) {
+      setOnboardingStarted(true);
+    }
+  });
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    setOpen(nextOpen);
+    if (!nextOpen) {
+      setOnboardingStarted(false);
+    }
+  };
+
+  return (
+    <InteractiveOnboardingModal
+      open={modalOpen()}
+      isFirstTimeOnboarding
+      onOpenChange={handleOpenChange}
+    />
+  );
 }
 
 export function Root() {
@@ -516,6 +535,7 @@ export function Root() {
                                 }}
                               </IsomorphicRouter>
                             </Suspense>
+                            <InitialInteractiveOnboardingModal />
                             <ToastRegion />
                           </SearchProvider>
                         </QuickAccessProvider>

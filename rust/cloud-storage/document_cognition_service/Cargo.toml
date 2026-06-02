@@ -43,7 +43,6 @@ call = { path = "../call", default-features = false, features = ["ports"] }
 chat = { path = "../chat", features = ["attachment"] }
 chrono = { workspace = true }
 comms = { path = "../comms", features = ["outbound", "attachment"] }
-comms_service_client = { path = "../comms_service_client" }
 connection_gateway = { path = "../connection_gateway" }
 cookie = { workspace = true }
 crm = { path = "../crm" }
@@ -54,6 +53,7 @@ email = { path = "../email", features = ["outbound", "attachment"] }
 email_service_client = { path = "../email_service_client" }
 entity_access = { path = "../entity_access" }
 entity_access_management = { path = "../entity_access_management" }
+foreign_entity = { path = "../foreign_entity" }
 frecency = { path = "../frecency", features = ["outbound", "postgres"] }
 futures = { workspace = true }
 http = { workspace = true }

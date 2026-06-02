@@ -2,7 +2,7 @@ import { useSplitLayout } from '@app/component/split-layout/layout';
 import { UserIcon } from '@core/component/UserIcon';
 import { idToEmail } from '@core/user';
 
-import { commsServiceClient } from '@service-comms/client';
+import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-create-dm';
 import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
 import type { Accessor } from 'solid-js';
 import { createMemo, For } from 'solid-js';
@@ -12,6 +12,7 @@ export function CallRecordingParticipantsSection(props: {
   record: Accessor<CallRecord>;
 }) {
   const { replaceOrInsertSplit } = useSplitLayout();
+  const getOrCreateDmMutation = useGetOrCreateDirectMessageMutation();
   const participants = createMemo(() =>
     dedupeCallRecordingParticipants(
       props.record().participants,
@@ -19,16 +20,15 @@ export function CallRecordingParticipantsSection(props: {
     )
   );
 
-  const openDirectMessage = async (participantId: string) => {
-    const result = await commsServiceClient.getOrCreateDirectMessage({
-      recipient_id: participantId,
-    });
-    const channelId = result.isOk() && result.value?.channel_id;
-    if (!channelId) return;
-    replaceOrInsertSplit({
-      type: 'channel',
-      id: channelId,
-    });
+  const openDirectMessage = (participantId: string) => {
+    getOrCreateDmMutation.mutate(
+      { recipient_id: participantId },
+      {
+        onSuccess: ({ channel_id }) => {
+          replaceOrInsertSplit({ type: 'channel', id: channel_id });
+        },
+      }
+    );
   };
 
   return (

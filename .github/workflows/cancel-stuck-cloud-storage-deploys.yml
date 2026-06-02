@@ -8,7 +8,7 @@ on:
       max-age-minutes:
         description: Cancel active runs older than this many minutes
         required: false
-        default: '180'
+        default: '90'
         type: string
       dry-run:
         description: Log what would be cancelled without doing it
@@ -27,7 +27,7 @@ jobs:
     timeout-minutes: 5
     env:
       WORKFLOW_FILE: deploy-cloud-storage-on-push.yml
-      MAX_AGE_MINUTES: ${{ inputs.max-age-minutes || '180' }}
+      MAX_AGE_MINUTES: ${{ inputs.max-age-minutes || '90' }}
       DRY_RUN: ${{ inputs.dry-run || 'false' }}
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}

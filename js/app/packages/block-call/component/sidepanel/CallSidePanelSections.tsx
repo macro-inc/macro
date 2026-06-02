@@ -11,10 +11,10 @@ import {
   useSetCallRecordShareWithTeamMutation,
   useToggleShareWithTeamMutation,
 } from '@queries/call/call';
-import { commsServiceClient } from '@service-comms/client';
+import { useAttachmentReferencesQuery } from '@queries/storage/attachment-references';
 import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
 import { cn } from '@ui';
-import { type Accessor, createResource, Show, Suspense } from 'solid-js';
+import { type Accessor, Show, Suspense } from 'solid-js';
 import { formatCallDuration } from '../../utils';
 
 interface CallSidePanelSectionsProps {
@@ -37,10 +37,6 @@ export function CallSidePanelSections(props: CallSidePanelSectionsProps) {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Details Section
-// ─────────────────────────────────────────────────────────────────────────────
-
 function DetailsSectionContent(props: { record: Accessor<CallRecord> }) {
   const record = props.record;
 
@@ -49,36 +45,36 @@ function DetailsSectionContent(props: { record: Accessor<CallRecord> }) {
   const durationMs = () => record().durationMs ?? undefined;
 
   return (
-    <div class="grid grid-cols-[var(--sidepanel-label-width,auto)_1fr] gap-x-3 items-center text-xs auto-rows-[2rem]">
-      <DetailsRow label="Owner">
+    <SidePanel.Grid>
+      <SidePanel.Row label="Owner">
         <OwnerValue ownerId={record().createdBy} />
-      </DetailsRow>
+      </SidePanel.Row>
       <Show when={startedAt()}>
         {(value) => (
-          <DetailsRow label="Started">
+          <SidePanel.Row label="Started">
             <DateValueDisplay value={value()} />
-          </DetailsRow>
+          </SidePanel.Row>
         )}
       </Show>
       <Show when={endedAt()}>
         {(value) => (
-          <DetailsRow label="Ended">
+          <SidePanel.Row label="Ended">
             <DateValueDisplay value={value()} />
-          </DetailsRow>
+          </SidePanel.Row>
         )}
       </Show>
       <Show when={durationMs()}>
         {(ms) => (
-          <DetailsRow label="Duration">
-            <span class={cn(PILL_CLASS, 'w-fit')}>
+          <SidePanel.Row label="Duration">
+            <SidePanel.Pill>
               <ClockIcon class="size-3 shrink-0" />
               <span class="truncate">{formatCallDuration(ms())}</span>
-            </span>
-          </DetailsRow>
+            </SidePanel.Pill>
+          </SidePanel.Row>
         )}
       </Show>
-      <DetailsRow label="Status">
-        <span class={cn(PILL_CLASS, 'w-fit')}>
+      <SidePanel.Row label="Status">
+        <SidePanel.Pill>
           <Show
             when={record().isActive}
             fallback={<span class="truncate text-ink-muted">Ended</span>}
@@ -86,44 +82,30 @@ function DetailsSectionContent(props: { record: Accessor<CallRecord> }) {
             <span class="size-2 rounded-full bg-success shrink-0" />
             <span class="truncate text-success font-medium">In progress</span>
           </Show>
-        </span>
-      </DetailsRow>
-    </div>
-  );
-}
-
-function DetailsRow(props: {
-  label: string;
-  children: import('solid-js').JSX.Element;
-}) {
-  return (
-    <>
-      <span class="text-ink-muted truncate" title={props.label}>
-        {props.label}
-      </span>
-      <div class="flex items-center gap-2 min-w-0">{props.children}</div>
-    </>
+        </SidePanel.Pill>
+      </SidePanel.Row>
+    </SidePanel.Grid>
   );
 }
 
 function OwnerValue(props: { ownerId: string }) {
   const [displayName] = useDisplayName(tryMacroId(props.ownerId));
   return (
-    <div class={cn(PILL_CLASS, 'w-fit')}>
+    <SidePanel.Pill>
       <UserIcon id={props.ownerId} size="sm" showTooltip suppressClick />
       <span class="truncate">{displayName()}</span>
-    </div>
+    </SidePanel.Pill>
   );
 }
 
 function DateValueDisplay(props: { value: DateValue }) {
   return (
-    <div class={cn(PILL_CLASS, 'w-fit')}>
+    <SidePanel.Pill>
       <ClockIcon class="size-3 shrink-0" />
       <span class="truncate">
         {formatDate(props.value, { showTime: true })}
       </span>
-    </div>
+    </SidePanel.Pill>
   );
 }
 
@@ -193,45 +175,21 @@ function SharingSectionContent(props: { record: Accessor<CallRecord> }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function ReferencesSectionConditional(props: { callId: string }) {
-  const [references] = createResource(
+  const references = useAttachmentReferencesQuery(
     () => props.callId,
-    async (id) => {
-      const response = await commsServiceClient.attachmentReferences({
-        entity_type: 'call',
-        entity_id: id,
-      });
-
-      if (response.isErr()) {
-        console.error(response);
-        return [];
-      }
-
-      return response.value.references;
-    }
+    () => 'call'
   );
 
-  const count = () => references()?.length ?? 0;
-
-  const title = () => (
-    <>
-      References
-      <Show when={count() > 0}>
-        {' '}
-        <span class="text-ink-extra-muted">({count()})</span>
-      </Show>
-    </>
-  );
+  const count = () => references.data?.length ?? 0;
 
   return (
     <Show when={count() > 0}>
-      <SidePanel.Section id="references" title={title()} order={50}>
-        <Suspense
-          fallback={
-            <div class="flex justify-center py-8">
-              <div class="animate-spin rounded-full size-6 border-b-2 border-ink-muted" />
-            </div>
-          }
-        >
+      <SidePanel.Section
+        id="references"
+        title={<SidePanel.CountTitle label="References" count={count()} />}
+        order={50}
+      >
+        <Suspense fallback={<SidePanel.Loading />}>
           <div class="text-xs">
             <References documentId={props.callId} entityType="call" />
           </div>
@@ -240,8 +198,3 @@ function ReferencesSectionConditional(props: { callId: string }) {
     </Show>
   );
 }
-
-const PILL_CLASS = cn(
-  'inline-flex items-center gap-1.5 min-w-0 max-w-full',
-  'px-2 py-1 leading-tight text-left rounded-full'
-);

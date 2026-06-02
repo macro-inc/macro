@@ -30,6 +30,7 @@ pub(super) fn has_thread_literals(ast: &Expr<EmailLiteral>) -> bool {
         filter_ast::ExprFrame::Not(a) => a,
         filter_ast::ExprFrame::Literal(
             EmailLiteral::ThreadId(_)
+            | EmailLiteral::Owner(_)
             | EmailLiteral::ProjectId(_)
             | EmailLiteral::CalendarOnly(_)
             | EmailLiteral::CreatedAt(_)
@@ -46,6 +47,7 @@ pub(super) fn has_message_literals(ast: &Expr<EmailLiteral>) -> bool {
         filter_ast::ExprFrame::Not(a) => a,
         filter_ast::ExprFrame::Literal(
             EmailLiteral::ThreadId(_)
+            | EmailLiteral::Owner(_)
             | EmailLiteral::ProjectId(_)
             | EmailLiteral::Shared(_)
             | EmailLiteral::CalendarOnly(_)
@@ -217,7 +219,9 @@ pub(super) fn build_message_email_filter(
         filter_ast::ExprFrame::Not(a) => SqlFragment::not(a),
 
         filter_ast::ExprFrame::Literal(
-            EmailLiteral::ThreadId(_) | EmailLiteral::ProjectId(_),
+            EmailLiteral::ThreadId(_)
+            | EmailLiteral::Owner(_)
+            | EmailLiteral::ProjectId(_),
         ) => SqlFragment::raw("TRUE"),
 
         filter_ast::ExprFrame::Literal(EmailLiteral::Sender(email)) => {
@@ -658,6 +662,12 @@ pub(super) fn build_thread_email_filter(
 
         filter_ast::ExprFrame::Literal(EmailLiteral::ThreadId(id)) => {
             let mut f = SqlFragment::raw("t.id = ");
+            f.extend(SqlFragment::bind_uuid(id));
+            f
+        }
+
+        filter_ast::ExprFrame::Literal(EmailLiteral::Owner(id)) => {
+            let mut f = SqlFragment::raw("t.link_id = ");
             f.extend(SqlFragment::bind_uuid(id));
             f
         }

@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT EXISTS (\n                SELECT 1 FROM crm_contacts c\n                JOIN crm_companies co ON co.id = c.company_id\n                WHERE c.id = $1\n                  AND co.team_id = $2\n                  AND ($3 OR (c.hidden = FALSE AND co.hidden = FALSE))\n            ) AS \"exists!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "exists!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "b3c25afc80ddf84ba0a49578a6b1d5e70039c2d64a25a54ef42b25889e75b653"
+}

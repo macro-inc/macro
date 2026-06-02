@@ -17,6 +17,9 @@ pub enum FusionAuthClientError {
     /// A user with this email already exists.
     #[error("user already exists")]
     UserAlreadyExists,
+    /// The Google identity is already linked to this FusionAuth user.
+    #[error("identity provider link already exists")]
+    IdentityProviderLinkAlreadyExists,
     /// No identity provider was found.
     #[error("no identity provider found")]
     NoIdentityProviderFound,

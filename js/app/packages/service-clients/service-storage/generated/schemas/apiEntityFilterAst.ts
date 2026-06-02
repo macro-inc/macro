@@ -8,6 +8,9 @@
 export interface ApiEntityFilterAst {
   /** the filters that should be applied to the call entity */
   callf?: unknown;
+  /** Filters applied to the crm_company entity (wire key `ccf`).
+Empty/omitted = team's full visible list. */
+  ccf?: unknown;
   /** the filters that should be applied to the chat entity */
   cf?: unknown;
   /** the filters that should be applied to the channel entity */
@@ -29,6 +32,8 @@ tree only; CRM scope is carried by the `ecd` / `eca` sibling
 fields). On this endpoint the email filter stays a bare tree,
 unlike the materialized [`EntityFilterAst`] used for cursors. */
   ef?: unknown;
+  /** the filters that should be applied to foreign entity records */
+  fef?: unknown;
   /** the filters that should be applied to the project entity */
   pf?: unknown;
   /** the filters that should be applied based on entity properties */

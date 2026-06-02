@@ -1,0 +1,31 @@
+-- Expand crm_domain_directory with Apollo.io organization-enrichment data.
+-- High-signal fields are promoted to typed columns; the full Apollo
+-- `organization` payload (minus our own workspace `account`) is kept in `raw`.
+ALTER TABLE crm_domain_directory
+    ADD COLUMN IF NOT EXISTS apollo_organization_id    TEXT,
+    ADD COLUMN IF NOT EXISTS website_url               TEXT,
+    ADD COLUMN IF NOT EXISTS linkedin_url              TEXT,
+    ADD COLUMN IF NOT EXISTS twitter_url               TEXT,
+    ADD COLUMN IF NOT EXISTS facebook_url              TEXT,
+    ADD COLUMN IF NOT EXISTS industry                  TEXT,
+    ADD COLUMN IF NOT EXISTS keywords                  TEXT[],
+    ADD COLUMN IF NOT EXISTS technologies              TEXT[],
+    ADD COLUMN IF NOT EXISTS estimated_num_employees   INTEGER,
+    ADD COLUMN IF NOT EXISTS annual_revenue            BIGINT,
+    ADD COLUMN IF NOT EXISTS annual_revenue_printed    TEXT,
+    ADD COLUMN IF NOT EXISTS total_funding             BIGINT,
+    ADD COLUMN IF NOT EXISTS total_funding_printed     TEXT,
+    ADD COLUMN IF NOT EXISTS latest_funding_stage      TEXT,
+    ADD COLUMN IF NOT EXISTS latest_funding_round_date TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS founded_year              INTEGER,
+    ADD COLUMN IF NOT EXISTS publicly_traded_symbol    TEXT,
+    ADD COLUMN IF NOT EXISTS publicly_traded_exchange  TEXT,
+    ADD COLUMN IF NOT EXISTS phone                     TEXT,
+    ADD COLUMN IF NOT EXISTS raw_address               TEXT,
+    ADD COLUMN IF NOT EXISTS street_address            TEXT,
+    ADD COLUMN IF NOT EXISTS city                      TEXT,
+    ADD COLUMN IF NOT EXISTS state                     TEXT,
+    ADD COLUMN IF NOT EXISTS postal_code               TEXT,
+    ADD COLUMN IF NOT EXISTS country                   TEXT,
+    ADD COLUMN IF NOT EXISTS raw                       JSONB,
+    ADD COLUMN IF NOT EXISTS enriched_at               TIMESTAMPTZ;

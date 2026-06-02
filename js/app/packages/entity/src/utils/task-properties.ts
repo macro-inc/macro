@@ -10,7 +10,7 @@ export const TASK_STATUS_OPTIONS = [
 ] as const;
 
 const TASK_PRIORITY_OPTIONS = [
-  { value: PROPERTY_OPTION_IDS.PRIORITY.URGENT, label: 'Critical' },
+  { value: PROPERTY_OPTION_IDS.PRIORITY.URGENT, label: 'Urgent' },
   { value: PROPERTY_OPTION_IDS.PRIORITY.HIGH, label: 'High' },
   { value: PROPERTY_OPTION_IDS.PRIORITY.MEDIUM, label: 'Medium' },
   { value: PROPERTY_OPTION_IDS.PRIORITY.LOW, label: 'Low' },

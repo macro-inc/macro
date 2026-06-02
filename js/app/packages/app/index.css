@@ -209,9 +209,7 @@
 
 @layer base {
   html {
-    overscroll-behavior: none;
     font: -apple-system-body;
-    scrollbar-width: none;
     overflow: hidden;
   }
 
@@ -234,6 +232,10 @@
 
   :where(input, textarea, select, p *, p span, .pdfViewer *, .markdown-content *, [contenteditable], .md *) {
     user-select: text;
+  }
+
+  :where(*) {
+    scrollbar-width: none;
   }
 
   *:focus-visible {

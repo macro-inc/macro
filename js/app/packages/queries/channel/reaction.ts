@@ -2,13 +2,11 @@ import { toast } from '@core/component/Toast/Toast';
 import { throwOnErr } from '@core/util/result';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import {
-  commsServiceClient,
   type MessageResponse,
-} from '@service-comms/client';
-import type {
-  CountedReaction,
-  PostReactionRequest,
-} from '@service-comms/generated/models';
+  storageServiceClient,
+} from '@service-storage/client';
+import type { ApiCountedReaction } from '@service-storage/generated/schemas/apiCountedReaction';
+import type { PostReactionRequest } from '@service-storage/generated/schemas/postReactionRequest';
 import { useMutation } from '@tanstack/solid-query';
 import { queryClient } from '../client';
 import { createMutationNonce } from '../nonce';
@@ -24,7 +22,7 @@ import {
 type WithChannelId<T> = T & { channelId: string };
 type WithUserId<T> = T & { userId: string };
 
-type ReactionList = CountedReaction[];
+type ReactionList = ApiCountedReaction[];
 type WithReactionState<T> = T & {
   currentReactions?: ReactionList;
   threadId?: string;
@@ -239,7 +237,7 @@ export function useAddReactionMutation(
     mutationFn: async (vars: ReactionParams) => {
       return await throwOnErr(
         async () =>
-          await commsServiceClient.postReaction({
+          await storageServiceClient.postReaction({
             channel_id: vars.channelId,
             message_id: vars.messageId,
             emoji: vars.emoji,
@@ -309,7 +307,7 @@ export function useRemoveReactionMutation(
     mutationFn: async (vars: ReactionParams) => {
       return await throwOnErr(
         async () =>
-          await commsServiceClient.postReaction({
+          await storageServiceClient.postReaction({
             channel_id: vars.channelId,
             message_id: vars.messageId,
             emoji: vars.emoji,

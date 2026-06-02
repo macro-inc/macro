@@ -189,15 +189,40 @@ export const useSoupNavigationHotkeys = (
     ) as HTMLButtonElement | null;
   };
 
+  // When the focused row is a group header, drive it toward `targetExpanded`.
+  // Returns true if it toggled, false if already in that state, or undefined
+  // when the focused row isn't a group header so the caller can fall through.
+  const toggleFocusedGroupHeader = (
+    targetExpanded: boolean
+  ): boolean | undefined => {
+    const focusedRow = soup.focus.row();
+    if (!focusedRow?.getIsGrouped() || !focusedRow.group) return undefined;
+    if (focusedRow.group.isExpanded() === targetExpanded) return false;
+    focusedRow.group.toggle();
+    return true;
+  };
+
   registerHotkey({
     hotkey: ['h', 'arrowleft'],
     scopeId,
     description: 'Collapse item',
     hotkeyToken: TOKENS.unifiedList.navigation.parent,
     keyDownHandler: () => {
+      const groupHandled = toggleFocusedGroupHeader(false);
+      if (groupHandled !== undefined) return groupHandled;
+
       const toggle = getCollapsibleToggle();
       if (toggle?.dataset.collapsibleState === 'expanded') {
         toggle.click();
+        return true;
+      }
+
+      // From a child row, collapse its parent group and focus the header.
+      const focusedGroup = soup.focus.row()?.group;
+      if (focusedGroup?.isExpanded()) {
+        focusedGroup.toggle();
+        const header = soup.navigate.toId(`header:${focusedGroup.key}`);
+        if (header) scrollTo(header.index);
         return true;
       }
 
@@ -214,6 +239,9 @@ export const useSoupNavigationHotkeys = (
     description: 'Expand item',
     hotkeyToken: TOKENS.unifiedList.navigation.child,
     keyDownHandler: () => {
+      const groupHandled = toggleFocusedGroupHeader(true);
+      if (groupHandled !== undefined) return groupHandled;
+
       const toggle = getCollapsibleToggle();
       if (toggle?.dataset.collapsibleState === 'collapsed') {
         toggle.click();

@@ -1,6 +1,7 @@
 import { renameItem } from '@core/component/FileList/itemOperations';
 import { toast } from '@core/component/Toast/Toast';
 import type { EntityData } from '@entity';
+import { callKeys } from '@queries/call/keys';
 import { channelKeys } from '@queries/channel/keys';
 import { queryClient } from '@queries/client';
 import { setHistoryItemName } from '@queries/history/history';
@@ -12,9 +13,9 @@ import {
 } from '@queries/soup/cache';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import type { CallRecord } from '@service-call/client';
-import { ChannelTypeEnum } from '@service-comms/client';
-import type { ApiChannelWithLatest } from '@service-comms/generated/models';
+import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
 import type { ItemType } from '@service-storage/client';
+import { ChannelTypeEnum } from '@service-storage/client';
 import { useMutation } from '@tanstack/solid-query';
 
 type RenamableEntity = Pick<EntityData, 'id' | 'type' | 'name'> &
@@ -162,10 +163,13 @@ const renameCallRecordSetData = (
 ): void => {
   entities.forEach(({ id, newName, itemType }) => {
     if (itemType !== 'call') return;
-    queryClient.setQueryData<CallRecord>(['call', 'record', id], (prev) => {
-      if (!prev) return prev;
-      return { ...prev, customName: newName };
-    });
+    queryClient.setQueryData<CallRecord>(
+      callKeys.record(id).queryKey,
+      (prev) => {
+        if (!prev) return prev;
+        return { ...prev, customName: newName };
+      }
+    );
   });
 };
 
