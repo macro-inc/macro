@@ -9,6 +9,7 @@ axum = [
   "dep:axum",
   "dep:macro_uuid",
   "dep:model-error-response",
+  "dep:model_user",
   "dep:utoipa",
   "entity_access/axum",
   "entity_access/inbound",
@@ -34,6 +35,7 @@ entity_access = { path = "../entity_access", default-features = false }
 axum = { workspace = true, optional = true }
 macro_uuid = { path = "../macro_uuid", optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
+model_user = { path = "../model_user", optional = true, features = ["axum"] }
 utoipa = { workspace = true, optional = true }
 
 # Outbound dependencies

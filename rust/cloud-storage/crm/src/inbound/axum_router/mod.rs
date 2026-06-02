@@ -46,6 +46,27 @@ impl<C, Eas> FromRef<CrmRouterState<C, Eas>> for Arc<Eas> {
     }
 }
 
+/// Newtype around `Arc<C>` so it can be pulled from
+/// [`CrmRouterState`] via `FromRef` without colliding with
+/// [`FromRef`] for [`Arc<Eas>`] in the (theoretical) case where
+/// `C == Eas`. Plain `Arc<C>` vs `Arc<Eas>` overlap as
+/// implementations when both type params resolve to the same type;
+/// wrapping one side fixes it without changing the state's storage.
+#[derive(Debug)]
+pub struct CrmServiceRef<C>(pub Arc<C>);
+
+impl<C> Clone for CrmServiceRef<C> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+
+impl<C, Eas> FromRef<CrmRouterState<C, Eas>> for CrmServiceRef<C> {
+    fn from_ref(state: &CrmRouterState<C, Eas>) -> Self {
+        CrmServiceRef(state.service.clone())
+    }
+}
+
 // Manual Clone so C, Eas don't need Clone.
 impl<C, Eas> Clone for CrmRouterState<C, Eas> {
     fn clone(&self) -> Self {

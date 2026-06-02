@@ -1,5 +1,8 @@
 use super::PgAccessRepository;
-use crate::domain::{models::AccessError, ports::AccessRepository};
+use crate::domain::{
+    models::{AccessError, AccessLevel},
+    ports::AccessRepository,
+};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
@@ -8,7 +11,10 @@ use uuid::Uuid;
 const TEAM_ALPHA: &str = "00000000-0000-0000-0000-0000000ea001";
 const TEAM_BETA: &str = "00000000-0000-0000-0000-0000000ea002";
 const TEAM_MEMBER: &str = "macro|member@team.com";
+const TEAM_ADMIN: &str = "macro|admin@team.com";
+const TEAM_OWNER: &str = "macro|owner@team.com";
 const USER_WITHOUT_TEAM: &str = "macro|noteam@team.com";
+const TEAM_BETA_OWNER: &str = "macro|multi@team.com";
 
 fn user_id(value: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(value.to_string()).unwrap()
@@ -161,6 +167,234 @@ async fn rejects_invalid_uuid(pool: PgPool) -> anyhow::Result<()> {
     assert!(matches!(
         error,
         AccessError::BadRequest("Invalid foreign entity ID format")
+    ));
+    Ok(())
+}
+
+// --------------------------------------------------------------------------
+// CRM company + contact access
+// --------------------------------------------------------------------------
+
+async fn insert_crm_company(pool: &PgPool, team_id: &str, hidden: bool) -> anyhow::Result<Uuid> {
+    let id = Uuid::new_v4();
+    sqlx::query!(
+        r#"
+        INSERT INTO crm_companies (id, team_id, hidden, first_interaction, last_interaction)
+        VALUES ($1, $2, $3, now(), now())
+        "#,
+        id,
+        Uuid::parse_str(team_id)?,
+        hidden,
+    )
+    .execute(pool)
+    .await?;
+    Ok(id)
+}
+
+async fn insert_crm_contact(pool: &PgPool, company_id: Uuid, hidden: bool) -> anyhow::Result<Uuid> {
+    let id = Uuid::new_v4();
+    sqlx::query!(
+        r#"
+        INSERT INTO crm_contacts (id, company_id, email, hidden, first_interaction, last_interaction)
+        VALUES ($1, $2, $3, $4, now(), now())
+        "#,
+        id,
+        company_id,
+        format!("contact-{id}@example.com"),
+        hidden,
+    )
+    .execute(pool)
+    .await?;
+    Ok(id)
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("user_team"))
+)]
+async fn crm_company_access_maps_team_role_to_access_level(pool: PgPool) -> anyhow::Result<()> {
+    let company_id = insert_crm_company(&pool, TEAM_ALPHA, false).await?;
+    let repo = PgAccessRepository::new(pool);
+
+    let cases = [
+        (TEAM_MEMBER, Some(AccessLevel::View)),
+        (TEAM_ADMIN, Some(AccessLevel::Edit)),
+        (TEAM_OWNER, Some(AccessLevel::Owner)),
+    ];
+    for (uid, expected) in cases {
+        let actual = repo
+            .get_crm_company_access(&company_id.to_string(), Some(&user_id(uid)))
+            .await?;
+        assert_eq!(actual, expected, "user {uid}");
+    }
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("user_team"))
+)]
+async fn crm_company_access_hides_from_member_when_hidden(pool: PgPool) -> anyhow::Result<()> {
+    let company_id = insert_crm_company(&pool, TEAM_ALPHA, true).await?;
+    let repo = PgAccessRepository::new(pool);
+
+    assert_eq!(
+        repo.get_crm_company_access(&company_id.to_string(), Some(&user_id(TEAM_MEMBER)))
+            .await?,
+        None,
+    );
+    assert_eq!(
+        repo.get_crm_company_access(&company_id.to_string(), Some(&user_id(TEAM_ADMIN)))
+            .await?,
+        Some(AccessLevel::Edit),
+    );
+    assert_eq!(
+        repo.get_crm_company_access(&company_id.to_string(), Some(&user_id(TEAM_OWNER)))
+            .await?,
+        Some(AccessLevel::Owner),
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("user_team"))
+)]
+async fn crm_company_access_denies_other_team(pool: PgPool) -> anyhow::Result<()> {
+    let alpha_company = insert_crm_company(&pool, TEAM_ALPHA, false).await?;
+    let repo = PgAccessRepository::new(pool);
+
+    // Beta's owner has no role on Alpha → no access to an Alpha company.
+    let actual = repo
+        .get_crm_company_access(&alpha_company.to_string(), Some(&user_id(TEAM_BETA_OWNER)))
+        .await?;
+    assert_eq!(actual, None);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("user_team"))
+)]
+async fn crm_company_access_denies_anonymous(pool: PgPool) -> anyhow::Result<()> {
+    let company_id = insert_crm_company(&pool, TEAM_ALPHA, false).await?;
+    let repo = PgAccessRepository::new(pool);
+
+    let actual = repo
+        .get_crm_company_access(&company_id.to_string(), None)
+        .await?;
+    assert_eq!(actual, None);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("user_team"))
+)]
+async fn crm_company_access_rejects_invalid_uuid(pool: PgPool) -> anyhow::Result<()> {
+    let repo = PgAccessRepository::new(pool);
+    let err = repo
+        .get_crm_company_access("not-a-uuid", Some(&user_id(TEAM_MEMBER)))
+        .await
+        .expect_err("invalid UUID should be rejected");
+    assert!(matches!(
+        err,
+        AccessError::BadRequest("Invalid CRM company ID format")
+    ));
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("user_team"))
+)]
+async fn crm_contact_access_maps_team_role_to_access_level(pool: PgPool) -> anyhow::Result<()> {
+    let company_id = insert_crm_company(&pool, TEAM_ALPHA, false).await?;
+    let contact_id = insert_crm_contact(&pool, company_id, false).await?;
+    let repo = PgAccessRepository::new(pool);
+
+    let cases = [
+        (TEAM_MEMBER, Some(AccessLevel::View)),
+        (TEAM_ADMIN, Some(AccessLevel::Edit)),
+        (TEAM_OWNER, Some(AccessLevel::Owner)),
+    ];
+    for (uid, expected) in cases {
+        let actual = repo
+            .get_crm_contact_access(&contact_id.to_string(), Some(&user_id(uid)))
+            .await?;
+        assert_eq!(actual, expected, "user {uid}");
+    }
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("user_team"))
+)]
+async fn crm_contact_access_hidden_contact_blocks_member(pool: PgPool) -> anyhow::Result<()> {
+    let company_id = insert_crm_company(&pool, TEAM_ALPHA, false).await?;
+    let contact_id = insert_crm_contact(&pool, company_id, true).await?;
+    let repo = PgAccessRepository::new(pool);
+
+    assert_eq!(
+        repo.get_crm_contact_access(&contact_id.to_string(), Some(&user_id(TEAM_MEMBER)))
+            .await?,
+        None,
+    );
+    assert_eq!(
+        repo.get_crm_contact_access(&contact_id.to_string(), Some(&user_id(TEAM_ADMIN)))
+            .await?,
+        Some(AccessLevel::Edit),
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("user_team"))
+)]
+async fn crm_contact_access_hidden_company_cascades_to_contact(pool: PgPool) -> anyhow::Result<()> {
+    let company_id = insert_crm_company(&pool, TEAM_ALPHA, true).await?;
+    let contact_id = insert_crm_contact(&pool, company_id, false).await?;
+    let repo = PgAccessRepository::new(pool);
+
+    assert_eq!(
+        repo.get_crm_contact_access(&contact_id.to_string(), Some(&user_id(TEAM_MEMBER)))
+            .await?,
+        None,
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("user_team"))
+)]
+async fn crm_contact_access_denies_other_team(pool: PgPool) -> anyhow::Result<()> {
+    let company_id = insert_crm_company(&pool, TEAM_ALPHA, false).await?;
+    let contact_id = insert_crm_contact(&pool, company_id, false).await?;
+    let repo = PgAccessRepository::new(pool);
+
+    let actual = repo
+        .get_crm_contact_access(&contact_id.to_string(), Some(&user_id(TEAM_BETA_OWNER)))
+        .await?;
+    assert_eq!(actual, None);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("user_team"))
+)]
+async fn crm_contact_access_rejects_invalid_uuid(pool: PgPool) -> anyhow::Result<()> {
+    let repo = PgAccessRepository::new(pool);
+    let err = repo
+        .get_crm_contact_access("not-a-uuid", Some(&user_id(TEAM_MEMBER)))
+        .await
+        .expect_err("invalid UUID should be rejected");
+    assert!(matches!(
+        err,
+        AccessError::BadRequest("Invalid CRM contact ID format")
     ));
     Ok(())
 }

@@ -440,4 +440,16 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
         comment_id: &uuid::Uuid,
         include_hidden: bool,
     ) -> impl Future<Output = Result<DeleteCrmCommentResult, CrmError>> + Send;
+
+    /// Resolve a CRM comment to the entity its thread is attached to.
+    /// Returns `Ok(None)` when the comment doesn't exist or is
+    /// soft-deleted. The schema's `crm_thread_one_parent` check
+    /// constraint guarantees exactly one of `company_id` / `contact_id`
+    /// is set on the parent thread, so the variant is unambiguous. This
+    /// is the lookup the comment access extractor uses to dispatch
+    /// access checks to the right entity type.
+    fn get_comment_entity(
+        &self,
+        comment_id: &uuid::Uuid,
+    ) -> impl Future<Output = Result<Option<(CrmCommentEntityType, uuid::Uuid)>, CrmError>> + Send;
 }

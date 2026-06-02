@@ -160,6 +160,42 @@ impl AccessRepository for PgAccessRepository {
     }
 
     #[tracing::instrument(err, skip(self))]
+    async fn get_crm_company_access(
+        &self,
+        company_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        let company_uuid = company_id
+            .parse::<Uuid>()
+            .map_err(|_| AccessError::BadRequest("Invalid CRM company ID format"))?;
+        let Some(user_id) = user_id else {
+            return Ok(None);
+        };
+        Ok(
+            queries::crm_company_access::get_crm_company_access(&self.pool, &company_uuid, user_id)
+                .await?,
+        )
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_crm_contact_access(
+        &self,
+        contact_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        let contact_uuid = contact_id
+            .parse::<Uuid>()
+            .map_err(|_| AccessError::BadRequest("Invalid CRM contact ID format"))?;
+        let Some(user_id) = user_id else {
+            return Ok(None);
+        };
+        Ok(
+            queries::crm_contact_access::get_crm_contact_access(&self.pool, &contact_uuid, user_id)
+                .await?,
+        )
+    }
+
+    #[tracing::instrument(err, skip(self))]
     async fn check_user_channel_membership(
         &self,
         user_id: Option<&MacroUserId<Lowercase<'_>>>,

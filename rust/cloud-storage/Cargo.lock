@@ -2667,6 +2667,7 @@ dependencies = [
  "macro_db_migrator",
  "macro_uuid",
  "model-error-response",
+ "model_user",
  "reqwest 0.13.3",
  "serde",
  "serde_json",
