@@ -1,5 +1,5 @@
+import { type JSX, type ParentProps, splitProps } from 'solid-js';
 import { cn } from '../utils/classname';
-import { type ParentProps, splitProps, type JSX } from 'solid-js';
 
 export type AvatarSize = 'sm' | 'md' | 'lg' | 'fill';
 

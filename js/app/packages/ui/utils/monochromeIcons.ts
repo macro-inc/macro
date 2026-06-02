@@ -1,26 +1,46 @@
-import { monochromeIcons } from '../signals/signals';
 import { createEffect, createRoot } from 'solid-js';
+import { monochromeIcons } from '../signals/signals';
 
 export function initMonochromeIcons() {
   createRoot(() => {
     createEffect(() => {
       if (monochromeIcons()) {
-        document.documentElement.style.setProperty('--color-calendar', 'var(--c0)');
-        document.documentElement.style.setProperty('--color-contact',  'var(--c0)');
-        document.documentElement.style.setProperty('--color-canvas',   'var(--c0)');
-        document.documentElement.style.setProperty('--color-folder',   'var(--c0)');
-        document.documentElement.style.setProperty('--color-image',    'var(--c0)');
-        document.documentElement.style.setProperty('--color-video',    'var(--c0)');
-        document.documentElement.style.setProperty('--color-write',    'var(--c0)');
-        document.documentElement.style.setProperty('--color-code',     'var(--c0)');
-        document.documentElement.style.setProperty('--color-chat',     'var(--c0)');
-        document.documentElement.style.setProperty('--color-html',     'var(--c0)');
-        document.documentElement.style.setProperty('--color-note',     'var(--c0)');
-        document.documentElement.style.setProperty('--color-task',     'var(--c0)');
-        document.documentElement.style.setProperty('--color-pdf',      'var(--c0)');
-        document.documentElement.style.setProperty('--color-rss',      'var(--c0)');
-      }
-      else {
+        document.documentElement.style.setProperty(
+          '--color-calendar',
+          'var(--c0)'
+        );
+        document.documentElement.style.setProperty(
+          '--color-contact',
+          'var(--c0)'
+        );
+        document.documentElement.style.setProperty(
+          '--color-canvas',
+          'var(--c0)'
+        );
+        document.documentElement.style.setProperty(
+          '--color-folder',
+          'var(--c0)'
+        );
+        document.documentElement.style.setProperty(
+          '--color-image',
+          'var(--c0)'
+        );
+        document.documentElement.style.setProperty(
+          '--color-video',
+          'var(--c0)'
+        );
+        document.documentElement.style.setProperty(
+          '--color-write',
+          'var(--c0)'
+        );
+        document.documentElement.style.setProperty('--color-code', 'var(--c0)');
+        document.documentElement.style.setProperty('--color-chat', 'var(--c0)');
+        document.documentElement.style.setProperty('--color-html', 'var(--c0)');
+        document.documentElement.style.setProperty('--color-note', 'var(--c0)');
+        document.documentElement.style.setProperty('--color-task', 'var(--c0)');
+        document.documentElement.style.setProperty('--color-pdf', 'var(--c0)');
+        document.documentElement.style.setProperty('--color-rss', 'var(--c0)');
+      } else {
         document.documentElement.style.removeProperty('--color-calendar');
         document.documentElement.style.removeProperty('--color-contact');
         document.documentElement.style.removeProperty('--color-canvas');

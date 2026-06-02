@@ -12,7 +12,7 @@ import { cn } from '../utils/classname';
 */
 
 export type StepperTransition = {
-  mode?: 'outin' | 'inout';                /* simultaneous if omitted   */
+  mode?: 'outin' | 'inout' /* simultaneous if omitted   */;
   enterActiveClass?: string;
   enterClass?: string;
   enterToClass?: string;
@@ -22,20 +22,24 @@ export type StepperTransition = {
 };
 
 /* Resolver receives 1 for forward navigation, -1 for backward */
-export type StepperTransitionResolver = (direction: 1 | -1) => StepperTransition;
+export type StepperTransitionResolver = (
+  direction: 1 | -1
+) => StepperTransition;
 
 export type StepperProps = {
-  step: number;                                                       /* current step index    */
-  transition?: StepperTransition | StepperTransitionResolver;         /* transition behavior   */
-  appear?: boolean;                                                   /* animate initial mount */
-  children: JSX.Element;                                              /* Stepper.Step slots    */
-  class?: string;                                                     /* container classes     */
+  step: number /* current step index    */;
+  transition?:
+    | StepperTransition
+    | StepperTransitionResolver /* transition behavior   */;
+  appear?: boolean /* animate initial mount */;
+  children: JSX.Element /* Stepper.Step slots    */;
+  class?: string /* container classes     */;
 };
 
 export type StepperStepProps = {
-  index?: number;                                                     /* override position     */
-  noTransition?: boolean;                                             /* skip enter+exit anim  */
-  children: JSX.Element;                                              /* step contents (lazy)  */
+  index?: number /* override position     */;
+  noTransition?: boolean /* skip enter+exit anim  */;
+  children: JSX.Element /* step contents (lazy)  */;
 };
 
 const FADE: StepperTransition = {
@@ -50,18 +54,21 @@ const FADE: StepperTransition = {
 
 const SLIDE: StepperTransitionResolver = (dir) => ({
   enterActiveClass: 'transition-all duration-200 ease-out',
-  enterClass: dir === 1 ? 'opacity-0 translate-x-6' : 'opacity-0 -translate-x-6',
+  enterClass:
+    dir === 1 ? 'opacity-0 translate-x-6' : 'opacity-0 -translate-x-6',
   enterToClass: 'opacity-100 translate-x-0',
   exitActiveClass: 'transition-all duration-100 ease-out absolute inset-0',
   exitClass: 'opacity-100 translate-x-0',
-  exitToClass: dir === 1 ? 'opacity-0 -translate-x-6' : 'opacity-0 translate-x-6',
+  exitToClass:
+    dir === 1 ? 'opacity-0 -translate-x-6' : 'opacity-0 translate-x-6',
 });
 
 const SLIDE_FULL: StepperTransitionResolver = (dir) => ({
   enterActiveClass: 'transition-transform duration-200 ease-out',
   enterClass: dir === 1 ? 'translate-x-full' : '-translate-x-full',
   enterToClass: 'translate-x-0',
-  exitActiveClass: 'transition-transform duration-100 ease-out absolute inset-0',
+  exitActiveClass:
+    'transition-transform duration-100 ease-out absolute inset-0',
   exitClass: 'translate-x-0',
   exitToClass: dir === 1 ? '-translate-x-full' : 'translate-x-full',
 });

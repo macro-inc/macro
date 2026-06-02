@@ -1,7 +1,7 @@
 import { Switch as KobalteSwitch } from '@kobalte/core/switch';
-import { Show, createSignal, onCleanup, splitProps } from 'solid-js';
-import { cn } from '../utils/classname';
 import type { JSX } from 'solid-js';
+import { createSignal, onCleanup, Show, splitProps } from 'solid-js';
+import { cn } from '../utils/classname';
 
 export type ToggleSwitchProps = {
   onChange?: (checked: boolean) => void;
@@ -57,7 +57,7 @@ export const ToggleSwitch = (props: ToggleSwitchProps): JSX.Element => {
             'absolute top-0.5 left-0.5 h-3 rounded-full bg-surface transition-all duration-100 ease-in-out',
             isStretched()
               ? 'w-4 data-checked:translate-x-1'
-              : 'w-3 data-checked:translate-x-2',
+              : 'w-3 data-checked:translate-x-2'
           )}
         />
       </KobalteSwitch.Control>

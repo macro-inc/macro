@@ -18,4 +18,3 @@ export const [monochromeIcons, setMonochromeIcons] = makePersisted(
   createSignal<boolean>(false),
   { name: 'enable-monochrome-icons' }
 );
-
