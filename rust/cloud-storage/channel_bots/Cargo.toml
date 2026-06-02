@@ -11,7 +11,7 @@ bot_id = { path = "../bot_id" }
 channels = { path = "../channels", features = ["inbound", "outbound"] }
 document_cognition_service_client = { path = "../document_cognition_service_client" }
 macro_user_id = { path = "../macro_user_id" }
-tokio = { workspace = true, features = ["rt"] }
+tokio = { workspace = true, features = ["rt", "sync"] }
 tracing = { workspace = true }
 uuid = { workspace = true }
 

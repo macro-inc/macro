@@ -7,14 +7,14 @@ use crate::domain::{
         MutatedAttachment, MutatedMessage, Sender, SimpleMention, TypingAction,
     },
     ports::{
-        ChannelBotDispatcher, ChannelContactsDispatcher, ChannelEventDispatcher,
-        ChannelEventHandler, ChannelNotificationSender, ChannelRealtimePublisher,
-        ChannelSearchIndexer, ChannelSideEffectContext,
+        ChannelContactsDispatcher, ChannelEventDispatcher, ChannelEventHandler,
+        ChannelNotificationSender, ChannelRealtimePublisher, ChannelSearchIndexer,
+        ChannelSideEffectContext,
     },
 };
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use std::collections::HashSet;
-use std::sync::{Arc, OnceLock};
+use tokio::sync::mpsc::UnboundedSender;
 use uuid::Uuid;
 
 /// Entity type used by message mentions that target a bot.
@@ -31,12 +31,8 @@ pub struct ChannelBotTrigger {
     pub bot_ids: Vec<BotId>,
 }
 
-/// Shared, late-bound slot for the channel bot dispatcher.
-///
-/// The dispatcher posts messages back through the channel service, which in turn
-/// owns this side-effect service, so the dependency is wired after construction
-/// to break the cycle.
-pub type SharedBotDispatcher = Arc<OnceLock<Arc<dyn ChannelBotDispatcher>>>;
+/// Sender for bot triggers derived from channel messages.
+pub type ChannelBotTriggerSender = UnboundedSender<ChannelBotTrigger>;
 
 /// Collect the bot ids mentioned in a message.
 ///
@@ -252,7 +248,7 @@ pub struct ChannelSideEffectService<C, R, N, S, K> {
     notifications: N,
     search: S,
     contacts: K,
-    bot_dispatcher: SharedBotDispatcher,
+    bot_triggers: Option<ChannelBotTriggerSender>,
 }
 
 struct MessagePostedSideEffects {
@@ -285,16 +281,14 @@ impl<C, R, N, S, K> ChannelSideEffectService<C, R, N, S, K> {
             notifications,
             search,
             contacts,
-            bot_dispatcher: Arc::new(OnceLock::new()),
+            bot_triggers: None,
         }
     }
 
-    /// Return a clonable handle to the late-bound bot dispatcher slot.
-    ///
-    /// Callers wire the dispatcher after the channel service is constructed via
-    /// [`OnceLock::set`] on the returned handle.
-    pub fn bot_dispatcher_cell(&self) -> SharedBotDispatcher {
-        self.bot_dispatcher.clone()
+    /// Configure a sender for bot triggers derived from channel messages.
+    pub fn with_bot_trigger_sender(mut self, bot_triggers: ChannelBotTriggerSender) -> Self {
+        self.bot_triggers = Some(bot_triggers);
+        self
     }
 
     /// Dispatch bot triggers for any bots mentioned in a user-authored message.
@@ -313,12 +307,21 @@ impl<C, R, N, S, K> ChannelSideEffectService<C, R, N, S, K> {
         if bot_ids.is_empty() {
             return;
         }
-        if let Some(dispatcher) = self.bot_dispatcher.get() {
-            dispatcher.dispatch(ChannelBotTrigger {
-                channel_id,
-                message: message.clone(),
-                bot_ids,
-            });
+
+        if let Some(bot_triggers) = &self.bot_triggers
+            && bot_triggers
+                .send(ChannelBotTrigger {
+                    channel_id,
+                    message: message.clone(),
+                    bot_ids,
+                })
+                .is_err()
+        {
+            tracing::warn!(
+                channel_id = %channel_id,
+                message_id = %message.id,
+                "unable to enqueue channel bot trigger; receiver was dropped"
+            );
         }
     }
 }
@@ -1305,6 +1308,79 @@ mod tests {
             vec![(channel_id, message_id)]
         );
         assert!(notifications.effects.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn user_message_with_bot_mention_enqueues_bot_trigger() {
+        let channel_id = Uuid::new_v4();
+        let message_id = Uuid::new_v4();
+        let sender = user("sender@example.com");
+        let recipient = user("recipient@example.com");
+        let (bot_trigger_sender, mut bot_trigger_receiver) = tokio::sync::mpsc::unbounded_channel();
+        let service = ChannelSideEffectService::new(
+            FakeContext {
+                message_count: 2,
+                document_mentions: Vec::new(),
+            },
+            FakeRealtime::default(),
+            FakeNotifications::default(),
+            FakeSearch::default(),
+            FakeContacts::default(),
+        )
+        .with_bot_trigger_sender(bot_trigger_sender);
+        let now = Utc::now();
+
+        service
+            .handle(ChannelEvent::MessagePosted {
+                channel_id,
+                metadata: ChannelMetadata {
+                    channel_type: ChannelType::Private,
+                    channel_name: "Project".to_string(),
+                },
+                participants: vec![
+                    ChannelParticipant {
+                        channel_id,
+                        user_id: sender.as_ref().to_string(),
+                        role: ParticipantRole::Member,
+                        joined_at: now,
+                        left_at: None,
+                    },
+                    ChannelParticipant {
+                        channel_id,
+                        user_id: recipient.as_ref().to_string(),
+                        role: ParticipantRole::Member,
+                        joined_at: now,
+                        left_at: None,
+                    },
+                ],
+                message: MutatedMessage {
+                    id: message_id,
+                    channel_id,
+                    thread_id: None,
+                    sender_id: Sender::User(sender),
+                    content: "@macro help".to_string(),
+                    created_at: now,
+                    updated_at: now,
+                    edited_at: None,
+                    deleted_at: None,
+                },
+                mentions: vec![SimpleMention {
+                    entity_type: "user".to_string(),
+                    entity_id: bot_id::MACRO_AI_BOT_ID.to_string(),
+                }],
+                has_attachments: false,
+                attachments: Vec::new(),
+                nonce: None,
+            })
+            .await;
+
+        let trigger = bot_trigger_receiver
+            .try_recv()
+            .expect("expected bot trigger");
+        assert_eq!(trigger.channel_id, channel_id);
+        assert_eq!(trigger.message.id, message_id);
+        assert_eq!(trigger.bot_ids, vec![bot_id::MACRO_AI_BOT_ID]);
+        assert!(bot_trigger_receiver.try_recv().is_err());
     }
 
     #[tokio::test]

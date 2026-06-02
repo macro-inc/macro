@@ -2,16 +2,20 @@
 
 use std::sync::Arc;
 
-use channels::domain::ports::{ChannelBotDispatcher, ChannelService};
+use channels::domain::ports::ChannelService;
 use channels::domain::side_effects::ChannelBotTrigger;
+use tokio::sync::mpsc::UnboundedReceiver;
 
-use crate::handlers::{BotEvent, BotTrigger, MacroAiHandler};
-use crate::responder::AgentResponder;
+use crate::domain::{
+    models::{BotEvent, BotTrigger},
+    ports::AgentResponder,
+    service::MacroAiHandler,
+};
 
 /// Resolves the bots mentioned in a channel message and runs their handlers.
 ///
-/// Wired into the channels side-effect service as a [`ChannelBotDispatcher`].
-/// Dispatch is fire-and-forget: each trigger is handled on a spawned task.
+/// Receives triggers derived by the channel side-effect service. Dispatch is
+/// fire-and-forget: each trigger is handled on a spawned task.
 ///
 /// System bots are defined in code and require no database row. Unknown bot ids
 /// are ignored for now; only Macro AI is handled by this branch.
@@ -39,6 +43,21 @@ where
         }
     }
 
+    /// Start consuming channel bot triggers.
+    pub fn spawn(self, mut triggers: UnboundedReceiver<ChannelBotTrigger>)
+    where
+        R: 'static,
+    {
+        tokio::spawn(async move {
+            while let Some(trigger) = triggers.recv().await {
+                let router = self.clone();
+                tokio::spawn(async move {
+                    router.run(trigger).await;
+                });
+            }
+        });
+    }
+
     async fn run(&self, trigger: ChannelBotTrigger) {
         // Guarded upstream, but double-check: only user messages trigger bots.
         let Some(requesting_user) = trigger.message.sender_id.as_user().cloned() else {
@@ -64,18 +83,5 @@ where
                 tracing::debug!(bot_id = %id, "no system bot handler registered for bot trigger");
             }
         }
-    }
-}
-
-impl<C, R> ChannelBotDispatcher for BotTriggerRouter<C, R>
-where
-    C: ChannelService,
-    R: AgentResponder + 'static,
-{
-    fn dispatch(&self, trigger: ChannelBotTrigger) {
-        let router = self.clone();
-        tokio::spawn(async move {
-            router.run(trigger).await;
-        });
     }
 }

@@ -15,7 +15,10 @@ use models_pagination::{CreatedAt, Query};
 use uuid::Uuid;
 
 use super::*;
-use crate::responder::AgentResponder;
+use crate::domain::{
+    models::{BotEvent, BotTrigger},
+    ports::AgentResponder,
+};
 
 struct TestChannelService {
     around_args: Mutex<Option<(Uuid, Uuid, i64, i64)>>,

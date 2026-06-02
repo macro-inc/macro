@@ -589,6 +589,7 @@ async fn main() -> anyhow::Result<()> {
     let channels_repo = PgChannelsRepo::new(db.clone());
     let bots_repo = bots::outbound::pg_bots_repo::PgBotsRepo::new(db.clone());
     let bots_service = bots::domain::service::BotServiceImpl::new(bots_repo.clone());
+    let (bot_trigger_sender, bot_trigger_receiver) = tokio::sync::mpsc::unbounded_channel();
 
     let channel_side_effects = ChannelSideEffectService::new(
         PgChannelSideEffectContext::new(db.clone()),
@@ -596,10 +597,8 @@ async fn main() -> anyhow::Result<()> {
         NotificationChannelSender::new(notification_ingress_service.clone()),
         SqsChannelSearchIndexer::new(sqs_client.clone()),
         ContactsChannelDispatcher::new(contacts_ingress.clone()),
-    );
-    // Late-bound slot for the bot dispatcher; the dispatcher posts back through
-    // the channel service, so it is wired after the service is built.
-    let bot_dispatcher_cell = channel_side_effects.bot_dispatcher_cell();
+    )
+    .with_bot_trigger_sender(bot_trigger_sender);
 
     let channels_service = Arc::new(ChannelServiceImpl::with_dependencies(
         channels_repo,
@@ -607,8 +606,8 @@ async fn main() -> anyhow::Result<()> {
         PgChannelReferenceSharePermissions::new(db.clone(), entity_access_service.clone()),
     ));
 
-    // Wire Macro AI to react to mentions. The dispatcher posts replies through
-    // the channel service we just built.
+    // Wire Macro AI to react to mentions. The router posts replies through the
+    // channel service we just built.
     let cognition_service_url = config::CognitionServiceUrl::new()
         .map(|v| v.as_ref().to_string())
         .unwrap_or_else(|| config.environment.cognition_service().to_string());
@@ -616,16 +615,11 @@ async fn main() -> anyhow::Result<()> {
         cognition_service_url,
         internal_api_secret.as_ref().to_string(),
     );
-    let bot_trigger_router = channel_bots::BotTriggerRouter::new(
+    let bot_trigger_router = channel_bots::inbound::BotTriggerRouter::new(
         channels_service.clone(),
-        Arc::new(channel_bots::DcsAgentResponder::new(dcs_client)),
+        Arc::new(channel_bots::outbound::DcsAgentResponder::new(dcs_client)),
     );
-    if bot_dispatcher_cell
-        .set(Arc::new(bot_trigger_router))
-        .is_err()
-    {
-        tracing::error!("channel bot dispatcher was already set");
-    }
+    bot_trigger_router.spawn(bot_trigger_receiver);
 
     let api_context = ApiContext {
         contacts_ingress: contacts_ingress.clone(),

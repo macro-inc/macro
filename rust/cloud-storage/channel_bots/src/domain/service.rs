@@ -1,17 +1,16 @@
-//! Bot trigger events and the built-in handlers.
+//! Domain service for built-in channel bots.
 
 use std::fmt::Write as _;
 use std::sync::Arc;
 
 use channels::domain::models::{
-    ChannelContextMessage, MutatedMessage, ParticipantRole, PatchMessageRequest,
-    PostMessageRequest, Sender,
+    ChannelContextMessage, ParticipantRole, PatchMessageRequest, PostMessageRequest, Sender,
 };
 use channels::domain::ports::ChannelService;
-use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
-use crate::responder::AgentResponder;
+use super::models::BotEvent;
+use super::ports::AgentResponder;
 
 /// How many channel messages to include around the trigger.
 ///
@@ -62,29 +61,6 @@ fn append_messages(
             message.content
         );
     }
-}
-
-/// The kind of event that triggered a bot.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BotTrigger {
-    /// The bot was `@`-mentioned in a channel message.
-    Mention,
-}
-
-/// A normalized trigger delivered to a system bot handler.
-#[derive(Debug, Clone)]
-pub struct BotEvent {
-    /// What triggered the bot.
-    pub trigger: BotTrigger,
-    /// Channel the trigger occurred in.
-    pub channel_id: Uuid,
-    /// The user-authored message that triggered the bot.
-    pub message: MutatedMessage,
-    /// Thread the bot should reply in. For a top-level message this is the
-    /// message id; for a reply it is the existing thread id.
-    pub reply_thread_id: Uuid,
-    /// The user who triggered the bot.
-    pub requesting_user: MacroUserIdStr<'static>,
 }
 
 /// Message Macro posts immediately, then replaces with its answer.

@@ -12,7 +12,7 @@ use crate::domain::models::{
     ThreadReply, ThreadReplyRow, TopLevelMessageRow,
 };
 use crate::domain::side_effects::{
-    ChannelBotTrigger, ChannelDocumentMention, ChannelNotificationEffect, ChannelRealtimeEffect,
+    ChannelDocumentMention, ChannelNotificationEffect, ChannelRealtimeEffect,
     ThreadNotificationContext,
 };
 use chrono::{DateTime, Utc};
@@ -837,16 +837,6 @@ pub trait ChannelEventHandler: Clone + Send + Sync + 'static {
 pub trait ChannelEventDispatcher: Send + Sync + 'static {
     /// Fire-and-forget dispatch of a channel event.
     fn dispatch(&self, event: ChannelEvent);
-}
-
-/// Dispatcher for bot triggers derived from channel messages.
-///
-/// Implemented outside the channels crate (where bots and the agent live) and
-/// wired into the side-effect service after construction. Dispatch is
-/// fire-and-forget; implementations spawn their own work.
-pub trait ChannelBotDispatcher: Send + Sync {
-    /// Handle a bot trigger emitted by a channel message.
-    fn dispatch(&self, trigger: ChannelBotTrigger);
 }
 
 /// Dispatcher for contact graph updates.
