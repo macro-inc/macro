@@ -1455,6 +1455,7 @@ export function BaseInput(props: {
                 links={emailLinksQuery.data?.links ?? []}
                 activeLinkId={activeLinkId()}
                 onSelect={(id) => form().setSelectedFromLink(id)}
+                readonly={!!props.replyingTo()}
               />
             </div>
             {/* Expanded TO */}
