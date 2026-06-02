@@ -24,6 +24,7 @@ import WideEmail from '@icon/wide-email.svg';
 import WideFileCode from '@icon/wide-file-code.svg';
 import WideFileImage from '@icon/wide-file-image.svg';
 import WideFileMd from '@icon/wide-file-md.svg';
+import WideFiles from '@icon/wide-files.svg';
 import WideFolder from '@icon/wide-folder.svg';
 import WideGlobe from '@icon/wide-globe.svg';
 import WideStar from '@icon/wide-star.svg';
@@ -38,6 +39,7 @@ import FileCode from '@phosphor/code.svg';
 import Email from '@phosphor/envelope.svg';
 import EmailRead from '@phosphor/envelope-open.svg';
 import File from '@phosphor/file.svg';
+import Files from '@phosphor/files.svg';
 import FileArchive from '@phosphor/file-archive.svg';
 import FileDoc from '@phosphor/file-doc.svg';
 import FileHtml from '@phosphor/file-html.svg';
@@ -78,6 +80,7 @@ export type EntityWithValidIcon =
   | 'emailRead'
   | 'emailInvite'
   | 'archive'
+  | 'files'
   | 'html';
 
 const ARCHIVE_EXTENSIONS = new Set(
@@ -207,6 +210,12 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     background: 'bg-default/20',
     prettyName: 'File',
   },
+  files: {
+    icon: Files,
+    foreground: 'text-default',
+    background: 'bg-default/20',
+    prettyName: 'Files',
+  },
   archive: {
     icon: FileArchive,
     foreground: 'text-default',
@@ -303,6 +312,7 @@ const WIDE_ICONS: Record<EntityWithValidIcon, Component> = {
   project: WideFolder,
   sharedProject: WideFolder,
   unknown: WideUnknown,
+  files: WideFiles,
   archive: WideUnknown,
   video: WideVideo,
   contact: WideUser,

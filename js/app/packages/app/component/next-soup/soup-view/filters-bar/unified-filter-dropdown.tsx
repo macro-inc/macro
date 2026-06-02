@@ -125,7 +125,7 @@ const INBOX_FILTER_CATEGORIES: FilterCategory[] = [
       {
         id: 'file',
         label: 'Files',
-        icon: () => <EntityIcon targetType="unknown" size="xs" />,
+        icon: () => <EntityIcon targetType="files" size="xs" />,
       },
     ],
     multiple: true,
