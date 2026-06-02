@@ -123,7 +123,7 @@ export type ReferredFrom =
   | 'launcher'
   | 'sidebar'
   | 'dock'
-  | 'dashboard'
+  | 'home'
   | 'entity-actions-menu'
   | 'hotkey'
   | 'quick-access'

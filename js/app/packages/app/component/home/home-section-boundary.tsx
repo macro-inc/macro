@@ -9,19 +9,19 @@ import {
   Suspense,
 } from 'solid-js';
 
-interface DashboardSectionBoundaryProps {
+interface HomeSectionBoundaryProps {
   title: string;
   children: JSX.Element;
   fallback?: JSX.Element;
 }
 
-interface DashboardSectionErrorProps {
+interface HomeSectionErrorProps {
   error: Error;
   reset: () => void;
   title?: string;
 }
 
-function DashboardSectionError(props: DashboardSectionErrorProps) {
+function HomeSectionError(props: HomeSectionErrorProps) {
   const [showDetails, setShowDetails] = createSignal(false);
 
   return (
@@ -74,7 +74,7 @@ function DashboardSectionError(props: DashboardSectionErrorProps) {
   );
 }
 
-function DashboardSectionFallback() {
+function HomeSectionFallback() {
   return (
     <div class="space-y-3">
       <div class="skeleton-shimmer h-4 w-32 rounded-full bg-ink/10" />
@@ -86,18 +86,18 @@ function DashboardSectionFallback() {
   );
 }
 
-export function DashboardSectionBoundary(props: DashboardSectionBoundaryProps) {
+export function HomeSectionBoundary(props: HomeSectionBoundaryProps) {
   return (
     <ErrorBoundary
       fallback={(error, reset) => (
-        <DashboardSectionError
+        <HomeSectionError
           error={error instanceof Error ? error : new Error(String(error))}
           reset={reset}
           title={props.title}
         />
       )}
     >
-      <Suspense fallback={props.fallback ?? <DashboardSectionFallback />}>
+      <Suspense fallback={props.fallback ?? <HomeSectionFallback />}>
         {props.children}
       </Suspense>
     </ErrorBoundary>

@@ -1,5 +1,5 @@
 import { useAnalytics } from '@app/component/analytics-context';
-import { DashboardSectionBoundary } from '@app/component/dashboard/dashboard-section-boundary';
+import { HomeSectionBoundary } from './home-section-boundary';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { useHasPaidAccess } from '@core/auth';
 import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
@@ -32,9 +32,9 @@ function AnimatedHeroLogo(props: { class?: string }) {
       display="block"
     >
       <defs>
-        <clipPath id="dashboard-hero-logo-fill">
+        <clipPath id="home-hero-logo-fill">
           <rect
-            class="dashboard-logo-fill-clip"
+            class="home-logo-fill-clip"
             x="0"
             y="0"
             width="24"
@@ -46,13 +46,13 @@ function AnimatedHeroLogo(props: { class?: string }) {
       <path
         d={MACRO_LOGO_PATH}
         fill="currentColor"
-        clip-path="url(#dashboard-hero-logo-fill)"
+        clip-path="url(#home-hero-logo-fill)"
       />
     </svg>
   );
 }
 
-export function Dashboard() {
+export function Home() {
   const user = useUserContext();
 
   const firstName = createMemo(() => {
@@ -69,40 +69,40 @@ export function Dashboard() {
 
   return (
     <main class="relative h-full overflow-y-auto bg-surface">
-      <div class="@container/dashboard size-full px-0 pb-10 p-2 md:p-4">
+      <div class="@container/home size-full px-0 pb-10 p-2 md:p-4">
         <div class="mx-auto h-full flex flex-col justify-center -mt-15 w-full min-w-0 max-w-2xl gap-10">
-          <DashboardSectionBoundary title="hero">
+          <HomeSectionBoundary title="hero">
             <section class="relative">
               <style>{
                 /*css*/ `
-          @keyframes dashboard-hero-fade-up {
+          @keyframes home-hero-fade-up {
             from { opacity: 0; transform: translateY(8px); }
             to   { opacity: 1; transform: translateY(0); }
           }
-          @keyframes dashboard-hero-logo-fill {
+          @keyframes home-hero-logo-fill {
             from { transform: scaleX(0); }
             to   { transform: scaleX(1); }
           }
-          .dashboard-hero-stagger > * {
-            animation: dashboard-hero-fade-up 250ms ease-out both;
+          .home-hero-stagger > * {
+            animation: home-hero-fade-up 250ms ease-out both;
           }
-          .dashboard-hero-stagger > *:nth-child(1) { animation-delay: 50ms; }
-          .dashboard-hero-stagger > *:nth-child(2) { animation-delay: 120ms; }
-          .dashboard-hero-stagger > *:nth-child(3) { animation-delay: 190ms; }
-          .dashboard-logo-fill-clip {
+          .home-hero-stagger > *:nth-child(1) { animation-delay: 50ms; }
+          .home-hero-stagger > *:nth-child(2) { animation-delay: 120ms; }
+          .home-hero-stagger > *:nth-child(3) { animation-delay: 190ms; }
+          .home-logo-fill-clip {
             transform-box: fill-box;
             transform-origin: left center;
-            animation: dashboard-hero-logo-fill 550ms cubic-bezier(0.2, 0.8, 0.2, 1) 50ms both;
+            animation: home-hero-logo-fill 550ms cubic-bezier(0.2, 0.8, 0.2, 1) 50ms both;
           }
           @media (prefers-reduced-motion: reduce) {
-            .dashboard-hero-stagger > *,
-            .dashboard-logo-fill-clip {
+            .home-hero-stagger > *,
+            .home-logo-fill-clip {
               animation: none;
             }
           }
         `
               }</style>
-              <div class="dashboard-hero-stagger mx-auto flex max-w-3xl flex-col items-center gap-8 px-4 sm:px-0">
+              <div class="home-hero-stagger mx-auto flex max-w-3xl flex-col items-center gap-8 px-4 sm:px-0">
                 <div class="flex w-full items-center gap-3 justify-center">
                   <AnimatedHeroLogo class="size-6 text-accent" />
                   <h1 class="relative min-w-0 text-balance text-2xl font-medium font-serif tracking-tight text-ink">
@@ -115,7 +115,7 @@ export function Dashboard() {
                 </div>
               </div>
             </section>
-          </DashboardSectionBoundary>
+          </HomeSectionBoundary>
         </div>
       </div>
     </main>
