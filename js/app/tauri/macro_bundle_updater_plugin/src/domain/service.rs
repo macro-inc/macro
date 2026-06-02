@@ -1,8 +1,8 @@
 use crate::domain::{
     models::{
         BundleAction, BundleManifest, BundleRoot, ClearRequiredStatus, CompletedStatus,
-        ProgressPercentage, UnzipRequest, UnzipStatus, UpdateDownloadingStatus, UpdateError,
-        UpdateFoundStatus, UpdateGranted, UpdateStatus,
+        NativeUpdateRequiredStatus, ProgressPercentage, UnzipRequest, UnzipStatus,
+        UpdateDownloadingStatus, UpdateError, UpdateFoundStatus, UpdateGranted, UpdateStatus,
     },
     ports::{AutoUpdateService, FsRepo, SystemQuery, UpdateRepo},
 };
@@ -62,6 +62,7 @@ struct WorkerHandle {
 
 /// the name of the app entrypoint
 const ENTRYPOINT_NAME: &str = "index.html";
+const PENDING_BUNDLE_ROOT_FILE: &str = "pending_bundle_root";
 
 impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
     fn new_handle(update_repo: U, fs_repo: Fs, system_query: Q) -> WorkerHandle {
@@ -108,7 +109,8 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
             };
             if let UpdateStatus::NoUpdateNeeded
             | UpdateStatus::Completed(_)
-            | UpdateStatus::ClearRequired(_) = status
+            | UpdateStatus::ClearRequired(_)
+            | UpdateStatus::NativeUpdateRequired(_) = status
             {
                 break;
             }
@@ -120,8 +122,16 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
                     | Ok(UpdateStatus::WaitingForWifi(_))
                     | Ok(UpdateStatus::Completed(_))
                     | Ok(UpdateStatus::ClearRequired(_))
+                    | Ok(UpdateStatus::NativeUpdateRequired(_))
                     | Err(_)
             );
+
+            if let Err(error) = &next {
+                tracing::error!(
+                    error=%error,
+                    "[bundle-update] update check failed"
+                );
+            }
 
             let Ok(()) = self.status_tx.send(next) else {
                 break;
@@ -178,6 +188,14 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
                             reason: clear.reason,
                         }))
                     }
+                    Some(BundleAction::NativeUpdateRequired(required)) => {
+                        Ok(UpdateStatus::NativeUpdateRequired(
+                            NativeUpdateRequiredStatus {
+                                bundle_build: required.bundle_build,
+                                min_native_build: required.min_native_build,
+                            },
+                        ))
+                    }
                     None => Ok(UpdateStatus::NoUpdateNeeded),
                 }
             }
@@ -209,6 +227,9 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
             }
             UpdateStatus::NoUpdateNeeded => Ok(UpdateStatus::NoUpdateNeeded),
             UpdateStatus::ClearRequired(clear) => Ok(UpdateStatus::ClearRequired(clear)),
+            UpdateStatus::NativeUpdateRequired(required) => {
+                Ok(UpdateStatus::NativeUpdateRequired(required))
+            }
             UpdateStatus::DownloadingBundle(status) => {
                 let update_dir = self
                     .system_query
@@ -259,6 +280,7 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
                     .parent()
                     .unwrap_or(&unzip_status.zip_filename)
                     .to_path_buf();
+                let update_dir = archive_target.parent().map(Path::to_path_buf);
                 let (req, rx) = UnzipRequest::new(unzip_status.zip_filename, archive_target);
 
                 let status_tx = self.status_tx.clone();
@@ -284,6 +306,25 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
                 )
                 .await
                 .context(UpdateError::Unzip)?;
+                if let Some(update_dir) = update_dir {
+                    let marker = update_dir.join(PENDING_BUNDLE_ROOT_FILE);
+                    if let Err(e) =
+                        persist_pending_bundle(&self.fs_repo, &update_dir, &bundle_dir).await
+                    {
+                        tracing::warn!(
+                            error=?e,
+                            update_dir=?update_dir,
+                            marker=?marker,
+                            bundle_dir=?bundle_dir,
+                            "[bundle-update] failed to persist pending bundle marker"
+                        );
+                    }
+                } else {
+                    tracing::warn!(
+                        bundle_dir=?bundle_dir,
+                        "[bundle-update] could not derive update dir for pending bundle marker"
+                    );
+                }
                 let mut entrypoint = bundle_dir;
                 entrypoint.push(ENTRYPOINT_NAME);
                 Ok(UpdateStatus::Completed(CompletedStatus { entrypoint }))
@@ -294,7 +335,7 @@ impl<U: UpdateRepo, Fs: FsRepo, Q: SystemQuery> Worker<U, Fs, Q> {
 
     async fn should_download_now(&self) -> Result<bool, Report> {
         let network_type = self.system_query.get_network_type().await?;
-        tracing::info!(
+        tracing::debug!(
             network_type = network_type.as_deref().unwrap_or("unknown"),
             "Bundle update network check"
         );
@@ -344,7 +385,7 @@ async fn find_cached_bundle(
     native_build: u64,
 ) -> Option<PathBuf> {
     let names = fs.list_dir_names(update_dir).await;
-    tracing::info!(
+    tracing::debug!(
         "find_cached_bundle: looking for bundle build {bundle_build} in {update_dir:?}, found dirs: {names:?}"
     );
     for name in names {
@@ -360,12 +401,12 @@ async fn find_cached_bundle(
         if manifest.bundle_build == bundle_build && manifest.min_native_build <= native_build {
             let entrypoint = dir.join(ENTRYPOINT_NAME);
             if fs.read_to_string(&entrypoint).await.is_ok() {
-                tracing::info!("find_cached_bundle: hit reusing {entrypoint:?}");
+                tracing::debug!("find_cached_bundle: hit reusing {entrypoint:?}");
                 return Some(entrypoint);
             }
         }
     }
-    tracing::info!("find_cached_bundle: no cached bundle found for {bundle_build}");
+    tracing::debug!("find_cached_bundle: no cached bundle found for {bundle_build}");
     None
 }
 
@@ -410,6 +451,23 @@ async fn validate_bundle_dir(
     Ok(())
 }
 
+async fn persist_pending_bundle(
+    fs: &impl FsRepo,
+    cache_dir: &Path,
+    bundle_dir: &Path,
+) -> Result<(), std::io::Error> {
+    fs.write(
+        &cache_dir.join(PENDING_BUNDLE_ROOT_FILE),
+        bundle_dir.to_string_lossy().as_bytes(),
+    )
+    .await
+}
+
+async fn clear_pending_bundle(fs: &impl FsRepo, cache_dir: &Path) -> Result<(), std::io::Error> {
+    fs.remove_file(&cache_dir.join(PENDING_BUNDLE_ROOT_FILE))
+        .await
+}
+
 /// helper function which pipes the progress of an event from one channel into another
 /// returning true if the value in the sender channel was modified
 async fn glue_channels<F>(
@@ -447,12 +505,24 @@ impl<Fs: FsRepo> Service<Fs> {
     }
 
     /// Load persisted bundle root from the given cache directory.
-    pub async fn load_bundle_root(&mut self, cache_dir: &Path, native_build: u64) {
+    ///
+    /// Returns `true` when a completed-but-not-applied bundle was restored and
+    /// should be applied before starting a fresh update check.
+    pub async fn load_bundle_root(&mut self, cache_dir: &Path, native_build: u64) -> bool {
         self.bundle_root = BundleRoot::load(cache_dir, &self.fs_repo).await;
         if !self.current_bundle_is_usable(native_build).await {
             tracing::warn!("Clearing unusable persisted bundle root");
             let _ = self.clear_bundle_root(cache_dir).await;
         }
+        if self.bundle_root.path().is_some() {
+            if let Err(e) = self.clear_pending_bundle(cache_dir).await {
+                tracing::warn!(error=?e, "Failed to clear stale pending bundle marker");
+            }
+            return false;
+        }
+
+        self.restore_pending_completed_update(cache_dir, native_build)
+            .await
     }
 
     /// Bundle build embedded in this native app.
@@ -503,8 +573,8 @@ impl<Fs: FsRepo> Service<Fs> {
             .ok_or_else(|| report!("entrypoint {entrypoint:?} has no parent directory"))?
             .to_path_buf();
 
-        tracing::info!("Setting bundle root to {bundle_dir:?}");
         self.set_bundle_root(bundle_dir.clone(), cache_dir).await?;
+        self.clear_pending_bundle(cache_dir).await?;
         self.reload_pending = true;
         self.reload_dispatched_at = None;
 
@@ -578,8 +648,104 @@ impl<Fs: FsRepo> Service<Fs> {
         Ok(())
     }
 
+    async fn clear_pending_bundle(&self, cache_dir: &Path) -> Result<(), std::io::Error> {
+        clear_pending_bundle(&self.fs_repo, cache_dir).await
+    }
+
+    async fn restore_pending_completed_update(
+        &mut self,
+        cache_dir: &Path,
+        native_build: u64,
+    ) -> bool {
+        let marker = cache_dir.join(PENDING_BUNDLE_ROOT_FILE);
+        let Ok(contents) = self.fs_repo.read_to_string(&marker).await else {
+            return self
+                .restore_latest_completed_download(cache_dir, native_build)
+                .await;
+        };
+
+        let bundle_dir = PathBuf::from(contents.trim());
+        self.restore_completed_bundle_dir(cache_dir, native_build, bundle_dir)
+            .await
+    }
+
+    async fn restore_latest_completed_download(
+        &mut self,
+        cache_dir: &Path,
+        native_build: u64,
+    ) -> bool {
+        let mut candidates = Vec::new();
+        for name in self.fs_repo.list_dir_names(cache_dir).await {
+            if name.parse::<u64>().is_err() {
+                continue;
+            }
+            let bundle_dir = cache_dir.join(&name);
+            let Some(manifest) =
+                BundleManifest::read(&bundle_dir.join("bundle-manifest.json"), &self.fs_repo).await
+            else {
+                continue;
+            };
+            if manifest.bundle_build < self.embedded_bundle_build
+                || manifest.min_native_build > native_build
+                || self
+                    .fs_repo
+                    .read_to_string(&bundle_dir.join(ENTRYPOINT_NAME))
+                    .await
+                    .is_err()
+            {
+                continue;
+            }
+            candidates.push((manifest.bundle_build, bundle_dir));
+        }
+
+        let Some((_, bundle_dir)) = candidates
+            .into_iter()
+            .max_by_key(|(bundle_build, _)| *bundle_build)
+        else {
+            return false;
+        };
+
+        self.restore_completed_bundle_dir(cache_dir, native_build, bundle_dir)
+            .await
+    }
+
+    async fn restore_completed_bundle_dir(
+        &mut self,
+        cache_dir: &Path,
+        native_build: u64,
+        bundle_dir: PathBuf,
+    ) -> bool {
+        let Some(manifest) =
+            BundleManifest::read(&bundle_dir.join("bundle-manifest.json"), &self.fs_repo).await
+        else {
+            let _ = self.clear_pending_bundle(cache_dir).await;
+            return false;
+        };
+
+        let entrypoint = bundle_dir.join(ENTRYPOINT_NAME);
+        let usable = manifest.bundle_build >= self.embedded_bundle_build
+            && manifest.min_native_build <= native_build
+            && self.fs_repo.read_to_string(&entrypoint).await.is_ok();
+        if !usable {
+            let _ = self.clear_pending_bundle(cache_dir).await;
+            return false;
+        }
+
+        if let Err(e) = self
+            .handle
+            .status_tx
+            .send(Ok(UpdateStatus::Completed(CompletedStatus { entrypoint })))
+        {
+            tracing::warn!(error=?e, "[bundle-update] failed to restore pending bundle status");
+            return false;
+        }
+
+        true
+    }
+
     /// Clear the bundle root and remove all downloaded bundles.
     pub async fn clear_bundle_root(&mut self, cache_dir: &Path) -> Result<(), std::io::Error> {
+        self.clear_pending_bundle(cache_dir).await?;
         for name in self.fs_repo.list_dir_names(cache_dir).await {
             if name.parse::<u64>().is_ok() {
                 let _ = self.fs_repo.remove_dir_all(&cache_dir.join(&name)).await;
@@ -715,8 +881,8 @@ mod tests {
     use super::*;
     use crate::domain::{
         models::{
-            AppInfo, Arch, BundleAction, BundleClear, BundleUpdate, DownloadBundleError,
-            DownloadBundleRequest, Target, UnzipError,
+            AppInfo, Arch, BundleAction, BundleClear, BundleNativeUpdateRequired, BundleUpdate,
+            DownloadBundleError, DownloadBundleRequest, Target, UnzipError,
         },
         ports::AutoUpdateService,
     };
@@ -1034,6 +1200,13 @@ mod tests {
         );
     }
 
+    fn seed_pending_bundle_root(fs: &FakeFs, cache_dir: &Path, bundle_dir: &Path) {
+        fs.write_file(
+            cache_dir.join(PENDING_BUNDLE_ROOT_FILE),
+            bundle_dir.to_string_lossy().to_string(),
+        );
+    }
+
     fn service_with_network(network_type: &str) -> (Service<FakeFs>, FakeSystemQuery) {
         let system_query = FakeSystemQuery::new(network_type);
         let (update_repo, _) = fake_update_repo(Some(BundleAction::Update(bundle_update())), true);
@@ -1241,6 +1414,85 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn pending_completed_ota_is_restored_after_restart() {
+        let fs = FakeFs::default();
+        let cache_dir = cache_dir();
+        let bundle_dir = seed_bundle(&fs, &cache_dir, "1", 20, 143);
+        seed_pending_bundle_root(&fs, &cache_dir, &bundle_dir);
+        let (mut service, _start_rx) =
+            service_with_status_fs_and_embedded_build(UpdateStatus::Idle, fs.clone(), 10);
+
+        let restored_pending = service.load_bundle_root(&cache_dir, 143).await;
+
+        assert!(restored_pending);
+        let status = service.status().borrow().as_ref().unwrap().clone();
+        let UpdateStatus::Completed(completed) = status else {
+            panic!("expected completed status");
+        };
+        assert_eq!(completed.entrypoint, bundle_dir.join(ENTRYPOINT_NAME));
+        assert!(fs.file_exists(cache_dir.join(PENDING_BUNDLE_ROOT_FILE)));
+    }
+
+    #[tokio::test]
+    async fn pending_completed_ota_older_than_embedded_bundle_is_not_restored() {
+        let fs = FakeFs::default();
+        let cache_dir = cache_dir();
+        let bundle_dir = seed_bundle(&fs, &cache_dir, "1", 10, 0);
+        seed_pending_bundle_root(&fs, &cache_dir, &bundle_dir);
+        let (mut service, _start_rx) =
+            service_with_status_fs_and_embedded_build(UpdateStatus::Idle, fs.clone(), 20);
+
+        let restored_pending = service.load_bundle_root(&cache_dir, 0).await;
+
+        assert!(!restored_pending);
+        assert!(matches!(
+            service.status().borrow().as_ref().unwrap(),
+            UpdateStatus::Idle
+        ));
+        assert!(!fs.file_exists(cache_dir.join(PENDING_BUNDLE_ROOT_FILE)));
+    }
+
+    #[tokio::test]
+    async fn unmarked_completed_ota_is_restored_from_numeric_cache_dir() {
+        let fs = FakeFs::default();
+        let cache_dir = cache_dir();
+        seed_bundle(&fs, &cache_dir, "1", 20, 0);
+        let bundle_dir = seed_bundle(&fs, &cache_dir, "2", 30, 0);
+        let (mut service, _start_rx) =
+            service_with_status_fs_and_embedded_build(UpdateStatus::Idle, fs.clone(), 10);
+
+        let restored_pending = service.load_bundle_root(&cache_dir, 0).await;
+
+        assert!(restored_pending);
+        let status = service.status().borrow().as_ref().unwrap().clone();
+        let UpdateStatus::Completed(completed) = status else {
+            panic!("expected completed status");
+        };
+        assert_eq!(completed.entrypoint, bundle_dir.join(ENTRYPOINT_NAME));
+    }
+
+    #[tokio::test]
+    async fn apply_update_clears_pending_completed_ota_marker() {
+        let fs = FakeFs::default();
+        let cache_dir = cache_dir();
+        let bundle_dir = seed_bundle(&fs, &cache_dir, "1", 20, 0);
+        seed_pending_bundle_root(&fs, &cache_dir, &bundle_dir);
+        let (mut service, _start_rx) = service_with_status_and_fs(
+            UpdateStatus::Completed(CompletedStatus {
+                entrypoint: bundle_dir.join(ENTRYPOINT_NAME),
+            }),
+            fs.clone(),
+        );
+
+        let result = service.apply_update(&cache_dir).await.unwrap();
+
+        assert_eq!(result, ApplyUpdateResult::ReloadNeeded);
+        assert_eq!(service.bundle_root_path(), Some(bundle_dir.as_path()));
+        assert!(!fs.file_exists(cache_dir.join(PENDING_BUNDLE_ROOT_FILE)));
+        assert!(fs.file_exists(cache_dir.join("bundle_root")));
+    }
+
+    #[tokio::test]
     async fn service_reports_configured_embedded_bundle_build() {
         let (service, _start_rx) = service_with_status_fs_and_embedded_build(
             UpdateStatus::Idle,
@@ -1319,6 +1571,60 @@ mod tests {
             UpdateStatus::ClearRequired(ClearRequiredStatus { reason })
                 if reason == "bundle_revoked"
         ));
+    }
+
+    #[tokio::test]
+    async fn native_update_required_action_from_server_becomes_terminal_status() {
+        let fs = FakeFs::default();
+        let cache_dir = cache_dir();
+        let mut worker = worker_with_fs_and_native_build(
+            fs,
+            Some(BundleAction::NativeUpdateRequired(
+                BundleNativeUpdateRequired {
+                    bundle_build: 102,
+                    min_native_build: 999,
+                },
+            )),
+            cache_dir,
+            142,
+        );
+
+        let status = worker
+            .next_status(UpdateStatus::CheckingForDownload(app_info(142)))
+            .await
+            .unwrap();
+
+        assert!(matches!(
+            status,
+            UpdateStatus::NativeUpdateRequired(NativeUpdateRequiredStatus {
+                bundle_build: 102,
+                min_native_build: 999,
+            })
+        ));
+    }
+
+    #[tokio::test]
+    async fn downloaded_zip_with_valid_manifest_persists_pending_marker() {
+        let fs = FakeFs::default();
+        let cache_dir = cache_dir();
+        let bundle_dir = seed_bundle(&fs, &cache_dir, "0", 40, 0);
+        fs.set_unzip_target(bundle_dir.clone());
+        let mut worker = worker_with_fs_and_native_build(fs.clone(), None, cache_dir.clone(), 0);
+
+        let status = worker
+            .next_status(UpdateStatus::UnzippingBundle(unzip_status(
+                &cache_dir, 40, 0,
+            )))
+            .await
+            .unwrap();
+
+        assert!(matches!(status, UpdateStatus::Completed(_)));
+        assert_eq!(
+            fs.read_to_string(&cache_dir.join(PENDING_BUNDLE_ROOT_FILE))
+                .await
+                .unwrap(),
+            bundle_dir.to_string_lossy()
+        );
     }
 
     #[tokio::test]

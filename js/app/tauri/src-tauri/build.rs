@@ -1,6 +1,7 @@
 fn main() {
     println!("cargo:rerun-if-changed=.macro-tauri-env");
     println!("cargo:rerun-if-changed=../../packages/app/dist/bundle-manifest.json");
+    println!("cargo:rerun-if-env-changed=MACRO_BUNDLE_UPDATE_BASE_URL");
 
     let contents = std::fs::read_to_string(".macro-tauri-env").unwrap_or_default();
     let raw_app_env = contents.trim();
@@ -32,6 +33,12 @@ fn main() {
         }
     };
     println!("cargo:rustc-env=MACRO_EMBEDDED_BUNDLE_BUILD={embedded_bundle_build}");
+    if let Ok(bundle_update_base_url) = std::env::var("MACRO_BUNDLE_UPDATE_BASE_URL") {
+        let bundle_update_base_url = bundle_update_base_url.trim();
+        if !bundle_update_base_url.is_empty() {
+            println!("cargo:rustc-env=MACRO_BUNDLE_UPDATE_BASE_URL={bundle_update_base_url}");
+        }
+    }
 
     tauri_build::build()
 }

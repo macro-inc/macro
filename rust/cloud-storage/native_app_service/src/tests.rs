@@ -144,7 +144,7 @@ async fn returns_none_when_deployed_bundle_is_equal_or_older() {
 }
 
 #[tokio::test]
-async fn returns_none_when_native_build_is_too_old() {
+async fn returns_native_update_required_when_newer_bundle_requires_too_new_native_build() {
     let service = service(20, 200, BundleUpdatePolicy::default());
 
     assert_matches!(
@@ -156,7 +156,10 @@ async fn returns_none_when_native_build_is_too_old() {
                 199,
             ))
             .await,
-        Ok(None)
+        Ok(Some(BundleAction::NativeUpdateRequired(required))) => {
+            assert_eq!(required.bundle_build, 20);
+            assert_eq!(required.min_native_build, 200);
+        }
     );
 }
 
@@ -293,6 +296,34 @@ async fn route_returns_204_when_no_bundle_action_is_needed() {
         .unwrap();
 
     assert_eq!(response.status(), StatusCode::NO_CONTENT);
+}
+
+#[tokio::test]
+async fn route_returns_native_update_required_for_incompatible_newer_bundle() {
+    let service = service(20, 200, BundleUpdatePolicy::default());
+    let app = native_app_router::<_, ()>(RouterState {
+        inner: Arc::new(service),
+    });
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/update/bundle/ios/aarch64?current_bundle_build=10&native_build=142")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(body["action"], "native_update_required");
+    assert_eq!(body["bundleBuild"], 20);
+    assert_eq!(body["minNativeBuild"], 200);
 }
 
 #[test]

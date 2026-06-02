@@ -1,7 +1,7 @@
 use crate::domain::{
     models::{
-        BundleAction, BundleClear, BundlePolicyAction, BundleUpdate, BundleUpdatePolicy,
-        BundleUpdateRequest, PlatformData, PlatformVerifier, UpdateErr,
+        BundleAction, BundleClear, BundleNativeUpdateRequired, BundlePolicyAction, BundleUpdate,
+        BundleUpdatePolicy, BundleUpdateRequest, PlatformData, PlatformVerifier, UpdateErr,
     },
     ports::{GetJsBundleManifest, NativeAppService},
 };
@@ -47,12 +47,17 @@ where
             })));
         }
 
-        if manifest.min_native_build > native_build {
+        if manifest.bundle_build <= current_bundle_build {
             return Ok(None);
         }
 
-        if manifest.bundle_build <= current_bundle_build {
-            return Ok(None);
+        if manifest.min_native_build > native_build {
+            return Ok(Some(BundleAction::NativeUpdateRequired(
+                BundleNativeUpdateRequired {
+                    bundle_build: manifest.bundle_build,
+                    min_native_build: manifest.min_native_build,
+                },
+            )));
         }
 
         if self.bundle_policy.rules.iter().any(|rule| {

@@ -91,6 +91,9 @@ pub enum BundleAction {
     Update(BundleUpdate),
     /// Clear the active cached OTA bundle.
     Clear(BundleClear),
+    /// A newer bundle exists, but the requesting native app build is too old.
+    #[serde(rename = "native_update_required")]
+    NativeUpdateRequired(BundleNativeUpdateRequired),
 }
 
 /// a struct which indicates how to update only the javascript bundle of the application
@@ -114,6 +117,16 @@ pub struct BundleUpdate {
 pub struct BundleClear {
     /// Machine-readable clear reason.
     pub(crate) reason: String,
+}
+
+/// A response telling the client a native app update is required before this bundle can run.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BundleNativeUpdateRequired {
+    /// The newer bundle build that could not be offered.
+    pub(crate) bundle_build: u64,
+    /// The minimum native build required by that bundle.
+    pub(crate) min_native_build: u64,
 }
 
 /// The payload to check if there is a native app js bundle update available

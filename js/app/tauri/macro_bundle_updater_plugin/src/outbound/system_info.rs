@@ -167,9 +167,19 @@ pub fn native_build() -> u64 {
         else {
             return 0;
         };
-        env.get_field(package_info, "versionCode", "I")
+        if let Ok(value) = env
+            .call_method(&package_info, "getLongVersionCode", "()J", &[])
+            .and_then(|value| value.j())
+        {
+            return u64::try_from(value).unwrap_or(0);
+        }
+        if env.exception_check().unwrap_or(false) {
+            let _ = env.exception_clear();
+        }
+
+        env.get_field(&package_info, "versionCode", "I")
             .and_then(|value| value.i())
-            .map(|value| value as u64)
+            .map(|value| u64::try_from(value).unwrap_or(0))
             .unwrap_or(0)
     }
 }

@@ -99,6 +99,8 @@ function formatBundleUpdateStatus(status: BundleUpdateStatus): string {
     case 'WaitingForWifi': return 'Waiting for Wi-Fi to download';
     case 'Downloading': return `Downloading: ${Math.round(status.data.progress)}%`;
     case 'Unzipping': return `Installing: ${Math.round(status.data.progress)}%`;
+    case 'ClearRequired': return 'Cached update revoked';
+    case 'NativeUpdateRequired': return 'App update required';
     case 'Completed': return 'Update ready';
     case 'Error': return 'An error occurred when checking for updates';
   }
@@ -1003,6 +1005,8 @@ function bundleUpdateAction(
       return { label: 'Download', action: grantBundleUpdate };
     case 'WaitingForWifi':
       return { label: 'Download anyway', action: grantBundleUpdate };
+    case 'ClearRequired':
+      return { label: 'Reload', action: () => invoke('perform_update') };
     case 'Completed':
       return { label: 'Update', action: () => invoke('perform_update') };
     default:
