@@ -72,10 +72,11 @@ pub async fn seen_handler(
     user_context: Extension<UserContext>,
     Path(PathParams { id: thread_id }): Path<PathParams>,
 ) -> Result<Response, SeenThreadError> {
-    // Resolve the inbox from the thread itself, scoped to the caller's own inboxes.
+    // Resolve the inbox from the thread itself, scoped to the caller's own and
+    // delegated inboxes.
     let link = email_db_client::links::get::fetch_owned_link_for_thread(
         &ctx.db,
-        &user_context.fusion_user_id,
+        &user_context.user_id,
         thread_id,
     )
     .await

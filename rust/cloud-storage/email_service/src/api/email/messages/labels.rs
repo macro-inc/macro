@@ -60,11 +60,11 @@ pub async fn handler(
             .into_response());
     }
 
-    // Resolve the inbox from the batch's messages (scoped to the caller's own
-    // inboxes); a single label op targets messages in one inbox.
+    // Resolve the inbox from the batch's messages (scoped to the caller's own and
+    // delegated inboxes); a single label op targets messages in one inbox.
     let link = email_db_client::links::get::fetch_owned_link_for_message(
         &ctx.db,
-        &user_context.fusion_user_id,
+        &user_context.user_id,
         body.message_ids[0],
     )
     .await

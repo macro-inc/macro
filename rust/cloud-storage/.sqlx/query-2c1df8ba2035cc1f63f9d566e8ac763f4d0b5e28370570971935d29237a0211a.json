@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT l.id, l.macro_id, l.fusionauth_user_id, l.email_address, l.provider as \"provider: _\",\n               l.is_sync_active, l.created_at, l.updated_at\n        FROM email_messages m\n        JOIN email_links l ON l.id = m.link_id\n        WHERE m.id = $1 AND l.fusionauth_user_id = $2\n        ",
+  "query": "\n        SELECT l.id, l.macro_id, l.fusionauth_user_id, l.email_address, l.provider as \"provider: _\",\n               l.is_sync_active, l.created_at, l.updated_at\n        FROM email_threads t\n        JOIN email_links l ON l.id = t.link_id\n        WHERE t.id = $1\n          AND (\n              l.macro_id = $2\n              OR EXISTS (\n                  SELECT 1 FROM macro_user_links mul\n                  WHERE mul.child_macro_id = l.macro_id AND mul.primary_macro_id = $2\n              )\n          )\n        ",
   "describe": {
     "columns": [
       {
@@ -70,5 +70,5 @@
       false
     ]
   },
-  "hash": "cd1b9c3eb3d9efe710902559ff97a12bd84caee88e8fb5d9f6f8ae2aa4dc06ec"
+  "hash": "2c1df8ba2035cc1f63f9d566e8ac763f4d0b5e28370570971935d29237a0211a"
 }
