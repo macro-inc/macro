@@ -347,7 +347,7 @@ function AssistantMessageParts(props: {
 
     const flushToolGroup = () => {
       if (pendingToolEntries.length === 0) return;
-      const key = `toolGroup:${pendingToolEntries.map((entry) => entry.key).join('|')}`;
+      const key = `toolGroup:${pendingToolEntries[0].key}`;
       orderedKeys.push(key);
       itemByKey.set(key, {
         type: 'toolGroup',
@@ -445,14 +445,25 @@ function AssistantMessageParts(props: {
                 {(() => {
                   const toolGroup = () =>
                     currentItem() as Extract<RenderItem, { type: 'toolGroup' }>;
+                  const isGrouped = () => toolGroup().entries.length > 1;
+                  const singleEntry = () => toolGroup().entries[0];
                   return (
-                    <Tool.Group>
-                      <For each={toolGroup().entries}>
-                        {(entry) =>
-                          renderToolPart(entry.part, entry.index, true)
-                        }
-                      </For>
-                    </Tool.Group>
+                    <Show
+                      when={isGrouped()}
+                      fallback={renderToolPart(
+                        singleEntry().part,
+                        singleEntry().index,
+                        false
+                      )}
+                    >
+                      <Tool.Group>
+                        <For each={toolGroup().entries}>
+                          {(entry) =>
+                            renderToolPart(entry.part, entry.index, true)
+                          }
+                        </For>
+                      </Tool.Group>
+                    </Show>
                   );
                 })()}
               </Match>
