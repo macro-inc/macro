@@ -1,11 +1,11 @@
 import { type UserItem, useQuickAccess } from '@core/context/quickAccess';
 import { useEmail } from '@core/context/user';
-import { isMacroAgentId } from '@core/constant/macroAgent';
 import type { IUser } from '@core/user';
 import { createFreshSearch, FreshSearchPresets } from '@core/util/freshSort';
 import { createLazyMemo } from '@solid-primitives/memo';
 import type { Accessor } from 'solid-js';
 import type { GroupMentionItem } from '../../../../utils/mentionsUtils';
+import { isBotMentionUser } from '../utils/botMention';
 
 type UseUsersMentionOptions = {
   /** Custom users list if necessary */
@@ -31,10 +31,6 @@ const GROUPS = [
 ] as const;
 
 const BOT_MENTION_BOOST = 10;
-
-function isBotMentionUser(item: UserItem): boolean {
-  return item.id.startsWith('bot|') || isMacroAgentId(item.id);
-}
 
 /**
  * Hook for managing user mentions in the mentions menu.
@@ -96,8 +92,8 @@ export function useUsersMention(
 
   const users = createLazyMemo(() => {
     const term = searchTerm();
-    if (!term) return usersList()();
-    return userSearch()(usersList()(), term).map(({ item }) => item);
+    const list = usersList()();
+    return userSearch()(list, term).map(({ item }) => item);
   });
 
   /**
