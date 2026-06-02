@@ -136,6 +136,7 @@ import {
   useEmailContext,
 } from './EmailContext';
 import { getOrInitEmailFormContext } from './EmailFormContext';
+import { FromInboxSelector } from './FromInboxSelector';
 
 false && fileFolderDrop;
 false && fileSelector;
@@ -440,6 +441,7 @@ export function BaseInput(props: {
   // inbox for a new message. Mutations send it as X-Email-Link-Id when it's a
   // non-primary inbox so the draft/send targets the right account.
   const activeLinkId = () =>
+    form().selectedLinkId() ??
     ctx.thread()?.link_id ??
     props.draft?.link_id ??
     primaryLinkId() ??
@@ -1442,9 +1444,16 @@ export function BaseInput(props: {
             {/* Expanded FROM */}
             <div class="flex flex-row items-baseline py-0.5">
               <div class="min-w-8">from</div>
-              <span class="ml-2">
-                {userName()} &lt;{activeInboxEmail()}&gt;
-              </span>
+              <FromInboxSelector
+                links={emailLinksQuery.data?.links ?? []}
+                activeLinkId={activeLinkId()}
+                label={
+                  <>
+                    {userName()} &lt;{activeInboxEmail()}&gt;
+                  </>
+                }
+                onSelect={(id) => form().setSelectedFromLink(id)}
+              />
             </div>
             {/* Expanded TO */}
 
