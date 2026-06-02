@@ -52,6 +52,7 @@ import { emailKeys } from '@queries/email/keys';
 import {
   useEmailLinksQuery,
   useNonPrimaryEmailLinkIdHeader,
+  usePrimaryEmailLinkId,
 } from '@queries/email/link';
 import {
   useSendMessageMutation,
@@ -97,12 +98,19 @@ export function EmailCompose(props: EmailComposeProps) {
   const deleteDraftMutation = useDeleteDraftMutation();
   const emailContext = useMaybeEmailContext();
 
+  const primaryLinkId = usePrimaryEmailLinkId();
   const link = createMemo(() => {
     const data = emailLinksQuery.data;
-    if (data && data.links.length > 0) {
-      return data.links[0];
-    }
-    return undefined;
+    if (!data || data.links.length === 0) return undefined;
+    // Send from the inbox that owns the draft being edited; fall back to the
+    // primary inbox for a fresh compose rather than whichever inbox sorts first.
+    const draftLinkId = props.draftID
+      ? emailContext?.messages
+          .unfiltered()
+          .find((m) => m.db_id === props.draftID)?.link_id
+      : undefined;
+    const targetId = draftLinkId ?? primaryLinkId();
+    return data.links.find((l) => l.id === targetId) ?? data.links[0];
   });
 
   const toHeaderLinkId = useNonPrimaryEmailLinkIdHeader();

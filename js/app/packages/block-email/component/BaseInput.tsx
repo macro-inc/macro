@@ -71,6 +71,7 @@ import { emailKeys } from '@queries/email/keys';
 import {
   useEmailLinksQuery,
   useNonPrimaryEmailLinkIdHeader,
+  usePrimaryEmailLinkId,
 } from '@queries/email/link';
 import {
   useSendMessageMutation,
@@ -431,14 +432,22 @@ export function BaseInput(props: {
   });
   const blockId = useBlockId();
   const emailLinksQuery = useEmailLinksQuery();
+  const userEmail = useEmail();
 
   const toHeaderLinkId = useNonPrimaryEmailLinkIdHeader();
-  // The inbox this input acts in: the open thread's inbox, else the default
+  const primaryLinkId = usePrimaryEmailLinkId();
+  // The inbox this input acts in: the open thread's inbox, else the primary
   // inbox for a new message. Mutations send it as X-Email-Link-Id when it's a
   // non-primary inbox so the draft/send targets the right account.
   const activeLinkId = () =>
-    ctx.thread()?.link_id ?? emailLinksQuery.data?.links[0]?.id;
+    ctx.thread()?.link_id ??
+    primaryLinkId() ??
+    emailLinksQuery.data?.links[0]?.id;
   const headerLinkId = () => toHeaderLinkId(activeLinkId());
+  // The address of the inbox this input sends from, for the "from" display.
+  const activeInboxEmail = () =>
+    emailLinksQuery.data?.links.find((l) => l.id === activeLinkId())
+      ?.email_address ?? userEmail();
 
   const [bodyMacro, setBodyMacro] = createSignal<string>('');
   const [expandedRecipientsRef, setExpandedRecipientsRef] =
@@ -652,7 +661,6 @@ export function BaseInput(props: {
     return registerToggleAppendedThread(editor);
   });
 
-  const userEmail = useEmail();
   const userId = useUserId();
   const [userName] = useDisplayName(tryMacroId(userId() ?? ''));
 
@@ -946,7 +954,7 @@ export function BaseInput(props: {
         logger.error('No links found');
         return;
       }
-      linkId = linksData.links[0].id;
+      linkId = primaryLinkId() ?? linksData.links[0].id;
     }
 
     const currentEditor = editor();
@@ -1434,7 +1442,7 @@ export function BaseInput(props: {
             <div class="flex flex-row items-baseline py-0.5">
               <div class="min-w-8">from</div>
               <span class="ml-2">
-                {userName()} &lt;{userEmail()}&gt;
+                {userName()} &lt;{activeInboxEmail()}&gt;
               </span>
             </div>
             {/* Expanded TO */}
