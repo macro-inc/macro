@@ -12,6 +12,7 @@ pub mod dcs;
 pub mod document;
 pub mod document_text;
 pub mod docx_unzip;
+pub mod email;
 pub mod entity_name;
 pub mod experiment;
 pub mod experiment_log;
@@ -37,7 +38,6 @@ pub mod team;
 pub mod user;
 pub mod user_document_view_location;
 pub mod user_quota;
-pub mod email;
 
 #[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone)]
 pub enum Parameters {

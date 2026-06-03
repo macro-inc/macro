@@ -11,7 +11,9 @@ use model_user::axum_extractor::MacroUserExtractor;
 use serde_utils::urlencode::UrlEncoded;
 use url::Url;
 
-use crate::api::{context::ApiContext, oauth2::OAuthState};
+use crate::api::{
+    context::ApiContext, link::github::REAUTHENTICATION_REQUIRED_MESSAGE, oauth2::OAuthState,
+};
 
 const GOOGLE_AUTHORIZATION_URL: &str = "https://accounts.google.com/o/oauth2/v2/auth";
 const GMAIL_IDENTITY_PROVIDER_NAME: &str = "google_gmail";
@@ -162,7 +164,7 @@ impl IntoResponse for GmailLinkStatusError {
             GmailLinkStatusError::ReauthenticationRequired => (
                 StatusCode::PRECONDITION_REQUIRED,
                 Json(ErrorResponse {
-                    message: "reauthentication required".into(),
+                    message: REAUTHENTICATION_REQUIRED_MESSAGE.into(),
                 }),
             ),
             GmailLinkStatusError::Internal(_) => (
@@ -171,7 +173,8 @@ impl IntoResponse for GmailLinkStatusError {
                     message: "internal error occurred".into(),
                 }),
             ),
-        }.into_response()
+        }
+        .into_response()
     }
 }
 
