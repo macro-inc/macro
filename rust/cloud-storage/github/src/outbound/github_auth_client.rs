@@ -41,6 +41,16 @@ impl GithubAuthImpl {
             conn,
         }
     }
+
+    async fn clear_access_token_cache(
+        &self,
+        fusionauth_user_id: &uuid::Uuid,
+    ) -> Result<(), anyhow::Error> {
+        let key = github_access_token_key!(fusionauth_user_id);
+        let mut conn = self.conn.clone();
+        conn.del::<&str, ()>(&key).await?;
+        Ok(())
+    }
 }
 
 impl Auth for GithubAuthImpl {
@@ -66,6 +76,8 @@ impl Auth for GithubAuthImpl {
                 },
             })
             .await?;
+
+        self.clear_access_token_cache(fusionauth_user_id).await?;
 
         Ok(())
     }
@@ -120,7 +132,11 @@ impl Auth for GithubAuthImpl {
             )
             .await
         {
-            Ok(()) | Err(FusionAuthClientError::NoIdentityProviderFound) => Ok(()),
+            Ok(()) | Err(FusionAuthClientError::NoIdentityProviderFound) => {
+                self.clear_access_token_cache(&github_link.fusionauth_user_id)
+                    .await?;
+                Ok(())
+            }
             Err(e) => Err(e.into()),
         }
     }

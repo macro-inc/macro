@@ -1,9 +1,8 @@
 use std::sync::Arc;
 
 use ai_tools::{
-    NoOpCallRtcClient, NoOpConnectionService, NoOpNotificationIngress, NoOpNotificationService,
-    NoOpScheduleContext, NoOpSnsEndpointManager, NoOpTaskProperties, ToolNotificationQueue,
-    ToolServiceContext,
+    NoOpCallRtcClient, NoOpConnectionService, NoOpNotificationIngress, NoOpScheduleContext,
+    NoOpSnsEndpointManager, ToolNotificationQueue, ToolServiceContext,
 };
 use anyhow::Context;
 use comms::domain::service::ChannelServiceImpl;
@@ -19,6 +18,10 @@ use email::domain::service::EmailServiceImpl;
 use email::outbound::EmailPgRepo;
 use email_service_client::{EmailServiceClient, EmailServiceClientExternal};
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
+use foreign_entity::{
+    domain::service::ForeignEntityServiceImpl,
+    outbound::pg_foreign_entity_repo::PgForeignEntityRepo,
+};
 use frecency::domain::services::FrecencyQueryServiceImpl;
 use frecency::outbound::postgres::FrecencyPgStorage;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
@@ -42,6 +45,7 @@ env_var!(
         DatabaseUrl,
         EmailScheduledQueue,
         DocumentStorageServiceUrl,
+        DocumentStorageServiceAuthKey,
         SyncServiceUrl,
         SyncServiceAuthKey,
         LexicalServiceUrl,
@@ -70,6 +74,7 @@ pub struct McpContext {
     pub tool_context: ToolServiceContext,
     pub auth_proxy: McpAuthProxyServiceImpl<RedisInflightAuth>,
     pub mcp_public_host: String,
+    pub db: PgPool,
 }
 
 pub async fn build_context() -> anyhow::Result<McpContext> {
@@ -115,6 +120,10 @@ pub async fn build_context() -> anyhow::Result<McpContext> {
         &secretsmanager_client,
         sqs_client,
         internal_auth_key.as_ref().to_string(),
+        env_vars
+            .document_storage_service_auth_key
+            .as_ref()
+            .to_owned(),
         sync_service_auth_key.as_ref().to_owned(),
     )
     .await?;
@@ -132,6 +141,7 @@ pub async fn build_context() -> anyhow::Result<McpContext> {
         tool_context,
         auth_proxy,
         mcp_public_host,
+        db,
     })
 }
 
@@ -141,12 +151,14 @@ async fn build_tool_context(
     secretsmanager_client: &secretsmanager_client::SecretsManager,
     sqs_client: sqs_client::SQS,
     internal_auth_key: String,
+    document_storage_service_auth_key: String,
     sync_service_auth_key: String,
 ) -> anyhow::Result<ToolServiceContext> {
     let dss_url: String = env_vars.document_storage_service_url.as_ref().to_owned();
     let sync_service_url: String = env_vars.sync_service_url.as_ref().to_owned();
 
-    let search_service_client = SearchServiceClient::new(internal_auth_key.clone(), dss_url);
+    let search_service_client =
+        SearchServiceClient::new(document_storage_service_auth_key, dss_url);
 
     let lexical_client = Arc::new(lexical_client::LexicalClient::new(
         internal_auth_key.clone(),
@@ -177,12 +189,16 @@ async fn build_tool_context(
         frecency_storage,
     );
     let email_service_for_tools: Arc<ai_tools::ToolEmailService> = Arc::new(email_service.clone());
+    let foreign_entity_service =
+        ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone()));
     let soup_service = Arc::new(SoupImpl::new(
         PgSoupRepo::new(readonly_pool::ReadOnlyPool(db.clone())),
         frecency_service,
         ReadonlyEmailPreviewAdapter(email_service),
         channels_service,
         call::domain::ports::NoOpCallRecordQueryService,
+        crm::domain::service::NoOpCrmService,
+        foreign_entity_service,
     ));
 
     let s3_client = macro_aws_config::s3_client().await;
@@ -216,39 +232,35 @@ async fn build_tool_context(
     };
     let sync_service_client =
         SyncServiceClient::new(sync_service_auth_key.clone(), sync_service_url.clone());
+    let entity_access_service = Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
+        db.clone(),
+    )));
+    let properties_service =
+        ai_tools::build_properties_service(db.clone(), entity_access_service.clone());
+    let task_properties_service =
+        ai_tools::build_task_properties_adapter(db.clone(), properties_service.clone());
     let document_service = documents::domain::service::DocumentServiceImpl {
         repo: document_repo,
         cloudfront_config,
         sync_service_client: sync_service_client.clone(),
         upload_url_service: s3_upload_adapter,
-        task_properties_service: NoOpTaskProperties,
+        task_properties_service,
         connection_service: NoOpConnectionService,
         entity_access_management_service:
             entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
                 entity_access_management::outbound::PgRepository::new(db.clone()),
             ),
+        foreign_entity_service: ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone())),
     };
-    let entity_access_service = EntityAccessServiceImpl::new(PgAccessRepository::new(db.clone()));
     let lexical_client_for_tools = (*lexical_client).clone();
     let document_tool_context = DocumentToolContext::new(
         document_service,
-        entity_access_service,
+        (*entity_access_service).clone(),
         lexical_client_for_tools,
         sync_service_client.clone(),
     );
 
-    let properties_service = properties::PropertiesServiceImpl::new(
-        properties::PropertiesPgRepo::new(db.clone()),
-        Some(properties::PermissionServiceImpl::new(
-            db.clone(),
-            Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
-                db.clone(),
-            ))),
-        )),
-        Some(NoOpNotificationService),
-    );
-    let properties_tool_context =
-        properties::inbound::toolset::PropertiesToolContext::new(properties_service);
+    let properties_tool_context = ai_tools::build_properties_tool_context(properties_service);
 
     let email_tool_context = email::inbound::toolset::EmailToolContext::new(
         Arc::new(EmailServiceImpl::new(

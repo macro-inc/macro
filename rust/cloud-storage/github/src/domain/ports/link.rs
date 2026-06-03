@@ -83,6 +83,12 @@ pub trait GithubOauth: Send + Sync + 'static {
         access_token: &str,
     ) -> impl Future<Output = Result<GithubUserInfo, Self::Err>> + Send;
 
+    /// Checks if the access token is expired or invalid.
+    fn is_access_token_expired(
+        &self,
+        access_token: &str,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
     /// Gets pull request details using the user's access token.
     fn get_pull_request_details(
         &self,
@@ -153,6 +159,12 @@ pub trait GithubLinkService: Send + Sync + 'static {
 
     /// Deletes the link for the user
     fn delete_user_link(
+        &self,
+        user_id: &MacroUserId<Lowercase<'static>>,
+    ) -> impl Future<Output = Result<(), GithubError>> + Send;
+
+    /// Checks whether the user's Github link token is valid.
+    fn check_user_link_token(
         &self,
         user_id: &MacroUserId<Lowercase<'static>>,
     ) -> impl Future<Output = Result<(), GithubError>> + Send;

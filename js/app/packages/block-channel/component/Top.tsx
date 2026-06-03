@@ -15,8 +15,8 @@ import HashIcon from '@phosphor/hash.svg';
 import PaperclipIcon from '@phosphor/paperclip.svg';
 import UsersIcon from '@phosphor/users.svg';
 import type { ChannelParticipant } from '@queries/channel/types';
-import { ChannelTypeEnum } from '@service-comms/client';
-import type { ChannelType } from '@service-comms/generated/models/channelType';
+import { ChannelTypeEnum } from '@service-storage/client';
+import type { ChannelType } from '@service-storage/generated/schemas/channelType';
 import { type Component, type JSX, Show } from 'solid-js';
 
 const CHANNEL_TAB_ICONS: Record<

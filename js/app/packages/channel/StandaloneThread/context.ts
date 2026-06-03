@@ -1,4 +1,5 @@
-import type { ApiChannelMessage, ApiThreadReply } from '@service-comms/client';
+import type { ApiChannelMessage } from '@service-storage/generated/schemas/apiChannelMessage';
+import type { ApiThreadReply } from '@service-storage/generated/schemas/apiThreadReply';
 import {
   type Accessor,
   createContext,

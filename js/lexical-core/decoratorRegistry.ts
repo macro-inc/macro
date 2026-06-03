@@ -25,10 +25,6 @@ import type {
   EquationNode,
 } from './nodes/EquationNode';
 import type {
-  SnapshotDecoratorProps,
-  SnapshotNode,
-} from './nodes/SnapshotNode';
-import type {
   GroupMentionDecoratorProps,
   GroupMentionNode,
 } from './nodes/GroupMentionNode';
@@ -42,22 +38,26 @@ import type {
 } from './nodes/HtmlRenderNode';
 import type { ImageDecoratorProps, ImageNode } from './nodes/ImageNode';
 import type {
-  UserMentionDecoratorProps,
-  UserMentionNode,
-} from './nodes/UserMentionNode';
-import type { VideoDecoratorProps, VideoNode } from './nodes/VideoNode';
+  SnapshotDecoratorProps,
+  SnapshotNode,
+} from './nodes/SnapshotNode';
 import type {
   ThemeMentionDecoratorProps,
   ThemeMentionNode,
 } from './nodes/ThemeMentionNode';
 import type {
+  UnknownMentionDecoratorProps,
+  UnknownMentionNode,
+} from './nodes/UnknownMentionNode';
+import type {
+  UserMentionDecoratorProps,
+  UserMentionNode,
+} from './nodes/UserMentionNode';
+import type { VideoDecoratorProps, VideoNode } from './nodes/VideoNode';
+import type {
   WatermarkDecoratorProps,
   WatermarkNode,
 } from './nodes/WatermarkNode';
-import type {
-  UnknownMentionNode,
-  UnknownMentionDecoratorProps,
-} from './nodes/UnknownMentionNode';
 
 // Generic component type to be overridden by solid-js on the front end
 // and nothing on the backend.

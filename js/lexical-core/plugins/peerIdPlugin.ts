@@ -17,7 +17,7 @@ import {
   type NodeKey,
   type SerializedLexicalNode,
 } from 'lexical';
-import { $isSerializedNode } from '../utils';
+import { $isSerializedNode } from '../utils/serializedNode';
 
 /**
  * An update tag that signifies this update only included updates to the local status of nodes.

@@ -6,7 +6,7 @@ import {
 } from '@app/component/next-soup/filters/filter-store';
 import type { ListView } from '@app/constants/list-views';
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
-import { subWeeks } from 'date-fns';
+import { startOfDay, subWeeks } from 'date-fns';
 
 type SoupFiltersPreset = {
   /** Filter data for server query */
@@ -38,7 +38,7 @@ type ViewTabConfig = {
 
 /** Filters for inbox/signal: not done, importance=true for emails, 2-week window */
 const getInboxSignalFilters = () => {
-  const twoWeeksAgo = subWeeks(new Date(), 2).toISOString();
+  const twoWeeksAgo = subWeeks(startOfDay(new Date()), 2).toISOString();
   return defineQueryFilters({
     include: {
       documentDone: false,

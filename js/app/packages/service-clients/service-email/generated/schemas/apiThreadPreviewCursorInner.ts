@@ -19,6 +19,7 @@ export interface ApiThreadPreviewCursorInner {
   isDraft: boolean;
   isImportant: boolean;
   isRead: boolean;
+  linkId: string;
   name?: ApiThreadPreviewCursorInnerName;
   ownerId: string;
   providerId?: ApiThreadPreviewCursorInnerProviderId;

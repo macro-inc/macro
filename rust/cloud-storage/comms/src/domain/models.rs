@@ -1,6 +1,6 @@
 use item_filters::ast::{LiteralTree, channel::ChannelLiteral};
 use macro_user_id::user_id::MacroUserIdStr;
-pub use models_comms::{channel, mentions};
+pub use models_comms::channel;
 use models_pagination::{Query, SimpleSortMethod};
 use serde::Deserialize;
 use uuid::Uuid;

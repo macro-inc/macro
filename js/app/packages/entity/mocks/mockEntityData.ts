@@ -259,7 +259,7 @@ const MOCK_TASK_COMPLETED: TaskEntity = {
 const MOCK_TASK_HIGH_PRIORITY: TaskEntity = {
   type: 'document',
   id: 'task_urgent_1',
-  name: 'Fix Critical Security Bug',
+  name: 'Fix Urgent Security Bug',
   ownerId: MOCK_USER_IDS.owner,
   fileType: 'md',
   subType: { type: 'task', is_completed: false },
@@ -278,6 +278,7 @@ const MOCK_CHANNEL_PUBLIC: ChannelEntity = {
   updatedAt: MOCK_TIMESTAMPS.today,
   interactedAt: MOCK_TIMESTAMPS.today,
   latestMessage: {
+    messageId: 'message_public_1',
     content: "Hey everyone! Don't forget about the team meeting at 2pm",
     senderId: MOCK_USER_IDS.teamMember1,
     createdAt: MOCK_TIMESTAMPS.today,
@@ -295,6 +296,7 @@ const MOCK_CHANNEL_PRIVATE: ChannelEntity = {
   updatedAt: MOCK_TIMESTAMPS.yesterday,
   interactedAt: MOCK_TIMESTAMPS.yesterday,
   latestMessage: {
+    messageId: 'message_private_1',
     content: 'Updated the mockups in Figma',
     senderId: MOCK_USER_IDS.teamMember2,
     createdAt: MOCK_TIMESTAMPS.yesterday,
@@ -313,6 +315,7 @@ const MOCK_CHANNEL_DIRECT_MESSAGE: ChannelEntity = {
   updatedAt: MOCK_TIMESTAMPS.today,
   interactedAt: MOCK_TIMESTAMPS.today,
   latestMessage: {
+    messageId: 'message_dm_1',
     content: 'Can you review the PR?',
     senderId: MOCK_USER_IDS.teamMember1,
     createdAt: MOCK_TIMESTAMPS.today,
@@ -320,16 +323,17 @@ const MOCK_CHANNEL_DIRECT_MESSAGE: ChannelEntity = {
   frecencyScore: 0.87,
 };
 
-const MOCK_CHANNEL_ORGANIZATION: ChannelEntity = {
+const MOCK_CHANNEL_ANNOUNCEMENTS: ChannelEntity = {
   type: 'channel',
-  id: 'channel_org_1',
+  id: 'channel_announcements_1',
   name: 'company-announcements',
   ownerId: MOCK_USER_IDS.owner,
-  channelType: 'organization',
+  channelType: 'private',
   createdAt: MOCK_TIMESTAMPS.lastYear,
   updatedAt: MOCK_TIMESTAMPS.lastWeek,
   interactedAt: MOCK_TIMESTAMPS.lastWeek,
   latestMessage: {
+    messageId: 'message_org_1',
     content: 'Q4 results are in!',
     senderId: MOCK_USER_IDS.owner,
     createdAt: MOCK_TIMESTAMPS.lastWeek,
@@ -347,6 +351,7 @@ const MOCK_CHANNEL_EMPTY_MESSAGE: ChannelEntity = {
   updatedAt: MOCK_TIMESTAMPS.today,
   interactedAt: MOCK_TIMESTAMPS.today,
   latestMessage: {
+    messageId: 'message_attachment_1',
     content: '',
     senderId: MOCK_USER_IDS.teamMember2,
     createdAt: MOCK_TIMESTAMPS.today,
@@ -710,7 +715,7 @@ const ALL_CHANNEL_ENTITIES = [
   MOCK_CHANNEL_PUBLIC,
   MOCK_CHANNEL_PRIVATE,
   MOCK_CHANNEL_DIRECT_MESSAGE,
-  MOCK_CHANNEL_ORGANIZATION,
+  MOCK_CHANNEL_ANNOUNCEMENTS,
   MOCK_CHANNEL_EMPTY_MESSAGE,
 ];
 

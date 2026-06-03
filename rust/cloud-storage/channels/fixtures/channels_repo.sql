@@ -97,3 +97,38 @@ INSERT INTO comms_channel_participants (channel_id, user_id, role, joined_at, le
   ('00000000-0000-0000-0000-000000000c01', 'macro|user-b@test.com', 'admin', '2024-01-01 00:01:00+00', NULL),
   ('00000000-0000-0000-0000-000000000c01', 'macro|user-c@test.com', 'member', '2024-01-01 00:02:00+00', NULL),
   ('00000000-0000-0000-0000-000000000c01', 'macro|left-user@test.com', 'member', '2024-01-01 00:03:00+00', '2024-01-05 00:00:00+00');
+
+-- Channel ch3: isolated thread-recipient correctness fixture.
+-- A departed participant (left-user) authored a reply in a thread whose parent
+-- was authored by an active participant (user-a). The departed sender must be
+-- excluded from thread recipient/notification lookups, while the active sender
+-- is still included.
+INSERT INTO comms_channels (id, name, channel_type, org_id, owner_id, created_at, updated_at) VALUES
+  ('00000000-0000-0000-0000-000000000c03', 'thread-recipients', 'public', NULL, 'macro|user-a@test.com',
+   '2024-01-01 00:00:00+00', '2024-01-01 00:00:00+00');
+
+INSERT INTO comms_messages (id, channel_id, thread_id, sender_id, content, created_at, updated_at, edited_at, deleted_at) VALUES
+  -- thread parent authored by an active participant
+  ('00000000-0000-0000-0000-000000000031', '00000000-0000-0000-0000-000000000c03', NULL,
+   'macro|user-a@test.com', 'thread parent', '2024-01-01 10:00:00+00', '2024-01-01 10:00:00+00', NULL, NULL),
+  -- reply authored by a participant who later left the channel
+  ('00000000-0000-0000-0000-00000000b031', '00000000-0000-0000-0000-000000000c03',
+   '00000000-0000-0000-0000-000000000031', 'macro|left-user@test.com', 'reply from departed user',
+   '2024-01-01 10:01:00+00', '2024-01-01 10:01:00+00', NULL, NULL);
+
+INSERT INTO comms_channel_participants (channel_id, user_id, role, joined_at, left_at) VALUES
+  ('00000000-0000-0000-0000-000000000c03', 'macro|user-a@test.com', 'owner', '2024-01-01 00:00:00+00', NULL),
+  ('00000000-0000-0000-0000-000000000c03', 'macro|left-user@test.com', 'member', '2024-01-01 00:03:00+00', '2024-01-05 00:00:00+00');
+
+-- entity mentions (used by attachment-references tests)
+-- doc-mention is mentioned inside msg3 (a message source → channel reference, gated by participation)
+-- doc-generic is mentioned by a non-message source (doc → generic reference, not gated)
+-- doc-2 already has a direct attachment on msg3 (a003, 12:00); this newer generic mention
+--   lets the merge/sort test assert generic-before-channel ordering
+INSERT INTO comms_entity_mentions (id, source_entity_type, source_entity_id, entity_type, entity_id, user_id, created_at) VALUES
+  ('00000000-0000-0000-0000-00000000e001', 'message', '00000000-0000-0000-0000-000000000003',
+   'document', 'doc-mention', 'macro|user-a@test.com', '2024-01-01 12:00:00+00'),
+  ('00000000-0000-0000-0000-00000000e002', 'doc', 'src-doc',
+   'document', 'doc-generic', 'macro|user-a@test.com', '2024-01-03 00:00:00+00'),
+  ('00000000-0000-0000-0000-00000000e003', 'doc', 'src-doc-2',
+   'document', 'doc-2', 'macro|user-a@test.com', '2024-01-04 00:00:00+00');

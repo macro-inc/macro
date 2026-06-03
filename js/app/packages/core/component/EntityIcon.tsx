@@ -24,6 +24,7 @@ import WideEmail from '@icon/wide-email.svg';
 import WideFileCode from '@icon/wide-file-code.svg';
 import WideFileImage from '@icon/wide-file-image.svg';
 import WideFileMd from '@icon/wide-file-md.svg';
+import WideFiles from '@icon/wide-files.svg';
 import WideFolder from '@icon/wide-folder.svg';
 import WideGlobe from '@icon/wide-globe.svg';
 import WideStar from '@icon/wide-star.svg';
@@ -44,6 +45,7 @@ import FileHtml from '@phosphor/file-html.svg';
 import FileMd from '@phosphor/file-md.svg';
 import FilePdf from '@phosphor/file-pdf.svg';
 import FileVideo from '@phosphor/file-video.svg';
+import Files from '@phosphor/files.svg';
 import Folder from '@phosphor/folder-simple.svg';
 import FolderUser from '@phosphor/folder-user.svg';
 import GlobeIcon from '@phosphor/globe.svg';
@@ -72,11 +74,13 @@ export type EntityWithValidIcon =
   | BlockName
   | BlockAlias
   | ChannelType
+  | 'organization'
   | 'default'
   | 'sharedProject'
   | 'emailRead'
   | 'emailInvite'
   | 'archive'
+  | 'files'
   | 'html';
 
 const ARCHIVE_EXTENSIONS = new Set(
@@ -120,7 +124,7 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     icon: Building,
     foreground: 'text-default',
     background: 'bg-default/20',
-    prettyName: 'Organization Channel',
+    prettyName: 'Organization',
   },
   private: {
     icon: WideChannel,
@@ -205,6 +209,12 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'File',
+  },
+  files: {
+    icon: Files,
+    foreground: 'text-default',
+    background: 'bg-default/20',
+    prettyName: 'Files',
   },
   archive: {
     icon: FileArchive,
@@ -302,6 +312,7 @@ const WIDE_ICONS: Record<EntityWithValidIcon, Component> = {
   project: WideFolder,
   sharedProject: WideFolder,
   unknown: WideUnknown,
+  files: WideFiles,
   archive: WideUnknown,
   video: WideVideo,
   contact: WideUser,
@@ -322,12 +333,12 @@ const ICON_SIZES = {
 } as const;
 
 export const ICON_SIZE_CLASSES = {
-  xs: `${ICON_SIZES.xs} flex justify-center overflow-hidden shrink-0`,
-  sm: `${ICON_SIZES.sm} flex justify-center overflow-hidden shrink-0`,
-  md: `${ICON_SIZES.md} flex justify-center overflow-hidden shrink-0`,
-  lg: `${ICON_SIZES.lg} flex justify-center overflow-hidden shrink-0`,
-  fill: `${ICON_SIZES.fill} flex justify-center overflow-hidden shrink-0`,
-  shrinkFill: `${ICON_SIZES.fill} flex justify-center overflow-hidden`,
+  xs: `${ICON_SIZES.xs} flex items-center justify-center overflow-hidden shrink-0`,
+  sm: `${ICON_SIZES.sm} flex items-center justify-center overflow-hidden shrink-0`,
+  md: `${ICON_SIZES.md} flex items-center justify-center overflow-hidden shrink-0`,
+  lg: `${ICON_SIZES.lg} flex items-center justify-center overflow-hidden shrink-0`,
+  fill: `${ICON_SIZES.fill} flex items-center justify-center overflow-hidden shrink-0`,
+  shrinkFill: `${ICON_SIZES.fill} flex items-center justify-center overflow-hidden`,
 } as const;
 
 export type EntityIconProps = {

@@ -5,10 +5,10 @@ import WideChat from '@icon/wide-chat.svg';
 import WideCopy from '@icon/wide-copy.svg';
 import WideTask from '@icon/wide-task.svg';
 import IconCheck from '@phosphor/check.svg';
-import { commsServiceClient } from '@service-comms/client';
+import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-create-dm';
 import { debounce } from '@solid-primitives/scheduled';
-import { Button, Surface } from '@ui';
-import { createSignal, Show } from 'solid-js';
+import { cn, Surface } from '@ui';
+import { createSignal, type JSX, Show } from 'solid-js';
 import { UserIcon } from './UserIcon';
 
 type UserTooltipProps = {
@@ -35,28 +35,24 @@ export function UserTooltip(props: UserTooltipProps) {
   }
   const currentUserId = useUserId();
   const { openWithSplit, popoverSplit } = useSplitLayout();
+  const getOrCreateDmMutation = useGetOrCreateDirectMessageMutation({
+    onError: () => toast.failure('Failed to open direct message'),
+  });
 
-  const openDM = async (e: PointerEvent | MouseEvent) => {
+  const openDM = async (e: MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    props.onClose?.();
-    if (props.id) {
-      try {
-        const result = await commsServiceClient.getOrCreateDirectMessage({
-          recipient_id: props.id,
-        });
-        const channelId = result.isOk() && result.value?.channel_id;
-        if (channelId) {
-          openWithSplit(
-            { type: 'channel', id: channelId },
-            { preferNewSplit: e.shiftKey }
-          );
-        } else {
-          toast.failure('Failed to open direct message');
-        }
-      } catch {
-        toast.failure('Failed to open direct message');
-      }
+    if (!props.id) return;
+    const preferNewSplit = e.shiftKey;
+    try {
+      const { channel_id } = await getOrCreateDmMutation.mutateAsync({
+        recipient_id: props.id,
+      });
+      openWithSplit({ type: 'channel', id: channel_id }, { preferNewSplit });
+    } catch {
+      // The mutation's onError callback handles the toast.
+    } finally {
+      props.onClose?.();
     }
   };
 
@@ -73,9 +69,6 @@ export function UserTooltip(props: UserTooltipProps) {
     }
   };
 
-  const buttonStyle =
-    'px-3 text-xs w-full justify-start hover:bg-hover rounded-xs';
-
   // Determine avatar props based on what we have
   const avatarProps = () => {
     if (props.id) {
@@ -89,7 +82,7 @@ export function UserTooltip(props: UserTooltipProps) {
   };
 
   return (
-    <Surface depth={2} active>
+    <Surface active depth={2} class="rounded-xl shadow-lg shadow-drop-shadow">
       <div class="text-ink max-w-lg">
         <div class="flex items-center gap-2 p-2">
           <UserIcon
@@ -111,36 +104,55 @@ export function UserTooltip(props: UserTooltipProps) {
 
         <Show when={props.email || props.id}>
           <div class="border-t border-edge"></div>
-          <div class="p-2 flex flex-col gap-0">
+          <div class="p-1.5 flex flex-col gap-0.5">
             <Show when={props.email}>
-              <Button onClick={handleCopyEmail} class={buttonStyle}>
+              <ActionItem onClick={handleCopyEmail}>
                 {copied() ? (
                   <IconCheck class="size-3.5" />
                 ) : (
                   <WideCopy class="size-3.5" />
                 )}
                 Copy email
-              </Button>
+              </ActionItem>
             </Show>
             <Show
               when={
                 props.id && !props.isDeleted && props.id !== currentUserId()
               }
             >
-              <Button onClick={openDM} class={buttonStyle}>
+              <ActionItem onClick={openDM}>
                 <WideChat class="size-3.5" />
                 DM
-              </Button>
+              </ActionItem>
             </Show>
             <Show when={props.id && !props.isDeleted}>
-              <Button onClick={openTaskComposer} class={buttonStyle}>
+              <ActionItem onClick={openTaskComposer}>
                 <WideTask class="size-3.5" />
                 Assign task
-              </Button>
+              </ActionItem>
             </Show>
           </div>
         </Show>
       </div>
     </Surface>
+  );
+}
+
+function ActionItem(props: {
+  children: JSX.Element;
+  onClick: JSX.EventHandler<HTMLButtonElement, MouseEvent>;
+  class?: string;
+}) {
+  return (
+    <button
+      type="button"
+      class={cn(
+        'group rounded-lg w-full flex items-center gap-2 px-2 h-8 text-left font-medium text-xs cursor-default outline-none hover:bg-ink/5 focus:bg-ink/5 data-highlighted:bg-ink/5 data-disabled:opacity-50 data-disabled:cursor-not-allowed',
+        props.class
+      )}
+      onClick={props.onClick}
+    >
+      {props.children}
+    </button>
   );
 }

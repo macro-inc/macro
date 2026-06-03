@@ -19,6 +19,7 @@ import type {
   ListEmailFiltersResponse,
   ListLabelsResponse,
   ListLinksResponse,
+  ResyncResponse,
   SendMessageRequest,
   SendMessageResponse,
   UpdateLabelBatchRequest,
@@ -33,6 +34,16 @@ import type {
 import type { EmptyResponse } from './generated/schemas/emptyResponse';
 
 const emailHost: string = SERVER_HOSTS['email-service'];
+
+/**
+ * Header that scopes a mutating email request to a specific inbox. Omitted for
+ * the primary inbox (the backend defaults to it when the header is absent).
+ */
+const EMAIL_LINK_ID_HEADER = 'X-Email-Link-Id';
+
+function emailLinkHeaders(linkId?: string): Record<string, string> | undefined {
+  return linkId ? { [EMAIL_LINK_ID_HEADER]: linkId } : undefined;
+}
 
 function emailFetch(
   url: string,
@@ -52,9 +63,12 @@ function emailFetch<T extends ObjectLike = never>(
 }
 
 export const emailClient = {
-  async init() {
+  async init(args?: { linkId?: string }) {
+    const path = args?.linkId
+      ? `/email/init?link_id=${encodeURIComponent(args.linkId)}`
+      : '/email/init';
     return (
-      await emailFetch<EmptyResponse>('/email/init', {
+      await emailFetch<EmptyResponse>(path, {
         method: 'POST',
       })
     ).map((result) => result);
@@ -143,12 +157,13 @@ export const emailClient = {
       }
     );
   },
-  async flagArchived(args: { value: boolean; id: string }) {
+  async flagArchived(args: { value: boolean; id: string }, linkId?: string) {
     const { value, id } = args;
     return (
       await emailFetch<EmptyResponse>(`/email/threads/${id}/archived`, {
         method: 'PATCH',
         body: JSON.stringify({ value }),
+        headers: emailLinkHeaders(linkId),
       })
     ).map((result) => result);
   },
@@ -167,16 +182,20 @@ export const emailClient = {
     ).map((result) => result);
   },
 
-  async sendMessage(args: SendMessageRequest) {
+  async sendMessage(args: SendMessageRequest, linkId?: string) {
     return (
       await emailFetch<SendMessageResponse>('/email/messages', {
         method: 'POST',
         body: JSON.stringify(args),
+        headers: emailLinkHeaders(linkId),
       })
     ).map((result) => result);
   },
 
-  async scheduleMessage(args: { draftID: string } & UpsertScheduledRequest) {
+  async scheduleMessage(
+    args: { draftID: string } & UpsertScheduledRequest,
+    linkId?: string
+  ) {
     const { draftID, ...rest } = args;
     return (
       await emailFetch<UpsertScheduledResponse>(
@@ -184,17 +203,19 @@ export const emailClient = {
         {
           method: 'PUT',
           body: JSON.stringify(rest),
+          headers: emailLinkHeaders(linkId),
         }
       )
     ).map((result) => result);
   },
 
-  async unscheduleMessage(args: { draftID: string }) {
+  async unscheduleMessage(args: { draftID: string }, linkId?: string) {
     return (
       await emailFetch<EmptyResponse>(
         `/email/drafts/scheduled/${args.draftID}`,
         {
           method: 'DELETE',
+          headers: emailLinkHeaders(linkId),
         }
       )
     ).map((result) => result);
@@ -205,6 +226,30 @@ export const emailClient = {
       await emailFetch<ListLinksResponse>('/email/links', {
         method: 'GET',
       })
+    ).map((result) => result);
+  },
+
+  async deleteLink(args: { linkId: string }) {
+    const { linkId } = args;
+    return (
+      await emailFetch<EmptyResponse>(
+        `/email/links/${encodeURIComponent(linkId)}`,
+        {
+          method: 'DELETE',
+        }
+      )
+    ).map((result) => result);
+  },
+
+  async resyncLink(args: { linkId: string }) {
+    const { linkId } = args;
+    return (
+      await emailFetch<ResyncResponse>(
+        `/email/links/${encodeURIComponent(linkId)}/resync`,
+        {
+          method: 'POST',
+        }
+      )
     ).map((result) => result);
   },
 
@@ -234,50 +279,63 @@ export const emailClient = {
       )
     ).map((result) => result);
   },
-  async createDraft(args: CreateDraftRequest) {
+  async createDraft(args: CreateDraftRequest, linkId?: string) {
     return (
       await emailFetch<CreateDraftResponse>('/email/drafts', {
         method: 'POST',
         body: JSON.stringify(args),
+        headers: emailLinkHeaders(linkId),
       })
     ).map((result) => result);
   },
-  async deleteDraft(args: { id: string }) {
+  async deleteDraft(args: { id: string }, linkId?: string) {
     const { id } = args;
     return (
       await emailFetch<EmptyResponse>(`/email/drafts/${id}`, {
         method: 'DELETE',
+        headers: emailLinkHeaders(linkId),
       })
     ).map((result) => result);
   },
-  async addDraftAttachment(args: {
-    draftID: string;
-    attachment: AddDraftAttachmentRequest;
-  }) {
+  async addDraftAttachment(
+    args: {
+      draftID: string;
+      attachment: AddDraftAttachmentRequest;
+    },
+    linkId?: string
+  ) {
     return (
       await emailFetch<AddDraftAttachmentResponse>(
         `/email/drafts/${args.draftID}/attachments`,
         {
           method: 'POST',
           body: JSON.stringify(args.attachment),
+          headers: emailLinkHeaders(linkId),
         }
       )
     ).map((result) => result);
   },
-  async removeDraftAttachment(args: { draftID: string; attachmentID: string }) {
+  async removeDraftAttachment(
+    args: { draftID: string; attachmentID: string },
+    linkId?: string
+  ) {
     return (
       await emailFetch<EmptyResponse>(
         `/email/drafts/${args.draftID}/attachments/${args.attachmentID}`,
         {
           method: 'DELETE',
+          headers: emailLinkHeaders(linkId),
         }
       )
     ).map((result) => result);
   },
-  async addForwardedAttachment(args: {
-    draftID: string;
-    attachmentID: string;
-  }) {
+  async addForwardedAttachment(
+    args: {
+      draftID: string;
+      attachmentID: string;
+    },
+    linkId?: string
+  ) {
     return (
       await emailFetch<{
         attachment_id: string;
@@ -287,40 +345,48 @@ export const emailClient = {
       }>(`/email/drafts/${args.draftID}/forwarded-attachments`, {
         method: 'POST',
         body: JSON.stringify({ attachment_id: args.attachmentID }),
+        headers: emailLinkHeaders(linkId),
       })
     ).map((result) => result);
   },
-  async removeForwardedAttachment(args: {
-    draftID: string;
-    attachmentID: string;
-  }) {
+  async removeForwardedAttachment(
+    args: {
+      draftID: string;
+      attachmentID: string;
+    },
+    linkId?: string
+  ) {
     return (
       await emailFetch<EmptyResponse>(
         `/email/drafts/${args.draftID}/forwarded-attachments/${args.attachmentID}`,
         {
           method: 'DELETE',
+          headers: emailLinkHeaders(linkId),
         }
       )
     ).map((result) => result);
   },
-  async markThreadAsSeen(args: { thread_id: string }) {
+  async markThreadAsSeen(args: { thread_id: string }, linkId?: string) {
     const { thread_id } = args;
     return (
       await emailFetch<EmptyResponse>(`/email/threads/${thread_id}/seen`, {
         method: 'POST',
+        headers: emailLinkHeaders(linkId),
       })
     ).map((result) => result);
   },
-  async blockSender(args: { email_address: string }) {
+  async blockSender(args: { email_address: string }, linkId?: string) {
     return emailFetch('/email/contacts/block', {
       method: 'POST',
       body: JSON.stringify({ email_address: args.email_address }),
+      headers: emailLinkHeaders(linkId),
     });
   },
-  async unblockSender(args: { email_address: string }) {
+  async unblockSender(args: { email_address: string }, linkId?: string) {
     return emailFetch('/email/contacts/unblock', {
       method: 'POST',
       body: JSON.stringify({ email_address: args.email_address }),
+      headers: emailLinkHeaders(linkId),
     });
   },
   async listEmailFilters() {

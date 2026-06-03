@@ -28,6 +28,39 @@ fn pull_request_details(
         merged_at,
         additions: 42,
         deletions: 12,
+        comments: None,
+        checks: None,
+    }
+}
+
+fn utc_datetime(value: &str) -> chrono::DateTime<chrono::Utc> {
+    chrono::DateTime::parse_from_rfc3339(value)
+        .unwrap()
+        .with_timezone(&chrono::Utc)
+}
+
+fn pull_request_comment() -> GithubPullRequestComment {
+    GithubPullRequestComment {
+        id: 101,
+        body: "Looks good to me".to_string(),
+        author_login: Some("octocat".to_string()),
+        author_association: Some("MEMBER".to_string()),
+        url: Some("https://github.com/macro/app/pull/7#issuecomment-101".to_string()),
+        created_at: Some(utc_datetime("2026-05-25T18:54:21Z")),
+        updated_at: Some(utc_datetime("2026-05-25T19:00:00Z")),
+        source: "issue_comment".to_string(),
+    }
+}
+
+fn pull_request_check_run() -> GithubPullRequestCheckRun {
+    GithubPullRequestCheckRun {
+        id: 202,
+        name: "ci".to_string(),
+        status: "completed".to_string(),
+        conclusion: Some("success".to_string()),
+        url: Some("https://github.com/macro/app/actions/runs/202".to_string()),
+        started_at: Some(utc_datetime("2026-05-25T18:55:00Z")),
+        completed_at: Some(utc_datetime("2026-05-25T18:59:00Z")),
     }
 }
 
@@ -47,12 +80,27 @@ fn pull_request_status_maps_closed_unmerged_pr() {
 
 #[test]
 fn pull_request_status_maps_closed_merged_pr() {
-    let merged_at = chrono::DateTime::parse_from_rfc3339("2026-05-25T18:54:21Z")
-        .unwrap()
-        .with_timezone(&chrono::Utc);
+    let merged_at = utc_datetime("2026-05-25T18:54:21Z");
     let details = pull_request_details("closed", Some(merged_at));
 
     assert_eq!(details.status(), GithubPullRequestStatus::Merged);
+}
+
+#[test]
+fn pull_request_details_deserializes_github_comment_count() {
+    let details_json = serde_json::json!({
+        "title": "Add pull request enrichment",
+        "state": "open",
+        "merged_at": null,
+        "additions": 42,
+        "deletions": 12,
+        "comments": 3
+    });
+
+    let details: GithubPullRequestDetails = serde_json::from_value(details_json).unwrap();
+
+    assert_eq!(details.comments, None);
+    assert_eq!(details.checks, None);
 }
 
 #[test]
@@ -101,6 +149,8 @@ fn pull_request_response_serializes_with_camel_case_fields() {
             status: Some(GithubPullRequestStatus::Merged),
             additions: Some(42),
             deletions: Some(12),
+            comments: Some(vec![pull_request_comment()]),
+            checks: Some(vec![pull_request_check_run()]),
         }],
     };
 
@@ -120,7 +170,30 @@ fn pull_request_response_serializes_with_camel_case_fields() {
                     "name": "Add pull request enrichment",
                     "status": "merged",
                     "additions": 42,
-                    "deletions": 12
+                    "deletions": 12,
+                    "comments": [
+                        {
+                            "id": 101,
+                            "body": "Looks good to me",
+                            "authorLogin": "octocat",
+                            "authorAssociation": "MEMBER",
+                            "url": "https://github.com/macro/app/pull/7#issuecomment-101",
+                            "createdAt": "2026-05-25T18:54:21Z",
+                            "updatedAt": "2026-05-25T19:00:00Z",
+                            "source": "issue_comment"
+                        }
+                    ],
+                    "checks": [
+                        {
+                            "id": 202,
+                            "name": "ci",
+                            "status": "completed",
+                            "conclusion": "success",
+                            "url": "https://github.com/macro/app/actions/runs/202",
+                            "startedAt": "2026-05-25T18:55:00Z",
+                            "completedAt": "2026-05-25T18:59:00Z"
+                        }
+                    ]
                 }
             ]
         })
@@ -129,6 +202,33 @@ fn pull_request_response_serializes_with_camel_case_fields() {
     let decoded_response: EnrichGithubPullRequestsResponse =
         serde_json::from_value(response_json).unwrap();
     assert_eq!(decoded_response, response);
+}
+
+#[test]
+fn pull_request_response_deserializes_without_comments_and_checks() {
+    let response_json = serde_json::json!({
+        "pullRequests": [
+            {
+                "githubKey": "macro/app/pull/7",
+                "owner": "macro",
+                "repo": "app",
+                "number": 7,
+                "url": "https://github.com/macro/app/pull/7",
+                "displayName": "macro/app#7",
+                "name": "Add pull request enrichment",
+                "status": "open",
+                "additions": 42,
+                "deletions": 12
+            }
+        ]
+    });
+
+    let decoded_response: EnrichGithubPullRequestsResponse =
+        serde_json::from_value(response_json).unwrap();
+    let pull_request = decoded_response.pull_requests.first().unwrap();
+
+    assert_eq!(pull_request.comments, None);
+    assert_eq!(pull_request.checks, None);
 }
 
 #[test]
@@ -146,6 +246,46 @@ fn pull_request_enrichment_preserves_reference_fields() {
     assert_eq!(enriched.status, None);
     assert_eq!(enriched.additions, None);
     assert_eq!(enriched.deletions, None);
+    assert_eq!(enriched.comments, None);
+    assert_eq!(enriched.checks, None);
+
+    let enriched_json = serde_json::to_value(&enriched).unwrap();
+    assert!(enriched_json.get("comments").is_none());
+    assert!(enriched_json.get("checks").is_none());
+}
+
+#[test]
+fn pull_request_enrichment_copies_details_fields() {
+    let reference = pull_request_reference();
+    let comments = vec![pull_request_comment()];
+    let checks = vec![pull_request_check_run()];
+    let details = GithubPullRequestDetails {
+        title: "Add pull request enrichment".to_string(),
+        state: "closed".to_string(),
+        merged_at: Some(utc_datetime("2026-05-25T18:54:21Z")),
+        additions: 42,
+        deletions: 12,
+        comments: Some(comments.clone()),
+        checks: Some(checks.clone()),
+    };
+
+    let enriched = EnrichedGithubPullRequest::from_details(reference.clone(), details);
+
+    assert_eq!(enriched.github_key, reference.github_key);
+    assert_eq!(enriched.owner, reference.owner);
+    assert_eq!(enriched.repo, reference.repo);
+    assert_eq!(enriched.number, reference.number);
+    assert_eq!(enriched.url, reference.url);
+    assert_eq!(enriched.display_name, reference.display_name);
+    assert_eq!(
+        enriched.name,
+        Some("Add pull request enrichment".to_string())
+    );
+    assert_eq!(enriched.status, Some(GithubPullRequestStatus::Merged));
+    assert_eq!(enriched.additions, Some(42));
+    assert_eq!(enriched.deletions, Some(12));
+    assert_eq!(enriched.comments, Some(comments));
+    assert_eq!(enriched.checks, Some(checks));
 }
 
 // ---------------------------------------------------------------------------

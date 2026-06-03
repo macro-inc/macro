@@ -124,7 +124,7 @@ where
 
         let sent = service_context
             .service
-            .send_message(&link, input)
+            .send_message(&link, std::slice::from_ref(&link), input)
             .await
             .map_err(|e| ToolCallError {
                 description: format!("Failed to send email: {e}"),

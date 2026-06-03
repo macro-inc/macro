@@ -21,12 +21,14 @@ email = { path = "../email", features = ["outbound"] }
 email_service_client = { path = "../email_service_client" }
 entity_access = { path = "../entity_access" }
 entity_access_management = { path = "../entity_access_management" }
+foreign_entity = { path = "../foreign_entity" }
 frecency = { path = "../frecency", features = ["outbound", "postgres"] }
 fusionauth = { path = "../fusionauth" }
 http = { workspace = true }
 lexical_client = { path = "../lexical_client" }
 mcp_auth_proxy = { path = "../mcp_auth_proxy" }
 macro_auth = { path = "../macro_auth" }
+macro_db_client = { path = "../macro_db_client" }
 macro_aws_config = { path = "../macro_aws_config", features = ["s3"] }
 macro_entrypoint = { path = "../macro_entrypoint" }
 macro_env = { path = "../macro_env" }
@@ -41,6 +43,7 @@ notification = { path = "../notification", features = ["ai_tool"] }
 properties = { path = "../properties", features = ["ai_tools"] }
 readonly_pool = { path = "../readonly_pool" }
 redis = { workspace = true, features = ["aio", "tokio-comp"] }
+roles_and_permissions = { path = "../roles_and_permissions" }
 rmcp = { workspace = true, features = ["transport-streamable-http-server"] }
 search_service_client = { path = "../search_service_client" }
 secretsmanager_client = { path = "../secretsmanager_client" }

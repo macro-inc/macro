@@ -5,7 +5,6 @@ use axum::extract::FromRef;
 use axum::extract::Request;
 use axum::http::Method;
 use axum::middleware::Next;
-use comms_service::CommsHandlerState;
 use context::InternalFlag;
 use github::inbound::github_sync_router::GithubSyncRouterState;
 use macro_axum_utils::compose_layers;
@@ -203,13 +202,21 @@ fn api_router(state: ApiContext) -> Router {
         )
         .nest(
             "/comms",
-            comms_service::comms_router(&CommsHandlerState::from_ref(&state))
-                .with_state(CommsHandlerState::from_ref(&state)),
+            comms::inbound::router::comms_router(state.comms_state.clone()),
         )
         .nest("/entity", entity::router())
         .nest(
             "/channels",
             channels::inbound::axum_router::channels_router(state.channels_state.clone()),
+        )
+        .merge(bots::inbound::axum_router::bots_router(
+            state.bots_state.clone(),
+        ))
+        .nest(
+            "/foreign_entity",
+            foreign_entity::inbound::axum_router::foreign_entity_router(
+                state.foreign_entity_state.clone(),
+            ),
         )
         .nest(
             "/call",

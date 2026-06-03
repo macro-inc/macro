@@ -602,7 +602,8 @@ export const SoupViewList = (props: SoupViewListProps) => {
     fetchNextGroupPage,
     isFetchingGroupPage,
   } = useSoupView();
-  const { hasActiveRefinements, resetToTabDefaults } = useFilterRefinements();
+  const { hasActiveRefinements, hasHiddenItems, resetToTabDefaults } =
+    useFilterRefinements();
 
   const { isKeypressActive } = useIsKeyPressActive();
 
@@ -662,11 +663,13 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
   const previewPanel = useMaybePreviewPanel();
 
-  // Auto focus the soup on mount except when it's in a preview panel
+  // Defer .focus() so the hotkey focusin handler's setActiveScope write doesn't re-invalidate this effect from inside its own tracking scope.
   createEffect(() => {
     if (previewPanel) return;
 
-    soupViewRef()?.focus();
+    const ref = soupViewRef();
+    if (!ref) return;
+    queueMicrotask(() => ref.focus());
   });
 
   const [attachHotkeys, soupViewScope] = useHotkeyDOMScope('soup-view');
@@ -1074,6 +1077,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                       listView={currentView()}
                       search={!!searchText()}
                       hasRefinementsFromBase={hasActiveRefinements()}
+                      hasHiddenItems={hasHiddenItems()}
                       onClearFilters={resetToTabDefaults}
                     />
                   </Match>

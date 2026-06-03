@@ -78,7 +78,7 @@ describe('notification-description helpers', () => {
     });
 
     it('returns correct verb for document_mention', () => {
-      expect(getActionVerb('document_mention')).toBe('mentioned you');
+      expect(getActionVerb('document_mention')).toBe('shared with you');
     });
 
     it('returns correct verb for channel_message_reply', () => {
@@ -109,6 +109,10 @@ describe('notification-description helpers', () => {
 
     it('returns correct verb for task_assigned', () => {
       expect(getActionVerb('task_assigned')).toBe('assigned you');
+    });
+
+    it('returns correct verb for github_pr_event', () => {
+      expect(getActionVerb('github_pr_event')).toBe('updated a pull request');
     });
   });
 
@@ -147,11 +151,11 @@ describe('notification-description helpers', () => {
 
     describe('document_mention', () => {
       it('returns singular for count of 1', () => {
-        expect(getTypeNoun('document_mention', 1)).toBe('mention');
+        expect(getTypeNoun('document_mention', 1)).toBe('document shared');
       });
 
       it('returns plural for count greater than 1', () => {
-        expect(getTypeNoun('document_mention', 4)).toBe('mentions');
+        expect(getTypeNoun('document_mention', 4)).toBe('documents shared');
       });
     });
 
@@ -204,6 +208,16 @@ describe('notification-description helpers', () => {
 
       it('returns plural for count greater than 1', () => {
         expect(getTypeNoun('new_email', 2)).toBe('emails');
+      });
+    });
+
+    describe('github_pr_event', () => {
+      it('returns singular for count of 1', () => {
+        expect(getTypeNoun('github_pr_event', 1)).toBe('pull request');
+      });
+
+      it('returns plural for count greater than 1', () => {
+        expect(getTypeNoun('github_pr_event', 2)).toBe('pull requests');
       });
     });
 

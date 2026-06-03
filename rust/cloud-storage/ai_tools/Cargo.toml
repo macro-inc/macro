@@ -32,6 +32,7 @@ email = { path = "../email", features = ["ai_schema", "ai_tools", "axum", "outbo
 email_service_client = { path = "../email_service_client" }
 entity_access = { path = "../entity_access" }
 entity_access_management = { path = "../entity_access_management" }
+foreign_entity = { path = "../foreign_entity" }
 frecency = { path = "../frecency", features = ["outbound", "postgres"] }
 futures.workspace = true
 item_filters = { path = "../item_filters" }
@@ -65,6 +66,7 @@ teams = { path = "../teams", default-features = false, features = ["ai_tools", "
 sqlx.workspace = true
 strum.workspace = true
 sync_service_client = { path = "../sync_service_client" }
+system_properties = { path = "../system_properties" }
 tokio.workspace = true
 tracing.workspace = true
 utoipa.workspace = true

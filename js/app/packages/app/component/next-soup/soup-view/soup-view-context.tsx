@@ -74,6 +74,7 @@ interface SoupViewContextValues {
   searchPaused: Accessor<boolean>;
   setSearchPaused: Setter<boolean>;
   featuredIds: Accessor<string[]>;
+  items: Accessor<SoupEntity[]>;
   rows: Accessor<SoupRow[]>;
   isSearchServiceLoading: Accessor<boolean>;
   isLocalSearchSettling: Accessor<boolean>;
@@ -545,6 +546,7 @@ export const SoupViewContextProvider: FlowComponent<
         }
       },
     },
+    items,
     rows,
     searchText: search.searchText,
     setSearchText: search.setSearchText,

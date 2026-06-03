@@ -5,7 +5,10 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { GithubPullRequestAdditions } from './githubPullRequestAdditions';
+import type { GithubPullRequestChecks } from './githubPullRequestChecks';
+import type { GithubPullRequestComments } from './githubPullRequestComments';
 import type { GithubPullRequestDeletions } from './githubPullRequestDeletions';
+import type { GithubPullRequestForeignEntityId } from './githubPullRequestForeignEntityId';
 import type { GithubPullRequestName } from './githubPullRequestName';
 import type { GithubPullRequestStatus } from './githubPullRequestStatus';
 
@@ -18,6 +21,10 @@ export interface GithubPullRequest {
    * @minimum 0
    */
   additions?: GithubPullRequestAdditions;
+  /** Check runs collected from the pull request head commit, when enrichment data is available. */
+  checks?: GithubPullRequestChecks;
+  /** Comments collected from the pull request, when enrichment data is available. */
+  comments?: GithubPullRequestComments;
   /**
    * The number of deleted lines in the pull request, when enrichment data is available.
    * @minimum 0
@@ -25,6 +32,8 @@ export interface GithubPullRequest {
   deletions?: GithubPullRequestDeletions;
   /** A compact label suitable for display in the UI. */
   displayName: string;
+  /** The internal `foreign_entity.id` UUID for the GitHub pull request row. */
+  foreignEntityId?: GithubPullRequestForeignEntityId;
   /** The stored GitHub association key, in `owner/repo/pull/number` format. */
   githubKey: string;
   /** The GitHub pull request title, when enrichment data is available. */

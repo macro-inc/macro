@@ -109,7 +109,7 @@ fn api_router(api_context: ApiContext) -> Router {
                     macro_middleware::auth::initialize_user_context::handler,
                 ))
                 .layer(axum::middleware::from_fn_with_state(
-                    api_context.jwt_args,
+                    api_context.jwt_args.clone(),
                     macro_middleware::auth::attach_user::handler,
                 )),
         );

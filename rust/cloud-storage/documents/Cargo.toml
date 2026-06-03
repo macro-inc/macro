@@ -33,6 +33,7 @@ axum = [
   "dep:axum-extra",
   "dep:model-error-response",
   "dep:model_user",
+  "dep:task_dedup",
   "dep:utoipa",
   "entity_access/axum",
 ]
@@ -59,7 +60,7 @@ outbound = [
   "ports",
 ]
 ports = ["dep:tokio"]
-service = ["dep:entity_access_management", "ports"]
+service = ["dep:entity_access_management", "dep:foreign_entity", "ports"]
 
 [dependencies]
 # Core
@@ -81,6 +82,9 @@ document_sub_type = { path = "../document_sub_type" }
 entity_access = { path = "../entity_access" }
 entity_access_management = { path = "../entity_access_management", default-features = false, features = [
   "outbound",
+  "ports",
+], optional = true }
+foreign_entity = { path = "../foreign_entity", default-features = false, features = [
   "ports",
 ], optional = true }
 macro_aws_config = { path = "../macro_aws_config", features = ["s3"] }
@@ -112,6 +116,7 @@ futures = { workspace = true }
 hex = { workspace = true, optional = true }
 sqlx = { workspace = true, optional = true }
 sync_service_client = { path = "../sync_service_client" }
+task_dedup = { path = "../task_dedup", optional = true }
 urlencoding = { workspace = true }
 
 # AI Tool dependencies

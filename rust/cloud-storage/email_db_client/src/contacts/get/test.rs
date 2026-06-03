@@ -1,9 +1,40 @@
-use crate::contacts::get::{fetch_db_recipients_in_bulk, fetch_senders_by_message_ids};
+use crate::contacts::get::{
+    fetch_contacts_by_link_id, fetch_db_recipients_in_bulk, fetch_senders_by_message_ids,
+};
 use anyhow::Result;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use models_email::db::address::EmailRecipientType;
+use models_email::email::service::address::ContactInfoWithInteraction;
 use sqlx::types::Uuid;
 use sqlx::{Pool, Postgres};
+use std::collections::HashMap;
+
+/// Mirrors the `/email/contacts` handler: union the caller's owned inboxes and
+/// group each inbox's contacts by link id. A two-inbox user must see both
+/// inboxes' contacts under their own link ids.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("fetch_contacts_two_links"))
+)]
+async fn fetch_contacts_unions_across_links_for_one_user(pool: Pool<Postgres>) -> Result<()> {
+    let links = crate::links::get::fetch_links_by_fusionauth_user_id(&pool, "fa-multi").await?;
+    assert_eq!(links.len(), 2, "user owns two inboxes");
+
+    let mut contacts: HashMap<Uuid, Vec<ContactInfoWithInteraction>> = HashMap::new();
+    for link in &links {
+        contacts.insert(link.id, fetch_contacts_by_link_id(&pool, link.id).await?);
+    }
+
+    let link1 = Uuid::parse_str("d1000000-0000-0000-0000-000000000001")?;
+    let link2 = Uuid::parse_str("d2000000-0000-0000-0000-000000000002")?;
+
+    assert_eq!(contacts[&link1].len(), 1);
+    assert_eq!(contacts[&link1][0].extra.email_address, "alice@example.com");
+    assert_eq!(contacts[&link2].len(), 1);
+    assert_eq!(contacts[&link2][0].extra.email_address, "bob@example.com");
+
+    Ok(())
+}
 
 // ============================================================================
 // Tests for fetch_senders_by_message_ids

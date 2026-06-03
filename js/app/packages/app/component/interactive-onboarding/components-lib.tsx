@@ -1,5 +1,5 @@
 import CheckIcon from '@phosphor/check.svg';
-import { cn } from '@ui';
+import { cn, Layer } from '@ui';
 import {
   type Component,
   createSignal,
@@ -20,16 +20,18 @@ interface CalloutShellProps {
 
 function CalloutShell(props: CalloutShellProps) {
   return (
-    <div class="flex items-center gap-3 rounded-xs bg-hover/50 px-4 py-3 border border-edge-muted">
-      <span class="text-sm text-muted">{props.leader}</span>
-      <div class="flex items-center gap-2.5">{props.children}</div>
-      <span class="text-sm text-muted">{props.label}</span>
-      <Show when={props.completed}>
-        <div class="bg-accent text-surface size-5 rounded xs flex items-center justify-center ml-auto">
-          <CheckIcon class="size-4" />
-        </div>
-      </Show>
-    </div>
+    <Layer depth={2}>
+      <div class="flex items-center gap-3 rounded-md bg-surface px-4 py-3 border border-edge-muted">
+        <span class="text-sm text-muted">{props.leader}</span>
+        <div class="flex items-center gap-2.5">{props.children}</div>
+        <span class="text-sm text-muted">{props.label}</span>
+        <Show when={props.completed}>
+          <div class="bg-accent text-surface size-5 rounded-xs flex items-center justify-center ml-auto">
+            <CheckIcon class="size-4" />
+          </div>
+        </Show>
+      </div>
+    </Layer>
   );
 }
 
@@ -109,8 +111,8 @@ export function HotkeyCallout(props: HotkeyCalloutProps) {
     <CalloutShell leader="Type" label={props.label} completed={props.completed}>
       <style>{`
         @keyframes hotkey-pulse {
-          0%   { outline: 2px solid rgb(from var(--color-edge) r g b / 0.3); outline-offset: 0px; }
-          100%   { outline: 2px solid rgb(from var(--color-edge) r g b / 0); outline-offset: 10px; }
+          0%   { outline: 2px solid rgb(from var(--color-accent) r g b / 0.8); outline-offset: 0px; }
+          100% { outline: 2px solid rgb(from var(--color-accent) r g b / 0); outline-offset: 10px; }
         }
         .hotkey-pulsing {
           animation: hotkey-pulse 1.4s cubic-bezier(0.2, 0.8, 0.4, 1);
@@ -156,7 +158,7 @@ export function HotkeyCallout(props: HotkeyCalloutProps) {
                 class={cn(
                   'inline-grid place-items-center rounded-sm border px-2.5 py-1 text-base',
                   isPressed() || props.completed
-                    ? 'bg-ink/20 border-edge text-ink'
+                    ? 'bg-accent/20 border-accent text-accent shadow-[0_0_0_1px_rgb(from_var(--color-accent)_r_g_b_/_0.35)]'
                     : 'bg-ink/10 border-edge text-ink'
                 )}
               >

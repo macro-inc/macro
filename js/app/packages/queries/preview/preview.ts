@@ -54,13 +54,16 @@ export function useItemPreview(item: Accessor<ItemEntity>) {
 
   const maybeChannelMessageQuery = useQuery(() => {
     const item_ = item();
-    const messageId = item_.type === 'channel' ? item_.messageId : undefined;
+    const channelId = item_.type === 'channel' ? item_.id : '';
+    const messageId = item_.type === 'channel' ? (item_.messageId ?? '') : '';
     return {
-      queryKey: previewKeys.item(item().id)._ctx.channelMessage(messageId!)
-        .queryKey,
-      queryFn: () => fetchMessageContext(messageId!),
+      queryKey: previewKeys
+        .item(item_.id)
+        ._ctx.channelMessage(channelId, messageId).queryKey,
+      queryFn: ({ signal }) =>
+        fetchMessageContext(channelId, messageId, signal),
       staleTime: PREVIEW_STALE_TIME,
-      enabled: !!messageId && previewQuery.isSuccess,
+      enabled: !!channelId && !!messageId && previewQuery.isSuccess,
     };
   });
 

@@ -220,9 +220,13 @@ pub async fn update_entity_access_channel_share_permissions(
     // We need to remove all required items from entity_access for the given entity id for all channels
     if !remove_channel_ids.is_empty() {
         match entity_type {
-            EntityType::User | EntityType::Team | EntityType::Channel | EntityType::StaticFile => {
-                unreachable!()
-            }
+            EntityType::User
+            | EntityType::Team
+            | EntityType::Channel
+            | EntityType::StaticFile
+            | EntityType::CrmCompany
+            | EntityType::CrmContact
+            | EntityType::ForeignEntity => unreachable!(),
             EntityType::Project => {
                 // Get all items in project
                 let project_items = get_nested_project_entities(transaction, entity_id).await?;
@@ -275,9 +279,13 @@ pub async fn update_entity_access_channel_share_permissions(
     // We need to upsert all required items into entity_access for all channels with the desired access level
     if !upsert_channel_ids.is_empty() {
         match entity_type {
-            EntityType::User | EntityType::Team | EntityType::Channel | EntityType::StaticFile => {
-                unreachable!()
-            }
+            EntityType::User
+            | EntityType::Team
+            | EntityType::Channel
+            | EntityType::StaticFile
+            | EntityType::CrmCompany
+            | EntityType::CrmContact
+            | EntityType::ForeignEntity => unreachable!(),
             EntityType::Project => {
                 // (a) Direct grant on the project itself (granted_from_project_id IS NULL)
                 let mut qb: QueryBuilder<Postgres> = QueryBuilder::new(

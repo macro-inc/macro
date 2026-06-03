@@ -290,7 +290,11 @@ where
         // for the email-backfill fan-out to populate yet. The fan-out
         // happens later, on the disabled → enabled transition in
         // `set_team_crm_enabled`.
-        self.team_repository.create_team(user_id, team_name).await
+        let team = self.team_repository.create_team(user_id, team_name).await?;
+        self.team_repository
+            .move_github_app_installation_to_team_if_exists(user_id, team.id())
+            .await?;
+        Ok(team)
     }
 
     #[tracing::instrument(skip(self), err)]

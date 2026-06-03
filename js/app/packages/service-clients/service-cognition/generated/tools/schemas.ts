@@ -506,10 +506,19 @@ export const ListEntities = z.object({
   ef: z.any().default(null),
   emailPreset: z.union([z.literal('signal'), z.null()]).optional(),
   emailView: z.union([z.string(), z.null()]).default(null),
+  fef: z.any().default(null),
   includeTypes: z
     .union([
       z.array(
-        z.enum(['document', 'ai_chat', 'project', 'email', 'channel', 'call'])
+        z.enum([
+          'document',
+          'ai_chat',
+          'project',
+          'email',
+          'channel',
+          'call',
+          'foreign_entity',
+        ])
       ),
       z.null(),
     ])
@@ -556,6 +565,13 @@ export const ListEntitiesResponse = z.object({
           id: z.string().uuid(),
           type: z.literal('call'),
         }),
+        z.object({
+          foreignEntityId: z.string(),
+          foreignEntitySource: z.string(),
+          id: z.string().uuid(),
+          metadata: z.any(),
+          type: z.literal('foreignEntity'),
+        }),
       ];
       const errors = schemas.reduce<z.ZodError[]>(
         (errors, schema) =>
@@ -601,6 +617,7 @@ export const ListNotifications = z.object({
             'chat',
             'call',
             'task',
+            'github',
           ]),
           id: z.string(),
         })
@@ -620,6 +637,7 @@ export const ListNotifications = z.object({
           'chat',
           'call',
           'task',
+          'github',
         ])
       ),
       z.null(),

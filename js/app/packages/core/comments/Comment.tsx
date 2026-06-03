@@ -167,7 +167,7 @@ export function Comment(
           if (newText.trim() === '') return;
           setIsEditing(false);
           setTextValue(newText);
-          Promise.all([
+          return Promise.all([
             commentOperations.updateComment(props.comment.id, {
               text: newText,
               threadId: props.comment.threadId,
@@ -193,7 +193,7 @@ export function CommentReply(
     replyId: number;
     threadId: number;
     deleteReply: () => void;
-    updateReply: (content: string) => void;
+    updateReply: (content: string) => unknown | Promise<unknown>;
     isOwned: boolean;
     isActive: boolean;
     isThreaded?: boolean;
@@ -283,9 +283,10 @@ export function CommentReply(
             }}
             onSend={(newText: string) => {
               if (newText.trim() === '') return;
-              props.updateReply(newText);
+              const result = props.updateReply(newText);
               setIsEditing(false);
               setTextValue(newText);
+              return result;
             }}
             hidePadding
             isReply

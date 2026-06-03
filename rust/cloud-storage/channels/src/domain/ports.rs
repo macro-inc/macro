@@ -1,13 +1,15 @@
 use crate::domain::events::ChannelEvent;
 use crate::domain::models::{
-    AddParticipantsRequest, ChannelAttachment, ChannelAttachmentType, ChannelInfo,
-    ChannelMessageFilters, ChannelMetadata, ChannelParticipant, CountedReaction,
-    CreateChannelRequest, CreateChannelResponse, DeleteMessageQuery, GetOrCreateChannelResponse,
-    GetOrCreateDmRequest, GetOrCreatePrivateRequest, MessageAttachment, MessagePageDirection,
-    MutatedAttachment, MutatedMessage, NewChannelAttachment, PatchChannelRequest,
-    PatchMessageRequest, PostMessageRequest, PostMessageResponse, PostReactionRequest,
-    PostTypingRequest, ReferencedShareItem, RemoveParticipantsRequest, ResolvedChannelMessage,
-    SimpleMention, ThreadData, ThreadReply, ThreadReplyRow, TopLevelMessageRow,
+    Activity, ActivityType, AddParticipantsRequest, AttachmentEntityReference, ChannelAttachment,
+    ChannelAttachmentType, ChannelContextMessage, ChannelInfo, ChannelMessageFilters,
+    ChannelMetadata, ChannelParticipant, ChannelPreview, ChannelPreviewRow, CountedReaction,
+    CreateChannelRequest, CreateChannelResponse, CreateEntityMentionOptions, DeleteMessageQuery,
+    EntityMention, GetOrCreateChannelResponse, GetOrCreateDmRequest, GetOrCreatePrivateRequest,
+    MessageAttachment, MessagePageDirection, MutatedAttachment, MutatedMessage,
+    NewChannelAttachment, PatchChannelRequest, PatchMessageRequest, PostMessageRequest,
+    PostMessageResponse, PostReactionRequest, PostTypingRequest, ReferencedShareItem,
+    RemoveParticipantsRequest, ResolvedChannelMessage, Sender, SimpleMention, ThreadData,
+    ThreadReply, ThreadReplyRow, TopLevelMessageRow,
 };
 use crate::domain::side_effects::{
     ChannelDocumentMention, ChannelNotificationEffect, ChannelRealtimeEffect,
@@ -78,6 +80,23 @@ pub trait ChannelRepo: Send + Sync + 'static {
         channel_id: Uuid,
     ) -> impl Future<Output = Result<Vec<ChannelParticipant>, Self::Err>> + Send;
 
+    /// Fetch messages around a target message in chronological order.
+    fn get_messages_with_context(
+        &self,
+        channel_id: Uuid,
+        message_id: Uuid,
+        before: i64,
+        after: i64,
+    ) -> impl Future<Output = Result<Vec<ChannelContextMessage>, Self::Err>> + Send;
+
+    /// Fetch attachment references for an entity, scoped to channels the user belongs to.
+    fn get_attachment_references(
+        &self,
+        entity_type: &str,
+        entity_id: &str,
+        user_id: &str,
+    ) -> impl Future<Output = Result<Vec<AttachmentEntityReference>, Self::Err>> + Send;
+
     /// Resolve a message id to its top-level parent row. If the message is a thread reply,
     /// returns the parent; if already top-level, returns itself. Returns `None` if not found.
     fn resolve_top_level_parent(
@@ -115,6 +134,22 @@ pub trait ChannelRepo: Send + Sync + 'static {
         channel_id: Uuid,
         viewer_user_id: MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<ChannelMetadata, Self::Err>> + Send;
+
+    /// Batch fetch channel preview rows for the requested ids, computing
+    /// per-channel access for the given viewer.
+    fn batch_get_channel_previews(
+        &self,
+        channel_ids: &[String],
+        viewer_user_id: &str,
+        org_id: Option<i64>,
+    ) -> impl Future<Output = Result<Vec<ChannelPreviewRow>, Self::Err>> + Send;
+
+    /// Resolve a channel's display name from the viewer's perspective.
+    fn resolve_channel_name(
+        &self,
+        info: &ChannelInfo,
+        viewer_user_id: MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<String, Self::Err>> + Send;
 
     /// Check whether a user belongs to a team.
     fn user_has_team(
@@ -230,6 +265,24 @@ pub trait ChannelRepo: Send + Sync + 'static {
         source_entity_id: String,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
+    /// Create a single entity mention.
+    fn create_entity_mention(
+        &self,
+        options: CreateEntityMentionOptions,
+    ) -> impl Future<Output = Result<EntityMention, Self::Err>> + Send;
+
+    /// Fetch an entity mention by id.
+    fn get_entity_mention_by_id(
+        &self,
+        id: Uuid,
+    ) -> impl Future<Output = Result<Option<EntityMention>, Self::Err>> + Send;
+
+    /// Delete an entity mention by id. Returns whether a row was removed.
+    fn delete_entity_mention_by_id(
+        &self,
+        id: Uuid,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
     /// Patch message attachment state.
     fn patch_message_attachments(
         &self,
@@ -277,6 +330,20 @@ pub trait ChannelRepo: Send + Sync + 'static {
         user_id: String,
         channel_id: Uuid,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Fetch all activities for a user across channels, most-recent first.
+    fn get_activities(
+        &self,
+        user_id: String,
+    ) -> impl Future<Output = Result<Vec<Activity>, Self::Err>> + Send;
+
+    /// Upsert the user's activity for a channel with the given type, returning the row.
+    fn set_activity(
+        &self,
+        user_id: String,
+        channel_id: Uuid,
+        activity_type: ActivityType,
+    ) -> impl Future<Output = Result<Activity, Self::Err>> + Send;
 
     /// Add a reaction to a message within a channel.
     fn add_reaction(
@@ -334,6 +401,50 @@ pub trait ChannelService: Send + Sync + 'static {
         channel_id: Uuid,
     ) -> impl Future<Output = Result<Vec<ChannelParticipant>, ChannelMessagesErr>> + Send;
 
+    /// Fetch channel metadata (type + resolved display name) from the viewer's perspective.
+    fn get_channel_metadata(
+        &self,
+        channel_id: Uuid,
+        viewer_user_id: MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<ChannelMetadata, ChannelMessagesErr>> + Send {
+        let _ = (channel_id, viewer_user_id);
+        async move {
+            Err(ChannelMessagesErr::Repo(anyhow::anyhow!(
+                "get_channel_metadata is not configured"
+            )))
+        }
+    }
+
+    /// Batch fetch channel previews for the requested ids.
+    fn batch_get_channel_previews(
+        &self,
+        _viewer_user_id: MacroUserIdStr<'static>,
+        _org_id: Option<i64>,
+        _channel_ids: Vec<String>,
+    ) -> impl Future<Output = Result<Vec<ChannelPreview>, ChannelMessagesErr>> + Send {
+        async move { Ok(Vec::new()) }
+    }
+
+    /// Fetch messages around a target message in chronological order.
+    fn get_message_context(
+        &self,
+        channel_id: Uuid,
+        message_id: Uuid,
+        before: i64,
+        after: i64,
+    ) -> impl Future<Output = Result<Vec<ChannelContextMessage>, ChannelMessagesErr>> + Send {
+        let _ = (channel_id, before, after);
+        async move { Err(ChannelMessagesErr::MessageNotFound(message_id)) }
+    }
+
+    /// Fetch attachment references for an entity visible to a user.
+    fn get_attachment_references(
+        &self,
+        entity_type: String,
+        entity_id: String,
+        user_id: String,
+    ) -> impl Future<Output = Result<Vec<AttachmentEntityReference>, ChannelMessagesErr>> + Send;
+
     /// Fetch a centered window of messages around a specific message id.
     ///
     /// The result's `has_more_newer` reports whether newer messages exist outside the
@@ -364,12 +475,20 @@ pub trait ChannelService: Send + Sync + 'static {
         async move { Err(ChannelMessagesErr::MessageNotFound(message_id)) }
     }
 
+    /// Fetch all activities for the user across channels.
+    fn get_activities(
+        &self,
+        _user_id: String,
+    ) -> impl Future<Output = Result<Vec<Activity>, ChannelMessagesErr>> + Send {
+        async move { Ok(Vec::new()) }
+    }
+
     // Channel mutation operations.
 
     /// Create a channel.
     fn create_channel(
         &self,
-        _actor: MacroUserIdStr<'static>,
+        _actor: Sender,
         _actor_org_id: Option<i64>,
         _req: CreateChannelRequest,
     ) -> impl Future<Output = Result<CreateChannelResponse, ChannelMutationErr>> + Send {
@@ -383,7 +502,7 @@ pub trait ChannelService: Send + Sync + 'static {
     /// Get or create a direct message channel.
     fn get_or_create_dm(
         &self,
-        _actor: MacroUserIdStr<'static>,
+        _actor: Sender,
         _req: GetOrCreateDmRequest,
     ) -> impl Future<Output = Result<GetOrCreateChannelResponse, ChannelMutationErr>> + Send {
         async move {
@@ -396,7 +515,7 @@ pub trait ChannelService: Send + Sync + 'static {
     /// Get or create a private channel.
     fn get_or_create_private(
         &self,
-        _actor: MacroUserIdStr<'static>,
+        _actor: Sender,
         _req: GetOrCreatePrivateRequest,
     ) -> impl Future<Output = Result<GetOrCreateChannelResponse, ChannelMutationErr>> + Send {
         async move {
@@ -409,7 +528,7 @@ pub trait ChannelService: Send + Sync + 'static {
     /// Patch a channel.
     fn patch_channel(
         &self,
-        _actor: MacroUserIdStr<'static>,
+        _actor: Sender,
         _channel_id: Uuid,
         _req: PatchChannelRequest,
     ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send {
@@ -423,7 +542,7 @@ pub trait ChannelService: Send + Sync + 'static {
     /// Delete a channel.
     fn delete_channel(
         &self,
-        _actor: MacroUserIdStr<'static>,
+        _actor: Sender,
         _channel_id: Uuid,
     ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send {
         async move {
@@ -436,7 +555,7 @@ pub trait ChannelService: Send + Sync + 'static {
     /// Send a message.
     fn post_message(
         &self,
-        _actor: MacroUserIdStr<'static>,
+        _actor: Sender,
         _channel_id: Uuid,
         _req: PostMessageRequest,
     ) -> impl Future<Output = Result<PostMessageResponse, ChannelMutationErr>> + Send {
@@ -450,7 +569,7 @@ pub trait ChannelService: Send + Sync + 'static {
     /// Patch a message.
     fn patch_message(
         &self,
-        _actor: MacroUserIdStr<'static>,
+        _actor: Sender,
         _actor_role: super::models::ParticipantRole,
         _channel_id: Uuid,
         _message_id: Uuid,
@@ -466,7 +585,7 @@ pub trait ChannelService: Send + Sync + 'static {
     /// Delete a message.
     fn delete_message(
         &self,
-        _actor: MacroUserIdStr<'static>,
+        _actor: Sender,
         _actor_role: super::models::ParticipantRole,
         _channel_id: Uuid,
         _message_id: Uuid,
@@ -482,7 +601,7 @@ pub trait ChannelService: Send + Sync + 'static {
     /// Mutate a reaction.
     fn post_reaction(
         &self,
-        _actor: MacroUserIdStr<'static>,
+        _actor: Sender,
         _channel_id: Uuid,
         _req: PostReactionRequest,
     ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send {
@@ -496,7 +615,7 @@ pub trait ChannelService: Send + Sync + 'static {
     /// Emit a typing update.
     fn post_typing(
         &self,
-        _actor: MacroUserIdStr<'static>,
+        _actor: Sender,
         _channel_id: Uuid,
         _req: PostTypingRequest,
     ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send {
@@ -510,7 +629,7 @@ pub trait ChannelService: Send + Sync + 'static {
     /// Add participants to a channel.
     fn add_participants(
         &self,
-        _actor: MacroUserIdStr<'static>,
+        _actor: Sender,
         _channel_id: Uuid,
         _req: AddParticipantsRequest,
     ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send {
@@ -524,6 +643,7 @@ pub trait ChannelService: Send + Sync + 'static {
     /// Remove participants from a channel.
     fn remove_participants(
         &self,
+        _actor: Sender,
         _channel_id: Uuid,
         _req: RemoveParticipantsRequest,
     ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send {
@@ -537,7 +657,7 @@ pub trait ChannelService: Send + Sync + 'static {
     /// Join a channel.
     fn join_channel(
         &self,
-        _actor: MacroUserIdStr<'static>,
+        _actor: Sender,
         _channel_id: Uuid,
     ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send {
         async move {
@@ -550,9 +670,59 @@ pub trait ChannelService: Send + Sync + 'static {
     /// Leave a channel.
     fn leave_channel(
         &self,
-        _actor: MacroUserIdStr<'static>,
+        _actor: Sender,
         _channel_id: Uuid,
     ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send {
+        async move {
+            Err(ChannelMutationErr::NotFound(
+                "channel mutations are not configured".to_string(),
+            ))
+        }
+    }
+
+    /// Create an entity mention.
+    fn create_entity_mention(
+        &self,
+        _options: CreateEntityMentionOptions,
+    ) -> impl Future<Output = Result<EntityMention, ChannelMutationErr>> + Send {
+        async move {
+            Err(ChannelMutationErr::NotFound(
+                "channel mutations are not configured".to_string(),
+            ))
+        }
+    }
+
+    /// Fetch an entity mention by id.
+    fn get_entity_mention(
+        &self,
+        _id: Uuid,
+    ) -> impl Future<Output = Result<Option<EntityMention>, ChannelMutationErr>> + Send {
+        async move {
+            Err(ChannelMutationErr::NotFound(
+                "channel mutations are not configured".to_string(),
+            ))
+        }
+    }
+
+    /// Delete an entity mention by id. Returns whether a row was removed.
+    fn delete_entity_mention(
+        &self,
+        _id: Uuid,
+    ) -> impl Future<Output = Result<bool, ChannelMutationErr>> + Send {
+        async move {
+            Err(ChannelMutationErr::NotFound(
+                "channel mutations are not configured".to_string(),
+            ))
+        }
+    }
+
+    /// Upsert the user's activity (view/interaction) for a channel.
+    fn post_activity(
+        &self,
+        _actor: Sender,
+        _channel_id: Uuid,
+        _activity_type: ActivityType,
+    ) -> impl Future<Output = Result<Activity, ChannelMutationErr>> + Send {
         async move {
             Err(ChannelMutationErr::NotFound(
                 "channel mutations are not configured".to_string(),

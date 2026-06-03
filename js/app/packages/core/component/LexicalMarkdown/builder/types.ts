@@ -112,6 +112,7 @@ export interface EditorComponentProps {
   class?: string;
   portalScope?: PortalScope;
   refFn?: (ref: HTMLDivElement) => void;
+  onConnect?: () => void;
 }
 
 export interface EditorConfig {

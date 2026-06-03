@@ -1,5 +1,5 @@
 import { MarkMessageNotifications } from '@notifications/components/MarkMessageNotifications';
-import type { ApiThreadReply } from '@service-comms/client';
+import type { ApiThreadReply } from '@service-storage/generated/schemas/apiThreadReply';
 import { type Accessor, createMemo, For, onMount } from 'solid-js';
 import type { MessageEditor } from '../Channel/create-message-editor';
 import type { NewMessageCheckable } from '../Channel/util';

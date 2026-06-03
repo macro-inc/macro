@@ -1,4 +1,4 @@
-import type { ApiThreadReply } from '@service-comms/client';
+import type { ApiThreadReply } from '@service-storage/generated/schemas/apiThreadReply';
 import { shouldGroupWithPreviousMessage } from '../Channel/message-grouping-meta';
 import type { NewMessageCheckable } from '../Channel/util';
 import type { ChannelMessageListMeta } from '../Message';

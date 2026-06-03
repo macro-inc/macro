@@ -1,3 +1,4 @@
+import { SidePanel } from '@app/component/side-panel';
 import type { Entity as EntityRef } from '@core/types';
 import { compareDateDesc } from '@core/util/date';
 import { NotificationRow } from '@entity';
@@ -29,13 +30,11 @@ export function Notifications(props: NotificationsProps) {
         </div>
       }
     >
-      <div class="rounded-lg border border-ink-muted/8 bg-ink-muted/[0.025] overflow-hidden">
-        <div class="divide-y divide-ink-muted/8">
-          <For each={notifications()}>
-            {(notification) => <NotificationRow notification={notification} />}
-          </For>
-        </div>
-      </div>
+      <SidePanel.Card>
+        <For each={notifications()}>
+          {(notification) => <NotificationRow notification={notification} />}
+        </For>
+      </SidePanel.Card>
     </Show>
   );
 }

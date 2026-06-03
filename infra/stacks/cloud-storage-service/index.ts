@@ -189,6 +189,18 @@ const contactsQueueArn: pulumi.Output<string> = contactsServiceStack
   .getOutput('contactsQueueArn')
   .apply((arn) => arn as string);
 
+const emailServiceStack = new pulumi.StackReference('email-service-stack', {
+  name: `macro-inc/email-service/${stack}`,
+});
+
+const emailScheduledQueueName: pulumi.Output<string> = emailServiceStack
+  .getOutput('scheduledQueueName')
+  .apply((name) => name as string);
+
+const emailScheduledQueueArn: pulumi.Output<string> = emailServiceStack
+  .getOutput('scheduledQueueArn')
+  .apply((arn) => arn as string);
+
 const {
   notificationIngressQueueName,
   notificationIngressQueueArn,
@@ -305,6 +317,14 @@ const ANTHROPIC_API_KEY = aws.secretsmanager
     return secret.secretString;
   });
 
+// OpenAI key used by task duplicate-detection embeddings (task_dedup). Resolved
+// at deploy time and baked into the task definition, like ANTHROPIC_API_KEY.
+const OPENAI_API_KEY = aws.secretsmanager
+  .getSecretVersionOutput({
+    secretId: config.get('openai_api_key') ?? '',
+  })
+  .apply((secret) => secret.secretString);
+
 // Cal.com webhook — HMAC secret, resolved at runtime via Secrets Manager.
 const CAL_WEBHOOK_SECRET_KEY = config.require('cal_webhook_secret_key');
 const calWebhookSecretKeyArn: pulumi.Output<string> = aws.secretsmanager
@@ -368,6 +388,7 @@ const cloudStorageService = new CloudStorageService(
       deleteDocumentHandler.queue.arn,
       notificationIngressQueueArn,
       contactsQueueArn,
+      emailScheduledQueueArn,
     ],
     vpc: coparse_api_vpc,
     platform: {
@@ -417,6 +438,10 @@ const cloudStorageService = new CloudStorageService(
       {
         name: 'ANTHROPIC_API_KEY',
         value: pulumi.interpolate`${ANTHROPIC_API_KEY}`,
+      },
+      {
+        name: 'OPENAI_API_KEY',
+        value: pulumi.interpolate`${OPENAI_API_KEY}`,
       },
       {
         name: 'LIVEKIT_SERVER_URL',
@@ -558,6 +583,18 @@ const cloudStorageService = new CloudStorageService(
         value: getServiceUrl(ServiceUrl.CONNECTION_GATEWAY_URL),
       },
       {
+        name: ServiceUrl.DOCUMENT_STORAGE_SERVICE_URL,
+        value: getServiceUrl(ServiceUrl.DOCUMENT_STORAGE_SERVICE_URL),
+      },
+      {
+        name: ServiceUrl.EMAIL_SERVICE_URL,
+        value: getServiceUrl(ServiceUrl.EMAIL_SERVICE_URL),
+      },
+      {
+        name: ServiceUrl.STATIC_FILE_SERVICE_URL,
+        value: getServiceUrl(ServiceUrl.STATIC_FILE_SERVICE_URL),
+      },
+      {
         name: 'BULK_UPLOAD_REQUESTS_TABLE',
         // TODO: this should be interpolated from the bulk upload resource
         value: `bulk-upload-${stack}`,
@@ -570,6 +607,10 @@ const cloudStorageService = new CloudStorageService(
       {
         name: 'SYNC_SERVICE_AUTH_KEY',
         value: pulumi.interpolate`${SYNC_SERVICE_AUTH_KEY}`,
+      },
+      {
+        name: 'EMAIL_SCHEDULED_QUEUE',
+        value: pulumi.interpolate`${emailScheduledQueueName}`,
       },
       {
         name: ServiceUrl.SYNC_SERVICE_URL,

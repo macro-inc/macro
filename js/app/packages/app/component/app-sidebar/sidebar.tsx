@@ -1,4 +1,5 @@
 import { useAnalytics } from '@app/component/analytics-context';
+import { SidebarActiveCallWidget } from '@app/component/app-sidebar/active-call-widget';
 import { ChannelsUnreadWidget } from '@app/component/app-sidebar/channels-unread-widget';
 import {
   InviteModal,
@@ -9,6 +10,7 @@ import {
   SidebarPromoHint,
 } from '@app/component/app-sidebar/sidebar-promo';
 import { CommandState } from '@app/component/command';
+import { InteractiveOnboardingModal } from '@app/component/interactive-onboarding/InteractiveOnboardingModal';
 import { createMenuOpen, setCreateMenuOpen } from '@app/component/Launcher';
 import { requestSearchFocus } from '@app/component/next-soup/soup-view/search-controllers';
 import { useSplitLayout } from '@app/component/split-layout/layout';
@@ -35,7 +37,9 @@ import {
   DEV_MODE_ENV,
   ENABLE_APP_STORE_QR_CODE,
   ENABLE_CALLS,
+  ENABLE_HOME_OVERRIDE,
   ENABLE_NEW_PRICING_OVERRIDE,
+  ENABLE_SIDEBAR_ACTIVE_CALLS,
   ENABLE_TEAMS_OVERRIDE,
 } from '@core/constant/featureFlags';
 import {
@@ -69,8 +73,10 @@ import { useNotificationSettings } from '@notifications';
 import BellIcon from '@phosphor/bell.svg';
 import CaretUpIcon from '@phosphor/caret-up.svg';
 import DeviceMobileIcon from '@phosphor/device-mobile-speaker.svg';
+import HomeIcon from '@phosphor/house.svg';
 import KeyboardIcon from '@phosphor/keyboard.svg';
 import PaintBucketIcon from '@phosphor/paint-bucket.svg';
+import PlayIcon from '@phosphor/play.svg';
 import PlugIcon from '@phosphor/plug.svg';
 import UserIconPhosphor from '@phosphor/user.svg';
 import UsersThreeIcon from '@phosphor/users-three.svg';
@@ -90,7 +96,7 @@ import {
 import { Dynamic } from 'solid-js/web';
 
 interface SidebarItem {
-  id: ListView;
+  id: ListView | (string & {});
   label: string;
   href: string;
   icon?: Component<
@@ -267,7 +273,7 @@ type SidebarHotkeyDeps = {
 type OpenWithSplitFn = ReturnType<typeof useSplitLayout>['openWithSplit'];
 
 const isComponentEntry =
-  (id: ListView) =>
+  (id: string) =>
   (entry: SplitContent): boolean =>
     entry.type === 'component' && entry.id === id;
 
@@ -280,7 +286,7 @@ const isComponentEntry =
  * and forces a new entry / new split.
  */
 function navigateToSidebarView(args: {
-  viewId: ListView;
+  viewId: SidebarItem['id'];
   shiftKey: boolean;
   activeSplit: SplitHandle | undefined;
   openWithSplit: OpenWithSplitFn;
@@ -645,6 +651,7 @@ type SidebarSettingsWidgetProps = {
 
 const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
   const userId = useUserId();
+  const [onboardingModalOpen, setOnboardingModalOpen] = createSignal(false);
 
   const topItems = createMemo(() =>
     SETTINGS_MENU_TOP_ITEMS.filter((item) => props.isTabAvailable(item.tab))
@@ -692,6 +699,17 @@ const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
       </Dropdown.Trigger>
       <Dropdown.Content>
         <Dropdown.Group>
+          <Dropdown.Item
+            class="flex items-center gap-2 px-2.5 py-2 text-sm cursor-default outline-none text-ink-muted"
+            onSelect={() => setOnboardingModalOpen(true)}
+          >
+            <span class="size-5 flex items-center justify-center">
+              <PlayIcon class="size-4 shrink-0 text-ink-extra-muted" />
+            </span>
+            <span class="text-ink">Play tutorial</span>
+          </Dropdown.Item>
+        </Dropdown.Group>
+        <Dropdown.Group>
           <For each={topItems()}>
             {(item) => (
               <Dropdown.Item
@@ -728,6 +746,10 @@ const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
           </For>
         </Dropdown.Group>
       </Dropdown.Content>
+      <InteractiveOnboardingModal
+        open={onboardingModalOpen()}
+        onOpenChange={setOnboardingModalOpen}
+      />
     </Dropdown>
   );
 };
@@ -741,6 +763,15 @@ const CALLS_LINK: SidebarItem = {
   hotkeyToken: TOKENS.sidebar.goTo.calls,
 };
 
+const DASHBOARD_LINK: SidebarItem = {
+  id: 'home',
+  label: 'Home',
+  href: '/home',
+  icon: HomeIcon,
+  hotkey: 'h',
+  hotkeyToken: TOKENS.sidebar.goTo.home,
+};
+
 export const AppSidebar = (props: AppSidebarProps) => {
   const analytics = useAnalytics();
   const layout = useSplitLayout();
@@ -748,6 +779,10 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const isTabAvailable = useIsSettingsTabAvailable();
   const notificationSettings = useNotificationSettings();
   const callCtx = useCallContextOptional();
+
+  const homeViewEnabled = useFeatureFlag('enable-home-view', {
+    enabledOverride: ENABLE_HOME_OVERRIDE,
+  });
 
   const hasPaidAccess = useHasPaidAccess();
 
@@ -775,14 +810,19 @@ export const AppSidebar = (props: AppSidebarProps) => {
 
   const [hotkeyVisible, setHotkeyVisible] = createSignal(false);
 
-  const visibleLinks = createMemo(() => {
-    if (!ENABLE_CALLS()) return SIDEBAR_LINKS;
-    const idx = SIDEBAR_LINKS.findIndex((l) => l.id === 'channels');
-    return [
-      ...SIDEBAR_LINKS.slice(0, idx + 1),
-      CALLS_LINK,
-      ...SIDEBAR_LINKS.slice(idx + 1),
-    ];
+  const visibleLinks = createMemo((): SidebarItem[] => {
+    let links: SidebarItem[] = [...SIDEBAR_LINKS];
+
+    if (homeViewEnabled().enabled) {
+      links = [DASHBOARD_LINK, ...links];
+    }
+
+    if (ENABLE_CALLS()) {
+      const idx = links.findIndex((l) => l.id === 'channels');
+      links = [...links.slice(0, idx + 1), CALLS_LINK, ...links.slice(idx + 1)];
+    }
+
+    return links;
   });
 
   const resetHotkeysState = () => {
@@ -980,13 +1020,23 @@ export const AppSidebar = (props: AppSidebarProps) => {
         <ChannelsUnreadWidget sidebarState={props.sidebarState ?? 'expanded'} />
       </div>
 
-      <Show when={callCtx?.isInCall()}>
-        <div class="px-2 mb-2 mt-auto" data-ui="in-call-panel">
-          <InCallPanel isSlim={panelIsSlim} />
-        </div>
-      </Show>
+      <div class="mt-auto">
+        <Show when={ENABLE_CALLS() && ENABLE_SIDEBAR_ACTIVE_CALLS()}>
+          <div class="block max-h-[clamp(10%,60%,20rem)]">
+            <SidebarActiveCallWidget
+              sidebarState={props.sidebarState ?? 'expanded'}
+            />
+          </div>
+        </Show>
 
-      <div class={cn('px-2 w-full', !callCtx?.isInCall() && 'mt-auto')}>
+        <Show when={callCtx?.isInCall()}>
+          <div class="px-2 mb-2" data-ui="in-call-panel">
+            <InCallPanel isSlim={panelIsSlim} />
+          </div>
+        </Show>
+      </div>
+
+      <div class="px-2 w-full">
         <hr class="border-transparent mb-2" />
       </div>
 

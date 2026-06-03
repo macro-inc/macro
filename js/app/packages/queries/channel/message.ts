@@ -4,12 +4,6 @@ import { toast } from '@core/component/Toast/Toast';
 import type { DateValue } from '@core/util/date';
 import { throwOnErr } from '@core/util/result';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
-import type {
-  Attachment,
-  ChannelMessage,
-  CountedReaction,
-  Message,
-} from '@service-comms/generated/models';
 import {
   type ApiChannelMessage,
   type ApiThreadReply,
@@ -17,7 +11,10 @@ import {
   type MessageResponse,
   storageServiceClient,
 } from '@service-storage/client';
+import type { ApiChannelContextMessage as Message } from '@service-storage/generated/schemas/apiChannelContextMessage';
+import type { ApiCountedReaction as CountedReaction } from '@service-storage/generated/schemas/apiCountedReaction';
 import type { ApiMessageAttachment } from '@service-storage/generated/schemas/apiMessageAttachment';
+import type { ChannelMessage } from '@service-storage/generated/schemas/channelMessage';
 import type { NewChannelAttachment as NewAttachment } from '@service-storage/generated/schemas/newChannelAttachment';
 import type { PostMessageRequest } from '@service-storage/generated/schemas/postMessageRequest';
 import type { SimpleMention } from '@service-storage/generated/schemas/simpleMention';
@@ -26,6 +23,7 @@ import { queryClient } from '../client';
 import { createMutationNonce, registerNonce } from '../nonce';
 import { getChannelMessagesQueryKeyPrefix } from './channel-messages';
 import { ChannelNonceKeys } from './keys';
+import { senderFromStorageId } from './message-sender';
 import {
   captureDeleteSnapshotForTarget,
   type DeleteTargetSnapshot,
@@ -41,6 +39,15 @@ import {
   softInvalidateTargetCaches,
   topLevelMessageHasReplies,
 } from './reconcile';
+
+/**
+ * A message attachment carrying its channel/message ids — the legacy comms `Attachment`
+ * shape (a message attachment plus channel_id/message_id; no sender_id).
+ */
+type Attachment = ApiMessageAttachment & {
+  channel_id: string;
+  message_id: string;
+};
 
 /**
  * Register nonces for both message and attachment deduplication.
@@ -121,6 +128,7 @@ function makeOptimisticTopLevelMessage(
   return {
     id: vars.optimisticId,
     channel_id: vars.channelId,
+    sender: senderFromStorageId(vars.senderId),
     sender_id: vars.senderId,
     content: vars.content,
     created_at: now,
@@ -144,6 +152,7 @@ function makeOptimisticThreadReply(
 ): ApiThreadReply {
   return {
     id: vars.optimisticId,
+    sender: senderFromStorageId(vars.senderId),
     sender_id: vars.senderId,
     content: vars.content,
     created_at: now,

@@ -1,5 +1,6 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { SidePanel } from '@app/component/side-panel';
+import { EntityPropertiesSection } from '@app/component/side-panel/properties';
 import { useBlockAliasedName, useBlockId, useBlockName } from '@core/block';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
@@ -19,43 +20,30 @@ import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler'
 import GithubIcon from '@icon/mcp-github.svg';
 import { useNotificationsForEntity } from '@notifications';
 import ClockIcon from '@phosphor/clock.svg';
-import Plus from '@phosphor/plus.svg';
-import { Property as PropertyNS } from '@property';
-import { Modals } from '@property/component/modal';
-import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
 import {
   getDefaultPinnedProperties,
   SYSTEM_PROPERTY_IDS,
 } from '@property/constants';
-import {
-  PropertiesProvider,
-  type PropertySaveHandler,
-  usePropertiesContext,
-} from '@property/context/PropertiesContext';
-import { useEntityProperties } from '@property/hooks';
-import type { Property, PropertyApiValues } from '@property/types';
-import { hasValue } from '@property/utils';
-import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { useDocumentMetadataQuery } from '@queries/storage/document-metadata';
 import { useDocumentGithubPullRequestsQuery } from '@queries/storage/github-pull-requests';
-import { commsServiceClient } from '@service-comms/client';
 import type { EntityType as PropertiesEntityType } from '@service-properties/generated/schemas/entityType';
-import { blockNameToItemType } from '@service-storage/client';
+import {
+  blockNameToItemType,
+  storageServiceClient,
+} from '@service-storage/client';
 import type { GithubPullRequest } from '@service-storage/generated/schemas';
 import { createCallback } from '@solid-primitives/rootless';
-import { cn } from '@ui/utils/classname';
 import {
   createEffect,
   createMemo,
   createResource,
   createSignal,
   For,
-  Match,
   onCleanup,
   Show,
-  Switch,
 } from 'solid-js';
 import { mdStore } from '../../signal/markdownBlockData';
+import { TaskDuplicateMatchesSidePanelSection } from '../TaskDuplicateMatches';
 
 interface MarkdownSidePanelSectionsProps {
   canEdit: boolean;
@@ -103,6 +91,9 @@ export function MarkdownSidePanelSections(
       <GithubSectionConditional documentId={blockId} isTask={isTask()} />
       <NotificationsSectionConditional entity={entity()} />
       <ReferencesSectionConditional documentId={blockId} />
+      <Show when={isTask()}>
+        <TaskDuplicateMatchesSidePanelSection />
+      </Show>
     </>
   );
 }
@@ -226,12 +217,6 @@ function PropertiesSectionContent(props: {
   const entityType: PropertiesEntityType =
     blockName === 'task' ? 'TASK' : 'DOCUMENT';
 
-  const { properties, isLoading, error, refetch } = useEntityProperties(
-    blockId,
-    entityType,
-    false
-  );
-
   const [pinnedPropertyIds, setPinnedPropertyIds] = createSignal<string[]>([]);
 
   createEffect(() => {
@@ -253,40 +238,6 @@ function PropertiesSectionContent(props: {
     onCleanup(unregister);
   });
 
-  const filteredPinnedProperties = createMemo(() => {
-    const allProps = properties();
-    const pinnedIds = pinnedPropertyIds();
-    const defaultPinnedIds = getDefaultPinnedProperties(blockName);
-
-    const pinned = allProps.filter(
-      (prop) =>
-        !prop.isMetadata &&
-        (defaultPinnedIds.includes(prop.propertyDefinitionId) ||
-          pinnedIds.includes(prop.propertyId))
-    );
-
-    return sortPinnedProperties(pinned);
-  });
-
-  const [pendingPinDefIds, setPendingPinDefIds] = createSignal<Set<string>>(
-    new Set()
-  );
-
-  const handlePropertyAdded = async (addedDefinitionIds?: string[]) => {
-    if (addedDefinitionIds && addedDefinitionIds.length > 0) {
-      setPendingPinDefIds((prev) => {
-        const next = new Set(prev);
-        for (const id of addedDefinitionIds) next.add(id);
-        return next;
-      });
-    }
-    refetch();
-  };
-
-  const handlePropertyDeleted = async () => {
-    refetch();
-  };
-
   const handlePropertyPinned = (propertyId: string) => {
     const editor = mdData.editor;
     if (editor) {
@@ -301,95 +252,18 @@ function PropertiesSectionContent(props: {
     }
   };
 
-  createEffect(() => {
-    const pending = pendingPinDefIds();
-    if (pending.size === 0) return;
-    const current = properties();
-    const remaining = new Set(pending);
-    for (const defId of pending) {
-      const instance = current.find((p) => p.propertyDefinitionId === defId);
-      if (instance) {
-        handlePropertyPinned(instance.propertyId);
-        remaining.delete(defId);
-      }
-    }
-    if (remaining.size !== pending.size) {
-      setPendingPinDefIds(remaining);
-    }
-  });
-
-  const saveMutation = useBulkSaveEntityPropertiesMutation();
-
-  const saveOne = (property: Property, apiValues: PropertyApiValues) =>
-    saveMutation.mutateAsync({
-      properties: [
-        { entityId: blockId, entityType: entityType, property, apiValues },
-      ],
-    });
-
-  const saveHandler: PropertySaveHandler = {
-    saveProperty: (property, value) => saveOne(property, value),
-    saveDate: (property, date) =>
-      saveOne(property, { valueType: 'DATE', value: date }),
-  };
-
   return (
-    <Show
-      when={!error()}
-      fallback={
-        <div class="text-failure-ink text-center py-4 text-xs">{error()}</div>
-      }
-    >
-      <div class="text-xs">
-        <PropertiesProvider
-          entityType={entityType}
-          canEdit={props.canEdit}
-          documentName={props.documentName}
-          properties={filteredPinnedProperties}
-          onRefresh={refetch}
-          onPropertyAdded={handlePropertyAdded}
-          onPropertyDeleted={handlePropertyDeleted}
-          onPropertyPinned={handlePropertyPinned}
-          onPropertyUnpinned={handlePropertyUnpinned}
-          pinnedPropertyIds={pinnedPropertyIds}
-          saveHandler={saveHandler}
-        >
-          <Show when={isLoading()}>
-            <SidePanel.Loading />
-          </Show>
-
-          <Show when={filteredPinnedProperties().length > 0}>
-            <SidePanel.Grid class="py-2">
-              <For each={filteredPinnedProperties()}>
-                {(property) => <SidePanelPropertyRow property={property} />}
-              </For>
-            </SidePanel.Grid>
-          </Show>
-
-          <Show when={props.canEdit}>
-            <AddPinnedPropertyButton />
-          </Show>
-          <Modals />
-        </PropertiesProvider>
-      </div>
-    </Show>
-  );
-}
-
-function AddPinnedPropertyButton() {
-  const { openPropertySelector } = usePropertiesContext();
-  return (
-    <button
-      onClick={openPropertySelector}
-      class={cn(
-        'inline-flex items-center gap-1.5 m-px ring ring-edge-muted bg-surface',
-        'px-2 py-1 leading-tight rounded-full text-ink-muted',
-        'hover:bg-hover hover:text-ink transition-colors'
-      )}
-    >
-      <Plus class="size-3" />
-      <span>Add property</span>
-    </button>
+    <EntityPropertiesSection
+      entityId={blockId}
+      entityType={entityType}
+      canEdit={props.canEdit}
+      documentName={props.documentName}
+      defaultPinnedPropertyIds={() => getDefaultPinnedProperties(blockName)}
+      pinnedPropertyIds={pinnedPropertyIds}
+      pinnedPropertyDefinitionOrder={PINNED_ORDER}
+      onPropertyPinned={handlePropertyPinned}
+      onPropertyUnpinned={handlePropertyUnpinned}
+    />
   );
 }
 
@@ -401,165 +275,6 @@ const PINNED_ORDER: readonly string[] = [
   SYSTEM_PROPERTY_IDS.PRIORITY,
   SYSTEM_PROPERTY_IDS.ASSIGNEES,
 ];
-
-function sortPinnedProperties<T extends Property>(properties: T[]): T[] {
-  const rank = (id: string) => {
-    const i = PINNED_ORDER.indexOf(id);
-    return i === -1 ? PINNED_ORDER.length : i;
-  };
-  return [...properties].sort(
-    (a, b) => rank(a.propertyDefinitionId) - rank(b.propertyDefinitionId)
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Pinned property rows — sidepanel-specific. Rendered into a two-column grid:
-// the displayName label sits in the left column, the value pill in the right.
-// Pills have no ring in this layout (the grid handles spacing/alignment).
-// ─────────────────────────────────────────────────────────────────────────────
-
-function SidePanelPropertyRow(props: { property: Property }) {
-  const ctx = usePropertiesContext();
-  const blockId = useBlockId();
-  const t = () => props.property.valueType;
-  const isMulti = () => !!props.property.isMultiSelect;
-
-  const isMultiValueRow = () =>
-    isMulti() &&
-    (t() === 'SELECT_STRING' || t() === 'SELECT_NUMBER' || t() === 'ENTITY');
-  const isInputType = () =>
-    t() === 'STRING' || t() === 'NUMBER' || t() === 'LINK' || t() === 'BOOLEAN';
-
-  return (
-    <>
-      <span
-        class="text-ink-muted truncate self-center"
-        title={props.property.displayName}
-      >
-        {props.property.displayName}
-      </span>
-      <div class="min-w-0 self-center">
-        <PropertyNS.Root
-          property={props.property}
-          canEdit={ctx.canEdit}
-          onSave={ctx.saveHandler.saveProperty}
-          onRefresh={ctx.onRefresh}
-        >
-          <Switch fallback={<SinglePill property={props.property} />}>
-            <Match when={isInputType()}>
-              <InputValue />
-            </Match>
-            <Match when={isMultiValueRow()}>
-              <MultiValue property={props.property} />
-            </Match>
-          </Switch>
-          <PropertyNS.PopoverEditor
-            entitySelfFilter={{ entityType: ctx.entityType, blockId }}
-          />
-        </PropertyNS.Root>
-      </div>
-    </>
-  );
-}
-
-function SinglePill(props: { property: Property }) {
-  const ctx = usePropertiesContext();
-  const isReadOnly = () => !ctx.canEdit || props.property.isMetadata;
-  const empty = () => !hasValue(props.property);
-
-  return (
-    <PropertyNS.Tooltip property={props.property}>
-      <PropertyNS.EditTrigger
-        class={cn(SidePanel.pillClass, 'w-fit', {
-          'hover:bg-hover': !isReadOnly(),
-        })}
-      >
-        <Show when={!empty()} fallback={<SidePanel.EmptyPill />}>
-          <PropertyNS.Icon property={props.property} class="size-3 shrink-0" />
-          <PropertyNS.Text property={props.property} />
-        </Show>
-        <PropertyNS.Caret />
-      </PropertyNS.EditTrigger>
-    </PropertyNS.Tooltip>
-  );
-}
-
-function UserStackPill(props: { property: Property }) {
-  const ctx = usePropertiesContext();
-  const isReadOnly = () => !ctx.canEdit || props.property.isMetadata;
-  const empty = () => !hasValue(props.property);
-
-  return (
-    <PropertyNS.Tooltip property={props.property}>
-      <PropertyNS.EditTrigger
-        class={cn(SidePanel.pillClass, 'w-fit', {
-          'hover:bg-hover': !isReadOnly(),
-        })}
-      >
-        <Show when={!empty()} fallback={<SidePanel.EmptyPill />}>
-          <PropertyNS.UserStack property={props.property} maxUsers={3} />
-          <PropertyNS.Text property={props.property} />
-        </Show>
-        <PropertyNS.Caret />
-      </PropertyNS.EditTrigger>
-    </PropertyNS.Tooltip>
-  );
-}
-
-function MultiValue(props: { property: Property }) {
-  const ctx = usePropertiesContext();
-  const isReadOnly = () => !ctx.canEdit || props.property.isMetadata;
-  const isEntity = () => props.property.valueType === 'ENTITY';
-  const isUserEntity = () =>
-    isEntity() && props.property.specificEntityType === 'USER';
-
-  return (
-    <Show
-      when={!isUserEntity()}
-      fallback={<UserStackPill property={props.property} />}
-    >
-      <PropertyNS.Tooltip property={props.property}>
-        <Show when={!isEntity()} fallback={<PropertyNS.Display />}>
-          <div class="flex flex-wrap items-center gap-1.5">
-            <PropertyNS.Chips
-              property={props.property}
-              renderChip={(chip) => (
-                <span
-                  class={cn(SidePanel.pillClass, 'text-xs max-w-35 bg-hover')}
-                >
-                  <PropertyValueIcon
-                    optionId={chip.key}
-                    class="size-3 shrink-0"
-                  />
-                  <span class="truncate">{chip.label}</span>
-                </span>
-              )}
-            />
-            <Show when={!isReadOnly()}>
-              <PropertyNS.EditTrigger
-                class={cn(
-                  'inline-flex items-center justify-center size-5 rounded-full',
-                  'text-ink-muted hover:bg-hover hover:text-ink transition-colors'
-                )}
-                aria-label={`Add ${props.property.displayName}`}
-              >
-                <Plus class="size-3" />
-              </PropertyNS.EditTrigger>
-            </Show>
-          </div>
-        </Show>
-      </PropertyNS.Tooltip>
-    </Show>
-  );
-}
-
-function InputValue() {
-  return (
-    <div class="min-w-0 w-full">
-      <PropertyNS.Display />
-    </div>
-  );
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Stats Section
@@ -577,17 +292,14 @@ function StatsSectionContent() {
     >
       {(stats) => (
         <Wordcount.Root stats={stats()}>
-          <div class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-3 items-center text-xs">
-            <span class="text-xs text-ink-muted">Words</span>
-            <div class="flex items-center gap-2 min-w-0">
+          <SidePanel.Grid>
+            <SidePanel.Row label="Words">
               <Wordcount.Words />
-            </div>
-
-            <span class="text-xs text-ink-muted">Characters</span>
-            <div class="flex items-center gap-2 min-w-0">
+            </SidePanel.Row>
+            <SidePanel.Row label="Characters">
               <Wordcount.Characters />
-            </div>
-          </div>
+            </SidePanel.Row>
+          </SidePanel.Grid>
         </Wordcount.Root>
       )}
     </Show>
@@ -637,7 +349,7 @@ function ReferencesSectionConditional(props: { documentId: string }) {
   const [references] = createResource(
     () => props.documentId,
     async (id) => {
-      const response = await commsServiceClient.attachmentReferences({
+      const response = await storageServiceClient.attachmentReferences({
         entity_type: 'document',
         entity_id: id,
       });

@@ -5,7 +5,7 @@ use url::Url;
 
 /// The possible input desktop operating systems
 /// See https://v2.tauri.app/plugin/updater/#dynamic-update-server
-#[derive(Debug, Deserialize, Clone, Copy)]
+#[derive(Debug, Deserialize, Serialize, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 #[cfg_attr(test, derive(strum::EnumIter))]
 pub enum DesktopTarget {
@@ -18,7 +18,7 @@ pub enum DesktopTarget {
 }
 
 /// The possible input mobile operating systems
-#[derive(Debug, Deserialize, Clone, Copy)]
+#[derive(Debug, Deserialize, Serialize, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 #[cfg_attr(test, derive(strum::EnumIter))]
 pub enum MobileTarget {
@@ -29,7 +29,7 @@ pub enum MobileTarget {
 }
 
 /// an enumeration of all possible tauri targets
-#[derive(Debug, Deserialize, Clone, Copy)]
+#[derive(Debug, Deserialize, Serialize, Clone, Copy, PartialEq, Eq)]
 #[serde(untagged)]
 pub enum AllTargets {
     /// desktop operating system
@@ -40,7 +40,7 @@ pub enum AllTargets {
 
 /// The possible input architechtures
 /// See https://v2.tauri.app/plugin/updater/#dynamic-update-server
-#[derive(Debug, Deserialize, Clone, Copy)]
+#[derive(Debug, Deserialize, Serialize, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(test, derive(strum::EnumIter))]
 #[serde(rename_all = "lowercase")]
 pub enum Arch {
@@ -67,17 +67,66 @@ pub struct DesktopUpdate {
     inner: BundleUpdate,
 }
 
+/// Metadata generated with each JavaScript bundle build.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct BundleManifest {
+    /// Manifest schema version.
+    pub schema_version: u64,
+    /// Monotonic JavaScript bundle build number.
+    pub bundle_build: u64,
+    /// Minimum native app build that can safely run this bundle.
+    pub min_native_build: u64,
+    /// Short git SHA used to build the bundle.
+    pub git_sha: Option<String>,
+    /// Application package version used for the bundle.
+    pub app_version: String,
+}
+
+/// Action returned by the bundle update endpoint.
+#[derive(Debug, Serialize)]
+#[serde(tag = "action", rename_all = "lowercase")]
+pub enum BundleAction {
+    /// Download and apply a newer compatible bundle.
+    Update(BundleUpdate),
+    /// Clear the active cached OTA bundle.
+    Clear(BundleClear),
+    /// A newer bundle exists, but the requesting native app build is too old.
+    #[serde(rename = "native_update_required")]
+    NativeUpdateRequired(BundleNativeUpdateRequired),
+}
+
 /// a struct which indicates how to update only the javascript bundle of the application
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BundleUpdate {
-    /// the version that we are going to update to
-    pub(crate) version: semver::Version,
+    /// the bundle build that we are going to update to
+    pub(crate) bundle_build: u64,
+    /// the minimum native build that can run this bundle
+    pub(crate) min_native_build: u64,
     /// some optional notes about the update
     pub(crate) notes: Option<String>,
     /// the fully qualified Url where the update bundle exists
     pub(crate) url: Url,
     /// the expected SHA-256 hex digest of the bundle archive
     pub(crate) checksum: String,
+}
+
+/// A response instructing the client to clear the active OTA bundle.
+#[derive(Debug, Serialize)]
+pub struct BundleClear {
+    /// Machine-readable clear reason.
+    pub(crate) reason: String,
+}
+
+/// A response telling the client a native app update is required before this bundle can run.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BundleNativeUpdateRequired {
+    /// The newer bundle build that could not be offered.
+    pub(crate) bundle_build: u64,
+    /// The minimum native build required by that bundle.
+    pub(crate) min_native_build: u64,
 }
 
 /// The payload to check if there is a native app js bundle update available
@@ -87,12 +136,74 @@ pub struct BundleUpdateRequest {
     pub target: AllTargets,
     /// the arch of the target
     pub arch: Arch,
-    /// the current verison of the bundle
-    pub semver: semver::Version,
+    /// the current effective JS bundle build
+    pub current_bundle_build: u64,
+    /// the native app build number
+    pub native_build: u64,
 }
 
-/// the name of the semver file as it exists in the s3 bucket
-pub static SEMVER_FILE_NAME: &str = "/app/semver.txt";
+/// Server-side compatibility and revocation rules for JS bundle updates.
+#[derive(Debug, Default, Clone, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct BundleUpdatePolicy {
+    /// Ordered rules evaluated at request time.
+    pub rules: Vec<BundlePolicyRule>,
+}
+
+/// One server-side policy rule.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BundlePolicyRule {
+    /// Whether this rule blocks future updates or revokes active bundles.
+    pub action: BundlePolicyAction,
+    /// Optional target filter.
+    pub target: Option<AllTargets>,
+    /// Inclusive minimum native build filter.
+    pub native_build_gte: Option<u64>,
+    /// Inclusive maximum native build filter.
+    pub native_build_lte: Option<u64>,
+    /// Inclusive minimum bundle build filter.
+    pub bundle_build_gte: Option<u64>,
+    /// Inclusive maximum bundle build filter.
+    pub bundle_build_lte: Option<u64>,
+    /// Optional reason returned for revocation rules.
+    pub reason: Option<String>,
+}
+
+/// Policy action to apply when a rule matches.
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum BundlePolicyAction {
+    /// Prevent a matching deployed bundle from being offered.
+    Block,
+    /// Clear a matching active bundle from clients.
+    Revoke,
+}
+
+impl BundlePolicyRule {
+    /// Return whether this rule matches the request target, native build, and bundle build.
+    pub fn matches(&self, target: AllTargets, native_build: u64, bundle_build: u64) -> bool {
+        if self.target.is_some_and(|expected| expected != target) {
+            return false;
+        }
+        if self.native_build_gte.is_some_and(|min| native_build < min) {
+            return false;
+        }
+        if self.native_build_lte.is_some_and(|max| native_build > max) {
+            return false;
+        }
+        if self.bundle_build_gte.is_some_and(|min| bundle_build < min) {
+            return false;
+        }
+        if self.bundle_build_lte.is_some_and(|max| bundle_build > max) {
+            return false;
+        }
+        true
+    }
+}
+
+/// the name of the manifest file as it exists in the s3 bucket
+pub static BUNDLE_MANIFEST_FILE_NAME: &str = "/app/bundle-manifest.json";
 /// the name of the bundle file as it exists in the s3 bucket
 pub static BUNDLE_ARCHIVE_NAME: &str = "/app/app-archive.zip";
 
@@ -102,9 +213,12 @@ pub enum UpdateErr {
     /// a network error has occirred
     #[error("A network error occurred")]
     Network,
-    /// failed to parse a semver string
-    #[error("Failed to parse semver")]
-    Semver,
+    /// failed to parse a bundle manifest
+    #[error("Failed to parse bundle manifest")]
+    Manifest,
+    /// failed to parse the update policy
+    #[error("Failed to parse bundle update policy")]
+    Policy,
 }
 
 /// contains information about bundle ids for various app platforms

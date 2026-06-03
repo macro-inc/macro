@@ -1,5 +1,8 @@
 use logger::Logger;
-use macro_bundle_updater_plugin::inbound::plugin::{PluginService, apply_completed_update};
+use macro_bundle_updater_plugin::inbound::plugin::{
+    allow_update_reload_retry, apply_completed_update_from, retry_waiting_for_wifi,
+    start_update_check,
+};
 use navigation_plugin::MacroNavigationPlugin;
 use navigation_plugin::scheme::MacroScheme;
 use reqwest::cookie::CookieStore;
@@ -25,6 +28,48 @@ use url::Url;
 mod share_target;
 mod staged_upload;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AppEnvironment {
+    Development,
+    Production,
+}
+
+impl AppEnvironment {
+    fn current() -> Self {
+        match env!("MACRO_TAURI_APP_ENV") {
+            "development" => Self::Development,
+            "production" => Self::Production,
+            other => unreachable!("invalid MACRO_TAURI_APP_ENV: {other}"),
+        }
+    }
+
+    fn auth_service_url(self) -> &'static str {
+        match self {
+            Self::Development => "https://auth-service-dev.macro.com/",
+            Self::Production => "https://auth-service.macro.com/",
+        }
+    }
+
+    fn bundle_update_base_url(self) -> &'static str {
+        option_env!("MACRO_BUNDLE_UPDATE_BASE_URL")
+            .filter(|url| !url.trim().is_empty())
+            .unwrap_or_else(|| self.auth_service_url())
+    }
+
+    fn web_origin(self) -> &'static str {
+        match self {
+            Self::Development => "https://dev.macro.com",
+            Self::Production => "https://macro.com",
+        }
+    }
+}
+
+fn embedded_bundle_build() -> u64 {
+    env!("MACRO_EMBEDDED_BUNDLE_BUILD")
+        .parse()
+        .expect("MACRO_EMBEDDED_BUNDLE_BUILD must be an unsigned integer")
+}
+
 /// This module provides debuging utilities and should not be compiled in prodiction builds
 #[cfg(debug_assertions)] // do not remove this
 mod debug;
@@ -37,6 +82,7 @@ static ALLOWED_DOMAINS: &[&str] = &[
     "http://tauri.localhost",
     "tauri://localhost",
     "https://macro.com",
+    "https://dev.macro.com",
     "http://localhost:3000",
     "http://localhost:3001",
     "http://localhost:3002",
@@ -127,13 +173,11 @@ pub fn run() {
         .plugin(MacroNavigationPlugin::new(ALLOWED_DOMAINS).expect("Domains must be valid urls"))
         .plugin(
             macro_bundle_updater_plugin::inbound::plugin::MacroBundleUpdaterPlugin::new(
-                if cfg!(debug_assertions) {
-                    "https://auth-service-dev.macro.com/"
-                } else {
-                    "https://auth-service.macro.com/"
-                }
-                .parse()
-                .expect("valid url"),
+                AppEnvironment::current()
+                    .bundle_update_base_url()
+                    .parse()
+                    .expect("valid url"),
+                embedded_bundle_build(),
             ),
         );
 
@@ -168,17 +212,7 @@ pub fn run() {
 
             move |ctx, request, responder| {
                 let h = handler.get_or_init(|| {
-                    // Restore persisted bundle root before the first request is served
                     let app = ctx.app_handle();
-                    if let Ok(cache_dir) = app.path().app_cache_dir() {
-                        tracing::info!("Protocol handler init: cache_dir={cache_dir:?}");
-                        if let Some(s) = app.try_state::<tokio::sync::Mutex<PluginService>>() {
-                            tauri::async_runtime::block_on(async {
-                                let mut service = s.lock().await;
-                                service.load_bundle_root(&cache_dir).await;
-                            });
-                        }
-                    }
                     tauri_protocol::get(app.clone(), &window_origin)
                 });
                 h(ctx.webview_label(), request, responder);
@@ -188,7 +222,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             macro_bundle_updater_plugin::inbound::plugin::grant_bundle_update,
             macro_bundle_updater_plugin::inbound::plugin::perform_update,
+            macro_bundle_updater_plugin::inbound::plugin::ack_bundle_update_reload,
             macro_bundle_updater_plugin::inbound::plugin::check_for_update,
+            macro_bundle_updater_plugin::inbound::plugin::get_bundle_debug_info,
             macro_bundle_updater_plugin::inbound::plugin::get_bundle_update_status,
             macro_bundle_updater_plugin::inbound::plugin::clear_bundle,
             get_pending_share_filenames,
@@ -198,20 +234,6 @@ pub fn run() {
             staged_upload::upload_staged_file_to_presigned_url,
         ])
         .setup(|app| {
-            // Restore persisted bundle root on startup
-            if let Ok(cache_dir) = app.path().app_cache_dir()
-                && let Some(s) = app.try_state::<tokio::sync::Mutex<PluginService>>()
-            {
-                tauri::async_runtime::block_on(async {
-                    let mut service = s.lock().await;
-                    service.load_bundle_root(&cache_dir).await;
-                    tracing::info!(
-                        "Setup: restored bundle root to {:?}",
-                        service.bundle_root_path()
-                    );
-                });
-            }
-
             #[cfg(any(target_os = "linux", all(windows, debug_assertions)))]
             {
                 use tauri_plugin_deep_link::DeepLinkExt;
@@ -228,24 +250,63 @@ pub fn run() {
         })
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
-        .run(|app_handle, event| {
-            #[cfg(feature = "auto_apply_update")]
-            {
-                if let RunEvent::Resumed = event {
+        .run(move |app_handle, event| match &event {
+            RunEvent::Ready => {
+                #[cfg(feature = "auto_apply_update")]
+                {
                     let app = app_handle.clone();
                     tauri::async_runtime::spawn(async move {
-                        match apply_completed_update(&app).await {
-                            Ok(true) => {
-                                tracing::info!("auto-applied pending bundle update on foreground");
-                            }
-                            Ok(false) => {}
+                        match apply_completed_update_from(&app, "run_event_ready").await {
+                            Ok(_) => {}
                             Err(e) => {
-                                tracing::error!("failed to auto-apply bundle update: {e}");
+                                tracing::error!("Failed to auto-apply bundle update on ready: {e}");
                             }
                         }
                     });
                 }
             }
+            RunEvent::Resumed => {
+                let app = app_handle.clone();
+                tauri::async_runtime::spawn(async move {
+                    if let Err(e) = retry_waiting_for_wifi(&app).await {
+                        tracing::warn!("Failed to retry bundle update Wi-Fi wait on resume: {e}");
+                    }
+                });
+                #[cfg(feature = "auto_apply_update")]
+                {
+                    let app = app_handle.clone();
+                    tauri::async_runtime::spawn(async move {
+                        if let Err(e) = allow_update_reload_retry(&app).await {
+                            tracing::warn!(
+                                "Failed to allow bundle update reload retry on resume: {e}"
+                            );
+                        }
+                        match apply_completed_update_from(&app, "run_event_resumed").await {
+                            Ok(true) => {}
+                            Ok(false) => {
+                                if let Err(e) = start_update_check(&app).await {
+                                    tracing::error!(
+                                        "Failed to start bundle update check on resume: {e}"
+                                    );
+                                }
+                            }
+                            Err(e) => {
+                                tracing::error!("Failed to auto-apply bundle update: {e}");
+                            }
+                        }
+                    });
+                }
+                #[cfg(not(feature = "auto_apply_update"))]
+                {
+                    let app = app_handle.clone();
+                    tauri::async_runtime::spawn(async move {
+                        if let Err(e) = start_update_check(&app).await {
+                            tracing::error!("Failed to start bundle update check on resume: {e}");
+                        }
+                    });
+                }
+            }
+            _ => {}
         });
 }
 
@@ -256,20 +317,17 @@ fn merge_header_callback<R: Runtime>(url: String, headers: &mut HeaderMap, handl
         return;
     };
 
-    // Origin headers are required for service auth and must be set unconditionally,
-    // independent of whether cookie state is available.
+    // These services (including the macroverse.workers.dev sync service) validate
+    // Origin for auth, so set it to our web origin unconditionally — independent of
+    // whether cookie state is available.
     match parsed_url.host_str() {
-        Some("services.macro.com") | Some("services-dev.macro.com") => {
-            headers.insert(ORIGIN, HeaderValue::from_static("https://macro.com"));
-        }
-        // The sync service (macroverse.workers.dev) also validates Origin.
-        Some("macroverse.workers.dev") => {
-            let origin = if cfg!(debug_assertions) {
-                "https://dev.macro.com"
-            } else {
-                "https://macro.com"
-            };
-            headers.insert(ORIGIN, HeaderValue::from_static(origin));
+        Some("services.macro.com")
+        | Some("services-dev.macro.com")
+        | Some("macroverse.workers.dev") => {
+            headers.insert(
+                ORIGIN,
+                HeaderValue::from_static(AppEnvironment::current().web_origin()),
+            );
         }
         _ => {}
     }

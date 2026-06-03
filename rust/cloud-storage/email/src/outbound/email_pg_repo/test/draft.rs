@@ -17,10 +17,11 @@ async fn test_get_simple_message_found(pool: Pool<Postgres>) -> anyhow::Result<(
 
     let msg_id = Uuid::parse_str("ee000001-0000-0000-0000-000000000001")?;
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
-    let result = repo.get_simple_message(msg_id, link_id).await?;
+    let result = repo.get_simple_message(msg_id, &[link_id]).await?;
 
     let info = result.expect("Message should be found");
     assert_eq!(info.db_id, msg_id);
+    assert_eq!(info.link_id, link_id);
     assert_eq!(
         info.thread_db_id,
         Uuid::parse_str("11111111-1111-1111-1111-111111111111")?
@@ -44,9 +45,32 @@ async fn test_get_simple_message_wrong_link_id(pool: Pool<Postgres>) -> anyhow::
 
     let msg_id = Uuid::parse_str("ee000001-0000-0000-0000-000000000001")?;
     let wrong_link = Uuid::parse_str("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")?;
-    let result = repo.get_simple_message(msg_id, wrong_link).await?;
+    let result = repo.get_simple_message(msg_id, &[wrong_link]).await?;
 
     assert!(result.is_none(), "Wrong link_id should return None");
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_draft"))
+)]
+async fn test_get_simple_message_across_inboxes(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = EmailPgRepo::new(pool);
+
+    let msg_id = Uuid::parse_str("ee000001-0000-0000-0000-000000000001")?;
+    let owning_link = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let other_link = Uuid::parse_str("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")?;
+    let result = repo
+        .get_simple_message(msg_id, &[other_link, owning_link])
+        .await?;
+
+    let info = result.expect("Message should be found across the accessible inboxes");
+    assert_eq!(
+        info.link_id, owning_link,
+        "Should report the inbox the message actually lives in"
+    );
 
     Ok(())
 }
@@ -60,7 +84,7 @@ async fn test_get_simple_message_not_found(pool: Pool<Postgres>) -> anyhow::Resu
 
     let missing = Uuid::parse_str("99999999-9999-9999-9999-999999999999")?;
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
-    let result = repo.get_simple_message(missing, link_id).await?;
+    let result = repo.get_simple_message(missing, &[link_id]).await?;
 
     assert!(result.is_none());
 
@@ -76,7 +100,7 @@ async fn test_get_simple_message_draft_with_headers(pool: Pool<Postgres>) -> any
 
     let msg_id = Uuid::parse_str("ee000002-0000-0000-0000-000000000002")?;
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
-    let result = repo.get_simple_message(msg_id, link_id).await?;
+    let result = repo.get_simple_message(msg_id, &[link_id]).await?;
 
     let info = result.expect("Draft should be found");
     assert!(info.is_draft);

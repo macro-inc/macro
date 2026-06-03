@@ -236,6 +236,21 @@ const _ENABLE_DOCK_NOTITIFCATIONS = resolveFeatureFlag(
 );
 export const ENABLE_TTFT = resolveFeatureFlag('ENABLE_TTFT', DEV_MODE_ENV);
 
+export const ENABLE_MULTI_INBOX = resolveFeatureFlag(
+  'ENABLE_MULTI_INBOX',
+  DEV_MODE_ENV
+);
+
+export const ENABLE_INBOX_RESYNC = resolveFeatureFlag(
+  'ENABLE_INBOX_RESYNC',
+  false
+);
+
+export const ENABLE_INBOX_SYNC_STATUS = resolveFeatureFlag(
+  'ENABLE_INBOX_SYNC_STATUS',
+  false
+);
+
 const _ENABLE_TASKS_TABS = resolveFeatureFlag('ENABLE_TASKS_TABS', true);
 
 export const ENABLE_EMAIL_SHARING = resolveFeatureFlag(
@@ -330,6 +345,14 @@ export function ENABLE_CALLS(): boolean {
   return analytics.posthog.isFeatureEnabled('enable-calls') ?? false;
 }
 
+// The sidebar active-calls widget fans out to one GET /call/{channelId}/active
+// request per channel every 15s. Flagged off until it's batched / socket-driven.
+export function ENABLE_SIDEBAR_ACTIVE_CALLS(): boolean {
+  return (
+    analytics.posthog.isFeatureEnabled('enable-sidebar-active-calls') ?? false
+  );
+}
+
 export const ENABLE_NEW_ONBOARDING_OVERRIDE = DEV_MODE_ENV ? true : undefined;
 
 export const ENABLE_NEW_LOGIN_OVERRIDE = DEV_MODE_ENV ? true : undefined;
@@ -343,6 +366,9 @@ export const ENABLE_TEAM_INVITE_TIERS_OVERRIDE = DEV_MODE_ENV
   : undefined;
 
 export const ENABLE_SOUP_GROUP_BY_OVERRIDE = DEV_MODE_ENV ? true : undefined;
+
+export const ENABLE_TASK_DUPLICATES_FLAG = 'enable-task-duplicates';
+export const ENABLE_TASK_DUPLICATES_OVERRIDE = DEV_MODE_ENV ? true : undefined;
 
 export const ENABLE_AUTO_UPDATE_UI = resolveFeatureFlag(
   'ENABLE_AUTO_UPDATE_UI',
@@ -365,6 +391,8 @@ export const ENABLE_CREATE_PROPERTY = resolveFeatureFlag(
   'ENABLE_CREATE_PROPERTY',
   false
 );
+
+export const ENABLE_HOME_OVERRIDE = DEV_MODE_ENV ? true : undefined;
 
 export const ENABLE_NEW_PRICING_OVERRIDE =
   resolveFeatureFlag('ENABLE_NEW_PRICING', DEV_MODE_ENV) || undefined;

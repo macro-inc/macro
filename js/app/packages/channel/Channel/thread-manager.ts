@@ -1,4 +1,4 @@
-import type { InputSnapshot } from '@channel/Input';
+import type { InputHandle, InputSnapshot } from '@channel/Input';
 import { batch, createSignal, type Setter } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import type { ThreadState } from '../Thread';
@@ -15,6 +15,9 @@ export function createThreadManager() {
     >();
     const [replyInputEl, setReplyInputEl] = createSignal<
       HTMLElement | undefined
+    >();
+    const [replyInputHandle, setReplyInputHandle] = createSignal<
+      InputHandle | undefined
     >();
 
     /** If you set replying from false -> true this means it must be expanded **/
@@ -41,6 +44,8 @@ export function createThreadManager() {
       setReplyInputState,
       replyInputEl,
       setReplyInputEl,
+      replyInputHandle,
+      setReplyInputHandle,
     };
 
     setThreadStore(threadId, state);

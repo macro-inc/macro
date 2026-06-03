@@ -9,6 +9,15 @@ pub mod set_company_hidden;
 /// Toggle the `hidden` flag on a `crm_contacts` row.
 pub mod set_contact_hidden;
 
+/// List the non-hidden contacts of a `crm_companies` row.
+pub mod list_company_contacts;
+
+/// Fetch a single non-hidden CRM contact by id.
+pub mod get_contact;
+
+/// Comment threads on a `crm_companies` / `crm_contacts` row.
+pub mod comments;
+
 use std::sync::Arc;
 
 use axum::{
@@ -16,7 +25,7 @@ use axum::{
     extract::FromRef,
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::put,
+    routing::{get, patch, put},
 };
 use entity_access::domain::ports::EntityAccessService;
 use model_error_response::ErrorResponse;
@@ -34,6 +43,27 @@ pub struct CrmRouterState<C, Eas> {
 impl<C, Eas> FromRef<CrmRouterState<C, Eas>> for Arc<Eas> {
     fn from_ref(state: &CrmRouterState<C, Eas>) -> Self {
         state.entity_access_service.clone()
+    }
+}
+
+/// Newtype around `Arc<C>` so it can be pulled from
+/// [`CrmRouterState`] via `FromRef` without colliding with
+/// [`FromRef`] for [`Arc<Eas>`] in the (theoretical) case where
+/// `C == Eas`. Plain `Arc<C>` vs `Arc<Eas>` overlap as
+/// implementations when both type params resolve to the same type;
+/// wrapping one side fixes it without changing the state's storage.
+#[derive(Debug)]
+pub struct CrmServiceRef<C>(pub Arc<C>);
+
+impl<C> Clone for CrmServiceRef<C> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+
+impl<C, Eas> FromRef<CrmRouterState<C, Eas>> for CrmServiceRef<C> {
+    fn from_ref(state: &CrmRouterState<C, Eas>) -> Self {
+        CrmServiceRef(state.service.clone())
     }
 }
 
@@ -64,8 +94,24 @@ where
             put(set_company_hidden::handler::<C, Eas>),
         )
         .route(
+            "/companies/{company_id}/contacts",
+            get(list_company_contacts::handler::<C, Eas>),
+        )
+        .route(
+            "/contacts/{contact_id}",
+            get(get_contact::handler::<C, Eas>),
+        )
+        .route(
             "/contacts/{contact_id}/hidden",
             put(set_contact_hidden::handler::<C, Eas>),
+        )
+        .route(
+            "/comments/{entity_type}/{entity_id}",
+            get(comments::list_handler::<C, Eas>).post(comments::create_handler::<C, Eas>),
+        )
+        .route(
+            "/comment/{comment_id}",
+            patch(comments::edit_handler::<C, Eas>).delete(comments::delete_handler::<C, Eas>),
         )
         .with_state(state)
 }
@@ -83,6 +129,24 @@ impl IntoResponse for CrmError {
                 StatusCode::NOT_FOUND,
                 Json(ErrorResponse {
                     message: "crm contact not found for team".into(),
+                }),
+            ),
+            CrmError::ThreadNotFound => (
+                StatusCode::NOT_FOUND,
+                Json(ErrorResponse {
+                    message: "crm comment thread not found".into(),
+                }),
+            ),
+            CrmError::CommentNotFound => (
+                StatusCode::NOT_FOUND,
+                Json(ErrorResponse {
+                    message: "crm comment not found".into(),
+                }),
+            ),
+            CrmError::InvalidRequest(message) => (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    message: message.into(),
                 }),
             ),
             CrmError::CompanyHidden => (

@@ -1,5 +1,5 @@
 use crate::domain::{
-    models::{BundleUpdate, DownloadBundleError, DownloadBundleRequest, Progress},
+    models::{BundleAction, DownloadBundleError, DownloadBundleRequest, Progress},
     ports::UpdateRepo,
 };
 use futures::TryStreamExt;
@@ -44,7 +44,7 @@ impl UpdateRepo for BundleClient {
     async fn check_for_update(
         &self,
         request: crate::domain::models::AppInfo,
-    ) -> Result<Option<BundleUpdate>, rootcause::Report> {
+    ) -> Result<Option<BundleAction>, rootcause::Report> {
         let mut url = self.base.clone();
         url.path_segments_mut()
             .map_err(|_| BundleClientErr::CannotBeABase(self.base.clone()))?
@@ -52,8 +52,13 @@ impl UpdateRepo for BundleClient {
             .push("update")
             .push("bundle")
             .push(request.target.into())
-            .push(request.arch.into())
-            .push(&request.current_version.to_string());
+            .push(request.arch.into());
+        url.query_pairs_mut()
+            .append_pair(
+                "current_bundle_build",
+                &request.current_bundle_build.to_string(),
+            )
+            .append_pair("native_build", &request.native_build.to_string());
 
         let res = self.client.get(url).send().await?.error_for_status()?;
 

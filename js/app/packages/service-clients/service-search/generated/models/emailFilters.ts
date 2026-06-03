@@ -47,6 +47,9 @@ Note: SPAM and TRASH emails are not indexed in OpenSearch, so they are already e
   /** Only include emails that have at least one of these labels. Supports both Gmail system labels (e.g. "INBOX", "CATEGORY_PROMOTIONS") and user-created labels (e.g. "github"). Empty to not filter by included labels.
 Note: SPAM and TRASH emails are not indexed in OpenSearch, so they will never appear in results regardless of this filter. */
   include_labels?: string[];
+  /** Restrict to specific inboxes by email_links.id. Empty means "any inbox the
+caller can access" (soup expands to the full set at the router edge). */
+  link_ids?: string[];
   /** Filter by email notification state. */
   notification_filters?: NotificationFilters;
   /** A list of project ids to search within. Empty to ignore project filtering. */

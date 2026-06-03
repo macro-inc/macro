@@ -17,6 +17,14 @@ use std::sync::Arc;
 use std::{marker::PhantomData, str::FromStr};
 use thiserror::Error;
 use utoipa::{IntoParams, ToSchema};
+use uuid::Uuid;
+
+/// Request header that selects which inbox a single-inbox (mutating) request
+/// targets. When absent, the caller's primary inbox is used.
+pub const EMAIL_LINK_ID_HEADER: &str = "x-email-link-id";
+
+#[cfg(test)]
+mod test;
 
 #[derive(Debug, Error)]
 pub enum GetPreviewsCursorError {
@@ -82,6 +90,10 @@ pub enum EmailLinkErr {
     DbErr(#[from] crate::domain::models::EmailErr),
     #[error("Email link not found")]
     NotFound,
+    #[error("Invalid X-Email-Link-Id header")]
+    InvalidLinkIdHeader,
+    #[error("No inbox specified; provide the X-Email-Link-Id header")]
+    NoInboxSelected,
     #[error(transparent)]
     UserErr(#[from] UserExtractorErr),
 }
@@ -94,10 +106,55 @@ impl IntoResponse for EmailLinkErr {
         let status = match &self {
             EmailLinkErr::DbErr(_) | EmailLinkErr::UserErr(_) => StatusCode::INTERNAL_SERVER_ERROR,
             EmailLinkErr::NotFound => StatusCode::NOT_FOUND,
+            EmailLinkErr::InvalidLinkIdHeader | EmailLinkErr::NoInboxSelected => {
+                StatusCode::BAD_REQUEST
+            }
         };
 
         (status, self.to_string()).into_response()
     }
+}
+
+/// Resolve the single inbox a mutating request targets from the caller's owned
+/// `links`. With an `X-Email-Link-Id` value, the matching owned link is used
+/// (404 when it isn't one of theirs). Without a header, the primary inbox is
+/// used — the link whose address matches the caller's account email,
+/// case-insensitively, mirroring the client's primary-inbox rule. A caller with
+/// no primary inbox (e.g. it was removed) must name an inbox explicitly.
+fn resolve_target_link(
+    links: Vec<Link>,
+    header_link_id: Option<Uuid>,
+    account_email: &str,
+) -> Result<Link, EmailLinkErr> {
+    match header_link_id {
+        Some(id) => links
+            .into_iter()
+            .find(|link| link.id == id)
+            .ok_or(EmailLinkErr::NotFound),
+        None => links
+            .into_iter()
+            .find(|link| {
+                link.email_address
+                    .0
+                    .as_ref()
+                    .eq_ignore_ascii_case(account_email)
+            })
+            .ok_or(EmailLinkErr::NoInboxSelected),
+    }
+}
+
+/// Parse the `X-Email-Link-Id` header into a link id, if present. A malformed
+/// value is a client error.
+fn parse_link_id_header(parts: &Parts) -> Result<Option<Uuid>, EmailLinkErr> {
+    let Some(value) = parts.headers.get(EMAIL_LINK_ID_HEADER) else {
+        return Ok(None);
+    };
+    let raw = value
+        .to_str()
+        .map_err(|_| EmailLinkErr::InvalidLinkIdHeader)?;
+    Uuid::parse_str(raw.trim())
+        .map(Some)
+        .map_err(|_| EmailLinkErr::InvalidLinkIdHeader)
 }
 
 impl<S, U> FromRequestParts<S> for EmailLinkExtractor<U>
@@ -109,17 +166,48 @@ where
     type Rejection = EmailLinkErr;
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        let Cached(MacroUserExtractor {
-            macro_user_id,
-            user_context,
-            ..
-        }) = parts.extract_with_state(state).await?;
-        let res = <EmailRouterState<U>>::from_ref(state)
+        let header_link_id = parse_link_id_header(parts)?;
+        let Cached(MacroUserExtractor { macro_user_id, .. }) =
+            parts.extract_with_state(state).await?;
+        let account_email = macro_user_id.0.email_str().to_string();
+        let links = <EmailRouterState<U>>::from_ref(state)
             .inner
-            .get_link_by_auth_id_and_macro_id(&user_context.fusion_user_id, macro_user_id)
-            .await?
-            .ok_or(EmailLinkErr::NotFound)?;
-        Ok(Self(res, PhantomData))
+            .get_inboxes_for_macro_id(macro_user_id)
+            .await?;
+        let link = resolve_target_link(links, header_link_id, &account_email)?;
+        Ok(Self(link, PhantomData))
+    }
+}
+
+/// Extractor that resolves *every* inbox the caller can read — their own inboxes
+/// plus any delegated/shared inboxes reachable via `macro_user_links`. Read
+/// endpoints fan out over all returned links. A caller with no inboxes yields an
+/// empty `Vec` (and hence empty results) rather than a 404 — the union over zero
+/// inboxes is empty, not missing.
+pub struct MultiEmailLinkExtractor<U>(pub Vec<Link>, pub PhantomData<U>);
+
+impl<U> Clone for MultiEmailLinkExtractor<U> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone(), PhantomData)
+    }
+}
+
+impl<S, U> FromRequestParts<S> for MultiEmailLinkExtractor<U>
+where
+    EmailRouterState<U>: FromRef<S>,
+    U: EmailService,
+    S: Send + Sync + 'static,
+{
+    type Rejection = EmailLinkErr;
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let Cached(MacroUserExtractor { macro_user_id, .. }) =
+            parts.extract_with_state(state).await?;
+        let links = <EmailRouterState<U>>::from_ref(state)
+            .inner
+            .get_inboxes_for_macro_id(macro_user_id)
+            .await?;
+        Ok(Self(links, PhantomData))
     }
 }
 

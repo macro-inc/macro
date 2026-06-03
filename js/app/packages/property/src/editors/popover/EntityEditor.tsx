@@ -4,7 +4,7 @@ import {
 } from '@property/utils/entityConversion';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
-import { createSignal, Show } from 'solid-js';
+import { createSignal, Show, Suspense } from 'solid-js';
 import { useProperty } from '../../core/context';
 import type { EntityProperty, PropertyApiValues } from '../../types';
 import { isEntityProperty } from '../../utils';
@@ -72,25 +72,31 @@ function EntityEditorBody(props: EntityEditorProps) {
 
   return (
     <EditorPopover onClose={closeAndSave}>
-      <PropertyEntitySelector
-        config={{
-          isMultiSelect: property.isMultiSelect,
-          placeholder: `${property.isMultiSelect ? 'Add' : 'Change'} ${property.displayName.toLowerCase()}...`,
-          specificEntityType: property.specificEntityType,
-          selfFilter: props.selfFilter,
-        }}
-        selectedOptions={() => entityReferencesToIdSet(selectedRefs())}
-        setSelectedOptions={(newOptions, entityInfo) => {
-          const updated = updateEntityReferences(
-            selectedRefs(),
-            newOptions,
-            entityInfo
-          );
-          setSelectedRefs(updated);
-          setDirty(true);
-        }}
-        onClose={closeAndSave}
-      />
+      <Suspense
+        fallback={
+          <div class="px-3 py-4 text-sm text-ink-muted">Loading...</div>
+        }
+      >
+        <PropertyEntitySelector
+          config={{
+            isMultiSelect: property.isMultiSelect,
+            placeholder: `${property.isMultiSelect ? 'Add' : 'Change'} ${property.displayName.toLowerCase()}...`,
+            specificEntityType: property.specificEntityType,
+            selfFilter: props.selfFilter,
+          }}
+          selectedOptions={() => entityReferencesToIdSet(selectedRefs())}
+          setSelectedOptions={(newOptions, entityInfo) => {
+            const updated = updateEntityReferences(
+              selectedRefs(),
+              newOptions,
+              entityInfo
+            );
+            setSelectedRefs(updated);
+            setDirty(true);
+          }}
+          onClose={closeAndSave}
+        />
+      </Suspense>
     </EditorPopover>
   );
 }

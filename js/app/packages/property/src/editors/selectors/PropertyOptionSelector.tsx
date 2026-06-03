@@ -128,7 +128,7 @@ const DropdownSelectableRow: ParentComponent<DropdownSelectableRowProps> = (
 ) => {
   return (
     <div
-      class="flex flex-row w-full justify-between items-center gap-2 py-1.5 px-2 rounded-md"
+      class="group flex flex-row w-full justify-between items-center gap-2 py-1.5 px-2 rounded-md"
       classList={{
         'bg-hover': props.isSelected,
       }}

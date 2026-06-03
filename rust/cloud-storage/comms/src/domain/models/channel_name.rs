@@ -19,23 +19,31 @@ pub fn resolve_channel_name(
     name_lookup: &NameLookup,
 ) -> ChannelName {
     match channel_type {
-            ChannelType::Organization | ChannelType::Public => channel_name.map(|name| name.to_string()).unwrap_or_else(|| {
-                tracing::warn!(channel_id=?channel_id, "organization or public channel should have a name");
-                match channel_type {
-                    ChannelType::Organization => "Organization".to_string(),
-                    ChannelType::Public => "Public".to_string(),
-                    _ => unreachable!(),
-                }
+        ChannelType::Public => channel_name
+            .map(|name| name.to_string())
+            .unwrap_or_else(|| {
+                tracing::warn!(channel_id=?channel_id, "public channel should have a name");
+                "Public".to_string()
             }),
-            ChannelType::Private => resolve_private_channel_name(channel_name, participants, name_lookup),
-            ChannelType::DirectMessage => match resolve_direct_message_channel_name(channel_name, participants, &channel_id.0, user_id, name_lookup) {
-                Ok(c) | Err(c) => c,
-            }
-            ChannelType::Team => channel_name.map(|name| name.to_string()).unwrap_or_else(|| {
+        ChannelType::Private => {
+            resolve_private_channel_name(channel_name, participants, name_lookup)
+        }
+        ChannelType::DirectMessage => match resolve_direct_message_channel_name(
+            channel_name,
+            participants,
+            &channel_id.0,
+            user_id,
+            name_lookup,
+        ) {
+            Ok(c) | Err(c) => c,
+        },
+        ChannelType::Team => channel_name
+            .map(|name| name.to_string())
+            .unwrap_or_else(|| {
                 tracing::warn!(channel_id=?channel_id, "team channel should have a name");
                 "Team".to_string()
             }),
-        }
+    }
 }
 
 pub fn resolve_private_channel_name(

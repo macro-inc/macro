@@ -18,6 +18,7 @@ import {
   Show,
   Switch,
 } from 'solid-js';
+import { MACRO_AI_BOT_ID, macroAiMentionUser } from '../macroAi';
 import { createInputAttachmentTracker } from './attachment-tracker';
 import { createConfiguredChannelMarkdownEditor } from './configured-markdown-editor';
 import { createInputState } from './create-input-state';
@@ -141,10 +142,40 @@ export function ChannelInput(props: ChannelInputProps) {
     persistenceKey: props.persistenceKey,
   });
 
+  let isEditorConnected = false;
+  let pendingRestoreSnapshot:
+    | Parameters<InputHandle['restoreSnapshot']>[0]
+    | undefined;
+
+  const applySnapshot = (
+    snapshot: Parameters<InputHandle['restoreSnapshot']>[0]
+  ) => {
+    markdownEditor.controls.setMarkdown(snapshot.value);
+    attachmentTracker.setAttachments(snapshot.attachments);
+    mentionsTracker.setMentions(snapshot.mentions);
+    markdownEditor.controls.focus();
+  };
+
+  const flushPendingRestore = () => {
+    const snapshot = pendingRestoreSnapshot;
+    pendingRestoreSnapshot = undefined;
+    if (!snapshot) return;
+    queueMicrotask(() => applySnapshot(snapshot));
+  };
+
+  // Macro AI is mentionable in every channel. It is surfaced through the same
+  // `@`-mention typeahead as participants and re-tagged as a bot at send time.
+  const mentionUsers: Accessor<IUser[]> = () => {
+    const base = props.participants?.() ?? [];
+    return base.some((user) => user.id === MACRO_AI_BOT_ID)
+      ? base
+      : [macroAiMentionUser(), ...base];
+  };
+
   const markdownEditor = createConfiguredChannelMarkdownEditor({
     namespace: props.markdownNamespace ?? 'channel-input-markdown',
     enableMentions: true,
-    users: props.participants,
+    users: mentionUsers,
     scrollContainer,
     onMentionCreate: (mention) => {
       mentionsTracker.onMentionCreate(mention);
@@ -188,10 +219,11 @@ export function ChannelInput(props: ChannelInputProps) {
     focus: () => markdownEditor.controls.focus(),
     attachFiles: (files) => inputState.commands.attachFiles(files),
     restoreSnapshot: (snapshot) => {
-      markdownEditor.controls.setMarkdown(snapshot.value);
-      attachmentTracker.setAttachments(snapshot.attachments);
-      mentionsTracker.setMentions(snapshot.mentions);
-      markdownEditor.controls.focus();
+      if (!isEditorConnected) {
+        pendingRestoreSnapshot = snapshot;
+        return;
+      }
+      applySnapshot(snapshot);
     },
   });
 
@@ -258,6 +290,10 @@ export function ChannelInput(props: ChannelInputProps) {
                   autofocus={!isMobile() && (props.autofocus ?? true)}
                   class="text-sm"
                   refFn={attach}
+                  onConnect={() => {
+                    isEditorConnected = true;
+                    flushPendingRestore();
+                  }}
                 />
               </Input.Editor>
             </Input.EditorShell>

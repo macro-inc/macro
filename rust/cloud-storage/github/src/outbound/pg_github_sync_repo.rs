@@ -5,6 +5,7 @@ mod test;
 
 use std::collections::HashSet;
 
+use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
 
 use crate::domain::{
@@ -191,6 +192,84 @@ impl GithubSyncRepo for PgGithubSyncRepo {
         .await?;
 
         Ok(team_ids)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_team_member_ids(
+        &self,
+        team_id: uuid::Uuid,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, Self::Err> {
+        let user_ids: Vec<String> = sqlx::query_scalar!(
+            r#"
+            SELECT user_id
+            FROM team_user
+            WHERE team_id = $1
+            ORDER BY user_id
+            "#,
+            team_id,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(user_ids
+            .into_iter()
+            .filter_map(|user_id| match MacroUserIdStr::try_from(user_id.clone()) {
+                Ok(user_id) => Some(user_id),
+                Err(error) => {
+                    tracing::warn!(
+                        team_id=%team_id,
+                        user_id,
+                        error=?error,
+                        "team_user.user_id is not a Macro user ID"
+                    );
+                    None
+                }
+            })
+            .collect())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_installation_sources(
+        &self,
+        installation_id: &str,
+    ) -> Result<Vec<GithubAppInstallationSource>, Self::Err> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT source_id AS "source_id!", source_type::text AS "source_type!"
+            FROM github_app_installation
+            WHERE id = $1
+            ORDER BY source_type, source_id
+            "#,
+            installation_id,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut sources = Vec::new();
+        for row in rows {
+            let source_id = row.source_id;
+            let source_type = row.source_type;
+            match source_type.as_str() {
+                "team" => match uuid::Uuid::parse_str(&source_id) {
+                    Ok(team_id) => sources.push(GithubAppInstallationSource::Team(team_id)),
+                    Err(error) => tracing::warn!(
+                        installation_id,
+                        source_id,
+                        error=?error,
+                        "github_app_installation team source_id is not a UUID"
+                    ),
+                },
+                "user" => sources.push(GithubAppInstallationSource::User(source_id)),
+                _ => tracing::warn!(
+                    installation_id,
+                    source_id,
+                    source_type,
+                    "github_app_installation has unknown source_type"
+                ),
+            }
+        }
+
+        Ok(sources)
     }
 
     #[tracing::instrument(skip(self), err)]

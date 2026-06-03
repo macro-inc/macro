@@ -41,7 +41,7 @@ function createNewMessageNotification(
       messageId,
       messageContent: `Message ${id}`,
       sender: 'user-1',
-      channelType: 'organization',
+      channelType: 'private',
     },
   });
 }
@@ -59,7 +59,7 @@ function createReplyNotification(
       threadId,
       messageContent: `Reply ${id}`,
       userId: 'user-1',
-      channelType: 'organization',
+      channelType: 'private',
     },
   });
 }
@@ -76,7 +76,7 @@ function createMentionNotification(
       messageId,
       messageContent: `Mention ${id}`,
       threadId: threadId ?? null,
-      channelType: 'organization',
+      channelType: 'private',
     },
   });
 }

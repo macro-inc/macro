@@ -523,6 +523,108 @@ fn test_build_query_orders_by_id_to_match_cursor_tiebreak() {
     assert!(!sql.contains("ORDER BY t.effective_ts DESC, t.updated_at DESC"));
 }
 
+// ---------------------------------------------------------------------------
+// Team-scoped (CRM) dedupe: one row per conversation across team mailboxes
+// ---------------------------------------------------------------------------
+//
+// Two team members on the same email each have their own email_threads row
+// (different link_id), so a team-widened query returns the conversation
+// twice. The team-scoped query shape dedupes on the root message's RFC-822
+// Message-ID (email_messages.global_id) with the caller's own copy winning.
+
+#[test]
+fn test_build_query_team_scoped_dedupes_on_root_global_id() {
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox);
+    let expr = Expr::Literal(EmailLiteral::Sender(Email::Domain("acme.com".to_string())));
+    let sql = super::query::debug_build_query_sql_team_scoped(&view, &expr);
+
+    assert!(
+        sql.contains("SELECT DISTINCT ON (dedupe_key) *"),
+        "missing dedupe wrapper: {sql}"
+    );
+    assert!(
+        sql.contains("m_root.global_id IS NOT NULL"),
+        "dedupe key must come from root-message global_id: {sql}"
+    );
+    assert!(
+        sql.contains("m_root.is_draft = FALSE"),
+        "drafts carry mailbox-local Message-IDs and must not be the key: {sql}"
+    );
+    assert!(
+        sql.contains("ORDER BY m_root.internal_date_ts ASC NULLS LAST, m_root.id ASC"),
+        "root selection must be deterministic under timestamp ties: {sql}"
+    );
+    assert!(
+        sql.contains("t.id::text"),
+        "threads without a usable global_id must fall back to their own id: {sql}"
+    );
+    // Own copy wins, then recency, then id.
+    assert!(
+        sql.contains("ORDER BY dedupe_key, is_own_link DESC, effective_ts DESC, id DESC"),
+        "wrong representative preference order: {sql}"
+    );
+}
+
+#[test]
+fn test_build_query_team_scoped_cursor_applies_after_dedupe() {
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox);
+    let expr = Expr::Literal(EmailLiteral::Sender(Email::Domain("acme.com".to_string())));
+    let sql = super::query::debug_build_query_sql_team_scoped(&view, &expr);
+
+    // The cursor compares the representative's already-computed effective_ts
+    // outside the dedupe wrapper...
+    assert!(
+        sql.contains("(effective_ts, id) < ("),
+        "post-dedupe cursor missing: {sql}"
+    );
+    // ...and the per-candidate cursor CASE is gone — filtering before
+    // DISTINCT ON would let duplicates resurface on later pages.
+    assert!(
+        !sql.contains("END, t.id"),
+        "candidate-level cursor must not exist in team-scoped queries: {sql}"
+    );
+}
+
+#[test]
+fn test_build_query_team_scoped_dedupe_wraps_shared_union() {
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox);
+    let expr = Expr::Literal(EmailLiteral::Shared(
+        item_filters::SharedEmailFilter::Include,
+    ));
+    let sql = super::query::debug_build_query_sql_team_scoped(&view, &expr);
+
+    // Both the Owned and Shared candidate branches must sit inside the
+    // dedupe wrapper, so a conversation entering via both still collapses.
+    // (Skip past the shared CTE — it has its own UNION ALLs.)
+    let distinct_pos = sql
+        .find("DISTINCT ON (dedupe_key)")
+        .expect("dedupe wrapper missing");
+    let union_pos = sql[distinct_pos..]
+        .find("UNION")
+        .map(|p| distinct_pos + p)
+        .expect("candidate UNION missing after dedupe wrapper");
+    let dedupe_close = sql
+        .find(") AS deduped_threads")
+        .expect("dedupe wrapper close missing");
+    assert!(
+        union_pos < dedupe_close,
+        "UNION must be inside the dedupe wrapper: {sql}"
+    );
+}
+
+#[test]
+fn test_build_query_non_team_has_no_dedupe_machinery() {
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox);
+    let expr = Expr::Literal(EmailLiteral::Sender(Email::Domain("acme.com".to_string())));
+    let sql = super::query::debug_build_query_sql(&view, &expr);
+
+    assert!(!sql.contains("DISTINCT ON"));
+    assert!(!sql.contains("dedupe_key"));
+    assert!(!sql.contains("is_own_link"));
+    // Cursor stays inside the candidate select on the per-mailbox path.
+    assert!(sql.contains("END, t.id"));
+}
+
 const DEFAULT_SORT_TS: &str = "t.updated_at";
 
 #[test]

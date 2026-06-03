@@ -202,11 +202,22 @@ fn extract_content_type(response: &reqwest::Response) -> Result<String, ProxyErr
         .unwrap_or("application/octet-stream")
         .to_string();
 
-    if !content_type.starts_with("image/") {
+    if !is_allowed_content_type(&content_type) {
         return Err(ProxyError::NotAnImage(content_type));
     }
 
     Ok(content_type)
+}
+
+fn is_allowed_content_type(content_type: &str) -> bool {
+    let media_type = content_type
+        .split(';')
+        .next()
+        .unwrap_or(content_type)
+        .trim()
+        .to_ascii_lowercase();
+
+    media_type.starts_with("image/") || media_type == "application/octet-stream"
 }
 
 fn check_content_length(

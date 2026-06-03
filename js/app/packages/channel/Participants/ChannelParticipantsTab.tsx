@@ -4,12 +4,12 @@ import { useUserId } from '@core/context/user';
 import { idToEmail } from '@core/user';
 
 import { useChannelParticipantsQuery } from '@queries/channel/channel-participants';
+import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-create-dm';
 import {
   useAddParticipantsMutation,
   useRemoveParticipantsMutation,
 } from '@queries/channel/participants';
-import { commsServiceClient } from '@service-comms/client';
-import { ChannelType } from '@service-comms/generated/models/channelType';
+import { ChannelType } from '@service-storage/generated/schemas/channelType';
 import { Panel } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import { ParticipantsAddPanel } from './ParticipantsAddPanel';
@@ -23,13 +23,12 @@ export function ChannelParticipantsTab(props: { channelId: string }) {
   const participantsQuery = useChannelParticipantsQuery(() => props.channelId);
   const addParticipantsMutation = useAddParticipantsMutation();
   const removeParticipantsMutation = useRemoveParticipantsMutation();
+  const getOrCreateDmMutation = useGetOrCreateDirectMessageMutation();
   const [searchQuery, setSearchQuery] = createSignal('');
 
   const participants = () => participantsQuery.data ?? [];
-  const canManageParticipants = () =>
-    channelType() !== ChannelType.organization;
-  const canAddParticipants = () =>
-    canManageParticipants() && channelType() === ChannelType.private;
+  const canAddParticipants = () => channelType() === ChannelType.private;
+  const isEditable = () => canAddParticipants();
 
   const filteredParticipants = () => {
     const query = searchQuery().trim().toLowerCase();
@@ -46,7 +45,7 @@ export function ChannelParticipantsTab(props: { channelId: string }) {
   };
 
   const addParticipants = (participantIds: string[]) => {
-    if (participantIds.length === 0) return;
+    if (!isEditable() || participantIds.length === 0) return;
 
     addParticipantsMutation.mutate({
       channelId: props.channelId,
@@ -55,24 +54,23 @@ export function ChannelParticipantsTab(props: { channelId: string }) {
   };
 
   const removeParticipant = (participantId: string) => {
+    if (!isEditable()) return;
+
     removeParticipantsMutation.mutate({
       channelId: props.channelId,
       participants: [participantId],
     });
   };
 
-  const openDirectMessage = async (participantId: string) => {
-    const result = await commsServiceClient.getOrCreateDirectMessage({
-      recipient_id: participantId,
-    });
-    const channelId = result.isOk() && result.value?.channel_id;
-
-    if (channelId) {
-      replaceOrInsertSplit({
-        type: 'channel',
-        id: channelId,
-      });
-    }
+  const openDirectMessage = (participantId: string) => {
+    getOrCreateDmMutation.mutate(
+      { recipient_id: participantId },
+      {
+        onSuccess: ({ channel_id }) => {
+          replaceOrInsertSplit({ type: 'channel', id: channel_id });
+        },
+      }
+    );
   };
 
   return (
@@ -90,7 +88,7 @@ export function ChannelParticipantsTab(props: { channelId: string }) {
           </Panel.Toolbar>
           <Panel.Body>
             <div class="flex h-full flex-col">
-              <Show when={canAddParticipants()}>
+              <Show when={isEditable()}>
                 <div class="px-6 py-3 border-b border-edge-muted shrink-0">
                   <ParticipantsAddPanel
                     participants={participants}
@@ -103,7 +101,7 @@ export function ChannelParticipantsTab(props: { channelId: string }) {
                   participants={filteredParticipants}
                   searchQuery={searchQuery}
                   currentUserId={userId() ?? undefined}
-                  editable={canManageParticipants()}
+                  editable={isEditable()}
                   onParticipantClick={openDirectMessage}
                   onRemoveParticipant={removeParticipant}
                 />

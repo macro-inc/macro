@@ -1,5 +1,5 @@
 import { useAnalytics } from '@app/component/analytics-context';
-import { ActiveFilterChips } from '@app/component/next-soup/soup-view/filters-bar/active-filter-chips';
+import { SoupActiveFiltersBar } from '@app/component/next-soup/soup-view/filters-bar/soup-active-filters-bar';
 import { SoupViewContextGroup } from '@app/component/next-soup/soup-view/filters-bar/soup-view-context-group';
 import { SoupViewContextSort } from '@app/component/next-soup/soup-view/filters-bar/soup-view-context-sort';
 import { UnifiedFilterDropdown } from '@app/component/next-soup/soup-view/filters-bar/unified-filter-dropdown';
@@ -15,17 +15,13 @@ import { isMobile } from '@core/mobile/isMobile';
 import EyeIcon from '@phosphor-icons/core/regular/eye.svg?component-solid';
 import EyeSlashIcon from '@phosphor-icons/core/regular/eye-slash.svg?component-solid';
 import { Button, Tooltip } from '@ui';
-import { createMemo, Show } from 'solid-js';
+import { createMemo, createSignal, Show } from 'solid-js';
 import { useSoup } from '../../soup-context';
 
 export function SoupFiltersBar() {
-  const {
-    resetToTabDefaults,
-    activeFiltersList,
-    isOptionActive,
-    replaceFilter,
-    removeFilter,
-  } = useFilterRefinements();
+  const { resetToTabDefaults, consolidatedFiltersList } =
+    useFilterRefinements();
+  const [filterDropdownOpen, setFilterDropdownOpen] = createSignal(false);
 
   const panel = useSplitPanelOrThrow();
   const analytics = useAnalytics();
@@ -64,18 +60,14 @@ export function SoupFiltersBar() {
   return (
     <Show when={!isMobile()}>
       <SplitToolbarLeft>
-        <div class="flex items-start gap-2 min-w-0 flex-1">
+        <div class="flex items-start gap-1 min-w-0 flex-1">
           <Show when={!isSearchView()}>
             <SoupViewContextSort />
             <SoupViewContextGroup />
           </Show>
-          <UnifiedFilterDropdown />
-          <ActiveFilterChips
-            isOptionActive={isOptionActive}
-            onClearAll={resetToTabDefaults}
-            filters={activeFiltersList()}
-            onReplace={replaceFilter}
-            onRemove={removeFilter}
+          <UnifiedFilterDropdown
+            open={filterDropdownOpen}
+            onOpenChange={setFilterDropdownOpen}
           />
         </div>
       </SplitToolbarLeft>
@@ -93,6 +85,11 @@ export function SoupFiltersBar() {
           </Button>
         </Tooltip>
       </SplitToolbarRight>
+      {/* Active filters bar - shown below the toolbar when there are filters */}
+      <SoupActiveFiltersBar
+        filters={consolidatedFiltersList()}
+        onClearAll={resetToTabDefaults}
+      />
     </Show>
   );
 }

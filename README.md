@@ -51,11 +51,9 @@ Enterprise-grade security. Zero data retention with model providers, including n
 
 # License
 
-Macro is licensed under the Business Source License with AGPL conversion. See `LICENSE.md` for details. The short version is that non-production use is allowed, and each released version converts to AGPL after its change date. Production commercial use before that conversion requires a commercial license.
+Macro is licensed under the GNU Affero General Public License v3.0. See `LICENSE.txt` for details.
 
-You can self-host Macro for development and evaluation. If you want to run Macro in production, contact [self-host@macro.com](mailto:self-host@macro.com) so we can work through licensing and operational requirements.
-
-We strongly recommend the hosted version for most teams. Macro gets better when it can connect teams to each other, and the managed service is where you get the latest features, Google Workspace integrations, SOC 2 controls, Apple App Store distribution, LiveKit-backed calls, and the sublicenses needed for production video. If you are in the military, government, or another environment where managed hosting is not possible, email us and we can talk through a deployment that fits.
+You can self-host Macro under the terms of the AGPLv3. If you want to discuss managed hosting or commercial arrangements, contact [self-host@macro.com](mailto:self-host@macro.com).
 
 
 # Community
