@@ -1,3 +1,4 @@
+import { until } from '@solid-primitives/promise';
 import { createEffect, createRoot, createSignal } from 'solid-js';
 import type { SplitManager } from '../component/split-layout/layoutManager';
 
@@ -11,22 +12,32 @@ export const [globalSplitManager, setGlobalSplitManager] =
  * Resolves once the global split manager is initialized. Safe to call from
  * outside a reactive context (e.g. async event handlers).
  */
-export function whenSplitManagerReady(): Promise<SplitManager> {
-  return new Promise((resolve) => {
-    const current = globalSplitManager();
-    if (current) {
-      resolve(current);
+export function whenSplitManagerReady(
+  signal?: AbortSignal
+): Promise<SplitManager> {
+  const wait = until(globalSplitManager);
+  if (!signal) return wait;
+  const abortSignal = signal;
+
+  return new Promise((resolve, reject) => {
+    function onAbort() {
+      wait.dispose();
+      reject(
+        abortSignal.reason ??
+          new DOMException('Split manager readiness wait aborted', 'AbortError')
+      );
+    }
+
+    wait
+      .then(resolve, reject)
+      .finally(() => abortSignal.removeEventListener('abort', onAbort));
+
+    if (abortSignal.aborted) {
+      onAbort();
       return;
     }
-    createRoot((dispose) => {
-      createEffect(() => {
-        const m = globalSplitManager();
-        if (m) {
-          dispose();
-          resolve(m);
-        }
-      });
-    });
+
+    abortSignal.addEventListener('abort', onAbort, { once: true });
   });
 }
 

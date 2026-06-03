@@ -5,6 +5,7 @@ import { isPlatform, isTauri } from '@core/util/platform';
 import { authServiceClient } from '@service-auth/client';
 import { notificationServiceClient } from '@service-notification/client';
 import type { DeviceType } from '@service-notification/generated/schemas/deviceType';
+import { raceTimeout } from '@solid-primitives/promise';
 import { addPluginListener, Channel, invoke } from '@tauri-apps/api/core';
 import { themeReactive } from '@theme/signals/themeReactive';
 import Color from 'colorjs.io';
@@ -148,17 +149,15 @@ async function joinChannelCallWhenReady(
     channelId,
     nativeMedia,
   });
-  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
-  const ready = whenSplitManagerReady().then(() => 'ready' as const);
-  const timeout = new Promise<'timeout'>((resolve) => {
-    timeoutHandle = setTimeout(
-      () => resolve('timeout'),
-      SPLIT_MANAGER_READY_TIMEOUT_MS
+  const splitManagerAbortController = new AbortController();
+  try {
+    await raceTimeout(
+      whenSplitManagerReady(splitManagerAbortController.signal),
+      SPLIT_MANAGER_READY_TIMEOUT_MS,
+      true
     );
-  });
-  const outcome = await Promise.race([ready, timeout]);
-  clearTimeout(timeoutHandle);
-  if (outcome === 'timeout') {
+  } catch {
+    splitManagerAbortController.abort();
     console.error(
       `[callkit] split manager not ready within ${SPLIT_MANAGER_READY_TIMEOUT_MS}ms; ending CallKit call`
     );
