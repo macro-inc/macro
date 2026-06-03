@@ -37,6 +37,7 @@ pub mod team;
 pub mod user;
 pub mod user_document_view_location;
 pub mod user_quota;
+pub mod email;
 
 #[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone)]
 pub enum Parameters {
