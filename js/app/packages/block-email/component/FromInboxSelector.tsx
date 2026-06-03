@@ -44,7 +44,6 @@ export function FromInboxSelector(props: {
   links: FromInbox[];
   activeLinkId: string | undefined;
   onSelect: (linkId: string) => void;
-  readonly?: boolean;
 }) {
   const activeInbox = () =>
     props.links.find((l) => l.id === props.activeLinkId) ?? props.links[0];
@@ -52,7 +51,7 @@ export function FromInboxSelector(props: {
     <Show when={activeInbox()}>
       {(active) => (
         <Show
-          when={!props.readonly && props.links.length > 1}
+          when={props.links.length > 1}
           fallback={
             <div class="flex items-center gap-2 min-w-0 text-sm text-ink-muted">
               <Show when={active()} keyed>
