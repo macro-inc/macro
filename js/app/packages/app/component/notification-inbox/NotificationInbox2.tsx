@@ -9,8 +9,9 @@ import { LoadingBlock } from '@core/component/LoadingBlock';
 import GithubIcon from '@icon/mcp-github.svg';
 import ChannelIcon from '@icon/wide-channel.svg';
 import EmailIcon from '@icon/wide-email.svg';
+import FilesIcon from '@icon/wide-files.svg';
+import TaskIcon from '@icon/wide-task.svg';
 import type { UnifiedNotification } from '@notifications';
-import FilesIcon from '@phosphor/files.svg';
 import FunnelIcon from '@phosphor/funnel.svg';
 import SortAscendingIcon from '@phosphor/sort-ascending.svg';
 import StackIcon from '@phosphor/stack.svg';
@@ -114,7 +115,7 @@ const getNotificationRoot = (
         label: metadata.content.taskName ?? 'Task',
         subItems: [],
         subtitle: 'Task',
-        icon: FilesIcon,
+        icon: TaskIcon,
         kind: 'default',
       };
     case 'channel_invite':

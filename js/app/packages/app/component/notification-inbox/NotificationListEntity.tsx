@@ -1,9 +1,11 @@
 import './NotificationListEntity.css';
+import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
+import { globalSplitManager } from '@app/signal/splitLayout';
 import { UserIcon } from '@core/component/UserIcon';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { Entity, formatRelativeTimestamp, NotificationRow } from '@entity';
 import GithubIcon from '@icon/mcp-github.svg';
-import type { UnifiedNotification } from '@notifications';
+import { openNotification, type UnifiedNotification } from '@notifications';
 import GitMergeIcon from '@phosphor-icons/core/regular/git-merge.svg?component-solid';
 import GitPullRequestIcon from '@phosphor-icons/core/regular/git-pull-request.svg?component-solid';
 import XCircleIcon from '@phosphor-icons/core/regular/x-circle.svg?component-solid';
@@ -19,6 +21,106 @@ interface NotificationListEntityProps {
   collapsedNotifications?: UnifiedNotification[];
 }
 
+const getEmailContent = (notification: UnifiedNotification) => {
+  const metadata = notification.notification_metadata;
+  return metadata.tag === 'new_email' ? metadata.content : undefined;
+};
+
+function NotificationListDescription(props: {
+  notification: UnifiedNotification;
+}) {
+  const email = () => getEmailContent(props.notification);
+  const macroId = () =>
+    props.notification.sender_id
+      ? tryMacroId(props.notification.sender_id)
+      : undefined;
+  const [displayName] = useDisplayName(macroId());
+  const senderName = () =>
+    displayName() || email()?.sender || props.notification.sender_id || 'Email';
+
+  return (
+    <Show
+      when={email()}
+      fallback={
+        <Entity.Notification.Description notification={props.notification} />
+      }
+    >
+      {senderName()}
+    </Show>
+  );
+}
+
+function EmailNotificationListRow(props: {
+  notification: UnifiedNotification;
+}) {
+  const notificationSource = useGlobalNotificationSource();
+  const email = () => getEmailContent(props.notification);
+  const unread = () =>
+    !props.notification.viewed_at && !props.notification.done;
+
+  const handleOpen = async (e: MouseEvent | KeyboardEvent) => {
+    const splitManager = globalSplitManager();
+    if (!splitManager) return;
+    e.stopPropagation();
+    await openNotification(props.notification, splitManager, e.shiftKey);
+    await notificationSource.markAsRead(props.notification);
+  };
+
+  return (
+    <div class="relative z-1 bg-surface shadow-[0_1px_0_rgb(from_var(--color-ink)_r_g_b_/_0.04)]">
+      <div
+        class="group/notif @container/notif-row flex items-center gap-2.5 px-3 py-2 hover:bg-ink-muted/6 min-w-0 overflow-hidden cursor-pointer"
+        onClick={handleOpen}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            handleOpen(e);
+          }
+        }}
+      >
+        <span
+          class={cn('size-1.5 rounded-full shrink-0', {
+            'bg-accent': unread(),
+            'bg-transparent': !unread(),
+          })}
+        />
+        <Entity.Notification.Icon
+          notification={props.notification}
+          class="size-3.5 shrink-0 text-ink-muted/60"
+        />
+        <span
+          class={cn('ph-no-capture truncate min-w-0 text-xs text-ink', {
+            'font-medium': unread(),
+          })}
+        >
+          <NotificationListDescription notification={props.notification} />
+        </span>
+        <span class="hidden @md/notif-row:flex flex-1 min-w-0 ph-no-capture truncate text-xs text-ink-muted/60">
+          <Show when={email()}>
+            {(content) => (
+              <>
+                <span class="text-ink">{content().subject}</span>
+                <Show when={content().snippet}>
+                  {(snippet) => (
+                    <span class="text-ink-extra-muted"> — {snippet()}</span>
+                  )}
+                </Show>
+              </>
+            )}
+          </Show>
+        </span>
+        <div class="shrink-0 ml-auto h-5 flex items-center justify-end">
+          <span class="text-ink-extra-muted text-xs tabular-nums">
+            <Entity.Notification.Timestamp notification={props.notification} />
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function NotificationListEntity(props: NotificationListEntityProps) {
   const collapsedCount = () => props.collapsedCount ?? 1;
   const hasCollapsedItems = () => collapsedCount() > 1;
@@ -28,23 +130,29 @@ export function NotificationListEntity(props: NotificationListEntityProps) {
   return (
     <div
       class={cn(
-        '@container/entity relative group/narrow flex flex-col min-h-10',
+        '@container/entity relative group/narrow flex flex-col',
         props.stacked
           ? 'w-full'
-          : 'soup-list-entity rounded-lg w-[calc(100%-0.5rem)] mr-1 py-0.5 mx-1',
+          : 'soup-list-entity w-[calc(100%-0.5rem)] mr-1 py-0.5 mx-1',
         props.highlighted && 'ring ring-edge bg-active/60 ring-inset'
       )}
     >
       <Show
         when={hasCollapsedItems()}
         fallback={
-          <div class="relative z-1 bg-surface rounded-lg shadow-[0_1px_0_rgb(from_var(--color-ink)_r_g_b_/_0.04)]">
-            <NotificationRow
-              notification={props.notification}
-              variant="compact"
-              class={cn(!props.stacked && 'rounded-lg')}
-            />
-          </div>
+          <Show
+            when={getEmailContent(props.notification)}
+            fallback={
+              <div class="relative z-1 bg-surface shadow-[0_1px_0_rgb(from_var(--color-ink)_r_g_b_/_0.04)]">
+                <NotificationRow
+                  notification={props.notification}
+                  variant="compact"
+                />
+              </div>
+            }
+          >
+            <EmailNotificationListRow notification={props.notification} />
+          </Show>
         }
       >
         <CollapsedNotificationListEntityRow
@@ -202,7 +310,7 @@ function CollapsedNotificationListEntityRow(props: {
 
   return (
     <div
-      class="relative z-1 bg-surface rounded-lg shadow-[0_1px_0_rgb(from_var(--color-ink)_r_g_b_/_0.04)]"
+      class="relative z-1 bg-surface shadow-[0_1px_0_rgb(from_var(--color-ink)_r_g_b_/_0.04)]"
       onClick={toggle}
       role="button"
       tabIndex={0}
@@ -212,7 +320,7 @@ function CollapsedNotificationListEntityRow(props: {
         }
       }}
     >
-      <div class="group/notif flex items-center gap-2.5 px-3 py-2 hover:bg-ink-muted/6 min-w-0 overflow-hidden cursor-pointer rounded-lg">
+      <div class="group/notif flex items-center gap-2.5 px-3 py-2 hover:bg-ink-muted/6 min-w-0 overflow-hidden cursor-pointer">
         <span
           class={cn('size-1.5 rounded-full shrink-0', {
             'bg-accent': unread(),
@@ -239,7 +347,7 @@ function CollapsedNotificationListEntityRow(props: {
             'font-medium': unread(),
           })}
         >
-          <Entity.Notification.Description notification={props.notification} />
+          <NotificationListDescription notification={props.notification} />
         </span>
         <span class="hidden @md/notif-row:flex flex-1 min-w-0 ph-no-capture truncate text-xs text-ink-muted/60">
           <Entity.Notification.Content
