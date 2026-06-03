@@ -4,7 +4,7 @@
  * email_service
  * OpenAPI spec version: 0.1.0
  */
-
+import type { LinkPhotoUrl } from './linkPhotoUrl';
 import type { LinkSignature } from './linkSignature';
 import type { Settings } from './settings';
 import type { SyncStatus } from './syncStatus';
@@ -17,6 +17,8 @@ export interface Link {
   id: string;
   is_sync_active: boolean;
   macro_id: string;
+  /** The inbox's own profile photo (its self-contact's SFS photo), if synced. */
+  photo_url?: LinkPhotoUrl;
   provider: UserProvider;
   settings: Settings;
   signature?: LinkSignature;

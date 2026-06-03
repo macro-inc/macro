@@ -6,7 +6,11 @@ import Check from '@phosphor/check.svg';
 import { Dropdown } from '@ui';
 import { For, Show } from 'solid-js';
 
-type FromInbox = { id: string; email_address: string };
+type FromInbox = {
+  id: string;
+  email_address: string;
+  photo_url?: string | null;
+};
 
 /** A single inbox: the account's user icon, name, and address. */
 function FromInboxOption(props: { inbox: FromInbox }) {
@@ -15,6 +19,7 @@ function FromInboxOption(props: { inbox: FromInbox }) {
     <>
       <UserIcon
         {...inboxIconProps(props.inbox.email_address)}
+        photoUrl={props.inbox.photo_url ?? undefined}
         size="sm"
         suppressClick
         class="shrink-0"

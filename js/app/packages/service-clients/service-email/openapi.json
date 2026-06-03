@@ -4158,6 +4158,10 @@
           "macro_id": {
             "type": "string"
           },
+          "photo_url": {
+            "type": ["string", "null"],
+            "description": "The inbox's own profile photo (its self-contact's SFS photo), if synced."
+          },
           "provider": {
             "$ref": "#/components/schemas/UserProvider"
           },
