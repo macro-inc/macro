@@ -103,6 +103,16 @@ pub trait EmailRepo: Send + Sync + 'static {
         limit: i64,
     ) -> impl Future<Output = Result<Vec<MessageRow>, Self::Err>> + Send;
 
+    /// Find macro reply drafts (across the given inboxes) that reply to any of
+    /// `replying_to_ids` but live in a thread other than `exclude_thread_id` —
+    /// i.e. a reply moved to another inbox by switching the sender.
+    fn cross_inbox_reply_drafts(
+        &self,
+        replying_to_ids: &[Uuid],
+        link_ids: &[Uuid],
+        exclude_thread_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<MessageRow>, Self::Err>> + Send;
+
     /// Fetch sender contact info for a set of message IDs, keyed by message ID.
     fn senders_by_message_ids(
         &self,

@@ -243,6 +243,46 @@ async fn test_delete_draft_message_rejects_sent_message(
     Ok(())
 }
 
+// ── cross_inbox_reply_drafts ──────────────────────────────────────
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_draft"))
+)]
+async fn test_cross_inbox_reply_drafts(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = EmailPgRepo::new(pool);
+
+    let msg1 = Uuid::parse_str("ee000001-0000-0000-0000-000000000001")?;
+    let thread1 = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
+    let own_link = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let alt_link = Uuid::parse_str("cccccccc-cccc-cccc-cccc-cccccccccccc")?;
+    let moved_draft = Uuid::parse_str("ee000005-0000-0000-0000-000000000005")?;
+
+    // The reply draft moved to the alt inbox is found, but the same-thread draft
+    // (ee000002 in thread1) is excluded.
+    let found = repo
+        .cross_inbox_reply_drafts(&[msg1], &[own_link, alt_link], thread1)
+        .await?;
+    assert_eq!(
+        found.len(),
+        1,
+        "should surface only the moved cross-inbox draft"
+    );
+    assert_eq!(found[0].db_id, moved_draft);
+    assert_eq!(found[0].link_id, alt_link);
+
+    // Without the alt inbox in scope, nothing is returned (same-thread draft excluded).
+    let none = repo
+        .cross_inbox_reply_drafts(&[msg1], &[own_link], thread1)
+        .await?;
+    assert!(
+        none.is_empty(),
+        "same-thread drafts and inaccessible inboxes must be excluded"
+    );
+
+    Ok(())
+}
+
 // ── upsert_contacts ───────────────────────────────────────────────
 
 #[sqlx::test(

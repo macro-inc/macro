@@ -60,6 +60,42 @@ pub(super) async fn messages_by_thread_id_paginated(
     Ok(rows.into_iter().map(MessageRow::from).collect())
 }
 
+/// Find macro drafts that reply to any of the given messages but live in a
+/// different thread within one of the accessible inboxes. These are reply drafts
+/// the user moved to another of their inboxes by switching the sender; surfacing
+/// them lets the original conversation reopen the draft with its sender.
+pub(super) async fn cross_inbox_reply_drafts(
+    pool: &PgPool,
+    replying_to_ids: &[Uuid],
+    link_ids: &[Uuid],
+    exclude_thread_id: Uuid,
+) -> Result<Vec<MessageRow>, sqlx::Error> {
+    let rows = sqlx::query_as!(
+        DbMessageRow,
+        r#"
+        SELECT
+            id, provider_id, thread_id, provider_thread_id, replying_to_id,
+            global_id, link_id, provider_history_id, internal_date_ts, snippet,
+            size_estimate, subject, sent_at, has_attachments, is_read, is_starred,
+            is_sent, is_draft, body_text, body_html_sanitized, body_macro,
+            headers_jsonb, created_at, updated_at
+        FROM email_messages
+        WHERE is_draft = true
+          AND provider_id IS NULL
+          AND replying_to_id = ANY($1)
+          AND link_id = ANY($2)
+          AND thread_id <> $3
+        "#,
+        replying_to_ids,
+        link_ids,
+        exclude_thread_id,
+    )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows.into_iter().map(MessageRow::from).collect())
+}
+
 /// Insert a new thread record within a transaction.
 pub(super) async fn insert_thread(
     tx: &mut sqlx::PgConnection,

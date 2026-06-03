@@ -125,6 +125,16 @@ impl EmailRepo for EmailPgRepo {
         thread::messages_by_thread_id_paginated(&self.pool, thread_id, offset, limit).await
     }
 
+    async fn cross_inbox_reply_drafts(
+        &self,
+        replying_to_ids: &[Uuid],
+        link_ids: &[Uuid],
+        exclude_thread_id: Uuid,
+    ) -> Result<Vec<MessageRow>, Self::Err> {
+        thread::cross_inbox_reply_drafts(&self.pool, replying_to_ids, link_ids, exclude_thread_id)
+            .await
+    }
+
     async fn senders_by_message_ids(
         &self,
         message_ids: &[Uuid],

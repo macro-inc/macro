@@ -71,3 +71,18 @@ INSERT INTO email_messages (id, thread_id, link_id, from_contact_id, subject, is
 VALUES
     ('ee000004-0000-0000-0000-000000000004', '33333333-3333-3333-3333-333333333333', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
      'c0000001-0000-0000-0000-000000000001', 'Draft only thread', true, false, true, false, '2025-03-01 12:00:00+00', '2025-03-01 12:00:00+00');
+
+-- A second inbox (cccc) + msg5: a reply draft to msg1 that was moved here by
+-- switching the sender (lives in a different thread) — for cross_inbox_reply_drafts.
+INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider, is_sync_active, created_at, updated_at)
+VALUES
+    ('cccccccc-cccc-cccc-cccc-cccccccccccc', 'macro|user1@test.com', 'fa-user-1', 'user1-alt@test.com', 'GMAIL', true, NOW(), NOW());
+
+INSERT INTO email_threads (id, provider_id, link_id, inbox_visible, is_read, created_at, updated_at)
+VALUES
+    ('cccccccc-0000-0000-0000-0000000000c4', NULL, 'cccccccc-cccc-cccc-cccc-cccccccccccc', false, true, NOW(), NOW());
+
+INSERT INTO email_messages (id, thread_id, link_id, from_contact_id, replying_to_id, subject, is_read, is_sent, is_draft, has_attachments, created_at, updated_at)
+VALUES
+    ('ee000005-0000-0000-0000-000000000005', 'cccccccc-0000-0000-0000-0000000000c4', 'cccccccc-cccc-cccc-cccc-cccccccccccc',
+     'c0000001-0000-0000-0000-000000000001', 'ee000001-0000-0000-0000-000000000001', 'Re: Hello World', true, false, true, false, '2025-04-01 10:00:00+00', '2025-04-01 10:00:00+00');
