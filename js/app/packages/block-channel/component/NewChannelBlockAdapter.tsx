@@ -9,6 +9,8 @@ import {
   ChannelCallAutoJoin,
   ChannelCallButton,
   ChannelCallTab,
+  getCallJoinTab,
+  isNativeIosCallKitEnabled,
   useCall,
   useCallContextOptional,
 } from '@channel/Call';
@@ -91,6 +93,7 @@ function NewTop(props: { channelId: string }) {
   // `activeTab` to `call` before the join request resolves).
   const showCallTab = () =>
     ENABLE_CALLS() &&
+    !isNativeIosCallKitEnabled() &&
     (call.isInThisChannel() ||
       call.isJoining() ||
       activeTab() === 'call' ||
@@ -151,7 +154,9 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
     callCtx?.isInCall() && callCtx.activeChannelId() === channelId;
 
   const [activeTab, setActiveTabInternal] = createSignal<ChannelTabId>(
-    wantsJoinCall || hasActiveCallHere ? 'call' : DEFAULT_CHANNEL_TAB
+    !isNativeIosCallKitEnabled() && (wantsJoinCall || hasActiveCallHere)
+      ? 'call'
+      : DEFAULT_CHANNEL_TAB
   );
   const [pendingJoinCall, setPendingJoinCall] = createSignal(wantsJoinCall);
 
@@ -159,6 +164,9 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
   const messagesChannelHandle: { current?: ChannelHandle } = {};
 
   const setActiveTab = (tab: ChannelTabId) => {
+    if (isNativeIosCallKitEnabled() && tab === 'call') {
+      tab = DEFAULT_CHANNEL_TAB;
+    }
     if (tab !== 'messages') {
       messagesChannelHandle.current = undefined;
     }
@@ -217,7 +225,7 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
   createMethodRegistration(blockHandle, {
     goToLocationFromParams: async (params: ChannelTargetMessageParams) => {
       if (isOpenCallTabRequested(params[CHANNEL_URL_PARAMS.openCallTab])) {
-        setActiveTab('call');
+        setActiveTab(getCallJoinTab());
         return;
       }
 
@@ -233,7 +241,7 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
       }
 
       if (isJoinCallRequested(params[CHANNEL_URL_PARAMS.joinCall])) {
-        setActiveTab('call');
+        setActiveTab(getCallJoinTab());
         setPendingJoinCall(true);
       }
     },
@@ -290,7 +298,9 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
             <Match when={activeTab() === 'participants'}>
               <ChannelParticipantsTab channelId={channelId} />
             </Match>
-            <Match when={activeTab() === 'call'}>
+            <Match
+              when={activeTab() === 'call' && !isNativeIosCallKitEnabled()}
+            >
               <ChannelCallTab
                 channelId={channelId}
                 pendingJoin={pendingJoinCall}

@@ -24,9 +24,11 @@
     "call-kit:allow-watch-drawer-opened",
     "call-kit:allow-watch-participant-identities",
     "call-kit:allow-get-active-call-state",
+    "call-kit:allow-start-outgoing-call",
     "call-kit:allow-set-video-enabled",
     "call-kit:allow-set-video-overlay-mode",
     "call-kit:allow-set-call-drawer-channel-title",
+    "call-kit:allow-set-call-drawer-theme",
     "call-kit:allow-set-participant-display-name",
     "call-kit:allow-switch-camera"
   ]

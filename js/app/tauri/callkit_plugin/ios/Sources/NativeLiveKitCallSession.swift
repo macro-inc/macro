@@ -178,7 +178,8 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
                     print("[CallKit] LiveKit existing remote participant \(self.describeParticipant(participant))")
                 }
                 self.emitParticipantIdentities(from: newRoom)
-                self.videoOverlay.presentForActiveCallIfNeeded()
+                await self.videoOverlay.setLocalParticipantTitle(self.displayTitle(newRoom.localParticipant))
+                await self.videoOverlay.presentForActiveCallIfNeeded()
                 self.rebuildRemoteVideoLayout(from: newRoom)
             } catch is CancellationError {
                 print("[CallKit] LiveKit connect task cancelled uuid=\(uuid.uuidString)")
@@ -296,6 +297,7 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
 
         print("[CallKit] Native LiveKit participant display name set identity=\(trimmedIdentity) normalizedIdentity=\(normalizedIdentity) displayName=\(participantDisplayNamesByIdentity[normalizedIdentity] ?? "nil")")
         if let room {
+            videoOverlay.setLocalParticipantTitle(displayTitle(room.localParticipant))
             rebuildRemoteVideoLayout(from: room)
         }
     }
@@ -323,10 +325,10 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
                 print("[CallKit] Setting native LiveKit camera enabled=\(enabled) uuid=\(uuid.uuidString)")
                 try await room.localParticipant.setCamera(enabled: enabled)
                 if enabled {
-                    self.videoOverlay.setLocalVideoTrack(room.localParticipant.firstCameraVideoTrack)
+                    await self.videoOverlay.setLocalVideoTrack(room.localParticipant.firstCameraVideoTrack)
                     self.setVideoOverlayMode(.expanded)
                 } else {
-                    self.videoOverlay.setLocalVideoTrack(nil)
+                    await self.videoOverlay.setLocalVideoTrack(nil)
                 }
                 self.updateVideoMuted(!enabled, overlayMode: enabled ? "expanded" : self.activeCall?.videoOverlayMode)
                 print("[CallKit] Native LiveKit camera set enabled=\(enabled) uuid=\(uuid.uuidString)")

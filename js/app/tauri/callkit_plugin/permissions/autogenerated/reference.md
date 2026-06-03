@@ -114,6 +114,32 @@ Denies the get_voip_token command without any pre-configured scope.
 <tr>
 <td>
 
+`call-kit:allow-set-call-drawer-theme`
+
+</td>
+<td>
+
+Enables the set_call_drawer_theme command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`call-kit:deny-set-call-drawer-theme`
+
+</td>
+<td>
+
+Denies the set_call_drawer_theme command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
 `call-kit:allow-set-call-drawer-channel-title`
 
 </td>
@@ -211,6 +237,32 @@ Enables the set_video_overlay_mode command without any pre-configured scope.
 <td>
 
 Denies the set_video_overlay_mode command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`call-kit:allow-start-outgoing-call`
+
+</td>
+<td>
+
+Enables the start_outgoing_call command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`call-kit:deny-start-outgoing-call`
+
+</td>
+<td>
+
+Denies the start_outgoing_call command without any pre-configured scope.
 
 </td>
 </tr>

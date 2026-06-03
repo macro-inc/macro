@@ -1,7 +1,7 @@
 import { useChannelTab } from '@channel/Channel/ChannelTabContext';
-import { DEFAULT_CHANNEL_TAB } from '@channel/Channel/channel-tabs';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import { type Accessor, createEffect, untrack } from 'solid-js';
+import { getCallJoinTab, getCallLeaveTab } from './call-tabs';
 import { useCall } from './use-call';
 
 /**
@@ -22,8 +22,8 @@ export function ChannelCallAutoJoin(props: {
   // CallOverlay (or a disconnect) returns the user to the default tab
   // even when the join was triggered here instead of via the button.
   const call = useCall(() => props.channelId, {
-    onJoin: () => setActiveTab('call'),
-    onLeave: () => setActiveTab(DEFAULT_CHANNEL_TAB),
+    onJoin: () => setActiveTab(getCallJoinTab()),
+    onLeave: () => setActiveTab(getCallLeaveTab()),
   });
 
   createEffect(() => {
@@ -43,7 +43,7 @@ export function ChannelCallAutoJoin(props: {
       }
 
       if (call.isInThisChannel()) {
-        setActiveTab('call');
+        setActiveTab(getCallJoinTab());
         props.onHandled();
         return;
       }

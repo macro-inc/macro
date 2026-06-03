@@ -1,3 +1,4 @@
+import { useChannelsContext } from '@core/context/channels';
 import { throwOnErr } from '@core/util/result';
 import {
   invalidateActiveCallQueries,
@@ -9,7 +10,12 @@ import { DisconnectReason, RoomEvent } from 'livekit-client';
 import { createEffect, createSignal, onCleanup } from 'solid-js';
 import { useCallContext } from './CallContext';
 import { nativeCallSnapshot } from './native-call-state';
-import { endCallKitCall, registerCallKitCallEndedHandler } from './use-callkit';
+import {
+  endCallKitCall,
+  isNativeIosCallKitEnabled,
+  registerCallKitCallEndedHandler,
+  startNativeCallKitOutgoingCall,
+} from './use-callkit';
 
 type UseCallOptions = {
   /** Called after successfully joining a call. */
@@ -64,6 +70,7 @@ let leaveInFlight = false;
  */
 export function useCall(channelId: () => string, options?: UseCallOptions) {
   const callCtx = useCallContext();
+  const channelsCtx = useChannelsContext();
   const leaveMutation = useLeaveCallMutation();
 
   // Track the disconnect listener so we can swap it when the room changes.
@@ -190,6 +197,21 @@ export function useCall(channelId: () => string, options?: UseCallOptions) {
           new Promise<void>((resolve) => setTimeout(resolve, 300)),
         ]);
         if (cancelled) return;
+
+        if (isNativeIosCallKitEnabled()) {
+          const channelTitle =
+            channelsCtx.channelsById()[tokenResponse.channelId]?.name ?? null;
+          await startNativeCallKitOutgoingCall({
+            channelId: tokenResponse.channelId,
+            callId: tokenResponse.callId,
+            channelTitle,
+            callerName: channelTitle,
+            serverUrl: tokenResponse.serverUrl,
+            token: tokenResponse.token,
+          });
+          return;
+        }
+
         await callCtx.connect(tokenResponse);
       };
 

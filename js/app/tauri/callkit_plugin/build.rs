@@ -13,9 +13,11 @@ const COMMANDS: &[&str] = &[
     "watch_drawer_opened",
     "watch_participant_identities",
     "get_active_call_state",
+    "start_outgoing_call",
     "set_video_enabled",
     "set_video_overlay_mode",
     "set_call_drawer_channel_title",
+    "set_call_drawer_theme",
     "set_participant_display_name",
     "switch_camera",
 ];

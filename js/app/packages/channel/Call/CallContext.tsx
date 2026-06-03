@@ -935,6 +935,8 @@ function createCallState() {
         );
         setStore('isAudioMuted', native.isAudioMuted);
         setStore('isVideoMuted', native.isVideoMuted);
+        setStore('optimisticJoinChannelId', null);
+        setStore('joinError', null);
       } else if (syncedFromNative) {
         syncedFromNative = false;
         setStore('activeChannelId', null);

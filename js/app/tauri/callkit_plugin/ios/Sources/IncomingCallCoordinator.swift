@@ -20,6 +20,8 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
     private var pendingCallTokens: [UUID: PendingCallToken] = [:]
     private var activeCallUUID: UUID?
     private var activeNativeMediaUUID: UUID?
+    private var outgoingCallUUIDs: Set<UUID> = []
+    private var reportedConnectedOutgoingCallUUIDs: Set<UUID> = []
     private var cachedVoipToken: String?
     private var pendingAnsweredCall: (channelId: String, nativeMedia: Bool)?
 
@@ -59,6 +61,65 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
         let answeredCall = pendingAnsweredCall
         pendingAnsweredCall = nil
         return answeredCall
+    }
+
+    func startOutgoingCall(
+        uuid: UUID,
+        channelId: String,
+        channelName: String?,
+        callerName: String?,
+        serverUrl: String,
+        token: String,
+        completion: @escaping (Error?) -> Void
+    ) {
+        if let activeCallUUID, activeCallUUID != uuid {
+            print("[CallKit] startOutgoingCall rejected; active call already exists activeUuid=\(activeCallUUID.uuidString) requestedUuid=\(uuid.uuidString)")
+            completion(NSError(
+                domain: "CallKitPlugin",
+                code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "A CallKit call is already active"]
+            ))
+            return
+        }
+
+        let title = channelName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let displayTitle = title?.isEmpty == false ? title : nil
+        pendingCalls[uuid] = PendingCallInfo(
+            channelId: channelId,
+            channelName: displayTitle,
+            callerName: callerName
+        )
+        pendingCallTokens[uuid] = PendingCallToken(serverUrl: serverUrl, token: token)
+        activeCallUUID = uuid
+        activeNativeMediaUUID = uuid
+        outgoingCallUUIDs.insert(uuid)
+        reportedConnectedOutgoingCallUUIDs.remove(uuid)
+        mediaSessionProvider().setChannelTitle(displayTitle)
+
+        let handle = CXHandle(type: .generic, value: displayTitle ?? channelId)
+        let action = CXStartCallAction(call: uuid, handle: handle)
+        action.isVideo = true
+        let transaction = CXTransaction(action: action)
+        print("[CallKit] Requesting CXStartCallAction uuid=\(uuid.uuidString) channelId=\(channelId) channelName=\(displayTitle ?? "nil")")
+        callController.request(transaction) { [weak self] error in
+            DispatchQueue.main.async {
+                if let error {
+                    print("[CallKit] CXStartCallAction request failed uuid=\(uuid.uuidString) error=\(error)")
+                    self?.clearCallState(uuid: uuid)
+                } else {
+                    print("[CallKit] CXStartCallAction request accepted uuid=\(uuid.uuidString)")
+                }
+                completion(error)
+            }
+        }
+    }
+
+    func reportNativeCallConnected(uuid: UUID) {
+        guard activeNativeMediaUUID == uuid, outgoingCallUUIDs.contains(uuid) else { return }
+        guard !reportedConnectedOutgoingCallUUIDs.contains(uuid) else { return }
+        reportedConnectedOutgoingCallUUIDs.insert(uuid)
+        print("[CallKit] Reporting outgoing call connected uuid=\(uuid.uuidString)")
+        provider.reportOutgoingCall(with: uuid, connectedAt: Date())
     }
 
     func endActiveCall(completion: @escaping () -> Void) {
@@ -213,12 +274,45 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
         pendingCallTokens.removeAll()
         activeCallUUID = nil
         pendingAnsweredCall = nil
+        outgoingCallUUIDs.removeAll()
+        reportedConnectedOutgoingCallUUIDs.removeAll()
         if activeNativeMediaUUID != nil {
             activeNativeMediaUUID = nil
             let mediaSession = mediaSessionProvider()
             Task {
                 await mediaSession.disconnect()
             }
+        }
+    }
+
+    func provider(_ provider: CXProvider, perform action: CXStartCallAction) {
+        let uuid = action.callUUID
+        print("[CallKit] CXStartCallAction received uuid=\(uuid.uuidString)")
+        guard let pendingCall = pendingCalls[uuid],
+              let pendingToken = pendingCallTokens[uuid] else {
+            print("[CallKit] CXStartCallAction failed: no pending call/token uuid=\(uuid.uuidString)")
+            action.fail()
+            clearCallState(uuid: uuid)
+            return
+        }
+
+        activeCallUUID = uuid
+        activeNativeMediaUUID = uuid
+        provider.reportOutgoingCall(with: uuid, startedConnectingAt: Date())
+        action.fulfill()
+        print("[CallKit] Fulfilled CXStartCallAction uuid=\(uuid.uuidString)")
+
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let mediaSession = self.mediaSessionProvider()
+            mediaSession.setChannelTitle(pendingCall.channelName)
+            print("[CallKit] Starting native LiveKit connect for outgoing call uuid=\(uuid.uuidString) channelId=\(pendingCall.channelId)")
+            mediaSession.connect(
+                uuid: uuid,
+                channelId: pendingCall.channelId,
+                serverUrl: pendingToken.serverUrl,
+                token: pendingToken.token
+            )
         }
     }
 
@@ -316,6 +410,8 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
         pendingCallTokens.removeValue(forKey: uuid)
         if activeCallUUID == uuid { activeCallUUID = nil }
         if activeNativeMediaUUID == uuid { activeNativeMediaUUID = nil }
+        outgoingCallUUIDs.remove(uuid)
+        reportedConnectedOutgoingCallUUIDs.remove(uuid)
         pendingAnsweredCall = nil
     }
 

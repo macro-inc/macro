@@ -1,5 +1,6 @@
 import Foundation
 import Tauri
+import UIKit
 import WebKit
 
 struct WatchCallAnsweredArgs: Decodable {
@@ -192,6 +193,38 @@ class CallKitPlugin: Plugin, @unchecked Sendable {
         }
     }
 
+    @objc public func startOutgoingCall(_ invoke: Invoke) throws {
+        let args = try invoke.parseArgs(StartOutgoingCallArgs.self)
+        onMain { [weak self] in
+            guard let self else {
+                print("[CallKit] JS requested startOutgoingCall after plugin deallocation")
+                invoke.reject("CallKit plugin is not available")
+                return
+            }
+            guard let uuid = UUID(uuidString: args.callId) else {
+                print("[CallKit] JS requested startOutgoingCall with invalid callId=\(args.callId)")
+                invoke.reject("Invalid callId")
+                return
+            }
+
+            print("[CallKit] JS requested startOutgoingCall uuid=\(uuid.uuidString) channelId=\(args.channelId)")
+            self.callCoordinator.startOutgoingCall(
+                uuid: uuid,
+                channelId: args.channelId,
+                channelName: args.channelTitle,
+                callerName: args.callerName,
+                serverUrl: args.serverUrl,
+                token: args.token
+            ) { error in
+                if let error {
+                    invoke.reject(error.localizedDescription)
+                } else {
+                    invoke.resolve(["uuid": uuid.uuidString])
+                }
+            }
+        }
+    }
+
     @objc public func setVideoEnabled(_ invoke: Invoke) throws {
         let args = try invoke.parseArgs(SetVideoEnabledArgs.self)
         onMain { [weak self] in
@@ -220,6 +253,26 @@ class CallKitPlugin: Plugin, @unchecked Sendable {
         }
     }
 
+    @objc public func setCallDrawerTheme(_ invoke: Invoke) throws {
+        let args = try invoke.parseArgs(SetCallDrawerThemeArgs.self)
+        onMain { [weak self] in
+            let theme = CallVideoOverlayTheme(
+                drawerBackgroundColor: Self.uiColor(args.drawerBackground),
+                textColor: Self.uiColor(args.text),
+                messageBackgroundColor: Self.uiColor(args.messageBackground),
+                overlayBackgroundColor: Self.uiColor(args.overlayBackground),
+                edgeMutedColor: Self.uiColor(args.edgeMuted),
+                edgeColor: Self.uiColor(args.edge),
+                inkMutedColor: Self.uiColor(args.inkMuted),
+                failureColor: Self.uiColor(args.failure),
+                failureInkColor: Self.uiColor(args.failureInk),
+                successColor: Self.uiColor(args.success)
+            )
+            self?.videoOverlay.setTheme(theme)
+            invoke.resolve()
+        }
+    }
+
     @objc public func setParticipantDisplayName(_ invoke: Invoke) throws {
         let args = try invoke.parseArgs(SetParticipantDisplayNameArgs.self)
         onMain { [weak self] in
@@ -244,6 +297,10 @@ class CallKitPlugin: Plugin, @unchecked Sendable {
         let payload: JsonObject
         if let snapshot {
             print("[CallKit] Sending connection state channel message state=\(snapshot.connectionState) channelId=\(snapshot.channelId) callId=\(snapshot.callId)")
+            if snapshot.connectionState == "connected",
+               let uuid = UUID(uuidString: snapshot.callId) {
+                callCoordinator.reportNativeCallConnected(uuid: uuid)
+            }
             payload = [
                 "state": snapshot.connectionState,
                 "channelId": snapshot.channelId,
@@ -322,6 +379,15 @@ class CallKitPlugin: Plugin, @unchecked Sendable {
         } else {
             DispatchQueue.main.async(execute: block)
         }
+    }
+
+    private static func uiColor(_ color: RgbaColorArgs) -> UIColor {
+        UIColor(
+            red: max(0, min(1, color.red)),
+            green: max(0, min(1, color.green)),
+            blue: max(0, min(1, color.blue)),
+            alpha: max(0, min(1, color.alpha ?? 1))
+        )
     }
 }
 
