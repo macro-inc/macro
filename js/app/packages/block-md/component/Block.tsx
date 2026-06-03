@@ -116,7 +116,7 @@ function BlockMarkdownContent({ fromScratch }: BlockMarkdownProps) {
 
   const instructionsMdId = useInstructionsMdIdQuery();
   const notificationSource = useGlobalNotificationSource();
-  const canEdit = useCanEdit();
+  const canEdit = useCanEdit(!fromScratch);
   const { displayName } = useMarkdownName();
   const isInstructionsMd = createMemo(() => blockId === instructionsMdId.data);
 
@@ -179,7 +179,10 @@ function BlockMarkdownContent({ fromScratch }: BlockMarkdownProps) {
                           />
                         }
                       >
-                        <Notebook loroManager={() => loroManager} />
+                        <Notebook
+                          loroManager={() => loroManager}
+                          mustBeConnected={!fromScratch}
+                        />
                       </Show>
                     </Suspense>
                   </div>

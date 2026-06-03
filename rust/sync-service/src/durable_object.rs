@@ -356,7 +356,7 @@ impl DocumentSyncSession {
     }
 
     async fn initialize_handler(&self, mut req: Request, document_id: &str) -> Result<Response> {
-        // worker::Delay::from(std::time::Duration::from_secs(2)).await; // (for simulating delay). too long and requests time out (~3s)
+        // worker::Delay::from(std::time::Duration::from_secs(4)).await; // (for simulating delay). too long and requests time out (~3s)
 
         // NB: we expect DocumentSyncSession to not be initialized. If it is initialized, it's an error.
         let storage = get_snapshot_storage(&self.env, &self.state, document_id.to_string())?;
@@ -546,6 +546,8 @@ impl DocumentSyncSession {
     }
 
     async fn connect_handler(&self, req: Request, document_id: &str) -> Result<Response> {
+        // worker::Delay::from(std::time::Duration::from_secs(4)).await; // (for simulating delay). too long and requests time out (~3s)
+
         let (res, elap) = timeit!({
             let claims = or_unauth!(decode_jwt(&req, &self.env, TokenFrom::QueryParams).ok());
             if self.maybe_set_document_id(document_id).await? {

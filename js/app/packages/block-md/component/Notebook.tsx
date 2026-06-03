@@ -72,6 +72,7 @@ const widthToMode = (width: number): CommentLayoutMode => {
 
 export function Notebook(props: {
   loroManager: Accessor<LoroManager | undefined>;
+  mustBeConnected?: boolean;
 }) {
   const blockElement = blockElementSignal.get;
   const setStore = mdStore.set;
@@ -267,7 +268,7 @@ export function Notebook(props: {
   return (
     <div class={containerClasses()} ref={notebookRef}>
       <div class={contentDivClasses()} ref={contentRef}>
-        <TitleEditor autoFocusOnMount />
+        <TitleEditor autoFocusOnMount mustBeConnected={props.mustBeConnected} />
         <div class="spacer h-3" />
         <div class="mb-6 flex flex-row flex-wrap items-center gap-2 text-sm empty:hidden">
           <InlineTaskProperties />
@@ -275,7 +276,10 @@ export function Notebook(props: {
           <TaskDuplicateMatchPill />
         </div>
         <ParamsProvider>
-          <MarkdownEditor loroManager={props.loroManager} />
+          <MarkdownEditor
+            loroManager={props.loroManager}
+            mustBeConnected={props.mustBeConnected}
+          />
           <Show when={ENABLE_RAIL_CHAT_TASK_COMMENTS && isTask}>
             <TaskDiscussion />
           </Show>

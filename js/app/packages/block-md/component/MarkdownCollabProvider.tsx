@@ -415,15 +415,14 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
     syncEngine.start();
     props.pluginManager.use(lexicalStateSyncPlugin);
 
-    // DEBUG: log every Lexical update so we can watch the tree evolve as the user types.
-    props.editor.registerUpdateListener(({ editorState, tags }) => {
-      console.log(
-        '[lexical update] tags:',
-        Array.from(tags),
-        '\nstate:',
-        JSON.stringify(editorState.toJSON(), null, 2)
-      );
-    });
+    // props.editor.registerUpdateListener(({ editorState, tags }) => {
+    // console.log(
+    //   '[lexical update] tags:',
+    //   Array.from(tags),
+    //   '\nstate:',
+    //   JSON.stringify(editorState.toJSON(), null, 2)
+    // );
+    // });
   }
 
   /** Initializes the loroManager and starts the sync engine */

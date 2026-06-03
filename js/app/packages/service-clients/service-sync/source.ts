@@ -28,7 +28,7 @@ import {
 } from '@websocket/solid/socket-effect';
 import { createWebsocketStateSignal } from '@websocket/solid/state-signal';
 import { encodeFrontiers, type Frontiers } from 'loro-crdt';
-import { type Result, ResultAsync } from 'neverthrow';
+import { type Result, ResultAsync, okAsync } from 'neverthrow';
 import { createStore } from 'solid-js/store';
 import {
   FromPeer,
@@ -120,6 +120,7 @@ export const createSyncServiceSource = (
   // server's RemoteInitialSync message arrives (~50ms after WS opens).
   // `doInitialSync()` just returns the cached promise; if it's called late,
   // it still resolves because the listener captured the message.
+  let initialSyncReceived = false;
   const initialSyncPromise = ResultAsync.fromPromise(
     raceTimeout(
       untilMessage(ws, (message) => message.isRemoteInitialSync()),
@@ -128,6 +129,7 @@ export const createSyncServiceSource = (
     ),
     () => SyncError.timeout(TIMEOUTS.INITIAL_SYNC)
   ).map((message) => {
+    initialSyncReceived = true;
     // Start heartbeat only after initial sync completes successfully
     // This prevents the heartbeat from closing the connection during slow initial syncs
     ws.startHeartbeat();
@@ -246,6 +248,12 @@ export const createSyncServiceSource = (
   const pushUpdate = (
     update: RawUpdate
   ): ResultAsync<void, MissingAckError> => {
+    // no point in sending messages, since we will do our catch-up sync once the
+    // initial sync comes in
+    if (!initialSyncReceived) {
+      return okAsync(undefined);
+    }
+
     const message = FromPeer.fromPeerUpdate({ update });
     ws.send(message);
 
