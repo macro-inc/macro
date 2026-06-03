@@ -21,7 +21,7 @@ import {
   Suspense,
 } from 'solid-js';
 
-const DEBOUNCE_MS = 500;
+const DEBOUNCE_MS = 150;
 
 type DebouncedInput = { title: string; markdown: string };
 
@@ -32,43 +32,26 @@ type DebouncedInput = { title: string; markdown: string };
  */
 function SimilarTasksInner(props: {
   debounced: Accessor<DebouncedInput>;
-  initialResults: TaskSimilarityResult[];
-  onResults: (results: TaskSimilarityResult[]) => void;
   onOpenTask: (taskId: string) => void;
 }) {
   const [expanded, setExpanded] = createSignal(true);
   const [listRef, setListRef] = createSignal<HTMLElement>();
 
-  // The composer's draft (and its saved results) was loaded for this input.
-  const initialInput = props.debounced();
+  const similarity = useTaskSimilaritySearchQuery(() => ({
+    title: props.debounced().title,
+    markdown: props.debounced().markdown,
+    // Mirror the composer's create call, which does not share with a team.
+    shareWithTeam: false,
+  }));
 
-  const similarity = useTaskSimilaritySearchQuery(
-    () => ({
-      title: props.debounced().title,
-      markdown: props.debounced().markdown,
-      // Mirror the composer's create call, which does not share with a team.
-      shareWithTeam: false,
-    }),
-    () => {
-      const input = props.debounced();
-      const isInitialInput =
-        input.title === initialInput.title &&
-        input.markdown === initialInput.markdown;
-      return isInitialInput && props.initialResults.length > 0
-        ? props.initialResults
-        : undefined;
-    }
-  );
-
-  // Persist the latest results with the composer draft.
-  createEffect(() => {
-    const data = similarity.data;
-    if (data) props.onResults(data);
-  });
-
-  // Live results once loaded, otherwise the results saved with the draft.
+  // The query retains its last data while disabled, so clear the results
+  // ourselves once there is nothing to search on (no title and no body).
+  const hasInput = () => {
+    const input = props.debounced();
+    return input.title.trim().length > 0 || input.markdown.trim().length > 0;
+  };
   const results = (): TaskSimilarityResult[] =>
-    similarity.data ?? props.initialResults;
+    hasInput() ? (similarity.data ?? []) : [];
   const ids = () => results().map((result) => result.taskId);
 
   // Hydrate full soup entities (status, owner, assignees, …) for the matches so
@@ -140,8 +123,6 @@ function SimilarTasksInner(props: {
 export function SimilarTasksSection(props: {
   title: Accessor<string>;
   content: Accessor<string>;
-  initialResults: TaskSimilarityResult[];
-  onResults: (results: TaskSimilarityResult[]) => void;
   onOpenTask: (taskId: string) => void;
 }) {
   const flag = useFeatureFlag(ENABLE_TASK_DUPLICATES_FLAG, {
@@ -167,8 +148,6 @@ export function SimilarTasksSection(props: {
       <Suspense>
         <SimilarTasksInner
           debounced={debounced}
-          initialResults={props.initialResults}
-          onResults={props.onResults}
           onOpenTask={props.onOpenTask}
         />
       </Suspense>
