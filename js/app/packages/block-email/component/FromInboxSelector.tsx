@@ -61,7 +61,7 @@ export function FromInboxSelector(props: {
           }
         >
           <Dropdown>
-            <Dropdown.Trigger class="gap-2 text-sm text-ink-muted">
+            <Dropdown.Trigger class="flex items-center min-w-0 max-w-full gap-2 text-sm text-ink-muted">
               <Show when={active()} keyed>
                 {(inbox) => <FromInboxOption inbox={inbox} />}
               </Show>
