@@ -62,6 +62,7 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, @
     private let localTileView = RemoteVideoTileView(isMirrored: true)
     private let controlsView = UIStackView()
     private let microphoneButton = UIButton(type: .system)
+    private let speakerButton = UIButton(type: .system)
     private let cameraButton = UIButton(type: .system)
     private let switchCameraButton = UIButton(type: .system)
     private let thumbnailView = UIView()
@@ -75,6 +76,7 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, @
     private let edgeTabView = UILabel()
 
     var onToggleMicrophone: (() -> Void)?
+    var onToggleSpeaker: (() -> Void)?
     var onToggleCamera: (() -> Void)?
     var onSwitchCamera: (() -> Void)?
     var onEndCall: (() -> Void)?
@@ -86,6 +88,12 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, @
     private var thumbnailCorner: ThumbnailCorner = .topRight
     private var didAutoPresent = false
     private var isAudioMuted = false
+    private var audioRoute = CallAudioRouteSnapshot(
+        input: .unknown,
+        output: .unknown,
+        isSpeakerForced: false,
+        supportsSpeakerToggle: true
+    )
     private var isLocalVideoEnabled = false
     private var channelTitle = "Call"
     private var theme = CallVideoOverlayTheme.fallback
@@ -274,6 +282,15 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, @
         }
     }
 
+    func setAudioRoute(_ route: CallAudioRouteSnapshot) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.audioRoute = route
+            self.configureControlState()
+            print("[CallKit] Native video overlay audioRoute input=\(route.input.rawValue) output=\(route.output.rawValue) speakerForced=\(route.isSpeakerForced) supportsSpeakerToggle=\(route.supportsSpeakerToggle)")
+        }
+    }
+
     func reset() {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
@@ -293,6 +310,12 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, @
             self.renderedThumbnailRemoteVideoTrack = nil
             self.rebuildParticipantStrip()
             self.isAudioMuted = false
+            self.audioRoute = CallAudioRouteSnapshot(
+                input: .unknown,
+                output: .unknown,
+                isSpeakerForced: false,
+                supportsSpeakerToggle: true
+            )
             self.isLocalVideoEnabled = false
             self.localParticipantTitle = "You"
             self.mode = .hidden
@@ -426,9 +449,12 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, @
         drawerView.addSubview(controlsView)
 
         configureControlButton(microphoneButton, systemImageName: "mic.fill", action: #selector(toggleMicrophone))
+        configureControlButton(speakerButton, systemImageName: "speaker.wave.2.fill", action: #selector(toggleSpeaker))
         configureControlButton(cameraButton, systemImageName: "video.slash.fill", action: #selector(toggleCamera))
-        microphoneButton.layer.maskedCorners = [.layerMinXMinYCorner, .layerMinXMaxYCorner]
+        speakerButton.layer.maskedCorners = [.layerMinXMinYCorner, .layerMinXMaxYCorner]
+        microphoneButton.layer.maskedCorners = []
         cameraButton.layer.maskedCorners = [.layerMaxXMinYCorner, .layerMaxXMaxYCorner]
+        controlsView.addArrangedSubview(speakerButton)
         controlsView.addArrangedSubview(microphoneButton)
         controlsView.addArrangedSubview(cameraButton)
 
@@ -491,10 +517,14 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, @
         button.heightAnchor.constraint(equalToConstant: 44).isActive = true
     }
 
-    private func applyActionButtonTheme(_ button: UIButton) {
+    private func applyActionButtonTheme(_ button: UIButton, isActive: Bool = false) {
         button.tintColor = theme.textColor
-        button.backgroundColor = theme.inkMutedColor.withAlphaComponent(0.025)
-        button.layer.borderColor = theme.inkMutedColor.withAlphaComponent(0.08).cgColor
+        button.backgroundColor = isActive
+            ? theme.edgeMutedColor
+            : theme.inkMutedColor.withAlphaComponent(0.025)
+        button.layer.borderColor = isActive
+            ? theme.edgeColor.cgColor
+            : theme.inkMutedColor.withAlphaComponent(0.08).cgColor
         button.layer.borderWidth = 1
     }
 
@@ -531,10 +561,48 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, @
         microphoneButton.setImage(UIImage(systemName: microphoneImage), for: .normal)
         applyActionButtonTheme(microphoneButton)
 
+        speakerButton.setImage(audioRouteButtonImage(), for: .normal)
+        speakerButton.isEnabled = audioRoute.supportsSpeakerToggle
+        speakerButton.alpha = audioRoute.supportsSpeakerToggle ? 1 : 0.45
+        applyActionButtonTheme(speakerButton, isActive: audioRoute.output == .speaker)
+
         let cameraImage = isLocalVideoEnabled ? "video.fill" : "video.slash.fill"
         cameraButton.setImage(UIImage(systemName: cameraImage), for: .normal)
         applyActionButtonTheme(cameraButton)
         switchCameraButton.isHidden = !isLocalVideoEnabled
+    }
+
+    private func audioRouteButtonImage() -> UIImage? {
+        switch audioRoute.output {
+        case .speaker, .receiver, .unknown:
+            return UIImage(systemName: "speaker.wave.2.fill")
+        case .bluetooth:
+            return UIImage(systemName: "bluetooth") ?? bluetoothTemplateImage()
+        case .headphones:
+            return UIImage(systemName: "headphones")
+        }
+    }
+
+    private func bluetoothTemplateImage() -> UIImage {
+        let size = CGSize(width: 20, height: 20)
+        let renderer = UIGraphicsImageRenderer(size: size)
+        return renderer.image { context in
+            let h = size.height
+            let y1 = h * 0.05
+            let y2 = h * 0.25
+            let cgContext = context.cgContext
+            cgContext.move(to: CGPoint(x: y2, y: y2))
+            cgContext.addLine(to: CGPoint(x: h - y2, y: h - y2))
+            cgContext.addLine(to: CGPoint(x: h / 2, y: h - y1))
+            cgContext.addLine(to: CGPoint(x: h / 2, y: y1))
+            cgContext.addLine(to: CGPoint(x: h - y2, y: y2))
+            cgContext.addLine(to: CGPoint(x: y2, y: h - y2))
+            cgContext.setStrokeColor(UIColor.black.cgColor)
+            cgContext.setLineCap(.round)
+            cgContext.setLineJoin(.round)
+            cgContext.setLineWidth(2)
+            cgContext.strokePath()
+        }.withRenderingMode(.alwaysTemplate)
     }
 
     private func rebuildParticipantStrip() {
@@ -910,6 +978,12 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, @
     @objc private func toggleMicrophone() {
         print("[CallKit] Native video overlay microphone toggle tapped currentMuted=\(isAudioMuted)")
         onToggleMicrophone?()
+    }
+
+    @objc private func toggleSpeaker() {
+        print("[CallKit] Native video overlay speaker toggle tapped output=\(audioRoute.output.rawValue) speakerForced=\(audioRoute.isSpeakerForced) supportsSpeakerToggle=\(audioRoute.supportsSpeakerToggle)")
+        guard audioRoute.supportsSpeakerToggle else { return }
+        onToggleSpeaker?()
     }
 
     @objc private func toggleCamera() {

@@ -33,7 +33,9 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
     private var participantDisplayNamesByIdentity: [String: String] = [:]
     private var didPrepareAudio = false
     private var isCallKitAudioActive = false
+    private var desiredAudioMuted = false
     private let audioEngineLogger = CallKitAudioEngineLogger()
+    private let audioRouteController = CallAudioRouteController()
 
     init(
         onSnapshotChanged: @escaping (ActiveCallSnapshot?) -> Void,
@@ -48,9 +50,15 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
         self.onParticipantIdentitiesChanged = onParticipantIdentitiesChanged
         self.videoOverlay = videoOverlay
         super.init()
+        audioEngineLogger.desiredMutedProvider = { [weak self] in
+            self?.desiredAudioMuted
+        }
         configureLiveKitAudioForCallKit()
         videoOverlay.onToggleMicrophone = { [weak self] in
             self?.toggleAudioFromOverlay()
+        }
+        videoOverlay.onToggleSpeaker = { [weak self] in
+            self?.toggleSpeakerFromOverlay()
         }
         videoOverlay.onToggleCamera = { [weak self] in
             self?.toggleVideoFromOverlay()
@@ -73,6 +81,10 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
             print("[CallKit] Picture in Picture refreshing source for overlay mode=\(mode.rawValue)")
             self?.pictureInPicture.prepare()
         }
+        audioRouteController.onRouteChanged = { [weak self] route in
+            self?.videoOverlay.setAudioRoute(route)
+        }
+        audioRouteController.startObserving()
         pictureInPicture.prepare()
         print("[CallKit] NativeLiveKitCallSession initialized")
     }
@@ -106,10 +118,12 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
             try session.setCategory(
                 .playAndRecord,
                 mode: .voiceChat,
-                options: [.mixWithOthers]
+                options: [.allowBluetoothHFP, .mixWithOthers]
             )
             try session.setPreferredIOBufferDuration(0.02)
             print("[CallKit] Configured AVAudioSession category for voice call \(describeAudioSession())")
+            audioRouteController.emitCurrentRoute()
+            audioRouteController.defaultToSpeakerIfBuiltInRoute(reason: "audioSessionCategoryConfigured")
         } catch {
             print("[CallKit] Failed to set audio session category: \(error) \(describeAudioSession())")
         }
@@ -151,6 +165,7 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
     func connect(uuid: UUID, channelId: String, serverUrl: String, token: String) {
         print("[CallKit] Native LiveKit connect requested uuid=\(uuid.uuidString) channelId=\(channelId)")
         prepareForCallKitAudio()
+        audioRouteController.prepareForCall()
 
         print("[CallKit] Creating LiveKit Room uuid=\(uuid.uuidString)")
         let newRoom = Room(delegate: self)
@@ -165,6 +180,7 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
             isVideoMuted: true,
             videoOverlayMode: "hidden"
         )
+        desiredAudioMuted = false
         pinnedRemoteVideoParticipantId = nil
         speakingRemoteParticipantIds = []
         videoOverlay.setAudioMuted(false)
@@ -250,11 +266,13 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
             self.room = nil
             self.activeCallUUID = nil
             self.activeCall = nil
+            self.desiredAudioMuted = false
             self.pinnedRemoteVideoParticipantId = nil
             self.speakingRemoteParticipantIds = []
             self.participantDisplayNamesByIdentity = [:]
             self.onParticipantIdentitiesChanged([])
             self.pictureInPicture.stopAndReset()
+            self.audioRouteController.resetSpeakerOverride()
             self.emitSnapshot()
             self.videoOverlay.reset()
             return r
@@ -274,15 +292,18 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
             return
         }
 
+        desiredAudioMuted = muted
+        print("[CallKit] Native LiveKit desired microphone muted=\(muted) uuid=\(uuid.uuidString) currentSnapshotMuted=\(activeCall?.isAudioMuted.description ?? "nil")")
+
         Task { [weak self, weak room] in
             guard let self, let room else { return }
 
             do {
                 if muted {
-                    print("[CallKit] Muting native LiveKit microphone uuid=\(uuid.uuidString)")
+                    print("[CallKit] Applying native LiveKit microphone muted=true uuid=\(uuid.uuidString) desiredMuted=\(self.desiredAudioMuted)")
                     try await room.localParticipant.setMicrophone(enabled: false)
                     self.updateAudioMuted(true, room: room, uuid: uuid)
-                    print("[CallKit] Native LiveKit microphone muted uuid=\(uuid.uuidString)")
+                    print("[CallKit] Native LiveKit microphone muted uuid=\(uuid.uuidString) desiredMuted=\(self.desiredAudioMuted)")
                     return
                 }
 
@@ -291,12 +312,12 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
                     return
                 }
 
-                print("[CallKit] Unmuting native LiveKit microphone uuid=\(uuid.uuidString) engineAvailable=\(AudioManager.shared.engineAvailability.isInputAvailable) engineRunning=\(AudioManager.shared.isEngineRunning) \(describeAudioSession())")
+                print("[CallKit] Applying native LiveKit microphone muted=false uuid=\(uuid.uuidString) desiredMuted=\(self.desiredAudioMuted) engineAvailable=\(AudioManager.shared.engineAvailability.isInputAvailable) engineRunning=\(AudioManager.shared.isEngineRunning) \(describeAudioSession())")
                 try await room.localParticipant.setMicrophone(enabled: true)
                 self.updateAudioMuted(false, room: room, uuid: uuid)
-                print("[CallKit] Native LiveKit microphone unmuted uuid=\(uuid.uuidString)")
+                print("[CallKit] Native LiveKit microphone unmuted uuid=\(uuid.uuidString) desiredMuted=\(self.desiredAudioMuted)")
             } catch {
-                print("[CallKit] Failed to set native LiveKit microphone muted=\(muted) uuid=\(uuid.uuidString): \(error)")
+                print("[CallKit] Failed to set native LiveKit microphone muted=\(muted) uuid=\(uuid.uuidString) desiredMuted=\(self.desiredAudioMuted): \(error)")
                 self.updateAudioMuted(true, room: room, uuid: uuid)
             }
         }
@@ -376,6 +397,13 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
         let muted = !(activeCall?.isAudioMuted ?? false)
         print("[CallKit] Native video overlay requested microphone muted=\(muted)")
         setAudioMuted(muted)
+    }
+
+    private func toggleSpeakerFromOverlay() {
+        let currentOutput = audioRouteController.currentRouteSnapshot().output
+        let enableSpeaker = currentOutput != .speaker
+        print("[CallKit] Native video overlay requested speaker enabled=\(enableSpeaker) currentOutput=\(currentOutput.rawValue)")
+        audioRouteController.setSpeakerEnabled(enableSpeaker)
     }
 
     private func endCallFromOverlay() {
@@ -853,8 +881,11 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
     private func updateAudioMuted(_ isMuted: Bool, room: Room, uuid: UUID) {
         DispatchQueue.main.async { [weak self, weak room] in
             guard let self, let room, self.activeCallUUID == uuid, self.room === room, var snapshot = self.activeCall else { return }
+            let previousMuted = snapshot.isAudioMuted
             snapshot.isAudioMuted = isMuted
+            self.desiredAudioMuted = isMuted
             self.activeCall = snapshot
+            print("[CallKit] Native LiveKit microphone state updated uuid=\(uuid.uuidString) previousMuted=\(previousMuted) actualMuted=\(isMuted) desiredMuted=\(self.desiredAudioMuted)")
             self.videoOverlay.setAudioMuted(isMuted)
             self.emitSnapshot()
         }
@@ -881,38 +912,39 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
 
 private final class CallKitAudioEngineLogger: AudioEngineObserver, @unchecked Sendable {
     var next: (any AudioEngineObserver)?
+    var desiredMutedProvider: (() -> Bool?)?
 
     func engineDidCreate(_ engine: AVAudioEngine) -> Int {
-        print("[CallKit] LiveKit audio engine did create")
+        print("[CallKit] LiveKit audio engine did create desiredMuted=\(describeDesiredMuted())")
         return next?.engineDidCreate(engine) ?? 0
     }
 
     func engineWillEnable(_ engine: AVAudioEngine, isPlayoutEnabled: Bool, isRecordingEnabled: Bool) -> Int {
-        print("[CallKit] LiveKit audio engine will enable playout=\(isPlayoutEnabled) recording=\(isRecordingEnabled)")
+        print("[CallKit] LiveKit audio engine will enable playout=\(isPlayoutEnabled) recording=\(isRecordingEnabled) desiredMuted=\(describeDesiredMuted())")
         let result = next?.engineWillEnable(engine, isPlayoutEnabled: isPlayoutEnabled, isRecordingEnabled: isRecordingEnabled) ?? 0
         print("[CallKit] LiveKit audio engine will enable result=\(result)")
         return result
     }
 
     func engineWillStart(_ engine: AVAudioEngine, isPlayoutEnabled: Bool, isRecordingEnabled: Bool) -> Int {
-        print("[CallKit] LiveKit audio engine will start playout=\(isPlayoutEnabled) recording=\(isRecordingEnabled)")
+        print("[CallKit] LiveKit audio engine will start playout=\(isPlayoutEnabled) recording=\(isRecordingEnabled) desiredMuted=\(describeDesiredMuted())")
         let result = next?.engineWillStart(engine, isPlayoutEnabled: isPlayoutEnabled, isRecordingEnabled: isRecordingEnabled) ?? 0
         print("[CallKit] LiveKit audio engine will start result=\(result)")
         return result
     }
 
     func engineDidStop(_ engine: AVAudioEngine, isPlayoutEnabled: Bool, isRecordingEnabled: Bool) -> Int {
-        print("[CallKit] LiveKit audio engine did stop playout=\(isPlayoutEnabled) recording=\(isRecordingEnabled)")
+        print("[CallKit] LiveKit audio engine did stop playout=\(isPlayoutEnabled) recording=\(isRecordingEnabled) desiredMuted=\(describeDesiredMuted())")
         return next?.engineDidStop(engine, isPlayoutEnabled: isPlayoutEnabled, isRecordingEnabled: isRecordingEnabled) ?? 0
     }
 
     func engineDidDisable(_ engine: AVAudioEngine, isPlayoutEnabled: Bool, isRecordingEnabled: Bool) -> Int {
-        print("[CallKit] LiveKit audio engine did disable playout=\(isPlayoutEnabled) recording=\(isRecordingEnabled)")
+        print("[CallKit] LiveKit audio engine did disable playout=\(isPlayoutEnabled) recording=\(isRecordingEnabled) desiredMuted=\(describeDesiredMuted())")
         return next?.engineDidDisable(engine, isPlayoutEnabled: isPlayoutEnabled, isRecordingEnabled: isRecordingEnabled) ?? 0
     }
 
     func engineWillRelease(_ engine: AVAudioEngine) -> Int {
-        print("[CallKit] LiveKit audio engine will release")
+        print("[CallKit] LiveKit audio engine will release desiredMuted=\(describeDesiredMuted())")
         return next?.engineWillRelease(engine) ?? 0
     }
 
@@ -923,7 +955,7 @@ private final class CallKitAudioEngineLogger: AudioEngineObserver, @unchecked Se
         format: AVAudioFormat,
         context: [AnyHashable: Any]
     ) -> Int {
-        print("[CallKit] LiveKit audio engine will connect output format=\(format)")
+        print("[CallKit] LiveKit audio engine will connect output format=\(format) desiredMuted=\(describeDesiredMuted())")
         return next?.engineWillConnectOutput(engine, src: src, dst: dst, format: format, context: context) ?? 0
     }
 
@@ -934,7 +966,11 @@ private final class CallKitAudioEngineLogger: AudioEngineObserver, @unchecked Se
         format: AVAudioFormat,
         context: [AnyHashable: Any]
     ) -> Int {
-        print("[CallKit] LiveKit audio engine will connect input format=\(format)")
+        print("[CallKit] LiveKit audio engine will connect input format=\(format) desiredMuted=\(describeDesiredMuted())")
         return next?.engineWillConnectInput(engine, src: src, dst: dst, format: format, context: context) ?? 0
+    }
+
+    private func describeDesiredMuted() -> String {
+        desiredMutedProvider?().map(String.init) ?? "nil"
     }
 }
