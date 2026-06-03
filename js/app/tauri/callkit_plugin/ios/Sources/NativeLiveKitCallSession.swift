@@ -261,25 +261,7 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
     func disconnect() async {
         print("[CallKit] Native LiveKit disconnect requested")
         let toDisconnect: Room? = await MainActor.run {
-            self.connectTask?.cancel()
-            self.connectTask = nil
-            if self.isCallKitAudioActive {
-                self.deactivateAudioEngine()
-            }
-            let r = self.room
-            self.room = nil
-            self.activeCallUUID = nil
-            self.activeCall = nil
-            self.desiredAudioMuted = false
-            self.pinnedRemoteVideoParticipantId = nil
-            self.speakingRemoteParticipantIds = []
-            self.participantDisplayNamesByIdentity = [:]
-            self.onParticipantIdentitiesChanged([])
-            self.pictureInPicture.stopAndReset()
-            self.audioRouteController.resetSpeakerOverride()
-            self.emitSnapshot()
-            self.videoOverlay.reset()
-            return r
+            self.clearNativeCallState(deactivateAudio: true)
         }
 
         if let toDisconnect {
@@ -462,9 +444,10 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
             guard let self, let room, self.room === room else { return }
 
             if connectionState == .disconnected {
-                self.activeCallUUID = nil
-                self.activeCall = nil
-                self.emitSnapshot()
+                if let uuid = self.activeCallUUID {
+                    self.requestSystemEndCall(uuid)
+                }
+                _ = self.clearNativeCallState(deactivateAudio: true)
                 return
             }
 
@@ -901,6 +884,29 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
             self.activeCall = snapshot
             self.emitSnapshot()
         }
+    }
+
+    @MainActor
+    private func clearNativeCallState(deactivateAudio: Bool) -> Room? {
+        connectTask?.cancel()
+        connectTask = nil
+        if deactivateAudio, isCallKitAudioActive {
+            deactivateAudioEngine()
+        }
+        let r = room
+        room = nil
+        activeCallUUID = nil
+        activeCall = nil
+        desiredAudioMuted = false
+        pinnedRemoteVideoParticipantId = nil
+        speakingRemoteParticipantIds = []
+        participantDisplayNamesByIdentity = [:]
+        onParticipantIdentitiesChanged([])
+        pictureInPicture.stopAndReset()
+        audioRouteController.resetSpeakerOverride()
+        emitSnapshot()
+        videoOverlay.reset()
+        return r
     }
 
     private func emitSnapshot() {

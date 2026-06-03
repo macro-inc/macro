@@ -70,22 +70,22 @@ class CallKitPlugin: Plugin, @unchecked Sendable {
                 self?.trigger("voip-token-updated", data: ["token": token])
             },
             onCallAnswered: { [weak self] channelId, nativeMedia in
-                guard let channel = self?.callAnsweredChannel else {
-                    print("[CallKit] No JS call answered channel registered; caching handled by coordinator channelId=\(channelId) nativeMedia=\(nativeMedia)")
-                    return
+                let eventPayload: JSObject = ["channelId": channelId, "nativeMedia": nativeMedia]
+                print("[CallKit] Triggering call answered event channelId=\(channelId) nativeMedia=\(nativeMedia)")
+                self?.trigger("call-answered", data: eventPayload)
+                if let channel = self?.callAnsweredChannel {
+                    let channelPayload: JsonObject = ["channelId": channelId, "nativeMedia": nativeMedia]
+                    channel.send(channelPayload)
                 }
-                print("[CallKit] Sending call answered channel message channelId=\(channelId) nativeMedia=\(nativeMedia)")
-                let payload: JsonObject = ["channelId": channelId, "nativeMedia": nativeMedia]
-                channel.send(payload)
             },
             onCallEnded: { [weak self] callId in
-                guard let channel = self?.callEndedChannel else {
-                    print("[CallKit] No JS call ended channel registered callId=\(callId)")
-                    return
+                let eventPayload: JSObject = ["callId": callId]
+                print("[CallKit] Triggering call ended event callId=\(callId)")
+                self?.trigger("call-ended", data: eventPayload)
+                if let channel = self?.callEndedChannel {
+                    let channelPayload: JsonObject = ["callId": callId]
+                    channel.send(channelPayload)
                 }
-                print("[CallKit] Sending call ended channel message callId=\(callId)")
-                let payload: JsonObject = ["callId": callId]
-                channel.send(payload)
             }
         )
         videoOverlay.attach(to: webview)
@@ -295,14 +295,23 @@ class CallKitPlugin: Plugin, @unchecked Sendable {
     }
 
     private func emitConnectionState(_ snapshot: ActiveCallSnapshot?) {
-        let payload: JsonObject
+        let eventPayload: JSObject
+        let channelPayload: JsonObject
         if let snapshot {
             print("[CallKit] Sending connection state channel message state=\(snapshot.connectionState) channelId=\(snapshot.channelId) callId=\(snapshot.callId)")
             if snapshot.connectionState == "connected",
                let uuid = UUID(uuidString: snapshot.callId) {
                 callCoordinator.reportNativeCallConnected(uuid: uuid)
             }
-            payload = [
+            eventPayload = [
+                "state": snapshot.connectionState,
+                "channelId": snapshot.channelId,
+                "callId": snapshot.callId,
+                "isAudioMuted": snapshot.isAudioMuted,
+                "isVideoMuted": snapshot.isVideoMuted,
+                "videoOverlayMode": snapshot.videoOverlayMode,
+            ]
+            channelPayload = [
                 "state": snapshot.connectionState,
                 "channelId": snapshot.channelId,
                 "callId": snapshot.callId,
@@ -312,7 +321,15 @@ class CallKitPlugin: Plugin, @unchecked Sendable {
             ]
         } else {
             print("[CallKit] Sending connection state channel message state=disconnected")
-            payload = [
+            eventPayload = [
+                "state": "disconnected",
+                "channelId": NSNull(),
+                "callId": NSNull(),
+                "isAudioMuted": false,
+                "isVideoMuted": true,
+                "videoOverlayMode": "hidden",
+            ]
+            channelPayload = [
                 "state": "disconnected",
                 "channelId": NSNull(),
                 "callId": NSNull(),
@@ -321,31 +338,30 @@ class CallKitPlugin: Plugin, @unchecked Sendable {
                 "videoOverlayMode": "hidden",
             ]
         }
-        guard let channel = connectionStateChannel else {
-            print("[CallKit] No JS connection state channel registered")
-            return
+        trigger("connection-state", data: eventPayload)
+        if let channel = connectionStateChannel {
+            channel.send(channelPayload)
         }
-        channel.send(payload)
     }
 
     private func emitDrawerOpened(channelId: String) {
-        guard let channel = drawerOpenedChannel else {
-            print("[CallKit] No JS drawer opened channel registered channelId=\(channelId)")
-            return
+        let eventPayload: JSObject = ["channelId": channelId]
+        print("[CallKit] Triggering drawer opened event channelId=\(channelId)")
+        trigger("drawer-opened", data: eventPayload)
+        if let channel = drawerOpenedChannel {
+            let channelPayload: JsonObject = ["channelId": channelId]
+            channel.send(channelPayload)
         }
-        print("[CallKit] Sending drawer opened channel message channelId=\(channelId)")
-        let payload: JsonObject = ["channelId": channelId]
-        channel.send(payload)
     }
 
     private func emitParticipantIdentities(_ identities: [String]) {
-        guard let channel = participantIdentitiesChannel else {
-            print("[CallKit] No JS participant identities channel registered identities=\(identities)")
-            return
+        let eventPayload: JSObject = ["identities": identities]
+        print("[CallKit] Triggering participant identities event identities=\(identities)")
+        trigger("participant-identities", data: eventPayload)
+        if let channel = participantIdentitiesChannel {
+            let channelPayload: JsonObject = ["identities": identities]
+            channel.send(channelPayload)
         }
-        print("[CallKit] Sending participant identities channel message identities=\(identities)")
-        let payload: JsonObject = ["identities": identities]
-        channel.send(payload)
     }
 
     private func getMediaSession() -> NativeLiveKitCallSession {

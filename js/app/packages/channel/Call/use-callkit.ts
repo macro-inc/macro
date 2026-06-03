@@ -140,6 +140,7 @@ export function isNativeIosCallKitEnabled(): boolean {
 
 // Fresh CallKit launches can receive answer events before the router tree mounts.
 const SPLIT_MANAGER_READY_TIMEOUT_MS = 15_000;
+const DUPLICATE_ANSWERED_CALL_WINDOW_MS = 2_000;
 
 async function joinChannelCallWhenReady(
   channelId: string,
@@ -264,7 +265,11 @@ export function useCallKitSetup() {
     console.info('[callkit] setting up iOS CallKit integration');
 
     let cleaned = false;
+    let lastHandledAnsweredCall:
+      | { key: string; handledAtMs: number }
+      | undefined;
     const unregisters: Array<() => Promise<void>> = [];
+    const channelWatchers: Array<Channel<unknown>> = [];
     onCleanup(() => {
       cleaned = true;
       unregisters.forEach((u) =>
@@ -273,6 +278,7 @@ export function useCallKitSetup() {
         )
       );
       unregisters.length = 0;
+      channelWatchers.length = 0;
     });
 
     function trackListener(
@@ -291,6 +297,23 @@ export function useCallKitSetup() {
         })
         .catch((err) =>
           console.error(`[callkit] failed to register ${label}`, err)
+        );
+    }
+
+    function registerChannelWatcher<T>(
+      command: string,
+      label: string,
+      handler: (payload: T) => void
+    ) {
+      const channel = new Channel<T>((payload) => {
+        if (cleaned) return;
+        handler(payload);
+      });
+      channelWatchers.push(channel as Channel<unknown>);
+      invoke(`plugin:call-kit|${command}`, { channel })
+        .then(() => console.info(`[callkit] ${label} watcher registered`))
+        .catch((err) =>
+          console.error(`[callkit] failed to register ${label} watcher`, err)
         );
     }
 
@@ -328,95 +351,108 @@ export function useCallKitSetup() {
       })
       .catch((err) => console.error('[callkit] get_voip_token failed', err));
 
-    const callAnsweredChannel = new Channel<CallAnsweredPayload>();
-    callAnsweredChannel.onmessage = ({ channelId, nativeMedia }) => {
-      console.info('[callkit] call answered channel message', {
+    const handleCallAnswered = (
+      { channelId, nativeMedia }: CallAnsweredPayload,
+      source: 'channel' | 'pending' = 'channel'
+    ) => {
+      const answeredCallKey = `${channelId}:${nativeMedia ?? false}`;
+      const now = Date.now();
+      if (
+        lastHandledAnsweredCall?.key === answeredCallKey &&
+        now - lastHandledAnsweredCall.handledAtMs <
+          DUPLICATE_ANSWERED_CALL_WINDOW_MS
+      ) {
+        return;
+      }
+      lastHandledAnsweredCall = { key: answeredCallKey, handledAtMs: now };
+
+      console.info('[callkit] call answered event', {
         channelId,
         nativeMedia,
+        source,
       });
       setNativeCallChannelId(channelId);
       joinChannelCallWhenReady(channelId, nativeMedia).catch((err) =>
         console.error('[callkit] joinChannelCallWhenReady failed', err)
       );
     };
-    invoke<void>('plugin:call-kit|watch_call_answered', {
-      channel: callAnsweredChannel,
-    })
-      .then(() => {
-        if (cleaned) return;
-        console.info('[callkit] call answered watcher registered');
-        return invoke<GetPendingAnsweredCallResponse>(
-          'plugin:call-kit|get_pending_answered_call'
-        ).then(({ channelId, nativeMedia }) => {
+
+    registerChannelWatcher<CallAnsweredPayload>(
+      'watch_call_answered',
+      'call answered',
+      (payload) => handleCallAnswered(payload, 'channel')
+    );
+
+    const drainPendingAnsweredCall = () => {
+      invoke<GetPendingAnsweredCallResponse>(
+        'plugin:call-kit|get_pending_answered_call'
+      )
+        .then(({ channelId, nativeMedia }) => {
           console.info('[callkit] drained pending answered call', {
             channelId,
             nativeMedia,
           });
-          if (channelId) {
-            setNativeCallChannelId(channelId);
-            joinChannelCallWhenReady(channelId, nativeMedia ?? false).catch(
-              (err) =>
-                console.error(
-                  '[callkit] joinChannelCallWhenReady (pending drain) failed',
-                  err
-                )
-            );
-          }
+          if (!channelId) return;
+          handleCallAnswered(
+            { channelId, nativeMedia: nativeMedia ?? false },
+            'pending'
+          );
+        })
+        .catch((err) =>
+          console.error('[callkit] get_pending_answered_call failed', err)
+        );
+    };
+
+    drainPendingAnsweredCall();
+
+    registerChannelWatcher<CallEndedPayload>(
+      'watch_call_ended',
+      'call ended',
+      (payload) => {
+        console.info('[callkit] call ended event', payload);
+        lastHandledAnsweredCall = undefined;
+        setNativeCallChannelId(null);
+        setNativeCallParticipantIdentities([]);
+        const handler = getActiveCallEndedHandler();
+        if (!handler) return;
+        Promise.resolve(handler(payload)).catch((err) =>
+          console.error('[callkit] failed to handle ended call', err)
+        );
+      }
+    );
+
+    registerChannelWatcher<ConnectionStatePayload>(
+      'watch_connection_state',
+      'connection state',
+      applyConnectionState
+    );
+
+    registerChannelWatcher<ParticipantIdentitiesPayload>(
+      'watch_participant_identities',
+      'participant identities',
+      ({ identities }) => {
+        console.info('[callkit] participant identities event', {
+          identities,
         });
-      })
-      .catch((err) =>
-        console.error('[callkit] watch_call_answered failed', err)
-      );
-
-    const callEndedChannel = new Channel<CallEndedPayload>();
-    callEndedChannel.onmessage = (payload) => {
-      console.info('[callkit] call ended channel message', payload);
-      setNativeCallChannelId(null);
-      setNativeCallParticipantIdentities([]);
-      const handler = getActiveCallEndedHandler();
-      if (!handler) return;
-      Promise.resolve(handler(payload)).catch((err) =>
-        console.error('[callkit] failed to handle ended call', err)
-      );
-    };
-    invoke<void>('plugin:call-kit|watch_call_ended', {
-      channel: callEndedChannel,
-    }).catch((err) => console.error('[callkit] watch_call_ended failed', err));
-
-    const connectionStateChannel = new Channel<ConnectionStatePayload>();
-    connectionStateChannel.onmessage = applyConnectionState;
-    invoke<void>('plugin:call-kit|watch_connection_state', {
-      channel: connectionStateChannel,
-    }).catch((err) =>
-      console.error('[callkit] watch_connection_state failed', err)
+        setNativeCallParticipantIdentities(identities);
+      }
     );
 
-    const participantIdentitiesChannel =
-      new Channel<ParticipantIdentitiesPayload>();
-    participantIdentitiesChannel.onmessage = ({ identities }) => {
-      console.info('[callkit] participant identities channel message', {
-        identities,
-      });
-      setNativeCallParticipantIdentities(identities);
-    };
-    invoke<void>('plugin:call-kit|watch_participant_identities', {
-      channel: participantIdentitiesChannel,
-    }).catch((err) =>
-      console.error('[callkit] watch_participant_identities failed', err)
-    );
-
-    const drawerOpenedChannel = new Channel<DrawerOpenedPayload>();
-    drawerOpenedChannel.onmessage = async ({ channelId }) => {
-      console.info('[callkit] drawer opened channel message', {
-        channelId,
-      });
-      setNativeCallChannelId(channelId);
-      await joinChannelCallWhenReady(channelId, true);
-    };
-    invoke<void>('plugin:call-kit|watch_drawer_opened', {
-      channel: drawerOpenedChannel,
-    }).catch((err) =>
-      console.error('[callkit] watch_drawer_opened failed', err)
+    registerChannelWatcher<DrawerOpenedPayload>(
+      'watch_drawer_opened',
+      'drawer opened',
+      ({ channelId }) => {
+        console.info('[callkit] drawer opened event', {
+          channelId,
+        });
+        setNativeCallChannelId(channelId);
+        joinChannelCallWhenReady(channelId, true).catch((err) =>
+          console.error(
+            '[callkit] joinChannelCallWhenReady (drawer opened) failed',
+            err
+          )
+        );
+      }
     );
 
     // Do not let a stale startup drain overwrite live listener state.
@@ -751,15 +787,6 @@ export async function startNativeCallKitOutgoingCall(
   setNativeCallChannelId(args.channelId);
 }
 
-export async function setNativeCallKitVideoEnabled(
-  enabled: boolean
-): Promise<void> {
-  if (!ENABLE_CALLKIT || !isTauri() || !isPlatform('ios')) return;
-  await invoke('plugin:call-kit|set_video_enabled', { enabled }).catch((err) =>
-    console.error('[callkit] failed to set native video enabled', err)
-  );
-}
-
 export async function setNativeCallKitVideoOverlayMode(
   mode: NativeCallSnapshot['videoOverlayMode']
 ): Promise<void> {
@@ -814,12 +841,5 @@ export async function setNativeCallKitParticipantDisplayName(
       '[callkit] failed to set native participant display name',
       err
     )
-  );
-}
-
-export async function switchNativeCallKitCamera(): Promise<void> {
-  if (!ENABLE_CALLKIT || !isTauri() || !isPlatform('ios')) return;
-  await invoke('plugin:call-kit|switch_camera').catch((err) =>
-    console.error('[callkit] failed to switch native camera', err)
   );
 }

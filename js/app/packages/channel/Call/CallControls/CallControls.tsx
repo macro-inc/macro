@@ -1,4 +1,5 @@
 import { type Accessor, Show } from 'solid-js';
+import { nativeCallSnapshot } from '../native-call-state';
 import { CallControlsDefaultAndPanelRow } from './CallControlsDefaultAndPanelRow';
 import { CallControlsPanelSmallRow } from './CallControlsPanelSmallRow';
 
@@ -24,7 +25,7 @@ function readWhen(when: boolean | Accessor<boolean> | undefined): boolean {
  */
 export function CallControls(props: CallControlsProps) {
   return (
-    <Show when={() => readWhen(props.when)}>
+    <Show when={() => readWhen(props.when) && !nativeCallSnapshot()}>
       <Show
         when={props.variant === 'panel-small'}
         fallback={<CallControlsDefaultAndPanelRow onLeave={props.onLeave} />}
