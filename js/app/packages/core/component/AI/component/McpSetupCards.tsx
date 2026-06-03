@@ -19,7 +19,7 @@ function CollapsibleCard(props: {
   copiedKey: () => string | null;
   onCopy: (key: string, text: string) => void;
 }) {
-  const [expanded, setExpanded] = createSignal(true);
+  const [expanded, setExpanded] = createSignal(false);
   const isCopied = () => props.copiedKey() === props.copyKey;
 
   return (
