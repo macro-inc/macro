@@ -4,21 +4,10 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { ApiGroupMeta } from './apiGroupMeta';
-import type { GroupedSoupPageItems } from './groupedSoupPageItems';
-import type { GroupedSoupPageNextCursor } from './groupedSoupPageNextCursor';
+import type { GroupedSoupPageOneOf } from './groupedSoupPageOneOf';
+import type { GroupedSoupPageOneOfFour } from './groupedSoupPageOneOfFour';
 
 /**
  * Response for grouped soup queries.
-
-Items are returned as a pool keyed by id; each `ApiGroupMeta.item_ids`
-describes the ordered membership of one group.
  */
-export interface GroupedSoupPage {
-  /** Ordered group metadata for this grouped response. */
-  groups: ApiGroupMeta[];
-  /** Items in this page, keyed by id. Ordering lives in `groups[].item_ids`. */
-  items: GroupedSoupPageItems;
-  /** Cursor to load the next page (global pagination) */
-  next_cursor?: GroupedSoupPageNextCursor;
-}
+export type GroupedSoupPage = GroupedSoupPageOneOf | GroupedSoupPageOneOfFour;

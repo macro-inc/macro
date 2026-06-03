@@ -4,8 +4,6 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { GroupedSoupSort } from './groupedSoupSort';
 
-/**
- * Filter to a specific group key (for "load more in group X").
- */
-export type GroupedParamsGroupKey = string | null;
+export type GroupedInitialParamsSortMethod = null | GroupedSoupSort;

@@ -9,7 +9,7 @@ import {
   useQueryClient,
 } from '@tanstack/solid-query';
 import type { SoupAstBody, SoupAstItemsPage, SoupAstParams } from '../items';
-import { parseGroupedSoupPage, serializeGroupByField } from './api';
+import { parseGroupMeta, serializeGroupByField } from './api';
 import type { GroupByField, GroupedSoupPage } from './types';
 
 const FETCH_KEY = ['soup', 'group-fetch'] as const;
@@ -42,11 +42,12 @@ function appendGroupPage(
   if (firstPage.kind !== 'grouped') return prev;
   if (!firstPage.groups.some((g) => g.key === groupKey)) return prev;
 
-  const items = { ...firstPage.items, ...response.items };
-
   const fetched = response.groups.find((g) => g.key === groupKey);
-  const newIds = fetched?.itemIds ?? [];
-  const newCursor = fetched?.nextCursor ?? null;
+  if (!fetched) return prev;
+
+  const items = { ...firstPage.items, ...response.items };
+  const newIds = fetched.itemIds;
+  const newCursor = fetched.nextCursor;
 
   const groups = firstPage.groups.map((g) => {
     if (g.key !== groupKey) return g;
@@ -73,18 +74,25 @@ export const useFetchGroupPage = () => {
     mutationKey: FETCH_KEY,
     mutationFn: async (vars: FetchVars) => {
       const response = await throwOnErr(async () =>
-        storageServiceClient.getGroupedSoupAstItems({
+        storageServiceClient.getGroupedSoupAstGroupPage({
           params: {
             cursor: vars.cursor,
             group_by: serializeGroupByField(vars.field),
             group_key: vars.groupKey,
+            limit: vars.soupParams.limit,
           },
-          body: { ...vars.soupBody, ...vars.soupParams },
+          body: vars.soupBody,
         })
       );
-      return parseGroupedSoupPage(response);
+
+      return {
+        items: response.items,
+        nextCursor: null,
+        groups: [parseGroupMeta(response.group)],
+      };
     },
     onSuccess: (parsed, vars) => {
+      console.log(parsed);
       queryClient.setQueryData<
         InfiniteData<SoupAstItemsPage, string | null> | undefined
       >(vars.queryKey, (prev) => appendGroupPage(prev, vars.groupKey, parsed));

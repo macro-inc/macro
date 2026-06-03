@@ -3,7 +3,7 @@ import { throwOnErr } from '@core/util/result';
 import type { EntityData } from '@entity';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import {
-  parseGroupedSoupPage,
+  parseGroupMeta,
   serializeGroupByField,
 } from '@queries/soup/grouped/api';
 import {
@@ -13,6 +13,7 @@ import {
 } from '@queries/soup/grouped/types';
 import { soupKeys } from '@queries/soup/keys';
 import {
+  isDisplayableSoupItem,
   isInstructionsMdDoc,
   mapApiSoupItemToEntity,
   mapSoupPageToEntityList,
@@ -148,21 +149,17 @@ export const useSoupAstItemsQuery = (
             async () =>
               await storageServiceClient.getGroupedSoupAstItems({
                 params: {
-                  cursor: ctx.pageParam,
                   group_by: serializeGroupByField(groupBy),
+                  per_group_limit: params.limit,
                 },
-                body: {
-                  ...body,
-                  ...params,
-                },
+                body,
               })
           );
 
-          const parsed = parseGroupedSoupPage(response);
           return {
             kind: 'grouped',
-            items: parsed.items,
-            groups: parsed.groups,
+            items: response.items,
+            groups: response.groups.map(parseGroupMeta),
             nextCursor: null,
           };
         }
@@ -207,7 +204,11 @@ export const useSoupAstItemsQuery = (
             for (const id of g.itemIds) {
               const item = itemsById[id];
 
-              if (item && !isInstructionsMdDoc(item, instructionsIdQuery)) {
+              if (
+                item &&
+                isDisplayableSoupItem(item) &&
+                !isInstructionsMdDoc(item, instructionsIdQuery)
+              ) {
                 const mapped = mapApiSoupItemToEntity(item);
                 entities.push(mapped);
 

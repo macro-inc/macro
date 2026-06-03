@@ -1,16 +1,17 @@
+import type { ApiGroupByField as ApiGroupedSoupField } from '@service-storage/generated/schemas/apiGroupByField';
 import type { ApiGroupMeta } from '@service-storage/generated/schemas/apiGroupMeta';
-import type { GroupedSoupPage as WireGroupedSoupPage } from '@service-storage/generated/schemas/groupedSoupPage';
 import type { SoupApiItem } from '@service-storage/generated/schemas/soupApiItem';
 import { match } from 'ts-pattern';
 import {
   GROUP_BY_TYPES,
   type GroupByField,
-  type GroupedSoupPage,
   type GroupMeta,
   NOT_SET_GROUP_KEY,
 } from './types';
 
-export function serializeGroupByField(field: GroupByField): unknown {
+export function serializeGroupByField(
+  field: GroupByField
+): ApiGroupedSoupField {
   switch (field.type) {
     case 'date':
       return 'date';
@@ -36,16 +37,6 @@ export function parseGroupMeta(raw: ApiGroupMeta): GroupMeta {
     totalCount: raw.total_count,
     itemIds: raw.item_ids,
     nextCursor: raw.next_cursor ?? null,
-  };
-}
-
-export function parseGroupedSoupPage(
-  response: WireGroupedSoupPage
-): GroupedSoupPage {
-  return {
-    items: response.items,
-    nextCursor: response.next_cursor ?? null,
-    groups: (response.groups ?? []).map(parseGroupMeta),
   };
 }
 

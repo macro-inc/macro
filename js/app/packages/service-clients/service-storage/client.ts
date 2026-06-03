@@ -31,7 +31,11 @@ import type {
   AccessLevel,
   CallRecordPreview,
   GithubPullRequestsResponse,
-  GroupedSoupPage,
+  GroupedSoupGroupPage,
+  GroupedSoupInitialPage,
+  PostGroupedSoupAstGroupPageRequest,
+  PostGroupedSoupAstInitialRequest,
+  PostGroupedSoupAstRequest,
   PostSoupAstRequest,
   PostSoupRequest,
   SoupPage,
@@ -345,9 +349,33 @@ export const storageServiceClient = {
 
   async getGroupedSoupAstItems(args: {
     params: {
+      group_by: PostGroupedSoupAstInitialRequest['group_by'];
+      per_group_limit?: number | null;
+    };
+    body: PostSoupAstRequest;
+  }) {
+    const { limit: _limit, sort_method: _sortMethod, ...filters } = args.body;
+    const body = {
+      ...filters,
+      mode: 'initial',
+      group_by: args.params.group_by,
+      ...(args.params.per_group_limit != null && {
+        per_group_limit: args.params.per_group_limit,
+      }),
+    } satisfies PostGroupedSoupAstRequest;
+
+    return await dssFetch<GroupedSoupInitialPage>(`/items/soup/ast/grouped`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  },
+
+  async getGroupedSoupAstGroupPage(args: {
+    params: {
       cursor?: string | null;
-      group_by: unknown;
-      group_key?: string | null;
+      group_by: PostGroupedSoupAstGroupPageRequest['group_by'];
+      group_key: string;
+      limit?: number | null;
     };
     body: PostSoupAstRequest;
   }) {
@@ -355,11 +383,16 @@ export const storageServiceClient = {
     if (args.params.cursor) params.set('cursor', args.params.cursor);
     const searchParams = params.toString() ? `?${params.toString()}` : '';
 
-    const body: Record<string, unknown> = { ...args.body };
-    if (args.params.group_by) body.group_by = args.params.group_by;
-    if (args.params.group_key != null) body.group_key = args.params.group_key;
+    const { limit: _limit, sort_method: _sortMethod, ...filters } = args.body;
+    const body = {
+      ...filters,
+      mode: 'group_page',
+      group_by: args.params.group_by,
+      group_key: args.params.group_key,
+      ...(args.params.limit != null && { limit: args.params.limit }),
+    } satisfies PostGroupedSoupAstRequest;
 
-    return await dssFetch<GroupedSoupPage>(
+    return await dssFetch<GroupedSoupGroupPage>(
       `/items/soup/ast/grouped${searchParams}`,
       {
         method: 'POST',

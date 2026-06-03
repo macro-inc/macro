@@ -449,6 +449,11 @@ const resolveDocumentEntityName = (
   });
 };
 
+export const isDisplayableSoupItem = (
+  item: SoupPage['items'][number]
+): item is DisplayableSoupItem =>
+  item.tag !== 'foreignEntity' && item.tag !== 'crmCompany';
+
 export const mapApiSoupItemToEntity = (
   item: DisplayableSoupItem
 ):
@@ -622,8 +627,7 @@ export const mapSoupPageToEntityList: (
   return data.items
     .filter(
       (item): item is DisplayableSoupItem =>
-        item.tag !== 'foreignEntity' &&
-        item.tag !== 'crmCompany' &&
+        isDisplayableSoupItem(item) &&
         (item.tag !== 'document' ||
           !isInstructionsMdDoc(item, options.instructionsIdQuery))
     )

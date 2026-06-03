@@ -6,6 +6,7 @@
  */
 
 /**
- * Cursor to load the next page (global pagination)
+ * Limit the number of items returned. Defaults to 20. Max 500.
+ * @minimum 0
  */
-export type GroupedSoupPageNextCursor = string | null;
+export type GroupedPageParamsLimit = number | null;

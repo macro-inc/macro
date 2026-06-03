@@ -4,10 +4,12 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { ApiEntityFilterAst } from './apiEntityFilterAst';
-import type { GroupedParams } from './groupedParams';
+import type { PostGroupedSoupAstRequestOneOf } from './postGroupedSoupAstRequestOneOf';
+import type { PostGroupedSoupAstRequestOneOfFour } from './postGroupedSoupAstRequestOneOfFour';
 
 /**
  * Request body for grouped soup queries with AST filters.
  */
-export type PostGroupedSoupAstRequest = ApiEntityFilterAst & GroupedParams;
+export type PostGroupedSoupAstRequest =
+  | PostGroupedSoupAstRequestOneOf
+  | PostGroupedSoupAstRequestOneOfFour;

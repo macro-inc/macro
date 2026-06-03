@@ -9,4 +9,4 @@ import type { SoupApiItem } from './soupApiItem';
 /**
  * Items in this page, keyed by id. Ordering lives in `groups[].item_ids`.
  */
-export type GroupedSoupPageItems = { [key: string]: SoupApiItem };
+export type GroupedSoupInitialPageItems = { [key: string]: SoupApiItem };

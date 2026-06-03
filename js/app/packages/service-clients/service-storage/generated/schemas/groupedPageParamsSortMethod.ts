@@ -6,4 +6,4 @@
  */
 import type { GroupedSoupSort } from './groupedSoupSort';
 
-export type GroupedParamsSortMethod = null | GroupedSoupSort;
+export type GroupedPageParamsSortMethod = null | GroupedSoupSort;

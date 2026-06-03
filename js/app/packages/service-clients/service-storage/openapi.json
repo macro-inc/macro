@@ -6622,7 +6622,7 @@
     "/items/soup/ast/grouped": {
       "post": {
         "tags": ["soup::inbound::axum_router"],
-        "summary": "Gets the items grouped by the specified field using AST filters",
+        "summary": "Gets the items grouped by the specified field using AST filters.",
         "operationId": "post_items_soup_ast_grouped",
         "parameters": [
           {
@@ -13859,18 +13859,46 @@
           }
         }
       },
-      "GroupedParams": {
+      "GroupedInitialParams": {
         "type": "object",
-        "description": "Parameters for grouped soup queries.",
+        "description": "Parameters for the initial grouped soup query.",
         "required": ["group_by"],
         "properties": {
           "group_by": {
             "$ref": "#/components/schemas/ApiGroupByField",
             "description": "Field to group results by (required)."
           },
+          "per_group_limit": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Limit the number of items returned per group. Defaults to 20. Max 500.",
+            "minimum": 0
+          },
+          "sort_method": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GroupedSoupSort",
+                "description": "Sort method. Defaults to viewed_updated."
+              }
+            ]
+          }
+        }
+      },
+      "GroupedPageParams": {
+        "type": "object",
+        "description": "Parameters for fetching one page within a specific group.",
+        "required": ["group_by", "group_key"],
+        "properties": {
+          "group_by": {
+            "$ref": "#/components/schemas/ApiGroupByField",
+            "description": "Field to group results by (required)."
+          },
           "group_key": {
-            "type": ["string", "null"],
-            "description": "Filter to a specific group key (for \"load more in group X\")."
+            "type": "string",
+            "description": "Group key to fetch."
           },
           "limit": {
             "type": ["integer", "null"],
@@ -13891,9 +13919,31 @@
           }
         }
       },
-      "GroupedSoupPage": {
+      "GroupedSoupGroupPage": {
         "type": "object",
-        "description": "Response for grouped soup queries.\n\nItems are returned as a pool keyed by id; each `ApiGroupMeta.item_ids`\ndescribes the ordered membership of one group.",
+        "description": "Response for fetching a page within one group.",
+        "required": ["items", "group"],
+        "properties": {
+          "group": {
+            "$ref": "#/components/schemas/ApiGroupMeta",
+            "description": "Metadata and item membership for the requested group page."
+          },
+          "items": {
+            "type": "object",
+            "description": "Items in this page, keyed by id. Ordering lives in `group.item_ids`.",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/SoupApiItem"
+            },
+            "propertyNames": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        }
+      },
+      "GroupedSoupInitialPage": {
+        "type": "object",
+        "description": "Response for the initial grouped soup query.\n\nItems are returned as a pool keyed by id; each `ApiGroupMeta.item_ids`\ndescribes the ordered membership of one group.",
         "required": ["items", "groups"],
         "properties": {
           "groups": {
@@ -13913,12 +13963,47 @@
               "type": "string",
               "format": "uuid"
             }
-          },
-          "next_cursor": {
-            "type": ["string", "null"],
-            "description": "Cursor to load the next page (global pagination)"
           }
         }
+      },
+      "GroupedSoupPage": {
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GroupedSoupInitialPage"
+              },
+              {
+                "type": "object",
+                "required": ["mode"],
+                "properties": {
+                  "mode": {
+                    "type": "string",
+                    "enum": ["initial"]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GroupedSoupGroupPage"
+              },
+              {
+                "type": "object",
+                "required": ["mode"],
+                "properties": {
+                  "mode": {
+                    "type": "string",
+                    "enum": ["group_page"]
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "description": "Response for grouped soup queries."
       },
       "GroupedSoupSort": {
         "type": "string",
@@ -14824,15 +14909,67 @@
           }
         }
       },
-      "PostGroupedSoupAstRequest": {
+      "PostGroupedSoupAstGroupPageRequest": {
         "allOf": [
           {
             "$ref": "#/components/schemas/ApiEntityFilterAst",
             "description": "Filters to apply (AST format)"
           },
           {
-            "$ref": "#/components/schemas/GroupedParams",
+            "$ref": "#/components/schemas/GroupedPageParams",
             "description": "Grouping parameters (required)"
+          }
+        ],
+        "description": "Request body for fetching one page within a specific group."
+      },
+      "PostGroupedSoupAstInitialRequest": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiEntityFilterAst",
+            "description": "Filters to apply (AST format)"
+          },
+          {
+            "$ref": "#/components/schemas/GroupedInitialParams",
+            "description": "Grouping parameters (required)"
+          }
+        ],
+        "description": "Request body for the initial grouped soup query."
+      },
+      "PostGroupedSoupAstRequest": {
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PostGroupedSoupAstInitialRequest"
+              },
+              {
+                "type": "object",
+                "required": ["mode"],
+                "properties": {
+                  "mode": {
+                    "type": "string",
+                    "enum": ["initial"]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PostGroupedSoupAstGroupPageRequest"
+              },
+              {
+                "type": "object",
+                "required": ["mode"],
+                "properties": {
+                  "mode": {
+                    "type": "string",
+                    "enum": ["group_page"]
+                  }
+                }
+              }
+            ]
           }
         ],
         "description": "Request body for grouped soup queries with AST filters."

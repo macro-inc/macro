@@ -6,7 +6,7 @@
  */
 
 /**
- * Limit the number of items returned. Defaults to 20. Max 500.
+ * Limit the number of items returned per group. Defaults to 20. Max 500.
  * @minimum 0
  */
-export type GroupedParamsLimit = number | null;
+export type GroupedInitialParamsPerGroupLimit = number | null;

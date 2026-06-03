@@ -123,8 +123,10 @@ use models_soup::foreign_entity::SoupForeignEntity;
 use models_soup::item::SoupItem;
 use models_soup::project::SoupProject;
 use soup::inbound::axum_router::{
-    ApiGroupByField, ApiGroupMeta, GroupedSoupPage, PostGroupedSoupAstRequest, PostSoupAstRequest,
-    PostSoupRequest, SoupApiItem, SoupApiSort, SoupPage,
+    ApiGroupByField, ApiGroupMeta, GroupedSoupGroupPage, GroupedSoupInitialPage,
+    GroupedSoupPage, PostGroupedSoupAstGroupPageRequest, PostGroupedSoupAstInitialRequest,
+    PostGroupedSoupAstRequest, PostSoupAstRequest, PostSoupRequest, SoupApiItem, SoupApiSort,
+    SoupPage,
 };
 use utoipa::OpenApi;
 
@@ -391,9 +393,13 @@ use utoipa::OpenApi;
             SoupLabelType,
             PostSoupRequest,
             PostSoupAstRequest,
+            PostGroupedSoupAstInitialRequest,
+            PostGroupedSoupAstGroupPageRequest,
             PostGroupedSoupAstRequest,
             ApiGroupByField,
             ApiGroupMeta,
+            GroupedSoupInitialPage,
+            GroupedSoupGroupPage,
             GroupedSoupPage,
 
             // Channels
