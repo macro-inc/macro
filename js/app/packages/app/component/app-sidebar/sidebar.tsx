@@ -272,7 +272,7 @@ type SidebarHotkeyDeps = {
 type OpenWithSplitFn = ReturnType<typeof useSplitLayout>['openWithSplit'];
 
 const isComponentEntry =
-  (id: ListView) =>
+  (id: string) =>
   (entry: SplitContent): boolean =>
     entry.type === 'component' && entry.id === id;
 
@@ -285,7 +285,7 @@ const isComponentEntry =
  * and forces a new entry / new split.
  */
 function navigateToSidebarView(args: {
-  viewId: ListView;
+  viewId: SidebarItem['id'];
   shiftKey: boolean;
   activeSplit: SplitHandle | undefined;
   openWithSplit: OpenWithSplitFn;
