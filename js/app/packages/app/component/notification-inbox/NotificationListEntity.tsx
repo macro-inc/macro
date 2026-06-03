@@ -189,10 +189,10 @@ function StackedNotificationIcon(props: {
   };
 
   return (
-    <span class="relative block size-6 shrink-0 text-ink-muted">
+    <span class="relative block size-5 shrink-0 text-ink-muted">
       <svg
         viewBox="0 0 24 24"
-        class="absolute inset-0 size-full text-ink-muted/70"
+        class="absolute inset-0 size-full text-ink-muted/45"
         aria-hidden="true"
       >
         <Show when={props.count > 3}>
@@ -203,7 +203,7 @@ function StackedNotificationIcon(props: {
             height="12"
             rx="2"
             class={cn(
-              'notification-stack-svg-piece fill-ink-muted/5 stroke-current opacity-0',
+              'notification-stack-svg-piece fill-ink-muted/3 stroke-current opacity-0',
               props.reloading && 'notification-stack-card-in'
             )}
             stroke-width="1"
@@ -218,7 +218,7 @@ function StackedNotificationIcon(props: {
             height="12"
             rx="2"
             class={cn(
-              'notification-stack-svg-piece fill-ink-muted/5 stroke-current',
+              'notification-stack-svg-piece fill-ink-muted/3 stroke-current',
               props.reloading &&
                 props.count > 3 &&
                 'notification-stack-card-shift'
@@ -235,7 +235,7 @@ function StackedNotificationIcon(props: {
             height="12"
             rx="2"
             class={cn(
-              'notification-stack-svg-piece fill-ink-muted/5 stroke-current',
+              'notification-stack-svg-piece fill-ink-muted/3 stroke-current',
               props.reloading &&
                 props.count > 3 &&
                 'notification-stack-card-shift'
@@ -321,15 +321,26 @@ function CollapsedNotificationListEntityRow(props: {
       }}
     >
       <div class="group/notif flex items-center gap-2.5 px-3 py-2 hover:bg-ink-muted/6 min-w-0 overflow-hidden cursor-pointer">
-        <span
-          class={cn('size-1.5 rounded-full shrink-0', {
-            'bg-accent': unread(),
-            'bg-transparent': !unread(),
-          })}
-        />
+        <span class="grid size-4 shrink-0 place-items-center">
+          <Show
+            when={props.count > 1}
+            fallback={
+              <span
+                class={cn('size-1.5 rounded-full', {
+                  'bg-accent': unread(),
+                  'bg-transparent': !unread(),
+                })}
+              />
+            }
+          >
+            <span class="grid size-4 place-items-center rounded-sm bg-accent/10 text-[10px] font-medium leading-none text-accent tabular-nums">
+              {props.count}
+            </span>
+          </Show>
+        </span>
         <button
           type="button"
-          class="relative shrink-0 size-7 grid place-items-center rounded-md hover:bg-ink-muted/6 outline-none focus-visible:bg-active"
+          class="relative -ml-1 -mr-0.5 shrink-0 size-5 grid place-items-center rounded-md hover:bg-ink-muted/6 outline-none focus-visible:bg-active"
           title={props.expanded ? 'Collapse messages' : 'Expand messages'}
           onClick={toggle}
         >
@@ -338,9 +349,6 @@ function CollapsedNotificationListEntityRow(props: {
             count={props.count}
             reloading={reloading()}
           />
-          <span class="absolute -left-1 -top-1 rounded-full border border-edge-muted bg-surface px-1 py-px text-[10px] leading-none font-medium text-ink-extra-muted tabular-nums">
-            {props.count}
-          </span>
         </button>
         <span
           class={cn('ph-no-capture truncate min-w-0 text-xs text-ink', {
