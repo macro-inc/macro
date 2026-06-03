@@ -10,6 +10,7 @@ import {
   useBlockId,
   useMaybeBlockAliasedName,
 } from '@core/block';
+import type { LoroManager } from '@core/collab/manager';
 import { DecoratorRenderer } from '@core/component/LexicalMarkdown/component/core/DecoratorRenderer';
 import { FocusClickTarget } from '@core/component/LexicalMarkdown/component/core/FocusClickTarget';
 import {
@@ -126,7 +127,6 @@ import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { blockElementSignal } from '@core/signal/blockElement';
-import type { LoroManager } from '@core/collab/manager';
 import {
   blockFileSignal,
   blockHandleSignal,

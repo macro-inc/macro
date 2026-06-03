@@ -116,20 +116,25 @@ export const createSyncServiceSource = (
 } => {
   const ws = createSyncServiceSocket(documentId, token);
 
-  const doInitialSync = () =>
-    ResultAsync.fromPromise(
-      raceTimeout(
-        untilMessage(ws, (message) => message.isRemoteInitialSync()),
-        TIMEOUTS.INITIAL_SYNC,
-        true
-      ),
-      () => SyncError.timeout(TIMEOUTS.INITIAL_SYNC)
-    ).map((message) => {
-      // Start heartbeat only after initial sync completes successfully
-      // This prevents the heartbeat from closing the connection during slow initial syncs
-      ws.startHeartbeat();
-      return message.value as InitialSync;
-    });
+  // Register the initial-sync listener eagerly so it's in place before the
+  // server's RemoteInitialSync message arrives (~50ms after WS opens).
+  // `doInitialSync()` just returns the cached promise; if it's called late,
+  // it still resolves because the listener captured the message.
+  const initialSyncPromise = ResultAsync.fromPromise(
+    raceTimeout(
+      untilMessage(ws, (message) => message.isRemoteInitialSync()),
+      TIMEOUTS.INITIAL_SYNC,
+      true
+    ),
+    () => SyncError.timeout(TIMEOUTS.INITIAL_SYNC)
+  ).map((message) => {
+    // Start heartbeat only after initial sync completes successfully
+    // This prevents the heartbeat from closing the connection during slow initial syncs
+    ws.startHeartbeat();
+    return message.value as InitialSync;
+  });
+
+  const doInitialSync = () => initialSyncPromise;
 
   const eventBus = createEventBus<SyncSourceEvent>();
 

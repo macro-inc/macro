@@ -61,6 +61,7 @@ const createBlock = async (spec: {
   createFn: () => Promise<string | undefined>;
   loading?: boolean;
   shouldInsert?: boolean;
+  params?: Record<string, unknown>;
 }) => {
   const { openWithSplit } = useSplitLayout();
   const { blockName, createFn, loading } = spec;
@@ -96,13 +97,13 @@ const createBlock = async (spec: {
 
   if (split) {
     split.replace({
-      next: { type: blockName, id },
+      next: { type: blockName, id, params: spec.params },
       mergeHistory: true,
       referredFrom: 'launcher',
     });
   } else {
     openWithSplit(
-      { type: blockName, id },
+      { type: blockName, id, params: spec.params },
       {
         referredFrom: 'launcher',
         preferNewSplit: spec.shouldInsert,
@@ -155,6 +156,7 @@ export function runCreateAction(
             projectId: undefined,
           }),
         shouldInsert,
+        params: { fromScratch: true },
       });
       return;
     case 'canvas':

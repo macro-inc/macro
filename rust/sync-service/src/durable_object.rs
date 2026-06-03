@@ -356,6 +356,8 @@ impl DocumentSyncSession {
     }
 
     async fn initialize_handler(&self, mut req: Request, document_id: &str) -> Result<Response> {
+        // worker::Delay::from(std::time::Duration::from_secs(2)).await; // (for simulating delay). too long and requests time out (~3s)
+
         // NB: we expect DocumentSyncSession to not be initialized. If it is initialized, it's an error.
         let storage = get_snapshot_storage(&self.env, &self.state, document_id.to_string())?;
 
@@ -381,6 +383,7 @@ impl DocumentSyncSession {
                 .lock("DocumentSyncSession::session_storage set within initialize_handler") =
                 Some(session_storage);
         }
+
         Response::empty()
     }
 
@@ -525,7 +528,11 @@ impl DocumentSyncSession {
     async fn connect_handler(&self, req: Request, document_id: &str) -> Result<Response> {
         let (res, elap) = timeit!({
             let claims = or_unauth!(decode_jwt(&req, &self.env, TokenFrom::QueryParams).ok());
-            self.maybe_set_document_id(document_id).await?;
+            if self.maybe_set_document_id(document_id).await? {
+                trace!("init document_id={document_id}");
+            } else {
+                trace!("document_id={document_id} already set");
+            }
 
             //  Below is websocket stuff only i.e connect
             let pair = WebSocketPair::new().context("failed to create websocket pair")?;
@@ -550,11 +557,11 @@ impl DocumentSyncSession {
 
             let snapshot = self
                 .document_state()
-                .await?
+                .await
+                .context("failed to load document state for connect")?
                 .export_shallow_snapshot()
                 .context("failed to export snapshot")?;
 
-            trace!("got_snapshot_len = {}", snapshot.len());
             websocket::send_initial_sync(
                 &pair.server,
                 snapshot.as_slice(),
@@ -574,7 +581,7 @@ impl DocumentSyncSession {
         Ok(res)
     }
 
-    async fn maybe_set_document_id(&self, document_id: &str) -> Result<()> {
+    async fn maybe_set_document_id(&self, document_id: &str) -> Result<bool> {
         if !self.document_id_is_some() {
             debug!("Setting DO::kv({DOCUMENT_ID_KEY}, {document_id})");
             self.state
@@ -585,8 +592,10 @@ impl DocumentSyncSession {
                 .document_id
                 .lock("DocumentSyncSession::document_id set within maybe_set_document_id") =
                 Some(Arc::new(document_id.to_string()));
+            Ok(true)
+        } else {
+            Ok(false)
         }
-        Ok(())
     }
 
     /// Check if provided document_id exists.

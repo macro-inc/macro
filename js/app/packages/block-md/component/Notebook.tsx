@@ -6,6 +6,7 @@ import {
 import { useGoToTempRedirect } from '@block-md/signal/location';
 import { mdStore } from '@block-md/signal/markdownBlockData';
 import { useBlockAliasedName, useBlockId } from '@core/block';
+import type { LoroManager } from '@core/collab/manager';
 import { editorFocusSignal } from '@core/component/LexicalMarkdown/utils';
 import { ParamsProvider } from '@core/component/ParamsProvider';
 import {
@@ -31,7 +32,6 @@ import {
   Show,
   untrack,
 } from 'solid-js';
-import type { LoroManager } from '@core/collab/manager';
 import { InlineTaskGithubPullRequests } from './InlineTaskGithubPullRequests';
 import { InlineTaskProperties } from './InlineTaskProperties';
 import { InstructionsEditor } from './InstructionsEditor';

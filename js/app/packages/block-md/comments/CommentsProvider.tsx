@@ -1,3 +1,4 @@
+import type { LoroManager } from '@core/collab/manager';
 import { isRoot, type Reply, type Root } from '@core/comments/commentType';
 import {
   isWrapperWithIds,
@@ -8,7 +9,6 @@ import {
   commentPlugin,
   MARK_SELECTED_COMMENT_COMMAND,
 } from '@core/component/LexicalMarkdown/plugins/comments/commentPlugin';
-import type { LoroManager } from '@core/collab/manager';
 import { useUserId } from '@core/context/user';
 import type { CommentNode } from '@lexical-core';
 import { COMMAND_PRIORITY_LOW, SELECTION_CHANGE_COMMAND } from 'lexical';

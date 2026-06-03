@@ -3,14 +3,17 @@ import { useBlockEntityCommands } from '@app/component/next-soup/actions';
 import { SidePanel } from '@app/component/side-panel';
 import { useBlockId } from '@core/block';
 import { createLoroManager } from '@core/collab/manager';
+import type { InitialSync, TimeoutError } from '@core/collab/source';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { ENABLE_MARKDOWN_SIDE_PANEL } from '@core/constant/featureFlags';
 import { blockErrorSignal } from '@core/signal/load';
 import { useCanEdit } from '@core/signal/permissions';
+import { getMarkdownGoldenBytes } from '@lexical-core/markdown-golden';
 import { MARKDOWN_LORO_SCHEMA } from '@lexical-core/markdown-loro-schema';
 import { DocumentDebouncedNotificationReadMarker } from '@notifications';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
 import { Scroll } from '@ui';
+import type { Result } from 'neverthrow';
 import {
   createEffect,
   createMemo,
@@ -25,18 +28,26 @@ import { ModalsProvider } from './ModalsProvider';
 import { InstructionsNotebook, Notebook } from './Notebook';
 import { MarkdownSidePanelSections } from './sidepanel/MarkdownSidePanelSections';
 import { InstructionsTopBar, TopBar } from './TopBar';
-import type { Result } from 'neverthrow';
-import type { InitialSync, TimeoutError } from '@core/collab/source';
 
-export default function BlockMarkdown() {
+export interface BlockMarkdownProps {
+  /**
+   * Whether the Markdown block we just switched to was switched to after
+   * creating a new, totally blank markdown document. If this is the case, this
+   * enables us to "assume" the initial sync result will be an identical
+   * initially blank document.
+   */
+  fromScratch?: boolean;
+}
+
+export default function BlockMarkdown(props: BlockMarkdownProps) {
   return (
     <MarkdownNameProvider>
-      <BlockMarkdownContent />
+      <BlockMarkdownContent {...props} />
     </MarkdownNameProvider>
   );
 }
 
-function BlockMarkdownContent() {
+function BlockMarkdownContent({ fromScratch }: BlockMarkdownProps) {
   useBlockEntityCommands();
   const [scrollRef, setScrollRef] = createSignal<HTMLDivElement>();
   const blockId = useBlockId();
@@ -46,23 +57,52 @@ function BlockMarkdownContent() {
 
   createEffect(() => {
     const data = blockDataSignal();
+
+    if (!data) {
+      setBlockError('MISSING');
+      return;
+    }
+
     if (!data?.doInitialSync) return;
 
-    data.doInitialSync().then((syncResult: Result<InitialSync, TimeoutError>) => {
-      if (syncResult.isErr()) {
-        console.error('Failed to receive initial sync', syncResult.error);
-        setBlockError('INVALID');
-        return;
-      }
-      loroManager
-        .initializeFromSnapshot(syncResult.value.snapshot)
-        .then((result) => {
-          if (result.isErr()) {
-            console.error('Failed to initialize loro doc', result.error);
-            setBlockError('INVALID');
-          }
-        });
-    });
+    if (fromScratch) {
+      getMarkdownGoldenBytes().then(async (snapshot) => {
+        await loroManager.initializeFromSnapshot(snapshot);
+        console.log(
+          '[fromScratch] loroManager state after init:',
+          JSON.stringify(loroManager.getDoc().toJSON(), null, 2)
+        );
+      });
+
+      data.doInitialSync().then((syncResult: Result<InitialSync, TimeoutError>) => {
+        if (syncResult.isErr()) {
+          console.error('Failed to receive initial sync', syncResult.error);
+          setBlockError('INVALID');
+          return;
+        }
+        const peerId = loroManager.getPeerId();
+        data.syncSource.pushUpdate(
+          loroManager.getDoc().export({ mode: 'update' }),
+          peerId
+        );
+      });
+    } else {
+      data.doInitialSync().then((syncResult: Result<InitialSync, TimeoutError>) => {
+        if (syncResult.isErr()) {
+          console.error('Failed to receive initial sync', syncResult.error);
+          setBlockError('INVALID');
+          return;
+        }
+        loroManager
+          .initializeFromSnapshot(syncResult.value.snapshot)
+          .then((result) => {
+            if (result.isErr()) {
+              console.error('Failed to initialize loro doc', result.error);
+              setBlockError('INVALID');
+            }
+          });
+      });
+    }
   });
 
   const instructionsMdId = useInstructionsMdIdQuery();
