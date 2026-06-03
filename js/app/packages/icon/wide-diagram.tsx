@@ -59,7 +59,14 @@ export const AnimatedDiagramIcon = (props: {
           the node's own stroke on every edge. */}
       <mask id={maskId} maskUnits="userSpaceOnUse">
         <rect x="-2" y="-3" width="22" height="22" fill="white" />
-        <rect class="cover-right" fill="black" x="13.3125" y="0.5625" width="4.125" height="4.125" />
+        <rect
+          class="cover-right"
+          fill="black"
+          x="13.3125"
+          y="0.5625"
+          width="4.125"
+          height="4.125"
+        />
       </mask>
 
       {/* Connectors + diamond — masked so the square nodes appear to cover them */}

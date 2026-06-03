@@ -44,8 +44,24 @@ export const AnimatedTaskIcon = (props: {
         rx="1.5"
       />
       <polyline class="checkmark" points="0.535,8.465 3.01,10.94 6.55,7.4" />
-      <rect x="8" y="2.4375" width="10" height="1.125" rx="0.5625" fill="currentColor" stroke="none" />
-      <rect x="8" y="8.5575" width="10" height="1.125" rx="0.5625" fill="currentColor" stroke="none" />
+      <rect
+        x="8"
+        y="2.4375"
+        width="10"
+        height="1.125"
+        rx="0.5625"
+        fill="currentColor"
+        stroke="none"
+      />
+      <rect
+        x="8"
+        y="8.5575"
+        width="10"
+        height="1.125"
+        rx="0.5625"
+        fill="currentColor"
+        stroke="none"
+      />
     </svg>
   );
 };

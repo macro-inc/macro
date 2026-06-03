@@ -59,7 +59,15 @@ export const AnimatedFileCodeIcon = (props: {
       <path d="M3.375 3.75L6.75 6L3.375 8.25" />
       <line class="underline-1" x1="7.3125" y1="8.25" x2="10.6875" y2="8.25" />
       <line class="underline-2" x1="7.3125" y1="8.25" x2="10.6875" y2="8.25" />
-      <rect class="place-rectangle" x="9.5" y="3" width="4.5" height="6" fill="currentColor" stroke="none" />
+      <rect
+        class="place-rectangle"
+        x="9.5"
+        y="3"
+        width="4.5"
+        height="6"
+        fill="currentColor"
+        stroke="none"
+      />
     </svg>
   );
 };

@@ -67,13 +67,27 @@ export const AnimatedInboxIcon = (props: {
         height="30"
       >
         <rect x="-2" y="-6" width="22" height="30" fill="white" />
-        <rect class="moving-mask-parts" fill="black" x="-2" y="5.25" width="22" height="24" />
+        <rect
+          class="moving-mask-parts"
+          fill="black"
+          x="-2"
+          y="5.25"
+          width="22"
+          height="24"
+        />
       </mask>
 
       <g mask={`url(#${maskId})`}>
         <g class="envelope">
           <rect x="5" y="6.5" width="8" height="6.5" rx="0.75" />
-          <rect x="9.52" y="8.75" width="1.5" height="1.5" fill="currentColor" stroke="none" />
+          <rect
+            x="9.52"
+            y="8.75"
+            width="1.5"
+            height="1.5"
+            fill="currentColor"
+            stroke="none"
+          />
         </g>
       </g>
 
