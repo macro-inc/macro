@@ -77,9 +77,9 @@ function HomeContent() {
 
   const greeting = createMemo(() => {
     const hour = new Date().getHours();
-    if (hour < 12) return 'Good Morning';
-    if (hour < 18) return 'Good Afternoon';
-    return 'Good Evening';
+    if (hour < 12) return 'Good morning';
+    if (hour < 18) return 'Good afternoon';
+    return 'Good evening';
   });
 
   return (
@@ -121,7 +121,7 @@ function HomeContent() {
               <div class="flex flex-col sm:flex-row w-full items-center gap-3 justify-center my-auto sm:m-0">
                 <AnimatedHeroLogo class="size-6 text-accent" />
                 <div class="flex flex-col gap-1 items-center">
-                  <h1 class="relative min-w-0 text-balance text-2xl font-medium font-serif tracking-tight text-ink">
+                  <h1 class="relative min-w-0 text-balance text-2xl font-normal tracking-tight text-ink">
                     {greeting()}, <span class="capitalize">{firstName()}</span>
                   </h1>
                 </div>
