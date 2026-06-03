@@ -24,8 +24,19 @@ struct CallAudioRouteSnapshot {
 }
 
 final class CallAudioRouteController: NSObject, @unchecked Sendable {
-    var onRouteChanged: ((CallAudioRouteSnapshot) -> Void)?
+    var onRouteChanged: ((CallAudioRouteSnapshot) -> Void)? {
+        get {
+            onMainSync { routeChangedHandler }
+        }
+        set {
+            let handler = newValue
+            onMain { [weak self] in
+                self?.routeChangedHandler = handler
+            }
+        }
+    }
 
+    private var routeChangedHandler: ((CallAudioRouteSnapshot) -> Void)?
     private var isObserving = false
     private var isSpeakerForced = false
     private var preferredBuiltInSpeakerEnabled: Bool?
@@ -35,10 +46,16 @@ final class CallAudioRouteController: NSObject, @unchecked Sendable {
     }
 
     deinit {
-        stopObserving()
+        NotificationCenter.default.removeObserver(self)
     }
 
     func startObserving() {
+        onMain { [weak self] in
+            self?.startObservingOnMain()
+        }
+    }
+
+    private func startObservingOnMain() {
         guard !isObserving else { return }
         isObserving = true
         NotificationCenter.default.addObserver(
@@ -52,6 +69,12 @@ final class CallAudioRouteController: NSObject, @unchecked Sendable {
     }
 
     func stopObserving() {
+        onMain { [weak self] in
+            self?.stopObservingOnMain()
+        }
+    }
+
+    private func stopObservingOnMain() {
         guard isObserving else { return }
         isObserving = false
         NotificationCenter.default.removeObserver(
@@ -62,29 +85,50 @@ final class CallAudioRouteController: NSObject, @unchecked Sendable {
     }
 
     func setSpeakerEnabled(_ enabled: Bool) {
-        setSpeakerEnabled(enabled, isUserSelection: true)
+        onMain { [weak self] in
+            self?.setSpeakerEnabledOnMain(enabled, isUserSelection: true)
+        }
     }
 
     func prepareForCall() {
-        preferredBuiltInSpeakerEnabled = nil
-        isSpeakerForced = false
-        emitCurrentRoute()
+        onMain { [weak self] in
+            self?.preferredBuiltInSpeakerEnabled = nil
+            self?.isSpeakerForced = false
+            self?.emitCurrentRouteOnMain()
+        }
     }
 
     func defaultToSpeakerIfBuiltInRoute(reason: String) {
+        onMain { [weak self] in
+            self?.defaultToSpeakerIfBuiltInRouteOnMain(reason: reason)
+        }
+    }
+
+    private func defaultToSpeakerIfBuiltInRouteOnMain(reason: String) {
         guard preferredBuiltInSpeakerEnabled != false else { return }
         guard !isExternalRouteAvailable() else {
             print("[CallKit] Skipping built-in speaker default because external route is available reason=\(reason) available=\(describeAvailableRoutes()) current=\(describeCurrentRoute())")
             return
         }
-        let snapshot = currentSnapshot()
+        let snapshot = currentSnapshotOnMain()
         guard snapshot.supportsSpeakerToggle, snapshot.output != .speaker else { return }
         print("[CallKit] Defaulting built-in audio route to speaker reason=\(reason) output=\(snapshot.output.rawValue)")
-        setSpeakerEnabled(true, isUserSelection: false)
+        setSpeakerEnabledOnMain(true, isUserSelection: false)
     }
 
-    private func setSpeakerEnabled(_ enabled: Bool, isUserSelection: Bool) {
+    private func setSpeakerEnabledOnMain(_ enabled: Bool, isUserSelection: Bool) {
         let session = AVAudioSession.sharedInstance()
+        let snapshot = currentSnapshotOnMain()
+        if snapshot.output == .unknown {
+            if isUserSelection {
+                preferredBuiltInSpeakerEnabled = enabled
+            }
+            isSpeakerForced = enabled
+            print("[CallKit] Queued audio route speaker preference enabled=\(enabled) userSelection=\(isUserSelection); current route is not ready \(describeCurrentRoute())")
+            emitCurrentRouteOnMain()
+            return
+        }
+
         do {
             try session.overrideOutputAudioPort(enabled ? .speaker : .none)
             isSpeakerForced = enabled
@@ -93,36 +137,48 @@ final class CallAudioRouteController: NSObject, @unchecked Sendable {
             }
             print("[CallKit] Audio route speaker override enabled=\(enabled) userSelection=\(isUserSelection) \(describeCurrentRoute())")
             print("[CallKit] Audio route available after speaker override \(describeAvailableRoutes())")
-            emitCurrentRoute()
+            emitCurrentRouteOnMain()
         } catch {
             print("[CallKit] Failed to set audio route speaker override enabled=\(enabled): \(error) \(describeCurrentRoute())")
         }
     }
 
     func resetSpeakerOverride() {
+        onMain { [weak self] in
+            self?.resetSpeakerOverrideOnMain()
+        }
+    }
+
+    private func resetSpeakerOverrideOnMain() {
         preferredBuiltInSpeakerEnabled = nil
         guard isSpeakerForced else { return }
-        setSpeakerEnabled(false, isUserSelection: false)
+        setSpeakerEnabledOnMain(false, isUserSelection: false)
     }
 
     func emitCurrentRoute() {
-        let snapshot = currentSnapshot()
+        onMain { [weak self] in
+            self?.emitCurrentRouteOnMain()
+        }
+    }
+
+    private func emitCurrentRouteOnMain() {
+        let snapshot = currentSnapshotOnMain()
         print("[CallKit] Audio route policy \(describePolicyState()) snapshot=input:\(snapshot.input.rawValue) output:\(snapshot.output.rawValue) speakerForced:\(snapshot.isSpeakerForced) supportsSpeakerToggle:\(snapshot.supportsSpeakerToggle) current=\(describeCurrentRoute()) \(describeAvailableRoutes())")
-        onRouteChanged?(snapshot)
+        routeChangedHandler?(snapshot)
     }
 
     func currentRouteSnapshot() -> CallAudioRouteSnapshot {
-        currentSnapshot()
+        onMainSync { currentSnapshotOnMain() }
     }
 
     func describeCurrentRoute() -> String {
-        describeRoute(AVAudioSession.sharedInstance().currentRoute)
+        onMainSync { describeRoute(AVAudioSession.sharedInstance().currentRoute) }
     }
 
-    private func currentSnapshot() -> CallAudioRouteSnapshot {
+    private func currentSnapshotOnMain() -> CallAudioRouteSnapshot {
         let route = AVAudioSession.sharedInstance().currentRoute
         let output = classifyOutput(route.outputs.first)
-        let supportsSpeakerToggle = output == .receiver || output == .speaker || output == .unknown
+        let supportsSpeakerToggle = output == .receiver || output == .speaker || (output == .unknown && !isExternalRouteAvailable())
         if !supportsSpeakerToggle {
             isSpeakerForced = false
         }
@@ -130,12 +186,18 @@ final class CallAudioRouteController: NSObject, @unchecked Sendable {
         return CallAudioRouteSnapshot(
             input: classifyInput(route.inputs.first),
             output: output,
-            isSpeakerForced: isSpeakerForced && output == .speaker,
+            isSpeakerForced: isSpeakerForced && (output == .speaker || output == .unknown),
             supportsSpeakerToggle: supportsSpeakerToggle
         )
     }
 
     @objc private func handleRouteChange(_ notification: Notification) {
+        onMain { [weak self] in
+            self?.handleRouteChangeOnMain(notification)
+        }
+    }
+
+    private func handleRouteChangeOnMain(_ notification: Notification) {
         let reason = routeChangeReason(from: notification)
         let previousRoute = notification.userInfo?[AVAudioSessionRouteChangePreviousRouteKey] as? AVAudioSessionRouteDescription
         print("[CallKit] Audio route changed reason=\(reason) previous=\(previousRoute.map(describeRoute) ?? "nil") current=\(describeCurrentRoute())")
@@ -143,27 +205,32 @@ final class CallAudioRouteController: NSObject, @unchecked Sendable {
 
         if shouldReleaseSpeakerOverrideForExternalRoute(reason: reason) {
             print("[CallKit] Releasing speaker override for external audio route reason=\(reason)")
-            setSpeakerEnabled(false, isUserSelection: false)
+            setSpeakerEnabledOnMain(false, isUserSelection: false)
             return
         }
 
         if shouldDefaultToSpeakerAfterRouteChange(reason: reason) {
-            defaultToSpeakerIfBuiltInRoute(reason: "routeChange:\(reason)")
+            defaultToSpeakerIfBuiltInRouteOnMain(reason: "routeChange:\(reason)")
             return
         }
-        emitCurrentRoute()
+        emitCurrentRouteOnMain()
     }
 
     private func shouldDefaultToSpeakerAfterRouteChange(reason: String) -> Bool {
         guard preferredBuiltInSpeakerEnabled != false else { return false }
         guard !isExternalRouteAvailable() else { return false }
-        guard currentSnapshot().supportsSpeakerToggle else { return false }
+        let snapshot = currentSnapshotOnMain()
+        guard snapshot.supportsSpeakerToggle, snapshot.output != .unknown else { return false }
         return reason != "override"
     }
 
     private func shouldReleaseSpeakerOverrideForExternalRoute(reason: String) -> Bool {
         guard isSpeakerForced, reason != "override" else { return false }
-        if currentSnapshot().output != .speaker {
+        if preferredBuiltInSpeakerEnabled == true, !isExternalRouteAvailable() {
+            return false
+        }
+        let output = currentSnapshotOnMain().output
+        if output != .speaker && output != .unknown {
             return true
         }
         return isExternalRouteAvailable()
@@ -252,5 +319,20 @@ final class CallAudioRouteController: NSObject, @unchecked Sendable {
 
     private func describePort(_ port: AVAudioSessionPortDescription) -> String {
         "\(port.portType.rawValue):\(port.portName):uid=\(port.uid)"
+    }
+
+    private func onMain(_ block: @escaping () -> Void) {
+        if Thread.isMainThread {
+            block()
+        } else {
+            DispatchQueue.main.async(execute: block)
+        }
+    }
+
+    private func onMainSync<T>(_ block: () -> T) -> T {
+        if Thread.isMainThread {
+            return block()
+        }
+        return DispatchQueue.main.sync(execute: block)
     }
 }

@@ -2,6 +2,7 @@ import AVFAudio
 import AVFoundation
 import Foundation
 import LiveKit
+import LiveKitWebRTC
 
 /// Native LiveKit Room plus CallKit-owned audio-session integration.
 final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendable {
@@ -33,6 +34,7 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
     private var participantDisplayNamesByIdentity: [String: String] = [:]
     private var didPrepareAudio = false
     private var isCallKitAudioActive = false
+    private var isActivatingAudioEngine = false
     private var desiredAudioMuted = false
     private let audioEngineLogger = CallKitAudioEngineLogger()
     private let audioRouteController = CallAudioRouteController()
@@ -83,7 +85,14 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
             self?.pictureInPicture.prepare()
         }
         audioRouteController.onRouteChanged = { [weak self] route in
-            self?.videoOverlay.setAudioRoute(route)
+            guard let self else { return }
+            self.videoOverlay.setAudioRoute(route)
+            guard self.activeCallUUID != nil else { return }
+            if self.isCallKitAudioActive, !AudioManager.shared.engineAvailability.isOutputAvailable {
+                self.activateAudioEngine(reason: "audio route changed")
+            } else if self.canEnableMicrophoneAudio() {
+                self.enableMicrophoneAfterAudioActivationIfNeeded(reason: "audio route changed")
+            }
         }
         audioRouteController.startObserving()
         pictureInPicture.prepare()
@@ -95,6 +104,7 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
         didPrepareAudio = true
 
         print("[CallKit] Prepared LiveKit audio for CallKit-controlled activation")
+        configureAudioSessionCategory(reason: "prepareForCallKitAudio")
     }
 
     private func configureLiveKitAudioForCallKit() {
@@ -113,7 +123,7 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
         }
     }
 
-    func configureAudioSessionCategory() {
+    func configureAudioSessionCategory(reason: String) {
         let session = AVAudioSession.sharedInstance()
         do {
             try session.setCategory(
@@ -122,30 +132,53 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
                 options: [.allowBluetoothHFP, .mixWithOthers]
             )
             try session.setPreferredIOBufferDuration(0.02)
-            print("[CallKit] Configured AVAudioSession category for voice call \(describeAudioSession())")
+            print("[CallKit] Configured AVAudioSession category for voice call reason=\(reason) \(describeAudioSession())")
             audioRouteController.emitCurrentRoute()
-            audioRouteController.defaultToSpeakerIfBuiltInRoute(reason: "audioSessionCategoryConfigured")
+            if hasUsableAudioOutputRoute() {
+                audioRouteController.defaultToSpeakerIfBuiltInRoute(reason: "audioSessionCategoryConfigured")
+            } else {
+                print("[CallKit] Skipping built-in speaker default because AVAudioSession route is not ready reason=\(reason) \(describeAudioSession())")
+            }
         } catch {
-            print("[CallKit] Failed to set audio session category: \(error) \(describeAudioSession())")
+            print("[CallKit] Failed to set audio session category reason=\(reason): \(error) \(describeAudioSession())")
         }
     }
 
-    func activateAudioEngine() {
-        isCallKitAudioActive = true
-        configureAudioSessionCategory()
+    func activateAudioEngine(reason: String = "CallKit didActivate", audioSession: AVAudioSession? = nil) {
+        guard !isActivatingAudioEngine else {
+            print("[CallKit] Ignoring nested LiveKit audio engine activation reason=\(reason)")
+            return
+        }
+        isActivatingAudioEngine = true
+        defer { isActivatingAudioEngine = false }
+
+        configureAudioSessionCategory(reason: reason)
+        if !hasUsableAudioOutputRoute() {
+            print("[CallKit] Activating LiveKit audio engine with empty AVAudioSession route reason=\(reason) \(describeAudioSession())")
+        }
         do {
+            if let audioSession {
+                LKRTCAudioSession.sharedInstance().audioSessionDidActivate(audioSession)
+                print("[CallKit] Notified LiveKit WebRTC audio session didActivate reason=\(reason)")
+            }
             let availability = callKitAudioEngineAvailability()
-            print("[CallKit] Enabling LiveKit audio engine after CallKit activation input=\(availability.isInputAvailable) output=\(availability.isOutputAvailable) \(describeAudioSession())")
+            print("[CallKit] Enabling LiveKit audio engine after CallKit activation reason=\(reason) input=\(availability.isInputAvailable) output=\(availability.isOutputAvailable) \(describeAudioSession())")
             try AudioManager.shared.setEngineAvailability(availability)
-            print("[CallKit] CallKit activated AVAudioSession; LiveKit audio engine available input=\(AudioManager.shared.engineAvailability.isInputAvailable) output=\(AudioManager.shared.engineAvailability.isOutputAvailable) running=\(AudioManager.shared.isEngineRunning) \(describeAudioSession())")
+            isCallKitAudioActive = true
+            print("[CallKit] CallKit activated AVAudioSession; LiveKit audio engine available reason=\(reason) input=\(AudioManager.shared.engineAvailability.isInputAvailable) output=\(AudioManager.shared.engineAvailability.isOutputAvailable) running=\(AudioManager.shared.isEngineRunning) \(describeAudioSession())")
+            enableMicrophoneAfterAudioActivationIfNeeded(reason: reason)
         } catch {
-            print("[CallKit] Failed to enable LiveKit audio engine after CallKit activation: \(error) \(describeAudioSession())")
+            print("[CallKit] Failed to enable LiveKit audio engine after CallKit activation reason=\(reason): \(error) \(describeAudioSession())")
         }
     }
 
-    func deactivateAudioEngine() {
+    func deactivateAudioEngine(audioSession: AVAudioSession? = nil) {
         isCallKitAudioActive = false
         do {
+            if let audioSession {
+                LKRTCAudioSession.sharedInstance().audioSessionDidDeactivate(audioSession)
+                print("[CallKit] Notified LiveKit WebRTC audio session didDeactivate")
+            }
             print("[CallKit] Disabling LiveKit audio engine after CallKit deactivation \(describeAudioSession())")
             try AudioManager.shared.setEngineAvailability(.none)
             print("[CallKit] CallKit deactivated AVAudioSession; LiveKit audio engine unavailable input=\(AudioManager.shared.engineAvailability.isInputAvailable) output=\(AudioManager.shared.engineAvailability.isOutputAvailable) running=\(AudioManager.shared.isEngineRunning) \(describeAudioSession())")
@@ -238,6 +271,10 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
                 }
 
                 print("[CallKit] Enabling LiveKit microphone uuid=\(uuid.uuidString) engineAvailable=\(AudioManager.shared.engineAvailability.isInputAvailable) engineRunning=\(AudioManager.shared.isEngineRunning) callKitAudioActive=\(self.isCallKitAudioActive) \(self.describeAudioSession())")
+                guard self.canEnableMicrophoneAudio() else {
+                    print("[CallKit] Deferring LiveKit microphone enable until CallKit audio engine is ready uuid=\(uuid.uuidString) engineAvailable=\(AudioManager.shared.engineAvailability.isInputAvailable) engineRunning=\(AudioManager.shared.isEngineRunning) callKitAudioActive=\(self.isCallKitAudioActive) \(self.describeAudioSession())")
+                    return
+                }
                 let microphoneWarning = Task {
                     try? await Task.sleep(nanoseconds: 5_000_000_000)
                     if !Task.isCancelled {
@@ -299,6 +336,10 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
                 }
 
                 print("[CallKit] Applying native LiveKit microphone muted=false uuid=\(uuid.uuidString) desiredMuted=\(self.desiredAudioMuted) engineAvailable=\(AudioManager.shared.engineAvailability.isInputAvailable) engineRunning=\(AudioManager.shared.isEngineRunning) \(describeAudioSession())")
+                guard self.canEnableMicrophoneAudio() else {
+                    print("[CallKit] Deferring native LiveKit microphone unmute until CallKit audio engine is ready uuid=\(uuid.uuidString) desiredMuted=\(self.desiredAudioMuted) engineAvailable=\(AudioManager.shared.engineAvailability.isInputAvailable) engineRunning=\(AudioManager.shared.isEngineRunning) \(self.describeAudioSession())")
+                    return
+                }
                 try await room.localParticipant.setMicrophone(enabled: true)
                 self.updateAudioMuted(false, room: room, uuid: uuid)
                 print("[CallKit] Native LiveKit microphone unmuted uuid=\(uuid.uuidString) desiredMuted=\(self.desiredAudioMuted)")
@@ -817,6 +858,38 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
             return AudioEngineAvailability(isInputAvailable: false, isOutputAvailable: true)
         }
         return .default
+    }
+
+    private func hasUsableAudioOutputRoute() -> Bool {
+        !AVAudioSession.sharedInstance().currentRoute.outputs.isEmpty
+    }
+
+    private func canEnableMicrophoneAudio() -> Bool {
+        isCallKitAudioActive
+            && AudioManager.shared.engineAvailability.isInputAvailable
+    }
+
+    private func enableMicrophoneAfterAudioActivationIfNeeded(reason: String) {
+        guard !desiredAudioMuted else { return }
+        guard let room, let uuid = activeCallUUID else { return }
+        guard activeCall?.connectionState == "connected" else { return }
+        guard canEnableMicrophoneAudio() else {
+            print("[CallKit] Waiting to restore LiveKit microphone after audio activation reason=\(reason) engineAvailable=\(AudioManager.shared.engineAvailability.isInputAvailable) engineRunning=\(AudioManager.shared.isEngineRunning) \(describeAudioSession())")
+            return
+        }
+
+        Task { [weak self, weak room] in
+            guard let self, let room else { return }
+            guard self.activeCallUUID == uuid, self.room === room, !self.desiredAudioMuted else { return }
+            do {
+                print("[CallKit] Restoring LiveKit microphone after audio activation reason=\(reason) uuid=\(uuid.uuidString) engineRunning=\(AudioManager.shared.isEngineRunning) \(self.describeAudioSession())")
+                try await room.localParticipant.setMicrophone(enabled: true)
+                self.updateAudioMuted(false, room: room, uuid: uuid)
+                print("[CallKit] Restored LiveKit microphone after audio activation reason=\(reason) uuid=\(uuid.uuidString)")
+            } catch {
+                print("[CallKit] Failed to restore LiveKit microphone after audio activation reason=\(reason) uuid=\(uuid.uuidString): \(error) \(self.describeAudioSession())")
+            }
+        }
     }
 
     private func setOutputOnlyAvailabilityIfNeeded(uuid: UUID) {

@@ -17,6 +17,7 @@ let package = Package(
   dependencies: [
     .package(name: "Tauri", path: "../.tauri/tauri-api"),
     .package(url: "https://github.com/livekit/client-sdk-swift.git", exact: "2.13.0"),
+    .package(url: "https://github.com/livekit/webrtc-xcframework.git", exact: "144.7559.03"),
   ],
   targets: [
     .target(
@@ -24,6 +25,7 @@ let package = Package(
       dependencies: [
         .byName(name: "Tauri"),
         .product(name: "LiveKit", package: "client-sdk-swift"),
+        .product(name: "LiveKitWebRTC", package: "webrtc-xcframework"),
       ],
       path: "Sources"
     )

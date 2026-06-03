@@ -13,6 +13,7 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
     private let onCallEnded: (String) -> Void
 
     private var provider: CXProvider!
+    private var providerConfiguration: CXProviderConfiguration!
     private let callController = CXCallController()
     private var registry: PKPushRegistry!
 
@@ -20,6 +21,7 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
     private var pendingCallTokens: [UUID: PendingCallToken] = [:]
     private var activeCallUUID: UUID?
     private var activeNativeMediaUUID: UUID?
+    private var isCallKitAudioSessionActive = false
     private var outgoingCallUUIDs: Set<UUID> = []
     private var reportedConnectedOutgoingCallUUIDs: Set<UUID> = []
     private var cachedVoipToken: String?
@@ -39,11 +41,9 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
 
     func load() {
         print("[CallKit] Loading PushKit/CallKit coordinator")
-        let config = CXProviderConfiguration()
-        config.supportsVideo = true
-        config.maximumCallsPerCallGroup = 1
-        config.supportedHandleTypes = [.generic]
+        let config = makeProviderConfiguration()
 
+        providerConfiguration = config
         provider = CXProvider(configuration: config)
         provider.setDelegate(self, queue: .main)
 
@@ -95,6 +95,7 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
         outgoingCallUUIDs.insert(uuid)
         reportedConnectedOutgoingCallUUIDs.remove(uuid)
         mediaSessionProvider().setChannelTitle(displayTitle)
+        activateNativeMediaAudioIfNeeded(reason: "outgoing call prepared")
 
         let handle = CXHandle(type: .generic, value: displayTitle ?? channelId)
         let action = CXStartCallAction(call: uuid, handle: handle)
@@ -221,6 +222,7 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
                 .sorted()
             print("[CallKit] Invalid callId '\(callIdString)' in VoIP payload; keys=\(safePayloadKeys)")
             let fallbackUUID = UUID()
+            applyProviderConfiguration(reason: "invalid incoming call report")
             provider.reportNewIncomingCall(with: fallbackUUID, update: CXCallUpdate()) { [weak self] _ in
                 self?.provider.reportCall(with: fallbackUUID, endedAt: nil, reason: .failed)
                 completion()
@@ -255,6 +257,7 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
         update.hasVideo = true
 
         // Must happen from the PushKit delegate; otherwise iOS can terminate us.
+        applyProviderConfiguration(reason: "incoming call report")
         provider.reportNewIncomingCall(with: uuid, update: update) { [weak self] error in
             if error != nil {
                 print("[CallKit] reportNewIncomingCall failed uuid=\(uuid.uuidString) error=\(String(describing: error))")
@@ -273,6 +276,7 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
         pendingCalls.removeAll()
         pendingCallTokens.removeAll()
         activeCallUUID = nil
+        isCallKitAudioSessionActive = false
         pendingAnsweredCall = nil
         outgoingCallUUIDs.removeAll()
         reportedConnectedOutgoingCallUUIDs.removeAll()
@@ -339,6 +343,7 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
             print("[CallKit] Scheduling native LiveKit connect for answered call uuid=\(answeredUUID.uuidString) channelId=\(channelId)")
             let mediaSession = mediaSessionProvider()
             mediaSession.setChannelTitle(pendingCall.channelName)
+            mediaSession.prepareForCallKitAudio()
         } else if pendingCallTokens[answeredUUID] != nil {
             print("[CallKit] Native LiveKit answer disabled; JS-driven join required uuid=\(answeredUUID.uuidString)")
         } else {
@@ -346,15 +351,15 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
         }
 
         pendingAnsweredCall = (channelId: channelId, nativeMedia: shouldConnectNatively)
-        print("[CallKit] Emitting call answered event channelId=\(channelId) uuid=\(answeredUUID.uuidString) nativeMedia=\(shouldConnectNatively)")
-        onCallAnswered(channelId, shouldConnectNatively)
 
         // Keep activeCallUUID so JS can still request CXEndCallAction.
         pendingCalls.removeValue(forKey: answeredUUID)
         pendingCallTokens.removeValue(forKey: answeredUUID)
 
         print("[CallKit] Fulfilling CXAnswerCallAction uuid=\(answeredUUID.uuidString)")
+        applyProviderConfiguration(reason: "answer action fulfillment")
         action.fulfill()
+        print("[CallKit] Fulfilled CXAnswerCallAction uuid=\(answeredUUID.uuidString)")
 
         if shouldConnectNatively, let pendingToken {
             Task { @MainActor [weak self] in
@@ -365,10 +370,9 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
                     print("[CallKit] Skipping answered native LiveKit connect; call no longer active uuid=\(answeredUUID.uuidString)")
                     return
                 }
-                print("[CallKit] Creating media session for native LiveKit connect uuid=\(answeredUUID.uuidString)")
                 let mediaSession = self.mediaSessionProvider()
-                print("[CallKit] Deferring AVAudioSession category configuration until CallKit activation uuid=\(answeredUUID.uuidString)")
-                print("[CallKit] Starting native LiveKit connect uuid=\(answeredUUID.uuidString) channelId=\(channelId)")
+                mediaSession.setChannelTitle(pendingCall.channelName)
+                print("[CallKit] Starting native LiveKit connect uuid=\(answeredUUID.uuidString) channelId=\(channelId); audio remains gated until CallKit activation")
                 mediaSession.connect(
                     uuid: answeredUUID,
                     channelId: channelId,
@@ -376,6 +380,11 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
                     token: pendingToken.token
                 )
             }
+        }
+
+        DispatchQueue.main.async { [weak self] in
+            print("[CallKit] Emitting call answered event after fulfill channelId=\(channelId) uuid=\(answeredUUID.uuidString) nativeMedia=\(shouldConnectNatively)")
+            self?.onCallAnswered(channelId, shouldConnectNatively)
         }
     }
 
@@ -397,21 +406,28 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
     }
 
     func provider(_ provider: CXProvider, didActivate audioSession: AVAudioSession) {
+        isCallKitAudioSessionActive = true
         guard activeNativeMediaUUID != nil else {
-            print("[CallKit] AVAudioSession activated by CallKit; no native media session active")
+            print("[CallKit] AVAudioSession activated by CallKit; native media not active yet")
             return
         }
         print("[CallKit] AVAudioSession activated by CallKit for native media")
-        mediaSessionProvider().activateAudioEngine()
+        mediaSessionProvider().activateAudioEngine(reason: "provider didActivate", audioSession: audioSession)
     }
 
     func provider(_ provider: CXProvider, didDeactivate audioSession: AVAudioSession) {
+        isCallKitAudioSessionActive = false
         guard activeNativeMediaUUID != nil else {
             print("[CallKit] AVAudioSession deactivated by CallKit; no native media session active")
             return
         }
         print("[CallKit] AVAudioSession deactivated by CallKit for native media")
-        mediaSessionProvider().deactivateAudioEngine()
+        mediaSessionProvider().deactivateAudioEngine(audioSession: audioSession)
+    }
+
+    func provider(_ provider: CXProvider, timedOutPerforming action: CXAction) {
+        let callUUID = (action as? CXCallAction)?.callUUID.uuidString ?? "nil"
+        print("[CallKit] CXProvider timed out performing action=\(type(of: action)) uuid=\(callUUID)")
     }
 
     private func clearCallState(uuid: UUID) {
@@ -425,8 +441,40 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
         pendingAnsweredCall = nil
     }
 
+    private func activateNativeMediaAudioIfNeeded(reason: String) {
+        guard activeNativeMediaUUID != nil else { return }
+        guard isCallKitAudioSessionActive else {
+            print("[CallKit] Native media waiting for CallKit AVAudioSession activation reason=\(reason)")
+            return
+        }
+        print("[CallKit] Applying existing CallKit AVAudioSession activation to native media reason=\(reason) \(describeCurrentAudioRoute())")
+        mediaSessionProvider().activateAudioEngine(reason: reason)
+    }
+
     private func canStartNativeMediaConnect(uuid: UUID) -> Bool {
         activeCallUUID == uuid && activeNativeMediaUUID == uuid
+    }
+
+    private func makeProviderConfiguration() -> CXProviderConfiguration {
+        let config = CXProviderConfiguration()
+        config.supportsVideo = true
+        config.maximumCallsPerCallGroup = 1
+        config.supportedHandleTypes = [.generic]
+        return config
+    }
+
+    private func applyProviderConfiguration(reason: String) {
+        let config = providerConfiguration ?? makeProviderConfiguration()
+        providerConfiguration = config
+        print("[CallKit] Applying CXProvider configuration reason=\(reason)")
+        provider.configuration = config
+    }
+
+    private func describeCurrentAudioRoute() -> String {
+        let session = AVAudioSession.sharedInstance()
+        let inputs = session.currentRoute.inputs.map { "\($0.portType.rawValue):\($0.portName)" }.joined(separator: ",")
+        let outputs = session.currentRoute.outputs.map { "\($0.portType.rawValue):\($0.portName)" }.joined(separator: ",")
+        return "audioRoute(inputs=[\(inputs)], outputs=[\(outputs)])"
     }
 
     private func onMain(_ block: @escaping () -> Void) {

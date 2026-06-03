@@ -564,7 +564,7 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, @
         speakerButton.setImage(audioRouteButtonImage(), for: .normal)
         speakerButton.isEnabled = audioRoute.supportsSpeakerToggle
         speakerButton.alpha = audioRoute.supportsSpeakerToggle ? 1 : 0.45
-        applyActionButtonTheme(speakerButton, isActive: audioRoute.output == .speaker)
+        applyActionButtonTheme(speakerButton, isActive: audioRoute.output == .speaker || (audioRoute.output == .unknown && audioRoute.isSpeakerForced))
 
         let cameraImage = isLocalVideoEnabled ? "video.fill" : "video.slash.fill"
         cameraButton.setImage(UIImage(systemName: cameraImage), for: .normal)
