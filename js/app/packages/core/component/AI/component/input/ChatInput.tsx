@@ -131,16 +131,15 @@ export function ChatInput(props: ChatInputComponentProps) {
     attachments.attached().length > 0 || uploadQueue.uploading().length > 0;
 
   const LeftButton = () => (
-    <div ref={setAttachMenuAnchorRef} class="shrink-0 flex">
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        class="text-ink"
-        onClick={() => setShowAttachMenu((prev) => !prev)}
-      >
-        <PaperclipIcon />
-      </Button>
-    </div>
+    <Button
+      ref={setAttachMenuAnchorRef}
+      variant="ghost"
+      size="icon-sm"
+      class="text-ink"
+      onClick={() => setShowAttachMenu((prev) => !prev)}
+    >
+      <PaperclipIcon />
+    </Button>
   );
 
   const StopButton = () => (
@@ -162,7 +161,7 @@ export function ChatInput(props: ChatInputComponentProps) {
 
   const SendButton = () => (
     <UiSendButton
-      tooltip={'Ask Ai'}
+      tooltip={'Ask AI'}
       shortcut="enter"
       tooltipPlacement="top"
       disabled={!canSendMessage()}
@@ -263,23 +262,16 @@ export function ChatInput(props: ChatInputComponentProps) {
           </div>
 
           <div
-            class={cn({
+            class={cn('contents', {
               'flex justify-between items-center': isTallVariant(),
             })}
           >
-            <div
-              class={cn(
-                !isTallVariant() && 'absolute left-2 top-1/2 -translate-y-1/2'
-              )}
-            >
+            <div class={cn(!isTallVariant() && 'absolute left-2 bottom-1.5')}>
               <LeftButton />
             </div>
 
             <div
-              class={cn(
-                !isTallVariant() &&
-                  'absolute right-1.5 top-1/2 -translate-y-1/2'
-              )}
+              class={cn(!isTallVariant() && 'absolute right-1.5 bottom-1.5')}
             >
               <RightControls />
             </div>
