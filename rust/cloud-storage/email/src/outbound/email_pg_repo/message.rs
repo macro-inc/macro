@@ -342,8 +342,10 @@ pub(crate) async fn get_draft_replying_to(
     Ok(row.map(SimpleMessageInfo::from))
 }
 
-/// Delete a draft message (dependent rows cascade) and, if its thread is left
-/// empty, delete the thread too.
+/// Delete an unsent draft in the given thread (dependent rows cascade) and, if
+/// the thread is left empty, delete the thread too. Errors if no matching unsent
+/// draft exists in that thread, so sent mail or a mismatched thread is never
+/// touched.
 #[tracing::instrument(skip(pool), err)]
 pub(crate) async fn delete_draft_message(
     pool: &PgPool,
@@ -352,9 +354,20 @@ pub(crate) async fn delete_draft_message(
 ) -> Result<(), sqlx::Error> {
     let mut tx = pool.begin().await?;
 
-    sqlx::query!("DELETE FROM email_messages WHERE id = $1", message_id)
-        .execute(&mut *tx)
-        .await?;
+    let deleted = sqlx::query!(
+        r#"
+        DELETE FROM email_messages
+        WHERE id = $1 AND thread_id = $2 AND is_draft = true AND is_sent = false
+        "#,
+        message_id,
+        thread_db_id,
+    )
+    .execute(&mut *tx)
+    .await?;
+
+    if deleted.rows_affected() == 0 {
+        return Err(sqlx::Error::RowNotFound);
+    }
 
     let messages_remain = sqlx::query_scalar!(
         r#"SELECT EXISTS(SELECT 1 FROM email_messages WHERE thread_id = $1) AS "exists!""#,

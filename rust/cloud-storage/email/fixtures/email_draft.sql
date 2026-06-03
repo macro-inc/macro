@@ -60,3 +60,14 @@ VALUES
 INSERT INTO email_message_labels (message_id, label_id)
 VALUES
     ('ee000003-0000-0000-0000-000000000003', 'bb000001-0000-0000-0000-000000000001');
+
+-- thread 3 + msg4: a draft that is the only message in its thread
+-- (for testing empty-thread cleanup when a draft is deleted)
+INSERT INTO email_threads (id, provider_id, link_id, inbox_visible, is_read, created_at, updated_at)
+VALUES
+    ('33333333-3333-3333-3333-333333333333', NULL, 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', false, true, NOW(), NOW());
+
+INSERT INTO email_messages (id, thread_id, link_id, from_contact_id, subject, is_read, is_sent, is_draft, has_attachments, created_at, updated_at)
+VALUES
+    ('ee000004-0000-0000-0000-000000000004', '33333333-3333-3333-3333-333333333333', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+     'c0000001-0000-0000-0000-000000000001', 'Draft only thread', true, false, true, false, '2025-03-01 12:00:00+00', '2025-03-01 12:00:00+00');

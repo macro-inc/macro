@@ -205,14 +205,39 @@ async fn test_delete_draft_message_removes_empty_thread(
 ) -> anyhow::Result<()> {
     let repo = EmailPgRepo::new(pool);
 
-    let msg_id = Uuid::parse_str("ee000003-0000-0000-0000-000000000003")?;
-    let thread_id = Uuid::parse_str("22222222-2222-2222-2222-222222222222")?;
+    let draft_id = Uuid::parse_str("ee000004-0000-0000-0000-000000000004")?;
+    let thread_id = Uuid::parse_str("33333333-3333-3333-3333-333333333333")?;
 
-    repo.delete_draft_message(msg_id, thread_id).await?;
+    repo.delete_draft_message(draft_id, thread_id).await?;
 
     assert!(
         repo.thread_by_id(thread_id).await?.is_none(),
         "a thread left with no messages should be deleted"
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_draft"))
+)]
+async fn test_delete_draft_message_rejects_sent_message(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = EmailPgRepo::new(pool);
+
+    // ee000003 is a sent message, not a draft; deleting it must not succeed.
+    let sent_id = Uuid::parse_str("ee000003-0000-0000-0000-000000000003")?;
+    let thread_id = Uuid::parse_str("22222222-2222-2222-2222-222222222222")?;
+
+    assert!(
+        repo.delete_draft_message(sent_id, thread_id).await.is_err(),
+        "deleting a non-draft should error and leave it intact"
+    );
+    assert!(
+        repo.thread_by_id(thread_id).await?.is_some(),
+        "the thread of a non-draft must be untouched"
     );
 
     Ok(())
