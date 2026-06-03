@@ -111,10 +111,11 @@ export function EmailWideContent(props: {
 }) {
   return (
     <>
-      <span class="w-(--title-width) shrink-0">
+      <span class="w-(--title-width) shrink-0 flex items-center gap-2">
         <span class="truncate max-w-32 flex gap-2 items-center">
           <EmailIdentity entity={props.entity} />
         </span>
+        <EmailInboxChip entity={props.entity} class="ml-auto" />
       </span>
       <span class="truncate">
         <Entity.Title entity={props.entity} />
@@ -129,7 +130,6 @@ export function EmailWideContent(props: {
           chars={props.chars}
         />
       </span>
-      <EmailInboxChip entity={props.entity} />
     </>
   );
 }
