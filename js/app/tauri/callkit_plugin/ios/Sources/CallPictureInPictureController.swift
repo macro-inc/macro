@@ -100,27 +100,15 @@ private final class AVKitCallPictureInPictureController: NSObject, AVPictureInPi
             print("[CallKit] Picture in Picture setParticipants localTitle=\(normalizedLocalTitle ?? "nil") localTrack=\(localTrack == nil ? "nil" : "set") remoteTitle=\(normalizedRemoteTitle ?? "nil") remoteTrack=\(remoteTrack == nil ? "nil" : "set")")
 
             if self.currentLocalTrack !== localTrack {
-                if let currentLocalTrack = self.currentLocalTrack {
-                    currentLocalTrack.remove(videoRenderer: self.videoCallController.localRenderer)
-                }
                 self.currentLocalTrack = localTrack
-                self.videoCallController.resetLocal(hasVideo: localTrack != nil)
-                if let localTrack {
-                    localTrack.add(videoRenderer: self.videoCallController.localRenderer)
-                    print("[CallKit] Picture in Picture local video track attached")
-                }
+                self.videoCallController.setLocalTrack(localTrack)
+                print("[CallKit] Picture in Picture local video track \(localTrack == nil ? "detached" : "attached")")
             }
 
             if self.currentRemoteTrack !== remoteTrack {
-                if let currentRemoteTrack = self.currentRemoteTrack {
-                    currentRemoteTrack.remove(videoRenderer: self.videoCallController.remoteRenderer)
-                }
                 self.currentRemoteTrack = remoteTrack
-                self.videoCallController.resetRemote(hasVideo: remoteTrack != nil)
-                if let remoteTrack {
-                    remoteTrack.add(videoRenderer: self.videoCallController.remoteRenderer)
-                    print("[CallKit] Picture in Picture remote video track attached")
-                }
+                self.videoCallController.setRemoteTrack(remoteTrack)
+                print("[CallKit] Picture in Picture remote video track \(remoteTrack == nil ? "detached" : "attached")")
             }
 
             if localTrack == nil {
@@ -139,12 +127,6 @@ private final class AVKitCallPictureInPictureController: NSObject, AVPictureInPi
             if self.pictureInPictureController?.isPictureInPictureActive == true {
                 print("[CallKit] Stopping Picture in Picture")
                 self.pictureInPictureController?.stopPictureInPicture()
-            }
-            if let currentLocalTrack = self.currentLocalTrack {
-                currentLocalTrack.remove(videoRenderer: self.videoCallController.localRenderer)
-            }
-            if let currentRemoteTrack = self.currentRemoteTrack {
-                currentRemoteTrack.remove(videoRenderer: self.videoCallController.remoteRenderer)
             }
             self.currentLocalTrack = nil
             self.currentRemoteTrack = nil
@@ -269,13 +251,9 @@ private final class AVKitCallPictureInPictureController: NSObject, AVPictureInPi
 @available(iOS 15.0, *)
 private final class CallPiPVideoCallViewController: AVPictureInPictureVideoCallViewController, @unchecked Sendable {
     private lazy var contentView = CallPiPContentView()
-    let localRenderer = CallPiPParticipantRenderer()
-    let remoteRenderer = CallPiPParticipantRenderer()
 
     override func loadView() {
         view = contentView
-        localRenderer.participantView = contentView.localView
-        remoteRenderer.participantView = contentView.remoteView
         preferredContentSize = CGSize(width: 320, height: 150)
     }
 
@@ -291,11 +269,19 @@ private final class CallPiPVideoCallViewController: AVPictureInPictureVideoCallV
     func resetRemote(hasVideo: Bool) {
         contentView.remoteView.reset(hasVideo: hasVideo)
     }
+
+    func setLocalTrack(_ track: VideoTrack?) {
+        contentView.localView.setTrack(track)
+    }
+
+    func setRemoteTrack(_ track: VideoTrack?) {
+        contentView.remoteView.setTrack(track)
+    }
 }
 
 private final class CallPiPContentView: UIView {
-    let localView = CallPiPParticipantView()
-    let remoteView = CallPiPParticipantView()
+    let localView = CallPiPParticipantView(isMirrored: true)
+    let remoteView = CallPiPParticipantView(isMirrored: false)
     private let dividerView = UIView()
 
     override init(frame: CGRect) {
@@ -334,22 +320,21 @@ private final class CallPiPContentView: UIView {
 }
 
 private final class CallPiPParticipantView: UIView {
-    private let renderingView = CallPiPSampleRenderingView()
+    private let videoView = VideoView()
     private let placeholderView = UIView()
     private let initialsLabel = UILabel()
     private let nameLabel = UILabel()
 
-    var sampleBufferDisplayLayer: AVSampleBufferDisplayLayer {
-        renderingView.sampleBufferDisplayLayer
-    }
-
-    override init(frame: CGRect) {
+    init(frame: CGRect = .zero, isMirrored: Bool) {
         super.init(frame: frame)
         backgroundColor = UIColor(white: 0.06, alpha: 1)
 
-        renderingView.sampleBufferDisplayLayer.videoGravity = .resizeAspectFill
-        renderingView.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(renderingView)
+        videoView.layoutMode = .fill
+        videoView.renderMode = .sampleBuffer
+        videoView.mirrorMode = isMirrored ? .auto : .off
+        videoView.backgroundColor = UIColor(white: 0.06, alpha: 1)
+        videoView.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(videoView)
 
         placeholderView.backgroundColor = UIColor(white: 0.06, alpha: 1)
         placeholderView.translatesAutoresizingMaskIntoConstraints = false
@@ -373,10 +358,10 @@ private final class CallPiPParticipantView: UIView {
         placeholderView.addSubview(nameLabel)
 
         NSLayoutConstraint.activate([
-            renderingView.leadingAnchor.constraint(equalTo: leadingAnchor),
-            renderingView.trailingAnchor.constraint(equalTo: trailingAnchor),
-            renderingView.topAnchor.constraint(equalTo: topAnchor),
-            renderingView.bottomAnchor.constraint(equalTo: bottomAnchor),
+            videoView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            videoView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            videoView.topAnchor.constraint(equalTo: topAnchor),
+            videoView.bottomAnchor.constraint(equalTo: bottomAnchor),
             placeholderView.leadingAnchor.constraint(equalTo: leadingAnchor),
             placeholderView.trailingAnchor.constraint(equalTo: trailingAnchor),
             placeholderView.topAnchor.constraint(equalTo: topAnchor),
@@ -410,13 +395,20 @@ private final class CallPiPParticipantView: UIView {
         nameLabel.text = resolvedTitle
     }
 
+    func setTrack(_ track: VideoTrack?) {
+        videoView.track = track
+        setHasVideo(track != nil)
+    }
+
     func setHasVideo(_ hasVideo: Bool) {
-        renderingView.isHidden = !hasVideo
+        videoView.isHidden = !hasVideo
         placeholderView.isHidden = hasVideo
     }
 
     func reset(hasVideo: Bool) {
-        sampleBufferDisplayLayer.flushAndRemoveImage()
+        if !hasVideo {
+            videoView.track = nil
+        }
         setHasVideo(hasVideo)
     }
 
@@ -432,54 +424,5 @@ private final class CallPiPParticipantView: UIView {
             return String(first.prefix(1)).uppercased()
         }
         return "?"
-    }
-}
-
-private final class CallPiPSampleRenderingView: UIView {
-    var sampleBufferDisplayLayer: AVSampleBufferDisplayLayer {
-        layer as! AVSampleBufferDisplayLayer
-    }
-
-    override class var layerClass: AnyClass {
-        AVSampleBufferDisplayLayer.self
-    }
-}
-
-@available(iOS 15.0, *)
-private final class CallPiPParticipantRenderer: NSObject, VideoRenderer, @unchecked Sendable {
-    weak var participantView: CallPiPParticipantView?
-
-    @MainActor var isAdaptiveStreamEnabled: Bool { true }
-    @MainActor var adaptiveStreamSize: CGSize {
-        participantView?.bounds.size ?? CGSize(width: 160, height: 150)
-    }
-
-    nonisolated func render(frame: VideoFrame) {
-        guard let sampleBuffer = frame.toCMSampleBuffer() else { return }
-
-        Task { @MainActor [weak self] in
-            guard let self, let participantView = self.participantView else { return }
-            participantView.setHasVideo(true)
-            let layer = participantView.sampleBufferDisplayLayer
-            if layer.status == .failed {
-                layer.flush()
-            }
-            if layer.isReadyForMoreMediaData {
-                layer.enqueue(sampleBuffer)
-            }
-            layer.setAffineTransform(CGAffineTransform(rotationAngle: frame.rotation.rotationAngle))
-        }
-    }
-}
-
-private extension VideoRotation {
-    var rotationAngle: CGFloat {
-        switch self {
-        case ._0: return 0
-        case ._90: return .pi / 2
-        case ._180: return .pi
-        case ._270: return 3 * .pi / 2
-        @unknown default: return 0
-        }
     }
 }

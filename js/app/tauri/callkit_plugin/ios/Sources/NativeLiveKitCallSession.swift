@@ -79,6 +79,7 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
         }
         videoOverlay.onModeChanged = { [weak self] mode in
             print("[CallKit] Picture in Picture refreshing source for overlay mode=\(mode.rawValue)")
+            self?.updateVideoOverlayMode(mode.rawValue)
             self?.pictureInPicture.prepare()
         }
         audioRouteController.onRouteChanged = { [weak self] route in
@@ -168,7 +169,10 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
         audioRouteController.prepareForCall()
 
         print("[CallKit] Creating LiveKit Room uuid=\(uuid.uuidString)")
-        let newRoom = Room(delegate: self)
+        let newRoom = Room(
+            delegate: self,
+            roomOptions: RoomOptions(suspendLocalVideoTracksInBackground: false)
+        )
         print("[CallKit] Created LiveKit Room uuid=\(uuid.uuidString)")
 
         activeCallUUID = uuid
@@ -384,7 +388,6 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
 
     func setVideoOverlayMode(_ mode: CallVideoOverlayMode) {
         videoOverlay.setMode(mode)
-        updateVideoOverlayMode(mode.rawValue)
     }
 
     private func toggleVideoFromOverlay() {

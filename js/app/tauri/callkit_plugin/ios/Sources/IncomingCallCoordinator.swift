@@ -304,6 +304,12 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
 
         Task { @MainActor [weak self] in
             guard let self else { return }
+            guard self.canStartNativeMediaConnect(uuid: uuid),
+                  self.pendingCalls[uuid] != nil,
+                  self.pendingCallTokens[uuid] != nil else {
+                print("[CallKit] Skipping outgoing native LiveKit connect; call no longer active uuid=\(uuid.uuidString)")
+                return
+            }
             let mediaSession = self.mediaSessionProvider()
             mediaSession.setChannelTitle(pendingCall.channelName)
             print("[CallKit] Starting native LiveKit connect for outgoing call uuid=\(uuid.uuidString) channelId=\(pendingCall.channelId)")
@@ -355,6 +361,10 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
                 guard let self else { return }
                 print("[CallKit] Native LiveKit connect task started uuid=\(answeredUUID.uuidString)")
                 try? await Task.sleep(nanoseconds: 100_000_000)
+                guard self.canStartNativeMediaConnect(uuid: answeredUUID) else {
+                    print("[CallKit] Skipping answered native LiveKit connect; call no longer active uuid=\(answeredUUID.uuidString)")
+                    return
+                }
                 print("[CallKit] Creating media session for native LiveKit connect uuid=\(answeredUUID.uuidString)")
                 let mediaSession = self.mediaSessionProvider()
                 print("[CallKit] Deferring AVAudioSession category configuration until CallKit activation uuid=\(answeredUUID.uuidString)")
@@ -413,6 +423,10 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
         outgoingCallUUIDs.remove(uuid)
         reportedConnectedOutgoingCallUUIDs.remove(uuid)
         pendingAnsweredCall = nil
+    }
+
+    private func canStartNativeMediaConnect(uuid: UUID) -> Bool {
+        activeCallUUID == uuid && activeNativeMediaUUID == uuid
     }
 
     private func onMain(_ block: @escaping () -> Void) {

@@ -40,6 +40,7 @@ class CallKitPlugin: Plugin, @unchecked Sendable {
     private var mediaSession: NativeLiveKitCallSession?
     private var callCoordinator: IncomingCallCoordinator!
     private let videoOverlay = CallVideoOverlayController()
+    private var pendingParticipantDisplayNamesByIdentity: [String: String] = [:]
 
     // Singleton channels avoid leaking listeners across webview reloads/HMR.
     private var callAnsweredChannel: Channel?
@@ -277,7 +278,7 @@ class CallKitPlugin: Plugin, @unchecked Sendable {
         let args = try invoke.parseArgs(SetParticipantDisplayNameArgs.self)
         onMain { [weak self] in
             print("[CallKit] JS requested participant display name identity=\(args.identity) displayName=\(args.displayName ?? "nil")")
-            self?.getMediaSession().setParticipantDisplayName(
+            self?.setParticipantDisplayName(
                 identity: args.identity,
                 displayName: args.displayName
             )
@@ -370,7 +371,34 @@ class CallKitPlugin: Plugin, @unchecked Sendable {
             videoOverlay: videoOverlay
         )
         self.mediaSession = mediaSession
+        replayPendingParticipantDisplayNames(to: mediaSession)
         return mediaSession
+    }
+
+    private func setParticipantDisplayName(identity: String, displayName: String?) {
+        if let mediaSession {
+            mediaSession.setParticipantDisplayName(identity: identity, displayName: displayName)
+            return
+        }
+
+        let trimmedName = displayName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let trimmedName, !trimmedName.isEmpty {
+            pendingParticipantDisplayNamesByIdentity[identity] = trimmedName
+            print("[CallKit] Cached participant display name until native session exists identity=\(identity) displayName=\(trimmedName)")
+        } else {
+            pendingParticipantDisplayNamesByIdentity.removeValue(forKey: identity)
+            print("[CallKit] Cleared pending participant display name before native session exists identity=\(identity)")
+        }
+    }
+
+    private func replayPendingParticipantDisplayNames(to mediaSession: NativeLiveKitCallSession) {
+        guard !pendingParticipantDisplayNamesByIdentity.isEmpty else { return }
+
+        print("[CallKit] Replaying pending participant display names count=\(pendingParticipantDisplayNamesByIdentity.count)")
+        for (identity, displayName) in pendingParticipantDisplayNamesByIdentity {
+            mediaSession.setParticipantDisplayName(identity: identity, displayName: displayName)
+        }
+        pendingParticipantDisplayNamesByIdentity.removeAll()
     }
 
     private func onMain(_ block: @escaping () -> Void) {
