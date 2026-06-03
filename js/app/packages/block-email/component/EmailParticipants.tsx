@@ -8,6 +8,7 @@ import { EmailUserTooltip } from './EmailUserTooltip';
 interface Participant {
   email: string;
   name?: string;
+  photoUrl?: string;
 }
 
 const DEFAULT_VISIBLE_COUNT = 5;
@@ -28,6 +29,7 @@ export function EmailParticipants() {
           seen.set(m.from.email, {
             email: m.from.email,
             name: m.from.name ?? undefined,
+            photoUrl: m.from.photo_url ?? existing?.photoUrl ?? undefined,
           });
         }
       }
@@ -38,6 +40,7 @@ export function EmailParticipants() {
           seen.set(r.email, {
             email: r.email,
             name: r.name ?? undefined,
+            photoUrl: r.photo_url ?? existing?.photoUrl ?? undefined,
           });
         }
       }
@@ -64,8 +67,8 @@ export function EmailParticipants() {
 
   const getIconProps = (p: Participant): UserIconProps => {
     const macroId = emailToMacroId(p.email);
-    if (macroId) return { id: macroId };
-    return { email: p.email };
+    if (macroId) return { id: macroId, photoUrl: p.photoUrl };
+    return { email: p.email, photoUrl: p.photoUrl };
   };
 
   return (
