@@ -1430,19 +1430,26 @@ export function BaseInput(props: {
               class="flex flex-1 items-center gap-1.5 min-w-0 mt-1 text-sm text-ink-muted"
               onClick={() => setShowExpandedRecipients(true)}
             >
-              <TruncatedRecipientList
-                toRecipients={form().recipients().to}
-                ccRecipients={form().recipients().cc}
-                bccRecipients={form().recipients().bcc}
-                onClick={() => setShowExpandedRecipients(true)}
-              />
-              <Show when={(emailLinksQuery.data?.links.length ?? 0) > 1}>
-                <span class="shrink-0 text-ink-extra-muted">·</span>
-                <span class="min-w-0 shrink-[2] truncate">
-                  from {activeInboxEmail()}
-                </span>
+              <Show
+                when={!isMobile()}
+                fallback={
+                  <PencilSimple class="size-4 shrink-0 text-ink-muted ml-auto" />
+                }
+              >
+                <TruncatedRecipientList
+                  toRecipients={form().recipients().to}
+                  ccRecipients={form().recipients().cc}
+                  bccRecipients={form().recipients().bcc}
+                  onClick={() => setShowExpandedRecipients(true)}
+                />
+                <Show when={(emailLinksQuery.data?.links.length ?? 0) > 1}>
+                  <span class="shrink-0 text-ink-extra-muted">·</span>
+                  <span class="min-w-0 shrink-[2] truncate">
+                    from {activeInboxEmail()}
+                  </span>
+                </Show>
+                <PencilSimple class="size-3.5 shrink-0 text-ink-extra-muted" />
               </Show>
-              <PencilSimple class="size-3.5 shrink-0 text-ink-extra-muted" />
             </div>
           }
         >
