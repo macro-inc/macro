@@ -416,7 +416,7 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
         />
 
         <div class="w-full py-1 px-2 absolute bottom-0 flex flex-row justify-between items-center z-user-highlight">
-          <div class="text-sm font-bold">{props.creatableBlock.label}</div>
+          <div class="text-sm font-medium">{props.creatableBlock.label}</div>
           <div
             class={cn(
               'size-3 transition-[transform,opacity] ease duration-200',

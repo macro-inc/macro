@@ -78,9 +78,14 @@ export const AnimatedSearchIcon = (props: {
 
       <g class="magnifying-glass">
         {/* Magnifying glass circle (lens) */}
-        <path
+        <circle
           class="glass"
-          d="M5.25,10.5c-2.9,0-5.25-2.36-5.25-5.25S2.35,0,5.25,0s5.25,2.35,5.25,5.25-2.35,5.25-5.25,5.25ZM5.25,1.5c-2.07,0-3.75,1.68-3.75,3.75s1.68,3.75,3.75,3.75,3.75-1.68,3.75-3.75-1.68-3.75-3.75-3.75Z"
+          cx="5.25"
+          cy="5.25"
+          r="4.6875"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.125"
         />
 
         <line
@@ -90,7 +95,7 @@ export const AnimatedSearchIcon = (props: {
           x2="5.25"
           y2="13.5"
           stroke="currentColor"
-          stroke-width="1.5"
+          stroke-width="1.125"
           stroke-linecap="round"
         />
 
@@ -101,7 +106,7 @@ export const AnimatedSearchIcon = (props: {
           x2="-.25"
           y2="5"
           stroke="currentColor"
-          stroke-width="1.5"
+          stroke-width="1.125"
           stroke-linecap="round"
         />
 
@@ -112,7 +117,7 @@ export const AnimatedSearchIcon = (props: {
           x2="5.25"
           y2="0"
           stroke="currentColor"
-          stroke-width="1.5"
+          stroke-width="1.125"
           stroke-linecap="round"
         />
 
@@ -123,7 +128,7 @@ export const AnimatedSearchIcon = (props: {
           x2="13.75"
           y2="5"
           stroke="currentColor"
-          stroke-width="1.5"
+          stroke-width="1.125"
           stroke-linecap="round"
         />
       </g>
