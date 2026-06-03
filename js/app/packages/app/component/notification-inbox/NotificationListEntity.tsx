@@ -4,7 +4,11 @@ import { tryMacroId, useDisplayName } from '@core/user';
 import { Entity, formatRelativeTimestamp, NotificationRow } from '@entity';
 import GithubIcon from '@icon/mcp-github.svg';
 import type { UnifiedNotification } from '@notifications';
-import { Avatar, Button, cn } from '@ui';
+import GitMergeIcon from '@phosphor-icons/core/regular/git-merge.svg?component-solid';
+import GitPullRequestIcon from '@phosphor-icons/core/regular/git-pull-request.svg?component-solid';
+import XCircleIcon from '@phosphor-icons/core/regular/x-circle.svg?component-solid';
+import type { GithubPrEventStatus } from '@service-notification/generated/schemas';
+import { Avatar, Button, cn, Tooltip } from '@ui';
 import { createEffect, createSignal, For, Show } from 'solid-js';
 
 interface NotificationListEntityProps {
@@ -257,18 +261,47 @@ function CollapsedNotificationListEntityRow(props: {
   );
 }
 
-const GITHUB_GRID_TEMPLATE = '1fr minmax(7rem, 10rem) minmax(5rem, 7rem) 2rem';
+const GITHUB_GRID_TEMPLATE_COLUMNS =
+  '1rem minmax(0, 1fr) var(--github-col-author, 8rem) var(--github-col-link, 12rem) var(--github-col-timestamp, 5rem)';
+const GITHUB_GRID_TEMPLATE_AREAS = '"indicator content author link timestamp"';
 
-export function GithubNotificationListHeader() {
+export function GithubNotificationListHeader(props: { class?: string }) {
   return (
     <div
-      class="w-full grid items-center gap-2 px-3 h-8 text-xs font-medium text-ink-extra-muted bg-surface"
-      style={{ 'grid-template-columns': GITHUB_GRID_TEMPLATE }}
+      class={cn(
+        'github-grid-row w-full grid items-center gap-2 px-2 h-10',
+        'text-xs font-medium text-ink-extra-muted',
+        'bg-surface',
+        props.class
+      )}
+      style={{
+        'grid-template-columns': GITHUB_GRID_TEMPLATE_COLUMNS,
+        'grid-template-areas': GITHUB_GRID_TEMPLATE_AREAS,
+      }}
     >
-      <div class="truncate">Update</div>
-      <div class="truncate">Author</div>
-      <div class="truncate text-right">Updated</div>
-      <div />
+      <div style={{ 'grid-area': 'indicator' }} />
+      <GithubHeaderCell gridArea="content" label="Update" />
+      <GithubHeaderCell gridArea="author" label="Author" />
+      <GithubHeaderCell gridArea="link" label="GitHub" />
+      <GithubHeaderCell gridArea="timestamp" label="Updated" align="end" />
+    </div>
+  );
+}
+
+function GithubHeaderCell(props: {
+  gridArea: string;
+  label: string;
+  align?: 'start' | 'end';
+}) {
+  const justify = () =>
+    props.align === 'end' ? 'justify-end' : 'justify-start';
+
+  return (
+    <div
+      style={{ 'grid-area': props.gridArea }}
+      class={cn('flex items-center min-w-0', justify())}
+    >
+      <span class="truncate">{props.label}</span>
     </div>
   );
 }
@@ -285,43 +318,107 @@ function NotificationAuthor(props: { id?: string; fallback?: string }) {
   const label = () => displayName() || props.fallback || props.id || 'Unknown';
 
   return (
-    <div class="min-w-0 flex items-center gap-1 text-xs text-ink-muted">
-      <Show
-        when={macroId() && props.id}
-        fallback={
-          <Avatar size="sm" class="size-4">
-            <Avatar.Fallback class="font-semibold">
-              {getInitials(label())}
-            </Avatar.Fallback>
-          </Avatar>
-        }
-      >
-        {(id) => (
-          <UserIcon id={id()} size="sm" suppressClick showTooltip={false} />
-        )}
-      </Show>
-      <span class="truncate">{label()}</span>
-    </div>
+    <Tooltip label={label()}>
+      <div class="flex items-center gap-1 text-xs text-ink-muted">
+        <Show
+          when={macroId() && props.id}
+          fallback={
+            <Avatar size="sm">
+              <Avatar.Fallback class="font-semibold">
+                {getInitials(label())}
+              </Avatar.Fallback>
+            </Avatar>
+          }
+        >
+          {(id) => (
+            <UserIcon id={id()} size="sm" suppressClick showTooltip={false} />
+          )}
+        </Show>
+        <span class="truncate">{label()}</span>
+      </div>
+    </Tooltip>
   );
 }
-
-const getGithubUpdateText = (notification: UnifiedNotification): string => {
-  const metadata = notification.notification_metadata;
-  if (metadata.tag !== 'github_pr_event') return '';
-  return metadata.content.action;
-};
 
 const getGithubContent = (notification: UnifiedNotification) => {
   const metadata = notification.notification_metadata;
   return metadata.tag === 'github_pr_event' ? metadata.content : undefined;
 };
 
+const getGithubStatusIcon = (status: GithubPrEventStatus) => {
+  switch (status) {
+    case 'open':
+      return GitPullRequestIcon;
+    case 'closed':
+      return XCircleIcon;
+    case 'merged':
+      return GitMergeIcon;
+  }
+};
+
+const getGithubStatusClass = (status: GithubPrEventStatus): string => {
+  switch (status) {
+    case 'open':
+      return 'text-success';
+    case 'closed':
+      return 'text-failure';
+    case 'merged':
+      return 'text-note';
+  }
+};
+
+function GithubLinkPill(props: { url?: string; label?: string }) {
+  return (
+    <Show
+      when={props.url}
+      fallback={
+        <span class="inline-flex max-w-full min-w-0 items-center gap-1 rounded-full border border-edge-muted px-1.5 py-0.5 text-xs text-ink-muted overflow-hidden">
+          <GithubIcon class="size-3.5 shrink-0" />
+          <span class="truncate min-w-0">{props.label ?? 'GitHub'}</span>
+        </span>
+      }
+    >
+      {(url) => (
+        <Button
+          variant="ghost"
+          size="sm"
+          class="[&_:where(svg)]:size-3.5 w-full max-w-full justify-start gap-1 rounded-full border border-edge-muted bg-surface px-1 py-0.5 text-xs text-ink-muted h-auto min-w-0 overflow-hidden"
+          noTouchResize
+          tooltip="Open pull request"
+          onClick={(e) => {
+            e.stopPropagation();
+            window.open(url(), '_blank', 'noreferrer');
+          }}
+        >
+          <GithubIcon class="shrink-0" />
+          <span class="truncate min-w-0">{props.label ?? 'GitHub'}</span>
+        </Button>
+      )}
+    </Show>
+  );
+}
+
 export function GithubNotificationListEntity(props: {
   notification: UnifiedNotification;
+  title?: string;
+  subtitle?: string;
+  status?: GithubPrEventStatus;
+  url?: string;
+  authorId?: string;
+  authorFallback?: string;
 }) {
   const github = () => getGithubContent(props.notification);
   const unread = () =>
     !props.notification.viewed_at && !props.notification.done;
+  const title = () => props.title ?? github()?.action ?? '';
+  const description = () => (props.title ? undefined : github()?.displayName);
+  const status = () => props.status ?? github()?.status;
+  const url = () => props.url ?? github()?.url;
+  const subtitle = () => props.subtitle ?? github()?.githubKey;
+  const authorId = () =>
+    props.authorId ?? props.notification.sender_id ?? undefined;
+  const authorFallback = () =>
+    props.authorFallback ?? github()?.senderGithubLogin ?? undefined;
   const timestamp = () =>
     formatRelativeTimestamp(
       props.notification.created_at ??
@@ -337,55 +434,71 @@ export function GithubNotificationListEntity(props: {
         <NotificationListEntity notification={props.notification} stacked />
       }
     >
-      {(content) => (
+      <div
+        class="group/notif grid min-h-10 items-center gap-2 px-2 py-1.5 hover:bg-ink-muted/6 min-w-0 overflow-hidden"
+        style={{
+          'grid-template-columns': GITHUB_GRID_TEMPLATE_COLUMNS,
+          'grid-template-areas': GITHUB_GRID_TEMPLATE_AREAS,
+        }}
+      >
         <div
-          class="group/notif grid items-center gap-2 px-3 py-2 hover:bg-ink-muted/6 min-w-0 overflow-hidden"
-          style={{ 'grid-template-columns': GITHUB_GRID_TEMPLATE }}
+          style={{ 'grid-area': 'indicator' }}
+          class="grid place-items-center"
         >
-          <div class="min-w-0 flex items-center gap-2">
-            <span
-              class={cn('size-1.5 rounded-full shrink-0', {
-                'bg-accent': unread(),
-                'bg-transparent': !unread(),
-              })}
-            />
-            <span
-              class={cn('truncate min-w-0 text-xs text-ink', {
-                'font-medium': unread(),
-              })}
-            >
-              {getGithubUpdateText(props.notification)}
-            </span>
-            <span class="truncate min-w-0 text-xs text-ink-muted/60">
-              {content().displayName}
-            </span>
-          </div>
-          <NotificationAuthor
-            id={props.notification.sender_id ?? undefined}
-            fallback={content().senderGithubLogin ?? undefined}
+          <span
+            class={cn('size-1.5 rounded-full', {
+              'bg-accent': unread(),
+              'bg-transparent': !unread(),
+            })}
           />
-          <span class="shrink-0 text-ink-extra-muted text-xs tabular-nums text-right">
-            {timestamp()}
+        </div>
+        <div
+          style={{ 'grid-area': 'content' }}
+          class="min-w-0 flex items-center gap-1.5 text-xs font-semibold tracking-tight"
+        >
+          <Show when={status()}>
+            {(value) => {
+              const StatusIcon = getGithubStatusIcon(value());
+              return (
+                <StatusIcon
+                  class={cn('size-3.5 shrink-0', getGithubStatusClass(value()))}
+                />
+              );
+            }}
+          </Show>
+          <span
+            class={cn('truncate min-w-0 text-ink-muted', {
+              'text-ink font-semibold': unread(),
+            })}
+          >
+            {title()}
           </span>
-          <Show when={content().url} fallback={<div />}>
-            {(url) => (
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                class="justify-self-end text-ink-muted !size-5 !p-0"
-                noTouchResize
-                tooltip="Open pull request"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  window.open(url(), '_blank', 'noreferrer');
-                }}
-              >
-                <GithubIcon class="size-2.5" />
-              </Button>
+          <Show when={description()}>
+            {(value) => (
+              <span class="truncate min-w-0 text-xs font-normal text-ink-muted/60">
+                {value()}
+              </span>
             )}
           </Show>
         </div>
-      )}
+        <div style={{ 'grid-area': 'author' }} class="min-w-0 overflow-hidden">
+          <div class="inline-flex max-w-full min-w-0 items-center rounded-full border border-edge-muted px-1 py-0.5 overflow-hidden">
+            <NotificationAuthor id={authorId()} fallback={authorFallback()} />
+          </div>
+        </div>
+        <div
+          style={{ 'grid-area': 'link' }}
+          class="min-w-0 overflow-hidden flex items-center"
+        >
+          <GithubLinkPill url={url()} label={subtitle()} />
+        </div>
+        <span
+          style={{ 'grid-area': 'timestamp' }}
+          class="shrink-0 text-ink-extra-muted text-xs tabular-nums text-right font-light"
+        >
+          {timestamp()}
+        </span>
+      </div>
     </Show>
   );
 }

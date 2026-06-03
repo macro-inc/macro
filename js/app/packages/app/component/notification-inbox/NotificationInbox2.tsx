@@ -15,18 +15,14 @@ import FunnelIcon from '@phosphor/funnel.svg';
 import SortAscendingIcon from '@phosphor/sort-ascending.svg';
 import StackIcon from '@phosphor/stack.svg';
 import EyeIcon from '@phosphor-icons/core/regular/eye.svg?component-solid';
-import GitMergeIcon from '@phosphor-icons/core/regular/git-merge.svg?component-solid';
-import GitPullRequestIcon from '@phosphor-icons/core/regular/git-pull-request.svg?component-solid';
 import SparkleIcon from '@phosphor-icons/core/regular/sparkle.svg?component-solid';
-import XCircleIcon from '@phosphor-icons/core/regular/x-circle.svg?component-solid';
 import type { GithubPrEventStatus } from '@service-notification/generated/schemas';
-import { Button, cn, Tooltip } from '@ui';
+import { Button, cn } from '@ui';
 import { createEffect, For, type JSX, Show } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { Dynamic } from 'solid-js/web';
 import {
   GithubNotificationListEntity,
-  GithubNotificationListHeader,
   NotificationListEntity,
 } from './NotificationListEntity';
 
@@ -148,28 +144,6 @@ const getNotificationRoot = (
         icon: SparkleIcon,
         kind: 'ai',
       };
-  }
-};
-
-const getGithubStatusIcon = (status: GithubPrEventStatus) => {
-  switch (status) {
-    case 'open':
-      return GitPullRequestIcon;
-    case 'closed':
-      return XCircleIcon;
-    case 'merged':
-      return GitMergeIcon;
-  }
-};
-
-const getGithubStatusClass = (status: GithubPrEventStatus): string => {
-  switch (status) {
-    case 'open':
-      return 'text-success';
-    case 'closed':
-      return 'text-failure';
-    case 'merged':
-      return 'text-note';
   }
 };
 
@@ -440,120 +414,76 @@ export function NotificationInbox2() {
                     >
                       {(group) => (
                         <section class="flex flex-col gap-1">
-                          <div
-                            class={cn(
-                              'group/header rounded-lg px-2 py-2 flex items-center gap-2.5 text-xs font-semibold tracking-tight text-ink-muted bg-surface hover:ring hover:ring-inset hover:ring-edge border border-edge-muted relative',
-                              {
-                                'border-none': !group().subItems.length,
-                              }
-                            )}
-                          >
-                            <Show when={group().kind !== 'github'}>
-                              <div class="shrink-0 rounded-xs bg-ink-muted/6 flex items-center justify-center text-ink-muted">
-                                <Dynamic
-                                  component={group().icon}
-                                  class="size-3.5"
-                                />
-                              </div>
-                            </Show>
-                            <div class="min-w-0 flex-1 flex items-center gap-1.5">
-                              <Show when={getGithubGroupStatus(group())}>
-                                {(status) => (
-                                  <Tooltip label={status()}>
-                                    <span
-                                      class={cn(
-                                        'shrink-0 flex items-center gap-1 text-xs font-medium capitalize',
-                                        getGithubStatusClass(status())
-                                      )}
-                                    >
-                                      <Dynamic
-                                        component={getGithubStatusIcon(
-                                          status()
-                                        )}
-                                        class="size-3.5"
-                                      />
-                                    </span>
-                                  </Tooltip>
-                                )}
-                              </Show>
-                              <span class="truncate text-ink-muted">
-                                {group().label}
-                              </span>
-                            </div>
-                            <Show when={group().kind === 'github'}>
-                              <div class="ml-auto shrink-0 h-5 flex items-center">
-                                <Show
-                                  when={getGithubGroupUrl(group())}
-                                  fallback={
-                                    <p class="flex items-center gap-2">
-                                      <GithubIcon class="size-3.5" />
-                                      <Show when={group().subtitle}>
-                                        {(subtitle) => (
-                                          <span class="truncate text-ink-extra-muted">
-                                            {subtitle()}
-                                          </span>
-                                        )}
-                                      </Show>
-                                    </p>
-                                  }
-                                >
-                                  {(url) => (
-                                    <a
-                                      class="flex items-center gap-2 hover:underline"
-                                      href={url()}
-                                    >
-                                      <GithubIcon class="size-3.5" />
-                                      <Show when={group().subtitle}>
-                                        {(subtitle) => (
-                                          <span class="truncate text-ink-extra-muted">
-                                            {subtitle()}
-                                          </span>
-                                        )}
-                                      </Show>
-                                    </a>
-                                  )}
-                                </Show>
-                              </div>
-                            </Show>
-                          </div>
                           <Show
-                            when={
-                              group().subItems.length === 1
-                                ? group().subItems[0]
-                                : undefined
+                            when={group().kind === 'github'}
+                            fallback={
+                              <div
+                                class={cn(
+                                  'group/header rounded-lg px-2 py-2 flex items-center gap-2.5 text-xs font-semibold tracking-tight text-ink-muted bg-surface hover:ring hover:ring-inset hover:ring-edge border border-edge-muted relative',
+                                  {
+                                    'border-none': !group().subItems.length,
+                                  }
+                                )}
+                              >
+                                <div class="shrink-0 rounded-xs bg-ink-muted/6 flex items-center justify-center text-ink-muted">
+                                  <Dynamic
+                                    component={group().icon}
+                                    class="size-3.5"
+                                  />
+                                </div>
+                                <div class="min-w-0 flex-1 flex items-center gap-1.5">
+                                  <span class="truncate text-ink-muted">
+                                    {group().label}
+                                  </span>
+                                </div>
+                              </div>
                             }
                           >
-                            {(subItem) => (
-                              <Show
-                                when={group().kind === 'github'}
-                                fallback={
-                                  <NotificationListEntity
-                                    notification={subItem().notification}
-                                    collapsedCount={subItem().collapsedCount}
-                                    collapsedNotifications={
-                                      subItem().collapsedNotifications
-                                    }
-                                    stacked
-                                  />
+                            <div
+                              class={cn(
+                                'group/header rounded-lg bg-surface hover:ring hover:ring-inset hover:ring-edge border border-edge-muted relative overflow-hidden',
+                                {
+                                  'border-none': !group().subItems.length,
                                 }
-                              >
-                                <GithubNotificationListEntity
-                                  notification={subItem().notification}
-                                />
-                              </Show>
-                            )}
+                              )}
+                            >
+                              <GithubNotificationListEntity
+                                notification={group().notifications[0]}
+                                title={group().label}
+                                subtitle={group().subtitle}
+                                status={getGithubGroupStatus(group())}
+                                url={getGithubGroupUrl(group())}
+                                authorId={group().authorId}
+                                authorFallback={group().authorFallback}
+                              />
+                            </div>
                           </Show>
-                          <Show when={group().subItems.length > 1}>
-                            <div class="rounded-lg border border-ink-muted/8 bg-ink-muted/2.5 overflow-hidden">
-                              <Show when={group().kind === 'github'}>
-                                <GithubNotificationListHeader />
-                              </Show>
-                              <div class="divide-y divide-ink-muted/8">
-                                <For each={group().subItems}>
-                                  {(item) => (
-                                    <Show
-                                      when={group().kind === 'github'}
-                                      fallback={
+                          <Show
+                            when={group().kind === 'github'}
+                            fallback={
+                              <>
+                                <Show
+                                  when={
+                                    group().subItems.length === 1
+                                      ? group().subItems[0]
+                                      : undefined
+                                  }
+                                >
+                                  {(subItem) => (
+                                    <NotificationListEntity
+                                      notification={subItem().notification}
+                                      collapsedCount={subItem().collapsedCount}
+                                      collapsedNotifications={
+                                        subItem().collapsedNotifications
+                                      }
+                                      stacked
+                                    />
+                                  )}
+                                </Show>
+                                <Show when={group().subItems.length > 1}>
+                                  <div class="rounded-lg border border-ink-muted/8 bg-ink-muted/2.5 overflow-hidden divide-y divide-ink-muted/8">
+                                    <For each={group().subItems}>
+                                      {(item) => (
                                         <NotificationListEntity
                                           notification={item.notification}
                                           collapsedCount={item.collapsedCount}
@@ -562,16 +492,26 @@ export function NotificationInbox2() {
                                           }
                                           stacked
                                         />
-                                      }
-                                    >
+                                      )}
+                                    </For>
+                                  </div>
+                                </Show>
+                              </>
+                            }
+                          >
+                            <Show when={group().subItems.length > 0}>
+                              <div class="rounded-lg border border-ink-muted/8 bg-ink-muted/2.5 overflow-hidden">
+                                <div class="divide-y divide-ink-muted/8">
+                                  <For each={group().subItems}>
+                                    {(item) => (
                                       <GithubNotificationListEntity
                                         notification={item.notification}
                                       />
-                                    </Show>
-                                  )}
-                                </For>
+                                    )}
+                                  </For>
+                                </div>
                               </div>
-                            </div>
+                            </Show>
                           </Show>
                         </section>
                       )}
