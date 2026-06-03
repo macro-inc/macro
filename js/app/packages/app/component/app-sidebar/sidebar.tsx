@@ -95,7 +95,7 @@ import {
 import { Dynamic } from 'solid-js/web';
 
 interface SidebarItem {
-  id: ListView;
+  id: ListView | (string & {});
   label: string;
   href: string;
   icon?: Component<
@@ -765,7 +765,7 @@ const CALLS_LINK: SidebarItem = {
 const DASHBOARD_LINK: SidebarItem = {
   id: 'home',
   label: 'Home',
-  href: LIST_VIEW_PATHS.home,
+  href: '/home',
   icon: HomeIcon,
   hotkey: 'h',
   hotkeyToken: TOKENS.sidebar.goTo.home,
