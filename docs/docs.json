@@ -29,6 +29,7 @@
                 "group": "AI",
                 "pages": [
                   "product/ai-chat",
+                  "product/automations",
                   "AI/mcp/overview",
                   {
                     "group": "Tool Reference",
