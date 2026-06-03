@@ -179,14 +179,14 @@ final class CallAudioRouteController: NSObject, @unchecked Sendable {
         let route = AVAudioSession.sharedInstance().currentRoute
         let output = classifyOutput(route.outputs.first)
         let supportsSpeakerToggle = output == .receiver || output == .speaker || (output == .unknown && !isExternalRouteAvailable())
-        if !supportsSpeakerToggle {
-            isSpeakerForced = false
-        }
+        let snapshotSpeakerForced = isSpeakerForced
+            && supportsSpeakerToggle
+            && (output == .speaker || output == .unknown)
 
         return CallAudioRouteSnapshot(
             input: classifyInput(route.inputs.first),
             output: output,
-            isSpeakerForced: isSpeakerForced && (output == .speaker || output == .unknown),
+            isSpeakerForced: snapshotSpeakerForced,
             supportsSpeakerToggle: supportsSpeakerToggle
         )
     }
