@@ -27,9 +27,9 @@ export function useOwningInbox(entity: Accessor<EmailEntity | undefined>) {
 }
 
 /**
- * Shows which linked inbox a thread belongs to, mirroring the composer's
- * "from" chip: the inbox's icon and address, resolved by email so an own
- * secondary inbox shows its own identity rather than the parent account's.
+ * Shows which linked inbox a thread belongs to as the inbox's icon (full
+ * address on hover), resolved by email so an own secondary inbox shows its own
+ * identity rather than the parent account's.
  */
 export function EmailInboxChip(props: { entity: EmailEntity; class?: string }) {
   const inbox = useOwningInbox(() => props.entity);
@@ -37,10 +37,7 @@ export function EmailInboxChip(props: { entity: EmailEntity; class?: string }) {
     <Show when={inbox()}>
       {(link) => (
         <span
-          class={cn(
-            'flex shrink-0 items-center gap-1 text-ink-extra-muted text-xs font-normal max-w-32',
-            props.class
-          )}
+          class={cn('flex shrink-0 items-center', props.class)}
           title={link().email_address}
         >
           <UserIcon
@@ -49,7 +46,6 @@ export function EmailInboxChip(props: { entity: EmailEntity; class?: string }) {
             suppressClick
             class="shrink-0"
           />
-          <span class="truncate">{link().email_address.split('@')[0]}</span>
         </span>
       )}
     </Show>
