@@ -234,6 +234,7 @@ export function UserIcon(props: UserIconProps) {
                 email={email()}
                 id={id}
                 isDeleted={props.isDeleted}
+                photoUrl={props.photoUrl}
                 onClose={close}
               />
             )}
@@ -263,6 +264,7 @@ export function UserIcon(props: UserIconProps) {
               displayName={email() || ''}
               email={email()}
               isDeleted={props.isDeleted}
+              photoUrl={props.photoUrl}
               onClose={close}
             />
           )}
