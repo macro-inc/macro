@@ -44,7 +44,6 @@ const useIsEditable = (mustBeConnected: boolean = true) => {
     if (isSourceSyncService(source_)) {
       const syncSource_ = syncSource();
       if (!syncSource_) return false;
-      console.trace(mustBeConnected);
       if (!mustBeConnected) return true;
       const status = syncSource_.status();
       return status === SyncSourceStatus.Connected;

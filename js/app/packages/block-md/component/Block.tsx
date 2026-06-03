@@ -69,10 +69,10 @@ function BlockMarkdownContent({ fromScratch }: BlockMarkdownProps) {
       getMarkdownGoldenBytes()
         .then(async (snapshot) => {
           await loroManager.initializeFromSnapshot(snapshot);
-          console.log(
-            '[fromScratch] loroManager state after init:',
-            JSON.stringify(loroManager.getDoc().toJSON(), null, 2)
-          );
+          // console.log(
+          //   '[fromScratch] loroManager state after init:',
+          //   JSON.stringify(loroManager.getDoc().toJSON(), null, 2)
+          // );
         })
         .then(() => {
           data

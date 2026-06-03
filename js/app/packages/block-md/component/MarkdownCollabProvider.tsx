@@ -434,10 +434,10 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
           console.warn('loro manager not initialized');
           return;
         } else {
-          console.log(
-            'loro manager initialized',
-            loroManager()?.isInitialized()
-          );
+          // console.log(
+          //   'loro manager initialized',
+          //   loroManager()?.isInitialized()
+          // );
         }
 
         const source = docSource();
@@ -464,10 +464,10 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
           // Indicate that we have completed the first sync
           setDidFirstSync(true);
 
-          console.log(
-            '[MarkdownCollabProvider] loroManager state:',
-            JSON.stringify(state.state, null, 2)
-          );
+          // console.log(
+          //   '[MarkdownCollabProvider] loroManager state:',
+          //   JSON.stringify(state.state, null, 2)
+          // );
 
           // Initialize the editor with the initial state from the sync service
           if (isStateEmpty(state.state as unknown as SerializedEditorState)) {
@@ -484,10 +484,10 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
             }
           }
 
-          console.log(
-            '[MarkdownCollabProvider] Lexical state after init:',
-            JSON.stringify(props.editor.getEditorState().toJSON(), null, 2)
-          );
+          // console.log(
+          //   '[MarkdownCollabProvider] Lexical state after init:',
+          //   JSON.stringify(props.editor.getEditorState().toJSON(), null, 2)
+          // );
 
           // Start the sync engine
           startSync();
