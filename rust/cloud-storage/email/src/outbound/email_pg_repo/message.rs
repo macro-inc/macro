@@ -342,6 +342,37 @@ pub(crate) async fn get_draft_replying_to(
     Ok(row.map(SimpleMessageInfo::from))
 }
 
+/// Delete a draft message (dependent rows cascade) and, if its thread is left
+/// empty, delete the thread too.
+#[tracing::instrument(skip(pool), err)]
+pub(crate) async fn delete_draft_message(
+    pool: &PgPool,
+    message_id: Uuid,
+    thread_db_id: Uuid,
+) -> Result<(), sqlx::Error> {
+    let mut tx = pool.begin().await?;
+
+    sqlx::query!("DELETE FROM email_messages WHERE id = $1", message_id)
+        .execute(&mut *tx)
+        .await?;
+
+    let messages_remain = sqlx::query_scalar!(
+        r#"SELECT EXISTS(SELECT 1 FROM email_messages WHERE thread_id = $1) AS "exists!""#,
+        thread_db_id
+    )
+    .fetch_one(&mut *tx)
+    .await?;
+
+    if !messages_remain {
+        sqlx::query!("DELETE FROM email_threads WHERE id = $1", thread_db_id)
+            .execute(&mut *tx)
+            .await?;
+    }
+
+    tx.commit().await?;
+    Ok(())
+}
+
 /// Upsert or delete a scheduled message based on send_time.
 pub(super) async fn process_scheduled_message(
     tx: &mut sqlx::PgConnection,

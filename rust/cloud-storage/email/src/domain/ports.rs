@@ -161,6 +161,13 @@ pub trait EmailRepo: Send + Sync + 'static {
         replying_to_id: Uuid,
     ) -> impl Future<Output = Result<Option<SimpleMessageInfo>, Self::Err>> + Send;
 
+    /// Delete a draft message and its thread if the thread is left empty.
+    fn delete_draft_message(
+        &self,
+        message_id: Uuid,
+        thread_db_id: Uuid,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
     /// Upsert contacts from the parsed addresses. Must be called outside a transaction
     /// to avoid deadlocks (contacts are shared across messages).
     fn upsert_contacts(

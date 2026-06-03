@@ -190,6 +190,14 @@ impl EmailRepo for EmailPgRepo {
         message::get_draft_replying_to(&self.pool, link_id, replying_to_id).await
     }
 
+    async fn delete_draft_message(
+        &self,
+        message_id: Uuid,
+        thread_db_id: Uuid,
+    ) -> Result<(), Self::Err> {
+        message::delete_draft_message(&self.pool, message_id, thread_db_id).await
+    }
+
     async fn upsert_contacts(
         &self,
         link_id: Uuid,

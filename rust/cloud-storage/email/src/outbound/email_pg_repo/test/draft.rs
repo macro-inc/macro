@@ -165,6 +165,59 @@ async fn test_get_draft_replying_to_wrong_link(pool: Pool<Postgres>) -> anyhow::
     Ok(())
 }
 
+// ── delete_draft_message ──────────────────────────────────────────
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_draft"))
+)]
+async fn test_delete_draft_message_keeps_nonempty_thread(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = EmailPgRepo::new(pool);
+
+    let draft_id = Uuid::parse_str("ee000002-0000-0000-0000-000000000002")?;
+    let thread_id = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+
+    repo.delete_draft_message(draft_id, thread_id).await?;
+
+    assert!(
+        repo.get_simple_message(draft_id, &[link_id])
+            .await?
+            .is_none(),
+        "the draft message should be deleted"
+    );
+    assert!(
+        repo.thread_by_id(thread_id).await?.is_some(),
+        "a thread that still has messages should be kept"
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_draft"))
+)]
+async fn test_delete_draft_message_removes_empty_thread(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = EmailPgRepo::new(pool);
+
+    let msg_id = Uuid::parse_str("ee000003-0000-0000-0000-000000000003")?;
+    let thread_id = Uuid::parse_str("22222222-2222-2222-2222-222222222222")?;
+
+    repo.delete_draft_message(msg_id, thread_id).await?;
+
+    assert!(
+        repo.thread_by_id(thread_id).await?.is_none(),
+        "a thread left with no messages should be deleted"
+    );
+
+    Ok(())
+}
+
 // ── upsert_contacts ───────────────────────────────────────────────
 
 #[sqlx::test(
