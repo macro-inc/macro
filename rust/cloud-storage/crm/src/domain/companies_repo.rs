@@ -4,7 +4,8 @@ use crate::domain::comment::{
     CrmComment, CrmCommentEntityType, CrmCommentThread, DeleteCrmCommentResult,
 };
 use crate::domain::model::{
-    CrmCompany, CrmCompanyForSoup, CrmContact, CrmError, CrmScopePrecheck, DomainMetadata,
+    CrmCompanyForSoup, CrmCompanyWithContacts, CrmContact, CrmError, CrmScopePrecheck,
+    DomainMetadata,
 };
 use chrono::{DateTime, Utc};
 use serde_json::Value;
@@ -34,16 +35,6 @@ pub struct CrmCompanySoupCursor {
 /// The CompaniesRepository defines persistence operations for CRM
 /// companies and their associated domains.
 pub trait CompaniesRepository: Clone + Send + Sync + 'static {
-    /// Fetches the company for the given team that has `domain` registered
-    /// against it, hydrated with the full list of domains belonging to that
-    /// company. Returns `Ok(None)` when no company in the team has the
-    /// domain registered. Domain matching is case-insensitive.
-    fn get_company_by_domain(
-        &self,
-        team_id: &uuid::Uuid,
-        domain: &str,
-    ) -> impl Future<Output = Result<Option<CrmCompany>, CrmError>> + Send;
-
     /// Idempotently records that `email` (which lives on `domain`) was seen
     /// from the mailbox identified by `link_id`, for the team `team_id`.
     /// Performs the company/domain/contact/contact_source upserts in a single
@@ -369,6 +360,23 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
         contact_id: &uuid::Uuid,
         include_hidden: bool,
     ) -> impl Future<Output = Result<Option<CrmContact>, CrmError>> + Send;
+
+    /// Fetches a single CRM company by id, scoped to `team_id`,
+    /// hydrated with all domains (ordered by `created_at ASC` —
+    /// primary first), the primary domain's `crm_domain_directory`
+    /// display metadata (name + description), and the company's full
+    /// contact list (subject to `include_hidden`). Returns `Ok(None)`
+    /// when the company doesn't exist, belongs to a different team,
+    /// or — for non-admin viewers (`include_hidden = false`) — the
+    /// company is hidden. With `include_hidden = true` (admin/owner)
+    /// every owned company is reachable. The handler converts `None`
+    /// into a 404 [`CrmError::CompanyNotFoundForTeam`].
+    fn get_company_for_team(
+        &self,
+        team_id: &uuid::Uuid,
+        company_id: &uuid::Uuid,
+        include_hidden: bool,
+    ) -> impl Future<Output = Result<Option<CrmCompanyWithContacts>, CrmError>> + Send;
 
     /// Create a CRM comment. With `thread_id = None` a new thread is opened
     /// on `(entity_type, entity_id)` and the comment becomes its root; with

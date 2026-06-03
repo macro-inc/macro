@@ -15,6 +15,9 @@ pub mod list_company_contacts;
 /// Fetch a single non-hidden CRM contact by id.
 pub mod get_contact;
 
+/// Fetch a single CRM company by id, hydrated with domains and contacts.
+pub mod get_company;
+
 /// Comment threads on a `crm_companies` / `crm_contacts` row.
 pub mod comments;
 
@@ -92,6 +95,10 @@ where
         .route(
             "/companies/{company_id}/hidden",
             put(set_company_hidden::handler::<C, Eas>),
+        )
+        .route(
+            "/companies/{company_id}",
+            get(get_company::handler::<C, Eas>),
         )
         .route(
             "/companies/{company_id}/contacts",

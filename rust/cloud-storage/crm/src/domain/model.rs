@@ -17,6 +17,24 @@ pub struct CrmCompanyForSoup {
     pub description: Option<String>,
 }
 
+/// A [`CrmCompany`] bundled with its directory display metadata
+/// (same as [`CrmCompanyForSoup`]) plus its full contact list — the
+/// shape returned by `GET /crm/companies/{company_id}`. Lets the FE
+/// hydrate the company panel in a single round trip instead of
+/// composing a soup call with a follow-up contacts call.
+#[derive(Debug, Clone)]
+pub struct CrmCompanyWithContacts {
+    /// The underlying company record (with domains pre-populated).
+    pub company: CrmCompany,
+    /// Display name from the primary domain's directory entry.
+    pub name: Option<String>,
+    /// Display description from the primary domain's directory entry.
+    pub description: Option<String>,
+    /// Contacts attached to this company, subject to the caller's
+    /// `include_hidden` flag (non-admins get only visible contacts).
+    pub contacts: Vec<CrmContact>,
+}
+
 /// A known external company tracked by a team (CRM-style record). A company
 /// aggregates one or more email domains and individual contacts that are
 /// considered to belong to the same external party.
