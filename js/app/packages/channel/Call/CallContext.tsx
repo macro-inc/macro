@@ -18,7 +18,6 @@ import {
 } from 'livekit-client';
 import {
   createContext,
-  createEffect,
   createSignal,
   onCleanup,
   type ParentProps,
@@ -920,34 +919,44 @@ function createCallState() {
   };
   navigator.mediaDevices?.addEventListener('devicechange', handleDeviceChange);
 
-  // Native iOS calls have no JS Room, so mirror only their identity/state.
-  if (isTauri() && isPlatform('ios')) {
-    let syncedFromNative = false;
-    createEffect(() => {
-      const native = nativeCallSnapshot();
-      if (native) {
-        syncedFromNative = true;
-        setStore('activeChannelId', native.channelId);
-        setStore('activeCallId', native.callId);
-        setStore(
-          'connectionState',
-          NATIVE_TO_LIVEKIT_STATE[native.connectionState]
-        );
-        setStore('isAudioMuted', native.isAudioMuted);
-        setStore('isVideoMuted', native.isVideoMuted);
-        setStore('optimisticJoinChannelId', null);
-        setStore('joinError', null);
-      } else if (syncedFromNative) {
-        syncedFromNative = false;
-        setStore('activeChannelId', null);
-        setStore('activeCallId', null);
-        setStore('connectionState', ConnectionState.Disconnected);
-        setStore('isAudioMuted', false);
-        setStore('isVideoMuted', true);
-        setStore('remoteParticipants', new Map());
-      }
-    });
-  }
+  const currentNativeCallSnapshot = () =>
+    isTauri() && isPlatform('ios') ? nativeCallSnapshot() : null;
+
+  const currentConnectionState = () => {
+    const native = currentNativeCallSnapshot();
+    return native
+      ? NATIVE_TO_LIVEKIT_STATE[native.connectionState]
+      : store.connectionState;
+  };
+
+  const currentActiveChannelId = () =>
+    currentNativeCallSnapshot()?.channelId ??
+    store.activeChannelId ??
+    store.optimisticJoinChannelId;
+
+  const currentActiveCallId = () =>
+    currentNativeCallSnapshot()?.callId ?? store.activeCallId;
+
+  const currentIsAudioMuted = () =>
+    currentNativeCallSnapshot()?.isAudioMuted ?? store.isAudioMuted;
+
+  const currentIsVideoMuted = () =>
+    currentNativeCallSnapshot()?.isVideoMuted ?? store.isVideoMuted;
+
+  const currentIsInCall = () =>
+    isActiveCallConnectionState(currentConnectionState()) ||
+    (currentNativeCallSnapshot() === null &&
+      store.optimisticJoinChannelId !== null);
+
+  const currentIsConnecting = () =>
+    (currentNativeCallSnapshot() === null &&
+      store.optimisticJoinChannelId !== null) ||
+    currentConnectionState() === ConnectionState.Connecting ||
+    currentConnectionState() === ConnectionState.Reconnecting ||
+    currentConnectionState() === ConnectionState.SignalReconnecting;
+
+  const currentJoinError = () =>
+    currentNativeCallSnapshot() ? null : store.joinError;
 
   // --- mutations ---
 
@@ -1095,9 +1104,8 @@ function createCallState() {
   async function toggleVideo() {
     const native = nativeCallSnapshot();
     if (native) {
-      const enabled = store.isVideoMuted;
+      const enabled = native.isVideoMuted;
       await setNativeCallKitVideoEnabled(enabled);
-      setStore('isVideoMuted', !enabled);
       return;
     }
 
@@ -1253,13 +1261,10 @@ function createCallState() {
   const state: CallState = {
     // readonly state
     room,
-    connectionState: () => store.connectionState,
-    isInCall: () =>
-      isActiveCallConnectionState(store.connectionState) ||
-      store.optimisticJoinChannelId !== null,
-    activeChannelId: () =>
-      store.activeChannelId ?? store.optimisticJoinChannelId,
-    activeCallId: () => store.activeCallId,
+    connectionState: currentConnectionState,
+    isInCall: currentIsInCall,
+    activeChannelId: currentActiveChannelId,
+    activeCallId: currentActiveCallId,
     remoteParticipants: () => store.remoteParticipants,
     trackVersion: () => store.trackVersion,
     isLocalSpeaking: () => {
@@ -1272,8 +1277,8 @@ function createCallState() {
       store.speakerVersion;
       return participant.isSpeaking;
     },
-    isAudioMuted: () => store.isAudioMuted,
-    isVideoMuted: () => store.isVideoMuted,
+    isAudioMuted: currentIsAudioMuted,
+    isVideoMuted: currentIsVideoMuted,
     isScreenSharing: () => store.isScreenSharing,
     audioInputDevices: () => store.audioInputDevices,
     audioOutputDevices: () => store.audioOutputDevices,
@@ -1281,11 +1286,7 @@ function createCallState() {
     activeAudioInputDeviceId: () => store.activeAudioInputDeviceId,
     activeAudioOutputDeviceId: () => store.activeAudioOutputDeviceId,
     activeVideoInputDeviceId: () => store.activeVideoInputDeviceId,
-    isConnecting: () =>
-      store.optimisticJoinChannelId !== null ||
-      store.connectionState === ConnectionState.Connecting ||
-      store.connectionState === ConnectionState.Reconnecting ||
-      store.connectionState === ConnectionState.SignalReconnecting,
+    isConnecting: currentIsConnecting,
 
     // mutations
     connect,
@@ -1302,16 +1303,15 @@ function createCallState() {
     toggleNoiseSuppression,
     beginOptimisticJoin,
     rollbackOptimisticJoin,
-    joinError: () => store.joinError,
+    joinError: currentJoinError,
     setJoinError,
     callPageChannelId: () => store.callPageChannelId,
     syncCallPageTab,
     isCallPage: () => {
       store.callPageChannelId;
-      store.activeChannelId;
-      store.optimisticJoinChannelId;
+      currentActiveChannelId();
       const page = store.callPageChannelId;
-      const active = store.activeChannelId ?? store.optimisticJoinChannelId;
+      const active = currentActiveChannelId();
       return page !== null && active !== null && page === active;
     },
     backgroundEffect: () => store.backgroundEffect,

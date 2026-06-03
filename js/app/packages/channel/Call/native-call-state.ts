@@ -7,7 +7,7 @@ export type NativeCallConnectionState =
   | 'reconnecting'
   | 'disconnecting';
 
-// Keep this narrow: CallContext mirrors every field here into JS state.
+// Keep this narrow: CallContext reads these fields directly for native iOS calls.
 export type NativeCallSnapshot = {
   channelId: string;
   callId: string;
