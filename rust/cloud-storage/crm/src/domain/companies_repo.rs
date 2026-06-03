@@ -339,6 +339,7 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
     /// (as stored in `team_user.user_id` / `UserHistory."userId"`);
     /// internal callers without a user can pass an empty string —
     /// `Viewed*` sorts then collapse to NULL (no viewed-at signal).
+    #[allow(clippy::too_many_arguments)]
     fn list_companies_for_soup(
         &self,
         team_id: &uuid::Uuid,

@@ -1008,6 +1008,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
     }
 
     #[tracing::instrument(skip(self), err)]
+    #[allow(clippy::too_many_arguments)]
     async fn list_companies_for_soup(
         &self,
         team_id: &uuid::Uuid,

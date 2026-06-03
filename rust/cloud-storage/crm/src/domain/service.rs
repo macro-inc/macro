@@ -178,6 +178,7 @@ pub trait CrmService: Clone + Send + Sync + 'static {
     /// required by the `Viewed*` sort variants (per-user
     /// `UserHistory` join); see
     /// [`CompaniesRepository::list_companies_for_soup`].
+    #[allow(clippy::too_many_arguments)]
     fn list_companies_for_soup(
         &self,
         team_id: &uuid::Uuid,
@@ -526,6 +527,7 @@ where
     }
 
     #[tracing::instrument(skip(self), err)]
+    #[allow(clippy::too_many_arguments)]
     async fn list_companies_for_soup(
         &self,
         team_id: &uuid::Uuid,
@@ -734,6 +736,7 @@ impl CrmService for NoOpCrmService {
         unimplemented!("NoOpCrmService.crm_scope_precheck")
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn list_companies_for_soup(
         &self,
         _team_id: &uuid::Uuid,

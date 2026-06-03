@@ -9,10 +9,12 @@ pub mod set_company_hidden;
 /// Toggle the `hidden` flag on a `crm_contacts` row.
 pub mod set_contact_hidden;
 
-/// List the non-hidden contacts of a `crm_companies` row.
+/// List contacts of a `crm_companies` row. Role-aware: members see
+/// visible contacts only; admin/owner see hidden contacts too.
 pub mod list_company_contacts;
 
-/// Fetch a single non-hidden CRM contact by id.
+/// Fetch a single CRM contact by id. Role-aware: members 404 on hidden
+/// rows; admin/owner reach hidden contacts (and hidden parent companies).
 pub mod get_contact;
 
 /// Fetch a single CRM company by id, hydrated with domains and contacts.
