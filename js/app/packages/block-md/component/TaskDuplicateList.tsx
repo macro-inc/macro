@@ -1,3 +1,4 @@
+import { QUERY_FILTERS_BASE } from '@app/component/next-soup/filters/query-filters';
 import { TaskListEntity } from '@app/component/next-soup/soup-view/views/tasks/TaskListEntity';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
@@ -60,6 +61,7 @@ function SimilarTasksInner(props: {
     () => ({
       params: { limit: 25 },
       body: {
+        ...QUERY_FILTERS_BASE,
         document_filters: { document_ids: ids(), sub_types: ['task'] },
       },
     }),
