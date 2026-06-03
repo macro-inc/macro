@@ -23,7 +23,7 @@ import {
   ChannelLatestMessageNarrowBody,
   ChannelMessageNarrowBody,
 } from './channel';
-import { EmailIdentity, EmailNarrowBody } from './email';
+import { EmailIdentity, EmailInboxChip, EmailNarrowBody } from './email';
 import { InboxDivider, type LayoutProps } from './shared';
 import { TaskNarrowBody } from './task';
 
@@ -112,7 +112,12 @@ export function NarrowInboxLayout(props: LayoutProps) {
           when={isEmailEntity(props.entity) && props.entity}
           fallback={<Entity.Title entity={props.entity} />}
         >
-          {(entity) => <EmailIdentity entity={entity()} />}
+          {(entity) => (
+            <>
+              <EmailIdentity entity={entity()} />
+              <EmailInboxChip entity={entity()} class="ml-auto" />
+            </>
+          )}
         </Show>
       </Entity.Slot>
 

@@ -526,6 +526,12 @@ export const mapSoupPageToEntityList: (
             sizeBytes: a.sizeBytes,
           }));
 
+          // The thread preview has no link id of its own; its participants and
+          // labels are scoped to the owning inbox, so they share its link id.
+          const linkId =
+            item.data.participants?.[0]?.linkId ??
+            item.data.labels?.[0]?.linkId;
+
           return {
             ...item.data,
             createdAt: item.data.createdAt,
@@ -540,6 +546,7 @@ export const mapSoupPageToEntityList: (
             frecencyScore: item.frecency_score,
             viewedAt: item.data.viewedAt,
             projectId: item.data.projectId ?? undefined,
+            linkId,
             participants,
             hasIcsAttachment,
             attachments,
