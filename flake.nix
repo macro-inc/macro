@@ -274,7 +274,7 @@
               case "$1 $2" in
                 "toolchain list") echo "$toolchain (default)" ;;
                 "toolchain add") exit 0 ;;
-                "target list") echo "x86_64-unknown-linux-gnu (installed)"; echo "aarch64-unknown-linux-gnu" ;;
+                "target list") echo "x86_64-unknown-linux-gnu (installed)"; echo "aarch64-unknown-linux-gnu"; echo "wasm32-unknown-unknown (installed)" ;;
                 "target add") exit 0 ;;
                 "component list") echo "rust-src-x86_64-unknown-linux-gnu (installed)"; echo "clippy-x86_64-unknown-linux-gnu (installed)" ;;
                 "component add") exit 0 ;;
