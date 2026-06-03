@@ -6,7 +6,10 @@ import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 import { ROUTER_BASE } from '@app/constants/routerBase';
 import { PosthogProvider, usePosthog } from '@app/lib/analytics/posthog';
 import { setHotkeyRoot } from '@app/signal/hotkeyRoot';
-import { globalSplitManager } from '@app/signal/splitLayout';
+import {
+  globalSplitManager,
+  setGlobalSplitManager,
+} from '@app/signal/splitLayout';
 import { CallProvider } from '@channel/Call/CallContext';
 import { CallStartedNotifier } from '@channel/Call/CallStartedNotifier';
 import { ChatAttachmentsInit } from '@core/component/AI/signal/globalAttachments';
@@ -94,6 +97,7 @@ import { Layout } from './Layout';
 import { SearchProvider } from './next-soup/search-context';
 import { usePendingNotificationNavigationEffect } from './PendingNotificationNavigationEffect';
 import { ReactiveFavicon } from './ReactiveFavicon';
+import { SplitLayoutContainer } from './split-layout/SplitLayout';
 import { LAYOUT_ROUTE } from './split-layout/SplitLayoutRoute';
 import { TeamInviteAcceptance } from './TeamInviteAcceptance';
 
@@ -251,12 +255,25 @@ const { EmailCallback, CALLBACK_PATH, EmailLinkCallback, LINK_CALLBACK_PATH } =
     successPath: '/',
   });
 
+function Inbox2Route() {
+  return (
+    <SplitLayoutContainer
+      pairs={['component', 'inbox2']}
+      setManager={setGlobalSplitManager}
+    />
+  );
+}
+
 const ROUTES: RouteDefinition[] = [
   LAYOUT_ROUTE,
   /** BEGIN - APP ROUTES */
   {
     path: '/inbox',
     component: LAYOUT_ROUTE.component,
+  },
+  {
+    path: '/inbox-2',
+    component: Inbox2Route,
   },
   {
     path: '/agents',

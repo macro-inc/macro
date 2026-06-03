@@ -4,6 +4,7 @@ import { Home } from '@app/component/home';
 import type { SetPredicatesInput } from '@app/component/next-soup/filters/filter-store/predicates-store';
 import type { Query } from '@app/component/next-soup/filters/filter-store/types';
 import { SoupView } from '@app/component/next-soup/soup-view/soup-view';
+import { NotificationInbox2 } from '@app/component/notification-inbox/NotificationInbox2';
 import { ChannelCompose } from '@block-channel/component/Compose';
 import { ComposeTask } from '@block-md/component/ComposeTask';
 import { useIsAuthenticated } from '@core/auth';
@@ -124,6 +125,14 @@ registerComponent(
         disableLocalSearch
       />
     );
+  })
+);
+
+registerComponent(
+  'inbox2',
+  withAuth(() => {
+    usePageViewTracking('inbox 2');
+    return <NotificationInbox2 />;
   })
 );
 

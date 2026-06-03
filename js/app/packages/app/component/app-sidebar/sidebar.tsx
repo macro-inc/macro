@@ -117,6 +117,14 @@ const SIDEBAR_LINKS = [
     hotkeyToken: TOKENS.sidebar.goTo.inbox,
   },
   {
+    id: 'inbox2',
+    label: 'Inbox 2',
+    href: '/inbox-2',
+    icon: AnimatedInboxIcon,
+    hotkey: '2',
+    hotkeyToken: TOKENS.sidebar.goTo.inbox2,
+  },
+  {
     id: 'search',
     label: 'Search',
     href: LIST_VIEW_PATHS.search,
