@@ -6,9 +6,6 @@ import {
 } from '@app/component/split-layout/components/SplitToolbar';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { LoadingBlock } from '@core/component/LoadingBlock';
-import { UserIcon } from '@core/component/UserIcon';
-import { tryMacroId, useDisplayName } from '@core/user';
-import { formatRelativeTimestamp } from '@entity';
 import GithubIcon from '@icon/mcp-github.svg';
 import ChannelIcon from '@icon/wide-channel.svg';
 import EmailIcon from '@icon/wide-email.svg';
@@ -20,12 +17,18 @@ import StackIcon from '@phosphor/stack.svg';
 import EyeIcon from '@phosphor-icons/core/regular/eye.svg?component-solid';
 import GitMergeIcon from '@phosphor-icons/core/regular/git-merge.svg?component-solid';
 import GitPullRequestIcon from '@phosphor-icons/core/regular/git-pull-request.svg?component-solid';
+import SparkleIcon from '@phosphor-icons/core/regular/sparkle.svg?component-solid';
 import XCircleIcon from '@phosphor-icons/core/regular/x-circle.svg?component-solid';
 import type { GithubPrEventStatus } from '@service-notification/generated/schemas';
-import { Avatar, Button, cn, Tooltip } from '@ui';
-import { createEffect, createMemo, For, type JSX, Show } from 'solid-js';
+import { Button, cn, Tooltip } from '@ui';
+import { createEffect, For, type JSX, Show } from 'solid-js';
+import { createStore, reconcile } from 'solid-js/store';
 import { Dynamic } from 'solid-js/web';
-import { NotificationListEntity } from './NotificationListEntity';
+import {
+  GithubNotificationListEntity,
+  GithubNotificationListHeader,
+  NotificationListEntity,
+} from './NotificationListEntity';
 
 const getNotificationTime = (notification: UnifiedNotification): number => {
   const time = Date.parse(
@@ -34,22 +37,22 @@ const getNotificationTime = (notification: UnifiedNotification): number => {
   return Number.isNaN(time) ? 0 : time;
 };
 
+type NotificationSubItem = {
+  notification: UnifiedNotification;
+  collapsedCount: number;
+  collapsedNotifications: UnifiedNotification[];
+};
+
 type NotificationVisualGroup = {
   id: string;
   label: string;
-  subItems: UnifiedNotification[];
+  subItems: NotificationSubItem[];
   subtitle?: string;
   authorId?: string;
   authorFallback?: string;
   icon: (props: { class?: string }) => JSX.Element;
-  kind: 'default' | 'github';
+  kind: 'default' | 'github' | 'email' | 'ai';
   notifications: UnifiedNotification[];
-};
-
-const getChannelSenderLabel = (notification: UnifiedNotification): string => {
-  const metadata = notification.notification_metadata;
-  if (metadata.tag === 'channel_message_send') return metadata.content.sender;
-  return notification.sender_id ?? 'Unknown sender';
 };
 
 const getNotificationRoot = (
@@ -60,22 +63,15 @@ const getNotificationRoot = (
   switch (metadata.tag) {
     case 'channel_mention':
     case 'channel_message_send':
-    case 'channel_message_reply': {
-      const isDirectMessage = metadata.content.channelType === 'directMessage';
-      const sender = getChannelSenderLabel(notification);
+    case 'channel_message_reply':
       return {
-        id: isDirectMessage
-          ? `channel:${notification.entity_id}:sender:${sender}`
-          : `channel:${notification.entity_id}`,
-        label: isDirectMessage
-          ? sender
-          : (metadata.content.channelName ?? 'Channel'),
+        id: `channel:${notification.entity_id}`,
+        label: metadata.content.channelName ?? 'Direct message',
         subItems: [],
-        subtitle: isDirectMessage ? 'Direct message' : 'Channel',
+        subtitle: 'Channel',
         icon: ChannelIcon,
         kind: 'default',
       };
-    }
     case 'github_pr_event':
       return {
         id: `github:${metadata.content.foreignEntityId || metadata.content.githubKey}`,
@@ -89,12 +85,12 @@ const getNotificationRoot = (
       };
     case 'new_email':
       return {
-        id: `email:${metadata.content.threadId || notification.entity_id}`,
-        label: metadata.content.subject,
+        id: `email:sender:${metadata.content.sender || notification.sender_id || 'unknown'}`,
+        label: metadata.content.sender || 'Email',
         subItems: [],
-        subtitle: 'Email thread',
+        subtitle: 'Email',
         icon: EmailIcon,
-        kind: 'default',
+        kind: 'email',
       };
     case 'document_mention':
       return {
@@ -149,8 +145,8 @@ const getNotificationRoot = (
         label: 'AI response',
         subItems: [],
         subtitle: 'Chat',
-        icon: ChannelIcon,
-        kind: 'default',
+        icon: SparkleIcon,
+        kind: 'ai',
       };
   }
 };
@@ -192,12 +188,6 @@ const isGithubStatusNotification = (
   );
 };
 
-const getGithubUpdateText = (notification: UnifiedNotification): string => {
-  const metadata = notification.notification_metadata;
-  if (metadata.tag !== 'github_pr_event') return '';
-  return metadata.content.action;
-};
-
 const getGithubGroupStatus = (
   group: NotificationVisualGroup
 ): GithubPrEventStatus | undefined => {
@@ -212,49 +202,6 @@ const getGithubGroupStatus = (
     : undefined;
 };
 
-const getVisibleGroupNotifications = (
-  group: NotificationVisualGroup
-): UnifiedNotification[] => {
-  if (group.kind !== 'github') return group.notifications;
-  return group.notifications.filter(
-    (notification) => !isGithubStatusNotification(notification)
-  );
-};
-
-const getInitials = (value: string): string => {
-  const parts = value.trim().split(/\s+/).filter(Boolean);
-  if (parts.length >= 2) {
-    return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-  }
-  return (parts[0]?.[0] ?? '?').toUpperCase();
-};
-
-function GithubAuthor(props: { id?: string; fallback?: string }) {
-  const macroId = () => (props.id ? tryMacroId(props.id) : undefined);
-  const [displayName] = useDisplayName(macroId());
-  const label = () => displayName() || props.fallback || props.id || 'Unknown';
-
-  return (
-    <span class="shrink-0 flex items-center gap-1 text-ink-muted font-medium min-w-0">
-      <Show
-        when={macroId() && props.id}
-        fallback={
-          <Avatar size="sm" class="size-4">
-            <Avatar.Fallback class="font-semibold">
-              {getInitials(label())}
-            </Avatar.Fallback>
-          </Avatar>
-        }
-      >
-        {(id) => (
-          <UserIcon id={id()} size="sm" suppressClick showTooltip={false} />
-        )}
-      </Show>
-      <span class="truncate max-w-28">{label()}</span>
-    </span>
-  );
-}
-
 const getGithubGroupUrl = (
   group: NotificationVisualGroup
 ): string | undefined => {
@@ -267,61 +214,69 @@ const getGithubGroupUrl = (
   return metadata?.tag === 'github_pr_event' ? metadata.content.url : undefined;
 };
 
-function GithubNotificationItem(props: { notification: UnifiedNotification }) {
-  const metadata = () => props.notification.notification_metadata;
-  const github = () => {
-    const value = metadata();
-    return value.tag === 'github_pr_event' ? value.content : undefined;
-  };
-  const unread = () =>
-    !props.notification.viewed_at && !props.notification.done;
-  const timestamp = () =>
-    formatRelativeTimestamp(
-      props.notification.created_at ??
-        props.notification.updated_at ??
-        new Date(0),
-      { condensed: true }
-    );
+type NotificationListItem =
+  | { id: string; type: 'group'; group: NotificationVisualGroup }
+  | { id: string; type: 'notification'; notification: UnifiedNotification };
 
-  return (
-    <Show
-      when={github()}
-      fallback={
-        <NotificationListEntity notification={props.notification} stacked />
-      }
-    >
-      {(content) => (
-        <div class="group/notif flex items-center gap-2.5 px-3 py-2 hover:bg-ink-muted/6 min-w-0 overflow-hidden">
-          <span
-            class={cn('size-1.5 rounded-full shrink-0', {
-              'bg-accent': unread(),
-              'bg-transparent': !unread(),
-            })}
-          />
-          <div class="min-w-0 flex-1 flex items-center gap-2">
-            <span
-              class={cn('truncate min-w-0 text-xs text-ink', {
-                'font-medium': unread(),
-              })}
-            >
-              {getGithubUpdateText(props.notification)}
-            </span>
-            <span class="truncate min-w-0 text-xs text-ink-muted/60">
-              {content().displayName}
-            </span>
-          </div>
-          <span class="shrink-0 text-ink-extra-muted text-xs tabular-nums">
-            {timestamp()}
-          </span>
-        </div>
-      )}
-    </Show>
-  );
-}
+const shouldRenderStandalone = (
+  root: Omit<NotificationVisualGroup, 'notifications'>,
+  notifications: UnifiedNotification[]
+): boolean =>
+  (root.kind === 'email' || root.kind === 'ai') && notifications.length === 1;
+
+const getCollapseThreadKey = (
+  notification: UnifiedNotification
+): string | undefined => {
+  const metadata = notification.notification_metadata;
+
+  switch (metadata.tag) {
+    case 'new_email':
+      return `email:${metadata.content.threadId}`;
+    case 'channel_mention':
+      return metadata.content.threadId
+        ? `channel:${notification.entity_id}:thread:${metadata.content.threadId}`
+        : undefined;
+    case 'channel_message_reply':
+      return `channel:${notification.entity_id}:thread:${metadata.content.threadId}`;
+    case 'channel_message_send':
+      return `channel:${notification.entity_id}:sender:${metadata.content.sender}`;
+    default:
+      return undefined;
+  }
+};
+
+const collapseConsecutiveThreadItems = (
+  notifications: UnifiedNotification[]
+): NotificationSubItem[] => {
+  const items: NotificationSubItem[] = [];
+
+  for (const notification of notifications) {
+    const previous = items[items.length - 1];
+    const threadKey = getCollapseThreadKey(notification);
+
+    if (
+      previous &&
+      threadKey &&
+      getCollapseThreadKey(previous.notification) === threadKey
+    ) {
+      previous.collapsedCount += 1;
+      previous.collapsedNotifications.push(notification);
+      continue;
+    }
+
+    items.push({
+      notification,
+      collapsedCount: 1,
+      collapsedNotifications: [notification],
+    });
+  }
+
+  return items;
+};
 
 const groupNotifications = (
   notifications: UnifiedNotification[]
-): NotificationVisualGroup[] => {
+): NotificationListItem[] => {
   const groups = new Map<string, UnifiedNotification[]>();
 
   for (const notification of notifications) {
@@ -335,24 +290,45 @@ const groupNotifications = (
     );
     const root = getNotificationRoot(sorted[0]);
 
-    let subItems = sorted;
-
-    if (root.kind === 'github') {
-      subItems = sorted.filter(
-        (notification) => !isGithubStatusNotification(notification)
-      );
+    if (shouldRenderStandalone(root, sorted)) {
+      return {
+        id: `notification:${sorted[0].id}`,
+        type: 'notification' as const,
+        notification: sorted[0],
+      };
     }
 
+    const subItems =
+      root.kind === 'github'
+        ? sorted
+            .filter((notification) => !isGithubStatusNotification(notification))
+            .map((notification) => ({
+              notification,
+              collapsedCount: 1,
+              collapsedNotifications: [notification],
+            }))
+        : collapseConsecutiveThreadItems(sorted);
+
     return {
-      ...root,
-      subItems,
-      notifications: sorted,
+      id: `group:${root.id}`,
+      type: 'group' as const,
+      group: {
+        ...root,
+        subItems,
+        notifications: sorted,
+      },
     };
-  }).toSorted(
-    (a, b) =>
-      getNotificationTime(b.notifications[0]) -
-      getNotificationTime(a.notifications[0])
-  );
+  }).toSorted((a, b) => {
+    const aTime =
+      a.type === 'group'
+        ? getNotificationTime(a.group.notifications[0])
+        : getNotificationTime(a.notification);
+    const bTime =
+      b.type === 'group'
+        ? getNotificationTime(b.group.notifications[0])
+        : getNotificationTime(b.notification);
+    return bTime - aTime;
+  });
 };
 
 export function NotificationInbox2() {
@@ -363,15 +339,19 @@ export function NotificationInbox2() {
     panel.handle.setDisplayName('Inbox 2');
   });
 
-  const notifications = createMemo(() =>
-    notificationSource
-      .notifications()
-      .filter((notification) => !notification.deleted_at)
-  );
+  const [notificationItems, setNotificationItems] = createStore<
+    NotificationListItem[]
+  >([]);
 
-  const notificationGroups = createMemo(() =>
-    groupNotifications(notifications())
-  );
+  createEffect(() => {
+    const next = groupNotifications(
+      notificationSource
+        .notifications()
+        .filter((notification) => !notification.deleted_at)
+    );
+
+    setNotificationItems(reconcile(next, { key: 'id' }));
+  });
 
   return (
     <div class="size-full flex flex-col" data-list-view="inbox2">
@@ -436,7 +416,7 @@ export function NotificationInbox2() {
             fallback={<LoadingBlock />}
           >
             <Show
-              when={notificationGroups().length > 0}
+              when={notificationItems.length > 0}
               fallback={
                 <div class="flex size-full items-center justify-center text-sm text-ink-muted">
                   No notifications
@@ -444,110 +424,158 @@ export function NotificationInbox2() {
               }
             >
               <div class="unified-table-body w-full flex flex-col gap-1 flex-1 min-h-0 relative overflow-y-auto p-2">
-                <For each={notificationGroups()}>
-                  {(group) => (
-                    <section class="flex flex-col gap-1">
-                      <div
-                        class={cn(
-                          'group/header rounded-lg px-2 py-2 flex items-center gap-2.5 text-xs font-semibold tracking-tight text-ink-muted bg-surface hover:ring hover:ring-inset hover:ring-edge border border-edge-muted relative',
-                          {
-                            'border-none': !group.subItems.length,
+                <For each={notificationItems}>
+                  {(item) => (
+                    <Show
+                      when={item.type === 'group' ? item.group : undefined}
+                      fallback={
+                        <NotificationListEntity
+                          notification={
+                            item.type === 'notification'
+                              ? item.notification
+                              : item.group.notifications[0]
                           }
-                        )}
-                      >
-                        <Show when={group.kind !== 'github'}>
-                          <div class="shrink-0 rounded-xs bg-ink-muted/6 flex items-center justify-center text-ink-muted">
-                            <Dynamic component={group.icon} class="size-3.5" />
-                          </div>
-                        </Show>
-                        <div class="min-w-0 flex-1 flex items-center gap-1.5">
-                          <Show when={getGithubGroupStatus(group)}>
-                            {(status) => (
-                              <Tooltip label={status()}>
-                                <span
-                                  class={cn(
-                                    'shrink-0 flex items-center gap-1 text-xs font-medium capitalize',
-                                    getGithubStatusClass(status())
-                                  )}
-                                >
-                                  <Dynamic
-                                    component={getGithubStatusIcon(status())}
-                                    class="size-3.5"
-                                  />
-                                </span>
-                              </Tooltip>
-                            )}
-                          </Show>
-                          <span class="truncate text-ink-muted">
-                            {group.label}
-                          </span>
-                          <Show when={group.authorId || group.authorFallback}>
-                            <GithubAuthor
-                              id={group.authorId}
-                              fallback={group.authorFallback}
-                            />
-                          </Show>
-                        </div>
-                        <Show when={group.kind === 'github'}>
-                          <div class="ml-auto shrink-0 h-5 flex items-center">
-                            <Show
-                              when={getGithubGroupUrl(group)}
-                              fallback={
-                                <p class="flex items-center gap-2">
-                                  <GithubIcon class="size-3.5" />
-                                  <Show when={group.subtitle}>
-                                    {(subtitle) => (
-                                      <span class="truncate text-ink-extra-muted">
-                                        {subtitle()}
-                                      </span>
-                                    )}
-                                  </Show>
-                                </p>
+                        />
+                      }
+                    >
+                      {(group) => (
+                        <section class="flex flex-col gap-1">
+                          <div
+                            class={cn(
+                              'group/header rounded-lg px-2 py-2 flex items-center gap-2.5 text-xs font-semibold tracking-tight text-ink-muted bg-surface hover:ring hover:ring-inset hover:ring-edge border border-edge-muted relative',
+                              {
+                                'border-none': !group().subItems.length,
                               }
-                            >
-                              {(url) => (
-                                <a
-                                  class="flex items-center gap-2 hover:underline"
-                                  href={url()}
-                                >
-                                  <GithubIcon class="size-3.5" />
-                                  <Show when={group.subtitle}>
-                                    {(subtitle) => (
-                                      <span class="truncate text-ink-extra-muted">
-                                        {subtitle()}
-                                      </span>
-                                    )}
-                                  </Show>
-                                </a>
-                              )}
+                            )}
+                          >
+                            <Show when={group().kind !== 'github'}>
+                              <div class="shrink-0 rounded-xs bg-ink-muted/6 flex items-center justify-center text-ink-muted">
+                                <Dynamic
+                                  component={group().icon}
+                                  class="size-3.5"
+                                />
+                              </div>
                             </Show>
-                          </div>
-                        </Show>
-                      </div>
-                      <Show when={group.subItems.length}>
-                        <div class="rounded-lg border border-ink-muted/8 bg-ink-muted/2.5 overflow-hidden">
-                          <div class="divide-y divide-ink-muted/8">
-                            <For each={getVisibleGroupNotifications(group)}>
-                              {(notification) => (
+                            <div class="min-w-0 flex-1 flex items-center gap-1.5">
+                              <Show when={getGithubGroupStatus(group())}>
+                                {(status) => (
+                                  <Tooltip label={status()}>
+                                    <span
+                                      class={cn(
+                                        'shrink-0 flex items-center gap-1 text-xs font-medium capitalize',
+                                        getGithubStatusClass(status())
+                                      )}
+                                    >
+                                      <Dynamic
+                                        component={getGithubStatusIcon(
+                                          status()
+                                        )}
+                                        class="size-3.5"
+                                      />
+                                    </span>
+                                  </Tooltip>
+                                )}
+                              </Show>
+                              <span class="truncate text-ink-muted">
+                                {group().label}
+                              </span>
+                            </div>
+                            <Show when={group().kind === 'github'}>
+                              <div class="ml-auto shrink-0 h-5 flex items-center">
                                 <Show
-                                  when={group.kind === 'github'}
+                                  when={getGithubGroupUrl(group())}
                                   fallback={
-                                    <NotificationListEntity
-                                      notification={notification}
-                                      stacked
-                                    />
+                                    <p class="flex items-center gap-2">
+                                      <GithubIcon class="size-3.5" />
+                                      <Show when={group().subtitle}>
+                                        {(subtitle) => (
+                                          <span class="truncate text-ink-extra-muted">
+                                            {subtitle()}
+                                          </span>
+                                        )}
+                                      </Show>
+                                    </p>
                                   }
                                 >
-                                  <GithubNotificationItem
-                                    notification={notification}
-                                  />
+                                  {(url) => (
+                                    <a
+                                      class="flex items-center gap-2 hover:underline"
+                                      href={url()}
+                                    >
+                                      <GithubIcon class="size-3.5" />
+                                      <Show when={group().subtitle}>
+                                        {(subtitle) => (
+                                          <span class="truncate text-ink-extra-muted">
+                                            {subtitle()}
+                                          </span>
+                                        )}
+                                      </Show>
+                                    </a>
+                                  )}
                                 </Show>
-                              )}
-                            </For>
+                              </div>
+                            </Show>
                           </div>
-                        </div>
-                      </Show>
-                    </section>
+                          <Show
+                            when={
+                              group().subItems.length === 1
+                                ? group().subItems[0]
+                                : undefined
+                            }
+                          >
+                            {(subItem) => (
+                              <Show
+                                when={group().kind === 'github'}
+                                fallback={
+                                  <NotificationListEntity
+                                    notification={subItem().notification}
+                                    collapsedCount={subItem().collapsedCount}
+                                    collapsedNotifications={
+                                      subItem().collapsedNotifications
+                                    }
+                                    stacked
+                                  />
+                                }
+                              >
+                                <GithubNotificationListEntity
+                                  notification={subItem().notification}
+                                />
+                              </Show>
+                            )}
+                          </Show>
+                          <Show when={group().subItems.length > 1}>
+                            <div class="rounded-lg border border-ink-muted/8 bg-ink-muted/2.5 overflow-hidden">
+                              <Show when={group().kind === 'github'}>
+                                <GithubNotificationListHeader />
+                              </Show>
+                              <div class="divide-y divide-ink-muted/8">
+                                <For each={group().subItems}>
+                                  {(item) => (
+                                    <Show
+                                      when={group().kind === 'github'}
+                                      fallback={
+                                        <NotificationListEntity
+                                          notification={item.notification}
+                                          collapsedCount={item.collapsedCount}
+                                          collapsedNotifications={
+                                            item.collapsedNotifications
+                                          }
+                                          stacked
+                                        />
+                                      }
+                                    >
+                                      <GithubNotificationListEntity
+                                        notification={item.notification}
+                                      />
+                                    </Show>
+                                  )}
+                                </For>
+                              </div>
+                            </div>
+                          </Show>
+                        </section>
+                      )}
+                    </Show>
                   )}
                 </For>
               </div>
