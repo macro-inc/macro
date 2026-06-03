@@ -94,9 +94,7 @@ export function EmptyStatePanel(props: EmptyStatePanelProps) {
                   onClick={action().onClick}
                 >
                   <Show when={action().icon}>
-                    {(icon) => (
-                      <Dynamic component={icon()} class="size-4" />
-                    )}
+                    {(icon) => <Dynamic component={icon()} class="size-4" />}
                   </Show>
                   {action().label}
                 </Button>
