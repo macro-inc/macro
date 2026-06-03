@@ -117,8 +117,8 @@ function HomeContent() {
       <div class="@container/home size-full sm:pb-10 p-2 md:p-4">
         <HomeSectionBoundary title="hero">
           <section class="relative flex flex-col size-full">
-            <div class="home-hero-stagger mx-auto flex flex-col items-center gap-8 justify-end sm:justify-center sm:-mt-15 max-w-3xl size-full">
-              <div class="flex flex-col w-full items-center gap-3 justify-center my-auto">
+            <div class="home-hero-stagger mx-auto flex flex-col items-center gap-8 justify-end sm:justify-center sm:-mt-15 max-w-2xl size-full">
+              <div class="flex flex-col sm:flex-row w-full items-center gap-3 justify-center my-auto sm:m-0">
                 <AnimatedHeroLogo class="size-6 text-accent" />
                 <div class="flex flex-col gap-1 items-center">
                   <h1 class="relative min-w-0 text-balance text-2xl font-medium font-serif tracking-tight text-ink">
