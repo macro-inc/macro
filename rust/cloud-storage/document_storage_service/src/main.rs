@@ -576,19 +576,11 @@ async fn main() -> anyhow::Result<()> {
     let sqs_client = Arc::new(sqs_client);
     let conn_gateway_client = Arc::new(conn_gateway_client);
     let task_dedup_config = TaskDedupConfig::default();
-    // Local reads the OpenAI key from the environment; dev/prod pull the same
-    // `openai-key` secret the backfill entrypoint uses. Fail fast if it's empty
-    // so the service never starts with a broken task-dedup embedder.
-    let openai_api_key = match config.environment {
-        Environment::Local => config::OpenaiApiKey::new()
-            .map(|v| v.as_ref().to_owned())
-            .unwrap_or_default(),
-        _ => secretsmanager_client
-            .get_secret_value("openai-key")
-            .await
-            .context("unable to get OpenAI embedding secret")?
-            .to_string(),
-    };
+    // The OpenAI key is injected as the required `OPENAI_API_KEY` env var
+    // (resolved from the `openai-key` secret at deploy time by the infra stack),
+    // the same way `document_cognition_service` consumes it. Fail fast if it's
+    // empty so the service never starts with a broken task-dedup embedder.
+    let openai_api_key = config.vars.openai_api_key.as_ref().to_owned();
     anyhow::ensure!(
         !openai_api_key.trim().is_empty(),
         "OpenAI API key is required for task dedup embeddings",
