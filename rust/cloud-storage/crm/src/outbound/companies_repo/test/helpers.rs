@@ -9,14 +9,14 @@ pub(super) async fn seed_team(pool: &PgPool, team_id: Uuid, owner_id: &str) -> s
     )
     .bind(macro_user_id)
     .bind(owner_id)
-    .bind(format!("{owner_id}@test.com"))
+    .bind(owner_id)
     .bind(format!("stripe_{macro_user_id}"))
     .execute(pool)
     .await?;
 
     sqlx::query(r#"INSERT INTO "User" (id, email, macro_user_id) VALUES ($1, $2, $3)"#)
         .bind(owner_id)
-        .bind(format!("{owner_id}@test.com"))
+        .bind(owner_id)
         .bind(macro_user_id)
         .execute(pool)
         .await?;
