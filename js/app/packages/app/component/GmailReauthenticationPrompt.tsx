@@ -1,7 +1,8 @@
-import { emailAuthUrl } from '@core/auth/email';
+import { GOOGLE_GMAIL_IDP } from '@core/auth/email';
 import { toast } from '@core/component/Toast/Toast';
 import { authServiceClient } from '@service-auth/client';
 import { onMount } from 'solid-js';
+import { useSsoLogin } from './auth/useSsoLogin';
 
 let gmailReauthenticationToastId: number | undefined;
 
@@ -9,18 +10,26 @@ function clearGmailReauthenticationToastState(): void {
   gmailReauthenticationToastId = undefined;
 }
 
-function handleGmailReauthenticationToastAction(): void {
+async function handleGmailReauthenticationToastAction(
+  startSsoLogin: (idpName: string) => Promise<void>
+): Promise<void> {
   if (gmailReauthenticationToastId !== undefined) {
     toast.dismiss(gmailReauthenticationToastId);
   }
   clearGmailReauthenticationToastState();
 
-  window.location.href = emailAuthUrl({
-    returnPath: `${window.location.pathname}${window.location.search}${window.location.hash}`,
-  });
+  const logoutResult = await authServiceClient.logout();
+  if (logoutResult.isErr()) {
+    toast.failure('Failed to log out before Gmail reconnect');
+    return;
+  }
+
+  await startSsoLogin(GOOGLE_GMAIL_IDP);
 }
 
-function showGmailReauthenticationToast(): void {
+function showGmailReauthenticationToast(
+  startSsoLogin: (idpName: string) => Promise<void>
+): void {
   if (gmailReauthenticationToastId !== undefined) return;
 
   gmailReauthenticationToastId = toast.custom(
@@ -32,7 +41,7 @@ function showGmailReauthenticationToast(): void {
       actions: [
         {
           label: 'Reconnect',
-          onClick: handleGmailReauthenticationToastAction,
+          onClick: () => handleGmailReauthenticationToastAction(startSsoLogin),
         },
       ],
     },
@@ -43,7 +52,9 @@ function showGmailReauthenticationToast(): void {
   );
 }
 
-async function checkGmailReauthenticationStatus(): Promise<void> {
+async function checkGmailReauthenticationStatus(
+  startSsoLogin: (idpName: string) => Promise<void>
+): Promise<void> {
   const response = await authServiceClient.checkGmailLinkStatus();
 
   const needsReauthentication = response.isOk()
@@ -53,13 +64,15 @@ async function checkGmailReauthenticationStatus(): Promise<void> {
       );
 
   if (needsReauthentication) {
-    showGmailReauthenticationToast();
+    showGmailReauthenticationToast(startSsoLogin);
   }
 }
 
 export function GmailReauthenticationPrompt() {
+  const startSsoLogin = useSsoLogin();
+
   onMount(() => {
-    void checkGmailReauthenticationStatus();
+    void checkGmailReauthenticationStatus(startSsoLogin);
   });
 
   return null;
