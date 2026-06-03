@@ -150,6 +150,7 @@ where
                 .await
                 .map_err(anyhow::Error::from)?;
             input.db_id = None;
+            input.provider_id = None;
             input.thread_db_id = None;
             input.provider_thread_id = None;
             return Ok(());
