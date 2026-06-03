@@ -1044,7 +1044,11 @@ export const SoupViewList = (props: SoupViewListProps) => {
                       Searching...
                     </div>
                   </Match>
-                  <Match when={!rows().length}>
+                  {/* TEMP(empty-state-preview): force the empty state for every
+                      view so each sidebar button shows its empty state in its
+                      natural habitat. Revert this `true` back to
+                      `!rows().length` when done. */}
+                  <Match when={true}>
                     <EmptyState
                       listView={currentView()}
                       search={!!searchText()}
