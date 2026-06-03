@@ -1,8 +1,10 @@
 use super::helpers::*;
+use crate::domain::auth::CrmCompanyReceipt;
 use crate::domain::companies_repo::*;
 use crate::domain::service::{CrmService, CrmServiceImpl};
 use crate::outbound::companies_repo::*;
 use crate::outbound::no_op_resolver::NoOpCompanyMetadataResolver;
+use entity_access::domain::models::EditAccessLevel;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -81,9 +83,8 @@ async fn service_set_company_hidden_true_soft_hides_contacts_and_disables_email_
         CompaniesRepositoryImpl::new(pool.clone()),
         NoOpCompanyMetadataResolver,
     );
-    service
-        .set_company_hidden(&team_id, &company_id, true)
-        .await?;
+    let access = CrmCompanyReceipt::<EditAccessLevel>::dangerously_internal(company_id, team_id);
+    service.set_company_hidden(&access, true).await?;
 
     assert_eq!(fetch_company_hidden(&pool, company_id).await?, Some(true));
     assert_eq!(fetch_email_sync(&pool, company_id).await?, Some(false));
@@ -146,9 +147,8 @@ async fn service_set_company_hidden_false_does_not_re_enable_email_sync(
         CompaniesRepositoryImpl::new(pool.clone()),
         NoOpCompanyMetadataResolver,
     );
-    service
-        .set_company_hidden(&team_id, &company_id, false)
-        .await?;
+    let access = CrmCompanyReceipt::<EditAccessLevel>::dangerously_internal(company_id, team_id);
+    service.set_company_hidden(&access, false).await?;
 
     assert_eq!(fetch_company_hidden(&pool, company_id).await?, Some(false));
     // Un-hiding leaves email_sync alone — caller must re-enable it explicitly.

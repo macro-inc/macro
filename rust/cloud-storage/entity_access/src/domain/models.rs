@@ -48,27 +48,27 @@ pub enum TeamRole {
 }
 
 /// Team member role.
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct MemberTeamRole;
 
 /// Team administrator role.
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct AdminTeamRole;
 
 /// Team owner role with full control.
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct OwnerTeamRole;
 
 /// Channel owner role with full control
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct OwnerParticipantRole;
 
 /// Channel Administrator
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct AdminParticipantRole;
 
 /// Regular channel member.
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct MemberParticipantRole;
 
 /// Trait implemented by marker types that encode a permission requirement.

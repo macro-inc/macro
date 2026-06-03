@@ -3,21 +3,18 @@ use axum::{
     extract::{Path, State},
 };
 use chrono::{DateTime, Utc};
-use entity_access::{
-    domain::{
-        models::{AccessLevel, ViewAccessLevel},
-        ports::EntityAccessService,
-    },
-    inbound::axum_extractors::CrmCompanyAccessLevelExtractor,
-};
+use entity_access::domain::{models::ViewAccessLevel, ports::EntityAccessService};
 use model_error_response::ErrorResponse;
 use serde::Serialize;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::domain::{
-    model::{CrmCompanyWithContacts, CrmDomain, CrmError},
-    service::CrmService,
+use crate::{
+    domain::{
+        model::{CrmCompanyWithContacts, CrmDomain, CrmError},
+        service::CrmService,
+    },
+    inbound::axum_extractors::CrmCompanyAccessLevelExtractor,
 };
 
 use super::{CrmRouterState, list_company_contacts::CrmContactResponse};
@@ -133,14 +130,9 @@ pub async fn handler<C: CrmService, Eas: EntityAccessService>(
     State(state): State<CrmRouterState<C, Eas>>,
     Path(company_id): Path<Uuid>,
 ) -> Result<Json<CrmCompanyResponse>, CrmError> {
-    let include_hidden = access
-        .entity_access_receipt
-        .entity_permission()
-        .allows_access_level(AccessLevel::Edit);
-
     let record = state
         .service
-        .get_company_for_team(&access.team_id, &company_id, include_hidden)
+        .get_company_for_team(&access.receipt)
         .await?
         .ok_or(CrmError::CompanyNotFoundForTeam)?;
 

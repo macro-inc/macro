@@ -14,10 +14,7 @@ use axum::{
     extract::{Path, State},
 };
 use entity_access::{
-    domain::{
-        models::{AccessLevel, ViewAccessLevel},
-        ports::EntityAccessService,
-    },
+    domain::{models::ViewAccessLevel, ports::EntityAccessService},
     inbound::axum_extractors::EntityPermissionExtractor,
 };
 use model_error_response::ErrorResponse;
@@ -28,6 +25,7 @@ use uuid::Uuid;
 
 use crate::{
     domain::{
+        auth::CrmCommentReceipt,
         comment::{CrmComment, CrmCommentEntityType, CrmCommentThread, DeleteCrmCommentResult},
         model::CrmError,
         service::CrmService,
@@ -85,18 +83,12 @@ pub struct EditCrmCommentRequest {
 pub async fn list_handler<C: CrmService, Eas: EntityAccessService>(
     access: EntityPermissionExtractor<Eas>,
     State(state): State<CrmRouterState<C, Eas>>,
-    Path((entity_type, entity_id)): Path<(CrmCommentEntityType, Uuid)>,
+    Path((_entity_type, entity_id)): Path<(CrmCommentEntityType, Uuid)>,
 ) -> Result<Json<Vec<CrmCommentThread>>, CrmError> {
     let team_id = team_id_for_user(&state, &access).await?;
-    let include_hidden = access
-        .entity_access_receipt
-        .entity_permission()
-        .allows_access_level(AccessLevel::Edit);
+    let receipt = CrmCommentReceipt::new(access.entity_access_receipt, team_id)?;
 
-    let threads = state
-        .service
-        .get_crm_comment_threads(&team_id, entity_type, &entity_id, include_hidden)
-        .await?;
+    let threads = state.service.get_crm_comment_threads(&receipt).await?;
 
     Ok(Json(threads))
 }
@@ -125,18 +117,10 @@ pub async fn list_handler<C: CrmService, Eas: EntityAccessService>(
 pub async fn create_handler<C: CrmService, Eas: EntityAccessService>(
     access: EntityPermissionExtractor<Eas>,
     State(state): State<CrmRouterState<C, Eas>>,
-    Path((entity_type, entity_id)): Path<(CrmCommentEntityType, Uuid)>,
+    Path((_entity_type, entity_id)): Path<(CrmCommentEntityType, Uuid)>,
     Json(req): Json<CreateCrmCommentRequest>,
 ) -> Result<Json<CrmCommentThread>, CrmError> {
     let team_id = team_id_for_user(&state, &access).await?;
-    let include_hidden = access
-        .entity_access_receipt
-        .entity_permission()
-        .allows_access_level(AccessLevel::Edit);
-    let owner = access
-        .entity_access_receipt
-        .get_authenticated_user()
-        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
     let text = req.text.trim();
     if text.is_empty() {
@@ -145,18 +129,21 @@ pub async fn create_handler<C: CrmService, Eas: EntityAccessService>(
         ));
     }
 
+    let receipt = CrmCommentReceipt::new(access.entity_access_receipt, team_id)?;
+    let owner = receipt
+        .receipt()
+        .get_authenticated_user()
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
     let thread = state
         .service
         .create_crm_comment(
-            &team_id,
-            entity_type,
-            &entity_id,
+            &receipt,
             owner.as_ref(),
             req.thread_id,
             req.thread_metadata,
             text,
             req.metadata,
-            include_hidden,
         )
         .await?;
 
@@ -187,11 +174,6 @@ pub async fn edit_handler<C: CrmService, Eas: EntityAccessService>(
     Path(comment_id): Path<Uuid>,
     Json(req): Json<EditCrmCommentRequest>,
 ) -> Result<Json<CrmComment>, CrmError> {
-    let include_hidden = access
-        .entity_access_receipt
-        .entity_permission()
-        .allows_access_level(AccessLevel::Edit);
-
     let text = req.text.trim();
     if text.is_empty() {
         return Err(CrmError::InvalidRequest(
@@ -201,7 +183,7 @@ pub async fn edit_handler<C: CrmService, Eas: EntityAccessService>(
 
     let comment = state
         .service
-        .edit_crm_comment(&access.team_id, &comment_id, text, include_hidden)
+        .edit_crm_comment(&access.receipt, &comment_id, text)
         .await?;
 
     Ok(Json(comment))
@@ -230,14 +212,9 @@ pub async fn delete_handler<C: CrmService, Eas: EntityAccessService>(
     State(state): State<CrmRouterState<C, Eas>>,
     Path(comment_id): Path<Uuid>,
 ) -> Result<Json<DeleteCrmCommentResult>, CrmError> {
-    let include_hidden = access
-        .entity_access_receipt
-        .entity_permission()
-        .allows_access_level(AccessLevel::Edit);
-
     let result = state
         .service
-        .delete_crm_comment(&access.team_id, &comment_id, include_hidden)
+        .delete_crm_comment(&access.receipt, &comment_id)
         .await?;
 
     Ok(Json(result))
