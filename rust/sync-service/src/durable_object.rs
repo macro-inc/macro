@@ -384,6 +384,26 @@ impl DocumentSyncSession {
                 Some(session_storage);
         }
 
+        // Broadcast initial sync to any sockets that connected before init landed.
+        if let Ok(state) = self.document_state().await
+            && let Ok(snapshot) = state.export_shallow_snapshot()
+        {
+            let awareness = self.awareness.encode_all();
+            for ws in &self.state.get_websockets() {
+                if let Err(e) = websocket::send_initial_sync(
+                    ws,
+                    snapshot.as_slice(),
+                    awareness.as_slice(),
+                    self.msg_buffer.clone(),
+                ) {
+                    warn!(
+                        error =? e,
+                        "failed to send delayed initial sync to a waiting peer"
+                    );
+                }
+            }
+        }
+
         Response::empty()
     }
 
@@ -555,20 +575,28 @@ impl DocumentSyncSession {
                 .lock("DocumentSyncSession::ws_meta_map insert in connect_handler")
                 .insert(ws_id, ws_meta);
 
+            // If the snapshot is already in storage, send the initial sync now.
+            // Otherwise accept the WS without sending — initialize_handler will
+            // broadcast initial sync to this socket once /initialize lands.
             let snapshot = self
                 .document_state()
                 .await
-                .context("failed to load document state for connect")?
-                .export_shallow_snapshot()
-                .context("failed to export snapshot")?;
+                .and_then(|state| state.export_shallow_snapshot());
 
-            websocket::send_initial_sync(
-                &pair.server,
-                snapshot.as_slice(),
-                self.awareness.encode_all().as_slice(),
-                self.msg_buffer.clone(),
-            )
-            .context("failed to send initial sync message")?;
+            if let Ok(snapshot) = snapshot {
+                websocket::send_initial_sync(
+                    &pair.server,
+                    snapshot.as_slice(),
+                    self.awareness.encode_all().as_slice(),
+                    self.msg_buffer.clone(),
+                )
+                .context("failed to send initial sync message")?;
+            } else {
+                debug!(
+                    document_id = document_id,
+                    "snapshot not yet available; deferring initial sync until /initialize"
+                );
+            }
 
             Response::from_websocket(pair.client).context("failed to create websocket response")?
         });

@@ -66,42 +66,51 @@ function BlockMarkdownContent({ fromScratch }: BlockMarkdownProps) {
     if (!data?.doInitialSync) return;
 
     if (fromScratch) {
-      getMarkdownGoldenBytes().then(async (snapshot) => {
-        await loroManager.initializeFromSnapshot(snapshot);
-        console.log(
-          '[fromScratch] loroManager state after init:',
-          JSON.stringify(loroManager.getDoc().toJSON(), null, 2)
-        );
-      });
-
-      data.doInitialSync().then((syncResult: Result<InitialSync, TimeoutError>) => {
-        if (syncResult.isErr()) {
-          console.error('Failed to receive initial sync', syncResult.error);
-          setBlockError('INVALID');
-          return;
-        }
-        const peerId = loroManager.getPeerId();
-        data.syncSource.pushUpdate(
-          loroManager.getDoc().export({ mode: 'update' }),
-          peerId
-        );
-      });
+      getMarkdownGoldenBytes()
+        .then(async (snapshot) => {
+          await loroManager.initializeFromSnapshot(snapshot);
+          console.log(
+            '[fromScratch] loroManager state after init:',
+            JSON.stringify(loroManager.getDoc().toJSON(), null, 2)
+          );
+        })
+        .then(() => {
+          data
+            .doInitialSync()
+            .then((syncResult: Result<InitialSync, TimeoutError>) => {
+              if (syncResult.isErr()) {
+                console.error(
+                  'Failed to receive initial sync',
+                  syncResult.error
+                );
+                setBlockError('INVALID');
+                return;
+              }
+              const peerId = loroManager.getPeerId();
+              data.syncSource.pushUpdate(
+                loroManager.getDoc().export({ mode: 'update' }),
+                peerId
+              );
+            });
+        });
     } else {
-      data.doInitialSync().then((syncResult: Result<InitialSync, TimeoutError>) => {
-        if (syncResult.isErr()) {
-          console.error('Failed to receive initial sync', syncResult.error);
-          setBlockError('INVALID');
-          return;
-        }
-        loroManager
-          .initializeFromSnapshot(syncResult.value.snapshot)
-          .then((result) => {
-            if (result.isErr()) {
-              console.error('Failed to initialize loro doc', result.error);
-              setBlockError('INVALID');
-            }
-          });
-      });
+      data
+        .doInitialSync()
+        .then((syncResult: Result<InitialSync, TimeoutError>) => {
+          if (syncResult.isErr()) {
+            console.error('Failed to receive initial sync', syncResult.error);
+            setBlockError('INVALID');
+            return;
+          }
+          loroManager
+            .initializeFromSnapshot(syncResult.value.snapshot)
+            .then((result) => {
+              if (result.isErr()) {
+                console.error('Failed to initialize loro doc', result.error);
+                setBlockError('INVALID');
+              }
+            });
+        });
     }
   });
 
