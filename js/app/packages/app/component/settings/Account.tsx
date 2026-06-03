@@ -350,7 +350,7 @@ export function Account() {
               <Show when={ENABLE_PROFILE_PICTURES && userId()}>
                 <Row label="Profile Picture">
                   <div
-                    class="relative group"
+                    class="flex items-center gap-3 cursor-pointer"
                     use:fileSelector={{
                       acceptedFileExtensions: blockNameToFileExtensions.image,
                       acceptedMimeTypes: blockNameToMimeTypes.image,
@@ -376,9 +376,10 @@ export function Account() {
                       size="lg"
                       class="bg-transparent"
                     />
-                    <div class="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <IconUpload class="size-5 text-white" />
-                    </div>
+                    <Button variant="base" size="sm" depth={3}>
+                      <IconUpload class="size-4" />
+                      Upload
+                    </Button>
                   </div>
                 </Row>
               </Show>
