@@ -10,6 +10,19 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
     private let onDrawerOpened: (String) -> Void
     private let onParticipantIdentitiesChanged: ([String]) -> Void
     private let videoOverlay: CallVideoOverlayController
+    private lazy var pictureInPicture: CallPictureInPictureManaging = makeCallPictureInPictureController(
+        sourceViewProvider: { [weak self] in
+            self?.videoOverlay.pictureInPictureSourceView()
+        },
+        onRestore: { [weak self] in
+            guard let self else { return }
+            self.setVideoOverlayMode(.expanded)
+            if let channelId = self.activeCall?.channelId {
+                print("[CallKit] Picture in Picture restoring channelId=\(channelId)")
+                self.onDrawerOpened(channelId)
+            }
+        }
+    )
 
     private var room: Room?
     private var connectTask: Task<Void, Never>?
@@ -56,6 +69,11 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
             print("[CallKit] Native video overlay opened from thumbnail channelId=\(channelId)")
             self?.onDrawerOpened(channelId)
         }
+        videoOverlay.onModeChanged = { [weak self] mode in
+            print("[CallKit] Picture in Picture refreshing source for overlay mode=\(mode.rawValue)")
+            self?.pictureInPicture.prepare()
+        }
+        pictureInPicture.prepare()
         print("[CallKit] NativeLiveKitCallSession initialized")
     }
 
@@ -236,6 +254,7 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
             self.speakingRemoteParticipantIds = []
             self.participantDisplayNamesByIdentity = [:]
             self.onParticipantIdentitiesChanged([])
+            self.pictureInPicture.stopAndReset()
             self.emitSnapshot()
             self.videoOverlay.reset()
             return r
@@ -325,10 +344,13 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
                 print("[CallKit] Setting native LiveKit camera enabled=\(enabled) uuid=\(uuid.uuidString)")
                 try await room.localParticipant.setCamera(enabled: enabled)
                 if enabled {
+                    self.enableMultitaskingCameraAccessIfSupported(room: room, uuid: uuid)
                     await self.videoOverlay.setLocalVideoTrack(room.localParticipant.firstCameraVideoTrack)
+                    self.rebuildRemoteVideoLayout(from: room)
                     self.setVideoOverlayMode(.expanded)
                 } else {
                     await self.videoOverlay.setLocalVideoTrack(nil)
+                    self.rebuildRemoteVideoLayout(from: room)
                 }
                 self.updateVideoMuted(!enabled, overlayMode: enabled ? "expanded" : self.activeCall?.videoOverlayMode)
                 print("[CallKit] Native LiveKit camera set enabled=\(enabled) uuid=\(uuid.uuidString)")
@@ -479,7 +501,9 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
             return
         }
         if let track = publication.track as? VideoTrack, publication.source == .camera {
+            enableMultitaskingCameraAccessIfSupported(room: room, uuid: activeCallUUID)
             videoOverlay.setLocalVideoTrack(track)
+            rebuildRemoteVideoLayout(from: room)
             updateVideoMuted(false, overlayMode: "expanded")
         }
     }
@@ -492,6 +516,7 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
         }
         if publication.source == .camera {
             videoOverlay.setLocalVideoTrack(nil)
+            rebuildRemoteVideoLayout(from: room)
             updateVideoMuted(true, overlayMode: activeCall?.videoOverlayMode)
         }
     }
@@ -595,7 +620,40 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
             ?? participants.first
 
         videoOverlay.setRemoteVideoParticipants(participants, primaryId: primary?.id)
+        updatePictureInPicture(from: room, primary: primary)
         print("[CallKit] Rebuilt remote video layout participants=\(participants.map { "\($0.id):\($0.title)" }) primary=\(primary?.id ?? "nil") pinned=\(pinnedRemoteVideoParticipantId ?? "nil")")
+    }
+
+    private func updatePictureInPicture(from room: Room, primary: NativeVideoParticipant?) {
+        let localTrack = room.localParticipant.firstCameraVideoTrack
+        print("[CallKit] Picture in Picture selected localTitle=\(displayTitle(room.localParticipant)) localTrack=\(localTrack != nil) primaryParticipant=\(primary?.id ?? "nil") remoteTitle=\(primary?.title ?? "nil") remoteTrack=\(primary?.track != nil)")
+        pictureInPicture.setParticipants(
+            localTitle: displayTitle(room.localParticipant),
+            localTrack: localTrack,
+            remoteTitle: primary?.title,
+            remoteTrack: primary?.track
+        )
+    }
+
+    private func enableMultitaskingCameraAccessIfSupported(room: Room, uuid: UUID?) {
+        guard #available(iOS 16.0, *) else {
+            print("[CallKit] Multitasking camera access unavailable before iOS 16 uuid=\(uuid?.uuidString ?? "nil")")
+            return
+        }
+        guard
+            let track = room.localParticipant.firstCameraVideoTrack as? LocalVideoTrack,
+            let capturer = track.capturer as? CameraCapturer
+        else {
+            print("[CallKit] Multitasking camera access skipped; no local camera capturer uuid=\(uuid?.uuidString ?? "nil")")
+            return
+        }
+        guard capturer.isMultitaskingAccessSupported else {
+            print("[CallKit] Multitasking camera access not supported uuid=\(uuid?.uuidString ?? "nil")")
+            return
+        }
+
+        capturer.isMultitaskingAccessEnabled = true
+        print("[CallKit] Multitasking camera access enabled uuid=\(uuid?.uuidString ?? "nil") enabled=\(capturer.isMultitaskingAccessEnabled)")
     }
 
     private func emitParticipantIdentities(from room: Room) {

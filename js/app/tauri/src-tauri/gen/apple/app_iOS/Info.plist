@@ -48,6 +48,8 @@
 	</array>
 	<key>UIBackgroundModes</key>
 	<array>
+		<string>audio</string>
+		<string>picture-in-picture</string>
 		<string>voip</string>
 	</array>
 	<key>UILaunchStoryboardName</key>

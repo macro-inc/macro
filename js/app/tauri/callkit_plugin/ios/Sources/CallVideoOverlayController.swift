@@ -80,6 +80,7 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, @
     var onEndCall: (() -> Void)?
     var onSelectRemoteParticipant: ((String) -> Void)?
     var onOpenDrawerFromThumbnail: (() -> Void)?
+    var onModeChanged: ((CallVideoOverlayMode) -> Void)?
 
     private var mode: CallVideoOverlayMode = .hidden
     private var thumbnailCorner: ThumbnailCorner = .topRight
@@ -124,6 +125,7 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, @
             self.updateVideoRenderTargets()
             self.layoutOverlay()
             print("[CallKit] Native video overlay mode=\(mode.rawValue)")
+            self.onModeChanged?(mode)
         }
     }
 
@@ -149,6 +151,14 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, @
             self.applyTheme()
             print("[CallKit] Native video overlay theme updated")
         }
+    }
+
+    func pictureInPictureSourceView() -> UIView {
+        if mode == .minimized {
+            return thumbnailView
+        }
+
+        return primaryVideoView
     }
 
     func presentForActiveCallIfNeeded() {
