@@ -809,6 +809,21 @@ export function BaseInput(props: {
     if (draftSaveTimer) window.clearTimeout(draftSaveTimer);
   });
 
+  // Persist immediately when the sending inbox changes, even without a text
+  // edit, so the draft moves to the new inbox and the choice survives a refresh.
+  // The backend reconciles the existing draft id across the caller's inboxes.
+  createEffect(
+    on(
+      activeLinkId,
+      (current, previous) => {
+        if (!previous || current === previous) return;
+        if (draftSaveTimer) window.clearTimeout(draftSaveTimer);
+        void executeSaveDraft();
+      },
+      { defer: true }
+    )
+  );
+
   // After a send, the bottom input stays mounted and its replyingTo flips to
   // the just-sent message once the thread refetches. Cancel the inhibited
   // post-send save and re-enable saves so a fresh edit under the new form
