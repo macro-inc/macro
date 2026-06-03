@@ -9,7 +9,9 @@ export const AnimatedContactIcon = (props: {
       viewBox="0 -3 18 18"
       fill="none"
       stroke="currentColor"
-      stroke-width="1.5"
+      stroke-width="1.125"
+      stroke-linecap="round"
+      stroke-linejoin="round"
       xmlns="http://www.w3.org/2000/svg"
       overflow="visible"
       class={`animated-contact-icon ${props.triggerAnimation ? 'animating' : ''} ${props.class ?? ''}`}
@@ -55,7 +57,7 @@ export const AnimatedContactIcon = (props: {
       />
       {/* Shoulders */}
       <path
-        d="M0.75 12C0.75 9.24 2.99 7 5.75 7C8.51 7 10.75 9.24 10.75 12"
+        d="M0.75 11.375A5.0446 5.0446 0 0 1 10.75 11.375"
         stroke-miterlimit="10"
       />
       {/* Lines (top -> bottom) */}

@@ -13,7 +13,9 @@ export const AnimatedCompanyIcon = (props: {
       viewBox="0 -3 18 18"
       fill="none"
       stroke="currentColor"
-      stroke-width="1.5"
+      stroke-width="1.125"
+      stroke-linecap="round"
+      stroke-linejoin="round"
       xmlns="http://www.w3.org/2000/svg"
       overflow="visible"
       class={`animated-company-icon ${props.triggerAnimation ? 'animating' : ''} ${props.class ?? ''}`}
@@ -23,14 +25,14 @@ export const AnimatedCompanyIcon = (props: {
         .animated-company-icon {
           .building-center, #${maskId} .mask-center { transform-origin: 9px 6px; }
           /* Origin at each L's bottom point so scaling grows them upward only */
-          .building-left { transform-origin: 0.75px 10.5px; }
-          .building-right { transform-origin: 17.25px 10.5px; }
+          .building-left { transform-origin: 0.5625px 10.875px; }
+          .building-right { transform-origin: 17.4375px 10.875px; }
           .building-center, .building-left, .building-right, .ground, #${maskId} .mask-center {
             transition: transform 0.4s ease;
           }
-          /* Counter-scale the outline so it reads ~1.5px at any zoom */
+          /* Counter-scale the outline so it reads ~1.125px at any zoom */
           .building-outline {
-            stroke-width: 1.5px;
+            stroke-width: 1.125px;
             transition: stroke-width 0.4s ease;
           }
         }
@@ -38,21 +40,21 @@ export const AnimatedCompanyIcon = (props: {
           .building-center, #${maskId} .mask-center {
             transform: scale(1.5);
           }
-          /* 1.5 * (2/3) = 1 -> rendered stroke stays ~1.5px under scale(1.5) */
+          /* 0.75 * 1.5 = 1.125 -> rendered stroke stays ~1.125px under scale(1.5) */
           .building-outline {
-            stroke-width: 1px;
+            stroke-width: 0.75px;
           }
-          /* Keep the ground touching the door/L bottoms: door bottom 10.5 ->
-             12.75 under scale(1.5); ground top edge meets it at centerline 13.5
-             (translateY 2.25). Side L's translate down by the same amount. */
+          /* Keep the ground touching the door/L bottoms: door bottom 11.4375 ->
+             14.15625 under scale(1.5); ground center moves to meet it
+             (translateY 2.71875). Side L's translate down by the same amount. */
           .ground {
-            transform: translateY(2.25px);
+            transform: translateY(2.71875px);
           }
           .building-left {
-            transform: translate(4px, 2.25px) scale(1.2);
+            transform: translate(4px, 2.71875px) scale(1.2);
           }
           .building-right {
-            transform: translate(-4px, 2.25px) scale(1.2);
+            transform: translate(-4px, 2.71875px) scale(1.2);
           }
         }
       `}</style>
@@ -63,60 +65,72 @@ export const AnimatedCompanyIcon = (props: {
           <rect x="-10" y="-40" width="100" height="140" fill="white" />
           <rect
             class="mask-center"
-            x="4"
-            y="0.5"
-            width="10"
-            height="11"
+            x="3.625"
+            y="0.125"
+            width="10.75"
+            height="11.75"
             fill="black"
           />
         </mask>
       </defs>
 
       {/* Ground */}
-      <path class="ground" d="M0 11.25H18" stroke-miterlimit="10" />
+      <path class="ground" d="M0.5625 11.4375H17.4375" />
 
       {/* Side buildings - masked so they vanish behind the middle building */}
       <g mask={`url(#${maskId})`}>
-        <path
-          class="building-right"
-          d="M17.25 10.5V6H16"
-          stroke-linejoin="round"
-        />
-        <path
-          class="building-left"
-          d="M0.75 10.5V3.5H2"
-          stroke-linejoin="round"
-        />
+        <path class="building-right" d="M17.4375 10.875V6H16" />
+        <path class="building-left" d="M0.5625 10.875V3.5H2" />
       </g>
 
       {/* Middle building (on top) - outline + windows + door */}
       <g class="building-center">
-        <path
-          class="building-outline"
-          d="M4.25 11.25V0.75H13.75V11.25"
-          stroke-linejoin="round"
-        />
-        <path
-          d="M8.22998 3H6.72998V4.5H8.22998V3Z"
+        <path class="building-outline" d="M4.25 11.4375V0.5625H13.75V11.4375" />
+        <rect
+          x="6.73"
+          y="3"
+          width="1.5"
+          height="1.5"
+          rx="0.3"
           fill="currentColor"
           stroke="none"
         />
-        <path
-          d="M11.23 3H9.72998V4.5H11.23V3Z"
+        <rect
+          x="9.73"
+          y="3"
+          width="1.5"
+          height="1.5"
+          rx="0.3"
           fill="currentColor"
           stroke="none"
         />
-        <path
-          d="M8.22998 6H6.72998V7.5H8.22998V6Z"
+        <rect
+          x="6.73"
+          y="6"
+          width="1.5"
+          height="1.5"
+          rx="0.3"
           fill="currentColor"
           stroke="none"
         />
-        <path
-          d="M11.23 6H9.72998V7.5H11.23V6Z"
+        <rect
+          x="9.73"
+          y="6"
+          width="1.5"
+          height="1.5"
+          rx="0.3"
           fill="currentColor"
           stroke="none"
         />
-        <path d="M9.75 9H8.25V10.5H9.75V9Z" fill="currentColor" stroke="none" />
+        <rect
+          x="8.25"
+          y="9"
+          width="1.5"
+          height="2.4375"
+          rx="0.3"
+          fill="currentColor"
+          stroke="none"
+        />
       </g>
     </svg>
   );
