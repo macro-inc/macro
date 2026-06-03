@@ -404,7 +404,8 @@ export function EntityIcon(props: EntityIconProps) {
         props.class
       )}
     >
-      <Dynamic component={icon()} />
+      {/* size-full: Safari needs a CSS size, not the SVG's % attributes. */}
+      <Dynamic component={icon()} class="size-full" />
     </div>
   );
 }
@@ -429,7 +430,8 @@ export function CustomEntityIcon(
         'p-[20%]': props.useBackground,
       }}
     >
-      <Dynamic component={props.icon || config().icon} />
+      {/* size-full: see EntityIcon (Safari). */}
+      <Dynamic component={props.icon || config().icon} class="size-full" />
     </div>
   );
 }

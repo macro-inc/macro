@@ -5,8 +5,9 @@ import ClockIcon from '@phosphor/clock.svg';
 import EmailIcon from '@phosphor/envelope.svg';
 import UsersIcon from '@phosphor/users.svg';
 import { cn } from '@ui';
-import { createEffect } from 'solid-js';
+import { createEffect, Show } from 'solid-js';
 import type { MentionItem } from '../../../../utils/mentionsUtils';
+import { isBotMentionItem } from '../utils/botMention';
 import {
   getBlockNameFromEntity,
   getMentionItemName,
@@ -87,12 +88,19 @@ export function MentionsMenuItem(props: {
       })}
     >
       <div class="mr-2 flex items-center">{icon()}</div>
-      <span
-        class="ph-no-capture text-ink text-xs sm:text-sm font-medium grow overflow-hidden text-nowrap"
-        style={{ 'text-overflow': 'ellipsis' }}
-      >
-        {name()}
-      </span>
+      <div class="flex min-w-0 grow items-center gap-2">
+        <span
+          class="ph-no-capture min-w-0 max-w-full overflow-hidden text-nowrap text-ink text-xs sm:text-sm font-medium"
+          style={{ 'text-overflow': 'ellipsis' }}
+        >
+          {name()}
+        </span>
+        <Show when={isBotMentionItem(props.item)}>
+          <span class="inline-flex shrink-0 items-center rounded-sm bg-hover px-1.5 py-0.5 text-[10px] font-medium leading-none text-ink-muted">
+            Agent
+          </span>
+        </Show>
+      </div>
     </div>
   );
 }

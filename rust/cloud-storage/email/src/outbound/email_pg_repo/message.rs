@@ -271,28 +271,31 @@ pub(super) async fn scheduled_send_times_by_message_ids(
         .collect())
 }
 
-/// Fetch a simplified message by DB ID and link ID for validation.
+/// Fetch a simplified message by DB ID, scoped to a set of accessible inboxes,
+/// for validation. Returns the message's own `link_id` so callers can tell
+/// whether the reply target lives in the inbox being sent from.
 #[tracing::instrument(skip(pool), err)]
 pub(crate) async fn get_simple_message(
     pool: &PgPool,
     message_id: Uuid,
-    link_id: Uuid,
+    link_ids: &[Uuid],
 ) -> Result<Option<SimpleMessageInfo>, sqlx::Error> {
     let row = sqlx::query_as!(
         DbSimpleMessageRow,
         r#"
         SELECT
             m.id,
+            m.link_id,
             m.thread_id,
             m.provider_thread_id,
             m.headers_jsonb,
             m.is_sent,
             m.is_draft
         FROM email_messages m
-        WHERE m.id = $1 AND m.link_id = $2
+        WHERE m.id = $1 AND m.link_id = ANY($2)
         "#,
         message_id,
-        link_id,
+        link_ids,
     )
     .fetch_optional(pool)
     .await?;
@@ -313,6 +316,7 @@ pub(crate) async fn get_draft_replying_to(
         r#"
         SELECT
             m.id,
+            m.link_id,
             m.thread_id,
             m.provider_thread_id,
             m.headers_jsonb,

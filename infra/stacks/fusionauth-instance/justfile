@@ -49,7 +49,9 @@ import_dev:
     fusionauth:index/fusionAuthKey:FusionAuthKey jwt-signing-key aea64fc1-84f6-89ab-fb7c-08a21556263e \
     fusionauth:index/fusionAuthApplication:FusionAuthApplication macro-application eb75fe7a-0ef1-4186-96d9-cc62cfb1d10c \
     fusionauth:index/fusionAuthTenant:FusionAuthTenant default-tenant 5e13f524-8d32-0454-81f8-061936256aa4 \
-    fusionauth:index/fusionAuthLambda:FusionAuthLambda populate-jwt-lambda a7f3e8d2-4b91-4c5a-9e6f-1a2b3c4d5e6f
+    fusionauth:index/fusionAuthLambda:FusionAuthLambda populate-jwt-lambda a7f3e8d2-4b91-4c5a-9e6f-1a2b3c4d5e6f \
+    fusionauth:index/fusionAuthIdpOpenIdConnect:FusionAuthIdpOpenIdConnect google-idp 17dc55db-c78e-4b19-940b-2e847479a08f \
+    fusionauth:index/fusionAuthIdpOpenIdConnect:FusionAuthIdpOpenIdConnect google-gmail-idp b99932ac-bce5-4f1d-99a1-e64760aae811
 
 # Performs a healthcheck on local FusionAuth.
 healthcheck:

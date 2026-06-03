@@ -2688,9 +2688,11 @@ export const editCrmCommentResponse = zod
   .describe('A single comment within a [`CrmThread`].');
 
 /**
- * @summary List the comment threads on a CRM company or contact, scoped to the
-requesting user's team. Returns 404 when the entity isn't owned by the
-team; an owned entity with no threads returns `200 []`.
+ * @summary List the comment threads on a CRM company or contact. Access is
+enforced by [`EntityPermissionExtractor`] against the path's
+`crm_company`/`crm_contact` entity type — hidden parents are
+invisible to plain members. An accessible entity with no threads
+returns `200 []`.
  */
 export const listCrmCommentsParams = zod.object({
   entity_type: zod
@@ -2902,12 +2904,11 @@ export const createCrmCommentResponse = zod
   );
 
 /**
- * @summary List the contacts of a CRM company, scoped to the requesting user's
-team. Returns 404 when the company isn't owned by the team (so
-existence doesn't leak across teams). Non-admin viewers also 404 on
-hidden companies and see only non-hidden contacts; admin/owner
-viewers reach hidden companies and see every owned contact
-regardless of `hidden` so they can render the right unhide UI.
+ * @summary List the contacts of a CRM company. Access is enforced by
+[`CrmCompanyAccessLevelExtractor`]: the user must be on the team that
+owns the company. Hidden companies and hidden contacts are invisible
+to plain members; admin/owner callers see hidden rows so they can
+render the right unhide UI.
  */
 export const listCompanyContactsParams = zod.object({
   company_id: zod.uuid().describe('The CRM company whose contacts to list'),
@@ -2992,11 +2993,11 @@ export const setCompanyHiddenBody = zod
   .describe('Request body for `PUT \/companies\/{company_id}\/hidden`.');
 
 /**
- * @summary Fetch a single CRM contact by id, scoped to the requesting user's
-team. Returns 404 when the contact doesn't exist or isn't owned by
-the team. Non-admin viewers also 404 on hidden contacts or hidden
-parent companies (so existence doesn't leak); admin/owner viewers
-reach every owned contact regardless of `hidden`.
+ * @summary Fetch a single CRM contact by id. Access is enforced by
+[`CrmContactAccessLevelExtractor`]: the user must be on the team that
+owns the contact's parent company, and hidden contacts are invisible
+to plain members. Admin/owner callers see hidden contacts so they can
+render the right unhide UI.
  */
 export const getContactParams = zod.object({
   contact_id: zod.uuid().describe('The CRM contact to fetch'),

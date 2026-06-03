@@ -26,7 +26,7 @@ import type { UserMentionRecord } from '@core/component/LexicalMarkdown/utils/me
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_EMAIL_SCHEDULED_SEND } from '@core/constant/featureFlags';
-import { useEmail, useUserId } from '@core/context/user';
+import { useEmail } from '@core/context/user';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { fileSelector } from '@core/directive/fileSelector';
 import { observedSize } from '@core/directive/observedSize';
@@ -34,7 +34,6 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
 import { trackMention } from '@core/signal/mention';
-import { tryMacroId, useDisplayName } from '@core/user';
 import { plural } from '@core/util/string';
 import { handleFileFolderDrop } from '@core/util/upload';
 
@@ -51,6 +50,7 @@ import Forward from '@phosphor/arrow-bend-up-right.svg';
 
 import ChevronDown from '@phosphor/caret-down.svg';
 import Paperclip from '@phosphor/paperclip.svg';
+import PencilSimple from '@phosphor/pencil-simple.svg';
 import Quotes from '@phosphor/quotes.svg';
 
 import TextAa from '@phosphor/text-aa.svg';
@@ -136,6 +136,7 @@ import {
   useEmailContext,
 } from './EmailContext';
 import { getOrInitEmailFormContext } from './EmailFormContext';
+import { FromInboxSelector } from './FromInboxSelector';
 
 false && fileFolderDrop;
 false && fileSelector;
@@ -322,7 +323,7 @@ function TruncatedRecipientList(props: {
   return (
     <div
       use:observedSize={{ setSize: setContainerRect }}
-      class="flex items-center text-sm overflow-hidden whitespace-nowrap mt-1 min-w-0 flex-1"
+      class="flex items-center text-sm overflow-hidden whitespace-nowrap min-w-0"
       onclick={props.onClick}
     >
       {/* Hidden measurement element - must have same font styles */}
@@ -440,6 +441,7 @@ export function BaseInput(props: {
   // inbox for a new message. Mutations send it as X-Email-Link-Id when it's a
   // non-primary inbox so the draft/send targets the right account.
   const activeLinkId = () =>
+    form().selectedLinkId() ??
     ctx.thread()?.link_id ??
     props.draft?.link_id ??
     primaryLinkId() ??
@@ -661,9 +663,6 @@ export function BaseInput(props: {
   lazyRegister(editor, (editor) => {
     return registerToggleAppendedThread(editor);
   });
-
-  const userId = useUserId();
-  const [userName] = useDisplayName(tryMacroId(userId() ?? ''));
 
   let draftSaveTimer: number | undefined;
   let pendingDeletion = false;
@@ -1427,12 +1426,22 @@ export function BaseInput(props: {
         <Show
           when={showExpandedRecipients()}
           fallback={
-            <TruncatedRecipientList
-              toRecipients={form().recipients().to}
-              ccRecipients={form().recipients().cc}
-              bccRecipients={form().recipients().bcc}
+            <div
+              class="flex flex-1 items-center gap-1.5 min-w-0 mt-1 text-sm text-ink-muted"
               onClick={() => setShowExpandedRecipients(true)}
-            />
+            >
+              <TruncatedRecipientList
+                toRecipients={form().recipients().to}
+                ccRecipients={form().recipients().cc}
+                bccRecipients={form().recipients().bcc}
+                onClick={() => setShowExpandedRecipients(true)}
+              />
+              <Show when={(emailLinksQuery.data?.links.length ?? 0) > 1}>
+                <span class="shrink-0 text-ink-extra-muted">·</span>
+                <span class="shrink-0 truncate">from {activeInboxEmail()}</span>
+              </Show>
+              <PencilSimple class="size-3.5 shrink-0 text-ink-extra-muted" />
+            </div>
           }
         >
           <div
@@ -1440,11 +1449,15 @@ export function BaseInput(props: {
             class="w-full text-sm text-ink-muted"
           >
             {/* Expanded FROM */}
-            <div class="flex flex-row items-baseline py-0.5">
+            <div class="flex flex-row items-center py-0.5">
               <div class="min-w-8">from</div>
-              <span class="ml-2">
-                {userName()} &lt;{activeInboxEmail()}&gt;
-              </span>
+              <div class="pl-4 min-w-0 flex-1">
+                <FromInboxSelector
+                  links={emailLinksQuery.data?.links ?? []}
+                  activeLinkId={activeLinkId()}
+                  onSelect={(id) => form().setSelectedFromLink(id)}
+                />
+              </div>
             </div>
             {/* Expanded TO */}
 
@@ -1458,6 +1471,7 @@ export function BaseInput(props: {
               <RecipientSelector<EmailRecipient['kind']>
                 inputRef={setToRef}
                 options={ctx.recipientOptions}
+                selfEmail={activeInboxEmail()}
                 selectedOptions={form().recipients().to}
                 setSelectedOptions={withDraftSave((v) =>
                   form().setRecipients('to', v)
@@ -1482,6 +1496,7 @@ export function BaseInput(props: {
                 <RecipientSelector<EmailRecipient['kind']>
                   inputRef={setCcRef}
                   options={ctx.recipientOptions}
+                  selfEmail={activeInboxEmail()}
                   selectedOptions={form().recipients().cc}
                   setSelectedOptions={withDraftSave((v) =>
                     form().setRecipients('cc', v)
@@ -1507,6 +1522,7 @@ export function BaseInput(props: {
                 <RecipientSelector<EmailRecipient['kind']>
                   inputRef={setBccRef}
                   options={ctx.recipientOptions}
+                  selfEmail={activeInboxEmail()}
                   selectedOptions={form().recipients().bcc}
                   setSelectedOptions={withDraftSave((v) =>
                     form().setRecipients('bcc', v)

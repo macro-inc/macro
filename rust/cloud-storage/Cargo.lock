@@ -2687,6 +2687,7 @@ dependencies = [
  "macro_db_migrator",
  "macro_uuid",
  "model-error-response",
+ "model_user",
  "reqwest 0.13.3",
  "serde",
  "serde_json",
@@ -3426,6 +3427,7 @@ dependencies = [
  "documents",
  "dynamodb_client",
  "email",
+ "embedding",
  "entity_access",
  "entity_access_management",
  "foreign_entity",
@@ -4131,6 +4133,14 @@ version = "0.1.0"
 dependencies = [
  "lazy_static",
  "regex",
+]
+
+[[package]]
+name = "embedding"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-openai",
 ]
 
 [[package]]
@@ -11439,11 +11449,21 @@ version = "0.1.0"
 dependencies = [
  "agent",
  "anyhow",
- "async-openai",
  "async-trait",
+ "aws-sdk-secretsmanager",
+ "clap",
  "connection_gateway_client",
+ "embedding",
+ "futures",
+ "lexical_client",
+ "macro_aws_config",
  "macro_db_migrator",
+ "macro_entrypoint",
+ "macro_env",
+ "macro_env_var",
+ "macro_middleware",
  "model-entity",
+ "secretsmanager_client",
  "serde",
  "serde_json",
  "sqlx",

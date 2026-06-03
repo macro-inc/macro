@@ -45,6 +45,7 @@ env_var!(
         DatabaseUrl,
         EmailScheduledQueue,
         DocumentStorageServiceUrl,
+        DocumentStorageServiceAuthKey,
         SyncServiceUrl,
         SyncServiceAuthKey,
         LexicalServiceUrl,
@@ -119,6 +120,10 @@ pub async fn build_context() -> anyhow::Result<McpContext> {
         &secretsmanager_client,
         sqs_client,
         internal_auth_key.as_ref().to_string(),
+        env_vars
+            .document_storage_service_auth_key
+            .as_ref()
+            .to_owned(),
         sync_service_auth_key.as_ref().to_owned(),
     )
     .await?;
@@ -146,12 +151,14 @@ async fn build_tool_context(
     secretsmanager_client: &secretsmanager_client::SecretsManager,
     sqs_client: sqs_client::SQS,
     internal_auth_key: String,
+    document_storage_service_auth_key: String,
     sync_service_auth_key: String,
 ) -> anyhow::Result<ToolServiceContext> {
     let dss_url: String = env_vars.document_storage_service_url.as_ref().to_owned();
     let sync_service_url: String = env_vars.sync_service_url.as_ref().to_owned();
 
-    let search_service_client = SearchServiceClient::new(internal_auth_key.clone(), dss_url);
+    let search_service_client =
+        SearchServiceClient::new(document_storage_service_auth_key, dss_url);
 
     let lexical_client = Arc::new(lexical_client::LexicalClient::new(
         internal_auth_key.clone(),

@@ -1696,6 +1696,32 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             thread_deleted,
         })
     }
+
+    #[tracing::instrument(skip(self), err, fields(comment_id = %comment_id))]
+    async fn get_comment_entity(
+        &self,
+        comment_id: &uuid::Uuid,
+    ) -> Result<Option<(CrmCommentEntityType, uuid::Uuid)>, CrmError> {
+        let row = sqlx::query!(
+            r#"
+            SELECT t.company_id, t.contact_id
+            FROM crm_comment c
+            JOIN crm_thread t ON t.id = c.thread_id
+            WHERE c.id = $1
+              AND c.deleted_at IS NULL
+            "#,
+            comment_id,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        Ok(row.and_then(|r| match (r.contact_id, r.company_id) {
+            (Some(contact_id), _) => Some((CrmCommentEntityType::CrmContact, contact_id)),
+            (None, Some(company_id)) => Some((CrmCommentEntityType::CrmCompany, company_id)),
+            (None, None) => None,
+        }))
+    }
 }
 
 /// Maps a CRM entity type to the team-scoped not-found error used when the

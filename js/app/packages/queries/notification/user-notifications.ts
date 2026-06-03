@@ -540,7 +540,14 @@ function notificationEntityTypeToSoupTag(
     .with('email_thread', () => 'emailThread' as const)
     .with('foreign_entity', () => 'foreignEntity' as const)
     .with(
-      P.union('user', 'team', 'call', 'static_file', 'crm_company'),
+      P.union(
+        'user',
+        'team',
+        'call',
+        'static_file',
+        'crm_company',
+        'crm_contact'
+      ),
       () => null
     )
     .exhaustive();

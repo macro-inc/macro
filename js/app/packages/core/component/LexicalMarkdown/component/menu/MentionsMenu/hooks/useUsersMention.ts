@@ -5,6 +5,7 @@ import { createFreshSearch, FreshSearchPresets } from '@core/util/freshSort';
 import { createLazyMemo } from '@solid-primitives/memo';
 import type { Accessor } from 'solid-js';
 import type { GroupMentionItem } from '../../../../utils/mentionsUtils';
+import { isBotMentionUser } from '../utils/botMention';
 
 type UseUsersMentionOptions = {
   /** Custom users list if necessary */
@@ -28,6 +29,8 @@ const GROUPS = [
     match: (term: string) => term === '' || 'here'.startsWith(term),
   },
 ] as const;
+
+const BOT_MENTION_BOOST = 10;
 
 /**
  * Hook for managing user mentions in the mentions menu.
@@ -67,22 +70,30 @@ export function useUsersMention(
     return quickAccess.useList('person');
   });
 
-  const userSearch = () =>
-    createFreshSearch<UserItem>({
-      config: FreshSearchPresets.baseUserSearch<UserItem>(
-        currentUserDomain,
-        (item) => item.data.email
-      ),
+  const userSearch = () => {
+    const baseConfig = FreshSearchPresets.baseUserSearch<UserItem>(
+      currentUserDomain,
+      (item) => item.data.email
+    );
+
+    return createFreshSearch<UserItem>({
+      config: {
+        ...baseConfig,
+        boostFn: (item) =>
+          (baseConfig.boostFn?.(item) ?? 0) +
+          (isBotMentionUser(item) ? BOT_MENTION_BOOST : 0),
+      },
       getName: (item) => item.searchText,
       getTimestamp: (item) => ({
         lastInteraction: item.timestamps.lastInteraction,
       }),
     });
+  };
 
   const users = createLazyMemo(() => {
     const term = searchTerm();
-    if (!term) return usersList()();
-    return userSearch()(usersList()(), term).map(({ item }) => item);
+    const list = usersList()();
+    return userSearch()(list, term).map(({ item }) => item);
   });
 
   /**

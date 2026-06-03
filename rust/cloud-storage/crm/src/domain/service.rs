@@ -273,6 +273,15 @@ pub trait CrmService: Clone + Send + Sync + 'static {
         comment_id: &uuid::Uuid,
         include_hidden: bool,
     ) -> impl Future<Output = Result<DeleteCrmCommentResult, CrmError>> + Send;
+
+    /// Resolve a comment to its owning CRM entity. `None` when the
+    /// comment doesn't exist or is soft-deleted. Used by the comment
+    /// access extractor to dispatch the access check to the right
+    /// entity type. See [`CompaniesRepository::get_comment_entity`].
+    fn get_comment_entity(
+        &self,
+        comment_id: &uuid::Uuid,
+    ) -> impl Future<Output = Result<Option<(CrmCommentEntityType, uuid::Uuid)>, CrmError>> + Send;
 }
 
 /// Implementation of [`CrmService`] backed by a [`CompaniesRepository`]
@@ -625,6 +634,16 @@ where
             .delete_crm_comment(team_id, comment_id, include_hidden)
             .await
     }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_comment_entity(
+        &self,
+        comment_id: &uuid::Uuid,
+    ) -> Result<Option<(CrmCommentEntityType, uuid::Uuid)>, CrmError> {
+        self.companies_repository
+            .get_comment_entity(comment_id)
+            .await
+    }
 }
 
 /// No-op [`CrmService`] for binaries that need to satisfy the bound
@@ -787,5 +806,12 @@ impl CrmService for NoOpCrmService {
         _include_hidden: bool,
     ) -> Result<DeleteCrmCommentResult, CrmError> {
         unimplemented!("NoOpCrmService.delete_crm_comment")
+    }
+
+    async fn get_comment_entity(
+        &self,
+        _comment_id: &uuid::Uuid,
+    ) -> Result<Option<(CrmCommentEntityType, uuid::Uuid)>, CrmError> {
+        Ok(None)
     }
 }

@@ -146,11 +146,12 @@ pub trait EmailRepo: Send + Sync + 'static {
         message_ids: &[Uuid],
     ) -> impl Future<Output = Result<HashMap<Uuid, DateTime<Utc>>, Self::Err>> + Send;
 
-    /// Fetch a simplified message by its DB ID and link ID (for validation).
+    /// Fetch a simplified message by its DB ID, scoped to a set of accessible
+    /// inbox link IDs (for validation across own + delegated inboxes).
     fn get_simple_message(
         &self,
         message_id: Uuid,
-        link_id: Uuid,
+        link_ids: &[Uuid],
     ) -> impl Future<Output = Result<Option<SimpleMessageInfo>, Self::Err>> + Send;
 
     /// Find an existing draft that replies to the given message ID.
@@ -362,17 +363,23 @@ pub trait EmailService: Send + Sync + 'static {
         limit: i64,
     ) -> impl Future<Output = Result<Option<ParsedThread>, EmailErr>> + Send;
 
-    /// Create a draft message for the given link.
+    /// Create a draft message sent from `link`. `accessible_inboxes` is every
+    /// inbox the caller can reach (own + delegated); a reply target may live in
+    /// any of them, not just `link`.
     fn create_draft(
         &self,
         link: &Link,
+        accessible_inboxes: &[Link],
         input: CreateDraftInput,
     ) -> impl Future<Output = Result<CreatedDraft, EmailErr>> + Send;
 
     /// Send a message: persist it and enqueue for scheduled delivery.
+    /// `accessible_inboxes` is every inbox the caller can reach (own +
+    /// delegated); a reply target may live in any of them, not just `link`.
     fn send_message(
         &self,
         link: &Link,
+        accessible_inboxes: &[Link],
         input: CreateDraftInput,
     ) -> impl Future<Output = Result<CreatedDraft, EmailErr>> + Send;
 

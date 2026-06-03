@@ -22,6 +22,8 @@ export type ChannelEntity = EntityBase & {
   interactedAt?: DateValue | null;
   participantIds?: string[];
   latestMessage?: {
+    messageId: string;
+    threadId?: string | null;
     content: string;
     senderId: string;
     createdAt: DateValue;

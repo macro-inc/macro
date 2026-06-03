@@ -54,6 +54,8 @@ pub enum EntityType {
     StaticFile,
     /// The entity is a CRM company tracked by a team
     CrmCompany,
+    /// The entity is a CRM contact tracked by a team
+    CrmContact,
 }
 
 impl EntityType {
@@ -73,8 +75,10 @@ impl EntityType {
             EntityType::Call => true,
             EntityType::ForeignEntity => false,
             EntityType::StaticFile => false,
-            // CRM companies are gated by team membership, not entity_access.
+            // CRM companies/contacts derive access via team membership joins
+            // — they aren't rows in the `entity_access` table.
             EntityType::CrmCompany => false,
+            EntityType::CrmContact => false,
         }
     }
     /// provide an entity string slice to upgrade this type into an [Entity]

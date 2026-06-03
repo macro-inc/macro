@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            (ct.hidden OR c.hidden) AS \"hidden!\",\n            tu.team_role AS \"role!: TeamRole\"\n        FROM crm_contacts ct\n        JOIN crm_companies c\n            ON c.id = ct.company_id\n        JOIN team_user tu\n            ON tu.team_id = c.team_id\n           AND tu.user_id = $1\n        WHERE ct.id = $2\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "hidden!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "role!: TeamRole",
+        "type_info": {
+          "Custom": {
+            "name": "team_role",
+            "kind": {
+              "Enum": [
+                "member",
+                "admin",
+                "owner"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      false
+    ]
+  },
+  "hash": "0643eed420f0f10eab30aa91b17d858d0f765ba260e5fa84edf3741df03f6566"
+}

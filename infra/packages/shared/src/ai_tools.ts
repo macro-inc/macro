@@ -94,6 +94,10 @@ export function getAiToolsInfra(): AiToolsInfra {
       value: pulumi.interpolate`${internalAuthKey}`,
     },
     {
+      name: 'DOCUMENT_STORAGE_SERVICE_AUTH_KEY',
+      value: pulumi.interpolate`${internalAuthKey}`,
+    },
+    {
       name: ServiceUrl.DOCUMENT_STORAGE_SERVICE_URL,
       value: getServiceUrl(ServiceUrl.DOCUMENT_STORAGE_SERVICE_URL),
     },

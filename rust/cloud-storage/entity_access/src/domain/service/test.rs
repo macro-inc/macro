@@ -20,6 +20,8 @@ struct MockRepo {
     thread_access: Arc<Mutex<Option<AccessLevel>>>,
     call_access: Arc<Mutex<Option<AccessLevel>>>,
     foreign_entity_access: Arc<Mutex<bool>>,
+    crm_company_access: Arc<Mutex<Option<AccessLevel>>>,
+    crm_contact_access: Arc<Mutex<Option<AccessLevel>>>,
     channel_membership: Arc<Mutex<Vec<Uuid>>>,
     channel_role: Arc<Mutex<ChannelRoleResult>>,
     document_users: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
@@ -40,6 +42,8 @@ impl MockRepo {
             thread_access: Arc::new(Mutex::new(None)),
             call_access: Arc::new(Mutex::new(None)),
             foreign_entity_access: Arc::new(Mutex::new(false)),
+            crm_company_access: Arc::new(Mutex::new(None)),
+            crm_contact_access: Arc::new(Mutex::new(None)),
             channel_membership: Arc::new(Mutex::new(vec![])),
             channel_role: Arc::new(Mutex::new(ChannelRoleResult::NotFound)),
             document_users: Arc::new(Mutex::new(vec![])),
@@ -80,6 +84,18 @@ impl MockRepo {
 
     fn with_foreign_entity_access(mut self, has_access: bool) -> Self {
         self.foreign_entity_access = Arc::new(Mutex::new(has_access));
+        self
+    }
+
+    #[allow(dead_code)]
+    fn with_crm_company_access(mut self, level: AccessLevel) -> Self {
+        self.crm_company_access = Arc::new(Mutex::new(Some(level)));
+        self
+    }
+
+    #[allow(dead_code)]
+    fn with_crm_contact_access(mut self, level: AccessLevel) -> Self {
+        self.crm_contact_access = Arc::new(Mutex::new(Some(level)));
         self
     }
 
@@ -178,6 +194,22 @@ impl AccessRepository for MockRepo {
         _user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> Result<bool, AccessError> {
         Ok(*self.foreign_entity_access.lock().await)
+    }
+
+    async fn get_crm_company_access(
+        &self,
+        _company_id: &str,
+        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        Ok(*self.crm_company_access.lock().await)
+    }
+
+    async fn get_crm_contact_access(
+        &self,
+        _contact_id: &str,
+        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        Ok(*self.crm_contact_access.lock().await)
     }
 
     async fn get_entity_users(

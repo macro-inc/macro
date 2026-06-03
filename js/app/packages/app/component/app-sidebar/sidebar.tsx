@@ -37,7 +37,9 @@ import {
   DEV_MODE_ENV,
   ENABLE_APP_STORE_QR_CODE,
   ENABLE_CALLS,
+  ENABLE_HOME_OVERRIDE,
   ENABLE_NEW_PRICING_OVERRIDE,
+  ENABLE_SIDEBAR_ACTIVE_CALLS,
   ENABLE_TEAMS_OVERRIDE,
 } from '@core/constant/featureFlags';
 import {
@@ -71,6 +73,7 @@ import { useNotificationSettings } from '@notifications';
 import BellIcon from '@phosphor/bell.svg';
 import CaretUpIcon from '@phosphor/caret-up.svg';
 import DeviceMobileIcon from '@phosphor/device-mobile-speaker.svg';
+import HomeIcon from '@phosphor/house.svg';
 import KeyboardIcon from '@phosphor/keyboard.svg';
 import PaintBucketIcon from '@phosphor/paint-bucket.svg';
 import PlayIcon from '@phosphor/play.svg';
@@ -93,7 +96,7 @@ import {
 import { Dynamic } from 'solid-js/web';
 
 interface SidebarItem {
-  id: ListView;
+  id: ListView | (string & {});
   label: string;
   href: string;
   icon?: Component<
@@ -270,7 +273,7 @@ type SidebarHotkeyDeps = {
 type OpenWithSplitFn = ReturnType<typeof useSplitLayout>['openWithSplit'];
 
 const isComponentEntry =
-  (id: ListView) =>
+  (id: string) =>
   (entry: SplitContent): boolean =>
     entry.type === 'component' && entry.id === id;
 
@@ -283,7 +286,7 @@ const isComponentEntry =
  * and forces a new entry / new split.
  */
 function navigateToSidebarView(args: {
-  viewId: ListView;
+  viewId: SidebarItem['id'];
   shiftKey: boolean;
   activeSplit: SplitHandle | undefined;
   openWithSplit: OpenWithSplitFn;
@@ -760,6 +763,15 @@ const CALLS_LINK: SidebarItem = {
   hotkeyToken: TOKENS.sidebar.goTo.calls,
 };
 
+const DASHBOARD_LINK: SidebarItem = {
+  id: 'home',
+  label: 'Home',
+  href: '/home',
+  icon: HomeIcon,
+  hotkey: 'h',
+  hotkeyToken: TOKENS.sidebar.goTo.home,
+};
+
 export const AppSidebar = (props: AppSidebarProps) => {
   const analytics = useAnalytics();
   const layout = useSplitLayout();
@@ -767,6 +779,10 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const isTabAvailable = useIsSettingsTabAvailable();
   const notificationSettings = useNotificationSettings();
   const callCtx = useCallContextOptional();
+
+  const homeViewEnabled = useFeatureFlag('enable-home-view', {
+    enabledOverride: ENABLE_HOME_OVERRIDE,
+  });
 
   const hasPaidAccess = useHasPaidAccess();
 
@@ -794,14 +810,19 @@ export const AppSidebar = (props: AppSidebarProps) => {
 
   const [hotkeyVisible, setHotkeyVisible] = createSignal(false);
 
-  const visibleLinks = createMemo(() => {
-    if (!ENABLE_CALLS()) return SIDEBAR_LINKS;
-    const idx = SIDEBAR_LINKS.findIndex((l) => l.id === 'channels');
-    return [
-      ...SIDEBAR_LINKS.slice(0, idx + 1),
-      CALLS_LINK,
-      ...SIDEBAR_LINKS.slice(idx + 1),
-    ];
+  const visibleLinks = createMemo((): SidebarItem[] => {
+    let links: SidebarItem[] = [...SIDEBAR_LINKS];
+
+    if (homeViewEnabled().enabled) {
+      links = [DASHBOARD_LINK, ...links];
+    }
+
+    if (ENABLE_CALLS()) {
+      const idx = links.findIndex((l) => l.id === 'channels');
+      links = [...links.slice(0, idx + 1), CALLS_LINK, ...links.slice(idx + 1)];
+    }
+
+    return links;
   });
 
   const resetHotkeysState = () => {
@@ -1000,7 +1021,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
       </div>
 
       <div class="mt-auto">
-        <Show when={ENABLE_CALLS()}>
+        <Show when={ENABLE_CALLS() && ENABLE_SIDEBAR_ACTIVE_CALLS()}>
           <div class="block max-h-[clamp(10%,60%,20rem)]">
             <SidebarActiveCallWidget
               sidebarState={props.sidebarState ?? 'expanded'}

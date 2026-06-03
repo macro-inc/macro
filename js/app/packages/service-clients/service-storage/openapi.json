@@ -3585,7 +3585,7 @@
     "/crm/comments/{entity_type}/{entity_id}": {
       "get": {
         "tags": ["crm::inbound::axum_router::comments"],
-        "summary": "List the comment threads on a CRM company or contact, scoped to the\nrequesting user's team. Returns 404 when the entity isn't owned by the\nteam; an owned entity with no threads returns `200 []`.",
+        "summary": "List the comment threads on a CRM company or contact. Access is\nenforced by [`EntityPermissionExtractor`] against the path's\n`crm_company`/`crm_contact` entity type — hidden parents are\ninvisible to plain members. An accessible entity with no threads\nreturns `200 []`.",
         "operationId": "list_crm_comments",
         "parameters": [
           {
@@ -3736,7 +3736,7 @@
     "/crm/companies/{company_id}/contacts": {
       "get": {
         "tags": ["crm::inbound::axum_router::list_company_contacts"],
-        "summary": "List the contacts of a CRM company, scoped to the requesting user's\nteam. Returns 404 when the company isn't owned by the team (so\nexistence doesn't leak across teams). Non-admin viewers also 404 on\nhidden companies and see only non-hidden contacts; admin/owner\nviewers reach hidden companies and see every owned contact\nregardless of `hidden` so they can render the right unhide UI.",
+        "summary": "List the contacts of a CRM company. Access is enforced by\n[`CrmCompanyAccessLevelExtractor`]: the user must be on the team that\nowns the company. Hidden companies and hidden contacts are invisible\nto plain members; admin/owner callers see hidden rows so they can\nrender the right unhide UI.",
         "operationId": "list_company_contacts",
         "parameters": [
           {
@@ -3938,7 +3938,7 @@
     "/crm/contacts/{contact_id}": {
       "get": {
         "tags": ["crm::inbound::axum_router::get_contact"],
-        "summary": "Fetch a single CRM contact by id, scoped to the requesting user's\nteam. Returns 404 when the contact doesn't exist or isn't owned by\nthe team. Non-admin viewers also 404 on hidden contacts or hidden\nparent companies (so existence doesn't leak); admin/owner viewers\nreach every owned contact regardless of `hidden`.",
+        "summary": "Fetch a single CRM contact by id. Access is enforced by\n[`CrmContactAccessLevelExtractor`]: the user must be on the team that\nowns the contact's parent company, and hidden contacts are invisible\nto plain members. Admin/owner callers see hidden contacts so they can\nrender the right unhide UI.",
         "operationId": "get_contact",
         "parameters": [
           {
