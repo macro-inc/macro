@@ -8,7 +8,7 @@ version = "0.1.0"
 axum = ["dep:axum", "dep:axum-extra", "dep:model-error-response", "dep:utoipa"]
 default = ["axum", "inbound", "link", "outbound", "ports", "sync"]
 inbound = ["axum", "ports"]
-link = ["ports"]
+link = ["dep:entity_access", "dep:foreign_entity", "ports"]
 outbound = [
   "dep:fusionauth",
   "dep:redis",

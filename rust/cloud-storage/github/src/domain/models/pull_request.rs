@@ -4,6 +4,9 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
+/// Foreign entity source used for GitHub pull request metadata rows.
+pub const GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE: &str = "github_pull_request";
+
 /// A pull request reference that can be enriched with live GitHub data.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
@@ -240,6 +243,37 @@ impl EnrichedGithubPullRequest {
             comments: details.comments,
             checks: details.checks,
         }
+    }
+
+    /// Serialize this pull request into the metadata shape stored on GitHub pull request foreign entities.
+    ///
+    /// Partial refreshes may omit `comments` or `checks`. When an omitted field exists as an array in
+    /// `existing_metadata`, the existing array is copied forward so richer metadata is not discarded.
+    pub fn foreign_entity_metadata(
+        &self,
+        existing_metadata: Option<&serde_json::Value>,
+    ) -> serde_json::Result<serde_json::Value> {
+        let mut metadata = serde_json::to_value(self)?;
+        let Some(existing_object) = existing_metadata.and_then(|value| value.as_object()) else {
+            return Ok(metadata);
+        };
+        let Some(metadata_object) = metadata.as_object_mut() else {
+            return Ok(metadata);
+        };
+
+        for field in ["comments", "checks"] {
+            if metadata_object.contains_key(field) {
+                continue;
+            }
+
+            if let Some(existing_value) = existing_object.get(field)
+                && existing_value.is_array()
+            {
+                metadata_object.insert(field.to_string(), existing_value.clone());
+            }
+        }
+
+        Ok(metadata)
     }
 }
 

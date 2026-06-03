@@ -654,6 +654,7 @@ dependencies = [
  "doppleganger",
  "email_validator",
  "entity_access",
+ "foreign_entity",
  "fusionauth",
  "futures",
  "github",

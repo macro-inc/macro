@@ -10,8 +10,9 @@ mod sync;
 pub use link::{GithubAccessToken, GithubExchangeTokenResponse, GithubLink, GithubUserInfo};
 pub use pull_request::{
     EnrichGithubPullRequestsProxyRequest, EnrichGithubPullRequestsResponse,
-    EnrichedGithubPullRequest, GithubPullRequestCheckRun, GithubPullRequestComment,
-    GithubPullRequestDetails, GithubPullRequestRef, GithubPullRequestStatus,
+    EnrichedGithubPullRequest, GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE,
+    GithubPullRequestCheckRun, GithubPullRequestComment, GithubPullRequestDetails,
+    GithubPullRequestRef, GithubPullRequestStatus,
 };
 pub use sync::{
     GithubAppInstallationSource, GithubInstallationAccessToken, GithubKey, GithubWebhookEventType,
