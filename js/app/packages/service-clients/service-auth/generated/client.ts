@@ -25,6 +25,7 @@ import type {
   GetUserInfo,
   GetUserLinkExistsParams,
   GithubLinkStatusResponse,
+  GmailLinkStatusResponse,
   InitGithubLinkParams,
   InitGithubLinkResponse,
   InitGmailLinkParams,
@@ -871,6 +872,75 @@ export const initGmailLink = async (
     status: res.status,
     headers: res.headers,
   } as initGmailLinkResponse;
+};
+
+/**
+ * @summary Checks whether the authenticated user's gmail link is valid.
+ */
+export type checkGmailLinkStatusResponse200 = {
+  data: GmailLinkStatusResponse;
+  status: 200;
+};
+
+export type checkGmailLinkStatusResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type checkGmailLinkStatusResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type checkGmailLinkStatusResponse428 = {
+  data: ErrorResponse;
+  status: 428;
+};
+
+export type checkGmailLinkStatusResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type checkGmailLinkStatusResponseSuccess =
+  checkGmailLinkStatusResponse200 & {
+    headers: Headers;
+  };
+export type checkGmailLinkStatusResponseError = (
+  | checkGmailLinkStatusResponse401
+  | checkGmailLinkStatusResponse404
+  | checkGmailLinkStatusResponse428
+  | checkGmailLinkStatusResponse500
+) & {
+  headers: Headers;
+};
+
+export type checkGmailLinkStatusResponse =
+  | checkGmailLinkStatusResponseSuccess
+  | checkGmailLinkStatusResponseError;
+
+export const getCheckGmailLinkStatusUrl = () => {
+  return `/link/gmail/status`;
+};
+
+export const checkGmailLinkStatus = async (
+  options?: RequestInit
+): Promise<checkGmailLinkStatusResponse> => {
+  const res = await fetch(getCheckGmailLinkStatusUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: checkGmailLinkStatusResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as checkGmailLinkStatusResponse;
 };
 
 /**

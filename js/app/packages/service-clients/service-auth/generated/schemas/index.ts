@@ -55,6 +55,7 @@ export * from './githubPullRequestCommentUpdatedAt';
 export * from './githubPullRequestCommentUrl';
 export * from './githubPullRequestRef';
 export * from './githubPullRequestStatus';
+export * from './gmailLinkStatusResponse';
 export * from './initGithubLinkParams';
 export * from './initGithubLinkResponse';
 export * from './initGmailLinkParams';

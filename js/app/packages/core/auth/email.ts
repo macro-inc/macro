@@ -9,7 +9,7 @@ type EmailAuthParams = {
   returnPath?: string;
 };
 
-function emailAuthUrl(params: EmailAuthParams) {
+export function emailAuthUrl(params: EmailAuthParams) {
   const idpName = params.idpName ?? GOOGLE_GMAIL_IDP;
   const returnUrl = `${window.location.origin}${params.returnPath ?? ROUTER_BASE}`;
 

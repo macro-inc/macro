@@ -6,6 +6,10 @@ use anyhow::{Context, anyhow};
 use config::{Config, Environment};
 use document_storage_service_client::DocumentStorageServiceClient;
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
+use foreign_entity::{
+    domain::service::ForeignEntityServiceImpl,
+    outbound::pg_foreign_entity_repo::PgForeignEntityRepo,
+};
 use github::{
     domain::service::{GithubLinkConfig, GithubLinkServiceImpl},
     outbound::{
@@ -261,10 +265,14 @@ async fn main() -> anyhow::Result<()> {
         team_crm_settings_repo_impl,
     );
 
+    let foreign_entity_service =
+        ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone()));
+
     let github_link_service_impl = GithubLinkServiceImpl::new(
         PgGithubRepo::new(db.clone()),
         GithubOauthImpl::default(),
         GithubAuthImpl::new(auth_client.clone(), redis_multiplexed_conn),
+        foreign_entity_service,
         GithubLinkConfig {
             client_id: config.github_client_id,
             client_secret: config.github_client_secret,

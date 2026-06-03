@@ -61,6 +61,30 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> impl Future<Output = Result<bool, AccessError>> + Send;
 
+    /// Get the access level a user has for a CRM company.
+    ///
+    /// Access derives from the user's role on the team that owns the company:
+    /// `Owner` → [`AccessLevel::Owner`], `Admin` → [`AccessLevel::Edit`],
+    /// `Member` → [`AccessLevel::View`]. Hidden companies are invisible to
+    /// plain members (returns `None`) but reachable by admins and owners.
+    fn get_crm_company_access(
+        &self,
+        company_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> impl Future<Output = Result<Option<AccessLevel>, AccessError>> + Send;
+
+    /// Get the access level a user has for a CRM contact.
+    ///
+    /// Access derives from the user's role on the team that owns the contact's
+    /// parent company, with the same role-to-level mapping as
+    /// [`Self::get_crm_company_access`]. Hidden contacts (or contacts whose
+    /// parent company is hidden) are invisible to plain members.
+    fn get_crm_contact_access(
+        &self,
+        contact_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> impl Future<Output = Result<Option<AccessLevel>, AccessError>> + Send;
+
     /// Check if a user is a member of the specified channels.
     ///
     /// Returns the subset of channel_ids that the user is a participant of.

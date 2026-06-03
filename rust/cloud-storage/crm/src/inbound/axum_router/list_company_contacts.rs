@@ -5,10 +5,10 @@ use axum::{
 use chrono::{DateTime, Utc};
 use entity_access::{
     domain::{
-        models::{MemberTeamRole, TeamRole},
+        models::{AccessLevel, ViewAccessLevel},
         ports::EntityAccessService,
     },
-    inbound::axum_extractors::MacroUserTeamExtractor,
+    inbound::axum_extractors::CrmCompanyAccessLevelExtractor,
 };
 use model_error_response::ErrorResponse;
 use serde::Serialize;
@@ -65,12 +65,11 @@ impl From<CrmContact> for CrmContactResponse {
     }
 }
 
-/// List the contacts of a CRM company, scoped to the requesting user's
-/// team. Returns 404 when the company isn't owned by the team (so
-/// existence doesn't leak across teams). Non-admin viewers also 404 on
-/// hidden companies and see only non-hidden contacts; admin/owner
-/// viewers reach hidden companies and see every owned contact
-/// regardless of `hidden` so they can render the right unhide UI.
+/// List the contacts of a CRM company. Access is enforced by
+/// [`CrmCompanyAccessLevelExtractor`]: the user must be on the team that
+/// owns the company. Hidden companies and hidden contacts are invisible
+/// to plain members; admin/owner callers see hidden rows so they can
+/// render the right unhide UI.
 #[utoipa::path(
     get,
     path = "/crm/companies/{company_id}/contacts",
@@ -87,20 +86,18 @@ impl From<CrmContact> for CrmContactResponse {
 )]
 #[tracing::instrument(skip_all, err, fields(company_id = %company_id))]
 pub async fn handler<C: CrmService, Eas: EntityAccessService>(
-    access: MacroUserTeamExtractor<MemberTeamRole, Eas>,
+    access: CrmCompanyAccessLevelExtractor<ViewAccessLevel, Eas>,
     State(state): State<CrmRouterState<C, Eas>>,
     Path(company_id): Path<Uuid>,
 ) -> Result<Json<Vec<CrmContactResponse>>, CrmError> {
-    let team_id = macro_uuid::string_to_uuid(&access.entity_access_receipt.entity().entity_id)
-        .map_err(|_| CrmError::InvalidTeamId)?;
     let include_hidden = access
         .entity_access_receipt
         .entity_permission()
-        .allows_team_role(TeamRole::Admin);
+        .allows_access_level(AccessLevel::Edit);
 
     let contacts = state
         .service
-        .list_contacts_for_company(&team_id, &company_id, include_hidden)
+        .list_contacts_for_company(&access.team_id, &company_id, include_hidden)
         .await?;
 
     Ok(Json(contacts.into_iter().map(Into::into).collect()))

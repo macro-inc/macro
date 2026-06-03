@@ -1,6 +1,8 @@
+import * as aws from '@pulumi/aws';
 import {
   FusionAuthApplication,
   FusionAuthEMail,
+  FusionAuthIdpOpenIdConnect,
   FusionAuthKey,
   FusionAuthLambda,
   FusionAuthReactor,
@@ -325,3 +327,92 @@ const macroApplication = new FusionAuthApplication(
 
 export const macroApplicationClientId =
   macroApplication.oauthConfiguration.clientId;
+
+// Google identity provider id
+const GOOGLE_IDP_ID =
+  stack === 'local' ? undefined : config.require('fusionauth-google-idp-id');
+
+// Google gmail identity provider id
+const GOOGLE_GMAIL_IDP_ID =
+  stack === 'local'
+    ? undefined
+    : config.require('fusionauth-google-gmail-idp-id');
+
+const GOOGLE_CLIENT_ID = aws.secretsmanager
+  .getSecretVersionOutput({
+    secretId: config.require('google-client-id-secret-key'),
+  })
+  .apply((secret) => secret.secretString);
+
+const GOOGLE_CLIENT_SECRET = aws.secretsmanager
+  .getSecretVersionOutput({
+    secretId: config.require('google-client-secret-secret-key'),
+  })
+  .apply((secret) => secret.secretString);
+
+// The google identity provider
+new FusionAuthIdpOpenIdConnect(
+  'google-idp',
+  {
+    enabled: true,
+
+    idpId: GOOGLE_IDP_ID,
+    name: 'google',
+    oauth2ClientId: GOOGLE_CLIENT_ID,
+    oauth2ClientSecret: GOOGLE_CLIENT_SECRET,
+    oauth2ClientAuthenticationMethod: 'client_secret_basic',
+    oauth2AuthorizationEndpoint:
+      'https://accounts.google.com/o/oauth2/v2/auth?prompt=consent&access_type=offline',
+    oauth2TokenEndpoint: 'https://oauth2.googleapis.com/token',
+    oauth2UserInfoEndpoint: 'https://openidconnect.googleapis.com/v1/userinfo',
+    buttonText: 'Google',
+    oauth2Scope: 'openid profile email',
+    oauth2UniqueIdClaim: 'sub',
+    linkingStrategy: 'LinkByEmail',
+    debug: stack !== 'prod',
+    applicationConfigurations: [
+      {
+        applicationId: FUSIONAUTH_APPLICATION_CLIENT_ID,
+        enabled: true,
+        createRegistration: true,
+      },
+    ],
+  },
+  {
+    provider: fusionAuthProvider,
+  }
+);
+
+// The google gmail identity provider
+new FusionAuthIdpOpenIdConnect(
+  'google-gmail-idp',
+  {
+    enabled: true,
+    idpId: GOOGLE_GMAIL_IDP_ID,
+    name: 'google_gmail',
+    oauth2ClientId: GOOGLE_CLIENT_ID,
+    oauth2ClientSecret: GOOGLE_CLIENT_SECRET,
+    oauth2ClientAuthenticationMethod: 'client_secret_basic',
+    oauth2AuthorizationEndpoint:
+      'https://accounts.google.com/o/oauth2/v2/auth?prompt=consent&access_type=offline',
+    oauth2TokenEndpoint: 'https://oauth2.googleapis.com/token',
+    oauth2UserInfoEndpoint: 'https://openidconnect.googleapis.com/v1/userinfo',
+    buttonText: 'GoogleGmail',
+    oauth2Scope:
+      'openid profile email https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/contacts.readonly https://www.googleapis.com/auth/contacts.other.readonly https://www.googleapis.com/auth/gmail.settings.basic',
+    oauth2UniqueIdClaim: 'sub',
+    linkingStrategy: 'LinkByEmail',
+    debug: stack !== 'prod',
+    lambdaReconcileId: reconcileSecondaryIdpLinkLambdaId,
+    applicationConfigurations: [
+      {
+        applicationId: FUSIONAUTH_APPLICATION_CLIENT_ID,
+        enabled: true,
+        createRegistration: true,
+      },
+    ],
+  },
+  {
+    provider: fusionAuthProvider,
+  }
+);

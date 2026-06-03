@@ -17,6 +17,7 @@ import type {
   EnrichGithubPullRequestsProxyRequest,
   EnrichGithubPullRequestsResponse,
   GithubLinkStatusResponse,
+  GmailLinkStatusResponse,
   InitGithubLinkResponse,
   InitGmailLinkResponse,
   PatchSubscriptionTierRequest,
@@ -587,6 +588,18 @@ export const authServiceClient = {
         GithubLinkStatusResponse,
         GithubReauthenticationErrorCode
       >(`${authHost}/link/github/status`, {
+        method: 'GET',
+        errorResponseHandler: githubErrorResponseHandler,
+      })
+    ).map((result) => result);
+  },
+
+  async checkGmailLinkStatus() {
+    return (
+      await fetchWithAuth<
+        GmailLinkStatusResponse,
+        GithubReauthenticationErrorCode
+      >(`${authHost}/link/gmail/status`, {
         method: 'GET',
         errorResponseHandler: githubErrorResponseHandler,
       })

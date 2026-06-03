@@ -9,11 +9,16 @@ pub mod set_company_hidden;
 /// Toggle the `hidden` flag on a `crm_contacts` row.
 pub mod set_contact_hidden;
 
-/// List the non-hidden contacts of a `crm_companies` row.
+/// List contacts of a `crm_companies` row. Role-aware: members see
+/// visible contacts only; admin/owner see hidden contacts too.
 pub mod list_company_contacts;
 
-/// Fetch a single non-hidden CRM contact by id.
+/// Fetch a single CRM contact by id. Role-aware: members 404 on hidden
+/// rows; admin/owner reach hidden contacts (and hidden parent companies).
 pub mod get_contact;
+
+/// Fetch a single CRM company by id, hydrated with domains and contacts.
+pub mod get_company;
 
 /// Comment threads on a `crm_companies` / `crm_contacts` row.
 pub mod comments;
@@ -46,6 +51,27 @@ impl<C, Eas> FromRef<CrmRouterState<C, Eas>> for Arc<Eas> {
     }
 }
 
+/// Newtype around `Arc<C>` so it can be pulled from
+/// [`CrmRouterState`] via `FromRef` without colliding with
+/// [`FromRef`] for [`Arc<Eas>`] in the (theoretical) case where
+/// `C == Eas`. Plain `Arc<C>` vs `Arc<Eas>` overlap as
+/// implementations when both type params resolve to the same type;
+/// wrapping one side fixes it without changing the state's storage.
+#[derive(Debug)]
+pub struct CrmServiceRef<C>(pub Arc<C>);
+
+impl<C> Clone for CrmServiceRef<C> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+
+impl<C, Eas> FromRef<CrmRouterState<C, Eas>> for CrmServiceRef<C> {
+    fn from_ref(state: &CrmRouterState<C, Eas>) -> Self {
+        CrmServiceRef(state.service.clone())
+    }
+}
+
 // Manual Clone so C, Eas don't need Clone.
 impl<C, Eas> Clone for CrmRouterState<C, Eas> {
     fn clone(&self) -> Self {
@@ -71,6 +97,10 @@ where
         .route(
             "/companies/{company_id}/hidden",
             put(set_company_hidden::handler::<C, Eas>),
+        )
+        .route(
+            "/companies/{company_id}",
+            get(get_company::handler::<C, Eas>),
         )
         .route(
             "/companies/{company_id}/contacts",

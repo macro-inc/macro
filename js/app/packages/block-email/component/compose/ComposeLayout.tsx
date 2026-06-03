@@ -2,6 +2,7 @@ import { CircleSpinner } from '@core/component/CircleSpinner';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { createSignal, type JSX, onMount, Show, Suspense } from 'solid-js';
+import { FromInboxSelector } from '../FromInboxSelector';
 import { ComposeBody } from './ComposeBody';
 import { useCompose } from './ComposeContext';
 import { ComposeRecipients } from './ComposeRecipients';
@@ -175,11 +176,14 @@ export function ComposeLayout(props: {
                 }
               >
                 <Show when={ctx.fromAddress?.()}>
-                  {(addr) => (
-                    <div class="text-xs text-ink-extra-muted/50">
-                      from {addr()}
-                    </div>
-                  )}
+                  <div class="text-xs text-ink-extra-muted/50 flex items-center gap-1">
+                    <span>from</span>
+                    <FromInboxSelector
+                      links={ctx.fromInboxes?.() ?? []}
+                      activeLinkId={ctx.selectedFromLinkId?.()}
+                      onSelect={(id) => ctx.onSelectFromLink?.(id)}
+                    />
+                  </div>
                 </Show>
               </Suspense>
             }

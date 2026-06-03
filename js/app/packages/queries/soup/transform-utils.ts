@@ -569,6 +569,9 @@ export const mapSoupPageToEntityList: (
         }
 
         if (item.tag === 'channel') {
+          const latestMessage =
+            item.data.latest_message ?? item.data.latest_non_thread_message;
+
           const out: ChannelEntity = {
             type: 'channel',
             id: item.data.channel.id,
@@ -580,11 +583,14 @@ export const mapSoupPageToEntityList: (
             createdAt: item.data.channel.created_at,
             participantIds: item.data.participants.map((p) => p.user_id),
             viewedAt: item.data.viewed_at ?? item.data.interacted_at,
-            latestMessage: item.data.latest_non_thread_message
+            interactedAt: item.data.interacted_at,
+            latestMessage: latestMessage
               ? {
-                  content: item.data.latest_non_thread_message.content,
-                  senderId: item.data.latest_non_thread_message.sender_id,
-                  createdAt: item.data.latest_non_thread_message.created_at,
+                  messageId: latestMessage.message_id,
+                  threadId: latestMessage.thread_id ?? undefined,
+                  content: latestMessage.content,
+                  senderId: latestMessage.sender_id,
+                  createdAt: latestMessage.created_at,
                 }
               : undefined,
           };

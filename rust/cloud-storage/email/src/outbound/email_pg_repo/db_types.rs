@@ -444,6 +444,7 @@ impl From<DbRecipientRow> for (uuid::Uuid, ContactInfo, RecipientType) {
 /// DB row for a simplified message used in draft validation queries.
 pub(crate) struct DbSimpleMessageRow {
     pub id: Uuid,
+    pub link_id: Uuid,
     pub thread_id: Uuid,
     pub provider_thread_id: Option<String>,
     pub headers_jsonb: Option<serde_json::Value>,
@@ -455,6 +456,7 @@ impl From<DbSimpleMessageRow> for SimpleMessageInfo {
     fn from(row: DbSimpleMessageRow) -> Self {
         Self {
             db_id: row.id,
+            link_id: row.link_id,
             thread_db_id: row.thread_id,
             provider_thread_id: row.provider_thread_id,
             headers_json: row.headers_jsonb,

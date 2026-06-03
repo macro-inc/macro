@@ -86,6 +86,7 @@ export const TOKENS = {
   sidebar: {
     goToLeader: 'sidebar.goToLeader',
     goTo: {
+      home: 'sidebar.goTo.home',
       inbox: 'sidebar.goTo.inbox',
       search: 'sidebar.goTo.search',
       agents: 'sidebar.goTo.agents',

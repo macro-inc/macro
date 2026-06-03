@@ -225,6 +225,7 @@ pub async fn update_entity_access_channel_share_permissions(
             | EntityType::Channel
             | EntityType::StaticFile
             | EntityType::CrmCompany
+            | EntityType::CrmContact
             | EntityType::ForeignEntity => unreachable!(),
             EntityType::Project => {
                 // Get all items in project
@@ -283,6 +284,7 @@ pub async fn update_entity_access_channel_share_permissions(
             | EntityType::Channel
             | EntityType::StaticFile
             | EntityType::CrmCompany
+            | EntityType::CrmContact
             | EntityType::ForeignEntity => unreachable!(),
             EntityType::Project => {
                 // (a) Direct grant on the project itself (granted_from_project_id IS NULL)

@@ -1,6 +1,7 @@
 import './index.css';
 import '@fontsource-variable/inter';
 import '@fontsource-variable/roboto-mono';
+import '@fontsource-variable/playfair-display';
 // SolidDevtools retains disposed memos, causes memory leak
 // import 'solid-devtools';
 import { initializeLexical } from '@core/component/LexicalMarkdown/init';

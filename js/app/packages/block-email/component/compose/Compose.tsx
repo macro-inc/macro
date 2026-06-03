@@ -98,18 +98,35 @@ export function EmailCompose(props: EmailComposeProps) {
   const deleteDraftMutation = useDeleteDraftMutation();
   const emailContext = useMaybeEmailContext();
 
+  const form = createEmailFormState(
+    props.draftID
+      ? {
+          type: 'draft',
+          messageID: props.draftID,
+        }
+      : undefined,
+    emailContext
+      ? {
+          getMessageByID: (id) =>
+            emailContext.messages.unfiltered().find((m) => m.db_id === id),
+          getDraftForMessageReply: emailContext.drafts.getDraftForMessage,
+          onRecipientsChange: emailContext.onRecipientsChange,
+        }
+      : undefined
+  );
+
   const primaryLinkId = usePrimaryEmailLinkId();
   const link = createMemo(() => {
     const data = emailLinksQuery.data;
     if (!data || data.links.length === 0) return undefined;
-    // Send from the inbox that owns the draft being edited; fall back to the
-    // primary inbox for a fresh compose rather than whichever inbox sorts first.
+    // Send from the inbox the user picked, else the inbox that owns the draft
+    // being edited, else the primary inbox — not whichever inbox sorts first.
     const draftLinkId = props.draftID
       ? emailContext?.messages
           .unfiltered()
           .find((m) => m.db_id === props.draftID)?.link_id
       : undefined;
-    const targetId = draftLinkId ?? primaryLinkId();
+    const targetId = form.selectedLinkId() ?? draftLinkId ?? primaryLinkId();
     return data.links.find((l) => l.id === targetId) ?? data.links[0];
   });
 
@@ -127,23 +144,6 @@ export function EmailCompose(props: EmailComposeProps) {
   });
 
   const { users: destinationOptions } = useCombinedRecipients();
-
-  const form = createEmailFormState(
-    props.draftID
-      ? {
-          type: 'draft',
-          messageID: props.draftID,
-        }
-      : undefined,
-    emailContext
-      ? {
-          getMessageByID: (id) =>
-            emailContext.messages.unfiltered().find((m) => m.db_id === id),
-          getDraftForMessageReply: emailContext.drafts.getDraftForMessage,
-          onRecipientsChange: emailContext.onRecipientsChange,
-        }
-      : undefined
-  );
 
   const [editor, setEditor] = createSignal<LexicalEditor | undefined>();
   const [content, setContent] = createSignal('');
@@ -666,6 +666,9 @@ export function EmailCompose(props: EmailComposeProps) {
 
     // Display
     fromAddress: () => link()?.email_address,
+    fromInboxes: () => emailLinksQuery.data?.links ?? [],
+    selectedFromLinkId: () => link()?.id,
+    onSelectFromLink: form.setSelectedFromLink,
     hasPaidAccess,
   };
 

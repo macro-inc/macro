@@ -94,6 +94,24 @@ where
         }
     }
 
+    /// Get access level for a CRM company via the user's team membership.
+    async fn get_crm_company_access(
+        &self,
+        entity_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        self.repo.get_crm_company_access(entity_id, user_id).await
+    }
+
+    /// Get access level for a CRM contact via its parent company's team.
+    async fn get_crm_contact_access(
+        &self,
+        entity_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        self.repo.get_crm_contact_access(entity_id, user_id).await
+    }
+
     /// Resolve a call id string to the channel id that owns it.
     ///
     /// Looks up both the active `calls` table and the archived `call_records`
@@ -160,12 +178,12 @@ where
             }
             EntityType::Channel => self.get_channel_access(entity_id, user_id).await,
             EntityType::ForeignEntity => self.get_foreign_entity_access(entity_id, user_id).await,
+            EntityType::CrmCompany => self.get_crm_company_access(entity_id, user_id).await,
+            EntityType::CrmContact => self.get_crm_contact_access(entity_id, user_id).await,
             // Static files are always viewable. This is wrong for owners
             EntityType::StaticFile => Ok(Some(AccessLevel::View)),
             // These entity types don't have access checks implemented yet.
             EntityType::Team | EntityType::User => Ok(None),
-            // CRM companies are gated by team membership, not entity_access.
-            EntityType::CrmCompany => Ok(None),
         }
     }
 
@@ -229,6 +247,24 @@ where
             }
             EntityType::ForeignEntity => {
                 let access = self.get_foreign_entity_access(entity_id, user_id).await?;
+                match access {
+                    Some(level) => Ok(EntityPermission::AccessLevel {
+                        access_level: level,
+                    }),
+                    None => Err(AccessError::Unauthorized),
+                }
+            }
+            EntityType::CrmCompany => {
+                let access = self.get_crm_company_access(entity_id, user_id).await?;
+                match access {
+                    Some(level) => Ok(EntityPermission::AccessLevel {
+                        access_level: level,
+                    }),
+                    None => Err(AccessError::Unauthorized),
+                }
+            }
+            EntityType::CrmContact => {
+                let access = self.get_crm_contact_access(entity_id, user_id).await?;
                 match access {
                     Some(level) => Ok(EntityPermission::AccessLevel {
                         access_level: level,

@@ -7,7 +7,7 @@ use crate::domain::{models::EmailErr, ports::EmailService};
 
 use super::{
     api_types::{SendMessageRequest, SendMessageResponse},
-    axum_impls::EmailLinkExtractor,
+    axum_impls::{EmailLinkExtractor, MultiEmailLinkExtractor},
     previews_router::EmailRouterState,
 };
 
@@ -86,14 +86,18 @@ impl From<EmailErr> for SendMessageError {
         (status = 500, body = ErrorResponse),
     )
 )]
-#[tracing::instrument(err, skip(state, link, body))]
+#[tracing::instrument(err, skip(state, link, accessible_inboxes, body))]
 pub async fn send_message_handler<T: EmailService>(
     State(state): State<EmailRouterState<T>>,
     Cached(EmailLinkExtractor(link, _)): Cached<EmailLinkExtractor<T>>,
+    Cached(MultiEmailLinkExtractor(accessible_inboxes, _)): Cached<MultiEmailLinkExtractor<T>>,
     Json(body): Json<SendMessageRequest>,
 ) -> Result<impl IntoResponse, SendMessageError> {
     let input = body.into_domain();
-    let created = state.inner.send_message(&link, input).await?;
+    let created = state
+        .inner
+        .send_message(&link, &accessible_inboxes, input)
+        .await?;
 
     Ok((
         StatusCode::CREATED,
