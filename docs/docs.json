@@ -28,8 +28,6 @@
               {
                 "group": "AI",
                 "pages": [
-                  "product/ai-chat",
-                  "product/automations",
                   "AI/mcp/overview",
                   {
                     "group": "Tool Reference",
@@ -67,8 +65,7 @@
               "product/docs",
               "product/tasks",
               "product/channels",
-              "product/calls",
-              "product/folders"
+              "product/calls"
             ]
           }
         ]
