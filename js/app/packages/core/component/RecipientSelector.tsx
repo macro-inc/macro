@@ -408,10 +408,13 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
       const email = getRecipientOptionEmail(item);
 
       if (!props.includeSelf) {
+        const emailLower = email?.toLowerCase();
         const matchesSelf =
           (item.kind === 'user' && item.id === selfId()) ||
-          (item.kind === 'contact' && email === selfEmail());
-        const isSelected = !!email && selectedEmails().has(email.toLowerCase());
+          (item.kind === 'contact' &&
+            !!emailLower &&
+            emailLower === selfEmail());
+        const isSelected = !!emailLower && selectedEmails().has(emailLower);
         if (matchesSelf && !isSelected) {
           continue;
         }
