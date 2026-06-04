@@ -380,6 +380,7 @@ new FusionAuthIdpOpenIdConnect(
   },
   {
     provider: fusionAuthProvider,
+    protect: stack !== 'local',
   }
 );
 
@@ -414,5 +415,6 @@ new FusionAuthIdpOpenIdConnect(
   },
   {
     provider: fusionAuthProvider,
+    protect: stack !== 'local',
   }
 );
