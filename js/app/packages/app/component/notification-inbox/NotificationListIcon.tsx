@@ -1,5 +1,10 @@
-import { EntityIcon } from '@core/component/EntityIcon';
+import {
+  EntityIcon,
+  type EntityIconSelector,
+} from '@core/component/EntityIcon';
+import { UserIcon } from '@core/component/UserIcon';
 import type { NotificationType } from '@core/types';
+import { tryMacroId } from '@core/user';
 import GithubIcon from '@icon/mcp-github.svg';
 import PhoneIcon from '@icon/wide-call.svg';
 import WideFilesIcon from '@icon/wide-files.svg';
@@ -9,14 +14,33 @@ import AtIcon from '@phosphor/at.svg';
 import ChatIcon from '@phosphor/chat.svg';
 import UserPlusIcon from '@phosphor/user-plus.svg';
 import { cn } from '@ui';
-import type { JSX } from 'solid-js';
+import { type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { match } from 'ts-pattern';
 
 const entityIcon =
   (targetType: 'email' | 'chat' | 'task') => (props: { class?: string }) => (
-    <EntityIcon targetType={targetType} size="xs" class={props.class} />
+    <EntityIcon targetType={targetType} size="sm" class={props.class} />
   );
+
+const getChannelIconType = (
+  notification: UnifiedNotification
+): EntityIconSelector => {
+  const metadata = notification.notification_metadata;
+  if (metadata.tag !== 'channel_message_send') return 'channel';
+
+  return metadata.content.channelType === 'directMessage'
+    ? 'direct_message'
+    : (metadata.content.channelType ?? 'channel');
+};
+
+const getChannelMessageSenderId = (
+  notification: UnifiedNotification
+): string | undefined => {
+  const metadata = notification.notification_metadata;
+  if (metadata.tag !== 'channel_message_send') return undefined;
+  return notification.sender_id ?? metadata.content.sender;
+};
 
 function getNotificationIcon(
   type: NotificationType
@@ -46,5 +70,29 @@ export function NotificationListIcon(props: {
   const icon = () =>
     getNotificationIcon(props.notification.notification_metadata.tag);
 
-  return <Dynamic component={icon()} class={cn('size-4', props.class)} />;
+  if (props.notification.notification_metadata.tag === 'channel_message_send') {
+    const senderId = () =>
+      props.notification.notification_metadata.tag === 'channel_message_send' &&
+      props.notification.notification_metadata.content.channelType ===
+        'directMessage'
+        ? tryMacroId(getChannelMessageSenderId(props.notification) ?? '')
+        : undefined;
+
+    return (
+      <Show
+        when={senderId()}
+        fallback={
+          <EntityIcon
+            targetType={getChannelIconType(props.notification)}
+            size="sm"
+            class={cn('size-4.5', props.class)}
+          />
+        }
+      >
+        {(id) => <UserIcon id={id()} size="sm" suppressClick showTooltip />}
+      </Show>
+    );
+  }
+
+  return <Dynamic component={icon()} class={cn('size-4.5', props.class)} />;
 }

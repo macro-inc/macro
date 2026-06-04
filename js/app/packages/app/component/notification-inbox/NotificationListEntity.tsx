@@ -1,6 +1,8 @@
 import './NotificationListEntity.css';
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
 import { UserIcon } from '@core/component/UserIcon';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { Entity, NotificationRow } from '@entity';
@@ -37,6 +39,25 @@ function NotificationListTimestamp(props: {
 const getEmailContent = (notification: UnifiedNotification) => {
   const metadata = notification.notification_metadata;
   return metadata.tag === 'new_email' ? metadata.content : undefined;
+};
+
+const getStandaloneChannelMessageContent = (
+  notification: UnifiedNotification
+) => {
+  const metadata = notification.notification_metadata;
+  return metadata.tag === 'channel_message_send' ||
+    metadata.tag === 'channel_mention'
+    ? metadata.content
+    : undefined;
+};
+
+const getStandaloneChannelMessageSenderFallback = (
+  notification: UnifiedNotification
+): string | undefined => {
+  const metadata = notification.notification_metadata;
+  return metadata.tag === 'channel_message_send'
+    ? metadata.content.sender
+    : (notification.sender_id ?? undefined);
 };
 
 function getNotificationSenderName(notification: UnifiedNotification): string {
@@ -88,9 +109,9 @@ function EmailNotificationListRow(props: {
   };
 
   return (
-    <div class="relative z-1 bg-surface shadow-[0_1px_0_rgb(from_var(--color-ink)_r_g_b_/_0.04)]">
+    <div class="relative z-1 bg-surface">
       <div
-        class="group/notif @container/notif-row flex items-center gap-2.5 px-3 py-2 hover:bg-ink-muted/6 min-w-0 overflow-hidden cursor-pointer"
+        class="group/notif @container/notif-row flex items-center gap-2 px-2 py-2 hover:bg-ink-muted/6 min-w-0 overflow-hidden cursor-pointer"
         onClick={handleOpen}
         role="button"
         tabIndex={0}
@@ -109,7 +130,7 @@ function EmailNotificationListRow(props: {
         />
         <NotificationListIcon
           notification={props.notification}
-          class="size-3.5 shrink-0"
+          class="size-4.5 shrink-0"
         />
         <span
           class={cn('ph-no-capture truncate min-w-0 text-xs text-ink', {
@@ -166,7 +187,7 @@ export function NotificationListEntity(props: NotificationListEntityProps) {
           <Show
             when={getEmailContent(props.notification)}
             fallback={
-              <div class="relative z-1 bg-surface shadow-[0_1px_0_rgb(from_var(--color-ink)_r_g_b_/_0.04)]">
+              <div class="relative z-1 bg-surface">
                 <NotificationRow
                   notification={props.notification}
                   variant="compact"
@@ -186,7 +207,7 @@ export function NotificationListEntity(props: NotificationListEntityProps) {
         />
       </Show>
       <Show when={hasCollapsedItems() && expanded()}>
-        <div class="ml-12 mr-2 mt-1 rounded-lg border border-ink-muted/8 bg-ink-muted/2.5 overflow-hidden divide-y divide-ink-muted/8">
+        <div class="ml-12 mr-2 mt-1 rounded-lg border border-ink-muted/8 bg-ink-muted/2.5 overflow-hidden">
           <For each={collapsedNotifications()}>
             {(notification) => (
               <NotificationRow notification={notification} variant="compact" />
@@ -195,6 +216,20 @@ export function NotificationListEntity(props: NotificationListEntityProps) {
         </div>
       </Show>
     </div>
+  );
+}
+
+function ChannelMessageContentPreview(props: { content?: string }) {
+  return (
+    <Show when={props.content?.trim()}>
+      {(content) => (
+        <StaticMarkdown
+          markdown={content()}
+          theme={unifiedListMarkdownTheme}
+          singleLine
+        />
+      )}
+    </Show>
   );
 }
 
@@ -238,6 +273,24 @@ function MultirowNotificationListRow(props: {
   const unread = () =>
     !props.notification.viewed_at && !props.notification.done;
   const count = () => props.count ?? 1;
+  const channelMessage = () =>
+    getStandaloneChannelMessageContent(props.notification);
+  const channelMessageSenderId = () =>
+    props.notification.sender_id ??
+    getStandaloneChannelMessageSenderFallback(props.notification);
+  const channelMessageSenderMacroId = () =>
+    channelMessageSenderId()
+      ? tryMacroId(channelMessageSenderId() ?? '')
+      : undefined;
+  const [channelMessageSenderDisplayName] = useDisplayName(
+    channelMessageSenderMacroId()
+  );
+  const channelMessageSenderName = () =>
+    channelMessageSenderDisplayName() ||
+    getStandaloneChannelMessageSenderFallback(props.notification) ||
+    'Unknown';
+  const isDirectMessage = () =>
+    channelMessage()?.channelType === 'directMessage';
 
   createEffect(() => {
     if (!props.isStack) return;
@@ -269,9 +322,9 @@ function MultirowNotificationListRow(props: {
   };
 
   return (
-    <div class="relative z-1 bg-surface shadow-[0_1px_0_rgb(from_var(--color-ink)_r_g_b_/_0.04)]">
+    <div class="relative z-1 bg-surface">
       <div
-        class="group/notif grid min-w-0 cursor-pointer grid-cols-[1rem_0.875rem_minmax(0,1fr)_4rem] grid-rows-[auto_auto_auto] gap-x-1.5 gap-y-0.5 overflow-hidden px-3 py-2 hover:bg-ink-muted/6"
+        class="group/notif grid min-w-0 cursor-pointer grid-cols-[1rem_1rem_minmax(0,1fr)_4rem] grid-rows-[auto_auto_auto] gap-x-1.5 gap-y-0.5 overflow-hidden px-2 py-2 hover:bg-ink-muted/6"
         onClick={handleOpen}
         role="button"
         tabIndex={0}
@@ -299,13 +352,13 @@ function MultirowNotificationListRow(props: {
             </span>
           </Show>
         </span>
-        <span class="col-start-2 row-start-1 grid size-3.5 place-items-center self-center text-ink-muted/60">
+        <span class="col-start-2 row-start-1 grid size-4 place-items-center self-center">
           <Show
             when={props.isStack}
             fallback={
               <NotificationListIcon
                 notification={props.notification}
-                class="size-3.5"
+                class="size-4.5"
               />
             }
           >
@@ -316,58 +369,89 @@ function MultirowNotificationListRow(props: {
             />
           </Show>
         </span>
-        <div class="col-start-3 row-start-1 min-w-0 flex items-center gap-1.5">
-          <Show
-            when={getEmailContent(props.notification)}
-            fallback={
-              <span
-                class={cn('ph-no-capture truncate min-w-0 text-xs text-ink', {
-                  'font-medium': unread(),
-                })}
-              >
-                <NotificationListDescription
-                  notification={props.notification}
-                />
-              </span>
-            }
+        <div class="col-start-3 row-start-1 min-w-0 flex items-center gap-1.5 pl-1">
+          <span
+            class={cn('ph-no-capture truncate min-w-0 text-xs text-ink', {
+              'font-medium': unread(),
+            })}
           >
-            {(_) => (
-              <span
-                class={cn('ph-no-capture truncate min-w-0 text-xs text-ink', {
-                  'font-medium': unread(),
-                })}
-              >
+            <Show
+              when={channelMessage()}
+              fallback={
                 <NotificationListDescription
                   notification={props.notification}
                 />
-              </span>
-            )}
-          </Show>
+              }
+            >
+              {(content) =>
+                isDirectMessage()
+                  ? channelMessageSenderName()
+                  : (content().channelName ?? 'Channel')
+              }
+            </Show>
+          </span>
         </div>
         <span class="col-start-4 row-start-1 justify-self-end text-xs text-right text-ink-extra-muted font-medium">
           <NotificationListTimestamp notification={props.notification} />
         </span>
         <Show
-          when={getEmailContent(props.notification)}
+          when={channelMessage()}
           fallback={
-            <div class="col-start-3 col-span-2 row-start-2 min-h-3 min-w-0 ph-no-capture truncate text-[11px] leading-3 text-ink-muted/60">
-              <NotificationContentPreview notification={props.notification} />
-            </div>
+            <Show
+              when={getEmailContent(props.notification)}
+              fallback={
+                <div class="col-start-3 col-span-2 row-start-2 min-h-3 min-w-0 ph-no-capture truncate pl-1 text-[11px] leading-3 text-ink-muted/60">
+                  <NotificationContentPreview
+                    notification={props.notification}
+                  />
+                </div>
+              }
+            >
+              {(content) => (
+                <>
+                  <div class="col-start-3 col-span-2 row-start-2 min-h-3 min-w-0 ph-no-capture truncate pl-1 text-[11px] leading-3 text-ink-muted">
+                    {content().subject}
+                  </div>
+                  <Show when={content().snippet}>
+                    {(snippet) => (
+                      <div class="col-start-3 col-span-2 row-start-3 min-w-0 ph-no-capture truncate pl-1 text-xs text-ink-muted/60">
+                        {snippet()}
+                      </div>
+                    )}
+                  </Show>
+                </>
+              )}
+            </Show>
           }
         >
           {(content) => (
-            <>
-              <div class="col-start-3 col-span-2 row-start-2 min-h-3 min-w-0 ph-no-capture truncate text-[11px] leading-3 text-ink-muted">
-                {content().subject}
-              </div>
-              <Show when={content().snippet}>
-                {(snippet) => (
-                  <div class="col-start-3 col-span-2 row-start-3 min-w-0 ph-no-capture truncate text-xs text-ink-muted/60">
-                    {snippet()}
+            <Show
+              when={isDirectMessage()}
+              fallback={
+                <>
+                  <div class="col-start-3 col-span-2 row-start-2 min-h-3 min-w-0 ph-no-capture truncate pl-1 text-[11px] leading-3 text-ink-muted">
+                    {channelMessageSenderName()}
+                  </div>
+                  <Show when={content().messageContent}>
+                    {(messageContent) => (
+                      <div class="col-start-3 col-span-2 row-start-3 min-w-0 ph-no-capture truncate pl-1 text-xs text-ink-muted/60">
+                        <ChannelMessageContentPreview
+                          content={messageContent()}
+                        />
+                      </div>
+                    )}
+                  </Show>
+                </>
+              }
+            >
+              <Show when={content().messageContent}>
+                {(messageContent) => (
+                  <div class="col-start-3 col-span-2 row-start-2 min-h-3 min-w-0 ph-no-capture truncate pl-1 text-[11px] leading-3 text-ink-muted/60">
+                    <ChannelMessageContentPreview content={messageContent()} />
                   </div>
                 )}
               </Show>
-            </>
+            </Show>
           )}
         </Show>
       </div>
@@ -397,7 +481,7 @@ function MultirowNotificationListEntity(props: NotificationListEntityProps) {
         onToggle={() => setExpanded((value) => !value)}
       />
       <Show when={hasCollapsedItems() && expanded()}>
-        <div class="ml-12 mr-2 mt-1 rounded-lg border border-ink-muted/8 bg-ink-muted/2.5 overflow-hidden divide-y divide-ink-muted/8">
+        <div class="ml-12 mr-2 mt-1 rounded-lg border border-ink-muted/8 bg-ink-muted/2.5 overflow-hidden">
           <For each={collapsedNotifications()}>
             {(notification) => (
               <MultirowNotificationListRow notification={notification} />
@@ -441,7 +525,7 @@ function CollapsedNotificationListEntityRow(props: {
 
   return (
     <div
-      class="relative z-1 bg-surface shadow-[0_1px_0_rgb(from_var(--color-ink)_r_g_b_/_0.04)]"
+      class="relative z-1 bg-surface"
       onClick={toggle}
       role="button"
       tabIndex={0}
@@ -451,7 +535,7 @@ function CollapsedNotificationListEntityRow(props: {
         }
       }}
     >
-      <div class="group/notif flex items-center gap-2.5 px-3 py-2 hover:bg-ink-muted/6 min-w-0 overflow-hidden cursor-pointer">
+      <div class="group/notif flex items-center gap-2 px-2 py-2 hover:bg-ink-muted/6 min-w-0 overflow-hidden cursor-pointer">
         <span class="grid size-4 shrink-0 place-items-center">
           <Show
             when={props.count > 1}
@@ -725,7 +809,7 @@ export function GithubNotificationListEntity(props: {
       addSuffix: true,
     })}`;
     const number = prNumber();
-    return number ? `${number} · ${timeLabel}` : timeLabel;
+    return number ? `${number} ${timeLabel}` : timeLabel;
   };
 
   const contentSlot = () => (
@@ -841,7 +925,7 @@ export function GithubNotificationListEntity(props: {
           </div>
         }
       >
-        <div class="group/notif grid min-w-0 grid-cols-[1rem_0.875rem_minmax(0,1fr)_4rem] grid-rows-[auto_auto_auto] gap-x-1.5 gap-y-0.5 px-3 py-2 hover:bg-ink-muted/6">
+        <div class="group/notif grid min-w-0 grid-cols-[1rem_1rem_minmax(0,1fr)_4rem] grid-rows-[auto_auto_auto] gap-x-1.5 gap-y-0.5 px-2 py-2 hover:bg-ink-muted/6">
           <span class="col-start-1 row-start-1 grid size-4 shrink-0 place-items-center">
             <span
               class={cn('size-1.5 rounded-full', {
@@ -856,14 +940,14 @@ export function GithubNotificationListEntity(props: {
               return (
                 <StatusIcon
                   class={cn(
-                    'col-start-2 row-start-1 size-3.5 shrink-0 self-center',
+                    'col-start-2 row-start-1 size-4.5 shrink-0 self-center',
                     getGithubStatusClass(value())
                   )}
                 />
               );
             }}
           </Show>
-          <div class="col-start-3 row-start-1 min-w-0 flex items-center gap-1.5 text-xs font-semibold tracking-tight">
+          <div class="col-start-3 row-start-1 min-w-0 flex items-center gap-1.5 pl-1 text-xs font-semibold tracking-tight">
             <span
               class={cn('truncate min-w-0 text-ink-muted', {
                 'text-ink font-semibold': unread(),
@@ -884,13 +968,13 @@ export function GithubNotificationListEntity(props: {
           </span>
           <Show when={statusDescription()}>
             {(value) => (
-              <div class="col-start-3 col-span-2 row-start-2 flex min-h-3 min-w-0 items-center gap-1 truncate text-[11px] leading-3 text-ink-muted">
+              <div class="col-start-3 col-span-2 row-start-2 flex min-h-3 min-w-0 items-center gap-1 truncate pl-1 text-[11px] leading-3 text-ink-muted">
                 <span class="truncate">{value()}</span>
                 {authorInline()}
               </div>
             )}
           </Show>
-          <div class="col-start-3 col-span-2 row-start-3 flex min-h-6 min-w-0 items-center gap-1.5 overflow-hidden pt-1">
+          <div class="col-start-3 col-span-2 row-start-3 flex min-h-6 min-w-0 items-center gap-1.5 overflow-hidden pl-1 pt-1">
             <div class="min-w-0 flex-1 overflow-hidden">
               <GithubLinkPill url={url()} label={linkLabel()} />
             </div>
