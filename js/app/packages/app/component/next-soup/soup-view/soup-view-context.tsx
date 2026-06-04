@@ -7,10 +7,7 @@ import {
   type SoupState,
 } from '@app/component/next-soup/create-soup-state';
 import type { FilterContext } from '@app/component/next-soup/filters/configs/';
-import {
-  NIL_UUID,
-  withEmailOwnerFilter,
-} from '@app/component/next-soup/filters/filter-store';
+import { withEmailOwnerFilter } from '@app/component/next-soup/filters/filter-store';
 import type { SetPredicatesInput } from '@app/component/next-soup/filters/filter-store/predicates-store';
 import {
   createQueryStore,
@@ -265,14 +262,14 @@ export const SoupViewContextProvider: FlowComponent<
     }
   });
 
-  // soupBody is derived from the query filter store's compiled AST, with the
-  // inbox scope ANDed into the email target. `undefined` = all (no clause);
-  // `[]` = no inboxes, so filter to a sentinel owner that matches nothing.
+  // soupBody is the query filter store's compiled AST with the inbox scope
+  // ANDed into the email target. `undefined` = all inboxes (no clause); `[]` =
+  // no inboxes (pass null so it filters to a sentinel owner matching nothing).
   const soupBody = createMemo(() => {
     const base = queryFilters.compile();
     const inboxes = inboxFilter();
     if (inboxes === undefined) return base;
-    return withEmailOwnerFilter(base, inboxes.length ? inboxes : [NIL_UUID]);
+    return withEmailOwnerFilter(base, inboxes.length ? inboxes : null);
   });
 
   const [searchText, setSearchText] = useEntryState<string>('search.text', {
