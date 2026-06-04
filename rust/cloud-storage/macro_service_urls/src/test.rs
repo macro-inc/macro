@@ -386,10 +386,7 @@ fn exported_service_urls_match_dev_values() {
 fn exported_service_urls_match_prod_values() {
     let service_urls = ServiceUrls::default_for_environment(macro_env::Environment::Production);
 
-    assert_eq!(
-        service_urls.app_service_url.as_ref(),
-        "https://macro.com"
-    );
+    assert_eq!(service_urls.app_service_url.as_ref(), "https://macro.com");
     assert_eq!(
         service_urls.auth_service_url.as_ref(),
         "https://auth-service.macro.com",

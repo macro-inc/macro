@@ -217,21 +217,27 @@ impl ServiceUrlVarErr {
 ///
 /// # Example
 ///
-/// ```ignore
-/// macro_service_urls::service_url! {
-///     #[derive(Debug, Clone)]
-///     pub struct DocumentStorageServiceUrl {
-///         local: "http://localhost:8086",
-///         dev: "https://cloud-storage-dev.macro.com",
-///         prod: "https://cloud-storage.macro.com",
+/// ```
+/// fn document_storage_service_url_example() -> Result<(), macro_service_urls::ServiceUrlVarErr> {
+///     macro_service_urls::service_url! {
+///         #[derive(Debug, Clone)]
+///         pub struct DocumentStorageServiceUrl {
+///             local: "http://localhost:8086",
+///             dev: "https://cloud-storage-dev.macro.com",
+///             prod: "https://cloud-storage.macro.com",
+///         }
 ///     }
+///
+///     let url = DocumentStorageServiceUrl::new()?;
+///     assert_eq!(
+///         url.override_env_var_name(),
+///         "OVERRIDE_DOCUMENT_STORAGE_SERVICE_URL",
+///     );
+///
+///     Ok(())
 /// }
 ///
-/// let url = DocumentStorageServiceUrl::new()?;
-/// assert_eq!(
-///     url.override_env_var_name(),
-///     "OVERRIDE_DOCUMENT_STORAGE_SERVICE_URL",
-/// );
+/// document_storage_service_url_example().unwrap();
 /// ```
 #[macro_export]
 macro_rules! service_url {
