@@ -45,6 +45,10 @@ export function FromInboxSelector(props: {
 }) {
   const activeInbox = () =>
     props.links.find((l) => l.id === props.activeLinkId) ?? props.links[0];
+  const sortedLinks = () =>
+    [...props.links].sort((a, b) =>
+      a.email_address.localeCompare(b.email_address)
+    );
   return (
     <Show when={activeInbox()}>
       {(active) => (
@@ -67,7 +71,7 @@ export function FromInboxSelector(props: {
             </Dropdown.Trigger>
             <Dropdown.Content>
               <Dropdown.Group>
-                <For each={props.links}>
+                <For each={sortedLinks()}>
                   {(inbox) => (
                     <Dropdown.Item onSelect={() => props.onSelect(inbox.id)}>
                       <FromInboxOption inbox={inbox} />
