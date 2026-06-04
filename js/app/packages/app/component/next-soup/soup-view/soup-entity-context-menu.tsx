@@ -1,5 +1,5 @@
 import { ContextMenuContent } from '@core/component/ContextMenu';
-import { longPressHighlight } from '@core/directive/longPressHighlight';
+import { touchHandler } from '@core/directive/touchHandler';
 import { isMobile } from '@core/mobile/isMobile';
 import type { EntityData } from '@entity';
 import { ContextMenu } from '@kobalte/core/context-menu';
@@ -25,12 +25,11 @@ export const SoupEntityContextMenu: FlowComponent<
         <div
           class="size-full"
           data-soup-entity
-          ref={(el) =>
-            longPressHighlight(el, () => ({
-              className: 'touch-highlight',
+          ref={(el) => {
+            touchHandler(el, () => ({
               onLongPress: () => drawerManager?.open(props.entity, soup),
-            }))
-          }
+            }));
+          }}
         >
           {props.children}
         </div>
