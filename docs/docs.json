@@ -15,7 +15,10 @@
       "dark": "#090909"
     }
   },
-  "favicon": "/favicon.svg",
+  "favicon": {
+    "light": "/favicon.svg",
+    "dark": "/favicon.svg"
+  },
   "navigation": {
     "tabs": [
       {
@@ -25,6 +28,7 @@
             "group": "Getting Started",
             "pages": [
               "index",
+              "keyboard-shortcuts",
               {
                 "group": "AI",
                 "pages": [
