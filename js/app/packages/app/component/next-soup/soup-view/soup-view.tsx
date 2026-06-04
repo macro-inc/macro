@@ -424,15 +424,6 @@ export const SoupView = (props: SoupViewProps) => {
                 </Show>
                 <Show
                   when={
-                    !isMobile() &&
-                    !narrowSearchExpanded() &&
-                    isComponentListView('mail')
-                  }
-                >
-                  <InboxSelector />
-                </Show>
-                <Show
-                  when={
                     !narrowSearchExpanded() && !isComponentListView('search')
                   }
                 >
@@ -445,6 +436,15 @@ export const SoupView = (props: SoupViewProps) => {
                       containerClass="h-full"
                     />
                   </Show>
+                </Show>
+                <Show
+                  when={
+                    !isMobile() &&
+                    !narrowSearchExpanded() &&
+                    isComponentListView('mail')
+                  }
+                >
+                  <InboxSelector />
                 </Show>
               </div>
             </SplitHeaderLeft>
