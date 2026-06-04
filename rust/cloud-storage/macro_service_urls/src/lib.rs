@@ -486,9 +486,9 @@ service_url! {
     pub struct ServiceUrls {
         /// Main app URL.
         pub AppServiceUrl {
-            local: "http://localhost:3000/app",
-            dev: "https://dev.macro.com/app",
-            prod: "https://macro.com/app",
+            local: "http://localhost:3000",
+            dev: "https://dev.macro.com",
+            prod: "https://macro.com",
         },
         /// Authentication service API URL.
         pub AuthServiceUrl {
