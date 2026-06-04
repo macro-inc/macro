@@ -10556,6 +10556,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "service_url"
+version = "0.1.0"
+dependencies = [
+ "macro_env",
+ "paste",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "servo_arc"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
