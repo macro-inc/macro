@@ -42,6 +42,7 @@ export function EmailInboxChip(props: { entity: EmailEntity; class?: string }) {
         >
           <UserIcon
             {...inboxIconProps(link().email_address)}
+            photoUrl={link().photo_url ?? undefined}
             size="sm"
             suppressClick
             class="shrink-0"
