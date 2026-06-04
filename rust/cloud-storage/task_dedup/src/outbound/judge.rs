@@ -9,6 +9,33 @@ use serde_json::json;
 use crate::domain::models::JudgeResult;
 use crate::domain::ports::TaskDuplicateJudge;
 
+static DUPLICATE_JUDGE_SYSTEM_PROMPT: &str = r#"You judge whether two tasks are duplicates.
+
+A duplicate means completing one task would substantially complete the other with no major additional decisions or work.
+
+For product or software tasks, use this framework before deciding. Identify each task's concrete unit of work:
+- user-visible outcome
+- primary action or behavior
+- object/entity being changed
+- trigger or interaction
+- required implementation area
+
+Return true only when the tasks describe the same user-visible outcome and same primary behavior, even if worded differently.
+
+Return false when tasks merely:
+- mention the same product, feature area, app, or inspiration source
+- affect the same entity but require different behaviors
+- share keywords but have different user outcomes
+- are part of the same larger project
+- could both be implemented in the same screen but are separate deliverables
+
+Example false case:
+Task A: "Email separated by today, past 7 days, etc like superhuman"
+Task B: "restore the superhuman j/k for emails"
+Reason: false because Task A is time-based email grouping, while Task B is keyboard navigation through emails. They share the email feature area and Superhuman reference, but differ in outcome, behavior, interaction, and implementation area.
+
+In the reason, briefly compare the concrete categories that matter most for the decision."#;
+
 /// Judge that decides duplicates via the agent structured completion path.
 ///
 /// When the model call fails it defaults to *not* a duplicate, so an outage
@@ -80,7 +107,7 @@ impl TaskDuplicateJudge for AgentDuplicateJudge {
 
         let value = dynamic_structured_completion(
             self.model,
-            "You judge duplicate software/product tasks. Two tasks are duplicates only when completing one would substantially complete the other. Return false for merely related work, shared projects, or same feature area with different deliverables.",
+            DUPLICATE_JUDGE_SYSTEM_PROMPT,
             vec![Message::user(prompt)],
             schema,
         )

@@ -22,7 +22,7 @@ import {
   Suspense,
 } from 'solid-js';
 
-const DEBOUNCE_MS = 150;
+const DEBOUNCE_MS = 300;
 
 type DebouncedInput = { title: string; markdown: string };
 
