@@ -8,10 +8,12 @@ import { MobileFilterDrawer } from '@app/component/next-soup/soup-view/filters-b
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { isListViewID, type ListView } from '@app/constants/list-views';
-import { type TabItem, Tabs } from '@core/component/Tabs';
+import type { TabItem } from '@core/component/Tabs';
 import { TabsInset } from '@core/component/TabsInset';
 import { TabsInsetDropdown } from '@core/component/TabsInsetDropdown';
 import { useUserContext } from '@core/context/user';
+import { hapticImpact } from '@core/mobile/haptics';
+import { cn, Layer } from '@ui';
 import { batch, createEffect, createMemo, For, Match, Switch } from 'solid-js';
 
 /** Views that have tab definitions. Shared between VIEW_TAB_LISTS and VIEW_TAB_PRESETS. */
@@ -182,24 +184,26 @@ export const MobileSoupViewTabs = () => {
   const listView = useCurrentListView();
 
   return (
-    <div class="bg-surface border-t border-edge-muted h-11 px-1 flex gap-1">
-      <MobileFilterDrawer />
-      <div class="flex-1 min-w-0 h-full">
-        <Switch>
-          <For
-            each={
-              Object.keys(VIEW_TAB_LISTS) as (keyof typeof VIEW_TAB_LISTS)[]
-            }
-          >
-            {(v) => (
-              <Match when={listView() === v}>
-                <MobileViewTabs view={v} />
-              </Match>
-            )}
-          </For>
-        </Switch>
+    <Layer depth={4}>
+      <div class="pointer-events-none absolute inset-x-0 bottom-[3.5rem] z-mobile-nav-bar flex items-center gap-2 px-4">
+        <MobileFilterDrawer />
+        <div class="pointer-events-auto flex min-w-0 gap-2 overflow-x-auto scrollbar-hidden py-1">
+          <Switch>
+            <For
+              each={
+                Object.keys(VIEW_TAB_LISTS) as (keyof typeof VIEW_TAB_LISTS)[]
+              }
+            >
+              {(v) => (
+                <Match when={listView() === v}>
+                  <MobileViewTabs view={v} />
+                </Match>
+              )}
+            </For>
+          </Switch>
+        </div>
       </div>
-    </div>
+    </Layer>
   );
 };
 
@@ -207,27 +211,32 @@ const MobileViewTabs = (props: { view: TabbedListView }) => {
   const { applyTabPreset } = useApplyPreset();
   const { activeTab } = useSoupView();
   const list = () => VIEW_TAB_LISTS[props.view];
+  const activeValue = () => activeTab() ?? VIEW_TAB_PRESETS[props.view].default;
 
   let wrapperRef: HTMLDivElement | undefined;
 
+  // Keep the active pill scrolled into view within the horizontal strip.
   createEffect(() => {
-    activeTab();
+    activeValue();
     list();
-    if (!wrapperRef) return;
+    const wrapper = wrapperRef;
+    if (!wrapper) return;
     queueMicrotask(() => {
-      const scrollEl = wrapperRef?.firstElementChild as HTMLElement | null;
-      const active = scrollEl?.querySelector(
+      const scrollEl = wrapper.parentElement;
+      const active = wrapper.querySelector(
         '[data-checked]'
       ) as HTMLElement | null;
       if (!scrollEl || !active) return;
-      const itemLeft = active.offsetLeft;
-      const itemRight = itemLeft + active.offsetWidth;
-      const viewRight = scrollEl.scrollLeft + scrollEl.clientWidth;
-      if (itemLeft < scrollEl.scrollLeft) {
-        scrollEl.scrollTo({ left: itemLeft, behavior: 'smooth' });
-      } else if (itemRight > viewRight) {
-        scrollEl.scrollTo({
-          left: itemRight - scrollEl.clientWidth,
+      const scrollRect = scrollEl.getBoundingClientRect();
+      const activeRect = active.getBoundingClientRect();
+      if (activeRect.left < scrollRect.left) {
+        scrollEl.scrollBy({
+          left: activeRect.left - scrollRect.left - 8,
+          behavior: 'smooth',
+        });
+      } else if (activeRect.right > scrollRect.right) {
+        scrollEl.scrollBy({
+          left: activeRect.right - scrollRect.right + 8,
           behavior: 'smooth',
         });
       }
@@ -235,15 +244,30 @@ const MobileViewTabs = (props: { view: TabbedListView }) => {
   });
 
   return (
-    <div ref={wrapperRef} class="h-full">
-      <Tabs
-        list={list()}
-        value={activeTab()}
-        defaultValue={VIEW_TAB_PRESETS[props.view].default}
-        onChange={(value) => applyTabPreset(props.view, value)}
-        indicatorPosition="top"
-        class="**:data-indicator:h-0.75 overflow-x-auto scrollbar-hidden [&>div]:w-max"
-      />
+    <div ref={wrapperRef} class="flex gap-2">
+      <For each={list()}>
+        {(item) => {
+          const active = () => activeValue() === item.value;
+          return (
+            <button
+              type="button"
+              data-checked={active() ? '' : undefined}
+              class={cn(
+                'h-8 shrink-0 whitespace-nowrap rounded-full px-3.5 text-sm font-medium shadow-md ring transition-colors',
+                active()
+                  ? 'bg-accent text-surface ring-accent'
+                  : 'bg-surface text-ink-extra-muted ring-edge'
+              )}
+              onClick={() => {
+                hapticImpact('light');
+                applyTabPreset(props.view, item.value);
+              }}
+            >
+              {item.label}
+            </button>
+          );
+        }}
+      </For>
     </div>
   );
 };

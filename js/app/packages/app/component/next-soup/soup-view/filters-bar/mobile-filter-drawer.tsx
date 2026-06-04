@@ -201,7 +201,7 @@ export const MobileFilterDrawer = () => {
           aria-label="Open filters"
           variant="ghost"
           size="sm"
-          class="rounded-xs [&_svg]:size-6 relative h-full"
+          class="pointer-events-auto relative size-10 shrink-0 rounded-full bg-surface shadow-md ring ring-edge [&_svg]:size-5"
         >
           <SlidersHorizontalIcon />
           <Show when={activeCount() > 0}>

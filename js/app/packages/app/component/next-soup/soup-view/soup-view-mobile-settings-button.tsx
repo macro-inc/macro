@@ -13,6 +13,8 @@ import {
 
 export function SoupViewMobileSettingsButton(props: {
   visible: Accessor<boolean>;
+  /** Position override; defaults to bottom-right above the floating dock. */
+  class?: string;
 }) {
   const { settingsOpen, toggleSettings } = useSettingsState();
   const { getSplitCount } = useSplitLayout();
@@ -25,14 +27,15 @@ export function SoupViewMobileSettingsButton(props: {
         <button
           type="button"
           class={cn(
-            'absolute bottom-[4.5rem] right-4 z-10 size-11 rounded-full',
+            'absolute z-10 size-11 rounded-full',
             'bg-surface text-ink flex items-center justify-center shadow-md',
             MOBILE_FLOATING_BUTTON_TRANSITION,
             'ring ring-edge hover:text-accent hover:bg-hover',
             settingsOpen() && 'bg-accent/20 text-accent ring-accent/20',
             props.visible()
               ? MOBILE_FLOATING_BUTTON_VISIBLE
-              : MOBILE_FLOATING_BUTTON_OFFSCREEN_RIGHT
+              : MOBILE_FLOATING_BUTTON_OFFSCREEN_RIGHT,
+            props.class ?? 'bottom-[4.5rem] right-4'
           )}
           aria-label={settingsOpen() ? 'Close Settings' : 'Open Settings'}
           aria-hidden={!props.visible()}

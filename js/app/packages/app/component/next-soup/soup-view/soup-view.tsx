@@ -35,12 +35,7 @@ import {
 } from '@app/component/next-soup/soup-view/soup-view-context';
 import { SoupViewCreateButton } from '@app/component/next-soup/soup-view/soup-view-create-button';
 import { SoupViewFileDropzone } from '@app/component/next-soup/soup-view/soup-view-file-dropzone';
-import { SoupViewMobileCreateButton } from '@app/component/next-soup/soup-view/soup-view-mobile-create-button';
-import {
-  SoupViewMobileSearchBar,
-  SoupViewMobileSearchButton,
-} from '@app/component/next-soup/soup-view/soup-view-mobile-search';
-import { SoupViewMobileSettingsButton } from '@app/component/next-soup/soup-view/soup-view-mobile-settings-button';
+import { SoupViewMobileSearchBar } from '@app/component/next-soup/soup-view/soup-view-mobile-search';
 import {
   CollapsedSoupViewTabs,
   MobileSoupViewTabs,
@@ -348,35 +343,6 @@ export const SoupView = (props: SoupViewProps) => {
   const [narrowSearchExpanded, setNarrowSearchExpanded] = createSignal(false);
   const [mobileSearchOpen, setMobileSearchOpen] = createSignal(false);
   const [searchIsCollapsed, setSearchIsCollapsed] = createSignal(false);
-  const [floatingButtonsVisible, setFloatingButtonsVisible] =
-    createSignal(true);
-  let lastSoupScrollOffset = 0;
-  let upwardSoupScrollDistance = 0;
-
-  const resetFloatingButtonScrollTracking = (offset = 0) => {
-    lastSoupScrollOffset = Math.max(0, offset);
-    upwardSoupScrollDistance = 0;
-    setFloatingButtonsVisible(true);
-  };
-
-  const handleSoupScrollOffsetChange = (offset: number) => {
-    const nextOffset = Math.max(0, offset);
-    const delta = nextOffset - lastSoupScrollOffset;
-    lastSoupScrollOffset = nextOffset;
-
-    if (delta > 0) {
-      upwardSoupScrollDistance = 0;
-      setFloatingButtonsVisible(false);
-      return;
-    }
-
-    if (delta < 0) {
-      upwardSoupScrollDistance += Math.abs(delta);
-      if (upwardSoupScrollDistance > FLOATING_BUTTON_SCROLL_UP_THRESHOLD) {
-        setFloatingButtonsVisible(true);
-      }
-    }
-  };
 
   registerHotkey({
     hotkey: 'cmd+f',
@@ -529,31 +495,17 @@ export const SoupView = (props: SoupViewProps) => {
                 <SoupViewList
                   initialClientFilters={props.initialClientFilters}
                   initialGroupBy={props.initialGroupBy}
-                  onScrollOffsetBaseline={resetFloatingButtonScrollTracking}
-                  onScrollOffsetChange={handleSoupScrollOffsetChange}
                 />
               </SoupViewFileDropzone>
             </Suspense>
             <Show when={isMobile()}>
-              <SoupViewMobileSettingsButton visible={floatingButtonsVisible} />
-              <SoupViewMobileSearchButton
-                open={mobileSearchOpen}
-                visible={floatingButtonsVisible}
-                onOpen={() => setMobileSearchOpen(true)}
-              />
-              <SoupViewMobileCreateButton
-                activeView={activeListView}
-                visible={floatingButtonsVisible}
-              />
               <SoupViewMobileSearchBar
                 open={mobileSearchOpen}
                 onClose={() => setMobileSearchOpen(false)}
               />
+              <MobileSoupViewTabs />
             </Show>
           </div>
-          <Show when={isMobile()}>
-            <MobileSoupViewTabs />
-          </Show>
         </div>
         <Suspense>
           <Show when={ENABLE_UNIFIED_LIST_AI_INPUT && !isMobile()}>
@@ -1109,7 +1061,10 @@ export const SoupViewList = (props: SoupViewListProps) => {
                           }}
                           virtualizerClass={cn(
                             previewVisible() && 'pt-1' /* scuffed */,
-                            'scrollbar-hidden'
+                            'scrollbar-hidden',
+                            // Clear the floating mobile tabs + dock so the last
+                            // row isn't hidden behind them.
+                            isMobile() && 'pb-[calc(var(--safe-bottom)+6.5rem)]'
                           )}
                           class="overflow-hidden flex min-w-0"
                           virtualizerRef={registerVirtualizerHandler}
@@ -1382,7 +1337,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
 const DEFAULT_ITEM_SIZE = 10;
 const DEFAULT_OVERSCAN = 5;
-const FLOATING_BUTTON_SCROLL_UP_THRESHOLD = 5;
 
 interface SoupListProps {
   ref?: (el: HTMLDivElement) => void;
