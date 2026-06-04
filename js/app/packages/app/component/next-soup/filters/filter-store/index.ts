@@ -1,4 +1,8 @@
-export { defineQueryFilters, queryStateFrom } from './compile';
+export {
+  defineQueryFilters,
+  queryStateFrom,
+  withEmailOwnerFilter,
+} from './compile';
 export type {
   PropertyFilter,
   Query,

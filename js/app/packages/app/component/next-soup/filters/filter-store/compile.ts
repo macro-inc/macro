@@ -155,6 +155,20 @@ export const queryStateFrom = (query: Query): QueryState => ({
   emailView: query.emailView,
 });
 
+/**
+ * ANDs an inbox-owner clause into the email target. Each link id becomes an
+ * `Owner` literal; multiple ids OR together to scope to a subset of the
+ * caller's inboxes. An empty list is a no-op (the default "all inboxes").
+ */
+export function withEmailOwnerFilter(
+  ast: TargetAstMap,
+  linkIds: string[]
+): TargetAstMap {
+  if (linkIds.length === 0) return ast;
+  const owners = AST.or(linkIds.map((id) => AST.literal('Owner', id)));
+  return { ...ast, ef: ast.ef ? AST.and([ast.ef, owners]) : owners };
+}
+
 export function compileToAst(state: QueryState): TargetAstMap {
   const byTarget: Record<QueryTarget, BackendAst[]> = {
     df: [],

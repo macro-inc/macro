@@ -7,6 +7,10 @@ import {
   type SoupState,
 } from '@app/component/next-soup/create-soup-state';
 import type { FilterContext } from '@app/component/next-soup/filters/configs/';
+import {
+  NIL_UUID,
+  withEmailOwnerFilter,
+} from '@app/component/next-soup/filters/filter-store';
 import type { SetPredicatesInput } from '@app/component/next-soup/filters/filter-store/predicates-store';
 import {
   createQueryStore,
@@ -84,6 +88,8 @@ interface SoupViewContextValues {
   queryFilters: QueryStore;
   assigneeFilter: Accessor<string[]>;
   setAssigneeFilter: Setter<string[]>;
+  inboxFilter: Accessor<string[] | undefined>;
+  setInboxFilter: Setter<string[] | undefined>;
   activeTab: Accessor<string | undefined>;
   setActiveTab: Setter<string | undefined>;
   groupByField: Accessor<GroupByField | undefined>;
@@ -223,6 +229,15 @@ export const SoupViewContextProvider: FlowComponent<
     'soup.assigneeFilter',
     { default: [] }
   );
+  // Inboxes (email_links.id) the view is scoped to. Tri-state, per-split like
+  // the assignee filter so it round-trips on nav:
+  //   undefined → all inboxes (default, no clause)
+  //   []        → no inboxes (show nothing)
+  //   [ids]     → that subset
+  const [inboxFilter, setInboxFilter] = useEntryState<string[] | undefined>(
+    'soup.inboxFilter',
+    { default: undefined }
+  );
   const [activeTab, setActiveTab] = useEntryState<string | undefined>(
     'soup.tab',
     { default: undefined }
@@ -250,8 +265,15 @@ export const SoupViewContextProvider: FlowComponent<
     }
   });
 
-  // soupBody is derived from the query filter store's compiled AST
-  const soupBody = createMemo(() => queryFilters.compile());
+  // soupBody is derived from the query filter store's compiled AST, with the
+  // inbox scope ANDed into the email target. `undefined` = all (no clause);
+  // `[]` = no inboxes, so filter to a sentinel owner that matches nothing.
+  const soupBody = createMemo(() => {
+    const base = queryFilters.compile();
+    const inboxes = inboxFilter();
+    if (inboxes === undefined) return base;
+    return withEmailOwnerFilter(base, inboxes.length ? inboxes : [NIL_UUID]);
+  });
 
   const [searchText, setSearchText] = useEntryState<string>('search.text', {
     default: props.initialSearchText ?? '',
@@ -605,6 +627,8 @@ export const SoupViewContextProvider: FlowComponent<
     queryFilters,
     assigneeFilter,
     setAssigneeFilter,
+    inboxFilter,
+    setInboxFilter,
     activeTab,
     setActiveTab,
     groupByField,

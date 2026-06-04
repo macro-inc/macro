@@ -1,4 +1,5 @@
 import { useAnalytics } from '@app/component/analytics-context';
+import { InboxSelector } from '@app/component/next-soup/soup-view/filters-bar/inbox-selector';
 import { SoupActiveFiltersBar } from '@app/component/next-soup/soup-view/filters-bar/soup-active-filters-bar';
 import { SoupViewContextGroup } from '@app/component/next-soup/soup-view/filters-bar/soup-view-context-group';
 import { SoupViewContextSort } from '@app/component/next-soup/soup-view/filters-bar/soup-view-context-sort';
@@ -57,6 +58,13 @@ export function SoupFiltersBar() {
     return content.type === 'component' && content.id === 'search';
   });
 
+  // The inbox selector only applies to the thread list; it's further gated on
+  // having more than one linked inbox.
+  const showInboxSelector = createMemo(() => {
+    const content = panel.handle.content();
+    return content.type === 'component' && content.id === 'mail';
+  });
+
   return (
     <Show when={!isMobile()}>
       <SplitToolbarLeft>
@@ -69,6 +77,9 @@ export function SoupFiltersBar() {
             open={filterDropdownOpen}
             onOpenChange={setFilterDropdownOpen}
           />
+          <Show when={showInboxSelector()}>
+            <InboxSelector />
+          </Show>
         </div>
       </SplitToolbarLeft>
       <SplitToolbarRight>
