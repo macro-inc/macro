@@ -2,6 +2,7 @@ import { useAnalytics } from '@app/component/analytics-context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import { useHasPaidAccess } from '@core/auth';
+import { DragDropWrapper } from '@core/component/AI/component/DragDrop';
 import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
 import { ChatInput } from '@core/component/AI/component/input/ChatInput';
@@ -62,7 +63,11 @@ export function Home() {
       enabledOverride={ENABLE_HOME_OVERRIDE}
       fallback={<Navigate href="/" />}
     >
-      <HomeContent />
+      <ChatInputProvider>
+        <DragDropWrapper class="relative size-full">
+          <HomeContent />
+        </DragDropWrapper>
+      </ChatInputProvider>
     </ShowFeatureFlag>
   );
 }
@@ -231,9 +236,5 @@ const HomeChatInputInner = () => {
 };
 
 const HomeChatInput = () => {
-  return (
-    <ChatInputProvider>
-      <HomeChatInputInner />
-    </ChatInputProvider>
-  );
+  return <HomeChatInputInner />;
 };
