@@ -22,19 +22,21 @@ export function InboxSelector() {
   const { inboxFilter, setInboxFilter } = useSoupView();
 
   const options = createMemo((): SearchableOption[] =>
-    links().map((link) => ({
-      id: link.id,
-      label: link.email_address,
-      icon: () => (
-        <UserIcon
-          {...inboxIconProps(link.email_address)}
-          photoUrl={link.photo_url ?? undefined}
-          size="sm"
-          suppressClick
-          showTooltip={false}
-        />
-      ),
-    }))
+    links()
+      .map((link) => ({
+        id: link.id,
+        label: link.email_address,
+        icon: () => (
+          <UserIcon
+            {...inboxIconProps(link.email_address)}
+            photoUrl={link.photo_url ?? undefined}
+            size="sm"
+            suppressClick
+            showTooltip={false}
+          />
+        ),
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label))
   );
 
   // `undefined` is the default "all inboxes" view; surface it as every inbox
@@ -65,6 +67,7 @@ export function InboxSelector() {
         activeIds={activeIds}
         onChange={onChange}
         placeholder="Search inboxes..."
+        preserveOrder
       >
         <Combobox.Trigger
           as={Button}
