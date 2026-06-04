@@ -80,6 +80,11 @@ export function EntityIcon(props: EntityIconProps) {
       )
       .when(isCallEntity, () => 'call')
       .with({ type: 'automation' }, () => 'automation')
+      .with(
+        { type: 'foreign', subType: { type: 'github_pull_request' } },
+        () => 'githubPullRequest'
+      )
+      .with({ type: 'foreign' }, () => 'default')
       .otherwise(() => 'default');
   };
 

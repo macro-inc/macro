@@ -24,6 +24,10 @@ function extractRawTitle(entity: EntityData): string {
       { type: 'automation' },
       (e) => e.name || blockNameToDefaultFile('automation')
     )
+    .with({ type: 'foreign', subType: { type: 'github_pull_request' } }, (e) =>
+      e.subType.name
+    )
+    .with({ type: 'foreign' }, (e) => e.name)
     .otherwise(() => 'Unknown');
 }
 
