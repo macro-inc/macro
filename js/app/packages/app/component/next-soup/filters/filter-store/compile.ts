@@ -155,22 +155,6 @@ export const queryStateFrom = (query: Query): QueryState => ({
   emailView: query.emailView,
 });
 
-/**
- * ANDs an inbox-owner clause into the email target. Each link id becomes an
- * `Owner` literal; multiple ids OR together to scope to a subset of the
- * caller's inboxes. Pass `null` for "no inboxes" — it filters to a sentinel
- * owner that matches nothing.
- */
-export function withEmailOwnerFilter(
-  ast: TargetAstMap,
-  linkIds: string[] | null
-): TargetAstMap {
-  const owners = AST.or(
-    (linkIds ?? [NIL_UUID]).map((id) => AST.literal('Owner', id))
-  );
-  return { ...ast, ef: ast.ef ? AST.and([ast.ef, owners]) : owners };
-}
-
 export function compileToAst(state: QueryState): TargetAstMap {
   const byTarget: Record<QueryTarget, BackendAst[]> = {
     df: [],

@@ -1,7 +1,7 @@
 export {
+  compileToAst,
   defineQueryFilters,
   queryStateFrom,
-  withEmailOwnerFilter,
 } from './compile';
 export type {
   PropertyFilter,

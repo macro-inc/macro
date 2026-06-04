@@ -7,7 +7,10 @@ import {
   type SoupState,
 } from '@app/component/next-soup/create-soup-state';
 import type { FilterContext } from '@app/component/next-soup/filters/configs/';
-import { withEmailOwnerFilter } from '@app/component/next-soup/filters/filter-store';
+import {
+  compileToAst,
+  NIL_UUID,
+} from '@app/component/next-soup/filters/filter-store';
 import type { SetPredicatesInput } from '@app/component/next-soup/filters/filter-store/predicates-store';
 import {
   createQueryStore,
@@ -258,10 +261,16 @@ export const SoupViewContextProvider: FlowComponent<
   });
 
   const soupBody = createMemo(() => {
-    const base = queryFilters.compile();
     const inboxes = inboxFilter();
-    if (inboxes === undefined) return base;
-    return withEmailOwnerFilter(base, inboxes.length ? inboxes : null);
+    if (inboxes === undefined) return queryFilters.compile();
+    const state = queryFilters.state;
+    return compileToAst({
+      ...state,
+      include: {
+        ...state.include,
+        emailLinkId: inboxes.length ? inboxes : [NIL_UUID],
+      },
+    });
   });
 
   const [searchText, setSearchText] = useEntryState<string>('search.text', {
