@@ -64,7 +64,6 @@ export function InboxSelector() {
         onChange={onChange}
         placeholder="Search inboxes..."
         preserveOrder
-        removeOnBackspace={false}
       >
         <Combobox.Trigger
           as={Button}

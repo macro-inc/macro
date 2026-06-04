@@ -34,8 +34,6 @@ type SearchableMultiSelectProps = {
   listboxClass?: string;
   /** Keep `options` in their given order instead of pinning selected first. */
   preserveOrder?: boolean;
-  /** Forwarded to Combobox; defaults to kobalte's `true` when omitted. */
-  removeOnBackspace?: boolean;
   open?: Accessor<boolean>;
   onOpenChange?: (open: boolean) => void;
   children: JSX.Element;
@@ -179,7 +177,7 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
       optionLabel="label"
       allowsEmptyCollection
       virtualized
-      removeOnBackspace={props.removeOnBackspace}
+      removeOnBackspace={false}
       placement={props.placement ?? 'bottom-start'}
       gutter={props.gutter ?? 4}
     >
@@ -311,6 +309,7 @@ export const SearchableMultiSelectInline = (
       optionLabel="label"
       allowsEmptyCollection
       virtualized
+      removeOnBackspace={false}
     >
       <div class="flex items-center gap-2 px-3 py-2 border-b border-edge-muted">
         <SearchIcon class="size-3.5 text-ink-muted shrink-0" />
