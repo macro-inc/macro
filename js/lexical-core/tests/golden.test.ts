@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs';
 import { LoroDoc } from 'loro-crdt';
 import { describe, expect, it } from 'vitest';
 import { Mirror } from '../../loro-mirror/packages/core/src';
@@ -6,9 +5,9 @@ import { MARKDOWN_LORO_SCHEMA } from '../markdown-loro-schema';
 
 describe('markdown-golden.bin', () => {
   it('ensures that the \"golden\" snapshot is properly blank as expected', async () => {
-    const golden = readFileSync(
-      new URL('file://../markdown-golden.1.bin', import.meta.url)
-    );
+    const golden = await Bun.file(
+      `${import.meta.dir}/../markdown-golden.1.bin`
+    ).bytes();
 
     const doc = new LoroDoc();
     doc.import(golden);
