@@ -1,3 +1,4 @@
+import ChatCircle from '@phosphor/chat-circle.svg';
 import GitMerge from '@phosphor/git-merge.svg';
 import GitPullRequest from '@phosphor/git-pull-request.svg';
 import { cn } from '@ui';
@@ -27,27 +28,48 @@ const numberFormatter = new Intl.NumberFormat();
 
 type GithubPullRequestStatus = GithubPullRequestEntity['subType']['status'];
 
+function iconText(
+  icon: Component<JSX.SvgSVGAttributes<SVGSVGElement>>,
+  text: JSX.Element
+) {
+  return (
+    <>
+      <Dynamic component={icon} class="size-3 shrink-0" />
+      {text}
+    </>
+  );
+}
+
 function statusConfig(status: GithubPullRequestStatus): {
   icon: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
-  class: string;
+  iconClass: string;
 } {
   switch (status) {
     case 'open':
       return {
         icon: GitPullRequest,
-        class: 'text-success/70 group-hover/entity:text-success'
+        iconClass: 'text-success/70 group-hover/entity:text-success',
       };
     case 'merged':
       return {
         icon: GitMerge,
-        class: 'text-note/70 group-hover/entity:text-note'
+        iconClass: 'text-note/70 group-hover/entity:text-note',
       };
     case 'closed':
       return {
         icon: GitPullRequest,
-        class: 'text-failure/70 group-hover/entity:text-failure'
+        iconClass: 'text-failure/70 group-hover/entity:text-failure',
       };
   }
+}
+
+function checkFailed(conclusion: string | null | undefined): boolean {
+  return (
+    conclusion === 'failure' ||
+    conclusion === 'timed_out' ||
+    conclusion === 'cancelled' ||
+    conclusion === 'action_required'
+  );
 }
 
 export function GithubPullRequestPills(props: {
@@ -59,11 +81,37 @@ export function GithubPullRequestPills(props: {
   const deletions = () => props.entity.subType.deletions;
   const additionsAreLarger = () => additions() > deletions();
   const deletionsAreLarger = () => deletions() > additions();
+  const comments = () => props.entity.subType.comments.length;
+  const checks = () => props.entity.subType.checks;
+  const countedChecks = () =>
+    checks().filter((check) => check.conclusion !== 'skipped');
+  const failedChecks = () =>
+    countedChecks().filter((check) => checkFailed(check.conclusion)).length;
+  const successfulChecks = () =>
+    countedChecks().filter((check) => check.conclusion === 'success').length;
+  const checkSummary = () => {
+    const total = countedChecks().length;
+    if (total === 0) return '0';
+    return `${successfulChecks()} of ${total}`;
+  };
+  const checkStatusClass = () => {
+    if (countedChecks().length === 0) return 'bg-ink-muted/50';
+    if (failedChecks() > 0) {
+      return 'bg-failure/70 group-hover/entity:bg-failure';
+    }
+    if (successfulChecks() === countedChecks().length) {
+      return 'bg-success/70 group-hover/entity:bg-success';
+    }
+    return 'bg-ink-muted/50';
+  };
 
   return (
     <>
-      <Pill class={config().class}>
-        <Dynamic component={config().icon} class="size-3 shrink-0" />
+      <Pill class="text-ink-muted">
+        <Dynamic
+          component={config().icon}
+          class={cn('size-3 shrink-0', config().iconClass)}
+        />
         <span class="capitalize">{status()}</span>
       </Pill>
       <Pill class="tabular-nums">
@@ -83,6 +131,13 @@ export function GithubPullRequestPills(props: {
         >
           −{numberFormatter.format(deletions())}
         </span>
+      </Pill>
+      <Pill class="text-ink-muted tabular-nums">
+        <span class={cn('size-1.5 rounded-full shrink-0', checkStatusClass())} />
+        {checkSummary()}
+      </Pill>
+      <Pill class="text-ink-muted tabular-nums">
+        {iconText(ChatCircle, numberFormatter.format(comments()))}
       </Pill>
     </>
   );
