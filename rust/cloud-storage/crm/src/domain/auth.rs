@@ -141,6 +141,7 @@ impl<T: RequiredPermission> CrmContactReceipt<T> {
 
     /// Test-only: mints an `Owner` receipt with no access check.
     #[cfg(test)]
+    #[allow(dead_code)]
     pub(crate) fn dangerously_internal(contact_id: Uuid, team_id: Uuid) -> Self {
         Self {
             receipt: EntityAccessReceipt::dangerously_assert_internal_user(
@@ -190,6 +191,7 @@ impl<T: RequiredPermission> CrmTeamReceipt<T> {
 
     /// Test-only: mints an `Owner` receipt with no access check.
     #[cfg(test)]
+    #[allow(dead_code)]
     pub(crate) fn dangerously_internal(team_id: Uuid) -> Self {
         Self {
             receipt: EntityAccessReceipt::dangerously_assert_internal_user(
@@ -262,6 +264,7 @@ impl<T: RequiredPermission> CrmCommentReceipt<T> {
 
     /// Test-only: mints an `Owner` receipt with no access check.
     #[cfg(test)]
+    #[allow(dead_code)]
     pub(crate) fn dangerously_internal(
         entity_type: CrmCommentEntityType,
         entity_id: Uuid,
