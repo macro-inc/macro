@@ -4040,12 +4040,12 @@
           "backfill_job_id": {
             "type": ["string", "null"],
             "format": "uuid",
-            "description": "Present when init enqueued a backfill job. Absent for the graph path,\nwhere the child link's backfill already ran under its own macro_id."
+            "description": "Present when init enqueued a backfill job. Absent for cross-user delegation,\nwhere the child link's backfill already ran under its own macro_id; present for\nthe self-link bootstrap, where a fresh link is provisioned and backfilled."
           },
           "link_id": {
             "type": "string",
             "format": "uuid",
-            "description": "The email_links row id for the now-accessible inbox. For the graph path\n(cross-account add) this is the *existing* child link the caller now\ndelegates over; for the data-source path it's a freshly upserted row."
+            "description": "The email_links row id for the now-accessible inbox. For cross-user delegation\nthis is the *existing* child link the caller now delegates over; for the\nself-link bootstrap and the data-source path it's a freshly upserted row."
           }
         }
       },
