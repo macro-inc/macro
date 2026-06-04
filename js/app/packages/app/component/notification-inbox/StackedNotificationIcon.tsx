@@ -1,8 +1,8 @@
-import { Entity } from '@entity';
 import type { UnifiedNotification } from '@notifications';
 import { cn } from '@ui';
 import { Show } from 'solid-js';
 import './NotificationListEntity.css';
+import { NotificationListIcon } from './NotificationListIcon';
 
 export function StackedNotificationIcon(props: {
   notification: UnifiedNotification;
@@ -98,7 +98,7 @@ export function StackedNotificationIcon(props: {
           props.reloading && 'notification-stack-icon-out'
         )}
       >
-        <Entity.Notification.Icon
+        <NotificationListIcon
           notification={props.notification}
           class="size-3"
         />

@@ -13,6 +13,7 @@ import type { GithubPrEventStatus } from '@service-notification/generated/schema
 import { Avatar, Button, cn, Tooltip } from '@ui';
 import { formatDistanceToNowStrict } from 'date-fns';
 import { createEffect, createSignal, For, Show } from 'solid-js';
+import { NotificationListIcon } from './NotificationListIcon';
 import { StackedNotificationIcon } from './StackedNotificationIcon';
 
 interface NotificationListEntityProps {
@@ -98,9 +99,9 @@ function EmailNotificationListRow(props: {
             'bg-transparent': !unread(),
           })}
         />
-        <Entity.Notification.Icon
+        <NotificationListIcon
           notification={props.notification}
-          class="size-3.5 shrink-0 text-ink-muted/60"
+          class="size-3.5 shrink-0"
         />
         <span
           class={cn('ph-no-capture truncate min-w-0 text-xs text-ink', {
@@ -296,7 +297,7 @@ function MultirowNotificationListRow(props: {
           <Show
             when={props.isStack}
             fallback={
-              <Entity.Notification.Icon
+              <NotificationListIcon
                 notification={props.notification}
                 class="size-3.5"
               />
