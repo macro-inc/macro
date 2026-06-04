@@ -33,14 +33,14 @@ use crate::config::Config;
 
 /// Builds a [`ToolServiceContext`] from environment variables and a database pool.
 ///
-/// Required env vars: `INTERNAL_API_SECRET_KEY`, `DOCUMENT_STORAGE_SERVICE_URL`,
-/// `EMAIL_SERVICE_URL`, `SYNC_SERVICE_URL`,
-/// `DOCUMENT_COGNITION_SERVICE_URL`, `STATIC_FILE_SERVICE_URL`,
-/// `DOCUMENT_STORAGE_BUCKET`, `DOCX_DOCUMENT_UPLOAD_BUCKET`,
-/// `EMAIL_SCHEDULED_QUEUE`,
+/// Required env vars: `INTERNAL_API_SECRET_KEY`, `DOCUMENT_STORAGE_BUCKET`,
+/// `DOCX_DOCUMENT_UPLOAD_BUCKET`, `EMAIL_SCHEDULED_QUEUE`,
 /// `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL`,
 /// `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID`,
-/// `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME`
+/// `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME`.
+///
+/// Service URLs are resolved through the `macro_service_urls` crate, using optional
+/// `OVERRIDE_*` env vars before environment defaults.
 #[tracing::instrument(skip(pool, config), err)]
 pub async fn build_tool_service_context(
     pool: sqlx::PgPool,

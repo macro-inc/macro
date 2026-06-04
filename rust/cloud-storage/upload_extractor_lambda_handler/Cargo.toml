@@ -25,6 +25,7 @@ model-entity = { path = "../model-entity" }
 models_bulk_upload = { path = "../models_bulk_upload" }
 serde = { workspace = true }
 serde_json = { workspace = true }
+macro_service_urls = { path = "../macro_service_urls" }
 sha2 = { workspace = true }
 sqs_client = { path = "../sqs_client" }
 tempfile = "3.19.1"

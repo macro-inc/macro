@@ -1,5 +1,6 @@
 use anyhow::Context;
 pub use macro_env::Environment;
+use macro_service_urls::LexicalServiceUrl;
 
 /// Per-entity DB page sizes used by the backfill source adapters. Tunable at
 /// runtime via the corresponding `BACKFILL_*_PAGE_SIZE` env vars.
@@ -130,8 +131,7 @@ impl Config {
             .parse::<u8>()
             .unwrap();
 
-        let lexical_service_url =
-            std::env::var("LEXICAL_SERVICE_URL").context("LEXICAL_SERVICE_URL must be provided")?;
+        let lexical_service_url = LexicalServiceUrl::new()?.to_string();
 
         let backfill_page_sizes = BackfillPageSizes {
             calls: parse_page_size("BACKFILL_CALLS_PAGE_SIZE", DEFAULT_CALLS_PAGE)?,

@@ -48,7 +48,14 @@ document_create_adapters = [
   "document_create",
   "markdown_init",
 ]
-backfill_binary = ["dep:clap", "dep:macro_entrypoint", "markdown_init", "outbound", "ports"]
+backfill_binary = [
+  "dep:clap",
+  "dep:macro_entrypoint",
+  "dep:macro_service_urls",
+  "markdown_init",
+  "outbound",
+  "ports",
+]
 inbound = ["axum", "document_create_adapters", "ports"]
 markdown_init = ["dep:lexical_client"]
 outbound = [
@@ -96,6 +103,7 @@ model-entity = { path = "../model-entity" }
 models_permissions = { path = "../models_permissions" }
 models_properties = { path = "../models_properties" }
 s3_key = { path = "../s3_key" }
+macro_service_urls = { path = "../macro_service_urls", optional = true }
 
 # Async runtime (for ports)
 tokio = { workspace = true, optional = true }

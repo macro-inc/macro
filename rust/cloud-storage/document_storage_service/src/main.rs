@@ -216,7 +216,7 @@ async fn main() -> anyhow::Result<()> {
 
     let conn_gateway_client = ConnectionGatewayClient::new(
         internal_api_secret.as_ref().to_string(),
-        config.vars.connection_gateway_url.as_ref().to_string(),
+        config.connection_gateway_url.clone(),
     );
 
     let sync_service_auth_key = match config.environment {
@@ -230,12 +230,12 @@ async fn main() -> anyhow::Result<()> {
 
     let sync_service_client = Arc::new(SyncServiceClient::new(
         sync_service_auth_key,
-        config.vars.sync_service_url.as_ref().to_string(),
+        config.sync_service_url.clone(),
     ));
 
     let lexical_client = Arc::new(LexicalClient::new(
         internal_api_secret.as_ref().to_string(),
-        config.vars.lexical_service_url.as_ref().to_string(),
+        config.lexical_service_url.clone(),
     ));
 
     let jwt_validation_args =

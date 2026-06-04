@@ -1,5 +1,6 @@
 use anyhow::Context;
 pub use macro_env::Environment;
+use macro_service_urls::StaticFileServiceUrl;
 
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -32,8 +33,7 @@ impl Config {
         let storage_bucket_name = std::env::var("STATIC_STORAGE_BUCKET")
             .context("STATIC_STORAGE_BUCKET must be provided")?;
 
-        let service_url = std::env::var("STATIC_FILE_SERVICE_URL")
-            .context("STATIC_FILE_SERVICE_URL must be provided")?;
+        let service_url = StaticFileServiceUrl::new()?.to_string();
 
         let s3_event_queue_url = std::env::var("STATIC_FILE_SERVICE_S3_EVENT_QUEUE_URL")
             .context("S3_EVENT_QUEUE_URL must be provided")?;

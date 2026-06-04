@@ -14,4 +14,5 @@ serde_json = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]
+macro_service_urls = { path = "../macro_service_urls" }
 tokio = { workspace = true }

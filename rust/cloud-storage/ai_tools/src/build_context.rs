@@ -32,6 +32,9 @@ use frecency::outbound::postgres::FrecencyPgStorage;
 use lexical_client::LexicalClient;
 use macro_env::Environment;
 use macro_env_var::{env_var, maybe_env_var};
+use macro_service_urls::{
+    DocumentStorageServiceUrl, EmailServiceUrl, LexicalServiceUrl, SyncServiceUrl,
+};
 use notification::domain::service::{NotificationReaderService, PlatformArnConfig};
 use notification::outbound::queue::SqsQueue;
 use notification::outbound::repository::DbNotificationRepository;
@@ -45,12 +48,8 @@ use sync_service_client::SyncServiceClient;
 
 env_var! {
     struct ToolContextEnvVars {
-        DocumentStorageServiceUrl,
         DocumentStorageServiceAuthKey,
-        EmailServiceUrl,
-        SyncServiceUrl,
         SyncServiceAuthKey,
-        StaticFileServiceUrl,
         DocumentStorageBucket,
         DocxDocumentUploadBucket,
         EmailScheduledQueue,
@@ -62,7 +61,6 @@ env_var! {
 
 maybe_env_var! {
     struct ToolContextMaybeEnvVars {
-        LexicalServiceUrl,
         NotificationQueue,
     }
 }
@@ -75,16 +73,17 @@ maybe_env_var! {
 /// are treated as AWS Secrets Manager secret names and resolved through the
 /// secrets manager. In `Local`, their values are used directly.
 ///
-/// Required env vars: `DOCUMENT_STORAGE_SERVICE_URL`, `EMAIL_SERVICE_URL`,
-/// `SYNC_SERVICE_URL`, `SYNC_SERVICE_AUTH_KEY`,
-/// `DOCUMENT_STORAGE_SERVICE_AUTH_KEY`, `STATIC_FILE_SERVICE_URL`,
-/// `DOCUMENT_STORAGE_BUCKET`, `DOCX_DOCUMENT_UPLOAD_BUCKET`, `EMAIL_SCHEDULED_QUEUE`,
+/// Required env vars: `SYNC_SERVICE_AUTH_KEY`,
+/// `DOCUMENT_STORAGE_SERVICE_AUTH_KEY`, `DOCUMENT_STORAGE_BUCKET`,
+/// `DOCX_DOCUMENT_UPLOAD_BUCKET`, `EMAIL_SCHEDULED_QUEUE`,
 /// `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL`,
 /// `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID`,
 /// `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME`.
 ///
-/// Optional env vars (with fallbacks for local dev):
-/// - `LEXICAL_SERVICE_URL` (defaults to `http://localhost:8096`)
+/// Service URLs are resolved through the `macro_service_urls` crate, using optional
+/// `OVERRIDE_*` env vars before environment defaults.
+///
+/// Optional env vars:
 /// - `NOTIFICATION_QUEUE` (if omitted, notification status updates skip push clearing)
 #[tracing::instrument(skip(pool), err)]
 pub async fn build_tool_service_context_from_env(
@@ -93,11 +92,10 @@ pub async fn build_tool_service_context_from_env(
     let env = ToolContextEnvVars::new()?;
     let maybe_env = ToolContextMaybeEnvVars::new();
     let environment = Environment::new_or_prod();
-
-    let lexical_service_url: Arc<str> = maybe_env
-        .lexical_service_url
-        .map(|v| v.as_arc())
-        .context("expected LEXICAL_SERVICE_URL")?;
+    let document_storage_service_url = DocumentStorageServiceUrl::new()?.to_string();
+    let sync_service_url = SyncServiceUrl::new()?.to_string();
+    let email_service_url = EmailServiceUrl::new()?.to_string();
+    let lexical_service_url = LexicalServiceUrl::new()?.to_string();
 
     let aws_config = macro_aws_config::get_macro_aws_config().await;
     let aws_sqs_client = aws_sdk_sqs::Client::new(&aws_config);
@@ -134,18 +132,16 @@ pub async fn build_tool_service_context_from_env(
 
     let search_client = Arc::new(SearchServiceClient::new(
         env.document_storage_service_auth_key.to_string(),
-        env.document_storage_service_url.to_string(),
+        document_storage_service_url,
     ));
     let sync_client = Arc::new(SyncServiceClient::new(
         sync_service_auth_key.clone(),
-        env.sync_service_url.to_string(),
+        sync_service_url,
     ));
-    let email_ext_client = Arc::new(EmailServiceClientExternal::new(
-        env.email_service_url.to_string(),
-    ));
+    let email_ext_client = Arc::new(EmailServiceClientExternal::new(email_service_url));
     let lexical_client = LexicalClient::new(
         env.document_storage_service_auth_key.to_string(),
-        lexical_service_url.to_string(),
+        lexical_service_url,
     );
 
     let frecency_storage = FrecencyPgStorage::new(pool.clone());
