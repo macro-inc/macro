@@ -22,10 +22,8 @@ export const [nativeCallSnapshot, setNativeCallSnapshot] =
 
 // Tracks the channel from early native CallKit events before the full native
 // media snapshot is available. nativeCallSnapshot remains authoritative once set.
-export const [
-  nativeCallBootstrapChannelId,
-  setNativeCallBootstrapChannelId,
-] = createSignal<string | null>(null);
+export const [nativeCallBootstrapChannelId, setNativeCallBootstrapChannelId] =
+  createSignal<string | null>(null);
 
 export const [
   nativeCallParticipantIdentities,
