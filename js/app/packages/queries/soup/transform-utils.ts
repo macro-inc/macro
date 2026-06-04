@@ -621,7 +621,7 @@ export const mapSoupPageToEntityList: (
         const out: GithubPullRequestEntity = {
           type: 'foreign',
           id: item.data.id,
-          name: metadata.displayName ?? metadata.name,
+          name: metadata.name ?? metadata.displayName,
           ownerId: item.data.storedForAuthEntity,
           createdAt: item.data.createdAt,
           updatedAt: item.data.updatedAt,
@@ -632,7 +632,7 @@ export const mapSoupPageToEntityList: (
           subType: {
             type: 'github_pull_request',
             number: metadata.number,
-            name: metadata.displayName ?? metadata.name,
+            name: metadata.name ?? metadata.displayName,
             owner: metadata.owner,
             repo: metadata.repo,
             url: metadata.url,
