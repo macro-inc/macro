@@ -154,34 +154,46 @@ pub async fn handler(
         if let Some(child_macro_id) = existing_owner.as_deref()
             && child_macro_id != user_context.user_id
         {
-            // Graph path: link primary (caller) → child so primary can read child's inbox.
-            macro_db_client::macro_user_links::insert_edge(
-                &ctx.db,
-                &user_context.user_id,
-                child_macro_id,
-            )
-            .await
-            .context("Failed to insert macro_user_links edge")?;
-
-            macro_db_client::in_progress_user_link::delete_in_progress_user_link(&ctx.db, &link_id)
-                .await
-                .inspect_err(|e| {
-                    tracing::error!(error=?e, ?link_id, "Failed to delete in_progress_user_link after graph delegation");
-                })
-                .ok();
-
+            // Verify the child has actually connected an inbox before mutating any state.
+            // Looking this up first means a missing email_links row fails cleanly, without
+            // leaving a dangling edge or consuming the in_progress row with no recovery path.
             let child_link = email_db_client::links::get::fetch_link_by_email(
                 &ctx.db,
                 &linked_email,
                 link::UserProvider::Gmail,
             )
             .await
-            .context("Failed to look up child link after delegation")?
+            .context("Failed to look up child link before delegation")?
             .ok_or_else(|| {
-                InitError::BadRequest(
-                    "child macro user exists but has no email_links row".to_string(),
-                )
+                InitError::BadRequest("child has not connected their inbox yet".to_string())
             })?;
+
+            // Graph path: link primary (caller) → child so primary can read child's inbox.
+            // The edge insert and in_progress consumption are a coupled pair, so commit them
+            // atomically: any failure rolls back, leaving the in_progress row for a retry.
+            let mut tx = ctx
+                .db
+                .begin()
+                .await
+                .context("Failed to begin graph delegation transaction")?;
+
+            macro_db_client::macro_user_links::insert_edge(
+                &mut *tx,
+                &user_context.user_id,
+                child_macro_id,
+            )
+            .await
+            .context("Failed to insert macro_user_links edge")?;
+
+            macro_db_client::in_progress_user_link::delete_in_progress_user_link(
+                &mut *tx, &link_id,
+            )
+            .await
+            .context("Failed to delete in_progress_user_link after graph delegation")?;
+
+            tx.commit()
+                .await
+                .context("Failed to commit graph delegation transaction")?;
 
             return Ok((
                 StatusCode::OK,

@@ -118,6 +118,22 @@ async fn delete_edges_for_child_removes_all_grants(pool: Pool<Postgres>) -> anyh
 }
 
 #[sqlx::test]
+async fn insert_edge_within_transaction_commits(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    insert_user(&pool, "macro|primary@x.com").await?;
+    insert_user(&pool, "macro|child@x.com").await?;
+
+    let mut tx = pool.begin().await?;
+    insert_edge(&mut *tx, "macro|primary@x.com", "macro|child@x.com").await?;
+    // Not visible outside the transaction until commit.
+    assert!(!edge_exists(&pool, "macro|primary@x.com", "macro|child@x.com").await?);
+    tx.commit().await?;
+
+    assert!(edge_exists(&pool, "macro|primary@x.com", "macro|child@x.com").await?);
+
+    Ok(())
+}
+
+#[sqlx::test]
 async fn self_referential_edge_rejected(pool: Pool<Postgres>) -> anyhow::Result<()> {
     insert_user(&pool, "macro|primary@x.com").await?;
 

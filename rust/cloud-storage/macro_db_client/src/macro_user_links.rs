@@ -2,7 +2,7 @@
 //! read another macro user's inbox without merging identities. The "what" of the
 //! delegation is implicit — primary may read child's email_links rows.
 
-use sqlx::{Pool, Postgres};
+use sqlx::{Executor, Pool, Postgres};
 
 #[cfg(test)]
 mod test;
@@ -10,11 +10,14 @@ mod test;
 /// Insert an edge `(primary, child)`. Idempotent: if the edge already exists
 /// the conflict is swallowed.
 #[tracing::instrument(skip(db), err)]
-pub async fn insert_edge(
-    db: &Pool<Postgres>,
+pub async fn insert_edge<'e, E>(
+    db: E,
     primary_macro_id: &str,
     child_macro_id: &str,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<()>
+where
+    E: Executor<'e, Database = Postgres>,
+{
     sqlx::query!(
         r#"
             INSERT INTO macro_user_links (primary_macro_id, child_macro_id)
