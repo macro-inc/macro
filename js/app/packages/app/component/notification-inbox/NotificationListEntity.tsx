@@ -3,7 +3,7 @@ import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { UserIcon } from '@core/component/UserIcon';
 import { tryMacroId, useDisplayName } from '@core/user';
-import { Entity, formatRelativeTimestamp, NotificationRow } from '@entity';
+import { Entity, formatTimestamp, NotificationRow } from '@entity';
 import GithubIcon from '@icon/mcp-github.svg';
 import { openNotification, type UnifiedNotification } from '@notifications';
 import GitMergeIcon from '@phosphor-icons/core/regular/git-merge.svg?component-solid';
@@ -12,6 +12,7 @@ import XCircleIcon from '@phosphor-icons/core/regular/x-circle.svg?component-sol
 import type { GithubPrEventStatus } from '@service-notification/generated/schemas';
 import { Avatar, Button, cn, Tooltip } from '@ui';
 import { createEffect, createSignal, For, Show } from 'solid-js';
+import { StackedNotificationIcon } from './StackedNotificationIcon';
 
 interface NotificationListEntityProps {
   notification: UnifiedNotification;
@@ -19,6 +20,16 @@ interface NotificationListEntityProps {
   stacked?: boolean;
   collapsedCount?: number;
   collapsedNotifications?: UnifiedNotification[];
+  layout?: 'compact' | 'multirow';
+}
+
+const getNotificationDate = (notification: UnifiedNotification): Date =>
+  new Date(notification.created_at ?? notification.updated_at ?? 0);
+
+function NotificationListTimestamp(props: {
+  notification: UnifiedNotification;
+}) {
+  return <>{formatTimestamp(getNotificationDate(props.notification))}</>;
 }
 
 const getEmailContent = (notification: UnifiedNotification) => {
@@ -112,8 +123,8 @@ function EmailNotificationListRow(props: {
           </Show>
         </span>
         <div class="shrink-0 ml-auto h-5 flex items-center justify-end">
-          <span class="text-ink-extra-muted text-xs tabular-nums">
-            <Entity.Notification.Timestamp notification={props.notification} />
+          <span class="text-xs text-right text-ink-extra-muted font-medium">
+            <NotificationListTimestamp notification={props.notification} />
           </span>
         </div>
       </div>
@@ -122,6 +133,10 @@ function EmailNotificationListRow(props: {
 }
 
 export function NotificationListEntity(props: NotificationListEntityProps) {
+  if (props.layout === 'multirow') {
+    return <MultirowNotificationListEntity {...props} />;
+  }
+
   const collapsedCount = () => props.collapsedCount ?? 1;
   const hasCollapsedItems = () => collapsedCount() > 1;
   const [expanded, setExpanded] = createSignal(false);
@@ -164,7 +179,7 @@ export function NotificationListEntity(props: NotificationListEntityProps) {
       </Show>
       <Show when={hasCollapsedItems() && expanded()}>
         <div class="ml-12 mr-2 mt-1 rounded-lg border border-ink-muted/8 bg-ink-muted/2.5 overflow-hidden divide-y divide-ink-muted/8">
-          <For each={collapsedNotifications().slice(1)}>
+          <For each={collapsedNotifications()}>
             {(notification) => (
               <NotificationRow notification={notification} variant="compact" />
             )}
@@ -175,106 +190,177 @@ export function NotificationListEntity(props: NotificationListEntityProps) {
   );
 }
 
-function StackedNotificationIcon(props: {
+function NotificationContentPreview(props: {
   notification: UnifiedNotification;
-  count: number;
-  reloading?: boolean;
 }) {
-  const visibleCount = () => Math.min(props.count, 3);
-  const topY = () => (visibleCount() >= 3 ? 2 : visibleCount() === 2 ? 5 : 8);
-  const iconTopClass = () => {
-    if (visibleCount() >= 3) return 'top-[33%]';
-    if (visibleCount() === 2) return 'top-[46%]';
-    return 'top-[58%]';
+  return (
+    <Show
+      when={getEmailContent(props.notification)}
+      fallback={
+        <Entity.Notification.Content
+          notification={props.notification}
+          singleLine
+        />
+      }
+    >
+      {(content) => (
+        <>
+          <span class="text-ink">{content().subject}</span>
+          <Show when={content().snippet}>
+            {(snippet) => (
+              <span class="text-ink-extra-muted"> — {snippet()}</span>
+            )}
+          </Show>
+        </>
+      )}
+    </Show>
+  );
+}
+
+function MultirowNotificationListRow(props: {
+  notification: UnifiedNotification;
+  count?: number;
+  isStack?: boolean;
+  expanded?: boolean;
+  onToggle?: () => void;
+}) {
+  const notificationSource = useGlobalNotificationSource();
+  const [reloading, setReloading] = createSignal(false);
+  const [previousCount, setPreviousCount] = createSignal(props.count ?? 1);
+  const unread = () =>
+    !props.notification.viewed_at && !props.notification.done;
+  const count = () => props.count ?? 1;
+
+  createEffect(() => {
+    if (!props.isStack) return;
+
+    const previous = previousCount();
+    const current = count();
+
+    if (current < previous && current > 1) {
+      setReloading(true);
+      window.setTimeout(() => setReloading(false), 180);
+    }
+
+    setPreviousCount(current);
+  });
+
+  const handleOpen = async (e: MouseEvent | KeyboardEvent) => {
+    e.stopPropagation();
+
+    if (props.isStack) {
+      e.preventDefault();
+      props.onToggle?.();
+      return;
+    }
+
+    const splitManager = globalSplitManager();
+    if (!splitManager) return;
+    await openNotification(props.notification, splitManager, e.shiftKey);
+    await notificationSource.markAsRead(props.notification);
   };
 
   return (
-    <span class="relative block size-5 shrink-0 text-ink-muted">
-      <svg
-        viewBox="0 0 24 24"
-        class="absolute inset-0 size-full text-ink-muted/45"
-        aria-hidden="true"
+    <div class="relative z-1 bg-surface shadow-[0_1px_0_rgb(from_var(--color-ink)_r_g_b_/_0.04)]">
+      <div
+        class="group/notif grid grid-cols-[1rem_1rem_minmax(0,1fr)_5rem] grid-rows-[auto_auto] gap-x-2 gap-y-1 px-3 py-2 hover:bg-ink-muted/6 min-w-0 overflow-hidden cursor-pointer"
+        onClick={handleOpen}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            handleOpen(e);
+          }
+        }}
       >
-        <Show when={props.count > 3}>
-          <rect
-            x="5"
-            y="8"
-            width="14"
-            height="12"
-            rx="2"
-            class={cn(
-              'notification-stack-svg-piece fill-ink-muted/3 stroke-current opacity-0',
-              props.reloading && 'notification-stack-card-in'
+        <span class="col-start-1 row-start-1 grid size-4 place-items-center">
+          <Show
+            when={props.isStack && count() > 1}
+            fallback={
+              <span
+                class={cn('size-1.5 rounded-full', {
+                  'bg-accent': unread(),
+                  'bg-transparent': !unread(),
+                })}
+              />
+            }
+          >
+            <span class="grid size-4 place-items-center rounded-sm bg-accent/10 text-[10px] font-medium leading-none text-accent tabular-nums">
+              {count()}
+            </span>
+          </Show>
+        </span>
+        <span class="col-start-2 row-start-1 grid size-4 place-items-center text-ink-muted/60">
+          <Show
+            when={props.isStack}
+            fallback={
+              <Entity.Notification.Icon
+                notification={props.notification}
+                class="size-3.5"
+              />
+            }
+          >
+            <StackedNotificationIcon
+              notification={props.notification}
+              count={count()}
+              reloading={reloading()}
+            />
+          </Show>
+        </span>
+        <div class="col-start-3 row-start-1 min-w-0 flex items-center gap-1.5">
+          <span
+            class={cn('ph-no-capture truncate min-w-0 text-xs text-ink', {
+              'font-medium': unread(),
+            })}
+          >
+            <NotificationListDescription notification={props.notification} />
+          </span>
+        </div>
+        <span class="col-start-4 row-start-1 justify-self-end text-xs text-right text-ink-extra-muted font-medium">
+          <NotificationListTimestamp notification={props.notification} />
+        </span>
+        <div class="col-start-3 col-span-2 row-start-2 min-w-0 ph-no-capture truncate text-xs text-ink-muted/60">
+          <NotificationContentPreview notification={props.notification} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MultirowNotificationListEntity(props: NotificationListEntityProps) {
+  const collapsedCount = () => props.collapsedCount ?? 1;
+  const hasCollapsedItems = () => collapsedCount() > 1;
+  const [expanded, setExpanded] = createSignal(false);
+  const collapsedNotifications = () => props.collapsedNotifications ?? [];
+
+  return (
+    <div
+      class={cn(
+        '@container/entity relative group/narrow flex flex-col',
+        props.stacked
+          ? 'w-full'
+          : 'soup-list-entity w-[calc(100%-0.5rem)] mr-1 py-0.5 mx-1',
+        props.highlighted && 'ring ring-edge bg-active/60 ring-inset'
+      )}
+    >
+      <MultirowNotificationListRow
+        notification={props.notification}
+        count={collapsedCount()}
+        isStack={hasCollapsedItems()}
+        expanded={expanded()}
+        onToggle={() => setExpanded((value) => !value)}
+      />
+      <Show when={hasCollapsedItems() && expanded()}>
+        <div class="ml-12 mr-2 mt-1 rounded-lg border border-ink-muted/8 bg-ink-muted/2.5 overflow-hidden divide-y divide-ink-muted/8">
+          <For each={collapsedNotifications()}>
+            {(notification) => (
+              <MultirowNotificationListRow notification={notification} />
             )}
-            stroke-width="1"
-            vector-effect="non-scaling-stroke"
-          />
-        </Show>
-        <Show when={visibleCount() >= 3}>
-          <rect
-            x="5"
-            y="8"
-            width="14"
-            height="12"
-            rx="2"
-            class={cn(
-              'notification-stack-svg-piece fill-ink-muted/3 stroke-current',
-              props.reloading &&
-                props.count > 3 &&
-                'notification-stack-card-shift'
-            )}
-            stroke-width="1"
-            vector-effect="non-scaling-stroke"
-          />
-        </Show>
-        <Show when={visibleCount() >= 2}>
-          <rect
-            x="5"
-            y="5"
-            width="14"
-            height="12"
-            rx="2"
-            class={cn(
-              'notification-stack-svg-piece fill-ink-muted/3 stroke-current',
-              props.reloading &&
-                props.count > 3 &&
-                'notification-stack-card-shift'
-            )}
-            stroke-width="1"
-            vector-effect="non-scaling-stroke"
-          />
-        </Show>
-        <g
-          class={cn(
-            'notification-stack-svg-piece',
-            props.reloading && 'notification-stack-card-out'
-          )}
-        >
-          <rect
-            x="5"
-            y={topY()}
-            width="14"
-            height="12"
-            rx="2"
-            class="fill-surface stroke-current"
-            stroke-width="1"
-            vector-effect="non-scaling-stroke"
-          />
-        </g>
-      </svg>
-      <span
-        class={cn(
-          'absolute left-1/2 -translate-x-1/2 -translate-y-1/2',
-          iconTopClass(),
-          props.reloading && 'notification-stack-icon-out'
-        )}
-      >
-        <Entity.Notification.Icon
-          notification={props.notification}
-          class="size-3"
-        />
-      </span>
-    </span>
+          </For>
+        </div>
+      </Show>
+    </div>
   );
 }
 
@@ -365,11 +451,11 @@ function CollapsedNotificationListEntityRow(props: {
         </span>
         <div class="shrink-0 ml-auto h-5 flex items-center justify-end">
           <span
-            class={cn('text-ink-extra-muted text-xs tabular-nums', {
+            class={cn('text-xs text-right text-ink-extra-muted font-medium', {
               'group-hover/notif:hidden': canMarkDone(),
             })}
           >
-            <Entity.Notification.Timestamp notification={props.notification} />
+            <NotificationListTimestamp notification={props.notification} />
           </span>
         </div>
       </div>
@@ -522,6 +608,7 @@ export function GithubNotificationListEntity(props: {
   url?: string;
   authorId?: string;
   authorFallback?: string;
+  layout?: 'compact' | 'multirow';
 }) {
   const github = () => getGithubContent(props.notification);
   const unread = () =>
@@ -536,12 +623,42 @@ export function GithubNotificationListEntity(props: {
   const authorFallback = () =>
     props.authorFallback ?? github()?.senderGithubLogin ?? undefined;
   const timestamp = () =>
-    formatRelativeTimestamp(
-      props.notification.created_at ??
-        props.notification.updated_at ??
-        new Date(0),
-      { condensed: true }
-    );
+    formatTimestamp(getNotificationDate(props.notification));
+
+  const contentSlot = () => (
+    <>
+      <Show when={status()}>
+        {(value) => {
+          const StatusIcon = getGithubStatusIcon(value());
+          return (
+            <StatusIcon
+              class={cn('size-3.5 shrink-0', getGithubStatusClass(value()))}
+            />
+          );
+        }}
+      </Show>
+      <span
+        class={cn('truncate min-w-0 text-ink-muted', {
+          'text-ink font-semibold': unread(),
+        })}
+      >
+        {title()}
+      </span>
+      <Show when={description()}>
+        {(value) => (
+          <span class="truncate min-w-0 text-xs font-normal text-ink-muted/60">
+            {value()}
+          </span>
+        )}
+      </Show>
+    </>
+  );
+
+  const authorPill = () => (
+    <div class="inline-flex max-w-full min-w-0 items-center rounded-full border border-edge-muted px-1 py-0.5 overflow-hidden">
+      <NotificationAuthor id={authorId()} fallback={authorFallback()} />
+    </div>
+  );
 
   return (
     <Show
@@ -550,71 +667,79 @@ export function GithubNotificationListEntity(props: {
         <NotificationListEntity notification={props.notification} stacked />
       }
     >
-      <div
-        class="group/notif grid min-h-10 items-center gap-2 px-2 py-1.5 hover:bg-ink-muted/6 min-w-0 overflow-hidden"
-        style={{
-          'grid-template-columns': GITHUB_GRID_TEMPLATE_COLUMNS,
-          'grid-template-areas': GITHUB_GRID_TEMPLATE_AREAS,
-        }}
-      >
-        <div
-          style={{ 'grid-area': 'indicator' }}
-          class="grid place-items-center"
-        >
-          <span
-            class={cn('size-1.5 rounded-full', {
-              'bg-accent': unread(),
-              'bg-transparent': !unread(),
-            })}
-          />
-        </div>
-        <div
-          style={{ 'grid-area': 'content' }}
-          class="min-w-0 flex items-center gap-1.5 text-xs font-semibold tracking-tight"
-        >
-          <Show when={status()}>
-            {(value) => {
-              const StatusIcon = getGithubStatusIcon(value());
-              return (
-                <StatusIcon
-                  class={cn('size-3.5 shrink-0', getGithubStatusClass(value()))}
-                />
-              );
+      <Show
+        when={props.layout === 'multirow'}
+        fallback={
+          <div
+            class="group/notif grid min-h-10 items-center gap-2 px-2 py-1.5 hover:bg-ink-muted/6 min-w-0 overflow-hidden"
+            style={{
+              'grid-template-columns': GITHUB_GRID_TEMPLATE_COLUMNS,
+              'grid-template-areas': GITHUB_GRID_TEMPLATE_AREAS,
             }}
-          </Show>
-          <span
-            class={cn('truncate min-w-0 text-ink-muted', {
-              'text-ink font-semibold': unread(),
-            })}
           >
-            {title()}
+            <div
+              style={{ 'grid-area': 'indicator' }}
+              class="grid place-items-center"
+            >
+              <span
+                class={cn('size-1.5 rounded-full', {
+                  'bg-accent': unread(),
+                  'bg-transparent': !unread(),
+                })}
+              />
+            </div>
+            <div
+              style={{ 'grid-area': 'content' }}
+              class="min-w-0 flex items-center gap-1.5 text-xs font-semibold tracking-tight"
+            >
+              {contentSlot()}
+            </div>
+            <div
+              style={{ 'grid-area': 'author' }}
+              class="min-w-0 overflow-hidden"
+            >
+              {authorPill()}
+            </div>
+            <div
+              style={{ 'grid-area': 'link' }}
+              class="min-w-0 overflow-hidden flex items-center"
+            >
+              <GithubLinkPill url={url()} label={subtitle()} />
+            </div>
+            <span
+              style={{ 'grid-area': 'timestamp' }}
+              class="shrink-0 text-xs text-right text-ink-extra-muted font-medium"
+            >
+              {timestamp()}
+            </span>
+          </div>
+        }
+      >
+        <div class="group/notif grid grid-cols-[1rem_minmax(0,1fr)_5rem] grid-rows-[auto_auto] gap-x-2 gap-y-1 px-2 py-2 hover:bg-ink-muted/6 min-w-0 overflow-hidden">
+          <div class="col-start-1 row-start-1 grid place-items-center">
+            <span
+              class={cn('size-1.5 rounded-full', {
+                'bg-accent': unread(),
+                'bg-transparent': !unread(),
+              })}
+            />
+          </div>
+          <div class="col-start-2 row-start-1 min-w-0 flex items-center gap-1.5 text-xs font-semibold tracking-tight">
+            {contentSlot()}
+          </div>
+          <span class="col-start-3 row-start-1 justify-self-end shrink-0 text-xs text-right text-ink-extra-muted font-medium">
+            {timestamp()}
           </span>
-          <Show when={description()}>
-            {(value) => (
-              <span class="truncate min-w-0 text-xs font-normal text-ink-muted/60">
-                {value()}
-              </span>
-            )}
-          </Show>
-        </div>
-        <div style={{ 'grid-area': 'author' }} class="min-w-0 overflow-hidden">
-          <div class="inline-flex max-w-full min-w-0 items-center rounded-full border border-edge-muted px-1 py-0.5 overflow-hidden">
-            <NotificationAuthor id={authorId()} fallback={authorFallback()} />
+          <div class="col-start-2 col-span-2 row-start-2 min-w-0 flex items-center gap-1.5 overflow-hidden">
+            <div class="min-w-0 max-w-[45%] overflow-hidden">
+              {authorPill()}
+            </div>
+            <div class="min-w-0 flex-1 overflow-hidden">
+              <GithubLinkPill url={url()} label={subtitle()} />
+            </div>
           </div>
         </div>
-        <div
-          style={{ 'grid-area': 'link' }}
-          class="min-w-0 overflow-hidden flex items-center"
-        >
-          <GithubLinkPill url={url()} label={subtitle()} />
-        </div>
-        <span
-          style={{ 'grid-area': 'timestamp' }}
-          class="shrink-0 text-ink-extra-muted text-xs tabular-nums text-right font-light"
-        >
-          {timestamp()}
-        </span>
-      </div>
+      </Show>
     </Show>
   );
 }

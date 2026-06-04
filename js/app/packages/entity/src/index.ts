@@ -42,4 +42,5 @@ export {
 export {
   formatDateAndTime,
   formatRelativeTimestamp,
+  formatTimestamp,
 } from './utils/timestamp';
