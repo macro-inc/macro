@@ -39,16 +39,12 @@ export function InboxSelector() {
       .sort((a, b) => a.label.localeCompare(b.label))
   );
 
-  // `undefined` is the default "all inboxes" view; surface it as every inbox
-  // checked rather than none.
   const activeIds = createMemo(() => {
     const selected = inboxFilter();
     return selected === undefined ? links().map((l) => l.id) : selected;
   });
 
   const onChange = (ids: string[]) =>
-    // Checking every inbox collapses to the clean default; otherwise keep the
-    // explicit set, including empty ("No inboxes").
     setInboxFilter(ids.length === links().length ? undefined : ids);
 
   const label = () => {

@@ -226,11 +226,6 @@ export const SoupViewContextProvider: FlowComponent<
     'soup.assigneeFilter',
     { default: [] }
   );
-  // Inboxes (email_links.id) the view is scoped to. Tri-state, per-split like
-  // the assignee filter so it round-trips on nav:
-  //   undefined → all inboxes (default, no clause)
-  //   []        → no inboxes (show nothing)
-  //   [ids]     → that subset
   const [inboxFilter, setInboxFilter] = useEntryState<string[] | undefined>(
     'soup.inboxFilter',
     { default: undefined }
@@ -262,9 +257,6 @@ export const SoupViewContextProvider: FlowComponent<
     }
   });
 
-  // soupBody is the query filter store's compiled AST with the inbox scope
-  // ANDed into the email target. `undefined` = all inboxes (no clause); `[]` =
-  // no inboxes (pass null so it filters to a sentinel owner matching nothing).
   const soupBody = createMemo(() => {
     const base = queryFilters.compile();
     const inboxes = inboxFilter();
