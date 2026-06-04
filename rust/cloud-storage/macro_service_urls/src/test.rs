@@ -8,95 +8,96 @@ const ENVS: [Environment; 3] = [
     Environment::Local,
 ];
 
-#[test]
-fn app_parses() {
-    for env in ENVS {
-        let _ = env.app();
+fn assert_parses_for_all_environments<T>(service_url_for_environment: impl Fn(Environment) -> T)
+where
+    T: AsRef<str>,
+{
+    for environment in ENVS {
+        service_url_for_environment(environment)
+            .as_ref()
+            .parse::<Url>()
+            .unwrap();
     }
 }
 
 #[test]
-fn auth_service_parses() {
-    for env in ENVS {
-        let _ = env.auth_service();
-    }
+fn app_service_url_parses() {
+    assert_parses_for_all_environments(AppServiceUrl::default_for_environment);
 }
 
 #[test]
-fn pdf_service_parses() {
-    for env in ENVS {
-        let _ = env.pdf_service();
-    }
+fn auth_service_url_parses() {
+    assert_parses_for_all_environments(AuthServiceUrl::default_for_environment);
 }
 
 #[test]
-fn document_storage_service_parses() {
-    for env in ENVS {
-        let _ = env.document_storage_service();
-    }
+fn pdf_service_url_parses() {
+    assert_parses_for_all_environments(PdfServiceUrl::default_for_environment);
 }
 
 #[test]
-fn websocket_service_parses() {
-    for env in ENVS {
-        let _ = env.websocket_service();
-    }
+fn document_storage_service_url_parses() {
+    assert_parses_for_all_environments(DocumentStorageServiceUrl::default_for_environment);
 }
 
 #[test]
-fn cognition_service_parses() {
-    for env in ENVS {
-        let _ = env.cognition_service();
-    }
+fn websocket_service_url_parses() {
+    assert_parses_for_all_environments(WebsocketServiceUrl::default_for_environment);
 }
 
 #[test]
-fn connection_gateway_parses() {
-    for env in ENVS {
-        let _ = env.connection_gateway();
-    }
+fn connection_gateway_url_parses() {
+    assert_parses_for_all_environments(ConnectionGatewayUrl::default_for_environment);
 }
 
 #[test]
-fn notification_service_parses() {
-    for env in ENVS {
-        let _ = env.notification_service();
-    }
+fn connection_gateway_websocket_url_parses() {
+    assert_parses_for_all_environments(ConnectionGatewayWebsocketUrl::default_for_environment);
 }
 
 #[test]
-fn static_file_service_parses() {
-    for env in ENVS {
-        let _ = env.static_file_service();
-    }
+fn document_cognition_service_url_parses() {
+    assert_parses_for_all_environments(DocumentCognitionServiceUrl::default_for_environment);
 }
 
 #[test]
-fn unfurl_service_parses() {
-    for env in ENVS {
-        let _ = env.unfurl_service();
-    }
+fn notification_service_url_parses() {
+    assert_parses_for_all_environments(NotificationServiceUrl::default_for_environment);
 }
 
 #[test]
-fn contacts_service_parses() {
-    for env in ENVS {
-        let _ = env.contacts_service();
-    }
+fn static_file_service_url_parses() {
+    assert_parses_for_all_environments(StaticFileServiceUrl::default_for_environment);
 }
 
 #[test]
-fn email_service_parses() {
-    for env in ENVS {
-        let _ = env.email_service();
-    }
+fn unfurl_service_url_parses() {
+    assert_parses_for_all_environments(UnfurlServiceUrl::default_for_environment);
 }
 
 #[test]
-fn image_proxy_service_parses() {
-    for env in ENVS {
-        let _ = env.image_proxy_service();
-    }
+fn contacts_service_url_parses() {
+    assert_parses_for_all_environments(ContactsServiceUrl::default_for_environment);
+}
+
+#[test]
+fn email_service_url_parses() {
+    assert_parses_for_all_environments(EmailServiceUrl::default_for_environment);
+}
+
+#[test]
+fn image_proxy_service_url_parses() {
+    assert_parses_for_all_environments(ImageProxyServiceUrl::default_for_environment);
+}
+
+#[test]
+fn lexical_service_url_parses() {
+    assert_parses_for_all_environments(LexicalServiceUrl::default_for_environment);
+}
+
+#[test]
+fn sync_service_url_parses() {
+    assert_parses_for_all_environments(SyncServiceUrl::default_for_environment);
 }
 
 crate::service_url! {
@@ -242,54 +243,134 @@ fn grouped_defaults_do_not_check_overrides() {
 }
 
 #[test]
-fn exported_service_urls_match_local_docker_compose_values() {
+fn exported_service_urls_match_local_values() {
     let service_urls = ServiceUrls::default_for_environment(macro_env::Environment::Local);
 
     assert_eq!(
+        service_urls.app_service_url.as_ref(),
+        "http://localhost:3000/app"
+    );
+    assert_eq!(
+        service_urls.auth_service_url.as_ref(),
+        "http://localhost:8080"
+    );
+    assert_eq!(
+        service_urls.pdf_service_url.as_ref(),
+        "http://localhost:4567"
+    );
+    assert_eq!(
         service_urls.document_storage_service_url.as_ref(),
         "http://localhost:8086",
+    );
+    assert_eq!(
+        service_urls.websocket_service_url.as_ref(),
+        "ws://localhost:6969"
     );
     assert_eq!(
         service_urls.connection_gateway_url.as_ref(),
         "http://localhost:8082",
     );
     assert_eq!(
+        service_urls.connection_gateway_websocket_url.as_ref(),
+        "ws://localhost:8082",
+    );
+    assert_eq!(
         service_urls.document_cognition_service_url.as_ref(),
         "http://localhost:8085",
     );
     assert_eq!(
-        service_urls.lexical_service_url.as_ref(),
-        "http://localhost:8096",
-    );
-    assert_eq!(
-        service_urls.sync_service_url.as_ref(),
-        "http://localhost:8787",
+        service_urls.notification_service_url.as_ref(),
+        "http://localhost:8089",
     );
     assert_eq!(
         service_urls.static_file_service_url.as_ref(),
         "http://localhost:8100",
     );
     assert_eq!(
+        service_urls.unfurl_service_url.as_ref(),
+        "http://localhost:8095"
+    );
+    assert_eq!(
+        service_urls.contacts_service_url.as_ref(),
+        "http://localhost:8083"
+    );
+    assert_eq!(
         service_urls.email_service_url.as_ref(),
-        "http://localhost:8087",
+        "http://localhost:8087"
+    );
+    assert_eq!(
+        service_urls.image_proxy_service_url.as_ref(),
+        "http://localhost:8097",
+    );
+    assert_eq!(
+        service_urls.lexical_service_url.as_ref(),
+        "http://localhost:8096"
+    );
+    assert_eq!(
+        service_urls.sync_service_url.as_ref(),
+        "http://localhost:8787"
     );
 }
 
 #[test]
-fn exported_service_urls_match_infra_shared_dev_values() {
+fn exported_service_urls_match_dev_values() {
     let service_urls = ServiceUrls::default_for_environment(macro_env::Environment::Develop);
 
     assert_eq!(
+        service_urls.app_service_url.as_ref(),
+        "https://dev.macro.com/app"
+    );
+    assert_eq!(
+        service_urls.auth_service_url.as_ref(),
+        "https://auth-service-dev.macro.com",
+    );
+    assert_eq!(
+        service_urls.pdf_service_url.as_ref(),
+        "https://pdf-service-dev.macro.com",
+    );
+    assert_eq!(
         service_urls.document_storage_service_url.as_ref(),
         "https://cloud-storage-dev.macro.com",
+    );
+    assert_eq!(
+        service_urls.websocket_service_url.as_ref(),
+        "wss://services-dev.macro.com",
     );
     assert_eq!(
         service_urls.connection_gateway_url.as_ref(),
         "https://connection-gateway-dev.macro.com",
     );
     assert_eq!(
+        service_urls.connection_gateway_websocket_url.as_ref(),
+        "wss://connection-gateway-dev.macro.com",
+    );
+    assert_eq!(
         service_urls.document_cognition_service_url.as_ref(),
         "https://document-cognition-dev.macro.com",
+    );
+    assert_eq!(
+        service_urls.notification_service_url.as_ref(),
+        "https://notifications-dev.macro.com",
+    );
+    assert_eq!(
+        service_urls.static_file_service_url.as_ref(),
+        "https://static-file-service-dev.macro.com",
+    );
+    assert_eq!(
+        service_urls.unfurl_service_url.as_ref(),
+        "https://unfurl-service-dev.macro.com",
+    );
+    assert_eq!(
+        service_urls.contacts_service_url.as_ref(),
+        "https://contacts-dev.macro.com",
+    );
+    assert_eq!(
+        service_urls.email_service_url.as_ref(),
+        "https://email-service-dev.macro.com",
+    );
+    assert_eq!(
+        service_urls.image_proxy_service_url.as_ref(),
+        "https://image-proxy-dev.macro.com",
     );
     assert_eq!(
         service_urls.lexical_service_url.as_ref(),
@@ -299,31 +380,67 @@ fn exported_service_urls_match_infra_shared_dev_values() {
         service_urls.sync_service_url.as_ref(),
         "https://sync-service-dev3.macroverse.workers.dev",
     );
-    assert_eq!(
-        service_urls.static_file_service_url.as_ref(),
-        "https://static-file-service-dev.macro.com",
-    );
-    assert_eq!(
-        service_urls.email_service_url.as_ref(),
-        "https://email-service-dev.macro.com",
-    );
 }
 
 #[test]
-fn exported_service_urls_match_infra_shared_prod_values() {
+fn exported_service_urls_match_prod_values() {
     let service_urls = ServiceUrls::default_for_environment(macro_env::Environment::Production);
 
     assert_eq!(
+        service_urls.app_service_url.as_ref(),
+        "https://macro.com/app"
+    );
+    assert_eq!(
+        service_urls.auth_service_url.as_ref(),
+        "https://auth-service.macro.com",
+    );
+    assert_eq!(
+        service_urls.pdf_service_url.as_ref(),
+        "https://pdf-service.macro.com",
+    );
+    assert_eq!(
         service_urls.document_storage_service_url.as_ref(),
         "https://cloud-storage.macro.com",
+    );
+    assert_eq!(
+        service_urls.websocket_service_url.as_ref(),
+        "wss://services.macro.com",
     );
     assert_eq!(
         service_urls.connection_gateway_url.as_ref(),
         "https://connection-gateway.macro.com",
     );
     assert_eq!(
+        service_urls.connection_gateway_websocket_url.as_ref(),
+        "wss://connection-gateway.macro.com",
+    );
+    assert_eq!(
         service_urls.document_cognition_service_url.as_ref(),
         "https://document-cognition.macro.com",
+    );
+    assert_eq!(
+        service_urls.notification_service_url.as_ref(),
+        "https://notifications.macro.com",
+    );
+    assert_eq!(
+        service_urls.static_file_service_url.as_ref(),
+        "https://static-file-service.macro.com",
+    );
+    assert_eq!(
+        service_urls.unfurl_service_url.as_ref(),
+        "https://unfurl-service.macro.com",
+    );
+    assert_eq!(
+        service_urls.contacts_service_url.as_ref(),
+        "https://contacts.macro.com",
+    );
+    assert_eq!(
+        service_urls.email_service_url.as_ref(),
+        "https://email-service.macro.com",
+    );
+    assert_eq!(
+        service_urls.image_proxy_service_url.as_ref(),
+        "https://image-proxy.macro.com",
     );
     assert_eq!(
         service_urls.lexical_service_url.as_ref(),
@@ -333,29 +450,65 @@ fn exported_service_urls_match_infra_shared_prod_values() {
         service_urls.sync_service_url.as_ref(),
         "https://sync-service-prod2.macroverse.workers.dev",
     );
-    assert_eq!(
-        service_urls.static_file_service_url.as_ref(),
-        "https://static-file-service.macro.com",
-    );
-    assert_eq!(
-        service_urls.email_service_url.as_ref(),
-        "https://email-service.macro.com",
-    );
 }
 
 #[test]
 fn exported_service_url_override_names_are_derived_from_env_var_names() {
     assert_eq!(
+        AppServiceUrl::local().override_env_var_name(),
+        "OVERRIDE_APP_SERVICE_URL",
+    );
+    assert_eq!(
+        AuthServiceUrl::local().override_env_var_name(),
+        "OVERRIDE_AUTH_SERVICE_URL",
+    );
+    assert_eq!(
+        PdfServiceUrl::local().override_env_var_name(),
+        "OVERRIDE_PDF_SERVICE_URL",
+    );
+    assert_eq!(
         DocumentStorageServiceUrl::local().override_env_var_name(),
         "OVERRIDE_DOCUMENT_STORAGE_SERVICE_URL",
+    );
+    assert_eq!(
+        WebsocketServiceUrl::local().override_env_var_name(),
+        "OVERRIDE_WEBSOCKET_SERVICE_URL",
     );
     assert_eq!(
         ConnectionGatewayUrl::local().override_env_var_name(),
         "OVERRIDE_CONNECTION_GATEWAY_URL",
     );
     assert_eq!(
+        ConnectionGatewayWebsocketUrl::local().override_env_var_name(),
+        "OVERRIDE_CONNECTION_GATEWAY_WEBSOCKET_URL",
+    );
+    assert_eq!(
         DocumentCognitionServiceUrl::local().override_env_var_name(),
         "OVERRIDE_DOCUMENT_COGNITION_SERVICE_URL",
+    );
+    assert_eq!(
+        NotificationServiceUrl::local().override_env_var_name(),
+        "OVERRIDE_NOTIFICATION_SERVICE_URL",
+    );
+    assert_eq!(
+        StaticFileServiceUrl::local().override_env_var_name(),
+        "OVERRIDE_STATIC_FILE_SERVICE_URL",
+    );
+    assert_eq!(
+        UnfurlServiceUrl::local().override_env_var_name(),
+        "OVERRIDE_UNFURL_SERVICE_URL",
+    );
+    assert_eq!(
+        ContactsServiceUrl::local().override_env_var_name(),
+        "OVERRIDE_CONTACTS_SERVICE_URL",
+    );
+    assert_eq!(
+        EmailServiceUrl::local().override_env_var_name(),
+        "OVERRIDE_EMAIL_SERVICE_URL",
+    );
+    assert_eq!(
+        ImageProxyServiceUrl::local().override_env_var_name(),
+        "OVERRIDE_IMAGE_PROXY_SERVICE_URL",
     );
     assert_eq!(
         LexicalServiceUrl::local().override_env_var_name(),
@@ -364,14 +517,6 @@ fn exported_service_url_override_names_are_derived_from_env_var_names() {
     assert_eq!(
         SyncServiceUrl::local().override_env_var_name(),
         "OVERRIDE_SYNC_SERVICE_URL",
-    );
-    assert_eq!(
-        StaticFileServiceUrl::local().override_env_var_name(),
-        "OVERRIDE_STATIC_FILE_SERVICE_URL",
-    );
-    assert_eq!(
-        EmailServiceUrl::local().override_env_var_name(),
-        "OVERRIDE_EMAIL_SERVICE_URL",
     );
 }
 

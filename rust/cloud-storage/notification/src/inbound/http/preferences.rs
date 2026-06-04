@@ -8,8 +8,7 @@ use axum::{
 };
 use cowlike::CowLike;
 use decode_jwt::DecodedJwt;
-use macro_env::Environment;
-use macro_service_urls::EnvExtMacroServiceUrls;
+use macro_service_urls::NotificationServiceUrl;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_error_response::ErrorResponse;
 use serde::{Deserialize, Serialize};
@@ -118,8 +117,20 @@ pub async fn presigned_disable_notification_type<S: NotificationReader>(
     Query(params): Query<PresignedQueryParams>,
     original_uri: OriginalUri,
 ) -> Result<Html<String>, (StatusCode, Html<String>)> {
-    let env = Environment::new_or_prod();
-    let notification_service_url = env.notification_service();
+    let notification_service_url = NotificationServiceUrl::new().map_err(|err| {
+        tracing::error!(error=?err, "failed to resolve notification service URL");
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Html("Invalid link".to_string()),
+        )
+    })?;
+    let notification_service_url = notification_service_url.parse_url().map_err(|err| {
+        tracing::error!(error=?err, "failed to parse notification service URL");
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Html("Invalid link".to_string()),
+        )
+    })?;
     let to_verify = notification_service_url.join(
         original_uri
             .path_and_query()
