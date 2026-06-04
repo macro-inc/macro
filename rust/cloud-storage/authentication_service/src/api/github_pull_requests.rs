@@ -22,17 +22,18 @@ pub enum EnrichGithubPullRequestsProxyError {
 
 impl IntoResponse for EnrichGithubPullRequestsProxyError {
     fn into_response(self) -> Response {
-        let status_code = match &self {
-            Self::Github(GithubError::NoLinkFound) => StatusCode::NOT_FOUND,
+        let (status_code, message) = match &self {
+            Self::Github(GithubError::NoLinkFound) => {
+                (StatusCode::NOT_FOUND, "no github link found")
+            }
+            Self::Github(GithubError::ReauthenticationRequired) => (
+                StatusCode::PRECONDITION_REQUIRED,
+                "reauthentication required",
+            ),
             Self::Github(error) => {
                 tracing::error!(error=?error, "failed to enrich GitHub pull requests");
-                StatusCode::INTERNAL_SERVER_ERROR
+                (StatusCode::INTERNAL_SERVER_ERROR, "internal error")
             }
-        };
-
-        let message = match &self {
-            Self::Github(GithubError::NoLinkFound) => "no github link found",
-            Self::Github(_) => "internal error",
         };
 
         (
@@ -59,6 +60,7 @@ pub fn router() -> Router<ApiContext> {
         (status = 200, body = EnrichGithubPullRequestsResponse),
         (status = 401, body = ErrorResponse),
         (status = 404, body = ErrorResponse),
+        (status = 428, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
     )
 )]

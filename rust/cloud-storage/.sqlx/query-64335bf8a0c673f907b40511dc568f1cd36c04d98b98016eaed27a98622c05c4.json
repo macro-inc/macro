@@ -1,0 +1,59 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            m.id,\n            m.link_id,\n            m.thread_id,\n            m.provider_thread_id,\n            m.headers_jsonb,\n            m.is_sent,\n            m.is_draft\n        FROM email_messages m\n        WHERE m.id = $1 AND m.link_id = ANY($2)\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "thread_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "provider_thread_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "headers_jsonb",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 5,
+        "name": "is_sent",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 6,
+        "name": "is_draft",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "64335bf8a0c673f907b40511dc568f1cd36c04d98b98016eaed27a98622c05c4"
+}

@@ -1,5 +1,6 @@
 import { useAnalytics } from '@app/component/analytics-context';
 import { getViewPreset } from '@app/component/app-sidebar/soup-filter-presets';
+import { Home } from '@app/component/home';
 import type { SetPredicatesInput } from '@app/component/next-soup/filters/filter-store/predicates-store';
 import type { Query } from '@app/component/next-soup/filters/filter-store/types';
 import { SoupView } from '@app/component/next-soup/soup-view/soup-view';
@@ -101,6 +102,14 @@ registerComponent('unified-list', () => (
 ));
 
 /** BEGIN - APP ROUTES */
+registerComponent(
+  'home',
+  withAuth(() => {
+    usePageViewTracking('home');
+    return <Home />;
+  })
+);
+
 registerComponent(
   'inbox',
   withAuth(() => {

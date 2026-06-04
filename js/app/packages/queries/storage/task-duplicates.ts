@@ -68,9 +68,6 @@ export function useDismissTaskDuplicatesMutation(documentId: Accessor<string>) {
   }));
 }
 
-/** Minimum title length before the live similarity search fires. */
-export const SIMILARITY_SEARCH_MIN_TITLE_LENGTH = 3;
-
 type TaskSimilaritySearchInput = {
   title: string;
   markdown: string;
@@ -95,21 +92,18 @@ async function searchSimilarTasks(
  * Live, ephemeral similarity search used by the task composer. Hits the
  * stateless `/documents/similarity_search` HTTP endpoint — nothing is
  * persisted, so there is no cache invalidation or dismiss flow.
- *
- * `initialData` lets a restored composer draft seed the results for its
- * initial input so saved matches render instantly without a refetch flash.
  */
 export function useTaskSimilaritySearchQuery(
-  input: Accessor<TaskSimilaritySearchInput>,
-  initialData?: Accessor<TaskSimilarityResult[] | undefined>
+  input: Accessor<TaskSimilaritySearchInput>
 ) {
   return useQuery(() => ({
     queryKey: taskSimilaritySearchKeys.forInput(input()).queryKey,
     queryFn: () => searchSimilarTasks(input()),
-    enabled: input().title.trim().length >= SIMILARITY_SEARCH_MIN_TITLE_LENGTH,
+    // Only query when there is something to search on: a title or a body.
+    enabled:
+      input().title.trim().length > 0 || input().markdown.trim().length > 0,
     staleTime: 30 * 1000,
     placeholderData: (prev) => prev,
-    initialData: initialData?.(),
   }));
 }
 

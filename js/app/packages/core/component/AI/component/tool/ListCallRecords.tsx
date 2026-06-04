@@ -10,7 +10,7 @@ const handler = createToolRenderer({
       {ctx.tool.data.channelId ? (
         <>
           {' '}
-          in <span class="text-accent">channel {ctx.tool.data.channelId}</span>
+          in <span class="text-ink">channel {ctx.tool.data.channelId}</span>
         </>
       ) : null}
     </BaseTool>

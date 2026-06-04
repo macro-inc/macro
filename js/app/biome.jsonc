@@ -143,8 +143,7 @@
       "includes": [
         "packages/app/component/settings/**",
         "packages/animate/**",
-        "packages/theme/**",
-        "packages/ui/**"
+        "packages/theme/**"
       ],
       "formatter": {
         "enabled": false

@@ -1,7 +1,12 @@
 import { SidePanel } from '@app/component/side-panel';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useBlockId } from '@core/block';
 import { DocumentMention } from '@core/component/LexicalMarkdown/component/decorator/DocumentMention';
 import { toast } from '@core/component/Toast/Toast';
+import {
+  ENABLE_TASK_DUPLICATES_FLAG,
+  ENABLE_TASK_DUPLICATES_OVERRIDE,
+} from '@core/constant/featureFlags';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import WarningIcon from '@phosphor/warning.svg';
 import {
@@ -13,52 +18,66 @@ import { Button, cn, Dropdown } from '@ui';
 import { createMemo, createSignal, For, Show, Suspense } from 'solid-js';
 
 export function TaskDuplicateMatchPill() {
+  const flag = useFeatureFlag(ENABLE_TASK_DUPLICATES_FLAG, {
+    enabledOverride: ENABLE_TASK_DUPLICATES_OVERRIDE,
+  });
   const matches = useTaskDuplicateMatches();
   const [open, setOpen] = createSignal(false);
 
   return (
-    <Suspense>
-      <Show when={matches.count() > 0}>
-        <Dropdown open={open()} onOpenChange={setOpen} placement="bottom-start">
-          <Dropdown.Trigger
-            depth={2}
-            class={cn(
-              'h-auto min-w-0 gap-1.5 rounded-full border-failure/40 px-2 py-1 leading-tight',
-              'bg-failure/10 text-failure-ink shadow-none',
-              'hover:bg-failure/15 focus-visible:bg-failure/15 focus-visible:ring-failure/60',
-              open() && 'bg-failure/15'
-            )}
-            title="Possible duplicate tasks"
+    <Show when={flag().enabled}>
+      <Suspense>
+        <Show when={matches.count() > 0}>
+          <Dropdown
+            open={open()}
+            onOpenChange={setOpen}
+            placement="bottom-start"
           >
-            <WarningIcon class="size-3 shrink-0" />
-            <span class="truncate">Duplicate Detected</span>
-            <CaretDownIcon class="size-3 shrink-0 text-current/70" />
-          </Dropdown.Trigger>
-          <Dropdown.Content class="max-w-[calc(100vw-24px)]">
-            <TaskDuplicateMatchPopover matches={matches} />
-          </Dropdown.Content>
-        </Dropdown>
-      </Show>
-    </Suspense>
+            <Dropdown.Trigger
+              depth={2}
+              class={cn(
+                'h-auto min-w-0 gap-1.5 rounded-full border-failure/40 px-2 py-1 leading-tight',
+                'bg-failure/10 text-failure-ink shadow-none',
+                'hover:bg-failure/15 focus-visible:bg-failure/15 focus-visible:ring-failure/60',
+                open() && 'bg-failure/15'
+              )}
+              title="Possible duplicate tasks"
+            >
+              <WarningIcon class="size-3 shrink-0" />
+              <span class="truncate">Duplicate Detected</span>
+              <CaretDownIcon class="size-3 shrink-0 text-current/70" />
+            </Dropdown.Trigger>
+            <Dropdown.Content class="max-w-[calc(100vw-24px)]">
+              <TaskDuplicateMatchPopover matches={matches} />
+            </Dropdown.Content>
+          </Dropdown>
+        </Show>
+      </Suspense>
+    </Show>
   );
 }
 
 export function TaskDuplicateMatchesSidePanelSection() {
+  const flag = useFeatureFlag(ENABLE_TASK_DUPLICATES_FLAG, {
+    enabledOverride: ENABLE_TASK_DUPLICATES_OVERRIDE,
+  });
   const matches = useTaskDuplicateMatches();
 
   return (
-    <Suspense>
-      <Show when={matches.count() > 0}>
-        <SidePanel.Section
-          id="duplicates"
-          title="Duplicate Tasks"
-          defaultOpen
-          order={60}
-        >
-          <TaskDuplicateMatchesSidePanel matches={matches} />
-        </SidePanel.Section>
-      </Show>
-    </Suspense>
+    <Show when={flag().enabled}>
+      <Suspense>
+        <Show when={matches.count() > 0}>
+          <SidePanel.Section
+            id="duplicates"
+            title="Duplicate Tasks"
+            defaultOpen
+            order={60}
+          >
+            <TaskDuplicateMatchesSidePanel matches={matches} />
+          </SidePanel.Section>
+        </Show>
+      </Suspense>
+    </Show>
   );
 }
 

@@ -117,25 +117,30 @@ fn github_pr_event_title_falls_back_to_display_name() {
 }
 
 #[test]
-fn github_pr_event_uses_foreign_entity_for_collapse_key_and_apns() {
-    let event = github_pr_event();
-    let entity = EntityType::ForeignEntity.with_entity_string(event.foreign_entity_id.to_string());
-    let entity_type: &'static str = EntityType::ForeignEntity.into();
-    let expected_collapse_key = NotifCollapseKey::new(entity_type)
-        .append(&event.foreign_entity_id.to_string())
-        .into_hashed()
-        .into_inner();
+fn github_pr_event_notif_event_deserializes_and_renders_in_app() {
+    let expected = github_pr_event();
+    let value = serde_json::json!({
+        "tag": "github_pr_event",
+        "content": serde_json::to_value(&expected).unwrap(),
+    });
 
-    let collapse_key = event.collapse_key(&entity).into_hashed().into_inner();
-    let apns = event.as_apns(None, &entity, Uuid::nil()).unwrap();
+    let event: crate::NotifEvent = serde_json::from_value(value).unwrap();
 
-    assert_eq!(collapse_key, expected_collapse_key);
     assert_eq!(
-        apns.push_notification_data
-            .sender_profile_picture_url
-            .as_deref(),
-        Some("https://avatars.githubusercontent.com/u/12345?v=4")
+        event
+            .format_title(Some(uid("macro|pr.sender@macro.com")))
+            .unwrap(),
+        "pr.sender merged a pull request"
     );
+    assert_eq!(
+        event.format_body(None).unwrap(),
+        "macro/app#42: Add GitHub PR notifications"
+    );
+
+    let crate::NotifEvent::GithubPrEvent(actual) = event else {
+        panic!("expected github_pr_event variant");
+    };
+    assert_eq!(actual, expected);
 }
 
 #[test]

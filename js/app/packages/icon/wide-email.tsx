@@ -1,22 +1,31 @@
-import { createEffect, createUniqueId } from 'solid-js';
+import { createEffect } from 'solid-js';
 
-// All coordinates are stroke-centers: path is inset 0.75px from visual edges on all sides.
-// Body is two open L-shaped strokes; each stops 1.5px short of the missing corners.
-// stroke-linejoin="round" on each path provides r=0.75 rounding at the surviving corners.
+// All coordinates are stroke-centers (inset from the visual edges by half the stroke).
+// The body is two C-shaped strokes that meet at the left/right edge midpoints:
+//   BODY_A = upper half (rounds the top-left + top-right corners)
+//   BODY_B = lower half (rounds the bottom-left + bottom-right corners)
+// Each corner is a real r=1.5 arc (cubic), so every command is mirrored M,L,C,L,C,L by
+// its paper-plane target — the plane's corner cubics are degenerate (collapsed onto a
+// single vertex), so the rounded corners smoothly shrink to the plane's sharp points.
+// Corner→destination is preserved from the original: TL→tail, TR→nose, BL/BR→tip.
 
 // ── Email (source) ───────────────────────────────────────────────────────────
-const BODY_A_D = 'M 1.5,0.75 L 17.25,0.75 L 17.25,10.5';
-const BODY_B_D = 'M 16.5,11.25 L 0.75,11.25 L 0.75,1.5';
-const FLAP_D = 'M 1.5,1.5 L 9,7.5 L 17.25,0.75';
+const BODY_A_D =
+  'M 17.53125,5.96875 L 17.53125,1.96875 C 17.53125,1.1403 16.8597,0.46875 16.03125,0.46875 L 1.96875,0.46875 C 1.1403,0.46875 0.46875,1.1403 0.46875,1.96875 L 0.46875,5.96875';
+const BODY_B_D =
+  'M 0.46875,5.96875 L 0.46875,9.96875 C 0.46875,10.7972 1.1403,11.46875 1.96875,11.46875 L 16.03125,11.46875 C 16.8597,11.46875 17.53125,10.6403 17.53125,9.96875 L 17.53125,5.96875';
+const FLAP_D = 'M 0.90825,0.90825 L 9,6.75 L 17.09175,0.90825';
 
 // ── Paper plane (target) ─────────────────────────────────────────────────────
-const PLANE_A_D = 'M 1.5,0.75 L 17.25,0.75 L 4.5,11.25';
-const PLANE_B_D = 'M 17.25,0.75 L 4.5,11.25 L 0.75,1';
+const PLANE_A_D =
+  'M 10.875,6 L 17.25,0.75 C 17.25,0.75 17.25,0.75 17.25,0.75 L 0.75,1 C 0.75,1 0.75,1 0.75,1 L 2.625,6.125';
+const PLANE_B_D =
+  'M 2.625,6.125 L 4.5,11.25 C 4.5,11.25 4.5,11.25 4.5,11.25 L 4.5,11.25 C 4.5,11.25 4.5,11.25 4.5,11.25 L 10.875,6';
 const PLANE_C_D = 'M 0.75,1 L 4.5,11.25 L 17.25,0.75';
 
 // ── Cutout triangle (fades in over paper plane) ───────────────────────────────
 // Derived from the inner notch in paper-plane-cutout.svg, scaled 24→18 (×0.75).
-const CUTOUT_D = 'M 3.5,6.7 L 7.3,4.2 L 2.85,4.8 Z';
+const CUTOUT_D = 'M 3.3,6.8 L 7.1,4.3 L 2.65,4.9 Z';
 
 // CSS `d` property requires path() wrapper for cross-browser WAAPI support
 const p = (d: string) => `path('${d}')`;
@@ -38,7 +47,6 @@ export const AnimatedEmailIcon = (props: {
   triggerAnimation?: boolean;
   class?: string;
 }) => {
-  const clipId = createUniqueId();
   let bodyAEl!: SVGPathElement;
   let bodyBEl!: SVGPathElement;
   let flapEl!: SVGPathElement;
@@ -156,7 +164,7 @@ export const AnimatedEmailIcon = (props: {
           morphAnims = [];
           // Only null cutoutAnim if it hasn't been replaced by a newer animation
           if (cutoutAnim === cutoutToWatch) cutoutAnim = null;
-          flapEl.setAttribute('stroke-linejoin', 'miter');
+          flapEl.setAttribute('stroke-linejoin', 'round');
         })
         .catch(() => {});
     }
@@ -169,29 +177,23 @@ export const AnimatedEmailIcon = (props: {
       viewBox="0 -3 18 18"
       fill="none"
       stroke="currentColor"
-      stroke-width="1.5"
+      stroke-width="1.125"
+      stroke-linecap="round"
+      stroke-linejoin="round"
       xmlns="http://www.w3.org/2000/svg"
       class={props.class}
     >
       {/*<title>Animated email icon</title>*/}
-      <defs>
-        {/* Clips out the top-left 1.5×1.5 missing corner (visual coords 0,0 → 1.5,1.5) */}
-        <clipPath id={clipId}>
-          <path d="M 1.5,-3 L 18,-3 L 18,15 L 0,15 L 0,1.5 L 1.5,1.5 Z" />
-        </clipPath>
-      </defs>
-      <g clip-path={`url(#${clipId})`}>
-        <path ref={bodyAEl} d={BODY_A_D} stroke-linejoin="round" />
-        <path ref={bodyBEl} d={BODY_B_D} stroke-linejoin="round" />
-        <path ref={flapEl} d={FLAP_D} />
-        <path
-          ref={cutoutEl}
-          d={CUTOUT_D}
-          fill="currentColor"
-          stroke="none"
-          style={{ opacity: 0 }}
-        />
-      </g>
+      <path ref={bodyAEl} d={BODY_A_D} stroke-linejoin="round" />
+      <path ref={bodyBEl} d={BODY_B_D} stroke-linejoin="round" />
+      <path ref={flapEl} d={FLAP_D} />
+      <path
+        ref={cutoutEl}
+        d={CUTOUT_D}
+        fill="currentColor"
+        stroke="none"
+        style={{ opacity: 0 }}
+      />
     </svg>
   );
 };

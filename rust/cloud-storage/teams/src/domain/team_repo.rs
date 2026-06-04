@@ -64,6 +64,13 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         team_name: &str,
     ) -> impl Future<Output = Result<Team, CreateTeamError>> + Send;
 
+    /// Moves any user-owned GitHub App installation rows to the given team.
+    fn move_github_app_installation_to_team_if_exists(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        team_id: &uuid::Uuid,
+    ) -> impl Future<Output = Result<(), CreateTeamError>> + Send;
+
     /// Invites users to a team.
     /// This will also handle the teams subscription.
     /// Returns the number of users invited.

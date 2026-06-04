@@ -12,7 +12,11 @@ use crate::{
         ports::AutoUpdateService,
         service::{ApplyUpdateResult, Service},
     },
-    outbound::{api_client::BundleClient, fs::FileSystem, system_info::SystemInfo},
+    outbound::{
+        api_client::BundleClient,
+        fs::FileSystem,
+        system_info::{SystemInfo, native_build},
+    },
 };
 
 /// Concrete service type used by the plugin commands.
@@ -50,6 +54,20 @@ pub enum BundleUpdateEvent {
         /// Extraction progress percentage (0–100).
         progress: f64,
     },
+    /// The active OTA bundle must be cleared.
+    ClearRequired {
+        /// Reason the server requested a clear.
+        reason: String,
+    },
+    /// A newer bundle exists but requires a newer native app build.
+    NativeUpdateRequired {
+        /// The newer bundle build that could not be applied.
+        #[serde(rename = "bundleBuild")]
+        bundle_build: u64,
+        /// The minimum native build required by that bundle.
+        #[serde(rename = "minNativeBuild")]
+        min_native_build: u64,
+    },
     /// Update applied successfully.
     Completed,
     /// An error occurred during the update.
@@ -59,17 +77,48 @@ pub enum BundleUpdateEvent {
     },
 }
 
+/// Debug metadata about the currently effective JavaScript bundle.
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BundleDebugInfo {
+    /// Current effective bundle build.
+    bundle_build: u64,
+    /// Whether the effective bundle came from OTA cache or embedded assets.
+    source: BundleDebugSource,
+    /// Runtime native app build number.
+    native_build: u64,
+}
+
+/// Source of the currently effective JavaScript bundle.
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum BundleDebugSource {
+    /// The native app's embedded bundle is active.
+    Embedded,
+    /// A cached OTA bundle is active.
+    Ota,
+}
+
 impl BundleUpdateEvent {
     fn new(cur: &Result<UpdateStatus, Report<UpdateError>>) -> Self {
         match cur.as_ref() {
             Ok(UpdateStatus::Idle) => BundleUpdateEvent::Idle,
             Ok(UpdateStatus::CheckingForDownload(_)) => BundleUpdateEvent::CheckingForUpdate,
             Ok(UpdateStatus::UpdateFound(found)) => BundleUpdateEvent::UpdateFound {
-                version: found.bundle.version.to_string(),
+                version: found.bundle.bundle_build.to_string(),
                 notes: found.bundle.notes.clone(),
             },
             Ok(UpdateStatus::WaitingForWifi(_found)) => BundleUpdateEvent::WaitingForWifi,
             Ok(UpdateStatus::NoUpdateNeeded) => BundleUpdateEvent::NoUpdateNeeded,
+            Ok(UpdateStatus::ClearRequired(clear)) => BundleUpdateEvent::ClearRequired {
+                reason: clear.reason.clone(),
+            },
+            Ok(UpdateStatus::NativeUpdateRequired(required)) => {
+                BundleUpdateEvent::NativeUpdateRequired {
+                    bundle_build: required.bundle_build,
+                    min_native_build: required.min_native_build,
+                }
+            }
             Ok(UpdateStatus::DownloadingBundle(dl)) => BundleUpdateEvent::Downloading {
                 progress: dl.progress.value(),
             },
@@ -87,12 +136,16 @@ impl BundleUpdateEvent {
 /// Tauri plugin that manages OTA bundle updates.
 pub struct MacroBundleUpdaterPlugin {
     base_url: Url,
+    embedded_bundle_build: u64,
 }
 
 impl MacroBundleUpdaterPlugin {
     /// Create the plugin targeting the given update server URL.
-    pub fn new(base_url: Url) -> Self {
-        Self { base_url }
+    pub fn new(base_url: Url, embedded_bundle_build: u64) -> Self {
+        Self {
+            base_url,
+            embedded_bundle_build,
+        }
     }
 }
 
@@ -120,6 +173,19 @@ pub async fn retry_waiting_for_wifi<R: Runtime>(
     service.retry_waiting_for_wifi().map_err(|e| e.to_string())
 }
 
+/// Start a fresh bundle update check.
+pub async fn start_update_check<R: Runtime>(
+    app_handle: &tauri::AppHandle<R>,
+) -> Result<bool, String> {
+    let Some(service_state) = app_handle.try_state::<Mutex<PluginService>>() else {
+        return Ok(false);
+    };
+
+    let service = service_state.lock().await;
+    service.start().map_err(|e| e.to_string())?;
+    Ok(true)
+}
+
 /// Allow a pending bundle update reload to be dispatched again.
 pub async fn allow_update_reload_retry<R: Runtime>(
     app_handle: &tauri::AppHandle<R>,
@@ -138,6 +204,14 @@ pub async fn allow_update_reload_retry<R: Runtime>(
 /// not in the `Completed` state (no pending update to commit).
 pub async fn apply_completed_update<R: Runtime>(
     app_handle: &tauri::AppHandle<R>,
+) -> Result<bool, String> {
+    apply_completed_update_from(app_handle, "command").await
+}
+
+/// Apply a completed bundle update and include the caller in operational logs.
+pub async fn apply_completed_update_from<R: Runtime>(
+    app_handle: &tauri::AppHandle<R>,
+    source: &'static str,
 ) -> Result<bool, String> {
     let service_state = app_handle
         .try_state::<Mutex<PluginService>>()
@@ -164,22 +238,20 @@ pub async fn apply_completed_update<R: Runtime>(
         // Reload to pick up the new bundle. Using location.reload() instead of
         // navigating to a new URL preserves WKWebView's cookie store.
         if let Some(webview) = app_handle.webview_windows().values().next() {
-            tracing::info!("Bundle update complete, reloading to pick up new assets");
             if let Err(e) = webview.eval("window.location.reload();") {
-                tracing::warn!(error=?e, "Failed to dispatch bundle update reload");
-                service_state
-                    .lock()
-                    .await
-                    .unmark_update_reload_dispatched();
+                tracing::warn!(
+                    source,
+                    error=?e,
+                    "[bundle-update] failed to dispatch webview reload"
+                );
+                service_state.lock().await.unmark_update_reload_dispatched();
             }
         } else {
             tracing::warn!(
-                "Completed bundle update applied but no webview was available to reload"
+                source,
+                "[bundle-update] completed bundle update applied but no webview was available to reload"
             );
-            service_state
-                .lock()
-                .await
-                .unmark_update_reload_dispatched();
+            service_state.lock().await.unmark_update_reload_dispatched();
         }
     }
     Ok(apply_result != ApplyUpdateResult::NoUpdate)
@@ -226,6 +298,25 @@ pub async fn get_bundle_update_status(
     Ok(BundleUpdateEvent::new(&status))
 }
 
+/// Return debug metadata for the currently effective JavaScript bundle.
+#[tauri::command]
+pub async fn get_bundle_debug_info(
+    service: tauri::State<'_, Mutex<PluginService>>,
+) -> Result<BundleDebugInfo, String> {
+    let service = service.lock().await;
+    let embedded_bundle_build = service.embedded_bundle_build();
+    let cached_bundle_build = service.bundle_build().await;
+    Ok(BundleDebugInfo {
+        bundle_build: cached_bundle_build.unwrap_or(embedded_bundle_build),
+        source: if cached_bundle_build.is_some() {
+            BundleDebugSource::Ota
+        } else {
+            BundleDebugSource::Embedded
+        },
+        native_build: crate::outbound::system_info::native_build(),
+    })
+}
+
 /// Clear the downloaded bundle and revert to built-in assets.
 #[tauri::command]
 pub async fn clear_bundle<R: Runtime>(
@@ -244,7 +335,6 @@ pub async fn clear_bundle<R: Runtime>(
         .await
         .map_err(|e| e.to_string())?;
 
-    tracing::info!("Bundle cleared, reloading to revert to built-in assets");
     if let Some(webview) = app_handle.webview_windows().values().next() {
         let _ = webview.eval("window.location.reload();");
     }
@@ -263,14 +353,74 @@ impl<R: Runtime> Plugin<R> for MacroBundleUpdaterPlugin {
     ) -> Result<(), Box<dyn std::error::Error>> {
         let client = BundleClient::new(self.base_url.clone());
         let fs = FileSystem;
-        let system_info = SystemInfo::new(app.clone());
+        let system_info = SystemInfo::new(app.clone(), self.embedded_bundle_build);
 
-        let service = Service::new(client, fs, system_info);
+        let mut service = Service::new(client, fs, system_info, self.embedded_bundle_build);
+        let mut acknowledge_setup_apply = false;
+        let mut start_update_check = false;
+        if let Ok(cache_dir) = app.path().app_cache_dir() {
+            let restored_pending = tauri::async_runtime::block_on(async {
+                service.load_bundle_root(&cache_dir, native_build()).await
+            });
+            if restored_pending {
+                match tauri::async_runtime::block_on(async {
+                    service.apply_update(&cache_dir).await
+                }) {
+                    Ok(ApplyUpdateResult::ReloadNeeded) => {
+                        acknowledge_setup_apply = true;
+                    }
+                    Ok(ApplyUpdateResult::ReloadAlreadyDispatched) => {
+                        acknowledge_setup_apply = true;
+                    }
+                    Ok(ApplyUpdateResult::NoUpdate) => {
+                        tracing::warn!(
+                            "[bundle-update] restored pending bundle had no update to apply during plugin initialization"
+                        );
+                        start_update_check = true;
+                    }
+                    Err(e) => {
+                        tracing::error!(
+                            "[bundle-update] failed to apply restored pending bundle during plugin initialization: {e}"
+                        );
+                        start_update_check = true;
+                    }
+                }
+            } else {
+                start_update_check = true;
+            }
+        } else {
+            tracing::warn!(
+                "[bundle-update] failed to read app cache dir during plugin initialization"
+            );
+            start_update_check = true;
+        }
         let mut status_rx = service.status().clone();
         let mut wifi_retry_status_rx = service.status().clone();
 
-        let _ = service.start();
         app.manage(tokio::sync::Mutex::new(service));
+        if acknowledge_setup_apply || start_update_check {
+            let Some(service_state) = app.try_state::<Mutex<PluginService>>() else {
+                tracing::warn!(
+                    "[bundle-update] plugin service state unavailable during initialization"
+                );
+                return Ok(());
+            };
+            let Ok(mut service) = service_state.try_lock() else {
+                tracing::warn!("[bundle-update] plugin service state locked during initialization");
+                return Ok(());
+            };
+            if acknowledge_setup_apply {
+                if let Err(e) = service.acknowledge_update_reload() {
+                    tracing::warn!(
+                        "[bundle-update] failed to acknowledge plugin-initialized bundle apply: {e}"
+                    );
+                }
+            } else if let Err(e) = service.start() {
+                tracing::warn!(
+                    "[bundle-update] failed to start update check during plugin initialization: {e}"
+                );
+            }
+        }
 
         let app_handle = app.clone();
         tauri::async_runtime::spawn(async move {
@@ -305,10 +455,7 @@ impl<R: Runtime> Plugin<R> for MacroBundleUpdaterPlugin {
                 tokio::select! {
                     _ = tokio::time::sleep(WIFI_RETRY_INTERVAL) => {
                         match retry_waiting_for_wifi(&app_handle).await {
-                            Ok(true) => tracing::info!(
-                                "[bundle-update] retrying bundle download after Wi-Fi wait"
-                            ),
-                            Ok(false) => {}
+                            Ok(true) | Ok(false) => {}
                             Err(e) => tracing::warn!(
                                 "[bundle-update] failed to retry bundle download after Wi-Fi wait: {e}"
                             ),

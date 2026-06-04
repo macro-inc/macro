@@ -7,7 +7,7 @@ use crate::domain::{models::EmailErr, ports::EmailService};
 
 use super::{
     api_types::{CreateDraftRequest, CreateDraftResponse},
-    axum_impls::EmailLinkExtractor,
+    axum_impls::{EmailLinkExtractor, MultiEmailLinkExtractor},
     previews_router::EmailRouterState,
 };
 
@@ -86,14 +86,18 @@ impl From<EmailErr> for CreateDraftError {
         (status = 500, body = ErrorResponse),
     )
 )]
-#[tracing::instrument(err, skip(state, link, body))]
+#[tracing::instrument(err, skip(state, link, accessible_inboxes, body))]
 pub async fn create_draft_handler<T: EmailService>(
     State(state): State<EmailRouterState<T>>,
     Cached(EmailLinkExtractor(link, _)): Cached<EmailLinkExtractor<T>>,
+    Cached(MultiEmailLinkExtractor(accessible_inboxes, _)): Cached<MultiEmailLinkExtractor<T>>,
     Json(body): Json<CreateDraftRequest>,
 ) -> Result<impl IntoResponse, CreateDraftError> {
     let input = body.into_domain();
-    let draft = state.inner.create_draft(&link, input).await?;
+    let draft = state
+        .inner
+        .create_draft(&link, &accessible_inboxes, input)
+        .await?;
 
     Ok((
         StatusCode::CREATED,

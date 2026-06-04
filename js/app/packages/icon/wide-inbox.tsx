@@ -9,9 +9,12 @@ export const AnimatedInboxIcon = (props: {
     <svg
       width="100%"
       height="100%"
-      viewBox="2.5 -3 18 18"
-      fill="currentColor"
-      stroke="none"
+      viewBox="0 0 18 12"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.125"
+      stroke-linecap="round"
+      stroke-linejoin="round"
       xmlns="http://www.w3.org/2000/svg"
       overflow="visible"
       class={`animated-inbox-icon ${props.triggerAnimation ? 'animating' : ''} ${props.class ?? ''}`}
@@ -19,27 +22,19 @@ export const AnimatedInboxIcon = (props: {
       {/*<title>Animated inbox icon</title>*/}
       <style>{`
         .animated-inbox-icon {
-          .right-bar {
-            transform-origin: 16.8px 0.75px;
-            transition: transform 0.2s ease;
-            transform: rotate(61.28deg);
-          }
           .left-bar {
-            transform-origin: 6.2px 0.75px;
-            transition: transform 0.2s ease;
-            transform: rotate(-61.28deg);
+            transition: d 0.2s ease;
+            d: path("M4.5 0.5625L0.5625 5.25");
+          }
+          .right-bar {
+            transition: d 0.2s ease;
+            d: path("M13.5 0.5625L17.4375 5.25");
           }
           .envelope {
             transform-origin: center;
-            transition: transform 0.2s ease;
-          }
-          .envelope, .tray, .right-line, .left-bottom-lines, .left-bar .over, .right-bar .over {
-            transition: transform 0.2s ease;
-          }
-          .envelope {
             transition: transform 0.4s ease;
           }
-          #${maskId} .moving-mask-parts {
+          .drawer-body, .tray, #${maskId} .moving-mask-parts {
             transition: transform 0.2s ease;
           }
         }
@@ -47,86 +42,75 @@ export const AnimatedInboxIcon = (props: {
           .envelope {
             transform: translate(0px, -3.5px) rotate(5deg);
           }
-          .tray, .right-line, .left-bottom-lines, #${maskId} .moving-mask-parts {
+          .drawer-body, .tray, #${maskId} .moving-mask-parts {
             transform: translate(0, 3px);
           }
+          /* flaps swing open AND extend — the tip drops with the drawer front.
+             Animating 'd' (geometry) instead of scaleX avoids warping the round caps. */
           .left-bar {
-            transform: rotate(-70deg);
-            .over {
-              transform: translate(-2.7px, 0);
-            }
+            d: path("M4.5 0.5625L0.5625 8.25");
           }
           .right-bar {
-            transform: rotate(70deg);
-            .over {
-              transform: translate(2.7px, 0);
-            }
+            d: path("M13.5 0.5625L17.4375 8.25");
           }
         }
       `}</style>
-      <mask id={maskId}>
-        <rect width="24" height="24" fill="white" />
-        <rect fill="black" x="4.5" y="-0.5" width="2" height="2" />
-        {/* moving parts of mask */}
-        <g class="moving-mask-parts">
-          <polygon
-            fill="black"
-            points="14.4 6.75 13.65 7.98 9.31 7.98 8.56 6.75 3.98 6.75 3.98 10.5 18.98 10.5 18.98 6.75 14.4 6.75"
-          />
-          <rect fill="black" x="18.98" y="10.5" width="2" height="1.5" />
-          <rect fill="black" x="2.48" y="12" width="18" height="9" />
-        </g>
+
+      {/* Only the card is masked — it's hidden while inside the drawer and revealed
+          as it rises above the shelf. The drawer outline is drawn unmasked. */}
+      <mask
+        id={maskId}
+        maskUnits="userSpaceOnUse"
+        x="-2"
+        y="-6"
+        width="22"
+        height="30"
+      >
+        <rect x="-2" y="-6" width="22" height="30" fill="white" />
+        <rect
+          class="moving-mask-parts"
+          fill="black"
+          x="-2"
+          y="5.25"
+          width="22"
+          height="24"
+        />
       </mask>
 
       <g mask={`url(#${maskId})`}>
-        {/* Envelope icon in tray */}
         <g class="envelope">
-          <rect x="12" y="9.5" width="1.5" height="1.5" />
-          <path d="M15.48,14.5H7.48c-.41,0-.75-.34-.75-.75v-6.5c0-.41.34-.75.75-.75h8c.41,0,.75.34.75.75v6.5c0,.41-.34.75-.75.75ZM8.23,13h6.5v-5h-6.5v5Z" />
-        </g>
-
-        {/* Top bar */}
-        <path d="M16.67,1.5H6.49c-.41,0-.75-.34-.75-.75S6.08,0,6.49,0h10.18c.41,0,.75.34.75.75s-.34.75-.75.75Z" />
-
-        {/* Right vertical line */}
-        <rect class="right-line" x="18.98" y="5.8" width="1.5" height="4.7" />
-
-        {/* Left and bottom lines */}
-        <path
-          class="left-bottom-lines"
-          d="M18.98,12H3.23c-.41,0-.75-.34-.75-.75v-5.45h1.5v4.7h15v1.5Z"
-        />
-
-        {/* Tray shape */}
-        <polygon
-          class="tray"
-          points="13.65 7.98 9.31 7.98 8.56 6.75 3.23 6.75 3.23 5.25 9.4 5.25 10.15 6.48 12.81 6.48 13.56 5.25 19.73 5.25 19.73 6.75 14.4 6.75 13.65 7.98"
-        />
-
-        {/* Right extension bar */}
-        <g class="right-bar">
-          <path
-            class="under"
-            d="M22.96,0h-6.21c-.41,0-.75.34-.75.75,0,.41.34.75.75.75h6.21s0-1.5,0-1.5Z"
-          />
-          <path
-            class="over"
-            d="M22.96,0h-6.21c-.41,0-.75.34-.75.75,0,.41.34.75.75.75h6.21s0-1.5,0-1.5Z"
-          />
-        </g>
-
-        {/* Left extension bar */}
-        <g class="left-bar">
-          <path
-            class="under"
-            d="M0,0h6.21c.41,0,.75.34.75.75,0,.41-.34.75-.75.75H0S0,0,0,0Z"
-          />
-          <path
-            class="over"
-            d="M0,0h6.21c.41,0,.75.34.75.75,0,.41-.34.75-.75.75H0S0,0,0,0Z"
+          <rect x="5" y="6.5" width="8" height="6.5" rx="0.75" />
+          <rect
+            x="9.52"
+            y="8.75"
+            width="1.5"
+            height="1.5"
+            fill="currentColor"
+            stroke="none"
           />
         </g>
       </g>
+
+      {/* Drawer (unmasked) */}
+      {/* Back rim */}
+      <line x1="4.5" y1="0.5625" x2="13.5" y2="0.5625" />
+
+      {/* Walls + rounded bottom */}
+      <path
+        class="drawer-body"
+        d="M0.5625 5.25L0.5625 9.9375A1.5 1.5 0 0 0 2.0625 11.4375L15.9375 11.4375A1.5 1.5 0 0 0 17.4375 9.9375L17.4375 5.25"
+      />
+
+      {/* Tray shelf with central slot */}
+      <path
+        class="tray"
+        d="M0.5625 5.25L6.92 5.25L7.67 6.48L10.33 6.48L11.08 5.25L17.4375 5.25"
+      />
+
+      {/* Flaps — animated via 'd' so the tip drops to the dropped drawer front
+          while stroke-width (and the round caps) stay constant */}
+      <path class="right-bar" d="M13.5 0.5625L17.4375 5.25" />
+      <path class="left-bar" d="M4.5 0.5625L0.5625 5.25" />
     </svg>
   );
 };

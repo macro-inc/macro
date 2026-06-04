@@ -1,11 +1,11 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { EntityIcon } from '@core/component/EntityIcon';
-import { ItemPreview } from '@core/component/ItemPreview';
+import { InlineItemPreview } from '@core/component/ItemPreview';
 import CaretRight from '@phosphor/caret-right.svg';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import type { SendEmail } from '@service-cognition/generated/tools/types';
 import { cn } from '@ui';
-import { Match, Show, Switch } from 'solid-js';
+import { Match, Show, Suspense, Switch } from 'solid-js';
 import { BaseTool } from './BaseTool';
 import { ComposeTool } from './email/ChatCompose';
 import { createToolRenderer } from './ToolRenderer';
@@ -94,7 +94,7 @@ function DraftPreviewButton(props: {
 
   return (
     <button
-      class="text-ink-base text-sm ring-1 ring-edge-muted rounded-xs hover:bg-surface-hover flex flex-row h-6 px-2 justify-center items-center"
+      class="text-ink text-xs ring-1 ring-edge-muted rounded-xs hover:bg-surface-hover flex flex-row h-6 px-2 justify-center items-center"
       onClick={() =>
         replaceOrInsertSplit({
           ...(props.threadId
@@ -129,10 +129,15 @@ function SentEmailResponse(props: {
     <details class="group">
       <summary class="list-none [&::-webkit-details-marker]:hidden">
         <BaseTool renderContext={props.renderContext} type="response">
-          <div class="flex items-center justify-between gap-3 text-sm text-ink">
+          <div class="flex items-center justify-between gap-3 text-xs text-ink-extra-muted">
             <div class="flex min-w-0 flex-wrap items-center gap-2">
-              <span class="text-base">{`Email sent to ${getRecipientsLabel(props.args)}`}</span>
-              <ItemPreview id={props.threadId} type="email" />
+              <span>
+                Email sent to{' '}
+                <span class="text-ink">{getRecipientsLabel(props.args)}</span>
+              </span>
+              <Suspense>
+                <InlineItemPreview id={props.threadId} type="email" />
+              </Suspense>
             </div>
             <span class="shrink-0 text-ink-muted">
               <CaretRight
@@ -167,9 +172,12 @@ function DraftEmailResponse(props: {
 }) {
   return (
     <BaseTool renderContext={props.renderContext} type="response">
-      <div class="flex items-center justify-between gap-3 text-sm text-ink">
+      <div class="flex items-center justify-between gap-3 text-xs text-ink-extra-muted">
         <div class="flex min-w-0 flex-wrap items-center gap-2">
-          <span class="text-base">{`Email saved as draft for ${getRecipientsLabel(props.args)}`}</span>
+          <span>
+            Email saved as draft for{' '}
+            <span class="text-ink">{getRecipientsLabel(props.args)}</span>
+          </span>
           <DraftPreviewButton
             draftId={props.draftId}
             subject={props.args.subject}

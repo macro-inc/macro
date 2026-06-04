@@ -170,6 +170,20 @@ const POSTHOG_API_KEY: pulumi.Output<string> = aws.secretsmanager
   .getSecretVersionOutput({ secretId: config.require('posthog_api_key') })
   .apply((secret) => secret.secretString);
 
+const bundleUpdatePolicyEnvVars = [
+  {
+    name: 'BUNDLE_UPDATE_POLICY_JSON',
+    value: config.get('bundle_update_policy_json'),
+  },
+  {
+    name: 'BUNDLE_UPDATE_POLICY_FILE',
+    value: config.get('bundle_update_policy_file'),
+  },
+].filter(
+  (envVar): envVar is { name: string; value: string } =>
+    envVar.value != null && envVar.value.length > 0
+);
+
 const secretKeyArns = [
   pulumi.interpolate`${jwtSecretKeyArn}`,
   pulumi.interpolate`${fusionauthApiKeySecretKeyArn}`,
@@ -391,6 +405,7 @@ const service = new AuthenticationService('authentication-service', {
       name: 'POSTHOG_API_KEY',
       value: pulumi.interpolate`${POSTHOG_API_KEY}`,
     },
+    ...bundleUpdatePolicyEnvVars,
   ],
 });
 

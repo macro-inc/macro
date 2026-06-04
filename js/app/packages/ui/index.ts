@@ -1,35 +1,43 @@
 /* components */
-export { Checkbox, SingleSelectCheck } from './components/Checkbox';
-export { SegmentedControl } from './components/SegmentedControl';
-export { TabbedControl } from './components/TabbedControl';
-export { Avatar, AvatarGroup } from './components/Avatar';
-export { LogoProgress } from './components/LogoProgress';
-export { ToggleSwitch } from './components/ToggleSwitch';
-export { ButtonGroup } from './components/ButtonGroup';
-export { SendButton } from './components/SendButton';
-export { HoverCard } from './components/HoverCard';
-export { Dropdown } from './components/Dropdown';
-export { Surface } from './components/Surface';
-export { Tooltip } from './components/Tooltip';
-export { Dialog  } from './components/Dialog';
-export { Button } from './components/Button';
-export { Hotkey } from './components/Hotkey';
-export { Scroll } from './components/Scroll';
-export { Panel  } from './components/Panel';
-export { Layer } from './components/Layer';
-export { EmptyStatePanel } from './components/EmptyStatePanel';
-export { FilteredHiddenBanner } from './components/FilteredHiddenBanner';
 
 /* types */
-export type { AvatarSize, AvatarProps, AvatarGroupSize, AvatarGroupProps } from './components/Avatar';
-export type { ChatInputRows, ChatInputProps } from './components/ChatInput';
-export type { ToggleSwitchProps } from './components/ToggleSwitch';
-export type { SendButtonProps } from './components/SendButton';
-export type { CheckboxProps } from './components/Checkbox';
+export type {
+  AvatarGroupProps,
+  AvatarGroupSize,
+  AvatarProps,
+  AvatarSize,
+} from './components/Avatar';
+export { Avatar, AvatarGroup } from './components/Avatar';
 export type { ButtonProps } from './components/Button';
+export { Button } from './components/Button';
+export { ButtonGroup } from './components/ButtonGroup';
+export type { ChatInputProps, ChatInputRows } from './components/ChatInput';
+export type { CheckboxProps } from './components/Checkbox';
+export { Checkbox, SingleSelectCheck } from './components/Checkbox';
 export type { DialogProps } from './components/Dialog';
-export type { EmptyStatePanelProps, EmptyStateAction } from './components/EmptyStatePanel';
+export { Dialog } from './components/Dialog';
+export { Dropdown } from './components/Dropdown';
+export type {
+  EmptyStateAction,
+  EmptyStatePanelProps,
+} from './components/EmptyStatePanel';
+export { EmptyStatePanel } from './components/EmptyStatePanel';
 export type { FilteredHiddenBannerProps } from './components/FilteredHiddenBanner';
+export { FilteredHiddenBanner } from './components/FilteredHiddenBanner';
+export { Hotkey } from './components/Hotkey';
+export { HoverCard } from './components/HoverCard';
+export { Layer } from './components/Layer';
+export { LogoProgress } from './components/LogoProgress';
+export { Panel } from './components/Panel';
+export { Scroll } from './components/Scroll';
+export { SegmentedControl } from './components/SegmentedControl';
+export type { SendButtonProps } from './components/SendButton';
+export { SendButton } from './components/SendButton';
+export { Surface } from './components/Surface';
+export { TabbedControl } from './components/TabbedControl';
+export type { ToggleSwitchProps } from './components/ToggleSwitch';
+export { ToggleSwitch } from './components/ToggleSwitch';
+export { Tooltip } from './components/Tooltip';
 
 /* utils */
 export { cn } from './utils/classname';

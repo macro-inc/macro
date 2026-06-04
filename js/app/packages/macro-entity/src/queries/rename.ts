@@ -1,6 +1,7 @@
 import { renameItem } from '@core/component/FileList/itemOperations';
 import { toast } from '@core/component/Toast/Toast';
 import type { EntityData } from '@entity';
+import { callKeys } from '@queries/call/keys';
 import { channelKeys } from '@queries/channel/keys';
 import { queryClient } from '@queries/client';
 import { setHistoryItemName } from '@queries/history/history';
@@ -162,10 +163,13 @@ const renameCallRecordSetData = (
 ): void => {
   entities.forEach(({ id, newName, itemType }) => {
     if (itemType !== 'call') return;
-    queryClient.setQueryData<CallRecord>(['call', 'record', id], (prev) => {
-      if (!prev) return prev;
-      return { ...prev, customName: newName };
-    });
+    queryClient.setQueryData<CallRecord>(
+      callKeys.record(id).queryKey,
+      (prev) => {
+        if (!prev) return prev;
+        return { ...prev, customName: newName };
+      }
+    );
   });
 };
 

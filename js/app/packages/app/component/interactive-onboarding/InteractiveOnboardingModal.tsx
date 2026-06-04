@@ -1,3 +1,4 @@
+import { globalSplitManager } from '@app/signal/splitLayout';
 import MacroLogo from '@core/component/MacroLogo';
 import { isMobile } from '@core/mobile/isMobile';
 import LogoIcon from '@icon/macro-logo.svg';
@@ -305,6 +306,14 @@ export function InteractiveOnboardingModal(
       open={open()}
       onOpenChange={setOpen}
       position="center"
+      // Let the shell keep the focus it grabs in onMount (keeps its scope active).
+      onOpenAutoFocus={(e) => e.preventDefault()}
+      // Auto-opened on login, so Kobalte has nothing to restore to: return
+      // focus to the active split so the app stays keyboard-usable on close.
+      onCloseAutoFocus={(e) => {
+        e.preventDefault();
+        globalSplitManager()?.returnFocus();
+      }}
       class="w-[min(1600px,calc(100vw-32px))] h-[min(900px,calc(100vh-32px))] max-w-none rounded-xl bg-surface shadow-2xl"
     >
       <div class="relative size-full overflow-hidden rounded-xl flex flex-col">

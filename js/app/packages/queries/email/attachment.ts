@@ -9,6 +9,8 @@ import { useMutation } from '@tanstack/solid-query';
 type UploadDraftAttachmentsParams = {
   draftID: string;
   attachments: File[];
+  /** Target inbox for a non-primary inbox; sent as the X-Email-Link-Id header. */
+  linkId?: string;
 };
 
 type UploadDraftAttachmentsReturn = {
@@ -42,14 +44,17 @@ export const useUploadDraftAttachmentsMutation = (
 
         const result = await throwOnErr(
           async () =>
-            await emailClient.addDraftAttachment({
-              draftID: params.draftID,
-              attachment: {
-                file_name: attachment.name,
-                size: attachment.size,
-                sha,
+            await emailClient.addDraftAttachment(
+              {
+                draftID: params.draftID,
+                attachment: {
+                  file_name: attachment.name,
+                  size: attachment.size,
+                  sha,
+                },
               },
-            })
+              params.linkId
+            )
         );
 
         uploadedAttachments.push({
@@ -91,10 +96,13 @@ export const useUploadDraftAttachmentsMutation = (
         async onError(error, variables) {
           if (error instanceof UploadDraftAttachmentError) {
             try {
-              await emailClient.removeDraftAttachment({
-                draftID: variables.draftID,
-                attachmentID: error.context.attachmentID,
-              });
+              await emailClient.removeDraftAttachment(
+                {
+                  draftID: variables.draftID,
+                  attachmentID: error.context.attachmentID,
+                },
+                variables.linkId
+              );
             } catch {
               console.error('Unable to remove draft attachment after failure');
             }
@@ -110,6 +118,8 @@ export const useUploadDraftAttachmentsMutation = (
 type RemoveDraftAttachmentParams = {
   draftID: string;
   attachmentID: string;
+  /** Target inbox for a non-primary inbox; sent as the X-Email-Link-Id header. */
+  linkId?: string;
 };
 
 export const useRemoveDraftAttachmentMutation = (
@@ -119,10 +129,13 @@ export const useRemoveDraftAttachmentMutation = (
     mutationFn: async (params: RemoveDraftAttachmentParams) => {
       await throwOnErr(
         async () =>
-          await emailClient.removeDraftAttachment({
-            draftID: params.draftID,
-            attachmentID: params.attachmentID,
-          })
+          await emailClient.removeDraftAttachment(
+            {
+              draftID: params.draftID,
+              attachmentID: params.attachmentID,
+            },
+            params.linkId
+          )
       );
     },
     ...withCallbacks<void, Error, RemoveDraftAttachmentParams>(
@@ -139,6 +152,8 @@ export const useRemoveDraftAttachmentMutation = (
 type AddForwardedAttachmentsParams = {
   draftID: string;
   attachments: { attachmentID: string }[];
+  /** Target inbox for a non-primary inbox; sent as the X-Email-Link-Id header. */
+  linkId?: string;
 };
 
 export const useAddForwardedAttachmentsMutation = (
@@ -149,10 +164,13 @@ export const useAddForwardedAttachmentsMutation = (
       for (const att of params.attachments) {
         await throwOnErr(
           async () =>
-            await emailClient.addForwardedAttachment({
-              draftID: params.draftID,
-              attachmentID: att.attachmentID,
-            })
+            await emailClient.addForwardedAttachment(
+              {
+                draftID: params.draftID,
+                attachmentID: att.attachmentID,
+              },
+              params.linkId
+            )
         );
       }
     },
@@ -170,6 +188,8 @@ export const useAddForwardedAttachmentsMutation = (
 type RemoveForwardedAttachmentParams = {
   draftID: string;
   attachmentID: string;
+  /** Target inbox for a non-primary inbox; sent as the X-Email-Link-Id header. */
+  linkId?: string;
 };
 
 export const useRemoveForwardedAttachmentMutation = (
@@ -179,10 +199,13 @@ export const useRemoveForwardedAttachmentMutation = (
     mutationFn: async (params: RemoveForwardedAttachmentParams) => {
       await throwOnErr(
         async () =>
-          await emailClient.removeForwardedAttachment({
-            draftID: params.draftID,
-            attachmentID: params.attachmentID,
-          })
+          await emailClient.removeForwardedAttachment(
+            {
+              draftID: params.draftID,
+              attachmentID: params.attachmentID,
+            },
+            params.linkId
+          )
       );
     },
     ...withCallbacks<void, Error, RemoveForwardedAttachmentParams>(

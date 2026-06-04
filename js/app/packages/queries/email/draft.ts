@@ -14,6 +14,8 @@ import { emailKeys } from './keys';
 type CreateDraftParams = {
   draft: ApiDraftInput;
   sendTime?: Date | null;
+  /** Target inbox for a non-primary inbox; sent as the X-Email-Link-Id header. */
+  linkId?: string;
 };
 
 /**
@@ -26,10 +28,13 @@ export function useSaveDraftMutation(
     mutationFn: async (vars: CreateDraftParams) => {
       return await throwOnErr(
         async () =>
-          await emailClient.createDraft({
-            draft: vars.draft,
-            send_time: vars.sendTime?.toISOString() ?? null,
-          })
+          await emailClient.createDraft(
+            {
+              draft: vars.draft,
+              send_time: vars.sendTime?.toISOString() ?? null,
+            },
+            vars.linkId
+          )
       );
     },
     ...withCallbacks<CreateDraftResponse, Error, CreateDraftParams>(
@@ -54,6 +59,8 @@ export function useSaveDraftMutation(
 
 type DeleteDraftParams = {
   draftId: string;
+  /** Target inbox for a non-primary inbox; sent as the X-Email-Link-Id header. */
+  linkId?: string;
 };
 
 /**
@@ -65,7 +72,8 @@ export function useDeleteDraftMutation(
   return useMutation(() => ({
     mutationFn: async (vars: DeleteDraftParams) => {
       await throwOnErr(
-        async () => await emailClient.deleteDraft({ id: vars.draftId })
+        async () =>
+          await emailClient.deleteDraft({ id: vars.draftId }, vars.linkId)
       );
     },
     ...withCallbacks<void, Error, DeleteDraftParams>(

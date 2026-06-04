@@ -400,13 +400,11 @@ impl SoupRequest<Option<EntityFilterAst>> {
             SoupQuery::Frecency(_) => return None,
         };
 
-        // No viewed_at signal for crm_company yet — ViewedAt/ViewedUpdated
-        // fall back to updated_at.
         let sort = match sort_method {
             SimpleSortMethod::CreatedAt => CrmCompanyListSort::CreatedAt,
-            SimpleSortMethod::UpdatedAt
-            | SimpleSortMethod::ViewedAt
-            | SimpleSortMethod::ViewedUpdated => CrmCompanyListSort::UpdatedAt,
+            SimpleSortMethod::UpdatedAt => CrmCompanyListSort::UpdatedAt,
+            SimpleSortMethod::ViewedAt => CrmCompanyListSort::ViewedAt,
+            SimpleSortMethod::ViewedUpdated => CrmCompanyListSort::ViewedUpdated,
         };
 
         let mut extract = CrmCompanyFilterExtract::default();
@@ -420,6 +418,7 @@ impl SoupRequest<Option<EntityFilterAst>> {
 
         Some(GetCrmCompaniesRequest {
             team_id,
+            user_id: self.user.clone(),
             company_ids: extract.ids,
             hidden: extract.hidden,
             sort,
@@ -500,6 +499,10 @@ impl SoupRequest<Option<EntityFilterAst>> {
 pub struct GetCrmCompaniesRequest {
     /// Team whose CRM companies to list. Derived from the team receipt.
     pub team_id: Uuid,
+    /// Requesting user — used to scope the per-user `UserHistory` join
+    /// behind the `Viewed*` sort variants. Always populated; the soup
+    /// request always has a user.
+    pub user_id: MacroUserIdStr<'static>,
     /// Filter to specific company ids. Empty = all of the team's
     /// companies matching `hidden` (subject to the killswitch).
     pub company_ids: Vec<Uuid>,

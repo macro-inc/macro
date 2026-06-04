@@ -20,6 +20,8 @@ use document_sub_type::DocumentSubType;
 use entity_access::domain::models::{
     EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
 };
+use foreign_entity::domain::models::{ForeignEntity, SourceId};
+use foreign_entity::domain::ports::ForeignEntityService;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::response::{DocumentResponseMetadata, LocationResponseData};
 use model::document::{ContentType, DocumentBasic, FileAssociation, FileType, FileTypeExt};
@@ -57,6 +59,7 @@ pub struct DocumentServiceImpl<
     T: TaskPropertiesPort,
     C: ConnectionService,
     Eam: EntityAccessManagementService,
+    F: ForeignEntityService,
 > {
     /// Document repository
     pub repo: R,
@@ -72,6 +75,8 @@ pub struct DocumentServiceImpl<
     pub connection_service: C,
     /// entity access management service
     pub entity_access_management_service: Eam,
+    /// Foreign entity service
+    pub foreign_entity_service: F,
 }
 
 fn ready_content_for_file_type(file_type: Option<FileType>) -> DocumentContent {
@@ -113,10 +118,34 @@ fn pending_content_for_file_type(file_type: Option<FileType>) -> DocumentContent
     }
 }
 
+const GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE: &str = "github_pull_request";
+
 fn short_id_for_entity_id(entity_id: &str) -> Result<String, DocumentError> {
     let uuid = macro_uuid::string_to_uuid(entity_id)
         .map_err(|e| DocumentError::BadRequest(format!("invalid entity_id: {e}")))?;
     Ok(macro_uuid::ShortUuidConverter::default().from_uuid(&uuid))
+}
+
+fn foreign_entity_matches_source_id(foreign_entity: &ForeignEntity, source_id: &SourceId) -> bool {
+    foreign_entity.stored_for_id == source_id.id
+        && foreign_entity.stored_for_auth_entity == source_id.auth_entity
+}
+
+fn first_visible_foreign_entity_id(
+    foreign_entities: &[ForeignEntity],
+    source_ids: Option<&[SourceId]>,
+) -> Option<uuid::Uuid> {
+    foreign_entities
+        .iter()
+        .find(|foreign_entity| {
+            foreign_entity.foreign_entity_source == GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE
+                && source_ids.is_none_or(|source_ids| {
+                    source_ids.iter().any(|source_id| {
+                        foreign_entity_matches_source_id(foreign_entity, source_id)
+                    })
+                })
+        })
+        .map(|foreign_entity| foreign_entity.id)
 }
 
 impl<
@@ -125,9 +154,11 @@ impl<
     T: TaskPropertiesPort,
     C: ConnectionService,
     Eam: EntityAccessManagementService,
-> DocumentServiceImpl<R, U, T, C, Eam>
+    F: ForeignEntityService,
+> DocumentServiceImpl<R, U, T, C, Eam, F>
 {
     /// Create a document service with its repository and external service ports.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         repo: R,
         cloudfront_config: CloudFrontConfig,
@@ -136,6 +167,7 @@ impl<
         task_properties_service: T,
         connection_service: C,
         entity_access_management_service: Eam,
+        foreign_entity_service: F,
     ) -> Self {
         Self {
             repo,
@@ -145,6 +177,7 @@ impl<
             task_properties_service,
             connection_service,
             entity_access_management_service,
+            foreign_entity_service,
         }
     }
 
@@ -409,7 +442,8 @@ impl<
     T: TaskPropertiesPort,
     C: ConnectionService,
     Eam: EntityAccessManagementService,
-> DocumentCreationService for DocumentServiceImpl<R, U, T, C, Eam>
+    F: ForeignEntityService,
+> DocumentCreationService for DocumentServiceImpl<R, U, T, C, Eam, F>
 {
     async fn create_document(
         &self,
@@ -461,7 +495,8 @@ impl<
     T: TaskPropertiesPort,
     C: ConnectionService,
     Eam: EntityAccessManagementService,
-> DocumentService for DocumentServiceImpl<R, U, T, C, Eam>
+    F: ForeignEntityService,
+> DocumentService for DocumentServiceImpl<R, U, T, C, Eam, F>
 {
     #[tracing::instrument(err, skip(self))]
     async fn get_document(
@@ -749,8 +784,44 @@ impl<
             .get_task_github_pull_request_keys(&short_id)
             .await
             .map_err(|e| DocumentError::Internal(e.into()))?;
+        let mut response = GithubPullRequestsResponse::from_github_keys(github_keys);
 
-        Ok(GithubPullRequestsResponse::from_github_keys(github_keys))
+        if response.pull_requests.is_empty() {
+            return Ok(response);
+        }
+
+        let source_ids = match entity_access_receipt.auth() {
+            EntityAccessAuth::Authenticated(user_id) => {
+                let user_id = user_id.as_ref().to_string();
+                let team_ids = self
+                    .repo
+                    .get_team_ids_for_user(&user_id)
+                    .await
+                    .map_err(|e| DocumentError::Internal(e.into()))?;
+                let mut source_ids = Vec::with_capacity(team_ids.len() + 1);
+                source_ids.push(SourceId::user(user_id));
+                source_ids.extend(team_ids.into_iter().map(SourceId::team));
+                Some(source_ids)
+            }
+            EntityAccessAuth::Unauthenticated => Some(Vec::new()),
+            EntityAccessAuth::Internal => None,
+        };
+
+        for pull_request in &mut response.pull_requests {
+            let foreign_entities = self
+                .foreign_entity_service
+                .get_foreign_entities_by_foreign_entity_id(
+                    &pull_request.github_key,
+                    Some(GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE),
+                )
+                .await
+                .map_err(|error| DocumentError::Internal(error.into()))?;
+
+            pull_request.foreign_entity_id =
+                first_visible_foreign_entity_id(&foreign_entities, source_ids.as_deref());
+        }
+
+        Ok(response)
     }
 
     #[tracing::instrument(err, skip(self, document_context))]

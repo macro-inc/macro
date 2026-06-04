@@ -7,6 +7,21 @@ use uuid::Uuid;
 
 const BOT_STORAGE_PREFIX: &str = "bot|";
 
+/// Stable UUID for the first-party "Macro AI" system bot.
+///
+/// This id is seeded by a migration and referenced directly by services so
+/// that Macro AI can be recognized without a database lookup.
+pub const MACRO_AI_BOT_UUID: Uuid = Uuid::from_u128(0x0000_0000_0000_0000_0000_0000_0000_a1a1);
+
+/// Stable [`BotId`] for the first-party "Macro AI" system bot.
+pub const MACRO_AI_BOT_ID: BotId = BotId::from_uuid(MACRO_AI_BOT_UUID);
+
+/// Stable handle for the "Macro AI" system bot (used for `@` mentions).
+pub const MACRO_AI_HANDLE: &str = "macro";
+
+/// Display name for the "Macro" system bot.
+pub const MACRO_AI_NAME: &str = "Macro";
+
 /// A bot id.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]

@@ -1,13 +1,17 @@
 //! Github Link Service implemenation
 
 use chrono::Utc;
+use foreign_entity::domain::{models::PatchForeignEntity, ports::ForeignEntityService};
 use macro_user_id::{
     lowercased::Lowercase,
     user_id::{MacroUserId, MacroUserIdStr},
 };
 
 use crate::domain::{
-    models::{EnrichedGithubPullRequest, GithubError, GithubLink, GithubPullRequestRef},
+    models::{
+        EnrichedGithubPullRequest, GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE, GithubAccessToken,
+        GithubError, GithubLink, GithubPullRequestRef,
+    },
     ports::{Auth, GithubLinkService, GithubOauth, GithubRepo},
 };
 
@@ -23,26 +27,140 @@ pub struct GithubLinkConfig {
 }
 
 /// The concrete github link service implementation.
-pub struct GithubLinkServiceImpl<R: GithubRepo, U: GithubOauth, F: Auth> {
+pub struct GithubLinkServiceImpl<R: GithubRepo, U: GithubOauth, F: Auth, E: ForeignEntityService> {
     repo: R,
     oauth: U,
     auth: F,
+    foreign_entity_service: E,
     config: super::GithubLinkConfig,
 }
 
-impl<R: GithubRepo, U: GithubOauth, F: Auth> GithubLinkServiceImpl<R, U, F> {
+impl<R: GithubRepo, U: GithubOauth, F: Auth, E: ForeignEntityService>
+    GithubLinkServiceImpl<R, U, F, E>
+{
     /// Create a new github link service.
-    pub fn new(repo: R, oauth: U, auth: F, config: super::GithubLinkConfig) -> Self {
+    pub fn new(
+        repo: R,
+        oauth: U,
+        auth: F,
+        foreign_entity_service: E,
+        config: super::GithubLinkConfig,
+    ) -> Self {
         Self {
             repo,
             oauth,
             auth,
+            foreign_entity_service,
             config,
+        }
+    }
+
+    fn link_lookup_error(error: R::Err) -> GithubError {
+        let error: anyhow::Error = error.into();
+
+        if error.to_string().contains("no rows returned") {
+            return GithubError::NoLinkFound;
+        }
+
+        GithubError::Internal(error)
+    }
+
+    async fn get_user_link_for_validation(
+        &self,
+        macro_user_id: &MacroUserId<Lowercase<'static>>,
+    ) -> Result<GithubLink, GithubError> {
+        self.repo
+            .get_github_link_by_user_id(macro_user_id)
+            .await
+            .map_err(Self::link_lookup_error)
+    }
+
+    async fn validated_access_token(
+        &self,
+        macro_user_id: &MacroUserId<Lowercase<'static>>,
+    ) -> Result<GithubAccessToken, GithubError> {
+        let link = self.get_user_link_for_validation(macro_user_id).await?;
+
+        let access_token = self
+            .auth
+            .retreive_access_token(&link.fusionauth_user_id, &self.config.idp_id)
+            .await
+            .map_err(|e| GithubError::Internal(e.into()))?;
+
+        let token_is_expired = self
+            .oauth
+            .is_access_token_expired(access_token.as_str())
+            .await
+            .map_err(|e| GithubError::Internal(e.into()))?;
+
+        if token_is_expired {
+            return Err(GithubError::ReauthenticationRequired);
+        }
+
+        Ok(access_token)
+    }
+
+    async fn patch_pull_request_foreign_entities(&self, pull_request: &EnrichedGithubPullRequest) {
+        let foreign_entities = match self
+            .foreign_entity_service
+            .get_foreign_entities_by_foreign_entity_id(
+                &pull_request.github_key,
+                Some(GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE),
+            )
+            .await
+        {
+            Ok(foreign_entities) => foreign_entities,
+            Err(error) => {
+                tracing::warn!(
+                    error=?error,
+                    github_key=%pull_request.github_key,
+                    source=%GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE,
+                    "failed to fetch GitHub pull request foreign entities"
+                );
+                return;
+            }
+        };
+
+        for foreign_entity in foreign_entities {
+            let foreign_entity_record_id = foreign_entity.id;
+            let metadata =
+                match pull_request.foreign_entity_metadata(Some(&foreign_entity.metadata)) {
+                    Ok(metadata) => metadata,
+                    Err(error) => {
+                        tracing::warn!(
+                            error=?error,
+                            foreign_entity_record_id=%foreign_entity_record_id,
+                            github_key=%pull_request.github_key,
+                            "failed to serialize GitHub pull request foreign entity metadata"
+                        );
+                        continue;
+                    }
+                };
+
+            let patch = PatchForeignEntity {
+                metadata: Some(metadata),
+                ..PatchForeignEntity::default()
+            };
+
+            if let Err(error) = self
+                .foreign_entity_service
+                .patch_foreign_entity(foreign_entity_record_id, patch)
+                .await
+            {
+                tracing::warn!(
+                    error=?error,
+                    foreign_entity_record_id=%foreign_entity_record_id,
+                    github_key=%pull_request.github_key,
+                    "failed to patch GitHub pull request foreign entity"
+                );
+            }
         }
     }
 }
 
-impl<R: GithubRepo, U: GithubOauth, F: Auth> GithubLinkService for GithubLinkServiceImpl<R, U, F> {
+impl<R: GithubRepo, U: GithubOauth, F: Auth, E: ForeignEntityService> GithubLinkService
+    for GithubLinkServiceImpl<R, U, F, E>
+{
     #[tracing::instrument(skip(self), err)]
     fn construct_oauth_url<T: serde::Serialize + std::fmt::Debug + 'static>(
         &self,
@@ -65,6 +183,15 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth> GithubLinkService for GithubLinkSer
             .map_err(|e| GithubError::Internal(e.into()))
     }
 
+    #[tracing::instrument(skip(self), err)]
+    async fn check_user_link_token(
+        &self,
+        macro_user_id: &MacroUserId<Lowercase<'static>>,
+    ) -> Result<(), GithubError> {
+        self.validated_access_token(macro_user_id).await?;
+        Ok(())
+    }
+
     #[tracing::instrument(skip(self, pull_requests), err)]
     async fn enrich_pull_requests(
         &self,
@@ -75,29 +202,7 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth> GithubLinkService for GithubLinkSer
             return Ok(Vec::new());
         }
 
-        let link = match self.repo.get_github_link_by_user_id(macro_user_id).await {
-            Ok(link) => link,
-            Err(e) => {
-                let e: anyhow::Error = e.into();
-                if let Some(db_err) = e.downcast_ref::<sqlx::Error>()
-                    && matches!(db_err, sqlx::Error::RowNotFound)
-                {
-                    return Err(GithubError::NoLinkFound);
-                }
-
-                if e.to_string().contains("no rows returned") {
-                    return Err(GithubError::NoLinkFound);
-                }
-
-                return Err(GithubError::Internal(e));
-            }
-        };
-
-        let access_token = self
-            .auth
-            .retreive_access_token(&link.fusionauth_user_id, &self.config.idp_id)
-            .await
-            .map_err(|e| GithubError::Internal(e.into()))?;
+        let access_token = self.validated_access_token(macro_user_id).await?;
 
         let mut enriched_pull_requests = Vec::with_capacity(pull_requests.len());
 
@@ -113,7 +218,13 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth> GithubLinkService for GithubLinkSer
                 .await;
 
             let enriched_pull_request = match details {
-                Ok(details) => EnrichedGithubPullRequest::from_details(pull_request, details),
+                Ok(details) => {
+                    let enriched_pull_request =
+                        EnrichedGithubPullRequest::from_details(pull_request, details);
+                    self.patch_pull_request_foreign_entities(&enriched_pull_request)
+                        .await;
+                    enriched_pull_request
+                }
                 Err(e) => {
                     tracing::warn!(
                         error=?e,
@@ -143,14 +254,12 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth> GithubLinkService for GithubLinkSer
             Ok(link) => link,
             Err(e) => {
                 let e: anyhow::Error = e.into();
-                if let Some(db_err) = e.downcast_ref::<sqlx::Error>()
-                    && matches!(db_err, sqlx::Error::RowNotFound)
-                {
+                if e.to_string().contains("no rows returned") {
                     tracing::trace!("no github link found for user");
                     return Ok(());
-                } else {
-                    return Err(GithubError::Internal(e));
                 }
+
+                return Err(GithubError::Internal(e));
             }
         };
 

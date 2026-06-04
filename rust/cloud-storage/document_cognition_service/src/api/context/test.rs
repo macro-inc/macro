@@ -254,6 +254,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
             entity_access_management::outbound::PgRepository::new(pool.clone()),
         ),
+        ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(pool.clone())),
     );
     let test_lexical_client = LexicalClient::new("test".into(), "http://nofileshere".into());
     let document_tool_context = documents::inbound::toolset::DocumentToolContext::new(

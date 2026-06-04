@@ -1,6 +1,6 @@
 import { SegmentedControl as KSegmentedControl } from '@kobalte/core/segmented-control';
-import { cn } from '../utils/classname';
 import { For, type JSX } from 'solid-js';
+import { cn } from '../utils/classname';
 
 type SegmentedControlOption<T extends string | number | boolean> = {
   value: T;

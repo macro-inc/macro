@@ -14,7 +14,7 @@ import { handleFileFolderDrop } from '@core/util/upload';
 import PaperclipIcon from '@phosphor/paperclip.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { Button, cn, Surface, SendButton as UiSendButton } from '@ui';
-import { createEffect, createSignal, Show } from 'solid-js';
+import { createEffect, createMemo, createSignal, Show } from 'solid-js';
 import { AttachmentList } from './Attachment';
 import { ChatAttachMenu } from './ChatAttachMenu';
 import { useAiDataConsentGate } from './useAiDataConsent';
@@ -30,6 +30,7 @@ type ChatInputProps = {
 };
 
 type ChatInputComponentProps = {
+  variant?: 'default' | 'tall';
   editor: EditorConfigBuilder;
   initialValue?: string;
   onChange?: (markdown: string) => void;
@@ -130,16 +131,15 @@ export function ChatInput(props: ChatInputComponentProps) {
     attachments.attached().length > 0 || uploadQueue.uploading().length > 0;
 
   const LeftButton = () => (
-    <div ref={setAttachMenuAnchorRef} class="shrink-0">
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        class="text-ink"
-        onClick={() => setShowAttachMenu((prev) => !prev)}
-      >
-        <PaperclipIcon />
-      </Button>
-    </div>
+    <Button
+      ref={setAttachMenuAnchorRef}
+      variant="ghost"
+      size="icon-sm"
+      class="text-ink"
+      onClick={() => setShowAttachMenu((prev) => !prev)}
+    >
+      <PaperclipIcon />
+    </Button>
   );
 
   const StopButton = () => (
@@ -161,7 +161,7 @@ export function ChatInput(props: ChatInputComponentProps) {
 
   const SendButton = () => (
     <UiSendButton
-      tooltip={'Ask Ai'}
+      tooltip={'Ask AI'}
       shortcut="enter"
       tooltipPlacement="top"
       disabled={!canSendMessage()}
@@ -180,6 +180,24 @@ export function ChatInput(props: ChatInputComponentProps) {
     </div>
   );
 
+  const Attachments = () => (
+    <Show when={hasAttachments()}>
+      <div class={cn('px-2 pt-2 w-full', isTallVariant() && 'px-0')}>
+        <AttachmentList
+          attached={attachments.attached}
+          removeAttachment={(id) => {
+            attachments.removeAttachment(id);
+          }}
+          uploading={() =>
+            uploadQueue.uploading().map((uploading) => uploading.preview)
+          }
+        />
+      </div>
+    </Show>
+  );
+
+  const isTallVariant = createMemo(() => props.variant === 'tall');
+
   return (
     <Surface active={isFocused()} class="rounded-xl" depth={2} solid>
       <div
@@ -193,18 +211,8 @@ export function ChatInput(props: ChatInputComponentProps) {
         ref={containerRef}
         id="chat-input"
       >
-        <Show when={hasAttachments()}>
-          <div class="px-2 pt-2 w-full">
-            <AttachmentList
-              attached={attachments.attached}
-              removeAttachment={(id) => {
-                attachments.removeAttachment(id);
-              }}
-              uploading={() =>
-                uploadQueue.uploading().map((uploading) => uploading.preview)
-              }
-            />
-          </div>
+        <Show when={!isTallVariant()}>
+          <Attachments />
         </Show>
 
         <Show when={showAttachMenu()}>
@@ -220,15 +228,18 @@ export function ChatInput(props: ChatInputComponentProps) {
           />
         </Show>
 
-        <div class="relative px-2 py-1.5">
+        <div
+          class={cn('relative px-2 py-1.5', {
+            'flex flex-col px-3 py-2': isTallVariant(),
+          })}
+        >
           <div
             id="chat-input-text-area"
             class={cn('text-sm sm:text-sm text-ink')}
             classList={{
-              'pl-8': !isMultiline(),
-              'pr-12': !isMultiline() && isTouchDevice(),
-              'pr-32.5': !isMultiline() && !isTouchDevice(),
-              'px-0  pb-8': isMultiline(),
+              'pl-8': !isMultiline() && !isTallVariant(),
+              'pr-12': !isMultiline() && !isTallVariant(),
+              'px-0 pb-8': isMultiline() && !isTallVariant(),
             }}
             ref={mdRef}
           >
@@ -242,18 +253,32 @@ export function ChatInput(props: ChatInputComponentProps) {
                 props.autoFocusOnMount !== false
               }
             />
+            <Show when={isTallVariant()}>
+              <div class="h-4" />
+            </Show>
+            <Show when={isTallVariant()}>
+              <Attachments />
+            </Show>
           </div>
 
-          <div class="absolute left-2 bottom-1.5">
-            <LeftButton />
-          </div>
+          <div
+            class={cn('contents', {
+              'flex justify-between items-center': isTallVariant(),
+            })}
+          >
+            <div class={cn(!isTallVariant() && 'absolute left-2 bottom-1.5')}>
+              <LeftButton />
+            </div>
 
-          <div class="absolute right-1.5 bottom-1.5">
-            <RightControls />
+            <div
+              class={cn(!isTallVariant() && 'absolute right-1.5 bottom-1.5')}
+            >
+              <RightControls />
+            </div>
           </div>
         </div>
-        <ConsentDialog />
       </div>
+      <ConsentDialog />
     </Surface>
   );
 }

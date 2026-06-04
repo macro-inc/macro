@@ -22,6 +22,8 @@ export type ChannelEntity = EntityBase & {
   interactedAt?: DateValue | null;
   participantIds?: string[];
   latestMessage?: {
+    messageId: string;
+    threadId?: string | null;
     content: string;
     senderId: string;
     createdAt: DateValue;
@@ -102,6 +104,8 @@ export type EmailEntity = EntityBase & {
   participants?: EmailThreadParticipants;
   senderEmail?: string;
   senderName?: string;
+  /** The linked inbox (email_links row) this thread belongs to. */
+  linkId?: string;
   labels?: SoupLabel[] | ApiLabel[];
   hasIcsAttachment?: boolean;
   attachments?: EmailAttachment[];

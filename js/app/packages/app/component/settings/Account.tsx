@@ -73,6 +73,8 @@ false && fileSelector;
 // 16 megabytes
 const MAX_PROFILE_PICTURE_SIZE = 16 * 1000 * 1000;
 
+type GithubLinkStatus = 'linked' | 'unlinked' | 'reauthentication_required';
+
 async function uploadProfilePicture(
   file: File
 ): Promise<{ id: string; url: string } | void> {
@@ -99,6 +101,8 @@ function formatBundleUpdateStatus(status: BundleUpdateStatus): string {
     case 'WaitingForWifi': return 'Waiting for Wi-Fi to download';
     case 'Downloading': return `Downloading: ${Math.round(status.data.progress)}%`;
     case 'Unzipping': return `Installing: ${Math.round(status.data.progress)}%`;
+    case 'ClearRequired': return 'Cached update revoked';
+    case 'NativeUpdateRequired': return 'App update required';
     case 'Completed': return 'Update ready';
     case 'Error': return 'An error occurred when checking for updates';
   }
@@ -230,10 +234,21 @@ export function Account() {
     );
   };
 
-  const [githubLinkExists, { refetch: refetchGithubLink }] = createResource(async () => {
-    const response = await authServiceClient.checkLinkExists({ idp_name: 'github' });
-    return response.isOk() ? response.value.link_exists : false;
-  });
+  const [githubLinkStatus, { refetch: refetchGithubLinkStatus }] =
+    createResource(async (): Promise<GithubLinkStatus> => {
+      const response = await authServiceClient.checkGithubLinkStatus();
+
+      if (response.isOk()) {
+        return response.value.reauthentication_required
+          ? 'reauthentication_required'
+          : 'linked';
+      }
+
+      const needsReauthentication = response.error.some(
+        (error) => error.code === 'REAUTHENTICATION_REQUIRED'
+      );
+      return needsReauthentication ? 'reauthentication_required' : 'unlinked';
+    });
 
   const handleGithubEnable = async () => {
     const url = await authServiceClient.initGithubLink(window.location.href);
@@ -244,7 +259,18 @@ export function Account() {
 
   const handleGithubDisable = async () => {
     await authServiceClient.deleteGithubLink();
-    refetchGithubLink();
+    refetchGithubLinkStatus();
+  };
+
+  const handleGithubReconnect = async () => {
+    const url = await authServiceClient.reauthenticateGithub(
+      window.location.href
+    );
+    if (url.isOk()) {
+      window.location.href = url.value;
+    } else {
+      toast.failure('Failed to start GitHub reconnect flow');
+    }
   };
 
   const firstName = () => {
@@ -404,6 +430,7 @@ export function Account() {
               </Row>
 
               <Show when={ENABLE_AUTO_UPDATE_UI}>
+                <BundleVersionRow />
                 <BundleUpdateRow />
               </Show>
 
@@ -530,14 +557,36 @@ export function Account() {
 
               <Row label="GitHub">
                 <Show
-                  when={!githubLinkExists.loading}
+                  when={!githubLinkStatus.loading}
                   fallback={
                     <span class="text-sm text-ink-muted">Loading…</span>
                   }
                 >
-                  <Show
-                    when={!githubLinkExists()}
+                  <Switch
                     fallback={
+                      <Button
+                        variant="base"
+                        size="sm"
+                        depth={3}
+                        onClick={handleGithubEnable}
+                      >
+                        Enable
+                      </Button>
+                    }
+                  >
+                    <Match
+                      when={githubLinkStatus() === 'reauthentication_required'}
+                    >
+                      <Button
+                        variant="base"
+                        size="sm"
+                        depth={3}
+                        onClick={handleGithubReconnect}
+                      >
+                        Reconnect
+                      </Button>
+                    </Match>
+                    <Match when={githubLinkStatus() === 'linked'}>
                       <Button
                         variant="base"
                         size="sm"
@@ -546,17 +595,8 @@ export function Account() {
                       >
                         Disable
                       </Button>
-                    }
-                  >
-                    <Button
-                      variant="base"
-                      size="sm"
-                      depth={3}
-                      onClick={handleGithubEnable}
-                    >
-                      Enable
-                    </Button>
-                  </Show>
+                    </Match>
+                  </Switch>
                 </Show>
               </Row>
 
@@ -1002,6 +1042,8 @@ function bundleUpdateAction(
       return { label: 'Download', action: grantBundleUpdate };
     case 'WaitingForWifi':
       return { label: 'Download anyway', action: grantBundleUpdate };
+    case 'ClearRequired':
+      return { label: 'Reload', action: () => invoke('perform_update') };
     case 'Completed':
       return { label: 'Update', action: () => invoke('perform_update') };
     default:
@@ -1009,30 +1051,55 @@ function bundleUpdateAction(
   }
 }
 
-function BundleUpdateRow() {
-  const tauri = useTauri();
+type BundleDebugInfo = {
+  bundleBuild: number;
+  source: 'embedded' | 'ota';
+  nativeBuild: number;
+};
+
+function BundleVersionRow() {
+  if (!isNativeMobilePlatform()) return null;
+  const [bundleDebugInfo] = createResource(() =>
+    invoke<BundleDebugInfo>('get_bundle_debug_info').catch((error) => {
+      console.error('[bundle-update] get_bundle_debug_info failed', error);
+      return null;
+    })
+  );
   return (
-    <Show when={tauri}>
-      {(ctx) => {
-        const status = () => ctx().bundleUpdateStatus();
-        const action = () => bundleUpdateAction(status());
-        return (
-          <Row label="App Update">
-            <div class="flex items-center gap-3">
-              <span class="text-sm text-ink-muted">
-                {formatBundleUpdateStatus(status())}
-              </span>
-              <Show when={action()}>
-                {(a) => (
-                  <Button variant="active" size="sm" depth={3} onClick={a().action}>
-                    {a().label}
-                  </Button>
-                )}
-              </Show>
-            </div>
-          </Row>
-        );
-      }}
+    <Show when={bundleDebugInfo()}>
+      {(info) => (
+        <Row label="Version">
+          <span class="text-sm text-ink-muted">
+            {info().bundleBuild} ({info().source === 'embedded' ? 'app' : 'ota'})
+            {' '}
+            - {info().nativeBuild}
+          </span>
+        </Row>
+      )}
     </Show>
+  );
+}
+
+function BundleUpdateRow() {
+  if (!isNativeMobilePlatform()) return null;
+  const tauri = useTauri();
+  const status = (): BundleUpdateStatus =>
+    tauri?.bundleUpdateStatus() ?? { status: 'Idle' };
+  const action = () => bundleUpdateAction(status());
+  return (
+    <Row label="App Update">
+      <div class="flex items-center gap-3">
+        <span class="text-sm text-ink-muted">
+          {formatBundleUpdateStatus(status())}
+        </span>
+        <Show when={action()}>
+          {(a) => (
+            <Button variant="active" size="sm" depth={3} onClick={a().action}>
+              {a().label}
+            </Button>
+          )}
+        </Show>
+      </div>
+    </Row>
   );
 }

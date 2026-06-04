@@ -1,4 +1,5 @@
 import { useCallKitSetup } from '@channel/Call';
+import { NativeAppUpdateRequiredDialog } from '@core/mobile/NativeAppUpdateRequiredDialog';
 import { isPlatform, isTauri } from '@core/util/platform';
 import { PlatformNotificationProvider } from '@notifications';
 import type { RouteSectionProps } from '@solidjs/router';
@@ -8,6 +9,7 @@ import { type OsType, type as osType } from '@tauri-apps/plugin-os';
 import {
   type Accessor,
   createContext,
+  createEffect,
   createSignal,
   type JSX,
   onCleanup,
@@ -29,6 +31,11 @@ export type BundleUpdateStatus =
   | { status: 'WaitingForWifi' }
   | { status: 'Downloading'; data: { progress: number } }
   | { status: 'Unzipping'; data: { progress: number } }
+  | { status: 'ClearRequired'; data: { reason: string } }
+  | {
+      status: 'NativeUpdateRequired';
+      data: { bundleBuild: number; minNativeBuild: number };
+    }
   | { status: 'Completed' }
   | { status: 'Error'; data: { message: string } };
 
@@ -40,6 +47,13 @@ interface TauriContextValue {
 
 const TauriContext = createContext<TauriContextValue | undefined>(undefined);
 
+function shouldShowNativeAppUpdateRequiredDialog(status: BundleUpdateStatus) {
+  return (
+    status.status === 'ClearRequired' ||
+    status.status === 'NativeUpdateRequired'
+  );
+}
+
 function TauriProvider(props: { children: JSX.Element }) {
   // we only care about this value on android.
   // ios should use the env(safe-area-inset-top) css properties
@@ -47,12 +61,29 @@ function TauriProvider(props: { children: JSX.Element }) {
   const [insets, setInsets] = createSignal<NotAndroid | Insets>('not-android');
   const [bundleUpdateStatus, setBundleUpdateStatus] =
     createSignal<BundleUpdateStatus>({ status: 'Idle' });
+  const [
+    nativeAppUpdateRequiredDialogOpen,
+    setNativeAppUpdateRequiredDialogOpen,
+  ] = createSignal(false);
+  let hasShownNativeAppUpdateRequiredDialog = false;
 
   function performBundleUpdate() {
     invoke<boolean>('perform_update').catch((e) =>
       console.error('[bundle-update] perform_update failed', e)
     );
   }
+
+  createEffect(() => {
+    if (
+      hasShownNativeAppUpdateRequiredDialog ||
+      !shouldShowNativeAppUpdateRequiredDialog(bundleUpdateStatus())
+    ) {
+      return;
+    }
+
+    hasShownNativeAppUpdateRequiredDialog = true;
+    setNativeAppUpdateRequiredDialogOpen(true);
+  });
 
   if (isTauri() && isPlatform('ios')) useCallKitSetup();
 
@@ -63,23 +94,9 @@ function TauriProvider(props: { children: JSX.Element }) {
   };
 
   onMount(() => {
-    console.info('[bundle-update] registering listener');
-    let loggedDownloading = false;
     const unlistenPromise = listen<BundleUpdateStatus>(
       'bundle-update-status',
       (ev) => {
-        if (ev.payload.status === 'Downloading') {
-          if (!loggedDownloading) {
-            console.info(
-              '[bundle-update] received',
-              JSON.stringify(ev.payload)
-            );
-            loggedDownloading = true;
-          }
-        } else {
-          console.info('[bundle-update] received', JSON.stringify(ev.payload));
-          loggedDownloading = false;
-        }
         setBundleUpdateStatus(ev.payload);
       }
     );
@@ -88,7 +105,6 @@ function TauriProvider(props: { children: JSX.Element }) {
     );
     // Fetch current status since events emitted before the listener registered are missed
     invoke<BundleUpdateStatus>('get_bundle_update_status').then((status) => {
-      console.info('[bundle-update] initial status', JSON.stringify(status));
       setBundleUpdateStatus(status);
     });
     onCleanup(() => {
@@ -144,6 +160,10 @@ function TauriProvider(props: { children: JSX.Element }) {
   return (
     <TauriContext.Provider value={value}>
       <ShareTargetProvider os={value.os}>{props.children}</ShareTargetProvider>
+      <NativeAppUpdateRequiredDialog
+        open={nativeAppUpdateRequiredDialogOpen()}
+        onClose={() => setNativeAppUpdateRequiredDialogOpen(false)}
+      />
     </TauriContext.Provider>
   );
 }

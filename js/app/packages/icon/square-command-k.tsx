@@ -67,7 +67,7 @@ export const AnimatedSquareCommandKIcon = (props: {
       <polyline
         class="ck-caret"
         points="0.75 0.75 6.75 6.75 0.75 12.75"
-        stroke-width="1.5"
+        stroke-width="1.125"
         stroke-linejoin="round"
         stroke-linecap="round"
       />
@@ -77,7 +77,7 @@ export const AnimatedSquareCommandKIcon = (props: {
         y1="13.49"
         x2="15"
         y2="13.49"
-        stroke-width="1.5"
+        stroke-width="1.125"
         stroke-linejoin="round"
         stroke-linecap="round"
       />

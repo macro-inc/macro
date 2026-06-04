@@ -8,6 +8,7 @@ import type { GithubPullRequestAdditions } from './githubPullRequestAdditions';
 import type { GithubPullRequestChecks } from './githubPullRequestChecks';
 import type { GithubPullRequestComments } from './githubPullRequestComments';
 import type { GithubPullRequestDeletions } from './githubPullRequestDeletions';
+import type { GithubPullRequestForeignEntityId } from './githubPullRequestForeignEntityId';
 import type { GithubPullRequestName } from './githubPullRequestName';
 import type { GithubPullRequestStatus } from './githubPullRequestStatus';
 
@@ -31,6 +32,8 @@ export interface GithubPullRequest {
   deletions?: GithubPullRequestDeletions;
   /** A compact label suitable for display in the UI. */
   displayName: string;
+  /** The internal `foreign_entity.id` UUID for the GitHub pull request row. */
+  foreignEntityId?: GithubPullRequestForeignEntityId;
   /** The stored GitHub association key, in `owner/repo/pull/number` format. */
   githubKey: string;
   /** The GitHub pull request title, when enrichment data is available. */

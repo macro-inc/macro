@@ -7,6 +7,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { throwOnErr } from '@core/util/result';
 import type { EntityData } from '@entity';
 import { scheduledActionKeys } from '@queries/agent-schedule/keys';
+import { callKeys } from '@queries/call/keys';
 import { queryClient } from '@queries/client';
 import {
   getSoupEntityById,
@@ -51,7 +52,7 @@ export function createBulkDeleteDssItemsMutation() {
         })
       );
       if (deletable.some((e) => e.type === 'call')) {
-        queryClient.invalidateQueries({ queryKey: ['call'] });
+        queryClient.invalidateQueries({ queryKey: callKeys._def });
       }
       if (deletable.some((e) => e.type === 'automation')) {
         const deletedIds = new Set(

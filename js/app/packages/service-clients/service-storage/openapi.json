@@ -3585,7 +3585,7 @@
     "/crm/comments/{entity_type}/{entity_id}": {
       "get": {
         "tags": ["crm::inbound::axum_router::comments"],
-        "summary": "List the comment threads on a CRM company or contact, scoped to the\nrequesting user's team. Returns 404 when the entity isn't owned by the\nteam; an owned entity with no threads returns `200 []`.",
+        "summary": "List the comment threads on a CRM company or contact. Access is\nenforced by [`EntityPermissionExtractor`] against the path's\n`crm_company`/`crm_contact` entity type — hidden parents are\ninvisible to plain members. An accessible entity with no threads\nreturns `200 []`.",
         "operationId": "list_crm_comments",
         "parameters": [
           {
@@ -3733,10 +3733,71 @@
         }
       }
     },
+    "/crm/companies/{company_id}": {
+      "get": {
+        "tags": ["crm::inbound::axum_router::get_company"],
+        "summary": "Fetch a single CRM company by id, hydrated with its domains, the\nprimary domain's directory display metadata (name + description),\nand the company's contacts. Access is enforced by\n[`CrmCompanyAccessLevelExtractor`]: the user must be on the team\nthat owns the company, and hidden companies are invisible to plain\nmembers. Admin/owner callers see hidden companies and contacts so\nthey can render the right unhide UI.",
+        "operationId": "get_company",
+        "parameters": [
+          {
+            "name": "company_id",
+            "in": "path",
+            "description": "The CRM company to fetch",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrmCompanyResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/crm/companies/{company_id}/contacts": {
       "get": {
         "tags": ["crm::inbound::axum_router::list_company_contacts"],
-        "summary": "List the contacts of a CRM company, scoped to the requesting user's\nteam. Returns 404 when the company isn't owned by the team (so\nexistence doesn't leak across teams). Non-admin viewers also 404 on\nhidden companies and see only non-hidden contacts; admin/owner\nviewers reach hidden companies and see every owned contact\nregardless of `hidden` so they can render the right unhide UI.",
+        "summary": "List the contacts of a CRM company. Access is enforced by\n[`CrmCompanyAccessLevelExtractor`]: the user must be on the team that\nowns the company. Hidden companies and hidden contacts are invisible\nto plain members; admin/owner callers see hidden rows so they can\nrender the right unhide UI.",
         "operationId": "list_company_contacts",
         "parameters": [
           {
@@ -3938,7 +3999,7 @@
     "/crm/contacts/{contact_id}": {
       "get": {
         "tags": ["crm::inbound::axum_router::get_contact"],
-        "summary": "Fetch a single CRM contact by id, scoped to the requesting user's\nteam. Returns 404 when the contact doesn't exist or isn't owned by\nthe team. Non-admin viewers also 404 on hidden contacts or hidden\nparent companies (so existence doesn't leak); admin/owner viewers\nreach every owned contact regardless of `hidden`.",
+        "summary": "Fetch a single CRM contact by id. Access is enforced by\n[`CrmContactAccessLevelExtractor`]: the user must be on the team that\nowns the contact's parent company, and hidden contacts are invisible\nto plain members. Admin/owner callers see hidden contacts so they can\nrender the right unhide UI.",
         "operationId": "get_contact",
         "parameters": [
           {
@@ -10931,6 +10992,72 @@
           }
         }
       },
+      "CrmCompanyResponse": {
+        "type": "object",
+        "description": "A CRM company as returned by `GET /crm/companies/{company_id}`.\nMirrors the soup-listed `crmCompany` shape (`name` / `description`\nresolved from the primary domain's `crm_domain_directory` entry) and\nembeds the company's contacts so the panel can render in a single\nrequest.",
+        "required": [
+          "id",
+          "teamId",
+          "emailSync",
+          "hidden",
+          "createdAt",
+          "updatedAt",
+          "domains",
+          "contacts"
+        ],
+        "properties": {
+          "contacts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CrmContactResponse"
+            },
+            "description": "Contacts attached to this company. Hidden contacts are filtered\nout for non-admin viewers."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Earliest known interaction with this company."
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Display description from the primary domain's directory entry."
+          },
+          "domains": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CrmDomainResponse"
+            },
+            "description": "All domains associated with this company, ordered by creation\ntime ascending (primary first)."
+          },
+          "emailSync": {
+            "type": "boolean",
+            "description": "Whether email sync is enabled for this company."
+          },
+          "hidden": {
+            "type": "boolean",
+            "description": "Whether the company is hidden from CRM listings for the\nrequesting team. Non-admin viewers never see `hidden = true`\nrows (the endpoint 404s for them); admin/owner callers see\nhidden companies so they can render the right toggle state."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of the company."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "Display name from the primary domain's directory entry, or\n`None` when unresolved."
+          },
+          "teamId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of the team that owns this company record."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Most recent known interaction with this company."
+          }
+        }
+      },
       "CrmContactResponse": {
         "type": "object",
         "description": "A CRM contact as returned by `GET /crm/companies/{company_id}/contacts`.",
@@ -10986,6 +11113,32 @@
             "type": "string",
             "format": "date-time",
             "description": "When the contact record was last updated."
+          }
+        }
+      },
+      "CrmDomainResponse": {
+        "type": "object",
+        "description": "A CRM domain associated with a company.",
+        "required": ["id", "companyId", "domain", "createdAt"],
+        "properties": {
+          "companyId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of the company the domain belongs to."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the domain record was created."
+          },
+          "domain": {
+            "type": "string",
+            "description": "The domain (e.g. \"acme.com\")."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of the domain record."
           }
         }
       },
@@ -13563,6 +13716,11 @@
           "displayName": {
             "type": "string",
             "description": "A compact label suitable for display in the UI."
+          },
+          "foreignEntityId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The internal `foreign_entity.id` UUID for the GitHub pull request row."
           },
           "githubKey": {
             "type": "string",

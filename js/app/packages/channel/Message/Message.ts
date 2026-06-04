@@ -1,4 +1,5 @@
 import { ActionMenu } from './ActionMenu';
+import { AgentBadge } from './AgentBadge';
 import { Attachments } from './Attachments';
 import { Content } from './Content';
 import { DateDivider } from './DateDivider';
@@ -20,6 +21,7 @@ export const Message = {
   Layout,
   Slot,
   SenderName,
+  AgentBadge,
   SenderIcon,
   Timestamp,
   Content,

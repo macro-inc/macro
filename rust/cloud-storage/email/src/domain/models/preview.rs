@@ -93,6 +93,7 @@ pub struct EmailThreadPreview {
     pub updated_at: DateTime<Utc>,
     pub viewed_at: Option<DateTime<Utc>>,
     pub project_id: Option<String>,
+    pub link_id: Uuid,
 }
 
 #[non_exhaustive]

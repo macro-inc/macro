@@ -64,7 +64,6 @@ import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { isListViewID, type ListView } from '@app/constants/list-views';
 import { usePreference } from '@app/preferences/use-preference';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
-import { EmailPermissionsBanner } from '@core/component/EmailPermissionsBanner';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { Resize } from '@core/component/Resize';
@@ -98,7 +97,6 @@ import { PropertyValueIcon } from '@property/component/propertyValue/PropertyVal
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { useQueryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
-import { useEmailLinksQuery } from '@queries/email/link';
 import { invalidateEntityNotifications } from '@queries/notification/user-notifications';
 import {
   invalidateSoupEntity,
@@ -394,21 +392,6 @@ export const SoupView = (props: SoupViewProps) => {
     },
   });
 
-  const isMailView = createMemo(() => {
-    const content = panel.handle.content();
-    return content.type === 'component' && content.id === 'mail';
-  });
-
-  const emailLinksQuery = useEmailLinksQuery();
-  const hasLinkError = createMemo(() => {
-    if (!isMailView()) return false;
-    if (emailLinksQuery.isPending) return false;
-    return (
-      emailLinksQuery.isError ||
-      (emailLinksQuery.data && emailLinksQuery.data.links.length === 0)
-    );
-  });
-
   return (
     <SplitPanelContext.Provider
       value={{
@@ -527,15 +510,7 @@ export const SoupView = (props: SoupViewProps) => {
             </Show>
             <SoupFiltersBar />
           </div>
-          <Show when={hasLinkError()}>
-            <EmailPermissionsBanner />
-          </Show>
-          <div
-            class="relative grow min-h-1 flex max-sm:flex-col flex-row size-full"
-            classList={{
-              'pointer-events-none opacity-10': hasLinkError(),
-            }}
-          >
+          <div class="relative grow min-h-1 flex max-sm:flex-col flex-row size-full">
             <Suspense>
               <SoupViewFileDropzone>
                 <SoupViewList

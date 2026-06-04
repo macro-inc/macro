@@ -41,7 +41,7 @@ use entity_access::domain::ports::EntityAccessService;
 use model_error_response::ErrorResponse;
 use serde::Deserialize;
 use sqlx::PgPool;
-use task_dedup::TaskDedupService;
+use task_dedup::PgTaskDedupService;
 
 #[cfg(feature = "document_create")]
 use self::create_markdown::create_markdown_handler;
@@ -110,7 +110,7 @@ pub struct DocumentRouterState<T, Svc> {
     /// The database pool (used by middleware for document lookups).
     pub pool: PgPool,
     /// Task duplicate detection service.
-    pub task_dedup_service: Arc<TaskDedupService>,
+    pub task_dedup_service: Arc<PgTaskDedupService>,
     /// Backend-owned document creation use case.
     #[cfg(feature = "document_create_adapters")]
     pub creator: DefaultDocumentCreator<T>,

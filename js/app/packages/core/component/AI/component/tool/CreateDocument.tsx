@@ -1,6 +1,6 @@
-import { ItemPreview } from '@core/component/ItemPreview';
+import { InlineItemPreview } from '@core/component/ItemPreview';
 import FilePlus from '@phosphor-icons/core/regular/file-plus.svg';
-import { Show } from 'solid-js';
+import { Show, Suspense } from 'solid-js';
 import { BaseTool } from './BaseTool';
 import { createToolRenderer } from './ToolRenderer';
 
@@ -8,18 +8,23 @@ const handler = createToolRenderer({
   name: 'CreateDocument',
   render: (ctx) => (
     <BaseTool icon={FilePlus} renderContext={ctx.renderContext} type="call">
-      <div class="flex min-w-0 flex-1 items-center justify-between gap-3">
-        <div class="min-w-0">
-          Create{' '}
-          <span class="text-accent">
-            {ctx.tool.data.documentName}.{ctx.tool.data.fileExtension}
-          </span>
-        </div>
+      <div class="min-w-0 flex-1">
+        Create{' '}
+        <span class="text-ink">
+          {ctx.tool.data.documentName}.{ctx.tool.data.fileExtension}
+        </span>
         <Show when={ctx.response}>
           {(response) => (
-            <div class="shrink-0">
-              <ItemPreview id={response().data.documentId} type="document" />
-            </div>
+            <>
+              {' '}
+              <span class="text-ink-placeholder">·</span>{' '}
+              <Suspense>
+                <InlineItemPreview
+                  id={response().data.documentId}
+                  type="document"
+                />
+              </Suspense>
+            </>
           )}
         </Show>
       </div>

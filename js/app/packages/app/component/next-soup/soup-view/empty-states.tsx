@@ -4,7 +4,7 @@ import type { BlockAlias, BlockName } from '@core/block';
 import { McpSetupCards } from '@core/component/AI/component/McpSetupCards';
 import { toast } from '@core/component/Toast/Toast';
 import { useEmailLinks, useEmailLinksStatus } from '@core/email-link';
-import Arcanum01 from '@design/arcanum-01.svg';
+import EmptyStateAiIcon from '@design/empty-state-ai.svg';
 import EmptyStateDocIcon from '@design/empty-state-doc.svg';
 import EmptyStateEmailIcon from '@design/empty-state-email.svg';
 import EmptyStateFolderIcon from '@design/empty-state-folder.svg';
@@ -12,35 +12,42 @@ import EmptyStateInboxZeroIcon from '@design/empty-state-inbox-zero.svg';
 import EmptyStateNoFilterMatchIcon from '@design/empty-state-no-filter-match.svg';
 import EmptyStateNoSearchMatchIcon from '@design/empty-state-no-search-match.svg';
 import EmptyStateTasksIcon from '@design/empty-state-tasks.svg';
+import PlusIcon from '@phosphor/plus.svg';
 import { EmptyStatePanel, FilteredHiddenBanner } from '@ui';
 import { type Component, Match, Switch } from 'solid-js';
 import { FolderDropZone } from './FolderDropZone';
 import { useSoupView } from './soup-view-context';
 
+// Base URL for the public documentation site (https://docs.macro.com).
+const DOCS_BASE = 'https://docs.macro.com';
+
 type FallbackContent = {
   plural: string;
   graphic?: Component<{ class?: string }>;
   create?: { label: string; blockName: BlockName | BlockAlias };
+  documentationUrl?: string;
 };
 
 const FALLBACK_CONTENT: Partial<Record<ListView, FallbackContent>> = {
   documents: {
     plural: 'documents',
     graphic: EmptyStateDocIcon,
-    create: { label: 'Create document', blockName: 'md' },
+    create: { label: 'New document', blockName: 'md' },
+    documentationUrl: `${DOCS_BASE}/product/docs`,
   },
   channels: {
     plural: 'channels',
-    create: { label: 'Create channel', blockName: 'channel' },
+    create: { label: 'New channel', blockName: 'channel' },
+    documentationUrl: `${DOCS_BASE}/product/channels`,
   },
-  calls: { plural: 'calls' },
+  calls: { plural: 'calls', documentationUrl: `${DOCS_BASE}/product/calls` },
   search: { plural: 'items' },
 };
 
 function InboxZeroNumber(props: { class?: string }) {
   return (
     <div
-      class={`flex items-center justify-center font-mono text-[9rem] font-thin leading-none text-ink-muted opacity-50 ${props.class ?? ''}`}
+      class={`flex items-center justify-center font-mono text-[9rem] font-thin leading-none text-ink-muted ${props.class ?? ''}`}
     >
       0
     </div>
@@ -76,6 +83,7 @@ export function EmptyState(props: {
               ? `No results for "${soup.searchText()}"`
               : 'No results'
           }
+          documentationUrl={`${DOCS_BASE}/product/search-1`}
         />
       </Match>
 
@@ -108,6 +116,7 @@ export function EmptyState(props: {
             label: 'Connect email',
             onClick: onConnectEmail,
           }}
+          documentationUrl={`${DOCS_BASE}/product/email`}
         />
       </Match>
 
@@ -117,6 +126,7 @@ export function EmptyState(props: {
           graphic={InboxZeroNumber}
           title="Inbox zero"
           description="You're all caught up. Important items will appear here as they arrive."
+          documentationUrl={`${DOCS_BASE}/product/inbox`}
         />
       </Match>
 
@@ -126,6 +136,7 @@ export function EmptyState(props: {
           graphic={InboxZeroNumber}
           title="Inbox zero"
           description="You're all caught up. New email will appear here as it arrives."
+          documentationUrl={`${DOCS_BASE}/product/email`}
         />
       </Match>
 
@@ -133,8 +144,15 @@ export function EmptyState(props: {
         <EmptyStatePanel
           align="center"
           graphic={EmptyStateTasksIcon}
+          graphicClass="h-36 w-36"
           title="Nothing to do"
           description="Tasks you create or that get assigned to you will show up here."
+          primaryAction={{
+            label: 'New task',
+            icon: PlusIcon,
+            onClick: () => runCreateAction('task'),
+          }}
+          documentationUrl={`${DOCS_BASE}/product/tasks`}
         />
       </Match>
 
@@ -146,7 +164,8 @@ export function EmptyState(props: {
           graphic={EmptyStateInboxZeroIcon}
           title="No automations to show"
           primaryAction={{
-            label: 'Create automation',
+            label: 'New automation',
+            icon: PlusIcon,
             onClick: () => runCreateAction('automation'),
           }}
         />
@@ -181,11 +200,13 @@ export function EmptyState(props: {
                 fallback.create
                   ? {
                       label: fallback.create.label,
+                      icon: PlusIcon,
                       onClick: () =>
                         runCreateAction(fallback.create!.blockName),
                     }
                   : undefined
               }
+              documentationUrl={fallback.documentationUrl}
             />
           );
         })()}
@@ -195,24 +216,23 @@ export function EmptyState(props: {
 }
 
 function AgentsEmptyState() {
+  // Shares the left-aligned EmptyStatePanel layout with the folders / connect-email
+  // empty states; the MCP setup cards render below the actions as panel children.
   return (
-    <div class="size-full relative overflow-hidden" data-soup-empty-state>
-      <div class="absolute inset-0 flex flex-col items-center pointer-events-none p-4">
-        <div class="h-72 m-8 mt-32 @max-sm:mt-20 opacity-5 text-ink-muted">
-          <Arcanum01 class="size-full" />
-        </div>
-      </div>
-      <div class="relative size-full flex flex-col items-center overflow-y-auto p-4">
-        <div class="w-full max-w-2xl mt-32 @max-sm:mt-20 px-4 pb-8 flex flex-col gap-4">
-          <div>
-            <p class="mt-1 text-sm text-ink-extra-muted">
-              Create an agent above, or use Macro with your favorite AI chat
-              client or code editor via MCP.
-            </p>
-          </div>
-          <McpSetupCards />
-        </div>
-      </div>
+    <div class="size-full" data-soup-empty-state>
+      <EmptyStatePanel
+        graphic={EmptyStateAiIcon}
+        title="Get started with agents"
+        description="Create an agent, or use Macro with your favorite AI chat client or code editor via MCP."
+        primaryAction={{
+          label: 'New agent',
+          icon: PlusIcon,
+          onClick: () => runCreateAction('chat'),
+        }}
+        documentationUrl={`${DOCS_BASE}/product/agents`}
+      >
+        <McpSetupCards />
+      </EmptyStatePanel>
     </div>
   );
 }

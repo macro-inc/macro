@@ -16,7 +16,9 @@ use model::response::GenericSuccessResponse;
 use model_user::axum_extractor::MacroUserExtractor;
 use models_permissions::share_permission::access_level::{OwnerAccessLevel, ViewAccessLevel};
 use serde::{Deserialize, Serialize};
-use task_dedup::{NewTask, TaskDedupError, TaskDedupService, TaskDuplicate, TaskSimilarityResult};
+use task_dedup::{
+    NewTask, PgTaskDedupService, TaskDedupError, TaskDuplicate, TaskSimilarityResult,
+};
 use uuid::Uuid;
 
 use super::{DocumentRouterState, Params};
@@ -175,7 +177,7 @@ pub async fn delete_this_duplicate_task_handler<T: DocumentService, Svc: EntityA
 }
 
 /// Spawn duplicate detection for a newly created task.
-pub fn spawn_task_duplicate_detection(task_dedup_service: Arc<TaskDedupService>, task: NewTask) {
+pub fn spawn_task_duplicate_detection(task_dedup_service: Arc<PgTaskDedupService>, task: NewTask) {
     tokio::spawn(async move {
         let _ = task_dedup_service
             .detect_new_task(task)

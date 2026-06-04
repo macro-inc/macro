@@ -17,17 +17,18 @@ where
     anyhow::Error: From<T::Err>,
     anyhow::Error: From<E::Err>,
 {
-    #[tracing::instrument(err, skip(self, link, input))]
+    #[tracing::instrument(err, skip(self, link, accessible_inboxes, input))]
     pub(crate) async fn send_message_impl(
         &self,
         link: &Link,
+        accessible_inboxes: &[Link],
         mut input: CreateDraftInput,
     ) -> Result<CreatedDraft, EmailErr> {
         let delay_secs = self.sent_undo_delay_secs;
         input.send_time = Some(chrono::Utc::now() + Duration::seconds(delay_secs as i64));
 
         let created = self
-            .prepare_and_insert_db_message(link, input, false)
+            .prepare_and_insert_db_message(link, accessible_inboxes, input, false)
             .await?;
 
         // FE displays "Undo" button for delay_secs. Give extra time for round trip of cancel request

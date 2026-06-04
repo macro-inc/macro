@@ -121,6 +121,7 @@ export const listTypedNotificationsResponse = zod
                 'foreign_entity',
                 'static_file',
                 'crm_company',
+                'crm_contact',
               ])
               .describe('The type of an entity in Macro'),
           })
@@ -743,6 +744,7 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                 'foreign_entity',
                 'static_file',
                 'crm_company',
+                'crm_contact',
               ])
               .describe('The type of an entity in Macro'),
           })
@@ -1359,6 +1361,7 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                 'foreign_entity',
                 'static_file',
                 'crm_company',
+                'crm_contact',
               ])
               .describe('The type of an entity in Macro'),
           })
@@ -1986,6 +1989,7 @@ export const getTypedNotificationByIdResponse = zod
         'foreign_entity',
         'static_file',
         'crm_company',
+        'crm_contact',
       ])
       .describe('The type of an entity in Macro'),
   })

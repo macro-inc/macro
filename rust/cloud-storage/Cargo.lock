@@ -654,6 +654,7 @@ dependencies = [
  "doppleganger",
  "email_validator",
  "entity_access",
+ "foreign_entity",
  "fusionauth",
  "futures",
  "github",
@@ -1993,6 +1994,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "channel_bots"
+version = "0.1.0"
+dependencies = [
+ "agent",
+ "ai_tools",
+ "ai_toolset",
+ "anyhow",
+ "async-trait",
+ "bot_id",
+ "channels",
+ "chrono",
+ "futures",
+ "macro_user_id",
+ "models_pagination",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "channels"
 version = "0.1.0"
 dependencies = [
@@ -2667,6 +2688,7 @@ dependencies = [
  "macro_db_migrator",
  "macro_uuid",
  "model-error-response",
+ "model_user",
  "reqwest 0.13.3",
  "serde",
  "serde_json",
@@ -3373,6 +3395,7 @@ dependencies = [
 name = "document_storage_service"
 version = "0.1.0"
 dependencies = [
+ "ai_tools",
  "analytics_client",
  "anyhow",
  "aws-sdk-dynamodb",
@@ -3388,6 +3411,7 @@ dependencies = [
  "bzip2",
  "cal",
  "call",
+ "channel_bots",
  "channels",
  "chrono",
  "clap",
@@ -3404,6 +3428,7 @@ dependencies = [
  "documents",
  "dynamodb_client",
  "email",
+ "embedding",
  "entity_access",
  "entity_access_management",
  "foreign_entity",
@@ -3426,6 +3451,7 @@ dependencies = [
  "macro_env_var",
  "macro_middleware",
  "macro_project_utils",
+ "macro_service_urls",
  "macro_sha_count_client",
  "macro_user_id",
  "macro_uuid",
@@ -3579,6 +3605,7 @@ dependencies = [
  "entity_access",
  "entity_access_db_utils",
  "entity_access_management",
+ "foreign_entity",
  "futures",
  "hex",
  "http-body-util",
@@ -4107,6 +4134,14 @@ version = "0.1.0"
 dependencies = [
  "lazy_static",
  "regex",
+]
+
+[[package]]
+name = "embedding"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-openai",
 ]
 
 [[package]]
@@ -7412,6 +7447,7 @@ dependencies = [
  "strum",
  "thiserror 2.0.18",
  "tokio",
+ "tower 0.5.3",
  "tracing",
  "url",
 ]
@@ -11414,11 +11450,21 @@ version = "0.1.0"
 dependencies = [
  "agent",
  "anyhow",
- "async-openai",
  "async-trait",
+ "aws-sdk-secretsmanager",
+ "clap",
  "connection_gateway_client",
+ "embedding",
+ "futures",
+ "lexical_client",
+ "macro_aws_config",
  "macro_db_migrator",
+ "macro_entrypoint",
+ "macro_env",
+ "macro_env_var",
+ "macro_middleware",
  "model-entity",
+ "secretsmanager_client",
  "serde",
  "serde_json",
  "sqlx",

@@ -159,9 +159,22 @@ jobs:
           path: lambda-artifacts.tar.gz
           retention-days: 7
 
+  migrate-db:
+    name: Run Database Migrations
+    runs-on: db-migrator
+    needs: [build-service-binaries, build-lambda-artifacts]
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          sparse-checkout: .github/
+      - name: Run migrations
+        uses: ./.github/actions/migrate-cloud-storage-db
+        with:
+          environment: ${{ inputs.environment }}
+
   deploy-services:
     name: Deploy ${{ matrix.service }}
-    needs: [setup, build-service-binaries, build-lambda-artifacts]
+    needs: [setup, build-service-binaries, build-lambda-artifacts, migrate-db]
     if: ${{ needs.setup.outputs.matrix != '[]' }}
     runs-on:
       [

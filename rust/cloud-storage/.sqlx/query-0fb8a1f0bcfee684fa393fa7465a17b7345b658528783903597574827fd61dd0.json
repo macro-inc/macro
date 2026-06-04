@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT t.company_id, t.contact_id\n            FROM crm_comment c\n            JOIN crm_thread t ON t.id = c.thread_id\n            WHERE c.id = $1\n              AND c.deleted_at IS NULL\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "company_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "contact_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      true
+    ]
+  },
+  "hash": "0fb8a1f0bcfee684fa393fa7465a17b7345b658528783903597574827fd61dd0"
+}

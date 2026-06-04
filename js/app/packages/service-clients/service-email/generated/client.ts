@@ -397,11 +397,6 @@ export type listContactsResponse401 = {
   status: 401;
 };
 
-export type listContactsResponse404 = {
-  data: ErrorResponse;
-  status: 404;
-};
-
 export type listContactsResponse500 = {
   data: ErrorResponse;
   status: 500;
@@ -412,7 +407,6 @@ export type listContactsResponseSuccess = listContactsResponse200 & {
 };
 export type listContactsResponseError = (
   | listContactsResponse401
-  | listContactsResponse404
   | listContactsResponse500
 ) & {
   headers: Headers;

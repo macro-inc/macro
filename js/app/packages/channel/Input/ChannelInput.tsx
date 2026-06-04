@@ -18,6 +18,7 @@ import {
   Show,
   Switch,
 } from 'solid-js';
+import { MACRO_AI_BOT_ID, macroAiMentionUser } from '../macroAi';
 import { createInputAttachmentTracker } from './attachment-tracker';
 import { createConfiguredChannelMarkdownEditor } from './configured-markdown-editor';
 import { createInputState } from './create-input-state';
@@ -162,10 +163,19 @@ export function ChannelInput(props: ChannelInputProps) {
     queueMicrotask(() => applySnapshot(snapshot));
   };
 
+  // Macro AI is mentionable in every channel. It is surfaced through the same
+  // `@`-mention typeahead as participants and re-tagged as a bot at send time.
+  const mentionUsers: Accessor<IUser[]> = () => {
+    const base = props.participants?.() ?? [];
+    return base.some((user) => user.id === MACRO_AI_BOT_ID)
+      ? base
+      : [macroAiMentionUser(), ...base];
+  };
+
   const markdownEditor = createConfiguredChannelMarkdownEditor({
     namespace: props.markdownNamespace ?? 'channel-input-markdown',
     enableMentions: true,
-    users: props.participants,
+    users: mentionUsers,
     scrollContainer,
     onMentionCreate: (mention) => {
       mentionsTracker.onMentionCreate(mention);

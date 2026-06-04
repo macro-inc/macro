@@ -63,6 +63,10 @@ env_var! {
         pub LivekitServerUrl,
         pub LivekitApiKey,
         pub LivekitApiSecret,
+        /// OpenAI API key used to generate task-dedup embeddings. Required —
+        /// injected as `OPENAI_API_KEY` from the `openai-key` secret by the
+        /// infra stack, the same way `document_cognition_service` consumes it.
+        pub OpenaiApiKey,
     }
 }
 

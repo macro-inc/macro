@@ -1,0 +1,59 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            m.id,\n            m.link_id,\n            m.thread_id,\n            m.provider_thread_id,\n            m.headers_jsonb,\n            m.is_sent,\n            m.is_draft\n        FROM email_messages m\n        WHERE m.link_id = $1\n          AND m.is_draft = true\n          AND jsonb_path_exists(\n              m.headers_jsonb,\n              '$[*] ? (@.\"Macro-In-Reply-To\" == $macro_uuid)'::jsonpath,\n              jsonb_build_object('macro_uuid', $2::text)\n          )\n        ORDER BY m.created_at DESC\n        LIMIT 1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "thread_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "provider_thread_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "headers_jsonb",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 5,
+        "name": "is_sent",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 6,
+        "name": "is_draft",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "60707c986f365c7b49d1938285b601338c1d98e45b630d1a3e1622fb16ad58b6"
+}

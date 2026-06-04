@@ -1,4 +1,5 @@
 import type { Entity } from '@core/types';
+import { useNonPrimaryEmailLinkIdHeader } from '@queries/email/link';
 import { useMarkThreadAsSeenMutation } from '@queries/email/thread';
 import { debounce } from '@solid-primitives/scheduled';
 import { onMount } from 'solid-js';
@@ -129,8 +130,11 @@ export function EmailDebouncedReadMarker(props: {
   notificationSource: NotificationSource;
   debounceTime?: number;
   threadId: string;
+  /** The inbox the thread belongs to; scopes mark-as-seen to a non-primary inbox. */
+  linkId?: string;
 }) {
   const markSeenMutation = useMarkThreadAsSeenMutation();
+  const toHeaderLinkId = useNonPrimaryEmailLinkIdHeader();
 
   return (
     <DebouncedMarker
@@ -140,7 +144,10 @@ export function EmailDebouncedReadMarker(props: {
           type: 'email_thread',
           id: props.threadId,
         });
-        markSeenMutation.mutate({ threadId: props.threadId });
+        markSeenMutation.mutate({
+          threadId: props.threadId,
+          linkId: toHeaderLinkId(props.linkId),
+        });
       }}
     />
   );

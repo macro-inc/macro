@@ -43,6 +43,7 @@ document_storage_service_client = { path = "../document_storage_service_client" 
 doppleganger = { workspace = true }
 email_validator = { path = "../email_validator" }
 entity_access = { path = "../entity_access" }
+foreign_entity = { path = "../foreign_entity" }
 fusionauth = { path = "../fusionauth" }
 futures = { workspace = true }
 github = { path = "../github", default-features = false, features = [

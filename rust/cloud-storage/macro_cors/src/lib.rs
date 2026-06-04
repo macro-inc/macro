@@ -20,7 +20,12 @@ static ALLOWED_ORIGINS: [&str; 11] = [
     "https://apollo-testing.macro.com",
 ];
 
-static EXTRA_HEADERS: [&str; 3] = ["x-permissions-token", "traceparent", "tracestate"];
+static EXTRA_HEADERS: [&str; 4] = [
+    "x-permissions-token",
+    "traceparent",
+    "tracestate",
+    "x-email-link-id",
+];
 
 fn get_allowed_origins() -> Vec<Cow<'static, str>> {
     match std::env::var("ALLOWED_ORIGINS") {

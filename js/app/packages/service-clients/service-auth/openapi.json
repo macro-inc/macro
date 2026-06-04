@@ -224,6 +224,16 @@
               }
             }
           },
+          "428": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "500": {
             "description": "",
             "content": {
@@ -541,6 +551,65 @@
         }
       }
     },
+    "/link/github/status": {
+      "get": {
+        "tags": ["link::github"],
+        "summary": "Checks whether the authenticated user's GitHub link token is valid.",
+        "operationId": "check_github_link_status",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GithubLinkStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/link/gmail": {
       "post": {
         "tags": ["link::gmail"],
@@ -589,6 +658,65 @@
             }
           },
           "429": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/link/gmail/status": {
+      "get": {
+        "tags": ["link::gmail"],
+        "summary": "Checks whether the authenticated user's gmail link is valid.",
+        "operationId": "check_gmail_link_status",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GmailLinkStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "428": {
             "description": "",
             "content": {
               "application/json": {
@@ -3710,6 +3838,16 @@
           }
         }
       },
+      "GithubLinkStatusResponse": {
+        "type": "object",
+        "required": ["reauthentication_required"],
+        "properties": {
+          "reauthentication_required": {
+            "type": "boolean",
+            "description": "Whether the user must reauthenticate their GitHub link."
+          }
+        }
+      },
       "GithubPullRequestCheckRun": {
         "type": "object",
         "description": "A check run associated with a GitHub pull request.",
@@ -3836,6 +3974,16 @@
         "type": "string",
         "description": "The normalized lifecycle status for a GitHub pull request.",
         "enum": ["open", "closed", "merged"]
+      },
+      "GmailLinkStatusResponse": {
+        "type": "object",
+        "required": ["reauthentication_required"],
+        "properties": {
+          "reauthentication_required": {
+            "type": "boolean",
+            "description": "Whether the user must reauthenticate their Gmail link."
+          }
+        }
       },
       "InitGithubLinkResponse": {
         "type": "object",

@@ -1,8 +1,46 @@
 ---
-title: Docs
-description: Real-time collaborative documents.
+title: "Documents"
+description: "Markdown native collaborative documents."
 ---
 
-# Docs
+<Frame>
+  ![Doc Screenshot](/images/doc_screenshot.png)
+</Frame>
 
-WIP
+In Macro, documents is the broad term for the container holding many different file types. The default when creating a new document is a markdown file. Unlike other tools, Macro uses CRDT's making live collaboration as seamless as possible.
+
+> To create a new markdown document use shortcut <kbd>c</kbd> \+ <kbd>d</kbd>
+
+Macro auto-extracts email attachments and adds them to documents module. Canvas and code files will also appear there.
+
+You can @mention documents in your channels, link to them in your tasks, ask an agent questions about a contract someone emailed you. Documents are always fully searchable inside of Macro.
+
+### Notifications in Docs:
+
+For a person to receive notifications from a document it must first be shared with them after which they will receive a channel notification. When @mentioning a person inside of a document's body, they will not get a notification in their inbox. However, when @mentioning someone inside of a comment of a document it will be added to their inbox notifications
+
+<Frame>
+  <img
+    src="/images/Screenshot-2026-06-02-at-6.40.28-PM.png"
+    alt="Screenshot 2026 06 02 At 6 40 28 PM"
+    title="Screenshot 2026 06 02 At 6 40 28 PM"
+    className="mx-auto"
+    style={{ width:"51%" }}
+  />
+</Frame>
+
+On the right hand side of your document or inside the Info panel depending on your split size, you are able to see document details as well as properties. Inside properties you can assign, add to a task, add urgency, etc to your document.
+
+<Frame>
+  <img
+    src="/images/properties_tab.png"
+    alt="Properties Tab"
+    title="Properties Tab"
+    className="mx-auto"
+    style={{ width:"56%" }}
+  />
+</Frame>
+
+### Public Sharing:
+
+Document viewing is not limited exclusively to Macro users. You can share documents to people outside the app by using their email address. Users not signed in will see the document preview without having to log on or create an account.

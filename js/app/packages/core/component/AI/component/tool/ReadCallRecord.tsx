@@ -6,7 +6,7 @@ const handler = createToolRenderer({
   name: 'ReadCallRecord',
   render: (ctx) => (
     <BaseTool type="call" icon={Newspaper} renderContext={ctx.renderContext}>
-      Read <span class="text-accent">call transcript</span>
+      Read <span class="text-ink">call transcript</span>
     </BaseTool>
   ),
 });

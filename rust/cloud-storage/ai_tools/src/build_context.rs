@@ -46,6 +46,7 @@ use sync_service_client::SyncServiceClient;
 env_var! {
     struct ToolContextEnvVars {
         DocumentStorageServiceUrl,
+        DocumentStorageServiceAuthKey,
         EmailServiceUrl,
         SyncServiceUrl,
         SyncServiceAuthKey,
@@ -61,7 +62,6 @@ env_var! {
 
 maybe_env_var! {
     struct ToolContextMaybeEnvVars {
-        InternalApiSecretKey,
         LexicalServiceUrl,
         NotificationQueue,
     }
@@ -77,14 +77,13 @@ maybe_env_var! {
 ///
 /// Required env vars: `DOCUMENT_STORAGE_SERVICE_URL`, `EMAIL_SERVICE_URL`,
 /// `SYNC_SERVICE_URL`, `SYNC_SERVICE_AUTH_KEY`,
-/// `STATIC_FILE_SERVICE_URL`, `DOCUMENT_STORAGE_BUCKET`,
-/// `DOCX_DOCUMENT_UPLOAD_BUCKET`, `EMAIL_SCHEDULED_QUEUE`,
+/// `DOCUMENT_STORAGE_SERVICE_AUTH_KEY`, `STATIC_FILE_SERVICE_URL`,
+/// `DOCUMENT_STORAGE_BUCKET`, `DOCX_DOCUMENT_UPLOAD_BUCKET`, `EMAIL_SCHEDULED_QUEUE`,
 /// `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL`,
 /// `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID`,
 /// `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME`.
 ///
 /// Optional env vars (with fallbacks for local dev):
-/// - `INTERNAL_API_SECRET_KEY` (defaults to `"local"`)
 /// - `LEXICAL_SERVICE_URL` (defaults to `http://localhost:8096`)
 /// - `NOTIFICATION_QUEUE` (if omitted, notification status updates skip push clearing)
 #[tracing::instrument(skip(pool), err)]
@@ -94,11 +93,6 @@ pub async fn build_tool_service_context_from_env(
     let env = ToolContextEnvVars::new()?;
     let maybe_env = ToolContextMaybeEnvVars::new();
     let environment = Environment::new_or_prod();
-
-    let internal_api_secret_key: Arc<str> = maybe_env
-        .internal_api_secret_key
-        .map(|v| v.as_arc())
-        .context("expected INTERNAL_API_SECRET_KEY")?;
 
     let lexical_service_url: Arc<str> = maybe_env
         .lexical_service_url
@@ -139,7 +133,7 @@ pub async fn build_tool_service_context_from_env(
         .to_string();
 
     let search_client = Arc::new(SearchServiceClient::new(
-        internal_api_secret_key.to_string(),
+        env.document_storage_service_auth_key.to_string(),
         env.document_storage_service_url.to_string(),
     ));
     let sync_client = Arc::new(SyncServiceClient::new(
@@ -149,7 +143,10 @@ pub async fn build_tool_service_context_from_env(
     let email_ext_client = Arc::new(EmailServiceClientExternal::new(
         env.email_service_url.to_string(),
     ));
-    let lexical_client = LexicalClient::new(sync_service_auth_key, lexical_service_url.to_string());
+    let lexical_client = LexicalClient::new(
+        env.document_storage_service_auth_key.to_string(),
+        lexical_service_url.to_string(),
+    );
 
     let frecency_storage = FrecencyPgStorage::new(pool.clone());
     let frecency_service = FrecencyQueryServiceImpl::new(frecency_storage.clone());
@@ -222,6 +219,9 @@ pub async fn build_tool_service_context_from_env(
             entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
                 entity_access_management::outbound::PgRepository::new(pool.clone()),
             ),
+        foreign_entity_service: ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(
+            pool.clone(),
+        )),
     };
 
     let document_tool_context = DocumentToolContext::new(
