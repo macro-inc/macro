@@ -68,6 +68,12 @@ type DataSource<T> = {
   data: Accessor<T[]>;
   isLoading: Accessor<boolean>;
   isFetching: Accessor<boolean>;
+  /**
+   * True while the query is showing placeholder data from a previous query
+   * key (e.g. the prior tab's rows) and fetching the real results. Used to
+   * surface a loading indicator when switching between soup tabs.
+   */
+  isPlaceholderData: Accessor<boolean>;
   isFetchingNextPage: Accessor<boolean>;
   hasNextPage: Accessor<boolean>;
   fetchNextPage: VoidFunction;
@@ -596,6 +602,8 @@ export const SoupViewContextProvider: FlowComponent<
       data: entities,
       isLoading: () => itemsQuery.isLoading,
       isFetching: () => itemsQuery.isFetching || searchQuery.isFetching,
+      isPlaceholderData: () =>
+        itemsQuery.isPlaceholderData && !search.isSearching(),
       isFetchingNextPage: () =>
         itemsQuery.isFetchingNextPage || searchQuery.isFetchingNextPage,
       hasNextPage: () => {
