@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT\n            (ct.hidden OR c.hidden) AS \"hidden!\",\n            tu.team_role AS \"role!: TeamRole\"\n        FROM crm_contacts ct\n        JOIN crm_companies c\n            ON c.id = ct.company_id\n        JOIN team_user tu\n            ON tu.team_id = c.team_id\n           AND tu.user_id = $1\n        WHERE ct.id = $2\n        ",
+  "query": "\n        SELECT\n            c.hidden AS \"hidden!\",\n            c.team_id AS \"team_id!\",\n            tu.team_role AS \"role!: TeamRole\"\n        FROM crm_companies c\n        JOIN team_user tu\n            ON tu.team_id = c.team_id\n           AND tu.user_id = $1\n        WHERE c.id = $2\n        ",
   "describe": {
     "columns": [
       {
@@ -10,6 +10,11 @@
       },
       {
         "ordinal": 1,
+        "name": "team_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
         "name": "role!: TeamRole",
         "type_info": {
           "Custom": {
@@ -32,9 +37,10 @@
       ]
     },
     "nullable": [
-      null,
+      false,
+      false,
       false
     ]
   },
-  "hash": "0643eed420f0f10eab30aa91b17d858d0f765ba260e5fa84edf3741df03f6566"
+  "hash": "060ac46a89df4da317917f28ca8d95dc07b98f4a64effa9b76d58089fb0728b1"
 }
