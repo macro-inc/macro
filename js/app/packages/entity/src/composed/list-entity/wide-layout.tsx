@@ -12,6 +12,7 @@ import {
   isChannelEntity,
   isChannelMessageEntity,
   isEmailEntity,
+  isGithubPrEntity,
   isProjectContainedEntity,
   isTaskEntity,
 } from '../../types/entity';
@@ -20,6 +21,7 @@ import { AutomationWideContent } from './automation';
 import { CallParticipants, CallWideContent } from './call';
 import { ChannelMessageWideContent, ChannelWideContent } from './channel';
 import { EmailWideContent, useOwningInbox } from './email';
+import { GithubPullRequestPills } from './foreign';
 import type { LayoutProps } from './shared';
 
 export function WideLayout(props: LayoutProps) {
@@ -116,8 +118,11 @@ export function WideLayout(props: LayoutProps) {
             </span>
           )}
         </Show>
-        <Show when={props.isShared && !owningInbox()}>
+        <Show when={props.isShared && !owningInbox() && !isGithubPrEntity(props.entity)}>
           <SharedBadge ownerId={props.entity.ownerId} />
+        </Show>
+        <Show when={isGithubPrEntity(props.entity) && props.entity}>
+          {(entity) => <GithubPullRequestPills entity={entity()} />}
         </Show>
         <Show when={isCallEntity(props.entity) && props.entity}>
           {(entity) => (

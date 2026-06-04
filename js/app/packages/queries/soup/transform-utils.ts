@@ -622,7 +622,7 @@ export const mapSoupPageToEntityList: (
           type: 'foreign',
           id: item.data.id,
           name: metadata.name ?? metadata.displayName,
-          ownerId: item.data.storedForAuthEntity,
+          ownerId: item.data.storedForId,
           createdAt: item.data.createdAt,
           updatedAt: item.data.updatedAt,
           foreignSource: item.data.foreignEntitySource,
