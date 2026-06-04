@@ -248,7 +248,7 @@ fn exported_service_urls_match_local_values() {
 
     assert_eq!(
         service_urls.app_service_url.as_ref(),
-        "http://localhost:3000/app"
+        "http://localhost:3000"
     );
     assert_eq!(
         service_urls.auth_service_url.as_ref(),
@@ -318,7 +318,7 @@ fn exported_service_urls_match_dev_values() {
 
     assert_eq!(
         service_urls.app_service_url.as_ref(),
-        "https://dev.macro.com/app"
+        "https://dev.macro.com"
     );
     assert_eq!(
         service_urls.auth_service_url.as_ref(),
@@ -388,7 +388,7 @@ fn exported_service_urls_match_prod_values() {
 
     assert_eq!(
         service_urls.app_service_url.as_ref(),
-        "https://macro.com/app"
+        "https://macro.com"
     );
     assert_eq!(
         service_urls.auth_service_url.as_ref(),
