@@ -13,10 +13,10 @@ import { createEffect, createMemo, onCleanup, onMount } from 'solid-js';
 import { joinChannelCall } from './join-channel-call';
 import {
   type NativeCallSnapshot,
-  nativeCallChannelId,
+  nativeCallBootstrapChannelId,
   nativeCallParticipantIdentities,
   nativeCallSnapshot,
-  setNativeCallChannelId,
+  setNativeCallBootstrapChannelId,
   setNativeCallParticipantIdentities,
   setNativeCallSnapshot,
 } from './native-call-state';
@@ -92,7 +92,7 @@ function applyConnectionState(payload: ConnectionStatePayload) {
     !payload.callId ||
     payload.state === 'disconnected'
   ) {
-    setNativeCallChannelId(null);
+    setNativeCallBootstrapChannelId(null);
     setNativeCallParticipantIdentities([]);
     setNativeCallSnapshot(null);
     return;
@@ -105,7 +105,7 @@ function applyConnectionState(payload: ConnectionStatePayload) {
     isVideoMuted: payload.isVideoMuted ?? true,
     videoOverlayMode: payload.videoOverlayMode ?? 'hidden',
   };
-  setNativeCallChannelId(snapshot.channelId);
+  setNativeCallBootstrapChannelId(snapshot.channelId);
   setNativeCallSnapshot(snapshot);
 }
 
@@ -193,7 +193,8 @@ export function useCallKitSetup() {
   createEffect(() => {
     if (!ENABLE_CALLKIT || !isTauri() || !isPlatform('ios')) return;
 
-    const channelId = nativeCallSnapshot()?.channelId ?? nativeCallChannelId();
+    const channelId =
+      nativeCallSnapshot()?.channelId ?? nativeCallBootstrapChannelId();
     const nativeParticipantIds = nativeCallParticipantIdentities();
     const participantIds = uniqueParticipantIds(nativeParticipantIds);
     const participantKey = participantIds
@@ -371,7 +372,7 @@ export function useCallKitSetup() {
         nativeMedia,
         source,
       });
-      setNativeCallChannelId(channelId);
+      setNativeCallBootstrapChannelId(channelId);
       joinChannelCallWhenReady(channelId, nativeMedia).catch((err) =>
         console.error('[callkit] joinChannelCallWhenReady failed', err)
       );
@@ -411,7 +412,7 @@ export function useCallKitSetup() {
       (payload) => {
         console.info('[callkit] call ended event', payload);
         lastHandledAnsweredCall = undefined;
-        setNativeCallChannelId(null);
+        setNativeCallBootstrapChannelId(null);
         setNativeCallParticipantIdentities([]);
         const handler = getActiveCallEndedHandler();
         if (!handler) return;
@@ -445,7 +446,7 @@ export function useCallKitSetup() {
         console.info('[callkit] drawer opened event', {
           channelId,
         });
-        setNativeCallChannelId(channelId);
+        setNativeCallBootstrapChannelId(channelId);
         joinChannelCallWhenReady(channelId, true).catch((err) =>
           console.error(
             '[callkit] joinChannelCallWhenReady (drawer opened) failed',
@@ -462,7 +463,7 @@ export function useCallKitSetup() {
         if (!state) return;
         setNativeCallParticipantIdentities(state.participantIdentities ?? []);
         if (nativeCallSnapshot() !== null) return;
-        setNativeCallChannelId(state.channelId);
+        setNativeCallBootstrapChannelId(state.channelId);
         setNativeCallSnapshot({
           channelId: state.channelId,
           callId: state.callId,
@@ -483,7 +484,7 @@ function useCallKitNativeMetadataSync() {
   let lastSyncedTitle: string | null | undefined;
 
   const activeNativeChannelId = () =>
-    nativeCallSnapshot()?.channelId ?? nativeCallChannelId();
+    nativeCallSnapshot()?.channelId ?? nativeCallBootstrapChannelId();
 
   const channelMetadata = createMemo((): NativeCallChannelMetadata | null => {
     const channelId = activeNativeChannelId();
@@ -784,7 +785,7 @@ export async function startNativeCallKitOutgoingCall(
     channelTitle: args.channelTitle,
   });
   await invoke('plugin:call-kit|start_outgoing_call', args);
-  setNativeCallChannelId(args.channelId);
+  setNativeCallBootstrapChannelId(args.channelId);
 }
 
 export async function setNativeCallKitVideoOverlayMode(
