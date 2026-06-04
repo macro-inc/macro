@@ -4,7 +4,7 @@ import { blockNameToDefaultFile } from '@core/constant/allBlocks';
 import { formatDocumentName } from '@service-storage/util/filename';
 import { type JSX, Show } from 'solid-js';
 import { match } from 'ts-pattern';
-import type { EntityData } from '../types/entity';
+import { type EntityData, isGithubPrEntity } from '../types/entity';
 import { isSearchEntity } from '../types/search';
 
 function extractRawTitle(entity: EntityData): JSX.Element {
@@ -24,17 +24,14 @@ function extractRawTitle(entity: EntityData): JSX.Element {
       { type: 'automation' },
       (e) => e.name || blockNameToDefaultFile('automation')
     )
-    .with(
-      { type: 'foreign', subType: { type: 'github_pull_request' } },
-      (e) => (
-        <>
-          {e.subType.name}{' '}
-          <span class="text-ink-extra-muted font-normal">
-            #{e.subType.number}
-          </span>
-        </>
-      )
-    )
+    .when(isGithubPrEntity, (e) => (
+      <>
+        {e.subType.name}{' '}
+        <span class="text-ink-extra-muted font-normal">
+          #{e.subType.number}
+        </span>
+      </>
+    ))
     .with({ type: 'foreign' }, (e) => e.name)
     .otherwise(() => 'Unknown');
 }
