@@ -39,6 +39,12 @@ const getEmailContent = (notification: UnifiedNotification) => {
   return metadata.tag === 'new_email' ? metadata.content : undefined;
 };
 
+function getNotificationSenderName(notification: UnifiedNotification): string {
+  const email = getEmailContent(notification);
+  const sender = email?.sender || notification.sender_id || 'Email';
+  return sender.split('@')[0] || sender;
+}
+
 function NotificationListDescription(props: {
   notification: UnifiedNotification;
 }) {
@@ -48,8 +54,10 @@ function NotificationListDescription(props: {
       ? tryMacroId(props.notification.sender_id)
       : undefined;
   const [displayName] = useDisplayName(macroId());
-  const senderName = () =>
-    displayName() || email()?.sender || props.notification.sender_id || 'Email';
+  const senderName = () => {
+    if (email()) return getNotificationSenderName(props.notification);
+    return displayName() || getNotificationSenderName(props.notification);
+  };
 
   return (
     <Show
@@ -148,9 +156,7 @@ export function NotificationListEntity(props: NotificationListEntityProps) {
     <div
       class={cn(
         '@container/entity relative group/narrow flex flex-col',
-        props.stacked
-          ? 'w-full'
-          : 'soup-list-entity w-[calc(100%-0.5rem)] mr-1 py-0.5 mx-1',
+        props.stacked ? 'w-full' : 'soup-list-entity w-full py-0.5',
         props.highlighted && 'ring ring-edge bg-active/60 ring-inset'
       )}
     >
@@ -265,7 +271,7 @@ function MultirowNotificationListRow(props: {
   return (
     <div class="relative z-1 bg-surface shadow-[0_1px_0_rgb(from_var(--color-ink)_r_g_b_/_0.04)]">
       <div
-        class="group/notif grid grid-cols-[1rem_1rem_minmax(0,1fr)_5rem] grid-rows-[auto_auto] gap-x-2 gap-y-1 px-3 py-2 hover:bg-ink-muted/6 min-w-0 overflow-hidden cursor-pointer"
+        class="group/notif grid min-w-0 cursor-pointer grid-cols-[1rem_0.875rem_minmax(0,1fr)_4rem] grid-rows-[auto_auto_auto] gap-x-1.5 gap-y-0.5 overflow-hidden px-3 py-2 hover:bg-ink-muted/6"
         onClick={handleOpen}
         role="button"
         tabIndex={0}
@@ -293,7 +299,7 @@ function MultirowNotificationListRow(props: {
             </span>
           </Show>
         </span>
-        <span class="col-start-2 row-start-1 grid size-4 place-items-center text-ink-muted/60">
+        <span class="col-start-2 row-start-1 grid size-3.5 place-items-center self-center text-ink-muted/60">
           <Show
             when={props.isStack}
             fallback={
@@ -311,20 +317,59 @@ function MultirowNotificationListRow(props: {
           </Show>
         </span>
         <div class="col-start-3 row-start-1 min-w-0 flex items-center gap-1.5">
-          <span
-            class={cn('ph-no-capture truncate min-w-0 text-xs text-ink', {
-              'font-medium': unread(),
-            })}
+          <Show
+            when={getEmailContent(props.notification)}
+            fallback={
+              <span
+                class={cn('ph-no-capture truncate min-w-0 text-xs text-ink', {
+                  'font-medium': unread(),
+                })}
+              >
+                <NotificationListDescription
+                  notification={props.notification}
+                />
+              </span>
+            }
           >
-            <NotificationListDescription notification={props.notification} />
-          </span>
+            {(_) => (
+              <span
+                class={cn('ph-no-capture truncate min-w-0 text-xs text-ink', {
+                  'font-medium': unread(),
+                })}
+              >
+                <NotificationListDescription
+                  notification={props.notification}
+                />
+              </span>
+            )}
+          </Show>
         </div>
         <span class="col-start-4 row-start-1 justify-self-end text-xs text-right text-ink-extra-muted font-medium">
           <NotificationListTimestamp notification={props.notification} />
         </span>
-        <div class="col-start-3 col-span-2 row-start-2 min-w-0 ph-no-capture truncate text-xs text-ink-muted/60">
-          <NotificationContentPreview notification={props.notification} />
-        </div>
+        <Show
+          when={getEmailContent(props.notification)}
+          fallback={
+            <div class="col-start-3 col-span-2 row-start-2 min-h-3 min-w-0 ph-no-capture truncate text-[11px] leading-3 text-ink-muted/60">
+              <NotificationContentPreview notification={props.notification} />
+            </div>
+          }
+        >
+          {(content) => (
+            <>
+              <div class="col-start-3 col-span-2 row-start-2 min-h-3 min-w-0 ph-no-capture truncate text-[11px] leading-3 text-ink-muted">
+                {content().subject}
+              </div>
+              <Show when={content().snippet}>
+                {(snippet) => (
+                  <div class="col-start-3 col-span-2 row-start-3 min-w-0 ph-no-capture truncate text-xs text-ink-muted/60">
+                    {snippet()}
+                  </div>
+                )}
+              </Show>
+            </>
+          )}
+        </Show>
       </div>
     </div>
   );
@@ -340,9 +385,7 @@ function MultirowNotificationListEntity(props: NotificationListEntityProps) {
     <div
       class={cn(
         '@container/entity relative group/narrow flex flex-col',
-        props.stacked
-          ? 'w-full'
-          : 'soup-list-entity w-[calc(100%-0.5rem)] mr-1 py-0.5 mx-1',
+        props.stacked ? 'w-full' : 'soup-list-entity w-full py-0.5',
         props.highlighted && 'ring ring-edge bg-active/60 ring-inset'
       )}
     >
@@ -466,14 +509,14 @@ function CollapsedNotificationListEntityRow(props: {
 }
 
 const GITHUB_GRID_TEMPLATE_COLUMNS =
-  '1rem minmax(0, 1fr) var(--github-col-author, 8rem) var(--github-col-link, 12rem) var(--github-col-timestamp, 5rem)';
+  '1rem minmax(0, 1fr) var(--github-col-author, 8rem) var(--github-col-link, 12rem) var(--github-col-timestamp, 4rem)';
 const GITHUB_GRID_TEMPLATE_AREAS = '"indicator content author link timestamp"';
 
 export function GithubNotificationListHeader(props: { class?: string }) {
   return (
     <div
       class={cn(
-        'github-grid-row w-full grid items-center gap-2 px-2 h-10',
+        'github-grid-row w-full grid items-center gap-2 px-3 h-10',
         'text-xs font-medium text-ink-extra-muted',
         'bg-surface',
         props.class
@@ -660,6 +703,11 @@ export function GithubNotificationListEntity(props: {
     props.authorId ?? props.notification.sender_id ?? undefined;
   const authorFallback = () =>
     props.authorFallback ?? github()?.senderGithubLogin ?? undefined;
+  const authorMacroId = () =>
+    authorId() ? tryMacroId(authorId() ?? '') : undefined;
+  const [authorDisplayName] = useDisplayName(authorMacroId());
+  const authorLabel = () =>
+    authorDisplayName() || authorFallback() || authorId() || undefined;
   const timestamp = () =>
     formatTimestamp(getNotificationDate(props.notification));
   const statusDescription = () => {
@@ -715,6 +763,29 @@ export function GithubNotificationListEntity(props: {
     </div>
   );
 
+  const authorInline = () => (
+    <Show when={authorLabel()}>
+      {(label) => (
+        <span class="inline-flex min-w-0 items-center gap-1 align-middle">
+          <span class="text-ink-muted/60">·</span>
+          <Show
+            when={authorMacroId() && authorId()}
+            fallback={
+              <Avatar size="sm" class="size-3">
+                <Avatar.Fallback class="font-semibold">
+                  {getInitials(label())}
+                </Avatar.Fallback>
+              </Avatar>
+            }
+          >
+            {(id) => <UserIcon id={id()} size="sm" suppressClick showTooltip />}
+          </Show>
+          <span class="truncate">{label()}</span>
+        </span>
+      )}
+    </Show>
+  );
+
   return (
     <Show
       when={github()}
@@ -726,7 +797,7 @@ export function GithubNotificationListEntity(props: {
         when={props.layout === 'multirow'}
         fallback={
           <div
-            class="group/notif grid min-h-10 h-auto items-center gap-2 px-2 py-1.5 hover:bg-ink-muted/6 min-w-0 overflow-hidden"
+            class="group/notif grid min-h-10 h-auto items-center gap-2 px-3 py-1.5 hover:bg-ink-muted/6 min-w-0 overflow-hidden"
             style={{
               'grid-template-columns': GITHUB_GRID_TEMPLATE_COLUMNS,
               'grid-template-areas': GITHUB_GRID_TEMPLATE_AREAS,
@@ -770,7 +841,7 @@ export function GithubNotificationListEntity(props: {
           </div>
         }
       >
-        <div class="group/notif grid min-w-0 grid-cols-[1rem_0.875rem_minmax(0,1fr)_5rem] grid-rows-[auto_auto_auto] gap-x-1.5 gap-y-0.5 px-2 py-2 hover:bg-ink-muted/6">
+        <div class="group/notif grid min-w-0 grid-cols-[1rem_0.875rem_minmax(0,1fr)_4rem] grid-rows-[auto_auto_auto] gap-x-1.5 gap-y-0.5 px-3 py-2 hover:bg-ink-muted/6">
           <span class="col-start-1 row-start-1 grid size-4 shrink-0 place-items-center">
             <span
               class={cn('size-1.5 rounded-full', {
@@ -813,15 +884,13 @@ export function GithubNotificationListEntity(props: {
           </span>
           <Show when={statusDescription()}>
             {(value) => (
-              <div class="col-start-3 col-span-2 row-start-2 min-h-3 min-w-0 truncate text-[11px] leading-3 text-ink-muted">
-                {value()}
+              <div class="col-start-3 col-span-2 row-start-2 flex min-h-3 min-w-0 items-center gap-1 truncate text-[11px] leading-3 text-ink-muted">
+                <span class="truncate">{value()}</span>
+                {authorInline()}
               </div>
             )}
           </Show>
           <div class="col-start-3 col-span-2 row-start-3 flex min-h-6 min-w-0 items-center gap-1.5 overflow-hidden pt-1">
-            <div class="min-w-0 max-w-[45%] overflow-hidden">
-              {authorPill()}
-            </div>
             <div class="min-w-0 flex-1 overflow-hidden">
               <GithubLinkPill url={url()} label={linkLabel()} />
             </div>

@@ -155,19 +155,21 @@ function NotificationInboxItems(props: {
               <Show
                 when={group().subItems.length > 0}
                 fallback={
-                  <GithubNotificationListEntity
-                    notification={group().notifications[0]}
-                    title={group().title}
-                    subtitle={group().subtitle}
-                    status={group().status}
-                    url={group().url}
-                    authorId={group().authorId}
-                    authorFallback={group().authorFallback}
-                    layout={props.listEntityLayout}
-                  />
+                  <div class="soup-list-entity w-full py-0.5">
+                    <GithubNotificationListEntity
+                      notification={group().notifications[0]}
+                      title={group().title}
+                      subtitle={group().subtitle}
+                      status={group().status}
+                      url={group().url}
+                      authorId={group().authorId}
+                      authorFallback={group().authorFallback}
+                      layout={props.listEntityLayout}
+                    />
+                  </div>
                 }
               >
-                <section class="flex flex-col gap-1">
+                <section class="soup-list-entity w-full py-0.5 flex flex-col gap-1">
                   <div class="group/header rounded-lg bg-surface relative">
                     <GithubNotificationListEntity
                       notification={group().notifications[0]}
