@@ -66,12 +66,13 @@ impl IntoResponse for InitError {
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, ToSchema)]
 pub struct InitResponse {
-    /// The email_links row id for the now-accessible inbox. For the graph path
-    /// (cross-account add) this is the *existing* child link the caller now
-    /// delegates over; for the data-source path it's a freshly upserted row.
+    /// The email_links row id for the now-accessible inbox. For cross-user delegation
+    /// this is the *existing* child link the caller now delegates over; for the
+    /// self-link bootstrap and the data-source path it's a freshly upserted row.
     pub link_id: Uuid,
-    /// Present when init enqueued a backfill job. Absent for the graph path,
-    /// where the child link's backfill already ran under its own macro_id.
+    /// Present when init enqueued a backfill job. Absent for cross-user delegation,
+    /// where the child link's backfill already ran under its own macro_id; present for
+    /// the self-link bootstrap, where a fresh link is provisioned and backfilled.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub backfill_job_id: Option<Uuid>,
 }
@@ -154,28 +155,84 @@ pub async fn handler(
         if let Some(child_macro_id) = existing_owner.as_deref()
             && child_macro_id != user_context.user_id
         {
-            // Verify the child has actually connected an inbox before mutating any state.
-            // Looking this up first means a missing email_links row fails cleanly, without
-            // leaving a dangling edge or consuming the in_progress row with no recovery path.
-            let child_link = email_db_client::links::get::fetch_link_by_email(
+            // Graph path: the linked email belongs to a different macro user. Look the
+            // child's inbox up before mutating any state so the in_progress row is only
+            // consumed once we know how to proceed.
+            let existing_child_link = email_db_client::links::get::fetch_link_by_email(
                 &ctx.db,
                 &linked_email,
                 link::UserProvider::Gmail,
             )
             .await
-            .context("Failed to look up child link before delegation")?
-            .ok_or_else(|| {
-                InitError::BadRequest("child has not connected their inbox yet".to_string())
-            })?;
+            .context("Failed to look up child link before delegation")?;
 
-            // Graph path: link primary (caller) → child so primary can read child's inbox.
-            // The edge insert and in_progress consumption are a coupled pair, so commit them
-            // atomically: any failure rolls back, leaving the in_progress row for a retry.
+            if let Some(child_link) = existing_child_link {
+                // Cross-user delegation: the child already connected their own inbox under
+                // their own fusion id. Link primary (caller) → child so primary can read it.
+                // The edge insert and in_progress consumption are a coupled pair, so commit
+                // them atomically: any failure rolls back, leaving the in_progress row for a
+                // retry.
+                let mut tx = ctx
+                    .db
+                    .begin()
+                    .await
+                    .context("Failed to begin graph delegation transaction")?;
+
+                macro_db_client::macro_user_links::insert_edge(
+                    &mut *tx,
+                    &user_context.user_id,
+                    child_macro_id,
+                )
+                .await
+                .context("Failed to insert macro_user_links edge")?;
+
+                macro_db_client::in_progress_user_link::delete_in_progress_user_link(
+                    &mut *tx, &link_id,
+                )
+                .await
+                .context("Failed to delete in_progress_user_link after graph delegation")?;
+
+                tx.commit()
+                    .await
+                    .context("Failed to commit graph delegation transaction")?;
+
+                return Ok((
+                    StatusCode::OK,
+                    Json(InitResponse {
+                        link_id: child_link.id,
+                        backfill_job_id: None,
+                    }),
+                )
+                    .into_response());
+            }
+
+            // Self-link bootstrap: the child macro_user exists but never connected an inbox.
+            // Provision its email_links row with the child's macro_id (inbox ownership) but the
+            // primary's fusionauth_user_id — the OAuth grant lives under the primary's fusion id,
+            // and token resolution, message/thread scoping, and backfill rate-limiting key off it.
+            let child_macro_id_owned = MacroUserIdStr::try_from(child_macro_id.to_string())?;
+
+            let gmail_token =
+                fetch_gmail_token_for_email(&ctx, &user_context.fusion_user_id, &linked_email)
+                    .await?;
+            let watch_response = ctx.gmail_client.register_watch(&gmail_token).await?;
+
+            // All writes commit atomically so a partial failure leaves no dangling link,
+            // edge, or consumed in_progress row.
             let mut tx = ctx
                 .db
                 .begin()
                 .await
-                .context("Failed to begin graph delegation transaction")?;
+                .context("Failed to begin self-link bootstrap transaction")?;
+
+            let link = enable_gmail_sync_for(
+                tx.as_mut(),
+                &user_context.fusion_user_id,
+                child_macro_id_owned,
+                &linked_email,
+                &watch_response.history_id,
+            )
+            .await?;
 
             macro_db_client::macro_user_links::insert_edge(
                 &mut *tx,
@@ -189,56 +246,63 @@ pub async fn handler(
                 &mut *tx, &link_id,
             )
             .await
-            .context("Failed to delete in_progress_user_link after graph delegation")?;
+            .context("Failed to delete in_progress_user_link after self-link bootstrap")?;
 
             tx.commit()
                 .await
-                .context("Failed to commit graph delegation transaction")?;
+                .context("Failed to commit self-link bootstrap transaction")?;
 
-            return Ok((
-                StatusCode::OK,
-                Json(InitResponse {
-                    link_id: child_link.id,
-                    backfill_job_id: None,
-                }),
-            )
-                .into_response());
-        }
+            // Fall through to the shared tail so the freshly bootstrapped inbox gets its
+            // initial backfill.
+            (link, linked_email)
+        } else {
+            // Data-source path (same-user re-link or brand-new email with no prior signup).
+            if pg_repo
+                .link_by_fusionauth_email_provider(
+                    &user_context.fusion_user_id,
+                    &linked_email,
+                    UserProvider::Gmail,
+                )
+                .await
+                .context("Failed to check existing link by email")?
+                .is_some()
+            {
+                return Err(InitError::AlreadyInitialized);
+            }
 
-        // Data-source path (same-user re-link or brand-new email with no prior signup).
-        if pg_repo
-            .link_by_fusionauth_email_provider(
+            let gmail_token =
+                fetch_gmail_token_for_email(&ctx, &user_context.fusion_user_id, &linked_email)
+                    .await?;
+            let watch_response = ctx.gmail_client.register_watch(&gmail_token).await?;
+
+            let mut tx = ctx
+                .db
+                .begin()
+                .await
+                .context("Failed to begin link transaction")?;
+
+            let link = enable_gmail_sync_for(
+                tx.as_mut(),
                 &user_context.fusion_user_id,
+                macro_user_id.clone(),
                 &linked_email,
-                UserProvider::Gmail,
+                &watch_response.history_id,
             )
-            .await
-            .context("Failed to check existing link by email")?
-            .is_some()
-        {
-            return Err(InitError::AlreadyInitialized);
+            .await?;
+
+            tx.commit()
+                .await
+                .context("Failed to commit link transaction")?;
+
+            macro_db_client::in_progress_user_link::delete_in_progress_user_link(&ctx.db, &link_id)
+                .await
+                .inspect_err(|e| {
+                    tracing::error!(error=?e, ?link_id, "Failed to delete in_progress_user_link after init");
+                })
+                .ok();
+
+            (link, linked_email)
         }
-
-        let gmail_token =
-            fetch_gmail_token_for_email(&ctx, &user_context.fusion_user_id, &linked_email).await?;
-
-        let link = enable_gmail_sync_for(
-            &ctx,
-            &user_context.fusion_user_id,
-            macro_user_id.clone(),
-            &linked_email,
-            &gmail_token,
-        )
-        .await?;
-
-        macro_db_client::in_progress_user_link::delete_in_progress_user_link(&ctx.db, &link_id)
-            .await
-            .inspect_err(|e| {
-                tracing::error!(error=?e, ?link_id, "Failed to delete in_progress_user_link after init");
-            })
-            .ok();
-
-        (link, linked_email)
     } else {
         let existing_link = pg_repo
             .link_by_fusionauth_and_macro_id(
@@ -264,14 +328,26 @@ pub async fn handler(
         .await
         .map_err(|_| InitError::BadRequest("Failed to fetch Gmail token".to_string()))?;
 
+        let watch_response = ctx.gmail_client.register_watch(&gmail_token).await?;
+
+        let mut tx = ctx
+            .db
+            .begin()
+            .await
+            .context("Failed to begin link transaction")?;
+
         let link = enable_gmail_sync_for(
-            &ctx,
+            tx.as_mut(),
             &user_context.fusion_user_id,
             macro_user_id.clone(),
             &email,
-            &gmail_token,
+            &watch_response.history_id,
         )
         .await?;
+
+        tx.commit()
+            .await
+            .context("Failed to commit link transaction")?;
 
         (link, email)
     };
@@ -388,19 +464,20 @@ async fn fetch_gmail_token_for_email(
         })
 }
 
-/// Registers a Gmail watch, upserts the `email_links` row, and seeds the gmail history entry.
-/// Caller-provided identifiers let this serve both the JWT-driven new-user signup and the
-/// `link_id`-driven add-inbox flow.
-#[tracing::instrument(skip(ctx, gmail_token), err)]
+/// Upserts the `email_links` row and seeds the gmail history entry for an already-registered
+/// Gmail watch. Runs on a caller-provided connection so the writes can join a wider
+/// transaction; callers register the watch (external IO) beforehand and pass its `history_id`.
+/// Caller-provided identifiers let this serve the JWT-driven new-user signup, the
+/// `link_id`-driven add-inbox flow, and the self-link bootstrap (where `macro_id` is the
+/// child's but `fusion_user_id` is the primary's).
+#[tracing::instrument(skip(conn), err)]
 async fn enable_gmail_sync_for(
-    ctx: &ApiContext,
+    conn: &mut sqlx::PgConnection,
     fusion_user_id: &str,
     macro_id: MacroUserIdStr<'static>,
     email_address: &str,
-    gmail_token: &str,
+    history_id: &str,
 ) -> Result<Link, InitError> {
-    let watch_response = ctx.gmail_client.register_watch(gmail_token).await?;
-
     let link = link::Link {
         id: macro_uuid::generate_uuid_v7(),
         macro_id,
@@ -412,11 +489,11 @@ async fn enable_gmail_sync_for(
         updated_at: Default::default(),
     };
 
-    let link = email_db_client::links::insert::upsert_link(&ctx.db, link)
+    let link = email_db_client::links::insert::upsert_link(&mut *conn, link)
         .await
         .context("Failed to upsert link")?;
 
-    email_db_client::histories::upsert_gmail_history(&ctx.db, link.id, &watch_response.history_id)
+    email_db_client::histories::upsert_gmail_history(&mut *conn, link.id, history_id)
         .await
         .context("Failed to upsert gmail history")?;
 
