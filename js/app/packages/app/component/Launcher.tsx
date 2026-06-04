@@ -55,13 +55,13 @@ import {
 import { Dynamic } from 'solid-js/web';
 import { type FocusableElement, tabbable } from 'tabbable';
 import { useSplitLayout } from './split-layout/layout';
+import { getMarkdownGoldenBytes } from '@lexical-core/markdown-golden';
 
 const createBlock = async (spec: {
   blockName: BlockName | BlockAlias;
   createFn: () => Promise<string | undefined>;
   loading?: boolean;
   shouldInsert?: boolean;
-  params?: Record<string, unknown>;
 }) => {
   const { openWithSplit } = useSplitLayout();
   const { blockName, createFn, loading } = spec;
@@ -95,15 +95,22 @@ const createBlock = async (spec: {
     source: 'launcher',
   });
 
+  // If we are creating a new markdown document "from scratch" then we can let
+  // them instantly start editing
+  const createMdParams =
+    blockName === 'md'
+      ? { optimisticSnapshot: await getMarkdownGoldenBytes() }
+      : undefined;
+
   if (split) {
     split.replace({
-      next: { type: blockName, id, params: spec.params },
+      next: { type: blockName, id, params: createMdParams },
       mergeHistory: true,
       referredFrom: 'launcher',
     });
   } else {
     openWithSplit(
-      { type: blockName, id, params: spec.params },
+      { type: blockName, id },
       {
         referredFrom: 'launcher',
         preferNewSplit: spec.shouldInsert,
@@ -156,7 +163,6 @@ export function runCreateAction(
             projectId: undefined,
           }),
         shouldInsert,
-        params: { fromScratch: true },
       });
       return;
     case 'canvas':

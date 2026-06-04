@@ -8,7 +8,6 @@ import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { ENABLE_MARKDOWN_SIDE_PANEL } from '@core/constant/featureFlags';
 import { blockErrorSignal } from '@core/signal/load';
 import { useCanEdit } from '@core/signal/permissions';
-import { getMarkdownGoldenBytes } from '@lexical-core/markdown-golden';
 import { MARKDOWN_LORO_SCHEMA } from '@lexical-core/markdown-loro-schema';
 import { DocumentDebouncedNotificationReadMarker } from '@notifications';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
@@ -31,12 +30,10 @@ import { InstructionsTopBar, TopBar } from './TopBar';
 
 export interface BlockMarkdownProps {
   /**
-   * Whether the Markdown block we just switched to was switched to after
-   * creating a new, totally blank markdown document. If this is the case, this
-   * enables us to "assume" the initial sync result will be an identical
-   * initially blank document.
+   * A loro snapshot to load while we wait for the real one to come through from
+   * the DO. We push our changes after we the DO one comes in.
    */
-  fromScratch?: boolean;
+  optimisticSnapshot?: Uint8Array<ArrayBufferLike>;
 }
 
 export default function BlockMarkdown(props: BlockMarkdownProps) {
@@ -47,7 +44,7 @@ export default function BlockMarkdown(props: BlockMarkdownProps) {
   );
 }
 
-function BlockMarkdownContent({ fromScratch }: BlockMarkdownProps) {
+function BlockMarkdownContent({ optimisticSnapshot }: BlockMarkdownProps) {
   useBlockEntityCommands();
   const [scrollRef, setScrollRef] = createSignal<HTMLDivElement>();
   const blockId = useBlockId();
@@ -65,34 +62,23 @@ function BlockMarkdownContent({ fromScratch }: BlockMarkdownProps) {
 
     if (!data?.doInitialSync) return;
 
-    if (fromScratch) {
-      getMarkdownGoldenBytes()
-        .then(async (snapshot) => {
-          await loroManager.initializeFromSnapshot(snapshot);
-          // console.log(
-          //   '[fromScratch] loroManager state after init:',
-          //   JSON.stringify(loroManager.getDoc().toJSON(), null, 2)
-          // );
-        })
-        .then(() => {
-          data
-            .doInitialSync()
-            .then((syncResult: Result<InitialSync, TimeoutError>) => {
-              if (syncResult.isErr()) {
-                console.error(
-                  'Failed to receive initial sync',
-                  syncResult.error
-                );
-                setBlockError('INVALID');
-                return;
-              }
-              const peerId = loroManager.getPeerId();
-              data.syncSource.pushUpdate(
-                loroManager.getDoc().export({ mode: 'update' }),
-                peerId
-              );
-            });
-        });
+    if (optimisticSnapshot) {
+      loroManager.initializeFromSnapshot(optimisticSnapshot).then(() => {
+        data
+          .doInitialSync()
+          .then((syncResult: Result<InitialSync, TimeoutError>) => {
+            if (syncResult.isErr()) {
+              console.error('Failed to receive initial sync', syncResult.error);
+              setBlockError('INVALID');
+              return;
+            }
+            const peerId = loroManager.getPeerId();
+            data.syncSource.pushUpdate(
+              loroManager.getDoc().export({ mode: 'update' }),
+              peerId
+            );
+          });
+      });
     } else {
       data
         .doInitialSync()
@@ -116,7 +102,8 @@ function BlockMarkdownContent({ fromScratch }: BlockMarkdownProps) {
 
   const instructionsMdId = useInstructionsMdIdQuery();
   const notificationSource = useGlobalNotificationSource();
-  const canEdit = useCanEdit(!fromScratch);
+  const mustBeConnected = optimisticSnapshot === undefined;
+  const canEdit = useCanEdit(mustBeConnected);
   const { displayName } = useMarkdownName();
   const isInstructionsMd = createMemo(() => blockId === instructionsMdId.data);
 
@@ -181,7 +168,7 @@ function BlockMarkdownContent({ fromScratch }: BlockMarkdownProps) {
                       >
                         <Notebook
                           loroManager={() => loroManager}
-                          mustBeConnected={!fromScratch}
+                          mustBeConnected={mustBeConnected}
                         />
                       </Show>
                     </Suspense>
