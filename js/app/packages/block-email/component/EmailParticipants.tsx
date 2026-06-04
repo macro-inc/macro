@@ -77,6 +77,7 @@ export function EmailParticipants() {
         {(participant) => (
           <EmailUserTooltip
             recipient={{ email: participant.email, name: participant.name }}
+            photoUrl={participant.photoUrl}
           >
             <div
               role="listitem"
@@ -87,6 +88,7 @@ export function EmailParticipants() {
                 isDeleted={false}
                 size="sm"
                 suppressClick
+                showTooltip={false}
               />
               <span class="truncate max-w-32">
                 {getDisplayName(participant)}

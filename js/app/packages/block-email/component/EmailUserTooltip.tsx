@@ -12,6 +12,8 @@ interface EmailUserTooltipProps {
   recipient?: Recipient | null;
   children: JSX.Element;
   bold?: boolean;
+  /** Fallback photo (e.g. a synced contact photo) when there's no Macro profile picture. */
+  photoUrl?: string;
 }
 
 export function EmailUserTooltip(props: EmailUserTooltipProps) {
@@ -33,6 +35,7 @@ export function EmailUserTooltip(props: EmailUserTooltipProps) {
               ? emailToMacroId(props.recipient.email)
               : undefined
           }
+          photoUrl={props.photoUrl}
           onClose={() => setOpen(false)}
         />
       }
