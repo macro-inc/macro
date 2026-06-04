@@ -3,7 +3,7 @@ import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { UserIcon } from '@core/component/UserIcon';
 import { tryMacroId, useDisplayName } from '@core/user';
-import { Entity, formatTimestamp, NotificationRow } from '@entity';
+import { Entity, NotificationRow } from '@entity';
 import GithubIcon from '@icon/mcp-github.svg';
 import { openNotification, type UnifiedNotification } from '@notifications';
 import GitMergeIcon from '@phosphor-icons/core/regular/git-merge.svg?component-solid';
@@ -11,7 +11,7 @@ import GitPullRequestIcon from '@phosphor-icons/core/regular/git-pull-request.sv
 import XCircleIcon from '@phosphor-icons/core/regular/x-circle.svg?component-solid';
 import type { GithubPrEventStatus } from '@service-notification/generated/schemas';
 import { Avatar, Button, cn, Tooltip } from '@ui';
-import { formatDistanceToNowStrict } from 'date-fns';
+import { format, formatDistanceToNowStrict } from 'date-fns';
 import { createEffect, createSignal, For, Show } from 'solid-js';
 import { NotificationListIcon } from './NotificationListIcon';
 import { StackedNotificationIcon } from './StackedNotificationIcon';
@@ -31,7 +31,7 @@ const getNotificationDate = (notification: UnifiedNotification): Date =>
 function NotificationListTimestamp(props: {
   notification: UnifiedNotification;
 }) {
-  return <>{formatTimestamp(getNotificationDate(props.notification))}</>;
+  return <>{format(getNotificationDate(props.notification), 'h:mm a')}</>;
 }
 
 const getEmailContent = (notification: UnifiedNotification) => {
@@ -709,7 +709,7 @@ export function GithubNotificationListEntity(props: {
   const authorLabel = () =>
     authorDisplayName() || authorFallback() || authorId() || undefined;
   const timestamp = () =>
-    formatTimestamp(getNotificationDate(props.notification));
+    format(getNotificationDate(props.notification), 'h:mm a');
   const statusDescription = () => {
     const content = github();
     if (!content) return undefined;

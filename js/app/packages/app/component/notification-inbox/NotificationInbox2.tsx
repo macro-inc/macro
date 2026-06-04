@@ -38,6 +38,12 @@ type NotificationInboxItem =
   | { id: string; type: 'notification'; notification: UnifiedNotification }
   | { id: string; type: 'github'; group: GithubNotificationGroup };
 
+type NotificationDateGroup = {
+  id: string;
+  label: string;
+  items: NotificationInboxItem[];
+};
+
 const getNotificationTime = (notification: UnifiedNotification): number => {
   const time = Date.parse(
     notification.created_at ?? notification.updated_at ?? ''
@@ -51,6 +57,29 @@ const sortNotifications = (
   notifications.toSorted(
     (a, b) => getNotificationTime(b) - getNotificationTime(a)
   );
+
+const getDateGroupKey = (time: number): string => {
+  const date = new Date(time);
+  return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+};
+
+const getDateGroupLabel = (time: number): string => {
+  const date = new Date(time);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const day = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const diffDays = Math.round((today.getTime() - day.getTime()) / 86_400_000);
+
+  if (diffDays === 0) return 'Today';
+  if (diffDays === 1) return 'Yesterday';
+
+  return new Intl.DateTimeFormat(undefined, {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: date.getFullYear() === now.getFullYear() ? undefined : 'numeric',
+  }).format(date);
+};
 
 const isGithubStatusNotification = (
   notification: UnifiedNotification
@@ -71,6 +100,36 @@ const getGithubGroupKey = (notification: UnifiedNotification): string => {
   const metadata = notification.notification_metadata;
   if (metadata.tag !== 'github_pr_event') return notification.id;
   return metadata.content.foreignEntityId || metadata.content.githubKey;
+};
+
+const getItemPrimaryNotification = (
+  item: NotificationInboxItem
+): UnifiedNotification =>
+  item.type === 'github' ? item.group.notifications[0] : item.notification;
+
+const groupItemsByDate = (
+  items: NotificationInboxItem[]
+): NotificationDateGroup[] => {
+  const groups = new Map<string, NotificationDateGroup>();
+
+  for (const item of items) {
+    const time = getNotificationTime(getItemPrimaryNotification(item));
+    const id = getDateGroupKey(time);
+    const existing = groups.get(id);
+
+    if (existing) {
+      existing.items.push(item);
+      continue;
+    }
+
+    groups.set(id, {
+      id,
+      label: getDateGroupLabel(time),
+      items: [item],
+    });
+  }
+
+  return Array.from(groups.values());
 };
 
 const groupNotifications = (
@@ -119,85 +178,113 @@ const groupNotifications = (
     });
   }
 
-  return items.toSorted((a, b) => {
-    const aNotification =
-      a.type === 'github' ? a.group.notifications[0] : a.notification;
-    const bNotification =
-      b.type === 'github' ? b.group.notifications[0] : b.notification;
-    return (
-      getNotificationTime(bNotification) - getNotificationTime(aNotification)
-    );
-  });
+  return items.toSorted(
+    (a, b) =>
+      getNotificationTime(getItemPrimaryNotification(b)) -
+      getNotificationTime(getItemPrimaryNotification(a))
+  );
 };
 
-function NotificationInboxItems(props: {
-  items: NotificationInboxItem[];
+function DateGroupHeader(props: { label: string }) {
+  return (
+    <div class="sticky top-0 z-10 bg-surface py-2">
+      <span class="rounded-sm px-3 py-1 text-xs text-ink-extra-muted ring ring-rail">
+        {props.label}
+      </span>
+    </div>
+  );
+}
+
+function NotificationInboxItemRow(props: {
+  item: NotificationInboxItem;
   listEntityLayout?: NotificationListLayout;
 }) {
   return (
-    <div class="unified-table-body w-full flex flex-col gap-1 flex-1 min-h-0 relative overflow-y-auto p-2">
-      <For each={props.items}>
-        {(item) => (
-          <Show
-            when={item.type === 'github' ? item.group : undefined}
-            fallback={
-              <NotificationListEntity
-                notification={
-                  item.type === 'notification'
-                    ? item.notification
-                    : item.group.notifications[0]
-                }
+    <Show
+      when={props.item.type === 'github' ? props.item.group : undefined}
+      fallback={
+        <NotificationListEntity
+          notification={
+            props.item.type === 'notification'
+              ? props.item.notification
+              : props.item.group.notifications[0]
+          }
+          layout={props.listEntityLayout}
+        />
+      }
+    >
+      {(group) => (
+        <Show
+          when={group().subItems.length > 0}
+          fallback={
+            <div class="soup-list-entity w-full py-0.5">
+              <GithubNotificationListEntity
+                notification={group().notifications[0]}
+                title={group().title}
+                subtitle={group().subtitle}
+                status={group().status}
+                url={group().url}
+                authorId={group().authorId}
+                authorFallback={group().authorFallback}
                 layout={props.listEntityLayout}
               />
-            }
-          >
-            {(group) => (
-              <Show
-                when={group().subItems.length > 0}
-                fallback={
-                  <div class="soup-list-entity w-full py-0.5">
+            </div>
+          }
+        >
+          <section class="soup-list-entity w-full py-0.5 flex flex-col gap-1">
+            <div class="group/header rounded-lg bg-surface relative">
+              <GithubNotificationListEntity
+                notification={group().notifications[0]}
+                title={group().title}
+                subtitle={group().subtitle}
+                status={group().status}
+                url={group().url}
+                authorId={group().authorId}
+                authorFallback={group().authorFallback}
+                layout={props.listEntityLayout}
+              />
+            </div>
+            <div class="rounded-lg border border-ink-muted/8 bg-ink-muted/2.5 overflow-hidden">
+              <div class="divide-y divide-ink-muted/8">
+                <For each={group().subItems}>
+                  {(notification) => (
                     <GithubNotificationListEntity
-                      notification={group().notifications[0]}
-                      title={group().title}
-                      subtitle={group().subtitle}
-                      status={group().status}
-                      url={group().url}
-                      authorId={group().authorId}
-                      authorFallback={group().authorFallback}
+                      notification={notification}
                       layout={props.listEntityLayout}
                     />
-                  </div>
-                }
-              >
-                <section class="soup-list-entity w-full py-0.5 flex flex-col gap-1">
-                  <div class="group/header rounded-lg bg-surface relative">
-                    <GithubNotificationListEntity
-                      notification={group().notifications[0]}
-                      title={group().title}
-                      subtitle={group().subtitle}
-                      status={group().status}
-                      url={group().url}
-                      authorId={group().authorId}
-                      authorFallback={group().authorFallback}
-                      layout={props.listEntityLayout}
-                    />
-                  </div>
-                  <div class="rounded-lg border border-ink-muted/8 bg-ink-muted/2.5 overflow-hidden">
-                    <div class="divide-y divide-ink-muted/8">
-                      <For each={group().subItems}>
-                        {(notification) => (
-                          <GithubNotificationListEntity
-                            notification={notification}
-                            layout={props.listEntityLayout}
-                          />
-                        )}
-                      </For>
-                    </div>
-                  </div>
-                </section>
-              </Show>
-            )}
-          </Show>
+                  )}
+                </For>
+              </div>
+            </div>
+          </section>
+        </Show>
+      )}
+    </Show>
+  );
+}
+
+function NotificationInboxItems(props: {
+  groups: NotificationDateGroup[];
+  listEntityLayout?: NotificationListLayout;
+}) {
+  return (
+    <div class="unified-table-body w-full flex flex-col gap-1 flex-1 min-h-0 relative overflow-y-auto px-2 pb-2">
+      <For each={props.groups}>
+        {(group, index) => (
+          <section class="flex flex-col gap-1">
+            <DateGroupHeader label={group.label} />
+            <For each={group.items}>
+              {(item) => (
+                <NotificationInboxItemRow
+                  item={item}
+                  listEntityLayout={props.listEntityLayout}
+                />
+              )}
+            </For>
+            <Show when={index() < props.groups.length - 1}>
+              <div class="h-4 shrink-0" />
+            </Show>
+          </section>
         )}
       </For>
     </div>
@@ -205,7 +292,7 @@ function NotificationInboxItems(props: {
 }
 
 function NotificationInboxListLayout(props: {
-  items: NotificationInboxItem[];
+  groups: NotificationDateGroup[];
   isLoading: boolean;
   listEntityLayout?: NotificationListLayout;
 }) {
@@ -213,7 +300,7 @@ function NotificationInboxListLayout(props: {
     <div class="@container/u-list size-full min-h-0 unified-list-root flex flex-col">
       <Show when={!props.isLoading} fallback={<LoadingBlock />}>
         <Show
-          when={props.items.length > 0}
+          when={props.groups.length > 0}
           fallback={
             <div class="flex size-full items-center justify-center text-sm text-ink-muted">
               No notifications
@@ -221,7 +308,7 @@ function NotificationInboxListLayout(props: {
           }
         >
           <NotificationInboxItems
-            items={props.items}
+            groups={props.groups}
             listEntityLayout={props.listEntityLayout}
           />
         </Show>
@@ -231,14 +318,14 @@ function NotificationInboxListLayout(props: {
 }
 
 function NotificationInboxPreviewLayout(props: {
-  items: NotificationInboxItem[];
+  groups: NotificationDateGroup[];
   isLoading: boolean;
 }) {
   return (
     <div class="grid size-full min-h-0 grid-cols-[minmax(22rem,0.42fr)_minmax(0,1fr)] overflow-hidden">
       <div class="min-w-0 min-h-0 border-r border-edge-muted">
         <NotificationInboxListLayout
-          items={props.items}
+          groups={props.groups}
           isLoading={props.isLoading}
           listEntityLayout="multirow"
         />
@@ -261,16 +348,18 @@ export function NotificationInbox2() {
     panel.handle.setDisplayName('Inbox 2');
   });
 
-  const [items, setItems] = createStore<NotificationInboxItem[]>([]);
+  const [dateGroups, setDateGroups] = createStore<NotificationDateGroup[]>([]);
 
   createEffect(() => {
-    const next = groupNotifications(
-      notificationSource
-        .notifications()
-        .filter((notification) => !notification.deleted_at)
+    const next = groupItemsByDate(
+      groupNotifications(
+        notificationSource
+          .notifications()
+          .filter((notification) => !notification.deleted_at)
+      )
     );
 
-    setItems(reconcile(next, { key: 'id' }));
+    setDateGroups(reconcile(next, { key: 'id' }));
   });
 
   return (
@@ -335,13 +424,13 @@ export function NotificationInbox2() {
         <Switch>
           <Match when={layout() === 'preview'}>
             <NotificationInboxPreviewLayout
-              items={items}
+              groups={dateGroups}
               isLoading={notificationSource.isLoading()}
             />
           </Match>
           <Match when={true}>
             <NotificationInboxListLayout
-              items={items}
+              groups={dateGroups}
               isLoading={notificationSource.isLoading()}
             />
           </Match>
