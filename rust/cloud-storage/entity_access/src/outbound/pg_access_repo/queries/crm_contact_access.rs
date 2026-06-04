@@ -1,6 +1,6 @@
 //! Query for CRM contact access level.
 
-use crate::domain::models::{AccessLevel, TeamRole};
+use crate::domain::models::{CrmEntityAccess, TeamRole};
 use crate::outbound::pg_access_repo::queries::crm_company_access::team_role_to_access_level;
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use sqlx::PgPool;
@@ -20,7 +20,7 @@ pub async fn get_crm_contact_access(
     pool: &PgPool,
     contact_id: &Uuid,
     user_id: &MacroUserId<Lowercase<'_>>,
-) -> Result<Option<(AccessLevel, Uuid)>, sqlx::Error> {
+) -> Result<Option<CrmEntityAccess>, sqlx::Error> {
     let row = sqlx::query!(
         r#"
         SELECT
@@ -41,6 +41,10 @@ pub async fn get_crm_contact_access(
     .fetch_optional(pool)
     .await?;
 
-    Ok(row
-        .and_then(|r| team_role_to_access_level(r.role, r.hidden).map(|level| (level, r.team_id))))
+    Ok(row.and_then(|r| {
+        team_role_to_access_level(r.role, r.hidden).map(|access_level| CrmEntityAccess {
+            access_level,
+            team_id: r.team_id,
+        })
+    }))
 }

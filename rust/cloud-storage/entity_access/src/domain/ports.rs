@@ -4,8 +4,8 @@
 
 use super::models::EntityType;
 use crate::domain::models::{
-    AccessError, AccessLevel, CallChannelInfo, ChannelRoleResult, EntityAccessReceipt,
-    EntityPermission, RequiredPermission, UserTeamInfo,
+    AccessError, AccessLevel, CallChannelInfo, ChannelRoleResult, CrmEntityAccess,
+    EntityAccessReceipt, EntityPermission, RequiredPermission, UserTeamInfo,
 };
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId, user_id::MacroUserIdStr};
 use std::future::Future;
@@ -74,7 +74,7 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         &self,
         company_id: &str,
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
-    ) -> impl Future<Output = Result<Option<(AccessLevel, Uuid)>, AccessError>> + Send;
+    ) -> impl Future<Output = Result<Option<CrmEntityAccess>, AccessError>> + Send;
 
     /// Get the access level a user has for a CRM contact, with the contact's
     /// owning `team_id` (its parent company's team).
@@ -87,7 +87,7 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         &self,
         contact_id: &str,
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
-    ) -> impl Future<Output = Result<Option<(AccessLevel, Uuid)>, AccessError>> + Send;
+    ) -> impl Future<Output = Result<Option<CrmEntityAccess>, AccessError>> + Send;
 
     /// Check if a user is a member of the specified channels.
     ///
@@ -224,28 +224,15 @@ pub trait EntityAccessService: Clone + Send + Sync + 'static {
     /// so the bundled team can't drift from the authorized entity for a
     /// multi-team user. Errors `AccessError::Unauthorized` when access fails.
     ///
-    /// The default impl delegates to `get_entity_permission` + `get_user_team`
-    /// (the user's default team) so test doubles keep compiling; the
-    /// production service overrides it with the single-query owning team.
+    /// No default impl on purpose: implementors must derive the team from the
+    /// entity's ownership row (not the user's default team), so the invariant
+    /// can't be silently weakened by inheriting a fallback.
     fn get_crm_entity_permission_with_team(
         &self,
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
         entity_id: &str,
         entity_type: EntityType,
-    ) -> impl Future<Output = Result<(EntityPermission, Uuid), AccessError>> + Send {
-        async move {
-            let permission = self
-                .get_entity_permission(user_id, entity_id, entity_type, None)
-                .await?;
-            let user_id = user_id.ok_or(AccessError::Unauthorized)?;
-            let team_id = self
-                .get_user_team(user_id)
-                .await?
-                .ok_or(AccessError::Unauthorized)?
-                .team_id;
-            Ok((permission, team_id))
-        }
-    }
+    ) -> impl Future<Output = Result<(EntityPermission, Uuid), AccessError>> + Send;
 
     /// Get all user IDs that have access to a given entity.
     ///

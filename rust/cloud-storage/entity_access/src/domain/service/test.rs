@@ -200,18 +200,28 @@ impl AccessRepository for MockRepo {
         &self,
         _company_id: &str,
         _user_id: Option<&MacroUserId<Lowercase<'_>>>,
-    ) -> Result<Option<(AccessLevel, Uuid)>, AccessError> {
+    ) -> Result<Option<CrmEntityAccess>, AccessError> {
         // Owning team is irrelevant to these access-level tests; pair with nil.
-        Ok((*self.crm_company_access.lock().await).map(|level| (level, Uuid::nil())))
+        Ok(
+            (*self.crm_company_access.lock().await).map(|access_level| CrmEntityAccess {
+                access_level,
+                team_id: Uuid::nil(),
+            }),
+        )
     }
 
     async fn get_crm_contact_access(
         &self,
         _contact_id: &str,
         _user_id: Option<&MacroUserId<Lowercase<'_>>>,
-    ) -> Result<Option<(AccessLevel, Uuid)>, AccessError> {
+    ) -> Result<Option<CrmEntityAccess>, AccessError> {
         // Owning team is irrelevant to these access-level tests; pair with nil.
-        Ok((*self.crm_contact_access.lock().await).map(|level| (level, Uuid::nil())))
+        Ok(
+            (*self.crm_contact_access.lock().await).map(|access_level| CrmEntityAccess {
+                access_level,
+                team_id: Uuid::nil(),
+            }),
+        )
     }
 
     async fn get_entity_users(

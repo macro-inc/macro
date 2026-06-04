@@ -1,6 +1,6 @@
 use super::PgAccessRepository;
 use crate::domain::{
-    models::{AccessError, AccessLevel},
+    models::{AccessError, AccessLevel, CrmEntityAccess},
     ports::AccessRepository,
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
@@ -219,9 +219,27 @@ async fn crm_company_access_maps_team_role_to_access_level(pool: PgPool) -> anyh
     // Each role resolves to its access level paired with the company's owning team.
     let team_alpha = Uuid::parse_str(TEAM_ALPHA)?;
     let cases = [
-        (TEAM_MEMBER, Some((AccessLevel::View, team_alpha))),
-        (TEAM_ADMIN, Some((AccessLevel::Edit, team_alpha))),
-        (TEAM_OWNER, Some((AccessLevel::Owner, team_alpha))),
+        (
+            TEAM_MEMBER,
+            Some(CrmEntityAccess {
+                access_level: AccessLevel::View,
+                team_id: team_alpha,
+            }),
+        ),
+        (
+            TEAM_ADMIN,
+            Some(CrmEntityAccess {
+                access_level: AccessLevel::Edit,
+                team_id: team_alpha,
+            }),
+        ),
+        (
+            TEAM_OWNER,
+            Some(CrmEntityAccess {
+                access_level: AccessLevel::Owner,
+                team_id: team_alpha,
+            }),
+        ),
     ];
     for (uid, expected) in cases {
         let actual = repo
@@ -249,12 +267,18 @@ async fn crm_company_access_hides_from_member_when_hidden(pool: PgPool) -> anyho
     assert_eq!(
         repo.get_crm_company_access(&company_id.to_string(), Some(&user_id(TEAM_ADMIN)))
             .await?,
-        Some((AccessLevel::Edit, team_alpha)),
+        Some(CrmEntityAccess {
+            access_level: AccessLevel::Edit,
+            team_id: team_alpha,
+        }),
     );
     assert_eq!(
         repo.get_crm_company_access(&company_id.to_string(), Some(&user_id(TEAM_OWNER)))
             .await?,
-        Some((AccessLevel::Owner, team_alpha)),
+        Some(CrmEntityAccess {
+            access_level: AccessLevel::Owner,
+            team_id: team_alpha,
+        }),
     );
     Ok(())
 }
@@ -319,9 +343,27 @@ async fn crm_contact_access_maps_team_role_to_access_level(pool: PgPool) -> anyh
     // The owning team is the contact's parent company's team.
     let team_alpha = Uuid::parse_str(TEAM_ALPHA)?;
     let cases = [
-        (TEAM_MEMBER, Some((AccessLevel::View, team_alpha))),
-        (TEAM_ADMIN, Some((AccessLevel::Edit, team_alpha))),
-        (TEAM_OWNER, Some((AccessLevel::Owner, team_alpha))),
+        (
+            TEAM_MEMBER,
+            Some(CrmEntityAccess {
+                access_level: AccessLevel::View,
+                team_id: team_alpha,
+            }),
+        ),
+        (
+            TEAM_ADMIN,
+            Some(CrmEntityAccess {
+                access_level: AccessLevel::Edit,
+                team_id: team_alpha,
+            }),
+        ),
+        (
+            TEAM_OWNER,
+            Some(CrmEntityAccess {
+                access_level: AccessLevel::Owner,
+                team_id: team_alpha,
+            }),
+        ),
     ];
     for (uid, expected) in cases {
         let actual = repo
@@ -350,7 +392,10 @@ async fn crm_contact_access_hidden_contact_blocks_member(pool: PgPool) -> anyhow
     assert_eq!(
         repo.get_crm_contact_access(&contact_id.to_string(), Some(&user_id(TEAM_ADMIN)))
             .await?,
-        Some((AccessLevel::Edit, team_alpha)),
+        Some(CrmEntityAccess {
+            access_level: AccessLevel::Edit,
+            team_id: team_alpha,
+        }),
     );
     Ok(())
 }

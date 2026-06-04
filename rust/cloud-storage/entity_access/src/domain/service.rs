@@ -5,8 +5,9 @@ use std::str::FromStr;
 
 use crate::domain::{
     models::{
-        AccessError, AccessLevel, CallChannelInfo, ChannelRoleResult, Entity, EntityAccessAuth,
-        EntityAccessReceipt, EntityPermission, EntityType, RequiredPermission, UserTeamInfo,
+        AccessError, AccessLevel, CallChannelInfo, ChannelRoleResult, CrmEntityAccess, Entity,
+        EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType, RequiredPermission,
+        UserTeamInfo,
     },
     ports::{AccessRepository, EntityAccessService},
 };
@@ -100,7 +101,7 @@ where
         &self,
         entity_id: &str,
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
-    ) -> Result<Option<(AccessLevel, Uuid)>, AccessError> {
+    ) -> Result<Option<CrmEntityAccess>, AccessError> {
         self.repo.get_crm_company_access(entity_id, user_id).await
     }
 
@@ -110,7 +111,7 @@ where
         &self,
         entity_id: &str,
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
-    ) -> Result<Option<(AccessLevel, Uuid)>, AccessError> {
+    ) -> Result<Option<CrmEntityAccess>, AccessError> {
         self.repo.get_crm_contact_access(entity_id, user_id).await
     }
 
@@ -183,11 +184,11 @@ where
             EntityType::CrmCompany => Ok(self
                 .get_crm_company_access(entity_id, user_id)
                 .await?
-                .map(|(level, _team)| level)),
+                .map(|a| a.access_level)),
             EntityType::CrmContact => Ok(self
                 .get_crm_contact_access(entity_id, user_id)
                 .await?
-                .map(|(level, _team)| level)),
+                .map(|a| a.access_level)),
             // Static files are always viewable. This is wrong for owners
             EntityType::StaticFile => Ok(Some(AccessLevel::View)),
             // These entity types don't have access checks implemented yet.
@@ -265,8 +266,8 @@ where
             EntityType::CrmCompany => {
                 let access = self.get_crm_company_access(entity_id, user_id).await?;
                 match access {
-                    Some((level, _team)) => Ok(EntityPermission::AccessLevel {
-                        access_level: level,
+                    Some(access) => Ok(EntityPermission::AccessLevel {
+                        access_level: access.access_level,
                     }),
                     None => Err(AccessError::Unauthorized),
                 }
@@ -274,8 +275,8 @@ where
             EntityType::CrmContact => {
                 let access = self.get_crm_contact_access(entity_id, user_id).await?;
                 match access {
-                    Some((level, _team)) => Ok(EntityPermission::AccessLevel {
-                        access_level: level,
+                    Some(access) => Ok(EntityPermission::AccessLevel {
+                        access_level: access.access_level,
                     }),
                     None => Err(AccessError::Unauthorized),
                 }
@@ -313,8 +314,13 @@ where
                 ));
             }
         };
-        let (access_level, team_id) = access.ok_or(AccessError::Unauthorized)?;
-        Ok((EntityPermission::AccessLevel { access_level }, team_id))
+        let access = access.ok_or(AccessError::Unauthorized)?;
+        Ok((
+            EntityPermission::AccessLevel {
+                access_level: access.access_level,
+            },
+            access.team_id,
+        ))
     }
 
     #[tracing::instrument(err, skip(self))]

@@ -12,6 +12,18 @@ pub use models_permissions::share_permission::access_level::{
     CommentAccessLevel, EditAccessLevel, OwnerAccessLevel, ViewAccessLevel,
 };
 
+/// A user's resolved access to a CRM entity (company or contact) paired with
+/// the entity's owning team — both produced by the same ownership lookup, so
+/// the team is guaranteed to be the one that granted access (not the user's
+/// default team).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CrmEntityAccess {
+    /// The access level the user holds on the entity.
+    pub access_level: AccessLevel,
+    /// The team that owns the entity.
+    pub team_id: Uuid,
+}
+
 /// The role a user has within a channel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
