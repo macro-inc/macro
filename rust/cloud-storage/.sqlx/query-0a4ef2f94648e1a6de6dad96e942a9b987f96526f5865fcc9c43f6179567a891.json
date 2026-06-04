@@ -1,0 +1,72 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                ct.id,\n                ct.company_id,\n                ct.email,\n                ct.name,\n                ct.hidden,\n                ct.first_interaction,\n                ct.last_interaction,\n                ct.created_at,\n                ct.updated_at\n            FROM crm_contacts ct\n            JOIN crm_companies co ON co.id = ct.company_id\n            WHERE ct.id = $1\n              AND co.team_id = $2\n              AND ($3 OR (ct.hidden = FALSE AND co.hidden = FALSE))\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "company_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "hidden",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "first_interaction",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "last_interaction",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "0a4ef2f94648e1a6de6dad96e942a9b987f96526f5865fcc9c43f6179567a891"
+}

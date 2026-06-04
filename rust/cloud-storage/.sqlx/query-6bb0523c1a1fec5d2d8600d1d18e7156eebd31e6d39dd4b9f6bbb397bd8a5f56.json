@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                user_id,\n                channel_id,\n                joined_at,\n                left_at::timestamptz AS \"left_at?\",\n                role AS \"role: ParticipantRole\"\n            FROM comms_channel_participants\n            WHERE channel_id = $1\n            ORDER BY joined_at DESC\n            ",
+  "query": "\n            SELECT\n                user_id,\n                channel_id,\n                joined_at,\n                left_at::timestamptz AS \"left_at?\",\n                role AS \"role: ParticipantRole\"\n            FROM comms_channel_participants\n            WHERE channel_id = $1 AND left_at IS NULL\n            ORDER BY joined_at DESC\n            ",
   "describe": {
     "columns": [
       {
@@ -53,5 +53,5 @@
       false
     ]
   },
-  "hash": "e757b0ff97cdde3e3742a24ca0efe796c255daff9e95ca53b7dcc6f824d0c942"
+  "hash": "6bb0523c1a1fec5d2d8600d1d18e7156eebd31e6d39dd4b9f6bbb397bd8a5f56"
 }

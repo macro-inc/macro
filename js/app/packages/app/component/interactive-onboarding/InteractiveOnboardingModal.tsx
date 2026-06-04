@@ -250,14 +250,10 @@ function InteractiveOnboardingModalLayout(props: {
   onClose: () => void;
 }) {
   const [phase, setPhase] = createSignal<ModalPhase>('start');
-  const completeTutorial = useCompleteTutorialMutation();
   const onboarding = useOnboarding();
 
   const handleSkip = () => {
-    if (props.isFirstTimeOnboarding) {
-      completeTutorial.mutate(undefined);
-    }
-    setPhase('end');
+    props.onClose();
   };
 
   const handleReplay = () => {
@@ -292,10 +288,14 @@ export function InteractiveOnboardingModal(
   const [internalOpen, setInternalOpen] = createSignal(
     props.defaultOpen ?? false
   );
+  const completeTutorial = useCompleteTutorialMutation();
 
   const open = () => props.open ?? internalOpen();
 
   const setOpen = (nextOpen: boolean) => {
+    if (!nextOpen) {
+      completeTutorial.mutate(undefined);
+    }
     setInternalOpen(nextOpen);
     props.onOpenChange?.(nextOpen);
   };

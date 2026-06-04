@@ -85,5 +85,41 @@ pub fn transform_aws_url(url: &str) -> String {
     url.to_string()
 }
 
+/// internal method to transform a browser-facing local url into one reachable
+/// from inside the docker network
+fn transform_internal_url(url: &str) -> String {
+    // NOTE: it is ok to use expect as this is only run locally
+    let parsed = url::Url::parse(url).expect("valid url");
+    let host = parsed.host_str().unwrap();
+    let port = parsed.port().unwrap_or(4566);
+    let path = parsed.path();
+    let query = parsed.query().map(|q| format!("?{q}")).unwrap_or_default();
+
+    // Browser-facing local URLs use `localhost`, which inside a container
+    // resolves to the container itself. Swap it for the `localstack` service
+    // hostname so service-to-service fetches reach LocalStack. Leave any other
+    // host untouched.
+    if host == "localhost" || host == "localstack" {
+        return format!("http://localstack:{port}{path}{query}");
+    }
+
+    url.to_string()
+}
+
+/// Transforms a browser-facing local URL into one reachable from inside the
+/// app's own containers when fetching an object server-side.
+///
+/// The inverse of [`transform_aws_url`]: presigned and distribution URLs are
+/// minted with the `localhost` host so the browser on the host machine can
+/// reach LocalStack, but a service fetching the same object from inside the
+/// Docker network must use the `localstack` service hostname instead. No-op
+/// outside local AWS.
+pub fn transform_aws_url_for_internal_fetch(url: &str) -> String {
+    if is_local_aws() {
+        return transform_internal_url(url);
+    }
+    url.to_string()
+}
+
 #[cfg(test)]
 mod test;

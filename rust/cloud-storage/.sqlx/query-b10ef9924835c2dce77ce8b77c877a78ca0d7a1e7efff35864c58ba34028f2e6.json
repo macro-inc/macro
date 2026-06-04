@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "DELETE FROM crm_contacts WHERE company_id = $1",
+  "query": "UPDATE crm_contacts SET hidden = FALSE WHERE company_id = $1",
   "describe": {
     "columns": [],
     "parameters": {
@@ -10,5 +10,5 @@
     },
     "nullable": []
   },
-  "hash": "ea8465e511eb18380f7a05b5c02930a31d7729c0a357e3d3c5044f2906756935"
+  "hash": "b10ef9924835c2dce77ce8b77c877a78ca0d7a1e7efff35864c58ba34028f2e6"
 }
