@@ -39,6 +39,7 @@ import WideStar from '@icon/wide-star.svg';
 import { AnimatedTaskIcon } from '@icon/wide-task';
 import WideTask from '@icon/wide-task.svg';
 import { Dialog } from '@kobalte/core/dialog';
+import { getMarkdownGoldenBytes } from '@lexical-core/markdown-golden';
 import ArrowRight from '@phosphor/arrow-right.svg';
 import { createProject } from '@queries/storage/projects';
 import { cn, Hotkey, Layer } from '@ui';
@@ -55,7 +56,6 @@ import {
 import { Dynamic } from 'solid-js/web';
 import { type FocusableElement, tabbable } from 'tabbable';
 import { useSplitLayout } from './split-layout/layout';
-import { getMarkdownGoldenBytes } from '@lexical-core/markdown-golden';
 
 const createBlock = async (spec: {
   blockName: BlockName | BlockAlias;
