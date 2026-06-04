@@ -1,6 +1,8 @@
 import type { DateValue } from '@core/util/date';
 import type { ApiLabel } from '@service-email/generated/schemas';
 import type {
+  GithubPullRequestCheckRun,
+  GithubPullRequestComment,
   SoupLabel,
   SoupProperty,
 } from '@service-storage/generated/schemas';
@@ -14,6 +16,31 @@ export type EntityBase = {
   updatedAt?: DateValue | null;
   viewedAt?: DateValue | null;
   sortTs?: DateValue | null;
+};
+
+export type ForeignEntity = EntityBase & {
+  type: 'foreign';
+  subType: { type: 'github_pull_request' };
+  foreignSource: 'github_pull_request' | (string & {});
+  foreignId: string;
+  storedForId: string;
+  storedForAuthEntity: 'team' | (string & {});
+};
+
+export type GithubPullRequestEntity = ForeignEntity & {
+  subType: {
+    type: 'github_pull_request';
+    number: number;
+    name: string;
+    owner: string;
+    repo: string;
+    url: string;
+    status: 'open' | 'merged' | 'closed';
+    additions: number;
+    deletions: number;
+    comments: GithubPullRequestComment[];
+    checks: GithubPullRequestCheckRun[];
+  };
 };
 
 export type ChannelEntity = EntityBase & {
@@ -152,7 +179,9 @@ export type EntityData =
   | EmailEntity
   | ProjectEntity
   | CallEntity
-  | AutomationEntity;
+  | AutomationEntity
+  | ForeignEntity
+  | GithubPullRequestEntity;
 
 const ENTITY_TYPE_VALUES = new Set<EntityData['type']>([
   'channel',
@@ -163,6 +192,7 @@ const ENTITY_TYPE_VALUES = new Set<EntityData['type']>([
   'project',
   'call',
   'automation',
+  'foreign',
 ]);
 
 const _isEntityData = (item: unknown): item is EntityData => {
@@ -182,6 +212,14 @@ export const isTaskEntity = (entity: EntityData): entity is TaskEntity => {
     entity.type === 'document' &&
     entity.fileType === 'md' &&
     entity.subType?.type === 'task'
+  );
+};
+
+export const isGithubPrEntity = (
+  entity: EntityData
+): entity is GithubPullRequestEntity => {
+  return (
+    entity.type === 'foreign' && entity.subType.type === 'github_pull_request'
   );
 };
 
