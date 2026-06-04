@@ -171,6 +171,21 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
         }
     }
 
+    func handleApplicationWillTerminate() {
+        guard let uuid = activeCallUUID else {
+            print("[CallKit] Application terminating with no active CallKit call")
+            return
+        }
+
+        print("[CallKit] Application terminating with active CallKit call uuid=\(uuid.uuidString)")
+        let shouldDisconnectNativeMedia = activeNativeMediaUUID == uuid
+        if shouldDisconnectNativeMedia {
+            mediaSessionProvider().disconnectForAppTermination()
+        }
+        provider.reportCall(with: uuid, endedAt: Date(), reason: .remoteEnded)
+        clearCallState(uuid: uuid)
+    }
+
     private func requestEndCall(uuid: UUID, completion: @escaping (Error?) -> Void) {
         let transaction = CXTransaction(action: CXEndCallAction(call: uuid))
         callController.request(transaction) { error in

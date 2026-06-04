@@ -48,6 +48,13 @@ class CallKitPlugin: Plugin, @unchecked Sendable {
     private var connectionStateChannel: Channel?
     private var drawerOpenedChannel: Channel?
     private var participantIdentitiesChannel: Channel?
+    private var willTerminateObserver: NSObjectProtocol?
+
+    deinit {
+        if let willTerminateObserver {
+            NotificationCenter.default.removeObserver(willTerminateObserver)
+        }
+    }
 
     override public func load(webview: WKWebView) {
         print("[CallKit] Tauri CallKitPlugin loading")
@@ -90,7 +97,22 @@ class CallKitPlugin: Plugin, @unchecked Sendable {
         )
         videoOverlay.attach(to: webview)
         callCoordinator.load()
+        observeApplicationTermination()
         print("[CallKit] Tauri CallKitPlugin loaded")
+    }
+
+    private func observeApplicationTermination() {
+        if let willTerminateObserver {
+            NotificationCenter.default.removeObserver(willTerminateObserver)
+        }
+        willTerminateObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.willTerminateNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            print("[CallKit] UIApplication will terminate")
+            self?.callCoordinator.handleApplicationWillTerminate()
+        }
     }
 
     @objc public func watchCallAnswered(_ invoke: Invoke) throws {

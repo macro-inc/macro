@@ -3,6 +3,7 @@ import AVFoundation
 import Foundation
 import LiveKit
 import LiveKitWebRTC
+import UIKit
 
 /// Native LiveKit Room plus CallKit-owned audio-session integration.
 final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendable {
@@ -306,6 +307,34 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
             print("[CallKit] Native LiveKit room disconnected")
         } else {
             print("[CallKit] Native LiveKit disconnect had no active room")
+        }
+    }
+
+    func disconnectForAppTermination() {
+        print("[CallKit] Native LiveKit app termination disconnect requested")
+        let backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "CallKitLiveKitDisconnectOnTerminate") {
+            print("[CallKit] Native LiveKit app termination disconnect background task expired")
+        }
+
+        Task { @MainActor [weak self] in
+            guard let self else {
+                if backgroundTask != .invalid {
+                    UIApplication.shared.endBackgroundTask(backgroundTask)
+                }
+                return
+            }
+
+            let toDisconnect = self.clearNativeCallState(deactivateAudio: true)
+            if let toDisconnect {
+                await toDisconnect.disconnect()
+                print("[CallKit] Native LiveKit room disconnected for app termination")
+            } else {
+                print("[CallKit] Native LiveKit app termination disconnect had no active room")
+            }
+
+            if backgroundTask != .invalid {
+                UIApplication.shared.endBackgroundTask(backgroundTask)
+            }
         }
     }
 
