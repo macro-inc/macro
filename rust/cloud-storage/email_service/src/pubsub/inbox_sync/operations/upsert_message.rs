@@ -571,20 +571,31 @@ async fn send_notifications(
         snippet: message.snippet.unwrap_or_default(),
     };
 
-    let macro_id_str = link.macro_id.to_string();
-    let recipient = MacroUserIdStr::parse_from_str(&macro_id_str).map_err(|e| {
-        ProcessingError::NonRetryable(DetailedError {
-            reason: FailureReason::InvalidData,
-            source: anyhow::anyhow!("failed to parse macro user id: {}", e),
-        })
-    })?;
+    let mut recipient_ids: HashSet<MacroUserIdStr<'static>> =
+        HashSet::from([link.macro_id.clone()]);
+
+    let primaries =
+        macro_db_client::macro_user_links::get_primaries_for_child(&ctx.db, link.macro_id.as_ref())
+            .await
+            .map_err(|e| {
+                ProcessingError::Retryable(DetailedError {
+                    reason: FailureReason::DatabaseQueryFailed,
+                    source: e.context("Failed to fetch delegated primaries".to_string()),
+                })
+            })?;
+
+    recipient_ids.extend(
+        primaries
+            .into_iter()
+            .filter_map(|p| MacroUserIdStr::try_from(p).ok()),
+    );
 
     let request = SendNotificationRequestBuilder {
         notification_entity: EntityType::EmailThread
             .with_entity_string(message.thread_db_id.to_string()),
         notification,
         sender_id,
-        recipient_ids: HashSet::from([recipient]),
+        recipient_ids,
     }
     .into_request()
     .with_conn_gateway();

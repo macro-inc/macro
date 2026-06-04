@@ -118,6 +118,40 @@ async fn delete_edges_for_child_removes_all_grants(pool: Pool<Postgres>) -> anyh
 }
 
 #[sqlx::test]
+async fn get_primaries_for_child_returns_all_grantees(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    insert_user(&pool, "macro|primary-a@x.com").await?;
+    insert_user(&pool, "macro|primary-b@x.com").await?;
+    insert_user(&pool, "macro|owner@x.com").await?;
+    insert_user(&pool, "macro|lonely@x.com").await?;
+
+    insert_edge(&pool, "macro|primary-a@x.com", "macro|owner@x.com").await?;
+    insert_edge(&pool, "macro|primary-b@x.com", "macro|owner@x.com").await?;
+
+    let mut primaries = get_primaries_for_child(&pool, "macro|owner@x.com").await?;
+    primaries.sort();
+    assert_eq!(
+        primaries,
+        vec!["macro|primary-a@x.com", "macro|primary-b@x.com"]
+    );
+
+    // A child nobody delegates from yields no primaries.
+    assert!(
+        get_primaries_for_child(&pool, "macro|lonely@x.com")
+            .await?
+            .is_empty()
+    );
+
+    // Direction matters: querying a primary as if it were a child returns nothing.
+    assert!(
+        get_primaries_for_child(&pool, "macro|primary-a@x.com")
+            .await?
+            .is_empty()
+    );
+
+    Ok(())
+}
+
+#[sqlx::test]
 async fn insert_edge_within_transaction_commits(pool: Pool<Postgres>) -> anyhow::Result<()> {
     insert_user(&pool, "macro|primary@x.com").await?;
     insert_user(&pool, "macro|child@x.com").await?;
