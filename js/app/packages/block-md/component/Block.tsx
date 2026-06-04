@@ -58,6 +58,8 @@ function BlockMarkdownContent({ optimisticSnapshot }: BlockMarkdownProps) {
       if (!data) {
         setBlockError('MISSING');
         return;
+      } else {
+        setBlockError(null);
       }
 
       if (optimisticSnapshot) {
