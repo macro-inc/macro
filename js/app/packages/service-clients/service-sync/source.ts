@@ -28,7 +28,7 @@ import {
 } from '@websocket/solid/socket-effect';
 import { createWebsocketStateSignal } from '@websocket/solid/state-signal';
 import { encodeFrontiers, type Frontiers } from 'loro-crdt';
-import { type Result, ResultAsync, okAsync } from 'neverthrow';
+import { okAsync, type Result, ResultAsync } from 'neverthrow';
 import { createStore } from 'solid-js/store';
 import {
   FromPeer,

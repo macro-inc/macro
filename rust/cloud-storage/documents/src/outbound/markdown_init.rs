@@ -87,7 +87,6 @@ where
 
             Ok(())
         } else {
-            println!("NORMAL CASE");
             let snapshot = self
                 .lexical_client
                 .markdown_to_loro_snapshot(markdown)
