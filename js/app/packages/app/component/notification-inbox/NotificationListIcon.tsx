@@ -84,8 +84,8 @@ export function NotificationListIcon(props: {
         fallback={
           <EntityIcon
             targetType={getChannelIconType(props.notification)}
-            size="sm"
-            class={cn('size-4.5', props.class)}
+            size="xs"
+            class={cn('size-4 overflow-visible', props.class)}
           />
         }
       >
@@ -94,5 +94,10 @@ export function NotificationListIcon(props: {
     );
   }
 
-  return <Dynamic component={icon()} class={cn('size-4.5', props.class)} />;
+  return (
+    <Dynamic
+      component={icon()}
+      class={cn('size-4 overflow-visible', props.class)}
+    />
+  );
 }
