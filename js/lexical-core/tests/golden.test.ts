@@ -7,7 +7,7 @@ import { MARKDOWN_LORO_SCHEMA } from '../markdown-loro-schema';
 describe('markdown-golden.bin', () => {
   it('ensures that the \"golden\" snapshot is properly blank as expected', async () => {
     const golden = readFileSync(
-      new URL('../markdown-golden.1.bin', import.meta.url)
+      new URL('file://../markdown-golden.1.bin', import.meta.url)
     );
 
     const doc = new LoroDoc();
