@@ -68,7 +68,7 @@ impl DssInternal for DssInternalClient<'_> {
         snapshot: &[u8],
     ) -> worker::Result<()> {
         let upload_url = self.get_snapshot_upload_url(document_id).await?;
-        tracing::trace!(upload_url = upload_url, "uploading snapshot to DSS");
+        tracing::trace!(document_id = document_id, "uploading snapshot to DSS");
 
         let req = Request::new_with_init(
             &upload_url,
