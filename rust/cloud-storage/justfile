@@ -31,6 +31,7 @@ build_dev_service_images:
 # Build all lambda functions
 build_lambdas compiler="":
     ulimit -n 10240 && just docx_unzip_handler/build {{compiler}}
+    ulimit -n 10240 && just call_recording_preview_handler/build {{compiler}}
     ulimit -n 10240 && just delete_chat_handler/build {{compiler}}
     ulimit -n 10240 && just organization_retention_handler/build {{compiler}}
     ulimit -n 10240 && just organization_retention_trigger/build {{compiler}}

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, channel_id, room_name, created_by, created_at, egress_id, recording_key, recording_started_at, share_with_team\n            FROM calls\n            WHERE id = $1\n            ",
+  "query": "\n            SELECT id, channel_id, room_name, created_by, created_at, egress_id, recording_key, preview_url, recording_started_at, share_permission_id, share_with_team\n            FROM calls\n            WHERE id = $1\n            FOR UPDATE\n            ",
   "describe": {
     "columns": [
       {
@@ -40,11 +40,21 @@
       },
       {
         "ordinal": 7,
+        "name": "preview_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
         "name": "recording_started_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
+        "name": "share_permission_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
         "name": "share_with_team",
         "type_info": "Bool"
       }
@@ -63,8 +73,10 @@
       true,
       true,
       true,
+      true,
+      false,
       false
     ]
   },
-  "hash": "9a097d6795fd9245014e53697e965ef12e37983d6939632758ec6c8accde3857"
+  "hash": "8f57f79c4318149ab611e764372c035d54880fcc3d80b41bd5d255245e94263e"
 }

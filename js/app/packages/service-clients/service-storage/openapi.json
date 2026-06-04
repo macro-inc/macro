@@ -9628,6 +9628,10 @@
             },
             "description": "Participants (both active and historic)."
           },
+          "recordingPreviewUrl": {
+            "type": ["string", "null"],
+            "description": "Presigned URL for the call recording preview image, if available."
+          },
           "recordingStartedAt": {
             "type": ["string", "null"],
             "format": "date-time",

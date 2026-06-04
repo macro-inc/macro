@@ -955,6 +955,12 @@ export const getCallRecordResponse = zod
           )
       )
       .describe('Participants (both active and historic).'),
+    recordingPreviewUrl: zod
+      .string()
+      .nullish()
+      .describe(
+        'Presigned URL for the call recording preview image, if available.'
+      ),
     recordingStartedAt: zod.iso
       .datetime({})
       .nullish()

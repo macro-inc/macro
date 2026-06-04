@@ -1935,6 +1935,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "call_recording_preview_handler"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "aws-sdk-s3",
+ "aws_lambda_events",
+ "lambda_runtime",
+ "macro_aws_config",
+ "macro_db_client",
+ "macro_entrypoint",
+ "sqlx",
+ "tokio",
+ "tracing",
+ "urlencoding",
+]
+
+[[package]]
 name = "cc"
 version = "1.2.62"
 source = "registry+https://github.com/rust-lang/crates.io-index"

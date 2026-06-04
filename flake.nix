@@ -265,6 +265,9 @@
           [
             parallel
             docker-compose
+            curl
+            xz
+            unzip
             zip
             cargo-info
             cargo-udeps

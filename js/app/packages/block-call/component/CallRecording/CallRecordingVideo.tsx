@@ -2,6 +2,7 @@ import { createSignal, onCleanup } from 'solid-js';
 
 export function CallRecordingVideo(props: {
   url: string;
+  posterUrl?: string;
   onTimeUpdate?: (
     seconds: number,
     source: 'playback' | 'seeking' | 'seeked'
@@ -40,6 +41,7 @@ export function CallRecordingVideo(props: {
         classList={{ 'opacity-0': !isLoaded(), 'opacity-100': isLoaded() }}
         controls
         crossorigin="anonymous"
+        poster={props.posterUrl}
         src={props.url}
         onLoadedData={() => setIsLoaded(true)}
         onCanPlay={() => setIsLoaded(true)}

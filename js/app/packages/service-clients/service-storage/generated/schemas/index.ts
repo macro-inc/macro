@@ -128,6 +128,7 @@ export * from './callRecordPreviewOneOfAllOfType';
 export * from './callRecordPreviewOneOfFour';
 export * from './callRecordPreviewOneOfFourAllOf';
 export * from './callRecordPreviewOneOfFourAllOfType';
+export * from './callRecordRecordingPreviewUrl';
 export * from './callRecordRecordingStartedAt';
 export * from './callRecordRecordingUrl';
 export * from './callRecordSummary';
