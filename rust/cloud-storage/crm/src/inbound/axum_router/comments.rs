@@ -85,7 +85,7 @@ pub async fn list_handler<C: CrmService, Eas: EntityAccessService>(
     State(state): State<CrmRouterState<C, Eas>>,
     Path((_entity_type, entity_id)): Path<(CrmCommentEntityType, Uuid)>,
 ) -> Result<Json<Vec<CrmCommentThread>>, CrmError> {
-    let team_id = team_id_for_user(&state, &access).await?;
+    let team_id = owning_team_for_entity(&state, &access).await?;
     let receipt = CrmCommentReceipt::new(access.entity_access_receipt, team_id)?;
 
     let threads = state.service.get_crm_comment_threads(&receipt).await?;
@@ -120,7 +120,7 @@ pub async fn create_handler<C: CrmService, Eas: EntityAccessService>(
     Path((_entity_type, entity_id)): Path<(CrmCommentEntityType, Uuid)>,
     Json(req): Json<CreateCrmCommentRequest>,
 ) -> Result<Json<CrmCommentThread>, CrmError> {
-    let team_id = team_id_for_user(&state, &access).await?;
+    let team_id = owning_team_for_entity(&state, &access).await?;
 
     let text = req.text.trim();
     if text.is_empty() {
@@ -220,11 +220,12 @@ pub async fn delete_handler<C: CrmService, Eas: EntityAccessService>(
     Ok(Json(result))
 }
 
-/// Resolve the requesting user's owning team via the entity access
-/// service. `EntityPermissionExtractor` already validated team-membership
-/// access on the target entity, so a missing team here is treated as
-/// `InvalidTeamId` (i.e. corrupted state) rather than `Unauthorized`.
-async fn team_id_for_user<C: CrmService, Eas: EntityAccessService>(
+/// Resolve the owning team of the entity the comment hangs off, derived from
+/// the same ownership lookup that grants access — not the caller's default
+/// team — so the bundled team can't drift from the authorized entity.
+/// `EntityPermissionExtractor` already validated access on that entity, so a
+/// failure here means corrupted state rather than a real authorization miss.
+async fn owning_team_for_entity<C: CrmService, Eas: EntityAccessService>(
     state: &CrmRouterState<C, Eas>,
     access: &EntityPermissionExtractor<Eas>,
 ) -> Result<Uuid, CrmError> {
@@ -232,11 +233,15 @@ async fn team_id_for_user<C: CrmService, Eas: EntityAccessService>(
         .entity_access_receipt
         .get_authenticated_user()
         .map_err(|e| CrmError::StorageLayerError(e.into()))?;
-    state
+    let entity = access.entity_access_receipt.entity();
+    let (_permission, team_id) = state
         .entity_access_service
-        .get_user_team(&user_id.0)
+        .get_crm_entity_permission_with_team(
+            Some(&user_id.0),
+            &entity.entity_id,
+            entity.entity_type,
+        )
         .await
-        .map_err(|e| CrmError::StorageLayerError(anyhow::Error::msg(e.to_string())))?
-        .map(|t| t.team_id)
-        .ok_or(CrmError::InvalidTeamId)
+        .map_err(|e| CrmError::StorageLayerError(anyhow::Error::msg(e.to_string())))?;
+    Ok(team_id)
 }

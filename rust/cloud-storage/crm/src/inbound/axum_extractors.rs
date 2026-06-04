@@ -43,9 +43,10 @@ use crate::{
 /// invisible to plain members — the extractor returns `Unauthorized` rather
 /// than leak existence.
 ///
-/// Reads `company_id` from the path. The owning `team_id` is resolved via
-/// the user's `team_user` membership and bundled into the receipt so the
-/// service can scope its queries without a second query.
+/// Reads `company_id` from the path. The access check resolves the company's
+/// owning `team_id` from the same ownership row and bundles it into the
+/// receipt, so the service scopes its queries by the entity's team rather
+/// than the caller's default team.
 #[derive(Debug)]
 pub struct CrmCompanyAccessLevelExtractor<T: RequiredPermission, Svc> {
     /// Capability token authorizing CRM company service calls.
@@ -77,12 +78,11 @@ where
             .await
             .map_err(|_| ExtractorError::Unauthorized)?;
 
-        let permission = service
-            .get_entity_permission(
+        let (permission, team_id) = service
+            .get_crm_entity_permission_with_team(
                 Some(&macro_user_id),
                 &company_id,
                 EntityType::CrmCompany,
-                None,
             )
             .await
             .map_err(ExtractorError::from)?;
@@ -90,13 +90,6 @@ where
         if !permission.satisfies::<T>() {
             return Err(ExtractorError::Unauthorized);
         }
-
-        let team_id = service
-            .get_user_team(&macro_user_id)
-            .await
-            .map_err(ExtractorError::from)?
-            .ok_or(ExtractorError::Unauthorized)?
-            .team_id;
 
         let receipt = EntityAccessReceipt::try_new_authenticated_user(
             macro_user_id,
@@ -122,8 +115,9 @@ where
 /// [`CrmCompanyAccessLevelExtractor`]. Hidden contacts (or contacts whose
 /// parent company is hidden) are invisible to plain members.
 ///
-/// Reads `contact_id` from the path. The owning `team_id` is resolved via
-/// the user's `team_user` membership and bundled into the receipt.
+/// Reads `contact_id` from the path. The access check resolves the contact's
+/// owning `team_id` (its parent company's team) from the same ownership row
+/// and bundles it into the receipt.
 #[derive(Debug)]
 pub struct CrmContactAccessLevelExtractor<T: RequiredPermission, Svc> {
     /// Capability token authorizing CRM contact service calls.
@@ -155,12 +149,11 @@ where
             .await
             .map_err(|_| ExtractorError::Unauthorized)?;
 
-        let permission = service
-            .get_entity_permission(
+        let (permission, team_id) = service
+            .get_crm_entity_permission_with_team(
                 Some(&macro_user_id),
                 &contact_id,
                 EntityType::CrmContact,
-                None,
             )
             .await
             .map_err(ExtractorError::from)?;
@@ -168,13 +161,6 @@ where
         if !permission.satisfies::<T>() {
             return Err(ExtractorError::Unauthorized);
         }
-
-        let team_id = service
-            .get_user_team(&macro_user_id)
-            .await
-            .map_err(ExtractorError::from)?
-            .ok_or(ExtractorError::Unauthorized)?
-            .team_id;
 
         let receipt = EntityAccessReceipt::try_new_authenticated_user(
             macro_user_id,
@@ -248,11 +234,11 @@ where
         // can't tell apart "this comment doesn't exist" (404) from "this
         // comment exists but isn't yours" (401) — comment ids would
         // otherwise be a probable existence oracle.
-        let permission = match access_service
-            .get_entity_permission(Some(&macro_user_id), &entity_id_str, entity_type, None)
+        let (permission, team_id) = match access_service
+            .get_crm_entity_permission_with_team(Some(&macro_user_id), &entity_id_str, entity_type)
             .await
         {
-            Ok(p) => p,
+            Ok(pair) => pair,
             Err(AccessError::Unauthorized | AccessError::UnauthorizedWithMessage(_)) => {
                 return Err(ExtractorError::NotFound("CRM comment not found"));
             }
@@ -262,13 +248,6 @@ where
         if !permission.satisfies::<T>() {
             return Err(ExtractorError::NotFound("CRM comment not found"));
         }
-
-        let team_id = access_service
-            .get_user_team(&macro_user_id)
-            .await
-            .map_err(ExtractorError::from)?
-            .ok_or(ExtractorError::Unauthorized)?
-            .team_id;
 
         let receipt = EntityAccessReceipt::try_new_authenticated_user(
             macro_user_id,

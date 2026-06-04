@@ -164,7 +164,7 @@ impl AccessRepository for PgAccessRepository {
         &self,
         company_id: &str,
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
-    ) -> Result<Option<AccessLevel>, AccessError> {
+    ) -> Result<Option<(AccessLevel, Uuid)>, AccessError> {
         let company_uuid = company_id
             .parse::<Uuid>()
             .map_err(|_| AccessError::BadRequest("Invalid CRM company ID format"))?;
@@ -182,7 +182,7 @@ impl AccessRepository for PgAccessRepository {
         &self,
         contact_id: &str,
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
-    ) -> Result<Option<AccessLevel>, AccessError> {
+    ) -> Result<Option<(AccessLevel, Uuid)>, AccessError> {
         let contact_uuid = contact_id
             .parse::<Uuid>()
             .map_err(|_| AccessError::BadRequest("Invalid CRM contact ID format"))?;

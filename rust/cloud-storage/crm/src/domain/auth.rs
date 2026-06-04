@@ -15,8 +15,8 @@
 //! public because the team receipt it wraps is itself the capability
 //! (only `entity_access` can produce one) and the team id is derived
 //! from it — there is nothing to forge. The `dangerously_internal`
-//! constructors are the only other way in; each is greppable so every
-//! auth bypass is auditable.
+//! constructors are test-only (`cfg(test)`, crate-private): no production
+//! caller can mint a receipt without passing an access check.
 
 use entity_access::domain::models::{
     AccessLevel, EntityAccessReceipt, EntityType, RequiredPermission,
@@ -78,9 +78,9 @@ impl<T: RequiredPermission> CrmCompanyReceipt<T> {
             .allows_access_level(AccessLevel::Edit)
     }
 
-    /// Internal-caller factory (AI tools / background jobs). Bypasses
-    /// external auth and grants `Owner`. Greppable.
-    pub fn dangerously_internal(company_id: Uuid, team_id: Uuid) -> Self {
+    /// Test-only: mints an `Owner` receipt with no access check.
+    #[cfg(test)]
+    pub(crate) fn dangerously_internal(company_id: Uuid, team_id: Uuid) -> Self {
         Self {
             receipt: EntityAccessReceipt::dangerously_assert_internal_user(
                 &company_id.to_string(),
@@ -139,9 +139,9 @@ impl<T: RequiredPermission> CrmContactReceipt<T> {
             .allows_access_level(AccessLevel::Edit)
     }
 
-    /// Internal-caller factory (AI tools / background jobs). Bypasses
-    /// external auth and grants `Owner`. Greppable.
-    pub fn dangerously_internal(contact_id: Uuid, team_id: Uuid) -> Self {
+    /// Test-only: mints an `Owner` receipt with no access check.
+    #[cfg(test)]
+    pub(crate) fn dangerously_internal(contact_id: Uuid, team_id: Uuid) -> Self {
         Self {
             receipt: EntityAccessReceipt::dangerously_assert_internal_user(
                 &contact_id.to_string(),
@@ -188,9 +188,9 @@ impl<T: RequiredPermission> CrmTeamReceipt<T> {
         &self.receipt
     }
 
-    /// Internal-caller factory (AI tools / background jobs). Bypasses
-    /// external auth and grants `Owner`. Greppable.
-    pub fn dangerously_internal(team_id: Uuid) -> Self {
+    /// Test-only: mints an `Owner` receipt with no access check.
+    #[cfg(test)]
+    pub(crate) fn dangerously_internal(team_id: Uuid) -> Self {
         Self {
             receipt: EntityAccessReceipt::dangerously_assert_internal_user(
                 &team_id.to_string(),
@@ -260,9 +260,9 @@ impl<T: RequiredPermission> CrmCommentReceipt<T> {
         Ok((entity_type, entity_id))
     }
 
-    /// Internal-caller factory (AI tools / background jobs). Bypasses
-    /// external auth and grants `Owner`. Greppable.
-    pub fn dangerously_internal(
+    /// Test-only: mints an `Owner` receipt with no access check.
+    #[cfg(test)]
+    pub(crate) fn dangerously_internal(
         entity_type: CrmCommentEntityType,
         entity_id: Uuid,
         team_id: Uuid,

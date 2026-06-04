@@ -216,10 +216,12 @@ async fn crm_company_access_maps_team_role_to_access_level(pool: PgPool) -> anyh
     let company_id = insert_crm_company(&pool, TEAM_ALPHA, false).await?;
     let repo = PgAccessRepository::new(pool);
 
+    // Each role resolves to its access level paired with the company's owning team.
+    let team_alpha = Uuid::parse_str(TEAM_ALPHA)?;
     let cases = [
-        (TEAM_MEMBER, Some(AccessLevel::View)),
-        (TEAM_ADMIN, Some(AccessLevel::Edit)),
-        (TEAM_OWNER, Some(AccessLevel::Owner)),
+        (TEAM_MEMBER, Some((AccessLevel::View, team_alpha))),
+        (TEAM_ADMIN, Some((AccessLevel::Edit, team_alpha))),
+        (TEAM_OWNER, Some((AccessLevel::Owner, team_alpha))),
     ];
     for (uid, expected) in cases {
         let actual = repo
@@ -237,6 +239,7 @@ async fn crm_company_access_maps_team_role_to_access_level(pool: PgPool) -> anyh
 async fn crm_company_access_hides_from_member_when_hidden(pool: PgPool) -> anyhow::Result<()> {
     let company_id = insert_crm_company(&pool, TEAM_ALPHA, true).await?;
     let repo = PgAccessRepository::new(pool);
+    let team_alpha = Uuid::parse_str(TEAM_ALPHA)?;
 
     assert_eq!(
         repo.get_crm_company_access(&company_id.to_string(), Some(&user_id(TEAM_MEMBER)))
@@ -246,12 +249,12 @@ async fn crm_company_access_hides_from_member_when_hidden(pool: PgPool) -> anyho
     assert_eq!(
         repo.get_crm_company_access(&company_id.to_string(), Some(&user_id(TEAM_ADMIN)))
             .await?,
-        Some(AccessLevel::Edit),
+        Some((AccessLevel::Edit, team_alpha)),
     );
     assert_eq!(
         repo.get_crm_company_access(&company_id.to_string(), Some(&user_id(TEAM_OWNER)))
             .await?,
-        Some(AccessLevel::Owner),
+        Some((AccessLevel::Owner, team_alpha)),
     );
     Ok(())
 }
@@ -313,10 +316,12 @@ async fn crm_contact_access_maps_team_role_to_access_level(pool: PgPool) -> anyh
     let contact_id = insert_crm_contact(&pool, company_id, false).await?;
     let repo = PgAccessRepository::new(pool);
 
+    // The owning team is the contact's parent company's team.
+    let team_alpha = Uuid::parse_str(TEAM_ALPHA)?;
     let cases = [
-        (TEAM_MEMBER, Some(AccessLevel::View)),
-        (TEAM_ADMIN, Some(AccessLevel::Edit)),
-        (TEAM_OWNER, Some(AccessLevel::Owner)),
+        (TEAM_MEMBER, Some((AccessLevel::View, team_alpha))),
+        (TEAM_ADMIN, Some((AccessLevel::Edit, team_alpha))),
+        (TEAM_OWNER, Some((AccessLevel::Owner, team_alpha))),
     ];
     for (uid, expected) in cases {
         let actual = repo
@@ -335,6 +340,7 @@ async fn crm_contact_access_hidden_contact_blocks_member(pool: PgPool) -> anyhow
     let company_id = insert_crm_company(&pool, TEAM_ALPHA, false).await?;
     let contact_id = insert_crm_contact(&pool, company_id, true).await?;
     let repo = PgAccessRepository::new(pool);
+    let team_alpha = Uuid::parse_str(TEAM_ALPHA)?;
 
     assert_eq!(
         repo.get_crm_contact_access(&contact_id.to_string(), Some(&user_id(TEAM_MEMBER)))
@@ -344,7 +350,7 @@ async fn crm_contact_access_hidden_contact_blocks_member(pool: PgPool) -> anyhow
     assert_eq!(
         repo.get_crm_contact_access(&contact_id.to_string(), Some(&user_id(TEAM_ADMIN)))
             .await?,
-        Some(AccessLevel::Edit),
+        Some((AccessLevel::Edit, team_alpha)),
     );
     Ok(())
 }
