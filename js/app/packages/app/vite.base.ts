@@ -186,10 +186,6 @@ export const createAppViteConfig = (): UserConfigFn => {
           host: process.env.TAURI_DEV_HOST || 'localhost',
         },
         cors: true,
-        proxy: {
-          // always redirect root to /app
-          '^/$': { target: 'http://localhost:3000', rewrite: () => '/app' },
-        },
         watch: {
           usePolling: true,
           interval: 100,
