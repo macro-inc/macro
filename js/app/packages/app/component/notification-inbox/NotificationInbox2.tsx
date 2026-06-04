@@ -1,4 +1,8 @@
-import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
+import {
+  useGlobalBlockOrchestrator,
+  useGlobalNotificationSource,
+} from '@app/component/GlobalAppState';
+import { PreviewPanel } from '@app/component/PreviewPanel';
 import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
 import {
   SplitToolbarLeft,
@@ -10,8 +14,10 @@ import {
   type EntityIconSelector,
 } from '@core/component/EntityIcon';
 import { LoadingBlock } from '@core/component/LoadingBlock';
+import { Resize } from '@core/component/Resize';
 import { UserIcon } from '@core/component/UserIcon';
 import { tryMacroId, useDisplayName } from '@core/user';
+import type { EntityData } from '@entity';
 import type { UnifiedNotification } from '@notifications';
 import FunnelIcon from '@phosphor/funnel.svg';
 import SortAscendingIcon from '@phosphor/sort-ascending.svg';
@@ -26,6 +32,7 @@ import {
   GithubNotificationListEntity,
   NotificationListEntity,
 } from './NotificationListEntity';
+import { SingleRowNotificationListEntity } from './SingleRowNotificationListEntity';
 
 type NotificationListLayout = 'compact' | 'multirow';
 
@@ -58,6 +65,10 @@ type NotificationDateGroup = {
   items: NotificationInboxItem[];
 };
 
+type NotificationPreviewSelection =
+  | { type: 'entity'; entity: EntityData }
+  | { type: 'coming-soon'; label: string };
+
 type ChannelNotificationStack = {
   id: string;
   notifications: UnifiedNotification[];
@@ -68,6 +79,131 @@ const getNotificationTime = (notification: UnifiedNotification): number => {
     notification.created_at ?? notification.updated_at ?? ''
   );
   return Number.isNaN(time) ? 0 : time;
+};
+
+const getNotificationDateValue = (
+  notification: UnifiedNotification
+): string | null => notification.created_at ?? notification.updated_at ?? null;
+
+const getChannelPreviewEntity = (
+  notification: UnifiedNotification
+): EntityData | undefined => {
+  const metadata = notification.notification_metadata;
+
+  if (
+    metadata.tag !== 'channel_message_send' &&
+    metadata.tag !== 'channel_message_reply' &&
+    metadata.tag !== 'channel_mention'
+  ) {
+    return undefined;
+  }
+
+  const channelType =
+    metadata.content.channelType === 'directMessage'
+      ? 'direct_message'
+      : metadata.content.channelType;
+  const senderId =
+    metadata.tag === 'channel_message_reply'
+      ? metadata.content.userId
+      : (notification.sender_id ?? undefined);
+
+  return {
+    id: metadata.content.messageId,
+    type: 'channel_message',
+    name: metadata.content.messageContent || metadata.content.channelName || '',
+    ownerId: '',
+    createdAt: getNotificationDateValue(notification),
+    updatedAt: getNotificationDateValue(notification),
+    channelId: notification.entity_id,
+    channelName: metadata.content.channelName ?? 'Channel',
+    channelType:
+      channelType === 'direct_message' ? 'direct_message' : channelType,
+    messageId: metadata.content.messageId,
+    threadId:
+      metadata.tag === 'channel_message_reply' ||
+      metadata.tag === 'channel_mention'
+        ? (metadata.content.threadId ?? undefined)
+        : undefined,
+    senderId: senderId ?? '',
+    content: metadata.content.messageContent ?? '',
+  };
+};
+
+const getNotificationPreviewEntity = (
+  notification: UnifiedNotification
+): EntityData | undefined => {
+  const channelEntity = getChannelPreviewEntity(notification);
+  if (channelEntity) return channelEntity;
+
+  const metadata = notification.notification_metadata;
+  const date = getNotificationDateValue(notification);
+
+  switch (metadata.tag) {
+    case 'new_email':
+      return {
+        id: notification.entity_id,
+        type: 'email',
+        name: metadata.content.subject || 'Email',
+        ownerId: '',
+        createdAt: date,
+        updatedAt: date,
+        viewedAt: notification.viewed_at ?? null,
+        isRead: !!notification.viewed_at,
+        isDraft: false,
+        snippet: metadata.content.snippet ?? undefined,
+        isImportant: false,
+        done: !!notification.done,
+        senderEmail: metadata.content.sender ?? undefined,
+        senderName: metadata.content.sender ?? undefined,
+      };
+    case 'task_assigned':
+      return {
+        id: notification.entity_id,
+        type: 'document',
+        name: metadata.content.taskName ?? 'Task',
+        ownerId: '',
+        createdAt: date,
+        updatedAt: date,
+        viewedAt: notification.viewed_at ?? null,
+        fileType: 'md',
+        subType: { type: 'task' },
+      };
+    case 'document_mention':
+      return {
+        id: notification.entity_id,
+        type: 'document',
+        name: metadata.content.documentName ?? 'Document',
+        ownerId: '',
+        createdAt: date,
+        updatedAt: date,
+        viewedAt: notification.viewed_at ?? null,
+        fileType: metadata.content.fileType ?? 'md',
+        subType: metadata.content.subType ?? null,
+      };
+    case 'ai_response':
+      return {
+        id: notification.entity_id,
+        type: 'chat',
+        name: metadata.content.summary || 'AI response',
+        ownerId: '',
+        createdAt: date,
+        updatedAt: date,
+        viewedAt: notification.viewed_at ?? null,
+      };
+    default:
+      return undefined;
+  }
+};
+
+const getNotificationPreviewSelection = (
+  notification: UnifiedNotification
+): NotificationPreviewSelection | undefined => {
+  if (notification.notification_metadata.tag === 'github_pr_event') {
+    return { type: 'coming-soon', label: 'GitHub preview is coming soon' };
+  }
+
+  const entity = getNotificationPreviewEntity(notification);
+  return entity ? { type: 'entity', entity } : undefined;
 };
 
 const sortNotifications = (
@@ -327,6 +463,21 @@ const getItemTime = (item: NotificationInboxItem): number =>
 
 const sortItems = (items: NotificationInboxItem[]): NotificationInboxItem[] =>
   items.toSorted((a, b) => getItemTime(b) - getItemTime(a));
+
+const getFirstPreviewSelection = (
+  groups: NotificationDateGroup[]
+): NotificationPreviewSelection | undefined => {
+  for (const group of groups) {
+    for (const item of group.items) {
+      const selection = getNotificationPreviewSelection(
+        getItemPrimaryNotification(item)
+      );
+      if (selection) return selection;
+    }
+  }
+
+  return undefined;
+};
 
 const groupItemsByDate = (
   items: NotificationInboxItem[]
@@ -668,85 +819,142 @@ function ChannelNotificationGroupRow(props: {
   );
 }
 
-function NotificationInboxItemRow(props: {
-  item: NotificationInboxItem;
+function GithubNotificationInboxRow(props: {
+  notification: UnifiedNotification;
+  group?: GithubNotificationGroup;
   listEntityLayout?: NotificationListLayout;
 }) {
   return (
-    <Switch>
-      <Match when={props.item.type === 'github' ? props.item.group : undefined}>
-        {(group) => (
-          <Show
-            when={group().subItems.length > 0}
-            fallback={
-              <div class="soup-list-entity w-full py-0.5">
-                <GithubNotificationListEntity
+    <Show
+      when={props.listEntityLayout === 'multirow'}
+      fallback={
+        <SingleRowNotificationListEntity
+          notification={props.notification}
+          title={props.group?.title}
+          subtitle={props.group?.subtitle}
+          status={props.group?.status}
+          url={props.group?.url}
+          authorId={props.group?.authorId}
+          authorFallback={props.group?.authorFallback}
+        />
+      }
+    >
+      <GithubNotificationListEntity
+        notification={props.notification}
+        title={props.group?.title}
+        subtitle={props.group?.subtitle}
+        status={props.group?.status}
+        url={props.group?.url}
+        authorId={props.group?.authorId}
+        authorFallback={props.group?.authorFallback}
+        layout={props.listEntityLayout}
+      />
+    </Show>
+  );
+}
+
+function NotificationInboxItemRow(props: {
+  item: NotificationInboxItem;
+  listEntityLayout?: NotificationListLayout;
+  onSelect?: (selection: NotificationPreviewSelection) => void;
+}) {
+  const handlePointerDown = () => {
+    const selection = getNotificationPreviewSelection(
+      getItemPrimaryNotification(props.item)
+    );
+    if (selection) props.onSelect?.(selection);
+  };
+
+  const stopNavigation = (el: HTMLDivElement) => {
+    el.addEventListener(
+      'click',
+      (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+      },
+      true
+    );
+    el.addEventListener(
+      'keydown',
+      (event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        event.stopPropagation();
+      },
+      true
+    );
+  };
+
+  return (
+    <div ref={stopNavigation} onPointerDown={handlePointerDown}>
+      <Switch>
+        <Match
+          when={props.item.type === 'github' ? props.item.group : undefined}
+        >
+          {(group) => (
+            <Show
+              when={group().subItems.length > 0}
+              fallback={
+                <GithubNotificationInboxRow
                   notification={group().notifications[0]}
-                  title={group().title}
-                  subtitle={group().subtitle}
-                  status={group().status}
-                  url={group().url}
-                  authorId={group().authorId}
-                  authorFallback={group().authorFallback}
-                  layout={props.listEntityLayout}
+                  group={group()}
+                  listEntityLayout={props.listEntityLayout}
                 />
-              </div>
-            }
-          >
-            <section class="soup-list-entity w-full py-0.5 flex flex-col gap-1">
-              <div class="group/header rounded-lg bg-surface relative">
-                <GithubNotificationListEntity
-                  notification={group().notifications[0]}
-                  title={group().title}
-                  subtitle={group().subtitle}
-                  status={group().status}
-                  url={group().url}
-                  authorId={group().authorId}
-                  authorFallback={group().authorFallback}
-                  layout={props.listEntityLayout}
-                />
-              </div>
-              <div class="rounded-lg border border-ink-muted/8 bg-ink-muted/2.5 overflow-hidden">
-                <div>
-                  <For each={group().subItems}>
-                    {(notification) => (
-                      <GithubNotificationListEntity
-                        notification={notification}
-                        layout={props.listEntityLayout}
-                      />
-                    )}
-                  </For>
+              }
+            >
+              <section class="soup-list-entity w-full py-0.5 flex flex-col gap-1">
+                <div class="group/header rounded-lg bg-surface relative">
+                  <GithubNotificationInboxRow
+                    notification={group().notifications[0]}
+                    group={group()}
+                    listEntityLayout={props.listEntityLayout}
+                  />
                 </div>
-              </div>
-            </section>
-          </Show>
-        )}
-      </Match>
-      <Match
-        when={props.item.type === 'channel' ? props.item.group : undefined}
-      >
-        {(group) => (
-          <ChannelNotificationGroupRow
-            group={group()}
-            listEntityLayout={props.listEntityLayout}
-          />
-        )}
-      </Match>
-      <Match when={props.item.type === 'notification' ? props.item : undefined}>
-        {(item) => (
-          <NotificationListEntity
-            notification={item().notification}
-            layout={props.listEntityLayout}
-          />
-        )}
-      </Match>
-    </Switch>
+                <div class="rounded-lg border border-ink-muted/8 bg-ink-muted/2.5 overflow-hidden">
+                  <div>
+                    <For each={group().subItems}>
+                      {(notification) => (
+                        <GithubNotificationInboxRow
+                          notification={notification}
+                          listEntityLayout={props.listEntityLayout}
+                        />
+                      )}
+                    </For>
+                  </div>
+                </div>
+              </section>
+            </Show>
+          )}
+        </Match>
+        <Match
+          when={props.item.type === 'channel' ? props.item.group : undefined}
+        >
+          {(group) => (
+            <ChannelNotificationGroupRow
+              group={group()}
+              listEntityLayout={props.listEntityLayout}
+            />
+          )}
+        </Match>
+        <Match
+          when={props.item.type === 'notification' ? props.item : undefined}
+        >
+          {(item) => (
+            <NotificationListEntity
+              notification={item().notification}
+              layout={props.listEntityLayout}
+            />
+          )}
+        </Match>
+      </Switch>
+    </div>
   );
 }
 
 function NotificationInboxItems(props: {
   groups: NotificationDateGroup[];
   listEntityLayout?: NotificationListLayout;
+  onSelect?: (selection: NotificationPreviewSelection) => void;
 }) {
   return (
     <div class="unified-table-body w-full flex flex-col gap-1 flex-1 min-h-0 relative overflow-y-auto px-2 pb-2">
@@ -759,6 +967,7 @@ function NotificationInboxItems(props: {
                 <NotificationInboxItemRow
                   item={item}
                   listEntityLayout={props.listEntityLayout}
+                  onSelect={props.onSelect}
                 />
               )}
             </For>
@@ -776,6 +985,7 @@ function NotificationInboxListLayout(props: {
   groups: NotificationDateGroup[];
   isLoading: boolean;
   listEntityLayout?: NotificationListLayout;
+  onSelect?: (selection: NotificationPreviewSelection) => void;
 }) {
   return (
     <div class="@container/u-list size-full min-h-0 unified-list-root flex flex-col">
@@ -791,6 +1001,7 @@ function NotificationInboxListLayout(props: {
           <NotificationInboxItems
             groups={props.groups}
             listEntityLayout={props.listEntityLayout}
+            onSelect={props.onSelect}
           />
         </Show>
       </Show>
@@ -801,22 +1012,70 @@ function NotificationInboxListLayout(props: {
 function NotificationInboxPreviewLayout(props: {
   groups: NotificationDateGroup[];
   isLoading: boolean;
+  selection: NotificationPreviewSelection | undefined;
+  onSelect: (selection: NotificationPreviewSelection) => void;
 }) {
+  const panel = useSplitPanelOrThrow();
+  const orchestrator = useGlobalBlockOrchestrator();
+  const previewVisible = () => !!props.selection;
+
+  createEffect(() => {
+    const [getPreview, setPreview] = panel.previewState;
+    if (previewVisible() !== getPreview()) setPreview(previewVisible());
+  });
+
   return (
-    <div class="grid size-full min-h-0 grid-cols-[minmax(22rem,0.42fr)_minmax(0,1fr)] overflow-hidden">
-      <div class="min-w-0 min-h-0 border-r border-edge-muted">
-        <NotificationInboxListLayout
-          groups={props.groups}
-          isLoading={props.isLoading}
-          listEntityLayout="multirow"
-        />
-      </div>
-      <div class="min-w-0 bg-surface/50 p-4">
-        <div class="flex size-full items-center justify-center rounded-lg border border-dashed border-edge-muted text-sm text-ink-extra-muted">
-          Preview
+    <Resize.Zone direction="horizontal" gutter={0}>
+      <Resize.Panel
+        id="notification-inbox-list"
+        minSize={200}
+        maxSize={previewVisible() ? 840 : undefined}
+      >
+        <div
+          class={cn(
+            'min-w-0 min-h-0 size-full',
+            previewVisible() && 'border-r border-edge-muted'
+          )}
+        >
+          <NotificationInboxListLayout
+            groups={props.groups}
+            isLoading={props.isLoading}
+            listEntityLayout="multirow"
+            onSelect={props.onSelect}
+          />
         </div>
-      </div>
-    </div>
+      </Resize.Panel>
+      <Show when={previewVisible()}>
+        <Resize.Panel
+          id="notification-inbox-preview"
+          minSize={300}
+          target={{ kind: 'percent', percent: 70 }}
+        >
+          <Show
+            when={
+              props.selection?.type === 'entity'
+                ? props.selection.entity
+                : undefined
+            }
+            fallback={
+              <div class="flex size-full items-center justify-center text-sm text-ink-extra-muted">
+                {props.selection?.type === 'coming-soon'
+                  ? props.selection.label
+                  : 'Preview'}
+              </div>
+            }
+          >
+            {(entity) => (
+              <PreviewPanel
+                selectedEntity={entity()}
+                orchestrator={orchestrator}
+                splitPanelContext={panel}
+              />
+            )}
+          </Show>
+        </Resize.Panel>
+      </Show>
+    </Resize.Zone>
   );
 }
 
@@ -824,6 +1083,8 @@ export function NotificationInbox2() {
   const panel = useSplitPanelOrThrow();
   const notificationSource = useGlobalNotificationSource();
   const [layout, setLayout] = createSignal<'list' | 'preview'>('preview');
+  const [previewSelection, setPreviewSelection] =
+    createSignal<NotificationPreviewSelection>();
 
   createEffect(() => {
     panel.handle.setDisplayName('Inbox 2');
@@ -841,6 +1102,11 @@ export function NotificationInbox2() {
     );
 
     setDateGroups(reconcile(next, { key: 'id' }));
+
+    if (!previewSelection()) {
+      const firstSelection = getFirstPreviewSelection(next);
+      if (firstSelection) setPreviewSelection(firstSelection);
+    }
   });
 
   return (
@@ -907,12 +1173,15 @@ export function NotificationInbox2() {
             <NotificationInboxPreviewLayout
               groups={dateGroups}
               isLoading={notificationSource.isLoading()}
+              selection={previewSelection()}
+              onSelect={setPreviewSelection}
             />
           </Match>
           <Match when={true}>
             <NotificationInboxListLayout
               groups={dateGroups}
               isLoading={notificationSource.isLoading()}
+              onSelect={setPreviewSelection}
             />
           </Match>
         </Switch>
