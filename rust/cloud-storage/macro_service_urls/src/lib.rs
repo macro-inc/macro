@@ -20,8 +20,6 @@ use url::Url;
 
 #[cfg(test)]
 mod test;
-#[cfg(test)]
-mod tests;
 
 #[cfg(test)]
 mod testing_harness {
