@@ -10,6 +10,7 @@ use super::{
     documents::{
         get_document, get_document_key, get_document_permissions, get_document_text,
         get_full_pdf_modification_data, list_documents_with_access, location, put_document_update,
+        snapshot_upload_url,
     },
     user::populate_items,
 };
@@ -122,6 +123,10 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         .route(
             "/documents/{document_id}/update",
             put(put_document_update::handler),
+        )
+        .route(
+            "/documents/{document_id}/snapshot_upload_url",
+            get(snapshot_upload_url::handler),
         )
         .route("/documents/metadata", post(get_documents_metadata::handler))
         // History routes

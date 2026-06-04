@@ -8,6 +8,7 @@ import {
   enqueueDocumentWakeup,
   isWakeableDocument,
 } from '@queries/preview';
+import { tryWarmSnapshot } from '@queries/storage/cached-snapshot';
 import { cn, Hotkey } from '@ui';
 import { createEffect, For, Match, Show, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -178,6 +179,9 @@ export function CommandItem(props: CommandItemProps) {
         }
       )}
       onMouseMove={() => props.onHover?.(props.index)}
+      onMouseEnter={() => {
+        if (isEntityItem(props.item)) tryWarmSnapshot(props.item.data);
+      }}
       onClick={(e) => {
         e.preventDefault();
         e.stopPropagation();

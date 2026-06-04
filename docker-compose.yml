@@ -366,6 +366,7 @@ services:
       services:
         aliases:
           - sync-service
+      databases:
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8787/health"]
       interval: 30s

@@ -20,6 +20,7 @@ use crate::{
     auth::{AccessLevel, TokenFrom, decode_jwt},
     constants::USER_PEER_D1_BINDING,
     d1::{PeerWithUserId, get_user_id_from_peer_id, insert_user_mapping},
+    dss_internal::{DssInternal, DssInternalClient},
     error::ResultExt,
     generated::schema::InitializeFromSnapshotRequest,
     keepalive::{DEFAULT_TIME_TO_LIVE, keepalive},
@@ -902,6 +903,18 @@ impl DurableObject for DocumentSyncSession {
                 .context("failed deleting applied ops")?;
 
             state.mark_exported();
+
+            if let Ok(document_id) = self.document_id().await
+                && let Ok(snapshot) = doc_state.export_shallow_snapshot()
+            {
+                // best effort
+                if let Err(err) = DssInternalClient::new(&self.env)
+                    .publish_shallow_snapshot(&document_id, &snapshot)
+                    .await
+                {
+                    warn!(error =? err, "failed to push snapshot to DSS");
+                }
+            }
         }
 
         let sockets = self.state.get_websockets();

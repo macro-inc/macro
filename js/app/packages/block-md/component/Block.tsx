@@ -2,7 +2,7 @@ import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { useBlockEntityCommands } from '@app/component/next-soup/actions';
 import { SidePanel } from '@app/component/side-panel';
 import { useBlockId } from '@core/block';
-import { createLoroManager } from '@core/collab/manager';
+import { createLoroManager, type LoroManager } from '@core/collab/manager';
 import type { InitialSync, TimeoutError } from '@core/collab/source';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { ENABLE_MARKDOWN_SIDE_PANEL } from '@core/constant/featureFlags';
@@ -10,6 +10,7 @@ import { blockErrorSignal } from '@core/signal/load';
 import { useCanEdit } from '@core/signal/permissions';
 import { MARKDOWN_LORO_SCHEMA } from '@lexical-core/markdown-loro-schema';
 import { DocumentDebouncedNotificationReadMarker } from '@notifications';
+import { fetchCachedSnapshot } from '@queries/storage/cached-snapshot';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
 import { Scroll } from '@ui';
 import type { Result } from 'neverthrow';
@@ -37,6 +38,80 @@ export interface BlockMarkdownProps {
   optimisticSnapshot?: Uint8Array<ArrayBufferLike>;
 }
 
+type SyncArgs = {
+  data: NonNullable<ReturnType<typeof blockDataSignal>>;
+  loroManager: LoroManager<typeof MARKDOWN_LORO_SCHEMA>;
+  setBlockError: (error: 'MISSING' | 'INVALID') => void;
+};
+
+async function syncFromOptimistic(
+  args: SyncArgs & { optimisticSnapshot: Uint8Array<ArrayBufferLike> }
+): Promise<void> {
+  const { data, loroManager, setBlockError, optimisticSnapshot } = args;
+  await loroManager.initializeFromSnapshot(optimisticSnapshot);
+
+  const syncResult: Result<InitialSync, TimeoutError> =
+    await data.doInitialSync();
+
+  if (syncResult.isErr()) {
+    console.error('Failed to receive initial sync', syncResult.error);
+    setBlockError('INVALID');
+    return;
+  }
+
+  data.syncSource.pushUpdate(
+    loroManager.getDoc().export({ mode: 'update' }),
+    loroManager.getPeerId()
+  );
+}
+
+async function syncFromCacheThenDO(
+  args: SyncArgs & { blockId: string }
+): Promise<void> {
+  const { data, loroManager, setBlockError, blockId } = args;
+
+  let gotDoSnapshot = false;
+
+  // load the fallback snapshot. only use it if it comes before the DO sync
+  // though
+  (async () => {
+    try {
+      const bytes = await fetchCachedSnapshot(blockId);
+
+      if (!gotDoSnapshot) {
+        await loroManager.initializeFromSnapshot(bytes);
+      }
+    } catch (error) {
+      console.warn('Failed to load cached snapshot', error);
+    }
+  })();
+
+  try {
+    const syncResult: Result<InitialSync, TimeoutError> =
+      await data.doInitialSync();
+
+    if (syncResult.isErr()) {
+      console.error('Failed to receive initial sync', syncResult.error);
+      setBlockError('INVALID');
+      return;
+    }
+
+    const result = await loroManager.initializeFromSnapshot(
+      syncResult.value.snapshot
+    );
+
+    gotDoSnapshot = true;
+
+    if (result.isErr()) {
+      console.error('Failed to initialize loro doc', result.error);
+      setBlockError('INVALID');
+    }
+  } catch (error) {
+    console.error('Failed to sync from cache', error);
+    setBlockError('INVALID');
+  }
+}
+
 export default function BlockMarkdown(props: BlockMarkdownProps) {
   return (
     <MarkdownNameProvider>
@@ -62,45 +137,15 @@ function BlockMarkdownContent({ optimisticSnapshot }: BlockMarkdownProps) {
       } else {
         setBlockError(null);
       }
-
       if (optimisticSnapshot) {
-        loroManager.initializeFromSnapshot(optimisticSnapshot).then(() => {
-          data
-            .doInitialSync()
-            .then((syncResult: Result<InitialSync, TimeoutError>) => {
-              if (syncResult.isErr()) {
-                console.error(
-                  'Failed to receive initial sync',
-                  syncResult.error
-                );
-                setBlockError('INVALID');
-                return;
-              }
-              const peerId = loroManager.getPeerId();
-              data.syncSource.pushUpdate(
-                loroManager.getDoc().export({ mode: 'update' }),
-                peerId
-              );
-            });
+        syncFromOptimistic({
+          data,
+          loroManager,
+          setBlockError,
+          optimisticSnapshot,
         });
       } else {
-        data
-          .doInitialSync()
-          .then((syncResult: Result<InitialSync, TimeoutError>) => {
-            if (syncResult.isErr()) {
-              console.error('Failed to receive initial sync', syncResult.error);
-              setBlockError('INVALID');
-              return;
-            }
-            loroManager
-              .initializeFromSnapshot(syncResult.value.snapshot)
-              .then((result) => {
-                if (result.isErr()) {
-                  console.error('Failed to initialize loro doc', result.error);
-                  setBlockError('INVALID');
-                }
-              });
-          });
+        syncFromCacheThenDO({ data, loroManager, setBlockError, blockId });
       }
     })
   );

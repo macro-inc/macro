@@ -31,6 +31,12 @@ export const binaryDocumentKeys = createQueryKeys('binaryDocument', {
   }),
 });
 
+export const cachedSnapshotKeys = createQueryKeys('cachedSnapshot', {
+  bytes: (documentId: string) => ({
+    queryKey: [documentId],
+  }),
+});
+
 export const documentGithubPullRequestsKeys = createQueryKeys(
   'documentGithubPullRequests',
   {

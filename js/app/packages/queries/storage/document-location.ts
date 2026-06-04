@@ -3,7 +3,7 @@ import {
   type ResultType,
   throwOnErr,
 } from '@core/util/result';
-import { storageServiceClient } from '@service-storage/client';
+import { dssFetch, storageServiceClient } from '@service-storage/client';
 import { DocumentContentState } from '@service-storage/generated/schemas/documentContentState';
 import { ok, type Result } from 'neverthrow';
 import { queryClient } from '../client';
