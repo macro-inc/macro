@@ -1,4 +1,4 @@
-import { openDB as idbOpen, type DBSchema, type IDBPDatabase } from 'idb';
+import { type DBSchema, type IDBPDatabase, openDB as idbOpen } from 'idb';
 import type { LoroManager } from './manager';
 import type { GenericRootSchema, RawUpdate } from './shared';
 import type { WALStore } from './wal';
@@ -71,7 +71,17 @@ export async function loadCachedState<S extends GenericRootSchema>(
 
   const pending = await walStore.getAll();
   for (const entry of pending) {
-    loroManager.importUpdate(entry.update);
+    const importResult = loroManager.importUpdate(entry.update);
+    if (importResult.isErr()) {
+      // Stop replaying. Skipped entries are safe: delivered ones are on the
+      // server (server sync will bring them back) and undelivered ones are
+      // still in the WAL (engine.start will flush them).
+      console.error('failed to replay WAL entry during cold load', {
+        entryId: entry.id,
+        err: importResult.error,
+      });
+      break;
+    }
   }
   return true;
 }

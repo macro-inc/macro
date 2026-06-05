@@ -2,10 +2,10 @@ import { ok, okAsync } from 'neverthrow';
 import { vi } from 'vitest';
 import type { LoroManager } from './manager';
 import type { GenericRootSchema, LoroRawUpdate, RawUpdate } from './shared';
-import type { SyncSourceEvent, WALSyncSource } from './source';
-import { LiveSyncSource, SyncSourceStatus } from './source';
-import type { WALEntry, WALStore } from './wal';
 import type { SnapshotStore } from './snapshot-store';
+import type { SyncSourceEvent, WALSyncSource } from './source';
+import { type LiveSyncSource, SyncSourceStatus } from './source';
+import type { WALEntry, WALStore } from './wal';
 
 export class MockSnapshotStore implements SnapshotStore {
   private snapshot: RawUpdate | null = null;

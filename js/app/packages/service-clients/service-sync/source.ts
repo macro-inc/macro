@@ -1,8 +1,8 @@
 import type { RawUpdate } from '@core/collab/shared';
 import {
   type InitialSync,
-  SyncError,
   type LiveSyncSource,
+  SyncError,
   type SyncSourceEvent,
   SyncSourceStatus,
   type TimeoutError,

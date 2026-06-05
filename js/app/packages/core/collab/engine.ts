@@ -78,6 +78,8 @@ export class SyncEngine<S extends GenericRootSchema, D> {
   }
 
   public start(): boolean {
+    if (this._isRunning) return true; // already running — idempotent
+
     if (!this.loroManager.isInitialized()) {
       logger.warn('Loro manager not initialized, engine will not start', {
         documentId: this.syncs.live.documentId,
@@ -95,7 +97,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
     this.syncs.live.listen((event) => this.handleSourceEvent(event));
     this.syncs.live.registerPeerId(this.loroManager.getPeerId());
 
-    if (this.snapshotStore) {
+    if (this.snapshotStore && this.snapshotInterval === undefined) {
       this.snapshotInterval = setInterval(
         () => void this.persistSnapshot(),
         SNAPSHOT_INTERVAL_MS

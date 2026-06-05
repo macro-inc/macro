@@ -3,10 +3,7 @@ import { useBlockEntityCommands } from '@app/component/next-soup/actions';
 import { SidePanel } from '@app/component/side-panel';
 import { useBlockId } from '@core/block';
 import { createLoroManager } from '@core/collab/manager';
-import {
-  IDBSnapshotStore,
-  loadCachedState,
-} from '@core/collab/snapshot-store';
+import { IDBSnapshotStore, loadCachedState } from '@core/collab/snapshot-store';
 import type { InitialSync, TimeoutError } from '@core/collab/source';
 import { IDBWALStore } from '@core/collab/wal';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';

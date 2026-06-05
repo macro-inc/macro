@@ -2,8 +2,8 @@ import { LoroDoc } from 'loro-crdt';
 import { describe, expect, it, vi } from 'vitest';
 import { SyncEngine } from './engine';
 import {
-  MockLoroManager,
   MockLiveSyncSource,
+  MockLoroManager,
   MockWALStore,
   MockWALSyncSource,
 } from './testing';
@@ -28,7 +28,10 @@ describe('SyncEngine', () => {
     const engine = new SyncEngine({
       loroManager: manager,
       awareness: makeAwareness(),
-      syncs: { wal: new IDBWALSyncSource(source, new MockWALStore()), live: source },
+      syncs: {
+        wal: new IDBWALSyncSource(source, new MockWALStore()),
+        live: source,
+      },
       bindings: { onRemoteState: vi.fn() },
       readonly: () => false,
       onRunningChange,
@@ -107,7 +110,11 @@ describe('SyncEngine', () => {
       await wal.pendingFlush;
 
       live.setPushResult(true);
-      live.emit({ type: 'reconnect', snapshot: emptySnapshot(), awareness: new Uint8Array() });
+      live.emit({
+        type: 'reconnect',
+        snapshot: emptySnapshot(),
+        awareness: new Uint8Array(),
+      });
       await vi.waitFor(async () => {
         const entries = await walStore.getAll();
         expect(entries.every((e) => e.delivered)).toBe(true);
@@ -120,7 +127,10 @@ describe('SyncEngine', () => {
     const engine = new SyncEngine({
       loroManager: new MockLoroManager(false),
       awareness: makeAwareness(),
-      syncs: { wal: new IDBWALSyncSource(source, new MockWALStore()), live: source },
+      syncs: {
+        wal: new IDBWALSyncSource(source, new MockWALStore()),
+        live: source,
+      },
       bindings: { onRemoteState: vi.fn() },
     });
 

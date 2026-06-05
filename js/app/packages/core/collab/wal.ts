@@ -1,7 +1,7 @@
-import { openDB as idbOpen, type DBSchema, type IDBPDatabase } from 'idb';
 import type { Listen } from '@solid-primitives/event-bus';
-import type { LiveSyncSource, SyncSourceEvent, WALSyncSource } from './source';
+import { type DBSchema, type IDBPDatabase, openDB as idbOpen } from 'idb';
 import type { RawUpdate } from './shared';
+import type { LiveSyncSource, SyncSourceEvent, WALSyncSource } from './source';
 
 export type WALEntry = {
   id: number;
