@@ -12,6 +12,7 @@ import type {
   EmailEntity,
   EntityData,
 } from '@entity';
+import GithubIcon from '@icon/mcp-github.svg';
 import WideBook from '@icon/wide-book.svg';
 import WideCalendar from '@icon/wide-calendar.svg';
 import PhoneCall from '@icon/wide-call.svg';
@@ -27,7 +28,6 @@ import WideFileMd from '@icon/wide-file-md.svg';
 import WideFiles from '@icon/wide-files.svg';
 import WideFolder from '@icon/wide-folder.svg';
 import WideGlobe from '@icon/wide-globe.svg';
-import GithubIcon from '@icon/mcp-github.svg';
 import WideStar from '@icon/wide-star.svg';
 import WideTask from '@icon/wide-task.svg';
 import WideUnknown from '@icon/wide-unknown.svg';
