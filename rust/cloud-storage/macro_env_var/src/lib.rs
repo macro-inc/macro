@@ -2,12 +2,54 @@
 pub use paste;
 use thiserror::Error;
 
+const APP_SECRETS_JSON_ENV: &str = "APP_SECRETS_JSON";
+
+fn read_std_env(s: &'static str) -> Result<String, std::env::VarError> {
+    std::env::var(s)
+}
+
+fn read_from_app_secrets_json_with<F>(key: &'static str, read_var: F) -> Option<String>
+where
+    F: Fn(&'static str) -> Result<String, std::env::VarError>,
+{
+    let secrets_json = read_var(APP_SECRETS_JSON_ENV).ok()?;
+    let secrets = serde_json::from_str::<serde_json::Value>(&secrets_json).ok()?;
+    let value = secrets.get(key)?;
+
+    match value {
+        serde_json::Value::String(value) => Some(value.clone()),
+        value => Some(value.to_string()),
+    }
+}
+
+/// Read a value from `APP_SECRETS_JSON` without mutating the process environment.
+pub fn read_from_app_secrets_json(key: &'static str) -> Option<String> {
+    read_from_app_secrets_json_with(key, read_std_env)
+}
+
+fn read_env_with<F>(s: &'static str, read_var: F) -> Result<String, VarNameErr>
+where
+    F: Fn(&'static str) -> Result<String, std::env::VarError>,
+{
+    match read_from_app_secrets_json_with(s, &read_var) {
+        Some(value) => Ok(value),
+        None => read_var(s).map_err(|err| VarNameErr { var_name: s, err }),
+    }
+}
+
+fn maybe_read_env_with<F>(s: &'static str, read_var: F) -> Option<String>
+where
+    F: Fn(&'static str) -> Result<String, std::env::VarError>,
+{
+    read_from_app_secrets_json_with(s, &read_var).or_else(|| read_var(s).ok())
+}
+
 #[cfg(test)]
 mod tests;
 
 #[cfg(test)]
 mod testing_harness {
-    use super::VarNameErr;
+    use super::{VarNameErr, maybe_read_env_with, read_env_with};
     use std::cell::Cell;
 
     type MockValue = Cell<Option<Box<dyn Fn(&'static str) -> Result<String, std::env::VarError>>>>;
@@ -15,7 +57,15 @@ mod testing_harness {
         static MOCK_VAR_GETTER: MockValue = const { Cell::new(None) };
     }
 
-    pub fn read_env(s: &'static str) -> Result<String, VarNameErr> {
+    struct MockEnvGuard;
+
+    impl Drop for MockEnvGuard {
+        fn drop(&mut self) {
+            MOCK_VAR_GETTER.replace(None);
+        }
+    }
+
+    fn get_env(s: &'static str) -> Result<String, std::env::VarError> {
         let cur_getter = MOCK_VAR_GETTER.replace(None);
         match cur_getter {
             Some(mock) => {
@@ -25,19 +75,14 @@ mod testing_harness {
             }
             None => std::env::var(s),
         }
-        .map_err(|err| VarNameErr { var_name: s, err })
+    }
+
+    pub fn read_env(s: &'static str) -> Result<String, VarNameErr> {
+        read_env_with(s, get_env)
     }
 
     pub fn maybe_read_env(s: &'static str) -> Option<String> {
-        let cur_getter = MOCK_VAR_GETTER.replace(None);
-        match cur_getter {
-            Some(mock) => {
-                let out = mock(s).ok();
-                MOCK_VAR_GETTER.replace(Some(mock));
-                out
-            }
-            None => std::env::var(s).ok(),
-        }
+        maybe_read_env_with(s, get_env)
     }
 
     pub(crate) fn with_mock_env<F, Cb, U>(f: F, cb: Cb) -> U
@@ -46,9 +91,8 @@ mod testing_harness {
         Cb: FnOnce() -> U,
     {
         MOCK_VAR_GETTER.replace(Some(Box::new(f)));
-        let output = cb();
-        MOCK_VAR_GETTER.replace(None);
-        output
+        let _guard = MockEnvGuard;
+        cb()
     }
 }
 
@@ -59,13 +103,13 @@ pub use testing_harness::read_env;
 
 #[cfg(not(test))]
 pub fn read_env(s: &'static str) -> Result<String, VarNameErr> {
-    std::env::var(s).map_err(|err| VarNameErr { var_name: s, err })
+    read_env_with(s, read_std_env)
 }
 
 /// Read an environment variable, returning `None` if it is not present.
 #[cfg(not(test))]
 pub fn maybe_read_env(s: &'static str) -> Option<String> {
-    std::env::var(s).ok()
+    maybe_read_env_with(s, read_std_env)
 }
 
 /// The type of error that is produced by this crate
@@ -246,12 +290,14 @@ macro_rules! env_var {
 /// # Example
 ///
 /// ```
+/// use macro_env_var::maybe_env_var;
+///
 /// maybe_env_var! {
 ///     pub struct OptionalApiKey;
 /// }
 ///
 /// // Returns None if OPTIONAL_API_KEY is not set
-/// let key: Option<OptionalApiKey> = OptionalApiKey::new();
+/// let _key: Option<OptionalApiKey> = OptionalApiKey::new();
 /// ```
 #[macro_export]
 macro_rules! maybe_env_var {

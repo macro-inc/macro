@@ -6542,6 +6542,7 @@ name = "macro_env_var"
 version = "0.1.0"
 dependencies = [
  "paste",
+ "serde_json",
  "thiserror 2.0.18",
  "tracing",
 ]
