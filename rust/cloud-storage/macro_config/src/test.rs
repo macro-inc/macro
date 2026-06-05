@@ -140,6 +140,39 @@ fn load_reads_values_from_app_secrets_json() {
     );
 }
 
+#[test]
+fn load_panics_when_app_secrets_json_is_invalid() {
+    let _lock = ENV_LOCK.lock().expect("env lock poisoned");
+    let env = EnvGuard::new(&["APP_SECRETS_JSON", "lowercase"]);
+    env.set("APP_SECRETS_JSON", "not json");
+    env.set("lowercase", "fallback value");
+
+    let panic = std::panic::catch_unwind(ConfigLoader::load::<LowercaseConfig>)
+        .expect_err("config load should panic");
+    let message = panic
+        .downcast_ref::<String>()
+        .map(String::as_str)
+        .or_else(|| panic.downcast_ref::<&str>().copied())
+        .expect("panic should have a string message");
+
+    assert!(message.contains("APP_SECRETS_JSON contains invalid JSON"));
+}
+
+#[test]
+fn load_does_not_fallback_to_env_when_app_secrets_json_is_present_without_key() {
+    let _lock = ENV_LOCK.lock().expect("env lock poisoned");
+    let env = EnvGuard::new(&["APP_SECRETS_JSON", "lowercase"]);
+    env.set("APP_SECRETS_JSON", r#"{}"#);
+    env.set("lowercase", "fallback value");
+
+    let error = ConfigLoader::load::<LowercaseConfig>().expect_err("config should fail");
+
+    assert!(matches!(
+        error,
+        MacroConfigError::MissingRequiredValue("lowercase")
+    ));
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 struct EnvVarFieldConfig {

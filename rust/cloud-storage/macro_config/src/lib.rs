@@ -77,18 +77,22 @@ where
     ConfigLoader::load()
 }
 
-/// Reads the value from app secrets json env var
-/// If not present, tries to read from standard env var
+/// Reads the value from app secrets json env var.
+/// If `APP_SECRETS_JSON` is not present, tries to read from standard env var.
 fn read_config_value(key: &'static str) -> Option<String> {
-    std::env::var("APP_SECRETS_JSON")
-        .ok()
-        .and_then(|raw| serde_json::from_str::<Value>(&raw).ok())
-        .and_then(|json| json.get(key).cloned())
-        .map(|value| match value {
-            Value::String(s) => s,
-            other => other.to_string(),
-        })
-        .or_else(|| std::env::var(key).ok())
+    match std::env::var("APP_SECRETS_JSON") {
+        Ok(raw) => {
+            let json = serde_json::from_str::<Value>(&raw)
+                .unwrap_or_else(|error| panic!("APP_SECRETS_JSON contains invalid JSON: {error}"));
+
+            json.get(key).cloned().map(|value| match value {
+                Value::String(s) => s,
+                other => other.to_string(),
+            })
+        }
+        Err(std::env::VarError::NotPresent) => std::env::var(key).ok(),
+        Err(error) => panic!("failed to read APP_SECRETS_JSON: {error}"),
+    }
 }
 
 /// Get a required value
