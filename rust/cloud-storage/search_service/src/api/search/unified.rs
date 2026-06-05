@@ -2,7 +2,7 @@ use super::SearchPaginationParams;
 use crate::api::{
     context::SearchHandlerState,
     search::{
-        crm_company::enrich_crm_companies,
+        crm_company::{enrich_crm_companies, resolve_crm_team_receipt},
         enrich::enrich_search_response,
         simple::{SearchError, simple_unified::perform_unified_search},
     },
@@ -12,12 +12,6 @@ use axum::{
     extract::{self, State},
     response::Json,
 };
-use crm::domain::auth::CrmTeamReceipt;
-use entity_access::domain::models::{
-    Entity, EntityAccessReceipt, EntityPermission, EntityType, MemberTeamRole,
-};
-use entity_access::domain::ports::EntityAccessService;
-use macro_user_id::user_id::MacroUserIdStr;
 use model::{response::ErrorResponse, user::UserContext};
 use models_search::unified::{
     UnifiedSearchRequest, UnifiedSearchResponse, UnifiedSearchResponseItem,
@@ -57,42 +51,10 @@ pub async fn handler(
         "unified_search"
     );
 
-    // CRM is opt-in: only when the caller asks for it do we resolve their
-    // team membership (one extra query) and mint a capability receipt —
-    // searches without `include_crm` pay nothing here. No team membership
-    // means the CRM portion is simply empty; the rest of the search still
-    // runs (we don't fail the aggregate request over a missing membership).
-    let crm_access: Option<CrmTeamReceipt<MemberTeamRole>> = if req.include_crm {
-        let user_id = MacroUserIdStr::try_from(user_context.user_id.clone())
-            .map_err(|_| SearchError::InvalidUserId(user_context.user_id.clone()))?;
-        match ctx
-            .entity_access_service
-            .get_user_team(&user_id)
-            .await
-            .map_err(|e| SearchError::InternalError(e.into()))?
-        {
-            Some(team) => {
-                // Member is the floor for MemberTeamRole, so this never
-                // rejects; the role still rides along for the hidden gate.
-                let receipt = EntityAccessReceipt::<MemberTeamRole>::try_new_authenticated_user(
-                    user_id,
-                    Entity {
-                        entity_id: team.team_id.to_string(),
-                        entity_type: EntityType::Team,
-                    },
-                    EntityPermission::TeamRole { role: team.role },
-                )
-                .map_err(|e| SearchError::InternalError(e.into()))?;
-                Some(
-                    CrmTeamReceipt::from_team_receipt(receipt)
-                        .map_err(|e| SearchError::InternalError(e.into()))?,
-                )
-            }
-            None => None,
-        }
-    } else {
-        None
-    };
+    // CRM is opt-in: only when the caller asks for it does this resolve a
+    // team membership and mint a capability receipt. No membership → empty
+    // CRM slice, not a failed search. See `resolve_crm_team_receipt`.
+    let crm_access = resolve_crm_team_receipt(&ctx, &user_context, req.include_crm).await?;
 
     let document_name_term = match req.search_on {
         models_search::SearchOn::Name | models_search::SearchOn::NameContent => {

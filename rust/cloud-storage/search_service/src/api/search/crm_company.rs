@@ -13,8 +13,13 @@ use crm::domain::model::CrmCompanyForSoup;
 use crm::domain::search_repo::CrmCompanySearchCursor;
 use crm::domain::search_service::{CrmSearchService, CrmSearchServiceImpl};
 use crm::outbound::search_repo::CrmSearchRepositoryImpl;
-use entity_access::domain::models::MemberTeamRole;
+use entity_access::domain::models::{
+    Entity, EntityAccessReceipt, EntityPermission, EntityType, MemberTeamRole,
+};
+use entity_access::domain::ports::EntityAccessService;
 use item_filters::CrmCompanyFilters;
+use macro_user_id::user_id::MacroUserIdStr;
+use model::user::UserContext;
 use models_opensearch::SearchEntityType;
 use models_search::crm_company::{CrmCompanySearchDomain, CrmCompanySearchResponseItem};
 use models_search::unified::UnifiedSearchResponseItem;
@@ -24,6 +29,50 @@ use uuid::Uuid;
 
 use crate::api::context::SearchHandlerState;
 use crate::api::search::simple::SearchError;
+
+/// Resolve the caller's CRM team capability when `include_crm` is set.
+///
+/// Returns `None` (the CRM slice stays empty) — without erroring — when CRM
+/// isn't requested or the user has no qualifying team membership; a missing
+/// team must not fail the aggregate search. The role rides along inside the
+/// receipt so the CRM service derives the hidden-company gate from it.
+///
+/// Assumes a single effective team per user (`get_user_team`). If multi-team
+/// membership is introduced, this should take an explicit team id rather
+/// than picking the highest-role team.
+pub(in crate::api::search) async fn resolve_crm_team_receipt(
+    ctx: &SearchHandlerState,
+    user_context: &UserContext,
+    include_crm: bool,
+) -> Result<Option<CrmTeamReceipt<MemberTeamRole>>, SearchError> {
+    if !include_crm {
+        return Ok(None);
+    }
+    let user_id = MacroUserIdStr::try_from(user_context.user_id.clone())
+        .map_err(|_| SearchError::InvalidUserId(user_context.user_id.clone()))?;
+    let Some(team) = ctx
+        .entity_access_service
+        .get_user_team(&user_id)
+        .await
+        .map_err(|e| SearchError::InternalError(e.into()))?
+    else {
+        return Ok(None);
+    };
+    // Member is the floor for MemberTeamRole, so this never rejects; the
+    // role still rides along for the hidden-company gate.
+    let receipt = EntityAccessReceipt::<MemberTeamRole>::try_new_authenticated_user(
+        user_id,
+        Entity {
+            entity_id: team.team_id.to_string(),
+            entity_type: EntityType::Team,
+        },
+        EntityPermission::TeamRole { role: team.role },
+    )
+    .map_err(|e| SearchError::InternalError(e.into()))?;
+    CrmTeamReceipt::from_team_receipt(receipt)
+        .map(Some)
+        .map_err(|e| SearchError::InternalError(e.into()))
+}
 
 /// Builds the CRM search service over the read-only pool. Search and
 /// enrich are both read-only, so the read replica is fine.
@@ -49,6 +98,15 @@ pub(in crate::api::search) async fn search_company_names(
         SearchCursorOption::Done => return Ok((vec![], SearchCursorOption::Done)),
         SearchCursorOption::NotDone(c) => c,
     };
+
+    // Defensive: an empty term would match every company via `ILIKE '%%'`.
+    // Callers already enforce a 3-char minimum upstream, but CRM is DB-backed
+    // and opt-in, so guard against accidentally listing the whole team.
+    let term = term.trim();
+    if term.is_empty() {
+        return Ok((vec![], SearchCursorOption::Done));
+    }
+
     let crm_cursor =
         inner_cursor
             .and_then(|c| c.as_updated_at())
@@ -57,18 +115,21 @@ pub(in crate::api::search) async fn search_company_names(
                 last_id,
             });
 
-    let company_ids: Vec<Uuid> = filters
-        .company_ids
-        .iter()
-        .filter_map(|id| Uuid::parse_str(id).ok())
-        .collect();
+    // Parse strictly: an invalid id is a malformed request, not "no filter".
+    // Silently dropping it would let a fully-invalid id list collapse to the
+    // empty set, which the repo reads as "all the team's companies".
+    let mut company_ids: Vec<Uuid> = Vec::with_capacity(filters.company_ids.len());
+    for id in &filters.company_ids {
+        company_ids
+            .push(Uuid::parse_str(id).map_err(|_| SearchError::InvalidCrmCompanyId(id.clone()))?);
+    }
 
     // Fetch one extra row to detect whether a next page exists.
     let fetch_limit = limit as i64 + 1;
     let mut matches = search_service(ctx)
         .search_company_names(
             access,
-            &term,
+            term,
             &company_ids,
             filters.hidden,
             fetch_limit,

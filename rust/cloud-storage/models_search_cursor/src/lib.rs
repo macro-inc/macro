@@ -191,3 +191,55 @@ impl SearchCursor {
             && self.crm_company_cursor.is_done()
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    /// A cursor minted before CRM search existed (no `crm_company_cursor`
+    /// field) must still decode, with the new field defaulting to a fresh
+    /// `NotDone(None)` rather than failing.
+    #[test]
+    fn decodes_legacy_cursor_without_crm_field() {
+        let legacy = r#"{"document_name_cursor":"Done","chat_name_cursor":"Done","content_cursor":"Done","project_name_cursor":"Done"}"#;
+        let encoded = BASE64.encode(legacy);
+
+        let cursor = SearchCursor::decode(&encoded).expect("legacy cursor should decode");
+
+        assert!(
+            cursor.crm_company_cursor.has_more(),
+            "missing crm cursor should default to NotDone(None)"
+        );
+        // The four legacy sources are Done, but the defaulted CRM cursor is
+        // NotDone, so the whole cursor is not yet exhausted.
+        assert!(!cursor.is_exhausted());
+    }
+
+    #[test]
+    fn crm_cursor_round_trips() {
+        let cursor = SearchCursor {
+            crm_company_cursor: SearchCursorOption::Done,
+            ..Default::default()
+        };
+        let decoded = SearchCursor::decode(&cursor.encode().expect("encode")).expect("decode");
+        assert!(decoded.crm_company_cursor.is_done());
+    }
+
+    #[test]
+    fn is_exhausted_requires_crm_done() {
+        let mut cursor = SearchCursor {
+            document_name_cursor: SearchCursorOption::Done,
+            chat_name_cursor: SearchCursorOption::Done,
+            content_cursor: SearchCursorOption::Done,
+            project_name_cursor: SearchCursorOption::Done,
+            crm_company_cursor: SearchCursorOption::Done,
+        };
+        assert!(cursor.is_exhausted());
+
+        cursor.crm_company_cursor = SearchCursorOption::NotDone(None);
+        assert!(
+            !cursor.is_exhausted(),
+            "a not-done CRM cursor must keep the aggregate cursor alive"
+        );
+    }
+}
