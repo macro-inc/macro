@@ -72,6 +72,8 @@ export type WALSyncSource = {
   readonly listen: Listen<SyncSourceEvent>;
   /** Persists a single outbound update. Resolves once written, not when delivered. */
   pushUpdate: (update: RawUpdate) => Promise<boolean>;
+  /** Drops WAL entries whose updates are now captured in a durable snapshot. */
+  pruneDelivered: () => Promise<void>;
 };
 
 export type LiveSyncSource = {

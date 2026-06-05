@@ -79,8 +79,9 @@ describe('SyncEngine', () => {
       manager.triggerLocalUpdate(update);
 
       await vi.waitFor(async () => {
-        expect(live.pushUpdate).toHaveBeenCalledTimes(1);
-        expect(await walStore.count()).toBe(0);
+        expect(live.pushUpdate).toHaveBeenCalledOnce();
+        const entries = await walStore.getAll();
+        expect(entries.every((e) => e.delivered)).toBe(true);
       });
     });
 
@@ -99,12 +100,18 @@ describe('SyncEngine', () => {
 
       engine.start();
       manager.triggerLocalUpdate(new Uint8Array([1, 2, 3]));
-      await vi.waitFor(async () => expect(await walStore.count()).toBe(1));
-      await wal.pendingFlush; // wait for the failing flush to fully settle
+      await vi.waitFor(async () => {
+        const entries = await walStore.getAll();
+        expect(entries.filter((e) => !e.delivered).length).toBe(1);
+      });
+      await wal.pendingFlush;
 
       live.setPushResult(true);
       live.emit({ type: 'reconnect', snapshot: emptySnapshot(), awareness: new Uint8Array() });
-      await vi.waitFor(async () => expect(await walStore.count()).toBe(0));
+      await vi.waitFor(async () => {
+        const entries = await walStore.getAll();
+        expect(entries.every((e) => e.delivered)).toBe(true);
+      });
     });
   });
 

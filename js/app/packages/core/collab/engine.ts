@@ -216,6 +216,9 @@ export class SyncEngine<S extends GenericRootSchema, D> {
         frontiers: doc.oplogFrontiers(),
       });
       await this.snapshotStore.save(snapshot);
+      // now safe to drop WAL entries it captures. we prune only
+      // after the save succeeds so that we can always recover fully.
+      await this.syncs.wal.pruneDelivered();
     } catch (err) {
       logger.error('failed to persist snapshot', {
         scope: 'sync_engine',

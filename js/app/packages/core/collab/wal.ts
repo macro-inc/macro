@@ -3,12 +3,21 @@ import type { Listen } from '@solid-primitives/event-bus';
 import type { LiveSyncSource, SyncSourceEvent, WALSyncSource } from './source';
 import type { RawUpdate } from './shared';
 
-export type WALEntry = { id: number; update: RawUpdate };
+export type WALEntry = {
+  id: number;
+  update: RawUpdate;
+  /** True once the server has acked this update. Pruned at the next snapshot. */
+  delivered: boolean;
+};
 
 export interface WALStore {
   append(update: RawUpdate): Promise<void>;
   getAll(): Promise<WALEntry[]>;
-  delete(id: number): Promise<void>;
+  /** Mark a set of entries as delivered (server acked). They remain in the
+   *  store until pruneDelivered() is called after a successful snapshot save. */
+  markDelivered(ids: number[]): Promise<void>;
+  /** Drop all delivered entries. Called by the snapshot tick after a save. */
+  pruneDelivered(): Promise<void>;
   count(): Promise<number>;
 }
 
@@ -18,7 +27,12 @@ const DB_VERSION = 1;
 interface WALSchema extends DBSchema {
   updates: {
     key: number;
-    value: { id?: number; documentId: string; update: Uint8Array };
+    value: {
+      id?: number;
+      documentId: string;
+      update: Uint8Array;
+      delivered: boolean;
+    };
     indexes: { documentId: string };
   };
 }
@@ -45,7 +59,11 @@ export class IDBWALStore implements WALStore {
 
   public async append(update: RawUpdate): Promise<void> {
     const db = await this.db();
-    await db.add('updates', { documentId: this.documentId, update });
+    await db.add('updates', {
+      documentId: this.documentId,
+      update,
+      delivered: false,
+    });
   }
 
   public async getAll(): Promise<WALEntry[]> {
@@ -57,9 +75,33 @@ export class IDBWALStore implements WALStore {
     ) as Promise<WALEntry[]>;
   }
 
-  public async delete(id: number): Promise<void> {
+  public async markDelivered(ids: number[]): Promise<void> {
+    if (ids.length === 0) return;
     const db = await this.db();
-    await db.delete('updates', id);
+    const tx = db.transaction('updates', 'readwrite');
+    const store = tx.objectStore('updates');
+    for (const id of ids) {
+      const row = await store.get(id);
+      if (row) await store.put({ ...row, delivered: true });
+    }
+    await tx.done;
+  }
+
+  public async pruneDelivered(): Promise<void> {
+    const db = await this.db();
+    const entries = await db.getAllFromIndex(
+      'updates',
+      'documentId',
+      this.documentId
+    );
+    const tx = db.transaction('updates', 'readwrite');
+    const store = tx.objectStore('updates');
+    for (const row of entries) {
+      if (row.delivered && row.id !== undefined) {
+        await store.delete(row.id);
+      }
+    }
+    await tx.done;
   }
 
   public async count(): Promise<number> {
@@ -105,18 +147,23 @@ export class IDBWALSyncSource implements WALSyncSource {
     return this.pendingFlush;
   }
 
+  public pruneDelivered(): Promise<void> {
+    return this.store.pruneDelivered();
+  }
+
   private async doFlush(): Promise<void> {
     this.isFlushing = true;
     this.hasNewPending = false;
     let succeeded = true;
     try {
-      // TODO: would be nice to use a async iterator
       const entries = await this.store.getAll();
-      if (entries.length === 0) return;
-      const delivered = await this.live.pushUpdate(entries.map((e) => e.update));
+      const undelivered = entries.filter((e) => !e.delivered);
+      if (undelivered.length === 0) return; // nothing to do
+      const delivered = await this.live.pushUpdate(
+        undelivered.map((e) => e.update)
+      );
       if (delivered) {
-        // NOTE: loro is idempotent. if we crash and re-flush these that is chill
-        for (const entry of entries) await this.store.delete(entry.id);
+        await this.store.markDelivered(undelivered.map((e) => e.id));
       } else {
         succeeded = false;
       }

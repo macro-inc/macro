@@ -39,16 +39,23 @@ export class MockWALStore implements WALStore {
   }
 
   public async append(update: RawUpdate): Promise<void> {
-    this.entries.push({ id: this.nextId++, update });
+    this.entries.push({ id: this.nextId++, update, delivered: false });
   }
 
   public async getAll(): Promise<WALEntry[]> {
     await this.gate;
-    return [...this.entries];
+    return this.entries.map((e) => ({ ...e }));
   }
 
-  public async delete(id: number): Promise<void> {
-    this.entries = this.entries.filter((e) => e.id !== id);
+  public async markDelivered(ids: number[]): Promise<void> {
+    const set = new Set(ids);
+    this.entries = this.entries.map((e) =>
+      set.has(e.id) ? { ...e, delivered: true } : e
+    );
+  }
+
+  public async pruneDelivered(): Promise<void> {
+    this.entries = this.entries.filter((e) => !e.delivered);
   }
 
   public async count(): Promise<number> {
@@ -61,6 +68,7 @@ export class MockWALSyncSource implements WALSyncSource {
 
   public documentId = 'doc-1';
   public pushUpdate = vi.fn(async (): Promise<boolean> => true);
+  public pruneDelivered = vi.fn(async (): Promise<void> => {});
 
   public listen(cb: (event: SyncSourceEvent) => void) {
     this.listeners.add(cb);
