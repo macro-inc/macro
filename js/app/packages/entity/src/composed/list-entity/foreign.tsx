@@ -1,6 +1,4 @@
 import ChatCircle from '@phosphor/chat-circle.svg';
-import GitMerge from '@phosphor/git-merge.svg';
-import GitPullRequest from '@phosphor/git-pull-request.svg';
 import { cn } from '@ui';
 import type { Component, JSX } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -26,8 +24,6 @@ function Pill(props: PillProps) {
 
 const numberFormatter = new Intl.NumberFormat();
 
-type GithubPullRequestStatus = GithubPullRequestEntity['subType']['status'];
-
 function iconText(
   icon: Component<JSX.SvgSVGAttributes<SVGSVGElement>>,
   text: JSX.Element
@@ -38,29 +34,6 @@ function iconText(
       {text}
     </>
   );
-}
-
-function statusConfig(status: GithubPullRequestStatus): {
-  icon: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
-  iconClass: string;
-} {
-  switch (status) {
-    case 'open':
-      return {
-        icon: GitPullRequest,
-        iconClass: 'text-success/70 group-hover/entity:text-success',
-      };
-    case 'merged':
-      return {
-        icon: GitMerge,
-        iconClass: 'text-note/70 group-hover/entity:text-note',
-      };
-    case 'closed':
-      return {
-        icon: GitPullRequest,
-        iconClass: 'text-failure/70 group-hover/entity:text-failure',
-      };
-  }
 }
 
 function checkFailed(conclusion: string | null | undefined): boolean {
@@ -75,8 +48,6 @@ function checkFailed(conclusion: string | null | undefined): boolean {
 export function GithubPullRequestPills(props: {
   entity: GithubPullRequestEntity;
 }) {
-  const status = () => props.entity.subType.status;
-  const config = () => statusConfig(status());
   const additions = () => props.entity.subType.additions;
   const deletions = () => props.entity.subType.deletions;
   const additionsAreLarger = () => additions() > deletions();
@@ -107,13 +78,13 @@ export function GithubPullRequestPills(props: {
 
   return (
     <>
-      <Pill class="text-ink-muted">
-        <Dynamic
-          component={config().icon}
-          class={cn('size-3 shrink-0', config().iconClass)}
-        />
-        <span class="capitalize">{status()}</span>
-      </Pill>
+      {/* <Pill class="text-ink-muted"> */}
+      {/*   <Dynamic */}
+      {/*     component={config().icon} */}
+      {/*     class={cn('size-3 shrink-0', config().iconClass)} */}
+      {/*   /> */}
+      {/*   <span class="capitalize">{status()}</span> */}
+      {/* </Pill> */}
       <Pill class="tabular-nums">
         <span
           class={cn(
@@ -133,7 +104,9 @@ export function GithubPullRequestPills(props: {
         </span>
       </Pill>
       <Pill class="text-ink-muted tabular-nums">
-        <span class={cn('size-1.5 rounded-full shrink-0', checkStatusClass())} />
+        <span
+          class={cn('size-1.5 rounded-full shrink-0', checkStatusClass())}
+        />
         {checkSummary()}
       </Pill>
       <Pill class="text-ink-muted tabular-nums">
