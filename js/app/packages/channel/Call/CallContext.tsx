@@ -1,4 +1,3 @@
-import { isPlatform, isTauri } from '@core/util/platform';
 import {
   isKrispNoiseFilterSupported,
   KrispNoiseFilter,
@@ -23,6 +22,11 @@ import {
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { CallAudioSink } from './CallAudioSink';
+import {
+  type CallSessionConnectMetadata,
+  type CallSessionDisconnectOptions,
+  createCallSessionController,
+} from './CallSessionController';
 import { createLivekitJsCallController } from './LivekitJsCallController';
 import {
   type NativeCallConnectionState,
@@ -331,10 +335,15 @@ export type CallState = {
   activeAudioOutputDeviceId: () => string | null;
   /** Currently active video input device ID */
   activeVideoInputDeviceId: () => string | null;
-  /** Connect to a call using a token response */
-  connect: (tokenResponse: CallTokenResponse) => Promise<void>;
-  /** Disconnect from the current call */
-  disconnect: () => Promise<void>;
+  /** Whether joining this channel needs a fresh call token */
+  shouldRequestSessionToken: (channelId: string) => boolean;
+  /** Connect the active call session using the right platform controller */
+  connectSession: (
+    tokenResponse: CallTokenResponse,
+    metadata?: CallSessionConnectMetadata
+  ) => Promise<void>;
+  /** Disconnect the active call session using the right platform controller */
+  disconnectSession: (options?: CallSessionDisconnectOptions) => Promise<void>;
   /** Toggle local audio */
   toggleAudio: () => Promise<void>;
   /** Toggle local video */
@@ -433,8 +442,7 @@ function createCallState() {
     return room() === targetRoom && mediaSetupVersion === setupVersion;
   }
 
-  const currentNativeCallSnapshot = () =>
-    isTauri() && isPlatform('ios') ? (nativeCall?.snapshot() ?? null) : null;
+  const currentNativeCallSnapshot = () => nativeCall?.snapshot() ?? null;
 
   function currentMicrophoneCaptureOptions(
     deviceId?: string | null
@@ -981,6 +989,12 @@ function createCallState() {
     setScreenSharing: (value) => setStore('isScreenSharing', value),
   });
 
+  const callSession = createCallSessionController({
+    nativeCall,
+    jsConnect: livekitJs.connect,
+    jsDisconnect: livekitJs.disconnect,
+  });
+
   async function toggleAudio() {
     const r = room();
     if (!r) return;
@@ -1183,8 +1197,9 @@ function createCallState() {
     isConnecting: currentIsConnecting,
 
     // mutations
-    connect: livekitJs.connect,
-    disconnect: livekitJs.disconnect,
+    shouldRequestSessionToken: callSession.shouldRequestToken,
+    connectSession: callSession.connectWithToken,
+    disconnectSession: callSession.disconnect,
     toggleAudio,
     toggleVideo,
     toggleScreenShare,

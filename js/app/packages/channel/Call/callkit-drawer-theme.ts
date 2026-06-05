@@ -25,21 +25,10 @@ export type CallKitDrawerTheme = {
   success: RgbaColor;
 };
 
-type DrawerThemeSnapshot = {
-  key: string;
-  theme: CallKitDrawerTheme;
-};
-
 export function createCallKitDrawerTheme(): Accessor<CallKitDrawerTheme> {
-  const drawerThemeSnapshot = createMemo(
-    (prev: DrawerThemeSnapshot | undefined): DrawerThemeSnapshot => {
-      const theme = currentCallKitTheme();
-      const key = callKitDrawerThemeKey(theme);
-      return prev?.key === key ? prev : { key, theme };
-    }
-  );
-
-  return () => drawerThemeSnapshot().theme;
+  return createMemo(currentCallKitTheme, undefined, {
+    equals: (a, b) => callKitDrawerThemeKey(a) === callKitDrawerThemeKey(b),
+  });
 }
 
 export async function setNativeCallKitDrawerTheme(

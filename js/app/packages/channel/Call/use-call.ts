@@ -9,13 +9,7 @@ import { useMutation } from '@tanstack/solid-query';
 import { DisconnectReason, RoomEvent } from 'livekit-client';
 import { createEffect, createSignal, onCleanup } from 'solid-js';
 import { useCallContext } from './CallContext';
-import { useMaybeNativeCallState } from './native-call-state';
-import {
-  endCallKitCall,
-  isNativeIosCallKitEnabled,
-  registerCallKitCallEndedHandler,
-  startNativeCallKitOutgoingCall,
-} from './use-callkit';
+import { registerCallKitCallEndedHandler } from './use-callkit';
 
 type UseCallOptions = {
   /** Called after successfully joining a call. */
@@ -63,14 +57,13 @@ let leaveInFlight = false;
 
 /**
  * Hook that orchestrates joining/leaving calls by combining
- * the API mutations with the LiveKit room connection.
+ * the API mutations with the platform call session controller.
  *
  * Join is implemented as a single TanStack mutation so optimistic UI, timeout,
  * rollback, and server cleanup stay in onMutate / onError / onSuccess.
  */
 export function useCall(channelId: () => string, options?: UseCallOptions) {
   const callCtx = useCallContext();
-  const nativeCall = useMaybeNativeCallState();
   const channelsCtx = useChannelsContext();
   const leaveMutation = useLeaveCallMutation();
 
@@ -164,33 +157,11 @@ export function useCall(channelId: () => string, options?: UseCallOptions) {
       };
 
       const doConnect = async () => {
-        // CallKit answers already joined natively; avoid a duplicate JS participant.
-        const native = nativeCall?.snapshot() ?? null;
-        if (
-          native &&
-          native.channelId === id &&
-          native.connectionState !== 'disconnected' &&
-          native.connectionState !== 'disconnecting'
-        ) {
-          console.info(
-            '[callkit] native call snapshot matched; skipping JS connect',
-            {
-              channelId: id,
-              callId: native.callId,
-              connectionState: native.connectionState,
-            }
-          );
+        if (!callCtx.shouldRequestSessionToken(id)) {
           callCtx.rollbackOptimisticJoin();
           return;
         }
 
-        console.info(
-          '[callkit] no matching native call snapshot; requesting JS call token',
-          {
-            channelId: id,
-            native,
-          }
-        );
         // Call the join API directly so a timed-out join attempt cannot leave
         // `useJoinCallMutation` stuck pending and block the next retry.
         const [tokenResponse] = await Promise.all([
@@ -199,29 +170,10 @@ export function useCall(channelId: () => string, options?: UseCallOptions) {
         ]);
         if (cancelled) return;
 
-        if (isNativeIosCallKitEnabled()) {
-          if (!nativeCall) {
-            throw new Error(
-              'Native call state is required for iOS CallKit outgoing calls'
-            );
-          }
-          const channelTitle =
-            channelsCtx.channelsById()[tokenResponse.channelId]?.name ?? null;
-          await startNativeCallKitOutgoingCall(
-            {
-              channelId: tokenResponse.channelId,
-              callId: tokenResponse.callId,
-              channelTitle,
-              callerName: channelTitle,
-              serverUrl: tokenResponse.serverUrl,
-              token: tokenResponse.token,
-            },
-            nativeCall
-          );
-          return;
-        }
-
-        await callCtx.connect(tokenResponse);
+        await callCtx.connectSession(tokenResponse, {
+          channelTitle:
+            channelsCtx.channelsById()[tokenResponse.channelId]?.name ?? null,
+        });
       };
 
       const timeout = new Promise<never>((_, reject) =>
@@ -258,7 +210,7 @@ export function useCall(channelId: () => string, options?: UseCallOptions) {
       );
       void (async () => {
         try {
-          await callCtx.disconnect();
+          await callCtx.disconnectSession({ endNativeCall: false });
         } catch (e) {
           console.error('join error recovery: disconnect failed', e);
         }
@@ -310,20 +262,9 @@ export function useCall(channelId: () => string, options?: UseCallOptions) {
     cleanupDisconnectListener?.();
     cleanupDisconnectListener = null;
     clearAutoRejoinTimer();
-    // Dismiss the native CallKit call sheet if the user left from within the app.
-    // When the leave is initiated by CXEndCallAction, the native sheet is already
-    // ending, so avoid sending a second native end request back to CallKit.
-    // Isolated try/catch so a CallKit dismissal failure never skips disconnect.
     try {
-      if (leaveOptions?.endNativeCall !== false) {
-        try {
-          await endCallKitCall();
-        } catch (e) {
-          console.error('callkit: failed to dismiss call sheet', e);
-        }
-      }
       try {
-        await callCtx.disconnect();
+        await callCtx.disconnectSession(leaveOptions);
         options?.onLeave?.();
       } finally {
         await leaveMutation.mutateAsync(id);
