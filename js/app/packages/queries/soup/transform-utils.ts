@@ -273,6 +273,11 @@ export const useSearchResponseItemMapper = () => {
     searchQuery: string
   ): (WithSearch<EntityData> | undefined)[] => {
     switch (result.type) {
+      // CRM companies are opt-in via `include_crm`, which soup search does
+      // not set, so this is never hit at runtime. Handle it as a no-op to
+      // keep the union exhaustive; soup doesn't render CRM companies yet.
+      case 'company':
+        return [];
       case 'document': {
         if (!result.metadata || result.metadata.deleted_at) return [];
         const searchFileType =
