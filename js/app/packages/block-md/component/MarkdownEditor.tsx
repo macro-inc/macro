@@ -203,7 +203,6 @@ const TASK_EDITOR_PADDING_BOTTOM = 48;
 export function MarkdownEditor(props: {
   autoFocusOnMount?: boolean;
   loroManager: Accessor<LoroManager | undefined>;
-  mustBeConnected?: boolean;
 }) {
   const blockData = blockDataSignal.get;
   const blockId = useBlockId();
@@ -216,7 +215,7 @@ export function MarkdownEditor(props: {
   const saveMarkdownDocument = useSaveMarkdownDocument();
   const setMdStore = mdStore.set;
   const md = mdStore.get;
-  const canEdit = useCanEdit(props.mustBeConnected);
+  const canEdit = useCanEdit();
   const canComment = useCanComment();
   const [blockElement] = blockElementSignal;
   const [findAndReplaceStore, setFindAndReplaceStore] = FindAndReplaceStore;

@@ -105,8 +105,7 @@ function BlockMarkdownContent({ optimisticSnapshot }: BlockMarkdownProps) {
 
   const instructionsMdId = useInstructionsMdIdQuery();
   const notificationSource = useGlobalNotificationSource();
-  const mustBeConnected = optimisticSnapshot === undefined;
-  const canEdit = useCanEdit(mustBeConnected);
+  const canEdit = useCanEdit();
   const { displayName } = useMarkdownName();
   const isInstructionsMd = createMemo(() => blockId === instructionsMdId.data);
 
@@ -169,10 +168,7 @@ function BlockMarkdownContent({ optimisticSnapshot }: BlockMarkdownProps) {
                           />
                         }
                       >
-                        <Notebook
-                          loroManager={() => loroManager}
-                          mustBeConnected={mustBeConnected}
-                        />
+                        <Notebook loroManager={() => loroManager} />
                       </Show>
                     </Suspense>
                   </div>
