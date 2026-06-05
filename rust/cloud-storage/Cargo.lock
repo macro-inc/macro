@@ -223,7 +223,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "hex",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -303,7 +303,7 @@ dependencies = [
  "lazy_static",
  "rand 0.9.4",
  "regex",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "schemars 1.2.1",
  "serde",
  "serde_json",
@@ -472,7 +472,7 @@ dependencies = [
  "futures",
  "getrandom 0.3.4",
  "rand 0.9.4",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "secrecy",
  "serde",
  "serde_json",
@@ -653,6 +653,7 @@ dependencies = [
  "cool_asserts",
  "document_storage_service_client",
  "doppleganger",
+ "doppler-config",
  "email_validator",
  "entity_access",
  "foreign_entity",
@@ -692,7 +693,7 @@ dependencies = [
  "redis",
  "referral",
  "remote_env_var",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "roles_and_permissions",
  "rsa",
  "secretsmanager_client",
@@ -726,7 +727,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "model",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "serde",
  "thiserror 2.0.18",
  "tracing",
@@ -2401,7 +2402,7 @@ dependencies = [
  "anyhow",
  "connection_gateway_models",
  "model-entity",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "serde",
  "serde_json",
  "tracing",
@@ -2470,7 +2471,7 @@ dependencies = [
  "model_user",
  "rate_limit",
  "redis",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "rootcause",
  "serde",
  "serde_json",
@@ -2691,7 +2692,7 @@ dependencies = [
  "macro_uuid",
  "model-error-response",
  "model_user",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "serde",
  "serde_json",
  "sqlx",
@@ -3366,7 +3367,7 @@ dependencies = [
  "readonly_pool",
  "redis",
  "regex",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "roles_and_permissions",
  "schemars 1.2.1",
  "search_service_client",
@@ -3480,7 +3481,7 @@ dependencies = [
  "readonly_pool",
  "redis",
  "regex",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "s3_key",
  "saved_views",
  "schemars 1.2.1",
@@ -3517,7 +3518,7 @@ dependencies = [
  "model",
  "models_bulk_upload",
  "models_permissions",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
@@ -3629,7 +3630,7 @@ dependencies = [
  "models_permissions",
  "models_properties",
  "non_empty",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "s3_key",
  "schemars 1.2.1",
  "serde",
@@ -3724,6 +3725,19 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unsynn",
+]
+
+[[package]]
+name = "doppler-config"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e9725269d4de75f25ee1ba5cb5ff8cdb7b1579567ea5b6ab7a70ca16cd1d5455"
+dependencies = [
+ "reqwest 0.13.4",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tracing",
 ]
 
 [[package]]
@@ -4045,7 +4059,7 @@ dependencies = [
  "once_cell",
  "redis",
  "regex",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "s3_client",
  "schemars 1.2.1",
  "scraper",
@@ -4081,7 +4095,7 @@ dependencies = [
  "email",
  "model",
  "models_email",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "serde",
  "serde_json",
  "tokio",
@@ -4233,18 +4247,6 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
-]
-
-[[package]]
-name = "enum-as-inner"
-version = "0.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1e6a265c649f3f5979b601d26f1d05ada116434c87741c9493cb56218f76cbc"
-dependencies = [
- "heck 0.5.0",
- "proc-macro2",
- "quote",
- "syn 2.0.117",
 ]
 
 [[package]]
@@ -4555,7 +4557,7 @@ dependencies = [
  "anyhow",
  "base64 0.22.1",
  "macro_env",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "serde",
  "serde_json",
  "serde_urlencoded",
@@ -4846,7 +4848,7 @@ dependencies = [
  "notification",
  "redis",
  "regex",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "rootcause",
  "serde",
  "serde_json",
@@ -4880,7 +4882,7 @@ dependencies = [
  "mockall",
  "models_email",
  "regex",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "serde",
  "serde_json",
  "tokio",
@@ -5049,23 +5051,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
-name = "hickory-proto"
-version = "0.25.2"
+name = "hickory-net"
+version = "0.26.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f8a6fe56c0038198998a6f217ca4e7ef3a5e51f46163bd6dd60b5c71ca6c6502"
+checksum = "e2295ed2f9c31e471e1428a8f88a3f0e1f4b27c15049592138d1eebe9c35b183"
 dependencies = [
  "async-trait",
  "cfg-if",
  "data-encoding",
- "enum-as-inner",
  "futures-channel",
  "futures-io",
  "futures-util",
+ "hickory-proto",
  "idna",
  "ipnet",
- "once_cell",
- "rand 0.9.4",
- "ring",
+ "jni 0.22.4",
+ "rand 0.10.1",
  "thiserror 2.0.18",
  "tinyvec",
  "tokio",
@@ -5074,21 +5075,46 @@ dependencies = [
 ]
 
 [[package]]
-name = "hickory-resolver"
-version = "0.25.2"
+name = "hickory-proto"
+version = "0.26.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dc62a9a99b0bfb44d2ab95a7208ac952d31060efc16241c87eaf36406fecf87a"
+checksum = "0bab31817bfb44672a252e97fe81cd0c18d1b2cf892108922f6818820df8c643"
+dependencies = [
+ "data-encoding",
+ "idna",
+ "ipnet",
+ "jni 0.22.4",
+ "once_cell",
+ "prefix-trie",
+ "rand 0.10.1",
+ "ring",
+ "thiserror 2.0.18",
+ "tinyvec",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "hickory-resolver"
+version = "0.26.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f0d58d28879ceecde6607729660c2667a081ccdc082e082675042793960f178c"
 dependencies = [
  "cfg-if",
  "futures-util",
+ "hickory-net",
  "hickory-proto",
  "ipconfig",
+ "ipnet",
+ "jni 0.22.4",
  "moka",
+ "ndk-context",
  "once_cell",
  "parking_lot",
- "rand 0.9.4",
+ "rand 0.10.1",
  "resolv-conf",
  "smallvec",
+ "system-configuration",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
@@ -5622,7 +5648,7 @@ dependencies = [
  "macro_env",
  "macro_middleware",
  "model",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "secretsmanager_client",
  "serde",
  "serde_json",
@@ -5803,6 +5829,9 @@ name = "ipnet"
 version = "2.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d98f6fed1fde3f8c21bc40a1abb88dd75e67924f9cffc3ef95607bad8017f8e2"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "is_terminal_polyfill"
@@ -6124,7 +6153,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "models_search",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "serde",
  "serde_json",
  "tokio",
@@ -6259,7 +6288,7 @@ dependencies = [
  "anyhow",
  "futures",
  "http 1.4.0",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "serde",
  "serde_json",
  "tokio",
@@ -6274,7 +6303,7 @@ dependencies = [
  "anyhow",
  "futures",
  "local_e2e_test_support",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "serde",
  "serde_json",
  "sqlx",
@@ -6782,7 +6811,7 @@ dependencies = [
  "model_user",
  "oauth2",
  "redis",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "rmcp",
  "schemars 1.2.1",
  "serde",
@@ -7447,7 +7476,7 @@ dependencies = [
  "axum",
  "cool_asserts",
  "futures",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "rootcause",
  "semver",
  "serde",
@@ -7460,6 +7489,12 @@ dependencies = [
  "tracing",
  "url",
 ]
+
+[[package]]
+name = "ndk-context"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "27b02d87554356db9e9a873add8782d4ea6e3e58ea071a9adb9a2e8ddb884a8b"
 
 [[package]]
 name = "new_debug_unreachable"
@@ -7576,7 +7611,7 @@ dependencies = [
  "models_pagination",
  "rate_limit",
  "redis",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "rootcause",
  "schemars 1.2.1",
  "serde",
@@ -8007,7 +8042,7 @@ dependencies = [
  "dyn-clone",
  "lazy_static",
  "percent-encoding",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "rustc_version",
  "serde",
  "serde_json",
@@ -8318,7 +8353,7 @@ dependencies = [
  "chrono",
  "console_error_panic_hook",
  "console_log",
- "itertools 0.11.0",
+ "itertools 0.14.0",
  "js-sys",
  "libloading",
  "log",
@@ -8726,6 +8761,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "prefix-trie"
+version = "0.8.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4cf6e3177f0684016a5c209b00882e15f8bdd3f3bb48f0491df10cd102d0c6e7"
+dependencies = [
+ "either",
+ "ipnet",
+ "num-traits",
+]
+
+[[package]]
 name = "prettyplease"
 version = "0.2.37"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8974,7 +9020,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "27c6023962132f4b30eb4c172c91ce92d933da334c59c23cddee82358ddafb0b"
 dependencies = [
  "anyhow",
- "itertools 0.11.0",
+ "itertools 0.14.0",
  "proc-macro2",
  "quote",
  "syn 2.0.117",
@@ -9498,9 +9544,9 @@ dependencies = [
 
 [[package]]
 name = "reqwest"
-version = "0.13.3"
+version = "0.13.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "62e0021ea2c22aed41653bc7e1419abb2c97e038ff2c33d0e1309e49a97deec0"
+checksum = "219c5811de6525e5416c7d5d53bb656d3afdbc6c5af816e0802bcfa42dbdc1c3"
 dependencies = [
  "base64 0.22.1",
  "bytes",
@@ -9586,7 +9632,7 @@ dependencies = [
  "nanoid",
  "ordered-float",
  "pin-project-lite",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "rig-derive",
  "schemars 1.2.1",
  "serde",
@@ -9647,7 +9693,7 @@ dependencies = [
  "pastey 0.2.3",
  "pin-project-lite",
  "rand 0.10.1",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "rmcp-macros",
  "schemars 1.2.1",
  "serde",
@@ -10210,7 +10256,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "models_search",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "tracing",
 ]
 
@@ -10317,7 +10363,7 @@ dependencies = [
  "models_email",
  "models_permissions",
  "rand 0.9.4",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "serde",
  "serde_json",
  "sqlx",
@@ -11198,7 +11244,7 @@ dependencies = [
  "mime",
  "model-entity",
  "non_empty",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "tracing",
 ]
 
@@ -11247,7 +11293,7 @@ dependencies = [
  "bytes",
  "macro_service_urls",
  "models_sfs",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "serde",
  "serde_json",
  "tokio",
@@ -11388,7 +11434,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "model",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "serde",
  "sync_service",
  "tokio",
@@ -12218,7 +12264,7 @@ dependencies = [
  "bytes",
  "futures",
  "mockall",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "scraper",
  "serde",
  "thiserror 2.0.18",
@@ -12241,7 +12287,7 @@ dependencies = [
  "macro_cors",
  "macro_entrypoint",
  "macro_env",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "scraper",
  "serde",
  "serde_json",

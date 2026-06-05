@@ -127,6 +127,7 @@ user_quota = { path = "../user_quota" }
 utoipa = { workspace = true }
 utoipa-swagger-ui = { workspace = true }
 uuid = { workspace = true }
+doppler-config = { workspace = true }
 
 [dev-dependencies]
 cool_asserts = "2"
