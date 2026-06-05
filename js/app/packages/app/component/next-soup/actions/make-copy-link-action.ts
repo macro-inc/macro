@@ -2,7 +2,7 @@ import { getChannelParams } from '@block-channel/utils/link';
 import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { buildSimpleEntityUrl } from '@core/util/url';
-import { isGithubPrEntity, type EntityData } from '@entity';
+import { type EntityData, isGithubPrEntity } from '@entity';
 import type { SoupState } from '../create-soup-state';
 
 /**

@@ -14,8 +14,8 @@ import {
 import type { BlockOrchestrator } from '@core/orchestrator';
 import type { DateValue } from '@core/util/date';
 import { throwOnErr } from '@core/util/result';
-import { openExternalUrl } from '@core/util/url';
 import { waitForFrames } from '@core/util/sleep';
+import { openExternalUrl } from '@core/util/url';
 import {
   type EntityData,
   getSnippetHit,
