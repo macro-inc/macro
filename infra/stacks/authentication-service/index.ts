@@ -113,8 +113,7 @@ const fusionAuthClusterName: pulumi.Output<string> = fusionAuthStack
   .getOutput('fusionAuthClusterName')
   .apply((fusionAuthClusterName) => fusionAuthClusterName as string);
 
-const { notificationIngressQueueArn } =
-  getMacroNotify();
+const { notificationIngressQueueArn } = getMacroNotify();
 
 const { searchEventQueueArn } = getSearchEventQueue();
 
@@ -154,8 +153,11 @@ const service = new AuthenticationService('authentication-service', {
     },
   ],
   containerSecrets: [
-    { name: 'DOPPLER_TOKEN', valueFrom: pulumi.interpolate`${dopplerTokenArn}` }
-  ]
+    {
+      name: 'DOPPLER_TOKEN',
+      valueFrom: pulumi.interpolate`${dopplerTokenArn}`,
+    },
+  ],
 });
 
 new UserLinkCleanupHandler('user-link-cleanup-handler', {
