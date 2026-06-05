@@ -4,6 +4,28 @@ use anyhow::Context;
 pub use macro_env::Environment;
 use macro_service_urls::DocumentStorageServiceUrl;
 
+use serde_json::Value;
+
+fn read_config_value(key: &'static str) -> Option<String> {
+    std::env::var("APP_SECRETS_JSON")
+        .ok()
+        .and_then(|raw| serde_json::from_str::<Value>(&raw).ok())
+        .and_then(|json| json.get(key).cloned())
+        .map(|value| match value {
+            Value::String(s) => s,
+            other => other.to_string(),
+        })
+        .or_else(|| std::env::var(key).ok())
+}
+
+fn required_config_value(key: &'static str) -> anyhow::Result<String> {
+    read_config_value(key).with_context(|| format!("{key} must be provided"))
+}
+
+fn optional_config_value(key: &'static str) -> Option<String> {
+    read_config_value(key)
+}
+
 // BASE_URL env var. This is validated when creating the config in main.rs
 pub static BASE_URL: LazyLock<String> = LazyLock::new(|| std::env::var("BASE_URL").unwrap());
 
@@ -96,48 +118,28 @@ pub struct Config {
     pub stripe_price_id: String,
 }
 
-/// Grab the stripe product price id using the environment
-fn get_stripe_price_id_from_environment(environment: Environment) -> String {
-    // SAFETY: stripe price ids are not sensitive information so hard coding them here is simpler
-    match environment {
-        Environment::Production => "price_1TZY5FJaD7zvQeOBMldBpUHg".to_string(),
-        Environment::Develop | Environment::Local => "price_1TZY5uJaD7zvQeOBRu9a5v8P".to_string(),
-    }
-}
-
 impl Config {
     pub fn from_env() -> anyhow::Result<Self> {
-        let base_url = std::env::var("BASE_URL").context("BASE_URL must be provided")?;
-        let database_url =
-            std::env::var("DATABASE_URL").context("DATABASE_URL must be provided")?;
+        let base_url = required_config_value("BASE_URL")?;
+        let database_url = required_config_value("DATABASE_URL")?;
+        let redis_uri = required_config_value("REDIS_URI")?;
 
-        let redis_uri = std::env::var("REDIS_URI").context("REDIS_URI must be provided")?;
+        let fusionauth_tenant_id = required_config_value("FUSIONAUTH_TENANT_ID")?;
+        let fusionauth_api_key_secret_key = required_config_value("FUSIONAUTH_API_KEY_SECRET_KEY")?;
+        let fusionauth_client_id = required_config_value("FUSIONAUTH_CLIENT_ID")?;
+        let fusionauth_client_secret_key = required_config_value("FUSIONAUTH_CLIENT_SECRET_KEY")?;
+        let fusionauth_base_url = required_config_value("FUSIONAUTH_BASE_URL")?;
+        let fusionauth_oauth_redirect_uri = required_config_value("FUSIONAUTH_OAUTH_REDIRECT_URI")?;
 
-        let fusionauth_tenant_id = std::env::var("FUSIONAUTH_TENANT_ID")
-            .context("FUSIONAUTH_TENANT_ID must be provided")?;
-        let fusionauth_api_key_secret_key = std::env::var("FUSIONAUTH_API_KEY_SECRET_KEY")
-            .context("FUSIONAUTH_API_KEY_SECRET_KEY must be provided")?;
-        let fusionauth_client_id = std::env::var("FUSIONAUTH_CLIENT_ID")
-            .context("FUSIONAUTH_CLIENT_ID must be provided")?;
-        let fusionauth_client_secret_key = std::env::var("FUSIONAUTH_CLIENT_SECRET_KEY")
-            .context("FUSIONAUTH_CLIENT_SECRET_KEY must be provided")?;
-        let fusionauth_base_url =
-            std::env::var("FUSIONAUTH_BASE_URL").context("FUSIONAUTH_BASE_URL must be provided")?;
-        let fusionauth_oauth_redirect_uri = std::env::var("FUSIONAUTH_OAUTH_REDIRECT_URI")
-            .context("FUSIONAUTH_OAUTH_REDIRECT_URI must be provided")?;
-        let google_client_id =
-            std::env::var("GOOGLE_CLIENT_ID").context("GOOGLE_CLIENT_ID must be provided")?;
-        let google_client_secret_key = std::env::var("GOOGLE_CLIENT_SECRET_KEY")
-            .context("GOOGLE_CLIENT_SECRET_KEY must be provided")?;
+        let google_client_id = required_config_value("GOOGLE_CLIENT_ID")?;
+        let google_client_secret_key = required_config_value("GOOGLE_CLIENT_SECRET_KEY")?;
 
-        let stripe_secret_key =
-            std::env::var("STRIPE_SECRET_KEY").context("STRIPE_SECRET_KEY must be provided")?;
+        let stripe_secret_key = required_config_value("STRIPE_SECRET_KEY")?;
 
-        let service_internal_auth_key = std::env::var("SERVICE_INTERNAL_AUTH_KEY")
-            .context("SERVICE_INTERNAL_AUTH_KEY environment variable not set")?;
+        let service_internal_auth_key = required_config_value("SERVICE_INTERNAL_AUTH_KEY")?;
 
-        let port: usize = std::env::var("PORT")
-            .unwrap_or("8080".to_string())
+        let port: usize = read_config_value("PORT")
+            .unwrap_or_else(|| "8080".to_string())
             .parse::<usize>()
             .context("should be valid port number")?;
 
@@ -145,39 +147,26 @@ impl Config {
 
         let document_storage_service_url = DocumentStorageServiceUrl::new()?.to_string();
 
-        let notification_queue =
-            std::env::var("NOTIFICATION_QUEUE").context("NOTIFICATION_QUEUE must be provided")?;
+        let notification_queue = required_config_value("NOTIFICATION_QUEUE")?;
+        let search_event_queue = required_config_value("SEARCH_EVENT_QUEUE")?;
+        let link_manager_queue = required_config_value("LINK_MANAGER_QUEUE")?;
+        let email_backfill_queue = required_config_value("EMAIL_BACKFILL_QUEUE")?;
 
-        let search_event_queue =
-            std::env::var("SEARCH_EVENT_QUEUE").context("SEARCH_EVENT_QUEUE must be provided")?;
+        let github_client_id = required_config_value("GITHUB_CLIENT_ID")?;
+        let github_client_secret = required_config_value("GITHUB_CLIENT_SECRET")?;
+        let github_idp_id = required_config_value("GITHUB_IDP_ID")?;
 
-        let link_manager_queue =
-            std::env::var("LINK_MANAGER_QUEUE").context("LINK_MANAGER_QUEUE must be provided")?;
+        let ga_measurement_id = optional_config_value("GA_MEASUREMENT_ID");
+        let ga_api_secret = optional_config_value("GA_API_SECRET");
 
-        let email_backfill_queue = std::env::var("EMAIL_BACKFILL_QUEUE")
-            .context("EMAIL_BACKFILL_QUEUE must be provided")?;
+        let meta_pixel_id = optional_config_value("META_PIXEL_ID");
+        let meta_access_token = optional_config_value("META_ACCESS_TOKEN");
+        let meta_test_event_code = optional_config_value("META_TEST_EVENT_CODE");
 
-        let github_client_id =
-            std::env::var("GITHUB_CLIENT_ID").context("GITHUB_CLIENT_ID must be provided")?;
-        let github_client_secret = std::env::var("GITHUB_CLIENT_SECRET")
-            .context("GITHUB_CLIENT_SECRET must be provided")?;
-        let github_idp_id =
-            std::env::var("GITHUB_IDP_ID").context("GITHUB_IDP_ID must be provided")?;
+        let posthog_api_key = optional_config_value("POSTHOG_API_KEY");
+        let posthog_host = optional_config_value("POSTHOG_HOST");
 
-        // Google Analytics configuration
-        let ga_measurement_id = std::env::var("GA_MEASUREMENT_ID").ok();
-        let ga_api_secret = std::env::var("GA_API_SECRET").ok();
-
-        // Meta Conversions API configuration
-        let meta_pixel_id = std::env::var("META_PIXEL_ID").ok();
-        let meta_access_token = std::env::var("META_ACCESS_TOKEN").ok();
-        let meta_test_event_code = std::env::var("META_TEST_EVENT_CODE").ok();
-
-        // PostHog configuration
-        let posthog_api_key = std::env::var("POSTHOG_API_KEY").ok();
-        let posthog_host = std::env::var("POSTHOG_HOST").ok();
-
-        let stripe_price_id = get_stripe_price_id_from_environment(environment);
+        let stripe_price_id = required_config_value("STRIPE_PRICE_ID")?;
 
         Ok(Config {
             base_url,
