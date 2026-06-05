@@ -20,7 +20,7 @@ use github::{
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
-use macro_service_urls::{AppServiceUrl, DocumentStorageServiceUrl};
+use macro_service_urls::AppServiceUrl;
 use native_app_service::{
     domain::{models::PlatformData, service::NativeAppServiceImpl},
     outbound::DefaultBundleFetcher,
@@ -61,24 +61,8 @@ mod rate_limit_config;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // Load in basic env vars
     MacroEntrypoint::default().init();
     let env = Environment::new_or_prod();
-
-    let doppler = doppler_config::DopplerConfig::builder()
-        .prefer_doppler_run_env() // if doppler run command is used, use that
-        .fallback_to_env_on_missing_token()
-        .project(
-            std::env::var("DOPPLER_PROJECT")
-                .ok()
-                .unwrap_or("authentication_service".to_string()),
-        )
-        .config(env.to_doppler_slug())
-        .token_from_env("DOPPLER_TOKEN")
-        .build()?;
-
-    let config: Config = doppler.load().await?;
-    tracing::trace!("initialized config");
 
     let secretsmanager_client = secretsmanager_client::SecretsManager::new(
         aws_sdk_secretsmanager::Client::new(&macro_aws_config::get_macro_aws_config().await),
@@ -91,6 +75,11 @@ async fn main() -> anyhow::Result<()> {
     let stripe_webhook_secret = secretsmanager_client
         .get_maybe_secret_value(env, StripeWebhookSecretKey::new()?)
         .await?;
+
+    // Parse our configuration from the environment.
+    let config = Config::from_env().context("expected to be able to generate config")?;
+
+    tracing::trace!("initialized config");
 
     let (min_connections, max_connections): (u32, u32) = match config.environment {
         Environment::Production => (5, 25),
@@ -166,7 +155,7 @@ async fn main() -> anyhow::Result<()> {
 
     let document_storage_service_client = DocumentStorageServiceClient::new(
         config.service_internal_auth_key.clone(),
-        DocumentStorageServiceUrl::new()?.to_string(),
+        config.document_storage_service_url.clone(),
     );
     tracing::trace!("initialized document storage service client");
 
