@@ -10,5 +10,5 @@ export type ChatStreamOneOfSixType =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const ChatStreamOneOfSixType = {
-  chat_user_message: 'chat_user_message',
+  chat_message_response: 'chat_message_response',
 } as const;

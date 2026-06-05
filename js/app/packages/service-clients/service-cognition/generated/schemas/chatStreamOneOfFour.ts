@@ -4,13 +4,19 @@
  * Document Cognition Service
  * OpenAPI spec version: 1.0.0
  */
+
 import type { ChatStreamOneOfFourType } from './chatStreamOneOfFourType';
+import type { Entity } from './entity';
 
 /**
- * Acknowledges that a message has been received for processing
+ * The user message that initiated this stream, sent as the first item
+so other clients can add it to their local chat state.
  */
 export type ChatStreamOneOfFour = {
+  attachments: Entity[];
   chat_id: string;
+  content: string;
   message_id: string;
+  stream_id: string;
   type: ChatStreamOneOfFourType;
 };
