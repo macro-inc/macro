@@ -49,6 +49,15 @@ impl Environment {
     pub fn new_or_prod() -> Self {
         Self::new_from_env().unwrap_or(Environment::Production)
     }
+
+    /// Convert the environment variable into a doppler slug
+    pub fn to_doppler_slug(self) -> String {
+        match self {
+            Environment::Production => "prd".to_string(),
+            Environment::Develop => "dev".to_string(),
+            Environment::Local => "lcl".to_string(),
+        }
+    }
 }
 
 impl Display for Environment {
