@@ -1,9 +1,7 @@
-import { openExternalUrl } from '@core/util/url';
 import { Popover } from '@kobalte/core/popover';
 import CaretRight from '@phosphor/caret-right.svg';
 import ChatCircle from '@phosphor/chat-circle.svg';
 import Check from '@phosphor/check.svg';
-import DashedCircle from '@phosphor/circle-dashed.svg';
 import MinusCircle from '@phosphor/minus-circle.svg';
 import X from '@phosphor/x.svg';
 import CheckCircle from '@phosphor-icons/core/assets/fill/check-circle-fill.svg?component-solid';
@@ -80,12 +78,6 @@ function pendingChecks(entity: GithubPullRequestEntity) {
   return countedChecks(entity).filter(
     (check) => check.status !== 'completed' || check.conclusion == null
   ).length;
-}
-
-function checkSummary(entity: GithubPullRequestEntity) {
-  const total = countedChecks(entity).length;
-  if (total === 0) return 'No checks';
-  return `${successfulChecks(entity)} of ${total} checks passed`;
 }
 
 function checkOverviewTitle(entity: GithubPullRequestEntity) {
