@@ -10,7 +10,12 @@ import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { debouncedDependent } from '@core/util/debounce';
 import { windowSearchMatch } from '@core/util/searchHighlight';
 import { openExternalUrl } from '@core/util/url';
-import { Entity, type EntityData, isGithubPrEntity, type WithSearch } from '@entity';
+import {
+  Entity,
+  type EntityData,
+  isGithubPrEntity,
+  type WithSearch,
+} from '@entity';
 import { SearchContent } from '@entity/extractors-search/search-content';
 import { Dialog } from '@kobalte/core/dialog';
 import ArrowLeft from '@phosphor/arrow-left.svg';

@@ -118,7 +118,11 @@ export function WideLayout(props: LayoutProps) {
             </span>
           )}
         </Show>
-        <Show when={props.isShared && !owningInbox() && !isGithubPrEntity(props.entity)}>
+        <Show
+          when={
+            props.isShared && !owningInbox() && !isGithubPrEntity(props.entity)
+          }
+        >
           <SharedBadge ownerId={props.entity.ownerId} />
         </Show>
         <Show when={isGithubPrEntity(props.entity) && props.entity}>
