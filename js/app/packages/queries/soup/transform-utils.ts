@@ -448,6 +448,19 @@ const resolveDocumentEntityName = (
   });
 };
 
+/**
+ * The email soup query encodes "no sort timestamp" — e.g. a never-viewed thread
+ * under the `viewed_at` sort — as the Unix epoch. Map it to `undefined` so each
+ * soup view's sort and the row date fall back to their own column
+ * (`updatedAt`/`createdAt`/`viewedAt`) instead of pinning the thread to 1970.
+ */
+function normalizeSentinelTs(
+  ts: string | null | undefined
+): string | undefined {
+  if (!ts) return undefined;
+  return Date.parse(ts) > 0 ? ts : undefined;
+}
+
 export const mapSoupPageToEntityList: (
   data: SoupPage,
   options: {
@@ -536,7 +549,7 @@ export const mapSoupPageToEntityList: (
             ...item.data,
             createdAt: item.data.createdAt,
             updatedAt: item.data.updatedAt,
-            sortTs: item.data.sortTs,
+            sortTs: normalizeSentinelTs(item.data.sortTs),
             senderEmail: item.data.senderEmail ?? undefined,
             senderName: item.data.senderName ?? undefined,
             snippet: item.data.snippet ?? undefined,

@@ -2,7 +2,9 @@ import type { Maybe } from '@core/types';
 import { type ResultError, throwOnErr } from '@core/util/result';
 import type { UnifiedNotification } from '@notifications/types';
 import {
+  hasSoupEntity,
   optimisticUpdateSoupItemUpdatedAt,
+  refetchSoupEntity,
   type SoupEntityTag,
 } from '@queries/soup/normalized-cache';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
@@ -578,12 +580,18 @@ export function optimisticInsertNotification(
     }
   );
 
-  if (soupTag && notification.created_at) {
-    optimisticUpdateSoupItemUpdatedAt(
-      notification.entity_id,
-      soupTag,
-      notification.created_at
-    );
+  if (soupTag) {
+    if (hasSoupEntity(notification.entity_id)) {
+      if (notification.created_at) {
+        optimisticUpdateSoupItemUpdatedAt(
+          notification.entity_id,
+          soupTag,
+          notification.created_at
+        );
+      }
+    } else {
+      refetchSoupEntity(notification.entity_id, soupTag);
+    }
   }
 
   // Cache is already updated via setQueriesData above. Mark as stale without
