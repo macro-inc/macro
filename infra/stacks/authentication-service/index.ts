@@ -142,6 +142,7 @@ const service = new AuthenticationService('authentication-service', {
   ],
   containerEnvVars: [
     { name: 'ENVIRONMENT', value: stack },
+    { name: 'DOPPLER_PROJECT', value: 'authentication_service' },
     // OpenTelemetry / Datadog tracing configuration
     {
       name: 'DD_SERVICE',
