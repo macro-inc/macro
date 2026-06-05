@@ -1,4 +1,4 @@
-use std::{fmt::Display, sync::Arc};
+use std::sync::Arc;
 
 use bebop::{Record, SliceWrapper};
 use loro::{Frontiers, awareness::EphemeralStore};
@@ -82,19 +82,6 @@ pub fn broadcast_awareness(
     Ok(())
 }
 
-impl Display for FromPeer<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let m = match self {
-            FromPeer::Unknown => "Unknown",
-            FromPeer::PeerUpdate { .. } => "PeerUpdate",
-            FromPeer::PeerAwareness { .. } => "PeerAwareness",
-            FromPeer::PeerRequestSince { .. } => "PeerRequestSince",
-            FromPeer::PeerRequestSnapshot {} => "PeerRequestSnapshot",
-            FromPeer::PeerRegisterId { .. } => "PeerRegisterId",
-        };
-        write!(f, "{m}")
-    }
-}
 
 // Max receiving websocket message is 1Mb
 const MAX_MESSAGE_SIZE: usize = 1000 * 1000;
@@ -137,7 +124,7 @@ pub async fn process_message(
         // Handle an incoming update from a peer
         // Should extract binary update and broadcast it to all other connected peers
         // Should also store the update in the operation log to be applied to the remote doc
-        FromPeer::PeerUpdate { update } => {
+        FromPeer::PeerUpdate { update, id } => {
             if !Wsm::new(dss, ws).can_edit().await? {
                 tracing::warn!("received update from peer without edit permission");
                 return Ok(());
@@ -162,9 +149,7 @@ pub async fn process_message(
 
             {
                 // send ACK
-                let message = FromRemote::RemoteUpdateAck {
-                    update: SliceWrapper::Raw(&update),
-                };
+                let message = FromRemote::RemoteUpdateAck { id };
                 let mut buf = buf.lock("serialize RemoteUpdateAck in PeerUpdate handler");
                 let serialized =
                     serialize(message, &mut buf).context("Failed serializing update")?;

@@ -145,7 +145,6 @@ export class SyncEngine<S extends GenericRootSchema, D> {
     if (this.readonly()) return;
     const peerId = this.loroManager.getPeerId();
     const delivered = await this.source.pushUpdate(update, peerId);
-    console.log(delivered);
     if (!delivered) {
       logger.error('failed to push local update to remote', {
         scope: 'sync_engine',

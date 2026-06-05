@@ -223,10 +223,12 @@ export const createSyncServiceSource = (
   const pushUpdate = async (update: RawUpdate): Promise<boolean> => {
     if (!initialSyncReceived) return true;
 
+    const id = crypto.randomUUID();
+
     const ack = (async () => {
       try {
         await raceTimeout(
-          untilMessage(ws, (msg) => msg.isRemoteUpdateAck()),
+          untilMessage(ws, (msg) => msg.isRemoteUpdateAck() && msg.value.id === id),
           TIMEOUTS.ACK,
           true
         );
@@ -236,14 +238,9 @@ export const createSyncServiceSource = (
       }
     })();
 
-    if (Math.random() > 0.5) {
-      ws.send(FromPeer.fromPeerUpdate({ update }));
-    } else {
-      console.log('fejiaofjwaeiofjieowjo');
-    }
+    ws.send(FromPeer.fromPeerUpdate({ update, id }));
 
     return ack;
-
   };
 
   const pushAwareness = (awareness: RawUpdate) => {

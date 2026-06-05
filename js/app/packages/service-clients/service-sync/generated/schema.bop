@@ -1,6 +1,7 @@
 union FromPeer {
   1 -> struct PeerUpdate {
     byte[] update;
+    string id;
   }
   2 -> struct PeerAwareness {
     byte[] awareness;
@@ -29,7 +30,7 @@ union FromRemote {
     byte[] snapshot;
   }
   5 -> struct RemoteUpdateAck {
-    byte[] update;
+    string id;
   }
   6 -> struct RemoteUpdateSince {
     byte[] update;

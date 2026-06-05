@@ -1969,6 +1969,7 @@ dependencies = [
  "matchit 0.8.6",
  "serde",
  "serde_json",
+ "sync_service_bebop_schema",
  "time",
  "tracing",
  "tracing-subscriber",
@@ -1977,6 +1978,13 @@ dependencies = [
  "wasm-bindgen",
  "web-time",
  "worker",
+]
+
+[[package]]
+name = "sync_service_bebop_schema"
+version = "0.1.0"
+dependencies = [
+ "bebop",
 ]
 
 [[package]]
