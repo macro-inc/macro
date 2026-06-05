@@ -358,6 +358,7 @@ impl From<&ApiContext> for SearchHandlerState {
         SearchHandlerState {
             db: ctx.readonly_db.clone(),
             opensearch_client: ctx.opensearch_client.clone(),
+            entity_access_service: ctx.entity_access_service.clone(),
         }
     }
 }

@@ -160,6 +160,10 @@ pub struct SearchCursor {
     pub content_cursor: SearchCursorOption,
     /// The project cursor
     pub project_name_cursor: SearchCursorOption,
+    /// The CRM company name cursor. `#[serde(default)]` so cursors minted
+    /// before CRM search existed still decode (defaults to a fresh cursor).
+    #[serde(default)]
+    pub crm_company_cursor: SearchCursorOption,
 }
 
 impl SearchCursor {
@@ -184,5 +188,6 @@ impl SearchCursor {
             && self.chat_name_cursor.is_done()
             && self.content_cursor.is_done()
             && self.project_name_cursor.is_done()
+            && self.crm_company_cursor.is_done()
     }
 }

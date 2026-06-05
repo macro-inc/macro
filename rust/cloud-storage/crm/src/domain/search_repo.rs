@@ -41,6 +41,7 @@ pub trait CrmSearchRepository: Clone + Send + Sync + 'static {
     /// `Some(true)` gets no rows. Results are ordered `(updated_at DESC,
     /// id DESC)` and capped at `limit`; pass `cursor` to seek past a
     /// previous page.
+    #[allow(clippy::too_many_arguments)]
     fn search_company_names(
         &self,
         team_id: &Uuid,

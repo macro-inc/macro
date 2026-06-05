@@ -51,6 +51,8 @@ pub enum SearchEntityType {
     Projects,
     /// The call records entity type (has OpenSearch index)
     CallRecords,
+    /// The CRM company entity type (Postgres-only)
+    CrmCompanies,
 }
 
 /// `SearchEntityType` variants that have an OpenSearch index.
