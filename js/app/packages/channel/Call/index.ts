@@ -36,6 +36,7 @@ export {
   useInCallPanel,
 } from './InCallPanel';
 export { joinChannelCall } from './join-channel-call';
+export { NativeCallProvider } from './native-call-state';
 export { openChannelCallTab } from './open-channel-call-tab';
 export { useCall } from './use-call';
 export {

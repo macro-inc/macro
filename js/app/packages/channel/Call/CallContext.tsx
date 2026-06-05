@@ -26,7 +26,7 @@ import { CallAudioSink } from './CallAudioSink';
 import { createLivekitJsCallController } from './LivekitJsCallController';
 import {
   type NativeCallConnectionState,
-  nativeCallSnapshot,
+  useMaybeNativeCallState,
 } from './native-call-state';
 
 export type CallParticipantInfo = {
@@ -405,6 +405,7 @@ export function useCallContextOptional(): CallState | undefined {
  * and all readonly call state. Returns reactive state + mutation actions.
  */
 function createCallState() {
+  const nativeCall = useMaybeNativeCallState();
   const [room, setRoom] = createSignal<Room | null>(null);
   const [store, setStore] = createStore<CallStoreState>({
     ...initialState,
@@ -431,6 +432,9 @@ function createCallState() {
   function isCurrentMediaSetup(targetRoom: Room, setupVersion: number) {
     return room() === targetRoom && mediaSetupVersion === setupVersion;
   }
+
+  const currentNativeCallSnapshot = () =>
+    isTauri() && isPlatform('ios') ? (nativeCall?.snapshot() ?? null) : null;
 
   function currentMicrophoneCaptureOptions(
     deviceId?: string | null
@@ -830,7 +834,7 @@ function createCallState() {
   }
 
   async function switchVideoInput(deviceId: string) {
-    if (nativeCallSnapshot()) {
+    if (currentNativeCallSnapshot()) {
       console.info(
         '[callkit] ignoring JS video input switch; native drawer controls camera'
       );
@@ -862,9 +866,6 @@ function createCallState() {
     enumerateDevices();
   };
   navigator.mediaDevices?.addEventListener('devicechange', handleDeviceChange);
-
-  const currentNativeCallSnapshot = () =>
-    isTauri() && isPlatform('ios') ? nativeCallSnapshot() : null;
 
   const currentConnectionState = () => {
     const native = currentNativeCallSnapshot();
@@ -1004,7 +1005,7 @@ function createCallState() {
   }
 
   async function toggleVideo() {
-    if (nativeCallSnapshot()) {
+    if (currentNativeCallSnapshot()) {
       console.info(
         '[callkit] ignoring JS video toggle; native drawer controls camera'
       );

@@ -9,7 +9,7 @@ import { useMutation } from '@tanstack/solid-query';
 import { DisconnectReason, RoomEvent } from 'livekit-client';
 import { createEffect, createSignal, onCleanup } from 'solid-js';
 import { useCallContext } from './CallContext';
-import { nativeCallSnapshot } from './native-call-state';
+import { useMaybeNativeCallState } from './native-call-state';
 import {
   endCallKitCall,
   isNativeIosCallKitEnabled,
@@ -70,6 +70,7 @@ let leaveInFlight = false;
  */
 export function useCall(channelId: () => string, options?: UseCallOptions) {
   const callCtx = useCallContext();
+  const nativeCall = useMaybeNativeCallState();
   const channelsCtx = useChannelsContext();
   const leaveMutation = useLeaveCallMutation();
 
@@ -164,7 +165,7 @@ export function useCall(channelId: () => string, options?: UseCallOptions) {
 
       const doConnect = async () => {
         // CallKit answers already joined natively; avoid a duplicate JS participant.
-        const native = nativeCallSnapshot();
+        const native = nativeCall?.snapshot() ?? null;
         if (
           native &&
           native.channelId === id &&
@@ -199,16 +200,24 @@ export function useCall(channelId: () => string, options?: UseCallOptions) {
         if (cancelled) return;
 
         if (isNativeIosCallKitEnabled()) {
+          if (!nativeCall) {
+            throw new Error(
+              'Native call state is required for iOS CallKit outgoing calls'
+            );
+          }
           const channelTitle =
             channelsCtx.channelsById()[tokenResponse.channelId]?.name ?? null;
-          await startNativeCallKitOutgoingCall({
-            channelId: tokenResponse.channelId,
-            callId: tokenResponse.callId,
-            channelTitle,
-            callerName: channelTitle,
-            serverUrl: tokenResponse.serverUrl,
-            token: tokenResponse.token,
-          });
+          await startNativeCallKitOutgoingCall(
+            {
+              channelId: tokenResponse.channelId,
+              callId: tokenResponse.callId,
+              channelTitle,
+              callerName: channelTitle,
+              serverUrl: tokenResponse.serverUrl,
+              token: tokenResponse.token,
+            },
+            nativeCall
+          );
           return;
         }
 

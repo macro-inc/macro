@@ -7,7 +7,7 @@
     "frontendDist": "../../packages/app/dist",
     "devUrl": "http://localhost:3000",
     "beforeDevCommand": { "script": "just dev-tauri", "cwd": "../.." },
-    "beforeBuildCommand": { "script": "just build-tauri", "cwd": "../.." }
+    "beforeBuildCommand": { "script": "just build-dev", "cwd": "../.." }
   },
   "app": {
     "windows": [
