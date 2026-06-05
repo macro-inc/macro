@@ -666,6 +666,7 @@ dependencies = [
  "macro_auth",
  "macro_aws_config",
  "macro_cache_client",
+ "macro_config",
  "macro_cors",
  "macro_db_client",
  "macro_entrypoint",
@@ -6461,12 +6462,22 @@ dependencies = [
 name = "macro_config"
 version = "0.1.0"
 dependencies = [
+ "macro_config_derive",
  "macro_env_var",
  "remote_env_var",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
  "tracing",
+]
+
+[[package]]
+name = "macro_config_derive"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
 ]
 
 [[package]]

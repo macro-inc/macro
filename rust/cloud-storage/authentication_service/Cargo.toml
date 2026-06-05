@@ -65,6 +65,7 @@ macro_cache_client = { path = "../macro_cache_client", default-features = false,
   "verify_email_rate_limit",
 ] }
 macro_cors = { path = "../macro_cors" }
+macro_config = { path = "../macro_config" }
 macro_db_client = { path = "../macro_db_client", default-features = false, features = [
   "account_merge_request",
   "team",
