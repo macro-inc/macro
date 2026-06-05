@@ -18,6 +18,10 @@ type KnownNotificationMetadata =
   | CallStartedNotificationMetadata;
 
 export function toNotificationEntity(entity: EntityData): Entity {
+  if (entity.type === 'email') {
+    return { type: 'email_thread', id: entity.id };
+  }
+
   if (entity.type === 'foreign') {
     return { type: 'foreign_entity', id: entity.id };
   }
