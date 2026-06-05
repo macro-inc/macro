@@ -372,13 +372,14 @@ new FusionAuthIdpOpenIdConnect(
     debug: stack !== 'prod',
     applicationConfigurations: [
       {
-        applicationId: FUSIONAUTH_APPLICATION_CLIENT_ID,
+        applicationId: pulumi.interpolate`${macroApplication.oauthConfiguration.clientId}`,
         enabled: true,
         createRegistration: true,
       },
     ],
   },
   {
+    dependsOn: macroApplication,
     provider: fusionAuthProvider,
     protect: stack !== 'local',
   }
@@ -407,13 +408,14 @@ new FusionAuthIdpOpenIdConnect(
     lambdaReconcileId: reconcileSecondaryIdpLinkLambdaId,
     applicationConfigurations: [
       {
-        applicationId: FUSIONAUTH_APPLICATION_CLIENT_ID,
+        applicationId: pulumi.interpolate`${macroApplication.oauthConfiguration.clientId}`,
         enabled: true,
         createRegistration: true,
       },
     ],
   },
   {
+    dependsOn: macroApplication,
     provider: fusionAuthProvider,
     protect: stack !== 'local',
   }
