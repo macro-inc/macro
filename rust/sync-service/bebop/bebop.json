@@ -7,7 +7,7 @@
       "outFile": "./generated/schema.ts"
     },
     "rust": {
-      "outFile": "../bebop-schema/src/lib.rs"
+      "outFile": "../bebop-schema/src/generated.rs"
     }
   }
 }

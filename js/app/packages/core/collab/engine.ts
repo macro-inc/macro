@@ -24,8 +24,6 @@ export type SyncSources = {
   live: LiveSyncSource;
 };
 
-export const NoopWALSyncSource = (live: LiveSyncSource): WALSyncSource => live;
-
 export type SyncEngineParams<S extends GenericRootSchema, D> = {
   loroManager: LoroManager<S>;
   awareness: Awareness<D>;

@@ -62,7 +62,7 @@ export class MockLiveSyncSource implements LiveSyncSource {
   private deferredPushes: Promise<boolean>[] = [];
 
   public documentId = 'doc-1';
-  public pushUpdate = vi.fn(async (): Promise<boolean> => {
+  public pushUpdate = vi.fn(async (_updates: RawUpdate[]): Promise<boolean> => {
     if (this.deferredPushes.length > 0) return this.deferredPushes.shift()!;
     if (this.pushResultQueue.length > 0) return this.pushResultQueue.shift()!;
     return this.pushResult;

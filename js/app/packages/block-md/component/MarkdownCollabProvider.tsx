@@ -1,6 +1,7 @@
 import { markdownBlockErrorSignal } from '@block-md/signal/error';
 import { createAwareness } from '@core/collab/awareness';
-import { createSyncEngine, NoopWALSyncSource } from '@core/collab/engine';
+import { createSyncEngine } from '@core/collab/engine';
+import { createWALSyncSource } from '@core/collab/wal';
 import type { LoroManager } from '@core/collab/manager';
 import {
   $convertLexicalSelectionToCursors,
@@ -111,7 +112,7 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
   const syncEngine = createSyncEngine({
     loroManager: loroManager()!,
     awareness,
-    syncs: { wal: NoopWALSyncSource(syncSource()!), live: syncSource()! },
+    syncs: { wal: createWALSyncSource(syncSource()!), live: syncSource()! },
     bindings: {
       onRemoteState: (state) =>
         syncStateToLexical(state as unknown as SerializedEditorState),

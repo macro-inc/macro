@@ -76,9 +76,9 @@ function BlockMarkdownContent({ optimisticSnapshot }: BlockMarkdownProps) {
                 setBlockError('INVALID');
                 return;
               }
-              data.syncSource.pushUpdate(
-                loroManager.getDoc().export({ mode: 'update' })
-              );
+              data.syncSource.pushUpdate([
+                loroManager.getDoc().export({ mode: 'update' }),
+              ]);
             });
         });
       } else {

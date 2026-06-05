@@ -39,6 +39,7 @@ const useIsEditable = (mustBeConnected: boolean = true) => {
   const source = blockSourceSignal.get;
   const syncSource = blockSyncSourceSignal.get;
   return createMemo(() => {
+    return true; // WAL persists offline edits; remove this to re-enable lockout
     const source_ = source();
     if (!source_) return false;
     if (isSourceSyncService(source_)) {

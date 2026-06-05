@@ -70,11 +70,15 @@ export enum SyncSourceStatus {
 export type WALSyncSource = {
   readonly documentId: string;
   readonly listen: Listen<SyncSourceEvent>;
-  /** Resolves true if acked by the server, false if timed out. */
+  /** Persists a single outbound update. Resolves once written, not when delivered. */
   pushUpdate: (update: RawUpdate) => Promise<boolean>;
 };
 
-export type LiveSyncSource = WALSyncSource & {
+export type LiveSyncSource = {
+  readonly documentId: string;
+  readonly listen: Listen<SyncSourceEvent>;
+  /** Sends a batch of updates to the server. Resolves true if acked, false if timed out. */
+  pushUpdate: (updates: RawUpdate[]) => Promise<boolean>;
   pushAwareness: (awareness: RawUpdate) => void;
   registerPeerId: (peerId: bigint) => void;
   status: Accessor<SyncSourceStatus>;

@@ -1,6 +1,6 @@
 import { LoroDoc } from 'loro-crdt';
 import { describe, expect, it, vi } from 'vitest';
-import { NoopWALSyncSource, SyncEngine } from './engine';
+import { SyncEngine } from './engine';
 import {
   MockLoroManager,
   MockLiveSyncSource,
@@ -28,7 +28,7 @@ describe('SyncEngine', () => {
     const engine = new SyncEngine({
       loroManager: manager,
       awareness: makeAwareness(),
-      syncs: { wal: NoopWALSyncSource(source), live: source },
+      syncs: { wal: new IDBWALSyncSource(source, new MockWALStore()), live: source },
       bindings: { onRemoteState: vi.fn() },
       readonly: () => false,
       onRunningChange,
@@ -113,7 +113,7 @@ describe('SyncEngine', () => {
     const engine = new SyncEngine({
       loroManager: new MockLoroManager(false),
       awareness: makeAwareness(),
-      syncs: { wal: NoopWALSyncSource(source), live: source },
+      syncs: { wal: new IDBWALSyncSource(source, new MockWALStore()), live: source },
       bindings: { onRemoteState: vi.fn() },
     });
 

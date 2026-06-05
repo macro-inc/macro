@@ -124,21 +124,21 @@ pub async fn process_message(
         // Handle an incoming update from a peer
         // Should extract binary update and broadcast it to all other connected peers
         // Should also store the update in the operation log to be applied to the remote doc
-        FromPeer::PeerUpdate { update, id } => {
+        FromPeer::PeerUpdate { updates, id } => {
             if !Wsm::new(dss, ws).can_edit().await? {
                 tracing::warn!("received update from peer without edit permission");
                 return Ok(());
             }
-            session_storage
-                .append_pending_operation(&update, document_state)
-                .await?;
 
-            {
-                // send update to peers
+            for update in &updates {
+                session_storage
+                    .append_pending_operation(update, document_state)
+                    .await?;
+
+                // broadcast each update to other peers
                 let message = FromRemote::RemoteUpdate {
-                    update: SliceWrapper::Raw(&update),
+                    update: SliceWrapper::Raw(update),
                 };
-
                 let mut buf = buf.lock("serialize RemoteUpdate in PeerUpdate handler");
                 let serialized =
                     serialize(message, &mut buf).context("Failed serializing update")?;
@@ -148,7 +148,7 @@ pub async fn process_message(
             }
 
             {
-                // send ACK
+                // send a single ACK for the whole batch
                 let message = FromRemote::RemoteUpdateAck { id };
                 let mut buf = buf.lock("serialize RemoteUpdateAck in PeerUpdate handler");
                 let serialized =

@@ -111,13 +111,12 @@ export class IDBWALSyncSource implements WALSyncSource {
     let succeeded = true;
     try {
       const entries = await this.store.getAll();
-      for (const entry of entries) {
-        const delivered = await this.live.pushUpdate(entry.update);
-        if (!delivered) {
-          succeeded = false;
-          break;
-        }
-        await this.store.delete(entry.id);
+      if (entries.length === 0) return;
+      const delivered = await this.live.pushUpdate(entries.map((e) => e.update));
+      if (delivered) {
+        for (const entry of entries) await this.store.delete(entry.id);
+      } else {
+        succeeded = false;
       }
     } finally {
       this.isFlushing = false;

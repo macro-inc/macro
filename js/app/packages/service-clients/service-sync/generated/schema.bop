@@ -1,6 +1,6 @@
 union FromPeer {
   1 -> struct PeerUpdate {
-    byte[] update;
+    byte[][] updates;
     string id;
   }
   2 -> struct PeerAwareness {

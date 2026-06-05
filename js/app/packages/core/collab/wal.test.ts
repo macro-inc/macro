@@ -33,7 +33,7 @@ describe('IDBWALSyncSource', () => {
     walStore.resume();
     await wal.pendingFlush;
 
-    expect(live.pushUpdate).toHaveBeenCalledExactlyOnceWith(update);
+    expect(live.pushUpdate).toHaveBeenCalledExactlyOnceWith([update]);
     expect(await walStore.count()).toBe(0); // and we popped updates after they were safely flushed
   });
 
@@ -54,22 +54,39 @@ describe('IDBWALSyncSource', () => {
     expect(await walStore.count()).toBe(1); // we couldn't pop it, since we failed to flush
   });
 
-  it('stops flush at first failure and retains remaining', async () => {
+  it('batches all pending updates into a single live push', async () => {
     const live = new MockLiveSyncSource();
-    live.setPushResults(true, true, false, false, false);
     const { wal, walStore } = makeWAL(live);
 
     walStore.pause();
     await wal.pushUpdate(new Uint8Array([1]));
     await wal.pushUpdate(new Uint8Array([2]));
     await wal.pushUpdate(new Uint8Array([3]));
-    await wal.pushUpdate(new Uint8Array([4]));
-    await wal.pushUpdate(new Uint8Array([5]));
     walStore.resume();
     await wal.pendingFlush;
 
-    expect(live.pushUpdate).toHaveBeenCalledTimes(3); // stops at first failure, never tries [4] or [5]
-    expect(await walStore.count()).toBe(3); // first two delivered, last three retained
+    expect(live.pushUpdate).toHaveBeenCalledExactlyOnceWith([
+      new Uint8Array([1]),
+      new Uint8Array([2]),
+      new Uint8Array([3]),
+    ]);
+    expect(await walStore.count()).toBe(0); // all delivered, store cleared
+  });
+
+  it('retains all updates when the batch push fails', async () => {
+    const live = new MockLiveSyncSource();
+    live.setPushResult(false);
+    const { wal, walStore } = makeWAL(live);
+
+    walStore.pause();
+    await wal.pushUpdate(new Uint8Array([1]));
+    await wal.pushUpdate(new Uint8Array([2]));
+    await wal.pushUpdate(new Uint8Array([3]));
+    walStore.resume();
+    await wal.pendingFlush;
+
+    expect(live.pushUpdate).toHaveBeenCalledTimes(1);
+    expect(await walStore.count()).toBe(3); // batch failed, all retained
   });
 
   it('retries flush on reconnect', async () => {

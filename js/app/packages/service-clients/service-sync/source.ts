@@ -103,13 +103,11 @@ const TIMEOUTS = {
   REQUEST_UPDATES_SINCE: 10_000,
 } as const;
 
-type WithCleanup<T> = T & { cleanup: () => void };
-
 export const createSyncServiceSource = (
   documentId: string,
   token: string
 ): {
-  source: WithCleanup<LiveSyncSource>;
+  source: LiveSyncSource;
   doInitialSync: () => ResultAsync<InitialSync, TimeoutError>;
 } => {
   const ws = createSyncServiceSocket(documentId, token);
@@ -174,7 +172,7 @@ export const createSyncServiceSource = (
     // startHeartbeat() is safe to call - it will no-op if connection closed.
     ws.startHeartbeat();
 
-    let reconnectSyncResult: Result<InitialSync, TimeoutError> =
+    const reconnectSyncResult: Result<InitialSync, TimeoutError> =
       await ResultAsync.fromPromise(
         raceTimeout(
           untilMessage(ws, (message) => message.isRemoteInitialSync()),
@@ -220,8 +218,9 @@ export const createSyncServiceSource = (
     ws.send(message);
   };
 
-  const pushUpdate = async (update: RawUpdate): Promise<boolean> => {
+  const pushUpdate = async (updates: RawUpdate[]): Promise<boolean> => {
     if (!initialSyncReceived) return true;
+    if (updates.length === 0) return true;
 
     const id = crypto.randomUUID();
 
@@ -241,7 +240,7 @@ export const createSyncServiceSource = (
       }
     })();
 
-    ws.send(FromPeer.fromPeerUpdate({ update, id }));
+    ws.send(FromPeer.fromPeerUpdate({ updates, id }));
 
     return ack;
   };
