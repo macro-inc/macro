@@ -12,3 +12,4 @@ thiserror = { workspace = true }
 
 [dev-dependencies]
 macro_env_var = { path = "../macro_env_var" }
+remote_env_var = { path = "../remote_env_var" }

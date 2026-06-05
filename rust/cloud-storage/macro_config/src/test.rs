@@ -148,6 +148,15 @@ struct EnvVarFieldConfig {
     missing_optional_secret: Option<OptionalConfigSecret>,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+struct RemoteSecretFieldConfig {
+    remote_config_secret: remote_env_var::LocalOrRemoteSecret<ConfigSecret>,
+    optional_remote_config_secret:
+        remote_env_var::OptionalLocalOrRemoteSecret<OptionalConfigSecret>,
+    missing_remote_config_secret: remote_env_var::OptionalLocalOrRemoteSecret<OptionalConfigSecret>,
+}
+
 #[test]
 fn load_deserializes_macro_env_var_fields() {
     let _lock = ENV_LOCK.lock().expect("env lock poisoned");
@@ -171,6 +180,39 @@ fn load_deserializes_macro_env_var_fields() {
         Some("optional-secret")
     );
     assert!(config.missing_optional_secret.is_none());
+}
+
+#[test]
+fn load_deserializes_local_or_remote_macro_env_var_fields() {
+    let _lock = ENV_LOCK.lock().expect("env lock poisoned");
+    let env = EnvGuard::new(&[
+        "APP_SECRETS_JSON",
+        "REMOTE_CONFIG_SECRET",
+        "OPTIONAL_REMOTE_CONFIG_SECRET",
+        "MISSING_REMOTE_CONFIG_SECRET",
+    ]);
+    env.set("REMOTE_CONFIG_SECRET", "remote-secret-name");
+    env.set(
+        "OPTIONAL_REMOTE_CONFIG_SECRET",
+        "optional-remote-secret-name",
+    );
+
+    let config = ConfigLoader::load::<RemoteSecretFieldConfig>().expect("config should load");
+
+    match config.remote_config_secret {
+        remote_env_var::LocalOrRemoteSecret::Local(value) => {
+            assert_eq!(value.as_ref(), "remote-secret-name");
+        }
+        remote_env_var::LocalOrRemoteSecret::Remote(_) => {
+            panic!("deserialized secret should be local until resolved")
+        }
+    }
+
+    assert_eq!(
+        config.optional_remote_config_secret.as_str(),
+        Some("optional-remote-secret-name")
+    );
+    assert_eq!(config.missing_remote_config_secret.as_str(), None);
 }
 
 #[allow(dead_code)]

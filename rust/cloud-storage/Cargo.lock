@@ -6462,6 +6462,7 @@ name = "macro_config"
 version = "0.1.0"
 dependencies = [
  "macro_env_var",
+ "remote_env_var",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
@@ -9513,6 +9514,9 @@ name = "remote_env_var"
 version = "0.1.0"
 dependencies = [
  "macro_env",
+ "macro_env_var",
+ "serde",
+ "serde_json",
  "thiserror 2.0.18",
  "tracing",
 ]
