@@ -14,7 +14,7 @@ import EmptyStateNoSearchMatchIcon from '@design/empty-state-no-search-match.svg
 import EmptyStateTasksIcon from '@design/empty-state-tasks.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import { EmptyStatePanel, FilteredHiddenBanner } from '@ui';
-import { type Component, Match, Switch } from 'solid-js';
+import { type Component, type JSXElement, Match, Switch } from 'solid-js';
 import { FolderDropZone } from './FolderDropZone';
 import { useSoupView } from './soup-view-context';
 
@@ -24,7 +24,7 @@ const DOCS_BASE = 'https://docs.macro.com';
 type FallbackContent = {
   plural: string;
   graphic?: Component<{ class?: string }>;
-  description?: string;
+  description?: JSXElement;
   create?: { label: string; blockName: BlockName | BlockAlias };
   documentationUrl?: string;
 };
@@ -47,8 +47,13 @@ const FALLBACK_CONTENT: Partial<Record<ListView, FallbackContent>> = {
   },
   calls: {
     plural: 'calls',
-    description:
-      'See your recent and upcoming calls in one place. Start or join a call from any channel to talk with your team.',
+    description: (
+      <>
+        See recordings, transcriptions and summaries of your Macro calls.
+        <br />
+        Calls are available to agents.
+      </>
+    ),
     documentationUrl: `${DOCS_BASE}/product/calls`,
   },
   search: { plural: 'items' },
