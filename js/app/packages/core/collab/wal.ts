@@ -110,10 +110,12 @@ export class IDBWALSyncSource implements WALSyncSource {
     this.hasNewPending = false;
     let succeeded = true;
     try {
+      // TODO: would be nice to use a async iterator
       const entries = await this.store.getAll();
       if (entries.length === 0) return;
       const delivered = await this.live.pushUpdate(entries.map((e) => e.update));
       if (delivered) {
+        // NOTE: loro is idempotent. if we crash and re-flush these that is chill
         for (const entry of entries) await this.store.delete(entry.id);
       } else {
         succeeded = false;

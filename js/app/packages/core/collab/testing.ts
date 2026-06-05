@@ -5,6 +5,23 @@ import type { GenericRootSchema, LoroRawUpdate, RawUpdate } from './shared';
 import type { SyncSourceEvent, WALSyncSource } from './source';
 import { LiveSyncSource, SyncSourceStatus } from './source';
 import type { WALEntry, WALStore } from './wal';
+import type { SnapshotStore } from './snapshot-store';
+
+export class MockSnapshotStore implements SnapshotStore {
+  private snapshot: RawUpdate | null = null;
+
+  public async save(snapshot: RawUpdate): Promise<void> {
+    this.snapshot = snapshot;
+  }
+
+  public async load(): Promise<RawUpdate | null> {
+    return this.snapshot;
+  }
+
+  public async delete(): Promise<void> {
+    this.snapshot = null;
+  }
+}
 
 export class MockWALStore implements WALStore {
   private entries: WALEntry[] = [];

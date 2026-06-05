@@ -7,6 +7,7 @@ import { type Accessor, createEffect, createSignal, on } from 'solid-js';
 import type { Awareness } from './awareness';
 import { type LoroManager, LoroStateTag, type StateUpdate } from './manager';
 import type { GenericRootSchema, LoroRawUpdate, RawUpdate } from './shared';
+import type { SnapshotStore } from './snapshot-store';
 import type {
   LiveSyncSource,
   SyncSourceEvent,
@@ -14,6 +15,8 @@ import type {
   WALSyncSource,
 } from './source';
 import { compareLoroDocVersions, loroDocFromSnapshot } from './utils';
+
+const SNAPSHOT_INTERVAL_MS = 5_000;
 
 export type EngineBindings<S extends GenericRootSchema> = {
   onRemoteState: (state: InferType<S>) => void;
@@ -31,6 +34,7 @@ export type SyncEngineParams<S extends GenericRootSchema, D> = {
   bindings: EngineBindings<S>;
   readonly?: () => boolean;
   onRunningChange?: (v: boolean) => void;
+  snapshotStore?: SnapshotStore;
 };
 
 type SnapshotThunk = () => ResultAsync<Uint8Array, TimeoutError>;
@@ -49,6 +53,8 @@ export class SyncEngine<S extends GenericRootSchema, D> {
   private readonly readonly: () => boolean;
   private readonly syncLock = new Mutex();
   private unsubscribe?: () => void;
+  private snapshotInterval?: ReturnType<typeof setInterval>;
+  private readonly snapshotStore?: SnapshotStore;
   private readonly defaultSnapshotThunk: SnapshotThunk;
   private readonly onRunningChange: (v: boolean) => void;
 
@@ -59,6 +65,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
     bindings,
     readonly = () => false,
     onRunningChange = () => {},
+    snapshotStore,
   }: SyncEngineParams<S, D>) {
     this.loroManager = loroManager;
     this.awareness = awareness;
@@ -67,6 +74,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
     this.readonly = readonly;
     this.defaultSnapshotThunk = syncs.live.requestSnapshot;
     this.onRunningChange = onRunningChange;
+    this.snapshotStore = snapshotStore;
   }
 
   public start(): boolean {
@@ -86,6 +94,14 @@ export class SyncEngine<S extends GenericRootSchema, D> {
 
     this.syncs.live.listen((event) => this.handleSourceEvent(event));
     this.syncs.live.registerPeerId(this.loroManager.getPeerId());
+
+    if (this.snapshotStore) {
+      this.snapshotInterval = setInterval(
+        () => void this.persistSnapshot(),
+        SNAPSHOT_INTERVAL_MS
+      );
+    }
+
     this._isRunning = true;
     this.onRunningChange(true);
     return true;
@@ -94,6 +110,11 @@ export class SyncEngine<S extends GenericRootSchema, D> {
   public stop() {
     this.unsubscribe?.();
     this.unsubscribe = undefined;
+
+    if (this.snapshotInterval !== undefined) {
+      clearInterval(this.snapshotInterval);
+      this.snapshotInterval = undefined;
+    }
 
     this.awareness.updateLocalAwareness(undefined);
     this.syncs.live.pushAwareness(this.awareness.getEncodedLocalAwareness());
@@ -183,6 +204,25 @@ export class SyncEngine<S extends GenericRootSchema, D> {
   private async handleLocalUpdates(update: LoroRawUpdate) {
     if (this.readonly()) return;
     void this.syncs.wal.pushUpdate(update);
+  }
+
+  private async persistSnapshot() {
+    if (!this.snapshotStore) return;
+
+    try {
+      const doc = this.loroManager.getDoc();
+      const snapshot = doc.export({
+        mode: 'shallow-snapshot',
+        frontiers: doc.oplogFrontiers(),
+      });
+      await this.snapshotStore.save(snapshot);
+    } catch (err) {
+      logger.error('failed to persist snapshot', {
+        scope: 'sync_engine',
+        documentId: this.syncs.live.documentId,
+        err,
+      });
+    }
   }
 
   private async handleRemoteUpdate(update: RawUpdate) {

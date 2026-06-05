@@ -3,7 +3,12 @@ import { useBlockEntityCommands } from '@app/component/next-soup/actions';
 import { SidePanel } from '@app/component/side-panel';
 import { useBlockId } from '@core/block';
 import { createLoroManager } from '@core/collab/manager';
+import {
+  IDBSnapshotStore,
+  loadCachedState,
+} from '@core/collab/snapshot-store';
 import type { InitialSync, TimeoutError } from '@core/collab/source';
+import { IDBWALStore } from '@core/collab/wal';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { ENABLE_MARKDOWN_SIDE_PANEL } from '@core/constant/featureFlags';
 import { blockErrorSignal } from '@core/signal/load';
@@ -53,52 +58,59 @@ function BlockMarkdownContent({ optimisticSnapshot }: BlockMarkdownProps) {
 
   const setBlockError = blockErrorSignal.set;
 
+  const snapshotStore = new IDBSnapshotStore(blockId);
+  const walStore = new IDBWALStore(blockId);
+
   createEffect(
-    on(blockDataSignal, (data) => {
+    on(blockDataSignal, async (data) => {
       if (!data) {
         // TODO: if it's actually missing what do we do?
         // setBlockError('MISSING');
         return;
+      }
+      setBlockError(null);
+
+      // If caller provided an optimistic snapshot, always use it (right now
+      // this is just used for the "fresh document" path)
+      let initializedLocally = false;
+      if (optimisticSnapshot) {
+        await loroManager.initializeFromSnapshot(optimisticSnapshot);
+        initializedLocally = true;
       } else {
-        setBlockError(null);
+        // Otherwise try loading from IDB cache
+        initializedLocally = await loadCachedState(
+          loroManager,
+          snapshotStore,
+          walStore
+        );
       }
 
-      if (optimisticSnapshot) {
-        loroManager.initializeFromSnapshot(optimisticSnapshot).then(() => {
-          data
-            .doInitialSync()
-            .then((syncResult: Result<InitialSync, TimeoutError>) => {
-              if (syncResult.isErr()) {
-                console.error(
-                  'Failed to receive initial sync',
-                  syncResult.error
-                );
-                setBlockError('INVALID');
-                return;
-              }
-              data.syncSource.pushUpdate([
-                loroManager.getDoc().export({ mode: 'update' }),
-              ]);
-            });
-        });
+      // Now try to sync with server in the background. CRDT merge handles
+      // overlap with whatever was loaded locally.
+      const syncResult: Result<InitialSync, TimeoutError> =
+        await data.doInitialSync();
+      if (syncResult.isErr()) {
+        console.error('Failed to receive initial sync', syncResult.error);
+        if (!initializedLocally) setBlockError('INVALID');
+        return;
+      }
+
+      if (initializedLocally) {
+        // Loro is already initialized; merge the server state on top.
+        const importResult = loroManager.importUpdate(
+          syncResult.value.snapshot
+        );
+        if (importResult.isErr()) {
+          console.error('Failed to merge server snapshot', importResult.error);
+        }
       } else {
-        data
-          .doInitialSync()
-          .then((syncResult: Result<InitialSync, TimeoutError>) => {
-            if (syncResult.isErr()) {
-              console.error('Failed to receive initial sync', syncResult.error);
-              setBlockError('INVALID');
-              return;
-            }
-            loroManager
-              .initializeFromSnapshot(syncResult.value.snapshot)
-              .then((result) => {
-                if (result.isErr()) {
-                  console.error('Failed to initialize loro doc', result.error);
-                  setBlockError('INVALID');
-                }
-              });
-          });
+        const initResult = await loroManager.initializeFromSnapshot(
+          syncResult.value.snapshot
+        );
+        if (initResult.isErr()) {
+          console.error('Failed to initialize loro doc', initResult.error);
+          setBlockError('INVALID');
+        }
       }
     })
   );

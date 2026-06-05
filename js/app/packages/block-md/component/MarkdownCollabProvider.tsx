@@ -1,6 +1,7 @@
 import { markdownBlockErrorSignal } from '@block-md/signal/error';
 import { createAwareness } from '@core/collab/awareness';
 import { createSyncEngine } from '@core/collab/engine';
+import { IDBSnapshotStore } from '@core/collab/snapshot-store';
 import { createWALSyncSource } from '@core/collab/wal';
 import type { LoroManager } from '@core/collab/manager';
 import {
@@ -118,6 +119,7 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
         syncStateToLexical(state as unknown as SerializedEditorState),
     },
     readonly: readOnly,
+    snapshotStore: new IDBSnapshotStore(syncSource()!.documentId),
   });
 
   const { refreshRemoteCursors, RemoteCursorsOverlay } = useRemoteCursors({
