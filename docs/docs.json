@@ -63,7 +63,7 @@
             "group": "Sidebar",
             "pages": [
               "product/inbox",
-              "product/search-1",
+              "product/search",
               "product/agents",
               "product/email",
               "product/docs",
