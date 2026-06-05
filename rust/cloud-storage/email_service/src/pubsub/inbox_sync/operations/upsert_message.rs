@@ -571,9 +571,6 @@ async fn send_notifications(
         snippet: message.snippet.unwrap_or_default(),
     };
 
-    let mut recipient_ids: HashSet<MacroUserIdStr<'static>> =
-        HashSet::from([link.macro_id.clone()]);
-
     let primaries =
         macro_db_client::macro_user_links::get_primaries_for_child(&ctx.db, link.macro_id.as_ref())
             .await
@@ -584,11 +581,7 @@ async fn send_notifications(
                 })
             })?;
 
-    recipient_ids.extend(
-        primaries
-            .into_iter()
-            .filter_map(|p| MacroUserIdStr::try_from(p).ok()),
-    );
+    let recipient_ids = build_notification_recipients(&link.macro_id, primaries);
 
     let request = SendNotificationRequestBuilder {
         notification_entity: EntityType::EmailThread
@@ -609,6 +602,30 @@ async fn send_notifications(
     }
 
     Ok(())
+}
+
+fn build_notification_recipients(
+    owner: &MacroUserIdStr<'static>,
+    primaries: Vec<String>,
+) -> HashSet<MacroUserIdStr<'static>> {
+    let mut recipient_ids = HashSet::from([owner.clone()]);
+
+    for primary in primaries {
+        match MacroUserIdStr::try_from(primary) {
+            Ok(id) => {
+                recipient_ids.insert(id);
+            }
+            Err(e) => {
+                tracing::warn!(
+                    error=?e,
+                    inbox_owner=%owner,
+                    "skipping delegated primary that failed to parse as a macro user id"
+                );
+            }
+        }
+    }
+
+    recipient_ids
 }
 
 // filter out messages we don't want to send notifications for
