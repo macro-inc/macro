@@ -370,6 +370,12 @@ export const ENABLE_SOUP_GROUP_BY_OVERRIDE = DEV_MODE_ENV ? true : undefined;
 export const ENABLE_TASK_DUPLICATES_FLAG = 'enable-task-duplicates';
 export const ENABLE_TASK_DUPLICATES_OVERRIDE = DEV_MODE_ENV ? true : undefined;
 
+export const ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_FLAG =
+  'enable-supported-soup-foreign-entities';
+export const ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE = DEV_MODE_ENV
+  ? true
+  : undefined;
+
 export const ENABLE_AUTO_UPDATE_UI = resolveFeatureFlag(
   'ENABLE_AUTO_UPDATE_UI',
   true

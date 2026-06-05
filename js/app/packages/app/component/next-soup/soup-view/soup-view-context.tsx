@@ -17,12 +17,17 @@ import {
   type Query,
   type QueryStore,
 } from '@app/component/next-soup/filters/filter-store/query-store';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { createInfiniteQueries } from '@app/component/next-soup/soup-view/create-infinite-queries';
 import { createSearchState } from '@app/component/next-soup/soup-view/create-search-state';
 import { deduplicateEntities } from '@app/component/next-soup/utils';
 import { useEntryState } from '@app/component/split-layout/entry-state';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
-import { ENABLE_FEATURED_SEARCH_RESULTS } from '@core/constant/featureFlags';
+import {
+  ENABLE_FEATURED_SEARCH_RESULTS,
+  ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_FLAG,
+  ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE,
+} from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { throwOnErr } from '@core/util/result';
 import {
@@ -290,6 +295,12 @@ export const SoupViewContextProvider: FlowComponent<
 
   const notificationSource = useGlobalNotificationSource();
   const userId = useUserId();
+  const showSupportedForeignEntitiesFF = useFeatureFlag(
+    ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_FLAG,
+    {
+      enabledOverride: ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE,
+    }
+  );
 
   // Create filter context for context-aware filter predicates
   const getFilterContext = (): FilterContext => ({
@@ -316,6 +327,7 @@ export const SoupViewContextProvider: FlowComponent<
     }),
     () => ({
       enabled: !search.isSearching(),
+      showSupportedForeignEntities: showSupportedForeignEntitiesFF().enabled,
     })
   );
 
@@ -483,7 +495,11 @@ export const SoupViewContextProvider: FlowComponent<
             const allItems = pages.flatMap((p) => p.items);
             return mapSoupPageToEntityList(
               { items: allItems, next_cursor: null },
-              { instructionsIdQuery }
+              {
+                instructionsIdQuery,
+                showSupportedForeignEntities:
+                  showSupportedForeignEntitiesFF().enabled,
+              }
             ).map((e) => attachNotifications(e)) as SoupEntity[];
           },
           enabled: true,

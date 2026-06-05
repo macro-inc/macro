@@ -477,15 +477,16 @@ export const mapSoupPageToEntityList: (
   data: SoupPage,
   options: {
     instructionsIdQuery: UseQueryResult<string | null | undefined, Error>;
+    showSupportedForeignEntities?: boolean;
   }
 ) => SoupEntity[] = (data, options) => {
   return data.items
     .filter((item): item is DisplayableSoupItem => {
-      if (
-        item.tag === 'foreignEntity' &&
-        item.data.foreignEntitySource !== 'github_pull_request'
-      ) {
-        return false;
+      if (item.tag === 'foreignEntity') {
+        return (
+          options.showSupportedForeignEntities === true &&
+          item.data.foreignEntitySource === 'github_pull_request'
+        );
       }
 
       if (item.tag === 'crmCompany') return false;
