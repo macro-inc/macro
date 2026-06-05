@@ -285,6 +285,16 @@ const useSoupNotificationInvalidators = () => {
       }
     }
   );
+
+  createEffectOnEntityTypeNotification(
+    notificationSource,
+    'foreign_entity',
+    (notification) => {
+      refetchSoupEntity(notification.entity_id, 'foreignEntity');
+      invalidateSoupEntity(notification.entity_id);
+      invalidateEntityNotifications(notification.entity_id);
+    }
+  );
 };
 
 const listStateCache = new Map<
