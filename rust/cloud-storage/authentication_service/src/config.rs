@@ -26,8 +26,10 @@ fn optional_config_value(key: &'static str) -> Option<String> {
     read_config_value(key)
 }
 
-// BASE_URL env var. This is validated when creating the config in main.rs
-pub static BASE_URL: LazyLock<String> = LazyLock::new(|| std::env::var("BASE_URL").unwrap());
+// BASE_URL config value. This is validated when creating the config in main.rs
+pub static BASE_URL: LazyLock<String> = LazyLock::new(|| {
+    read_config_value("BASE_URL").expect("BASE_URL must be provided via APP_SECRETS_JSON or env")
+});
 
 /// The configuration parameters for the application.
 ///
