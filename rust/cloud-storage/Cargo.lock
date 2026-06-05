@@ -6458,6 +6458,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "macro_config"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tracing",
+]
+
+[[package]]
 name = "macro_cors"
 version = "0.1.0"
 dependencies = [
