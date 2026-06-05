@@ -66,6 +66,8 @@ async fn main() -> anyhow::Result<()> {
     let env = Environment::new_or_prod();
 
     let doppler = doppler_config::DopplerConfig::builder()
+        .prefer_doppler_run_env() // if doppler run command is used, use that
+        .fallback_to_env_on_missing_token()
         .project(
             std::env::var("DOPPLER_PROJECT")
                 .ok()

@@ -92,13 +92,3 @@ pub struct Config {
     /// The stripe price id
     pub stripe_price_id: String,
 }
-
-/// Grab the stripe product price id using the environment
-#[allow(dead_code)]
-fn get_stripe_price_id_from_environment(environment: Environment) -> String {
-    // SAFETY: stripe price ids are not sensitive information so hard coding them here is simpler
-    match environment {
-        Environment::Production => "price_1TZY5FJaD7zvQeOBMldBpUHg".to_string(),
-        Environment::Develop | Environment::Local => "price_1TZY5uJaD7zvQeOBRu9a5v8P".to_string(),
-    }
-}

@@ -3729,9 +3729,9 @@ dependencies = [
 
 [[package]]
 name = "doppler-config"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e9725269d4de75f25ee1ba5cb5ff8cdb7b1579567ea5b6ab7a70ca16cd1d5455"
+checksum = "a033f09243efd65cf904770c51a0a4c3d45fd6e4cfa71b915e2f948692fb831d"
 dependencies = [
  "reqwest 0.13.4",
  "serde",
