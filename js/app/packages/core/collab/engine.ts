@@ -7,46 +7,219 @@ import { type Accessor, createEffect, createSignal, on } from 'solid-js';
 import type { Awareness } from './awareness';
 import { type LoroManager, LoroStateTag, type StateUpdate } from './manager';
 import type { GenericRootSchema, LoroRawUpdate, RawUpdate } from './shared';
-import type { SyncSource, TimeoutError } from './source';
+import type { SyncSource, SyncSourceEvent, TimeoutError } from './source';
 import { compareLoroDocVersions, loroDocFromSnapshot } from './utils';
 
-type EngineBindings<S extends GenericRootSchema, D> = {
-  /**
-   * Callback for handling state updates from the remote
-   * @param state - The serialized state
-   */
-  syncFromLoro: (state: InferType<S>) => void;
-  onReset?: () => void;
-  /**
-   * Callback for handling awareness updates from the remote
-   * @param awareness - The decoded awareness state
-   */
-  syncFromAwareness?: (awareness: D) => void;
+export type EngineBindings<S extends GenericRootSchema> = {
+  onRemoteState: (state: InferType<S>) => void;
 };
 
-type Engine<S extends GenericRootSchema, D> = {
-  /** Is the engine running ¯\_(ツ)_/¯  */
-  readonly isRunning: Accessor<boolean>;
-  /**
-   * Update the local state, and sync it to the remote
-   * @param state - The serialized state to push
-   */
-  syncStateToLoro: (state: InferType<S>) => Promise<void>;
-  /**
-   * Update the local awareness, and sync it to the remote
-   * @param awareness - The decoded awareness state to push
-   */
-  syncAwarenessToLoro: (awareness: D) => void;
-  /** Starts the sync engine */
+type SnapshotThunk = () => ResultAsync<Uint8Array, TimeoutError>;
+
+export class SyncEngine<S extends GenericRootSchema, D> {
+  private _isRunning = false;
+  get isRunning() {
+    return this._isRunning;
+  }
+
+  private readonly syncLock = new Mutex();
+  private unsubscribe?: () => void;
+  private readonly defaultSnapshotThunk: SnapshotThunk;
+  private readonly onRunningChange: (v: boolean) => void;
+
+  constructor(
+    private readonly loroManager: LoroManager<S>,
+    private readonly awareness: Awareness<D>,
+    private readonly source: SyncSource,
+    private readonly bindings: EngineBindings<S>,
+    private readonly readonly: () => boolean = () => false,
+    { onRunningChange = () => {} }: { onRunningChange?: (v: boolean) => void } = {}
+  ) {
+    this.defaultSnapshotThunk = source.requestSnapshot;
+    this.onRunningChange = onRunningChange;
+  }
+
+  public start(): boolean {
+    if (!this.loroManager.isInitialized()) {
+      logger.warn('Loro manager not initialized, engine will not start', {
+        documentId: this.source.documentId,
+      });
+      return false;
+    }
+
+    this.unsubscribe?.();
+    this.unsubscribe = this.loroManager.getDoc().subscribeLocalUpdates((update) => {
+      this.handleLocalUpdates(update);
+    });
+
+    this.source.listen((event) => this.handleSourceEvent(event));
+    this.source.registerPeerId(this.loroManager.getPeerId());
+    this._isRunning = true;
+    this.onRunningChange(true);
+    return true;
+  }
+
+  public stop() {
+    this.unsubscribe?.();
+    this.unsubscribe = undefined;
+
+    this.awareness.updateLocalAwareness(undefined);
+    this.source.pushAwareness(this.awareness.getEncodedLocalAwareness());
+    this._isRunning = false;
+    this.onRunningChange(false);
+  }
+
+  public async syncStateToLoro(state: InferType<S>) {
+    if (!this._isRunning) return;
+    await this.syncLock.runExclusive(async () => {
+      const syncResult = await this.loroManager.syncToLoro(state);
+
+      if (syncResult.isErr()) {
+        logger.error('failed to sync state to remote', {
+          resolution: 'reset engine',
+          scope: 'sync_engine',
+          err: syncResult,
+          documentId: this.source.documentId,
+        });
+        this.reset();
+      }
+    });
+  }
+
+  public syncAwarenessToLoro(awarenessUpdate: D) {
+    if (!this._isRunning) return;
+    this.awareness.updateLocalAwareness(awarenessUpdate);
+    this.source.pushAwareness(this.awareness.getEncodedLocalAwareness());
+  }
+
+  public async reset(snapshotThunk?: SnapshotThunk) {
+    const wasRunning = this._isRunning;
+    if (wasRunning) {
+      this.stop();
+    }
+
+    await this.syncLock.runExclusive(async () => {
+      let snapshot = await (snapshotThunk ?? this.defaultSnapshotThunk)();
+      if (snapshot.isErr()) {
+        logger.error('failed to get snapshot from source', {
+          resolution: 'fail',
+          scope: 'sync_engine',
+          err: snapshot.error,
+          documentId: this.source.documentId,
+        });
+        return;
+      }
+
+      let resetResult = await this.loroManager.reset(snapshot.value);
+      if (resetResult.isErr()) {
+        logger.error('failed to reset engine or loro manager', {
+          resolution: 'fail',
+          scope: 'sync_engine',
+          err: resetResult,
+          documentId: this.source.documentId,
+        });
+        return;
+      }
+    });
+
+    if (wasRunning) {
+      this.start();
+    }
+  }
+
+  public onStateUpdate(stateUpdate: StateUpdate<S> | undefined) {
+    if (!this._isRunning || !stateUpdate) return;
+    if (stateUpdate.metadata.direction === SyncDirection.TO_LORO) return;
+    if (stateUpdate.metadata.tags?.includes(LoroStateTag.Initialize)) return;
+    this.syncLock.runExclusive(() => this.bindings.onRemoteState(stateUpdate.state));
+  }
+
+  public onLocalAwarenessChange() {
+    if (!this._isRunning) return;
+    const awarenessUpdate = this.awareness.getEncodedLocalAwareness();
+    if (!awarenessUpdate) return;
+    this.source.pushAwareness(awarenessUpdate);
+  }
+
+  private async handleLocalUpdates(update: LoroRawUpdate) {
+    if (this.readonly()) return;
+    const peerId = this.loroManager.getPeerId();
+    const delivered = await this.source.pushUpdate(update, peerId);
+    console.log(delivered);
+    if (!delivered) {
+      logger.error('failed to push local update to remote', {
+        scope: 'sync_engine',
+        resolution: 'try to reconnect',
+        documentId: this.source.documentId,
+      });
+      this.source.reconnect();
+    }
+  }
+
+  private async handleRemoteUpdate(update: RawUpdate) {
+    await this.syncLock.runExclusive(async () => {
+      let importResult = this.loroManager.importUpdate(update);
+      await Promise.resolve();
+      if (importResult.isErr()) {
+        logger.error('failed to import remote update', {
+          resolution: 'reset engine',
+          scope: 'sync_engine',
+          err: importResult,
+          documentId: this.source.documentId,
+        });
+        console.error(importResult);
+        this.reset();
+        return;
+      }
+    });
+  }
+
+  private handleSourceEvent(event: SyncSourceEvent) {
+    switch (event.type) {
+      case 'update':
+        this.handleRemoteUpdate(event.update);
+        break;
+      case 'awareness':
+        this.awareness.importRemoteAwareness(event.awareness);
+        break;
+      case 'incremental_snapshot':
+        this.handleRemoteUpdate(event.snapshot);
+        break;
+      case 'reconnect': {
+        const doc = this.loroManager.getDoc();
+        const tempDoc = loroDocFromSnapshot(event.snapshot);
+        const cmp = compareLoroDocVersions(doc, tempDoc);
+        if (cmp >= 0) return;
+        logger.log('reconnecting and fast forwarding new updates', {
+          documentId: this.source.documentId,
+        });
+        this.requestAndHandleUpdatesSince(doc.frontiers());
+        break;
+      }
+    }
+  }
+
+  private async requestAndHandleUpdatesSince(since: Frontiers) {
+    const updates = await this.source.requestUpdatesSince(since);
+    if (updates.isErr() || !updates.value) {
+      console.error(
+        'failed to request updates since',
+        'error' in updates ? updates.error : 'update is undefined'
+      );
+      return;
+    }
+
+    this.handleRemoteUpdate(updates.value);
+  }
+}
+
+export type ReactiveSyncEngine<S extends GenericRootSchema, D> = {
+  isRunning: Accessor<boolean>;
   start: () => void;
-  /** Stops the sync engine */
   stop: () => void;
-  /**
-   * Resets the sync engine
-   * This will use the latest snapshot from the remote,
-   * and re-create the manager from the snapshot
-   */
-  reset: () => void;
+  reset: (snapshotThunk?: () => ResultAsync<Uint8Array, TimeoutError>) => Promise<void>;
+  syncStateToLoro: (state: InferType<S>) => Promise<void>;
+  syncAwarenessToLoro: (awareness: D) => void;
 };
 
 export function createSyncEngine<
@@ -56,237 +229,24 @@ export function createSyncEngine<
   loroManager: LoroManager<S>,
   awareness: Awareness<D>,
   source: SyncSource,
-  bindings: EngineBindings<S, D>,
+  bindings: EngineBindings<S>,
   readonly: Accessor<boolean> = () => false
-): Engine<S, D> {
-  const [running, setRunning] = createSignal(false);
-  const syncLock = new Mutex();
+): ReactiveSyncEngine<S, D> {
+  const [isRunning, setIsRunning] = createSignal(false);
 
-  const handleLocalUpdates = async (update: LoroRawUpdate) => {
-    if (readonly()) return;
-    const peerId = loroManager.getPeerId();
-    await source.pushUpdate(update, peerId).mapErr((err) => {
-      logger.error('failed to push local update to remote', {
-        scope: 'sync_engine',
-        resolution: 'try to reconnect',
-        err: err,
-        documentId: source.documentId,
-      });
-      source.reconnect();
-      return;
-    });
-  };
-
-  /**
-   * Handles remote updates from the other peers
-   *
-   * Takes the incoming peer update and imports i into the local loroDoc
-   *
-   * If the import fails, it will reset the engine
-   *
-   * @param update - The update to handle
-   */
-  const handleRemoteUpdate = async (update: RawUpdate) => {
-    await syncLock.runExclusive(async () => {
-      let importResult = loroManager.importUpdate(update);
-      await Promise.resolve();
-      if (importResult.isErr()) {
-        logger.error('failed to import remote update', {
-          resolution: 'reset engine',
-          scope: 'sync_engine',
-          err: importResult,
-          documentId: source.documentId,
-        });
-        const error = importResult;
-        console.error(error);
-        resetEngine();
-        return;
-      }
-    });
-  };
-
-  let unsubscribe: (() => void) | undefined;
-
-  const start = () => {
-    if (!loroManager.isInitialized()) {
-      logger.warn('Loro manager not initialized, engine will not start', {
-        documentId: source.documentId,
-      });
-      return;
-    }
-
-    unsubscribe?.();
-    unsubscribe = loroManager.getDoc().subscribeLocalUpdates((update) => {
-      handleLocalUpdates(update);
-    });
-
-    source.registerPeerId(loroManager.getPeerId());
-    setRunning(true);
-  };
-
-  const stop = () => {
-    unsubscribe?.();
-    unsubscribe = undefined;
-
-    awareness.updateLocalAwareness(undefined);
-    source.pushAwareness(awareness.getEncodedLocalAwareness());
-    setRunning(false);
-  };
-
-  const syncStateToLoro = async (state: InferType<S>) => {
-    if (!running()) return;
-    await syncLock.runExclusive(async () => {
-      const syncResult = await loroManager.syncToLoro(state);
-
-      // Failed to sync, try to reset the engine
-      if (syncResult.isErr()) {
-        let error = syncResult;
-        logger.error('failed to sync state to remote', {
-          resolution: 'reset engine',
-          scope: 'sync_engine',
-          err: error,
-          documentId: source.documentId,
-        });
-        resetEngine();
-      }
-    });
-  };
-
-  type SnapshotThunk = () => ResultAsync<Uint8Array, TimeoutError>;
-
-  const DEFAULT_SNAPSHOT_THUNK: SnapshotThunk = source.requestSnapshot;
-
-  const resetEngine = async (snapshotThunk?: SnapshotThunk) => {
-    const wasRunning = running();
-    if (wasRunning) {
-      stop();
-    }
-
-    await syncLock.runExclusive(async () => {
-      let snapshot = await (snapshotThunk ?? DEFAULT_SNAPSHOT_THUNK)();
-      if (snapshot.isErr()) {
-        logger.error('failed to get snapshot from source', {
-          resolution: 'fail',
-          scope: 'sync_engine',
-          err: snapshot.error,
-          documentId: source.documentId,
-        });
-        return;
-      }
-
-      let resetResult = await loroManager.reset(snapshot.value);
-      if (resetResult.isErr()) {
-        logger.error('failed to reset engine or loro manager', {
-          resolution: 'fail',
-          scope: 'sync_engine',
-          err: resetResult,
-          documentId: source.documentId,
-        });
-        return;
-      }
-    });
-
-    if (wasRunning) {
-      start();
-    }
-  };
-
-  /**
-   * Sync local awareness to peers and local ephemeral store
-   * @param awarenessUpdate
-   */
-  const syncAwarenessToLoro = (awarenessUpdate: D) => {
-    if (!running()) return;
-    // Update the local ephemeral store with the new awareness
-    awareness.updateLocalAwareness(awarenessUpdate);
-    // Push the awareness updates to be synced with the other peers
-    source.pushAwareness(awareness.getEncodedLocalAwareness());
-  };
-
-  /**
-   * Requests all updates since the current version of the document from the source
-   * and applies them to the local document
-   *
-   * @param since - The version to request updates since
-   */
-  const requestAndHandleUpdatesSince = async (since: Frontiers) => {
-    const updates = await source.requestUpdatesSince(since);
-    if (updates.isErr() || !updates.value) {
-      console.error(
-        'failed to request updates since',
-        'error' in updates ? updates.error : 'update is undefined'
-      );
-      return;
-    }
-
-    handleRemoteUpdate(updates.value);
-  };
-
-  createEffect(() => {
-    if (!running()) return;
-
-    source.listen(async (event) => {
-      switch (event.type) {
-        case 'update':
-          handleRemoteUpdate(event.update);
-          break;
-        case 'awareness':
-          awareness.importRemoteAwareness(event.awareness);
-          break;
-        case 'incremental_snapshot':
-          handleRemoteUpdate(event.snapshot);
-          break;
-        case 'reconnect': {
-          const doc = loroManager.getDoc();
-          const tempDoc = loroDocFromSnapshot(event.snapshot);
-          const cmp = compareLoroDocVersions(doc, tempDoc);
-          if (cmp >= 0) {
-            return;
-          }
-          logger.log('reconnecting and fast forwarding new updates', {
-            documentId: source.documentId,
-          });
-          requestAndHandleUpdatesSince(doc.frontiers());
-        }
-      }
-    });
+  const engine = new SyncEngine(loroManager, awareness, source, bindings, readonly, {
+    onRunningChange: setIsRunning,
   });
 
-  createEffect(
-    on(loroManager.state, (stateUpdate: StateUpdate<S> | undefined) => {
-      if (
-        // Engine is not running
-        !running() ||
-        // Update is empty
-        !stateUpdate ||
-        // Update is from ourselves
-        stateUpdate.metadata.direction === SyncDirection.TO_LORO ||
-        // Update is from the initial sync
-        stateUpdate.metadata.tags?.includes(LoroStateTag.Initialize)
-      ) {
-        return;
-      }
-      syncLock.runExclusive(async () => {
-        bindings.syncFromLoro(stateUpdate.state);
-      });
-    })
-  );
-
-  createEffect(
-    on(awareness.local, (_) => {
-      if (!running()) return;
-      const awarenessUpdate = awareness.getEncodedLocalAwareness();
-      if (!awarenessUpdate) return;
-      source.pushAwareness(awarenessUpdate);
-    })
-  );
+  createEffect(on(loroManager.state, (update) => engine.onStateUpdate(update)));
+  createEffect(on(awareness.local, () => engine.onLocalAwarenessChange()));
 
   return {
-    isRunning: running,
-    syncStateToLoro,
-    syncAwarenessToLoro,
-    start,
-    stop,
-    reset: resetEngine,
+    isRunning,
+    start: () => engine.start(),
+    stop: () => engine.stop(),
+    reset: (t) => engine.reset(t),
+    syncStateToLoro: (state) => engine.syncStateToLoro(state),
+    syncAwarenessToLoro: (a) => engine.syncAwarenessToLoro(a),
   };
 }

@@ -113,7 +113,7 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
     awareness,
     syncSource()!,
     {
-      syncFromLoro: (state) =>
+      onRemoteState: (state) =>
         syncStateToLexical(state as unknown as SerializedEditorState),
     },
     readOnly

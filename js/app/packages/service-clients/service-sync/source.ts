@@ -1,7 +1,6 @@
 import type { RawUpdate } from '@core/collab/shared';
 import {
   type InitialSync,
-  type MissingAckError,
   SyncError,
   type SyncSource,
   type SyncSourceEvent,
@@ -13,7 +12,7 @@ import { arrayEquals } from '@core/util/compareUtils';
 
 import { storageServiceClient } from '@service-storage/client';
 import { createEventBus } from '@solid-primitives/event-bus';
-import { raceTimeout, until } from '@solid-primitives/promise';
+import { raceTimeout } from '@solid-primitives/promise';
 import {
   BebopSerializer,
   ConstantBackoff,
@@ -28,8 +27,7 @@ import {
 } from '@websocket/solid/socket-effect';
 import { createWebsocketStateSignal } from '@websocket/solid/state-signal';
 import { encodeFrontiers, type Frontiers } from 'loro-crdt';
-import { okAsync, type Result, ResultAsync } from 'neverthrow';
-import { createStore } from 'solid-js/store';
+import { type Result, ResultAsync } from 'neverthrow';
 import {
   FromPeer,
   FromRemote,
@@ -100,7 +98,7 @@ function createSyncServiceSocket(documentId: string, initialToken: string) {
 
 const TIMEOUTS = {
   INITIAL_SYNC: 10_000,
-  ACK: 3_000,
+  ACK: 1_000,
   SNAPSHOT: 10_000,
   REQUEST_UPDATES_SINCE: 10_000,
 } as const;
@@ -142,25 +140,6 @@ export const createSyncServiceSource = (
 
   const status = createWebsocketStateSignal(ws);
 
-  const [awaitingAckStore, setAwaitingAck] = createStore<Record<string, true>>(
-    {}
-  );
-
-  const ackUpdate = (update: RawUpdate) => {
-    setAwaitingAck((prev) => ({
-      ...prev,
-      [rawUpdateToString(update)]: true,
-    }));
-  };
-
-  const stopAwaitingAck = (update: RawUpdate) => {
-    setAwaitingAck((prev) => {
-      const newState = { ...prev };
-      delete newState[rawUpdateToString(update)];
-      return newState;
-    });
-  };
-
   const syncEventForMessage = (message: FromRemote): SyncSourceEvent | null => {
     if (message.isRemoteUpdate()) {
       return {
@@ -186,10 +165,6 @@ export const createSyncServiceSource = (
     const syncEvent = syncEventForMessage(message);
     if (syncEvent) {
       eventBus.emit(syncEvent);
-    }
-
-    if (message.isRemoteUpdateAck()) {
-      ackUpdate(message.value.update);
     }
   });
 
@@ -245,35 +220,30 @@ export const createSyncServiceSource = (
     ws.send(message);
   };
 
-  const pushUpdate = (
-    update: RawUpdate
-  ): ResultAsync<void, MissingAckError> => {
-    // no point in sending messages, since we will do our catch-up sync once the
-    // initial sync comes in
-    if (!initialSyncReceived) {
-      return okAsync(undefined);
+  const pushUpdate = async (update: RawUpdate): Promise<boolean> => {
+    if (!initialSyncReceived) return true;
+
+    const ack = (async () => {
+      try {
+        await raceTimeout(
+          untilMessage(ws, (msg) => msg.isRemoteUpdateAck()),
+          TIMEOUTS.ACK,
+          true
+        );
+        return true;
+      } catch {
+        return false;
+      }
+    })();
+
+    if (Math.random() > 0.5) {
+      ws.send(FromPeer.fromPeerUpdate({ update }));
+    } else {
+      console.log('fejiaofjwaeiofjieowjo');
     }
 
-    const message = FromPeer.fromPeerUpdate({ update });
-    ws.send(message);
+    return ack;
 
-    const ack = () => awaitingAckStore[rawUpdateToString(update)];
-
-    return ResultAsync.fromPromise(
-      raceTimeout(
-        until(ack),
-        TIMEOUTS.ACK,
-        /** make sure until throws **/
-        true
-      ),
-      () =>
-        ({
-          type: 'missing_ack',
-          update: update,
-        }) as const
-    ).map(() => {
-      stopAwaitingAck(update);
-    });
   };
 
   const pushAwareness = (awareness: RawUpdate) => {
@@ -329,6 +299,3 @@ export const createSyncServiceSource = (
     doInitialSync,
   };
 };
-
-const rawUpdateToString = (update: RawUpdate) =>
-  btoa(String.fromCharCode(...update));

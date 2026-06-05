@@ -42,10 +42,6 @@ export type TimeoutError = {
   duration: number;
 };
 
-export type MissingAckError = {
-  type: 'missing_ack';
-  update: RawUpdate;
-};
 
 export type SyncError =
   | ConnectionFailedError
@@ -76,14 +72,11 @@ export type SyncSource = {
   readonly listen: Listen<SyncSourceEvent>;
   readonly documentId: string;
 
-  /** Pushes an update to the source
+  /** Pushes an update to the source. Resolves true if acked, false if timed out.
    *
    * @param update - The update to push, should be a [RawUpdate] from [LoroDoc.export()]
    **/
-  pushUpdate: (
-    update: RawUpdate,
-    peerId: bigint
-  ) => ResultAsync<void, MissingAckError>;
+  pushUpdate: (update: RawUpdate, peerId: bigint) => Promise<boolean>;
 
   /** Pushes an awareness update to the source
    *
