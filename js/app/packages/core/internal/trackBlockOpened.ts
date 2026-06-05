@@ -19,7 +19,7 @@ function isSoupEntityTag(
   itemType: ItemType
 ): itemType is ItemType & SoupEntityTag {
   return match(itemType)
-    .with('email', 'channel_message', 'automation', () => false)
+    .with('email', 'channel_message', 'automation', 'foreign', () => false)
     .with('document', 'chat', 'project', 'channel', 'call', () => true)
     .exhaustive();
 }

@@ -32,6 +32,7 @@ export { unreadFilterFn } from './utils/filter';
 export {
   filterNotDoneNotifications,
   filterValidNotifications,
+  toNotificationEntity,
 } from './utils/notification';
 export { useIsShared } from './utils/shared';
 export {

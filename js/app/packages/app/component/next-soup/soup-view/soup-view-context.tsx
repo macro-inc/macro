@@ -29,6 +29,7 @@ import {
   type EntityData,
   getPropertyOptionLabel,
   isWithNotification,
+  toNotificationEntity,
 } from '@entity';
 import { useNotificationsForEntity } from '@notifications';
 import { useQueryClient } from '@queries/client';
@@ -300,7 +301,10 @@ export const SoupViewContextProvider: FlowComponent<
   const attachNotifications = (entity: EntityData) => {
     return {
       ...entity,
-      notifications: useNotificationsForEntity(notificationSource, entity),
+      notifications: useNotificationsForEntity(
+        notificationSource,
+        toNotificationEntity(entity)
+      ),
     };
   };
 

@@ -317,6 +317,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
       clientY: currentPos.y,
     };
     const item = event.draggable.data;
+    if (item.type === 'foreign') return;
     const blockName = itemToBlockName(item);
     if (!blockName) return;
     let id = event.draggable.data.id as string;

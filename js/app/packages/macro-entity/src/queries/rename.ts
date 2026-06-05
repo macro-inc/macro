@@ -91,6 +91,8 @@ const validateEntityRename = (entity: EntityData): void => {
     case 'project':
     case 'call':
       return;
+    case 'foreign':
+      throw new Error('Foreign entities do not support renaming');
     default:
       throw new Error(`Unsupported entity type: ${entity.type}`);
   }
@@ -124,7 +126,8 @@ const renameDssSetData = (
     } else if (
       itemType !== 'email' &&
       itemType !== 'channel_message' &&
-      itemType !== 'automation'
+      itemType !== 'automation' &&
+      itemType !== 'foreign'
     ) {
       txns.set(
         id,

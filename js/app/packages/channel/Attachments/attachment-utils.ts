@@ -110,5 +110,8 @@ export function getEntityClickContent(entity: EntityData): SplitContent {
       type: 'automation' as const,
       id: e.id,
     }))
+    .with({ type: 'foreign' }, () => {
+      throw new Error('foreign entities do not support channel attachments');
+    })
     .exhaustive();
 }

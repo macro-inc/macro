@@ -8,7 +8,8 @@ import { getActiveCommandsFromScope } from '@core/hotkey/getCommands';
 import type { RegisterHotkeyReturn } from '@core/hotkey/types';
 import { runCommand } from '@core/hotkey/utils';
 import { debouncedDependent } from '@core/util/debounce';
-import { type EntityData, InlineEntity } from '@entity';
+import { openExternalUrl } from '@core/util/url';
+import { type EntityData, InlineEntity, isGithubPrEntity } from '@entity';
 import Macro from '@icon/macro-logo.svg';
 import ArrowLeft from '@phosphor/arrow-left.svg';
 import { cn, Dialog, Hotkey, Panel } from '@ui';
@@ -209,15 +210,25 @@ export function CommandMenuInner(props: {
 
     // Handle entity items (documents, channels, chats, etc.)
     if (isEntityItem(item)) {
-      const blockName = itemToBlockName(item.data);
-      if (blockName) {
-        openWithSplit(
-          { type: blockName, id: item.id },
-          {
-            referredFrom: 'kommand-menu',
-            preferNewSplit: openInNewSplit,
-          }
-        );
+      // TODO(dev-rb/github): Route GitHub PRs to /pr.
+      if (isGithubPrEntity(item.data)) {
+        openExternalUrl(item.data.metadata.url);
+        CommandState.close();
+        CommandState.setQuery('');
+        return;
+      }
+
+      if (item.data.type !== 'foreign') {
+        const blockName = itemToBlockName(item.data);
+        if (blockName) {
+          openWithSplit(
+            { type: blockName, id: item.id },
+            {
+              referredFrom: 'kommand-menu',
+              preferNewSplit: openInNewSplit,
+            }
+          );
+        }
       }
       CommandState.close();
       CommandState.setQuery('');
