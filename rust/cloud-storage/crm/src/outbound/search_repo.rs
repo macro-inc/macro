@@ -8,6 +8,9 @@ use crate::domain::{
     search_repo::{CrmCompanyNameMatch, CrmCompanySearchCursor, CrmSearchRepository},
 };
 
+#[cfg(test)]
+mod test;
+
 /// PostgreSQL-backed [`CrmSearchRepository`].
 #[derive(Clone)]
 pub struct CrmSearchRepositoryImpl {
@@ -40,29 +43,13 @@ fn escape_regex(term: &str) -> String {
 
 impl CrmSearchRepository for CrmSearchRepositoryImpl {
     #[tracing::instrument(skip(self), err)]
-    async fn get_team_id_for_user(&self, macro_id: &str) -> Result<Option<Uuid>, CrmError> {
-        sqlx::query_scalar!(
-            r#"
-            SELECT team_id
-            FROM team_user
-            WHERE user_id = $1
-            ORDER BY team_role DESC
-            LIMIT 1
-            "#,
-            macro_id,
-        )
-        .fetch_optional(&self.pool)
-        .await
-        .map_err(|e| CrmError::StorageLayerError(e.into()))
-    }
-
-    #[tracing::instrument(skip(self), err)]
     async fn search_company_names(
         &self,
         team_id: &Uuid,
         term: &str,
         company_ids: &[Uuid],
         hidden: Option<bool>,
+        include_hidden: bool,
         limit: i64,
         cursor: Option<CrmCompanySearchCursor>,
     ) -> Result<Vec<CrmCompanyNameMatch>, CrmError> {
@@ -84,7 +71,10 @@ impl CrmSearchRepository for CrmSearchRepositoryImpl {
                 SELECT c.id, c.last_interaction AS updated_at
                 FROM crm_companies c
                 WHERE c.team_id = $1
-                  AND (($2::bool IS NULL AND c.hidden = FALSE) OR c.hidden = $2)
+                  AND (
+                      (c.hidden = FALSE AND ($2::bool IS NULL OR $2 = FALSE))
+                      OR (c.hidden = TRUE AND $2 = TRUE AND $9)
+                  )
                   AND (cardinality($3::uuid[]) = 0 OR c.id = ANY($3))
                   AND EXISTS (
                       SELECT 1
@@ -128,6 +118,7 @@ impl CrmSearchRepository for CrmSearchRepositoryImpl {
             highlight,
             cursor_ts,
             cursor_id,
+            include_hidden,
         )
         .fetch_all(&self.pool)
         .await
@@ -149,6 +140,7 @@ impl CrmSearchRepository for CrmSearchRepositoryImpl {
         &self,
         team_id: &Uuid,
         company_ids: &[Uuid],
+        include_hidden: bool,
     ) -> Result<Vec<CrmCompanyForSoup>, CrmError> {
         // Batch form of `get_company_for_team`'s hydration (minus
         // contacts): one row per (company, domain), domains ordered
@@ -178,10 +170,12 @@ impl CrmSearchRepository for CrmSearchRepositoryImpl {
                 ON LOWER(dd.domain) = LOWER(d.domain)
             WHERE c.team_id = $1
               AND c.id = ANY($2)
+              AND ($3 OR c.hidden = FALSE)
             ORDER BY c.last_interaction DESC, c.id DESC, d.created_at ASC NULLS LAST
             "#,
             team_id,
             company_ids,
+            include_hidden,
         )
         .fetch_all(&self.pool)
         .await

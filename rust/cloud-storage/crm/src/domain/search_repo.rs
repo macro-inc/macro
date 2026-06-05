@@ -32,26 +32,22 @@ pub struct CrmCompanySearchCursor {
 
 /// Persistence port for CRM company search.
 pub trait CrmSearchRepository: Clone + Send + Sync + 'static {
-    /// Returns the team `macro_id` belongs to (highest `team_role` wins),
-    /// or `None` when the user has no team membership.
-    fn get_team_id_for_user(
-        &self,
-        macro_id: &str,
-    ) -> impl Future<Output = Result<Option<Uuid>, CrmError>> + Send;
-
     /// Searches a team's CRM companies by `term` over the company name and
     /// its domains (`crm_domains.domain`), case-insensitive substring
     /// match. `company_ids` restricts to those ids when non-empty;
-    /// `hidden` defaults to visible-only when `None` (`Some(true)` =
-    /// hidden only, requires admin/owner — enforced by the caller).
-    /// Results are ordered `(updated_at DESC, id DESC)` and capped at
-    /// `limit`; pass `cursor` to seek past a previous page.
+    /// `hidden` selects the visible (`None`/`Some(false)`) or hidden
+    /// (`Some(true)`) set. Hidden rows are returned only when
+    /// `include_hidden` is true (admin/owner); a non-admin requesting
+    /// `Some(true)` gets no rows. Results are ordered `(updated_at DESC,
+    /// id DESC)` and capped at `limit`; pass `cursor` to seek past a
+    /// previous page.
     fn search_company_names(
         &self,
         team_id: &Uuid,
         term: &str,
         company_ids: &[Uuid],
         hidden: Option<bool>,
+        include_hidden: bool,
         limit: i64,
         cursor: Option<CrmCompanySearchCursor>,
     ) -> impl Future<Output = Result<Vec<CrmCompanyNameMatch>, CrmError>> + Send;
@@ -61,11 +57,14 @@ pub trait CrmSearchRepository: Clone + Send + Sync + 'static {
     /// primary (earliest-created) domain plus the company's domains. This
     /// is the batch enrich step: same join shape as the single-company
     /// `get_company_for_team`, minus contacts. Companies not owned by the
-    /// team are silently dropped. Result order is unspecified — callers
-    /// re-order by the match results.
+    /// team are silently dropped, as are hidden companies unless
+    /// `include_hidden` is true (admin/owner) — matching
+    /// `get_company_for_team`'s gate, so a member can't enrich a hidden id.
+    /// Result order is unspecified — callers re-order by the match results.
     fn enrich_companies(
         &self,
         team_id: &Uuid,
         company_ids: &[Uuid],
+        include_hidden: bool,
     ) -> impl Future<Output = Result<Vec<CrmCompanyForSoup>, CrmError>> + Send;
 }
