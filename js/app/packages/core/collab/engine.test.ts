@@ -1,37 +1,15 @@
+import { LoroDoc } from 'loro-crdt';
 import { describe, expect, it, vi } from 'vitest';
-import { SyncEngine } from './engine';
-import type { SyncSource } from './source';
+import { NoopWALSyncSource, SyncEngine } from './engine';
+import {
+  MockLoroManager,
+  MockLiveSyncSource,
+  MockWALStore,
+  MockWALSyncSource,
+} from './testing';
+import { IDBWALSyncSource } from './wal';
 
-function makeSource(overrides: Partial<SyncSource> = {}): SyncSource {
-  return {
-    documentId: 'doc-1',
-    pushUpdate: vi.fn(() => Promise.resolve(true)),
-    pushAwareness: vi.fn(),
-    registerPeerId: vi.fn(),
-    listen: vi.fn(),
-    reconnect: vi.fn(),
-    requestSnapshot: vi.fn(() => okAsync(new Uint8Array())),
-    requestUpdatesSince: vi.fn(() => okAsync(new Uint8Array())),
-    status: () => 0 as any,
-    ...overrides,
-  } as unknown as SyncSource;
-}
-
-function makeLoroManager(initialized = true) {
-  const doc = {
-    subscribeLocalUpdates: vi.fn(() => () => {}),
-    frontiers: vi.fn(() => []),
-  };
-  return {
-    isInitialized: () => initialized,
-    getDoc: () => doc,
-    getPeerId: () => BigInt(1),
-    state: () => undefined,
-    importUpdate: vi.fn(() => ({ isErr: () => false })),
-    syncToLoro: vi.fn(() => okAsync({ isErr: () => false })),
-    reset: vi.fn(() => okAsync({ isErr: () => false })),
-  } as any;
-}
+const emptySnapshot = () => new LoroDoc().export({ mode: 'snapshot' });
 
 function makeAwareness() {
   return {
@@ -44,16 +22,17 @@ function makeAwareness() {
 
 describe('SyncEngine', () => {
   it('registers peer id and calls onRunningChange(true) on start', () => {
-    const source = makeSource();
+    const source = new MockLiveSyncSource();
+    const manager = new MockLoroManager();
     const onRunningChange = vi.fn();
-    const engine = new SyncEngine(
-      makeLoroManager(),
-      makeAwareness(),
-      source,
-      { onRemoteState: vi.fn() },
-      () => false,
-      { onRunningChange }
-    );
+    const engine = new SyncEngine({
+      loroManager: manager,
+      awareness: makeAwareness(),
+      syncs: { wal: NoopWALSyncSource(source), live: source },
+      bindings: { onRemoteState: vi.fn() },
+      readonly: () => false,
+      onRunningChange,
+    });
 
     const started = engine.start();
 
@@ -63,27 +42,79 @@ describe('SyncEngine', () => {
     expect(onRunningChange).toHaveBeenCalledWith(true);
   });
 
-  it('calls reconnect when pushUpdate returns false', async () => {
-    const source = makeSource({
-      pushUpdate: vi.fn(() => Promise.resolve(false)),
-    });
-    const manager = makeLoroManager();
-    const engine = new SyncEngine(manager, makeAwareness(), source, {
-      onRemoteState: vi.fn(),
+  it('forwards every local update to the wal only', async () => {
+    const source = new MockLiveSyncSource();
+    const wal = new MockWALSyncSource();
+    const manager = new MockLoroManager();
+    const engine = new SyncEngine({
+      loroManager: manager,
+      awareness: makeAwareness(),
+      syncs: { wal, live: source },
+      bindings: { onRemoteState: vi.fn() },
     });
 
     engine.start();
+    const update = new Uint8Array([1, 2, 3]);
+    manager.triggerLocalUpdate(update);
 
-    const onUpdate = vi.mocked(manager.getDoc().subscribeLocalUpdates).mock.calls[0][0];
-    await onUpdate(new Uint8Array([1, 2, 3]));
+    await vi.waitFor(() => expect(wal.pushUpdate).toHaveBeenCalledWith(update));
+    expect(source.pushUpdate).not.toHaveBeenCalled();
+  });
 
-    expect(source.reconnect).toHaveBeenCalled();
+  describe('integration with WAL', () => {
+    it('local edit is persisted to WAL and delivered to live', async () => {
+      const live = new MockLiveSyncSource();
+      const walStore = new MockWALStore();
+      const wal = new IDBWALSyncSource(live, walStore);
+      const manager = new MockLoroManager();
+      const engine = new SyncEngine({
+        loroManager: manager,
+        awareness: makeAwareness(),
+        syncs: { wal, live },
+        bindings: { onRemoteState: vi.fn() },
+      });
+
+      engine.start();
+      const update = new Uint8Array([1, 2, 3]);
+      manager.triggerLocalUpdate(update);
+
+      await vi.waitFor(async () => {
+        expect(live.pushUpdate).toHaveBeenCalledTimes(1);
+        expect(await walStore.count()).toBe(0);
+      });
+    });
+
+    it('local edit stays in WAL when live is down, clears on reconnect', async () => {
+      const live = new MockLiveSyncSource();
+      live.setPushResult(false);
+      const walStore = new MockWALStore();
+      const wal = new IDBWALSyncSource(live, walStore);
+      const manager = new MockLoroManager();
+      const engine = new SyncEngine({
+        loroManager: manager,
+        awareness: makeAwareness(),
+        syncs: { wal, live },
+        bindings: { onRemoteState: vi.fn() },
+      });
+
+      engine.start();
+      manager.triggerLocalUpdate(new Uint8Array([1, 2, 3]));
+      await vi.waitFor(async () => expect(await walStore.count()).toBe(1));
+      await wal.pendingFlush; // wait for the failing flush to fully settle
+
+      live.setPushResult(true);
+      live.emit({ type: 'reconnect', snapshot: emptySnapshot(), awareness: new Uint8Array() });
+      await vi.waitFor(async () => expect(await walStore.count()).toBe(0));
+    });
   });
 
   it('does not start when manager is not initialized', () => {
-    const source = makeSource();
-    const engine = new SyncEngine(makeLoroManager(false), makeAwareness(), source, {
-      onRemoteState: vi.fn(),
+    const source = new MockLiveSyncSource();
+    const engine = new SyncEngine({
+      loroManager: new MockLoroManager(false),
+      awareness: makeAwareness(),
+      syncs: { wal: NoopWALSyncSource(source), live: source },
+      bindings: { onRemoteState: vi.fn() },
     });
 
     const started = engine.start();

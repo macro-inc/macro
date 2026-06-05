@@ -14,67 +14,60 @@
 //     Changes to this file may cause incorrect behavior and will be lost if
 //     the code is regenerated.
 // </auto-generated>
-import { BebopView, BebopRuntimeError, BebopRecord, BebopJson, BebopTypeGuard, Guid, GuidMap } from "bebop";
+import {
+  BebopView,
+  BebopRuntimeError,
+  BebopRecord,
+  BebopJson,
+  BebopTypeGuard,
+  Guid,
+  GuidMap,
+} from 'bebop';
 
-export const BEBOP_SCHEMA = new Uint8Array ([
-3, 16, 0, 0, 0, 80, 101, 101, 114, 85, 112, 100, 97, 116,
-101, 0, 1, 0, 0, 8, 0, 0, 0, 0, 2, 117, 112, 100, 97, 116,
-101, 0, 242, 255, 255, 255, 0, 254, 255, 255, 255, 0, 105,
-100, 0, 245, 255, 255, 255, 0, 80, 101, 101, 114, 65, 119,
-97, 114, 101, 110, 101, 115, 115, 0, 1, 0, 0, 4, 0, 0, 0,
-0, 1, 97, 119, 97, 114, 101, 110, 101, 115, 115, 0, 242,
-255, 255, 255, 0, 254, 255, 255, 255, 0, 80, 101, 101,
-114, 82, 101, 113, 117, 101, 115, 116, 83, 105, 110, 99,
-101, 0, 1, 0, 0, 4, 0, 0, 0, 0, 1, 102, 114, 111, 110,
-116, 105, 101, 114, 115, 0, 242, 255, 255, 255, 0, 254,
-255, 255, 255, 0, 80, 101, 101, 114, 82, 101, 113, 117,
-101, 115, 116, 83, 110, 97, 112, 115, 104, 111, 116, 0, 1,
-0, 0, 0, 0, 0, 0, 1, 0, 80, 101, 101, 114, 82, 101, 103,
-105, 115, 116, 101, 114, 73, 100, 0, 1, 0, 0, 8, 0, 0, 0,
-1, 1, 112, 101, 101, 114, 105, 100, 0, 249, 255, 255, 255,
-0, 70, 114, 111, 109, 80, 101, 101, 114, 0, 3, 0, 5, 0, 0,
-0, 5, 1, 0, 0, 0, 0, 2, 1, 0, 0, 0, 3, 2, 0, 0, 0, 4, 3,
-0, 0, 0, 5, 4, 0, 0, 0, 82, 101, 109, 111, 116, 101, 73,
-110, 105, 116, 105, 97, 108, 83, 121, 110, 99, 0, 1, 0, 0,
-8, 0, 0, 0, 0, 2, 115, 110, 97, 112, 115, 104, 111, 116,
-0, 242, 255, 255, 255, 0, 254, 255, 255, 255, 0, 97, 119,
-97, 114, 101, 110, 101, 115, 115, 0, 242, 255, 255, 255,
-0, 254, 255, 255, 255, 0, 82, 101, 109, 111, 116, 101, 85,
-112, 100, 97, 116, 101, 0, 1, 0, 0, 4, 0, 0, 0, 0, 1, 117,
-112, 100, 97, 116, 101, 0, 242, 255, 255, 255, 0, 254,
-255, 255, 255, 0, 82, 101, 109, 111, 116, 101, 65, 119,
-97, 114, 101, 110, 101, 115, 115, 0, 1, 0, 0, 4, 0, 0, 0,
-0, 1, 97, 119, 97, 114, 101, 110, 101, 115, 115, 0, 242,
-255, 255, 255, 0, 254, 255, 255, 255, 0, 82, 101, 109,
-111, 116, 101, 83, 110, 97, 112, 115, 104, 111, 116, 0, 1,
-0, 0, 4, 0, 0, 0, 0, 1, 115, 110, 97, 112, 115, 104, 111,
-116, 0, 242, 255, 255, 255, 0, 254, 255, 255, 255, 0, 82,
-101, 109, 111, 116, 101, 85, 112, 100, 97, 116, 101, 65,
-99, 107, 0, 1, 0, 0, 4, 0, 0, 0, 0, 1, 105, 100, 0, 245,
-255, 255, 255, 0, 82, 101, 109, 111, 116, 101, 85, 112,
-100, 97, 116, 101, 83, 105, 110, 99, 101, 0, 1, 0, 0, 8,
-0, 0, 0, 0, 2, 117, 112, 100, 97, 116, 101, 0, 242, 255,
-255, 255, 0, 254, 255, 255, 255, 0, 102, 114, 111, 110,
-116, 105, 101, 114, 115, 0, 242, 255, 255, 255, 0, 254,
-255, 255, 255, 0, 70, 114, 111, 109, 82, 101, 109, 111,
-116, 101, 0, 3, 0, 9, 0, 0, 0, 6, 1, 6, 0, 0, 0, 2, 7, 0,
-0, 0, 3, 8, 0, 0, 0, 4, 9, 0, 0, 0, 5, 10, 0, 0, 0, 6, 11,
-0, 0, 0, 79, 112, 101, 114, 97, 116, 105, 111, 110, 0, 1,
-0, 0, 12, 0, 0, 0, 0, 2, 117, 112, 100, 97, 116, 101, 0,
-242, 255, 255, 255, 0, 254, 255, 255, 255, 0, 116, 105,
-109, 101, 115, 116, 97, 109, 112, 0, 243, 255, 255, 255,
-0, 79, 112, 101, 114, 97, 116, 105, 111, 110, 76, 111,
-103, 0, 1, 0, 0, 4, 0, 0, 0, 0, 1, 111, 112, 101, 114, 97,
-116, 105, 111, 110, 115, 0, 242, 255, 255, 255, 0, 13, 0,
-0, 0, 0, 73, 110, 105, 116, 105, 97, 108, 105, 122, 101,
-70, 114, 111, 109, 83, 110, 97, 112, 115, 104, 111, 116,
-82, 101, 113, 117, 101, 115, 116, 0, 1, 0, 0, 4, 0, 0, 0,
-0, 1, 115, 110, 97, 112, 115, 104, 111, 116, 0, 242, 255,
-255, 255, 0, 254, 255, 255, 255, 0, 0, 0, 0, 0
+export const BEBOP_SCHEMA = new Uint8Array([
+  3, 16, 0, 0, 0, 80, 101, 101, 114, 85, 112, 100, 97, 116, 101, 0, 1, 0, 0, 8,
+  0, 0, 0, 0, 2, 117, 112, 100, 97, 116, 101, 0, 242, 255, 255, 255, 0, 254,
+  255, 255, 255, 0, 105, 100, 0, 245, 255, 255, 255, 0, 80, 101, 101, 114, 65,
+  119, 97, 114, 101, 110, 101, 115, 115, 0, 1, 0, 0, 4, 0, 0, 0, 0, 1, 97, 119,
+  97, 114, 101, 110, 101, 115, 115, 0, 242, 255, 255, 255, 0, 254, 255, 255,
+  255, 0, 80, 101, 101, 114, 82, 101, 113, 117, 101, 115, 116, 83, 105, 110, 99,
+  101, 0, 1, 0, 0, 4, 0, 0, 0, 0, 1, 102, 114, 111, 110, 116, 105, 101, 114,
+  115, 0, 242, 255, 255, 255, 0, 254, 255, 255, 255, 0, 80, 101, 101, 114, 82,
+  101, 113, 117, 101, 115, 116, 83, 110, 97, 112, 115, 104, 111, 116, 0, 1, 0,
+  0, 0, 0, 0, 0, 1, 0, 80, 101, 101, 114, 82, 101, 103, 105, 115, 116, 101, 114,
+  73, 100, 0, 1, 0, 0, 8, 0, 0, 0, 1, 1, 112, 101, 101, 114, 105, 100, 0, 249,
+  255, 255, 255, 0, 70, 114, 111, 109, 80, 101, 101, 114, 0, 3, 0, 5, 0, 0, 0,
+  5, 1, 0, 0, 0, 0, 2, 1, 0, 0, 0, 3, 2, 0, 0, 0, 4, 3, 0, 0, 0, 5, 4, 0, 0, 0,
+  82, 101, 109, 111, 116, 101, 73, 110, 105, 116, 105, 97, 108, 83, 121, 110,
+  99, 0, 1, 0, 0, 8, 0, 0, 0, 0, 2, 115, 110, 97, 112, 115, 104, 111, 116, 0,
+  242, 255, 255, 255, 0, 254, 255, 255, 255, 0, 97, 119, 97, 114, 101, 110, 101,
+  115, 115, 0, 242, 255, 255, 255, 0, 254, 255, 255, 255, 0, 82, 101, 109, 111,
+  116, 101, 85, 112, 100, 97, 116, 101, 0, 1, 0, 0, 4, 0, 0, 0, 0, 1, 117, 112,
+  100, 97, 116, 101, 0, 242, 255, 255, 255, 0, 254, 255, 255, 255, 0, 82, 101,
+  109, 111, 116, 101, 65, 119, 97, 114, 101, 110, 101, 115, 115, 0, 1, 0, 0, 4,
+  0, 0, 0, 0, 1, 97, 119, 97, 114, 101, 110, 101, 115, 115, 0, 242, 255, 255,
+  255, 0, 254, 255, 255, 255, 0, 82, 101, 109, 111, 116, 101, 83, 110, 97, 112,
+  115, 104, 111, 116, 0, 1, 0, 0, 4, 0, 0, 0, 0, 1, 115, 110, 97, 112, 115, 104,
+  111, 116, 0, 242, 255, 255, 255, 0, 254, 255, 255, 255, 0, 82, 101, 109, 111,
+  116, 101, 85, 112, 100, 97, 116, 101, 65, 99, 107, 0, 1, 0, 0, 4, 0, 0, 0, 0,
+  1, 105, 100, 0, 245, 255, 255, 255, 0, 82, 101, 109, 111, 116, 101, 85, 112,
+  100, 97, 116, 101, 83, 105, 110, 99, 101, 0, 1, 0, 0, 8, 0, 0, 0, 0, 2, 117,
+  112, 100, 97, 116, 101, 0, 242, 255, 255, 255, 0, 254, 255, 255, 255, 0, 102,
+  114, 111, 110, 116, 105, 101, 114, 115, 0, 242, 255, 255, 255, 0, 254, 255,
+  255, 255, 0, 70, 114, 111, 109, 82, 101, 109, 111, 116, 101, 0, 3, 0, 9, 0, 0,
+  0, 6, 1, 6, 0, 0, 0, 2, 7, 0, 0, 0, 3, 8, 0, 0, 0, 4, 9, 0, 0, 0, 5, 10, 0, 0,
+  0, 6, 11, 0, 0, 0, 79, 112, 101, 114, 97, 116, 105, 111, 110, 0, 1, 0, 0, 12,
+  0, 0, 0, 0, 2, 117, 112, 100, 97, 116, 101, 0, 242, 255, 255, 255, 0, 254,
+  255, 255, 255, 0, 116, 105, 109, 101, 115, 116, 97, 109, 112, 0, 243, 255,
+  255, 255, 0, 79, 112, 101, 114, 97, 116, 105, 111, 110, 76, 111, 103, 0, 1, 0,
+  0, 4, 0, 0, 0, 0, 1, 111, 112, 101, 114, 97, 116, 105, 111, 110, 115, 0, 242,
+  255, 255, 255, 0, 13, 0, 0, 0, 0, 73, 110, 105, 116, 105, 97, 108, 105, 122,
+  101, 70, 114, 111, 109, 83, 110, 97, 112, 115, 104, 111, 116, 82, 101, 113,
+  117, 101, 115, 116, 0, 1, 0, 0, 4, 0, 0, 0, 0, 1, 115, 110, 97, 112, 115, 104,
+  111, 116, 0, 242, 255, 255, 255, 0, 254, 255, 255, 255, 0, 0, 0, 0, 0,
 ]);
 
 export interface IPeerUpdate extends BebopRecord {
-
   readonly update: Uint8Array;
 
   readonly id: string;
@@ -117,14 +110,14 @@ export class PeerUpdate implements IPeerUpdate {
    */
   public static validateCompatibility(record: IPeerUpdate): void {
     BebopTypeGuard.ensureArray(record.update, BebopTypeGuard.ensureUint8);
-    BebopTypeGuard.ensureString(record.id)
+    BebopTypeGuard.ensureString(record.id);
   }
 
   /**
    * Unsafely creates an instance of {@link PeerUpdate} from the specified dynamic object. No type checking is performed.
    */
   public static unsafeCast(record: any): IPeerUpdate {
-      return new PeerUpdate(record);
+    return new PeerUpdate(record);
   }
 
   /**
@@ -176,9 +169,7 @@ export class PeerUpdate implements IPeerUpdate {
   }
 }
 
-
 export interface IPeerAwareness extends BebopRecord {
-
   readonly awareness: Uint8Array;
 }
 
@@ -223,7 +214,7 @@ export class PeerAwareness implements IPeerAwareness {
    * Unsafely creates an instance of {@link PeerAwareness} from the specified dynamic object. No type checking is performed.
    */
   public static unsafeCast(record: any): IPeerAwareness {
-      return new PeerAwareness(record);
+    return new PeerAwareness(record);
   }
 
   /**
@@ -271,9 +262,7 @@ export class PeerAwareness implements IPeerAwareness {
   }
 }
 
-
 export interface IPeerRequestSince extends BebopRecord {
-
   readonly frontiers: Uint8Array;
 }
 
@@ -318,7 +307,7 @@ export class PeerRequestSince implements IPeerRequestSince {
    * Unsafely creates an instance of {@link PeerRequestSince} from the specified dynamic object. No type checking is performed.
    */
   public static unsafeCast(record: any): IPeerRequestSince {
-      return new PeerRequestSince(record);
+    return new PeerRequestSince(record);
   }
 
   /**
@@ -366,16 +355,13 @@ export class PeerRequestSince implements IPeerRequestSince {
   }
 }
 
-
-export interface IPeerRequestSnapshot extends BebopRecord {
-}
+export interface IPeerRequestSnapshot extends BebopRecord {}
 
 export class PeerRequestSnapshot implements IPeerRequestSnapshot {
   public readonly discriminator: number = 4 as 4;
   public static readonly discriminator: number = 4 as 4;
 
-  constructor(record: IPeerRequestSnapshot) {
-  }
+  constructor(record: IPeerRequestSnapshot) {}
 
   /**
    * Serializes the current instance into a JSON-Over-Bebop string
@@ -401,15 +387,13 @@ export class PeerRequestSnapshot implements IPeerRequestSnapshot {
   /**
    * Validates that the specified dynamic object can become an instance of {@link PeerRequestSnapshot}.
    */
-  public static validateCompatibility(record: IPeerRequestSnapshot): void {
-
-  }
+  public static validateCompatibility(record: IPeerRequestSnapshot): void {}
 
   /**
    * Unsafely creates an instance of {@link PeerRequestSnapshot} from the specified dynamic object. No type checking is performed.
    */
   public static unsafeCast(record: any): IPeerRequestSnapshot {
-      return new PeerRequestSnapshot(record);
+    return new PeerRequestSnapshot(record);
   }
 
   /**
@@ -417,7 +401,9 @@ export class PeerRequestSnapshot implements IPeerRequestSnapshot {
    */
   public static fromJSON(json: string): IPeerRequestSnapshot {
     if (typeof json !== 'string' || json.trim().length === 0) {
-      throw new BebopRuntimeError(`PeerRequestSnapshot.fromJSON: expected string`);
+      throw new BebopRuntimeError(
+        `PeerRequestSnapshot.fromJSON: expected string`
+      );
     }
     const parsed = JSON.parse(json, BebopJson.reviver);
     PeerRequestSnapshot.validateCompatibility(parsed);
@@ -434,7 +420,10 @@ export class PeerRequestSnapshot implements IPeerRequestSnapshot {
     return view.toArray();
   }
 
-  public static encodeInto(record: IPeerRequestSnapshot, view: BebopView): number {
+  public static encodeInto(
+    record: IPeerRequestSnapshot,
+    view: BebopView
+  ): number {
     const before = view.length;
 
     const after = view.length;
@@ -448,15 +437,12 @@ export class PeerRequestSnapshot implements IPeerRequestSnapshot {
   }
 
   public static readFrom(view: BebopView): IPeerRequestSnapshot {
-    let message: IPeerRequestSnapshot = {
-    };
+    let message: IPeerRequestSnapshot = {};
     return new PeerRequestSnapshot(message);
   }
 }
 
-
 export interface IPeerRegisterId extends BebopRecord {
-
   readonly peerid: bigint;
 }
 
@@ -494,14 +480,14 @@ export class PeerRegisterId implements IPeerRegisterId {
    * Validates that the specified dynamic object can become an instance of {@link PeerRegisterId}.
    */
   public static validateCompatibility(record: IPeerRegisterId): void {
-    BebopTypeGuard.ensureUint64(record.peerid)
+    BebopTypeGuard.ensureUint64(record.peerid);
   }
 
   /**
    * Unsafely creates an instance of {@link PeerRegisterId} from the specified dynamic object. No type checking is performed.
    */
   public static unsafeCast(record: any): IPeerRegisterId {
-      return new PeerRegisterId(record);
+    return new PeerRegisterId(record);
   }
 
   /**
@@ -549,19 +535,17 @@ export class PeerRegisterId implements IPeerRegisterId {
   }
 }
 
-
-export type IFromPeerType
-  = { discriminator: 1, value: IPeerUpdate }
-  | { discriminator: 2, value: IPeerAwareness }
-  | { discriminator: 3, value: IPeerRequestSince }
-  | { discriminator: 4, value: IPeerRequestSnapshot }
-  | { discriminator: 5, value: IPeerRegisterId };
+export type IFromPeerType =
+  | { discriminator: 1; value: IPeerUpdate }
+  | { discriminator: 2; value: IPeerAwareness }
+  | { discriminator: 3; value: IPeerRequestSince }
+  | { discriminator: 4; value: IPeerRequestSnapshot }
+  | { discriminator: 5; value: IPeerRegisterId };
 
 export interface IFromPeer extends BebopRecord {
   readonly data: IFromPeerType;
 }
 export class FromPeer implements IFromPeer {
-
   public readonly data: IFromPeerType;
 
   private constructor(data: IFromPeerType) {
@@ -577,45 +561,60 @@ export class FromPeer implements IFromPeer {
   }
 
   public static fromPeerUpdate(value: IPeerUpdate) {
-    return new FromPeer({ discriminator: 1, value: new PeerUpdate(value)});
+    return new FromPeer({ discriminator: 1, value: new PeerUpdate(value) });
   }
 
-  public isPeerUpdate(): this is { value: PeerUpdate } & { data: Extract<IFromPeerType, { discriminator: 1 }> } {
+  public isPeerUpdate(): this is { value: PeerUpdate } & {
+    data: Extract<IFromPeerType, { discriminator: 1 }>;
+  } {
     return this.data.value instanceof PeerUpdate;
   }
 
   public static fromPeerAwareness(value: IPeerAwareness) {
-    return new FromPeer({ discriminator: 2, value: new PeerAwareness(value)});
+    return new FromPeer({ discriminator: 2, value: new PeerAwareness(value) });
   }
 
-  public isPeerAwareness(): this is { value: PeerAwareness } & { data: Extract<IFromPeerType, { discriminator: 2 }> } {
+  public isPeerAwareness(): this is { value: PeerAwareness } & {
+    data: Extract<IFromPeerType, { discriminator: 2 }>;
+  } {
     return this.data.value instanceof PeerAwareness;
   }
 
   public static fromPeerRequestSince(value: IPeerRequestSince) {
-    return new FromPeer({ discriminator: 3, value: new PeerRequestSince(value)});
+    return new FromPeer({
+      discriminator: 3,
+      value: new PeerRequestSince(value),
+    });
   }
 
-  public isPeerRequestSince(): this is { value: PeerRequestSince } & { data: Extract<IFromPeerType, { discriminator: 3 }> } {
+  public isPeerRequestSince(): this is { value: PeerRequestSince } & {
+    data: Extract<IFromPeerType, { discriminator: 3 }>;
+  } {
     return this.data.value instanceof PeerRequestSince;
   }
 
   public static fromPeerRequestSnapshot(value: IPeerRequestSnapshot) {
-    return new FromPeer({ discriminator: 4, value: new PeerRequestSnapshot(value)});
+    return new FromPeer({
+      discriminator: 4,
+      value: new PeerRequestSnapshot(value),
+    });
   }
 
-  public isPeerRequestSnapshot(): this is { value: PeerRequestSnapshot } & { data: Extract<IFromPeerType, { discriminator: 4 }> } {
+  public isPeerRequestSnapshot(): this is { value: PeerRequestSnapshot } & {
+    data: Extract<IFromPeerType, { discriminator: 4 }>;
+  } {
     return this.data.value instanceof PeerRequestSnapshot;
   }
 
   public static fromPeerRegisterId(value: IPeerRegisterId) {
-    return new FromPeer({ discriminator: 5, value: new PeerRegisterId(value)});
+    return new FromPeer({ discriminator: 5, value: new PeerRegisterId(value) });
   }
 
-  public isPeerRegisterId(): this is { value: PeerRegisterId } & { data: Extract<IFromPeerType, { discriminator: 5 }> } {
+  public isPeerRegisterId(): this is { value: PeerRegisterId } & {
+    data: Extract<IFromPeerType, { discriminator: 5 }>;
+  } {
     return this.data.value instanceof PeerRegisterId;
   }
-
 
   /**
    * Serializes the current instance into a JSON-Over-Bebop string
@@ -676,25 +675,42 @@ export class FromPeer implements IFromPeer {
    * Unsafely creates an instance of {@link FromPeer} from the specified dynamic object. No type checking is performed.
    */
   public static unsafeCast(record: any): FromPeer {
-      const discriminator = record.data.discriminator;
-      switch (discriminator) {
-        case 1: {
-          return new FromPeer({ discriminator: 1, value: PeerUpdate.unsafeCast(record.value) });
-        }
-        case 2: {
-          return new FromPeer({ discriminator: 2, value: PeerAwareness.unsafeCast(record.value) });
-        }
-        case 3: {
-          return new FromPeer({ discriminator: 3, value: PeerRequestSince.unsafeCast(record.value) });
-        }
-        case 4: {
-          return new FromPeer({ discriminator: 4, value: PeerRequestSnapshot.unsafeCast(record.value) });
-        }
-        case 5: {
-          return new FromPeer({ discriminator: 5, value: PeerRegisterId.unsafeCast(record.value) });
-        }
+    const discriminator = record.data.discriminator;
+    switch (discriminator) {
+      case 1: {
+        return new FromPeer({
+          discriminator: 1,
+          value: PeerUpdate.unsafeCast(record.value),
+        });
       }
-      throw new BebopRuntimeError(`Failed to unsafely cast union from discriminator: ${discriminator}`);
+      case 2: {
+        return new FromPeer({
+          discriminator: 2,
+          value: PeerAwareness.unsafeCast(record.value),
+        });
+      }
+      case 3: {
+        return new FromPeer({
+          discriminator: 3,
+          value: PeerRequestSince.unsafeCast(record.value),
+        });
+      }
+      case 4: {
+        return new FromPeer({
+          discriminator: 4,
+          value: PeerRequestSnapshot.unsafeCast(record.value),
+        });
+      }
+      case 5: {
+        return new FromPeer({
+          discriminator: 5,
+          value: PeerRegisterId.unsafeCast(record.value),
+        });
+      }
+    }
+    throw new BebopRuntimeError(
+      `Failed to unsafely cast union from discriminator: ${discriminator}`
+    );
   }
 
   /**
@@ -769,14 +785,14 @@ export class FromPeer implements IFromPeer {
         return this.fromPeerRegisterId(PeerRegisterId.readFrom(view));
       default:
         view.index = end;
-        throw new BebopRuntimeError("Unrecognized discriminator while decoding FromPeer");
+        throw new BebopRuntimeError(
+          'Unrecognized discriminator while decoding FromPeer'
+        );
     }
   }
 }
 
-
 export interface IRemoteInitialSync extends BebopRecord {
-
   readonly snapshot: Uint8Array;
 
   readonly awareness: Uint8Array;
@@ -826,7 +842,7 @@ export class RemoteInitialSync implements IRemoteInitialSync {
    * Unsafely creates an instance of {@link RemoteInitialSync} from the specified dynamic object. No type checking is performed.
    */
   public static unsafeCast(record: any): IRemoteInitialSync {
-      return new RemoteInitialSync(record);
+    return new RemoteInitialSync(record);
   }
 
   /**
@@ -834,7 +850,9 @@ export class RemoteInitialSync implements IRemoteInitialSync {
    */
   public static fromJSON(json: string): IRemoteInitialSync {
     if (typeof json !== 'string' || json.trim().length === 0) {
-      throw new BebopRuntimeError(`RemoteInitialSync.fromJSON: expected string`);
+      throw new BebopRuntimeError(
+        `RemoteInitialSync.fromJSON: expected string`
+      );
     }
     const parsed = JSON.parse(json, BebopJson.reviver);
     RemoteInitialSync.validateCompatibility(parsed);
@@ -851,7 +869,10 @@ export class RemoteInitialSync implements IRemoteInitialSync {
     return view.toArray();
   }
 
-  public static encodeInto(record: IRemoteInitialSync, view: BebopView): number {
+  public static encodeInto(
+    record: IRemoteInitialSync,
+    view: BebopView
+  ): number {
     const before = view.length;
     view.writeBytes(record.snapshot);
     view.writeBytes(record.awareness);
@@ -878,9 +899,7 @@ export class RemoteInitialSync implements IRemoteInitialSync {
   }
 }
 
-
 export interface IRemoteUpdate extends BebopRecord {
-
   readonly update: Uint8Array;
 }
 
@@ -925,7 +944,7 @@ export class RemoteUpdate implements IRemoteUpdate {
    * Unsafely creates an instance of {@link RemoteUpdate} from the specified dynamic object. No type checking is performed.
    */
   public static unsafeCast(record: any): IRemoteUpdate {
-      return new RemoteUpdate(record);
+    return new RemoteUpdate(record);
   }
 
   /**
@@ -973,9 +992,7 @@ export class RemoteUpdate implements IRemoteUpdate {
   }
 }
 
-
 export interface IRemoteAwareness extends BebopRecord {
-
   readonly awareness: Uint8Array;
 }
 
@@ -1020,7 +1037,7 @@ export class RemoteAwareness implements IRemoteAwareness {
    * Unsafely creates an instance of {@link RemoteAwareness} from the specified dynamic object. No type checking is performed.
    */
   public static unsafeCast(record: any): IRemoteAwareness {
-      return new RemoteAwareness(record);
+    return new RemoteAwareness(record);
   }
 
   /**
@@ -1068,9 +1085,7 @@ export class RemoteAwareness implements IRemoteAwareness {
   }
 }
 
-
 export interface IRemoteSnapshot extends BebopRecord {
-
   readonly snapshot: Uint8Array;
 }
 
@@ -1115,7 +1130,7 @@ export class RemoteSnapshot implements IRemoteSnapshot {
    * Unsafely creates an instance of {@link RemoteSnapshot} from the specified dynamic object. No type checking is performed.
    */
   public static unsafeCast(record: any): IRemoteSnapshot {
-      return new RemoteSnapshot(record);
+    return new RemoteSnapshot(record);
   }
 
   /**
@@ -1163,9 +1178,7 @@ export class RemoteSnapshot implements IRemoteSnapshot {
   }
 }
 
-
 export interface IRemoteUpdateAck extends BebopRecord {
-
   readonly id: string;
 }
 
@@ -1203,14 +1216,14 @@ export class RemoteUpdateAck implements IRemoteUpdateAck {
    * Validates that the specified dynamic object can become an instance of {@link RemoteUpdateAck}.
    */
   public static validateCompatibility(record: IRemoteUpdateAck): void {
-    BebopTypeGuard.ensureString(record.id)
+    BebopTypeGuard.ensureString(record.id);
   }
 
   /**
    * Unsafely creates an instance of {@link RemoteUpdateAck} from the specified dynamic object. No type checking is performed.
    */
   public static unsafeCast(record: any): IRemoteUpdateAck {
-      return new RemoteUpdateAck(record);
+    return new RemoteUpdateAck(record);
   }
 
   /**
@@ -1258,9 +1271,7 @@ export class RemoteUpdateAck implements IRemoteUpdateAck {
   }
 }
 
-
 export interface IRemoteUpdateSince extends BebopRecord {
-
   readonly update: Uint8Array;
 
   readonly frontiers: Uint8Array;
@@ -1310,7 +1321,7 @@ export class RemoteUpdateSince implements IRemoteUpdateSince {
    * Unsafely creates an instance of {@link RemoteUpdateSince} from the specified dynamic object. No type checking is performed.
    */
   public static unsafeCast(record: any): IRemoteUpdateSince {
-      return new RemoteUpdateSince(record);
+    return new RemoteUpdateSince(record);
   }
 
   /**
@@ -1318,7 +1329,9 @@ export class RemoteUpdateSince implements IRemoteUpdateSince {
    */
   public static fromJSON(json: string): IRemoteUpdateSince {
     if (typeof json !== 'string' || json.trim().length === 0) {
-      throw new BebopRuntimeError(`RemoteUpdateSince.fromJSON: expected string`);
+      throw new BebopRuntimeError(
+        `RemoteUpdateSince.fromJSON: expected string`
+      );
     }
     const parsed = JSON.parse(json, BebopJson.reviver);
     RemoteUpdateSince.validateCompatibility(parsed);
@@ -1335,7 +1348,10 @@ export class RemoteUpdateSince implements IRemoteUpdateSince {
     return view.toArray();
   }
 
-  public static encodeInto(record: IRemoteUpdateSince, view: BebopView): number {
+  public static encodeInto(
+    record: IRemoteUpdateSince,
+    view: BebopView
+  ): number {
     const before = view.length;
     view.writeBytes(record.update);
     view.writeBytes(record.frontiers);
@@ -1362,20 +1378,18 @@ export class RemoteUpdateSince implements IRemoteUpdateSince {
   }
 }
 
-
-export type IFromRemoteType
-  = { discriminator: 1, value: IRemoteInitialSync }
-  | { discriminator: 2, value: IRemoteUpdate }
-  | { discriminator: 3, value: IRemoteAwareness }
-  | { discriminator: 4, value: IRemoteSnapshot }
-  | { discriminator: 5, value: IRemoteUpdateAck }
-  | { discriminator: 6, value: IRemoteUpdateSince };
+export type IFromRemoteType =
+  | { discriminator: 1; value: IRemoteInitialSync }
+  | { discriminator: 2; value: IRemoteUpdate }
+  | { discriminator: 3; value: IRemoteAwareness }
+  | { discriminator: 4; value: IRemoteSnapshot }
+  | { discriminator: 5; value: IRemoteUpdateAck }
+  | { discriminator: 6; value: IRemoteUpdateSince };
 
 export interface IFromRemote extends BebopRecord {
   readonly data: IFromRemoteType;
 }
 export class FromRemote implements IFromRemote {
-
   public readonly data: IFromRemoteType;
 
   private constructor(data: IFromRemoteType) {
@@ -1391,53 +1405,79 @@ export class FromRemote implements IFromRemote {
   }
 
   public static fromRemoteInitialSync(value: IRemoteInitialSync) {
-    return new FromRemote({ discriminator: 1, value: new RemoteInitialSync(value)});
+    return new FromRemote({
+      discriminator: 1,
+      value: new RemoteInitialSync(value),
+    });
   }
 
-  public isRemoteInitialSync(): this is { value: RemoteInitialSync } & { data: Extract<IFromRemoteType, { discriminator: 1 }> } {
+  public isRemoteInitialSync(): this is { value: RemoteInitialSync } & {
+    data: Extract<IFromRemoteType, { discriminator: 1 }>;
+  } {
     return this.data.value instanceof RemoteInitialSync;
   }
 
   public static fromRemoteUpdate(value: IRemoteUpdate) {
-    return new FromRemote({ discriminator: 2, value: new RemoteUpdate(value)});
+    return new FromRemote({ discriminator: 2, value: new RemoteUpdate(value) });
   }
 
-  public isRemoteUpdate(): this is { value: RemoteUpdate } & { data: Extract<IFromRemoteType, { discriminator: 2 }> } {
+  public isRemoteUpdate(): this is { value: RemoteUpdate } & {
+    data: Extract<IFromRemoteType, { discriminator: 2 }>;
+  } {
     return this.data.value instanceof RemoteUpdate;
   }
 
   public static fromRemoteAwareness(value: IRemoteAwareness) {
-    return new FromRemote({ discriminator: 3, value: new RemoteAwareness(value)});
+    return new FromRemote({
+      discriminator: 3,
+      value: new RemoteAwareness(value),
+    });
   }
 
-  public isRemoteAwareness(): this is { value: RemoteAwareness } & { data: Extract<IFromRemoteType, { discriminator: 3 }> } {
+  public isRemoteAwareness(): this is { value: RemoteAwareness } & {
+    data: Extract<IFromRemoteType, { discriminator: 3 }>;
+  } {
     return this.data.value instanceof RemoteAwareness;
   }
 
   public static fromRemoteSnapshot(value: IRemoteSnapshot) {
-    return new FromRemote({ discriminator: 4, value: new RemoteSnapshot(value)});
+    return new FromRemote({
+      discriminator: 4,
+      value: new RemoteSnapshot(value),
+    });
   }
 
-  public isRemoteSnapshot(): this is { value: RemoteSnapshot } & { data: Extract<IFromRemoteType, { discriminator: 4 }> } {
+  public isRemoteSnapshot(): this is { value: RemoteSnapshot } & {
+    data: Extract<IFromRemoteType, { discriminator: 4 }>;
+  } {
     return this.data.value instanceof RemoteSnapshot;
   }
 
   public static fromRemoteUpdateAck(value: IRemoteUpdateAck) {
-    return new FromRemote({ discriminator: 5, value: new RemoteUpdateAck(value)});
+    return new FromRemote({
+      discriminator: 5,
+      value: new RemoteUpdateAck(value),
+    });
   }
 
-  public isRemoteUpdateAck(): this is { value: RemoteUpdateAck } & { data: Extract<IFromRemoteType, { discriminator: 5 }> } {
+  public isRemoteUpdateAck(): this is { value: RemoteUpdateAck } & {
+    data: Extract<IFromRemoteType, { discriminator: 5 }>;
+  } {
     return this.data.value instanceof RemoteUpdateAck;
   }
 
   public static fromRemoteUpdateSince(value: IRemoteUpdateSince) {
-    return new FromRemote({ discriminator: 6, value: new RemoteUpdateSince(value)});
+    return new FromRemote({
+      discriminator: 6,
+      value: new RemoteUpdateSince(value),
+    });
   }
 
-  public isRemoteUpdateSince(): this is { value: RemoteUpdateSince } & { data: Extract<IFromRemoteType, { discriminator: 6 }> } {
+  public isRemoteUpdateSince(): this is { value: RemoteUpdateSince } & {
+    data: Extract<IFromRemoteType, { discriminator: 6 }>;
+  } {
     return this.data.value instanceof RemoteUpdateSince;
   }
-
 
   /**
    * Serializes the current instance into a JSON-Over-Bebop string
@@ -1493,7 +1533,9 @@ export class FromRemote implements IFromRemote {
         break;
       }
       default: {
-        throw new Error(`Unknown discriminator for FromRemote: ${discriminator}`);
+        throw new Error(
+          `Unknown discriminator for FromRemote: ${discriminator}`
+        );
       }
     }
   }
@@ -1502,28 +1544,48 @@ export class FromRemote implements IFromRemote {
    * Unsafely creates an instance of {@link FromRemote} from the specified dynamic object. No type checking is performed.
    */
   public static unsafeCast(record: any): FromRemote {
-      const discriminator = record.data.discriminator;
-      switch (discriminator) {
-        case 1: {
-          return new FromRemote({ discriminator: 1, value: RemoteInitialSync.unsafeCast(record.value) });
-        }
-        case 2: {
-          return new FromRemote({ discriminator: 2, value: RemoteUpdate.unsafeCast(record.value) });
-        }
-        case 3: {
-          return new FromRemote({ discriminator: 3, value: RemoteAwareness.unsafeCast(record.value) });
-        }
-        case 4: {
-          return new FromRemote({ discriminator: 4, value: RemoteSnapshot.unsafeCast(record.value) });
-        }
-        case 5: {
-          return new FromRemote({ discriminator: 5, value: RemoteUpdateAck.unsafeCast(record.value) });
-        }
-        case 6: {
-          return new FromRemote({ discriminator: 6, value: RemoteUpdateSince.unsafeCast(record.value) });
-        }
+    const discriminator = record.data.discriminator;
+    switch (discriminator) {
+      case 1: {
+        return new FromRemote({
+          discriminator: 1,
+          value: RemoteInitialSync.unsafeCast(record.value),
+        });
       }
-      throw new BebopRuntimeError(`Failed to unsafely cast union from discriminator: ${discriminator}`);
+      case 2: {
+        return new FromRemote({
+          discriminator: 2,
+          value: RemoteUpdate.unsafeCast(record.value),
+        });
+      }
+      case 3: {
+        return new FromRemote({
+          discriminator: 3,
+          value: RemoteAwareness.unsafeCast(record.value),
+        });
+      }
+      case 4: {
+        return new FromRemote({
+          discriminator: 4,
+          value: RemoteSnapshot.unsafeCast(record.value),
+        });
+      }
+      case 5: {
+        return new FromRemote({
+          discriminator: 5,
+          value: RemoteUpdateAck.unsafeCast(record.value),
+        });
+      }
+      case 6: {
+        return new FromRemote({
+          discriminator: 6,
+          value: RemoteUpdateSince.unsafeCast(record.value),
+        });
+      }
+    }
+    throw new BebopRuntimeError(
+      `Failed to unsafely cast union from discriminator: ${discriminator}`
+    );
   }
 
   /**
@@ -1603,14 +1665,14 @@ export class FromRemote implements IFromRemote {
         return this.fromRemoteUpdateSince(RemoteUpdateSince.readFrom(view));
       default:
         view.index = end;
-        throw new BebopRuntimeError("Unrecognized discriminator while decoding FromRemote");
+        throw new BebopRuntimeError(
+          'Unrecognized discriminator while decoding FromRemote'
+        );
     }
   }
 }
 
-
 export interface IOperation extends BebopRecord {
-
   readonly update: Uint8Array;
 
   readonly timestamp: Date;
@@ -1651,14 +1713,14 @@ export class Operation implements IOperation {
    */
   public static validateCompatibility(record: IOperation): void {
     BebopTypeGuard.ensureArray(record.update, BebopTypeGuard.ensureUint8);
-    BebopTypeGuard.ensureDate(record.timestamp)
+    BebopTypeGuard.ensureDate(record.timestamp);
   }
 
   /**
    * Unsafely creates an instance of {@link Operation} from the specified dynamic object. No type checking is performed.
    */
   public static unsafeCast(record: any): IOperation {
-      return new Operation(record);
+    return new Operation(record);
   }
 
   /**
@@ -1710,9 +1772,7 @@ export class Operation implements IOperation {
   }
 }
 
-
 export interface IOperationLog extends BebopRecord {
-
   readonly operations: Array<IOperation>;
 }
 
@@ -1748,14 +1808,17 @@ export class OperationLog implements IOperationLog {
    * Validates that the specified dynamic object can become an instance of {@link OperationLog}.
    */
   public static validateCompatibility(record: IOperationLog): void {
-    BebopTypeGuard.ensureArray(record.operations, Operation.validateCompatibility);
+    BebopTypeGuard.ensureArray(
+      record.operations,
+      Operation.validateCompatibility
+    );
   }
 
   /**
    * Unsafely creates an instance of {@link OperationLog} from the specified dynamic object. No type checking is performed.
    */
   public static unsafeCast(record: any): IOperationLog {
-      return new OperationLog(record);
+    return new OperationLog(record);
   }
 
   /**
@@ -1786,7 +1849,7 @@ export class OperationLog implements IOperationLog {
       const length0 = record.operations.length;
       view.writeUint32(length0);
       for (let i0 = 0; i0 < length0; i0++) {
-        Operation.encodeInto(record.operations[i0], view)
+        Operation.encodeInto(record.operations[i0], view);
       }
     }
     const after = view.length;
@@ -1817,13 +1880,13 @@ export class OperationLog implements IOperationLog {
   }
 }
 
-
 export interface IInitializeFromSnapshotRequest extends BebopRecord {
-
   readonly snapshot: Uint8Array;
 }
 
-export class InitializeFromSnapshotRequest implements IInitializeFromSnapshotRequest {
+export class InitializeFromSnapshotRequest
+  implements IInitializeFromSnapshotRequest
+{
   public readonly snapshot: Uint8Array;
 
   constructor(record: IInitializeFromSnapshotRequest) {
@@ -1854,7 +1917,9 @@ export class InitializeFromSnapshotRequest implements IInitializeFromSnapshotReq
   /**
    * Validates that the specified dynamic object can become an instance of {@link InitializeFromSnapshotRequest}.
    */
-  public static validateCompatibility(record: IInitializeFromSnapshotRequest): void {
+  public static validateCompatibility(
+    record: IInitializeFromSnapshotRequest
+  ): void {
     BebopTypeGuard.ensureArray(record.snapshot, BebopTypeGuard.ensureUint8);
   }
 
@@ -1862,7 +1927,7 @@ export class InitializeFromSnapshotRequest implements IInitializeFromSnapshotReq
    * Unsafely creates an instance of {@link InitializeFromSnapshotRequest} from the specified dynamic object. No type checking is performed.
    */
   public static unsafeCast(record: any): IInitializeFromSnapshotRequest {
-      return new InitializeFromSnapshotRequest(record);
+    return new InitializeFromSnapshotRequest(record);
   }
 
   /**
@@ -1870,7 +1935,9 @@ export class InitializeFromSnapshotRequest implements IInitializeFromSnapshotReq
    */
   public static fromJSON(json: string): IInitializeFromSnapshotRequest {
     if (typeof json !== 'string' || json.trim().length === 0) {
-      throw new BebopRuntimeError(`InitializeFromSnapshotRequest.fromJSON: expected string`);
+      throw new BebopRuntimeError(
+        `InitializeFromSnapshotRequest.fromJSON: expected string`
+      );
     }
     const parsed = JSON.parse(json, BebopJson.reviver);
     InitializeFromSnapshotRequest.validateCompatibility(parsed);
@@ -1887,7 +1954,10 @@ export class InitializeFromSnapshotRequest implements IInitializeFromSnapshotReq
     return view.toArray();
   }
 
-  public static encodeInto(record: IInitializeFromSnapshotRequest, view: BebopView): number {
+  public static encodeInto(
+    record: IInitializeFromSnapshotRequest,
+    view: BebopView
+  ): number {
     const before = view.length;
     view.writeBytes(record.snapshot);
     const after = view.length;
@@ -1909,4 +1979,3 @@ export class InitializeFromSnapshotRequest implements IInitializeFromSnapshotReq
     return new InitializeFromSnapshotRequest(message);
   }
 }
-

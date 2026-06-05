@@ -2,7 +2,7 @@ import type { RawUpdate } from '@core/collab/shared';
 import {
   type InitialSync,
   SyncError,
-  type SyncSource,
+  type LiveSyncSource,
   type SyncSourceEvent,
   SyncSourceStatus,
   type TimeoutError,
@@ -109,7 +109,7 @@ export const createSyncServiceSource = (
   documentId: string,
   token: string
 ): {
-  source: WithCleanup<SyncSource>;
+  source: WithCleanup<LiveSyncSource>;
   doInitialSync: () => ResultAsync<InitialSync, TimeoutError>;
 } => {
   const ws = createSyncServiceSocket(documentId, token);
@@ -228,7 +228,10 @@ export const createSyncServiceSource = (
     const ack = (async () => {
       try {
         await raceTimeout(
-          untilMessage(ws, (msg) => msg.isRemoteUpdateAck() && msg.value.id === id),
+          untilMessage(
+            ws,
+            (msg) => msg.isRemoteUpdateAck() && msg.value.id === id
+          ),
           TIMEOUTS.ACK,
           true
         );

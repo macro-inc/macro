@@ -1,0 +1,134 @@
+import { openDB as idbOpen, type DBSchema, type IDBPDatabase } from 'idb';
+import type { Listen } from '@solid-primitives/event-bus';
+import type { LiveSyncSource, SyncSourceEvent, WALSyncSource } from './source';
+import type { RawUpdate } from './shared';
+
+export type WALEntry = { id: number; update: RawUpdate };
+
+export interface WALStore {
+  append(update: RawUpdate): Promise<void>;
+  getAll(): Promise<WALEntry[]>;
+  delete(id: number): Promise<void>;
+  count(): Promise<number>;
+}
+
+const DB_NAME = 'macro-document-wal';
+const DB_VERSION = 1;
+
+interface WALSchema extends DBSchema {
+  updates: {
+    key: number;
+    value: { id?: number; documentId: string; update: Uint8Array };
+    indexes: { documentId: string };
+  };
+}
+
+export class IDBWALStore implements WALStore {
+  /** Resolves to the open IDB database, shared across all operations. */
+  private _db: Promise<IDBPDatabase<WALSchema>>;
+
+  private db(): Promise<IDBPDatabase<WALSchema>> {
+    return this._db;
+  }
+
+  constructor(private readonly documentId: string) {
+    this._db = idbOpen<WALSchema>(DB_NAME, DB_VERSION, {
+      upgrade(db) {
+        const store = db.createObjectStore('updates', {
+          keyPath: 'id',
+          autoIncrement: true,
+        });
+        store.createIndex('documentId', 'documentId');
+      },
+    });
+  }
+
+  public async append(update: RawUpdate): Promise<void> {
+    const db = await this.db();
+    await db.add('updates', { documentId: this.documentId, update });
+  }
+
+  public async getAll(): Promise<WALEntry[]> {
+    const db = await this.db();
+    return db.getAllFromIndex(
+      'updates',
+      'documentId',
+      this.documentId
+    ) as Promise<WALEntry[]>;
+  }
+
+  public async delete(id: number): Promise<void> {
+    const db = await this.db();
+    await db.delete('updates', id);
+  }
+
+  public async count(): Promise<number> {
+    const db = await this.db();
+    return (await db.getAllFromIndex('updates', 'documentId', this.documentId))
+      .length;
+  }
+}
+
+export class IDBWALSyncSource implements WALSyncSource {
+  /** True while a flush is in progress — prevents concurrent flushes. */
+  private isFlushing = false;
+  /** True if pushUpdate was called while a flush was in progress.
+   *  Causes flush to re-run after completing so those entries aren't stranded. */
+  private hasNewPending = false;
+  public pendingFlush: Promise<void> = Promise.resolve();
+
+  public readonly documentId: string;
+  public readonly listen: Listen<SyncSourceEvent>;
+
+  constructor(
+    private readonly live: LiveSyncSource,
+    private readonly store: WALStore
+  ) {
+    this.documentId = live.documentId;
+    this.listen = live.listen.bind(live);
+
+    live.listen((event) => {
+      if (event.type === 'reconnect') void this.flush(); // unawaited
+    });
+  }
+
+  public async pushUpdate(update: RawUpdate): Promise<boolean> {
+    await this.store.append(update);
+    this.hasNewPending = true;
+    void this.flush(); // unawaited
+    return true;
+  }
+
+  public flush(): Promise<void> {
+    if (this.isFlushing) return this.pendingFlush;
+    this.pendingFlush = this.doFlush();
+    return this.pendingFlush;
+  }
+
+  private async doFlush(): Promise<void> {
+    this.isFlushing = true;
+    this.hasNewPending = false;
+    let succeeded = true;
+    try {
+      const entries = await this.store.getAll();
+      for (const entry of entries) {
+        const delivered = await this.live.pushUpdate(entry.update);
+        if (!delivered) {
+          succeeded = false;
+          break;
+        }
+        await this.store.delete(entry.id);
+      }
+    } finally {
+      this.isFlushing = false;
+    }
+    if (succeeded && this.hasNewPending) {
+      this.pendingFlush = this.doFlush();
+      return this.pendingFlush;
+    }
+  }
+}
+
+export function createWALSyncSource(live: LiveSyncSource): IDBWALSyncSource {
+  return new IDBWALSyncSource(live, new IDBWALStore(live.documentId));
+}

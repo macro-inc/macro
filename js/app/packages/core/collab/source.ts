@@ -42,7 +42,6 @@ export type TimeoutError = {
   duration: number;
 };
 
-
 export type SyncError =
   | ConnectionFailedError
   | TimeoutError
@@ -68,39 +67,21 @@ export enum SyncSourceStatus {
   Connecting,
 }
 
-export type SyncSource = {
-  readonly listen: Listen<SyncSourceEvent>;
+export type WALSyncSource = {
   readonly documentId: string;
+  readonly listen: Listen<SyncSourceEvent>;
+  /** Resolves true if acked by the server, false if timed out. */
+  pushUpdate: (update: RawUpdate) => Promise<boolean>;
+};
 
-  /** Pushes an update to the source. Resolves true if acked, false if timed out.
-   *
-   * @param update - The update to push, should be a [RawUpdate] from [LoroDoc.export()]
-   **/
-  pushUpdate: (update: RawUpdate, peerId: bigint) => Promise<boolean>;
-
-  /** Pushes an awareness update to the source
-   *
-   * @param awareness - The awareness update to push, should be a [RawUpdate] from [EphemeralStore.encode()]
-   **/
+export type LiveSyncSource = WALSyncSource & {
   pushAwareness: (awareness: RawUpdate) => void;
-
-  /**
-   * Registers a new peerId that is associated with the current source
-   *
-   * @param peerId - The peerId to register
-   **/
   registerPeerId: (peerId: bigint) => void;
-
   status: Accessor<SyncSourceStatus>;
-
   requestUpdatesSince: (
     version: Frontiers
   ) => ResultAsync<RawUpdate, TimeoutError>;
-
-  /** Requests a shallow snapshot from the source */
   requestSnapshot: () => ResultAsync<RawUpdate, TimeoutError>;
-
   reconnect: () => void;
-
   cleanup: () => void;
 };

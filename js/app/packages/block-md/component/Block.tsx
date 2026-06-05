@@ -76,10 +76,8 @@ function BlockMarkdownContent({ optimisticSnapshot }: BlockMarkdownProps) {
                 setBlockError('INVALID');
                 return;
               }
-              const peerId = loroManager.getPeerId();
               data.syncSource.pushUpdate(
-                loroManager.getDoc().export({ mode: 'update' }),
-                peerId
+                loroManager.getDoc().export({ mode: 'update' })
               );
             });
         });

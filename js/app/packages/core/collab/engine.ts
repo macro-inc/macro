@@ -7,53 +7,87 @@ import { type Accessor, createEffect, createSignal, on } from 'solid-js';
 import type { Awareness } from './awareness';
 import { type LoroManager, LoroStateTag, type StateUpdate } from './manager';
 import type { GenericRootSchema, LoroRawUpdate, RawUpdate } from './shared';
-import type { SyncSource, SyncSourceEvent, TimeoutError } from './source';
+import type {
+  LiveSyncSource,
+  SyncSourceEvent,
+  TimeoutError,
+  WALSyncSource,
+} from './source';
 import { compareLoroDocVersions, loroDocFromSnapshot } from './utils';
 
 export type EngineBindings<S extends GenericRootSchema> = {
   onRemoteState: (state: InferType<S>) => void;
 };
 
+export type SyncSources = {
+  wal: WALSyncSource;
+  live: LiveSyncSource;
+};
+
+export const NoopWALSyncSource = (live: LiveSyncSource): WALSyncSource => live;
+
+export type SyncEngineParams<S extends GenericRootSchema, D> = {
+  loroManager: LoroManager<S>;
+  awareness: Awareness<D>;
+  syncs: SyncSources;
+  bindings: EngineBindings<S>;
+  readonly?: () => boolean;
+  onRunningChange?: (v: boolean) => void;
+};
+
 type SnapshotThunk = () => ResultAsync<Uint8Array, TimeoutError>;
 
 export class SyncEngine<S extends GenericRootSchema, D> {
   private _isRunning = false;
+
   get isRunning() {
     return this._isRunning;
   }
 
+  private readonly loroManager: LoroManager<S>;
+  private readonly awareness: Awareness<D>;
+  private readonly syncs: SyncSources;
+  private readonly bindings: EngineBindings<S>;
+  private readonly readonly: () => boolean;
   private readonly syncLock = new Mutex();
   private unsubscribe?: () => void;
   private readonly defaultSnapshotThunk: SnapshotThunk;
   private readonly onRunningChange: (v: boolean) => void;
 
-  constructor(
-    private readonly loroManager: LoroManager<S>,
-    private readonly awareness: Awareness<D>,
-    private readonly source: SyncSource,
-    private readonly bindings: EngineBindings<S>,
-    private readonly readonly: () => boolean = () => false,
-    { onRunningChange = () => {} }: { onRunningChange?: (v: boolean) => void } = {}
-  ) {
-    this.defaultSnapshotThunk = source.requestSnapshot;
+  constructor({
+    loroManager,
+    awareness,
+    syncs,
+    bindings,
+    readonly = () => false,
+    onRunningChange = () => {},
+  }: SyncEngineParams<S, D>) {
+    this.loroManager = loroManager;
+    this.awareness = awareness;
+    this.syncs = syncs;
+    this.bindings = bindings;
+    this.readonly = readonly;
+    this.defaultSnapshotThunk = syncs.live.requestSnapshot;
     this.onRunningChange = onRunningChange;
   }
 
   public start(): boolean {
     if (!this.loroManager.isInitialized()) {
       logger.warn('Loro manager not initialized, engine will not start', {
-        documentId: this.source.documentId,
+        documentId: this.syncs.live.documentId,
       });
       return false;
     }
 
     this.unsubscribe?.();
-    this.unsubscribe = this.loroManager.getDoc().subscribeLocalUpdates((update) => {
-      this.handleLocalUpdates(update);
-    });
+    this.unsubscribe = this.loroManager
+      .getDoc()
+      .subscribeLocalUpdates((update) => {
+        this.handleLocalUpdates(update);
+      });
 
-    this.source.listen((event) => this.handleSourceEvent(event));
-    this.source.registerPeerId(this.loroManager.getPeerId());
+    this.syncs.live.listen((event) => this.handleSourceEvent(event));
+    this.syncs.live.registerPeerId(this.loroManager.getPeerId());
     this._isRunning = true;
     this.onRunningChange(true);
     return true;
@@ -64,13 +98,14 @@ export class SyncEngine<S extends GenericRootSchema, D> {
     this.unsubscribe = undefined;
 
     this.awareness.updateLocalAwareness(undefined);
-    this.source.pushAwareness(this.awareness.getEncodedLocalAwareness());
+    this.syncs.live.pushAwareness(this.awareness.getEncodedLocalAwareness());
     this._isRunning = false;
     this.onRunningChange(false);
   }
 
   public async syncStateToLoro(state: InferType<S>) {
     if (!this._isRunning) return;
+
     await this.syncLock.runExclusive(async () => {
       const syncResult = await this.loroManager.syncToLoro(state);
 
@@ -79,7 +114,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
           resolution: 'reset engine',
           scope: 'sync_engine',
           err: syncResult,
-          documentId: this.source.documentId,
+          documentId: this.syncs.live.documentId,
         });
         this.reset();
       }
@@ -88,35 +123,37 @@ export class SyncEngine<S extends GenericRootSchema, D> {
 
   public syncAwarenessToLoro(awarenessUpdate: D) {
     if (!this._isRunning) return;
+
     this.awareness.updateLocalAwareness(awarenessUpdate);
-    this.source.pushAwareness(this.awareness.getEncodedLocalAwareness());
+    this.syncs.live.pushAwareness(this.awareness.getEncodedLocalAwareness());
   }
 
   public async reset(snapshotThunk?: SnapshotThunk) {
     const wasRunning = this._isRunning;
+
     if (wasRunning) {
       this.stop();
     }
 
     await this.syncLock.runExclusive(async () => {
-      let snapshot = await (snapshotThunk ?? this.defaultSnapshotThunk)();
+      const snapshot = await (snapshotThunk ?? this.defaultSnapshotThunk)();
       if (snapshot.isErr()) {
         logger.error('failed to get snapshot from source', {
           resolution: 'fail',
           scope: 'sync_engine',
           err: snapshot.error,
-          documentId: this.source.documentId,
+          documentId: this.syncs.live.documentId,
         });
         return;
       }
 
-      let resetResult = await this.loroManager.reset(snapshot.value);
+      const resetResult = await this.loroManager.reset(snapshot.value);
       if (resetResult.isErr()) {
         logger.error('failed to reset engine or loro manager', {
           resolution: 'fail',
           scope: 'sync_engine',
           err: resetResult,
-          documentId: this.source.documentId,
+          documentId: this.syncs.live.documentId,
         });
         return;
       }
@@ -129,42 +166,37 @@ export class SyncEngine<S extends GenericRootSchema, D> {
 
   public onStateUpdate(stateUpdate: StateUpdate<S> | undefined) {
     if (!this._isRunning || !stateUpdate) return;
+
     if (stateUpdate.metadata.direction === SyncDirection.TO_LORO) return;
     if (stateUpdate.metadata.tags?.includes(LoroStateTag.Initialize)) return;
-    this.syncLock.runExclusive(() => this.bindings.onRemoteState(stateUpdate.state));
+    this.syncLock.runExclusive(() =>
+      this.bindings.onRemoteState(stateUpdate.state)
+    );
   }
 
   public onLocalAwarenessChange() {
     if (!this._isRunning) return;
+
     const awarenessUpdate = this.awareness.getEncodedLocalAwareness();
     if (!awarenessUpdate) return;
-    this.source.pushAwareness(awarenessUpdate);
+    this.syncs.live.pushAwareness(awarenessUpdate);
   }
 
   private async handleLocalUpdates(update: LoroRawUpdate) {
     if (this.readonly()) return;
-    const peerId = this.loroManager.getPeerId();
-    const delivered = await this.source.pushUpdate(update, peerId);
-    if (!delivered) {
-      logger.error('failed to push local update to remote', {
-        scope: 'sync_engine',
-        resolution: 'try to reconnect',
-        documentId: this.source.documentId,
-      });
-      this.source.reconnect();
-    }
+    void this.syncs.wal.pushUpdate(update);
   }
 
   private async handleRemoteUpdate(update: RawUpdate) {
     await this.syncLock.runExclusive(async () => {
-      let importResult = this.loroManager.importUpdate(update);
+      const importResult = this.loroManager.importUpdate(update);
       await Promise.resolve();
       if (importResult.isErr()) {
         logger.error('failed to import remote update', {
           resolution: 'reset engine',
           scope: 'sync_engine',
           err: importResult,
-          documentId: this.source.documentId,
+          documentId: this.syncs.live.documentId,
         });
         console.error(importResult);
         this.reset();
@@ -190,7 +222,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
         const cmp = compareLoroDocVersions(doc, tempDoc);
         if (cmp >= 0) return;
         logger.log('reconnecting and fast forwarding new updates', {
-          documentId: this.source.documentId,
+          documentId: this.syncs.live.documentId,
         });
         this.requestAndHandleUpdatesSince(doc.frontiers());
         break;
@@ -199,7 +231,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
   }
 
   private async requestAndHandleUpdatesSince(since: Frontiers) {
-    const updates = await this.source.requestUpdatesSince(since);
+    const updates = await this.syncs.live.requestUpdatesSince(since);
     if (updates.isErr() || !updates.value) {
       console.error(
         'failed to request updates since',
@@ -216,7 +248,9 @@ export type ReactiveSyncEngine<S extends GenericRootSchema, D> = {
   isRunning: Accessor<boolean>;
   start: () => void;
   stop: () => void;
-  reset: (snapshotThunk?: () => ResultAsync<Uint8Array, TimeoutError>) => Promise<void>;
+  reset: (
+    snapshotThunk?: () => ResultAsync<Uint8Array, TimeoutError>
+  ) => Promise<void>;
   syncStateToLoro: (state: InferType<S>) => Promise<void>;
   syncAwarenessToLoro: (awareness: D) => void;
 };
@@ -225,17 +259,14 @@ export function createSyncEngine<
   D,
   S extends GenericRootSchema = GenericRootSchema,
 >(
-  loroManager: LoroManager<S>,
-  awareness: Awareness<D>,
-  source: SyncSource,
-  bindings: EngineBindings<S>,
-  readonly: Accessor<boolean> = () => false
+  params: Omit<SyncEngineParams<S, D>, 'onRunningChange'> & {
+    readonly?: Accessor<boolean>;
+  }
 ): ReactiveSyncEngine<S, D> {
   const [isRunning, setIsRunning] = createSignal(false);
 
-  const engine = new SyncEngine(loroManager, awareness, source, bindings, readonly, {
-    onRunningChange: setIsRunning,
-  });
+  const engine = new SyncEngine({ ...params, onRunningChange: setIsRunning });
+  const { loroManager, awareness } = params;
 
   createEffect(on(loroManager.state, (update) => engine.onStateUpdate(update)));
   createEffect(on(awareness.local, () => engine.onLocalAwarenessChange()));

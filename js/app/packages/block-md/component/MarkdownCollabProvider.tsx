@@ -1,6 +1,6 @@
 import { markdownBlockErrorSignal } from '@block-md/signal/error';
 import { createAwareness } from '@core/collab/awareness';
-import { createSyncEngine } from '@core/collab/engine';
+import { createSyncEngine, NoopWALSyncSource } from '@core/collab/engine';
 import type { LoroManager } from '@core/collab/manager';
 import {
   $convertLexicalSelectionToCursors,
@@ -108,16 +108,16 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
 
   const readOnly = () => !(canEdit() || canComment());
 
-  const syncEngine = createSyncEngine(
-    loroManager()!,
+  const syncEngine = createSyncEngine({
+    loroManager: loroManager()!,
     awareness,
-    syncSource()!,
-    {
+    syncs: { wal: NoopWALSyncSource(syncSource()!), live: syncSource()! },
+    bindings: {
       onRemoteState: (state) =>
         syncStateToLexical(state as unknown as SerializedEditorState),
     },
-    readOnly
-  );
+    readonly: readOnly,
+  });
 
   const { refreshRemoteCursors, RemoteCursorsOverlay } = useRemoteCursors({
     loroManager: loroManager()!,
