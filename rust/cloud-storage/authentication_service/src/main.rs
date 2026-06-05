@@ -342,7 +342,6 @@ async fn main() -> anyhow::Result<()> {
                 },
             }),
             analytics_client: Arc::new(analytics_client),
-            legacy_stripe_price_ids: config.legacy_stripe_price_ids,
             stripe_price_id: config.stripe_price_id,
         },
         config.port,
