@@ -23,6 +23,12 @@ const dopplerTokenArn: pulumi.Output<string> = aws.secretsmanager
   .getSecretVersionOutput({ secretId: config.require('doppler_token_key') })
   .apply((secret) => secret.arn);
 
+const dopplerSecretSyncArn: pulumi.Output<string> = aws.secretsmanager
+  .getSecretVersionOutput({
+    secretId: config.require('doppler_secret_sync_key'),
+  })
+  .apply((secret) => secret.arn);
+
 const DATABASE_URL = aws.secretsmanager
   .getSecretVersionOutput({
     secretId: config.require(`macro_db_secret_key`),
@@ -157,6 +163,10 @@ const service = new AuthenticationService('authentication-service', {
     {
       name: 'DOPPLER_TOKEN',
       valueFrom: pulumi.interpolate`${dopplerTokenArn}`,
+    },
+    {
+      name: 'APP_SECRETS_JSON',
+      valueFrom: pulumi.interpolate`${dopplerSecretSyncArn}`,
     },
   ],
 });

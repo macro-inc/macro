@@ -27,3 +27,4 @@ config:
   authentication-service:posthog_host: https://us.i.posthog.com
   authentication-service:posthog_api_key: posthog-api-key
   authentication-service:doppler_token_key: doppler-token-authentication-service-dev
+  authentication-service:doppler_secret_sync_key: /doppler/authentication-service/dev
