@@ -47,6 +47,14 @@ fn it_should_be_arced() {
 }
 
 #[test]
+fn required_env_var_deserializes_from_string() {
+    let v = serde_json::from_str::<TestVar>(r#""from-serde""#).expect("env var deserializes");
+
+    assert_eq!(&*v, "from-serde");
+    assert!(v.runtime_inner().is_some());
+}
+
+#[test]
 fn required_env_reads_from_app_secrets_json_when_key_exists() {
     let value = with_mock_env(
         |k| match k {
@@ -199,6 +207,15 @@ fn maybe_env_var_can_be_arced() {
     let next = v.runtime_inner().unwrap().clone();
     let third = next.clone();
     assert_eq!(Arc::strong_count(&third), 3);
+}
+
+#[test]
+fn optional_env_var_deserializes_from_string() {
+    let v = serde_json::from_str::<MaybeTestVar>(r#""optional-from-serde""#)
+        .expect("optional env var deserializes");
+
+    assert_eq!(&*v, "optional-from-serde");
+    assert!(v.runtime_inner().is_some());
 }
 
 #[test]

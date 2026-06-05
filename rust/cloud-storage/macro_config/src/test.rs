@@ -47,6 +47,16 @@ impl Drop for EnvGuard {
     }
 }
 
+macro_env_var::env_var! {
+    #[derive(Debug)]
+    struct ConfigSecret;
+}
+
+macro_env_var::maybe_env_var! {
+    #[derive(Debug)]
+    struct OptionalConfigSecret;
+}
+
 #[derive(Debug, Deserialize, PartialEq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 struct ScreamingSnakeConfig {
@@ -128,6 +138,39 @@ fn load_reads_values_from_app_secrets_json() {
             items: vec!["first".to_string(), "second".to_string()],
         }
     );
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+struct EnvVarFieldConfig {
+    config_secret: ConfigSecret,
+    optional_config_secret: Option<OptionalConfigSecret>,
+    missing_optional_secret: Option<OptionalConfigSecret>,
+}
+
+#[test]
+fn load_deserializes_macro_env_var_fields() {
+    let _lock = ENV_LOCK.lock().expect("env lock poisoned");
+    let env = EnvGuard::new(&[
+        "APP_SECRETS_JSON",
+        "CONFIG_SECRET",
+        "OPTIONAL_CONFIG_SECRET",
+        "MISSING_OPTIONAL_SECRET",
+    ]);
+    env.set("CONFIG_SECRET", "secret");
+    env.set("OPTIONAL_CONFIG_SECRET", "optional-secret");
+
+    let config = ConfigLoader::load::<EnvVarFieldConfig>().expect("config should load");
+
+    assert_eq!(&*config.config_secret, "secret");
+    assert_eq!(
+        config
+            .optional_config_secret
+            .as_ref()
+            .map(|value| value.as_ref()),
+        Some("optional-secret")
+    );
+    assert!(config.missing_optional_secret.is_none());
 }
 
 #[allow(dead_code)]
