@@ -122,3 +122,25 @@ pub async fn children_for_primary(
 
     Ok(rows)
 }
+
+/// Returns the `primary_macro_id`s delegated to read the given child's inboxes.
+/// Inverse of [`children_for_primary`]; used to fan a child inbox's notifications
+/// out to every primary that can view it.
+#[tracing::instrument(skip(db), err)]
+pub async fn get_primaries_for_child(
+    db: &Pool<Postgres>,
+    child_macro_id: &str,
+) -> anyhow::Result<Vec<String>> {
+    let rows = sqlx::query_scalar!(
+        r#"
+            SELECT primary_macro_id
+            FROM macro_user_links
+            WHERE child_macro_id = $1
+        "#,
+        child_macro_id
+    )
+    .fetch_all(db)
+    .await?;
+
+    Ok(rows)
+}

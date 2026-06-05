@@ -27,6 +27,9 @@ use frecency::outbound::postgres::FrecencyPgStorage;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_env_var::env_var;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
+use macro_service_urls::{
+    DocumentStorageServiceUrl, EmailServiceUrl, LexicalServiceUrl, SyncServiceUrl,
+};
 use mcp_auth_proxy::{
     domain::service::McpAuthProxyServiceImpl,
     outbound::{fusionauth::FusionAuthOAuthProvider, redis::RedisInflightAuth},
@@ -44,13 +47,8 @@ env_var!(
     pub struct McpEnvVars {
         DatabaseUrl,
         EmailScheduledQueue,
-        DocumentStorageServiceUrl,
         DocumentStorageServiceAuthKey,
-        SyncServiceUrl,
         SyncServiceAuthKey,
-        LexicalServiceUrl,
-        EmailServiceUrl,
-        StaticFileServiceUrl,
         DocumentStorageBucket,
         DocxDocumentUploadBucket,
         DocumentStorageServiceCloudfrontDistributionUrl,
@@ -154,20 +152,22 @@ async fn build_tool_context(
     document_storage_service_auth_key: String,
     sync_service_auth_key: String,
 ) -> anyhow::Result<ToolServiceContext> {
-    let dss_url: String = env_vars.document_storage_service_url.as_ref().to_owned();
-    let sync_service_url: String = env_vars.sync_service_url.as_ref().to_owned();
+    let dss_url = DocumentStorageServiceUrl::new()?.to_string();
+    let sync_service_url = SyncServiceUrl::new()?.to_string();
+    let lexical_service_url = LexicalServiceUrl::new()?.to_string();
+    let email_service_url = EmailServiceUrl::new()?.to_string();
 
     let search_service_client =
         SearchServiceClient::new(document_storage_service_auth_key, dss_url);
 
     let lexical_client = Arc::new(lexical_client::LexicalClient::new(
         internal_auth_key.clone(),
-        env_vars.lexical_service_url.as_ref().to_owned(),
+        lexical_service_url,
     ));
 
     let email_service_client = Arc::new(EmailServiceClient::new(
         internal_auth_key.clone(),
-        env_vars.email_service_url.as_ref().to_owned(),
+        email_service_url,
     ));
 
     let frecency_storage = FrecencyPgStorage::new(db.clone());

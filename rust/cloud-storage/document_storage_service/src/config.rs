@@ -1,5 +1,6 @@
 pub use macro_env::Environment;
 use macro_env_var::{env_var, maybe_env_var};
+use macro_service_urls::{ConnectionGatewayUrl, LexicalServiceUrl, SyncServiceUrl};
 use secretsmanager_client::LocalOrRemoteSecret;
 
 /// The configuration parameters for the application.
@@ -17,6 +18,15 @@ pub struct Config {
 
     /// The environment we are in
     pub environment: Environment,
+
+    /// Connection gateway URL.
+    pub connection_gateway_url: String,
+
+    /// Sync service URL.
+    pub sync_service_url: String,
+
+    /// Lexical service URL.
+    pub lexical_service_url: String,
 
     /// Maximum number of SQS messages to receive per poll for the delete document worker
     pub queue_max_messages: i32,
@@ -48,12 +58,9 @@ env_var! {
         pub RedisUri,
         pub NotificationQueue,
         pub SearchEventQueue,
-        pub ConnectionGatewayUrl,
         pub BulkUploadRequestsTable,
         pub UploadStagingBucket,
-        pub SyncServiceUrl,
         pub SyncServiceAuthKey,
-        pub LexicalServiceUrl,
         pub OpensearchUrl,
         pub OpensearchUsername,
         pub OpensearchPassword,
@@ -185,11 +192,17 @@ impl Config {
             .unwrap_or(4);
 
         let vars = EnvVars::new()?;
+        let connection_gateway_url = ConnectionGatewayUrl::new()?.to_string();
+        let sync_service_url = SyncServiceUrl::new()?.to_string();
+        let lexical_service_url = LexicalServiceUrl::new()?.to_string();
 
         Ok(Config {
             vars,
             port,
             environment,
+            connection_gateway_url,
+            sync_service_url,
+            lexical_service_url,
             queue_max_messages,
             queue_wait_time_seconds,
             document_limit,

@@ -1,6 +1,7 @@
 use anyhow::Context;
 pub use macro_env::Environment;
 use macro_env_var::env_var;
+use macro_service_urls::{ConnectionGatewayUrl, DocumentStorageServiceUrl, StaticFileServiceUrl};
 use secretsmanager_client::LocalOrRemoteSecret;
 
 pub struct Config {
@@ -322,14 +323,11 @@ impl Config {
         let auth_service_secret_key = std::env::var("AUTHENTICATION_SERVICE_SECRET_KEY")
             .context("AUTHENTICATION_SERVICE_SECRET_KEY must be provided")?;
 
-        let static_file_service_url = std::env::var("STATIC_FILE_SERVICE_URL")
-            .context("STATIC_FILE_SERVICE_URL must be provided")?;
+        let static_file_service_url = StaticFileServiceUrl::new()?.to_string();
 
-        let connection_gateway_url = std::env::var("CONNECTION_GATEWAY_URL")
-            .context("CONNECTION_GATEWAY_URL must be provided")?;
+        let connection_gateway_url = ConnectionGatewayUrl::new()?.to_string();
 
-        let document_storage_service_url = std::env::var("DOCUMENT_STORAGE_SERVICE_URL")
-            .context("DOCUMENT_STORAGE_SERVICE_URL must be provided")?;
+        let document_storage_service_url = DocumentStorageServiceUrl::new()?.to_string();
 
         let email_service_cloudfront_distribution_url =
             std::env::var("EMAIL_SERVICE_CLOUDFRONT_DISTRIBUTION_URL")

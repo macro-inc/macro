@@ -3112,75 +3112,6 @@
         }
       }
     },
-    "/user/stripe/checkout": {
-      "post": {
-        "tags": ["user::stripe::create_checkout_session"],
-        "summary": "**LEGACY DO NOT USE** Creates a Stripe checkout session for the user to subscribe.",
-        "operationId": "create_checkout_session",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateCheckoutSessionRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/StripeSessionResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/user/stripe/checkoutv2": {
       "post": {
         "tags": ["user::stripe::create_checkout_session_v2"],
@@ -3277,78 +3208,6 @@
             }
           },
           "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/user/stripe/subscription": {
-      "patch": {
-        "tags": ["user::stripe::patch_subscription_tier"],
-        "summary": "Updates the user's subscription tier, swapping both their RBAC role and Stripe subscription line item.",
-        "operationId": "patch_subscription_tier",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PatchSubscriptionTierRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": ""
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "409": {
             "description": "",
             "content": {
               "application/json": {
@@ -3474,33 +3333,6 @@
           "email": {
             "type": "string",
             "description": "The email address to generate the merge link for."
-          }
-        }
-      },
-      "CreateCheckoutSessionRequest": {
-        "type": "object",
-        "description": "Request body for creating a Stripe checkout session",
-        "required": ["successUrl", "cancelUrl"],
-        "properties": {
-          "cancelUrl": {
-            "type": "string",
-            "description": "The URL to redirect to if checkout is cancelled"
-          },
-          "discount": {
-            "type": ["string", "null"],
-            "description": "Optional discount/promo code to apply"
-          },
-          "metadata": {
-            "$ref": "#/components/schemas/CheckoutSessionMetadata",
-            "description": "Tracking metadata for conversion attribution"
-          },
-          "successUrl": {
-            "type": "string",
-            "description": "The URL to redirect to on successful checkout"
-          },
-          "tier": {
-            "$ref": "#/components/schemas/StripeProductTier",
-            "description": "The tier, defaults to haiku"
           }
         }
       },
@@ -4081,17 +3913,6 @@
           }
         }
       },
-      "PatchSubscriptionTierRequest": {
-        "type": "object",
-        "description": "Request body for changing the user's subscription tier",
-        "required": ["newTier"],
-        "properties": {
-          "newTier": {
-            "$ref": "#/components/schemas/StripeProductTier",
-            "description": "The new tier to move the user to"
-          }
-        }
-      },
       "PatchTeamCrmSettingsRequest": {
         "type": "object",
         "description": "Request body for `PATCH /team/crm`.",
@@ -4321,10 +4142,6 @@
             "description": "The idp_id you need to perform sso login with."
           }
         }
-      },
-      "StripeProductTier": {
-        "type": "string",
-        "enum": ["haiku", "sonnet", "opus"]
       },
       "StripeSessionResponse": {
         "type": "object",

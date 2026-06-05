@@ -4,6 +4,7 @@ use document_storage_service_client::DocumentStorageServiceClient;
 use handler::handler;
 use lambda_runtime::{Error, LambdaEvent, run, service_fn, tracing};
 use macro_entrypoint::MacroEntrypoint;
+use macro_service_urls::DocumentStorageServiceUrl;
 use std::sync::Arc;
 
 mod handler;
@@ -17,8 +18,7 @@ async fn main() -> Result<(), Error> {
     let search_event_queue =
         std::env::var("SEARCH_EVENT_QUEUE").context("SEARCH_EVENT_QUEUE must be provided")?;
 
-    let dss_url = std::env::var("DOCUMENT_STORAGE_SERVICE_URL")
-        .context("DOCUMENT_STORAGE_SERVICE_URL must be provided")?;
+    let dss_url = DocumentStorageServiceUrl::new()?.to_string();
     let dss_auth_key = std::env::var("DOCUMENT_STORAGE_SERVICE_AUTH_KEY")
         .context("DOCUMENT_STORAGE_SERVICE_AUTH_KEY must be provided")?;
 

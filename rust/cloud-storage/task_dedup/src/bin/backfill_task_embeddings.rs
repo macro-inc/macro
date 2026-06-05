@@ -12,6 +12,7 @@ use embedding::{EmbeddingModel, VectorStore};
 use futures::StreamExt;
 use lexical_client::LexicalClient;
 use macro_env_var::env_var;
+use macro_service_urls::LexicalServiceUrl;
 use secretsmanager_client::{SecretManager, SecretsManager};
 use task_dedup::outbound::postgres::PgTaskVectorDb;
 
@@ -37,13 +38,15 @@ impl Env {
         }
     }
 
-    /// Hard-coded lexical-service URL for the environment.
-    fn lexical_service_url(self) -> &'static str {
-        match self {
-            Env::Local => "http://localhost:8096",
-            Env::Dev => "https://lexical-service-dev.macroverse.workers.dev",
-            Env::Prod => "https://lexical-service.macroverse.workers.dev",
-        }
+    /// Resolve the lexical-service URL for the environment.
+    fn lexical_service_url(self) -> Result<String> {
+        let environment = match self {
+            Env::Local => macro_service_urls::macro_env::Environment::Local,
+            Env::Dev => macro_service_urls::macro_env::Environment::Develop,
+            Env::Prod => macro_service_urls::macro_env::Environment::Production,
+        };
+
+        Ok(LexicalServiceUrl::new_for_environment(environment)?.to_string())
     }
 }
 
@@ -132,7 +135,6 @@ fn confirm(s: &str) -> Result<()> {
 env_var! {
     struct Vars {
         DatabaseUrl,
-        LexicalServiceUrl,
         InternalApiSecretKey,
         OpenaiApiKey,
     }
@@ -157,9 +159,8 @@ impl ResolvedConfig {
             // which isn't resolvable from the host shell, so hardcode the
             // localhost URL for local runs.
             database_url: "postgres://user:password@localhost:5432/macrodb".to_string(),
-            // The repo `.env` ships the docker-network lexical host
-            // (`http://lexical-service:8096`); use the localhost URL for local runs.
-            lexical_service_url: Env::Local.lexical_service_url().to_string(),
+            // Resolve through macro_service_urls so local runs use the host-reachable URL.
+            lexical_service_url: Env::Local.lexical_service_url()?,
             internal_api_secret_key: vars.internal_api_secret_key.as_ref().to_string(),
             openai_api_key: vars.openai_api_key.as_ref().to_string(),
         })
@@ -191,7 +192,7 @@ impl ResolvedConfig {
 
         Ok(Self {
             database_url,
-            lexical_service_url: env.lexical_service_url().to_string(),
+            lexical_service_url: env.lexical_service_url()?,
             internal_api_secret_key: internal_api_secret_key.as_ref().to_string(),
             openai_api_key: openai_api_key.as_ref().to_string(),
         })
@@ -200,7 +201,7 @@ impl ResolvedConfig {
     fn print(&self) {
         println!("________________________________________");
         println!("DATABASE_URL: {}", masked_db_url(&self.database_url));
-        println!("LEXICAL_SERVICE_URL: {}", self.lexical_service_url);
+        println!("lexical service URL: {}", self.lexical_service_url);
         println!("________________________________________");
     }
 }

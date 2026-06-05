@@ -31,16 +31,22 @@ use sync_service_client::SyncServiceClient;
 
 use crate::config::Config;
 
-/// Builds a [`ToolServiceContext`] from environment variables and a database pool.
+/// Builds a [`ToolServiceContext`] from a database pool and caller-provided config.
 ///
-/// Required env vars: `INTERNAL_API_SECRET_KEY`, `DOCUMENT_STORAGE_SERVICE_URL`,
-/// `EMAIL_SERVICE_URL`, `SYNC_SERVICE_URL`,
-/// `DOCUMENT_COGNITION_SERVICE_URL`, `STATIC_FILE_SERVICE_URL`,
-/// `DOCUMENT_STORAGE_BUCKET`, `DOCX_DOCUMENT_UPLOAD_BUCKET`,
-/// `EMAIL_SCHEDULED_QUEUE`,
+/// This function does not resolve service URLs. The caller must provide a [`Config`]
+/// whose service URL fields have already been resolved, for example with
+/// `macro_service_urls`: `document_storage_service_url`, `sync_service_url`,
+/// `email_service_url`, and `lexical_service_url`.
+///
+/// The provided [`Config`] must also contain values sourced from the required
+/// environment variables: `INTERNAL_API_SECRET_KEY`, `DOCUMENT_STORAGE_BUCKET`,
+/// `DOCX_DOCUMENT_UPLOAD_BUCKET`, `EMAIL_SCHEDULED_QUEUE`,
 /// `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL`,
-/// `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID`,
-/// `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME`
+/// `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID`, and
+/// `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME`.
+///
+/// This function reads the provided [`Config`] and initializes the clients needed to
+/// build the [`ToolServiceContext`].
 #[tracing::instrument(skip(pool, config), err)]
 pub async fn build_tool_service_context(
     pool: sqlx::PgPool,

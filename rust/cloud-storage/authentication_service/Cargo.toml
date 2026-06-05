@@ -128,7 +128,6 @@ utoipa = { workspace = true }
 utoipa-swagger-ui = { workspace = true }
 uuid = { workspace = true }
 
-
 [dev-dependencies]
 cool_asserts = "2"
 

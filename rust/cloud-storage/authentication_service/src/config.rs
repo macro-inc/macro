@@ -2,7 +2,7 @@ use std::sync::LazyLock;
 
 use anyhow::Context;
 pub use macro_env::Environment;
-use macro_env_var::env_var;
+use macro_service_urls::DocumentStorageServiceUrl;
 
 // BASE_URL env var. This is validated when creating the config in main.rs
 pub static BASE_URL: LazyLock<String> = LazyLock::new(|| std::env::var("BASE_URL").unwrap());
@@ -92,23 +92,8 @@ pub struct Config {
     /// PostHog host (optional)
     pub posthog_host: Option<String>,
 
-    /// The legacy stripe price ids
-    pub legacy_stripe_price_ids: LegacyStripePriceIds,
-
     /// The stripe price id
     pub stripe_price_id: String,
-}
-
-env_var! {
-    #[derive(Clone)]
-    pub struct LegacyStripePriceIds {
-        #[derive(Clone)]
-        pub StripePriceIdHaiku,
-        #[derive(Clone)]
-        pub StripePriceIdSonnet,
-        #[derive(Clone)]
-        pub StripePriceIdOpus,
-    }
 }
 
 /// Grab the stripe product price id using the environment
@@ -158,8 +143,7 @@ impl Config {
 
         let environment = Environment::new_or_prod();
 
-        let document_storage_service_url = std::env::var("DOCUMENT_STORAGE_SERVICE_URL")
-            .context("DOCUMENT_STORAGE_SERVICE_URL must be provided")?;
+        let document_storage_service_url = DocumentStorageServiceUrl::new()?.to_string();
 
         let notification_queue =
             std::env::var("NOTIFICATION_QUEUE").context("NOTIFICATION_QUEUE must be provided")?;
@@ -192,8 +176,6 @@ impl Config {
         // PostHog configuration
         let posthog_api_key = std::env::var("POSTHOG_API_KEY").ok();
         let posthog_host = std::env::var("POSTHOG_HOST").ok();
-
-        let legacy_stripe_price_ids = LegacyStripePriceIds::new()?;
 
         let stripe_price_id = get_stripe_price_id_from_environment(environment);
 
@@ -228,7 +210,6 @@ impl Config {
             meta_test_event_code,
             posthog_api_key,
             posthog_host,
-            legacy_stripe_price_ids,
             stripe_price_id,
         })
     }

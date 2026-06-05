@@ -119,21 +119,6 @@ const googleClientSecretKeyArn: pulumi.Output<string> = aws.secretsmanager
   .getSecretVersionOutput({ secretId: GOOGLE_CLIENT_SECRET_KEY })
   .apply((secret) => secret.arn);
 
-// -- STRIPE PRICE IDs
-const STRIPE_PRICE_ID_HAIKU = aws.secretsmanager
-  .getSecretVersionOutput({ secretId: config.require('stripe_price_id_haiku') })
-  .apply((s) => s.secretString);
-
-const STRIPE_PRICE_ID_SONNET = aws.secretsmanager
-  .getSecretVersionOutput({
-    secretId: config.require('stripe_price_id_sonnet'),
-  })
-  .apply((s) => s.secretString);
-
-const STRIPE_PRICE_ID_OPUS = aws.secretsmanager
-  .getSecretVersionOutput({ secretId: config.require('stripe_price_id_opus') })
-  .apply((s) => s.secretString);
-
 const MACRO_API_TOKEN_EXPIRY_SECONDS = config.require(
   `macro_api_token_expiry_seconds`
 );
@@ -344,19 +329,6 @@ const service = new AuthenticationService('authentication-service', {
     {
       name: 'STRIPE_WEBHOOK_SECRET_KEY',
       value: pulumi.interpolate`${stripeWebhookSecretKeyArn}`,
-    },
-    // Stripe price ids
-    {
-      name: 'STRIPE_PRICE_ID_HAIKU',
-      value: pulumi.interpolate`${STRIPE_PRICE_ID_HAIKU}`,
-    },
-    {
-      name: 'STRIPE_PRICE_ID_SONNET',
-      value: pulumi.interpolate`${STRIPE_PRICE_ID_SONNET}`,
-    },
-    {
-      name: 'STRIPE_PRICE_ID_OPUS',
-      value: pulumi.interpolate`${STRIPE_PRICE_ID_OPUS}`,
     },
     // Github
     {
