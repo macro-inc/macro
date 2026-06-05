@@ -28,6 +28,7 @@
             "group": "Getting Started",
             "pages": [
               "index",
+              "permissions",
               "keyboard-shortcuts",
               {
                 "group": "AI",
