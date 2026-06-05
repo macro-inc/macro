@@ -34,6 +34,9 @@ use std::result;
 use std::sync::Arc;
 use uuid::Uuid;
 
+#[cfg(test)]
+mod test;
+
 // upsert a message into the db. could be a new message or an existing one that had changes
 #[tracing::instrument(skip(ctx))]
 pub async fn upsert_message(
