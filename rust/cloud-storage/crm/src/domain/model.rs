@@ -250,6 +250,10 @@ pub enum CrmError {
     /// Comment id does not exist or does not belong to the team.
     #[error("crm comment not found for team")]
     CommentNotFound,
+    /// Comment exists and is visible to the caller, but they are not its
+    /// author — only the comment owner may edit or delete it.
+    #[error("crm comment not owned by caller")]
+    CommentNotOwned,
     /// Request rejected for a client-side reason (e.g. blank comment text).
     #[error("{0}")]
     InvalidRequest(String),

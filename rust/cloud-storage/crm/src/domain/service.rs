@@ -617,8 +617,18 @@ where
     ) -> Result<CrmComment, CrmError> {
         let team_id = access.team_id();
         let include_hidden = access.include_hidden();
+        let requester = access
+            .receipt()
+            .get_authenticated_user()
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
         self.companies_repository
-            .edit_crm_comment(&team_id, comment_id, text, include_hidden)
+            .edit_crm_comment(
+                &team_id,
+                comment_id,
+                text,
+                include_hidden,
+                requester.as_ref(),
+            )
             .await
     }
 
@@ -630,8 +640,12 @@ where
     ) -> Result<DeleteCrmCommentResult, CrmError> {
         let team_id = access.team_id();
         let include_hidden = access.include_hidden();
+        let requester = access
+            .receipt()
+            .get_authenticated_user()
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
         self.companies_repository
-            .delete_crm_comment(&team_id, comment_id, include_hidden)
+            .delete_crm_comment(&team_id, comment_id, include_hidden, requester.as_ref())
             .await
     }
 

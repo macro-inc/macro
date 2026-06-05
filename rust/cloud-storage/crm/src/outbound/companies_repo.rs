@@ -66,6 +66,48 @@ impl CompaniesRepositoryImpl {
 
         Ok(())
     }
+
+    /// Resolve a comment's author, but only when the comment resolves to a
+    /// team-owned parent the caller may see (`include_hidden` admits hidden
+    /// parents). `Ok(None)` means absent / cross-team / hidden-from-caller —
+    /// indistinguishable on purpose. Gates owner-only edit/delete.
+    async fn comment_owner_if_visible(
+        &self,
+        team_id: &uuid::Uuid,
+        comment_id: &uuid::Uuid,
+        include_hidden: bool,
+    ) -> Result<Option<String>, CrmError> {
+        sqlx::query_scalar!(
+            r#"
+            SELECT c.owner
+            FROM crm_comment c
+            JOIN crm_thread t ON t.id = c.thread_id
+            WHERE c.id = $1
+              AND c.deleted_at IS NULL
+              AND (
+                EXISTS (
+                    SELECT 1 FROM crm_companies co
+                    WHERE co.id = t.company_id
+                      AND co.team_id = $2
+                      AND ($3 OR co.hidden = FALSE)
+                )
+                OR EXISTS (
+                    SELECT 1 FROM crm_contacts ct
+                    JOIN crm_companies co2 ON co2.id = ct.company_id
+                    WHERE ct.id = t.contact_id
+                      AND co2.team_id = $2
+                      AND ($3 OR (ct.hidden = FALSE AND co2.hidden = FALSE))
+                )
+              )
+            "#,
+            comment_id,
+            team_id,
+            include_hidden,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))
+    }
 }
 
 impl CompaniesRepository for CompaniesRepositoryImpl {
@@ -1604,7 +1646,19 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         comment_id: &uuid::Uuid,
         text: &str,
         include_hidden: bool,
+        requester: &str,
     ) -> Result<CrmComment, CrmError> {
+        // Owner-only: a visible-but-unowned comment is `CommentNotOwned`,
+        // an absent/cross-team/hidden one is `CommentNotFound`.
+        match self
+            .comment_owner_if_visible(team_id, comment_id, include_hidden)
+            .await?
+        {
+            None => return Err(CrmError::CommentNotFound),
+            Some(owner) if owner != requester => return Err(CrmError::CommentNotOwned),
+            Some(_) => {}
+        }
+
         // Update only when the comment's thread resolves to a company or
         // contact owned by the team, so cross-team edits 404. For
         // non-admins (`include_hidden = false`) the parent must also
@@ -1667,7 +1721,19 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         team_id: &uuid::Uuid,
         comment_id: &uuid::Uuid,
         include_hidden: bool,
+        requester: &str,
     ) -> Result<DeleteCrmCommentResult, CrmError> {
+        // Owner-only: a visible-but-unowned comment is `CommentNotOwned`,
+        // an absent/cross-team/hidden one is `CommentNotFound`.
+        match self
+            .comment_owner_if_visible(team_id, comment_id, include_hidden)
+            .await?
+        {
+            None => return Err(CrmError::CommentNotFound),
+            Some(owner) if owner != requester => return Err(CrmError::CommentNotOwned),
+            Some(_) => {}
+        }
+
         let mut tx = self
             .pool
             .begin()
