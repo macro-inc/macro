@@ -91,6 +91,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
             channelId: [NIL_UUID],
             chatId: [NIL_UUID],
             folderId: [NIL_UUID],
+            foreignEntityRecordId: [NIL_UUID],
           },
           emailView: 'all',
         },
