@@ -32,7 +32,7 @@ const useHasAccess = (requestedPermissions: Permissions) => {
   );
 };
 
-const useIsEditable = () => {
+const useIsEditable = (_mustBeConnected: boolean = true) => {
   const source = blockSourceSignal.get;
   return createMemo(() => source() != null);
 };
