@@ -60,11 +60,13 @@
             sqlxFilter = path: _type: builtins.match ".*\\.sqlx/.*\\.json$" path != null;
             pdfiumFilter = path: _type: builtins.match ".*pdfium-lib/.*\\.(so|dylib)$" path != null;
             assetFilter = path: _type: builtins.match ".*\\.(md|html|txt|json|canvas|sql)$" path != null;
+            binFilter = path: _type: builtins.match ".*\\.bin$" path != null;
             srcFilter =
               path: type:
               (sqlxFilter path type)
               || (pdfiumFilter path type)
               || (assetFilter path type)
+              || (binFilter path type)
               || (craneLib.filterCargoSources path type);
             cloudStorageSrc = pkgs.lib.cleanSourceWith {
               src = ./rust/cloud-storage;
