@@ -18,18 +18,24 @@ export type EntityBase = {
   sortTs?: DateValue | null;
 };
 
-export type ForeignEntity = EntityBase & {
+type ForeignEntityBase = EntityBase & {
   type: 'foreign';
-  subType: { type: 'github_pull_request' };
-  foreignSource: 'github_pull_request' | (string & {});
   foreignId: string;
   storedForId: string;
   storedForAuthEntity: 'team' | (string & {});
 };
 
-export type GithubPullRequestEntity = ForeignEntity & {
-  subType: {
-    type: 'github_pull_request';
+export type UnknownForeignEntity = ForeignEntityBase & {
+  foreignSource: 'unknown';
+  rawForeignSource: string;
+  metadata: {
+    [key: string]: unknown;
+  };
+};
+
+export type GithubPullRequestEntity = ForeignEntityBase & {
+  foreignSource: 'github_pull_request';
+  metadata: {
     number: number;
     name: string;
     owner: string;
@@ -42,6 +48,8 @@ export type GithubPullRequestEntity = ForeignEntity & {
     checks: GithubPullRequestCheckRun[];
   };
 };
+
+export type ForeignEntity = UnknownForeignEntity | GithubPullRequestEntity;
 
 export type ChannelEntity = EntityBase & {
   type: 'channel';
@@ -180,8 +188,7 @@ export type EntityData =
   | ProjectEntity
   | CallEntity
   | AutomationEntity
-  | ForeignEntity
-  | GithubPullRequestEntity;
+  | ForeignEntity;
 
 const ENTITY_TYPE_VALUES = new Set<EntityData['type']>([
   'channel',
@@ -219,8 +226,14 @@ export const isGithubPrEntity = (
   entity: EntityData
 ): entity is GithubPullRequestEntity => {
   return (
-    entity.type === 'foreign' && entity.subType.type === 'github_pull_request'
+    entity.type === 'foreign' && entity.foreignSource === 'github_pull_request'
   );
+};
+
+export const isUnknownForeignEntity = (
+  entity: EntityData
+): entity is UnknownForeignEntity => {
+  return entity.type === 'foreign' && entity.foreignSource === 'unknown';
 };
 
 export const isChannelEntity = (

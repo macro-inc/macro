@@ -610,7 +610,7 @@ export const mapSoupPageToEntityList: (
       if (item.tag === 'foreignEntity') {
         const metadata = item.data.metadata as unknown as GithubPullRequest;
 
-        let status: GithubPullRequestEntity['subType']['status'] = 'open';
+        let status: GithubPullRequestEntity['metadata']['status'] = 'open';
 
         if (metadata.status === 'merged') {
           status = 'merged';
@@ -625,12 +625,11 @@ export const mapSoupPageToEntityList: (
           ownerId: item.data.storedForId,
           createdAt: item.data.createdAt,
           updatedAt: item.data.updatedAt,
-          foreignSource: item.data.foreignEntitySource,
+          foreignSource: 'github_pull_request',
           foreignId: item.data.foreignEntityId,
           storedForId: item.data.storedForId,
           storedForAuthEntity: item.data.storedForAuthEntity,
-          subType: {
-            type: 'github_pull_request',
+          metadata: {
             number: metadata.number,
             name: metadata.name ?? metadata.displayName,
             owner: metadata.owner,

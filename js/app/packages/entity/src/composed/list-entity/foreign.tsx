@@ -48,12 +48,12 @@ function checkFailed(conclusion: string | null | undefined): boolean {
 export function GithubPullRequestPills(props: {
   entity: GithubPullRequestEntity;
 }) {
-  const additions = () => props.entity.subType.additions;
-  const deletions = () => props.entity.subType.deletions;
+  const additions = () => props.entity.metadata.additions;
+  const deletions = () => props.entity.metadata.deletions;
   const additionsAreLarger = () => additions() > deletions();
   const deletionsAreLarger = () => deletions() > additions();
-  const comments = () => props.entity.subType.comments.length;
-  const checks = () => props.entity.subType.checks;
+  const comments = () => props.entity.metadata.comments.length;
+  const checks = () => props.entity.metadata.checks;
   const countedChecks = () =>
     checks().filter((check) => check.conclusion !== 'skipped');
   const failedChecks = () =>

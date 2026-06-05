@@ -26,9 +26,9 @@ function extractRawTitle(entity: EntityData): JSX.Element {
     )
     .when(isGithubPrEntity, (e) => (
       <>
-        {e.subType.name}{' '}
+        {e.metadata.name}{' '}
         <span class="text-ink-extra-muted font-normal">
-          #{e.subType.number}
+          #{e.metadata.number}
         </span>
       </>
     ))
