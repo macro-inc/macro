@@ -94,6 +94,12 @@ struct LowercaseConfig {
     lowercase: String,
 }
 
+#[derive(Debug, MacroConfig, PartialEq)]
+struct DefaultValueConfig {
+    #[macro_config_default(8080)]
+    port: usize,
+}
+
 #[test]
 fn load_uses_default_field_names() {
     let _lock = ENV_LOCK.lock().expect("env lock poisoned");
@@ -108,6 +114,27 @@ fn load_uses_default_field_names() {
             lowercase: "lowercase value".to_string(),
         }
     );
+}
+
+#[test]
+fn load_uses_macro_config_default_value_when_key_is_missing() {
+    let _lock = ENV_LOCK.lock().expect("env lock poisoned");
+    let _env = EnvGuard::new(&["APP_SECRETS_JSON", "port"]);
+
+    let config = load::<DefaultValueConfig>().expect("config should load");
+
+    assert_eq!(config, DefaultValueConfig { port: 8080 });
+}
+
+#[test]
+fn load_uses_config_value_over_macro_config_default_value() {
+    let _lock = ENV_LOCK.lock().expect("env lock poisoned");
+    let env = EnvGuard::new(&["APP_SECRETS_JSON", "port"]);
+    env.set("port", "3000");
+
+    let config = load::<DefaultValueConfig>().expect("config should load");
+
+    assert_eq!(config, DefaultValueConfig { port: 3000 });
 }
 
 #[derive(Debug, Deserialize, PartialEq)]

@@ -2,11 +2,18 @@
 
 //! This crate creates a standardized way to load a service config from environment variables.
 
+extern crate self as macro_config;
+
+pub use macro_config_derive::MacroConfig;
+
 use serde::de::{
     self, DeserializeOwned, DeserializeSeed, Error as _, IntoDeserializer, MapAccess, Visitor,
 };
 use serde_json::Value;
 use std::fmt::Display;
+
+#[doc(hidden)]
+pub use serde as __serde;
 use std::str::FromStr;
 
 #[cfg(test)]
