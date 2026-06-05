@@ -345,19 +345,6 @@ const service = new AuthenticationService('authentication-service', {
       name: 'STRIPE_WEBHOOK_SECRET_KEY',
       value: pulumi.interpolate`${stripeWebhookSecretKeyArn}`,
     },
-    // Stripe price ids
-    {
-      name: 'STRIPE_PRICE_ID_HAIKU',
-      value: pulumi.interpolate`${STRIPE_PRICE_ID_HAIKU}`,
-    },
-    {
-      name: 'STRIPE_PRICE_ID_SONNET',
-      value: pulumi.interpolate`${STRIPE_PRICE_ID_SONNET}`,
-    },
-    {
-      name: 'STRIPE_PRICE_ID_OPUS',
-      value: pulumi.interpolate`${STRIPE_PRICE_ID_OPUS}`,
-    },
     // Github
     {
       name: 'GITHUB_CLIENT_ID',
