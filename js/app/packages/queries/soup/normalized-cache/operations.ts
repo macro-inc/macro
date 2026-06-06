@@ -42,6 +42,11 @@ import type {
 
 type SoupItemsInfiniteData = InfiniteData<SoupPage, unknown>;
 type SoupAstItemsInfiniteData = InfiniteData<SoupAstItemsPage, unknown>;
+type GroupedGroupPage = {
+  items: Record<string, SoupApiItem>;
+  group: GroupMeta;
+};
+type GroupedGroupInfiniteData = InfiniteData<GroupedGroupPage, unknown>;
 type SoupSearchInfiniteData = InfiniteData<
   { results: UnifiedSearchResponseItem[] },
   unknown
@@ -79,7 +84,9 @@ export function optimisticUpdateSoupEntity<T extends SoupEntityTag>(
   normalizer.setNormalizedData(partial as NormalizerData);
 
   if (normKey) {
-    reconcileGroupedCachesForEntity(stripSoupNormPrefix(normKey));
+    const entityId = stripSoupNormPrefix(normKey);
+    reconcileGroupedCachesForEntity(entityId);
+    reconcileGroupedGroupQueriesForEntity(entityId);
   }
 
   return {
@@ -147,6 +154,66 @@ function reconcileGroupedCachesForEntity(entityId: string): void {
 
     queryClient.setQueryData(key, { ...prev, pages });
   }
+}
+
+function reconcileGroupedGroupQueriesForEntity(entityId: string): void {
+  const entity = getSoupEntityById(entityId);
+  if (!entity) return;
+
+  const caches = queryClient.getQueriesData<GroupedGroupInfiniteData>({
+    queryKey: soupKeys.groupedGroup._def,
+  });
+
+  for (const [key, prev] of caches) {
+    if (!prev?.pages?.length) continue;
+
+    const groupBy = extractGroupByFromKey(key);
+    const groupKey = extractGroupedGroupKeyFromKey(key);
+    if (!groupBy || groupKey == null) continue;
+
+    const nextGroupKeys = computeGroupKeysForItem(entity, groupBy);
+    if (nextGroupKeys === undefined) continue;
+
+    const filter = getSoupItemFilterForQueryKey(key);
+    const shouldHave =
+      nextGroupKeys.includes(groupKey) && (filter ? filter(entity) : true);
+    let changed = false;
+
+    const pages = prev.pages.map((page, index) => {
+      const hasEntity = page.group.itemIds.includes(entityId);
+
+      if (shouldHave && index === 0 && !hasEntity) {
+        changed = true;
+        return {
+          ...page,
+          items: { ...page.items, [entityId]: entity },
+          group: prependEntityIdToGroup(page.group, entityId),
+        };
+      }
+
+      if (!shouldHave && hasEntity) {
+        changed = true;
+        const { [entityId]: _removed, ...items } = page.items;
+        return {
+          ...page,
+          items,
+          group: removeEntityIdFromGroup(page.group, entityId),
+        };
+      }
+
+      return page;
+    });
+
+    if (changed) {
+      queryClient.setQueryData(key, { ...prev, pages });
+    }
+  }
+}
+
+function extractGroupedGroupKeyFromKey(key: QueryKey): string | undefined {
+  const markerIndex = key.findIndex((part) => part === 'group');
+  const groupKey = markerIndex >= 0 ? key[markerIndex + 1] : undefined;
+  return typeof groupKey === 'string' ? groupKey : undefined;
 }
 
 /** Runtime guard for the normalized grouped parent page shape. */
@@ -341,6 +408,42 @@ function insertIntoGroupedPage(
   };
 }
 
+function insertIntoGroupedGroupQueries(item: SoupApiItem): void {
+  const itemId = getSoupItemId(item);
+  const caches = queryClient.getQueriesData<GroupedGroupInfiniteData>({
+    queryKey: soupKeys.groupedGroup._def,
+  });
+
+  for (const [key, prev] of caches) {
+    if (!prev?.pages?.length) continue;
+
+    const filter = getSoupItemFilterForQueryKey(key);
+    if (filter && !filter(item)) continue;
+
+    const groupBy = extractGroupByFromKey(key);
+    const groupKey = extractGroupedGroupKeyFromKey(key);
+    if (!groupBy || groupKey == null) continue;
+
+    const targetKeys = computeGroupKeysForItem(item, groupBy);
+    if (!targetKeys?.includes(groupKey)) continue;
+
+    const firstPage = prev.pages[0];
+    if (firstPage.group.itemIds.includes(itemId)) continue;
+
+    queryClient.setQueryData<GroupedGroupInfiniteData>(key, {
+      ...prev,
+      pages: [
+        {
+          ...firstPage,
+          items: { ...firstPage.items, [itemId]: item },
+          group: prependEntityIdToGroup(firstPage.group, itemId),
+        },
+        ...prev.pages.slice(1),
+      ],
+    });
+  }
+}
+
 /**
  * Insert a new entity into the first page of every active soup list query.
  * Grouped pages: derive the item's target groups via `computeGroupKeysForItem`
@@ -408,6 +511,8 @@ export function insertSoupEntity(item: SoupApiItem): SoupTransaction {
       pages: [nextPage, ...prev.pages.slice(1)],
     });
   }
+
+  insertIntoGroupedGroupQueries(item);
 
   return { rollback: () => restoreSnapshot(previous) };
 }
@@ -507,7 +612,50 @@ export function removeSoupEntities(entityIds: Set<string>): SoupTransaction {
     }
   );
 
+  removeFromGroupedGroupQueries(entityIds);
+
   return { rollback: () => restoreSnapshot(previous) };
+}
+
+function removeFromGroupedGroupQueries(entityIds: Set<string>): void {
+  queryClient.setQueriesData<GroupedGroupInfiniteData>(
+    { queryKey: soupKeys.groupedGroup._def },
+    (prev) => {
+      if (!prev?.pages?.length) return prev;
+
+      let changed = false;
+      const pages = prev.pages.map((page) => {
+        const itemIds = page.group.itemIds.filter((id) => !entityIds.has(id));
+        const removed = page.group.itemIds.length - itemIds.length;
+        let items = page.items;
+
+        for (const id of entityIds) {
+          if (id in items) {
+            if (items === page.items) items = { ...page.items };
+            delete items[id];
+            changed = true;
+          }
+        }
+
+        if (removed === 0) {
+          return items === page.items ? page : { ...page, items };
+        }
+
+        changed = true;
+        return {
+          ...page,
+          items,
+          group: {
+            ...page.group,
+            itemIds,
+            totalCount: Math.max(0, page.group.totalCount - removed),
+          },
+        };
+      });
+
+      return changed ? { ...prev, pages } : prev;
+    }
+  );
 }
 
 function getSoupItemFilterForQueryKey(
@@ -742,6 +890,9 @@ function snapshotSoup(): [QueryKey, unknown][] {
     ...queryClient.getQueriesData<unknown>({ queryKey: soupKeys.items._def }),
     ...queryClient.getQueriesData<unknown>({
       queryKey: soupKeys.astItems._def,
+    }),
+    ...queryClient.getQueriesData<unknown>({
+      queryKey: soupKeys.groupedGroup._def,
     }),
   ];
 }
