@@ -26,7 +26,6 @@ export type GroupMeta = {
   label: string;
   value: unknown;
   count: number;
-  nextCursor: string | null;
   isExpanded: () => boolean;
   toggle: () => void;
   renderHeader?: (props: GroupHeaderProps) => JSX.Element;

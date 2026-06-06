@@ -84,8 +84,8 @@ export type SoupAstItemsFlatPage = {
 export type SoupAstItemsData = {
   entities: EntityData[];
   groups: GroupMeta[] | undefined;
-  /** Only present when query is grouped. */
-  itemsById?: Record<string, EntityData>;
+  /** Raw API item pool. Only present when query is grouped. */
+  itemsById?: SoupAstItemsGroupedPage['items'];
 };
 
 export const useSoupItemsQuery = (
@@ -197,7 +197,6 @@ export const useSoupAstItemsQuery = (
             .sort(makeGroupComparator(groupBy));
 
           const itemsById = firstPage.items;
-          const entitiesById: Record<string, EntityData> = {};
           const entities: EntityData[] = [];
 
           for (const g of groups) {
@@ -211,13 +210,11 @@ export const useSoupAstItemsQuery = (
               ) {
                 const mapped = mapApiSoupItemToEntity(item);
                 entities.push(mapped);
-
-                entitiesById[id] = mapped;
               }
             }
           }
 
-          return { entities, groups, itemsById: entitiesById };
+          return { entities, groups, itemsById };
         }
 
         const entities = data.pages.flatMap((page) => {

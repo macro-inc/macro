@@ -1231,13 +1231,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                                   highlighted(),
                                               })}
                                               onClick={() => {
-                                                const cursor =
-                                                  group().nextCursor;
-                                                if (!cursor) return;
-                                                fetchNextGroupPage(
-                                                  group().key,
-                                                  cursor
-                                                );
+                                                fetchNextGroupPage(group().key);
                                               }}
                                             >
                                               <CaretDownIcon class="size-2.5" />

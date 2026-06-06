@@ -13,6 +13,7 @@ import {
   type Query,
   type QueryStore,
 } from '@app/component/next-soup/filters/filter-store/query-store';
+import { createGroupedSoupQueries } from '@app/component/next-soup/soup-view/create-grouped-soup-queries';
 import { createSearchState } from '@app/component/next-soup/soup-view/create-search-state';
 import { deduplicateEntities } from '@app/component/next-soup/utils';
 import { useEntryState } from '@app/component/split-layout/entry-state';
@@ -35,7 +36,6 @@ import type {
   GroupMeta as ApiGroupMeta,
   GroupByField,
 } from '@queries/soup/grouped/types';
-import { useFetchGroupPage } from '@queries/soup/grouped/use-fetch-group-page';
 import type { SoupParams } from '@queries/soup/items';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
 import { soupKeys } from '@queries/soup/keys';
@@ -84,8 +84,9 @@ interface SoupViewContextValues {
   activeTab: Accessor<string | undefined>;
   setActiveTab: Setter<string | undefined>;
   groupByField: Accessor<GroupByField | undefined>;
-  fetchNextGroupPage: (groupKey: string, cursor: string) => Promise<void>;
+  fetchNextGroupPage: (groupKey: string) => Promise<void>;
   isFetchingGroupPage: (groupKey: string) => boolean;
+  hasNextGroupPage: (groupKey: string) => boolean;
 }
 
 const SoupViewContext = createContext<SoupViewContextValues>();
@@ -252,43 +253,6 @@ export const SoupViewContextProvider: FlowComponent<
   // soupBody is derived from the query filter store's compiled AST
   const soupBody = createMemo(() => queryFilters.compile());
 
-  const groupPageFetcher = useFetchGroupPage();
-
-  const groupedSoupQueryKey = createMemo(() => {
-    const field = groupByField();
-    if (!field) return;
-
-    return soupKeys.astItems({
-      params: soupParams(),
-      body: soupBody(),
-      groupBy: field,
-    }).queryKey;
-  });
-
-  const fetchNextGroupPage = async (groupKey: string, cursor: string) => {
-    const field = groupByField();
-    const queryKey = groupedSoupQueryKey();
-
-    if (!field || !queryKey) return;
-
-    await groupPageFetcher.fetch({
-      queryKey,
-      groupKey,
-      cursor,
-      field,
-      soupParams: soupParams(),
-      soupBody: soupBody(),
-    });
-  };
-
-  const isFetchingGroupPage = (groupKey: string) => {
-    const queryKey = groupedSoupQueryKey();
-
-    if (!queryKey) return false;
-
-    return groupPageFetcher.isPending(queryKey, groupKey);
-  };
-
   const [searchText, setSearchText] = useEntryState<string>('search.text', {
     default: props.initialSearchText ?? '',
   });
@@ -443,6 +407,39 @@ export const SoupViewContextProvider: FlowComponent<
     return [...featured, ...rest];
   };
 
+  const groupQueries = createGroupedSoupQueries({
+    initialPage: () => {
+      const groups = itemsQuery.data?.groups;
+      const items = itemsQuery.data?.itemsById;
+      if (!groups || !items) return;
+      return { groups, items };
+    },
+    groupByField,
+    soupParams,
+    soupBody,
+    queryOptions: () => {
+      const view = activeListView();
+      return {
+        enabled: !search.isSearching(),
+        meta: {
+          itemFilter: (item) => soupItemMatchesListView(item, view),
+        },
+      };
+    },
+  });
+
+  const groupQueryFor = (groupKey: string) => groupQueries.map().get(groupKey);
+
+  const fetchNextGroupPage = async (groupKey: string) => {
+    await groupQueryFor(groupKey)?.fetchNextPage();
+  };
+
+  const isFetchingGroupPage = (groupKey: string) =>
+    groupQueryFor(groupKey)?.isFetchingNextPage() ?? false;
+
+  const hasNextGroupPage = (groupKey: string) =>
+    groupQueryFor(groupKey)?.hasNextPage() ?? false;
+
   const buildGroupMeta = (group: ApiGroupMeta): GroupMeta => {
     const resolvedLabel = getPropertyOptionLabel(group.key) ?? group.label;
     return {
@@ -450,7 +447,6 @@ export const SoupViewContextProvider: FlowComponent<
       value: group.key,
       label: resolvedLabel,
       count: group.totalCount,
-      nextCursor: group.nextCursor,
       isExpanded: () => soup.grouping.isExpanded(group.key),
       toggle: () => soup.grouping.toggle(group.key),
     };
@@ -466,19 +462,19 @@ export const SoupViewContextProvider: FlowComponent<
       );
     }
 
-    const byId = itemsQuery.data?.itemsById ?? {};
-
     const result: SoupRow[] = [];
     let globalIndex = 0;
 
     for (const apiGroup of groups) {
       const groupMeta = buildGroupMeta(apiGroup);
-      const groupEntities: SoupEntity[] = [];
-      for (const id of apiGroup.itemIds) {
-        const item = byId[id];
-
-        if (item) groupEntities.push(item);
-      }
+      const groupData = groupQueryFor(apiGroup.key)?.data();
+      const groupEntities =
+        groupData?.entities.map(
+          (entity) =>
+            (isWithNotification(entity)
+              ? entity
+              : attachNotifications(entity)) as SoupEntity
+        ) ?? [];
 
       const firstEntity = groupEntities[0];
       if (!firstEntity) continue;
@@ -504,7 +500,7 @@ export const SoupViewContextProvider: FlowComponent<
         );
       }
 
-      if (apiGroup.nextCursor == null) continue;
+      if (!hasNextGroupPage(apiGroup.key)) continue;
 
       const lastEntity = groupEntities[groupEntities.length - 1];
       result.push(
@@ -563,6 +559,7 @@ export const SoupViewContextProvider: FlowComponent<
     groupByField,
     fetchNextGroupPage,
     isFetchingGroupPage,
+    hasNextGroupPage,
   };
 
   return (
