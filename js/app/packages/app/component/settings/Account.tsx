@@ -327,11 +327,16 @@ export function Account() {
 
   const emailActive = useEmailLinksStatus();
 
-  const onConnectEmail = () => {
-    connectEmail().match(
+  const [isEmailActionPending, setIsEmailActionPending] = createSignal(false);
+
+  const onConnectEmail = async () => {
+    if (isEmailActionPending()) return;
+    setIsEmailActionPending(true);
+    await connectEmail().match(
       () => {},
       () => toast.failure('Failed to connect email')
     );
+    setIsEmailActionPending(false);
   };
 
   const initGmailLink = useInitGmailLink();
@@ -557,6 +562,7 @@ export function Account() {
                             variant="base"
                             size="sm"
                             depth={3}
+                            disabled={isEmailActionPending()}
                             onClick={() => setShowEmailModal(true)}
                           >
                             Disable
@@ -567,6 +573,7 @@ export function Account() {
                           variant="base"
                           size="sm"
                           depth={3}
+                          disabled={isEmailActionPending()}
                           onClick={onConnectEmail}
                         >
                           Enable
@@ -579,10 +586,13 @@ export function Account() {
                         variant="ghost"
                         size="sm"
                         depth={3}
+                        disabled={isEmailActionPending()}
                         onClick={async () => {
-                          setShowEmailModal(false);
+                          if (isEmailActionPending()) return;
+                          setIsEmailActionPending(true);
                           await disconnectEmail().match(
                             () => {
+                              setShowEmailModal(false);
                               toast.success(
                                 'Email disabled — clearing your data.'
                               );
@@ -593,6 +603,7 @@ export function Account() {
                               );
                             }
                           );
+                          setIsEmailActionPending(false);
                         }}
                       >
                         Confirm
@@ -627,6 +638,7 @@ export function Account() {
                             variant="base"
                             size="sm"
                             depth={3}
+                            disabled={isEmailActionPending()}
                             onClick={onConnectEmail}
                           >
                             Enable
