@@ -110,6 +110,7 @@ export class ImageProxyService extends pulumi.ComponentResource {
       isPrivate,
       tags,
       idleTimeout: 3600,
+      deregistrationDelay: 30,
     });
     this.targetGroup = targetGroup;
     this.lb = lb;
