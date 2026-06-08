@@ -1,9 +1,11 @@
 use doppleganger::Mirror;
 use models_email::email::service;
-use sqlx::PgPool;
 use sqlx::types::Uuid;
 
 use crate::links::types::DbUserProvider;
+
+#[cfg(test)]
+mod test;
 
 struct LinkId {
     id: Uuid,
@@ -13,9 +15,9 @@ struct LinkId {
 /// If a record with matching fusionauth_user_id, email_address, and provider already exists,
 /// updates the existing record with values from the provided Link.
 /// Returns the ID of the inserted or updated link and a boolean indicating if a new record was created.
-#[tracing::instrument(skip(pool), err)]
+#[tracing::instrument(skip(conn), err)]
 pub async fn upsert_link(
-    pool: &PgPool,
+    conn: &mut sqlx::PgConnection,
     service_link: service::link::Link,
 ) -> anyhow::Result<service::link::Link> {
     if service_link.fusionauth_user_id.is_empty() {
@@ -53,7 +55,7 @@ pub async fn upsert_link(
         db_provider as _,
         is_sync_active
     )
-        .fetch_one(pool)
+        .fetch_one(&mut *conn)
         .await?;
 
     let service_link = service::link::Link {
@@ -76,7 +78,7 @@ pub async fn upsert_link(
         "#,
         service_link.id,
     )
-    .execute(pool)
+    .execute(&mut *conn)
     .await?;
 
     Ok(service_link)

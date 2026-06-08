@@ -19,6 +19,7 @@ import type { SoupState } from '../create-soup-state';
 // Valid list views where the mark done should be allowed to run
 const VALID_MARK_DONE_LIST_VIEWS: `${ListView}-${string}`[] = [
   'inbox-signal',
+  'inbox-noise',
   'mail-important',
   'mail-all',
   'mail-noise',
@@ -59,6 +60,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
     hotkeyGroup,
     onMutate: (variables) =>
       applyEntitiesDoneOptimistic({
+        entityIds: variables.entities.map((entity) => entity.id),
         emailIds: variables.emailIds,
         notificationIds: variables.notificationIds,
       }),

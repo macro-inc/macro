@@ -212,7 +212,10 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         if (!ctx.userId) return undefined;
         return {
           filters: defineQueryFilters({
-            include: { documentOwnerId: [ctx.userId] },
+            include: {
+              documentOwnerId: [ctx.userId],
+              isEmailAttachment: false,
+            },
             exclude: { subType: ['task'] },
           }),
           clientFilters: { and: ['document-or-file', 'owned-entity'] },
@@ -222,6 +225,9 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         if (!ctx.userId) return undefined;
         return {
           filters: defineQueryFilters({
+            include: {
+              isEmailAttachment: false,
+            },
             exclude: { subType: ['task'], documentOwnerId: [ctx.userId] },
           }),
           clientFilters: { and: ['document-or-file', 'shared-entity'] },

@@ -345,6 +345,14 @@ export function ENABLE_CALLS(): boolean {
   return analytics.posthog.isFeatureEnabled('enable-calls') ?? false;
 }
 
+// The sidebar active-calls widget fans out to one GET /call/{channelId}/active
+// request per channel every 15s. Flagged off until it's batched / socket-driven.
+export function ENABLE_SIDEBAR_ACTIVE_CALLS(): boolean {
+  return (
+    analytics.posthog.isFeatureEnabled('enable-sidebar-active-calls') ?? false
+  );
+}
+
 export const ENABLE_NEW_ONBOARDING_OVERRIDE = DEV_MODE_ENV ? true : undefined;
 
 export const ENABLE_NEW_LOGIN_OVERRIDE = DEV_MODE_ENV ? true : undefined;
@@ -383,6 +391,8 @@ export const ENABLE_CREATE_PROPERTY = resolveFeatureFlag(
   'ENABLE_CREATE_PROPERTY',
   false
 );
+
+export const ENABLE_HOME_OVERRIDE = DEV_MODE_ENV ? true : undefined;
 
 export const ENABLE_NEW_PRICING_OVERRIDE =
   resolveFeatureFlag('ENABLE_NEW_PRICING', DEV_MODE_ENV) || undefined;

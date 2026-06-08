@@ -1,6 +1,7 @@
 use logger::Logger;
 use macro_bundle_updater_plugin::inbound::plugin::{
-    PluginService, allow_update_reload_retry, apply_completed_update, retry_waiting_for_wifi,
+    allow_update_reload_retry, apply_completed_update_from, retry_waiting_for_wifi,
+    start_update_check,
 };
 use navigation_plugin::MacroNavigationPlugin;
 use navigation_plugin::scheme::MacroScheme;
@@ -49,12 +50,24 @@ impl AppEnvironment {
         }
     }
 
+    fn bundle_update_base_url(self) -> &'static str {
+        option_env!("MACRO_BUNDLE_UPDATE_BASE_URL")
+            .filter(|url| !url.trim().is_empty())
+            .unwrap_or_else(|| self.auth_service_url())
+    }
+
     fn web_origin(self) -> &'static str {
         match self {
             Self::Development => "https://dev.macro.com",
             Self::Production => "https://macro.com",
         }
     }
+}
+
+fn embedded_bundle_build() -> u64 {
+    env!("MACRO_EMBEDDED_BUNDLE_BUILD")
+        .parse()
+        .expect("MACRO_EMBEDDED_BUNDLE_BUILD must be an unsigned integer")
 }
 
 /// This module provides debuging utilities and should not be compiled in prodiction builds
@@ -161,9 +174,10 @@ pub fn run() {
         .plugin(
             macro_bundle_updater_plugin::inbound::plugin::MacroBundleUpdaterPlugin::new(
                 AppEnvironment::current()
-                    .auth_service_url()
+                    .bundle_update_base_url()
                     .parse()
                     .expect("valid url"),
+                embedded_bundle_build(),
             ),
         );
 
@@ -198,17 +212,7 @@ pub fn run() {
 
             move |ctx, request, responder| {
                 let h = handler.get_or_init(|| {
-                    // Restore persisted bundle root before the first request is served
                     let app = ctx.app_handle();
-                    if let Ok(cache_dir) = app.path().app_cache_dir() {
-                        tracing::info!("Protocol handler init: cache_dir={cache_dir:?}");
-                        if let Some(s) = app.try_state::<tokio::sync::Mutex<PluginService>>() {
-                            tauri::async_runtime::block_on(async {
-                                let mut service = s.lock().await;
-                                service.load_bundle_root(&cache_dir).await;
-                            });
-                        }
-                    }
                     tauri_protocol::get(app.clone(), &window_origin)
                 });
                 h(ctx.webview_label(), request, responder);
@@ -220,6 +224,7 @@ pub fn run() {
             macro_bundle_updater_plugin::inbound::plugin::perform_update,
             macro_bundle_updater_plugin::inbound::plugin::ack_bundle_update_reload,
             macro_bundle_updater_plugin::inbound::plugin::check_for_update,
+            macro_bundle_updater_plugin::inbound::plugin::get_bundle_debug_info,
             macro_bundle_updater_plugin::inbound::plugin::get_bundle_update_status,
             macro_bundle_updater_plugin::inbound::plugin::clear_bundle,
             get_pending_share_filenames,
@@ -229,20 +234,6 @@ pub fn run() {
             staged_upload::upload_staged_file_to_presigned_url,
         ])
         .setup(|app| {
-            // Restore persisted bundle root on startup
-            if let Ok(cache_dir) = app.path().app_cache_dir()
-                && let Some(s) = app.try_state::<tokio::sync::Mutex<PluginService>>()
-            {
-                tauri::async_runtime::block_on(async {
-                    let mut service = s.lock().await;
-                    service.load_bundle_root(&cache_dir).await;
-                    tracing::info!(
-                        "Setup: restored bundle root to {:?}",
-                        service.bundle_root_path()
-                    );
-                });
-            }
-
             #[cfg(any(target_os = "linux", all(windows, debug_assertions)))]
             {
                 use tauri_plugin_deep_link::DeepLinkExt;
@@ -265,7 +256,7 @@ pub fn run() {
                 {
                     let app = app_handle.clone();
                     tauri::async_runtime::spawn(async move {
-                        match apply_completed_update(&app).await {
+                        match apply_completed_update_from(&app, "run_event_ready").await {
                             Ok(_) => {}
                             Err(e) => {
                                 tracing::error!("Failed to auto-apply bundle update on ready: {e}");
@@ -290,11 +281,27 @@ pub fn run() {
                                 "Failed to allow bundle update reload retry on resume: {e}"
                             );
                         }
-                        match apply_completed_update(&app).await {
-                            Ok(_) => {}
+                        match apply_completed_update_from(&app, "run_event_resumed").await {
+                            Ok(true) => {}
+                            Ok(false) => {
+                                if let Err(e) = start_update_check(&app).await {
+                                    tracing::error!(
+                                        "Failed to start bundle update check on resume: {e}"
+                                    );
+                                }
+                            }
                             Err(e) => {
                                 tracing::error!("Failed to auto-apply bundle update: {e}");
                             }
+                        }
+                    });
+                }
+                #[cfg(not(feature = "auto_apply_update"))]
+                {
+                    let app = app_handle.clone();
+                    tauri::async_runtime::spawn(async move {
+                        if let Err(e) = start_update_check(&app).await {
+                            tracing::error!("Failed to start bundle update check on resume: {e}");
                         }
                     });
                 }

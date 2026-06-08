@@ -98,7 +98,7 @@ async fn main() -> anyhow::Result<()> {
     );
 
     let document_storage_client = DocumentStorageServiceClient::new(
-        internal_auth_key.as_ref().to_string(),
+        config.document_storage_service_auth_key.clone(),
         config.document_storage_service_url.clone(),
     );
 
@@ -119,7 +119,7 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("initialized sync service client");
     let search_service_client = SearchServiceClient::new(
-        internal_auth_key.as_ref().to_string(),
+        config.document_storage_service_auth_key.clone(),
         config.document_storage_service_url.clone(),
     );
 
@@ -416,7 +416,7 @@ async fn main() -> anyhow::Result<()> {
     let mcp_oauth_state_store =
         mcp_client::outbound::redis_state_store::RedisOAuthStateStore::new(redis_client.clone());
     let mcp_pre_registered =
-        mcp_client::domain::provider_registry::PreRegisteredProviders::from_env();
+        mcp_client::domain::provider_registry::PreRegisteredProviders::from_env()?;
     let mcp_oauth = mcp_client::domain::service::OAuthService::new(
         mcp_server_repo.clone(),
         mcp_oauth_state_store,

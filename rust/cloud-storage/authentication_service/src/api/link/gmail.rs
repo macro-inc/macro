@@ -11,7 +11,9 @@ use model_user::axum_extractor::MacroUserExtractor;
 use serde_utils::urlencode::UrlEncoded;
 use url::Url;
 
-use crate::api::{context::ApiContext, oauth2::OAuthState};
+use crate::api::{
+    context::ApiContext, link::github::REAUTHENTICATION_REQUIRED_MESSAGE, oauth2::OAuthState,
+};
 
 const GOOGLE_AUTHORIZATION_URL: &str = "https://accounts.google.com/o/oauth2/v2/auth";
 const GMAIL_IDENTITY_PROVIDER_NAME: &str = "google_gmail";
@@ -139,5 +141,91 @@ pub async fn init_gmail_link_handler(
     Ok(Json(InitGmailLinkResponse {
         authorization_url: authorization_url.to_string(),
         link_id,
+    }))
+}
+
+#[derive(serde::Deserialize, serde::Serialize, Debug, utoipa::ToSchema)]
+pub struct GmailLinkStatusResponse {
+    /// Whether the user must reauthenticate their Gmail link.
+    pub reauthentication_required: bool,
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum GmailLinkStatusError {
+    #[error("reauthentication required")]
+    ReauthenticationRequired,
+    #[error("internal")]
+    Internal(#[from] anyhow::Error),
+}
+
+impl IntoResponse for GmailLinkStatusError {
+    fn into_response(self) -> Response {
+        match &self {
+            GmailLinkStatusError::ReauthenticationRequired => (
+                StatusCode::PRECONDITION_REQUIRED,
+                Json(ErrorResponse {
+                    message: REAUTHENTICATION_REQUIRED_MESSAGE.into(),
+                }),
+            ),
+            GmailLinkStatusError::Internal(_) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    message: "internal error occurred".into(),
+                }),
+            ),
+        }
+        .into_response()
+    }
+}
+
+/// Checks whether the authenticated user's gmail link is valid.
+#[utoipa::path(
+        get,
+        operation_id = "check_gmail_link_status",
+        path = "/link/gmail/status",
+        responses(
+            (status = 200, body=GmailLinkStatusResponse),
+            (status = 401, body=ErrorResponse),
+            (status = 404, body=ErrorResponse),
+            (status = 428, body=ErrorResponse),
+            (status = 500, body=ErrorResponse),
+        )
+    )]
+#[tracing::instrument(skip(ctx, ip_context, user_context), fields(client_ip=%ip_context, user_id=%user_context.macro_user_id), err)]
+pub async fn check_gmail_link_status_handler(
+    State(ctx): State<ApiContext>,
+    ip_context: ClientIp,
+    user_context: MacroUserExtractor,
+) -> Result<Json<GmailLinkStatusResponse>, GmailLinkStatusError> {
+    // Check if the user has an email link in db
+    if macro_db_client::email::check_user_email_link(&ctx.db, &user_context.macro_user_id)
+        .await
+        .map_err(GmailLinkStatusError::Internal)?
+    {
+        let links = ctx
+            .auth_client
+            .get_links(&user_context.user_context.fusion_user_id, None)
+            .await
+            .map_err(|e| GmailLinkStatusError::Internal(e.into()))?;
+
+        let result = links
+            .iter()
+            .filter_map(|l| {
+                if l.identity_provider_name.eq("google_gmail") {
+                    Some(true)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<bool>>();
+
+        // If no, return 428
+        if result.is_empty() {
+            return Err(GmailLinkStatusError::ReauthenticationRequired);
+        }
+    }
+
+    Ok(Json(GmailLinkStatusResponse {
+        reauthentication_required: false,
     }))
 }

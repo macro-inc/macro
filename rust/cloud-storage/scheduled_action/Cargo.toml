@@ -57,3 +57,5 @@ macro_middleware = { path = "../macro_middleware", default-features = false, fea
 ] }
 secretsmanager_client = { path = "../secretsmanager_client" }
 aws-sdk-secretsmanager = { workspace = true }
+
+macro_service_urls = { path = "../macro_service_urls" }

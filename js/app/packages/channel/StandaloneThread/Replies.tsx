@@ -92,6 +92,7 @@ export function Replies(props: RepliesProps) {
                           class="flex items-center gap-1 min-w-0"
                         >
                           <Message.SenderName />
+                          <Message.AgentBadge />
                           <Message.EditedIndicator />
                           <Message.Timestamp
                             class="ml-auto shrink-0"

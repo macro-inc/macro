@@ -19,3 +19,5 @@ sqs_client = { path = "../sqs_client", default-features = false, features = [
 tokio = { workspace = true }
 tracing = { workspace = true }
 
+
+macro_service_urls = { path = "../macro_service_urls" }

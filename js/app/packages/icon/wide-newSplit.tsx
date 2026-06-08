@@ -5,36 +5,27 @@ export const AnimatedNewSplitIcon = (props: {
   class?: string;
 }) => {
   const maskId = createUniqueId();
-  const notchMaskId = createUniqueId();
 
   return (
     <svg
       width="100%"
       height="100%"
       viewBox="0 0 18 18"
-      fill="currentColor"
-      stroke="none"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.125"
+      stroke-linecap="round"
+      stroke-linejoin="round"
       xmlns="http://www.w3.org/2000/svg"
       class={`animated-new-split-icon ${props.triggerAnimation ? 'animating' : ''} ${props.class ?? ''}`}
     >
       {/*<title>Animated new split icon</title>*/}
       <defs>
         {/*
-          Mask: white = show, black = hide.
-          The black rect starts at x=9 (just right of the plus, which ends at x=7.5),
-          then slides left by 7.5px in sync with the rect, progressively covering the plus.
-          Inline reactive style is used so the mask element reliably transitions
-          inside <defs> across all browsers.
+          Covering mask: white = show, black = hide. The black rect starts at x=9
+          (just right of the plus, which ends at x=7.5), then slides left by 7.5px in
+          sync with the rect, progressively covering the plus as the split forms.
         */}
-        {/* Notch mask: cuts 1.5×1.5px squares from the top-left and bottom-right of the 15×15 content area */}
-        <mask id={notchMaskId} maskUnits="userSpaceOnUse">
-          <rect x="0" y="0" width="18" height="18" fill="white" />
-          {/* Extended left to the viewbox edge so the notch holds during leftward bounce overshoot */}
-          <rect x="0" y="1.5" width="3" height="1.5" fill="black" />
-          {/* Extended right to the viewbox edge so the notch holds during rightward bounce overshoot */}
-          <rect x="15" y="15" width="3" height="1.5" fill="black" />
-        </mask>
-
         <mask id={maskId} maskUnits="userSpaceOnUse">
           <rect x="0" y="0" width="18" height="18" fill="white" />
           <rect
@@ -55,6 +46,9 @@ export const AnimatedNewSplitIcon = (props: {
 
       <style>{`
         .animated-new-split-icon {
+          .plus {
+            transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+          }
           .rect {
             transition: transform 0.3s ease;
           }
@@ -65,6 +59,9 @@ export const AnimatedNewSplitIcon = (props: {
           }
         }
         .animated-new-split-icon.animating {
+          .plus {
+            transform: translateX(1px);
+          }
           .rect {
             transform: translateX(-7.5px);
             transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -77,23 +74,34 @@ export const AnimatedNewSplitIcon = (props: {
         }
       `}</style>
 
-      <g mask={`url(#${notchMaskId})`}>
-        {/* Plus — masked so the sliding rect properly covers it */}
-        <polygon
-          mask={`url(#${maskId})`}
-          points="7.5 8.25 5.25 8.25 5.25 6 3.75 6 3.75 8.25 1.5 8.25 1.5 9.75 3.75 9.75 3.75 12 5.25 12 5.25 9.75 7.5 9.75 7.5 8.25"
-        />
-
-        {/* Existing rect — slides left by exactly its own width, ending at x=1.5–9 */}
-        <g class="rect">
-          <path d="M16.5,16.5h-6.65c-.47,0-.85-.38-.85-.85V1.5h6.65c.47,0,.85.38.85.85v14.15ZM10.5,15h4.5V3h-4.5v12Z" />
-        </g>
-
-        {/* New rect — 1.5px wider, left edge at x=7.5 so its border overlaps the slid rect's right border */}
-        <g class="rect-new">
-          <path d="M16.5,16.5h-8.15c-.47,0-.85-.38-.85-.85V1.5h8.15c.47,0,.85.38.85.85v14.15ZM9,15h6V3H9v12Z" />
+      {/* Plus — masked so the sliding rect covers it as the split forms. The inner
+          group nudges right on animation so the left round cap is fully covered. */}
+      <g mask={`url(#${maskId})`}>
+        <g class="plus">
+          <line x1="1.5" y1="9" x2="7.5" y2="9" />
+          <line x1="4.5" y1="6" x2="4.5" y2="12" />
         </g>
       </g>
+
+      {/* Existing panel — slides left by exactly its own width, ending at x≈2–8.5 */}
+      <rect
+        class="rect"
+        x="9.5625"
+        y="2.0625"
+        width="6.375"
+        height="13.875"
+        rx="1.5"
+      />
+
+      {/* New panel — wider, left edge overlapping the slid panel's right edge */}
+      <rect
+        class="rect-new"
+        x="8.0625"
+        y="2.0625"
+        width="7.875"
+        height="13.875"
+        rx="1.5"
+      />
     </svg>
   );
 };

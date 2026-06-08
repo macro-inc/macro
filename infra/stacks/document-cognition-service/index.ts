@@ -82,14 +82,6 @@ const PERPLEXITY_API_KEY = aws.secretsmanager
   })
   .apply((secret) => secret.secretString);
 
-const SLACK_MCP_CLIENT_ID = aws.secretsmanager
-  .getSecretVersionOutput({ secretId: 'slack-mcp-client-id' })
-  .apply((secret) => secret.secretString);
-
-const SLACK_MCP_CLIENT_SECRET = aws.secretsmanager
-  .getSecretVersionOutput({ secretId: 'slack-mcp-client-secret' })
-  .apply((secret) => secret.secretString);
-
 const AUTHENTICATION_SERVICE_INTERNAL_API_KEY_SECRET_NAME = config.require(
   'authentication_service_internal_api_key'
 );
@@ -312,14 +304,6 @@ const documentCognitionService = new DocumentCognitionService(
       {
         name: 'DOCUMENT_COGNITION_SERVICE_URL',
         value: `https://${SERVICE_DOMAIN_NAME}`,
-      },
-      {
-        name: 'SLACK_MCP_CLIENT_ID',
-        value: pulumi.interpolate`${SLACK_MCP_CLIENT_ID}`,
-      },
-      {
-        name: 'SLACK_MCP_CLIENT_SECRET',
-        value: pulumi.interpolate`${SLACK_MCP_CLIENT_SECRET}`,
       },
     ],
     isPrivate: false,

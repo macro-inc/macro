@@ -3,8 +3,8 @@ use std::sync::Arc;
 
 use native_app_service::{
     domain::{
-        models::{PlatformData, UpdateErr},
-        ports::GetJsBundleSemver,
+        models::{BundleManifest, BundleUpdatePolicy, PlatformData, UpdateErr},
+        ports::GetJsBundleManifest,
         service::NativeAppServiceImpl,
     },
     inbound::{RouterState, native_app_router},
@@ -15,7 +15,7 @@ use tokio::io::AsyncReadExt;
 use tower_http::services::ServeFile;
 use url::Url;
 
-/// Bundle fetcher that always reports a very high version, forcing an update.
+/// Bundle fetcher that always reports a very high bundle build, forcing an update.
 /// The checksum is recomputed from the archive on disk each time it is
 /// requested, so rebuilding the archive doesn't require restarting the server.
 struct AlwaysUpdateFetcher {
@@ -23,9 +23,15 @@ struct AlwaysUpdateFetcher {
     archive_path: PathBuf,
 }
 
-impl GetJsBundleSemver for AlwaysUpdateFetcher {
-    async fn get_app_semver(&self) -> Result<semver::Version, Report<UpdateErr>> {
-        Ok(semver::Version::new(999, 0, 0))
+impl GetJsBundleManifest for AlwaysUpdateFetcher {
+    async fn get_app_bundle_manifest(&self) -> Result<BundleManifest, Report<UpdateErr>> {
+        Ok(BundleManifest {
+            schema_version: 2,
+            bundle_build: 999_000_000_000,
+            min_native_build: 0,
+            git_sha: None,
+            app_version: "999.0.0".to_string(),
+        })
     }
 
     fn get_app_bundle_path(&self) -> Url {
@@ -34,7 +40,7 @@ impl GetJsBundleSemver for AlwaysUpdateFetcher {
 
     async fn get_app_bundle_checksum(
         &self,
-        _version: &semver::Version,
+        _bundle_build: u64,
     ) -> Result<String, Report<UpdateErr>> {
         sha256_hex(&self.archive_path).await.map_err(|e| {
             tracing::error!(error=?e, path=?self.archive_path, "failed to hash bundle archive");
@@ -74,6 +80,7 @@ async fn main() {
             bundle_url,
             archive_path: PathBuf::from(ARCHIVE_PATH),
         },
+        bundle_policy: BundleUpdatePolicy::default(),
         platform_data: PlatformData {
             ios_development_team_id: String::new(),
             ios_app_bundle_id: String::new(),

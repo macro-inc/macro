@@ -5,6 +5,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { UserIcon } from '@core/component/UserIcon';
 import { UserTooltip } from '@core/component/UserTooltip';
 import { useEmail, useUserId } from '@core/context/user';
+import { isMobile } from '@core/mobile/isMobile';
 import {
   type CombinedRecipientItem,
   type CombinedRecipientKind,
@@ -72,7 +73,6 @@ function RecipientChip(props: {
   return (
     <div
       class="flex flex-row shrink-0 py-1 pl-2 gap-1 pr-1 overflow-hidden items-center bg-active rounded-full"
-      classList={{ 'cursor-grab active:cursor-grabbing': props.draggable }}
       draggable={props.draggable}
       onDragStart={props.onDragStart}
       onDragEnd={props.onDragEnd}
@@ -258,6 +258,7 @@ type RecipientSelectorProps<K extends CombinedRecipientKind> = {
   hideBorder?: boolean;
   noPadding?: boolean;
   includeSelf?: boolean;
+  selfEmail?: string;
   disabled?: boolean;
   onChipDragStart?: (option: WithCustomUserInput<K>, e: DragEvent) => void;
   onChipDragEnd?: (e: DragEvent) => void;
@@ -317,6 +318,9 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
 
   const userId = useUserId();
   const userEmail = useEmail();
+  const selfEmail = () => (props.selfEmail ?? userEmail())?.toLowerCase();
+  const selfId = () =>
+    props.selfEmail ? emailToId(props.selfEmail) : userId();
 
   function handleChange(value: CombinedRecipientItem[]) {
     let newestSelection = value.at(-1);
@@ -329,7 +333,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
     if (
       !props.includeSelf &&
       newestSelection.kind === 'user' &&
-      newestSelection.id === userId()
+      newestSelection.id === selfId()
     ) {
       const inputEl = inputRef();
       if (inputEl) inputEl.value = '';
@@ -386,6 +390,15 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
     }),
   });
 
+  const selectedEmails = createMemo(() => {
+    const set = new Set<string>();
+    for (const option of props.selectedOptions) {
+      const email = getRecipientOptionEmail(option as CombinedRecipientItem);
+      if (email) set.add(email.toLowerCase());
+    }
+    return set;
+  });
+
   const augmentUserWithDmActivity = useAugmentUserWithDmActivity();
   const recipients = createMemo(() => {
     const options: CombinedRecipientItem[] = [];
@@ -396,10 +409,14 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
       const email = getRecipientOptionEmail(item);
 
       if (!props.includeSelf) {
+        const emailLower = email?.toLowerCase();
         const matchesSelf =
-          (item.kind === 'user' && item.id === userId()) ||
-          (item.kind === 'contact' && email === userEmail()?.toLowerCase());
-        if (matchesSelf) {
+          (item.kind === 'user' && item.id === selfId()) ||
+          (item.kind === 'contact' &&
+            !!emailLower &&
+            emailLower === selfEmail());
+        const isSelected = !!emailLower && selectedEmails().has(emailLower);
+        if (matchesSelf && !isSelected) {
           continue;
         }
       }
@@ -495,7 +512,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
         onInputChange={onInputChange}
         shouldFocusWrap
         placeholder={
-          props.selectedOptions?.length === 0
+          props.selectedOptions?.length === 0 || isMobile()
             ? (props.placeholder ?? placeholderText())
             : undefined
         }

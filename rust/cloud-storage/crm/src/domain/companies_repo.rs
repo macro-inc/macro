@@ -4,19 +4,31 @@ use crate::domain::comment::{
     CrmComment, CrmCommentEntityType, CrmCommentThread, DeleteCrmCommentResult,
 };
 use crate::domain::model::{
-    CrmCompany, CrmCompanyForSoup, CrmContact, CrmError, CrmScopePrecheck, DomainMetadata,
+    CrmCompanyForSoup, CrmCompanyWithContacts, CrmContact, CrmError, CrmScopePrecheck,
+    DomainMetadata,
 };
 use chrono::{DateTime, Utc};
 use serde_json::Value;
 
-/// Sort order for [`CompaniesRepository::list_companies_for_soup`].
-/// Both variants tiebreak on `id DESC` for deterministic pagination.
+/// Sort order for [`CompaniesRepository::list_companies_for_soup`]. All
+/// variants tiebreak on `id DESC` for deterministic pagination. The two
+/// `Viewed*` variants require a `user_id` (the `UserHistory` join is
+/// per-user); rows the user has never opened sort to NULL (`ViewedAt`
+/// drops them to the bottom; `ViewedUpdated` falls back to
+/// `last_interaction`).
 #[derive(Debug, Clone, Copy)]
 pub enum CrmCompanyListSort {
     /// Sort by `crm_companies.last_interaction` DESC.
     UpdatedAt,
     /// Sort by `crm_companies.first_interaction` DESC.
     CreatedAt,
+    /// Sort by the user's `UserHistory."updatedAt"` DESC (when this user
+    /// last opened the company). Unviewed rows sort to NULL (bottom).
+    ViewedAt,
+    /// Sort by `COALESCE(UserHistory."updatedAt", last_interaction)` DESC
+    /// — recently viewed bubble up, with a graceful fallback to
+    /// activity recency for unviewed rows.
+    ViewedUpdated,
 }
 
 /// Keyset cursor for [`CompaniesRepository::list_companies_for_soup`].
@@ -24,8 +36,11 @@ pub enum CrmCompanyListSort {
 /// so the next page seeks strictly past it. `None` = first page.
 #[derive(Debug, Clone, Copy)]
 pub struct CrmCompanySoupCursor {
-    /// Sort timestamp of the previous page's last row —
-    /// `first_interaction`/`last_interaction` per [`CrmCompanyListSort`].
+    /// Sort timestamp of the previous page's last row, expressed in the
+    /// sort method's units: `first_interaction` for `CreatedAt`,
+    /// `last_interaction` for `UpdatedAt`, `UserHistory."updatedAt"` for
+    /// `ViewedAt`, and `COALESCE(uh."updatedAt", last_interaction)` for
+    /// `ViewedUpdated`.
     pub last_sort_ts: DateTime<Utc>,
     /// Id of the previous page's last row; tiebreaks equal timestamps.
     pub last_id: uuid::Uuid,
@@ -34,16 +49,6 @@ pub struct CrmCompanySoupCursor {
 /// The CompaniesRepository defines persistence operations for CRM
 /// companies and their associated domains.
 pub trait CompaniesRepository: Clone + Send + Sync + 'static {
-    /// Fetches the company for the given team that has `domain` registered
-    /// against it, hydrated with the full list of domains belonging to that
-    /// company. Returns `Ok(None)` when no company in the team has the
-    /// domain registered. Domain matching is case-insensitive.
-    fn get_company_by_domain(
-        &self,
-        team_id: &uuid::Uuid,
-        domain: &str,
-    ) -> impl Future<Output = Result<Option<CrmCompany>, CrmError>> + Send;
-
     /// Idempotently records that `email` (which lives on `domain`) was seen
     /// from the mailbox identified by `link_id`, for the team `team_id`.
     /// Performs the company/domain/contact/contact_source upserts in a single
@@ -327,10 +332,18 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
     /// this method (soup's axum router does this). Empty `company_ids`
     /// = all rows matching the `hidden` filter; non-empty = whitelist.
     /// `cursor` seeks strictly past the previous soup page's last row
-    /// (`None` = first page). Both sort orders tiebreak on `id DESC`.
+    /// (`None` = first page). All sort orders tiebreak on `id DESC`.
+    ///
+    /// `user_id` scopes the per-user `UserHistory` join used by the
+    /// `Viewed*` sort variants. Pass the requesting user's id verbatim
+    /// (as stored in `team_user.user_id` / `UserHistory."userId"`);
+    /// internal callers without a user can pass an empty string —
+    /// `Viewed*` sorts then collapse to NULL (no viewed-at signal).
+    #[allow(clippy::too_many_arguments)]
     fn list_companies_for_soup(
         &self,
         team_id: &uuid::Uuid,
+        user_id: &str,
         company_ids: &[uuid::Uuid],
         hidden: Option<bool>,
         sort: CrmCompanyListSort,
@@ -369,6 +382,23 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
         contact_id: &uuid::Uuid,
         include_hidden: bool,
     ) -> impl Future<Output = Result<Option<CrmContact>, CrmError>> + Send;
+
+    /// Fetches a single CRM company by id, scoped to `team_id`,
+    /// hydrated with all domains (ordered by `created_at ASC` —
+    /// primary first), the primary domain's `crm_domain_directory`
+    /// display metadata (name + description), and the company's full
+    /// contact list (subject to `include_hidden`). Returns `Ok(None)`
+    /// when the company doesn't exist, belongs to a different team,
+    /// or — for non-admin viewers (`include_hidden = false`) — the
+    /// company is hidden. With `include_hidden = true` (admin/owner)
+    /// every owned company is reachable. The handler converts `None`
+    /// into a 404 [`CrmError::CompanyNotFoundForTeam`].
+    fn get_company_for_team(
+        &self,
+        team_id: &uuid::Uuid,
+        company_id: &uuid::Uuid,
+        include_hidden: bool,
+    ) -> impl Future<Output = Result<Option<CrmCompanyWithContacts>, CrmError>> + Send;
 
     /// Create a CRM comment. With `thread_id = None` a new thread is opened
     /// on `(entity_type, entity_id)` and the comment becomes its root; with
@@ -414,7 +444,9 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<CrmCommentThread>, CrmError>> + Send;
 
     /// Edit a CRM comment's `text`, scoped to `team_id` via the comment's
-    /// thread → entity → company. Returns the updated comment, or
+    /// thread → entity → company. Owner-only: returns
+    /// [`CrmError::CommentNotOwned`] when `requester` (the caller's macro
+    /// user id) is not the comment's author, or
     /// [`CrmError::CommentNotFound`] when it doesn't exist or isn't owned by
     /// the team. `include_hidden = false` (non-admin) additionally
     /// returns `CommentNotFound` when the parent entity is hidden.
@@ -424,12 +456,15 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
         comment_id: &uuid::Uuid,
         text: &str,
         include_hidden: bool,
+        requester: &str,
     ) -> impl Future<Output = Result<CrmComment, CrmError>> + Send;
 
     /// Soft-delete a CRM comment (sets `deleted_at`), scoped to `team_id`.
     /// When it was the thread's last live comment, the thread is
     /// soft-deleted too (reported via
-    /// [`DeleteCrmCommentResult::thread_deleted`]). Returns
+    /// [`DeleteCrmCommentResult::thread_deleted`]). Owner-only: returns
+    /// [`CrmError::CommentNotOwned`] when `requester` (the caller's macro
+    /// user id) is not the comment's author, or
     /// [`CrmError::CommentNotFound`] when the comment doesn't exist, is
     /// already deleted, or isn't owned by the team. `include_hidden =
     /// false` (non-admin) additionally returns `CommentNotFound` when
@@ -439,5 +474,18 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
         team_id: &uuid::Uuid,
         comment_id: &uuid::Uuid,
         include_hidden: bool,
+        requester: &str,
     ) -> impl Future<Output = Result<DeleteCrmCommentResult, CrmError>> + Send;
+
+    /// Resolve a CRM comment to the entity its thread is attached to.
+    /// Returns `Ok(None)` when the comment doesn't exist or is
+    /// soft-deleted. The schema's `crm_thread_one_parent` check
+    /// constraint guarantees exactly one of `company_id` / `contact_id`
+    /// is set on the parent thread, so the variant is unambiguous. This
+    /// is the lookup the comment access extractor uses to dispatch
+    /// access checks to the right entity type.
+    fn get_comment_entity(
+        &self,
+        comment_id: &uuid::Uuid,
+    ) -> impl Future<Output = Result<Option<(CrmCommentEntityType, uuid::Uuid)>, CrmError>> + Send;
 }

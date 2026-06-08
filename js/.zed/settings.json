@@ -11,5 +11,6 @@
     "CSS": {
       "language_servers": ["tailwindcss-language-server", "!vscode-css-language-server"]
     }
-  }
+  },
+  "use_on_type_format": false
 }

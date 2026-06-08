@@ -186,6 +186,7 @@ export * from './labelName';
 export * from './labelType';
 export * from './labelTypeProperty';
 export * from './link';
+export * from './linkPhotoUrl';
 export * from './linkSignature';
 export * from './listBlockedResponse';
 export * from './listContactsResponse';

@@ -157,7 +157,7 @@ pub struct ListEntitiesResponse {
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "ListEntities",
-    description = "Browse the user's workspace to see recent items they have access to. Returns documents, AI conversations, projects, emails, chat channels, call records, and foreign entities. Use this to get an overview of what the user has been working on or to find items by type. For finding specific items by name or content, use the search tool instead."
+    description = "Browse the user's workspace to see recent items they have access to. Returns documents, AI conversations, projects, emails, chat channels, call records, and foreign entities. Use this to get an overview of what the user has been working on or to find items by type. Start here for activity-summary questions such as \"what happened today\", \"what's going on\", \"catch me up\", or \"what happened in standup today\"; apply precise time, type, channel, or mailbox filters when the user gives that scope. For finding specific items by name or content, use the search tool instead."
 )]
 pub struct ListEntities {
     #[schemars(

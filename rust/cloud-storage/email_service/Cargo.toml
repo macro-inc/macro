@@ -161,5 +161,7 @@ utoipa = { workspace = true }
 utoipa-swagger-ui = { workspace = true }
 uuid = { workspace = true }
 
+macro_service_urls = { path = "../macro_service_urls" }
+
 [dev-dependencies]
 macro_auth = { path = "../macro_auth", features = ["testing"] }

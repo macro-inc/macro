@@ -3,16 +3,16 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
 };
-use entity_access::{
-    domain::{models::AdminTeamRole, ports::EntityAccessService},
-    inbound::axum_extractors::MacroUserTeamExtractor,
-};
+use entity_access::domain::{models::EditAccessLevel, ports::EntityAccessService};
 use model_error_response::ErrorResponse;
 use serde::Deserialize;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::domain::{model::CrmError, service::CrmService};
+use crate::{
+    domain::{model::CrmError, service::CrmService},
+    inbound::axum_extractors::CrmCompanyAccessLevelExtractor,
+};
 
 use super::CrmRouterState;
 
@@ -49,17 +49,14 @@ pub struct SetEmailSyncRequest {
 )]
 #[tracing::instrument(skip_all, err, fields(company_id = %company_id, email_sync = req.email_sync))]
 pub async fn handler<C: CrmService, Eas: EntityAccessService>(
-    access: MacroUserTeamExtractor<AdminTeamRole, Eas>,
+    access: CrmCompanyAccessLevelExtractor<EditAccessLevel, Eas>,
     State(state): State<CrmRouterState<C, Eas>>,
     Path(company_id): Path<Uuid>,
     Json(req): Json<SetEmailSyncRequest>,
 ) -> Result<StatusCode, CrmError> {
-    let team_id = macro_uuid::string_to_uuid(&access.entity_access_receipt.entity().entity_id)
-        .map_err(|_| CrmError::InvalidTeamId)?;
-
     state
         .service
-        .set_email_sync(&team_id, &company_id, req.email_sync)
+        .set_email_sync(&access.receipt, req.email_sync)
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }

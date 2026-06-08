@@ -10,7 +10,8 @@
     "./packages/core/**/*.spec.ts",
     "./packages/block-code/scripts/**/*",
     "./packages/service-clients/service-sync/scripts/**/*",
-    "../lexical-core/tests/**/*"
+    "../lexical-core/tests/**/*",
+    "../lexical-core/scripts/**/*"
   ],
   "compilerOptions": {
     "noImplicitAny": true,

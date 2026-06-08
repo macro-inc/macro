@@ -100,7 +100,16 @@ const syncServiceHostRemote = {
 
 function selectSyncServiceHost():
   | typeof syncServiceHostRemote
-  | typeof syncServiceHostLocal {
+  | typeof syncServiceHostLocal
+  | { worker: string; ws: string } {
+  const overrideHost: string | undefined = import.meta.env
+    .VITE_SYNC_SERVICE_HOST;
+  if (overrideHost) {
+    return {
+      worker: `https://${overrideHost}`,
+      ws: `wss://${overrideHost}`,
+    };
+  }
   if (import.meta.env.MODE !== 'development') {
     return syncServiceHostRemote;
   }

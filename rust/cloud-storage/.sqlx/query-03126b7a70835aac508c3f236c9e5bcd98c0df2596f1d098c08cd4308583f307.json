@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM entity_access \n            WHERE entity_id = $1 \n            AND entity_type = $2 \n            AND source_type = $3\n            AND source_id != $4\n            AND granted_from_project_id IS NULL\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        {
+          "Custom": {
+            "name": "entity_access_source_type",
+            "kind": {
+              "Enum": [
+                "channel",
+                "team",
+                "user"
+              ]
+            }
+          }
+        },
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "03126b7a70835aac508c3f236c9e5bcd98c0df2596f1d098c08cd4308583f307"
+}

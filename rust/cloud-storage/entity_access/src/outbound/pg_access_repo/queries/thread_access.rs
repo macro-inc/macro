@@ -105,10 +105,19 @@ pub async fn get_thread_access(
     .fetch_all(pool);
 
     // Team CRM access: a teammate of the thread owner gets Comment access when
-    // they share a CRM-enabled team with the owner AND every participant
-    // (from/to/cc/bcc) resolves to a non-hidden crm_contacts row whose
-    // non-hidden crm_companies row has email_sync on. Strict: any participant
-    // without a qualifying contact in that team denies access.
+    // they share a CRM-enabled team with the owner, the thread has at least
+    // one external participant, and no external participant carries an
+    // opt-out signal on that team.
+    //
+    // Opt-out signals are role-aware:
+    //   * email_sync=false on a tracked company is a HARD opt-out — the
+    //     team explicitly suppressed CRM email sync for that company, and
+    //     no role (member, admin, or owner) can see threads through CRM
+    //     grant for participants tracked there.
+    //   * contact.hidden or company.hidden is a SOFT opt-out — admins and
+    //     owners see hidden CRM rows; only plain members are blocked.
+    //
+    // Untracked external addresses default to allowed.
     let crm_fut = sqlx::query_scalar!(
         r#"
         WITH thread_owner AS (
@@ -119,7 +128,7 @@ pub async fn get_thread_access(
         ),
         shared_teams AS (
             -- Teams the requester shares with the owner that have CRM enabled.
-            SELECT tcs.team_id
+            SELECT tcs.team_id, requester.team_role
             FROM team_user requester
             JOIN team_user owner_member ON owner_member.team_id = requester.team_id
             JOIN thread_owner o ON o.macro_id = owner_member.user_id
@@ -144,31 +153,30 @@ pub async fn get_thread_access(
             SELECT 1
             FROM shared_teams st
             -- Require at least one *external* participant (outside the
-            -- requester's own email domain). Internal colleagues don't
-            -- need to be tracked CRM contacts, but a purely-internal
-            -- thread shouldn't grant CRM access either.
+            -- requester's own email domain). A purely-internal thread
+            -- shouldn't grant CRM access.
             WHERE EXISTS (
                 SELECT 1
                 FROM participants p
                 WHERE split_part(p.email, '@', 2) <> split_part(LOWER($2), '@', 2)
             )
               AND NOT EXISTS (
-                  -- An external participant with no qualifying contact in
-                  -- this team. Participants on the requester's own domain
-                  -- are skipped (they're internal, not CRM contacts).
+                  -- An external participant flagged for opt-out on this
+                  -- team. email_sync=false blocks everyone; hidden flags
+                  -- only block plain members.
                   SELECT 1
                   FROM participants p
-                  WHERE split_part(p.email, '@', 2) <> split_part(LOWER($2), '@', 2)
-                    AND NOT EXISTS (
-                      SELECT 1
-                      FROM crm_contacts ct
-                      JOIN crm_companies c ON c.id = ct.company_id
-                      WHERE c.team_id = st.team_id
-                        AND ct.email = p.email
-                        AND c.email_sync
-                        AND NOT c.hidden
-                        AND NOT ct.hidden
-                  )
+                  JOIN crm_contacts ct ON ct.email = p.email
+                  JOIN crm_companies c ON c.id = ct.company_id
+                  WHERE c.team_id = st.team_id
+                    AND split_part(p.email, '@', 2) <> split_part(LOWER($2), '@', 2)
+                    AND (
+                        NOT c.email_sync
+                        OR (
+                            (ct.hidden OR c.hidden)
+                            AND st.team_role = 'member'
+                        )
+                    )
               )
         ) AS "granted!"
         "#,

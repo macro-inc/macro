@@ -17,6 +17,7 @@ type UserTooltipProps = {
   id?: string;
   isDeleted?: boolean;
   onClose?: () => void;
+  photoUrl?: string;
 };
 
 export function UserTooltip(props: UserTooltipProps) {
@@ -72,13 +73,13 @@ export function UserTooltip(props: UserTooltipProps) {
   // Determine avatar props based on what we have
   const avatarProps = () => {
     if (props.id) {
-      return { id: props.id } as const;
+      return { id: props.id, photoUrl: props.photoUrl } as const;
     }
     if (props.email) {
-      return { email: props.email } as const;
+      return { email: props.email, photoUrl: props.photoUrl } as const;
     }
     // Fallback - use email even if empty to satisfy the union type
-    return { email: '?' } as const;
+    return { email: '?', photoUrl: props.photoUrl } as const;
   };
 
   return (

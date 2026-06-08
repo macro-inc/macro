@@ -1,5 +1,5 @@
 import { cn, Dropdown } from '@ui';
-import type { JSX } from 'solid-js';
+import { type JSX, onCleanup, onMount } from 'solid-js';
 import { useProperty } from '../../core/context';
 
 type EditorPopoverProps = {
@@ -34,6 +34,31 @@ export function EditorPopover(props: EditorPopoverProps) {
     else ctx.closeEditor();
   };
 
+  const handleEscapeKeyDown = (event: KeyboardEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    close();
+  };
+
+  const handleEscapeCapture = (event: KeyboardEvent) => {
+    if (event.key !== 'Escape') return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
+    close();
+  };
+
+  onMount(() => {
+    window.addEventListener('keydown', handleEscapeCapture, { capture: true });
+  });
+
+  onCleanup(() => {
+    window.removeEventListener('keydown', handleEscapeCapture, {
+      capture: true,
+    });
+  });
+
   const handleInteractOutside = () => {
     if (props.withClickBlock === false) {
       close();
@@ -67,7 +92,7 @@ export function EditorPopover(props: EditorPopoverProps) {
         props.class
       )}
       onInteractOutside={handleInteractOutside}
-      onEscapeKeyDown={close}
+      onEscapeKeyDown={handleEscapeKeyDown}
       mount={ctx.portalMount()}
       depth={3}
     >

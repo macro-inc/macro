@@ -1,5 +1,5 @@
 import { useMessageActionDrawer } from '@channel/Mobile/message-action-drawer-context';
-import { longPressHighlight } from '@core/directive/longPressHighlight';
+import { touchHandler } from '@core/directive/touchHandler';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import TrashIcon from '@icon/square-trash.svg';
 import { cn } from '@ui';
@@ -123,6 +123,7 @@ function RegularMessageLayout(props: {
       </Message.Slot>
       <Message.Slot placement="header" class="flex items-center gap-1 min-w-0">
         <Message.SenderName />
+        <Message.AgentBadge />
         <Message.EditedIndicator />
         {/* On message hover, timestamp floats above actions. */}
         <div class="grow shrink-0 min-w-0 flex justify-end group-hover/message:absolute group-hover/message:right-1 group-hover/message:-top-9 group-hover/message:p-1 group-hover/message:bg-surface group-hover/message:rounded-md">
@@ -188,8 +189,8 @@ export function ChannelMessage(props: ChannelMessageProps) {
       selected={props.selectionState?.isSelected}
       onClick={props.onClick}
       ref={(el) =>
-        longPressHighlight(el, () => ({
-          className: 'channel-message-long-press-highlight',
+        touchHandler(el, () => ({
+          touchClassName: 'channel-message-long-press-highlight',
           onLongPress: () => drawerManager?.open(props.message, props.actions),
         }))
       }

@@ -5,8 +5,9 @@ use std::str::FromStr;
 
 use crate::domain::{
     models::{
-        AccessError, AccessLevel, CallChannelInfo, ChannelRoleResult, Entity, EntityAccessAuth,
-        EntityAccessReceipt, EntityPermission, EntityType, RequiredPermission, UserTeamInfo,
+        AccessError, AccessLevel, CallChannelInfo, ChannelRoleResult, CrmEntityAccess, Entity,
+        EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType, RequiredPermission,
+        UserTeamInfo,
     },
     ports::{AccessRepository, EntityAccessService},
 };
@@ -94,6 +95,26 @@ where
         }
     }
 
+    /// Get access level + owning team for a CRM company via the user's team
+    /// membership.
+    async fn get_crm_company_access(
+        &self,
+        entity_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<CrmEntityAccess>, AccessError> {
+        self.repo.get_crm_company_access(entity_id, user_id).await
+    }
+
+    /// Get access level + owning team for a CRM contact via its parent
+    /// company's team.
+    async fn get_crm_contact_access(
+        &self,
+        entity_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<CrmEntityAccess>, AccessError> {
+        self.repo.get_crm_contact_access(entity_id, user_id).await
+    }
+
     /// Resolve a call id string to the channel id that owns it.
     ///
     /// Looks up both the active `calls` table and the archived `call_records`
@@ -160,12 +181,18 @@ where
             }
             EntityType::Channel => self.get_channel_access(entity_id, user_id).await,
             EntityType::ForeignEntity => self.get_foreign_entity_access(entity_id, user_id).await,
+            EntityType::CrmCompany => Ok(self
+                .get_crm_company_access(entity_id, user_id)
+                .await?
+                .map(|a| a.access_level)),
+            EntityType::CrmContact => Ok(self
+                .get_crm_contact_access(entity_id, user_id)
+                .await?
+                .map(|a| a.access_level)),
             // Static files are always viewable. This is wrong for owners
             EntityType::StaticFile => Ok(Some(AccessLevel::View)),
             // These entity types don't have access checks implemented yet.
             EntityType::Team | EntityType::User => Ok(None),
-            // CRM companies are gated by team membership, not entity_access.
-            EntityType::CrmCompany => Ok(None),
         }
     }
 
@@ -236,6 +263,24 @@ where
                     None => Err(AccessError::Unauthorized),
                 }
             }
+            EntityType::CrmCompany => {
+                let access = self.get_crm_company_access(entity_id, user_id).await?;
+                match access {
+                    Some(access) => Ok(EntityPermission::AccessLevel {
+                        access_level: access.access_level,
+                    }),
+                    None => Err(AccessError::Unauthorized),
+                }
+            }
+            EntityType::CrmContact => {
+                let access = self.get_crm_contact_access(entity_id, user_id).await?;
+                match access {
+                    Some(access) => Ok(EntityPermission::AccessLevel {
+                        access_level: access.access_level,
+                    }),
+                    None => Err(AccessError::Unauthorized),
+                }
+            }
             EntityType::Channel => {
                 let channel_uuid = Uuid::from_str(entity_id)
                     .map_err(|_| AccessError::BadRequest("Invalid channel ID format"))?;
@@ -248,6 +293,34 @@ where
             }
             _ => Err(AccessError::BadRequest("Unsupported entity type")),
         }
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_crm_entity_permission_with_team(
+        &self,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> Result<(EntityPermission, Uuid), AccessError> {
+        // Resolve permission and owning team from one ownership lookup, so the
+        // team is the entity's owner (and the user is a member of it) rather
+        // than the user's default team.
+        let access = match entity_type {
+            EntityType::CrmCompany => self.get_crm_company_access(entity_id, user_id).await?,
+            EntityType::CrmContact => self.get_crm_contact_access(entity_id, user_id).await?,
+            _ => {
+                return Err(AccessError::BadRequest(
+                    "get_crm_entity_permission_with_team supports only CRM entities",
+                ));
+            }
+        };
+        let access = access.ok_or(AccessError::Unauthorized)?;
+        Ok((
+            EntityPermission::AccessLevel {
+                access_level: access.access_level,
+            },
+            access.team_id,
+        ))
     }
 
     #[tracing::instrument(err, skip(self))]

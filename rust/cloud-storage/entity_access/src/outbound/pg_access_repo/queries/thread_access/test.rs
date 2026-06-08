@@ -84,10 +84,17 @@ async fn insert_team(pool: &PgPool, team_id: Uuid, owner_user_id: &str, crm_enab
 }
 
 async fn add_team_member(pool: &PgPool, team_id: Uuid, user_id: &str) {
+    add_team_user(pool, team_id, user_id, "member").await;
+}
+
+/// `role` must be one of `'member' | 'admin' | 'owner'`.
+async fn add_team_user(pool: &PgPool, team_id: Uuid, user_id: &str, role: &str) {
     sqlx::query!(
-        r#"INSERT INTO team_user (user_id, team_id, team_role) VALUES ($1, $2, 'member')"#,
+        r#"INSERT INTO team_user (user_id, team_id, team_role)
+           VALUES ($1, $2, $3::text::team_role)"#,
         user_id,
         team_id,
+        role,
     )
     .execute(pool)
     .await
@@ -232,25 +239,32 @@ async fn insert_crm_contact(pool: &PgPool, company_id: Uuid, email: &str, hidden
     .unwrap();
 }
 
-/// OWNER + REQUESTER on the same team (with a CRM settings row).
+/// OWNER + REQUESTER on the same team (with a CRM settings row). Both joined
+/// as plain members — use [`setup_shared_team_as`] when the requester's role
+/// matters (admin/owner can see hidden CRM rows; member cannot).
 async fn setup_shared_team(pool: &PgPool, crm_enabled: bool) -> Uuid {
+    setup_shared_team_as(pool, crm_enabled, "member").await
+}
+
+async fn setup_shared_team_as(pool: &PgPool, crm_enabled: bool, requester_role: &str) -> Uuid {
     let team_id = Uuid::new_v4();
     insert_user(pool, OWNER, "owner@corp.test").await;
     insert_user(pool, REQUESTER, "requester@corp.test").await;
     insert_team(pool, team_id, OWNER, crm_enabled).await;
     add_team_member(pool, team_id, OWNER).await;
-    add_team_member(pool, team_id, REQUESTER).await;
+    add_team_user(pool, team_id, REQUESTER, requester_role).await;
     team_id
 }
 
 /// Synced CRM team + thread where every participant resolves to a non-hidden
-/// contact in a synced+visible company, EXCEPT `unsynced`, which gets no CRM
-/// contact. Used to prove each address slot (from/to/cc/bcc) is enforced.
-async fn access_with_one_unsynced(
+/// contact in a synced+visible company, EXCEPT `untracked`, which gets no CRM
+/// contact at all. Used to prove untracked addresses don't deny access in any
+/// slot (from/to/cc/bcc).
+async fn access_with_one_untracked(
     pool: &PgPool,
     from_email: &str,
     recipients: &[(&str, &str)],
-    unsynced: &str,
+    untracked: &str,
 ) -> Option<AccessLevel> {
     let team_id = setup_shared_team(pool, true).await;
     let thread_id = create_thread(pool, OWNER, from_email, recipients).await;
@@ -259,7 +273,7 @@ async fn access_with_one_unsynced(
     let mut all = vec![from_email];
     all.extend(recipients.iter().map(|(e, _)| *e));
     for email in all {
-        if email != unsynced {
+        if email != untracked {
             insert_crm_contact(pool, company, email, false).await;
         }
     }
@@ -458,11 +472,11 @@ async fn grants_when_synced_participants_span_multiple_messages(
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn grants_when_participant_has_qualifying_mapping_despite_hidden_duplicate(
-    pool: PgPool,
-) -> anyhow::Result<()> {
-    // Same address resolves to two contacts in the team: one hidden, one valid.
-    // The existence semantics grant as long as a qualifying mapping exists.
+async fn denies_when_any_duplicate_contact_signals_opt_out(pool: PgPool) -> anyhow::Result<()> {
+    // Same address resolves to two contacts on the team: one hidden + in a
+    // hidden company (opt-out), one clean. The opt-out signal wins — explicit
+    // suppression on any tracked row denies even when a clean duplicate
+    // exists.
     let team_id = setup_shared_team(&pool, true).await;
     let thread_id = create_thread(&pool, OWNER, "alice@client.test", &[]).await;
 
@@ -472,10 +486,7 @@ async fn grants_when_participant_has_qualifying_mapping_despite_hidden_duplicate
     let good_company = insert_crm_company(&pool, team_id, true, false).await;
     insert_crm_contact(&pool, good_company, "alice@client.test", false).await;
 
-    assert_eq!(
-        access_as_requester(&pool, &thread_id).await,
-        Some(AccessLevel::Comment)
-    );
+    assert_eq!(access_as_requester(&pool, &thread_id).await, None);
     Ok(())
 }
 
@@ -587,12 +598,12 @@ async fn denies_when_team_crm_settings_row_missing(pool: PgPool) -> anyhow::Resu
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn denies_when_contact_belongs_to_a_different_teams_company(
+async fn grants_when_only_contact_for_participant_is_on_a_different_team(
     pool: PgPool,
 ) -> anyhow::Result<()> {
-    // alice resolves to a contact, but only under a company owned by a team the
-    // requester is not on. The shared team has no mapping for her → deny.
-    // Shared CRM-enabled team for owner + requester, but it has no alice contact.
+    // alice is tracked only on a team the requester is not on. The shared
+    // team has no opt-out signal for her, and untracked external addresses
+    // default to allowed → grant.
     let _shared_team = setup_shared_team(&pool, true).await;
     let thread_id = create_thread(&pool, OWNER, "alice@client.test", &[]).await;
 
@@ -602,7 +613,10 @@ async fn denies_when_contact_belongs_to_a_different_teams_company(
     let other_company = insert_crm_company(&pool, other_team, true, false).await;
     insert_crm_contact(&pool, other_company, "alice@client.test", false).await;
 
-    assert_eq!(access_as_requester(&pool, &thread_id).await, None);
+    assert_eq!(
+        access_as_requester(&pool, &thread_id).await,
+        Some(AccessLevel::Comment)
+    );
     Ok(())
 }
 
@@ -673,65 +687,136 @@ async fn denies_when_a_contact_is_hidden(pool: PgPool) -> anyhow::Result<()> {
 }
 
 // ---------------------------------------------------------------------------
-// Strict: an unsynced participant in ANY address slot denies access
+// Role-aware opt-out semantics: admins/owners see through `hidden`, but
+// `email_sync=false` is a hard suppression that blocks every role.
 // ---------------------------------------------------------------------------
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn denies_when_the_from_sender_is_unsynced(pool: PgPool) -> anyhow::Result<()> {
-    let result = access_with_one_unsynced(
+async fn admin_grants_despite_hidden_contact(pool: PgPool) -> anyhow::Result<()> {
+    let team_id = setup_shared_team_as(&pool, true, "admin").await;
+    let thread_id = create_thread(&pool, OWNER, "alice@client.test", &[]).await;
+    let company = insert_crm_company(&pool, team_id, true, false).await;
+    insert_crm_contact(&pool, company, "alice@client.test", true).await;
+
+    assert_eq!(
+        access_as_requester(&pool, &thread_id).await,
+        Some(AccessLevel::Comment)
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn admin_grants_despite_hidden_company(pool: PgPool) -> anyhow::Result<()> {
+    let team_id = setup_shared_team_as(&pool, true, "admin").await;
+    let thread_id = create_thread(&pool, OWNER, "alice@client.test", &[]).await;
+    let company = insert_crm_company(&pool, team_id, true, true).await;
+    insert_crm_contact(&pool, company, "alice@client.test", false).await;
+
+    assert_eq!(
+        access_as_requester(&pool, &thread_id).await,
+        Some(AccessLevel::Comment)
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn owner_grants_despite_hidden_contact_and_company(pool: PgPool) -> anyhow::Result<()> {
+    let team_id = setup_shared_team_as(&pool, true, "owner").await;
+    let thread_id = create_thread(&pool, OWNER, "alice@client.test", &[]).await;
+    let company = insert_crm_company(&pool, team_id, true, true).await;
+    insert_crm_contact(&pool, company, "alice@client.test", true).await;
+
+    assert_eq!(
+        access_as_requester(&pool, &thread_id).await,
+        Some(AccessLevel::Comment)
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn admin_denied_when_email_sync_off(pool: PgPool) -> anyhow::Result<()> {
+    // email_sync=false is a hard suppression — even admins/owners can't see
+    // threads through CRM grant for participants tracked in such companies.
+    let team_id = setup_shared_team_as(&pool, true, "admin").await;
+    let thread_id = create_thread(&pool, OWNER, "alice@client.test", &[]).await;
+    let company = insert_crm_company(&pool, team_id, false, false).await;
+    insert_crm_contact(&pool, company, "alice@client.test", false).await;
+
+    assert_eq!(access_as_requester(&pool, &thread_id).await, None);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn owner_denied_when_email_sync_off(pool: PgPool) -> anyhow::Result<()> {
+    let team_id = setup_shared_team_as(&pool, true, "owner").await;
+    let thread_id = create_thread(&pool, OWNER, "alice@client.test", &[]).await;
+    let company = insert_crm_company(&pool, team_id, false, false).await;
+    insert_crm_contact(&pool, company, "alice@client.test", false).await;
+
+    assert_eq!(access_as_requester(&pool, &thread_id).await, None);
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Untracked external participants don't deny access (in any address slot)
+// ---------------------------------------------------------------------------
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn grants_when_the_from_sender_is_untracked(pool: PgPool) -> anyhow::Result<()> {
+    let result = access_with_one_untracked(
         &pool,
         "alice@client.test",
         &[("bob@client.test", "TO")],
         "alice@client.test",
     )
     .await;
-    assert_eq!(result, None);
+    assert_eq!(result, Some(AccessLevel::Comment));
     Ok(())
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn denies_when_a_to_participant_is_unsynced(pool: PgPool) -> anyhow::Result<()> {
-    let result = access_with_one_unsynced(
+async fn grants_when_a_to_participant_is_untracked(pool: PgPool) -> anyhow::Result<()> {
+    let result = access_with_one_untracked(
         &pool,
         "alice@client.test",
         &[("bob@client.test", "TO")],
         "bob@client.test",
     )
     .await;
-    assert_eq!(result, None);
+    assert_eq!(result, Some(AccessLevel::Comment));
     Ok(())
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn denies_when_a_cc_participant_is_unsynced(pool: PgPool) -> anyhow::Result<()> {
-    let result = access_with_one_unsynced(
+async fn grants_when_a_cc_participant_is_untracked(pool: PgPool) -> anyhow::Result<()> {
+    let result = access_with_one_untracked(
         &pool,
         "alice@client.test",
         &[("bob@client.test", "CC")],
         "bob@client.test",
     )
     .await;
-    assert_eq!(result, None);
+    assert_eq!(result, Some(AccessLevel::Comment));
     Ok(())
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn denies_when_a_bcc_participant_is_unsynced(pool: PgPool) -> anyhow::Result<()> {
-    let result = access_with_one_unsynced(
+async fn grants_when_a_bcc_participant_is_untracked(pool: PgPool) -> anyhow::Result<()> {
+    let result = access_with_one_untracked(
         &pool,
         "alice@client.test",
         &[("bob@client.test", "BCC")],
         "bob@client.test",
     )
     .await;
-    assert_eq!(result, None);
+    assert_eq!(result, Some(AccessLevel::Comment));
     Ok(())
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn denies_when_unsynced_participant_in_a_later_message(pool: PgPool) -> anyhow::Result<()> {
-    // First message is fully synced; a second message introduces an unsynced
-    // participant. Strict deny must still apply.
+async fn grants_when_untracked_participant_in_a_later_message(pool: PgPool) -> anyhow::Result<()> {
+    // A later message introduces an untracked external participant. Without
+    // an opt-out signal the grant still holds.
     let team_id = setup_shared_team(&pool, true).await;
     let (link_id, thread_id) = create_link_and_thread(&pool, OWNER).await;
     add_message(
@@ -755,9 +840,33 @@ async fn denies_when_unsynced_participant_in_a_later_message(pool: PgPool) -> an
     for email in ["alice@client.test", "bob@client.test", "carol@client.test"] {
         insert_crm_contact(&pool, company, email, false).await;
     }
-    // zed@unknown.test intentionally absent from CRM.
+    // zed@unknown.test intentionally absent from CRM — untracked, not opted-out.
 
-    assert_eq!(access_as_requester(&pool, &thread_id).await, None);
+    assert_eq!(
+        access_as_requester(&pool, &thread_id).await,
+        Some(AccessLevel::Comment)
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn grants_when_no_external_participant_is_tracked_at_all(pool: PgPool) -> anyhow::Result<()> {
+    // Brand-new external folks (no CRM rows yet) on a CRM-enabled team —
+    // grant. This is the typical "Evan opens a teammate's thread with new
+    // outside addresses" case.
+    let _team_id = setup_shared_team(&pool, true).await;
+    let thread_id = create_thread(
+        &pool,
+        OWNER,
+        "ccrawford@cape.co",
+        &[("jdoyle@cape.co", "TO"), ("matt@kodexglobal.com", "CC")],
+    )
+    .await;
+
+    assert_eq!(
+        access_as_requester(&pool, &thread_id).await,
+        Some(AccessLevel::Comment)
+    );
     Ok(())
 }
 

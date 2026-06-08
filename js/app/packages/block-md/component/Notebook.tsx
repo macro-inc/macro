@@ -6,6 +6,7 @@ import {
 import { useGoToTempRedirect } from '@block-md/signal/location';
 import { mdStore } from '@block-md/signal/markdownBlockData';
 import { useBlockAliasedName, useBlockId } from '@core/block';
+import type { LoroManager } from '@core/collab/manager';
 import { editorFocusSignal } from '@core/component/LexicalMarkdown/utils';
 import { ParamsProvider } from '@core/component/ParamsProvider';
 import {
@@ -22,6 +23,7 @@ import { tempRedirectLocation } from '@core/signal/location';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { makeResizeObserver } from '@solid-primitives/resize-observer';
 import {
+  type Accessor,
   createEffect,
   createMemo,
   createSignal,
@@ -68,7 +70,10 @@ const widthToMode = (width: number): CommentLayoutMode => {
   return CommentLayoutMode.none;
 };
 
-export function Notebook() {
+export function Notebook(props: {
+  loroManager: Accessor<LoroManager | undefined>;
+  mustBeConnected?: boolean;
+}) {
   const blockElement = blockElementSignal.get;
   const setStore = mdStore.set;
   const setWideEnoughForComments = commentWidthSignal.set;
@@ -263,7 +268,7 @@ export function Notebook() {
   return (
     <div class={containerClasses()} ref={notebookRef}>
       <div class={contentDivClasses()} ref={contentRef}>
-        <TitleEditor autoFocusOnMount />
+        <TitleEditor autoFocusOnMount mustBeConnected={props.mustBeConnected} />
         <div class="spacer h-3" />
         <div class="mb-6 flex flex-row flex-wrap items-center gap-2 text-sm empty:hidden">
           <InlineTaskProperties />
@@ -271,7 +276,10 @@ export function Notebook() {
           <TaskDuplicateMatchPill />
         </div>
         <ParamsProvider>
-          <MarkdownEditor />
+          <MarkdownEditor
+            loroManager={props.loroManager}
+            mustBeConnected={props.mustBeConnected}
+          />
           <Show when={ENABLE_RAIL_CHAT_TASK_COMMENTS && isTask}>
             <TaskDiscussion />
           </Show>
@@ -292,7 +300,9 @@ export function Notebook() {
   );
 }
 
-export function InstructionsNotebook() {
+export function InstructionsNotebook(props: {
+  loroManager: Accessor<LoroManager | undefined>;
+}) {
   const setStore = mdStore.set;
 
   let notebookRef!: HTMLDivElement;
@@ -319,7 +329,7 @@ export function InstructionsNotebook() {
       ref={notebookRef}
     >
       <div class="grow max-w-3xl pt-12 min-w-0 mx-auto" ref={contentRef}>
-        <InstructionsEditor />
+        <InstructionsEditor loroManager={props.loroManager} />
       </div>
     </div>
   );

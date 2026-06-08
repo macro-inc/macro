@@ -196,6 +196,7 @@ impl EmailService for MockEmail {
     async fn create_draft(
         &self,
         _link: &email::domain::models::Link,
+        _accessible_inboxes: &[email::domain::models::Link],
         _input: email::domain::models::CreateDraftInput,
     ) -> Result<email::domain::models::CreatedDraft, EmailErr> {
         Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
@@ -204,6 +205,7 @@ impl EmailService for MockEmail {
     async fn send_message(
         &self,
         _link: &email::domain::models::Link,
+        _accessible_inboxes: &[email::domain::models::Link],
         _input: email::domain::models::CreateDraftInput,
     ) -> Result<email::domain::models::CreatedDraft, EmailErr> {
         Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
@@ -331,6 +333,20 @@ impl entity_access::domain::ports::EntityAccessService for MockEntityAccess {
         _user_org_id: Option<i64>,
     ) -> Result<
         entity_access::domain::models::EntityPermission,
+        entity_access::domain::models::AccessError,
+    > {
+        unimplemented!()
+    }
+
+    async fn get_crm_entity_permission_with_team(
+        &self,
+        _user_id: Option<
+            &macro_user_id::user_id::MacroUserId<macro_user_id::lowercased::Lowercase<'_>>,
+        >,
+        _entity_id: &str,
+        _entity_type: entity_access::domain::models::EntityType,
+    ) -> Result<
+        (entity_access::domain::models::EntityPermission, uuid::Uuid),
         entity_access::domain::models::AccessError,
     > {
         unimplemented!()
@@ -485,6 +501,7 @@ impl EmailService for MockEmailLinkResult {
     async fn create_draft(
         &self,
         _link: &email::domain::models::Link,
+        _accessible_inboxes: &[email::domain::models::Link],
         _input: email::domain::models::CreateDraftInput,
     ) -> Result<email::domain::models::CreatedDraft, EmailErr> {
         Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
@@ -493,6 +510,7 @@ impl EmailService for MockEmailLinkResult {
     async fn send_message(
         &self,
         _link: &email::domain::models::Link,
+        _accessible_inboxes: &[email::domain::models::Link],
         _input: email::domain::models::CreateDraftInput,
     ) -> Result<email::domain::models::CreatedDraft, EmailErr> {
         Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))

@@ -1,11 +1,11 @@
-import AddEmojiIcon from '@icon/square-add-emoji.svg';
-import EditIcon from '@icon/square-edit.svg';
-import LinkIcon from '@icon/square-link.svg';
-import ReplyIcon from '@icon/square-reply.svg';
-import TrashIcon from '@icon/square-trash.svg';
 import StarIcon from '@icon/wide-star.svg';
 import TaskIcon from '@icon/wide-task.svg';
-import { Button, Layer } from '@ui';
+import ReplyIcon from '@phosphor/arrow-bend-up-left.svg';
+import LinkIcon from '@phosphor/link.svg';
+import EditIcon from '@phosphor/pencil-simple.svg';
+import AddEmojiIcon from '@phosphor/smiley.svg';
+import TrashIcon from '@phosphor/trash.svg';
+import { Button, cn, Layer } from '@ui';
 import { type Component, createSignal, For, type JSX, Show } from 'solid-js';
 import { useMessage, useMessageActions } from './context';
 import { EmojiReactionPopover } from './EmojiReactionPopover';
@@ -30,6 +30,7 @@ type ActionItem = {
   onClick?: MessageActionHandler;
   destructive?: boolean;
   class?: string;
+  iconClass?: string;
 };
 
 type ActionMenuProps = {
@@ -50,7 +51,10 @@ function ActionButton(props: {
       variant="ghost"
       class={props.action.class}
     >
-      {renderIcon(props.action.icon, props.action.class)}
+      {renderIcon(
+        props.action.icon,
+        cn(props.action.iconClass, props.action.class)
+      )}
     </Button>
   );
 }
@@ -90,18 +94,21 @@ export function ActionMenu(props: ActionMenuProps) {
       label: 'Reply',
       icon: ReplyIcon,
       onClick: actions?.onReply,
+      iconClass: 'size-3.5',
     },
     {
       id: 'copy-link',
       label: 'Copy Link',
       icon: LinkIcon,
       onClick: actions?.onCopyLink,
+      iconClass: 'size-3.5',
     },
     {
       id: 'edit',
       label: 'Edit',
       icon: EditIcon,
       onClick: actions?.onEdit,
+      iconClass: 'size-3.5',
     },
     {
       id: 'delete',
@@ -110,6 +117,7 @@ export function ActionMenu(props: ActionMenuProps) {
       onClick: actions?.onDelete,
       destructive: true,
       class: 'text-failure-ink',
+      iconClass: 'size-3.5',
     },
   ];
 
@@ -151,7 +159,7 @@ export function ActionMenu(props: ActionMenuProps) {
                 onEmojiSelect={(emoji) => {
                   handleReaction(emoji);
                 }}
-                trigger={renderIcon(AddEmojiIcon, 'size-3')}
+                trigger={renderIcon(AddEmojiIcon, 'size-3.5')}
                 triggerProps={{
                   title: 'More reactions',
                   'aria-label': 'More reactions',

@@ -3,16 +3,16 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
 };
-use entity_access::{
-    domain::{models::AdminTeamRole, ports::EntityAccessService},
-    inbound::axum_extractors::MacroUserTeamExtractor,
-};
+use entity_access::domain::{models::EditAccessLevel, ports::EntityAccessService};
 use model_error_response::ErrorResponse;
 use serde::Deserialize;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::domain::{model::CrmError, service::CrmService};
+use crate::{
+    domain::{model::CrmError, service::CrmService},
+    inbound::axum_extractors::CrmContactAccessLevelExtractor,
+};
 
 use super::CrmRouterState;
 
@@ -44,17 +44,14 @@ pub struct SetContactHiddenRequest {
 )]
 #[tracing::instrument(skip_all, err, fields(contact_id = %contact_id, hidden = req.hidden))]
 pub async fn handler<C: CrmService, Eas: EntityAccessService>(
-    access: MacroUserTeamExtractor<AdminTeamRole, Eas>,
+    access: CrmContactAccessLevelExtractor<EditAccessLevel, Eas>,
     State(state): State<CrmRouterState<C, Eas>>,
     Path(contact_id): Path<Uuid>,
     Json(req): Json<SetContactHiddenRequest>,
 ) -> Result<StatusCode, CrmError> {
-    let team_id = macro_uuid::string_to_uuid(&access.entity_access_receipt.entity().entity_id)
-        .map_err(|_| CrmError::InvalidTeamId)?;
-
     state
         .service
-        .set_contact_hidden(&team_id, &contact_id, req.hidden)
+        .set_contact_hidden(&access.receipt, req.hidden)
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }

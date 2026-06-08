@@ -14,7 +14,7 @@ use crate::api::{context::ApiContext, oauth2::OAuthState};
 
 use model::response::{EmptyResponse, ErrorResponse};
 
-const REAUTHENTICATION_REQUIRED_MESSAGE: &str = "ReauthenticationRequired";
+pub const REAUTHENTICATION_REQUIRED_MESSAGE: &str = "ReauthenticationRequired";
 
 #[derive(serde::Deserialize, serde::Serialize, Debug, utoipa::ToSchema)]
 pub struct GithubLinkStatusResponse {

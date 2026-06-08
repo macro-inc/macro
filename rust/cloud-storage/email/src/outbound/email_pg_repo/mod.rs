@@ -125,6 +125,16 @@ impl EmailRepo for EmailPgRepo {
         thread::messages_by_thread_id_paginated(&self.pool, thread_id, offset, limit).await
     }
 
+    async fn cross_inbox_reply_drafts(
+        &self,
+        replying_to_ids: &[Uuid],
+        link_ids: &[Uuid],
+        exclude_thread_id: Uuid,
+    ) -> Result<Vec<MessageRow>, Self::Err> {
+        thread::cross_inbox_reply_drafts(&self.pool, replying_to_ids, link_ids, exclude_thread_id)
+            .await
+    }
+
     async fn senders_by_message_ids(
         &self,
         message_ids: &[Uuid],
@@ -177,9 +187,9 @@ impl EmailRepo for EmailPgRepo {
     async fn get_simple_message(
         &self,
         message_id: Uuid,
-        link_id: Uuid,
+        link_ids: &[Uuid],
     ) -> Result<Option<SimpleMessageInfo>, Self::Err> {
-        message::get_simple_message(&self.pool, message_id, link_id).await
+        message::get_simple_message(&self.pool, message_id, link_ids).await
     }
 
     async fn get_draft_replying_to(
@@ -188,6 +198,14 @@ impl EmailRepo for EmailPgRepo {
         replying_to_id: Uuid,
     ) -> Result<Option<SimpleMessageInfo>, Self::Err> {
         message::get_draft_replying_to(&self.pool, link_id, replying_to_id).await
+    }
+
+    async fn delete_draft_message(
+        &self,
+        message_id: Uuid,
+        thread_db_id: Uuid,
+    ) -> Result<(), Self::Err> {
+        message::delete_draft_message(&self.pool, message_id, thread_db_id).await
     }
 
     async fn upsert_contacts(

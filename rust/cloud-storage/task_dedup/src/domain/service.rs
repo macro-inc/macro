@@ -3,15 +3,18 @@
 #[cfg(test)]
 mod test;
 
-use std::collections::HashSet;
+use std::borrow::Cow;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
+use embedding::entity::Task;
+use embedding::{Content, EmbeddingModel, KeyedEmbedding, RerankModel, SearchResults, VectorStore};
 use uuid::Uuid;
 
-use super::models::{NewTask, TaskDedupError, TaskDuplicate, TaskSimilarityResult};
-use super::ports::{
-    TaskDedupNotifier, TaskDedupRepo, TaskDuplicateJudge, TaskEmbedder, TaskReranker,
+use super::models::{
+    NewTask, TaskDedupError, TaskDuplicate, TaskSearchParameters, TaskSimilarityResult,
 };
+use super::ports::{TaskDedupNotifier, TaskDuplicateJudge, TaskMatchRepo};
 
 /// Configuration for the task duplicate detection pipeline.
 #[derive(Debug, Clone)]
@@ -41,34 +44,59 @@ impl Default for TaskDedupConfig {
     }
 }
 
-/// Task duplicate detection service.
-#[derive(Clone)]
-pub struct TaskDedupService {
-    config: TaskDedupConfig,
-    repo: Arc<dyn TaskDedupRepo>,
-    embedder: Arc<dyn TaskEmbedder>,
-    reranker: Arc<dyn TaskReranker>,
-    judge: Arc<dyn TaskDuplicateJudge>,
-    notifier: Arc<dyn TaskDedupNotifier>,
+/// A candidate task surfaced by vector retrieval, collapsed from the per-field
+/// [`SearchResults`] into a single score and a reconstructed text used for
+/// reranking and judging.
+struct Candidate {
+    document_id: String,
+    /// The candidate's stored field contents joined back together.
+    content: String,
+    /// Best cosine similarity across the query × stored field cross-product.
+    vector_score: f64,
 }
 
-impl TaskDedupService {
-    /// Creates a new service from its ports.
+/// Task duplicate detection service.
+///
+/// Embedding (`E`), vector storage (`V`), and reranking (`R`) are supplied by the
+/// [`embedding`] crate's traits. They are generic rather than `dyn` because those
+/// traits use return-position `impl Trait` / associated types and are not
+/// object-safe. The judge, notifier, and match repo remain `dyn` ports.
+#[derive(Clone)]
+pub struct TaskDedupService<const DIMS: usize, E, V, R> {
+    config: TaskDedupConfig,
+    embedder: E,
+    vector_db: V,
+    reranker: R,
+    judge: Arc<dyn TaskDuplicateJudge>,
+    notifier: Arc<dyn TaskDedupNotifier>,
+    matches: Arc<dyn TaskMatchRepo>,
+}
+
+impl<const DIMS: usize, E, V, R> TaskDedupService<DIMS, E, V, R>
+where
+    E: EmbeddingModel<DIMS> + Send + Sync,
+    V: VectorStore<DIMS, Metadata = String, SearchParameters = TaskSearchParameters> + Send + Sync,
+    V::Error: Into<anyhow::Error>,
+    R: RerankModel<DIMS> + Send + Sync,
+{
+    /// Creates a new service from its dependencies.
     pub fn new(
         config: TaskDedupConfig,
-        repo: Arc<dyn TaskDedupRepo>,
-        embedder: Arc<dyn TaskEmbedder>,
-        reranker: Arc<dyn TaskReranker>,
+        embedder: E,
+        vector_db: V,
+        reranker: R,
         judge: Arc<dyn TaskDuplicateJudge>,
         notifier: Arc<dyn TaskDedupNotifier>,
+        matches: Arc<dyn TaskMatchRepo>,
     ) -> Self {
         Self {
             config,
-            repo,
             embedder,
+            vector_db,
             reranker,
             judge,
             notifier,
+            matches,
         }
     }
 
@@ -77,7 +105,7 @@ impl TaskDedupService {
         &self,
         document_id: &str,
     ) -> Result<Vec<TaskDuplicate>, TaskDedupError> {
-        self.repo.active_duplicates(document_id).await
+        self.matches.active_duplicates(document_id).await
     }
 
     /// Dismisses visible matches.
@@ -94,7 +122,7 @@ impl TaskDedupService {
 
         let mut affected_document_ids = HashSet::new();
         for match_id in &unique_match_ids {
-            if !self.repo.match_contains(document_id, *match_id).await? {
+            if !self.matches.match_contains(document_id, *match_id).await? {
                 return Err(TaskDedupError::MatchNotFound);
             }
             affected_document_ids.extend(self.match_document_ids(*match_id).await?);
@@ -102,7 +130,7 @@ impl TaskDedupService {
 
         for match_id in unique_match_ids {
             let dismissed = self
-                .repo
+                .matches
                 .dismiss_match(document_id, match_id, dismissed_by)
                 .await?;
             if !dismissed {
@@ -120,7 +148,7 @@ impl TaskDedupService {
         document_id: &str,
         match_id: Uuid,
     ) -> Result<(), TaskDedupError> {
-        if self.repo.match_contains(document_id, match_id).await? {
+        if self.matches.match_contains(document_id, match_id).await? {
             Ok(())
         } else {
             Err(TaskDedupError::MatchNotFound)
@@ -130,7 +158,7 @@ impl TaskDedupService {
     /// Dismisses a match by id.
     pub async fn dismiss_match_by_id(&self, match_id: Uuid) -> Result<(), TaskDedupError> {
         let affected_document_ids = self.match_document_ids(match_id).await?;
-        self.repo.dismiss_match_by_id(match_id).await?;
+        self.matches.dismiss_match_by_id(match_id).await?;
         self.notify_documents(affected_document_ids).await;
         Ok(())
     }
@@ -147,34 +175,57 @@ impl TaskDedupService {
         title: &str,
         markdown: &str,
     ) -> Result<Vec<TaskSimilarityResult>, TaskDedupError> {
-        let content = task_embedding_content(title, markdown);
-        let embedding = self.embedder.embed(&content).await?;
+        let embeddable = Task {
+            title: Cow::Borrowed(title),
+            body: Cow::Borrowed(markdown),
+        };
+        let labeled = self.embedder.embed(&embeddable).await?;
+        if labeled.is_empty() {
+            return Ok(Vec::new());
+        }
+        let query: Vec<KeyedEmbedding<DIMS>> = labeled
+            .iter()
+            .map(|field| KeyedEmbedding {
+                search_key: field.search_key,
+                embedding: field.embedding,
+            })
+            .collect();
 
-        let candidates = self
-            .repo
-            .similarity_candidates(
-                owner,
-                team_id,
-                &embedding,
-                self.config.vector_candidate_limit,
-            )
-            .await?;
+        let params = TaskSearchParameters {
+            owner: owner.to_string(),
+            team_id,
+            limit: self.config.vector_candidate_limit,
+            exclude_document_id: None,
+            exclude_dismissed: false,
+        };
+        let results = self
+            .vector_db
+            .cosine_search(query, params)
+            .await
+            .map_err(|error| TaskDedupError::Dependency(error.into()))?;
 
-        let candidates = candidates
+        let query_content = full_text(title, markdown);
+        let ranked = self
+            .rerank(&query_content, results)
+            .await?
             .into_iter()
-            .filter(|candidate| candidate.vector_score >= self.config.min_vector_similarity)
+            .take(self.config.duplicate_limit.max(0) as usize)
             .collect::<Vec<_>>();
 
-        let ranked = self
-            .rerank(&content, candidates, |candidate| candidate.content.as_str())
-            .await?;
+        let document_ids = ranked
+            .iter()
+            .map(|candidate| candidate.document_id.clone())
+            .collect::<Vec<_>>();
+        let names = self.matches.task_names(&document_ids).await?;
 
         Ok(ranked
             .into_iter()
-            .take(self.config.duplicate_limit.max(0) as usize)
             .map(|candidate| TaskSimilarityResult {
+                task_name: names
+                    .get(&candidate.document_id)
+                    .cloned()
+                    .unwrap_or_default(),
                 task_id: candidate.document_id,
-                task_name: candidate.name,
                 vector_score: candidate.vector_score,
             })
             .collect())
@@ -183,38 +234,52 @@ impl TaskDedupService {
     /// Detects duplicates for a newly-created task and sends live updates for
     /// documents that now have active matches.
     pub async fn detect_new_task(&self, task: NewTask) -> Result<Vec<String>, TaskDedupError> {
-        let content = task_embedding_content(&task.title, &task.markdown);
-        let embedding = self.embedder.embed(&content).await?;
+        let embeddable = task.as_embeddable();
+        let labeled = self.embedder.embed(&embeddable).await?;
+        if labeled.is_empty() {
+            return Ok(Vec::new());
+        }
         let mut changed_document_ids = HashSet::new();
 
-        self.repo
-            .upsert_embedding(
-                &task.document_id,
-                &self.config.embedding_model,
-                &content,
-                &embedding,
-            )
-            .await?;
+        // Build the query before moving the labeled embeddings into the store;
+        // the vectors are `Copy` so this borrows rather than clones the content.
+        let query: Vec<KeyedEmbedding<DIMS>> = labeled
+            .iter()
+            .map(|field| KeyedEmbedding {
+                search_key: field.search_key,
+                embedding: field.embedding,
+            })
+            .collect();
 
-        let candidates = self
-            .repo
-            .candidates(&task, &embedding, self.config.vector_candidate_limit)
-            .await?;
+        self.vector_db
+            .upsert_embeddings(task.document_id.clone(), labeled)
+            .await
+            .map_err(|error| TaskDedupError::Dependency(error.into()))?;
+
+        let params = TaskSearchParameters {
+            owner: task.owner.clone(),
+            team_id: task.team_id,
+            limit: self.config.vector_candidate_limit,
+            exclude_document_id: Some(task.document_id.clone()),
+            exclude_dismissed: true,
+        };
+        let results = self
+            .vector_db
+            .cosine_search(query, params)
+            .await
+            .map_err(|error| TaskDedupError::Dependency(error.into()))?;
 
         // Gate by the vector-similarity floor, rerank the survivors, then send
         // only the top `max_judge_candidates` (by rerank score) to the LLM judge.
-        let candidates = candidates
-            .into_iter()
-            .filter(|candidate| candidate.vector_score >= self.config.min_vector_similarity)
-            .collect::<Vec<_>>();
+        let query_content = full_text(&task.title, &task.markdown);
         let judge_candidates = self
-            .rerank(&content, candidates, |candidate| candidate.content.as_str())
+            .rerank(&query_content, results)
             .await?
             .into_iter()
             .take(self.config.max_judge_candidates);
 
         for candidate in judge_candidates {
-            let judge = self.judge.judge(&content, &candidate.content).await;
+            let judge = self.judge.judge(&query_content, &candidate.content).await;
             if !judge.is_duplicate {
                 continue;
             }
@@ -226,7 +291,7 @@ impl TaskDedupService {
                 .await?;
             let reason = inferred_judge_reason(judge.reason.as_deref());
             for (left, right) in complete_graph_pairs(&component) {
-                self.repo
+                self.matches
                     .upsert_match(
                         left,
                         right,
@@ -242,7 +307,7 @@ impl TaskDedupService {
         }
 
         for changed_document_id in &changed_document_ids {
-            self.repo
+            self.matches
                 .trim_matches(changed_document_id, self.config.duplicate_limit)
                 .await?;
         }
@@ -250,7 +315,7 @@ impl TaskDedupService {
         let mut active_document_ids = Vec::new();
         for changed_document_id in changed_document_ids {
             if !self
-                .repo
+                .matches
                 .active_duplicates(&changed_document_id)
                 .await?
                 .is_empty()
@@ -263,37 +328,66 @@ impl TaskDedupService {
         Ok(active_document_ids)
     }
 
-    /// Reranks `candidates` against `query` and returns them ordered by
-    /// descending relevance score. Candidates with equal scores keep their input
-    /// (vector-similarity) order. An empty input skips the reranker entirely.
-    async fn rerank<C: Send>(
+    /// Collapses a single entity's per-field [`SearchResults`] into a
+    /// [`Candidate`]: the vector score is the best similarity across the query ×
+    /// stored-field cross-product, and the content is the entity's matched field
+    /// texts joined back together for judging. Returns `None` when the entity
+    /// falls below the configured similarity floor.
+    fn collapse(&self, result: &SearchResults<String, DIMS>) -> Option<Candidate> {
+        let vector_score = result
+            .matches
+            .iter()
+            .map(|matched| matched.score as f64)
+            .fold(f64::NEG_INFINITY, f64::max);
+        if !vector_score.is_finite() || vector_score < self.config.min_vector_similarity {
+            return None;
+        }
+        let content = result
+            .matches
+            .iter()
+            .map(|matched| matched.embedding.content.as_ref())
+            .collect::<Vec<_>>()
+            .join("\n");
+        Some(Candidate {
+            document_id: result.metadata.clone(),
+            content,
+            vector_score,
+        })
+    }
+
+    /// Drops results below the similarity floor, reranks the survivors against
+    /// `query`, and returns them as [`Candidate`]s ordered by descending
+    /// relevance. The reranker only carries each result's `document_id` through,
+    /// so the collapsed content and vector score are looked back up afterwards.
+    /// An empty survivor set skips the reranker entirely.
+    async fn rerank(
         &self,
         query: &str,
-        candidates: Vec<C>,
-        content_of: impl Fn(&C) -> &str,
-    ) -> Result<Vec<C>, TaskDedupError> {
-        if candidates.is_empty() {
-            return Ok(candidates);
+        results: Vec<SearchResults<String, DIMS>>,
+    ) -> Result<Vec<Candidate>, TaskDedupError> {
+        let mut lookup: HashMap<String, Candidate> = HashMap::new();
+        let mut survivors: Vec<SearchResults<String, DIMS>> = Vec::new();
+        for result in results {
+            let Some(candidate) = self.collapse(&result) else {
+                continue;
+            };
+            lookup.insert(candidate.document_id.clone(), candidate);
+            survivors.push(result);
         }
 
-        let documents = candidates
-            .iter()
-            .map(|candidate| content_of(candidate).to_string())
-            .collect::<Vec<_>>();
-        let scores = self.reranker.rerank(query, &documents).await?;
-        if scores.len() != candidates.len() {
-            return Err(TaskDedupError::Dependency(anyhow::anyhow!(
-                "reranker returned {} scores for {} documents",
-                scores.len(),
-                candidates.len()
-            )));
+        if survivors.is_empty() {
+            return Ok(Vec::new());
         }
 
-        let mut scored = candidates.into_iter().zip(scores).collect::<Vec<_>>();
-        scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-        Ok(scored
+        let reranked = self
+            .reranker
+            .rerank(Content::Borrowed(query), survivors)
+            .await
+            .map_err(TaskDedupError::Dependency)?;
+
+        Ok(reranked
             .into_iter()
-            .map(|(candidate, _score)| candidate)
+            .filter_map(|scored| lookup.remove(&scored.item))
             .collect())
     }
 
@@ -313,7 +407,7 @@ impl TaskDedupService {
     }
 
     async fn match_document_ids(&self, match_id: Uuid) -> Result<Vec<String>, TaskDedupError> {
-        let document_ids = self.repo.match_document_ids(match_id).await?;
+        let document_ids = self.matches.match_document_ids(match_id).await?;
         if document_ids.is_empty() {
             Err(TaskDedupError::MatchNotFound)
         } else {
@@ -328,7 +422,7 @@ impl TaskDedupService {
         let seeds = document_ids.into_iter().collect::<HashSet<_>>();
         let seed_list = seeds.iter().cloned().collect::<Vec<_>>();
         let mut component = self
-            .repo
+            .matches
             .active_duplicate_component(&seed_list)
             .await?
             .into_iter()
@@ -341,8 +435,9 @@ impl TaskDedupService {
     }
 }
 
-/// Builds the text embedded for a task.
-pub fn task_embedding_content(title: &str, markdown: &str) -> String {
+/// Builds the full task text used as the rerank/judge query, joining the title
+/// and body the same way they read to a user.
+fn full_text(title: &str, markdown: &str) -> String {
     format!("{}\n{}", title.trim(), markdown.trim())
 }
 

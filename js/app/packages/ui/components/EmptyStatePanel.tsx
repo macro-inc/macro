@@ -1,3 +1,4 @@
+import { openExternalUrl } from '@core/util/url';
 import { type Component, type JSXElement, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { cn } from '../utils/classname';
@@ -6,6 +7,8 @@ import { Button } from './Button';
 export interface EmptyStateAction {
   label: string;
   onClick: () => void;
+  /** Optional leading icon, e.g. a plus for "create" actions. */
+  icon?: Component<{ class?: string }>;
 }
 
 export interface EmptyStatePanelProps {
@@ -14,6 +17,12 @@ export interface EmptyStatePanelProps {
   title?: string;
   description?: JSXElement;
   primaryAction?: EmptyStateAction;
+  /**
+   * When set, renders a secondary "Documentation" button that opens the given
+   * URL in a new tab. Omit when no relevant documentation page exists.
+   */
+  documentationUrl?: string;
+  documentationLabel?: string;
   align?: 'left' | 'center';
   children?: JSXElement;
   class?: string;
@@ -28,7 +37,7 @@ export function EmptyStatePanel(props: EmptyStatePanelProps) {
     <div
       role="status"
       class={cn(
-        'flex size-full flex-col px-8',
+        'flex size-full flex-col overflow-y-auto px-8 pb-8',
         '@max-sm:px-4 @max-sm:text-center @max-sm:items-center',
         isCentered()
           ? 'items-center text-center'
@@ -49,7 +58,11 @@ export function EmptyStatePanel(props: EmptyStatePanelProps) {
           {(graphic) => (
             <div
               aria-hidden="true"
-              class={cn(DEFAULT_GRAPHIC_CLASS, '-mb-8', props.graphicClass)}
+              class={cn(
+                DEFAULT_GRAPHIC_CLASS,
+                '-mb-8 opacity-70',
+                props.graphicClass
+              )}
             >
               <Dynamic component={graphic()} class="size-full" />
             </div>
@@ -61,17 +74,45 @@ export function EmptyStatePanel(props: EmptyStatePanelProps) {
         <Show when={props.description}>
           <div class="text-sm/6 text-ink-muted">{props.description}</div>
         </Show>
-        <Show when={props.primaryAction}>
-          {(action) => (
-            <Button
-              variant="cta"
-              size="md"
-              class="mt-2"
-              onClick={action().onClick}
-            >
-              {action().label}
-            </Button>
-          )}
+        <Show when={props.primaryAction || props.documentationUrl}>
+          <div
+            class={cn(
+              'mt-2 flex flex-wrap gap-2',
+              isCentered() ? 'justify-center' : 'justify-start',
+              '@max-sm:w-full @max-sm:flex-col @max-sm:justify-center'
+            )}
+          >
+            <Show when={props.primaryAction}>
+              {(action) => (
+                <Button
+                  variant="cta"
+                  size="md"
+                  class={cn(
+                    'rounded-full',
+                    action().icon ? 'pl-3 pr-4' : 'px-4'
+                  )}
+                  onClick={action().onClick}
+                >
+                  <Show when={action().icon}>
+                    {(icon) => <Dynamic component={icon()} class="size-4" />}
+                  </Show>
+                  {action().label}
+                </Button>
+              )}
+            </Show>
+            <Show when={props.documentationUrl}>
+              {(url) => (
+                <Button
+                  variant="base"
+                  size="md"
+                  class="rounded-full px-4"
+                  onClick={() => openExternalUrl(url())}
+                >
+                  {props.documentationLabel ?? 'Documentation'}
+                </Button>
+              )}
+            </Show>
+          </div>
         </Show>
         <Show when={props.children}>{props.children}</Show>
       </div>

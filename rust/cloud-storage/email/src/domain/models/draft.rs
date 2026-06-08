@@ -76,6 +76,8 @@ pub struct ResolvedDraftInput {
 pub struct SimpleMessageInfo {
     /// Database ID of the message.
     pub db_id: Uuid,
+    /// The inbox (link) the message belongs to.
+    pub link_id: Uuid,
     /// Thread database ID.
     pub thread_db_id: Uuid,
     /// Provider thread ID.

@@ -29,6 +29,7 @@ type MessageRootProps = {
   focused: boolean;
   unfocusable?: boolean;
   senderId?: string;
+  senderPhotoUrl?: string;
   customIcon?: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
   customIconTargetType?: EntityWithValidIcon;
   isFirstMessage: boolean;
@@ -309,6 +310,7 @@ const Root: Component<MessageRootProps> = (props) => {
                         >
                           <UserIcon
                             id={props.senderId ?? ''}
+                            photoUrl={props.senderPhotoUrl}
                             isDeleted={false}
                             size="fill"
                             suppressClick={true}

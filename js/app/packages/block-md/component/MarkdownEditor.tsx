@@ -10,6 +10,7 @@ import {
   useBlockId,
   useMaybeBlockAliasedName,
 } from '@core/block';
+import type { LoroManager } from '@core/collab/manager';
 import { DecoratorRenderer } from '@core/component/LexicalMarkdown/component/core/DecoratorRenderer';
 import { FocusClickTarget } from '@core/component/LexicalMarkdown/component/core/FocusClickTarget';
 import {
@@ -129,7 +130,6 @@ import { blockElementSignal } from '@core/signal/blockElement';
 import {
   blockFileSignal,
   blockHandleSignal,
-  blockLoroManagerSignal,
   blockSourceSignal,
 } from '@core/signal/load';
 import { trackMention } from '@core/signal/mention';
@@ -198,7 +198,11 @@ const EDITOR_PADDING_BOTTOM = 200;
 // For tasks, the click target is a small fixed pad so the activity section stays visible.
 const TASK_EDITOR_PADDING_BOTTOM = 48;
 
-export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
+export function MarkdownEditor(props: {
+  autoFocusOnMount?: boolean;
+  loroManager: Accessor<LoroManager | undefined>;
+  mustBeConnected?: boolean;
+}) {
   const blockData = blockDataSignal.get;
   const blockId = useBlockId();
   const userId = useUserId();
@@ -210,7 +214,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
   const saveMarkdownDocument = useSaveMarkdownDocument();
   const setMdStore = mdStore.set;
   const md = mdStore.get;
-  const canEdit = useCanEdit();
+  const canEdit = useCanEdit(props.mustBeConnected);
   const canComment = useCanComment();
   const [blockElement] = blockElementSignal;
   const [findAndReplaceStore, setFindAndReplaceStore] = FindAndReplaceStore;
@@ -496,8 +500,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
     if (!IS_SYNC()) {
       return createPeerIdValidator(() => undefined, false);
     }
-    const loroManager = blockLoroManagerSignal.get;
-    const peerId = () => loroManager()?.getPeerIdStr();
+    const peerId = () => props.loroManager()?.getPeerIdStr();
     return createPeerIdValidator(peerId, true);
   };
 
@@ -508,7 +511,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
     .markdownShortcuts()
     .delete()
     .state<EditorState>(setState, 'json')
-    .history(400)
+    .history(400, props.loroManager())
     .use(tabIndentationPlugin())
     .use(selectionDataPlugin(lexicalWrapper))
     .use(horizontalRulePlugin())
@@ -608,8 +611,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
   }
 
   if (ENABLE_MARKDOWN_LIVE_COLLABORATION) {
-    const getBlockLoroManager = blockLoroManagerSignal.get;
-    const peerId = () => getBlockLoroManager()?.getPeerIdStr();
+    const peerId = () => props.loroManager()?.getPeerIdStr();
     plugins.use(
       peerIdPlugin({
         peerId,
@@ -959,6 +961,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
             editorFocus={editorFocus}
             setEditorReady={setEditorReady}
             setEditorError={setEditorError}
+            loroManager={props.loroManager}
           />
         </Show>
 
@@ -1039,7 +1042,10 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
         </Show>
 
         <Show when={ENABLE_MARKDOWN_COMMENTS}>
-          <CommentsProvider activeComment={activeCommentIdParam} />
+          <CommentsProvider
+            activeComment={activeCommentIdParam}
+            loroManager={props.loroManager}
+          />
         </Show>
 
         <Show when={canEdit()}>

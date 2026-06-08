@@ -23,6 +23,11 @@ struct MarkdownSnapshotRequest<'a> {
     markdown: &'a str,
 }
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct MarkdownResponse {
+    data: String,
+}
+
 impl From<LexicalResponseItem> for MarkdownParseResult {
     fn from(result: LexicalResponseItem) -> MarkdownParseResult {
         MarkdownParseResult {
@@ -50,6 +55,14 @@ impl LexicalClient {
         let response = check_response(self.client.get(&url).send().await?).await?;
         let data: LexicalResponse = response.json().await?;
         Ok(data.data.into_iter().map(Into::into).collect())
+    }
+
+    /// Fetches the full document rendered as a single plain markdown string.
+    #[tracing::instrument(skip(self), err)]
+    pub async fn get_markdown(&self, document_id: &str) -> Result<String> {
+        let url = format!("{}/markdown/{}", self.url, document_id);
+        let response: MarkdownResponse = self.get_json(&url).await?;
+        Ok(response.data)
     }
 
     #[tracing::instrument(skip(self), err)]

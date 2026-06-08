@@ -52,6 +52,7 @@ import { emailKeys } from '@queries/email/keys';
 import {
   useEmailLinksQuery,
   useNonPrimaryEmailLinkIdHeader,
+  usePrimaryEmailLinkId,
 } from '@queries/email/link';
 import {
   useSendMessageMutation,
@@ -97,29 +98,6 @@ export function EmailCompose(props: EmailComposeProps) {
   const deleteDraftMutation = useDeleteDraftMutation();
   const emailContext = useMaybeEmailContext();
 
-  const link = createMemo(() => {
-    const data = emailLinksQuery.data;
-    if (data && data.links.length > 0) {
-      return data.links[0];
-    }
-    return undefined;
-  });
-
-  const toHeaderLinkId = useNonPrimaryEmailLinkIdHeader();
-  // Scope writes to the inbox this compose sends from (its X-Email-Link-Id
-  // header), so a non-primary "from" inbox drafts/sends from the right account.
-  const headerLinkId = () => toHeaderLinkId(link()?.id);
-
-  const hasLinkError = createMemo(() => {
-    if (emailLinksQuery.isPending) return false;
-    return (
-      emailLinksQuery.isError ||
-      (emailLinksQuery.data && emailLinksQuery.data.links.length === 0)
-    );
-  });
-
-  const { users: destinationOptions } = useCombinedRecipients();
-
   const form = createEmailFormState(
     props.draftID
       ? {
@@ -136,6 +114,36 @@ export function EmailCompose(props: EmailComposeProps) {
         }
       : undefined
   );
+
+  const primaryLinkId = usePrimaryEmailLinkId();
+  const link = createMemo(() => {
+    const data = emailLinksQuery.data;
+    if (!data || data.links.length === 0) return undefined;
+    // Send from the inbox the user picked, else the inbox that owns the draft
+    // being edited, else the primary inbox — not whichever inbox sorts first.
+    const draftLinkId = props.draftID
+      ? emailContext?.messages
+          .unfiltered()
+          .find((m) => m.db_id === props.draftID)?.link_id
+      : undefined;
+    const targetId = form.selectedLinkId() ?? draftLinkId ?? primaryLinkId();
+    return data.links.find((l) => l.id === targetId) ?? data.links[0];
+  });
+
+  const toHeaderLinkId = useNonPrimaryEmailLinkIdHeader();
+  // Scope writes to the inbox this compose sends from (its X-Email-Link-Id
+  // header), so a non-primary "from" inbox drafts/sends from the right account.
+  const headerLinkId = () => toHeaderLinkId(link()?.id);
+
+  const hasLinkError = createMemo(() => {
+    if (emailLinksQuery.isPending) return false;
+    return (
+      emailLinksQuery.isError ||
+      (emailLinksQuery.data && emailLinksQuery.data.links.length === 0)
+    );
+  });
+
+  const { users: destinationOptions } = useCombinedRecipients();
 
   const [editor, setEditor] = createSignal<LexicalEditor | undefined>();
   const [content, setContent] = createSignal('');
@@ -658,6 +666,9 @@ export function EmailCompose(props: EmailComposeProps) {
 
     // Display
     fromAddress: () => link()?.email_address,
+    fromInboxes: () => emailLinksQuery.data?.links ?? [],
+    selectedFromLinkId: () => link()?.id,
+    onSelectFromLink: form.setSelectedFromLink,
     hasPaidAccess,
   };
 

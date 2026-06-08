@@ -1,0 +1,85 @@
+---
+title: "FAQ"
+---
+
+<AccordionGroup>
+  <Accordion title="What's the main purpose of Macro?">
+    To unify everything you do into a single system. There's a few main benefits of this:
+
+    1. **For you,** Access everything with one login, from one interface, that's super fast with keyboard shortcuts. Basically, just making everything centralized for you personally, so you don't have 27 tabs open, and can search across everything.
+    2. **For your agents,** the ability to access everything in a unified way. Yes, you can connect all your tools via MCP, but we've devoted a lot of time to creating a nice "UI" for your agents so they can be most useful, with the least number of tokens, and not suffer from recall issues (failing to find things); for example if you ask "what's the latest status of \[project alamo\]" your Claude has to search Slack, Notion, Email, Drive, etc., and it might fail to understand the latest status due to conflicting messages and docs, and not know which is latest. And after all of that, Claude still might not have access to a Zoom recording (or was it not recorded 🤦‍♂️?) that holds the actual true latest status of project alamo. This is the benefit of macro: unified context.
+    3. **For your team,** having everything in one place. This is actually why we built Macro in the first place: as our last startup scaled to 20 people, the sales team lived in HubSpot/Salesforce, the engineers in Linear, and Notion became abandoned ground. I call this the Notion Balkanization... it was good to start, but when we need to get serious, we wanted best-in-class systems for each team not a bunch of markdown files, databases and custom integrations. But the problem with the balkanization is that we then had multiple sources of truth, siloes between teams, and just chaos. Macro is the first platform that gives you both (i) dedicated, best-in-class CRM, ticketing, email, messaging, docs and also (ii) a single integrated platform. This is only possible because it's designed under one roof concurrently, not sprawled over years or pieced together via acquisitions and half-baked integrations. It's built like an iPhone, as a single ecosystem.
+  </Accordion>
+
+  <Accordion title="How does Macro integrate with, or compare to, Notion?">
+    Macro is a replacement for Notion, and we've been inspired by Ivan and the Notion team. They built a great product, but our belief is that they got some core premises wrong.
+
+    Notion is based in markdown and databases vs. Macro has purpose-built modules. Yes, you can sort of build a CRM in Notion. Yes, Notion has email, but it's a separate app that they got through an acquisition of the Skiff team. Notion doesn't have messaging or traditional file storage. Notion promises that you can build arbitrary software out of databases and markdown files, but this is the wrong level of abstraction. In reality, you need to go to the code level; and with agents now, that's what you want anyways. Notion is the worst of all worlds: limited customization, rate-limited API, closed-source, worst-in-class for each specific team vs. domain-specific tools (e.g. Linear for Engineering, HubSpot for sales, etc.) and for note taking it's bloated vs. Obsidian. We are inspired by them and without their 2010s efforts the productivity category wouldn't be the same, but we believe the world looks differently today and we've made fundamentally better/different decisions.
+
+    See our comparison video here: [https://youtu.be/hyU1XYmxkYM?si=iGPivxvZpQ13oig4](https://youtu.be/hyU1XYmxkYM?si=iGPivxvZpQ13oig4).
+
+    You can still **integrate** your Notion with Macro if you want, so that agents in Macro can access your Notion via MCP — go to Settings -\> Connectors -\> Notion.
+
+    To **import** your Notion content and migrate away from Notion to Macro, just connect it using the above and then ask a Macro agent to import your Notion docs as Macro docs. You could also use Macro MCP.
+  </Accordion>
+
+  <Accordion title="How does Macro work with, or compare to, Superhuman?">
+    Before Macro, we used to be Superhuman users. In designing Macro's email portion, we were heavily inspired by Superhuman. Macro is like Superhuman but better. We support multiple email accounts in the same inbox. We have a shared inbox ("omni-box") between messages, email, @mentions and tasks. One thing to check, not four or more.
+
+    The same <kbd>j</kbd> <kbd>k</kbd> <kbd>e</kbd> shortcuts you're familiar with are available in Macro. Macro does not integrate with Superhuman, because Superhuman is just a wrapper on Gmail; we integrate with Gmail instead. There's no reason you can't use both, but most Macro users find they no longer need Superhuman.
+  </Accordion>
+
+  <Accordion title="How does Macro work with, or compare to, Slack?">
+    Channels in Macro are designed to be quieter and more focused on technical conversations vs. Slack. Replies are shown inline for the first few, so every time there's a reply you don't need to open the thread. It looks more like Reddit, more organized, unlike Slack which makes it quite difficult to remember which channel or thread-in-which-channel a certain conversation happened in.
+
+    Other than making it less noisy, Macro doesn't change much about chat compared to Slack or Discord or any other chat client. The main benefit it that it's deeply integrated with the rest of your workspace so you can @mention anything. **When you mention something it is shared with all members of the channel.** If somebody is added to the channel, or removed from the channel, they will lose access to the document. This **"channel-based sharing**" prevents footguns that occur with Notion and Slack, or Notion and Docs, etc. where a people don't have access to things and need to request access. In Macro, it works like magic.
+
+    If you're not ready to migrate off Slack, or if you need to maintain Slack for archival reasons or Slack Connect, etc., you can integrate Macro to Slack via MCP. Settings -\> Connectors -\> and add the custom MCP for Slack.
+  </Accordion>
+
+  <Accordion title="Does Macro have its own email or integrate with my email?">
+    Macro is not an email server, it's just an email client. We integrated with your existing Google Workspace or Gmail account. Outlook and custom IMAP/SMTP email has been a popular request and we plan on adding that both soon.
+  </Accordion>
+
+  <Accordion title="Can I self-host Macro?">
+    Yes you can according to our AGPL license, but as of June 2026, this hasn't been our primary focus.
+
+    The hosted version is the one that works with the iOS app and has necessary Apple approval, Google Mail approval, and Github approval to integrate your PRs. We're hosted on AWS and maintain SOC II audit. We sublicense LiveKit for videos calls and FusionAuth for authentication, PostHog for auth, so so on, so you'd have to maintain licenses to those services or disable them.
+
+    Our main focus right now is on making Macro great, but we also want to make it easier to self-host. We hope to turn our attention to this later this year (2026). For HIPAA-compliant, FEDRAMP and other clients, please contact [self-host@macro.com](mailto:self-host@macro.com) and we can work with you to get Macro running on your own infrastructure.
+  </Accordion>
+
+  <Accordion title="Are you open to contributions?">
+    Yes, you can open a PR on our monorepo at [https://github.com/macro-inc/macro](https://github.com/macro-inc/macro) if there's something that catches your eye and you want to improve. If you want to help but you're not sure where to start please email [teo@macro.com](mailto:teo@macro.com).
+  </Accordion>
+
+  <Accordion title="Is Macro fully open source? What is the license?">
+    **Macro is fully open source.** Not "open core". We were previously source-available under the BSL but on [May 31 2026](https://x.com/j_becke/status/2061153001536975206) we moved to a fully open-source model under the AGPLv3. The AGPL is a copyleft license meaning derivative works also need to be open source. That means that if you build on top of Macro, you need to keep your code open source under the AGPLv3. If you want to build on top of Macro and not use the AGPLv3 — i.e. close-source or an incompatible license — you need to obtain a different license from us. Contact [licensing@macro.com](mailto:licensing@macro.com) to discuss with us.
+  </Accordion>
+
+  <Accordion title="How do you make money if Macro is open source?">
+    1. From our hosted version, like any other SaaS or AI product.
+    2. From people who build on top of Macro and do not want to use our AGPLv3 license, and thus pay us money for a different license.
+  </Accordion>
+
+  <Accordion title="How do you use my data?">
+    We are in the business of making a good product and charging you money for our hosted version of that product. We are not interested in your data. See our privacy policy and terms of service for full information.
+  </Accordion>
+
+  <Accordion title='How do teams work in Macro? Do I need a "team"?'>
+    Macro is designed for solo and team use. Of course, everything is better with friends. The pricing for Macro whether you are on a team or personal plan is the same; Teams exist just to help you collaborate better as a group. Keep in mind there is no free plan for teams, however. Teams give:
+
+    1. Auto-shared emails, tasks and calls, without having to explicitly share everything. For example, when you're working as a team you want all emails to be shared in our CRM module, engineering tasks should be visible by everyone, and having all calls transcribed and stored to the Team gives you a nice team-level memory of all of your conversations.
+    2. Team-level memory for your agents. Agents remember not just your personal chat history — like with Claude or ChatGPT's memory system — but they remember everything going on across tasks your team is working on, emails, docs, and calls that the team has had recently!
+
+    To create a team, head to "Team" in the bottom left.
+  </Accordion>
+
+  <Accordion title="Who is Macro made for? Who uses Macro?">
+    We designed Macro for ourselves, for our personal use, but mostly for our Series A tech startup. There's many types of companies using Macro today other than tech startups: consultancies, agencies, small and medium sized businesses, large tech companies, consumer brands, students, and individual teams at all kinds of companies.
+  </Accordion>
+
+  <Accordion title="Have you raised venture capital?">
+    Yes, we have raised ~\$30M led by a16z with participation from BoxGroup, 3kVC and others.
+  </Accordion>
+</AccordionGroup>

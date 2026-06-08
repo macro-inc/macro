@@ -7,6 +7,10 @@ import {
   type SoupState,
 } from '@app/component/next-soup/create-soup-state';
 import type { FilterContext } from '@app/component/next-soup/filters/configs/';
+import {
+  compileToAst,
+  NIL_UUID,
+} from '@app/component/next-soup/filters/filter-store';
 import type { SetPredicatesInput } from '@app/component/next-soup/filters/filter-store/predicates-store';
 import {
   createQueryStore,
@@ -84,6 +88,8 @@ interface SoupViewContextValues {
   queryFilters: QueryStore;
   assigneeFilter: Accessor<string[]>;
   setAssigneeFilter: Setter<string[]>;
+  inboxFilter: Accessor<string[] | undefined>;
+  setInboxFilter: Setter<string[] | undefined>;
   activeTab: Accessor<string | undefined>;
   setActiveTab: Setter<string | undefined>;
   groupByField: Accessor<GroupByField | undefined>;
@@ -223,6 +229,10 @@ export const SoupViewContextProvider: FlowComponent<
     'soup.assigneeFilter',
     { default: [] }
   );
+  const [inboxFilter, setInboxFilter] = useEntryState<string[] | undefined>(
+    'soup.inboxFilter',
+    { default: undefined }
+  );
   const [activeTab, setActiveTab] = useEntryState<string | undefined>(
     'soup.tab',
     { default: undefined }
@@ -250,8 +260,18 @@ export const SoupViewContextProvider: FlowComponent<
     }
   });
 
-  // soupBody is derived from the query filter store's compiled AST
-  const soupBody = createMemo(() => queryFilters.compile());
+  const soupBody = createMemo(() => {
+    const inboxes = inboxFilter();
+    if (inboxes === undefined) return queryFilters.compile();
+    const state = queryFilters.state;
+    return compileToAst({
+      ...state,
+      include: {
+        ...state.include,
+        emailLinkId: inboxes.length ? inboxes : [NIL_UUID],
+      },
+    });
+  });
 
   const [searchText, setSearchText] = useEntryState<string>('search.text', {
     default: props.initialSearchText ?? '',
@@ -605,6 +625,8 @@ export const SoupViewContextProvider: FlowComponent<
     queryFilters,
     assigneeFilter,
     setAssigneeFilter,
+    inboxFilter,
+    setInboxFilter,
     activeTab,
     setActiveTab,
     groupByField,
