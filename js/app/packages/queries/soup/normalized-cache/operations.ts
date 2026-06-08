@@ -18,13 +18,13 @@ import { extractGroupByFromKey } from '../grouped/api';
 import type { SoupApiItemFilter, SoupAstItemsPage } from '../items';
 import { soupKeys } from '../keys';
 import {
-  getSoupItemFilterForQueryKey,
-  insertIntoGroupedGroupQueries,
-  insertIntoGroupedPage,
-  reconcileGroupedCachesForEntity,
-  reconcileGroupedGroupQueriesForEntity,
-  removeEntitiesFromGroupedPage,
-  removeFromGroupedGroupQueries,
+  getItemFilter,
+  insertGroupedPage,
+  insertGroupQueries,
+  removeGroupedPage,
+  removeGroupQueries,
+  syncGroupedParents,
+  syncGroupQueries,
 } from './grouped-operations';
 import {
   getNormalizationObjectKey,
@@ -81,8 +81,8 @@ export function optimisticUpdateSoupEntity<T extends SoupEntityTag>(
     const entityId = stripSoupNormPrefix(normKey);
     const entity = getSoupEntityById(entityId);
     if (entity) {
-      reconcileGroupedCachesForEntity(entityId, entity);
-      reconcileGroupedGroupQueriesForEntity(entityId, entity);
+      syncGroupedParents(entityId, entity);
+      syncGroupQueries(entityId, entity);
     }
   }
 
@@ -175,7 +175,7 @@ export function insertSoupEntity(item: SoupApiItem): SoupTransaction {
   for (const [key, prev] of parents) {
     if (!prev?.pages?.length) continue;
 
-    const filter = getSoupItemFilterForQueryKey(key);
+    const filter = getItemFilter(key);
     if (filter && !filter(item)) continue;
 
     const firstPage = prev.pages[0];
@@ -191,7 +191,7 @@ export function insertSoupEntity(item: SoupApiItem): SoupTransaction {
       continue;
     }
 
-    const nextPage = insertIntoGroupedPage(
+    const nextPage = insertGroupedPage(
       firstPage,
       item,
       getSoupItemId(item),
@@ -208,7 +208,7 @@ export function insertSoupEntity(item: SoupApiItem): SoupTransaction {
     });
   }
 
-  insertIntoGroupedGroupQueries(item, getSoupItemId(item));
+  insertGroupQueries(item, getSoupItemId(item));
 
   return { rollback: () => restoreSnapshot(previous) };
 }
@@ -267,7 +267,7 @@ export function removeSoupEntities(entityIds: Set<string>): SoupTransaction {
 
       // Grouped AST queries only use the first parent page. Group membership is
       // fully represented there by `groups[].itemIds`, so update that page once.
-      const nextPage = removeEntitiesFromGroupedPage(firstPage, entityIds);
+      const nextPage = removeGroupedPage(firstPage, entityIds);
 
       return nextPage === firstPage
         ? prev
@@ -275,7 +275,7 @@ export function removeSoupEntities(entityIds: Set<string>): SoupTransaction {
     }
   );
 
-  removeFromGroupedGroupQueries(entityIds);
+  removeGroupQueries(entityIds);
 
   return { rollback: () => restoreSnapshot(previous) };
 }
