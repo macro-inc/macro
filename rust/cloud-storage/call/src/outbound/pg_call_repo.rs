@@ -1338,7 +1338,9 @@ impl CallRepository for PgCallRepo {
 
         let mut records = Vec::with_capacity(rows.len());
         for row in rows {
-            let participants = participants_by_call.remove(&row.call_id).unwrap_or_default();
+            let participants = participants_by_call
+                .remove(&row.call_id)
+                .unwrap_or_default();
 
             records.push(CallRecord {
                 call_id: row.call_id,
