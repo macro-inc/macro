@@ -1,4 +1,3 @@
-import { updateUserAuth } from '@core/auth';
 import { useEmail } from '@core/context/user';
 import { throwOnErr } from '@core/util/result';
 import { invalidateUserInfo } from '@queries/auth/user-info';
@@ -102,8 +101,11 @@ export function useRemoveInboxMutation(callbacks?: RemoveInboxCallbacks) {
         },
 
         onSuccess: async () => {
-          invalidateEmailLinks();
-          await updateUserAuth();
+          // Owned inboxes are torn down asynchronously, so the row still appears
+          // in GET /email/links for a short window after the 204. Refetching links
+          // here would resurrect the optimistically-removed row; instead leave the
+          // optimistic cache in place and let the next focus refetch reconcile once
+          // teardown completes.
           await invalidateUserInfo();
         },
 
