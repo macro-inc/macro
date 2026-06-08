@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)\n        SELECT dp.\"documentId\"::uuid, 'document', u.user_id, 'user', sp.\"publicAccessLevel\"::\"AccessLevel\"\n        FROM \"DocumentPermission\" dp\n        JOIN \"SharePermission\" sp ON sp.id = dp.\"sharePermissionId\"\n        CROSS JOIN UNNEST($2::text[]) AS u(user_id)\n        WHERE dp.\"documentId\" = $1\n          AND sp.\"isPublic\" = true\n          AND sp.\"publicAccessLevel\" IS NOT NULL\n        ON CONFLICT (entity_id, entity_type, source_id, source_type)\n        WHERE granted_from_project_id IS NULL\n        DO NOTHING\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ab7417eb79789bfff9a6084c7881191a9b0ee849745041e1fecc7e4ba9b4fc5d"
+}

@@ -5,6 +5,16 @@ use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 use models_permissions::share_permission::channel_share_permission::UpdateOperation;
 use sqlx::{Postgres, Transaction};
 
+pub(super) async fn get_document_owner(
+    transaction: &mut Transaction<'_, Postgres>,
+    document_id: &str,
+) -> Result<String, sqlx::Error> {
+    sqlx::query!(r#"SELECT owner FROM "Document" WHERE id = $1"#, document_id)
+        .map(|r| r.owner)
+        .fetch_one(transaction.as_mut())
+        .await
+}
+
 /// Update document metadata (name, projectId, fileType, updatedAt).
 ///
 /// `file_type`: None = no change, Some(None) = set to NULL, Some(Some(ft)) = set to ft.

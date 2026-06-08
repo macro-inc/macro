@@ -42,6 +42,36 @@ pub async fn insert_entity_access_row(
     Ok(())
 }
 
+/// Removes all user source level entity access rows for the provided entity aside from the owner
+/// one.
+/// This is used when an item goes from public to private.
+#[tracing::instrument(skip(transaction), err)]
+pub async fn remove_non_owner_user_entity_access(
+    transaction: &mut Transaction<'_, Postgres>,
+    entity_id: &macro_uuid::Uuid,
+    entity_type: EntityType,
+    owner_id: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        r#"
+            DELETE FROM entity_access 
+            WHERE entity_id = $1 
+            AND entity_type = $2 
+            AND source_type = $3
+            AND source_id != $4
+            AND granted_from_project_id IS NULL
+        "#,
+        entity_id,
+        entity_type.as_ref(),
+        EntityAccessSourceType::User as _,
+        owner_id,
+    )
+    .execute(transaction.as_mut())
+    .await?;
+
+    Ok(())
+}
+
 /// Deletes all entity_access rows for a given (entity_id, entity_type).
 /// *NOTE*: The transaction does not get committed automatically.
 #[tracing::instrument(skip(transaction), err)]
