@@ -458,6 +458,6 @@ class CallKitPlugin: Plugin, @unchecked Sendable {
 }
 
 @_cdecl("init_plugin_call_kit")
-func initPlugin() -> Plugin {
+public func initPlugin() -> Plugin {
     return CallKitPlugin()
 }
