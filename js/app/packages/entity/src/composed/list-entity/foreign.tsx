@@ -47,59 +47,91 @@ function checkFailed(conclusion: string | null | undefined): boolean {
   );
 }
 
-function countedChecks(entity: GithubPullRequestEntity) {
-  return entity.metadata.checks.filter(
-    (check) => check.conclusion !== 'skipped'
-  );
+type CheckCounts = {
+  total: number;
+  successful: number;
+  failed: number;
+  skipped: number;
+  pending: number;
+};
+
+function checkCounts(entity: GithubPullRequestEntity): CheckCounts {
+  let successful = 0;
+  let failed = 0;
+  let skipped = 0;
+  let pending = 0;
+
+  for (const check of entity.metadata.checks) {
+    if (check.conclusion === 'skipped') {
+      skipped += 1;
+      continue;
+    }
+
+    if (checkFailed(check.conclusion)) {
+      failed += 1;
+    }
+
+    if (check.conclusion === 'success') {
+      successful += 1;
+    }
+
+    if (check.status !== 'completed' || check.conclusion == null) {
+      pending += 1;
+    }
+  }
+
+  return {
+    total: entity.metadata.checks.length - skipped,
+    successful,
+    failed,
+    skipped,
+    pending,
+  };
 }
 
-function failedChecks(entity: GithubPullRequestEntity) {
-  return countedChecks(entity).filter((check) => checkFailed(check.conclusion))
-    .length;
-}
+function checkOverviewTitle(counts: CheckCounts) {
+  if (counts.total === 0) return 'No checks';
 
-function successfulChecks(entity: GithubPullRequestEntity) {
-  return countedChecks(entity).filter((check) => check.conclusion === 'success')
-    .length;
-}
-
-function skippedChecks(entity: GithubPullRequestEntity) {
-  return entity.metadata.checks.filter(
-    (check) => check.conclusion === 'skipped'
-  ).length;
-}
-
-function pendingChecks(entity: GithubPullRequestEntity) {
-  return countedChecks(entity).filter(
-    (check) => check.status !== 'completed' || check.conclusion == null
-  ).length;
-}
-
-function checkOverviewTitle(entity: GithubPullRequestEntity) {
-  const total = countedChecks(entity).length;
-  if (total === 0) return 'No checks';
-  if (failedChecks(entity) > 0) {
-    return failedChecks(entity) === total
+  if (counts.failed > 0) {
+    return counts.failed === counts.total
       ? 'All checks failed'
       : 'Some checks failed';
   }
-  if (pendingChecks(entity) > 0) return 'Checks pending';
-  if (successfulChecks(entity) === total) return 'All checks succeeded';
+  if (counts.pending > 0) return 'Checks pending';
+  if (counts.successful === counts.total) return 'All checks succeeded';
   return 'Checks completed';
 }
 
-function showCheckCountSummary(entity: GithubPullRequestEntity) {
-  return failedChecks(entity) > 0 || pendingChecks(entity) > 0;
+function showCheckCountSummary(counts: CheckCounts) {
+  return counts.failed > 0 || counts.pending > 0;
 }
+
+const CHECK_RUN_STATE_LABELS: Record<string, string> = {
+  action_required: 'Action required',
+  cancelled: 'Cancelled',
+  completed: 'Completed',
+  failure: 'Failed',
+  in_progress: 'In progress',
+  neutral: 'Neutral',
+  pending: 'Pending',
+  queued: 'Queued',
+  requested: 'Requested',
+  skipped: 'Skipped',
+  stale: 'Stale',
+  startup_failure: 'Startup failure',
+  success: 'Success',
+  timed_out: 'Timed out',
+  waiting: 'Waiting',
+};
 
 type CheckVisualState = 'success' | 'failure' | 'pending' | 'skipped' | 'none';
 
 function checkState(entity: GithubPullRequestEntity): CheckVisualState {
-  const total = countedChecks(entity).length;
-  if (total === 0) return 'none';
-  if (failedChecks(entity) > 0) return 'failure';
-  if (pendingChecks(entity) > 0) return 'pending';
-  if (successfulChecks(entity) === total) return 'success';
+  const counts = checkCounts(entity);
+  if (counts.total === 0) return 'none';
+  if (counts.failed > 0) return 'failure';
+  if (counts.pending > 0) return 'pending';
+  if (counts.successful === counts.total) return 'success';
   return 'pending';
 }
 
@@ -107,21 +139,23 @@ function checkRunState(
   check: GithubPullRequestEntity['metadata']['checks'][number]
 ): CheckVisualState {
   if (check.conclusion === 'skipped') return 'skipped';
+
   if (checkFailed(check.conclusion)) return 'failure';
-  if (check.status !== 'completed' || check.conclusion == null)
+
+  if (check.status !== 'completed' || check.conclusion == null) {
     return 'pending';
+  }
+
   if (check.conclusion === 'success') return 'success';
+
   return 'none';
 }
 
 function checkStatusText(
   check: GithubPullRequestEntity['metadata']['checks'][number]
 ) {
-  if (check.conclusion === 'success') return 'Success';
-  if (check.conclusion === 'skipped') return 'Skipped';
-  if (checkFailed(check.conclusion)) return check.conclusion ?? 'Failed';
-  if (check.conclusion) return check.conclusion;
-  return check.status;
+  const state = check.conclusion ?? check.status;
+  return CHECK_RUN_STATE_LABELS[state] ?? state.replaceAll('_', ' ');
 }
 
 function formatDuration(milliseconds: number): string | undefined {
@@ -133,7 +167,9 @@ function formatDuration(milliseconds: number): string | undefined {
   const seconds = totalSeconds % 60;
 
   if (hours > 0) return `${hours}h ${minutes}m`;
+
   if (minutes > 0) return `${minutes}m ${seconds}s`;
+
   return `${seconds}s`;
 }
 
@@ -206,10 +242,11 @@ function CheckStateIcon(props: { state: CheckVisualState; circle?: boolean }) {
   );
 }
 
-function GithubPullRequestChecksTooltip(props: {
+function GithubPullRequestChecksPopover(props: {
   entity: GithubPullRequestEntity;
 }) {
   const checks = () => props.entity.metadata.checks;
+  const counts = () => checkCounts(props.entity);
   const [now, setNow] = createSignal(Date.now());
 
   onMount(() => {
@@ -221,13 +258,13 @@ function GithubPullRequestChecksTooltip(props: {
     <div class="flex flex-col gap-0.5 text-left">
       <div class="flex flex-col px-2 py-1">
         <div class="text-base font-medium text-ink">
-          {checkOverviewTitle(props.entity)}
+          {checkOverviewTitle(counts())}
         </div>
-        <Show when={showCheckCountSummary(props.entity)}>
+        <Show when={showCheckCountSummary(counts())}>
           <div class="flex items-center gap-2 text-[11px] text-ink-extra-muted tabular-nums">
-            <span>{successfulChecks(props.entity)} succeeded</span>
-            <span>{failedChecks(props.entity)} failed</span>
-            <span>{skippedChecks(props.entity)} skipped</span>
+            <span>{counts().successful} succeeded</span>
+            <span>{counts().failed} failed</span>
+            <span>{counts().skipped} skipped</span>
           </div>
         </Show>
       </div>
@@ -323,7 +360,7 @@ export function GithubPullRequestChecksIndicator(props: {
             class="flex items-stretch justify-start rounded-xl p-1.5"
             depth={2}
           >
-            <GithubPullRequestChecksTooltip entity={props.entity} />
+            <GithubPullRequestChecksPopover entity={props.entity} />
           </Surface>
         </Popover.Content>
       </Popover.Portal>
