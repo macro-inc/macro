@@ -940,8 +940,11 @@ export const SoupViewList = (props: SoupViewListProps) => {
   onMount(() => {
     batch(() => {
       const savedSort = sortPref();
+
       if (savedSort.length > 0) {
         soup.sort.setAll(savedSort as SystemSortOption[]);
+      } else {
+        soup.sort.setAll(['updated_at']);
       }
       // soup state is shared at the SplitPanel level, so a prior view in the
       // same split (e.g. tasks) may have left grouping state behind. Always
