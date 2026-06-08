@@ -528,7 +528,7 @@ export function Account() {
                 </div>
               </Row>
 
-              <Show when={ENABLE_AUTO_UPDATE_UI}>
+              <Show when={ENABLE_AUTO_UPDATE_UI()}>
                 <BundleVersionRow />
                 <BundleUpdateRow />
               </Show>
