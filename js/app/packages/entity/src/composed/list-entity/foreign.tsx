@@ -2,6 +2,7 @@ import { Popover } from '@kobalte/core/popover';
 import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
 import ChatCircle from '@phosphor/chat-circle.svg';
 import Check from '@phosphor/check.svg';
+import CircleDashed from '@phosphor/circle-dashed.svg';
 import MinusCircle from '@phosphor/minus-circle.svg';
 import X from '@phosphor/x.svg';
 import CheckCircle from '@phosphor-icons/core/assets/fill/check-circle-fill.svg?component-solid';
@@ -258,7 +259,9 @@ function CheckStateIcon(props: {
         <MinusCircle class="size-5 text-ink-extra-muted/50" />
       </Show>
       <Show when={props.state === 'none'}>
-        <span class="size-1.5 rounded-full bg-ink-muted/40" />
+        <div class="relative size-4 inline-flex items-center justify-center">
+          <span class="size-1.5 rounded-full bg-ink-muted/40" />
+        </div>
       </Show>
     </span>
   );
@@ -305,7 +308,15 @@ function GithubPullRequestChecksPopover(props: {
         <Show
           when={checks().length > 0}
           fallback={
-            <div class="px-2 py-1.5 text-ink-extra-muted">No checks</div>
+            <div class="flex flex-col items-center gap-2 px-4 py-6 text-center">
+              <CircleDashed class="size-6 text-ink-extra-muted" />
+              <div class="flex flex-col gap-1">
+                <div class="text-sm font-medium text-ink">No checks yet</div>
+                <div class="max-w-56 text-xs text-ink-extra-muted">
+                  GitHub has not reported any check runs for this pull request.
+                </div>
+              </div>
+            </div>
           }
         >
           <div class="flex flex-col gap-0.5">
