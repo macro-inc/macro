@@ -1,3 +1,4 @@
+import type { SoupProperty } from '@service-storage/generated/schemas';
 import type { ApiGroupByField as ApiGroupedSoupField } from '@service-storage/generated/schemas/apiGroupByField';
 import type { ApiGroupMeta } from '@service-storage/generated/schemas/apiGroupMeta';
 import type { SoupApiItem } from '@service-storage/generated/schemas/soupApiItem';
@@ -8,6 +9,43 @@ import {
   type GroupMeta,
   NOT_SET_GROUP_KEY,
 } from './types';
+
+function hasProperties<T extends SoupApiItem>(
+  item: T
+): item is T & {
+  data: T['data'] & {
+    properties?: SoupProperty[];
+  };
+} {
+  if (
+    item.tag === 'channel' ||
+    item.tag === 'call' ||
+    item.tag === 'crmCompany' ||
+    item.tag === 'foreignEntity'
+  )
+    return false;
+
+  return true;
+}
+
+function hasProjectId<T extends SoupApiItem>(
+  item: T
+): item is T & {
+  data: T['data'] & {
+    projectId?: string;
+  };
+} {
+  if (
+    item.tag === 'channel' ||
+    item.tag === 'call' ||
+    item.tag === 'crmCompany' ||
+    item.tag === 'foreignEntity' ||
+    item.tag === 'project'
+  )
+    return false;
+
+  return true;
+}
 
 export function serializeGroupByField(
   field: GroupByField
@@ -83,6 +121,7 @@ export function resolveGroupMetaForKey(
   return match(groupBy)
     .with({ type: 'entity_type' }, () => {
       const meta = ENTITY_TYPE_META[key] ?? { label: 'Other', displayOrder: 6 };
+
       return { key, label: meta.label, displayOrder: meta.displayOrder };
     })
     .with({ type: 'project' }, () => {
@@ -93,6 +132,7 @@ export function resolveGroupMetaForKey(
           displayOrder: Number.MAX_SAFE_INTEGER,
         };
       }
+
       return;
     })
     .with({ type: 'property' }, (propertyGroupBy) => {
@@ -104,6 +144,7 @@ export function resolveGroupMetaForKey(
         item,
         propertyGroupBy
       );
+
       if (propertyValueType === 'SelectOption') {
         return {
           key,
@@ -111,6 +152,7 @@ export function resolveGroupMetaForKey(
           displayOrder: null,
         };
       }
+
       return;
     })
     .with({ type: 'date' }, () => undefined)
@@ -122,17 +164,17 @@ function getGroupedPropertyValueType(
   groupBy: GroupByField
 ): string | undefined {
   if (!item || groupBy.type !== 'property') return;
-  if (item.tag === 'channel' || item.tag === 'call') return;
 
-  const properties = (
-    item.data as unknown as { properties?: Array<Record<string, unknown>> }
-  ).properties;
+  if (!hasProperties(item)) return;
+
+  const properties = item.data.properties;
+
   const prop = properties?.find(
-    (p) =>
-      (p.definition as Record<string, unknown> | undefined)?.id ===
-      groupBy.propertyDefinitionId
+    (p) => p.definition?.id === groupBy.propertyDefinitionId
   );
-  const value = prop?.value as { type?: string } | null | undefined;
+
+  const value = prop?.value;
+
   return value?.type;
 }
 
@@ -150,45 +192,39 @@ export function computeGroupKeysForItem(
   return match(groupBy)
     .with({ type: 'entity_type' }, () => [item.tag])
     .with({ type: 'project' }, () => {
-      if (item.tag === 'channel' || item.tag === 'call') return;
-      const projectId = (item.data as { projectId?: string | null }).projectId;
+      if (!hasProjectId(item)) return;
+
+      const projectId = item.data.projectId;
+
       return [projectId ?? NOT_SET_GROUP_KEY];
     })
     .with({ type: 'property' }, (propertyGroupBy) => {
-      if (item.tag === 'channel' || item.tag === 'call') return;
+      if (!hasProperties(item)) return;
 
-      const properties = (
-        item.data as unknown as {
-          properties?: Array<Record<string, unknown>>;
-        }
-      ).properties;
+      const properties = item.data.properties;
+
       if (!properties) return [NOT_SET_GROUP_KEY];
 
       const prop = properties.find(
-        (p) =>
-          (p.definition as Record<string, unknown> | undefined)?.id ===
-          propertyGroupBy.propertyDefinitionId
+        (p) => p.definition?.id === propertyGroupBy.propertyDefinitionId
       );
+
       if (!prop) return [NOT_SET_GROUP_KEY];
 
-      const value = prop.value as
-        | { type: string; value: unknown }
-        | null
-        | undefined;
+      const value = prop.value;
+
       if (value == null) return [NOT_SET_GROUP_KEY];
 
       if (value.type === 'SelectOption' && Array.isArray(value.value)) {
-        return value.value.length > 0
-          ? (value.value as string[])
-          : [NOT_SET_GROUP_KEY];
+        return value.value.length > 0 ? value.value : [NOT_SET_GROUP_KEY];
       }
+
       if (value.type === 'EntityReference' && Array.isArray(value.value)) {
         return value.value.length > 0
-          ? (value.value as Array<{ entity_id: string }>).map(
-              (r) => r.entity_id
-            )
+          ? value.value.map((r) => r.entity_id)
           : [NOT_SET_GROUP_KEY];
       }
+
       return;
     })
     .with({ type: 'date' }, () => undefined)
