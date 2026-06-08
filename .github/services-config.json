@@ -37,8 +37,7 @@
     },
     "call-recording": {
       "source_paths": [
-        "rust/cloud-storage/call_recording_preview_handler/**",
-        "rust/cloud-storage/macro_db_client/src/call_record/**"
+        "rust/cloud-storage/call_recording_preview_handler/**"
       ],
       "stack_path": "infra/stacks/call-recording/**",
       "deploy_lambdas": [
@@ -94,7 +93,6 @@
       "source_paths": [
         "rust/cloud-storage/document_storage_service/**",
         "rust/cloud-storage/call/**",
-        "rust/cloud-storage/macro_db_client/src/call_record/**",
         "rust/cloud-storage/github/**",
         "rust/cloud-storage/delete_chat_handler/**",
         "rust/cloud-storage/docx_unzip_handler/**",
