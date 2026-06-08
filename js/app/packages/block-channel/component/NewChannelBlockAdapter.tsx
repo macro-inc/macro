@@ -86,7 +86,7 @@ const canUseInlineCallTab = () => {
 // Native iOS CallKit owns the call surface, so the embedded Call tab should
 // never become the active channel tab on that platform.
 const normalizeChannelTab = (tab: ChannelTabId) => {
-  return tab === 'call' && canUseInlineCallTab() ? tab : DEFAULT_CHANNEL_TAB;
+  return tab === 'call' && !canUseInlineCallTab() ? DEFAULT_CHANNEL_TAB : tab;
 };
 
 const initialChannelTab = (options: {
