@@ -14,10 +14,10 @@ import {
 import { isAfter } from 'date-fns';
 import { match } from 'ts-pattern';
 import { queryClient } from '../../client';
-import { extractGroupByFromKey } from '../grouped/api';
 import type { SoupApiItemFilter, SoupAstItemsPage } from '../items';
 import { soupKeys } from '../keys';
 import {
+  getGroupByForQuery,
   getItemFilter,
   insertGroupedPage,
   insertGroupQueries,
@@ -195,7 +195,7 @@ export function insertSoupEntity(item: SoupApiItem): SoupTransaction {
       firstPage,
       item,
       getSoupItemId(item),
-      extractGroupByFromKey(key)
+      getGroupByForQuery(key)
     );
 
     if (!nextPage) {

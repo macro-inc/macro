@@ -3,12 +3,7 @@ import type { ApiGroupByField as ApiGroupedSoupField } from '@service-storage/ge
 import type { ApiGroupMeta } from '@service-storage/generated/schemas/apiGroupMeta';
 import type { SoupApiItem } from '@service-storage/generated/schemas/soupApiItem';
 import { match } from 'ts-pattern';
-import {
-  GROUP_BY_TYPES,
-  type GroupByField,
-  type GroupMeta,
-  NOT_SET_GROUP_KEY,
-} from './types';
+import { type GroupByField, type GroupMeta, NOT_SET_GROUP_KEY } from './types';
 
 function hasProperties<T extends SoupApiItem>(
   item: T
@@ -76,22 +71,6 @@ export function parseGroupMeta(raw: ApiGroupMeta): GroupMeta {
     itemIds: raw.item_ids,
     nextCursor: raw.next_cursor ?? null,
   };
-}
-
-export function extractGroupByFromKey(
-  queryKey: readonly unknown[]
-): GroupByField | undefined {
-  for (const v of queryKey) {
-    if (!v || typeof v !== 'object') continue;
-    const t = (v as { type?: unknown }).type;
-    if (
-      typeof t === 'string' &&
-      GROUP_BY_TYPES.includes(t as GroupByField['type'])
-    ) {
-      return v as GroupByField;
-    }
-  }
-  return;
 }
 
 const ENTITY_TYPE_META: Record<

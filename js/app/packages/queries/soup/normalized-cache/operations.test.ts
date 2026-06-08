@@ -479,10 +479,14 @@ describe('optimisticUpdateSoupItemUpdatedAt', () => {
 
 // -- Normalized grouped cache tests --
 
-import type { GroupMeta } from '../grouped/types';
+import type { GroupByField, GroupMeta } from '../grouped/types';
 import type { SoupAstItemsGroupedPage } from '../items';
 
 const STATUS_DEF = 'status-def-id';
+const STATUS_GROUP_BY: GroupByField = {
+  type: 'property',
+  propertyDefinitionId: STATUS_DEF,
+};
 
 /** Build a task-like document item with a status property value. */
 function mockTaskItem(id: string, statusOption: string): SoupApiItem {
@@ -537,20 +541,13 @@ function mockGroupedParentCache(
   };
 }
 
-/** Seed a grouped astItems query keyed with the status property groupBy so
- * extractGroupByFromKey can discover it. astItems key layout:
- * ['soup', 'astItems', params, body, groupBy] */
+/** Seed a grouped astItems query with status property grouping metadata. */
 function seedGroupedAstQuery(
   data: InfiniteData<SoupAstItemsGroupedPage, unknown>,
   suffix = 'grouped-seed'
 ) {
-  const key = [
-    ...soupKeys.astItems._def,
-    {},
-    {},
-    { type: 'property', propertyDefinitionId: STATUS_DEF },
-    suffix,
-  ];
+  const key = [...soupKeys.astItems._def, {}, {}, STATUS_GROUP_BY, suffix];
+  testQueryClient.setQueryDefaults(key, { meta: { groupBy: STATUS_GROUP_BY } });
   testQueryClient.setQueryData(key, data);
   return key;
 }

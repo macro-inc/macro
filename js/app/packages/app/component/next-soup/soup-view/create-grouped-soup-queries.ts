@@ -46,6 +46,8 @@ type CreateGroupedSoupQueriesArgs = {
   queryOptions: Accessor<{
     enabled?: boolean;
     meta?: {
+      groupBy?: GroupByField;
+      groupKey?: string;
       itemFilter?: SoupApiItemFilter;
     };
   }>;
@@ -148,6 +150,7 @@ export function createGroupedSoupQueries(args: CreateGroupedSoupQueriesArgs) {
           enabled: options.enabled,
           meta: {
             ...options.meta,
+            groupBy: field,
             groupKey: group.key,
             normalize: true,
           },

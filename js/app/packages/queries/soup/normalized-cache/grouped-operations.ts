@@ -4,11 +4,14 @@ import type { InfiniteData, QueryKey } from '@tanstack/solid-query';
 import { queryClient } from '../../client';
 import {
   computeGroupKeysForItem,
-  extractGroupByFromKey,
   type ResolvedGroupMeta,
   resolveGroupMetaForKey,
 } from '../grouped/api';
-import type { GroupByField, GroupMeta } from '../grouped/types';
+import {
+  GROUP_BY_TYPES,
+  type GroupByField,
+  type GroupMeta,
+} from '../grouped/types';
 import type { SoupApiItemFilter, SoupAstItemsGroupedPage } from '../items';
 import { soupKeys } from '../keys';
 
@@ -29,12 +32,33 @@ export function getItemFilter(queryKey: QueryKey) {
     : undefined;
 }
 
+/** Returns the grouping field stored in TanStack query metadata. */
+export function getGroupByForQuery(queryKey: QueryKey) {
+  const groupBy = queryClient.getQueryCache().find({ queryKey })?.meta?.groupBy;
+
+  return isGroupByField(groupBy) ? groupBy : undefined;
+}
+
 /** Returns the expanded group key stored in TanStack query metadata. */
 function getGroupKeyForQuery(queryKey: QueryKey) {
   const groupKey = queryClient.getQueryCache().find({ queryKey })
     ?.meta?.groupKey;
 
   return typeof groupKey === 'string' ? groupKey : undefined;
+}
+
+function isGroupByField(value: unknown): value is GroupByField {
+  if (!value || typeof value !== 'object') return false;
+
+  const groupBy = value as Partial<GroupByField>;
+  if (!GROUP_BY_TYPES.includes(groupBy.type as GroupByField['type'])) {
+    return false;
+  }
+
+  return (
+    groupBy.type !== 'property' ||
+    typeof groupBy.propertyDefinitionId === 'string'
+  );
 }
 
 /** Runtime guard for the normalized grouped parent page shape. */
@@ -99,7 +123,7 @@ export function syncGroupedParents(entityId: string, entity: SoupApiItem) {
       continue;
     }
 
-    const groupBy = extractGroupByFromKey(key);
+    const groupBy = getGroupByForQuery(key);
 
     if (!groupBy) continue;
 
@@ -152,7 +176,7 @@ export function syncGroupQueries(entityId: string, entity: SoupApiItem) {
   for (const [key, prev] of caches) {
     if (!prev?.pages?.length) continue;
 
-    const groupBy = extractGroupByFromKey(key);
+    const groupBy = getGroupByForQuery(key);
     const groupKey = getGroupKeyForQuery(key);
     if (!groupBy || groupKey == null) continue;
 
@@ -244,7 +268,7 @@ export function insertGroupQueries(item: SoupApiItem, itemId: string) {
     const filter = getItemFilter(key);
     if (filter && !filter(item)) continue;
 
-    const groupBy = extractGroupByFromKey(key);
+    const groupBy = getGroupByForQuery(key);
     const groupKey = getGroupKeyForQuery(key);
     if (!groupBy || groupKey == null) continue;
 

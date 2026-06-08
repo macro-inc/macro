@@ -56,6 +56,8 @@ interface SoupItemsQueryOptions {
   enabled?: boolean;
   staleTime?: StaleTime;
   meta?: {
+    groupBy?: GroupByField;
+    groupKey?: string;
     itemFilter?: (item: SoupApiItem) => boolean;
   };
 }
@@ -233,6 +235,7 @@ export const useSoupAstItemsQuery = (
       placeholderData: (p) => p,
       meta: {
         ...options?.().meta,
+        groupBy,
         normalize: true,
       },
     };
