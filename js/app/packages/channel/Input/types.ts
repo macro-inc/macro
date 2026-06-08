@@ -49,6 +49,11 @@ export type InputSnapshot = {
   attachments: InputAttachmentData[];
 };
 
+export type EntityMentionInsertCoordinates = {
+  clientX: number;
+  clientY: number;
+};
+
 export type InputCallbacks = {
   onChange?: (snapshot: InputSnapshot) => void | Promise<void>;
   onSend?: (snapshot: InputSnapshot) => void | Promise<void>;
@@ -79,7 +84,18 @@ export type InputHandle = {
    * Inserts a mention for a dragged soup entity into the editor. Only provided
    * by inputs that support entity drag-and-drop (e.g. channel inputs).
    */
-  insertEntityMention?: (entity: EntityData) => void;
+  insertEntityMention?: (
+    entity: EntityData,
+    coordinates?: EntityMentionInsertCoordinates
+  ) => void;
+  /**
+   * Updates the insertion preview for a dragged soup entity. Coordinates are
+   * client-space pointer coordinates from the drag sensor.
+   */
+  previewEntityMentionInsertion?: (
+    coordinates: EntityMentionInsertCoordinates
+  ) => void;
+  clearEntityMentionInsertionPreview?: () => void;
 };
 
 export type InputAttachmentTracker = Tracker;

@@ -98,8 +98,6 @@ import { createAccessoryStore } from '@core/component/LexicalMarkdown/plugins/no
 import { restoreFocusPlugin } from '@core/component/LexicalMarkdown/plugins/restore-focus';
 import { createMenuOperations } from '@core/component/LexicalMarkdown/shared/inlineMenu';
 import {
-  $insertWrappedAfter,
-  $insertWrappedBefore,
   editorFocusSignal,
   editorIsEmpty,
   getSaveState,
@@ -107,6 +105,11 @@ import {
   initializeEditorWithState,
   setEditorStateFromMarkdown,
 } from '@core/component/LexicalMarkdown/utils';
+import {
+  getValidDragInsertPosition,
+  insertDocumentMentionAtDragInsertPosition,
+  updateDragInsertPreviewFromCoordinates,
+} from '@core/component/LexicalMarkdown/utils/dragInsertUtils';
 import {
   createFilesReadyHandler,
   getDragDropPosition,
@@ -140,7 +143,6 @@ import { bufToString } from '@core/util/string';
 import { handleFileFolderDrop } from '@core/util/upload';
 import type { EntityDragEvent } from '@entity';
 import {
-  $createDocumentMentionNode,
   $isInlineSearchNode,
   AwaitNode,
   CommentNode,
@@ -342,9 +344,9 @@ export function MarkdownEditor(props: {
 
     const res = wrapDndEvent(event);
     if (!res) return;
-    const { key, position } = getDragDropPosition(editor, res.mousePos, true);
 
     if (res.blockName === 'image' || res.blockName === 'video') {
+      getDragDropPosition(editor, res.mousePos, true);
       editor.dispatchCommand(INSERT_MEDIA_COMMAND, {
         type: 'dss',
         id: res.id,
@@ -354,36 +356,29 @@ export function MarkdownEditor(props: {
     }
 
     if (res.blockName === undefined) return;
-    if (!key || !position) return;
+    const dragInsertPosition = getValidDragInsertPosition(editor, res.mousePos);
+    if (!dragInsertPosition) return;
 
     const mentionId = await trackMention(blockId, 'document', res.id);
 
-    editor.update(() => {
-      let blockParams: Record<string, string> | undefined;
-      if (res.blockName === 'channel') {
-        blockParams = {};
-        if (res.item.messageId) {
-          blockParams[CHANNEL_PARAMS.message] = res.item.messageId;
-        }
-        if (res.item.threadId) {
-          blockParams[CHANNEL_PARAMS.thread] = res.item.threadId;
-        }
+    let blockParams: Record<string, string> | undefined;
+    if (res.blockName === 'channel') {
+      blockParams = {};
+      if (res.item.messageId) {
+        blockParams[CHANNEL_PARAMS.message] = res.item.messageId;
       }
-      const mention = $createDocumentMentionNode({
-        documentId: res.id,
-        documentName: res.item.name,
-        blockName: res.blockName,
-        blockParams,
-        mentionUuid: mentionId,
-        createdAt: Date.now(),
-      });
+      if (res.item.threadId) {
+        blockParams[CHANNEL_PARAMS.thread] = res.item.threadId;
+      }
+    }
 
-      if (position === 'before') {
-        $insertWrappedBefore(key, mention);
-      } else {
-        $insertWrappedAfter(key, mention);
-      }
-      mention.selectEnd();
+    insertDocumentMentionAtDragInsertPosition(editor, dragInsertPosition, {
+      documentId: res.id,
+      documentName: res.item.name,
+      blockName: res.blockName,
+      blockParams,
+      mentionUuid: mentionId,
+      createdAt: Date.now(),
     });
   };
 
@@ -394,10 +389,11 @@ export function MarkdownEditor(props: {
     const res = wrapDndEvent(event);
     if (!res) return;
     const { mousePos } = res;
-    const { key, position } = getDragDropPosition(editor, mousePos, false);
-    if (key !== null && position !== null) {
-      setDragInsertStore({ nodeKey: key, position, visible: true });
-    }
+    updateDragInsertPreviewFromCoordinates({
+      editor,
+      coordinates: mousePos,
+      setState: setDragInsertStore,
+    });
   }, 60);
 
   onDragEnd((event: EntityDragEvent) => {

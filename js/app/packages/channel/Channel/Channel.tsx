@@ -558,11 +558,7 @@ export function Channel(props: ChannelProps) {
                     })}
                     onReady={(handle) => {
                       dragState.setAttachFilesToChannel(handle.attachFiles);
-                      if (handle.insertEntityMention) {
-                        dragState.setInsertEntityMention(
-                          handle.insertEntityMention
-                        );
-                      }
+                      dragState.setEntityMentionInputHandlers(handle);
                       setChannelInputHandle(handle);
                     }}
                     onChange={(snapshot) =>
