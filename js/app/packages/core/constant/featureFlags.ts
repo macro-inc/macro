@@ -378,7 +378,9 @@ export function ENABLE_AUTO_UPDATE_UI(): boolean {
     return ENABLE_AUTO_UPDATE_UI_OVERRIDE;
   }
 
-  return !(analytics.posthog.isFeatureEnabled('disable-auto-update-ui') ?? false);
+  return !(
+    analytics.posthog.isFeatureEnabled('disable-auto-update-ui') ?? false
+  );
 }
 
 export const ENABLE_CALLKIT = resolveFeatureFlag('ENABLE_CALLKIT', true);
