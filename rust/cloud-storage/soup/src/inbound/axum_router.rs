@@ -48,7 +48,7 @@ use model_error_response::ErrorResponse;
 use model_user::axum_extractor::MacroUserExtractor;
 use models_grouping::{GroupByField, GroupingConfig};
 use models_pagination::{
-    Cursor, CursorWithValAndFilter, Frecency, PaginatedOpaqueCursor, SimpleSortMethod, SortMethod,
+    CursorWithValAndFilter, Frecency, PaginatedOpaqueCursor, SimpleSortMethod, SortMethod,
     TypeEraseCursor,
 };
 use models_soup::item::SoupItem;
@@ -500,7 +500,11 @@ where
                 .into_iter()
                 .map(|(id, item)| (id, SoupApiItem::from_frecency_soup_item(item)))
                 .collect(),
-            groups: response.groups.into_iter().map(ApiGroupMeta::from).collect(),
+            groups: response
+                .groups
+                .into_iter()
+                .map(ApiGroupMeta::from)
+                .collect(),
         })
     }
 }
