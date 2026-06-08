@@ -228,6 +228,8 @@ fn to_response_item(
         company,
         name,
         description,
+        // Search results aren't view-tracked; no viewed_at in the response.
+        viewed_at: _,
     } = c;
     CrmCompanySearchResponseItem {
         id: company.id,

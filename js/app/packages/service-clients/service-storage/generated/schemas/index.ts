@@ -770,6 +770,7 @@ export * from './soupContactSfsPhotoUrl';
 export * from './soupCrmCompany';
 export * from './soupCrmCompanyDescription';
 export * from './soupCrmCompanyName';
+export * from './soupCrmCompanyViewedAt';
 export * from './soupCrmDomain';
 export * from './soupDocument';
 export * from './soupDocumentBranchedFromId';

@@ -199,6 +199,9 @@ impl CrmSearchRepository for CrmSearchRepositoryImpl {
                     },
                     name: row.dir_name,
                     description: row.dir_description,
+                    // Search results aren't resolved against per-user view
+                    // history; the soup listing path supplies viewed_at.
+                    viewed_at: None,
                 });
             }
             // LEFT JOIN yields an all-NULL domain row for companies with
