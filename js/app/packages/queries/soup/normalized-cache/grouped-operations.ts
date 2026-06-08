@@ -19,6 +19,11 @@ type GroupedGroupPage = {
 
 type GroupedGroupInfiniteData = InfiniteData<GroupedGroupPage, unknown>;
 
+/**
+ * Recomputes an updated item's memberships across grouped parent AST queries.
+ * Updates only resolvable grouped pages; unresolved grouping metadata is left
+ * unchanged so callers can rely on later invalidation/refetch behavior.
+ */
 export function syncGroupedParents(
   entityId: string,
   entity: SoupApiItem
@@ -72,6 +77,11 @@ export function syncGroupedParents(
   }
 }
 
+/**
+ * Reconciles expanded single-group queries after an item changes.
+ * Adds the item to matching first pages and removes it from groups it no
+ * longer belongs to or no longer passes the query's item filter for.
+ */
 export function syncGroupQueries(entityId: string, entity: SoupApiItem): void {
   const caches = queryClient.getQueriesData<GroupedGroupInfiniteData>({
     queryKey: soupKeys.groupedGroup._def,
@@ -123,6 +133,10 @@ export function syncGroupQueries(entityId: string, entity: SoupApiItem): void {
   }
 }
 
+/**
+ * Inserts an item into a grouped parent page, creating optimistic group metadata
+ * for any target groups that can be resolved locally.
+ */
 export function insertGroupedPage(
   page: SoupAstItemsGroupedPage,
   item: SoupApiItem,
@@ -156,6 +170,7 @@ export function insertGroupedPage(
   };
 }
 
+/** Inserts an item into the first page of any expanded group query it matches. */
 export function insertGroupQueries(item: SoupApiItem, itemId: string): void {
   const caches = queryClient.getQueriesData<GroupedGroupInfiniteData>({
     queryKey: soupKeys.groupedGroup._def,
@@ -191,6 +206,7 @@ export function insertGroupQueries(item: SoupApiItem, itemId: string): void {
   }
 }
 
+/** Removes items from a grouped parent page's item pool and group memberships. */
 export function removeGroupedPage(
   page: SoupAstItemsGroupedPage,
   entityIds: Set<string>
@@ -228,6 +244,7 @@ export function removeGroupedPage(
   return changed ? { ...page, items, groups } : page;
 }
 
+/** Removes items from all expanded group queries while preserving unaffected pages. */
 export function removeGroupQueries(entityIds: Set<string>): void {
   queryClient.setQueriesData<GroupedGroupInfiniteData>(
     { queryKey: soupKeys.groupedGroup._def },
@@ -269,6 +286,7 @@ export function removeGroupQueries(entityIds: Set<string>): void {
   );
 }
 
+/** Returns the per-query soup item filter stored in TanStack query metadata. */
 export function getItemFilter(
   queryKey: QueryKey
 ): SoupApiItemFilter | undefined {
@@ -277,6 +295,7 @@ export function getItemFilter(
     | undefined;
 }
 
+/** Extracts the expanded group key from a groupedGroup query key. */
 function getGroupKey(key: QueryKey): string | undefined {
   const markerIndex = key.indexOf('group');
   const groupKey = markerIndex >= 0 ? key[markerIndex + 1] : undefined;
@@ -355,6 +374,7 @@ function syncMembership(
   return { ...page, items: nextItems, groups };
 }
 
+/** Builds a new optimistic group containing a single item. */
 function makeGroup(meta: ResolvedGroupMeta, entityId: string): GroupMeta {
   return {
     ...meta,
@@ -364,6 +384,7 @@ function makeGroup(meta: ResolvedGroupMeta, entityId: string): GroupMeta {
   };
 }
 
+/** Moves an item id to the front of a group, incrementing count only if new. */
 function prependId(group: GroupMeta, entityId: string): GroupMeta {
   const existing = group.itemIds.includes(entityId);
 
@@ -376,6 +397,7 @@ function prependId(group: GroupMeta, entityId: string): GroupMeta {
   };
 }
 
+/** Removes an item id from a group and decrements the total count safely. */
 function removeId(group: GroupMeta, entityId: string): GroupMeta {
   if (!group.itemIds.includes(entityId)) return group;
 
