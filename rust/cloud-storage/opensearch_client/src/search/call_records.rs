@@ -1,9 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    Result,
-    call_records_shape::{alias_uses_join_shape, call_records_search_alias},
-    delegate_methods,
+    Result, delegate_methods,
     search::{
         builder::{SearchQueryBuilder, SearchQueryConfig},
         model::{
@@ -40,19 +38,10 @@ const MATCH_PHRASE_PREFIX_MAX_EXPANSIONS: u32 = 256;
 pub(crate) struct CallRecordIndex {
     pub entity_id: uuid::Uuid,
     pub channel_id: uuid::Uuid,
-    /// Present on flat-shape (legacy) segment docs. Absent on join-shape
-    /// parent docs — the matching segments come via `inner_hits`.
-    #[serde(default)]
-    pub transcript_id: Option<uuid::Uuid>,
     #[serde(default)]
     pub participant_ids: Vec<String>,
     #[serde(default)]
     pub channel_name: Option<String>,
-    /// Present on flat-shape segment docs. Absent on join-shape parents.
-    #[serde(default)]
-    pub speaker_id: Option<String>,
-    #[serde(default)]
-    pub sequence_num: Option<i32>,
     pub started_at_seconds: i64,
     #[serde(default)]
     pub ended_at_seconds: Option<i64>,
@@ -100,37 +89,12 @@ impl CallRecordQueryBuilder {
         self
     }
 
-    pub fn build_bool_query<'a>(&'a self) -> Result<BoolQueryBuilder<'a>> {
-        if alias_uses_join_shape() {
-            return self.build_bool_query_join();
-        }
-        self.build_bool_query_flat()
-    }
-
-    /// Flat one-doc-per-segment path: the whole user query becomes a
-    /// single phrase[-prefix] match on `content` and the channel /
-    /// speaker filters sit on the same doc as the content.
-    fn build_bool_query_flat<'a>(&'a self) -> Result<BoolQueryBuilder<'a>> {
-        // Access comes from `ids_only` + accessible call_ids; these just narrow.
-        let mut content_bool_query = self.inner.build_content_bool_query()?;
-
-        if !self.channel_ids.is_empty() {
-            content_bool_query.filter(QueryType::terms("channel_id", self.channel_ids.clone()));
-        }
-
-        if !self.speaker_ids.is_empty() {
-            content_bool_query.filter(QueryType::terms("speaker_id", self.speaker_ids.clone()));
-        }
-
-        Ok(content_bool_query)
-    }
-
-    /// Parent/child join path: one `has_child` clause per term, ANDed
+    /// Parent/child join query: one `has_child` clause per term, ANDed
     /// inside `bool.must` so every search term must match some segment
     /// in the same call. channel_id lives on the parent so it sits on
     /// `bool.filter` directly; speaker_id is child-side so it's a
     /// has_child filter clause.
-    fn build_bool_query_join<'a>(&'a self) -> Result<BoolQueryBuilder<'a>> {
+    pub fn build_bool_query<'a>(&'a self) -> Result<BoolQueryBuilder<'a>> {
         if self.inner.ids_only && self.inner.ids.is_empty() {
             return Err(crate::error::OpensearchClientError::EmptyIdsWithIdsOnly(
                 CallRecordSearchConfig::ENTITY_INDEX,
@@ -142,11 +106,12 @@ impl CallRecordQueryBuilder {
 
         let mut bool_query = BoolQueryBuilder::new();
 
-        // Restrict to parent calls in the call_records alias (overridable
-        // via CALL_RECORDS_INDEX_NAME for local end-to-end testing).
+        // Restrict to parent calls in the call_records alias.
         bool_query.filter(QueryType::term(
             "_index",
-            call_records_search_alias().to_string(),
+            CallRecordSearchConfig::ENTITY_INDEX
+                .index_name()
+                .to_string(),
         ));
         bool_query.filter(QueryType::term(
             "call_relation",

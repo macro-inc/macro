@@ -1,9 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    Result,
-    chats_shape::{alias_uses_join_shape, chats_search_alias},
-    delegate_methods,
+    Result, delegate_methods,
     search::{
         builder::{SearchQueryBuilder, SearchQueryConfig},
         model::{Highlight, SearchGotoChat, SearchGotoContent, SearchHit, parse_highlight_hit},
@@ -40,15 +38,7 @@ const MATCH_PHRASE_PREFIX_MAX_EXPANSIONS: u32 = 256;
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub(crate) struct ChatIndex {
     pub entity_id: uuid::Uuid,
-    /// Present on flat-shape (legacy) message docs. Absent on join-shape
-    /// parent docs — those carry chat-level metadata only and the
-    /// matching message ids come via `inner_hits`.
-    #[serde(default)]
-    pub chat_message_id: Option<uuid::Uuid>,
     pub user_id: String,
-    /// Present on flat-shape message docs. Absent on join-shape parents.
-    #[serde(default)]
-    pub role: Option<String>,
     pub title: String,
     pub updated_at_seconds: Option<i64>,
 }
@@ -91,32 +81,11 @@ impl ChatQueryBuilder {
         self
     }
 
-    pub fn build_bool_query<'a>(&'a self) -> Result<BoolQueryBuilder<'a>> {
-        if alias_uses_join_shape() {
-            return self.build_bool_query_join();
-        }
-        self.build_bool_query_flat()
-    }
-
-    /// Flat one-doc-per-message path: the whole user query is a single
-    /// phrase match on `content` and metadata filters sit on the same
-    /// doc as the content.
-    fn build_bool_query_flat<'a>(&'a self) -> Result<BoolQueryBuilder<'a>> {
-        let mut content_bool_query = self.inner.build_content_bool_query()?;
-
-        if !self.role.is_empty() {
-            let should_query = should_wildcard_field_query_builder("role", &self.role);
-            content_bool_query.filter(should_query);
-        }
-
-        Ok(content_bool_query)
-    }
-
-    /// Parent/child join path: one `has_child` clause per term, ANDed
+    /// Parent/child join query: one `has_child` clause per term, ANDed
     /// inside `bool.must` so each term must match some message in the
     /// same chat. Parent metadata filters (user, ids) sit on
     /// `bool.filter` because they live on the parent doc.
-    fn build_bool_query_join<'a>(&'a self) -> Result<BoolQueryBuilder<'a>> {
+    pub fn build_bool_query<'a>(&'a self) -> Result<BoolQueryBuilder<'a>> {
         if self.inner.ids_only && self.inner.ids.is_empty() {
             return Err(crate::error::OpensearchClientError::EmptyIdsWithIdsOnly(
                 ChatSearchConfig::ENTITY_INDEX,
@@ -128,10 +97,11 @@ impl ChatQueryBuilder {
 
         let mut bool_query = BoolQueryBuilder::new();
 
-        // Restrict to parent chats in the chats alias (overridable via
-        // CHATS_INDEX_NAME for local end-to-end testing against a side
-        // alias).
-        bool_query.filter(QueryType::term("_index", chats_search_alias().to_string()));
+        // Restrict to parent chats in the chats alias.
+        bool_query.filter(QueryType::term(
+            "_index",
+            ChatSearchConfig::ENTITY_INDEX.index_name().to_string(),
+        ));
         bool_query.filter(QueryType::term(
             "chat_relation",
             PARENT_RELATION.to_string(),

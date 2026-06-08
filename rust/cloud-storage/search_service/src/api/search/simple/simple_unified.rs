@@ -197,33 +197,17 @@ pub(in crate::api::search) async fn perform_unified_search(
 
     // Set terms on each index's search args.
     //
-    // Emails and channels both get whitespace-split terms — emails match
-    // each term independently across many fields ANDed inside OpenSearch;
+    // Every content index gets whitespace-split terms. Emails match each
+    // term independently across many fields ANDed inside OpenSearch;
     // channel messages are single-doc-per-message so each token must
-    // appear in the same message via bool.must. Documents and chats get
-    // split terms once their alias points at a join-shape index, where
-    // each term becomes a separate has_child clause ANDed via bool.must.
-    let document_terms = if opensearch_client::documents_shape::alias_uses_join_shape() {
-        split_search_terms(&terms)
-    } else {
-        terms.clone()
-    };
-    let chat_terms = if opensearch_client::chats_shape::alias_uses_join_shape() {
-        split_search_terms(&terms)
-    } else {
-        terms.clone()
-    };
-    let call_record_terms = if opensearch_client::call_records_shape::alias_uses_join_shape() {
-        split_search_terms(&terms)
-    } else {
-        terms.clone()
-    };
-    let channel_terms = split_search_terms(&terms);
-    filter_document_response.terms = document_terms;
-    filter_channel_response.terms = channel_terms;
-    filter_chat_response.terms = chat_terms;
+    // appear in the same message via bool.must. Documents, chats, and
+    // call records are join-shape, where each term becomes a separate
+    // has_child clause ANDed via bool.must.
+    filter_document_response.terms = split_search_terms(&terms);
+    filter_channel_response.terms = split_search_terms(&terms);
+    filter_chat_response.terms = split_search_terms(&terms);
     filter_email_response.terms = email_terms.clone();
-    filter_call_record_response.terms = call_record_terms;
+    filter_call_record_response.terms = split_search_terms(&terms);
 
     // Clone terms for use in name searches
     let name_search_term = terms[0].clone();
