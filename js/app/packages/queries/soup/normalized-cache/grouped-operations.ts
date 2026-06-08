@@ -91,7 +91,7 @@ export function syncGroupQueries(entityId: string, entity: SoupApiItem): void {
     if (!prev?.pages?.length) continue;
 
     const groupBy = extractGroupByFromKey(key);
-    const groupKey = getGroupKey(key);
+    const groupKey = getGroupKeyForQuery(key);
     if (!groupBy || groupKey == null) continue;
 
     const nextGroupKeys = computeGroupKeysForItem(entity, groupBy);
@@ -183,7 +183,7 @@ export function insertGroupQueries(item: SoupApiItem, itemId: string): void {
     if (filter && !filter(item)) continue;
 
     const groupBy = extractGroupByFromKey(key);
-    const groupKey = getGroupKey(key);
+    const groupKey = getGroupKeyForQuery(key);
     if (!groupBy || groupKey == null) continue;
 
     const targetKeys = computeGroupKeysForItem(item, groupBy);
@@ -298,10 +298,11 @@ export function getItemFilter(
     : undefined;
 }
 
-/** Extracts the expanded group key from a groupedGroup query key. */
-function getGroupKey(key: QueryKey): string | undefined {
-  const markerIndex = key.indexOf('group');
-  const groupKey = markerIndex >= 0 ? key[markerIndex + 1] : undefined;
+/** Returns the expanded group key stored in TanStack query metadata. */
+function getGroupKeyForQuery(queryKey: QueryKey): string | undefined {
+  const groupKey = queryClient.getQueryCache().find({ queryKey })
+    ?.meta?.groupKey;
+
   return typeof groupKey === 'string' ? groupKey : undefined;
 }
 

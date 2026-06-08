@@ -148,6 +148,7 @@ export function createGroupedSoupQueries(args: CreateGroupedSoupQueriesArgs) {
           enabled: options.enabled,
           meta: {
             ...options.meta,
+            groupKey: group.key,
             normalize: true,
           },
           staleTime: Infinity,
