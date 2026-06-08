@@ -70,11 +70,6 @@ export async function loadCachedState<S extends GenericRootSchema>(
   }
 
   const pending = await walStore.getAll();
-  const undelivered = pending.filter((e) => !e.delivered);
-  console.log('[WAL] cold load: replaying WAL entries', {
-    total: pending.length,
-    undelivered: undelivered.length,
-  });
   for (const entry of pending) {
     const importResult = loroManager.importUpdate(entry.update);
     if (importResult.isErr()) {

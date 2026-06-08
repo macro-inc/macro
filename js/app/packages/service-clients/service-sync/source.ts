@@ -26,7 +26,7 @@ import {
   createSocketEffect,
 } from '@websocket/solid/socket-effect';
 import { createWebsocketStateSignal } from '@websocket/solid/state-signal';
-import { encodeFrontiers, type Frontiers } from 'loro-crdt';
+import type { VersionVector } from 'loro-crdt';
 import { type Result, ResultAsync } from 'neverthrow';
 import {
   FromPeer,
@@ -251,12 +251,10 @@ export const createSyncServiceSource = (
   };
 
   const requestUpdatesSince = (
-    frontiers: Frontiers
+    vv: VersionVector
   ): ResultAsync<RawUpdate, TimeoutError> => {
-    let encodedFrontiers = encodeFrontiers(frontiers);
-    const message = FromPeer.fromPeerRequestSince({
-      frontiers: encodedFrontiers,
-    });
+    const encodedVv = vv.encode();
+    const message = FromPeer.fromPeerRequestSince({ vv: encodedVv });
     ws.send(message);
 
     return ResultAsync.fromPromise(
@@ -264,7 +262,7 @@ export const createSyncServiceSource = (
         untilMessage(ws, (message) => {
           return (
             message.isRemoteUpdateSince() &&
-            arrayEquals(message.value.frontiers, encodedFrontiers)
+            arrayEquals(message.value.vv, encodedVv)
           );
         }),
         TIMEOUTS.REQUEST_UPDATES_SINCE,

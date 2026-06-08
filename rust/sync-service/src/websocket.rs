@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use bebop::{Record, SliceWrapper};
-use loro::{Frontiers, awareness::EphemeralStore};
+use loro::{VersionVector, awareness::EphemeralStore};
 use tracing::trace;
 use worker::{Result, WebSocket};
 
@@ -166,19 +166,22 @@ pub async fn process_message(
             broadcast_awareness(ws, &dss.get_websockets(), &encodede, buf)
                 .context("failed to broadcast awareness")?;
         }
-        // Handle a peer requesting a specific set of updates from the document
-        FromPeer::PeerRequestSince { frontiers } => {
-            let frontiers = Frontiers::decode(*frontiers).context("failed to decode frontiers")?;
+        // Handle a peer requesting a specific set of updates from the document.
+        // The client sends a version vector (not frontiers) so unknown peers
+        // — e.g. a peer that made offline edits the server hasn't seen yet —
+        // don't cause a panic in `frontiersToVV` lookup.
+        FromPeer::PeerRequestSince { vv } => {
+            let vv = VersionVector::decode(*vv).context("failed to decode version vector")?;
 
             let update = document_state
-                .export_updates_since(&frontiers)
+                .export_updates_since(&vv)
                 .context("failed to export updates")?;
 
-            let encoded_frontiers = frontiers.encode();
+            let encoded_vv = vv.encode();
 
             let message = FromRemote::RemoteUpdateSince {
                 update: SliceWrapper::Raw(&update),
-                frontiers: SliceWrapper::Raw(&encoded_frontiers),
+                vv: SliceWrapper::Raw(&encoded_vv),
             };
 
             let mut buf = buf.lock("serialize RemoteUpdate in PeerRequestSince handler");

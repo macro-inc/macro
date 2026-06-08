@@ -1,5 +1,5 @@
 import type { Listen } from '@solid-primitives/event-bus';
-import type { Frontiers } from 'loro-crdt';
+import type { VersionVector } from 'loro-crdt';
 import type { ResultAsync } from 'neverthrow';
 import type { Accessor } from 'solid-js';
 import type { RawUpdate } from './shared';
@@ -72,6 +72,8 @@ export type WALSyncSource = {
   readonly listen: Listen<SyncSourceEvent>;
   /** Persists a single outbound update. Resolves once written, not when delivered. */
   pushUpdate: (update: RawUpdate) => Promise<boolean>;
+  /** Pushes any undelivered entries to the live source. Idempotent. */
+  flush: () => Promise<void>;
   /** Drops WAL entries whose updates are now captured in a durable snapshot. */
   pruneDelivered: () => Promise<void>;
 };
@@ -85,7 +87,7 @@ export type LiveSyncSource = {
   registerPeerId: (peerId: bigint) => void;
   status: Accessor<SyncSourceStatus>;
   requestUpdatesSince: (
-    version: Frontiers
+    version: VersionVector
   ) => ResultAsync<RawUpdate, TimeoutError>;
   requestSnapshot: () => ResultAsync<RawUpdate, TimeoutError>;
   reconnect: () => void;

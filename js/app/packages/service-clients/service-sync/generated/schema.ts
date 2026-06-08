@@ -16,7 +16,7 @@
 // </auto-generated>
 import {
   BebopJson,
-  type BebopRecord,
+  BebopRecord,
   BebopRuntimeError,
   BebopTypeGuard,
   BebopView,
@@ -31,40 +31,40 @@ export const BEBOP_SCHEMA = new Uint8Array([
   65, 119, 97, 114, 101, 110, 101, 115, 115, 0, 1, 0, 0, 4, 0, 0, 0, 0, 1, 97,
   119, 97, 114, 101, 110, 101, 115, 115, 0, 242, 255, 255, 255, 0, 254, 255,
   255, 255, 0, 80, 101, 101, 114, 82, 101, 113, 117, 101, 115, 116, 83, 105,
-  110, 99, 101, 0, 1, 0, 0, 4, 0, 0, 0, 0, 1, 102, 114, 111, 110, 116, 105, 101,
-  114, 115, 0, 242, 255, 255, 255, 0, 254, 255, 255, 255, 0, 80, 101, 101, 114,
-  82, 101, 113, 117, 101, 115, 116, 83, 110, 97, 112, 115, 104, 111, 116, 0, 1,
-  0, 0, 0, 0, 0, 0, 1, 0, 80, 101, 101, 114, 82, 101, 103, 105, 115, 116, 101,
-  114, 73, 100, 0, 1, 0, 0, 8, 0, 0, 0, 1, 1, 112, 101, 101, 114, 105, 100, 0,
-  249, 255, 255, 255, 0, 70, 114, 111, 109, 80, 101, 101, 114, 0, 3, 0, 5, 0, 0,
-  0, 5, 1, 0, 0, 0, 0, 2, 1, 0, 0, 0, 3, 2, 0, 0, 0, 4, 3, 0, 0, 0, 5, 4, 0, 0,
-  0, 82, 101, 109, 111, 116, 101, 73, 110, 105, 116, 105, 97, 108, 83, 121, 110,
-  99, 0, 1, 0, 0, 8, 0, 0, 0, 0, 2, 115, 110, 97, 112, 115, 104, 111, 116, 0,
-  242, 255, 255, 255, 0, 254, 255, 255, 255, 0, 97, 119, 97, 114, 101, 110, 101,
-  115, 115, 0, 242, 255, 255, 255, 0, 254, 255, 255, 255, 0, 82, 101, 109, 111,
-  116, 101, 85, 112, 100, 97, 116, 101, 0, 1, 0, 0, 4, 0, 0, 0, 0, 1, 117, 112,
-  100, 97, 116, 101, 0, 242, 255, 255, 255, 0, 254, 255, 255, 255, 0, 82, 101,
-  109, 111, 116, 101, 65, 119, 97, 114, 101, 110, 101, 115, 115, 0, 1, 0, 0, 4,
-  0, 0, 0, 0, 1, 97, 119, 97, 114, 101, 110, 101, 115, 115, 0, 242, 255, 255,
-  255, 0, 254, 255, 255, 255, 0, 82, 101, 109, 111, 116, 101, 83, 110, 97, 112,
-  115, 104, 111, 116, 0, 1, 0, 0, 4, 0, 0, 0, 0, 1, 115, 110, 97, 112, 115, 104,
-  111, 116, 0, 242, 255, 255, 255, 0, 254, 255, 255, 255, 0, 82, 101, 109, 111,
-  116, 101, 85, 112, 100, 97, 116, 101, 65, 99, 107, 0, 1, 0, 0, 4, 0, 0, 0, 0,
-  1, 105, 100, 0, 245, 255, 255, 255, 0, 82, 101, 109, 111, 116, 101, 85, 112,
-  100, 97, 116, 101, 83, 105, 110, 99, 101, 0, 1, 0, 0, 8, 0, 0, 0, 0, 2, 117,
-  112, 100, 97, 116, 101, 0, 242, 255, 255, 255, 0, 254, 255, 255, 255, 0, 102,
-  114, 111, 110, 116, 105, 101, 114, 115, 0, 242, 255, 255, 255, 0, 254, 255,
-  255, 255, 0, 70, 114, 111, 109, 82, 101, 109, 111, 116, 101, 0, 3, 0, 9, 0, 0,
-  0, 6, 1, 6, 0, 0, 0, 2, 7, 0, 0, 0, 3, 8, 0, 0, 0, 4, 9, 0, 0, 0, 5, 10, 0, 0,
-  0, 6, 11, 0, 0, 0, 79, 112, 101, 114, 97, 116, 105, 111, 110, 0, 1, 0, 0, 12,
-  0, 0, 0, 0, 2, 117, 112, 100, 97, 116, 101, 0, 242, 255, 255, 255, 0, 254,
-  255, 255, 255, 0, 116, 105, 109, 101, 115, 116, 97, 109, 112, 0, 243, 255,
-  255, 255, 0, 79, 112, 101, 114, 97, 116, 105, 111, 110, 76, 111, 103, 0, 1, 0,
-  0, 4, 0, 0, 0, 0, 1, 111, 112, 101, 114, 97, 116, 105, 111, 110, 115, 0, 242,
-  255, 255, 255, 0, 13, 0, 0, 0, 0, 73, 110, 105, 116, 105, 97, 108, 105, 122,
-  101, 70, 114, 111, 109, 83, 110, 97, 112, 115, 104, 111, 116, 82, 101, 113,
-  117, 101, 115, 116, 0, 1, 0, 0, 4, 0, 0, 0, 0, 1, 115, 110, 97, 112, 115, 104,
-  111, 116, 0, 242, 255, 255, 255, 0, 254, 255, 255, 255, 0, 0, 0, 0, 0,
+  110, 99, 101, 0, 1, 0, 0, 4, 0, 0, 0, 0, 1, 118, 118, 0, 242, 255, 255, 255,
+  0, 254, 255, 255, 255, 0, 80, 101, 101, 114, 82, 101, 113, 117, 101, 115, 116,
+  83, 110, 97, 112, 115, 104, 111, 116, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 80, 101,
+  101, 114, 82, 101, 103, 105, 115, 116, 101, 114, 73, 100, 0, 1, 0, 0, 8, 0, 0,
+  0, 1, 1, 112, 101, 101, 114, 105, 100, 0, 249, 255, 255, 255, 0, 70, 114, 111,
+  109, 80, 101, 101, 114, 0, 3, 0, 5, 0, 0, 0, 5, 1, 0, 0, 0, 0, 2, 1, 0, 0, 0,
+  3, 2, 0, 0, 0, 4, 3, 0, 0, 0, 5, 4, 0, 0, 0, 82, 101, 109, 111, 116, 101, 73,
+  110, 105, 116, 105, 97, 108, 83, 121, 110, 99, 0, 1, 0, 0, 8, 0, 0, 0, 0, 2,
+  115, 110, 97, 112, 115, 104, 111, 116, 0, 242, 255, 255, 255, 0, 254, 255,
+  255, 255, 0, 97, 119, 97, 114, 101, 110, 101, 115, 115, 0, 242, 255, 255, 255,
+  0, 254, 255, 255, 255, 0, 82, 101, 109, 111, 116, 101, 85, 112, 100, 97, 116,
+  101, 0, 1, 0, 0, 4, 0, 0, 0, 0, 1, 117, 112, 100, 97, 116, 101, 0, 242, 255,
+  255, 255, 0, 254, 255, 255, 255, 0, 82, 101, 109, 111, 116, 101, 65, 119, 97,
+  114, 101, 110, 101, 115, 115, 0, 1, 0, 0, 4, 0, 0, 0, 0, 1, 97, 119, 97, 114,
+  101, 110, 101, 115, 115, 0, 242, 255, 255, 255, 0, 254, 255, 255, 255, 0, 82,
+  101, 109, 111, 116, 101, 83, 110, 97, 112, 115, 104, 111, 116, 0, 1, 0, 0, 4,
+  0, 0, 0, 0, 1, 115, 110, 97, 112, 115, 104, 111, 116, 0, 242, 255, 255, 255,
+  0, 254, 255, 255, 255, 0, 82, 101, 109, 111, 116, 101, 85, 112, 100, 97, 116,
+  101, 65, 99, 107, 0, 1, 0, 0, 4, 0, 0, 0, 0, 1, 105, 100, 0, 245, 255, 255,
+  255, 0, 82, 101, 109, 111, 116, 101, 85, 112, 100, 97, 116, 101, 83, 105, 110,
+  99, 101, 0, 1, 0, 0, 8, 0, 0, 0, 0, 2, 117, 112, 100, 97, 116, 101, 0, 242,
+  255, 255, 255, 0, 254, 255, 255, 255, 0, 118, 118, 0, 242, 255, 255, 255, 0,
+  254, 255, 255, 255, 0, 70, 114, 111, 109, 82, 101, 109, 111, 116, 101, 0, 3,
+  0, 9, 0, 0, 0, 6, 1, 6, 0, 0, 0, 2, 7, 0, 0, 0, 3, 8, 0, 0, 0, 4, 9, 0, 0, 0,
+  5, 10, 0, 0, 0, 6, 11, 0, 0, 0, 79, 112, 101, 114, 97, 116, 105, 111, 110, 0,
+  1, 0, 0, 12, 0, 0, 0, 0, 2, 117, 112, 100, 97, 116, 101, 0, 242, 255, 255,
+  255, 0, 254, 255, 255, 255, 0, 116, 105, 109, 101, 115, 116, 97, 109, 112, 0,
+  243, 255, 255, 255, 0, 79, 112, 101, 114, 97, 116, 105, 111, 110, 76, 111,
+  103, 0, 1, 0, 0, 4, 0, 0, 0, 0, 1, 111, 112, 101, 114, 97, 116, 105, 111, 110,
+  115, 0, 242, 255, 255, 255, 0, 13, 0, 0, 0, 0, 73, 110, 105, 116, 105, 97,
+  108, 105, 122, 101, 70, 114, 111, 109, 83, 110, 97, 112, 115, 104, 111, 116,
+  82, 101, 113, 117, 101, 115, 116, 0, 1, 0, 0, 4, 0, 0, 0, 0, 1, 115, 110, 97,
+  112, 115, 104, 111, 116, 0, 242, 255, 255, 255, 0, 254, 255, 255, 255, 0, 0,
+  0, 0, 0,
 ]);
 
 export interface IPeerUpdate extends BebopRecord {
@@ -279,16 +279,16 @@ export class PeerAwareness implements IPeerAwareness {
 }
 
 export interface IPeerRequestSince extends BebopRecord {
-  readonly frontiers: Uint8Array;
+  readonly vv: Uint8Array;
 }
 
 export class PeerRequestSince implements IPeerRequestSince {
   public readonly discriminator: number = 3 as 3;
   public static readonly discriminator: number = 3 as 3;
-  public readonly frontiers: Uint8Array;
+  public readonly vv: Uint8Array;
 
   constructor(record: IPeerRequestSince) {
-    this.frontiers = record.frontiers;
+    this.vv = record.vv;
   }
 
   /**
@@ -316,7 +316,7 @@ export class PeerRequestSince implements IPeerRequestSince {
    * Validates that the specified dynamic object can become an instance of {@link PeerRequestSince}.
    */
   public static validateCompatibility(record: IPeerRequestSince): void {
-    BebopTypeGuard.ensureArray(record.frontiers, BebopTypeGuard.ensureUint8);
+    BebopTypeGuard.ensureArray(record.vv, BebopTypeGuard.ensureUint8);
   }
 
   /**
@@ -350,7 +350,7 @@ export class PeerRequestSince implements IPeerRequestSince {
 
   public static encodeInto(record: IPeerRequestSince, view: BebopView): number {
     const before = view.length;
-    view.writeBytes(record.frontiers);
+    view.writeBytes(record.vv);
     const after = view.length;
     return after - before;
   }
@@ -365,7 +365,7 @@ export class PeerRequestSince implements IPeerRequestSince {
     let field0: Uint8Array;
     field0 = view.readBytes();
     let message: IPeerRequestSince = {
-      frontiers: field0,
+      vv: field0,
     };
     return new PeerRequestSince(message);
   }
@@ -1290,18 +1290,18 @@ export class RemoteUpdateAck implements IRemoteUpdateAck {
 export interface IRemoteUpdateSince extends BebopRecord {
   readonly update: Uint8Array;
 
-  readonly frontiers: Uint8Array;
+  readonly vv: Uint8Array;
 }
 
 export class RemoteUpdateSince implements IRemoteUpdateSince {
   public readonly discriminator: number = 6 as 6;
   public static readonly discriminator: number = 6 as 6;
   public readonly update: Uint8Array;
-  public readonly frontiers: Uint8Array;
+  public readonly vv: Uint8Array;
 
   constructor(record: IRemoteUpdateSince) {
     this.update = record.update;
-    this.frontiers = record.frontiers;
+    this.vv = record.vv;
   }
 
   /**
@@ -1330,7 +1330,7 @@ export class RemoteUpdateSince implements IRemoteUpdateSince {
    */
   public static validateCompatibility(record: IRemoteUpdateSince): void {
     BebopTypeGuard.ensureArray(record.update, BebopTypeGuard.ensureUint8);
-    BebopTypeGuard.ensureArray(record.frontiers, BebopTypeGuard.ensureUint8);
+    BebopTypeGuard.ensureArray(record.vv, BebopTypeGuard.ensureUint8);
   }
 
   /**
@@ -1370,7 +1370,7 @@ export class RemoteUpdateSince implements IRemoteUpdateSince {
   ): number {
     const before = view.length;
     view.writeBytes(record.update);
-    view.writeBytes(record.frontiers);
+    view.writeBytes(record.vv);
     const after = view.length;
     return after - before;
   }
@@ -1388,7 +1388,7 @@ export class RemoteUpdateSince implements IRemoteUpdateSince {
     field1 = view.readBytes();
     let message: IRemoteUpdateSince = {
       update: field0,
-      frontiers: field1,
+      vv: field1,
     };
     return new RemoteUpdateSince(message);
   }

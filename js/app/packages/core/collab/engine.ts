@@ -1,7 +1,7 @@
 import { type InferType, SyncDirection } from '@loro-mirror/packages/core/src';
 import { logger } from '@observability/logger';
 import { Mutex } from 'async-mutex';
-import type { Frontiers } from 'loro-crdt';
+import type { VersionVector } from 'loro-crdt';
 import type { ResultAsync } from 'neverthrow';
 import { type Accessor, createEffect, createSignal, on } from 'solid-js';
 import type { Awareness } from './awareness';
@@ -269,13 +269,13 @@ export class SyncEngine<S extends GenericRootSchema, D> {
         logger.log('reconnecting and fast forwarding new updates', {
           documentId: this.syncs.live.documentId,
         });
-        this.requestAndHandleUpdatesSince(doc.frontiers());
+        this.requestAndHandleUpdatesSince(doc.version());
         break;
       }
     }
   }
 
-  private async requestAndHandleUpdatesSince(since: Frontiers) {
+  private async requestAndHandleUpdatesSince(since: VersionVector) {
     const updates = await this.syncs.live.requestUpdatesSince(since);
     if (updates.isErr() || !updates.value) {
       console.error(

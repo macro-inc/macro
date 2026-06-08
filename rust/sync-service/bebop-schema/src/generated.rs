@@ -38,7 +38,7 @@ pub enum FromPeer<'raw> {
 
     /// Discriminator 3
     PeerRequestSince {
-        frontiers: ::bebop::SliceWrapper<'raw, u8>,
+        vv: ::bebop::SliceWrapper<'raw, u8>,
     },
 
     /// Discriminator 4
@@ -75,10 +75,10 @@ impl<'raw> ::bebop::SubRecord<'raw> for FromPeer<'raw> {
                 _awareness.serialized_size()
             }
             Self::PeerRequestSince {
-                frontiers: ref _frontiers,
+                vv: ref _vv,
             }
             => {
-                _frontiers.serialized_size()
+                _vv.serialized_size()
             }
             Self::PeerRequestSnapshot {
             }
@@ -118,11 +118,11 @@ impl<'raw> ::bebop::SubRecord<'raw> for FromPeer<'raw> {
                 _awareness._serialize_chained(dest)?;
             }
             Self::PeerRequestSince {
-                frontiers: ref _frontiers,
+                vv: ref _vv,
             }
             => {
                 3u8._serialize_chained(dest)?;
-                _frontiers._serialize_chained(dest)?;
+                _vv._serialize_chained(dest)?;
             }
             Self::PeerRequestSnapshot {
             }
@@ -168,7 +168,7 @@ impl<'raw> ::bebop::SubRecord<'raw> for FromPeer<'raw> {
                 i += read;
 
                 FromPeer::PeerRequestSince {
-                    frontiers: v0,
+                    vv: v0,
                 }
             }
             4 => {
@@ -234,7 +234,7 @@ pub enum FromRemote<'raw> {
     /// Discriminator 6
     RemoteUpdateSince {
         update: ::bebop::SliceWrapper<'raw, u8>,
-        frontiers: ::bebop::SliceWrapper<'raw, u8>,
+        vv: ::bebop::SliceWrapper<'raw, u8>,
     },
 }
 
@@ -281,11 +281,11 @@ impl<'raw> ::bebop::SubRecord<'raw> for FromRemote<'raw> {
             }
             Self::RemoteUpdateSince {
                 update: ref _update,
-                frontiers: ref _frontiers,
+                vv: ref _vv,
             }
             => {
                 _update.serialized_size() +
-                _frontiers.serialized_size()
+                _vv.serialized_size()
             }
         }
     }
@@ -336,12 +336,12 @@ impl<'raw> ::bebop::SubRecord<'raw> for FromRemote<'raw> {
             }
             Self::RemoteUpdateSince {
                 update: ref _update,
-                frontiers: ref _frontiers,
+                vv: ref _vv,
             }
             => {
                 6u8._serialize_chained(dest)?;
                 _update._serialize_chained(dest)?;
-                _frontiers._serialize_chained(dest)?;
+                _vv._serialize_chained(dest)?;
             }
         }
         Ok(size)
@@ -402,7 +402,7 @@ impl<'raw> ::bebop::SubRecord<'raw> for FromRemote<'raw> {
 
                 FromRemote::RemoteUpdateSince {
                     update: v0,
-                    frontiers: v1,
+                    vv: v1,
                 }
             }
             _ => {
@@ -570,7 +570,7 @@ pub mod owned {
 
         /// Discriminator 3
         PeerRequestSince {
-            frontiers: ::std::vec::Vec<u8>,
+            vv: ::std::vec::Vec<u8>,
         },
 
         /// Discriminator 4
@@ -608,11 +608,11 @@ pub mod owned {
                     }
                 }
                 super::FromPeer::PeerRequestSince {
-                    frontiers: _frontiers,
+                    vv: _vv,
                 }
                 => {
                     Self::PeerRequestSince {
-                        frontiers: _frontiers.iter().map(|value| value).collect(),
+                        vv: _vv.iter().map(|value| value).collect(),
                     }
                 }
                 super::FromPeer::PeerRequestSnapshot {
@@ -657,10 +657,10 @@ pub mod owned {
                     _awareness.serialized_size()
                 }
                 Self::PeerRequestSince {
-                    frontiers: ref _frontiers,
+                    vv: ref _vv,
                 }
                 => {
-                    _frontiers.serialized_size()
+                    _vv.serialized_size()
                 }
                 Self::PeerRequestSnapshot {
                 }
@@ -700,11 +700,11 @@ pub mod owned {
                     _awareness._serialize_chained(dest)?;
                 }
                 Self::PeerRequestSince {
-                    frontiers: ref _frontiers,
+                    vv: ref _vv,
                 }
                 => {
                     3u8._serialize_chained(dest)?;
-                    _frontiers._serialize_chained(dest)?;
+                    _vv._serialize_chained(dest)?;
                 }
                 Self::PeerRequestSnapshot {
                 }
@@ -750,7 +750,7 @@ pub mod owned {
                     i += read;
 
                     FromPeer::PeerRequestSince {
-                        frontiers: v0,
+                        vv: v0,
                     }
                 }
                 4 => {
@@ -816,7 +816,7 @@ pub mod owned {
         /// Discriminator 6
         RemoteUpdateSince {
             update: ::std::vec::Vec<u8>,
-            frontiers: ::std::vec::Vec<u8>,
+            vv: ::std::vec::Vec<u8>,
         },
     }
 
@@ -870,12 +870,12 @@ pub mod owned {
                 }
                 super::FromRemote::RemoteUpdateSince {
                     update: _update,
-                    frontiers: _frontiers,
+                    vv: _vv,
                 }
                 => {
                     Self::RemoteUpdateSince {
                         update: _update.iter().map(|value| value).collect(),
-                        frontiers: _frontiers.iter().map(|value| value).collect(),
+                        vv: _vv.iter().map(|value| value).collect(),
                     }
                 }
             }
@@ -925,11 +925,11 @@ pub mod owned {
                 }
                 Self::RemoteUpdateSince {
                     update: ref _update,
-                    frontiers: ref _frontiers,
+                    vv: ref _vv,
                 }
                 => {
                     _update.serialized_size() +
-                    _frontiers.serialized_size()
+                    _vv.serialized_size()
                 }
             }
         }
@@ -980,12 +980,12 @@ pub mod owned {
                 }
                 Self::RemoteUpdateSince {
                     update: ref _update,
-                    frontiers: ref _frontiers,
+                    vv: ref _vv,
                 }
                 => {
                     6u8._serialize_chained(dest)?;
                     _update._serialize_chained(dest)?;
-                    _frontiers._serialize_chained(dest)?;
+                    _vv._serialize_chained(dest)?;
                 }
             }
             Ok(size)
@@ -1046,7 +1046,7 @@ pub mod owned {
 
                     FromRemote::RemoteUpdateSince {
                         update: v0,
-                        frontiers: v1,
+                        vv: v1,
                     }
                 }
                 _ => {

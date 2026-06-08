@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { MockLiveSyncSource, MockWALStore } from './testing';
-import { IDBWALSyncSource } from './wal';
+import { IDBWALSyncSource, WAL_TTL_MS } from './wal';
 
 function makeWAL(live: MockLiveSyncSource) {
   const walStore = new MockWALStore();
@@ -209,5 +209,35 @@ describe('IDBWALSyncSource', () => {
 
     await wal.pruneDelivered();
     expect(await walStore.count()).toBe(1); // undelivered entry survives prune
+  });
+
+  it('pruneExpired drops entries older than the TTL', async () => {
+    const walStore = new MockWALStore();
+    const now = Date.now();
+    walStore.seedEntry(new Uint8Array([1]), now - WAL_TTL_MS - 1000); // expired
+    walStore.seedEntry(new Uint8Array([2]), now - 60_000); // fresh
+    walStore.seedEntry(new Uint8Array([3]), now - WAL_TTL_MS - 1); // expired
+
+    const deleted = await walStore.pruneExpired(WAL_TTL_MS);
+
+    expect(deleted).toBe(2);
+    const remaining = await walStore.getAll();
+    expect(remaining.map((e) => e.update)).toEqual([new Uint8Array([2])]);
+  });
+
+  it('prunes expired entries on construction so cold-start replay skips them', async () => {
+    const live = new MockLiveSyncSource();
+    const walStore = new MockWALStore();
+    walStore.seedEntry(new Uint8Array([1]), Date.now() - WAL_TTL_MS - 1000);
+    walStore.seedEntry(new Uint8Array([2]), Date.now() - 60_000);
+
+    new IDBWALSyncSource(live, walStore);
+
+    // Constructor schedules the prune asynchronously — wait for it.
+    await vi.waitFor(async () => {
+      const entries = await walStore.getAll();
+      expect(entries).toHaveLength(1);
+      expect(entries[0]!.update).toEqual(new Uint8Array([2]));
+    });
   });
 });
