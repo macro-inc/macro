@@ -178,10 +178,13 @@ function CheckStateIcon(props: { state: CheckVisualState; circle?: boolean }) {
         <div class="relative size-full inline-flex items-center justify-center">
           <span
             class={cn(
-              'animate-spin rounded-full',
-              'bg-[conic-gradient(from_0deg,var(--color-alert-ink)_0deg,var(--color-alert-ink)_60deg,rgb(from_var(--color-alert-ink)_r_g_b/0.2)_120deg,transparent_260deg,transparent_360deg)]',
-              '[mask:radial-gradient(farthest-side,transparent_calc(100%-1.5px),#000_calc(100%-1.5px))]',
-              props.circle ? 'size-5' : 'size-3.5'
+              'size-4 rounded-full',
+              props.circle && [
+                'size-5',
+                'animate-spin',
+                'bg-[conic-gradient(from_0deg,var(--color-alert-ink)_0deg,var(--color-alert-ink)_60deg,rgb(from_var(--color-alert-ink)_r_g_b/0.2)_120deg,transparent_260deg,transparent_360deg)]',
+                '[mask:radial-gradient(farthest-side,transparent_calc(100%-1.5px),#000_calc(100%-1.5px))]',
+              ]
             )}
           />
 
