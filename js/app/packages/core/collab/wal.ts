@@ -1,6 +1,7 @@
 import { logger } from '@observability/logger';
 import type { Listen } from '@solid-primitives/event-bus';
 import { type DBSchema, type IDBPDatabase, openDB as idbOpen } from 'idb';
+import { logger } from '@observability/logger';
 import type { RawUpdate } from './shared';
 import type { LiveSyncSource, SyncSourceEvent, WALSyncSource } from './source';
 
@@ -166,6 +167,11 @@ export class IDBWALSyncSource implements WALSyncSource {
       if (delivered) {
         await this.store.markDelivered(undelivered.map((e) => e.id));
       } else {
+        logger.warn('WAL flush: pushUpdate not acked', {
+          scope: 'wal',
+          documentId: this.documentId,
+          count: undelivered.length,
+        });
         succeeded = false;
       }
     } finally {

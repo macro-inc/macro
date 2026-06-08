@@ -123,7 +123,7 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
   });
 
   const { refreshRemoteCursors, RemoteCursorsOverlay } = useRemoteCursors({
-    loroManager,
+    loroManager: loroManager,
     mapping: props.mappings,
     editor: props.editor,
     awareness: awareness,

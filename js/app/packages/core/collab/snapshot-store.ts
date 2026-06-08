@@ -70,12 +70,17 @@ export async function loadCachedState<S extends GenericRootSchema>(
   }
 
   const pending = await walStore.getAll();
+  const undelivered = pending.filter((e) => !e.delivered);
+  console.log('[WAL] cold load: replaying WAL entries', {
+    total: pending.length,
+    undelivered: undelivered.length,
+  });
   for (const entry of pending) {
     const importResult = loroManager.importUpdate(entry.update);
     if (importResult.isErr()) {
       // Stop replaying. Skipped entries are safe: delivered ones are on the
       // server (server sync will bring them back) and undelivered ones are
-      // still in the WAL (engine.start will flush them).
+      // still in the WAL (next edit or reconnect will flush them).
       console.error('failed to replay WAL entry during cold load', {
         entryId: entry.id,
         err: importResult.error,
