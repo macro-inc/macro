@@ -7,7 +7,7 @@ use lambda_runtime::{Error, LambdaEvent};
 use sqlx::{PgPool, Postgres};
 use tracing::Instrument;
 
-use crate::{ffmpeg::FfmpegTools, key};
+use crate::{db, ffmpeg::FfmpegTools, key};
 
 const DEFAULT_PRESIGNED_URL_SECONDS: u64 = 900;
 const JPEG_CONTENT_TYPE: &str = "image/jpeg";
@@ -246,7 +246,7 @@ async fn persist_preview_url(
     recording_key: &str,
     preview_key: &str,
 ) -> anyhow::Result<()> {
-    let rows_updated = macro_db_client::call_record::update_preview_url::update_preview_url(
+    let rows_updated = db::update_preview_url(
         db,
         recording_key,
         preview_key,

@@ -5,5 +5,6 @@
 mod event;
 mod ffmpeg;
 mod key;
+mod db;
 
 pub use event::{HandlerConfig, HandlerState, handler};
