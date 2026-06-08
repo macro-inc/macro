@@ -21,9 +21,9 @@ type PendingUserNameRequest = {
 let pendingUserNameRequests = new Map<string, PendingUserNameRequest[]>();
 let pendingUserNameFlush: ReturnType<typeof setTimeout> | undefined;
 
-export function normalizeUserNameQueryId(userId: string): string {
+export function normalizeUserNameQueryId(userId: string): string | null {
   const trimmed = userId.trim();
-  return isMacroUserNameQueryId(trimmed) ? trimmed.toLowerCase() : trimmed;
+  return isMacroUserNameQueryId(trimmed) ? trimmed.toLowerCase() : null;
 }
 
 function uniqueUserNameQueryIds(userIds: readonly string[]): string[] {
@@ -49,13 +49,12 @@ function isMacroUserNameQueryId(userId: string): boolean {
 }
 
 async function fetchUserNames(userIds: string[]): Promise<UserName[]> {
-  const macroUserIds = userIds.filter(isMacroUserNameQueryId);
-  if (macroUserIds.length === 0) return [];
+  if (userIds.length === 0) return [];
 
   const result = await throwOnErr(
     async () =>
       await authServiceClient.getUserNamesWithEmail({
-        user_ids: macroUserIds,
+        user_ids: userIds,
       })
   );
 
@@ -70,9 +69,11 @@ function flushPendingUserNameRequests() {
   const userIds = Array.from(requestsById.keys());
   fetchUserNames(userIds)
     .then((names) => {
-      const namesById = new Map(
-        names.map((name) => [normalizeUserNameQueryId(name.id), name])
-      );
+      const namesById = new Map<string, UserName>();
+      for (const name of names) {
+        const normalizedId = normalizeUserNameQueryId(name.id);
+        if (normalizedId) namesById.set(normalizedId, name);
+      }
 
       for (const [userId, requests] of requestsById) {
         const userName = namesById.get(userId) ?? null;
@@ -100,8 +101,9 @@ async function fetchUserName(userId: string): Promise<UserName | null> {
 export function userNameQueryOptions(userId: string) {
   const queryUserId = normalizeUserNameQueryId(userId);
   return {
-    queryKey: authKeys.userName(queryUserId).queryKey,
-    queryFn: () => fetchUserName(queryUserId),
+    queryKey: authKeys.userName(queryUserId ?? '').queryKey,
+    queryFn: () =>
+      queryUserId ? fetchUserName(queryUserId) : Promise.resolve(null),
     enabled: Boolean(queryUserId),
     throwOnError: false,
     staleTime: USER_NAMES_STALE_TIME,
