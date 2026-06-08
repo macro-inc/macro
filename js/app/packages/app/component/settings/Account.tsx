@@ -223,13 +223,7 @@ export function Account() {
     if (!target) return;
     setRemoveTarget(null);
     await removeInbox(target.id).match(
-      () => {
-        toast.success(
-          target.isOwn
-            ? 'Inbox removed — clearing its data, this may take a moment.'
-            : 'Inbox removed.'
-        );
-      },
+      () => toast.success('Inbox removed'),
       () => toast.failure('Failed to remove inbox. Please try again.')
     );
   };
