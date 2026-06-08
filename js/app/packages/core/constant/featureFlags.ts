@@ -370,16 +370,18 @@ export const ENABLE_SOUP_GROUP_BY_OVERRIDE = DEV_MODE_ENV ? true : undefined;
 export const ENABLE_TASK_DUPLICATES_FLAG = 'enable-task-duplicates';
 export const ENABLE_TASK_DUPLICATES_OVERRIDE = DEV_MODE_ENV ? true : undefined;
 
-const ENABLE_AUTO_UPDATE_UI_OVERRIDE = getFeatureFlagOverride(
+export const DISABLE_AUTO_UPDATE_UI_FLAG = 'disable-auto-update-ui';
+export const ENABLE_AUTO_UPDATE_UI_OVERRIDE = getFeatureFlagOverride(
   'ENABLE_AUTO_UPDATE_UI'
 );
+
 export function ENABLE_AUTO_UPDATE_UI(): boolean {
   if (ENABLE_AUTO_UPDATE_UI_OVERRIDE !== undefined) {
     return ENABLE_AUTO_UPDATE_UI_OVERRIDE;
   }
 
   return !(
-    analytics.posthog.isFeatureEnabled('disable-auto-update-ui') ?? false
+    analytics.posthog.isFeatureEnabled(DISABLE_AUTO_UPDATE_UI_FLAG) ?? false
   );
 }
 
