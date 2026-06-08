@@ -1,10 +1,13 @@
+import { updateUserAuth } from '@core/auth';
 import { useEmail } from '@core/context/user';
 import { throwOnErr } from '@core/util/result';
+import { invalidateUserInfo } from '@queries/auth/user-info';
 import { queryClient } from '@queries/client';
 import { emailClient } from '@service-email/client';
 import type { ListLinksResponse } from '@service-email/generated/schemas';
-import { useQuery } from '@tanstack/solid-query';
+import { useMutation, useQuery } from '@tanstack/solid-query';
 import { createMemo } from 'solid-js';
+import { type MutationCallbacks, withCallbacks } from '../utils';
 import { emailKeys } from './keys';
 
 const LINK_STALE_TIME = 5 * 60 * 1000;
@@ -54,36 +57,66 @@ export function invalidateEmailLinks() {
   });
 }
 
-/**
- * Optimistically drops a link from the cached links list and returns the prior
- * cache value so the caller can roll back if the server delete fails.
- */
-export function removeEmailLinkFromCache(
-  linkId: string
-): ListLinksResponse | undefined {
-  queryClient.cancelQueries({ queryKey: emailKeys.links.queryKey });
-  const previous = queryClient.getQueryData<ListLinksResponse>(
-    emailKeys.links.queryKey
-  );
-  queryClient.setQueryData<ListLinksResponse>(
-    emailKeys.links.queryKey,
-    (current) =>
-      current && {
-        ...current,
-        links: current.links.filter((link) => link.id !== linkId),
-      }
-  );
-  return previous;
-}
+type RemoveInboxContext = { previousLinks: ListLinksResponse | undefined };
+type RemoveInboxCallbacks = MutationCallbacks<
+  void,
+  Error,
+  string,
+  RemoveInboxContext
+>;
 
 /**
- * Restores a previously snapshotted links cache, e.g. to roll back an
- * optimistic removal after the server delete fails.
+ * Removes a linked inbox, optimistically dropping its row from the cached links
+ * list so the change is reflected immediately. Rolls the cache back on failure
+ * and reconciles with the server on success.
  */
-export function restoreEmailLinksCache(
-  snapshot: ListLinksResponse | undefined
-) {
-  if (snapshot) {
-    queryClient.setQueryData(emailKeys.links.queryKey, snapshot);
-  }
+export function useRemoveInboxMutation(callbacks?: RemoveInboxCallbacks) {
+  return useMutation(() => ({
+    mutationFn: async (linkId: string) => {
+      await throwOnErr(() => emailClient.deleteLink({ linkId }));
+    },
+
+    ...withCallbacks<void, Error, string, RemoveInboxContext>(
+      {
+        onMutate: async (linkId) => {
+          await queryClient.cancelQueries({
+            queryKey: emailKeys.links.queryKey,
+          });
+
+          const previousLinks = queryClient.getQueryData<ListLinksResponse>(
+            emailKeys.links.queryKey
+          );
+
+          queryClient.setQueryData<ListLinksResponse>(
+            emailKeys.links.queryKey,
+            (old) =>
+              old
+                ? {
+                    ...old,
+                    links: old.links.filter((link) => link.id !== linkId),
+                  }
+                : undefined
+          );
+
+          return { previousLinks };
+        },
+
+        onSuccess: async () => {
+          invalidateEmailLinks();
+          await updateUserAuth();
+          await invalidateUserInfo();
+        },
+
+        onError: (_error, _linkId, context) => {
+          if (context?.previousLinks) {
+            queryClient.setQueryData(
+              emailKeys.links.queryKey,
+              context.previousLinks
+            );
+          }
+        },
+      },
+      callbacks
+    ),
+  }));
 }

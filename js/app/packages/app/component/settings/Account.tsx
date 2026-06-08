@@ -59,6 +59,7 @@ import PaywallTeamOwnerView from '../paywall/PaywallTeamOwnerView';
 import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
 import { useEmailLinks, useEmailLinksStatus } from '@core/email-link';
 import { useInitGmailLink } from '@queries/auth';
+import { useRemoveInboxMutation } from '@queries/email/link';
 import {
   type SupportedNotificationSettings,
   useNotificationSettings,
@@ -142,9 +143,12 @@ export function Account() {
   const {
     query: emailLinksQuery,
     disconnect: disconnectEmail,
-    removeInbox,
     resyncInbox,
   } = useEmailLinks();
+  const removeInboxMutation = useRemoveInboxMutation({
+    onSuccess: () => toast.success('Inbox removed'),
+    onError: () => toast.failure('Failed to remove inbox. Please try again.'),
+  });
   const [removeTarget, setRemoveTarget] = createSignal<{
     id: string;
     email: string;
@@ -218,14 +222,11 @@ export function Account() {
     });
   };
 
-  const handleRemoveInbox = async () => {
+  const handleRemoveInbox = () => {
     const target = removeTarget();
     if (!target) return;
     setRemoveTarget(null);
-    await removeInbox(target.id).match(
-      () => toast.success('Inbox removed'),
-      () => toast.failure('Failed to remove inbox. Please try again.')
-    );
+    removeInboxMutation.mutate(target.id);
   };
 
   const [githubLinkStatus, { refetch: refetchGithubLinkStatus }] =
