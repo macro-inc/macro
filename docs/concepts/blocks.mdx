@@ -1,43 +1,25 @@
 ---
-title: "Block Feature List"
+title: "Blocks"
 description: "Block-by-block reference of what Macro can and can't do, with cross-block integrations and links to full docs."
 ---
 
-This is a block-by-block reference of what Macro can and can't do. The audience is agents (and power users) who already understand the product at a high level and want to confirm whether a specific capability exists inside a given block, and how that block links to the rest of the workspace.
+Everything in Macro is a **block**. This page is a block-by-block reference of what each one can and can't do, aimed at agents (and power users) who already understand the product at a high level and want to confirm whether a specific capability exists, and how a block links to the rest of the workspace.
 
-Each block has its own section covering what it does, the specifics worth knowing, and how it interlinks with other blocks. Where a feature is behind a flag or mid-migration, it's called out so you don't promise something that isn't live yet. Where a block has a full guide, a **Full docs** link points to it.
+The block types are `md` (documents), `email`, `channel`, `chat` (agents), `automation`, `project` (tasks), `contact` (CRM), `call`, `canvas`, `code`, `image`, `video`, `pdf`, and `unknown` (fallback). Two aliases route to existing blocks: `task` → `project`, and `csv` → a document/text block. Each section below covers what a block does, the specifics worth knowing, and how it interlinks with other blocks. Where a feature is behind a flag or mid-migration, it's called out so you don't promise something that isn't live yet. Where a block has a full guide, a **Full docs** link points to it.
 
 <Note>
   This is v1, generated from the codebase. Treat it as the source of truth for "does this exist," and flag anything that looks stale.
 </Note>
 
-## How blocks work (read this first)
+## Shared behaviors
 
-Everything in Macro is a **block**. The block types are `md` (documents), `email`, `channel`, `chat` (agents), `automation`, `project` (tasks), `contact` (CRM), `call`, `canvas`, `code`, `image`, `video`, `pdf`, and `unknown` (fallback). Two aliases route to existing blocks: `task` → `project`, and `csv` → a document/text block.
-
-A handful of capabilities are not features of any one block — they are properties of the platform that show up almost everywhere. [Mentions](#mentions) get their own section below because they're how blocks reference each other. The rest:
+A handful of capabilities aren't features of any one block — they're properties of the platform that show up almost everywhere. Two of them are big enough to have their own pages: [Mentions](/concepts/mentions) are how blocks reference each other, and [Properties](/concepts/properties) are how structured fields attach to them. The rest:
 
 - **Splits** — Any two blocks can sit side-by-side (a doc next to a chat, an email next to a task). A few combinations are restricted: no doc-with-doc of the same kind, no code-with-code, and no pdf-with-pdf unless multisplit is enabled. Create a split with <kbd>cmd</kbd>+<kbd>\</kbd>, focus left/right with <kbd>shift</kbd>+<kbd>h</kbd> / <kbd>shift</kbd>+<kbd>l</kbd>, maximize with <kbd>shift</kbd>+<kbd>escape</kbd>, close with <kbd>cmd</kbd>+<kbd>escape</kbd>.
 - **Nesting** — `canvas`, `pdf`, and `code` blocks can embed read-only inside a markdown doc, with their editing and markup tools disabled.
-- **Properties** — A unified property system (text, number, boolean, date, single/multi-select, entity-reference, link) attaches to documents, tasks, emails, and CRM records. The full type list lives in [CRM](#crm--contacts--companies); the task-specific fields are in [Tasks](#tasks).
 - **References, sharing & permissions** — Every block has a References panel (backlinks to everywhere it's mentioned or embedded) and the same share dialog, with owner / editor / commenter / viewer access levels plus public links for documents.
 - **Real-time collaboration** — Collaborative blocks (docs, canvas, pdf markup) sync through **Loro CRDTs** over a **Cloudflare Durable Objects** backend: the Rust `sync-service` spins up one Durable Object "room" per document, and clients connect over WebSocket to `/document/:id`. This is what gives you multiplayer editing, presence cursors, and full offline support — edits reconcile when you reconnect. A separate `lexical-service` Cloudflare Worker handles server-side conversions (plaintext, search/cognition preprocessing, markdown→Loro snapshots).
 - **Search & Inbox** — One unified [Search](/product/search) index covers every block type, filterable by type and by mentioned person. The unified [Inbox](/product/inbox) pulls open notifications from across blocks into a single recency-sorted list.
-
-## Mentions
-
-Mentions are the connective tissue of the workspace, so they belong here rather than under any single block. Typing `@` in any rich-text surface — a document, an email body, a channel message, a chat or automation prompt, or a task description — opens an autocomplete that lets you reference something else in Macro. Whatever you pick renders as a live inline pill that carries its target's current metadata (a task mention, for instance, shows the task's status and priority), and the reference is recorded in the target's [References](#how-blocks-work-read-this-first) panel as a backlink.
-
-You can mention:
-
-- **People** — by name or email.
-- **Documents and blocks** — any doc, task, canvas, code file, pdf, etc.
-- **Contacts and companies** — CRM records, rendered differently for people vs. organizations.
-- **Channels** — a deep link to the channel (or to a specific message/thread).
-- **Dates** — date pills.
-- **Groups** — by group alias.
-
-What a mention *does* depends on where you make it. In a document or chat it's a navigable link and a source of context. In an **email body** it has side effects: mentioning a person adds them to CC, and mentioning a document inserts a link and updates that document's permissions so recipients can open it. In a **channel** there are two special mentions on top of the normal ones — `@here` pings every participant, and `@Macro` invokes the agent inline. The agent also leans on mentions heavily: anything you @mention into a chat is pulled in as context, and autocomplete there surfaces your currently open tabs first.
 
 ---
 
@@ -53,13 +35,13 @@ The editor supports the full set of block nodes — paragraphs, Heading 1/2/3, b
 
 Markdown autoformatting works as you type (`#`/`##`/`###`, `-`, `1.`, `[]`, `>`, `---`, and backticks), `:shortcode:` emoji are supported, blocks can be dragged to reorder, <kbd>tab</kbd>/<kbd>shift</kbd>+<kbd>tab</kbd> indent and outdent, and find & replace (<kbd>cmd</kbd>+<kbd>f</kbd>) supports regex and replace-one/replace-all. The slash menu (`/`, or the command menu) inserts any of these: Normal text, Heading 1/2/3, Blockquote, Code block, Bullet/Numbered/Checklist, **Task** (an inline task with mentions), Image, Video, Link, Equation (`/latex` or `/math`), Table (5×3), and Divider.
 
-All [mention](#mentions) types work in the body and render as collapsible inline pills.
+All [mention](/concepts/mentions) types work in the body and render as collapsible inline pills.
 
 ### Comments, history & properties
 
 Comments are inline and thread-based, anchored to a text selection — you can reply, resolve and unresolve, draft, and edit or delete your own. Comments are also what generate inbox notifications; a plain `@mention` in the body does not. Full version history is available via time-travel: browse historical states grouped by user and time, and **fork** a document at any past version into a new doc.
 
-The side panel shows Details (owner, folder/project, created/updated) alongside a Properties section; you can pin properties so their values render as pills under the title, toggle an optional YAML front-matter display, and see a live word/character count.
+The side panel shows Details (owner, folder/project, created/updated) alongside a [Properties](/concepts/properties) section; you can pin properties so their values render as pills under the title, toggle an optional YAML front-matter display, and see a live word/character count.
 
 ### Sharing & export
 
@@ -99,11 +81,11 @@ Email splits into **Signal** (important mail — teammates, customer feedback) a
 
 ### Labels, side panel & rendering
 
-You can view, add, and remove thread labels and list your full label set; agents can read and modify labels too (`UpdateThreadLabels`, `ListLabels`). The side panel Details show Last Sent, Last Received, Thread Started, and Subject, alongside a custom Properties section. Email HTML is sanitized and external images are proxied, with a plain-text→HTML fallback.
+You can view, add, and remove thread labels and list your full label set; agents can read and modify labels too (`UpdateThreadLabels`, `ListLabels`). The side panel Details show Last Sent, Last Received, Thread Started, and Subject, alongside a custom [Properties](/concepts/properties) section. Email HTML is sanitized and external images are proxied, with a plain-text→HTML fallback.
 
 ### Integrations
 
-In the body, [mentions](#mentions) have side effects: a person becomes a CC recipient and a document becomes a permissioned link. From a thread you can **Create Task** (the title is pre-filled from the subject and the thread is linked into the task body), share it into a channel (feature-flagged — participants get a notification and can read the whole thread, but to reply they must be forwarded the mail), or **Chat with agent** to open a chat with the thread as context. Agents can read threads (`GetThread`/`ReadThread`) and compose or send mail (`SendEmail`, with user review before sending). Senders and recipients auto-link to [CRM](#crm--contacts--companies) contacts and companies, and attachments extract into the Documents container with one click.
+In the body, [mentions](/concepts/mentions) have side effects: a person becomes a CC recipient and a document becomes a permissioned link. From a thread you can **Create Task** (the title is pre-filled from the subject and the thread is linked into the task body), share it into a channel (feature-flagged — participants get a notification and can read the whole thread, but to reply they must be forwarded the mail), or **Chat with agent** to open a chat with the thread as context. Agents can read threads (`GetThread`/`ReadThread`) and compose or send mail (`SendEmail`, with user review before sending). Senders and recipients auto-link to [CRM](#crm--contacts--companies) contacts and companies, and attachments extract into the Documents container with one click.
 
 ---
 
@@ -119,7 +101,7 @@ Messages use the full Lexical editor — headings, the usual inline formatting, 
 
 ### Threading & membership
 
-Threads are Reddit-style and nested: expand or collapse a parent into its replies, reply in a dedicated input, quote-reply (with a `>` prefix), and page through replies. Arrow keys navigate, <kbd>enter</kbd> replies, and <kbd>e</kbd>/<kbd>backspace</kbd> edit or delete your reply. Participants are added by email — non-users get an email about the notification — and a Participants tab lets you view, search, and remove members. Alongside the normal [mentions](#mentions), `@here` pings everyone in the channel and `@Macro` calls the agent inline.
+Threads are Reddit-style and nested: expand or collapse a parent into its replies, reply in a dedicated input, quote-reply (with a `>` prefix), and page through replies. Arrow keys navigate, <kbd>enter</kbd> replies, and <kbd>e</kbd>/<kbd>backspace</kbd> edit or delete your reply. Participants are added by email — non-users get an email about the notification — and a Participants tab lets you view, search, and remove members. Alongside the normal [mentions](/concepts/mentions), `@here` pings everyone in the channel and `@Macro` calls the agent inline.
 
 ### Attachments, sharing in & calls
 
@@ -170,7 +152,7 @@ Scheduled agent runs (cron jobs) — the same agent and tools as [Chat](#chat--a
 
 **Full docs:** [Automations (in Agents)](/product/agents#automations) · Created from the Agents module → Automations tab.
 
-An automation is a composer with a name (auto-derived from the prompt, up to ~72 characters), a markdown prompt editor that accepts [mentions](#mentions) of channels, docs, tasks, and people, plus a schedule and timezone (defaulting to local). Schedules are **weekly** (pick days, with weekday/weekend/every-day presets) or **monthly** (a day from 1–31) at a chosen `HH:MM`; the defaults are weekly, weekdays, 09:00. Under the hood these are stored as standard 6–7 field cron expressions (ranges, lists, and wildcards all parse), and each run is capped at 20 minutes.
+An automation is a composer with a name (auto-derived from the prompt, up to ~72 characters), a markdown prompt editor that accepts [mentions](/concepts/mentions) of channels, docs, tasks, and people, plus a schedule and timezone (defaulting to local). Schedules are **weekly** (pick days, with weekday/weekend/every-day presets) or **monthly** (a day from 1–31) at a chosen `HH:MM`; the defaults are weekly, weekdays, 09:00. Under the hood these are stored as standard 6–7 field cron expressions (ranges, lists, and wildcards all parse), and each run is capped at 20 minutes.
 
 You can edit, enable or disable, rename, delete, and **Run Now**, with a "Running" indicator while a run is in flight. The run history keeps the latest ~50 entries with a timestamp and success/failure state, and each run produces a chat artifact you can open. Every run has the full MCP toolset, and results land in the [Inbox](/product/inbox) and the Agents tab at the scheduled time.
 
@@ -193,7 +175,7 @@ Lightweight task tracking (block type `project`, alias `task`). Deliberately low
 - **Effort** (number) and **Story Points** (number).
 - **Relevant Documents** (multi-doc references).
 
-Beyond these, tasks accept any **custom property** from the shared type system (see [CRM](#crm--contacts--companies) for the full list). Status, Priority, and Assignees are pinned by default.
+Beyond these, tasks accept any **custom property** from the shared type system (see [Properties](/concepts/properties) for the full list). Status, Priority, and Assignees are pinned by default.
 
 ### Views & creation
 
@@ -213,7 +195,7 @@ Tasks are @mentionable in docs, channels, emails, and chats, where they render a
 
 ## CRM — Contacts & Companies
 
-A CRM that "just works" (block type `contact`), built on the same polymorphic entity and property system as [Tasks](#tasks). Records are created automatically from email activity, so the CRM stays populated without manual entry.
+A CRM that "just works" (block type `contact`), built on the same polymorphic entity and [property](/concepts/properties) system as [Tasks](#tasks). Records are created automatically from email activity, so the CRM stays populated without manual entry.
 
 <Note>CRM does not yet have a standalone guide page — this section is the reference for now.</Note>
 
@@ -224,20 +206,7 @@ There are two record types, and both can relate to Projects, Channels, Chats, Do
 - **Contact** (a person): Email, Name, Company (parent), First Interaction, Last Interaction, Created/Updated, and a Hidden flag (admin-only visibility).
 - **Company** (an organization): Name and Description (resolved from the domain directory), Team, Domains (primary first), an embedded permission-filtered Contacts list, an Email Sync toggle, a Hidden flag, and Created/Updated.
 
-### Custom properties — supported types
-
-Contacts, companies, tasks, and other entities all support the same property data types:
-
-- **STRING** (text) — e.g. phone, job title, department, notes.
-- **NUMBER** — e.g. revenue, employee count, ARR.
-- **BOOLEAN** — toggles.
-- **DATE** — e.g. last contacted, contract/renewal date.
-- **SELECT_STRING** — single/multi-select with string options (custom option colors/icons).
-- **SELECT_NUMBER** — single/multi-select with numeric options.
-- **ENTITY** — a reference to another entity (User, Company, Contact, Document, Project, Channel, Chat, Task, Thread).
-- **LINK** — URLs (website, LinkedIn, etc.).
-
-Property editors come in inline (click-to-edit), popover, and modal (batch) forms. Properties can be system (non-removable) or custom, and properties marked as metadata stay out of the main views.
+On top of these built-ins, contacts and companies accept any custom property — phone, job title, industry, revenue, renewal date, a LinkedIn link, and so on. See [Properties](/concepts/properties) for the supported types and editors.
 
 ### Auto-creation & management
 
@@ -245,7 +214,7 @@ Sending or receiving email auto-creates the contact and its company, links them,
 
 ### Integrations
 
-Email is the primary data source — contacts and companies link to threads, and per-company email sync controls what flows in. Both are [@mentionable](#mentions) in docs, channels, and chats (rendered distinctly for people vs. companies), tasks can reference them through ENTITY properties, and agents read and write them through the entity property tools (`GetEntityProperties`, `SetEntityProperty`, `ListEntities`).
+Email is the primary data source — contacts and companies link to threads, and per-company email sync controls what flows in. Both are [@mentionable](/concepts/mentions) in docs, channels, and chats (rendered distinctly for people vs. companies), tasks can reference them through ENTITY properties, and agents read and write them through the entity property tools (`GetEntityProperties`, `SetEntityProperty`, `ListEntities`).
 
 ---
 
