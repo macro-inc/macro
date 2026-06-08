@@ -2,6 +2,7 @@ import { useEmail } from '@core/context/user';
 import { throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
 import { emailClient } from '@service-email/client';
+import type { ListLinksResponse } from '@service-email/generated/schemas';
 import { useQuery } from '@tanstack/solid-query';
 import { createMemo } from 'solid-js';
 import { emailKeys } from './keys';
@@ -51,4 +52,38 @@ export function invalidateEmailLinks() {
   queryClient.invalidateQueries({
     queryKey: emailKeys.links.queryKey,
   });
+}
+
+/**
+ * Optimistically drops a link from the cached links list and returns the prior
+ * cache value so the caller can roll back if the server delete fails.
+ */
+export function removeEmailLinkFromCache(
+  linkId: string
+): ListLinksResponse | undefined {
+  queryClient.cancelQueries({ queryKey: emailKeys.links.queryKey });
+  const previous = queryClient.getQueryData<ListLinksResponse>(
+    emailKeys.links.queryKey
+  );
+  queryClient.setQueryData<ListLinksResponse>(
+    emailKeys.links.queryKey,
+    (current) =>
+      current && {
+        ...current,
+        links: current.links.filter((link) => link.id !== linkId),
+      }
+  );
+  return previous;
+}
+
+/**
+ * Restores a previously snapshotted links cache, e.g. to roll back an
+ * optimistic removal after the server delete fails.
+ */
+export function restoreEmailLinksCache(
+  snapshot: ListLinksResponse | undefined
+) {
+  if (snapshot) {
+    queryClient.setQueryData(emailKeys.links.queryKey, snapshot);
+  }
 }

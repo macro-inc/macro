@@ -7,7 +7,12 @@ import {
 import { openEmailAuthPopup } from '@core/auth/email';
 
 import { invalidateUserInfo } from '@queries/auth/user-info';
-import { invalidateEmailLinks, useEmailLinksQuery } from '@queries/email/link';
+import {
+  invalidateEmailLinks,
+  removeEmailLinkFromCache,
+  restoreEmailLinksCache,
+  useEmailLinksQuery,
+} from '@queries/email/link';
 import { emailClient } from '@service-email/client';
 import type {
   ListLinksResponse,
@@ -197,7 +202,12 @@ export function useEmailLinks() {
         .map(startEmailPolling)
         .andTee(invalidations),
     disconnect: () => disconnectEmail().andTee(invalidations),
-    removeInbox: (linkId: string) => removeInbox(linkId).andTee(invalidations),
+    removeInbox: (linkId: string) => {
+      const snapshot = removeEmailLinkFromCache(linkId);
+      return removeInbox(linkId)
+        .andTee(invalidations)
+        .orTee(() => restoreEmailLinksCache(snapshot));
+    },
     resyncInbox: (linkId: string) =>
       resyncInbox(linkId).andTee(() => invalidateEmailLinks()),
     invalidate: () => invalidateEmailLinks(),
