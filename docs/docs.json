@@ -16,8 +16,8 @@
     }
   },
   "favicon": {
-    "light": "/docs/images/macro-logo.svg",
-    "dark": "/docs/images/macro-logo.svg"
+    "light": "favicon.svg",
+    "dark": "/favicon.svg"
   },
   "navigation": {
     "tabs": [
@@ -88,10 +88,6 @@
         ]
       }
     ]
-  },
-  "logo": {
-    "light": "/docs/images/macro-logo.svg",
-    "dark": "/docs/images/macro-logo.svg"
   },
   "navbar": {
     "primary": {
