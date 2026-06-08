@@ -17,7 +17,16 @@ export function FocusClickTarget(
   return (
     <div
       onMouseDown={(e: MouseEvent) => {
-        e.preventDefault(); // this div should not take focus.
+        // don't prevent default when there's an active selection
+        // since the expected behavior is that it unselects
+        let hasActiveSelection = false;
+        local.editor.getEditorState().read(() => {
+          const sel = $getSelection();
+          hasActiveSelection = $isRangeSelection(sel) && !sel.isCollapsed();
+        });
+        if (!hasActiveSelection) {
+          e.preventDefault();
+        }
       }}
       classList={{
         'invisible-focus-target': true,
