@@ -2,12 +2,13 @@ import { whenSplitManagerReady } from '@app/signal/splitLayout';
 import { ENABLE_CALLKIT } from '@core/constant/featureFlags';
 import { useChannelsContext } from '@core/context/channels';
 import { isPlatform, isTauri } from '@core/util/platform';
-import { authServiceClient } from '@service-auth/client';
+import { useUserNamesQuery } from '@queries/auth';
+import type { UserName } from '@service-auth/generated/schemas/userName';
 import { notificationServiceClient } from '@service-notification/client';
 import type { DeviceType } from '@service-notification/generated/schemas/deviceType';
 import { raceTimeout } from '@solid-primitives/promise';
 import { addPluginListener, Channel, invoke } from '@tauri-apps/api/core';
-import { createEffect, createMemo, onCleanup, onMount } from 'solid-js';
+import { createEffect, createMemo, on, onCleanup, onMount } from 'solid-js';
 import { joinChannelCall } from './join-channel-call';
 import {
   type NativeCallSnapshot,
@@ -59,6 +60,20 @@ type NativeCallChannelMetadata = {
   channelId: string;
   name?: string | null;
 };
+
+type NativeCallChannelTitleSyncValue =
+  | { channelId: string; channelTitle: string }
+  | null
+  | undefined;
+
+type NativeParticipantDisplayNames =
+  | { isPending: true }
+  | {
+      isPending: false;
+      displayNames: Record<string, string>;
+      fetchedNameCount: number;
+      errors: unknown[];
+    };
 
 function applyConnectionState(
   nativeCall: NativeCallState,
@@ -169,75 +184,6 @@ export function useCallKitSetup() {
   if (!isNativeIosCallKitEnabled()) return;
 
   const nativeCall = useNativeCallState();
-  let requestedParticipantKey: string | null = null;
-
-  createEffect(() => {
-    const channelId = nativeCall.activeChannelId();
-    const nativeParticipantIds = nativeCall.participantIdentities();
-    const participantIds = uniqueParticipantIds(nativeParticipantIds);
-    const participantKey = participantIds
-      .map(normalizeParticipantIdentity)
-      .sort()
-      .join('\0');
-
-    if (!participantKey) {
-      requestedParticipantKey = null;
-      return;
-    }
-    if (participantKey === requestedParticipantKey) return;
-    requestedParticipantKey = participantKey;
-
-    const fallbackNames: Record<string, string> = Object.fromEntries(
-      participantIds.map((userId) => [userId, fallbackParticipantName(userId)])
-    );
-
-    console.info('[callkit] fetching native participant display names', {
-      channelId,
-      participantCount: participantIds.length,
-    });
-
-    authServiceClient
-      .getUserNamesWithEmail({ user_ids: participantIds })
-      .then((result) => {
-        if (requestedParticipantKey !== participantKey) return;
-        const displayNames = buildParticipantDisplayNames(
-          participantIds,
-          fallbackNames,
-          result.isOk() ? result.value.names : []
-        );
-
-        if (result.isErr()) {
-          console.error('[callkit] failed to fetch participant display names', {
-            channelId,
-            nativeParticipantIds,
-            participantIds,
-            error: result.error,
-          });
-        }
-
-        console.info('[callkit] syncing native participant display names', {
-          channelId,
-          participantCount: participantIds.length,
-          fetchedNameCount: result.isOk() ? result.value.names.length : 0,
-        });
-
-        for (const [identity, displayName] of Object.entries(displayNames)) {
-          setNativeCallKitParticipantDisplayName(identity, displayName).catch(
-            (err) =>
-              console.error(
-                '[callkit] failed to sync native participant display name',
-                err
-              )
-          );
-        }
-      })
-      .catch((err) =>
-        console.error(
-          '[callkit] failed to fetch participant display names',
-          err
-        )
-      );
-  });
 
   onMount(() => {
     console.info('[callkit] setting up iOS CallKit integration');
@@ -459,7 +405,6 @@ export function useCallKitSetup() {
 function useCallKitNativeMetadataSync() {
   const nativeCall = useNativeCallState();
   const channelsCtx = useChannelsContext();
-  let lastSyncedTitle: string | null | undefined;
 
   const channelMetadata = createMemo((): NativeCallChannelMetadata | null => {
     const channelId = nativeCall.activeChannelId();
@@ -476,31 +421,122 @@ function useCallKitNativeMetadataSync() {
     return null;
   });
 
-  createEffect(() => {
-    const metadata = channelMetadata();
-    if (!metadata) {
-      if (nativeCall.activeChannelId()) return;
-      if (lastSyncedTitle === null) return;
-      lastSyncedTitle = null;
-      setNativeCallKitChannelTitle(null).catch((err) =>
-        console.error('[callkit] failed to clear native channel title', err)
-      );
-      return;
+  const channelTitleSyncValue = createMemo(
+    (): NativeCallChannelTitleSyncValue => {
+      const metadata = channelMetadata();
+      if (!metadata) {
+        return nativeCall.activeChannelId() ? undefined : null;
+      }
+
+      const channelTitle = metadata.name?.trim();
+      if (!channelTitle) return undefined;
+
+      return {
+        channelId: metadata.channelId,
+        channelTitle,
+      };
     }
+  );
 
-    const channelTitle = metadata.name?.trim();
-    if (!channelTitle) return;
+  createEffect(
+    on(channelTitleSyncValue, (syncValue, previousSyncValue) => {
+      if (syncValue === undefined) return;
 
-    if (channelTitle === lastSyncedTitle) return;
-    lastSyncedTitle = channelTitle;
-    console.info('[callkit] syncing native channel title', {
-      channelId: metadata.channelId,
-      channelTitle,
-    });
-    setNativeCallKitChannelTitle(channelTitle).catch((err) =>
-      console.error('[callkit] failed to sync native channel title', err)
-    );
+      if (syncValue === null) {
+        if (previousSyncValue === null) return;
+        setNativeCallKitChannelTitle(null).catch((err) =>
+          console.error('[callkit] failed to clear native channel title', err)
+        );
+        return;
+      }
+
+      if (
+        previousSyncValue &&
+        previousSyncValue.channelTitle === syncValue.channelTitle
+      ) {
+        return;
+      }
+
+      console.info('[callkit] syncing native channel title', syncValue);
+      setNativeCallKitChannelTitle(syncValue.channelTitle).catch((err) =>
+        console.error('[callkit] failed to sync native channel title', err)
+      );
+    })
+  );
+
+  return null;
+}
+
+function useCallKitParticipantDisplayNameSync() {
+  const nativeCall = useNativeCallState();
+  const nativeParticipantIds = createMemo(() =>
+    nativeCall.participantIdentities()
+  );
+  const participantIds = createMemo(() =>
+    uniqueParticipantIds(nativeParticipantIds())
+  );
+
+  const participantUserNameQueries = useUserNamesQuery({
+    userIds: participantIds,
+    enabled: () => participantIds().length > 0,
   });
+
+  const participantDisplayNames = createMemo(
+    (): NativeParticipantDisplayNames | undefined => {
+      const ids = participantIds();
+      if (ids.length === 0) return undefined;
+
+      const isPending = participantUserNameQueries.some(
+        (query) => query.isPending
+      );
+      if (isPending) return { isPending: true };
+
+      const fetchedNames = participantUserNameQueries
+        .map((query) => query.data)
+        .filter((name): name is UserName => Boolean(name));
+
+      return {
+        isPending: false,
+        displayNames: buildParticipantDisplayNames(
+          ids,
+          fallbackParticipantDisplayNames(ids),
+          fetchedNames
+        ),
+        fetchedNameCount: fetchedNames.length,
+        errors: participantUserNameQueries
+          .filter((query) => query.isError)
+          .map((query) => query.error),
+      };
+    }
+  );
+
+  createEffect(
+    on(participantDisplayNames, (displayNameData) => {
+      if (!displayNameData) return;
+      if (displayNameData.isPending) return;
+
+      const channelId = nativeCall.activeChannelId();
+      const nativeParticipantIds = nativeCall.participantIdentities();
+      const ids = participantIds();
+
+      if (displayNameData.errors.length > 0) {
+        console.error('[callkit] failed to fetch participant display names', {
+          channelId,
+          nativeParticipantIds,
+          participantIds: ids,
+          errors: displayNameData.errors,
+        });
+      }
+
+      console.info('[callkit] syncing native participant display names', {
+        channelId,
+        participantCount: ids.length,
+        fetchedNameCount: displayNameData.fetchedNameCount,
+      });
+
+      syncNativeParticipantDisplayNames(displayNameData.displayNames);
+    })
+  );
 
   return null;
 }
@@ -509,6 +545,7 @@ export function CallKitSync() {
   if (!isNativeIosCallKitEnabled()) return null;
 
   useCallKitNativeMetadataSync();
+  useCallKitParticipantDisplayNameSync();
   useCallKitThemeSync();
   return null;
 }
@@ -516,11 +553,7 @@ export function CallKitSync() {
 function buildParticipantDisplayNames(
   participantIds: string[],
   fallbackNames: Record<string, string>,
-  fetchedNames: Array<{
-    id: string;
-    first_name?: string | null;
-    last_name?: string | null;
-  }>
+  fetchedNames: UserName[]
 ): Record<string, string> {
   const displayNames = { ...fallbackNames };
   const fetchedNamesByIdentity = new Map<string, string>();
@@ -539,6 +572,30 @@ function buildParticipantDisplayNames(
   }
 
   return displayNames;
+}
+
+function fallbackParticipantDisplayNames(
+  participantIds: string[]
+): Record<string, string> {
+  return Object.fromEntries(
+    participantIds.map((identity) => [
+      identity,
+      fallbackParticipantName(identity),
+    ])
+  );
+}
+
+function syncNativeParticipantDisplayNames(
+  displayNames: Record<string, string>
+) {
+  for (const [identity, displayName] of Object.entries(displayNames)) {
+    setNativeCallKitParticipantDisplayName(identity, displayName).catch((err) =>
+      console.error(
+        '[callkit] failed to sync native participant display name',
+        err
+      )
+    );
+  }
 }
 
 function uniqueParticipantIds(ids: string[]): string[] {
