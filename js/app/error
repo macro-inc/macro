@@ -1,0 +1,12 @@
+int null null remote-cursor.tsx:28:13
+Collab Cursors:  no node for loro container o5x6vbq2 2 cursor.ts:34:29
+Remote cursors: no anchor or focus point null null remote-cursor.tsx:28:13
+failed to persist snapshot 
+Object { scope: "sync_engine", documentId: "019ea99f-f434-7cda-9bfe-b014e5db18fb", err: DOMException }
+logger.ts:59:20
+failed to persist snapshot 
+Object { scope: "sync_engine", documentId: "019ea99f-f434-7cda-9bfe-b014e5db18fb", err: DOMException }
+logger.ts:59:20
+failed to persist snapshot 
+Object { scope: "sync_engine", documentId: "019ea99f-f434-7cda-9bfe-b014e5db18fb", err: DOMException }
+logger.ts:59:20

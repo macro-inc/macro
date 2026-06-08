@@ -224,9 +224,13 @@ export class SyncEngine<S extends GenericRootSchema, D> {
       // after the save succeeds so that we can always recover fully.
       await this.syncs.wal.pruneDelivered();
     } catch (err) {
+      // DOMException's name/message aren't own-enumerable, so logging the
+      // bare object hides everything but the type. Pull them out by hand.
       logger.error('failed to persist snapshot', {
         scope: 'sync_engine',
         documentId: this.syncs.live.documentId,
+        errName: err instanceof Error ? err.name : undefined,
+        errMessage: err instanceof Error ? err.message : String(err),
         err,
       });
     }
