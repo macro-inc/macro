@@ -18,7 +18,7 @@ import {
   ENABLE_AUTO_UPDATE_UI_OVERRIDE,
   ENABLE_INBOX_RESYNC,
   ENABLE_INBOX_SYNC_STATUS,
-  ENABLE_MULTI_INBOX,
+  ENABLE_MULTI_INBOX_OVERRIDE,
   ENABLE_PROFILE_PICTURES,
   ENABLE_NEW_PRICING_OVERRIDE,
 } from '@core/constant/featureFlags';
@@ -262,6 +262,9 @@ function ProfilePictureRow(props: { userId: string }) {
 // Not accessible if user is not authenticated
 export function Account() {
   const email = useEmail();
+  const multiInboxFlag = useFeatureFlag('enable-multi-inbox', {
+    enabledOverride: ENABLE_MULTI_INBOX_OVERRIDE,
+  });
   const userId = useUserId();
   const licenseStatus = useLicenseStatus();
   const logout = useLogout();
@@ -549,7 +552,7 @@ export function Account() {
                 <BundleUpdateRow />
               </Show>
 
-              <Show when={ENABLE_EMAIL && !ENABLE_MULTI_INBOX}>
+              <Show when={ENABLE_EMAIL && !multiInboxFlag().enabled}>
                 <Row
                   label={
                     showEmailModal()
@@ -626,7 +629,7 @@ export function Account() {
                 </Row>
               </Show>
 
-              <Show when={ENABLE_EMAIL && ENABLE_MULTI_INBOX}>
+              <Show when={ENABLE_EMAIL && multiInboxFlag().enabled}>
                 <div class="bg-surface">
                   <div class="flex items-center justify-between h-15.25 px-6">
                     <div class="text-sm">Inboxes</div>

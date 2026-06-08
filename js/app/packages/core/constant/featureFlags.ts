@@ -236,10 +236,8 @@ const _ENABLE_DOCK_NOTITIFCATIONS = resolveFeatureFlag(
 );
 export const ENABLE_TTFT = resolveFeatureFlag('ENABLE_TTFT', DEV_MODE_ENV);
 
-export const ENABLE_MULTI_INBOX = resolveFeatureFlag(
-  'ENABLE_MULTI_INBOX',
-  DEV_MODE_ENV
-);
+export const ENABLE_MULTI_INBOX_OVERRIDE =
+  resolveFeatureFlag('ENABLE_MULTI_INBOX', DEV_MODE_ENV) || undefined;
 
 export const ENABLE_INBOX_RESYNC = resolveFeatureFlag(
   'ENABLE_INBOX_RESYNC',
