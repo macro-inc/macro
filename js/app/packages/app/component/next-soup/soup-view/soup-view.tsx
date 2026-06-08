@@ -1418,12 +1418,6 @@ const SoupList = (props: SoupListProps) => {
   const itemSize = createMemo(() => props.itemSize ?? DEFAULT_ITEM_SIZE);
   const overscan = createMemo(() => props.overscan ?? DEFAULT_OVERSCAN);
 
-  const [stableRows, setStableRows] = createStore<SoupRow[]>([]);
-
-  createRenderEffect(() => {
-    setStableRows(reconcile(props.rows, { key: 'id' }));
-  });
-
   const handleScroll = (offset: number) => {
     const handle = virtualizerHandle();
 
@@ -1459,7 +1453,7 @@ const SoupList = (props: SoupListProps) => {
         cache={props.cache}
         ref={registerVirtualizerHandler}
         class={cn('overscroll-none', props.virtualizerClass)}
-        data={stableRows}
+        data={props.rows}
         itemSize={itemSize()}
         bufferSize={overscan() * itemSize()}
         onScroll={handleScroll}
