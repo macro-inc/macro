@@ -26,7 +26,7 @@ async fn access_level_for(
     .unwrap()
 }
 
-#[sqlx::test(fixtures(path = "../../../fixtures", scripts("share_on_mention")))]
+#[sqlx::test(fixtures(path = "../../fixtures", scripts("share_on_mention")))]
 async fn shares_public_document_with_mentioned_users(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let mentioned = MacroUserIdStr::try_from("macro|mentioned@user.com".to_string()).unwrap();
 
@@ -42,7 +42,7 @@ async fn shares_public_document_with_mentioned_users(pool: Pool<Postgres>) -> an
     Ok(())
 }
 
-#[sqlx::test(fixtures(path = "../../../fixtures", scripts("share_on_mention")))]
+#[sqlx::test(fixtures(path = "../../fixtures", scripts("share_on_mention")))]
 async fn does_not_share_private_document(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let mentioned = MacroUserIdStr::try_from("macro|mentioned@user.com".to_string()).unwrap();
 
@@ -62,7 +62,7 @@ async fn does_not_share_private_document(pool: Pool<Postgres>) -> anyhow::Result
     Ok(())
 }
 
-#[sqlx::test(fixtures(path = "../../../fixtures", scripts("share_on_mention")))]
+#[sqlx::test(fixtures(path = "../../fixtures", scripts("share_on_mention")))]
 async fn does_not_downgrade_existing_access(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let mentioned = MacroUserIdStr::try_from("macro|mentioned@user.com".to_string()).unwrap();
     let entity_id = macro_uuid::string_to_uuid(PUBLIC_DOC).unwrap();
@@ -91,7 +91,7 @@ async fn does_not_downgrade_existing_access(pool: Pool<Postgres>) -> anyhow::Res
     Ok(())
 }
 
-#[sqlx::test(fixtures(path = "../../../fixtures", scripts("share_on_mention")))]
+#[sqlx::test(fixtures(path = "../../fixtures", scripts("share_on_mention")))]
 async fn empty_recipients_is_a_noop(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let entity_id = macro_uuid::string_to_uuid(PUBLIC_DOC).unwrap();
     share_public_document_with_mentioned_users(&pool, PUBLIC_DOC, &[]).await?;
