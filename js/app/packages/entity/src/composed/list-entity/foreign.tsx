@@ -278,7 +278,7 @@ function GithubPullRequestChecksPopover(props: {
 
   return (
     <div class="w-full flex flex-col gap-0.5 text-left">
-      <div class="flex items-start gap-2 py-2 pl-2.5 border-b border-b-edge">
+      <div class="flex items-start gap-2 py-2 pl-4 border-b border-b-edge">
         <CheckStateIcon
           state={checkState(props.entity)}
           class="mt-1 [&_svg]:size-4"
@@ -286,7 +286,7 @@ function GithubPullRequestChecksPopover(props: {
         <div class="flex min-w-0 flex-col">
           <div
             class={cn(
-              'text-base font-medium',
+              'text-base font-semibold',
               checkOverviewTitleClass(checkState(props.entity))
             )}
           >
