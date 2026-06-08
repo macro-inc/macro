@@ -1,3 +1,5 @@
+import { useSoup } from '@app/component/next-soup/soup-context';
+import { openEntityInSplitFromUnifiedList } from '@app/component/next-soup/utils';
 import { isListViewID } from '@app/constants/list-views';
 import {
   ENABLE_PREVIEW,
@@ -7,8 +9,10 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import CollapseIcon from '@phosphor/arrows-in.svg';
 import ExpandIcon from '@phosphor/arrows-out.svg';
+import CaretDown from '@phosphor/caret-down.svg';
 import CaretLeft from '@phosphor/caret-left.svg';
 import CaretRight from '@phosphor/caret-right.svg';
+import CaretUp from '@phosphor/caret-up.svg';
 import EyeIcon from '@phosphor/eye.svg';
 import EyeSlashIcon from '@phosphor/eye-slash.svg';
 import CloseIcon from '@phosphor/x.svg';
@@ -153,6 +157,53 @@ function _SplitControlButtons() {
   );
 }
 
+function SoupNavigationButtons() {
+  const context = useContext(SplitPanelContext);
+  const soup = useSoup();
+  if (!context) return null;
+
+  const rows = () => soup.rows();
+  const currentIndex = () => soup.focus.index();
+  const canNavigateUp = () => rows().length > 0 && currentIndex() !== 0;
+  const canNavigateDown = () =>
+    rows().length > 0 && currentIndex() !== rows().length - 1;
+
+  const navigate = (offset: number) => {
+    const next = soup.navigate.by(offset);
+    if (!next) return;
+
+    void openEntityInSplitFromUnifiedList(next.row.original, {
+      splitHandle: context.handle,
+      mergeHistory: true,
+    });
+  };
+
+  return (
+    <Show when={context.handle.referredFrom() === 'list-view' && rows().length}>
+      <div class="flex items-center gap-1 pr-1">
+        <Button
+          class="p-1 rounded-lg"
+          label="Previous item"
+          hotkey={TOKENS.entity.step.start}
+          disabled={!canNavigateUp()}
+          onClick={() => navigate(-1)}
+        >
+          <CaretUp class="size-4" />
+        </Button>
+        <Button
+          class="p-1 rounded-lg"
+          label="Next item"
+          hotkey={TOKENS.entity.step.end}
+          disabled={!canNavigateDown()}
+          onClick={() => navigate(1)}
+        >
+          <CaretDown class="size-4" />
+        </Button>
+      </div>
+    </Show>
+  );
+}
+
 export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
   const panel = useContext(SplitPanelContext);
   if (!panel) {
@@ -201,7 +252,9 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
           ref={(ref) => {
             panel.layoutRefs.headerRight = ref;
           }}
-        />
+        >
+          <SoupNavigationButtons />
+        </div>
       </div>
     </div>
   );
