@@ -211,6 +211,8 @@ export class SyncEngine<S extends GenericRootSchema, D> {
   private async persistSnapshot() {
     if (!this.snapshotStore) return;
 
+    void this.syncs.wal.flush(); // unawaited
+
     try {
       const doc = this.loroManager.getDoc();
       const snapshot = doc.export({

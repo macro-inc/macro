@@ -202,7 +202,7 @@ const TASK_EDITOR_PADDING_BOTTOM = 48;
 
 export function MarkdownEditor(props: {
   autoFocusOnMount?: boolean;
-  loroManager: Accessor<LoroManager | undefined>;
+  loroManager: LoroManager;
 }) {
   const blockData = blockDataSignal.get;
   const blockId = useBlockId();
@@ -496,7 +496,7 @@ export function MarkdownEditor(props: {
     if (!IS_SYNC()) {
       return createPeerIdValidator(() => undefined, false);
     }
-    const peerId = () => props.loroManager()?.getPeerIdStr();
+    const peerId = () => props.loroManager.getPeerIdStr();
     return createPeerIdValidator(peerId, true);
   };
 
@@ -507,7 +507,7 @@ export function MarkdownEditor(props: {
     .markdownShortcuts()
     .delete()
     .state<EditorState>(setState, 'json')
-    .history(400, props.loroManager())
+    .history(400, props.loroManager)
     .use(tabIndentationPlugin())
     .use(selectionDataPlugin(lexicalWrapper))
     .use(horizontalRulePlugin())
@@ -607,7 +607,7 @@ export function MarkdownEditor(props: {
   }
 
   if (ENABLE_MARKDOWN_LIVE_COLLABORATION) {
-    const peerId = () => props.loroManager()?.getPeerIdStr();
+    const peerId = () => props.loroManager.getPeerIdStr();
     plugins.use(
       peerIdPlugin({
         peerId,

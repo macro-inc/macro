@@ -75,7 +75,7 @@ const DEBUG = false;
 const EDITOR_PADDING_BOTTOM = 120;
 
 export function InstructionsEditor(props: {
-  loroManager: Accessor<LoroManager | undefined>;
+  loroManager: LoroManager;
 }) {
   const blockData = blockDataSignal.get;
   const blockId = useBlockId();
@@ -154,7 +154,7 @@ export function InstructionsEditor(props: {
     if (!IS_SYNC()) {
       return createPeerIdValidator(() => undefined, false);
     }
-    const peerId = () => props.loroManager()?.getPeerIdStr();
+    const peerId = () => props.loroManager.getPeerIdStr();
     return createPeerIdValidator(peerId, true);
   };
 
@@ -169,7 +169,7 @@ export function InstructionsEditor(props: {
     .markdownShortcuts()
     .delete()
     .state<EditorState>(setState, 'json')
-    .history(400, props.loroManager())
+    .history(400, props.loroManager)
     .use(userPromptPlugin)
     .use(
       emojisPlugin({
@@ -199,7 +199,7 @@ export function InstructionsEditor(props: {
     );
 
   if (ENABLE_MARKDOWN_LIVE_COLLABORATION) {
-    const peerId = () => props.loroManager()?.getPeerIdStr();
+    const peerId = () => props.loroManager.getPeerIdStr();
     plugins.use(
       peerIdPlugin({
         peerId,
