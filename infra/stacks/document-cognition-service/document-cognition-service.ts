@@ -3,6 +3,7 @@ import * as awsx from '@pulumi/awsx';
 import * as pulumi from '@pulumi/pulumi';
 import {
   DATADOG_API_KEY,
+  DEFAULT_CONTINUE_BEFORE_STEADY_STATE,
   DatadogServiceEntity,
   datadogAgentContainer,
   fargateLogRouterSidecarContainer,
@@ -230,6 +231,7 @@ export class DocumentCognitionService extends pulumi.ComponentResource {
           subnets: vpc.privateSubnetIds,
           securityGroups: [this.serviceSg.id],
         },
+        continueBeforeSteadyState: DEFAULT_CONTINUE_BEFORE_STEADY_STATE,
         deploymentCircuitBreaker: {
           enable: true,
           rollback: true,

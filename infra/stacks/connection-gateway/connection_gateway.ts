@@ -4,6 +4,7 @@ import * as pulumi from '@pulumi/pulumi';
 import {
   createFrecencyTablePolicy,
   DATADOG_API_KEY,
+  DEFAULT_CONTINUE_BEFORE_STEADY_STATE,
   datadogAgentContainer,
   fargateLogRouterSidecarContainer,
   serviceLoadBalancer,
@@ -182,6 +183,7 @@ export class ConnectionGateway extends pulumi.ComponentResource {
           subnets: vpc.privateSubnetIds,
           securityGroups: [this.serviceSg.id],
         },
+        continueBeforeSteadyState: DEFAULT_CONTINUE_BEFORE_STEADY_STATE,
         deploymentCircuitBreaker: {
           enable: true,
           rollback: true,

@@ -1,6 +1,7 @@
 import * as aws from '@pulumi/aws';
 import * as awsx from '@pulumi/awsx';
 import * as pulumi from '@pulumi/pulumi';
+import { DEFAULT_CONTINUE_BEFORE_STEADY_STATE } from '../../packages/resources';
 import { serviceLoadBalancer } from './resources/load_balancer';
 import {
   BASE_DOMAIN,
@@ -126,6 +127,7 @@ export class FusionAuthService extends pulumi.ComponentResource {
           subnets: vpc.privateSubnetIds,
           securityGroups: [this.serviceSg.id],
         },
+        continueBeforeSteadyState: DEFAULT_CONTINUE_BEFORE_STEADY_STATE,
         deploymentCircuitBreaker: {
           enable: true,
           rollback: true,
