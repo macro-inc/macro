@@ -237,62 +237,56 @@ export const bucketPolicyId = bucketPolicy.id;
 // 4. Call recording preview Lambda
 // ---------------------------------------------------------------------------
 
-let callRecordingPreviewLambda: CallRecordingPreviewLambda | undefined;
+const DATABASE_URL = aws.secretsmanager
+  .getSecretVersionOutput({
+    secretId: config.require('macro_db_proxy_secret_key'),
+  })
+  .apply((secret) => secret.secretString);
 
-if (stack !== 'local') {
-  const macroDbProxySecretKey =
-    config.get('macro_db_proxy_secret_key') ?? `macrodb-rds-proxy-${stack}`;
-  const DATABASE_URL = aws.secretsmanager
-    .getSecretVersionOutput({
-      secretId: macroDbProxySecretKey,
-    })
-    .apply((secret) => secret.secretString);
+const previewLambdaEnvVars: CallRecordingPreviewLambdaEnvVars = {
+  CALL_RECORDING_BUCKET_NAME: pulumi.interpolate`${callRecordingBucket.id}`,
+  DATABASE_URL: pulumi.interpolate`${DATABASE_URL}`,
+  FFMPEG_PATH: '/var/task/bin/ffmpeg',
+  FFPROBE_PATH: '/var/task/bin/ffprobe',
+  ENVIRONMENT: stack,
+  RUST_LOG: 'call_recording_preview_handler=trace',
+};
 
-  const previewLambdaEnvVars: CallRecordingPreviewLambdaEnvVars = {
-    CALL_RECORDING_BUCKET_NAME: pulumi.interpolate`${callRecordingBucket.id}`,
-    DATABASE_URL: pulumi.interpolate`${DATABASE_URL}`,
-    FFMPEG_PATH: '/var/task/bin/ffmpeg',
-    FFPROBE_PATH: '/var/task/bin/ffprobe',
-    ENVIRONMENT: stack,
-    RUST_LOG: 'call_recording_preview_handler=trace',
-  };
+const callRecordingPreviewLambda = new CallRecordingPreviewLambda(
+  `call-recording-preview-lambda-${stack}`,
+  {
+    envVars: previewLambdaEnvVars,
+    callRecordingBucketArn: callRecordingBucket.arn,
+    vpc: get_coparse_api_vpc(),
+    tags,
+  }
+);
 
-  callRecordingPreviewLambda = new CallRecordingPreviewLambda(
-    `call-recording-preview-lambda-${stack}`,
-    {
-      envVars: previewLambdaEnvVars,
-      callRecordingBucketArn: callRecordingBucket.arn,
-      vpc: get_coparse_api_vpc(),
-      tags,
-    }
-  );
+const previewLambdaS3InvokePermission = new aws.lambda.Permission(
+  `call-recording-preview-lambda-s3-permission-${stack}`,
+  {
+    action: 'lambda:InvokeFunction',
+    function: callRecordingPreviewLambda.lambda.name,
+    principal: 's3.amazonaws.com',
+    sourceArn: callRecordingBucket.arn,
+  }
+);
 
-  const previewLambdaS3InvokePermission = new aws.lambda.Permission(
-    `call-recording-preview-lambda-s3-permission-${stack}`,
-    {
-      action: 'lambda:InvokeFunction',
-      function: callRecordingPreviewLambda.lambda.name,
-      principal: 's3.amazonaws.com',
-      sourceArn: callRecordingBucket.arn,
-    }
-  );
-
-  new aws.s3.BucketNotification(
-    `call-recording-preview-lambda-notification-${stack}`,
-    {
-      bucket: callRecordingBucket.id,
-      lambdaFunctions: [
-        {
-          lambdaFunctionArn: callRecordingPreviewLambda.lambda.arn,
-          events: ['s3:ObjectCreated:*'],
-          filterPrefix: 'calls/',
-          filterSuffix: '.mp4',
-        },
-      ],
-    },
-    { dependsOn: [previewLambdaS3InvokePermission] }
-  );
-}
+new aws.s3.BucketNotification(
+  `call-recording-preview-lambda-notification-${stack}`,
+  {
+    bucket: callRecordingBucket.id,
+    lambdaFunctions: [
+      {
+        lambdaFunctionArn: callRecordingPreviewLambda.lambda.arn,
+        events: ['s3:ObjectCreated:*'],
+        filterPrefix: 'calls/',
+        filterSuffix: '.mp4',
+      },
+    ],
+  },
+  { dependsOn: [previewLambdaS3InvokePermission] }
+);
 
 export const callRecordingPreviewLambdaName =
   callRecordingPreviewLambda?.lambda.name;

@@ -1,3 +1,4 @@
 config:
   aws-native:region: us-east-1
   aws:region: us-east-1
+  call-recording:macro_db_proxy_secret_key: macrodb-rds-proxy-dev
