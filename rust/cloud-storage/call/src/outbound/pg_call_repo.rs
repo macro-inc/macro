@@ -1291,48 +1291,54 @@ impl CallRepository for PgCallRepo {
         .fetch_all(&self.pool)
         .await?;
 
+        // Split ids by source table: active participants live in
+        // `call_participants` (keyed call_id), archived in
+        // `call_record_participants` (keyed call_record_id). Ids are disjoint
+        // across the two tables, so a single UNION ALL fetches all participants
+        // in one round-trip; we then group by id in memory (avoids N+1).
+        let mut active_ids: Vec<Uuid> = Vec::new();
+        let mut archived_ids: Vec<Uuid> = Vec::new();
+        for row in &rows {
+            if row.is_active {
+                active_ids.push(row.call_id);
+            } else {
+                archived_ids.push(row.call_id);
+            }
+        }
+
+        let mut participants_by_call: HashMap<Uuid, Vec<CallRecordParticipant>> =
+            HashMap::with_capacity(rows.len());
+
+        for p in sqlx::query!(
+            r#"
+            SELECT call_id AS "id!", user_id AS "user_id!", joined_at AS "joined_at!", left_at
+            FROM call_participants
+            WHERE call_id = ANY($1)
+            UNION ALL
+            SELECT call_record_id AS "id!", user_id AS "user_id!", joined_at AS "joined_at!", left_at
+            FROM call_record_participants
+            WHERE call_record_id = ANY($2)
+            ORDER BY 3 ASC
+            "#,
+            &active_ids,
+            &archived_ids,
+        )
+        .fetch_all(&self.pool)
+        .await?
+        {
+            participants_by_call
+                .entry(p.id)
+                .or_default()
+                .push(CallRecordParticipant {
+                    user_id: p.user_id,
+                    joined_at: p.joined_at,
+                    left_at: p.left_at,
+                });
+        }
+
         let mut records = Vec::with_capacity(rows.len());
         for row in rows {
-            // Fetch participants from the appropriate table.
-            let participants = if row.is_active {
-                sqlx::query!(
-                    r#"
-                    SELECT user_id, joined_at, left_at
-                    FROM call_participants
-                    WHERE call_id = $1
-                    ORDER BY joined_at ASC
-                    "#,
-                    row.call_id,
-                )
-                .fetch_all(&self.pool)
-                .await?
-                .into_iter()
-                .map(|p| CallRecordParticipant {
-                    user_id: p.user_id,
-                    joined_at: p.joined_at,
-                    left_at: p.left_at,
-                })
-                .collect()
-            } else {
-                sqlx::query!(
-                    r#"
-                    SELECT user_id, joined_at, left_at
-                    FROM call_record_participants
-                    WHERE call_record_id = $1
-                    ORDER BY joined_at ASC
-                    "#,
-                    row.call_id,
-                )
-                .fetch_all(&self.pool)
-                .await?
-                .into_iter()
-                .map(|p| CallRecordParticipant {
-                    user_id: p.user_id,
-                    joined_at: p.joined_at,
-                    left_at: p.left_at,
-                })
-                .collect()
-            };
+            let participants = participants_by_call.remove(&row.call_id).unwrap_or_default();
 
             records.push(CallRecord {
                 call_id: row.call_id,
