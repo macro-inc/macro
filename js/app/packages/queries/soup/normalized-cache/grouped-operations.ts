@@ -290,9 +290,12 @@ export function removeGroupQueries(entityIds: Set<string>): void {
 export function getItemFilter(
   queryKey: QueryKey
 ): SoupApiItemFilter | undefined {
-  return queryClient.getQueryCache().find({ queryKey })?.meta?.itemFilter as
-    | SoupApiItemFilter
-    | undefined;
+  const itemFilter = queryClient.getQueryCache().find({ queryKey })
+    ?.meta?.itemFilter;
+
+  return typeof itemFilter === 'function'
+    ? (itemFilter as SoupApiItemFilter)
+    : undefined;
 }
 
 /** Extracts the expanded group key from a groupedGroup query key. */
