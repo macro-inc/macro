@@ -5,7 +5,7 @@ description: "Block-by-block reference of what Macro can and can't do, with cros
 
 This is a block-by-block reference of what Macro can and can't do. The audience is agents (and power users) who already understand the product at a high level and want to confirm whether a specific capability exists inside a given block, and how that block links to the rest of the workspace.
 
-Each block has its own section with what it does, the specifics worth knowing (fields, formats, shortcuts, property types), and an **Integrations** list describing how it interlinks with other blocks. Where a feature is behind a flag or mid-migration, it's called out so you don't promise something that isn't live yet. Where a block has a full guide, a **Full docs** link points to it.
+Each block has its own section covering what it does, the specifics worth knowing, and how it interlinks with other blocks. Where a feature is behind a flag or mid-migration, it's called out so you don't promise something that isn't live yet. Where a block has a full guide, a **Full docs** link points to it.
 
 <Note>
   This is v1, generated from the codebase. Treat it as the source of truth for "does this exist," and flag anything that looks stale.
@@ -13,157 +13,121 @@ Each block has its own section with what it does, the specifics worth knowing (f
 
 ## How blocks work (read this first)
 
-Everything in Macro is a **block**. The block types are: `md` (documents), `email`, `channel`, `chat` (agents), `automation`, `project` (tasks), `contact` (CRM), `call`, `canvas`, `code`, `image`, `video`, `pdf`, and `unknown` (fallback). Two aliases route to existing blocks: `task` → `project`, and `csv` → a document/text block.
+Everything in Macro is a **block**. The block types are `md` (documents), `email`, `channel`, `chat` (agents), `automation`, `project` (tasks), `contact` (CRM), `call`, `canvas`, `code`, `image`, `video`, `pdf`, and `unknown` (fallback). Two aliases route to existing blocks: `task` → `project`, and `csv` → a document/text block.
 
-Shared platform concepts that show up in almost every block:
+A handful of capabilities are not features of any one block — they are properties of the platform that show up almost everywhere. [Mentions](#mentions) get their own section below because they're how blocks reference each other. The rest:
 
-- **Splits** — Any two blocks can sit side-by-side in a split layout (e.g. a doc next to a chat, an email next to a task). A few combinations are restricted (no doc-with-doc of the same kind, code-with-code, or pdf-with-pdf unless multisplit is enabled). Create a split with <kbd>cmd</kbd>+<kbd>\</kbd>, focus left/right with <kbd>shift</kbd>+<kbd>h</kbd> / <kbd>shift</kbd>+<kbd>l</kbd>, maximize with <kbd>shift</kbd>+<kbd>escape</kbd>, close with <kbd>cmd</kbd>+<kbd>escape</kbd>.
-- **Nesting** — Some blocks embed read-only inside a markdown doc: `canvas`, `pdf`, and `code` render nested in `md`. Nested blocks disable their editing/markup tools.
-- **Properties** — A unified property system (text, number, boolean, date, single/multi-select, entity-reference, link) attaches to documents, tasks, emails, CRM records, and more. See the [CRM](#crm--contacts--companies) and [Tasks](#tasks) sections for the full type list.
-- **References** — Every block has a References panel showing everywhere it's @mentioned or embedded across the workspace (backlinks).
-- **Sharing & permissions** — Every block uses the same share dialog and access levels (owner / editor / commenter / viewer), plus public link sharing for documents.
-- **Real-time collaboration** — Collaborative blocks (docs, canvas, pdf markup) sync through **Loro CRDTs** over a **Cloudflare Durable Objects** backend. The Rust `sync-service` spins up one Durable Object "room" per document; clients connect over WebSocket to `/document/:id`. This gives multiplayer editing, presence/cursors, and full offline support (edits reconcile when you reconnect). A separate `lexical-service` Cloudflare Worker handles server-side conversions (plaintext, search/cognition preprocessing, markdown→Loro snapshots).
-- **Search & Inbox** — One unified [Search](/product/search) index covers all block types, filterable by type and by @mentioned person. The unified [Inbox](/product/inbox) pulls open notifications from across blocks into one recency-sorted list.
+- **Splits** — Any two blocks can sit side-by-side (a doc next to a chat, an email next to a task). A few combinations are restricted: no doc-with-doc of the same kind, no code-with-code, and no pdf-with-pdf unless multisplit is enabled. Create a split with <kbd>cmd</kbd>+<kbd>\</kbd>, focus left/right with <kbd>shift</kbd>+<kbd>h</kbd> / <kbd>shift</kbd>+<kbd>l</kbd>, maximize with <kbd>shift</kbd>+<kbd>escape</kbd>, close with <kbd>cmd</kbd>+<kbd>escape</kbd>.
+- **Nesting** — `canvas`, `pdf`, and `code` blocks can embed read-only inside a markdown doc, with their editing and markup tools disabled.
+- **Properties** — A unified property system (text, number, boolean, date, single/multi-select, entity-reference, link) attaches to documents, tasks, emails, and CRM records. The full type list lives in [CRM](#crm--contacts--companies); the task-specific fields are in [Tasks](#tasks).
+- **References, sharing & permissions** — Every block has a References panel (backlinks to everywhere it's mentioned or embedded) and the same share dialog, with owner / editor / commenter / viewer access levels plus public links for documents.
+- **Real-time collaboration** — Collaborative blocks (docs, canvas, pdf markup) sync through **Loro CRDTs** over a **Cloudflare Durable Objects** backend: the Rust `sync-service` spins up one Durable Object "room" per document, and clients connect over WebSocket to `/document/:id`. This is what gives you multiplayer editing, presence cursors, and full offline support — edits reconcile when you reconnect. A separate `lexical-service` Cloudflare Worker handles server-side conversions (plaintext, search/cognition preprocessing, markdown→Loro snapshots).
+- **Search & Inbox** — One unified [Search](/product/search) index covers every block type, filterable by type and by mentioned person. The unified [Inbox](/product/inbox) pulls open notifications from across blocks into a single recency-sorted list.
+
+## Mentions
+
+Mentions are the connective tissue of the workspace, so they belong here rather than under any single block. Typing `@` in any rich-text surface — a document, an email body, a channel message, a chat or automation prompt, or a task description — opens an autocomplete that lets you reference something else in Macro. Whatever you pick renders as a live inline pill that carries its target's current metadata (a task mention, for instance, shows the task's status and priority), and the reference is recorded in the target's [References](#how-blocks-work-read-this-first) panel as a backlink.
+
+You can mention:
+
+- **People** — by name or email.
+- **Documents and blocks** — any doc, task, canvas, code file, pdf, etc.
+- **Contacts and companies** — CRM records, rendered differently for people vs. organizations.
+- **Channels** — a deep link to the channel (or to a specific message/thread).
+- **Dates** — date pills.
+- **Groups** — by group alias.
+
+What a mention *does* depends on where you make it. In a document or chat it's a navigable link and a source of context. In an **email body** it has side effects: mentioning a person adds them to CC, and mentioning a document inserts a link and updates that document's permissions so recipients can open it. In a **channel** there are two special mentions on top of the normal ones — `@here` pings every participant, and `@Macro` invokes the agent inline. The agent also leans on mentions heavily: anything you @mention into a chat is pulled in as context, and autocomplete there surfaces your currently open tabs first.
 
 ---
 
 ## Markdown / Documents
 
-The default document type: a Lexical-based, markdown-native collaborative editor. "Documents" is also the container that holds other file types (canvas, code, pdf, images) — anything created or auto-extracted lands here.
+The default document type: a Lexical-based, markdown-native collaborative editor. "Documents" is also the container that holds other file types — canvas, code, pdf, images, and anything auto-extracted from elsewhere all land here.
 
 **Full docs:** [Documents](/product/docs) · Create with <kbd>c</kbd> then <kbd>d</kbd>.
 
 ### Editing & formatting
 
-- **Block nodes:** paragraphs, Heading 1/2/3, bullet lists, numbered lists, checklists (interactive checkboxes), blockquotes, code blocks (Prism syntax highlighting, 15+ languages), tables, horizontal rules/dividers, images, videos, and links.
-- **Inline formatting:** bold (<kbd>cmd</kbd>+<kbd>b</kbd>), italic (<kbd>cmd</kbd>+<kbd>i</kbd>), underline (<kbd>cmd</kbd>+<kbd>u</kbd>), strikethrough (<kbd>shift</kbd>+<kbd>cmd</kbd>+<kbd>x</kbd>), highlight (<kbd>shift</kbd>+<kbd>cmd</kbd>+<kbd>h</kbd>), inline code (<kbd>cmd</kbd>+<kbd>e</kbd>), plus superscript and subscript.
-- **Math / LaTeX:** inline and block equations rendered with KaTeX.
-- **Markdown autoformatting:** `#`/`##`/`###` for headings, `-` for bullets, `1.` for numbered, `[]` for checklists, `>` for quotes, `---` for a divider, backticks for code.
-- **Emoji:** `:shortcode:` support with search/insert.
-- **Drag-to-reorder** blocks, <kbd>tab</kbd>/<kbd>shift</kbd>+<kbd>tab</kbd> to indent/outdent, find & replace (<kbd>cmd</kbd>+<kbd>f</kbd>, regex supported, replace one/all).
+The editor supports the full set of block nodes — paragraphs, Heading 1/2/3, bullet/numbered/checklist lists (with interactive checkboxes), blockquotes, code blocks (Prism syntax highlighting across 15+ languages), tables, dividers, images, videos, and links — plus inline/block math rendered with KaTeX. Inline formatting follows the usual shortcuts: bold (<kbd>cmd</kbd>+<kbd>b</kbd>), italic (<kbd>cmd</kbd>+<kbd>i</kbd>), underline (<kbd>cmd</kbd>+<kbd>u</kbd>), strikethrough (<kbd>shift</kbd>+<kbd>cmd</kbd>+<kbd>x</kbd>), highlight (<kbd>shift</kbd>+<kbd>cmd</kbd>+<kbd>h</kbd>), inline code (<kbd>cmd</kbd>+<kbd>e</kbd>), plus superscript and subscript.
 
-### Slash menu
+Markdown autoformatting works as you type (`#`/`##`/`###`, `-`, `1.`, `[]`, `>`, `---`, and backticks), `:shortcode:` emoji are supported, blocks can be dragged to reorder, <kbd>tab</kbd>/<kbd>shift</kbd>+<kbd>tab</kbd> indent and outdent, and find & replace (<kbd>cmd</kbd>+<kbd>f</kbd>) supports regex and replace-one/replace-all. The slash menu (`/`, or the command menu) inserts any of these: Normal text, Heading 1/2/3, Blockquote, Code block, Bullet/Numbered/Checklist, **Task** (an inline task with mentions), Image, Video, Link, Equation (`/latex` or `/math`), Table (5×3), and Divider.
 
-Typing `/` (or the command menu) inserts: Normal text, Heading 1/2/3, Blockquote, Code block, Bullet/Numbered/Checklist, **Task** (inline task with mentions), Image, Video, Link, Equation (`/latex` or `/math`), Table (5×3), Divider.
+All [mention](#mentions) types work in the body and render as collapsible inline pills.
 
-### @Mentions
+### Comments, history & properties
 
-Mentioning is the primary way docs link to the rest of the workspace. Mention types:
+Comments are inline and thread-based, anchored to a text selection — you can reply, resolve and unresolve, draft, and edit or delete your own. Comments are also what generate inbox notifications; a plain `@mention` in the body does not. Full version history is available via time-travel: browse historical states grouped by user and time, and **fork** a document at any past version into a new doc.
 
-- **Documents / blocks** — link any doc, task, canvas, code file, pdf, etc. Renders as an inline pill (collapsible) with live metadata; for tasks it shows status/priority.
-- **People** — by name or email.
-- **Contacts / companies** — CRM records, formatted differently for people vs. companies.
-- **Channels** — deep-link to a channel.
-- **Dates** — date pills.
-- **Groups** — group aliases.
+The side panel shows Details (owner, folder/project, created/updated) alongside a Properties section; you can pin properties so their values render as pills under the title, toggle an optional YAML front-matter display, and see a live word/character count.
 
-### Comments & history
+### Sharing & export
 
-- Inline, thread-based comments anchored to a text selection: reply, resolve/unresolve, edit/delete your own, draft comments. Comments are what generate inbox notifications — body @mentions do not.
-- Full version history via time-travel; browse historical states grouped by user/time; **fork** a document at any past version into a new doc.
-
-### Properties & sharing
-
-- Side panel shows Details (owner, folder/project, created/updated) and a Properties section. Pin properties for quick access; pinned values render as pills under the title. Optional YAML front-matter display toggle; word/character count.
-- Access levels: owner / editor / commenter / viewer. **Public link** sharing lets viewers outside Macro open a read-only preview with no account. Sharing a doc via a Macro message auto-updates its permissions. Copy link with <kbd>shift</kbd>+<kbd>cmd</kbd>+<kbd>c</kbd>.
-- Export/download as markdown text; image/video upload via paste, drag, or media picker.
+Documents use the standard access levels (owner / editor / commenter / viewer). **Public link** sharing lets viewers outside Macro open a read-only preview with no account or login, and sharing a doc through a Macro message auto-updates its permissions so recipients can open it. Copy a link with <kbd>shift</kbd>+<kbd>cmd</kbd>+<kbd>c</kbd>, export to markdown text, and upload images or video by paste, drag, or the media picker.
 
 ### AI
 
-- Inline AI generate / rewrite (with side-by-side diff insert/delete nodes) and streaming completions exist in the codebase but are **temporarily disabled pending a migration** — don't assume inline doc AI is live.
-- You can dispatch an agent task with the document as context from the doc itself.
+Inline AI — generate, rewrite (with side-by-side diff insert/delete nodes), and streaming completions — exists in the codebase but is **temporarily disabled pending a migration**, so don't assume inline doc AI is live today. You can still dispatch an agent task with the document as context directly from the doc.
 
 ### Integrations
 
-- **Tasks:** create a task inline with `/task`, or convert any checklist item into a real task (pulls @assignees and date mentions out of the line). Tasks embed back into docs as live mention pills.
-- **Channels / Email:** @mention a doc in a channel or email and it becomes a link; permissions update so recipients can view.
-- **Agents:** agents read and create documents (`CreateDocument`, `ReadContent`); docs are first-class chat context.
-- **Search & Inbox:** always full-text searchable; comment @mentions land in your inbox.
-- **GitHub:** task-documents show linked PRs inline (see [Tasks](#tasks)).
-- **Nesting:** can embed canvas, pdf, and code blocks read-only.
+Tasks are the tightest integration: create one inline with `/task`, or convert any checklist item into a real task (Macro pulls the @assignee and any date mention out of the line), and tasks embed back into docs as live status pills. @mentioning a doc into a channel or email turns it into a link and updates permissions so recipients can view it. Agents read and create documents (`CreateDocument`, `ReadContent`) and treat docs as first-class chat context. Everything is full-text searchable, comment mentions land in your inbox, task-documents surface their linked GitHub PRs inline (see [Tasks](#tasks)), and canvas/pdf/code blocks can be embedded read-only.
 
 ---
 
 ## Email
 
-Keyboard-driven email with Gmail sync, a rich Lexical composer, and Signal/Noise triage. Recommended to link at signup.
+Keyboard-driven email with Gmail sync, a rich Lexical composer, and Signal/Noise triage. It's recommended to link email at signup.
 
-**Full docs:** [Email](/product/email) · Compose with <kbd>c</kbd> then <kbd>e</kbd>; triage with <kbd>j</kbd>/<kbd>k</kbd> to move, <kbd>e</kbd> to archive.
+**Full docs:** [Email](/product/email) · Compose with <kbd>c</kbd> then <kbd>e</kbd>; triage with <kbd>j</kbd>/<kbd>k</kbd> to move and <kbd>e</kbd> to archive.
 
 ### Accounts & sync
 
-- **Multi-account / multi-inbox** — link several inboxes; pick which one you send from via the From selector. Primary inbox is detected automatically; non-primary writes are scoped correctly.
-- **Providers:** Gmail (primary, full label/category/threading sync), plus Outlook/IMAP via the inbox-linking system. Resync and delete linked inboxes from settings.
+Email is multi-account: link several inboxes and pick which one you send from via the From selector. The primary inbox is detected automatically and non-primary writes are scoped correctly. Gmail is the primary provider (full label, category, and threading sync), with Outlook/IMAP supported through the same inbox-linking system. You can resync or remove linked inboxes from settings.
 
-### Compose
+### Compose & send
 
-- New, reply (<kbd>opt</kbd>+<kbd>r</kbd>), reply-all (<kbd>r</kbd>), forward (<kbd>f</kbd>); CC (<kbd>shift</kbd>+<kbd>cmd</kbd>+<kbd>c</kbd>) and BCC (<kbd>shift</kbd>+<kbd>cmd</kbd>+<kbd>b</kbd>) toggles with drag-and-drop between To/Cc/Bcc.
-- Rich-text body (Lexical): bold/italic/underline, lists, quotes, code, markdown; format ribbon toggle.
-- **Attachments** up to 18 MB total; inline image/video previews.
-- **Drafts** autosave; explicit save/delete; reply-drafts render inline under the parent message; undo snapshot restores recipients/subject/body/attachments.
-- **Send** with <kbd>cmd</kbd>+<kbd>enter</kbd>. **Scheduled send** (date/time picker, with unschedule) is feature-flagged. Default "Sent with Macro" signature (removable on paid).
+The composer covers new, reply (<kbd>opt</kbd>+<kbd>r</kbd>), reply-all (<kbd>r</kbd>), and forward (<kbd>f</kbd>), with CC (<kbd>shift</kbd>+<kbd>cmd</kbd>+<kbd>c</kbd>) and BCC (<kbd>shift</kbd>+<kbd>cmd</kbd>+<kbd>b</kbd>) toggles and drag-and-drop between the To/Cc/Bcc fields. The body is the same Lexical rich-text editor used elsewhere (bold/italic/underline, lists, quotes, code, markdown, format-ribbon toggle). Attachments are capped at 18 MB total and images/video preview inline. Drafts autosave (and can be saved or deleted explicitly), reply-drafts render inline under their parent message, and an undo snapshot restores recipients, subject, body, and attachments. Send with <kbd>cmd</kbd>+<kbd>enter</kbd>; **scheduled send** (with a date/time picker and unschedule) is feature-flagged. A "Sent with Macro" signature is appended by default and is removable on paid plans.
 
 ### Triage
 
-- Archive / mark done (removes from inbox), trash (with 10s undo), mark read/unread (auto on view), **block sender** (future mail → trash, undoable).
-- Navigate messages with <kbd>↑</kbd>/<kbd>↓</kbd>; collapsed messages show sender + snippet + date; infinite scroll loads older mail.
+Triage is built for the keyboard: archive or mark done (which removes a thread from the inbox), trash (with a 10-second undo), mark read/unread (automatic on view), and **block sender** (future mail goes straight to trash, undoable). Move between messages with <kbd>↑</kbd>/<kbd>↓</kbd>; collapsed messages show sender, snippet, and date, and infinite scroll loads older mail.
 
 ### Signal vs Noise
 
-- Email splits into **Signal** (important, e.g. teammates, customer feedback) and **Noise** (newsletters, promotions, social, forums). For Signal, a thread must be marked important **and not** shared to you by someone else.
-- Mark a sender **Signal** (`is_important=true` filter) or **Noise** (`is_important=false`); both undoable.
+Email splits into **Signal** (important mail — teammates, customer feedback) and **Noise** (newsletters, promotions, social, forums). To qualify for Signal a thread must be flagged important *and* not shared to you by someone else. Marking a sender Signal or Noise creates a persistent filter (`is_important=true`/`false`) and both actions are undoable.
 
-### Labels & side panel
+### Labels, side panel & rendering
 
-- View, add, and remove thread labels; list your label set. Agents can read and modify labels (`UpdateThreadLabels`, `ListLabels`).
-- Side panel Details: Last Sent, Last Received, Thread Started, Subject, plus a custom Properties section.
-- Sanitized HTML rendering with external image proxying; plain-text→HTML fallback.
+You can view, add, and remove thread labels and list your full label set; agents can read and modify labels too (`UpdateThreadLabels`, `ListLabels`). The side panel Details show Last Sent, Last Received, Thread Started, and Subject, alongside a custom Properties section. Email HTML is sanitized and external images are proxied, with a plain-text→HTML fallback.
 
 ### Integrations
 
-- **@Mentions inside the body:** mention a **person** → added to CC (toast confirms); mention a **document** → inserted as a link and the doc's permissions update to link-viewable.
-- **Tasks:** "Create Task" from a thread pre-fills the title from the subject and links the thread into the task body.
-- **Channels:** share a thread into a channel (feature-flagged); participants get a notification and can view the whole thread read-only — to reply they must be forwarded the mail.
-- **Agents:** "Chat with agent" opens a chat with the thread as context; agents can read threads (`GetThread`/`ReadThread`) and compose/send (`SendEmail`, with user review).
-- **CRM:** senders/recipients auto-link to contacts and companies; per-company email sync feeds the CRM.
-- **Documents:** attachments auto-extract into the Documents container with one click.
+In the body, [mentions](#mentions) have side effects: a person becomes a CC recipient and a document becomes a permissioned link. From a thread you can **Create Task** (the title is pre-filled from the subject and the thread is linked into the task body), share it into a channel (feature-flagged — participants get a notification and can read the whole thread, but to reply they must be forwarded the mail), or **Chat with agent** to open a chat with the thread as context. Agents can read threads (`GetThread`/`ReadThread`) and compose or send mail (`SendEmail`, with user review before sending). Senders and recipients auto-link to [CRM](#crm--contacts--companies) contacts and companies, and attachments extract into the Documents container with one click.
 
 ---
 
 ## Channels
 
-Team chat with Reddit-style nested threading and Signal/Noise on pings. Anyone can be added by email, including non-Macro users.
+Team chat with Reddit-style nested threading and Signal/Noise on pings. Anyone can be added by email, including people without a Macro account.
 
-**Full docs:** [Channels](/product/channels) · Create with <kbd>c</kbd> then <kbd>m</kbd>; find in channel with <kbd>cmd</kbd>+<kbd>f</kbd>.
+**Full docs:** [Channels](/product/channels) · Create with <kbd>c</kbd> then <kbd>m</kbd>; find in a channel with <kbd>cmd</kbd>+<kbd>f</kbd>.
 
 ### Messaging
 
-- Full Lexical rich text: headings, bold/italic/underline/strike/highlight/inline-code, bullet/numbered/checklists, code blocks, quotes, tables, dividers, links, images, math, video embeds; format-ribbon toggle.
-- Edit (<kbd>e</kbd>) and delete (<kbd>backspace</kbd>) your own messages; copy text; copy message link; "(edited)" indicator.
-- Consecutive messages from one sender are grouped; date dividers; "new" divider; sticky scroll with a scroll-to-bottom overlay; typing indicators.
-- Emoji reactions with a picker, quick reactions (❤️ 👍 😂), per-emoji counters, click to remove.
+Messages use the full Lexical editor — headings, the usual inline formatting, lists and checklists, code blocks, quotes, tables, dividers, links, images, math, and video embeds, with a format-ribbon toggle. You can edit (<kbd>e</kbd>) and delete (<kbd>backspace</kbd>) your own messages, copy their text or a direct link, and react with emoji (a picker plus quick reactions ❤️ 👍 😂, per-emoji counters, click to remove). Consecutive messages from one sender are grouped, date and "new" dividers break up the timeline, and the view sticks to the bottom with a scroll-to-bottom overlay and typing indicators.
 
-### Threading
+### Threading & membership
 
-- Reddit-style nested threads: expand/collapse a parent into its replies, dedicated thread reply input, quote-reply (`>` prefix), reply pagination. Navigate with arrow keys; <kbd>enter</kbd> to reply, <kbd>e</kbd>/<kbd>backspace</kbd> to edit/delete your reply.
-
-### Membership & mentions
-
-- Add participants by email (Macro or not — non-users get an email about the notification). Participants tab to view/search/remove members.
-- `@user` to mention someone, `@here` for everyone in the channel, `@Macro` to call the agent inline (summarize, answer workspace questions, etc.).
+Threads are Reddit-style and nested: expand or collapse a parent into its replies, reply in a dedicated input, quote-reply (with a `>` prefix), and page through replies. Arrow keys navigate, <kbd>enter</kbd> replies, and <kbd>e</kbd>/<kbd>backspace</kbd> edit or delete your reply. Participants are added by email — non-users get an email about the notification — and a Participants tab lets you view, search, and remove members. Alongside the normal [mentions](#mentions), `@here` pings everyone in the channel and `@Macro` calls the agent inline.
 
 ### Attachments, sharing in & calls
 
-- Drag-and-drop files or attach via the paperclip; image/video gallery with a media viewer.
-- Drag or @mention **entities** into a message to share them: documents, tasks, other channels, specific messages/threads (deep-linked), calls, and emails.
-- Start or join a [call](#calls) from the channel header: screen share, audio/video toggle, mute, participants panel, plus a Call History tab.
+Files can be dropped onto the channel or attached via the paperclip, with an image/video gallery and media viewer. Dragging or @mentioning an **entity** into a message shares it — documents, tasks, other channels, specific deep-linked messages or threads, calls, and emails all work. You can also start or join a [call](#calls) from the channel header (screen share, audio/video toggle, mute, participants panel, and a Call History tab).
 
 ### Integrations
 
-- **Tasks:** create a task from any message (hover action); convert message checkboxes into tasks.
-- **Agents:** `@Macro` runs the agent in-thread; "Chat with agent" uses a message as context.
-- **Everything else:** emails, docs, tasks, calls, and other channels all share into channels as deep-linked entity mentions.
-- **Inbox / notifications:** mentions and replies create inbox items; Signal/Noise separates important pings from noise.
+You can create a task from any message via the hover action, or convert message checkboxes into tasks. `@Macro` runs the agent in-thread and "Chat with agent" uses a message as context. Conversely, emails, docs, tasks, calls, and other channels all share *into* channels as deep-linked mentions. Mentions and replies create inbox items, and Signal/Noise classification keeps important pings separate from the noise.
 
 ---
 
@@ -175,14 +139,11 @@ The agent workspace: streaming chats with an agent that has full read/write acce
 
 ### Models & chat experience
 
-- Selectable per chat: **Smart** (default; reasoning), **Fast** (speed), **Opus 4.7**, **Sonnet 4.6**, **Haiku 4.5**. All Anthropic; mobile defaults to Smart.
-- Token streaming with a stop control; persistent history; auto-named from the first message; reopen and continue any past chat.
-- Share, rename, duplicate, delete chats; chat list with search; custom AI instructions per chat; References panel showing sources used.
+Each chat picks a model: **Smart** (the default, tuned for reasoning), **Fast** (tuned for speed), **Opus 4.7**, **Sonnet 4.6**, or **Haiku 4.5** — all Anthropic, with mobile defaulting to Smart. Responses stream token-by-token with a stop control, history is persistent, and chats are auto-named from the first message so you can reopen and continue any of them. You can share, rename, duplicate, and delete chats, search the chat list, set custom AI instructions per chat, and review a References panel showing the sources the agent used.
 
 ### Context & attachments
 
-- @mention channels, docs, tasks, people, and email threads to pull them in as context; autocomplete surfaces currently-open tabs.
-- Attach files (paste / drag-and-drop) with an upload queue and progress; mentioned entities auto-attach.
+Pull context in by @mentioning channels, docs, tasks, people, and email threads — autocomplete surfaces your currently open tabs first, and mentioned entities auto-attach. You can also attach files directly (paste or drag-and-drop) with an upload queue and progress.
 
 ### Tools (MCP)
 
@@ -195,12 +156,11 @@ The agent runs against Macro's MCP [tool registry](/AI/mcp/tools/index):
 - **Execution:** `bash_code_execution`, `text_editor_code_execution`.
 - **Web:** `web_search`, `web_fetch`.
 
-The same MCP server is reachable externally (see [MCP Setup](/AI/mcp/overview)), so Claude Code / Codex / any MCP client can drive the workspace too.
+The same MCP server is reachable externally (see [MCP Setup](/AI/mcp/overview)), so Claude Code, Codex, or any MCP client can drive the workspace too.
 
 ### Integrations
 
-- The agent can create tasks, draft/send emails, create documents, set properties/assignees, and read across email, channels, docs, calls, and CRM.
-- Outputs surface in the Agents tab and the [Inbox](/product/inbox).
+Through those tools the agent can create tasks, draft and send emails, create documents, set properties and assignees, and read across email, channels, docs, calls, and CRM. Its outputs surface in the Agents tab and the [Inbox](/product/inbox).
 
 ---
 
@@ -210,22 +170,15 @@ Scheduled agent runs (cron jobs) — the same agent and tools as [Chat](#chat--a
 
 **Full docs:** [Automations (in Agents)](/product/agents#automations) · Created from the Agents module → Automations tab.
 
-### Authoring & scheduling
+An automation is a composer with a name (auto-derived from the prompt, up to ~72 characters), a markdown prompt editor that accepts [mentions](#mentions) of channels, docs, tasks, and people, plus a schedule and timezone (defaulting to local). Schedules are **weekly** (pick days, with weekday/weekend/every-day presets) or **monthly** (a day from 1–31) at a chosen `HH:MM`; the defaults are weekly, weekdays, 09:00. Under the hood these are stored as standard 6–7 field cron expressions (ranges, lists, and wildcards all parse), and each run is capped at 20 minutes.
 
-- Composer with a name (auto-derived from the prompt, up to ~72 chars), a markdown instruction/prompt editor, schedule, and timezone (defaults to local). @mention channels, docs, tasks, and people inside the prompt.
-- **Weekly** (pick days; presets for weekdays / weekends / every day) or **monthly** (day 1–31), at a chosen `HH:MM`. Defaults: weekly, weekdays, 09:00. Stored as standard 6–7 field cron (ranges, lists, wildcards). Max 20-minute runtime per run.
-
-### Management & results
-
-- Edit, enable/disable, rename, delete, and **Run Now**; "Running" indicator.
-- Run history (latest ~50) with timestamp and success/failure; each run produces a chat artifact you can open.
-- Each run can use the full MCP toolset; results appear in the [Inbox](/product/inbox) and the Agents tab at the scheduled time.
+You can edit, enable or disable, rename, delete, and **Run Now**, with a "Running" indicator while a run is in flight. The run history keeps the latest ~50 entries with a timestamp and success/failure state, and each run produces a chat artifact you can open. Every run has the full MCP toolset, and results land in the [Inbox](/product/inbox) and the Agents tab at the scheduled time.
 
 ---
 
 ## Tasks
 
-Lightweight task tracking (block type `project`, alias `task`). Deliberately low-ceremony: status, priority, assignee — no extra label/category sprawl required.
+Lightweight task tracking (block type `project`, alias `task`). Deliberately low-ceremony — status, priority, assignee — with no extra label or category sprawl required.
 
 **Full docs:** [Tasks](/product/tasks) · Create with <kbd>c</kbd> then <kbd>t</kbd> (or <kbd>shift</kbd>+<kbd>t</kbd> for a new split).
 
@@ -237,54 +190,43 @@ Lightweight task tracking (block type `project`, alias `task`). Deliberately low
 - **Due Date** (date).
 - **Parent Task** / **Subtasks** (task hierarchy).
 - **Depends On** (blocking relationships).
-- **Effort** (number), **Story Points** (number).
+- **Effort** (number) and **Story Points** (number).
 - **Relevant Documents** (multi-doc references).
-- Plus any **custom property** (see [CRM](#crm--contacts--companies) for the full type list). Default pinned: Status, Priority, Assignees.
 
-### Views
+Beyond these, tasks accept any **custom property** from the shared type system (see [CRM](#crm--contacts--companies) for the full list). Status, Priority, and Assignees are pinned by default.
 
-- **List** — table with inline-editable property columns (name, status, priority, assignees, created-by, updated).
-- **Board / grid** — kanban grouped by status with drag-and-drop columns.
-- **Grouping:** none, status, priority, assignee, project, date. **Sorting:** updated, created, viewed, priority, status. **Filters:** active, by status, by priority, assigned-to-me, by assignee, and any custom property.
+### Views & creation
 
-### Creating tasks
+Tasks render in a **list** view (a table with inline-editable property columns: name, status, priority, assignees, created-by, updated) or a **board/grid** kanban grouped by status with drag-and-drop columns. You can group by none, status, priority, assignee, project, or date; sort by updated, created, viewed, priority, or status; and filter by active, status, priority, assigned-to-me, assignee, or any custom property.
 
-- Keyboard (<kbd>c</kbd>+<kbd>t</kbd>), launcher/create buttons, **from an email** (pre-fills subject as title, links the thread), **from markdown/channel checkboxes** (extracts @assignee, date mention, title, and checked→Completed), and inline in docs via `/task`. Duplicate-task detection via similarity search.
-
-### Keyboard (task-specific)
-
-- <kbd>shift</kbd>+<kbd>cmd</kbd>+<kbd>o</kbd> open property editor · <kbd>shift</kbd>+<kbd>cmd</kbd>+<kbd>p</kbd> set priority · <kbd>shift</kbd>+<kbd>cmd</kbd>+<kbd>a</kbd> set assignee · <kbd>shift</kbd>+<kbd>cmd</kbd>+<kbd>s</kbd> set status · <kbd>shift</kbd>+<kbd>cmd</kbd>+<kbd>b</kbd> copy branch name.
+You can create a task from the keyboard (<kbd>c</kbd>+<kbd>t</kbd>), the launcher, **an email** (the subject becomes the title and the thread is linked in), a **markdown or channel checkbox** (Macro extracts the @assignee, date mention, and title, and maps a checked box to Completed), or inline in a doc via `/task`. A similarity search flags likely duplicates. Task-specific shortcuts: <kbd>shift</kbd>+<kbd>cmd</kbd>+<kbd>o</kbd> open property editor · <kbd>shift</kbd>+<kbd>cmd</kbd>+<kbd>p</kbd> priority · <kbd>shift</kbd>+<kbd>cmd</kbd>+<kbd>a</kbd> assignee · <kbd>shift</kbd>+<kbd>cmd</kbd>+<kbd>s</kbd> status · <kbd>shift</kbd>+<kbd>cmd</kbd>+<kbd>b</kbd> copy branch name.
 
 ### GitHub integration
 
-- Link your GitHub account in Settings → Account.
-- Linked PRs render inline on the task with name, number, status, and +/− line counts.
-- Status auto-transitions as you work: branch created → **In Progress**, PR opened/in review → **In Review**, PR merged → **Completed**. The task knows which PR ID maps to it.
+Link your GitHub account in Settings → Account. Linked PRs then render inline on the task with name, number, status, and +/− line counts, and the task knows which PR ID maps to it. Status auto-transitions as you work: creating a branch moves it to **In Progress**, opening a PR or starting review moves it to **In Review**, and merging moves it to **Completed**.
 
 ### Integrations
 
-- @mention tasks in docs, channels, emails, and chats — they render as live status pills.
-- Assigned tasks appear in your [Inbox](/product/inbox) (a `task_assigned` notification); marking done from the inbox completes the task.
-- Agents create and update tasks via `CreateDocument` / `SetEntityProperty`.
-- Bulk operations: rename, move to project, delete, edit properties (with undo).
+Tasks are @mentionable in docs, channels, emails, and chats, where they render as live status pills. Assigned tasks appear in your [Inbox](/product/inbox) as a `task_assigned` notification, and marking one done from the inbox completes it. Agents create and update tasks via `CreateDocument` and `SetEntityProperty`, and bulk operations (rename, move to project, delete, edit properties) all support undo.
 
 ---
 
 ## CRM — Contacts & Companies
 
-A CRM that "just works" (block type `contact`), built on the same polymorphic entity + property system as [Tasks](#tasks). Records are created automatically from email activity, so it stays populated without manual entry.
+A CRM that "just works" (block type `contact`), built on the same polymorphic entity and property system as [Tasks](#tasks). Records are created automatically from email activity, so the CRM stays populated without manual entry.
 
 <Note>CRM does not yet have a standalone guide page — this section is the reference for now.</Note>
 
 ### Entity types & built-in fields
 
-- **Contact** (a person): Email, Name, Company (parent), First Interaction, Last Interaction, Created/Updated, Hidden (admin-only visibility).
-- **Company** (an organization): Name and Description (from the domain directory), Team, Domains (primary first), embedded Contacts list (permission-filtered), Email Sync toggle, Hidden, Created/Updated.
-- Both can relate to Projects, Channels, Chats, Documents, Users, Threads, and Tasks.
+There are two record types, and both can relate to Projects, Channels, Chats, Documents, Users, Threads, and Tasks:
+
+- **Contact** (a person): Email, Name, Company (parent), First Interaction, Last Interaction, Created/Updated, and a Hidden flag (admin-only visibility).
+- **Company** (an organization): Name and Description (resolved from the domain directory), Team, Domains (primary first), an embedded permission-filtered Contacts list, an Email Sync toggle, a Hidden flag, and Created/Updated.
 
 ### Custom properties — supported types
 
-Contacts, companies, tasks, and other entities all support these property data types:
+Contacts, companies, tasks, and other entities all support the same property data types:
 
 - **STRING** (text) — e.g. phone, job title, department, notes.
 - **NUMBER** — e.g. revenue, employee count, ARR.
@@ -292,22 +234,18 @@ Contacts, companies, tasks, and other entities all support these property data t
 - **DATE** — e.g. last contacted, contract/renewal date.
 - **SELECT_STRING** — single/multi-select with string options (custom option colors/icons).
 - **SELECT_NUMBER** — single/multi-select with numeric options.
-- **ENTITY** — reference to another entity (User, Company, Contact, Document, Project, Channel, Chat, Task, Thread).
+- **ENTITY** — a reference to another entity (User, Company, Contact, Document, Project, Channel, Chat, Task, Thread).
 - **LINK** — URLs (website, LinkedIn, etc.).
 
-Property editors come in inline (click-to-edit), popover, and modal (batch) forms; properties can be system (non-removable) or custom, and metadata properties stay out of the main views.
+Property editors come in inline (click-to-edit), popover, and modal (batch) forms. Properties can be system (non-removable) or custom, and properties marked as metadata stay out of the main views.
 
-### Auto-creation, views & comments
+### Auto-creation & management
 
-- Receiving or sending email auto-creates the contact and its company, links them, and updates first/last interaction timestamps. Company name/description enrich from the domain directory; contact names derive from email addresses.
-- Records appear in the unified list views with filtering (by company, by interaction, hidden status, email-sync status). Threaded comments on contacts/companies. Hidden records are filtered out for non-admins.
+Sending or receiving email auto-creates the contact and its company, links them, and updates the first/last interaction timestamps; company names and descriptions enrich from the domain directory, and contact names derive from their email addresses. Records show up in the unified list views with filtering (by company, by interaction, hidden status, email-sync status), support threaded comments, and hide from non-admins when flagged hidden.
 
 ### Integrations
 
-- **Email:** the primary data source — contacts/companies link to threads; per-company email sync controls what flows in.
-- **Mentions:** contacts and companies are @mentionable in docs, channels, and chats (rendered distinctly for people vs. companies).
-- **Tasks:** tasks can reference contacts/companies via ENTITY properties.
-- **Agents:** readable/writable through the entity property tools (`GetEntityProperties`, `SetEntityProperty`, `ListEntities`).
+Email is the primary data source — contacts and companies link to threads, and per-company email sync controls what flows in. Both are [@mentionable](#mentions) in docs, channels, and chats (rendered distinctly for people vs. companies), tasks can reference them through ENTITY properties, and agents read and write them through the entity property tools (`GetEntityProperties`, `SetEntityProperty`, `ListEntities`).
 
 ---
 
@@ -317,86 +255,50 @@ Video calls with transcription and AI summaries that live inside Macro and feed 
 
 **Full docs:** [Calls](/product/calls) · Start from the Calls tab or the call button inside a channel.
 
-### During a call
+During a call you get a ring notification to participants, audio/video toggles, mute, screen share, and a participants panel. A **team-sharing toggle** controls memory scope: by default a call is shared to the whole team's memory, but unchecking it (bottom-left of an active call, or in the side panel) keeps the call in your personal memory only.
 
-- Ring notification to participants; audio/video toggle, mute, screen share, participants panel.
-- **Team-sharing toggle** — by default a call is shared to the whole team's memory; uncheck (bottom-left of an active call, or in the side panel) to keep it in your personal memory only.
+After a call ends, the recording is available for playback with a poster image, and the **transcript** arrives with speaker diarization (Speaker #1/#2…), timestamps, and grouping within 5-minute windows — click any line to seek the video, or use "sync to video time" to re-follow playback. An **AI summary** is generated in markdown once the call ends. The side panel shows owner, start/end, duration, status, participants (click one to DM them), and References.
 
-### After a call
-
-- Recording playback with standard controls and a poster image.
-- **Transcript** with speaker diarization (Speaker #1/#2…), timestamps, and grouping within 5-minute windows; click any line to seek the video; "sync to video time" to re-follow.
-- **AI summary** auto-generated in markdown once the call ends.
-- Side panel shows owner, start/end, duration, status, participants (click a participant to DM), and References.
-
-### Integrations
-
-- **Channels:** start/join calls in-channel; calls show in the channel's Call History.
-- **Search:** transcripts and summaries are full-text searchable (when team-shared).
-- **Agents:** the agent can search and summarize across call transcripts.
-- **Docs:** call blocks embed in markdown (via a `call_transcript_id` param).
-- **Inbox:** calls are intentionally **excluded** from the unified inbox view.
+For integrations: calls start and join in-channel and appear in the channel's Call History; transcripts and summaries are full-text searchable when team-shared, and the agent can search and summarize across them; call blocks embed in markdown via a `call_transcript_id` param. Note that calls are intentionally **excluded** from the unified inbox view.
 
 ---
 
 ## Canvas
 
-Infinite-canvas diagrams / whiteboard. Collaborative and embeddable in docs.
+Infinite-canvas diagrams and whiteboard — collaborative and embeddable in docs. Create with <kbd>c</kbd> then <kbd>n</kbd>.
 
-Create with <kbd>c</kbd> then <kbd>n</kbd>.
-
-- **Tools:** select, freehand pencil, shapes (rectangle, ellipse), pan/hand, zoom. **Connectors:** straight, flow (smooth bezier), and bent (orthogonal/stepped); end styles include arrow, filled arrow, circle, small circle, or none. Color swatches for stroke/fill; text properties (font family, size, color).
-- **Content nodes** — text, image, file, and video nodes — are feature-flagged (`ENABLE_CANVAS_TEXT/IMAGES/FILES/VIDEO`).
-- **Collaboration & files:** live multi-user sync (CRDT, debounced autosave), undo/redo; share a link that captures the current viewport (x/y/scale); download/export the canvas.
-- **Integrations:** embeds read-only inside [markdown](#markdown--documents); References / sharing / search like every block.
+The toolbar has select, a freehand pencil, shapes (rectangle, ellipse), pan/hand, and zoom. Connectors come in three styles — straight, flow (smooth bezier), and bent (orthogonal/stepped) — with end markers for arrow, filled arrow, circle, small circle, or none, and color swatches and text properties (font family, size, color) for styling. Text, image, file, and video content nodes exist but are feature-flagged (`ENABLE_CANVAS_TEXT/IMAGES/FILES/VIDEO`). Changes sync live (CRDT-backed, debounced autosave) with undo/redo, you can share a link that captures the current viewport (x/y/scale), and you can download/export the canvas. A canvas embeds read-only inside a [markdown doc](#markdown--documents), and References, sharing, and search work like every block.
 
 ---
 
 ## Code
 
-Code files with syntax highlighting (CodeMirror 6) and autosave.
+Code files with CodeMirror 6 syntax highlighting and autosave. Create with <kbd>c</kbd> then <kbd>o</kbd>.
 
-Create with <kbd>c</kbd> then <kbd>o</kbd>.
-
-- **Languages:** highlighting for JavaScript (`.js/.mjs/.cjs`), TypeScript (`.ts/.cts/.mts`), JSX/TSX, HTML, CSS/SCSS/Sass/Less, JSON/JSONC, Python, Rust, C, and C++ (broad extension coverage); plain text/CSV fallback.
-- **Editing:** tab/indent management, toggle line comments (<kbd>cmd</kbd>+<kbd>/</kbd>), read-only when you lack edit access, autosave (debounced 500 ms, throttled 5 s).
-- **HTML render mode** — `.html` files toggle between code and a live preview (runs in-context, not sandboxed).
-- **Integrations:** embeds read-only in [markdown](#markdown--documents) with highlighting; References, sharing, download like every block.
+Highlighting covers JavaScript (`.js/.mjs/.cjs`), TypeScript (`.ts/.cts/.mts`), JSX/TSX, HTML, CSS/SCSS/Sass/Less, JSON/JSONC, Python, Rust, C, and C++ (broad extension coverage), with a plain-text/CSV fallback. Editing includes tab/indent management, line-comment toggling (<kbd>cmd</kbd>+<kbd>/</kbd>), read-only mode when you lack edit access, and autosave (debounced 500 ms, throttled 5 s). `.html` files have a render mode that toggles between code and a live preview (which runs in-context, not sandboxed). Code embeds read-only in [markdown](#markdown--documents) with highlighting, and References, sharing, and download work like every block.
 
 ---
 
 ## PDF
 
-PDF (and DOCX-as-PDF) viewing with markup, search, and agent Q&A. Uses a Macro fork of PDF.js.
+PDF (and DOCX-as-PDF) viewing with markup, search, and agent Q&A, built on a Macro fork of PDF.js.
 
-- **Viewing:** multi-page rendering; jump to a page; up to 8 labeled tabs to hold positions within one PDF; full-text search (<kbd>cmd</kbd>+<kbd>f</kbd>, regex, match count, next/prev); AI-generated table of contents when structure allows; click-to-define term lookup.
-- **Markup** (flag `ENABLE_PDF_MARKUP`): text highlights (custom colors), freehand annotations, text boxes, signature fields, and comment threads anchored to highlights/areas (reply, edit/delete your own). Highlights/comments sync across collaborators.
-- **Export:** download with annotations/highlights applied (comments exported alongside); print (<kbd>cmd</kbd>+<kbd>p</kbd>).
-- **Integrations:** "Chat with agent" opens Q&A over the PDF; embeds read-only in [markdown](#markdown--documents) (markup disabled when nested); multisplit with other PDFs is flag-gated.
+Viewing covers multi-page rendering, jump-to-page, up to 8 labeled tabs to hold positions within one PDF, full-text search (<kbd>cmd</kbd>+<kbd>f</kbd>, regex, match count, next/prev), an AI-generated table of contents when the structure allows, and click-to-define term lookup. Markup (flag `ENABLE_PDF_MARKUP`) adds text highlights with custom colors, freehand annotations, text boxes, signature fields, and comment threads anchored to highlights or areas (reply, edit/delete your own); highlights and comments sync across collaborators. You can download with annotations and highlights applied (comments exported alongside) and print (<kbd>cmd</kbd>+<kbd>p</kbd>). "Chat with agent" opens Q&A over the PDF's contents, the block embeds read-only in [markdown](#markdown--documents) (with markup disabled when nested), and multisplit with other PDFs is flag-gated.
 
 ---
 
 ## Image
 
-Image viewing.
-
-- **Formats:** PNG, JPEG, GIF, SVG, WebP.
-- Aspect-preserving display; copy to clipboard (<kbd>cmd</kbd>+<kbd>c</kbd>); download; share; References and details panel like every block.
+Image viewing for PNG, JPEG, GIF, SVG, and WebP. The image displays aspect-preserved, you can copy it to the clipboard (<kbd>cmd</kbd>+<kbd>c</kbd>), download it, or share it, and it carries the standard References and details panel like every block.
 
 ---
 
 ## Video
 
-Video file viewing (distinct from [Calls](#calls)).
-
-- **Formats:** MP4, MKV, WebM, AVI, MOV, WMV, MPEG/MPG, M4V, FLV, F4V, 3GP — native HTML5 player.
-- Standard controls, autoplay, secure presigned streaming; download (with progress) and share; References and details panel. (Behind `ENABLE_VIDEO_BLOCK`.)
+Video file viewing (distinct from [Calls](#calls)), behind the `ENABLE_VIDEO_BLOCK` flag. The native HTML5 player handles MP4, MKV, WebM, AVI, MOV, WMV, MPEG/MPG, M4V, FLV, F4V, and 3GP, with standard controls, autoplay, and secure presigned streaming. You can download (with progress) and share, and the block carries the usual References and details panel.
 
 ---
 
 ## Unknown / other files
 
-Fallback for any file type without a dedicated viewer.
-
-- Shows "No preview available for [filename]" with prominent **Download** and **Share** buttons.
-- Still carries a details panel and References, so unsupported files remain shareable, linkable, and searchable by name/metadata like every other block.
+The fallback for any file type without a dedicated viewer. It shows "No preview available for [filename]" with prominent **Download** and **Share** buttons, and still carries a details panel and References — so even unsupported files stay shareable, linkable, and searchable by name and metadata like every other block.
