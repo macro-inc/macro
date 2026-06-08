@@ -2,6 +2,10 @@ import * as aws from '@pulumi/aws';
 import type * as pulumi from '@pulumi/pulumi';
 import type { Output } from '@pulumi/pulumi';
 import { MACRO_SUBDOMAIN_CERT, stack } from '../../../shared';
+import {
+  DEFAULT_DEREGISTRATION_DELAY_SECONDS,
+  DEFAULT_TARGET_GROUP_HEALTH_CHECK,
+} from './ecs_deployment_defaults';
 
 export function serviceLoadBalancer(
   parent: pulumi.ComponentResource | undefined,
@@ -14,6 +18,8 @@ export function serviceLoadBalancer(
     isPrivate,
     tags,
     idleTimeout,
+    healthCheck,
+    deregistrationDelay,
   }: {
     serviceName: string;
     serviceContainerPort: number;
@@ -27,13 +33,16 @@ export function serviceLoadBalancer(
     isPrivate?: boolean;
     tags: { [key: string]: string };
     idleTimeout?: number;
+    healthCheck?: Partial<aws.types.input.lb.TargetGroupHealthCheck>;
+    deregistrationDelay?: number;
   }
 ) {
   const targetGroup = new aws.alb.TargetGroup(
     `${serviceName}-tg-${stack}`,
     {
       name: `${serviceName}-tg-${stack}`,
-      deregistrationDelay: 30, // let any active calls finish within 30 seconds
+      deregistrationDelay:
+        deregistrationDelay ?? DEFAULT_DEREGISTRATION_DELAY_SECONDS,
       port: serviceContainerPort,
       protocol: 'HTTP',
       targetType: 'ip',
@@ -41,6 +50,8 @@ export function serviceLoadBalancer(
       healthCheck: {
         path: healthCheckPath,
         protocol: 'HTTP',
+        ...DEFAULT_TARGET_GROUP_HEALTH_CHECK,
+        ...healthCheck,
       },
       tags,
     },
