@@ -23,7 +23,11 @@ pub enum SearchIndex {
     CallRecords,
 }
 
-/// All searchable entity types. Projects are Postgres-only.
+/// All searchable entity types — the tag on a unified `SearchHit`,
+/// independent of where the hit came from. Most are backed by an
+/// OpenSearch index, but some (Projects, CrmCompanies) are Postgres-only
+/// and synthesized by name searches; those never appear in OpenSearch
+/// responses. The OpenSearch-backed subset is [`OpenSearchEntityType`].
 #[derive(
     Debug,
     Clone,
@@ -51,6 +55,8 @@ pub enum SearchEntityType {
     Projects,
     /// The call records entity type (has OpenSearch index)
     CallRecords,
+    /// The CRM company entity type (Postgres-only)
+    CrmCompanies,
 }
 
 /// `SearchEntityType` variants that have an OpenSearch index.

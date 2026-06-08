@@ -10260,8 +10260,10 @@ dependencies = [
  "chrono",
  "comms",
  "comms_db_client",
+ "crm",
  "document_sub_type",
  "email_db_client",
+ "entity_access",
  "futures",
  "http-body-util",
  "indexmap 2.14.0",
@@ -10294,6 +10296,7 @@ dependencies = [
  "tower-http",
  "tracing",
  "utoipa",
+ "uuid",
 ]
 
 [[package]]

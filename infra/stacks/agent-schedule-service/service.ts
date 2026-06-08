@@ -4,6 +4,7 @@ import * as pulumi from '@pulumi/pulumi';
 import {
   DATADOG_API_KEY,
   DEFAULT_CONTINUE_BEFORE_STEADY_STATE,
+  EcsDeploymentFailureAlarm,
   datadogAgentContainer,
   fargateLogRouterSidecarContainer,
   serviceLoadBalancer,
@@ -442,6 +443,16 @@ export class AgentScheduleService extends pulumi.ComponentResource {
   }
 
   private setupServiceAlarms() {
+    new EcsDeploymentFailureAlarm(
+      `${BASE_NAME}-deployment-failure-alarm`,
+      {
+        serviceName: BASE_NAME,
+        serviceArn: this.service.service.arn,
+        tags: this.tags,
+      },
+      { parent: this }
+    );
+
     new aws.cloudwatch.MetricAlarm(
       `${BASE_NAME}-service-cpu-alarm`,
       {

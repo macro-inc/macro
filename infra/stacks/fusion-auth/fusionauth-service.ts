@@ -1,7 +1,10 @@
 import * as aws from '@pulumi/aws';
 import * as awsx from '@pulumi/awsx';
 import * as pulumi from '@pulumi/pulumi';
-import { DEFAULT_CONTINUE_BEFORE_STEADY_STATE } from '../../packages/resources';
+import {
+  DEFAULT_CONTINUE_BEFORE_STEADY_STATE,
+  EcsDeploymentFailureAlarm,
+} from '../../packages/resources';
 import { serviceLoadBalancer } from './resources/load_balancer';
 import {
   BASE_DOMAIN,
@@ -301,6 +304,16 @@ export class FusionAuthService extends pulumi.ComponentResource {
   }
 
   setupServiceAlarms() {
+    new EcsDeploymentFailureAlarm(
+      `${BASE_NAME}-deployment-failure-alarm`,
+      {
+        serviceName: BASE_NAME,
+        serviceArn: this.service.service.arn,
+        tags: this.tags,
+      },
+      { parent: this }
+    );
+
     new aws.cloudwatch.MetricAlarm(
       `${BASE_NAME}-high-cpu-alarm`,
       {

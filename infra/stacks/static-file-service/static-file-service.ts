@@ -6,6 +6,7 @@ import {
   DATADOG_API_KEY,
   DEFAULT_CONTINUE_BEFORE_STEADY_STATE,
   datadogAgentContainer,
+  EcsDeploymentFailureAlarm,
   fargateLogRouterSidecarContainer,
   QueueAlarms,
   serviceLoadBalancer,
@@ -605,6 +606,17 @@ export class StaticFileService extends pulumi.ComponentResource {
     );
 
     this.service = service;
+
+    new EcsDeploymentFailureAlarm(
+      `${SERVICE_NAME}-deployment-failure-alarm`,
+      {
+        serviceName: SERVICE_NAME,
+        serviceArn: this.service.service.arn,
+        tags: this.tags,
+      },
+      { parent: this }
+    );
+
     this.domain = `https://${SERVICE_DOMAIN_NAME}`;
   }
 

@@ -1145,7 +1145,8 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
                 d.domain             AS "domain?",
                 d.created_at       AS "domain_created_at?",
                 dd.name            AS "dir_name?",
-                dd.description     AS "dir_description?"
+                dd.description     AS "dir_description?",
+                uh."updatedAt"::timestamptz AS "viewed_at?"
             FROM limited_companies lc
             LEFT JOIN "UserHistory" uh
                 ON uh."itemId" = lc.id::text
@@ -1196,6 +1197,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
                     },
                     name: row.dir_name,
                     description: row.dir_description,
+                    viewed_at: row.viewed_at,
                 });
             }
             // LEFT JOIN gives an all-NULL domain row for companies with

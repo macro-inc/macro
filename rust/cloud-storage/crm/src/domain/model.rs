@@ -15,6 +15,11 @@ pub struct CrmCompanyForSoup {
     pub name: Option<String>,
     /// Display description from the primary domain's directory entry.
     pub description: Option<String>,
+    /// When the requesting user last viewed this company
+    /// (`UserHistory.updatedAt`), or `None` if never viewed. Drives the
+    /// soup `viewed_at` / `viewed_updated` sorts and the recently-viewed
+    /// feed. `None` for sources that don't resolve view history (search).
+    pub viewed_at: Option<DateTime<Utc>>,
 }
 
 /// A [`CrmCompany`] bundled with its directory display metadata

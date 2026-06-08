@@ -14,6 +14,10 @@ export {
   DEFAULT_TARGET_GROUP_HEALTH_CHECK,
 } from './resources/ecs_deployment_defaults';
 export {
+  EcsDeploymentFailureAlarm,
+  type EcsDeploymentFailureAlarmArgs,
+} from './resources/ecs_deployment_failure_alarm';
+export {
   attachFrecencyTablePolicy,
   createFrecencyTablePolicy,
 } from './resources/frecency';

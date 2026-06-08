@@ -126,8 +126,13 @@ impl SoupItem {
                 .unwrap_or(soup_channel.channel.channel.updated_at),
             (SoupItem::Call(record), SimpleSortMethod::CreatedAt) => record.started_at,
             (SoupItem::Call(record), _) => record.ended_at.unwrap_or(record.started_at),
-            // No viewed_at signal for CrmCompany yet — fall back to updated_at.
             (SoupItem::CrmCompany(company), SimpleSortMethod::CreatedAt) => company.created_at,
+            (SoupItem::CrmCompany(company), SimpleSortMethod::ViewedAt) => {
+                company.viewed_at.unwrap_or_default()
+            }
+            (SoupItem::CrmCompany(company), SimpleSortMethod::ViewedUpdated) => {
+                company.viewed_at.unwrap_or(company.updated_at)
+            }
             (SoupItem::CrmCompany(company), _) => company.updated_at,
             (SoupItem::ForeignEntity(foreign_entity), SimpleSortMethod::CreatedAt) => {
                 foreign_entity.created_at

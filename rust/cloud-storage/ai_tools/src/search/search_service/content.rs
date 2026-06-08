@@ -61,6 +61,7 @@ impl AsyncTool<Arc<SearchServiceClient>> for ContentSearch {
             match_type: MatchType::Partial,
             filters: entity_filters_from_include(self.entity_types.clone(), base_filters),
             search_on: models_search::SearchOn::Content,
+            include_crm: false,
             collapse: Some(true),
         };
 

@@ -7250,6 +7250,12 @@ export const getItemsSoupResponse = zod.object({
               updatedAt: zod.iso
                 .datetime({})
                 .describe('When the company was last updated.'),
+              viewedAt: zod.iso
+                .datetime({})
+                .nullish()
+                .describe(
+                  'When the requesting user last viewed this company, or `None` if\nnever viewed. Mirrors the `viewed_at` other soup entities carry.'
+                ),
             })
             .describe(
               'A CRM company as displayed in Soup. Carries the core company\nfields plus display metadata resolved from `crm_domain_directory`\nagainst the primary (earliest-created) domain.'
@@ -9097,6 +9103,12 @@ export const postItemsSoupResponse = zod.object({
               updatedAt: zod.iso
                 .datetime({})
                 .describe('When the company was last updated.'),
+              viewedAt: zod.iso
+                .datetime({})
+                .nullish()
+                .describe(
+                  'When the requesting user last viewed this company, or `None` if\nnever viewed. Mirrors the `viewed_at` other soup entities carry.'
+                ),
             })
             .describe(
               'A CRM company as displayed in Soup. Carries the core company\nfields plus display metadata resolved from `crm_domain_directory`\nagainst the primary (earliest-created) domain.'
@@ -10537,6 +10549,12 @@ export const postItemsSoupAstResponse = zod.object({
               updatedAt: zod.iso
                 .datetime({})
                 .describe('When the company was last updated.'),
+              viewedAt: zod.iso
+                .datetime({})
+                .nullish()
+                .describe(
+                  'When the requesting user last viewed this company, or `None` if\nnever viewed. Mirrors the `viewed_at` other soup entities carry.'
+                ),
             })
             .describe(
               'A CRM company as displayed in Soup. Carries the core company\nfields plus display metadata resolved from `crm_domain_directory`\nagainst the primary (earliest-created) domain.'

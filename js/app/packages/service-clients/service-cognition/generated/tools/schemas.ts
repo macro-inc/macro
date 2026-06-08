@@ -370,6 +370,27 @@ export const SearchToolResponse = z.object({
           }),
           z.object({ type: z.literal('call') })
         ),
+        z.intersection(
+          z.object({
+            createdAt: z.string().datetime({ offset: true }),
+            description: z.union([z.string(), z.null()]).optional(),
+            domains: z.array(
+              z.object({
+                companyId: z.string().uuid(),
+                createdAt: z.string().datetime({ offset: true }),
+                domain: z.string(),
+                id: z.string().uuid(),
+              })
+            ),
+            hidden: z.boolean(),
+            id: z.string().uuid(),
+            name: z.union([z.string(), z.null()]).optional(),
+            nameHighlighted: z.union([z.string(), z.null()]).optional(),
+            teamId: z.string().uuid(),
+            updatedAt: z.string().datetime({ offset: true }),
+          }),
+          z.object({ type: z.literal('company') })
+        ),
       ];
       const errors = schemas.reduce<z.ZodError[]>(
         (errors, schema) =>

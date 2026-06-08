@@ -399,6 +399,7 @@ function getSearchResultId(result: UnifiedSearchResponseItem): string {
     .with({ type: 'email' }, (r) => r.thread_id)
     .with({ type: 'project' }, (r) => r.id)
     .with({ type: 'call' }, (r) => r.call_id)
+    .with({ type: 'company' }, (r) => r.id)
     .exhaustive();
 }
 

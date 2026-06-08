@@ -11,10 +11,11 @@ import {
   blockNameToFileExtensions,
   blockNameToMimeTypes,
 } from '@core/constant/allBlocks';
-import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
+import { ShowFeatureFlag, useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
-  ENABLE_AUTO_UPDATE_UI,
+  DISABLE_AUTO_UPDATE_UI_FLAG,
   ENABLE_EMAIL,
+  ENABLE_AUTO_UPDATE_UI_OVERRIDE,
   ENABLE_INBOX_RESYNC,
   ENABLE_INBOX_SYNC_STATUS,
   ENABLE_MULTI_INBOX,
@@ -268,6 +269,10 @@ export function Account() {
   const hasPaidAccess = useHasPaidAccess();
   const permissions = usePermissions();
     const { toggleSettings } = useSettingsState();
+  const disableAutoUpdateUIFlag = useFeatureFlag(DISABLE_AUTO_UPDATE_UI_FLAG);
+  const autoUpdateUIEnabled = createMemo(
+    () => ENABLE_AUTO_UPDATE_UI_OVERRIDE ?? !disableAutoUpdateUIFlag().enabled
+  );
   const [showEmailModal, setShowEmailModal] = createSignal<boolean>(false);
   const [showDeleteModal, setShowDeleteModal] = createSignal<boolean>(false);
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] = createSignal<boolean>(false);
@@ -539,7 +544,7 @@ export function Account() {
                 </div>
               </Row>
 
-              <Show when={ENABLE_AUTO_UPDATE_UI}>
+              <Show when={autoUpdateUIEnabled()}>
                 <BundleVersionRow />
                 <BundleUpdateRow />
               </Show>

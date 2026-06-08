@@ -223,6 +223,7 @@ pub struct SplitUnifiedSearchResponseValues {
     pub email: Vec<SearchHit>,
     pub project: Vec<SearchHit>,
     pub call_record: Vec<SearchHit>,
+    pub crm_company: Vec<SearchHit>,
 }
 
 pub trait SplitUnifiedSearchResponse: Iterator<Item = SearchHit> {
@@ -234,40 +235,53 @@ where
     T: Iterator<Item = SearchHit>,
 {
     fn split_search_response(self) -> SplitUnifiedSearchResponseValues {
-        let (channel_message, chat, document, email, project, call_record) = self.into_iter().fold(
-            (vec![], vec![], vec![], vec![], vec![], vec![]),
-            |(
-                mut channel_message,
-                mut chat,
-                mut document,
-                mut email,
-                mut project,
-                mut call_record,
-            ),
-             item| {
-                match item.entity_type {
-                    SearchEntityType::Channels => {
-                        channel_message.push(item);
+        let (channel_message, chat, document, email, project, call_record, crm_company) =
+            self.into_iter().fold(
+                (vec![], vec![], vec![], vec![], vec![], vec![], vec![]),
+                |(
+                    mut channel_message,
+                    mut chat,
+                    mut document,
+                    mut email,
+                    mut project,
+                    mut call_record,
+                    mut crm_company,
+                ),
+                 item| {
+                    match item.entity_type {
+                        SearchEntityType::Channels => {
+                            channel_message.push(item);
+                        }
+                        SearchEntityType::Chats => {
+                            chat.push(item);
+                        }
+                        SearchEntityType::Documents => {
+                            document.push(item);
+                        }
+                        SearchEntityType::Emails => {
+                            email.push(item);
+                        }
+                        SearchEntityType::Projects => {
+                            project.push(item);
+                        }
+                        SearchEntityType::CallRecords => {
+                            call_record.push(item);
+                        }
+                        SearchEntityType::CrmCompanies => {
+                            crm_company.push(item);
+                        }
                     }
-                    SearchEntityType::Chats => {
-                        chat.push(item);
-                    }
-                    SearchEntityType::Documents => {
-                        document.push(item);
-                    }
-                    SearchEntityType::Emails => {
-                        email.push(item);
-                    }
-                    SearchEntityType::Projects => {
-                        project.push(item);
-                    }
-                    SearchEntityType::CallRecords => {
-                        call_record.push(item);
-                    }
-                }
-                (channel_message, chat, document, email, project, call_record)
-            },
-        );
+                    (
+                        channel_message,
+                        chat,
+                        document,
+                        email,
+                        project,
+                        call_record,
+                        crm_company,
+                    )
+                },
+            );
 
         SplitUnifiedSearchResponseValues {
             channel_message,
@@ -276,6 +290,7 @@ where
             email,
             project,
             call_record,
+            crm_company,
         }
     }
 }

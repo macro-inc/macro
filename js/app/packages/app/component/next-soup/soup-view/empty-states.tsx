@@ -138,13 +138,45 @@ export function EmptyState(props: {
       </Match>
 
       <Match when={props.listView === 'inbox' && emailActive()}>
-        <EmptyStatePanel
-          align="center"
-          graphic={InboxZeroNumber}
-          title="Inbox zero"
-          description="You're all caught up. Important items will appear here as they arrive."
-          documentationUrl={`${DOCS_BASE}/product/inbox`}
-        />
+        {(() => {
+          // Each inbox tab filters to a different slice, so the empty copy
+          // should match: Signal is the important stuff, Noise is explicitly
+          // the low-priority stuff, and All spans everything.
+          const tab = soup.activeTab();
+          const { title, description } =
+            tab === 'noise'
+              ? {
+                  title: 'No noise',
+                  description: (
+                    <>
+                      Low-priority items like newsletters and notifications
+                      collect here.
+                      <br />
+                      Nothing to clear right now.
+                    </>
+                  ),
+                }
+              : tab === 'all'
+                ? {
+                    title: 'Inbox zero',
+                    description:
+                      "You're all caught up. New items will appear here as they arrive.",
+                  }
+                : {
+                    title: 'Inbox zero',
+                    description:
+                      "You're all caught up. Important items will appear here as they arrive.",
+                  };
+          return (
+            <EmptyStatePanel
+              align="center"
+              graphic={InboxZeroNumber}
+              title={title}
+              description={description}
+              documentationUrl={`${DOCS_BASE}/product/inbox`}
+            />
+          );
+        })()}
       </Match>
 
       <Match when={props.listView === 'mail' && emailActive()}>
