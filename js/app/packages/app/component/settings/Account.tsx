@@ -190,7 +190,7 @@ function ProfilePictureRow(props: { userId: string }) {
             <Show when={profilePictureUrl()}>
               <Tooltip label="Remove profile picture">
                 <Button
-                  variant="base"
+                  variant="danger"
                   size="icon-sm"
                   depth={3}
                   disabled={isRemoving()}
