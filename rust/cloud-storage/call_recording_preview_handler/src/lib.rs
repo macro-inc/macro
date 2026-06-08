@@ -2,9 +2,9 @@
 
 //! Lambda handler for generating call recording preview thumbnails.
 
+mod db;
 mod event;
 mod ffmpeg;
 mod key;
-mod db;
 
 pub use event::{HandlerConfig, HandlerState, handler};

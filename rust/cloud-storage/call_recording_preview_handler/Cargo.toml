@@ -15,3 +15,4 @@ sqlx = { workspace = true }
 tokio = { workspace = true, features = ["fs", "process", "time"] }
 tracing = { workspace = true }
 urlencoding = { workspace = true }
+uuid = { workspace = true }
