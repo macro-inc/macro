@@ -144,7 +144,7 @@ const SIDEBAR_LINKS = [
   },
   {
     id: 'documents',
-    label: 'Documents',
+    label: 'Files',
     href: LIST_VIEW_PATHS.documents,
     icon: AnimatedFileMdIcon,
     hotkey: 'd',
@@ -165,14 +165,6 @@ const SIDEBAR_LINKS = [
     icon: AnimatedChannelIcon,
     hotkey: 'c',
     hotkeyToken: TOKENS.sidebar.goTo.channels,
-  },
-  {
-    id: 'folders',
-    label: 'Folders',
-    href: LIST_VIEW_PATHS.folders,
-    icon: AnimatedFolderIcon,
-    hotkey: 'f',
-    hotkeyToken: TOKENS.sidebar.goTo.folders,
   },
 ] satisfies SidebarItem[];
 

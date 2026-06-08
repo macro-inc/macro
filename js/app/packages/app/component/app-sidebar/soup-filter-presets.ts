@@ -242,6 +242,12 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         }),
         clientFilters: { and: ['document-or-file'] },
       }),
+      folders: () => ({
+        filters: defineQueryFilters({
+          exclude: { folderId: [NIL_UUID] },
+        }),
+        clientFilters: { and: ['folders'] },
+      }),
       all: () => ({
         filters: defineQueryFilters({
           exclude: { subType: ['task'] },
