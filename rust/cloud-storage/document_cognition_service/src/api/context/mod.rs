@@ -21,6 +21,7 @@ use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use notification::domain::service::SqsNotificationIngress;
 use notification::outbound::queue::SqsQueue;
+use notification::outbound::websocket::ConnectionGatewayClient;
 use search_service_client::SearchServiceClient;
 use secretsmanager_client::LocalOrRemoteSecret;
 use sqlx::PgPool;
@@ -74,6 +75,7 @@ pub struct ApiContext {
     pub internal_auth_key: LocalOrRemoteSecret<InternalApiSecretKey>,
     pub notification_ingress_service: Arc<NotificationIngressType>,
     pub connection_repo: Arc<dyn ConnectionRepo>,
+    pub connection_gateway_client: Arc<ConnectionGatewayClient>,
     pub soup_service: Arc<ToolSoupService>,
     pub email_service: Arc<ToolEmailService>,
     pub stream_repo: Arc<dyn StreamRepo>,

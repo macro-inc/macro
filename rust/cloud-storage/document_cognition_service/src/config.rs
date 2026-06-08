@@ -1,8 +1,8 @@
 pub use macro_env::Environment;
 use macro_env_var::{env_var, maybe_env_var};
 use macro_service_urls::{
-    DocumentCognitionServiceUrl, DocumentStorageServiceUrl, EmailServiceUrl, LexicalServiceUrl,
-    StaticFileServiceUrl, SyncServiceUrl,
+    ConnectionGatewayUrl, DocumentCognitionServiceUrl, DocumentStorageServiceUrl, EmailServiceUrl,
+    LexicalServiceUrl, StaticFileServiceUrl, SyncServiceUrl,
 };
 
 use crate::core::constants::DEFAULT_DOCUMENT_BATCH_LIMIT;
@@ -45,6 +45,8 @@ pub struct Config {
     pub document_cognition_service_url: String,
     /// static file service url
     pub static_file_service_url: String,
+    /// connection gateway url
+    pub connection_gateway_url: String,
     /// authentication service url (for soup service)
     pub authentication_service_url: String,
     /// authentication service secret key (for soup service)
@@ -112,6 +114,7 @@ impl Config {
         let email_service_url = EmailServiceUrl::new()?.to_string();
         let document_cognition_service_url = DocumentCognitionServiceUrl::new()?.to_string();
         let static_file_service_url = StaticFileServiceUrl::new()?.to_string();
+        let connection_gateway_url = ConnectionGatewayUrl::new()?.to_string();
 
         let EnvVars {
             database_url,
@@ -152,6 +155,7 @@ impl Config {
             email_service_url,
             document_cognition_service_url,
             static_file_service_url,
+            connection_gateway_url,
             authentication_service_url: authentication_service_url.to_string(),
             authentication_service_secret_key: authentication_service_secret_key.to_string(),
             redis_host,
@@ -187,6 +191,7 @@ impl Config {
             email_service_url: Default::default(),
             document_cognition_service_url: Default::default(),
             static_file_service_url: Default::default(),
+            connection_gateway_url: Default::default(),
             authentication_service_url: Default::default(),
             authentication_service_secret_key: Default::default(),
             redis_host: RedisHost::Comptime("redis://localhost:6379"),

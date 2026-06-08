@@ -48,6 +48,7 @@ import {
   prefetchUserInfo,
   useUserInfoQuery,
 } from '@queries/auth/user-info';
+import { useChatRenameWebsocketSync } from '@queries/chat';
 import { prefetchHistory } from '@queries/history/history';
 import { invalidateUserNotifications } from '@queries/notification/user-notifications';
 import { QuerySyncProvider } from '@queries/sync/SyncProvider';
@@ -361,6 +362,7 @@ const ROUTES: RouteDefinition[] = [
 function ConfiguredGlobalAppStateProvider(props: ParentProps) {
   // Initialize global notification helpers
   const notifInterface = usePlatformNotificationState();
+  useChatRenameWebsocketSync();
 
   const onNotification = (notification: UnifiedNotification) => {
     if (notifInterface === 'not-supported') return;
