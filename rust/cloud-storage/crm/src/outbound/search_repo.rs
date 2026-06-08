@@ -41,6 +41,19 @@ fn escape_regex(term: &str) -> String {
     out
 }
 
+/// Escapes LIKE wildcards so `term` matches literally. Relies on Postgres's
+/// default `\` escape character for ILIKE, so no `ESCAPE` clause is needed.
+fn escape_like(term: &str) -> String {
+    let mut out = String::with_capacity(term.len() * 2);
+    for c in term.chars() {
+        if matches!(c, '%' | '_' | '\\') {
+            out.push('\\');
+        }
+        out.push(c);
+    }
+    out
+}
+
 impl CrmSearchRepository for CrmSearchRepositoryImpl {
     #[tracing::instrument(skip(self), err)]
     async fn search_company_names(
@@ -53,7 +66,7 @@ impl CrmSearchRepository for CrmSearchRepositoryImpl {
         limit: i64,
         cursor: Option<CrmCompanySearchCursor>,
     ) -> Result<Vec<CrmCompanyNameMatch>, CrmError> {
-        let pattern = format!("%{term}%");
+        let pattern = format!("%{}%", escape_like(term));
         let highlight = format!("({})", escape_regex(term));
         let cursor_ts = cursor.map(|c| c.last_updated_at);
         let cursor_id = cursor.map(|c| c.last_id);
