@@ -96,8 +96,12 @@ export function syncGroupedParents(entityId: string, entity: SoupApiItem) {
     let changed = false;
     let needsInvalidation = false;
 
-    const pages = prev.pages.map((page) => {
-      if (!isGroupedPage(page)) return page;
+    const pages = [];
+    for (const page of prev.pages) {
+      if (!isGroupedPage(page)) {
+        pages.push(page);
+        continue;
+      }
 
       const next = syncMembership(
         page,
@@ -109,13 +113,13 @@ export function syncGroupedParents(entityId: string, entity: SoupApiItem) {
 
       if (!next) {
         needsInvalidation = true;
-        return page;
+        pages.push(page);
+        continue;
       }
 
       if (next !== page) changed = true;
-
-      return next;
-    });
+      pages.push(next);
+    }
 
     if (needsInvalidation || !changed) continue;
 
@@ -152,30 +156,37 @@ export function syncGroupQueries(entityId: string, entity: SoupApiItem) {
 
     let changed = false;
 
-    const pages = prev.pages.map((page, index) => {
+    const pages = [];
+    let index = 0;
+    for (const page of prev.pages) {
       const hasEntity = page.group.itemIds.includes(entityId);
 
       if (shouldHave && index === 0 && !hasEntity) {
         changed = true;
-        return {
+        pages.push({
           ...page,
           items: { ...page.items, [entityId]: entity },
           group: prependId(page.group, entityId),
-        };
+        });
+        index += 1;
+        continue;
       }
 
       if (!shouldHave && hasEntity) {
         changed = true;
         const { [entityId]: _removed, ...items } = page.items;
-        return {
+        pages.push({
           ...page,
           items,
           group: removeId(page.group, entityId),
-        };
+        });
+        index += 1;
+        continue;
       }
 
-      return page;
-    });
+      pages.push(page);
+      index += 1;
+    }
 
     if (changed) {
       query.setData({ ...prev, pages }, { manual: true });
@@ -308,25 +319,30 @@ export function removeGroupQueries(entityIds: Set<string>) {
     if (!prev?.pages?.length) continue;
 
     let changed = false;
-    const pages = prev.pages.map((page) => {
+
+    const pages = [];
+
+    for (const page of prev.pages) {
       const itemIds = page.group.itemIds.filter((id) => !entityIds.has(id));
       const removed = page.group.itemIds.length - itemIds.length;
       let items = page.items;
 
       for (const id of entityIds) {
         if (id in items) {
-          if (items === page.items) items = { ...page.items };
-          delete items[id];
+          const { [id]: _, ...rest } = items;
+          items = { ...rest };
+
           changed = true;
         }
       }
 
       if (removed === 0) {
-        return items === page.items ? page : { ...page, items };
+        pages.push(items === page.items ? page : { ...page, items });
+        continue;
       }
 
       changed = true;
-      return {
+      pages.push({
         ...page,
         items,
         group: {
@@ -334,8 +350,8 @@ export function removeGroupQueries(entityIds: Set<string>) {
           itemIds,
           totalCount: Math.max(0, page.group.totalCount - removed),
         },
-      };
-    });
+      });
+    }
 
     if (changed) {
       query.setData({ ...prev, pages }, { manual: true });
@@ -353,17 +369,17 @@ function syncMembership(
   entity: SoupApiItem,
   groupBy: GroupByField | undefined
 ) {
-  const nextKeySet = new Set(nextGroupKeys);
-  const existingKeys = new Set(page.groups.map((g) => g.key));
+  const nextGroups = new Set(nextGroupKeys);
+  const currentGroups = new Set(page.groups.map((g) => g.key));
 
   let changed = false;
 
   const groups: GroupMeta[] = [];
 
-  for (const key of nextKeySet) {
-    if (existingKeys.has(key)) continue;
+  for (const group of nextGroups) {
+    if (currentGroups.has(group)) continue;
 
-    const meta = resolveGroupMetaForKey(groupBy, key, entity);
+    const meta = resolveGroupMetaForKey(groupBy, group, entity);
 
     if (!meta) return;
 
@@ -373,7 +389,7 @@ function syncMembership(
 
   for (const group of page.groups) {
     const hasEntity = group.itemIds.includes(entityId);
-    const shouldInsert = nextKeySet.has(group.key);
+    const shouldInsert = nextGroups.has(group.key);
 
     if (hasEntity === shouldInsert) {
       groups.push(group);
@@ -388,7 +404,7 @@ function syncMembership(
 
   if (!changed) return page;
 
-  const newGroupsExist = nextKeySet.size > 0;
+  const newGroupsExist = nextGroups.size > 0;
   const nextItems: Record<string, SoupApiItem> = {};
 
   for (const [id, item] of Object.entries(page.items)) {
@@ -397,7 +413,9 @@ function syncMembership(
     }
   }
 
-  if (newGroupsExist) nextItems[entityId] = entity;
+  if (newGroupsExist) {
+    nextItems[entityId] = entity;
+  }
 
   return { ...page, items: nextItems, groups };
 }
