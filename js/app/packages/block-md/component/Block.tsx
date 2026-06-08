@@ -172,7 +172,7 @@ function BlockMarkdownContent({ optimisticSnapshot }: BlockMarkdownProps) {
                       <Show
                         when={!isInstructionsMd()}
                         fallback={
-                          <InstructionsNotebook loroManager={loroManager}/>
+                          <InstructionsNotebook loroManager={loroManager} />
                         }
                       >
                         <Notebook loroManager={loroManager} />

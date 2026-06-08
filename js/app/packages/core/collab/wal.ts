@@ -1,3 +1,4 @@
+import { logger } from '@observability/logger';
 import type { Listen } from '@solid-primitives/event-bus';
 import { type DBSchema, type IDBPDatabase, openDB as idbOpen } from 'idb';
 import type { RawUpdate } from './shared';

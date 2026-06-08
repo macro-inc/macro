@@ -210,7 +210,6 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
   function localCursorUpdate():
     | { awareness: LexicalSelectionAwareness; format: number }
     | undefined {
-
     if (!loroManager) {
       console.error(
         'tried to convert selection to cursor, but no loro manager'
