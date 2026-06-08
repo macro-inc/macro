@@ -1943,11 +1943,13 @@ dependencies = [
  "aws_lambda_events",
  "lambda_runtime",
  "macro_aws_config",
+ "macro_db_migrator",
  "macro_entrypoint",
  "sqlx",
  "tokio",
  "tracing",
  "urlencoding",
+ "uuid",
 ]
 
 [[package]]

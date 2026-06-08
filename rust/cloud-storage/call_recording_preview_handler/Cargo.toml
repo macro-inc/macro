@@ -16,3 +16,6 @@ tokio = { workspace = true, features = ["fs", "process", "time"] }
 tracing = { workspace = true }
 urlencoding = { workspace = true }
 uuid = { workspace = true }
+
+[dev-dependencies]
+macro_db_migrator = { path = "../macro_db_migrator" }
