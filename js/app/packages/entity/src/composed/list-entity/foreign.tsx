@@ -1,5 +1,5 @@
 import { Popover } from '@kobalte/core/popover';
-import CaretRight from '@phosphor/caret-right.svg';
+import ArrowRight from '@phosphor/arrow-right.svg';
 import ChatCircle from '@phosphor/chat-circle.svg';
 import Check from '@phosphor/check.svg';
 import MinusCircle from '@phosphor/minus-circle.svg';
@@ -8,7 +8,6 @@ import CheckCircle from '@phosphor-icons/core/assets/fill/check-circle-fill.svg?
 import XCircle from '@phosphor-icons/core/assets/fill/x-circle-fill.svg?component-solid';
 import { Button, cn, Surface } from '@ui';
 import {
-  type Component,
   createSignal,
   For,
   type JSX,
@@ -38,18 +37,6 @@ function Pill(props: PillProps) {
 }
 
 const numberFormatter = new Intl.NumberFormat();
-
-function iconText(
-  icon: Component<JSX.SvgSVGAttributes<SVGSVGElement>>,
-  text: JSX.Element
-) {
-  return (
-    <>
-      <Dynamic component={icon} class="size-3 shrink-0" />
-      {text}
-    </>
-  );
-}
 
 function checkFailed(conclusion: string | null | undefined): boolean {
   return (
@@ -229,7 +216,7 @@ function GithubPullRequestChecksTooltip(props: {
 
   return (
     <div class="flex flex-col gap-0.5 text-left">
-      <div class="bg-hover rounded-lg flex flex-col px-2 py-1">
+      <div class="flex flex-col px-2 py-1">
         <div class="text-base font-medium text-ink">
           {checkOverviewTitle(props.entity)}
         </div>
@@ -291,7 +278,7 @@ function GithubPullRequestChecksTooltip(props: {
                         </span>
                       )}
                     </Show>
-                    <CaretRight
+                    <ArrowRight
                       class={cn(
                         'size-3 shrink-0 text-ink-extra-muted opacity-0 transition-opacity',
                         hasUrl() && 'group-hover/check-card:opacity-100'
@@ -348,7 +335,6 @@ export function GithubPullRequestPills(props: {
   const deletions = () => props.entity.metadata.deletions;
   const largestChanges = () =>
     additions() > deletions() ? 'additions' : 'deletions';
-  const comments = () => props.entity.metadata.comments.length;
 
   return (
     <>
@@ -371,7 +357,8 @@ export function GithubPullRequestPills(props: {
         </span>
       </Pill>
       <Pill class="text-ink-muted tabular-nums">
-        {iconText(ChatCircle, numberFormatter.format(comments()))}
+        <ChatCircle class="size-3 shrink-0" />
+        {numberFormatter.format(props.entity.metadata.comments.length)}
       </Pill>
     </>
   );
