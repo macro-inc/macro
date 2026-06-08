@@ -33,6 +33,8 @@ export type UnknownForeignEntity = ForeignEntityBase & {
   };
 };
 
+// Consider making this a generic pull request entity so we can display
+// pull requests from other sources besides github
 export type GithubPullRequestEntity = ForeignEntityBase & {
   foreignSource: 'github_pull_request';
   metadata: {
