@@ -1,3 +1,5 @@
+import * as crypto from 'node:crypto';
+import * as fs from 'node:fs';
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 import { Lambda } from '../../packages/lambda';
@@ -6,6 +8,8 @@ import { CLOUD_TRAIL_SNS_TOPIC_ARN, stack } from '../../packages/shared';
 const LAMBDA_BASE_NAME = 'call_recording_preview_handler';
 const CLOUD_STORAGE_BASE = `../../../rust/cloud-storage`;
 const ZIP_LOCATION = `${CLOUD_STORAGE_BASE}/target/lambda/${LAMBDA_BASE_NAME}/bootstrap.zip`;
+const FFMPEG_LAYER_ZIP_LOCATION = `${CLOUD_STORAGE_BASE}/target/lambda/${LAMBDA_BASE_NAME}/ffmpeg-layer.zip`;
+const FFMPEG_LAYER_ARTIFACT_BUCKET_NAME = `macro-call-recording-preview-layer-artifacts-${stack}`;
 
 export type CallRecordingPreviewLambdaEnvVars = {
   CALL_RECORDING_BUCKET_NAME: pulumi.Output<string> | string;
@@ -29,9 +33,23 @@ type CallRecordingPreviewLambdaArgs = {
   tags: { [key: string]: string };
 };
 
+function fileBase64Sha256(filePath: string): string {
+  if (!fs.existsSync(filePath)) {
+    throw new Error(
+      `FFmpeg Lambda layer zip not found at ${filePath}. Run \`just call_recording_preview_handler/build\` from rust/cloud-storage before deploying.`
+    );
+  }
+
+  return crypto
+    .createHash('sha256')
+    .update(fs.readFileSync(filePath))
+    .digest('base64');
+}
+
 export class CallRecordingPreviewLambda extends pulumi.ComponentResource {
   role: aws.iam.Role;
   lambda: aws.lambda.Function;
+  ffmpegLayer: aws.lambda.LayerVersion;
   tags: { [key: string]: string };
 
   constructor(
@@ -43,6 +61,61 @@ export class CallRecordingPreviewLambda extends pulumi.ComponentResource {
     const { callRecordingBucketArn, vpc, envVars, tags } = args;
 
     this.tags = tags;
+
+    const ffmpegLayerSourceCodeHash = fileBase64Sha256(
+      FFMPEG_LAYER_ZIP_LOCATION
+    );
+
+    const ffmpegLayerArtifactBucket = new aws.s3.BucketV2(
+      `${LAMBDA_BASE_NAME}-ffmpeg-layer-artifacts-${stack}`,
+      {
+        bucket: FFMPEG_LAYER_ARTIFACT_BUCKET_NAME,
+        forceDestroy: stack !== 'prod',
+        tags: this.tags,
+      },
+      { parent: this }
+    );
+
+    new aws.s3.BucketPublicAccessBlock(
+      `${LAMBDA_BASE_NAME}-ffmpeg-layer-artifacts-public-access-block-${stack}`,
+      {
+        bucket: ffmpegLayerArtifactBucket.id,
+        blockPublicAcls: true,
+        blockPublicPolicy: true,
+        ignorePublicAcls: true,
+        restrictPublicBuckets: true,
+      },
+      { parent: this, dependsOn: [ffmpegLayerArtifactBucket] }
+    );
+
+    const ffmpegLayerObject = new aws.s3.BucketObjectv2(
+      `${LAMBDA_BASE_NAME}-ffmpeg-layer-zip-${stack}`,
+      {
+        bucket: ffmpegLayerArtifactBucket.id,
+        key: `${LAMBDA_BASE_NAME}/ffmpeg-layer.zip`,
+        source: new pulumi.asset.FileAsset(FFMPEG_LAYER_ZIP_LOCATION),
+        sourceHash: ffmpegLayerSourceCodeHash,
+        contentType: 'application/zip',
+        serverSideEncryption: 'AES256',
+        tags: this.tags,
+      },
+      { parent: this, dependsOn: [ffmpegLayerArtifactBucket] }
+    );
+
+    this.ffmpegLayer = new aws.lambda.LayerVersion(
+      `${LAMBDA_BASE_NAME}-ffmpeg-layer-${stack}`,
+      {
+        layerName: `${LAMBDA_BASE_NAME}-ffmpeg-${stack}`,
+        description:
+          'Static ffmpeg and ffprobe binaries for call recording preview generation.',
+        compatibleArchitectures: ['x86_64'],
+        compatibleRuntimes: ['provided.al2023'],
+        s3Bucket: ffmpegLayerArtifactBucket.id,
+        s3Key: ffmpegLayerObject.key,
+        sourceCodeHash: ffmpegLayerSourceCodeHash,
+      },
+      { parent: this, dependsOn: [ffmpegLayerObject] }
+    );
 
     const s3Policy = new aws.iam.Policy(
       `${LAMBDA_BASE_NAME}-s3-policy`,
@@ -109,6 +182,7 @@ export class CallRecordingPreviewLambda extends pulumi.ComponentResource {
         vpc,
         timeout: 300,
         memorySize: stack === 'prod' ? 2048 : 1024,
+        layers: [this.ffmpegLayer.arn],
         tags: this.tags,
       },
       { parent: this }

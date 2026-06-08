@@ -12,6 +12,7 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 crate_dir="$(cd "${script_dir}/.." && pwd)"
 workspace_dir="$(cd "${crate_dir}/.." && pwd)"
 zip_path="${workspace_dir}/target/lambda/${lambda_name}/bootstrap.zip"
+layer_zip_path="${workspace_dir}/target/lambda/${lambda_name}/ffmpeg-layer.zip"
 
 if [[ ! -f "${zip_path}" ]]; then
   echo "Lambda zip not found: ${zip_path}" >&2
@@ -41,12 +42,17 @@ tar -xJf "${archive_path}" -C "${extract_dir}" \
 install -m 0755 "${extract_dir}/${archive_dir}/ffmpeg" "${package_dir}/bin/ffmpeg"
 install -m 0755 "${extract_dir}/${archive_dir}/ffprobe" "${package_dir}/bin/ffprobe"
 
-echo "Adding ffmpeg and ffprobe to ${zip_path}"
-(
-  cd "${package_dir}"
-  zip -9 -q "${zip_path}" bin/ffmpeg bin/ffprobe
-)
-
+echo "Ensuring ffmpeg and ffprobe are not packaged in ${zip_path}"
+zip -d -q "${zip_path}" bin/ffmpeg bin/ffprobe 2>/dev/null || true
 unzip -tqq "${zip_path}" >/dev/null
 
-echo "Packaged ffmpeg ${ffmpeg_version} into ${zip_path}"
+rm -f "${layer_zip_path}"
+echo "Creating ffmpeg Lambda layer at ${layer_zip_path}"
+(
+  cd "${package_dir}"
+  zip -9 -q "${layer_zip_path}" bin/ffmpeg bin/ffprobe
+)
+
+unzip -tqq "${layer_zip_path}" >/dev/null
+
+echo "Packaged ffmpeg ${ffmpeg_version} into ${layer_zip_path}"

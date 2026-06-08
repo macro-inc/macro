@@ -24,19 +24,16 @@ pub struct HandlerConfig {
 impl HandlerConfig {
     /// Builds handler configuration from environment variables.
     ///
-    /// `FFMPEG_PATH` and `FFPROBE_PATH` override the default Lambda paths under
-    /// `${LAMBDA_TASK_ROOT}/bin`. `CALL_RECORDING_BUCKET_NAME` is used only as a
+    /// `FFMPEG_PATH` and `FFPROBE_PATH` override the default Lambda layer paths under
+    /// `/opt/bin`. `CALL_RECORDING_BUCKET_NAME` is used only as a
     /// fallback when a malformed local S3 event does not include a bucket name.
     pub fn from_env() -> Self {
-        let task_root = std::env::var_os("LAMBDA_TASK_ROOT")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from("/var/task"));
         let ffmpeg_path = std::env::var_os("FFMPEG_PATH")
             .map(PathBuf::from)
-            .unwrap_or_else(|| task_root.join("bin/ffmpeg"));
+            .unwrap_or_else(|| PathBuf::from("/opt/bin/ffmpeg"));
         let ffprobe_path = std::env::var_os("FFPROBE_PATH")
             .map(PathBuf::from)
-            .unwrap_or_else(|| task_root.join("bin/ffprobe"));
+            .unwrap_or_else(|| PathBuf::from("/opt/bin/ffprobe"));
         let default_bucket_name = std::env::var("CALL_RECORDING_BUCKET_NAME")
             .ok()
             .filter(|bucket| !bucket.trim().is_empty());
