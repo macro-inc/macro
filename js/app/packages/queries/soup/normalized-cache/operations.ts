@@ -17,7 +17,6 @@ import { queryClient } from '../../client';
 import type { SoupApiItemFilter, SoupAstItemsPage } from '../items';
 import { soupKeys } from '../keys';
 import {
-  getSoupQueryMeta,
   insertGroupedPage,
   insertGroupQueries,
   removeGroupedPage,
@@ -37,6 +36,7 @@ import type {
   SoupEntityTag,
   SoupTransaction,
 } from './types';
+import { getSoupQueryMeta } from './utils';
 
 type SoupItemsInfiniteData = InfiniteData<SoupPage, unknown>;
 type SoupAstItemsInfiniteData = InfiniteData<SoupAstItemsPage, unknown>;
