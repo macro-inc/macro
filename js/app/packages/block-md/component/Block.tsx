@@ -2,19 +2,17 @@ import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { useBlockEntityCommands } from '@app/component/next-soup/actions';
 import { SidePanel } from '@app/component/side-panel';
 import { useBlockId } from '@core/block';
-import { createLoroManager } from '@core/collab/manager';
-import { IDBSnapshotStore, loadCachedState } from '@core/collab/snapshot-store';
-import type { InitialSync, TimeoutError } from '@core/collab/source';
-import { IDBWALStore } from '@core/collab/wal';
+import { createLoroManager, type LoroManager } from '@core/collab/manager';
+import { IDBSnapshotStore } from '@core/collab/snapshot-store';
+import { BrowserWALStore } from '@core/collab/wal';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { ENABLE_MARKDOWN_SIDE_PANEL } from '@core/constant/featureFlags';
-import { blockErrorSignal } from '@core/signal/load';
+import { blockErrorSignal, blockSyncSourceSignal } from '@core/signal/load';
 import { useCanEdit } from '@core/signal/permissions';
 import { MARKDOWN_LORO_SCHEMA } from '@lexical-core/markdown-loro-schema';
 import { DocumentDebouncedNotificationReadMarker } from '@notifications';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
 import { Scroll } from '@ui';
-import type { Result } from 'neverthrow';
 import {
   createEffect,
   createMemo,
@@ -23,6 +21,7 @@ import {
   Show,
   Suspense,
 } from 'solid-js';
+import type { MarkdownData } from '../definition';
 import { blockDataSignal, mdStore } from '../signal/markdownBlockData';
 import { FindAndReplace } from './FindAndReplace';
 import { MarkdownNameProvider, useMarkdownName } from './MarkdownNameProvider';
@@ -33,10 +32,44 @@ import { InstructionsTopBar, TopBar } from './TopBar';
 
 export interface BlockMarkdownProps {
   /**
-   * A loro snapshot to load while we wait for the real one to come through from
-   * the DO. We push our changes after we the DO one comes in.
+   * A loro snapshot to load while we wait for a remote snapshot (from s3, dss, etc.).
    */
   optimisticSnapshot?: Uint8Array<ArrayBufferLike>;
+}
+
+type MarkdownLoroManager = LoroManager<typeof MARKDOWN_LORO_SCHEMA>;
+type SetBlockError = (value: 'INVALID' | null) => void;
+
+async function ingestLocalSnapshot(
+  loroManager: MarkdownLoroManager,
+  snapshotStore: IDBSnapshotStore,
+  walStore: BrowserWALStore
+) {
+  const localSnapshot = await snapshotStore.load();
+  if (!localSnapshot) return;
+  const walEntries = await walStore.getAll();
+  await loroManager.ingest({
+    kind: 'local',
+    snapshot: localSnapshot,
+    walUpdates: walEntries.map((entry) => entry.update),
+  });
+}
+
+async function ingestRemoteSnapshot(
+  loroManager: MarkdownLoroManager,
+  doInitialSync: MarkdownData['doInitialSync'],
+  setBlockError: SetBlockError
+) {
+  const sync = await doInitialSync();
+  if (sync.isErr()) {
+    console.error('Failed to receive initial sync', sync.error);
+    if (!loroManager.isInitialized()) setBlockError('INVALID');
+    return;
+  }
+  await loroManager.ingest({
+    kind: 'dss',
+    snapshot: sync.value.snapshot,
+  });
 }
 
 export default function BlockMarkdown(props: BlockMarkdownProps) {
@@ -51,15 +84,21 @@ function BlockMarkdownContent({ optimisticSnapshot }: BlockMarkdownProps) {
   useBlockEntityCommands();
   const [scrollRef, setScrollRef] = createSignal<HTMLDivElement>();
   const blockId = useBlockId();
-  const loroManager = createLoroManager(MARKDOWN_LORO_SCHEMA);
 
+  const getSyncSource = blockSyncSourceSignal.get;
   const setBlockError = blockErrorSignal.set;
 
+  const wasDirty = BrowserWALStore.isDirtyHint(blockId);
+  const loroManager = createLoroManager(MARKDOWN_LORO_SCHEMA, {
+    liveSyncSource: () => getSyncSource()!,
+    wasDirty,
+  });
+
   const snapshotStore = new IDBSnapshotStore(blockId);
-  const walStore = new IDBWALStore(blockId);
+  const walStore = new BrowserWALStore(blockId);
 
   createEffect(
-    on(blockDataSignal, async (data) => {
+    on(blockDataSignal, (data) => {
       if (!data) {
         // TODO: if it's actually missing what do we do?
         // setBlockError('MISSING');
@@ -67,54 +106,24 @@ function BlockMarkdownContent({ optimisticSnapshot }: BlockMarkdownProps) {
       }
       setBlockError(null);
 
-      // If caller provided an optimistic snapshot, always use it (right now
-      // this is just used for the "fresh document" path)
-      let initializedLocally = false;
+      // Fan out — the state machine in LoroManager handles precedence
+      // and rejects events that don't apply for the current `wasDirty` mode.
       if (optimisticSnapshot) {
-        await loroManager.initializeFromSnapshot(optimisticSnapshot);
-        initializedLocally = true;
-      } else {
-        // Otherwise try loading from IDB cache
-        initializedLocally = await loadCachedState(
-          loroManager,
-          snapshotStore,
-          walStore
-        );
+        void loroManager.ingest({
+          kind: 'optimistic',
+          snapshot: optimisticSnapshot,
+        });
       }
 
-      // Now try to sync with server in the background. CRDT merge handles
-      // overlap with whatever was loaded locally.
-      const syncResult: Result<InitialSync, TimeoutError> =
-        await data.doInitialSync();
-      if (syncResult.isErr()) {
-        console.error('Failed to receive initial sync', syncResult.error);
-        if (!initializedLocally) setBlockError('INVALID');
-        return;
-      }
-
-      if (initializedLocally) {
-        // Loro is already initialized; merge the server state on top.
-        const importResult = loroManager.importUpdate(
-          syncResult.value.snapshot
-        );
-        if (importResult.isErr()) {
-          console.error('Failed to merge server snapshot', importResult.error);
-        }
-      } else {
-        const initResult = await loroManager.initializeFromSnapshot(
-          syncResult.value.snapshot
-        );
-        if (initResult.isErr()) {
-          console.error('Failed to initialize loro doc', initResult.error);
-          setBlockError('INVALID');
-        }
-      }
+      void ingestLocalSnapshot(loroManager, snapshotStore, walStore);
+      void ingestRemoteSnapshot(loroManager, data.doInitialSync, setBlockError);
     })
   );
 
   const instructionsMdId = useInstructionsMdIdQuery();
   const notificationSource = useGlobalNotificationSource();
-  const canEdit = useCanEdit();
+  const mustBeConnected = optimisticSnapshot === undefined;
+  const canEdit = useCanEdit(mustBeConnected);
   const { displayName } = useMarkdownName();
   const isInstructionsMd = createMemo(() => blockId === instructionsMdId.data);
 

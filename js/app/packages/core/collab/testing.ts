@@ -39,7 +39,12 @@ export class MockWALStore implements WALStore {
   }
 
   public async append(update: RawUpdate): Promise<void> {
-    this.entries.push({ id: this.nextId++, update, delivered: false });
+    this.entries.push({
+      id: this.nextId++,
+      update,
+      delivered: false,
+      createdAt: Date.now(),
+    });
   }
 
   public async getAll(): Promise<WALEntry[]> {
@@ -58,8 +63,24 @@ export class MockWALStore implements WALStore {
     this.entries = this.entries.filter((e) => !e.delivered);
   }
 
+  public async pruneExpired(ttlMs: number): Promise<number> {
+    const cutoff = Date.now() - ttlMs;
+    const before = this.entries.length;
+    this.entries = this.entries.filter((e) => e.createdAt >= cutoff);
+    return before - this.entries.length;
+  }
+
   public async count(): Promise<number> {
     return this.entries.length;
+  }
+
+  public markClean(): void {}
+
+  /** Test helper: seed an entry with an explicit createdAt timestamp. */
+  public seedEntry(update: RawUpdate, createdAt: number): number {
+    const id = this.nextId++;
+    this.entries.push({ id, update, delivered: false, createdAt });
+    return id;
   }
 }
 
@@ -68,6 +89,7 @@ export class MockWALSyncSource implements WALSyncSource {
 
   public documentId = 'doc-1';
   public pushUpdate = vi.fn(async (): Promise<boolean> => true);
+  public flush = vi.fn(async (): Promise<void> => {});
   public pruneDelivered = vi.fn(async (): Promise<void> => {});
 
   public listen(cb: (event: SyncSourceEvent) => void) {
@@ -76,7 +98,7 @@ export class MockWALSyncSource implements WALSyncSource {
   }
 
   public emit(event: SyncSourceEvent) {
-    this.listeners.forEach((cb) => cb(event));
+    this.listeners.forEach((cb) => void cb(event));
   }
 }
 
@@ -121,7 +143,7 @@ export class MockLiveSyncSource implements LiveSyncSource {
   }
 
   public emit(event: SyncSourceEvent) {
-    this.listeners.forEach((cb) => cb(event));
+    this.listeners.forEach((cb) => void cb(event));
   }
 }
 
@@ -140,6 +162,7 @@ export class MockLoroManager implements LoroManager<GenericRootSchema> {
   public syncToLoro = vi.fn(async () => ok(undefined as void));
   public reset = vi.fn(async () => ok(undefined as void));
   public initializeFromSnapshot = vi.fn(async () => ok(undefined as void));
+  public ingest = vi.fn(async () => {});
   public getVersion = vi.fn(() => ({}) as any);
   public getUpdateSince = vi.fn(() => ok(undefined as any));
   public getAllContainerIds = vi.fn(() => ok([]));
@@ -164,6 +187,6 @@ export class MockLoroManager implements LoroManager<GenericRootSchema> {
   }
 
   public triggerLocalUpdate(update: LoroRawUpdate) {
-    this.updateCallbacks.forEach((cb) => cb(update));
+    this.updateCallbacks.forEach((cb) => void cb(update));
   }
 }
