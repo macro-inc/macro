@@ -113,7 +113,6 @@ import {
   batch,
   createEffect,
   createMemo,
-  createRenderEffect,
   createSignal,
   type JSX,
   Match,
@@ -124,7 +123,6 @@ import {
   Suspense,
   Switch,
 } from 'solid-js';
-import { createStore, reconcile } from 'solid-js/store';
 import { Dynamic } from 'solid-js/web';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
 import type { CacheSnapshot } from 'virtua/unstable_core';
