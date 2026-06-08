@@ -94,8 +94,6 @@ const useCurrentListView = () => {
   });
 };
 
-export type ApplyTabPreset = (view: ListView, tabId: string) => boolean;
-
 const PRESERVE_FILTERS_ON_TAB_CHANGE: ListView[] = ['documents'];
 
 export const shouldPreserveFiltersOnTabChange = (view: ListView) =>
@@ -121,7 +119,7 @@ export const useApplyPreset = () => {
       : (filter.query as Query);
   };
 
-  const applyTabPreset: ApplyTabPreset = (view, tabId) => {
+  const applyTabPreset = (view: ListView, tabId: string) => {
     const presetContext = getPresetContext();
     const preset = getViewPreset(view, tabId, presetContext);
     if (!preset) return false;
