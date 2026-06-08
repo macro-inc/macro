@@ -13,7 +13,6 @@ import {
 } from '@core/constant/allBlocks';
 import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import {
-  DEV_MODE_ENV,
   ENABLE_AUTO_UPDATE_UI,
   ENABLE_EMAIL,
   ENABLE_INBOX_RESYNC,
@@ -270,12 +269,12 @@ export function Account() {
   const permissions = usePermissions();
     const { toggleSettings } = useSettingsState();
   const [showEmailModal, setShowEmailModal] = createSignal<boolean>(false);
-  const [showEnableEmailModal, setShowEnableEmailModal] = createSignal<boolean>(false);
   const [showDeleteModal, setShowDeleteModal] = createSignal<boolean>(false);
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] = createSignal<boolean>(false);
 
   const {
     query: emailLinksQuery,
+    connect: connectEmail,
     disconnect: disconnectEmail,
     resyncInbox,
   } = useEmailLinks();
@@ -327,6 +326,13 @@ export function Account() {
   >(undefined);
 
   const emailActive = useEmailLinksStatus();
+
+  const onConnectEmail = () => {
+    connectEmail().match(
+      () => {},
+      () => toast.failure('Failed to connect email')
+    );
+  };
 
   const initGmailLink = useInitGmailLink();
   const handleAddInbox = async () => {
@@ -533,37 +539,73 @@ export function Account() {
                 <BundleUpdateRow />
               </Show>
 
-              <Show
-                when={
-                  ENABLE_EMAIL &&
-                  !ENABLE_MULTI_INBOX &&
-                  (!emailActive() || DEV_MODE_ENV)
-                }
-              >
-                <Row label="Email">
+              <Show when={ENABLE_EMAIL && !ENABLE_MULTI_INBOX}>
+                <Row
+                  label={
+                    showEmailModal()
+                      ? 'Disabling will clear all email data from Macro'
+                      : 'Email'
+                  }
+                >
                   <Show
-                    when={!emailActive()}
+                    when={showEmailModal()}
                     fallback={
-                      <Button
-                        variant="base"
-                        size="sm"
-                        depth={3}
-                        onClick={() => setShowEmailModal(true)}
+                      <Show
+                        when={!emailActive()}
+                        fallback={
+                          <Button
+                            variant="base"
+                            size="sm"
+                            depth={3}
+                            onClick={() => setShowEmailModal(true)}
+                          >
+                            Disable
+                          </Button>
+                        }
                       >
-                        Disable
-                      </Button>
+                        <Button
+                          variant="base"
+                          size="sm"
+                          depth={3}
+                          onClick={onConnectEmail}
+                        >
+                          Enable
+                        </Button>
+                      </Show>
                     }
                   >
-                    <Show when={!showEnableEmailModal()}>
+                    <div class="flex flex-row">
                       <Button
-                        variant="base"
+                        variant="ghost"
                         size="sm"
                         depth={3}
-                        onClick={() => setShowEnableEmailModal(true)}
+                        onClick={async () => {
+                          setShowEmailModal(false);
+                          await disconnectEmail().match(
+                            () => {
+                              toast.success(
+                                'Email disabled — clearing your data.'
+                              );
+                            },
+                            () => {
+                              toast.failure(
+                                'Failed to disable email. Please try again.'
+                              );
+                            }
+                          );
+                        }}
                       >
-                        Enable
+                        Confirm
                       </Button>
-                    </Show>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        depth={3}
+                        onClick={() => setShowEmailModal(false)}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
                   </Show>
                 </Row>
               </Show>
@@ -581,16 +623,14 @@ export function Account() {
                       <Show
                         when={emailActive()}
                         fallback={
-                          <Show when={!showEnableEmailModal()}>
-                            <Button
-                              variant="base"
-                              size="sm"
-                              depth={3}
-                              onClick={() => setShowEnableEmailModal(true)}
-                            >
-                              Enable
-                            </Button>
-                          </Show>
+                          <Button
+                            variant="base"
+                            size="sm"
+                            depth={3}
+                            onClick={onConnectEmail}
+                          >
+                            Enable
+                          </Button>
                         }
                       >
                         <Tooltip label="Add inbox">
@@ -629,7 +669,7 @@ export function Account() {
                     <Show when={!inboxes().primary && email()}>
                       <DisabledPrimaryRow
                         email={email() ?? ''}
-                        onEnable={() => setShowEnableEmailModal(true)}
+                        onEnable={onConnectEmail}
                       />
                     </Show>
                     <For each={inboxes().others}>
@@ -713,71 +753,6 @@ export function Account() {
                 Logout
               </Button>
             </div>
-
-            <Show when={showEnableEmailModal()}>
-              <div class="flex flex-row items-center">
-                <div class="text-sm">
-                  Email requires additional Google permissions. Select the permissions on sign-in to enable.
-                </div>
-                <div class="ml-auto flex flex-row">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    depth={3}
-                    onClick={() => {
-                      setShowEnableEmailModal(false);
-                      logout();
-                    }}
-                  >
-                    Logout
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    depth={3}
-                    onClick={() => setShowEnableEmailModal(false)}
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              </div>
-            </Show>
-
-            <Show when={showEmailModal()}>
-              <div class="flex flex-row items-center">
-                <div class="text-sm">
-                  Disabling will clear all email data from Macro
-                </div>
-                <div class="ml-auto flex flex-row">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    depth={3}
-                    onClick={async () => {
-                      setShowEmailModal(false);
-                      await disconnectEmail().match(
-                        () => {
-                          toast.success('Email disabled — clearing your email data, this may take a moment.');
-                        },
-                        () => {
-                          toast.failure('Failed to disable email. Please try again.');
-                        },
-                      );
-                    }}
-                  >
-                    Confirm
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    depth={3}
-                    onClick={() => setShowEmailModal(false)}
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              </div>
-            </Show>
 
             <Dialog
               open={removeTarget() !== null}
