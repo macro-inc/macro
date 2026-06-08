@@ -7,7 +7,15 @@ import X from '@phosphor/x.svg';
 import CheckCircle from '@phosphor-icons/core/assets/fill/check-circle-fill.svg?component-solid';
 import XCircle from '@phosphor-icons/core/assets/fill/x-circle-fill.svg?component-solid';
 import { Button, cn, Surface } from '@ui';
-import { type Component, For, type JSX, Show } from 'solid-js';
+import {
+  type Component,
+  createSignal,
+  For,
+  type JSX,
+  onCleanup,
+  onMount,
+  Show,
+} from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import type { GithubPullRequestEntity } from '../../types/entity';
 
@@ -129,6 +137,40 @@ function checkStatusText(
   return check.status;
 }
 
+function formatDuration(milliseconds: number): string | undefined {
+  if (!Number.isFinite(milliseconds) || milliseconds < 0) return undefined;
+
+  const totalSeconds = Math.max(0, Math.floor(milliseconds / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  if (minutes > 0) return `${minutes}m ${seconds}s`;
+  return `${seconds}s`;
+}
+
+function checkDurationText(
+  check: GithubPullRequestEntity['metadata']['checks'][number],
+  now: number
+): string | undefined {
+  if (check.conclusion === 'skipped' || !check.startedAt) return undefined;
+
+  const started = Date.parse(check.startedAt);
+  if (!Number.isFinite(started)) return undefined;
+
+  if (check.status === 'completed') {
+    if (!check.completedAt) return undefined;
+
+    const completed = Date.parse(check.completedAt);
+    if (!Number.isFinite(completed)) return undefined;
+
+    return formatDuration(completed - started);
+  }
+
+  return formatDuration(now - started);
+}
+
 function CheckStateIcon(props: { state: CheckVisualState; circle?: boolean }) {
   return (
     <span class="relative inline-flex shrink-0 items-center justify-center">
@@ -178,11 +220,17 @@ function GithubPullRequestChecksTooltip(props: {
   entity: GithubPullRequestEntity;
 }) {
   const checks = () => props.entity.metadata.checks;
+  const [now, setNow] = createSignal(Date.now());
+
+  onMount(() => {
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    onCleanup(() => clearInterval(interval));
+  });
 
   return (
-    <div class="flex flex-col gap-2 text-left">
-      <div class="flex flex-col gap-1">
-        <div class="text-base font-semibold text-ink">
+    <div class="flex flex-col gap-0.5 text-left">
+      <div class="bg-hover rounded-lg flex flex-col px-2 py-1">
+        <div class="text-base font-medium text-ink">
           {checkOverviewTitle(props.entity)}
         </div>
         <Show when={showCheckCountSummary(props.entity)}>
@@ -193,12 +241,14 @@ function GithubPullRequestChecksTooltip(props: {
           </div>
         </Show>
       </div>
-      <div class="max-h-56 overflow-y-auto pr-1">
+      <div class="max-h-56 overflow-y-auto">
         <Show
           when={checks().length > 0}
-          fallback={<div class="text-ink-extra-muted">No checks</div>}
+          fallback={
+            <div class="px-2 py-1.5 text-ink-extra-muted">No checks</div>
+          }
         >
-          <div class="flex flex-col gap-1.5">
+          <div class="flex flex-col gap-0.5">
             <For each={checks()}>
               {(check) => {
                 const hasUrl = () => !!check.url;
@@ -207,8 +257,10 @@ function GithubPullRequestChecksTooltip(props: {
                     component={hasUrl() ? 'a' : 'button'}
                     type={!hasUrl() ? 'button' : undefined}
                     class={cn(
-                      'group/check-card flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left',
-                      hasUrl() && 'hover:bg-active/50'
+                      'group/check-card flex h-8 w-full min-w-0 items-center gap-2 rounded-lg px-2 text-left text-xs font-medium outline-none',
+                      hasUrl()
+                        ? 'cursor-default hover:bg-ink/5 focus-visible:bg-ink/5'
+                        : 'cursor-not-allowed opacity-50'
                     )}
                     href={check.url ? check.url : undefined}
                     disabled={!hasUrl() ? true : undefined}
@@ -217,14 +269,28 @@ function GithubPullRequestChecksTooltip(props: {
                       state={checkRunState(check)}
                       circle={true}
                     />
-                    <div class="min-w-0 flex gap-2 flex-1 text-sm">
-                      <span class="font-semibold text-ink whitespace-nowrap">
+                    <div class="min-w-0 flex flex-1 items-center gap-2">
+                      <span class="truncate font-semibold text-ink">
                         {check.name}
                       </span>{' '}
-                      <span class="text-sm text-ink-extra-muted/70 capitalize">
+                      <span class="shrink-0 text-ink-extra-muted/70 capitalize">
                         {checkStatusText(check).replaceAll('_', ' ')}
                       </span>
                     </div>
+                    <Show when={checkDurationText(check, now())}>
+                      {(duration) => (
+                        <span
+                          class="shrink-0 tabular-nums text-ink-extra-muted/70"
+                          title={
+                            check.status === 'completed'
+                              ? 'Duration'
+                              : 'Elapsed'
+                          }
+                        >
+                          {duration()}
+                        </span>
+                      )}
+                    </Show>
                     <CaretRight
                       class={cn(
                         'size-3 shrink-0 text-ink-extra-muted opacity-0 transition-opacity',
@@ -264,7 +330,7 @@ export function GithubPullRequestChecksIndicator(props: {
           onClick={(event) => event.stopPropagation()}
         >
           <Surface
-            class="flex items-stretch justify-start p-2  rounded-2xl"
+            class="flex items-stretch justify-start rounded-xl p-1.5"
             depth={2}
           >
             <GithubPullRequestChecksTooltip entity={props.entity} />
@@ -280,32 +346,25 @@ export function GithubPullRequestPills(props: {
 }) {
   const additions = () => props.entity.metadata.additions;
   const deletions = () => props.entity.metadata.deletions;
-  const additionsAreLarger = () => additions() > deletions();
-  const deletionsAreLarger = () => deletions() > additions();
+  const largestChanges = () =>
+    additions() > deletions() ? 'additions' : 'deletions';
   const comments = () => props.entity.metadata.comments.length;
 
   return (
     <>
-      {/* <Pill class="text-ink-muted"> */}
-      {/*   <Dynamic */}
-      {/*     component={config().icon} */}
-      {/*     class={cn('size-3 shrink-0', config().iconClass)} */}
-      {/*   /> */}
-      {/*   <span class="capitalize">{status()}</span> */}
-      {/* </Pill> */}
       <Pill class="tabular-nums">
         <span
           class={cn(
-            'text-success/70 group-hover/entity:text-success font-light',
-            additionsAreLarger() && 'font-semibold'
+            'text-success/70 group-hover/entity:text-success font-normal',
+            largestChanges() === 'additions' && 'font-semibold'
           )}
         >
           +{numberFormatter.format(additions())}
         </span>
         <span
           class={cn(
-            'text-failure/70 group-hover/entity:text-failure font-light',
-            deletionsAreLarger() && 'font-semibold'
+            'text-failure/70 group-hover/entity:text-failure font-normal',
+            largestChanges() === 'deletions' && 'font-semibold'
           )}
         >
           −{numberFormatter.format(deletions())}
