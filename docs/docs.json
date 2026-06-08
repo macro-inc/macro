@@ -73,6 +73,12 @@
               "product/channels",
               "product/calls"
             ]
+          },
+          {
+            "group": "Reference",
+            "pages": [
+              "product/block-feature-list"
+            ]
           }
         ]
       },
