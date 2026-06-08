@@ -7,14 +7,14 @@ impl AuthServiceClient {
     pub async fn remove_link(
         &self,
         fusionauth_user_id: &str,
-        macro_id: &str,
+        linked_email: &str,
         idp_name: &str,
     ) -> Result<(), AuthServiceClientError> {
         let res = self
             .client
             .delete(format!("{}/internal/remove_link", self.url))
             .query(&[("fusionauth_user_id", fusionauth_user_id)])
-            .query(&[("macro_id", macro_id)])
+            .query(&[("linked_email", linked_email)])
             .query(&[("idp_name", idp_name)])
             .send()
             .await
