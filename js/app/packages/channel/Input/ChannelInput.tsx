@@ -215,6 +215,7 @@ export function ChannelInput(props: ChannelInputProps) {
     onAttachFromDisk: (files) => inputState.commands.attachFiles(files),
   });
   const markdownHandle = markdownEditor.buildHandle();
+  const lexicalEditor = () => markdownHandle.lexical;
   const [entityDragInsertStore, setEntityDragInsertStore] =
     createDragInsertStore();
 
@@ -223,7 +224,7 @@ export function ChannelInput(props: ChannelInputProps) {
   ) => {
     const rect =
       scrollContainer()?.getBoundingClientRect() ??
-      markdownHandle.lexical.getRootElement()?.getBoundingClientRect();
+      lexicalEditor().getRootElement()?.getBoundingClientRect();
     if (!rect) return false;
     return (
       coordinates.clientX >= rect.left &&
@@ -250,7 +251,7 @@ export function ChannelInput(props: ChannelInputProps) {
     coordinates: EntityMentionInsertCoordinates
   ) => {
     updateDragInsertPreviewFromCoordinates({
-      editor: markdownHandle.lexical,
+      editor: lexicalEditor(),
       coordinates,
       setState: setEntityDragInsertStore,
       isValidDropTarget: isInsideEditorDropBounds,
@@ -274,13 +275,13 @@ export function ChannelInput(props: ChannelInputProps) {
 
     if (
       !insertDocumentMentionAtDragCoordinates({
-        editor: markdownHandle.lexical,
+        editor: lexicalEditor(),
         coordinates,
         mentionInfo,
         isValidDropTarget: isInsideEditorDropBounds,
       })
     ) {
-      const editor = markdownHandle.lexical;
+      const editor = lexicalEditor();
       editor.update(() => {
         $getRoot().selectEnd();
       });
@@ -374,7 +375,7 @@ export function ChannelInput(props: ChannelInputProps) {
                   }}
                 />
                 <DragInsertIndicator
-                  editor={markdownHandle.lexical}
+                  editor={lexicalEditor()}
                   state={entityDragInsertStore}
                   active
                 />
