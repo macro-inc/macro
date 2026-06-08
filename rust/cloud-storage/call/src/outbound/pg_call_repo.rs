@@ -993,7 +993,7 @@ impl CallRepository for PgCallRepo {
                 egress_id: active.egress_id,
                 recording_started_at: active.recording_started_at,
                 recording_key: active.recording_key,
-                preview_url: active.preview_url,
+                preview_key: active.preview_url,
                 recording_url: None,
                 recording_preview_url: None,
                 channel_name: None,
@@ -1077,7 +1077,7 @@ impl CallRepository for PgCallRepo {
             egress_id: archived.egress_id,
             recording_started_at: archived.recording_started_at,
             recording_key: archived.recording_key,
-            preview_url: archived.preview_url,
+            preview_key: archived.preview_url,
             recording_url: None,
             recording_preview_url: None,
             channel_name: None,
@@ -1345,7 +1345,7 @@ impl CallRepository for PgCallRepo {
                 egress_id: row.egress_id,
                 recording_started_at: row.recording_started_at,
                 recording_key: row.recording_key,
-                preview_url: row.preview_url,
+                preview_key: row.preview_url,
                 recording_url: None,
                 recording_preview_url: None,
                 channel_name: None,
@@ -1461,7 +1461,7 @@ impl CallRepository for PgCallRepo {
         tx.commit().await?;
         Ok(row.map(|r| DeletedCallRecordStorageKeys {
             recording_key: r.recording_key,
-            preview_url: r.preview_url,
+            preview_key: r.preview_url,
         }))
     }
 

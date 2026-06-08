@@ -167,7 +167,7 @@ async fn process_record(
     )
     .await?;
 
-    persist_preview_url(
+    persist_preview_key(
         &state.db,
         &preview_keys.recording_key,
         &preview_keys.preview_key,
@@ -241,14 +241,14 @@ async fn upload_preview_jpeg(
 }
 
 #[tracing::instrument(skip(db), err)]
-async fn persist_preview_url(
+async fn persist_preview_key(
     db: &sqlx::Pool<Postgres>,
     recording_key: &str,
     preview_key: &str,
 ) -> anyhow::Result<()> {
-    let rows_updated = db::update_preview_url(db, recording_key, preview_key)
+    let rows_updated = db::update_preview_key(db, recording_key, preview_key)
         .await
-        .with_context(|| format!("failed to persist preview URL for {recording_key}"))?;
+        .with_context(|| format!("failed to persist preview key for {recording_key}"))?;
 
     if rows_updated > 0 {
         return Ok(());

@@ -76,6 +76,6 @@ pub(crate) fn preview_keys_from_decoded_s3_key(decoded_key: &str) -> KeyDecision
     KeyDecision::Process(PreviewKeys {
         source_key: decoded_key.to_string(),
         recording_key: recording_key.to_string(),
-        preview_key: format!("{CALLS_PREFIX}{parent}/{PREVIEW_FILENAME}"),
+        preview_key: format!("{CALLS_PREFIX}{parent}/{file_name}/{PREVIEW_FILENAME}"),
     })
 }

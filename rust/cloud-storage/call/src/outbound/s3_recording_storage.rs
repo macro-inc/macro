@@ -23,8 +23,8 @@ fn recording_object_key(recording_key: &str) -> String {
     format!("calls/{recording_key}")
 }
 
-fn preview_object_key(preview_url: &str) -> &str {
-    preview_url
+fn preview_object_key(preview_key: &str) -> &str {
+    preview_key
 }
 
 impl RecordingStorage for S3RecordingStorage {
@@ -44,7 +44,7 @@ impl RecordingStorage for S3RecordingStorage {
         Ok(macro_aws_config::transform_aws_url(presigned.uri()))
     }
 
-    async fn presign_recording_preview_url(&self, preview_url: &str) -> anyhow::Result<String> {
+    async fn presign_recording_preview_url(&self, preview_key: &str) -> anyhow::Result<String> {
         let presigning_config =
             aws_sdk_s3::presigning::PresigningConfig::expires_in(Duration::from_secs(3600))?;
 
@@ -52,7 +52,7 @@ impl RecordingStorage for S3RecordingStorage {
             .client
             .get_object()
             .bucket(&self.bucket)
-            .key(preview_object_key(preview_url))
+            .key(preview_object_key(preview_key))
             .presigned(presigning_config)
             .await?;
 
@@ -69,11 +69,11 @@ impl RecordingStorage for S3RecordingStorage {
         Ok(())
     }
 
-    async fn delete_recording_preview(&self, preview_url: &str) -> anyhow::Result<()> {
+    async fn delete_recording_preview(&self, preview_key: &str) -> anyhow::Result<()> {
         self.client
             .delete_object()
             .bucket(&self.bucket)
-            .key(preview_object_key(preview_url))
+            .key(preview_object_key(preview_key))
             .send()
             .await?;
         Ok(())
@@ -95,8 +95,8 @@ mod test {
     #[test]
     fn preview_object_key_uses_stored_key_path_without_prefix_changes() {
         assert_eq!(
-            preview_object_key("calls/room/PREVIEW.jpg"),
-            "calls/room/PREVIEW.jpg"
+            preview_object_key("calls/room/recording.mp4/PREVIEW.jpg"),
+            "calls/room/recording.mp4/PREVIEW.jpg"
         );
     }
 }

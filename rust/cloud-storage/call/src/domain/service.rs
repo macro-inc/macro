@@ -984,10 +984,10 @@ impl<
                 .ok();
         }
 
-        if let Some(preview_url) = &record.preview_url {
+        if let Some(preview_key) = &record.preview_key {
             record.recording_preview_url = self
                 .recording_storage
-                .presign_recording_preview_url(preview_url)
+                .presign_recording_preview_url(preview_key)
                 .await
                 .inspect_err(
                     |e| tracing::error!(error=?e, "failed to presign recording preview URL"),
@@ -1053,19 +1053,19 @@ impl<
                     .ok();
             }
 
-            let preview_url = storage_keys.preview_url.or_else(|| {
+            let preview_key = storage_keys.preview_key.or_else(|| {
                 storage_keys
                     .recording_key
                     .as_deref()
-                    .and_then(derive_preview_url_from_recording_key)
+                    .and_then(derive_preview_key_from_recording_key)
             });
 
-            if let Some(preview_url) = preview_url {
+            if let Some(preview_key) = preview_key {
                 self.recording_storage
-                    .delete_recording_preview(&preview_url)
+                    .delete_recording_preview(&preview_key)
                     .await
                     .inspect_err(|e| {
-                        tracing::error!(error=?e, preview_url=%preview_url, "failed to delete call recording preview from storage");
+                        tracing::error!(error=?e, preview_key=%preview_key, "failed to delete call recording preview from storage");
                     })
                     .ok();
             }
@@ -1563,15 +1563,15 @@ fn extract_recording_key(file_url: &str) -> &str {
         .unwrap_or(file_url)
 }
 
-fn derive_preview_url_from_recording_key(recording_key: &str) -> Option<String> {
+fn derive_preview_key_from_recording_key(recording_key: &str) -> Option<String> {
     let recording_key = recording_key
         .strip_prefix("calls/")
         .unwrap_or(recording_key);
-    let (parent, _) = recording_key.rsplit_once('/')?;
-    if parent.is_empty() {
+    let (parent, file_name) = recording_key.rsplit_once('/')?;
+    if parent.is_empty() || file_name.is_empty() {
         return None;
     }
-    Some(format!("calls/{parent}/PREVIEW.jpg"))
+    Some(format!("calls/{parent}/{file_name}/PREVIEW.jpg"))
 }
 
 /// Zero-sized placeholder implementation of [`CallSummarizer`].

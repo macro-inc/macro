@@ -17,7 +17,7 @@ fn preview_keys_from_decoded_s3_key_derives_preview_key() {
         KeyDecision::Process(PreviewKeys {
             source_key: "calls/example-room/1700000000.mp4".to_string(),
             recording_key: "example-room/1700000000.mp4".to_string(),
-            preview_key: "calls/example-room/PREVIEW.jpg".to_string(),
+            preview_key: "calls/example-room/1700000000.mp4/PREVIEW.jpg".to_string(),
         })
     );
 }
@@ -31,7 +31,7 @@ fn preview_keys_from_decoded_s3_key_preserves_nested_parent_path() {
         KeyDecision::Process(PreviewKeys {
             source_key: "calls/org/example-room/recording.mp4".to_string(),
             recording_key: "org/example-room/recording.mp4".to_string(),
-            preview_key: "calls/org/example-room/PREVIEW.jpg".to_string(),
+            preview_key: "calls/org/example-room/recording.mp4/PREVIEW.jpg".to_string(),
         })
     );
 }
@@ -45,7 +45,8 @@ fn preview_keys_from_decoded_s3_key_skips_non_mp4_keys() {
 
 #[test]
 fn preview_keys_from_decoded_s3_key_skips_preview_images() {
-    let decision = preview_keys_from_decoded_s3_key("calls/example-room/PREVIEW.jpg");
+    let decision =
+        preview_keys_from_decoded_s3_key("calls/example-room/1700000000.mp4/PREVIEW.jpg");
 
     assert_eq!(decision, KeyDecision::Skip(SkipReason::PreviewImage));
 }

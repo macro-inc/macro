@@ -10,7 +10,7 @@ use crate::domain::models::{CallError, CallWebhookEvent, EgressS3Config, VoipPus
 use crate::domain::ports::CallRtcClient;
 
 use super::{
-    derive_preview_url_from_recording_key, exclude_voip_recipients, extract_recording_key,
+    derive_preview_key_from_recording_key, exclude_voip_recipients, extract_recording_key,
 };
 
 #[cfg(feature = "outbound")]
@@ -220,24 +220,24 @@ fn extract_key_from_bare_calls_path() {
 }
 
 #[test]
-fn derive_preview_url_from_recording_key_uses_recording_parent() {
+fn derive_preview_key_from_recording_key_uses_recording_file_path() {
     assert_eq!(
-        derive_preview_url_from_recording_key("abc-123/recording.mp4").as_deref(),
-        Some("calls/abc-123/PREVIEW.jpg")
+        derive_preview_key_from_recording_key("abc-123/recording.mp4").as_deref(),
+        Some("calls/abc-123/recording.mp4/PREVIEW.jpg")
     );
 }
 
 #[test]
-fn derive_preview_url_from_recording_key_accepts_prefixed_recording_key() {
+fn derive_preview_key_from_recording_key_accepts_prefixed_recording_key() {
     assert_eq!(
-        derive_preview_url_from_recording_key("calls/abc-123/recording.mp4").as_deref(),
-        Some("calls/abc-123/PREVIEW.jpg")
+        derive_preview_key_from_recording_key("calls/abc-123/recording.mp4").as_deref(),
+        Some("calls/abc-123/recording.mp4/PREVIEW.jpg")
     );
 }
 
 #[test]
-fn derive_preview_url_from_recording_key_returns_none_without_parent() {
-    assert!(derive_preview_url_from_recording_key("recording.mp4").is_none());
+fn derive_preview_key_from_recording_key_returns_none_without_parent() {
+    assert!(derive_preview_key_from_recording_key("recording.mp4").is_none());
 }
 
 #[test]

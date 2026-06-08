@@ -2,15 +2,16 @@ use sqlx::{Pool, Postgres};
 
 /// Persist the generated preview image object key/path for a recording.
 ///
-/// `recording_key` is the MP4 key without the `calls/` prefix. `preview_url`
+/// `recording_key` is the MP4 key without the `calls/` prefix. `preview_key`
 /// is the stable S3 object key/path for the preview image, for example
-/// `calls/{room}/PREVIEW.jpg`. Returns the total number of active and archived
-/// rows updated so callers can retry when no matching recording row exists yet.
+/// `calls/{room}/{recording_file_name}/PREVIEW.jpg`. Returns the total number
+/// of active and archived rows updated so callers can retry when no matching
+/// recording row exists yet.
 #[tracing::instrument(skip(db), err)]
-pub async fn update_preview_url(
+pub async fn update_preview_key(
     db: &Pool<Postgres>,
     recording_key: &str,
-    preview_url: &str,
+    preview_key: &str,
 ) -> anyhow::Result<u64> {
     let mut tx = db.begin().await?;
 
@@ -21,7 +22,7 @@ pub async fn update_preview_url(
         WHERE recording_key = $1
         "#,
         recording_key,
-        preview_url,
+        preview_key,
     )
     .execute(tx.as_mut())
     .await?;
@@ -33,7 +34,7 @@ pub async fn update_preview_url(
         WHERE recording_key = $1
         "#,
         recording_key,
-        preview_url,
+        preview_key,
     )
     .execute(tx.as_mut())
     .await?;
@@ -55,7 +56,7 @@ mod test {
     const ARCHIVED_CALL_ID: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_00000000ca12);
     const MATCHING_RECORDING_KEY: &str = "room/recording.mp4";
     const OTHER_RECORDING_KEY: &str = "room/other.mp4";
-    const PREVIEW_URL: &str = "calls/room/PREVIEW.jpg";
+    const PREVIEW_KEY: &str = "calls/room/recording.mp4/PREVIEW.jpg";
 
     async fn insert_channel(pool: &Pool<Postgres>) -> anyhow::Result<()> {
         sqlx::query(
@@ -175,55 +176,55 @@ mod test {
     }
 
     #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-    async fn update_preview_url_updates_active_and_archived_rows(
+    async fn update_preview_key_updates_active_and_archived_rows(
         pool: Pool<Postgres>,
     ) -> anyhow::Result<()> {
         insert_channel(&pool).await?;
         insert_active_call(&pool, MATCHING_RECORDING_KEY).await?;
         insert_archived_call(&pool, MATCHING_RECORDING_KEY).await?;
 
-        let rows = update_preview_url(&pool, MATCHING_RECORDING_KEY, PREVIEW_URL).await?;
+        let rows = update_preview_key(&pool, MATCHING_RECORDING_KEY, PREVIEW_KEY).await?;
 
         assert_eq!(rows, 2);
         assert_eq!(
             preview_url_for_active_call(&pool).await?.as_deref(),
-            Some(PREVIEW_URL)
+            Some(PREVIEW_KEY)
         );
         assert_eq!(
             preview_url_for_archived_call(&pool).await?.as_deref(),
-            Some(PREVIEW_URL)
+            Some(PREVIEW_KEY)
         );
         Ok(())
     }
 
     #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-    async fn update_preview_url_updates_only_matching_recording_key(
+    async fn update_preview_key_updates_only_matching_recording_key(
         pool: Pool<Postgres>,
     ) -> anyhow::Result<()> {
         insert_channel(&pool).await?;
         insert_active_call(&pool, MATCHING_RECORDING_KEY).await?;
         insert_archived_call(&pool, OTHER_RECORDING_KEY).await?;
 
-        let rows = update_preview_url(&pool, MATCHING_RECORDING_KEY, PREVIEW_URL).await?;
+        let rows = update_preview_key(&pool, MATCHING_RECORDING_KEY, PREVIEW_KEY).await?;
 
         assert_eq!(rows, 1);
         assert_eq!(
             preview_url_for_active_call(&pool).await?.as_deref(),
-            Some(PREVIEW_URL)
+            Some(PREVIEW_KEY)
         );
         assert!(preview_url_for_archived_call(&pool).await?.is_none());
         Ok(())
     }
 
     #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-    async fn update_preview_url_returns_zero_when_no_rows_match(
+    async fn update_preview_key_returns_zero_when_no_rows_match(
         pool: Pool<Postgres>,
     ) -> anyhow::Result<()> {
         insert_channel(&pool).await?;
         insert_active_call(&pool, OTHER_RECORDING_KEY).await?;
         insert_archived_call(&pool, OTHER_RECORDING_KEY).await?;
 
-        let rows = update_preview_url(&pool, MATCHING_RECORDING_KEY, PREVIEW_URL).await?;
+        let rows = update_preview_key(&pool, MATCHING_RECORDING_KEY, PREVIEW_KEY).await?;
 
         assert_eq!(rows, 0);
         assert!(preview_url_for_active_call(&pool).await?.is_none());

@@ -343,7 +343,7 @@ pub struct CallRecord {
     pub recording_key: Option<String>,
     /// Stored S3 object key/path for the preview image (internal, not serialized).
     #[serde(skip_serializing)]
-    pub preview_url: Option<String>,
+    pub preview_key: Option<String>,
     /// Presigned URL for the call recording, if available.
     pub recording_url: Option<String>,
     /// Presigned URL for the call recording preview image, if available.
@@ -372,7 +372,7 @@ pub struct DeletedCallRecordStorageKeys {
     /// S3 object key for the MP4 recording, without the `calls/` prefix.
     pub recording_key: Option<String>,
     /// Stored S3 object key/path for the preview image.
-    pub preview_url: Option<String>,
+    pub preview_key: Option<String>,
 }
 
 /// Lightweight preview of a call record, returned by the batch preview endpoint.

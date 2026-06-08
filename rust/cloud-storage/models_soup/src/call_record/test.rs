@@ -16,7 +16,7 @@ fn record_with_participants(user_ids: &[&str]) -> CallRecord {
         egress_id: None,
         recording_started_at: None,
         recording_key: None,
-        preview_url: None,
+        preview_key: None,
         recording_url: None,
         recording_preview_url: None,
         channel_name: None,

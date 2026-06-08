@@ -348,10 +348,10 @@ pub trait RecordingStorage: Send + Sync + 'static {
     /// Generate a presigned GET URL for a stored preview image key/path.
     ///
     /// The preview key/path is stored as a full S3 object key, for example
-    /// `calls/{room}/PREVIEW.jpg`.
+    /// `calls/{room}/{recording_file_name}/PREVIEW.jpg`.
     fn presign_recording_preview_url(
         &self,
-        preview_url: &str,
+        preview_key: &str,
     ) -> impl Future<Output = anyhow::Result<String>> + Send;
 
     /// Delete the recording object identified by `recording_key`.
@@ -364,13 +364,13 @@ pub trait RecordingStorage: Send + Sync + 'static {
         recording_key: &str,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 
-    /// Delete the stored preview image object identified by `preview_url`.
+    /// Delete the stored preview image object identified by `preview_key`.
     ///
     /// The preview key/path is stored as a full S3 object key. This operation
     /// should be idempotent — succeed if the key no longer exists.
     fn delete_recording_preview(
         &self,
-        preview_url: &str,
+        preview_key: &str,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 }
 
@@ -382,9 +382,9 @@ impl<T: RecordingStorage> RecordingStorage for Option<T> {
         }
     }
 
-    async fn presign_recording_preview_url(&self, preview_url: &str) -> anyhow::Result<String> {
+    async fn presign_recording_preview_url(&self, preview_key: &str) -> anyhow::Result<String> {
         match self {
-            Some(inner) => inner.presign_recording_preview_url(preview_url).await,
+            Some(inner) => inner.presign_recording_preview_url(preview_key).await,
             None => anyhow::bail!("recording storage not configured"),
         }
     }
@@ -396,9 +396,9 @@ impl<T: RecordingStorage> RecordingStorage for Option<T> {
         }
     }
 
-    async fn delete_recording_preview(&self, preview_url: &str) -> anyhow::Result<()> {
+    async fn delete_recording_preview(&self, preview_key: &str) -> anyhow::Result<()> {
         match self {
-            Some(inner) => inner.delete_recording_preview(preview_url).await,
+            Some(inner) => inner.delete_recording_preview(preview_key).await,
             None => anyhow::bail!("recording storage not configured"),
         }
     }
