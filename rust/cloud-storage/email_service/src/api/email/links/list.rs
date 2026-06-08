@@ -75,8 +75,13 @@ pub async fn list_links_handler(
             .await
             .map_err(ListLinksError::DatabaseError)?;
 
+    let my_macro_id = user_context.user_id.clone();
+    let my_fusion = user_context.fusion_user_id.clone();
+
     let tasks = links.into_iter().map(|link| {
         let ctx = ctx.clone();
+        let is_inbox_only =
+            link.macro_id.to_string() != my_macro_id && link.fusionauth_user_id == my_fusion;
         async move {
             let settings = email_db_client::settings::fetch_settings(&ctx.db, link.id)
                 .await
@@ -126,6 +131,7 @@ pub async fn list_links_handler(
                 api::settings::Settings::from(settings),
                 sync_status,
                 photo_url,
+                is_inbox_only,
             ))
         }
     });
