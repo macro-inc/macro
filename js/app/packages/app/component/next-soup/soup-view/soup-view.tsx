@@ -679,9 +679,9 @@ export const SoupViewList = (props: SoupViewListProps) => {
   });
 
   // Register navigation hotkeys on the active list scope (usually the split
-  // scope), but dispose them with the mounted SoupViewList. This keeps j/k
-  // available while the list split is active without leaking into opened blocks
-  // after the list unmounts.
+  // scope). Most handlers are disposed with SoupViewList, but j/k intentionally
+  // remain on the split scope so an entity opened from the list can continue to
+  // drive list navigation and update the split content.
   useSoupNavigationHotkeys({
     scopeId: scopeId(),
     soup,

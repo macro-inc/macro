@@ -117,6 +117,9 @@ export const useSoupNavigationHotkeys = (
     return true;
   };
 
+  // Keep j/k registered on the split scope after the list unmounts. When an
+  // entity is opened from a list into the same split, this lets j/k continue
+  // navigating the originating soup list and update the split content.
   registerHotkey({
     hotkey: ['j'],
     scopeId,
@@ -124,7 +127,7 @@ export const useSoupNavigationHotkeys = (
     hotkeyToken: TOKENS.entity.step.end,
     keyDownHandler: navigateDown,
     hide: true,
-  }).withGroup(group);
+  });
 
   registerHotkey({
     hotkey: ['arrowdown'],
@@ -134,6 +137,9 @@ export const useSoupNavigationHotkeys = (
     hide: true,
   }).withGroup(group);
 
+  // Keep j/k registered on the split scope after the list unmounts. When an
+  // entity is opened from a list into the same split, this lets j/k continue
+  // navigating the originating soup list and update the split content.
   registerHotkey({
     hotkey: ['k'],
     scopeId,
@@ -141,7 +147,7 @@ export const useSoupNavigationHotkeys = (
     description: 'Up',
     keyDownHandler: navigateUp,
     hide: true,
-  }).withGroup(group);
+  });
 
   registerHotkey({
     hotkey: ['arrowup'],
