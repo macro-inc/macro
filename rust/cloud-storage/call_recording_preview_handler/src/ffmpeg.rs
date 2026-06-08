@@ -1,10 +1,12 @@
 #[cfg(test)]
 mod test;
 
-use std::{path::Path, process::Output};
+use std::{path::Path, process::Output, time::Duration};
 
 use anyhow::{Context, bail};
 use tokio::process::Command;
+
+const COMMAND_OUTPUT_TIMEOUT: Duration = Duration::from_secs(60);
 
 #[derive(Debug, Clone)]
 pub(crate) struct FfmpegTools {
@@ -136,10 +138,11 @@ async fn extract_frame(
 
 async fn command_output(command: &mut Command, command_name: &str) -> anyhow::Result<Output> {
     command.kill_on_drop(true);
-    command
-        .output()
+    let output = tokio::time::timeout(COMMAND_OUTPUT_TIMEOUT, command.output())
         .await
-        .with_context(|| format!("failed to run {command_name}"))
+        .with_context(|| format!("timed out running {command_name}"))?;
+
+    output.with_context(|| format!("failed to run {command_name}"))
 }
 
 fn ensure_command_success(output: &Output, command_name: &str) -> anyhow::Result<()> {

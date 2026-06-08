@@ -12,6 +12,6 @@ lambda_runtime = { workspace = true }
 macro_aws_config = { path = "../macro_aws_config", features = ["s3"] }
 macro_entrypoint = { path = "../macro_entrypoint" }
 sqlx = { workspace = true }
-tokio = { workspace = true, features = ["fs", "process"] }
+tokio = { workspace = true, features = ["fs", "process", "time"] }
 tracing = { workspace = true }
 urlencoding = { workspace = true }
