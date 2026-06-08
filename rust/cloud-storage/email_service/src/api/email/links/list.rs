@@ -75,13 +75,14 @@ pub async fn list_links_handler(
             .await
             .map_err(ListLinksError::DatabaseError)?;
 
-    let my_macro_id = user_context.user_id.clone();
-    let my_fusion = user_context.fusion_user_id.clone();
-
     let tasks = links.into_iter().map(|link| {
         let ctx = ctx.clone();
-        let is_inbox_only =
-            link.macro_id.to_string() != my_macro_id && link.fusionauth_user_id == my_fusion;
+        // Secondary mailbox (email differs from its macro user's own) = inbox-only, not a user.
+        let is_inbox_only = !link
+            .email_address
+            .0
+            .as_ref()
+            .eq_ignore_ascii_case(link.macro_id.email_str());
         async move {
             let settings = email_db_client::settings::fetch_settings(&ctx.db, link.id)
                 .await
