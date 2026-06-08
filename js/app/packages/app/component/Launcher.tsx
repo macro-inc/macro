@@ -39,6 +39,7 @@ import WideStar from '@icon/wide-star.svg';
 import { AnimatedTaskIcon } from '@icon/wide-task';
 import WideTask from '@icon/wide-task.svg';
 import { Dialog } from '@kobalte/core/dialog';
+import { getMarkdownGoldenBytes } from '@lexical-core/markdown-golden';
 import ArrowRight from '@phosphor/arrow-right.svg';
 import { createProject } from '@queries/storage/projects';
 import { cn, Hotkey, Layer } from '@ui';
@@ -94,9 +95,16 @@ const createBlock = async (spec: {
     source: 'launcher',
   });
 
+  // If we are creating a new markdown document "from scratch" then we can let
+  // them instantly start editing
+  const createMdParams =
+    blockName === 'md'
+      ? { optimisticSnapshot: await getMarkdownGoldenBytes() }
+      : undefined;
+
   if (split) {
     split.replace({
-      next: { type: blockName, id },
+      next: { type: blockName, id, params: createMdParams },
       mergeHistory: true,
       referredFrom: 'launcher',
     });

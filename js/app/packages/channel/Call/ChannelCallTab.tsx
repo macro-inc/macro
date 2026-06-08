@@ -1,5 +1,4 @@
 import { useChannelTab } from '@channel/Channel/ChannelTabContext';
-import { DEFAULT_CHANNEL_TAB } from '@channel/Channel/channel-tabs';
 import { UserGroup } from '@core/component/UserGroup';
 import { tryMacroId, useDisplayNameParts } from '@core/user';
 import PhoneIcon from '@icon/wide-call.svg';
@@ -7,6 +6,7 @@ import { useActiveCallQuery, useCallRecordQuery } from '@queries/call/call';
 import { Button } from '@ui';
 import { type Accessor, createMemo, Match, Show, Switch } from 'solid-js';
 import { CallOverlay } from './CallOverlay';
+import { getCallJoinTab, getCallLeaveTab } from './call-tabs';
 import { useCall } from './use-call';
 
 function ParticipantFirstName(props: { id: string }) {
@@ -104,8 +104,8 @@ export function ChannelCallTab(props: {
   // overlay (or disconnect) switches back to Messages — not only when
   // the join was initiated from the header button.
   const call = useCall(() => props.channelId, {
-    onJoin: () => setActiveTab('call'),
-    onLeave: () => setActiveTab(DEFAULT_CHANNEL_TAB),
+    onJoin: () => setActiveTab(getCallJoinTab()),
+    onLeave: () => setActiveTab(getCallLeaveTab()),
   });
 
   const handleRetry = async () => {

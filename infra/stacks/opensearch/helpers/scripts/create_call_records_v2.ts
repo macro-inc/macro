@@ -18,7 +18,7 @@
 require('dotenv').config();
 
 import { client } from '../client';
-import { SHARD_SETTINGS } from '../constants';
+import { SHARD_SETTINGS, SLOWLOG_SETTINGS } from '../constants';
 
 const INDEX = 'call_records_v2';
 const RELATION_PARENT = 'call';
@@ -27,6 +27,7 @@ const RELATION_CHILD = 'segment';
 const BODY = {
   settings: {
     ...SHARD_SETTINGS,
+    ...SLOWLOG_SETTINGS,
     refresh_interval: '2s',
   },
   mappings: {

@@ -10,6 +10,7 @@ import type { CallRecordDurationMs } from './callRecordDurationMs';
 import type { CallRecordEgressId } from './callRecordEgressId';
 import type { CallRecordEndedAt } from './callRecordEndedAt';
 import type { CallRecordParticipant } from './callRecordParticipant';
+import type { CallRecordRecordingPreviewUrl } from './callRecordRecordingPreviewUrl';
 import type { CallRecordRecordingStartedAt } from './callRecordRecordingStartedAt';
 import type { CallRecordRecordingUrl } from './callRecordRecordingUrl';
 import type { CallRecordSummary } from './callRecordSummary';
@@ -41,6 +42,8 @@ archived `call_records`; active calls always return `None`. */
   isActive: boolean;
   /** Participants (both active and historic). */
   participants: CallRecordParticipant[];
+  /** Presigned URL for the call recording preview image, if available. */
+  recordingPreviewUrl?: CallRecordRecordingPreviewUrl;
   /** When the egress recording actually began. `None` until the
 `egress_started` webhook arrives (typically a few seconds after
 `started_at`). Frontend should anchor transcript-to-audio sync to

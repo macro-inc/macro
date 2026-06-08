@@ -3,12 +3,7 @@ use std::collections::HashSet;
 use models_opensearch::SearchIndex;
 
 use super::BulkUpsertResult;
-use crate::{
-    Result,
-    date_format::EpochSeconds,
-    documents_shape::{alias_uses_join_shape, destination_uses_join_shape},
-    error::OpensearchClientError,
-};
+use crate::{Result, date_format::EpochSeconds, error::OpensearchClientError};
 
 /// Relation name for parent docs in the join field.
 const PARENT_RELATION: &str = "document";
@@ -53,55 +48,6 @@ fn resolve_destination(index_override: Option<&str>) -> &str {
     index_override.unwrap_or(SearchIndex::Documents.as_ref())
 }
 
-// ---------------------------------------------------------------------------
-// Flat-shape (legacy) path
-// ---------------------------------------------------------------------------
-
-/// Process a single chunk of documents in the legacy flat shape.
-async fn bulk_upsert_single_chunk_flat(
-    client: &opensearch::OpenSearch,
-    documents: &[UpsertDocumentArgs],
-    index: &str,
-) -> Result<BulkUpsertResult> {
-    let mut bulk_body = Vec::new();
-
-    for doc in documents {
-        let id = format!("{}:{}", doc.document_id, doc.node_id);
-
-        let action = serde_json::json!({
-            "index": {
-                "_id": id
-            }
-        });
-
-        bulk_body.push(action.to_string());
-        bulk_body.push(serde_json::to_string(doc).map_err(|e| {
-            OpensearchClientError::DeserializationFailed {
-                details: e.to_string(),
-                method: Some("bulk_upsert_single_chunk_flat".to_string()),
-            }
-        })?);
-    }
-
-    let result =
-        super::bulk_upsert_to_index(client, index, bulk_body, "bulk_upsert_single_chunk_flat")
-            .await?;
-
-    tracing::trace!(
-        chunk_total = documents.len(),
-        successful = result.successful,
-        failed = result.failed,
-        version_conflicts = result.version_conflicts,
-        "bulk upsert chunk completed (flat)"
-    );
-
-    Ok(result)
-}
-
-// ---------------------------------------------------------------------------
-// Join-shape path
-// ---------------------------------------------------------------------------
-
 /// Builds the JSON document body for a parent doc, given any one
 /// `UpsertDocumentArgs` belonging to that parent (parent metadata is
 /// denormalized identically across all chunks of the same document, so any
@@ -138,7 +84,7 @@ fn child_doc_body(chunk: &UpsertDocumentArgs) -> serde_json::Value {
     doc
 }
 
-/// Process a single chunk of documents in the join shape.
+/// Process a single chunk of documents.
 ///
 /// Emits, for each chunk:
 ///   - one parent `index` op with `routing = parent_id` (deduped within
@@ -150,7 +96,7 @@ fn child_doc_body(chunk: &UpsertDocumentArgs) -> serde_json::Value {
 /// Cross-batch duplicate parent writes are accepted as cheap last-writer-
 /// wins overwrites; all writers should agree on parent metadata since it's
 /// denormalized from the same source.
-async fn bulk_upsert_single_chunk_join(
+async fn bulk_upsert_single_chunk(
     client: &opensearch::OpenSearch,
     documents: &[UpsertDocumentArgs],
     index: &str,
@@ -185,8 +131,7 @@ async fn bulk_upsert_single_chunk_join(
     }
 
     let result =
-        super::bulk_upsert_to_index(client, index, bulk_body, "bulk_upsert_single_chunk_join")
-            .await?;
+        super::bulk_upsert_to_index(client, index, bulk_body, "bulk_upsert_single_chunk").await?;
 
     tracing::trace!(
         chunk_total = documents.len(),
@@ -194,14 +139,14 @@ async fn bulk_upsert_single_chunk_join(
         successful = result.successful,
         failed = result.failed,
         version_conflicts = result.version_conflicts,
-        "bulk upsert chunk completed (join)"
+        "bulk upsert chunk completed"
     );
 
     Ok(result)
 }
 
 // ---------------------------------------------------------------------------
-// Public entry points (dispatch)
+// Public entry points
 // ---------------------------------------------------------------------------
 
 /// Bulk upsert documents to reduce version conflicts with automatic chunking
@@ -219,7 +164,6 @@ pub(crate) async fn bulk_upsert_documents(
     let mut overall_result = BulkUpsertResult::default();
 
     let index = resolve_destination(index_override);
-    let join_shape = destination_uses_join_shape(index);
 
     let chunks: Vec<_> = documents.chunks(CHUNK_SIZE).collect();
 
@@ -228,7 +172,6 @@ pub(crate) async fn bulk_upsert_documents(
         total_chunks = chunks.len(),
         chunk_size = CHUNK_SIZE,
         index = %index,
-        shape = if join_shape { "join" } else { "flat" },
         "starting chunked bulk upsert"
     );
 
@@ -239,11 +182,7 @@ pub(crate) async fn bulk_upsert_documents(
             "processing chunk"
         );
 
-        let chunk_result = if join_shape {
-            bulk_upsert_single_chunk_join(client, chunk, index).await
-        } else {
-            bulk_upsert_single_chunk_flat(client, chunk, index).await
-        };
+        let chunk_result = bulk_upsert_single_chunk(client, chunk, index).await;
 
         match chunk_result {
             Ok(r) => {
@@ -278,6 +217,10 @@ pub(crate) async fn bulk_upsert_documents(
     Ok(overall_result)
 }
 
+/// Upsert a single chunk: parent index followed by child index. Uses a
+/// 2-op bulk so both land in one request. Full-overwrite `index`
+/// semantics on the parent ensure omitted optional fields (e.g.
+/// `sub_type`) get cleared on Some→None transitions.
 #[tracing::instrument(skip(client))]
 pub(crate) async fn upsert_document(
     client: &opensearch::OpenSearch,
@@ -285,64 +228,6 @@ pub(crate) async fn upsert_document(
     index_override: Option<&str>,
 ) -> Result<()> {
     let index = resolve_destination(index_override);
-    if destination_uses_join_shape(index) {
-        return upsert_document_join(client, args, index).await;
-    }
-    upsert_document_flat(client, args, index).await
-}
-
-async fn upsert_document_flat(
-    client: &opensearch::OpenSearch,
-    args: &UpsertDocumentArgs,
-    index: &str,
-) -> Result<()> {
-    let id = format!("{}:{}", args.document_id, args.node_id);
-    let response = client
-        .index(opensearch::IndexParts::IndexId(index, &id))
-        .body(args)
-        .send()
-        .await
-        .map_err(|err| OpensearchClientError::DeserializationFailed {
-            details: err.to_string(),
-            method: Some("upsert_document_flat".to_string()),
-        })?;
-
-    let status_code = response.status_code();
-    if status_code.is_success() {
-        tracing::trace!(id=%id, "document upserted successfully");
-        return Ok(());
-    }
-
-    let body =
-        response
-            .text()
-            .await
-            .map_err(|err| OpensearchClientError::DeserializationFailed {
-                details: err.to_string(),
-                method: Some("upsert_document_flat".to_string()),
-            })?;
-
-    tracing::error!(
-        status_code = ?status_code,
-        body = ?body,
-        "error upserting document",
-    );
-
-    Err(OpensearchClientError::Unknown {
-        details: body,
-        method: Some("upsert_document_flat".to_string()),
-    })
-}
-
-/// Upsert a single chunk in the join shape: parent index followed by
-/// child index. Uses a 2-op bulk so both land in one request. Full-
-/// overwrite `index` semantics on the parent ensure omitted optional
-/// fields (e.g. `sub_type`) get cleared on Some→None transitions.
-async fn upsert_document_join(
-    client: &opensearch::OpenSearch,
-    args: &UpsertDocumentArgs,
-    index: &str,
-) -> Result<()> {
     let parent_id = args.document_id.as_str();
     let routing = parent_id;
 
@@ -368,120 +253,28 @@ async fn upsert_document_join(
         child_doc_body(args).to_string(),
     ];
 
-    let result =
-        super::bulk_upsert_to_index(client, index, bulk_body, "upsert_document_join").await?;
+    let result = super::bulk_upsert_to_index(client, index, bulk_body, "upsert_document").await?;
 
     if result.failed > 0 {
         return Err(OpensearchClientError::Unknown {
             details: format!(
-                "upsert_document_join had {} failures: {:?}",
+                "upsert_document had {} failures: {:?}",
                 result.failed, result.errors
             ),
-            method: Some("upsert_document_join".to_string()),
+            method: Some("upsert_document".to_string()),
         });
     }
 
-    tracing::trace!(id=%child_id, parent=%parent_id, "document upserted successfully (join)");
+    tracing::trace!(id=%child_id, parent=%parent_id, "document upserted successfully");
     Ok(())
 }
 
 /// Update the denormalized `document_name` for an existing document.
 ///
-/// Flat shape: `update_by_query` fans the new name across every chunk
-/// doc. Join shape: a single partial-update on the parent (children
-/// don't carry `document_name`).
+/// A single partial-update on the parent doc; children don't carry
+/// `document_name`. Routing must match the parent's routing (= parent
+/// _id = document_id).
 pub(crate) async fn update_document_metadata(
-    client: &opensearch::OpenSearch,
-    document_id: &str,
-    document_name: &str,
-) -> Result<()> {
-    if alias_uses_join_shape() {
-        update_document_metadata_join(client, document_id, document_name).await
-    } else {
-        update_document_metadata_flat(client, document_id, document_name).await
-    }
-}
-
-async fn update_document_metadata_flat(
-    client: &opensearch::OpenSearch,
-    document_id: &str,
-    document_name: &str,
-) -> Result<()> {
-    use opensearch::UpdateByQueryParts;
-    use serde_json::json;
-
-    let query = json!({
-        "query": {
-            "term": {
-                "entity_id": document_id
-            }
-        },
-        "script": {
-            "source": "ctx._source.document_name = params.document_name",
-            "params": {
-                "document_name": document_name
-            }
-        }
-    });
-
-    let response = client
-        .update_by_query(UpdateByQueryParts::Index(
-            &[SearchIndex::Documents.as_ref()],
-        ))
-        .body(query)
-        .send()
-        .await
-        .map_err(|err| OpensearchClientError::DeserializationFailed {
-            details: err.to_string(),
-            method: Some("update_document_metadata_flat".to_string()),
-        })?;
-
-    let status_code = response.status_code();
-    if status_code.is_success() {
-        let response_body: serde_json::Value =
-            response
-                .json()
-                .await
-                .map_err(|err| OpensearchClientError::DeserializationFailed {
-                    details: err.to_string(),
-                    method: Some("update_document_metadata_flat".to_string()),
-                })?;
-
-        let updated_count = response_body["updated"].as_u64().unwrap_or(0);
-        tracing::info!(
-            document_id=%document_id,
-            document_name=%document_name,
-            updated_count=%updated_count,
-            "document metadata updated successfully (flat)"
-        );
-        return Ok(());
-    }
-
-    let body =
-        response
-            .text()
-            .await
-            .map_err(|err| OpensearchClientError::DeserializationFailed {
-                details: err.to_string(),
-                method: Some("update_document_metadata_flat".to_string()),
-            })?;
-
-    tracing::error!(
-        status_code=?status_code,
-        body=?body,
-        document_id=%document_id,
-        "error updating document metadata (flat)",
-    );
-
-    Err(OpensearchClientError::Unknown {
-        details: body,
-        method: Some("update_document_metadata_flat".to_string()),
-    })
-}
-
-/// Partial update on the parent doc. Routing must match the parent's
-/// routing (= parent _id = document_id).
-async fn update_document_metadata_join(
     client: &opensearch::OpenSearch,
     document_id: &str,
     document_name: &str,
@@ -505,7 +298,7 @@ async fn update_document_metadata_join(
         .await
         .map_err(|err| OpensearchClientError::DeserializationFailed {
             details: err.to_string(),
-            method: Some("update_document_metadata_join".to_string()),
+            method: Some("update_document_metadata".to_string()),
         })?;
 
     let status_code = response.status_code();
@@ -513,7 +306,7 @@ async fn update_document_metadata_join(
         tracing::info!(
             document_id=%document_id,
             document_name=%document_name,
-            "document metadata updated successfully (join)"
+            "document metadata updated successfully"
         );
         return Ok(());
     }
@@ -524,19 +317,19 @@ async fn update_document_metadata_join(
             .await
             .map_err(|err| OpensearchClientError::DeserializationFailed {
                 details: err.to_string(),
-                method: Some("update_document_metadata_join".to_string()),
+                method: Some("update_document_metadata".to_string()),
             })?;
 
     tracing::error!(
         status_code=?status_code,
         body=?body,
         document_id=%document_id,
-        "error updating document metadata (join)",
+        "error updating document metadata",
     );
 
     Err(OpensearchClientError::Unknown {
         details: body,
-        method: Some("update_document_metadata_join".to_string()),
+        method: Some("update_document_metadata".to_string()),
     })
 }
 

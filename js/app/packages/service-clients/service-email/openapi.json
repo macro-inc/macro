@@ -4134,6 +4134,7 @@
           "is_sync_active",
           "sync_status",
           "settings",
+          "is_inbox_only",
           "created_at",
           "updated_at"
         ],
@@ -4151,6 +4152,9 @@
           "id": {
             "type": "string",
             "format": "uuid"
+          },
+          "is_inbox_only": {
+            "type": "boolean"
           },
           "is_sync_active": {
             "type": "boolean"

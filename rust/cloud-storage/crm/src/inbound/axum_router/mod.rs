@@ -152,6 +152,12 @@ impl IntoResponse for CrmError {
                     message: "crm comment not found".into(),
                 }),
             ),
+            CrmError::CommentNotOwned => (
+                StatusCode::FORBIDDEN,
+                Json(ErrorResponse {
+                    message: "you can only modify your own crm comments".into(),
+                }),
+            ),
             CrmError::InvalidRequest(message) => (
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponse {

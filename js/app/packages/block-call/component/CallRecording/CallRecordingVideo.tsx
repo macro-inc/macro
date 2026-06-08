@@ -1,7 +1,8 @@
-import { createSignal, onCleanup } from 'solid-js';
+import { createEffect, createSignal, onCleanup } from 'solid-js';
 
 export function CallRecordingVideo(props: {
   url: string;
+  posterUrl?: string;
   onTimeUpdate?: (
     seconds: number,
     source: 'playback' | 'seeking' | 'seeked'
@@ -10,6 +11,14 @@ export function CallRecordingVideo(props: {
 }) {
   const [isLoaded, setIsLoaded] = createSignal(false);
   let rafId: number | null = null;
+
+  createEffect<string | undefined>((previousUrl) => {
+    const url = props.url;
+    if (url !== previousUrl) {
+      setIsLoaded(false);
+    }
+    return url;
+  });
 
   const stopTicking = () => {
     if (rafId !== null) {
@@ -37,9 +46,13 @@ export function CallRecordingVideo(props: {
       <video
         ref={props.setVideoRef}
         class="max-w-full max-h-full rounded transition-opacity duration-200"
-        classList={{ 'opacity-0': !isLoaded(), 'opacity-100': isLoaded() }}
+        classList={{
+          'opacity-0': !isLoaded() && !props.posterUrl,
+          'opacity-100': isLoaded() || !!props.posterUrl,
+        }}
         controls
         crossorigin="anonymous"
+        poster={props.posterUrl}
         src={props.url}
         onLoadedData={() => setIsLoaded(true)}
         onCanPlay={() => setIsLoaded(true)}

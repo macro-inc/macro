@@ -1,25 +1,30 @@
 //! Query for CRM company access level.
 
-use crate::domain::models::{AccessLevel, TeamRole};
+use crate::domain::models::{AccessLevel, CrmEntityAccess, TeamRole};
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use sqlx::PgPool;
 use uuid::Uuid;
 
-/// Resolve the access level a user has for a CRM company.
+/// Resolve the access level a user has for a CRM company, together with the
+/// company's owning `team_id`.
 ///
 /// Joins `crm_companies` against the user's `team_user` row on the owning
-/// team. Returns `None` when the user is not on that team, or when the
-/// company is hidden and the user is a plain member.
+/// team, so the returned `team_id` is the team that owns the company *and*
+/// that the user belongs to — the caller can scope downstream queries by it
+/// without trusting the user's default team. Returns `None` when the user is
+/// not on that team, or when the company is hidden and the user is a plain
+/// member.
 #[tracing::instrument(err, skip(pool))]
 pub async fn get_crm_company_access(
     pool: &PgPool,
     company_id: &Uuid,
     user_id: &MacroUserId<Lowercase<'_>>,
-) -> Result<Option<AccessLevel>, sqlx::Error> {
+) -> Result<Option<CrmEntityAccess>, sqlx::Error> {
     let row = sqlx::query!(
         r#"
         SELECT
             c.hidden AS "hidden!",
+            c.team_id AS "team_id!",
             tu.team_role AS "role!: TeamRole"
         FROM crm_companies c
         JOIN team_user tu
@@ -33,7 +38,12 @@ pub async fn get_crm_company_access(
     .fetch_optional(pool)
     .await?;
 
-    Ok(row.and_then(|r| team_role_to_access_level(r.role, r.hidden)))
+    Ok(row.and_then(|r| {
+        team_role_to_access_level(r.role, r.hidden).map(|access_level| CrmEntityAccess {
+            access_level,
+            team_id: r.team_id,
+        })
+    }))
 }
 
 /// Map a team role + hidden flag to an [`AccessLevel`].

@@ -223,6 +223,7 @@ pub struct SplitUnifiedSearchResponseValues {
     pub email: Vec<SearchHit>,
     pub project: Vec<SearchHit>,
     pub call_record: Vec<SearchHit>,
+    pub crm_company: Vec<SearchHit>,
 }
 
 pub trait SplitUnifiedSearchResponse: Iterator<Item = SearchHit> {
@@ -234,40 +235,53 @@ where
     T: Iterator<Item = SearchHit>,
 {
     fn split_search_response(self) -> SplitUnifiedSearchResponseValues {
-        let (channel_message, chat, document, email, project, call_record) = self.into_iter().fold(
-            (vec![], vec![], vec![], vec![], vec![], vec![]),
-            |(
-                mut channel_message,
-                mut chat,
-                mut document,
-                mut email,
-                mut project,
-                mut call_record,
-            ),
-             item| {
-                match item.entity_type {
-                    SearchEntityType::Channels => {
-                        channel_message.push(item);
+        let (channel_message, chat, document, email, project, call_record, crm_company) =
+            self.into_iter().fold(
+                (vec![], vec![], vec![], vec![], vec![], vec![], vec![]),
+                |(
+                    mut channel_message,
+                    mut chat,
+                    mut document,
+                    mut email,
+                    mut project,
+                    mut call_record,
+                    mut crm_company,
+                ),
+                 item| {
+                    match item.entity_type {
+                        SearchEntityType::Channels => {
+                            channel_message.push(item);
+                        }
+                        SearchEntityType::Chats => {
+                            chat.push(item);
+                        }
+                        SearchEntityType::Documents => {
+                            document.push(item);
+                        }
+                        SearchEntityType::Emails => {
+                            email.push(item);
+                        }
+                        SearchEntityType::Projects => {
+                            project.push(item);
+                        }
+                        SearchEntityType::CallRecords => {
+                            call_record.push(item);
+                        }
+                        SearchEntityType::CrmCompanies => {
+                            crm_company.push(item);
+                        }
                     }
-                    SearchEntityType::Chats => {
-                        chat.push(item);
-                    }
-                    SearchEntityType::Documents => {
-                        document.push(item);
-                    }
-                    SearchEntityType::Emails => {
-                        email.push(item);
-                    }
-                    SearchEntityType::Projects => {
-                        project.push(item);
-                    }
-                    SearchEntityType::CallRecords => {
-                        call_record.push(item);
-                    }
-                }
-                (channel_message, chat, document, email, project, call_record)
-            },
-        );
+                    (
+                        channel_message,
+                        chat,
+                        document,
+                        email,
+                        project,
+                        call_record,
+                        crm_company,
+                    )
+                },
+            );
 
         SplitUnifiedSearchResponseValues {
             channel_message,
@@ -276,17 +290,18 @@ where
             email,
             project,
             call_record,
+            crm_company,
         }
     }
 }
 
 /// Expand one OpenSearch hit into one or more `SearchHit`s.
 ///
-/// For join-shape parents (documents, chats), OpenSearch returns one
-/// parent hit per matching root with the matching children nested
-/// under `inner_hits`. Each entity's search module knows how to unpack
-/// those into child-level hits; everything else (flat indices) takes
-/// the 1:1 conversion.
+/// For join-shape parents (documents, chats, call records), OpenSearch
+/// returns one parent hit per matching root with the matching children
+/// nested under `inner_hits`. Each entity's search module knows how to
+/// unpack those into child-level hits; everything else (channels,
+/// emails) takes the 1:1 conversion.
 fn expand_hit_into_search_hits(hit: Hit<UnifiedSearchIndex>) -> Vec<SearchHit> {
     match &hit.source {
         UnifiedSearchIndex::Document(parent) => {
@@ -383,13 +398,12 @@ impl From<Hit<UnifiedSearchIndex>> for SearchHit {
                     })
                     .unwrap_or_default(),
                 goto: Some(SearchGotoContent::Documents(SearchGotoDocument {
-                    // Parent hits in the join shape have no node_id on
-                    // `_source` (it lives on the matching chunk in
-                    // inner_hits). Fall back to empty for now; piping
-                    // the chunk's node_id through inner_hits is a
-                    // follow-up.
-                    node_id: a.node_id.unwrap_or_default(),
-                    raw_content: a.raw_content,
+                    // Reached only on the defensive parent fallback when a
+                    // matched parent carried no inner_hits. node_id and
+                    // raw_content are child-only fields, so there is no
+                    // chunk-level identifier to navigate to here.
+                    node_id: String::new(),
+                    raw_content: None,
                 })),
                 updated_at: a
                     .updated_at_seconds
@@ -446,13 +460,12 @@ impl From<Hit<UnifiedSearchIndex>> for SearchHit {
                     })
                     .unwrap_or_default(),
                 goto: Some(SearchGotoContent::Chats(SearchGotoChat {
-                    // Flat-shape docs always carry chat_message_id +
-                    // role; the join-shape parent fallback path can
-                    // arrive here only when inner_hits was empty, in
-                    // which case we have no message-level identifier
-                    // to navigate to.
-                    chat_message_id: a.chat_message_id.unwrap_or_default(),
-                    role: a.role.unwrap_or_default(),
+                    // Reached only on the defensive parent fallback when a
+                    // matched parent carried no inner_hits. chat_message_id
+                    // and role are child-only fields, so there is no
+                    // message-level identifier to navigate to here.
+                    chat_message_id: uuid::Uuid::nil(),
+                    role: String::new(),
                 })),
                 updated_at: a
                     .updated_at_seconds
@@ -476,13 +489,13 @@ impl From<Hit<UnifiedSearchIndex>> for SearchHit {
                     .unwrap_or_default(),
                 goto: Some(SearchGotoContent::CallRecords(SearchGotoCallRecord {
                     channel_id: a.channel_id,
-                    // Flat-shape docs always carry transcript/speaker/sequence;
-                    // the join-shape parent fallback path only arrives here
-                    // when inner_hits was empty, in which case we have no
-                    // segment-level identifier to navigate to.
-                    transcript_id: a.transcript_id.unwrap_or_default(),
-                    speaker_id: a.speaker_id.unwrap_or_default(),
-                    sequence_num: a.sequence_num.unwrap_or_default(),
+                    // Reached only on the defensive parent fallback when a
+                    // matched parent carried no inner_hits. transcript_id,
+                    // speaker_id, and sequence_num are child-only fields, so
+                    // there is no segment-level identifier to navigate to here.
+                    transcript_id: uuid::Uuid::nil(),
+                    speaker_id: String::new(),
+                    sequence_num: 0,
                     started_at: DateTime::from_timestamp(a.started_at_seconds, 0)
                         .unwrap_or_default(),
                     ended_at: a
@@ -621,22 +634,7 @@ pub(crate) async fn search_unified(
 
     tracing::trace!("search request {:?}", search_request);
 
-    // Documents, chats, and call records reads can be redirected to a
-    // side alias via DOCUMENTS_INDEX_NAME / CHATS_INDEX_NAME /
-    // CALL_RECORDS_INDEX_NAME for local end-to-end testing; every other
-    // entity type keeps its default alias.
-    let search_indices: Vec<&str> = args
-        .search_indices
-        .iter()
-        .map(|i| match i {
-            OpenSearchEntityType::Documents => crate::documents_shape::documents_search_alias(),
-            OpenSearchEntityType::Chats => crate::chats_shape::chats_search_alias(),
-            OpenSearchEntityType::CallRecords => {
-                crate::call_records_shape::call_records_search_alias()
-            }
-            other => other.index_name(),
-        })
-        .collect();
+    let search_indices: Vec<&str> = args.search_indices.iter().map(|i| i.index_name()).collect();
 
     let response = async {
         client

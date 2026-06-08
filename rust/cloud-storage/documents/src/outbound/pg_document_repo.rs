@@ -526,8 +526,33 @@ impl DocumentRepo for PgDocumentRepo {
         .await?;
 
         if let Some(ref share_permission) = args.share_permission {
+            let mut document_now_private = false;
+
+            if let Some(is_public) = share_permission.is_public
+                && !is_public
+            {
+                document_now_private = true;
+            }
+
             edit::update_share_permission(&mut transaction, &args.document_id, share_permission)
                 .await?;
+
+            // The share permission changed, if the document became private we need to update
+            // entity_access
+            if document_now_private {
+                let owner = edit::get_document_owner(&mut transaction, &args.document_id).await?;
+
+                // SAFETY: this will not fail
+                let entity_id = macro_uuid::string_to_uuid(&args.document_id).unwrap();
+
+                entity_access_db_utils::remove_non_owner_user_entity_access(
+                    &mut transaction,
+                    &entity_id,
+                    EntityType::Document,
+                    &owner,
+                )
+                .await?;
+            }
         }
 
         transaction.commit().await?;

@@ -28,6 +28,9 @@ port := '3000'
 local:
     cd packages/app && PORT='{{port}}' VITE_LOCAL_SERVERS='{{servers}}' bun run --bun dev
 
+local-sync-playground:
+    cd packages/app && VITE_LOCAL_SERVERS='ALL' VITE_SYNC_SERVICE_HOST='sync-service-playground.macroverse.workers.dev' bun run --bun dev
+
 local-dcs:
     cd packages/app && VITE_LOCAL_SERVERS='cognition-service,cognition-websocket-service' bun run --bun dev
 

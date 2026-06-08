@@ -1,4 +1,4 @@
-import { useCallKitSetup } from '@channel/Call';
+import { NativeCallProvider, useCallKitSetup } from '@channel/Call';
 import { NativeAppUpdateRequiredDialog } from '@core/mobile/NativeAppUpdateRequiredDialog';
 import { isPlatform, isTauri } from '@core/util/platform';
 import { PlatformNotificationProvider } from '@notifications';
@@ -171,11 +171,13 @@ function TauriProvider(props: { children: JSX.Element }) {
 export function MaybeTauriProvider(props: { children: JSX.Element }) {
   if (isTauri()) {
     return (
-      <TauriProvider>
-        <MaybePushNotificationRegistration>
-          {props.children}
-        </MaybePushNotificationRegistration>
-      </TauriProvider>
+      <NativeCallProvider>
+        <TauriProvider>
+          <MaybePushNotificationRegistration>
+            {props.children}
+          </MaybePushNotificationRegistration>
+        </TauriProvider>
+      </NativeCallProvider>
     );
   }
 

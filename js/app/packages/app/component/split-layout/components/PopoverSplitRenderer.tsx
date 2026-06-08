@@ -134,11 +134,7 @@ function PopoverSplitModal(props: {
         bindHotKeyDom(r);
       }}
     >
-      <Panel
-        depth={2}
-        active
-        class="rounded-xl *:max-h-[75vh] bottom-(--virtual-keyboard-height,0)"
-      >
+      <Panel depth={2} active class="rounded-xl *:max-h-[75vh]">
         <SplitPanelContext.Provider value={stubPanelContext}>
           <SoupContextProvider>
             <Show when={props.popover.mount}>

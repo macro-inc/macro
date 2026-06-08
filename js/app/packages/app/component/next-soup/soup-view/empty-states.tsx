@@ -14,7 +14,7 @@ import EmptyStateNoSearchMatchIcon from '@design/empty-state-no-search-match.svg
 import EmptyStateTasksIcon from '@design/empty-state-tasks.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import { EmptyStatePanel, FilteredHiddenBanner } from '@ui';
-import { type Component, Match, Switch } from 'solid-js';
+import { type Component, type JSXElement, Match, Switch } from 'solid-js';
 import { FolderDropZone } from './FolderDropZone';
 import { useSoupView } from './soup-view-context';
 
@@ -24,6 +24,7 @@ const DOCS_BASE = 'https://docs.macro.com';
 type FallbackContent = {
   plural: string;
   graphic?: Component<{ class?: string }>;
+  description?: JSXElement;
   create?: { label: string; blockName: BlockName | BlockAlias };
   documentationUrl?: string;
 };
@@ -32,15 +33,29 @@ const FALLBACK_CONTENT: Partial<Record<ListView, FallbackContent>> = {
   documents: {
     plural: 'documents',
     graphic: EmptyStateDocIcon,
+    description:
+      'Write, collaborate, and share documents right inside Macro. Create notes, specs, or any long-form content and keep it alongside your conversations.',
     create: { label: 'New document', blockName: 'md' },
     documentationUrl: `${DOCS_BASE}/product/docs`,
   },
   channels: {
     plural: 'channels',
+    description:
+      'Channels are shared spaces for team conversations organized by topic, project, or team. Create a channel to start collaborating with your team.',
     create: { label: 'New channel', blockName: 'channel' },
     documentationUrl: `${DOCS_BASE}/product/channels`,
   },
-  calls: { plural: 'calls', documentationUrl: `${DOCS_BASE}/product/calls` },
+  calls: {
+    plural: 'calls',
+    description: (
+      <>
+        See recordings, transcriptions and summaries of your Macro calls.
+        <br />
+        Calls are available to agents.
+      </>
+    ),
+    documentationUrl: `${DOCS_BASE}/product/calls`,
+  },
   search: { plural: 'items' },
 };
 
@@ -83,6 +98,7 @@ export function EmptyState(props: {
               ? `No results for "${soup.searchText()}"`
               : 'No results'
           }
+          description="Search across messages, documents, tasks, and more. Try a different query or broaden your filters."
           documentationUrl={`${DOCS_BASE}/product/search-1`}
         />
       </Match>
@@ -92,6 +108,7 @@ export function EmptyState(props: {
           align="center"
           graphic={EmptyStateNoFilterMatchIcon}
           title="No items matching the filters"
+          description="Try adjusting or clearing your filters to see more results."
         >
           {props.onClearFilters && (
             <FilteredHiddenBanner
@@ -121,13 +138,45 @@ export function EmptyState(props: {
       </Match>
 
       <Match when={props.listView === 'inbox' && emailActive()}>
-        <EmptyStatePanel
-          align="center"
-          graphic={InboxZeroNumber}
-          title="Inbox zero"
-          description="You're all caught up. Important items will appear here as they arrive."
-          documentationUrl={`${DOCS_BASE}/product/inbox`}
-        />
+        {(() => {
+          // Each inbox tab filters to a different slice, so the empty copy
+          // should match: Signal is the important stuff, Noise is explicitly
+          // the low-priority stuff, and All spans everything.
+          const tab = soup.activeTab();
+          const { title, description } =
+            tab === 'noise'
+              ? {
+                  title: 'No noise',
+                  description: (
+                    <>
+                      Low-priority items like newsletters and notifications
+                      collect here.
+                      <br />
+                      Nothing to clear right now.
+                    </>
+                  ),
+                }
+              : tab === 'all'
+                ? {
+                    title: 'Inbox zero',
+                    description:
+                      "You're all caught up. New items will appear here as they arrive.",
+                  }
+                : {
+                    title: 'Inbox zero',
+                    description:
+                      "You're all caught up. Important items will appear here as they arrive.",
+                  };
+          return (
+            <EmptyStatePanel
+              align="center"
+              graphic={InboxZeroNumber}
+              title={title}
+              description={description}
+              documentationUrl={`${DOCS_BASE}/product/inbox`}
+            />
+          );
+        })()}
       </Match>
 
       <Match when={props.listView === 'mail' && emailActive()}>
@@ -163,11 +212,13 @@ export function EmptyState(props: {
           align="center"
           graphic={EmptyStateInboxZeroIcon}
           title="No automations to show"
+          description="Automations run in the background to handle repetitive work for you — like triaging messages, updating tasks, or sending follow-ups."
           primaryAction={{
             label: 'New automation',
             icon: PlusIcon,
             onClick: () => runCreateAction('automation'),
           }}
+          documentationUrl={`${DOCS_BASE}/product/agents`}
         />
       </Match>
 
@@ -179,7 +230,8 @@ export function EmptyState(props: {
         <EmptyStatePanel
           graphic={EmptyStateFolderIcon}
           title="No folders"
-          description="Create a folder or drop files below to get started."
+          description="Folders let you organize conversations, documents, and tasks into projects. Create a folder or drop files below to get started."
+          documentationUrl={`${DOCS_BASE}/product/folders`}
         >
           <FolderDropZone />
         </EmptyStatePanel>
@@ -196,6 +248,7 @@ export function EmptyState(props: {
               align="center"
               graphic={fallback.graphic ?? EmptyStateInboxZeroIcon}
               title={`No ${fallback.plural} to show`}
+              description={fallback.description}
               primaryAction={
                 fallback.create
                   ? {

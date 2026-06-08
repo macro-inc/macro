@@ -307,6 +307,30 @@
           "markdownDescription": "Denies the end_active_call command without any pre-configured scope."
         },
         {
+          "description": "Enables the get_active_call_state command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-get-active-call-state",
+          "markdownDescription": "Enables the get_active_call_state command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the get_active_call_state command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-get-active-call-state",
+          "markdownDescription": "Denies the get_active_call_state command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the get_pending_answered_call command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-get-pending-answered-call",
+          "markdownDescription": "Enables the get_pending_answered_call command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the get_pending_answered_call command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-get-pending-answered-call",
+          "markdownDescription": "Denies the get_pending_answered_call command without any pre-configured scope."
+        },
+        {
           "description": "Enables the get_voip_token command without any pre-configured scope.",
           "type": "string",
           "const": "allow-get-voip-token",
@@ -317,6 +341,150 @@
           "type": "string",
           "const": "deny-get-voip-token",
           "markdownDescription": "Denies the get_voip_token command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the set_call_drawer_channel_title command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-set-call-drawer-channel-title",
+          "markdownDescription": "Enables the set_call_drawer_channel_title command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the set_call_drawer_channel_title command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-set-call-drawer-channel-title",
+          "markdownDescription": "Denies the set_call_drawer_channel_title command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the set_call_drawer_theme command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-set-call-drawer-theme",
+          "markdownDescription": "Enables the set_call_drawer_theme command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the set_call_drawer_theme command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-set-call-drawer-theme",
+          "markdownDescription": "Denies the set_call_drawer_theme command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the set_participant_display_name command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-set-participant-display-name",
+          "markdownDescription": "Enables the set_participant_display_name command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the set_participant_display_name command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-set-participant-display-name",
+          "markdownDescription": "Denies the set_participant_display_name command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the set_video_enabled command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-set-video-enabled",
+          "markdownDescription": "Enables the set_video_enabled command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the set_video_enabled command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-set-video-enabled",
+          "markdownDescription": "Denies the set_video_enabled command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the set_video_overlay_mode command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-set-video-overlay-mode",
+          "markdownDescription": "Enables the set_video_overlay_mode command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the set_video_overlay_mode command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-set-video-overlay-mode",
+          "markdownDescription": "Denies the set_video_overlay_mode command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the start_outgoing_call command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-start-outgoing-call",
+          "markdownDescription": "Enables the start_outgoing_call command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the start_outgoing_call command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-start-outgoing-call",
+          "markdownDescription": "Denies the start_outgoing_call command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the switch_camera command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-switch-camera",
+          "markdownDescription": "Enables the switch_camera command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the switch_camera command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-switch-camera",
+          "markdownDescription": "Denies the switch_camera command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the watch_call_answered command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-watch-call-answered",
+          "markdownDescription": "Enables the watch_call_answered command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the watch_call_answered command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-watch-call-answered",
+          "markdownDescription": "Denies the watch_call_answered command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the watch_call_ended command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-watch-call-ended",
+          "markdownDescription": "Enables the watch_call_ended command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the watch_call_ended command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-watch-call-ended",
+          "markdownDescription": "Denies the watch_call_ended command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the watch_connection_state command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-watch-connection-state",
+          "markdownDescription": "Enables the watch_connection_state command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the watch_connection_state command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-watch-connection-state",
+          "markdownDescription": "Denies the watch_connection_state command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the watch_drawer_opened command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-watch-drawer-opened",
+          "markdownDescription": "Enables the watch_drawer_opened command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the watch_drawer_opened command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-watch-drawer-opened",
+          "markdownDescription": "Denies the watch_drawer_opened command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the watch_participant_identities command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-watch-participant-identities",
+          "markdownDescription": "Enables the watch_participant_identities command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the watch_participant_identities command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-watch-participant-identities",
+          "markdownDescription": "Denies the watch_participant_identities command without any pre-configured scope."
         }
       ]
     }

@@ -31,6 +31,7 @@ destroy_local_stack:
 destroy:
   just destroy_local_stack || true
   docker compose down -v
+  docker volume rm fusionauth_db_data fusionauth_config || true
 
 # Creates the local pulumi stack and updates FusionAuth with components.
 setup_local_stack:

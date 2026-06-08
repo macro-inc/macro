@@ -7,6 +7,7 @@ import { ROUTER_BASE } from '@app/constants/routerBase';
 import { PosthogProvider, usePosthog } from '@app/lib/analytics/posthog';
 import { setHotkeyRoot } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { CallKitSync } from '@channel/Call';
 import { CallProvider } from '@channel/Call/CallContext';
 import { CallStartedNotifier } from '@channel/Call/CallStartedNotifier';
 import { ChatAttachmentsInit } from '@core/component/AI/signal/globalAttachments';
@@ -515,6 +516,7 @@ export function Root() {
                   <MutationUndoProvider>
                     <ChannelsContextProvider>
                       <CallProvider>
+                        <CallKitSync />
                         <CallStartedNotifier />
                         <QuickAccessProvider>
                           <SearchProvider>

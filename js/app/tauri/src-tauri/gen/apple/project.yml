@@ -3,6 +3,9 @@ options:
   bundleIdPrefix: com.macro.app.prod
   deploymentTarget:
     iOS: 14.0
+packages:
+  CallKitPlugin:
+    path: ../../../callkit_plugin/ios
 fileGroups: [../../src]
 configs:
   debug: debug
@@ -36,6 +39,7 @@ targets:
       - path: Externals
         excludes:
           - "**/*.a"
+          - "**/*.framework"
       - path: app_iOS
       - path: assets
         buildPhase: resources
@@ -68,6 +72,10 @@ targets:
         NSPhotoLibraryUsageDescription: "This app needs access to your photo library to upload attachments."
         LSApplicationQueriesSchemes:
           - macro
+        UIBackgroundModes:
+          - audio
+          - picture-in-picture
+          - voip
     entitlements:
       path: app_iOS/app_iOS.entitlements
       properties:
@@ -87,8 +95,11 @@ targets:
     settings:
       base:
         ENABLE_BITCODE: false
+        ENABLE_DEBUG_DYLIB: false
         ARCHS: [arm64]
         VALID_ARCHS: arm64 
+        FRAMEWORK_SEARCH_PATHS[arch=x86_64]: $(inherited) $(PROJECT_DIR)/Externals/x86_64/$(CONFIGURATION)
+        FRAMEWORK_SEARCH_PATHS[arch=arm64]: $(inherited) $(PROJECT_DIR)/Externals/arm64/$(CONFIGURATION)
         LIBRARY_SEARCH_PATHS[arch=x86_64]: $(inherited) $(PROJECT_DIR)/Externals/x86_64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME) $(TOOLCHAIN_DIR)/usr/lib/swift-5.0/$(PLATFORM_NAME)
         LIBRARY_SEARCH_PATHS[arch=arm64]: $(inherited) $(PROJECT_DIR)/Externals/arm64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME) $(TOOLCHAIN_DIR)/usr/lib/swift-5.0/$(PLATFORM_NAME)
         ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES: true
@@ -101,6 +112,8 @@ targets:
         embed: true
       - framework: libapp.a
         embed: false
+      - package: CallKitPlugin
+        product: tauri-plugin-call-kit
       - sdk: CoreGraphics.framework
       - sdk: Metal.framework
       - sdk: MetalKit.framework

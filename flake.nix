@@ -60,11 +60,13 @@
             sqlxFilter = path: _type: builtins.match ".*\\.sqlx/.*\\.json$" path != null;
             pdfiumFilter = path: _type: builtins.match ".*pdfium-lib/.*\\.(so|dylib)$" path != null;
             assetFilter = path: _type: builtins.match ".*\\.(md|html|txt|json|canvas|sql)$" path != null;
+            binFilter = path: _type: builtins.match ".*\\.bin$" path != null;
             srcFilter =
               path: type:
               (sqlxFilter path type)
               || (pdfiumFilter path type)
               || (assetFilter path type)
+              || (binFilter path type)
               || (craneLib.filterCargoSources path type);
             cloudStorageSrc = pkgs.lib.cleanSourceWith {
               src = ./rust/cloud-storage;
@@ -263,6 +265,9 @@
           [
             parallel
             docker-compose
+            curl
+            xz
+            unzip
             zip
             cargo-info
             cargo-udeps
@@ -274,7 +279,7 @@
               case "$1 $2" in
                 "toolchain list") echo "$toolchain (default)" ;;
                 "toolchain add") exit 0 ;;
-                "target list") echo "x86_64-unknown-linux-gnu (installed)"; echo "aarch64-unknown-linux-gnu" ;;
+                "target list") echo "x86_64-unknown-linux-gnu (installed)"; echo "aarch64-unknown-linux-gnu"; echo "wasm32-unknown-unknown (installed)" ;;
                 "target add") exit 0 ;;
                 "component list") echo "rust-src-x86_64-unknown-linux-gnu (installed)"; echo "clippy-x86_64-unknown-linux-gnu (installed)" ;;
                 "component add") exit 0 ;;

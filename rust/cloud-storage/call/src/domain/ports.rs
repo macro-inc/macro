@@ -13,7 +13,8 @@ use item_filters::ast::{LiteralTree, call::CallLiteral};
 use notification::domain::models::apple::VoipPushPayload;
 
 use crate::domain::models::{
-    CustomSpeakerAssignment, EditCallRecordRequest, EditCallTranscriptRequest,
+    CustomSpeakerAssignment, DeletedCallRecordStorageKeys, EditCallRecordRequest,
+    EditCallTranscriptRequest,
 };
 
 use super::models::{
@@ -251,12 +252,12 @@ pub trait CallRepository: Send + Sync + 'static {
 
     /// Delete a row from `call_records` by id. Participants and transcript
     /// segments are removed via `ON DELETE CASCADE`. No-op if no row matches.
-    /// Returns the deleted row's `recording_key` (if any) so the caller can
-    /// clean up the associated recording object in storage.
+    /// Returns the deleted row's storage object keys so the caller can clean
+    /// up the associated recording and preview objects.
     fn delete_call_record(
         &self,
         call_record_id: &Uuid,
-    ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Option<DeletedCallRecordStorageKeys>, Self::Err>> + Send;
 
     /// Patches a call record.
     fn patch_call_record(
@@ -344,6 +345,15 @@ pub trait RecordingStorage: Send + Sync + 'static {
         recording_key: &str,
     ) -> impl Future<Output = anyhow::Result<String>> + Send;
 
+    /// Generate a presigned GET URL for a stored preview image key/path.
+    ///
+    /// The preview key/path is stored as a full S3 object key, for example
+    /// `calls/{room}/{recording_file_name}/PREVIEW.jpg`.
+    fn presign_recording_preview_url(
+        &self,
+        preview_key: &str,
+    ) -> impl Future<Output = anyhow::Result<String>> + Send;
+
     /// Delete the recording object identified by `recording_key`.
     ///
     /// Implementations must apply the same prefix as
@@ -352,6 +362,15 @@ pub trait RecordingStorage: Send + Sync + 'static {
     fn delete_recording(
         &self,
         recording_key: &str,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
+
+    /// Delete the stored preview image object identified by `preview_key`.
+    ///
+    /// The preview key/path is stored as a full S3 object key. This operation
+    /// should be idempotent — succeed if the key no longer exists.
+    fn delete_recording_preview(
+        &self,
+        preview_key: &str,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 }
 
@@ -363,9 +382,23 @@ impl<T: RecordingStorage> RecordingStorage for Option<T> {
         }
     }
 
+    async fn presign_recording_preview_url(&self, preview_key: &str) -> anyhow::Result<String> {
+        match self {
+            Some(inner) => inner.presign_recording_preview_url(preview_key).await,
+            None => anyhow::bail!("recording storage not configured"),
+        }
+    }
+
     async fn delete_recording(&self, recording_key: &str) -> anyhow::Result<()> {
         match self {
             Some(inner) => inner.delete_recording(recording_key).await,
+            None => anyhow::bail!("recording storage not configured"),
+        }
+    }
+
+    async fn delete_recording_preview(&self, preview_key: &str) -> anyhow::Result<()> {
+        match self {
+            Some(inner) => inner.delete_recording_preview(preview_key).await,
             None => anyhow::bail!("recording storage not configured"),
         }
     }

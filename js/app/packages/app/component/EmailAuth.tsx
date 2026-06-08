@@ -115,7 +115,11 @@ function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
       }
 
       await initEmailLink({ linkId }).match(
-        () => {
+        async () => {
+          // Pull the newly-provisioned link into the cache before leaving the
+          // callback so the inbox panel shows it immediately on return rather
+          // than flashing a stale list until its own refetch lands.
+          await query.refetch();
           toast.success('Inbox connected');
           navigateToSuccess();
         },

@@ -9628,6 +9628,10 @@
             },
             "description": "Participants (both active and historic)."
           },
+          "recordingPreviewUrl": {
+            "type": ["string", "null"],
+            "description": "Presigned URL for the call recording preview image, if available."
+          },
           "recordingStartedAt": {
             "type": ["string", "null"],
             "format": "date-time",
@@ -16106,6 +16110,11 @@
             "type": "string",
             "format": "date-time",
             "description": "When the company was last updated."
+          },
+          "viewedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the requesting user last viewed this company, or `None` if\nnever viewed. Mirrors the `viewed_at` other soup entities carry."
           }
         }
       },

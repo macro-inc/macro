@@ -711,31 +711,38 @@ async fn set_active_call_recording_key_updates_matching_call(
     // Set egress_id on the fixture call first.
     repo.set_egress_id(&CALL1, "egress-123").await?;
 
+    let recording_key = "0195cea6-fc16-72f2-93b6-144df711f270/2026-04-10T210832.mp4";
+    let preview_key =
+        "calls/0195cea6-fc16-72f2-93b6-144df711f270/2026-04-10T210832.mp4/PREVIEW.jpg";
+
     // Should update and return true.
     let updated = repo
-        .set_active_call_recording_key(
-            "egress-123",
-            "0195cea6-fc16-72f2-93b6-144df711f270/2026-04-10T210832.mp4",
-        )
+        .set_active_call_recording_key("egress-123", recording_key)
         .await?;
     assert!(updated);
+
+    sqlx::query!(
+        r#"UPDATE calls SET preview_url = $2 WHERE id = $1"#,
+        CALL1,
+        preview_key,
+    )
+    .execute(&pool)
+    .await?;
 
     // Verify the key is on the active call.
     let call = repo.get_call_by_channel_id(&CH1).await?.unwrap();
     assert_eq!(call.egress_id.as_deref(), Some("egress-123"));
 
-    // Now archive and verify recording_key carries forward.
+    // Now archive and verify recording_key and preview key carry forward.
     let record_id = repo.archive_call(&CALL1).await?;
-    let key = sqlx::query_scalar!(
-        r#"SELECT recording_key FROM call_records WHERE id = $1"#,
+    let archived = sqlx::query!(
+        r#"SELECT recording_key, preview_url FROM call_records WHERE id = $1"#,
         record_id,
     )
     .fetch_one(&pool)
     .await?;
-    assert_eq!(
-        key.as_deref(),
-        Some("0195cea6-fc16-72f2-93b6-144df711f270/2026-04-10T210832.mp4")
-    );
+    assert_eq!(archived.recording_key.as_deref(), Some(recording_key));
+    assert_eq!(archived.preview_url.as_deref(), Some(preview_key));
 
     Ok(())
 }

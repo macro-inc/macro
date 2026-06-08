@@ -1,5 +1,6 @@
 use crate::api::search::simple::filter::FilterVariantToSearchArgs;
 
+use crate::api::search::crm_company;
 use crate::api::search::simple::{simple_chat, simple_document, simple_project};
 use crate::api::{
     context::SearchHandlerState,
@@ -10,6 +11,8 @@ use axum::{
     extract::{self, State},
     response::Json,
 };
+use crm::domain::auth::CrmTeamReceipt;
+use entity_access::domain::models::MemberTeamRole;
 use macro_user_id::user_id::MacroUserId;
 use model::{response::ErrorResponse, user::UserContext};
 use models_search::unified::SearchEntityFilters;
@@ -28,6 +31,7 @@ enum SearchSource {
     ChatName,
     ProjectName,
     Content,
+    CrmCompany,
 }
 
 /// Wrapper for SearchHit that tracks its source for cursor regeneration
@@ -84,6 +88,7 @@ use crate::api::search::terms::split_search_terms;
 pub(in crate::api::search) async fn perform_unified_search(
     ctx: &SearchHandlerState,
     user_context: &UserContext,
+    crm_access: Option<&CrmTeamReceipt<MemberTeamRole>>,
     query_params: SearchPaginationParams,
     req: UnifiedSearchRequest,
 ) -> Result<
@@ -130,6 +135,12 @@ pub(in crate::api::search) async fn perform_unified_search(
     let terms: Vec<String> = vec![query];
 
     let match_type = req.match_type;
+
+    // CRM is opt-in: it only runs when the caller resolved a team receipt
+    // (set only when `include_crm` is true and the user has a qualifying
+    // membership). `crm_company_filters` scopes/selects within the team.
+    let crm_company_filters = req.filters.crm_company_filters.clone();
+    let should_include_crm = crm_access.is_some();
 
     let search_filters = SearchEntityFilters::from(req.filters);
     let channel_filters = search_filters.channel_filters;
@@ -197,33 +208,17 @@ pub(in crate::api::search) async fn perform_unified_search(
 
     // Set terms on each index's search args.
     //
-    // Emails and channels both get whitespace-split terms — emails match
-    // each term independently across many fields ANDed inside OpenSearch;
+    // Every content index gets whitespace-split terms. Emails match each
+    // term independently across many fields ANDed inside OpenSearch;
     // channel messages are single-doc-per-message so each token must
-    // appear in the same message via bool.must. Documents and chats get
-    // split terms once their alias points at a join-shape index, where
-    // each term becomes a separate has_child clause ANDed via bool.must.
-    let document_terms = if opensearch_client::documents_shape::alias_uses_join_shape() {
-        split_search_terms(&terms)
-    } else {
-        terms.clone()
-    };
-    let chat_terms = if opensearch_client::chats_shape::alias_uses_join_shape() {
-        split_search_terms(&terms)
-    } else {
-        terms.clone()
-    };
-    let call_record_terms = if opensearch_client::call_records_shape::alias_uses_join_shape() {
-        split_search_terms(&terms)
-    } else {
-        terms.clone()
-    };
-    let channel_terms = split_search_terms(&terms);
-    filter_document_response.terms = document_terms;
-    filter_channel_response.terms = channel_terms;
-    filter_chat_response.terms = chat_terms;
+    // appear in the same message via bool.must. Documents, chats, and
+    // call records are join-shape, where each term becomes a separate
+    // has_child clause ANDed via bool.must.
+    filter_document_response.terms = split_search_terms(&terms);
+    filter_channel_response.terms = split_search_terms(&terms);
+    filter_chat_response.terms = split_search_terms(&terms);
     filter_email_response.terms = email_terms.clone();
-    filter_call_record_response.terms = call_record_terms;
+    filter_call_record_response.terms = split_search_terms(&terms);
 
     // Clone terms for use in name searches
     let name_search_term = terms[0].clone();
@@ -248,11 +243,17 @@ pub(in crate::api::search) async fn perform_unified_search(
         .map(|c| c.content_cursor.clone())
         .unwrap_or_default();
 
+    let crm_cursor = cursor
+        .as_ref()
+        .map(|c| c.crm_company_cursor.clone())
+        .unwrap_or_default();
+
     // Clone cursors for passing to search functions (originals needed for cursor regeneration)
     let document_cursor_for_search = document_cursor.clone();
     let chat_cursor_for_search = chat_cursor.clone();
     let project_cursor_for_search = project_cursor.clone();
     let content_cursor_for_search = content_cursor.clone();
+    let crm_cursor_for_search = crm_cursor.clone();
 
     let unified_search_args = UnifiedSearchArgs {
         user_id: user_id.as_ref().to_string(),
@@ -294,7 +295,7 @@ pub(in crate::api::search) async fn perform_unified_search(
 
     // Call search functions in parallel for included entity types
     // search_names handles Done cursors internally by returning early
-    let (doc_name_results, chat_results, project_results, content_results) = tokio::join!(
+    let (doc_name_results, chat_results, project_results, content_results, crm_results) = tokio::join!(
         async {
             if should_include_documents {
                 match search_on {
@@ -381,6 +382,24 @@ pub(in crate::api::search) async fn perform_unified_search(
                 ctx.opensearch_client.search_unified(args).await
             }
         },
+        async {
+            // CRM companies are name/domain only — no content index — so
+            // they only participate under Name / NameContent.
+            match (should_include_crm, crm_access, search_on) {
+                (true, Some(access), SearchOn::Name | SearchOn::NameContent) => {
+                    crm_company::search_company_names(
+                        ctx,
+                        access,
+                        &crm_company_filters,
+                        name_search_term.clone(),
+                        page_size,
+                        crm_cursor_for_search,
+                    )
+                    .await
+                }
+                _ => Ok((vec![], SearchCursorOption::Done)),
+            }
+        },
     );
 
     // Extract results and next cursors
@@ -388,12 +407,14 @@ pub(in crate::api::search) async fn perform_unified_search(
     let (chat_hits, chat_next_cursor) = chat_results?;
     let (project_hits, project_next_cursor) = project_results?;
     let (content_hits, content_next_cursor) = content_results?;
+    let (crm_hits, crm_next_cursor) = crm_results?;
 
     // Track original counts before combining
     let doc_name_count = doc_hits.len();
     let chat_name_count = chat_hits.len();
     let project_name_count = project_hits.len();
     let content_count = content_hits.len();
+    let crm_count = crm_hits.len();
 
     let final_tagged = {
         let _span = tracing::info_span!(
@@ -422,6 +443,10 @@ pub(in crate::api::search) async fn perform_unified_search(
         combined.extend(content_hits.into_iter().map(|hit| TaggedSearchHit {
             hit,
             source: SearchSource::Content,
+        }));
+        combined.extend(crm_hits.into_iter().map(|hit| TaggedSearchHit {
+            hit,
+            source: SearchSource::CrmCompany,
         }));
 
         tracing::debug!(total_combined = combined.len(), "combined all results");
@@ -469,6 +494,10 @@ pub(in crate::api::search) async fn perform_unified_search(
             .iter()
             .filter(|h| h.source == SearchSource::Content)
             .count();
+        let included_crm = final_tagged
+            .iter()
+            .filter(|h| h.source == SearchSource::CrmCompany)
+            .count();
 
         // Generate new cursors using helper function
         let new_doc_cursor = compute_next_cursor(
@@ -503,11 +532,20 @@ pub(in crate::api::search) async fn perform_unified_search(
             &content_cursor,
         );
 
+        let new_crm_cursor = compute_next_cursor(
+            &crm_next_cursor,
+            included_crm,
+            crm_count,
+            find_last_of_source(&final_tagged, SearchSource::CrmCompany),
+            &crm_cursor,
+        );
+
         // Build next cursor if any source has more results
         let has_more = new_doc_cursor.has_more()
             || new_chat_cursor.has_more()
             || new_project_cursor.has_more()
-            || new_content_cursor.has_more();
+            || new_content_cursor.has_more()
+            || new_crm_cursor.has_more();
 
         if has_more {
             let cursor = SearchCursor {
@@ -515,6 +553,7 @@ pub(in crate::api::search) async fn perform_unified_search(
                 chat_name_cursor: new_chat_cursor,
                 content_cursor: new_content_cursor,
                 project_name_cursor: new_project_cursor,
+                crm_company_cursor: new_crm_cursor,
             };
             cursor.encode()
         } else {
@@ -558,8 +597,9 @@ pub async fn handler(
         "simple_unified_search"
     );
 
+    // CRM opt-in is wired through the unified `/search` endpoint only.
     let (results, _next_cursor) =
-        perform_unified_search(&ctx, &user_context, query_params, req).await?;
+        perform_unified_search(&ctx, &user_context, None, query_params, req).await?;
 
     let results = results.into_iter().map(|a| a.into()).collect();
 

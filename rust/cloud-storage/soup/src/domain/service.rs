@@ -409,7 +409,7 @@ where
         };
 
         let GetCrmCompaniesRequest {
-            team_id,
+            access,
             user_id,
             company_ids,
             hidden,
@@ -421,7 +421,7 @@ where
         Ok(Either::Right(
             self.crm_service
                 .list_companies_for_soup(
-                    &team_id,
+                    &access,
                     user_id.as_ref(),
                     &company_ids,
                     hidden,

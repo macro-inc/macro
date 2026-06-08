@@ -4,9 +4,7 @@ import {
   LoadErrors,
   loadResult,
 } from '@core/block';
-import { createLoroManager } from '@core/collab/manager';
 import { ENABLE_MARKDOWN_LIVE_COLLABORATION } from '@core/constant/featureFlags';
-import { MARKDOWN_LORO_SCHEMA } from '@lexical-core/markdown-loro-schema';
 import { waitForDocumentSyncServiceReady } from '@queries/storage/document-location';
 import { storageServiceClient } from '@service-storage/client';
 import { makeFileFromBlob } from '@service-storage/util/makeFileFromBlob';
@@ -83,25 +81,10 @@ export const definition = defineBlock({
         return LoadErrors.INVALID;
       }
 
-      const syncServiceResult = await createSyncServiceSource(source.id, token);
-
-      const loroManager = createLoroManager(MARKDOWN_LORO_SCHEMA);
-
-      if (syncServiceResult.isErr()) {
-        console.error('Failed to initialize sync');
-        return LoadErrors.INVALID;
-      }
-
-      const { source: syncSource, initialSync } = syncServiceResult.value;
-
-      let result = await loroManager.initializeFromSnapshot(
-        initialSync.snapshot
+      const { source: syncSource, doInitialSync } = createSyncServiceSource(
+        source.id,
+        token
       );
-
-      if (result.isErr()) {
-        console.error('Failed to initialize doc state', result);
-        return LoadErrors.INVALID;
-      }
 
       // HACK: unfortunately, most blocks still rely on a dssFile for things like
       // metadata and fileName. so I'm creating an empty blob file to get around that.
@@ -124,7 +107,7 @@ export const definition = defineBlock({
         dssFile: fileWithoutBlob,
         userAccessLevel,
         syncSource,
-        loroManager,
+        doInitialSync,
         documentMetadata,
       });
     }

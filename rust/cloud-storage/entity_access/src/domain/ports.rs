@@ -4,8 +4,8 @@
 
 use super::models::EntityType;
 use crate::domain::models::{
-    AccessError, AccessLevel, CallChannelInfo, ChannelRoleResult, EntityAccessReceipt,
-    EntityPermission, RequiredPermission, UserTeamInfo,
+    AccessError, AccessLevel, CallChannelInfo, ChannelRoleResult, CrmEntityAccess,
+    EntityAccessReceipt, EntityPermission, RequiredPermission, UserTeamInfo,
 };
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId, user_id::MacroUserIdStr};
 use std::future::Future;
@@ -61,19 +61,23 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> impl Future<Output = Result<bool, AccessError>> + Send;
 
-    /// Get the access level a user has for a CRM company.
+    /// Get the access level a user has for a CRM company, with the company's
+    /// owning `team_id`.
     ///
     /// Access derives from the user's role on the team that owns the company:
     /// `Owner` → [`AccessLevel::Owner`], `Admin` → [`AccessLevel::Edit`],
     /// `Member` → [`AccessLevel::View`]. Hidden companies are invisible to
-    /// plain members (returns `None`) but reachable by admins and owners.
+    /// plain members (returns `None`) but reachable by admins and owners. The
+    /// returned `team_id` is the company's owning team, resolved from the same
+    /// row that grants access.
     fn get_crm_company_access(
         &self,
         company_id: &str,
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
-    ) -> impl Future<Output = Result<Option<AccessLevel>, AccessError>> + Send;
+    ) -> impl Future<Output = Result<Option<CrmEntityAccess>, AccessError>> + Send;
 
-    /// Get the access level a user has for a CRM contact.
+    /// Get the access level a user has for a CRM contact, with the contact's
+    /// owning `team_id` (its parent company's team).
     ///
     /// Access derives from the user's role on the team that owns the contact's
     /// parent company, with the same role-to-level mapping as
@@ -83,7 +87,7 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         &self,
         contact_id: &str,
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
-    ) -> impl Future<Output = Result<Option<AccessLevel>, AccessError>> + Send;
+    ) -> impl Future<Output = Result<Option<CrmEntityAccess>, AccessError>> + Send;
 
     /// Check if a user is a member of the specified channels.
     ///
@@ -211,6 +215,24 @@ pub trait EntityAccessService: Clone + Send + Sync + 'static {
         entity_type: EntityType,
         user_org_id: Option<i64>,
     ) -> impl Future<Output = Result<EntityPermission, AccessError>> + Send;
+
+    /// Resolve a user's permission for a CRM company or contact **together
+    /// with the entity's owning `team_id`** — the team that owns the entity
+    /// and that the user belongs to, resolved from the same ownership lookup
+    /// that grants access. Mint team-scoped CRM receipts off this rather than
+    /// pairing [`Self::get_entity_permission`] with [`Self::get_user_team`],
+    /// so the bundled team can't drift from the authorized entity for a
+    /// multi-team user. Errors `AccessError::Unauthorized` when access fails.
+    ///
+    /// No default impl on purpose: implementors must derive the team from the
+    /// entity's ownership row (not the user's default team), so the invariant
+    /// can't be silently weakened by inheriting a fallback.
+    fn get_crm_entity_permission_with_team(
+        &self,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> impl Future<Output = Result<(EntityPermission, Uuid), AccessError>> + Send;
 
     /// Get all user IDs that have access to a given entity.
     ///

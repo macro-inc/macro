@@ -7,6 +7,7 @@ pub use grouping::{
 
 use call::domain::models::GetCallRecordsRequest;
 use comms::domain::models::GetChannelsRequest;
+use crm::domain::auth::CrmTeamReceipt;
 use crm::domain::companies_repo::{CrmCompanyListSort, CrmCompanySoupCursor};
 use email::domain::models::{GetEmailsRequest, PreviewView};
 use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
@@ -365,11 +366,13 @@ impl SoupRequest<Option<EntityFilterAst>> {
         team_receipt: &Option<EntityAccessReceipt<MemberTeamRole>>,
     ) -> Option<GetCrmCompaniesRequest> {
         let receipt = team_receipt.as_ref()?;
-        let team_id = Uuid::parse_str(&receipt.entity().entity_id)
+        // Re-wrap the verified team receipt as the CRM capability token the
+        // service now requires; a malformed receipt skips the sub-request.
+        let access = CrmTeamReceipt::from_team_receipt(receipt.clone())
             .inspect_err(|e| {
                 tracing::warn!(
                     error=?e,
-                    "team_receipt entity_id is not a valid uuid; skipping crm_company sub-request"
+                    "team_receipt is not a valid CRM team receipt; skipping crm_company sub-request"
                 );
             })
             .ok()?;
@@ -417,7 +420,7 @@ impl SoupRequest<Option<EntityFilterAst>> {
         }
 
         Some(GetCrmCompaniesRequest {
-            team_id,
+            access,
             user_id: self.user.clone(),
             company_ids: extract.ids,
             hidden: extract.hidden,
@@ -497,8 +500,9 @@ impl SoupRequest<Option<EntityFilterAst>> {
 /// Parameters for fetching CRM companies to fold into the soup feed.
 #[derive(Debug)]
 pub struct GetCrmCompaniesRequest {
-    /// Team whose CRM companies to list. Derived from the team receipt.
-    pub team_id: Uuid,
+    /// Capability token for the team whose CRM companies to list. The
+    /// service derives the team id from it.
+    pub access: CrmTeamReceipt<MemberTeamRole>,
     /// Requesting user — used to scope the per-user `UserHistory` join
     /// behind the `Viewed*` sort variants. Always populated; the soup
     /// request always has a user.

@@ -36,7 +36,7 @@ type UseSoupViewHotkeysOptions = {
   previewState: Accessor<boolean>;
   currentView: Accessor<ListView | undefined>;
   activeTab: Accessor<string | undefined>;
-  applyTabPreset: (view: ListView, tabId: string) => void;
+  applyTabPreset: (view: ListView, tabId: string) => boolean;
 };
 
 export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {

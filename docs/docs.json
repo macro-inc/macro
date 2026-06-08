@@ -28,7 +28,9 @@
             "group": "Getting Started",
             "pages": [
               "index",
+              "permissions",
               "keyboard-shortcuts",
+              "faq",
               {
                 "group": "AI",
                 "pages": [
@@ -63,7 +65,7 @@
             "group": "Sidebar",
             "pages": [
               "product/inbox",
-              "product/search-1",
+              "product/search",
               "product/agents",
               "product/email",
               "product/docs",
@@ -86,10 +88,6 @@
         ]
       }
     ]
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
   },
   "navbar": {
     "primary": {

@@ -3,21 +3,18 @@ use axum::{
     extract::{Path, State},
 };
 use chrono::{DateTime, Utc};
-use entity_access::{
-    domain::{
-        models::{AccessLevel, ViewAccessLevel},
-        ports::EntityAccessService,
-    },
-    inbound::axum_extractors::CrmCompanyAccessLevelExtractor,
-};
+use entity_access::domain::{models::ViewAccessLevel, ports::EntityAccessService};
 use model_error_response::ErrorResponse;
 use serde::Serialize;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::domain::{
-    model::{CrmContact, CrmError},
-    service::CrmService,
+use crate::{
+    domain::{
+        model::{CrmContact, CrmError},
+        service::CrmService,
+    },
+    inbound::axum_extractors::CrmCompanyAccessLevelExtractor,
 };
 
 use super::CrmRouterState;
@@ -90,14 +87,9 @@ pub async fn handler<C: CrmService, Eas: EntityAccessService>(
     State(state): State<CrmRouterState<C, Eas>>,
     Path(company_id): Path<Uuid>,
 ) -> Result<Json<Vec<CrmContactResponse>>, CrmError> {
-    let include_hidden = access
-        .entity_access_receipt
-        .entity_permission()
-        .allows_access_level(AccessLevel::Edit);
-
     let contacts = state
         .service
-        .list_contacts_for_company(&access.team_id, &company_id, include_hidden)
+        .list_contacts_for_company(&access.receipt)
         .await?;
 
     Ok(Json(contacts.into_iter().map(Into::into).collect()))

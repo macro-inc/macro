@@ -45,7 +45,7 @@ inputs:
     required: false
     default: ''
   lambda-artifacts:
-    description: 'Optional GitHub artifact containing built Lambda bootstrap.zip files under target/lambda'
+    description: 'Optional GitHub artifact containing built Lambda artifacts under target/lambda'
     required: false
     default: ''
   cloud-storage-service-name:

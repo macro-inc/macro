@@ -1,11 +1,23 @@
-import type { EntityDragData, EntityDragEvent } from '@entity';
+import type { EntityData, EntityDragData, EntityDragEvent } from '@entity';
 import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
 import { type Accessor, createMemo } from 'solid-js';
-import type { InputAttachmentTracker } from '../Input';
+
+export type EntityDropCoordinates = {
+  clientX: number;
+  clientY: number;
+};
 
 type CreateEntityDropZoneOptions = {
   droppableId: string;
-  tracker: InputAttachmentTracker;
+  /** Called when a soup entity is dropped onto this zone. */
+  onDropEntity: (
+    entity: EntityData,
+    coordinates?: EntityDropCoordinates
+  ) => void;
+  /** Called while a soup entity is dragged over this zone. */
+  onDragEntityMove?: (coordinates: EntityDropCoordinates) => void;
+  /** Called when the active entity drag leaves this zone or ends. */
+  onDragEntityEnd?: () => void;
 };
 
 type EntityDropZone = {
@@ -18,10 +30,23 @@ export function createEntityDropZone(
 ): EntityDropZone {
   const droppable = createDroppable(options.droppableId);
 
-  const [state, { onDragEnd }] = useDragDropContext() ?? [
+  const [state, { onDragEnd, onDragMove }] = useDragDropContext() ?? [
     undefined,
-    { onDragEnd: () => {} },
+    { onDragEnd: () => {}, onDragMove: () => {} },
   ];
+
+  const currentCoordinates = (): EntityDropCoordinates | undefined => {
+    const coordinates = state?.active.sensor?.coordinates.current;
+    if (!coordinates) return undefined;
+    return {
+      clientX: coordinates.x,
+      clientY: coordinates.y,
+    };
+  };
+
+  const isOverThisDropZone = () =>
+    droppable.isActiveDroppable ||
+    state?.active.droppable?.id === options.droppableId;
 
   const entityDragData = createMemo(() => {
     const draggable = state?.active.draggable;
@@ -40,20 +65,27 @@ export function createEntityDropZone(
   });
 
   onDragEnd((event: EntityDragEvent) => {
-    if (!event.droppable) return;
-    if (event.droppable.id !== options.droppableId) return;
-
     const data = event.draggable?.data;
     if (!data || data.dragType !== 'entity') return;
 
-    const fileType = 'fileType' in data ? data.fileType : undefined;
+    options.onDragEntityEnd?.();
+    if (!event.droppable) return;
+    if (event.droppable.id !== options.droppableId) return;
 
-    options.tracker.addAttachment({
-      id: data.id,
-      name: data.name,
-      kind: 'document',
-      iconType: fileType ?? data.type,
-    });
+    const coordinates = currentCoordinates();
+    options.onDropEntity(data, coordinates);
+  });
+
+  onDragMove((event: EntityDragEvent) => {
+    const data = event.draggable?.data;
+    if (!data || data.dragType !== 'entity' || !isOverThisDropZone()) {
+      options.onDragEntityEnd?.();
+      return;
+    }
+
+    const coordinates = currentCoordinates();
+    if (!coordinates) return;
+    options.onDragEntityMove?.(coordinates);
   });
 
   return { droppable, isDraggingOver };

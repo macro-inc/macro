@@ -9,7 +9,9 @@ use uuid::Uuid;
 use crate::domain::models::{CallError, CallWebhookEvent, EgressS3Config, VoipPushPayloadRequest};
 use crate::domain::ports::CallRtcClient;
 
-use super::{exclude_voip_recipients, extract_recording_key};
+use super::{
+    derive_preview_key_from_recording_key, exclude_voip_recipients, extract_recording_key,
+};
 
 #[cfg(feature = "outbound")]
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
@@ -215,6 +217,27 @@ fn extract_key_fallback_when_no_calls_prefix() {
 fn extract_key_from_bare_calls_path() {
     let url = "calls/abc-123/recording.mp4";
     assert_eq!(extract_recording_key(url), "abc-123/recording.mp4");
+}
+
+#[test]
+fn derive_preview_key_from_recording_key_uses_recording_file_path() {
+    assert_eq!(
+        derive_preview_key_from_recording_key("abc-123/recording.mp4").as_deref(),
+        Some("calls/abc-123/recording.mp4/PREVIEW.jpg")
+    );
+}
+
+#[test]
+fn derive_preview_key_from_recording_key_accepts_prefixed_recording_key() {
+    assert_eq!(
+        derive_preview_key_from_recording_key("calls/abc-123/recording.mp4").as_deref(),
+        Some("calls/abc-123/recording.mp4/PREVIEW.jpg")
+    );
+}
+
+#[test]
+fn derive_preview_key_from_recording_key_returns_none_without_parent() {
+    assert!(derive_preview_key_from_recording_key("recording.mp4").is_none());
 }
 
 #[test]

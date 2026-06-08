@@ -1,5 +1,6 @@
 import type { EntityIconSelector } from '@core/component/EntityIcon';
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
+import type { EntityData } from '@entity';
 import type { PersistenceKey } from '@queries/persistence';
 import type { InputAttachmentTracker as Tracker } from './attachment-tracker';
 
@@ -48,6 +49,11 @@ export type InputSnapshot = {
   attachments: InputAttachmentData[];
 };
 
+export type EntityMentionInsertCoordinates = {
+  clientX: number;
+  clientY: number;
+};
+
 export type InputCallbacks = {
   onChange?: (snapshot: InputSnapshot) => void | Promise<void>;
   onSend?: (snapshot: InputSnapshot) => void | Promise<void>;
@@ -74,6 +80,22 @@ export type InputHandle = {
   focus: () => void;
   attachFiles: (files: File[]) => Promise<void>;
   restoreSnapshot: (snapshot: InputSnapshot) => void;
+  /**
+   * Inserts a mention for a dragged soup entity into the editor. Only provided
+   * by inputs that support entity drag-and-drop (e.g. channel inputs).
+   */
+  insertEntityMention?: (
+    entity: EntityData,
+    coordinates?: EntityMentionInsertCoordinates
+  ) => void;
+  /**
+   * Updates the insertion preview for a dragged soup entity. Coordinates are
+   * client-space pointer coordinates from the drag sensor.
+   */
+  previewEntityMentionInsertion?: (
+    coordinates: EntityMentionInsertCoordinates
+  ) => void;
+  clearEntityMentionInsertionPreview?: () => void;
 };
 
 export type InputAttachmentTracker = Tracker;

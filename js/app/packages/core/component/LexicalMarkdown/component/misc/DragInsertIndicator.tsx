@@ -1,3 +1,4 @@
+import type { LexicalEditor } from 'lexical';
 import { Show, useContext } from 'solid-js';
 import type { Store } from 'solid-js/store';
 import { Portal } from 'solid-js/web';
@@ -7,9 +8,10 @@ import type { DragInsertState } from '../../plugins';
 export function DragInsertIndicator(props: {
   state: Store<DragInsertState>;
   active: boolean;
+  editor?: LexicalEditor;
 }) {
   const lexicalWrapper = useContext(LexicalWrapperContext);
-  const editor = () => lexicalWrapper?.editor;
+  const editor = () => props.editor ?? lexicalWrapper?.editor;
 
   const elementRect = () => {
     const key = props.state.nodeKey;

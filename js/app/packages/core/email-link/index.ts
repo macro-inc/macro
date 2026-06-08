@@ -117,20 +117,6 @@ function disconnectEmail(): ResultAsync<void, 'failed-to-disconnect'> {
 }
 
 /**
- * Removes a linked inbox. For an owned inbox the backend cascades the full
- * teardown; for a delegated inbox it only drops the delegation edge.
- *
- * @returns ok if the inbox was removed, err if it failed
- */
-function removeInbox(linkId: string): ResultAsync<void, 'failed-to-remove'> {
-  return ResultAsync.fromSafePromise(
-    emailClient.deleteLink({ linkId })
-  ).andThen((response) =>
-    response.isErr() ? err('failed-to-remove') : okAsync(void 0)
-  );
-}
-
-/**
  * Enqueues a fresh backfill for a linked inbox. Idempotent on the backend: a
  * no-op when a backfill is already in progress.
  *
@@ -197,7 +183,6 @@ export function useEmailLinks() {
         .map(startEmailPolling)
         .andTee(invalidations),
     disconnect: () => disconnectEmail().andTee(invalidations),
-    removeInbox: (linkId: string) => removeInbox(linkId).andTee(invalidations),
     resyncInbox: (linkId: string) =>
       resyncInbox(linkId).andTee(() => invalidateEmailLinks()),
     invalidate: () => invalidateEmailLinks(),
