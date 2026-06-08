@@ -332,3 +332,48 @@ fn from_ref_narrows_tagged_marker_field() {
     let narrowed = requires_narrowable(&config);
     assert_eq!(&*narrowed, "secret-value");
 }
+
+macro_env_var::env_var! {
+    #[derive(Debug, Clone)]
+    struct AllConfigDatabaseUrl;
+}
+
+macro_env_var::env_var! {
+    #[derive(Debug, Clone)]
+    struct AllConfigRedisUri;
+}
+
+// `#[from_ref_all]` opts every field into a FromRef impl without per-field tags. Requires every
+// field to be a distinct marker type.
+#[derive(MacroConfig)]
+#[from_ref_all]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+struct AllNarrowConfig {
+    database_url: AllConfigDatabaseUrl,
+    redis_uri: AllConfigRedisUri,
+}
+
+fn requires_both<E>(env: &E) -> (AllConfigDatabaseUrl, AllConfigRedisUri)
+where
+    AllConfigDatabaseUrl: FromRef<E>,
+    AllConfigRedisUri: FromRef<E>,
+{
+    (
+        AllConfigDatabaseUrl::from_ref(env),
+        AllConfigRedisUri::from_ref(env),
+    )
+}
+
+#[test]
+fn from_ref_all_narrows_every_field() {
+    let _lock = ENV_LOCK.lock().expect("env lock poisoned");
+    let env = EnvGuard::new(&["APP_SECRETS_JSON", "DATABASE_URL", "REDIS_URI"]);
+    env.set("DATABASE_URL", "postgres://db");
+    env.set("REDIS_URI", "redis://cache");
+
+    let config = ConfigLoader::load::<AllNarrowConfig>().expect("config should load");
+
+    let (db, redis) = requires_both(&config);
+    assert_eq!(&*db, "postgres://db");
+    assert_eq!(&*redis, "redis://cache");
+}
