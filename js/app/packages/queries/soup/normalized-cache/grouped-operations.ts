@@ -1,5 +1,5 @@
 import type { SoupApiItem } from '@service-storage/generated/schemas';
-import type { InfiniteData, QueryKey } from '@tanstack/solid-query';
+import type { InfiniteData } from '@tanstack/solid-query';
 
 import { queryClient } from '../../client';
 import {
@@ -22,42 +22,38 @@ type GroupedGroupPage = {
 
 type GroupedGroupInfiniteData = InfiniteData<GroupedGroupPage, unknown>;
 
-/** Returns the per-query soup item filter stored in TanStack query metadata. */
-export function getItemFilter(queryKey: QueryKey) {
-  const itemFilter = queryClient.getQueryCache().find({ queryKey })
-    ?.meta?.itemFilter;
+type SoupQueryMeta = {
+  groupBy?: GroupByField;
+  groupKey?: string;
+  itemFilter?: SoupApiItemFilter;
+};
 
-  return typeof itemFilter === 'function'
-    ? (itemFilter as SoupApiItemFilter)
-    : undefined;
-}
+export function getSoupQueryMeta(meta: unknown): SoupQueryMeta {
+  if (!meta || typeof meta !== 'object') return {};
 
-/** Returns the grouping field stored in TanStack query metadata. */
-export function getGroupByForQuery(queryKey: QueryKey) {
-  const groupBy = queryClient.getQueryCache().find({ queryKey })?.meta?.groupBy;
+  const raw = meta as Record<string, unknown>;
+  const soupMeta: SoupQueryMeta = {};
 
-  return isGroupByField(groupBy) ? groupBy : undefined;
-}
+  if (isGroupByField(raw.groupBy)) soupMeta.groupBy = raw.groupBy;
+  if (typeof raw.groupKey === 'string') soupMeta.groupKey = raw.groupKey;
+  if (typeof raw.itemFilter === 'function') {
+    soupMeta.itemFilter = raw.itemFilter as SoupApiItemFilter;
+  }
 
-/** Returns the expanded group key stored in TanStack query metadata. */
-function getGroupKeyForQuery(queryKey: QueryKey) {
-  const groupKey = queryClient.getQueryCache().find({ queryKey })
-    ?.meta?.groupKey;
-
-  return typeof groupKey === 'string' ? groupKey : undefined;
+  return soupMeta;
 }
 
 function isGroupByField(value: unknown): value is GroupByField {
   if (!value || typeof value !== 'object') return false;
 
-  const groupBy = value as Partial<GroupByField>;
-  if (!GROUP_BY_TYPES.includes(groupBy.type as GroupByField['type'])) {
-    return false;
-  }
+  const groupBy = value as Record<string, unknown>;
+  const type = groupBy.type;
+  if (typeof type !== 'string') return false;
+
+  if (!GROUP_BY_TYPES.some((groupByType) => groupByType === type)) return false;
 
   return (
-    groupBy.type !== 'property' ||
-    typeof groupBy.propertyDefinitionId === 'string'
+    type !== 'property' || typeof groupBy.propertyDefinitionId === 'string'
   );
 }
 
@@ -114,20 +110,22 @@ function removeId(group: GroupMeta, entityId: string): GroupMeta {
  * unchanged so callers can rely on later invalidation/refetch behavior.
  */
 export function syncGroupedParents(entityId: string, entity: SoupApiItem) {
-  const caches = queryClient.getQueriesData<InfiniteData<unknown, unknown>>({
+  const queries = queryClient.getQueryCache().findAll({
     queryKey: soupKeys.astItems._def,
   });
 
-  for (const [key, prev] of caches) {
+  for (const query of queries) {
+    const prev = query.state.data as InfiniteData<unknown, unknown> | undefined;
+
     if (!prev || !Array.isArray(prev.pages) || prev.pages.length === 0) {
       continue;
     }
 
-    const groupBy = getGroupByForQuery(key);
+    const meta = getSoupQueryMeta(query.meta);
 
-    if (!groupBy) continue;
+    if (!meta.groupBy) continue;
 
-    const nextGroupKeys = computeGroupKeysForItem(entity, groupBy);
+    const nextGroupKeys = computeGroupKeysForItem(entity, meta.groupBy);
 
     if (nextGroupKeys === undefined) {
       continue;
@@ -144,7 +142,7 @@ export function syncGroupedParents(entityId: string, entity: SoupApiItem) {
         entityId,
         nextGroupKeys,
         entity,
-        groupBy
+        meta.groupBy
       );
 
       if (!next) {
@@ -159,7 +157,7 @@ export function syncGroupedParents(entityId: string, entity: SoupApiItem) {
 
     if (needsInvalidation || !changed) continue;
 
-    queryClient.setQueryData(key, { ...prev, pages });
+    query.setData({ ...prev, pages }, { manual: true });
   }
 }
 
@@ -169,23 +167,27 @@ export function syncGroupedParents(entityId: string, entity: SoupApiItem) {
  * longer belongs to or no longer passes the query's item filter for.
  */
 export function syncGroupQueries(entityId: string, entity: SoupApiItem) {
-  const caches = queryClient.getQueriesData<GroupedGroupInfiniteData>({
+  const queries = queryClient.getQueryCache().findAll({
     queryKey: soupKeys.groupedGroup._def,
   });
 
-  for (const [key, prev] of caches) {
+  for (const query of queries) {
+    const prev = query.state.data as GroupedGroupInfiniteData | undefined;
     if (!prev?.pages?.length) continue;
 
-    const groupBy = getGroupByForQuery(key);
-    const groupKey = getGroupKeyForQuery(key);
-    if (!groupBy || groupKey == null) continue;
+    const meta = getSoupQueryMeta(query.meta);
+    if (!meta.groupBy || meta.groupKey == null) continue;
 
-    const nextGroupKeys = computeGroupKeysForItem(entity, groupBy);
+    const nextGroupKeys = computeGroupKeysForItem(entity, meta.groupBy);
     if (nextGroupKeys === undefined) continue;
 
-    const filter = getItemFilter(key);
-    const shouldHave =
-      nextGroupKeys.includes(groupKey) && (filter ? filter(entity) : true);
+    const filter = meta.itemFilter;
+    let shouldHave = nextGroupKeys.includes(meta.groupKey);
+
+    if (filter && !filter(entity)) {
+      shouldHave = false;
+    }
+
     let changed = false;
 
     const pages = prev.pages.map((page, index) => {
@@ -214,7 +216,7 @@ export function syncGroupQueries(entityId: string, entity: SoupApiItem) {
     });
 
     if (changed) {
-      queryClient.setQueryData(key, { ...prev, pages });
+      query.setData({ ...prev, pages }, { manual: true });
     }
   }
 }
@@ -258,37 +260,40 @@ export function insertGroupedPage(
 
 /** Inserts an item into the first page of any expanded group query it matches. */
 export function insertGroupQueries(item: SoupApiItem, itemId: string) {
-  const caches = queryClient.getQueriesData<GroupedGroupInfiniteData>({
+  const queries = queryClient.getQueryCache().findAll({
     queryKey: soupKeys.groupedGroup._def,
   });
 
-  for (const [key, prev] of caches) {
+  for (const query of queries) {
+    const prev = query.state.data as GroupedGroupInfiniteData | undefined;
     if (!prev?.pages?.length) continue;
 
-    const filter = getItemFilter(key);
+    const meta = getSoupQueryMeta(query.meta);
+    const filter = meta.itemFilter;
     if (filter && !filter(item)) continue;
 
-    const groupBy = getGroupByForQuery(key);
-    const groupKey = getGroupKeyForQuery(key);
-    if (!groupBy || groupKey == null) continue;
+    if (!meta.groupBy || meta.groupKey == null) continue;
 
-    const targetKeys = computeGroupKeysForItem(item, groupBy);
-    if (!targetKeys?.includes(groupKey)) continue;
+    const targetKeys = computeGroupKeysForItem(item, meta.groupBy);
+    if (!targetKeys?.includes(meta.groupKey)) continue;
 
     const firstPage = prev.pages[0];
     if (firstPage.group.itemIds.includes(itemId)) continue;
 
-    queryClient.setQueryData<GroupedGroupInfiniteData>(key, {
-      ...prev,
-      pages: [
-        {
-          ...firstPage,
-          items: { ...firstPage.items, [itemId]: item },
-          group: prependId(firstPage.group, itemId),
-        },
-        ...prev.pages.slice(1),
-      ],
-    });
+    query.setData(
+      {
+        ...prev,
+        pages: [
+          {
+            ...firstPage,
+            items: { ...firstPage.items, [itemId]: item },
+            group: prependId(firstPage.group, itemId),
+          },
+          ...prev.pages.slice(1),
+        ],
+      },
+      { manual: true }
+    );
   }
 }
 
@@ -332,44 +337,48 @@ export function removeGroupedPage(
 
 /** Removes items from all expanded group queries while preserving unaffected pages. */
 export function removeGroupQueries(entityIds: Set<string>) {
-  queryClient.setQueriesData<GroupedGroupInfiniteData>(
-    { queryKey: soupKeys.groupedGroup._def },
-    (prev) => {
-      if (!prev?.pages?.length) return prev;
+  const queries = queryClient.getQueryCache().findAll({
+    queryKey: soupKeys.groupedGroup._def,
+  });
 
-      let changed = false;
-      const pages = prev.pages.map((page) => {
-        const itemIds = page.group.itemIds.filter((id) => !entityIds.has(id));
-        const removed = page.group.itemIds.length - itemIds.length;
-        let items = page.items;
+  for (const query of queries) {
+    const prev = query.state.data as GroupedGroupInfiniteData | undefined;
+    if (!prev?.pages?.length) continue;
 
-        for (const id of entityIds) {
-          if (id in items) {
-            if (items === page.items) items = { ...page.items };
-            delete items[id];
-            changed = true;
-          }
+    let changed = false;
+    const pages = prev.pages.map((page) => {
+      const itemIds = page.group.itemIds.filter((id) => !entityIds.has(id));
+      const removed = page.group.itemIds.length - itemIds.length;
+      let items = page.items;
+
+      for (const id of entityIds) {
+        if (id in items) {
+          if (items === page.items) items = { ...page.items };
+          delete items[id];
+          changed = true;
         }
+      }
 
-        if (removed === 0) {
-          return items === page.items ? page : { ...page, items };
-        }
+      if (removed === 0) {
+        return items === page.items ? page : { ...page, items };
+      }
 
-        changed = true;
-        return {
-          ...page,
-          items,
-          group: {
-            ...page.group,
-            itemIds,
-            totalCount: Math.max(0, page.group.totalCount - removed),
-          },
-        };
-      });
+      changed = true;
+      return {
+        ...page,
+        items,
+        group: {
+          ...page.group,
+          itemIds,
+          totalCount: Math.max(0, page.group.totalCount - removed),
+        },
+      };
+    });
 
-      return changed ? { ...prev, pages } : prev;
+    if (changed) {
+      query.setData({ ...prev, pages }, { manual: true });
     }
-  );
+  }
 }
 
 /** Reconcile group membership for an existing entity. Returns `undefined`

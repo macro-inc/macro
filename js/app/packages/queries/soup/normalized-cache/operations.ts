@@ -17,8 +17,7 @@ import { queryClient } from '../../client';
 import type { SoupApiItemFilter, SoupAstItemsPage } from '../items';
 import { soupKeys } from '../keys';
 import {
-  getGroupByForQuery,
-  getItemFilter,
+  getSoupQueryMeta,
   insertGroupedPage,
   insertGroupQueries,
   removeGroupedPage,
@@ -175,7 +174,10 @@ export function insertSoupEntity(item: SoupApiItem): SoupTransaction {
   for (const [key, prev] of parents) {
     if (!prev?.pages?.length) continue;
 
-    const filter = getItemFilter(key);
+    const meta = getSoupQueryMeta(
+      queryClient.getQueryCache().find({ queryKey: key })?.meta
+    );
+    const filter = meta.itemFilter;
     if (filter && !filter(item)) continue;
 
     const firstPage = prev.pages[0];
@@ -195,7 +197,7 @@ export function insertSoupEntity(item: SoupApiItem): SoupTransaction {
       firstPage,
       item,
       getSoupItemId(item),
-      getGroupByForQuery(key)
+      meta.groupBy
     );
 
     if (!nextPage) {
