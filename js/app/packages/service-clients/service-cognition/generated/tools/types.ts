@@ -218,6 +218,9 @@ export type UnifiedSearchResponseItem =
     })
   | (CallRecordSearchResponseItemWithMetadata & {
       type: 'call';
+    })
+  | (CrmCompanySearchResponseItem & {
+      type: 'company';
     });
 /**
  * Response from the SendEmail tool.
@@ -797,6 +800,69 @@ export interface CreateDocumentResponse {
    * The id of the document
    */
   documentId: string;
+}
+/**
+ * A CRM domain attached to a company in search results.
+ */
+export interface CrmCompanySearchDomain {
+  /**
+   * The id of the company the domain belongs to.
+   */
+  companyId: string;
+  /**
+   * When the domain record was created.
+   */
+  createdAt: string;
+  /**
+   * The domain (lowercased, e.g. "acme.com").
+   */
+  domain: string;
+  /**
+   * The id of the domain record.
+   */
+  id: string;
+}
+/**
+ * A CRM company match in unified search results. Carries the display
+ * metadata resolved from the primary domain plus the highlighted name.
+ */
+export interface CrmCompanySearchResponseItem {
+  /**
+   * When the company was created.
+   */
+  createdAt: string;
+  /**
+   * Display description from the primary domain's directory entry.
+   */
+  description?: string | null;
+  /**
+   * Domains associated with this company, primary first.
+   */
+  domains: CrmCompanySearchDomain[];
+  /**
+   * Whether the company is hidden from CRM listings.
+   */
+  hidden: boolean;
+  /**
+   * The id of the company.
+   */
+  id: string;
+  /**
+   * Display name from the primary domain's directory entry.
+   */
+  name?: string | null;
+  /**
+   * `name` with matched spans wrapped in `<macro_em>…</macro_em>`.
+   */
+  nameHighlighted?: string | null;
+  /**
+   * The id of the team that owns this company record.
+   */
+  teamId: string;
+  /**
+   * When the company was last updated (the sort key).
+   */
+  updatedAt: string;
 }
 /**
  * API-visible content lifecycle and location metadata.
