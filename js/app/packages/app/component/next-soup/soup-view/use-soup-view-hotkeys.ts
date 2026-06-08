@@ -25,7 +25,11 @@ import { openSingleStackNotification } from '@notifications';
 import { type Accessor, onCleanup } from 'solid-js';
 import type { VirtualizerHandle } from 'virtua/solid';
 import type { SoupState } from '../create-soup-state';
-import { type TabbedListView, VIEW_TAB_LISTS } from './soup-view-tabs';
+import {
+  type ApplyTabPreset,
+  type TabbedListView,
+  VIEW_TAB_LISTS,
+} from './soup-view-tabs';
 
 type UseSoupViewHotkeysOptions = {
   splitId: string;
@@ -36,7 +40,7 @@ type UseSoupViewHotkeysOptions = {
   previewState: Accessor<boolean>;
   currentView: Accessor<ListView | undefined>;
   activeTab: Accessor<string | undefined>;
-  applyTabPreset: (view: ListView, tabId: string) => void;
+  applyTabPreset: ApplyTabPreset;
 };
 
 export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
