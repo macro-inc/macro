@@ -277,7 +277,7 @@ function GithubPullRequestChecksPopover(props: {
   });
 
   return (
-    <div class="flex flex-col gap-0.5 text-left">
+    <div class="w-full flex flex-col gap-0.5 text-left">
       <div class="flex items-start gap-2 py-2 pl-2.5 border-b border-b-edge">
         <CheckStateIcon
           state={checkState(props.entity)}
