@@ -7,7 +7,6 @@
 import type {
   AppleLoginRequest,
   CreateAccountMergeRequest,
-  CreateCheckoutSessionRequest,
   CreateCheckoutSessionV2Request,
   CreateInProgressLinkResponse,
   CreatePortalSessionRequest,
@@ -25,6 +24,7 @@ import type {
   GetUserInfo,
   GetUserLinkExistsParams,
   GithubLinkStatusResponse,
+  GmailLinkStatusResponse,
   InitGithubLinkParams,
   InitGithubLinkResponse,
   InitGmailLinkParams,
@@ -35,7 +35,6 @@ import type {
   PasswordlessCallbackParams,
   PasswordlessRequest,
   PasswordRequest,
-  PatchSubscriptionTierRequest,
   PatchTeamCrmSettingsRequest,
   PatchTeamCrmSettingsResponse,
   PatchTeamRequest,
@@ -871,6 +870,75 @@ export const initGmailLink = async (
     status: res.status,
     headers: res.headers,
   } as initGmailLinkResponse;
+};
+
+/**
+ * @summary Checks whether the authenticated user's gmail link is valid.
+ */
+export type checkGmailLinkStatusResponse200 = {
+  data: GmailLinkStatusResponse;
+  status: 200;
+};
+
+export type checkGmailLinkStatusResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type checkGmailLinkStatusResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type checkGmailLinkStatusResponse428 = {
+  data: ErrorResponse;
+  status: 428;
+};
+
+export type checkGmailLinkStatusResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type checkGmailLinkStatusResponseSuccess =
+  checkGmailLinkStatusResponse200 & {
+    headers: Headers;
+  };
+export type checkGmailLinkStatusResponseError = (
+  | checkGmailLinkStatusResponse401
+  | checkGmailLinkStatusResponse404
+  | checkGmailLinkStatusResponse428
+  | checkGmailLinkStatusResponse500
+) & {
+  headers: Headers;
+};
+
+export type checkGmailLinkStatusResponse =
+  | checkGmailLinkStatusResponseSuccess
+  | checkGmailLinkStatusResponseError;
+
+export const getCheckGmailLinkStatusUrl = () => {
+  return `/link/gmail/status`;
+};
+
+export const checkGmailLinkStatus = async (
+  options?: RequestInit
+): Promise<checkGmailLinkStatusResponse> => {
+  const res = await fetch(getCheckGmailLinkStatusUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: checkGmailLinkStatusResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as checkGmailLinkStatusResponse;
 };
 
 /**
@@ -3671,78 +3739,6 @@ export const getUserQuota = async (
 };
 
 /**
- * @summary **LEGACY DO NOT USE** Creates a Stripe checkout session for the user to subscribe.
- */
-export type createCheckoutSessionResponse200 = {
-  data: StripeSessionResponse;
-  status: 200;
-};
-
-export type createCheckoutSessionResponse400 = {
-  data: ErrorResponse;
-  status: 400;
-};
-
-export type createCheckoutSessionResponse404 = {
-  data: ErrorResponse;
-  status: 404;
-};
-
-export type createCheckoutSessionResponse409 = {
-  data: ErrorResponse;
-  status: 409;
-};
-
-export type createCheckoutSessionResponse500 = {
-  data: ErrorResponse;
-  status: 500;
-};
-
-export type createCheckoutSessionResponseSuccess =
-  createCheckoutSessionResponse200 & {
-    headers: Headers;
-  };
-export type createCheckoutSessionResponseError = (
-  | createCheckoutSessionResponse400
-  | createCheckoutSessionResponse404
-  | createCheckoutSessionResponse409
-  | createCheckoutSessionResponse500
-) & {
-  headers: Headers;
-};
-
-export type createCheckoutSessionResponse =
-  | createCheckoutSessionResponseSuccess
-  | createCheckoutSessionResponseError;
-
-export const getCreateCheckoutSessionUrl = () => {
-  return `/user/stripe/checkout`;
-};
-
-export const createCheckoutSession = async (
-  createCheckoutSessionRequest: CreateCheckoutSessionRequest,
-  options?: RequestInit
-): Promise<createCheckoutSessionResponse> => {
-  const res = await fetch(getCreateCheckoutSessionUrl(), {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(createCheckoutSessionRequest),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: createCheckoutSessionResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as createCheckoutSessionResponse;
-};
-
-/**
  * @summary Creates a Stripe checkout session for the user to subscribe.
  */
 export type createCheckoutSessionV2Response200 = {
@@ -3872,84 +3868,6 @@ export const createPortalSession = async (
     status: res.status,
     headers: res.headers,
   } as createPortalSessionResponse;
-};
-
-/**
- * @summary Updates the user's subscription tier, swapping both their RBAC role and Stripe subscription line item.
- */
-export type patchSubscriptionTierResponse200 = {
-  data: void;
-  status: 200;
-};
-
-export type patchSubscriptionTierResponse400 = {
-  data: ErrorResponse;
-  status: 400;
-};
-
-export type patchSubscriptionTierResponse403 = {
-  data: ErrorResponse;
-  status: 403;
-};
-
-export type patchSubscriptionTierResponse404 = {
-  data: ErrorResponse;
-  status: 404;
-};
-
-export type patchSubscriptionTierResponse409 = {
-  data: ErrorResponse;
-  status: 409;
-};
-
-export type patchSubscriptionTierResponse500 = {
-  data: ErrorResponse;
-  status: 500;
-};
-
-export type patchSubscriptionTierResponseSuccess =
-  patchSubscriptionTierResponse200 & {
-    headers: Headers;
-  };
-export type patchSubscriptionTierResponseError = (
-  | patchSubscriptionTierResponse400
-  | patchSubscriptionTierResponse403
-  | patchSubscriptionTierResponse404
-  | patchSubscriptionTierResponse409
-  | patchSubscriptionTierResponse500
-) & {
-  headers: Headers;
-};
-
-export type patchSubscriptionTierResponse =
-  | patchSubscriptionTierResponseSuccess
-  | patchSubscriptionTierResponseError;
-
-export const getPatchSubscriptionTierUrl = () => {
-  return `/user/stripe/subscription`;
-};
-
-export const patchSubscriptionTier = async (
-  patchSubscriptionTierRequest: PatchSubscriptionTierRequest,
-  options?: RequestInit
-): Promise<patchSubscriptionTierResponse> => {
-  const res = await fetch(getPatchSubscriptionTierUrl(), {
-    ...options,
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(patchSubscriptionTierRequest),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: patchSubscriptionTierResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as patchSubscriptionTierResponse;
 };
 
 /**

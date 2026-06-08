@@ -35,12 +35,15 @@ pub async fn fetch_history_id_for_link(
     Ok(result.map(|r| r.history_id))
 }
 
-#[tracing::instrument(skip(pool), err)]
-pub async fn upsert_gmail_history(
-    pool: &PgPool,
+#[tracing::instrument(skip(executor), err)]
+pub async fn upsert_gmail_history<'e, E>(
+    executor: E,
     link_id: Uuid,
     history_id: &str,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<()>
+where
+    E: sqlx::Executor<'e, Database = sqlx::Postgres>,
+{
     let service_history = GmailHistory {
         link_id,
         history_id: history_id.to_string(),
@@ -62,7 +65,7 @@ pub async fn upsert_gmail_history(
         db_history.link_id,
         db_history.history_id
     )
-    .execute(pool)
+    .execute(executor)
     .await?;
 
     Ok(())

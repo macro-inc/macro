@@ -128,6 +128,8 @@ utoipa = { workspace = true, features = ["axum_extras", "chrono"] }
 utoipa-swagger-ui = { workspace = true, features = ["axum"] }
 uuid = { workspace = true }
 
+macro_service_urls = { path = "../macro_service_urls" }
+
 [dev-dependencies]
 ai_tools = { path = "../ai_tools", features = ["test-support"] }
 macro_auth = { path = "../macro_auth", features = ["testing"] }

@@ -19,11 +19,16 @@ import { isSearchEntity } from '../../types/search';
 import { AutomationWideContent } from './automation';
 import { CallParticipants, CallWideContent } from './call';
 import { ChannelMessageWideContent, ChannelWideContent } from './channel';
-import { EmailWideContent } from './email';
+import { EmailWideContent, useOwningInbox } from './email';
 import type { LayoutProps } from './shared';
 
 export function WideLayout(props: LayoutProps) {
   const soupView = useMaybeSoupView();
+  // When a thread resolves to one of the user's inboxes the inbox chip already
+  // conveys ownership, so the generic "shared" badge would be redundant.
+  const owningInbox = useOwningInbox(() =>
+    isEmailEntity(props.entity) ? props.entity : undefined
+  );
 
   return (
     <Entity.Layout
@@ -111,7 +116,7 @@ export function WideLayout(props: LayoutProps) {
             </span>
           )}
         </Show>
-        <Show when={props.isShared}>
+        <Show when={props.isShared && !owningInbox()}>
           <SharedBadge ownerId={props.entity.ownerId} />
         </Show>
         <Show when={isCallEntity(props.entity) && props.entity}>

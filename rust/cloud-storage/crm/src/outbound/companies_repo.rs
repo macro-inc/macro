@@ -9,8 +9,8 @@ use crate::domain::{
     },
     companies_repo::{CompaniesRepository, CrmCompanyListSort, CrmCompanySoupCursor},
     model::{
-        CrmAddressStatus, CrmCompany, CrmCompanyForSoup, CrmContact, CrmDomain, CrmDomainStatus,
-        CrmError, CrmScopePrecheck, DomainMetadata,
+        CrmAddressStatus, CrmCompany, CrmCompanyForSoup, CrmCompanyWithContacts, CrmContact,
+        CrmDomain, CrmDomainStatus, CrmError, CrmScopePrecheck, DomainMetadata,
     },
 };
 use chrono::{DateTime, Utc};
@@ -66,69 +66,51 @@ impl CompaniesRepositoryImpl {
 
         Ok(())
     }
-}
 
-impl CompaniesRepository for CompaniesRepositoryImpl {
-    #[tracing::instrument(skip(self), err)]
-    async fn get_company_by_domain(
+    /// Resolve a comment's author, but only when the comment resolves to a
+    /// team-owned parent the caller may see (`include_hidden` admits hidden
+    /// parents). `Ok(None)` means absent / cross-team / hidden-from-caller —
+    /// indistinguishable on purpose. Gates owner-only edit/delete.
+    async fn comment_owner_if_visible(
         &self,
         team_id: &uuid::Uuid,
-        domain: &str,
-    ) -> Result<Option<CrmCompany>, CrmError> {
-        let normalized_domain = domain.to_ascii_lowercase();
-
-        let company = sqlx::query!(
+        comment_id: &uuid::Uuid,
+        include_hidden: bool,
+    ) -> Result<Option<String>, CrmError> {
+        sqlx::query_scalar!(
             r#"
-            SELECT c.id, c.team_id, c.email_sync, c.hidden, c.created_at, c.updated_at
-            FROM crm_companies c
-            JOIN crm_domains d ON d.company_id = c.id
-            WHERE c.team_id = $1
-              AND LOWER(d.domain) = $2
-            LIMIT 1
+            SELECT c.owner
+            FROM crm_comment c
+            JOIN crm_thread t ON t.id = c.thread_id
+            WHERE c.id = $1
+              AND c.deleted_at IS NULL
+              AND (
+                EXISTS (
+                    SELECT 1 FROM crm_companies co
+                    WHERE co.id = t.company_id
+                      AND co.team_id = $2
+                      AND ($3 OR co.hidden = FALSE)
+                )
+                OR EXISTS (
+                    SELECT 1 FROM crm_contacts ct
+                    JOIN crm_companies co2 ON co2.id = ct.company_id
+                    WHERE ct.id = t.contact_id
+                      AND co2.team_id = $2
+                      AND ($3 OR (ct.hidden = FALSE AND co2.hidden = FALSE))
+                )
+              )
             "#,
+            comment_id,
             team_id,
-            normalized_domain,
+            include_hidden,
         )
         .fetch_optional(&self.pool)
         .await
-        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
-
-        let Some(company) = company else {
-            return Ok(None);
-        };
-
-        let domains = sqlx::query!(
-            r#"
-            SELECT id, company_id, domain, created_at
-            FROM crm_domains
-            WHERE company_id = $1
-            ORDER BY created_at ASC
-            "#,
-            company.id,
-        )
-        .fetch_all(&self.pool)
-        .await
-        .map_err(|e| CrmError::StorageLayerError(e.into()))?
-        .into_iter()
-        .map(|row| CrmDomain {
-            id: row.id,
-            company_id: row.company_id,
-            domain: row.domain,
-            created_at: row.created_at,
-        })
-        .collect();
-
-        Ok(Some(CrmCompany {
-            id: company.id,
-            team_id: company.team_id,
-            email_sync: company.email_sync,
-            hidden: company.hidden,
-            created_at: company.created_at,
-            updated_at: company.updated_at,
-            domains,
-        }))
+        .map_err(|e| CrmError::StorageLayerError(e.into()))
     }
+}
 
+impl CompaniesRepository for CompaniesRepositoryImpl {
     #[tracing::instrument(skip(self), err)]
     #[allow(clippy::too_many_arguments)]
     async fn populate_contact(
@@ -1068,9 +1050,11 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
     }
 
     #[tracing::instrument(skip(self), err)]
+    #[allow(clippy::too_many_arguments)]
     async fn list_companies_for_soup(
         &self,
         team_id: &uuid::Uuid,
+        user_id: &str,
         company_ids: &[uuid::Uuid],
         hidden: Option<bool>,
         sort: CrmCompanyListSort,
@@ -1080,6 +1064,8 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         let sort_method_str = match sort {
             CrmCompanyListSort::UpdatedAt => "updated_at",
             CrmCompanyListSort::CreatedAt => "created_at",
+            CrmCompanyListSort::ViewedAt => "viewed_at",
+            CrmCompanyListSort::ViewedUpdated => "viewed_updated",
         };
         // Keyset seek past the previous soup page's last row. Compared as
         // (sort_ts, id::text) to match the main soup query's tiebreak in
@@ -1092,7 +1078,10 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         // so rows arrive contiguous per company with the primary
         // domain first. Sort columns are `first_interaction` /
         // `last_interaction` from populate_contact (both NOT NULL —
-        // see the `crm_interaction_timestamps` migration).
+        // see the `crm_interaction_timestamps` migration). `Viewed*`
+        // variants join `UserHistory` per-user — same shape as the
+        // soup repo's `viewed_at` / `viewed_updated` sorts for
+        // docs/chats/projects (see pg_soup_repo/expanded/by_cursor.rs).
         //
         // `$5` (`hidden`) defaults to visible-only when `NULL`; the
         // admin/owner role check for `Some(true)` is enforced upstream
@@ -1108,6 +1097,10 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
                     c.first_interaction,
                     c.last_interaction
                 FROM crm_companies c
+                LEFT JOIN "UserHistory" uh
+                    ON uh."itemId" = c.id::text
+                   AND uh."itemType" = 'crm_company'
+                   AND uh."userId" = $8
                 WHERE c.team_id = $1
                   AND c.hidden = COALESCE($5::bool, FALSE)
                   AND EXISTS (
@@ -1122,6 +1115,9 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
                       OR (
                           CASE $4
                               WHEN 'created_at' THEN c.first_interaction
+                              WHEN 'viewed_at' THEN uh."updatedAt"
+                              WHEN 'viewed_updated'
+                                  THEN COALESCE(uh."updatedAt", c.last_interaction)
                               ELSE c.last_interaction
                           END,
                           c.id::text
@@ -1130,8 +1126,11 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
                 ORDER BY
                     CASE $4
                         WHEN 'created_at' THEN c.first_interaction
+                        WHEN 'viewed_at' THEN uh."updatedAt"
+                        WHEN 'viewed_updated'
+                            THEN COALESCE(uh."updatedAt", c.last_interaction)
                         ELSE c.last_interaction
-                    END DESC,
+                    END DESC NULLS LAST,
                     c.id DESC
                 LIMIT $3
             )
@@ -1148,14 +1147,21 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
                 dd.name            AS "dir_name?",
                 dd.description     AS "dir_description?"
             FROM limited_companies lc
+            LEFT JOIN "UserHistory" uh
+                ON uh."itemId" = lc.id::text
+               AND uh."itemType" = 'crm_company'
+               AND uh."userId" = $8
             LEFT JOIN crm_domains d ON d.company_id = lc.id
             LEFT JOIN crm_domain_directory dd
                 ON LOWER(dd.domain) = LOWER(d.domain)
             ORDER BY
                 CASE $4
                     WHEN 'created_at' THEN lc.first_interaction
+                    WHEN 'viewed_at' THEN uh."updatedAt"
+                    WHEN 'viewed_updated'
+                        THEN COALESCE(uh."updatedAt", lc.last_interaction)
                     ELSE lc.last_interaction
-                END DESC,
+                END DESC NULLS LAST,
                 lc.id DESC,
                 d.created_at ASC NULLS LAST
             "#,
@@ -1166,6 +1172,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             hidden,
             cursor_ts,
             cursor_id,
+            user_id,
         )
         .fetch_all(&self.pool)
         .await
@@ -1332,6 +1339,100 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             last_interaction: row.last_interaction,
             created_at: row.created_at,
             updated_at: row.updated_at,
+        }))
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_company_for_team(
+        &self,
+        team_id: &uuid::Uuid,
+        company_id: &uuid::Uuid,
+        include_hidden: bool,
+    ) -> Result<Option<CrmCompanyWithContacts>, CrmError> {
+        // Mirrors `list_companies_for_soup`'s domain + directory join shape
+        // but scoped to a single id. Domains arrive ordered by their
+        // `created_at` so the first row carries the "primary" domain and
+        // its `crm_domain_directory` row contributes name/description.
+        // First-interaction / last-interaction are aliased into the
+        // CrmCompany.created_at / updated_at slots — same convention as
+        // the soup listing.
+        let rows = sqlx::query!(
+            r#"
+            SELECT
+                c.id                AS "company_id!",
+                c.team_id           AS "company_team_id!",
+                c.email_sync        AS "company_email_sync!",
+                c.hidden            AS "company_hidden!",
+                c.first_interaction AS "company_created_at!",
+                c.last_interaction  AS "company_updated_at!",
+                d.id                AS "domain_id?",
+                d.domain            AS "domain?",
+                d.created_at        AS "domain_created_at?",
+                dd.name             AS "dir_name?",
+                dd.description      AS "dir_description?"
+            FROM crm_companies c
+            LEFT JOIN crm_domains d ON d.company_id = c.id
+            LEFT JOIN crm_domain_directory dd
+                ON LOWER(dd.domain) = LOWER(d.domain)
+            WHERE c.id = $1
+              AND c.team_id = $2
+              AND ($3 OR c.hidden = FALSE)
+            ORDER BY d.created_at ASC NULLS LAST
+            "#,
+            company_id,
+            team_id,
+            include_hidden,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        let mut iter = rows.into_iter();
+        let Some(first) = iter.next() else {
+            return Ok(None);
+        };
+
+        // Directory name/description come from the primary domain's row
+        // (which is the first row by `created_at ASC` per the ORDER BY).
+        let name = first.dir_name.clone();
+        let description = first.dir_description.clone();
+
+        let mut company = CrmCompany {
+            id: first.company_id,
+            team_id: first.company_team_id,
+            email_sync: first.company_email_sync,
+            hidden: first.company_hidden,
+            created_at: first.company_created_at,
+            updated_at: first.company_updated_at,
+            domains: Vec::new(),
+        };
+
+        for row in std::iter::once(first).chain(iter) {
+            if let (Some(id), Some(domain), Some(created_at)) =
+                (row.domain_id, row.domain, row.domain_created_at)
+            {
+                company.domains.push(CrmDomain {
+                    id,
+                    company_id: company.id,
+                    domain,
+                    created_at,
+                });
+            }
+        }
+
+        // Fetch contacts via the existing list method so the hidden
+        // semantics stay in one place. Issued only after the company
+        // resolves so cross-team or hidden 404s short-circuit before
+        // a second round trip.
+        let contacts = self
+            .list_contacts_for_company(team_id, company_id, include_hidden)
+            .await?;
+
+        Ok(Some(CrmCompanyWithContacts {
+            company,
+            name,
+            description,
+            contacts,
         }))
     }
 
@@ -1545,7 +1646,19 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         comment_id: &uuid::Uuid,
         text: &str,
         include_hidden: bool,
+        requester: &str,
     ) -> Result<CrmComment, CrmError> {
+        // Owner-only: a visible-but-unowned comment is `CommentNotOwned`,
+        // an absent/cross-team/hidden one is `CommentNotFound`.
+        match self
+            .comment_owner_if_visible(team_id, comment_id, include_hidden)
+            .await?
+        {
+            None => return Err(CrmError::CommentNotFound),
+            Some(owner) if owner != requester => return Err(CrmError::CommentNotOwned),
+            Some(_) => {}
+        }
+
         // Update only when the comment's thread resolves to a company or
         // contact owned by the team, so cross-team edits 404. For
         // non-admins (`include_hidden = false`) the parent must also
@@ -1608,7 +1721,19 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         team_id: &uuid::Uuid,
         comment_id: &uuid::Uuid,
         include_hidden: bool,
+        requester: &str,
     ) -> Result<DeleteCrmCommentResult, CrmError> {
+        // Owner-only: a visible-but-unowned comment is `CommentNotOwned`,
+        // an absent/cross-team/hidden one is `CommentNotFound`.
+        match self
+            .comment_owner_if_visible(team_id, comment_id, include_hidden)
+            .await?
+        {
+            None => return Err(CrmError::CommentNotFound),
+            Some(owner) if owner != requester => return Err(CrmError::CommentNotOwned),
+            Some(_) => {}
+        }
+
         let mut tx = self
             .pool
             .begin()

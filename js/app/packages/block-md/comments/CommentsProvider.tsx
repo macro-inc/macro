@@ -1,3 +1,4 @@
+import type { LoroManager } from '@core/collab/manager';
 import { isRoot, type Reply, type Root } from '@core/comments/commentType';
 import {
   isWrapperWithIds,
@@ -9,7 +10,6 @@ import {
   MARK_SELECTED_COMMENT_COMMAND,
 } from '@core/component/LexicalMarkdown/plugins/comments/commentPlugin';
 import { useUserId } from '@core/context/user';
-import { blockLoroManagerSignal } from '@core/signal/load';
 import type { CommentNode } from '@lexical-core';
 import { COMMAND_PRIORITY_LOW, SELECTION_CHANGE_COMMAND } from 'lexical';
 import {
@@ -78,6 +78,7 @@ function getHighlightThread(
 
 export const CommentsProvider: VoidComponent<{
   activeComment?: Accessor<string | undefined>;
+  loroManager: Accessor<LoroManager | undefined>;
 }> = (props) => {
   const wrapper = useContext(LexicalWrapperContext);
   if (!isWrapperWithIds(wrapper)) {
@@ -86,8 +87,7 @@ export const CommentsProvider: VoidComponent<{
   }
   const { plugins, editor } = wrapper;
 
-  const loroManager = blockLoroManagerSignal.get;
-  const currentPeerId = () => loroManager()?.getPeerIdStr();
+  const currentPeerId = () => props.loroManager()?.getPeerIdStr();
 
   const [marks, setMarks] = markStore;
   const [commentThreadsData] = commentThreadsResource;

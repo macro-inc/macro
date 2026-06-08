@@ -1,8 +1,10 @@
 //! Some providers don't support dynamic client registration.
 //! They are configured on a per-provider basis and config loaded here
+use super::models;
 
 /// Slack MCP server URL.
 const SLACK_SERVER_URL: &str = "https://mcp.slack.com/mcp";
+const GITHUB_SERVER_URL: &str = "https://api.githubcopilot.com/mcp";
 
 macro_env_var::env_var! {
     /// Environment variables for pre-registered MCP providers.
@@ -12,6 +14,10 @@ macro_env_var::env_var! {
         pub SlackMcpClientId,
         /// Slack MCP OAuth client secret (`SLACK_MCP_CLIENT_SECRET`).
         pub SlackMcpClientSecret,
+        /// GitHub OAuth client ID (`GITHUB_CLIENT_ID`).
+        pub GithubClientId,
+        /// GitHub OAuth client secret (`GITHUB_CLIENT_SECRET`).
+        pub GithubClientSecret,
     }
 }
 
@@ -47,10 +53,15 @@ pub struct PreRegisteredProviders {
 
 impl PreRegisteredProviders {
     /// Build the registry from environment variables.
-    pub fn from_env() -> Self {
-        Self {
-            env: ProviderEnvVars::new().ok(),
-        }
+    pub fn from_env() -> models::Result<Self> {
+        ProviderEnvVars::new()
+            .map_err(models::Error::RequiredEnvironmentVariable)
+            .map(|env| Self { env: Some(env) })
+    }
+
+    /// Build an empty registry for callers that do not need provider OAuth.
+    pub fn empty() -> Self {
+        Self { env: None }
     }
 
     /// Look up pre-registered credentials for a server URL.
@@ -61,6 +72,11 @@ impl PreRegisteredProviders {
                 client_id: env.slack_mcp_client_id.to_string(),
                 client_secret: env.slack_mcp_client_secret.to_string(),
                 scopes: slack_scopes(),
+            }),
+            GITHUB_SERVER_URL => Some(PreRegisteredCredentials {
+                client_id: env.github_client_id.to_string(),
+                client_secret: env.github_client_secret.to_string(),
+                scopes: vec![],
             }),
             _ => None,
         }

@@ -8,8 +8,19 @@ use utoipa::ToSchema;
 
 use super::{StripeOperationError, StripeSessionResponse};
 use crate::api::context::ApiContext;
-use crate::api::user::stripe::create_checkout_session::CheckoutSessionMetadata;
 use model::response::ErrorResponse;
+
+/// Tracking metadata for conversion attribution
+#[derive(Debug, Default, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CheckoutSessionMetadata {
+    /// Google Analytics client ID for conversion tracking
+    pub ga_client_id: Option<String>,
+    /// Meta (Facebook) browser ID from _fbp cookie
+    pub fbp: Option<String>,
+    /// Meta (Facebook) click ID from _fbc cookie
+    pub fbc: Option<String>,
+}
 
 /// Request body for creating a Stripe checkout session
 #[derive(Debug, Deserialize, ToSchema)]

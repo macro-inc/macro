@@ -1,5 +1,9 @@
 import { hapticImpact } from '@core/mobile/haptics';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { type Accessor, createSignal, onCleanup } from 'solid-js';
+
+const TOUCH_CLASS_ENTER_DELAY_MS = 100;
+const TOUCH_CLASS_EXIT_DELAY_MS = 50;
 
 interface TouchHandlerOptions {
   onLongPress?: (e: TouchEvent) => void;
@@ -10,6 +14,10 @@ interface TouchHandlerOptions {
   delay?: number;
   moveThreshold?: number;
   stopTouchStartPropagation?: boolean;
+  /** CSS class added while the touch highlight is active. */
+  touchClassName?: string;
+  touchClassEnterDelay?: number;
+  touchClassExitDelay?: number;
 }
 
 declare module 'solid-js' {
@@ -35,14 +43,67 @@ export function touchHandler(
   element: HTMLElement,
   options: Accessor<TouchHandlerOptions>
 ) {
-  if (!options().onLongPress && !options().onShortTouch) {
+  if (!isTouchDevice()) {
     return;
   }
 
   let timer: number;
+  let touchClassEnterTimer: number | undefined;
+  let touchClassExitTimer: number | undefined;
+  let activeTouchClassName: string | undefined;
   let startPosition: { x: number; y: number } | undefined;
   let longPressTriggered = false;
   const [validShortTouch, setValidShortTouch] = createSignal(true);
+
+  const touchClassName = () => options().touchClassName;
+
+  function cancelTouchClassExit() {
+    if (touchClassExitTimer !== undefined) {
+      clearTimeout(touchClassExitTimer);
+      touchClassExitTimer = undefined;
+    }
+  }
+
+  function startTouchClass() {
+    touchClassEnterTimer = undefined;
+    cancelTouchClassExit();
+
+    const className = touchClassName();
+    if (!className) return;
+
+    if (activeTouchClassName && activeTouchClassName !== className) {
+      element.classList.remove(activeTouchClassName);
+    }
+
+    activeTouchClassName = className;
+    element.classList.add(className);
+  }
+
+  function cancelTouchClassEnter() {
+    if (touchClassEnterTimer !== undefined) {
+      clearTimeout(touchClassEnterTimer);
+      touchClassEnterTimer = undefined;
+    }
+  }
+
+  function endTouchClass() {
+    cancelTouchClassExit();
+    if (activeTouchClassName) {
+      element.classList.remove(activeTouchClassName);
+      activeTouchClassName = undefined;
+      return;
+    }
+
+    const className = touchClassName();
+    if (className) {
+      element.classList.remove(className);
+    }
+  }
+
+  function scheduleTouchClassEnd(delay: number) {
+    cancelTouchClassExit();
+    touchClassExitTimer = window.setTimeout(endTouchClass, delay);
+  }
 
   function getDistance(x: number, y: number) {
     if (!startPosition) return 0;
@@ -68,12 +129,16 @@ export function touchHandler(
 
   function handleTouchCancel() {
     clearState();
+    cancelTouchClassEnter();
+    endTouchClass();
     options().onCancel?.();
   }
 
   function handleTouchStart(e: TouchEvent) {
     if (e.touches.length > 1) {
       clearState();
+      cancelTouchClassEnter();
+      endTouchClass();
       setValidShortTouch(false);
       return;
     }
@@ -87,6 +152,12 @@ export function touchHandler(
     }
 
     options().onTouchStart?.(e);
+    if (touchClassName()) {
+      touchClassEnterTimer = window.setTimeout(
+        startTouchClass,
+        options().touchClassEnterDelay ?? TOUCH_CLASS_ENTER_DELAY_MS
+      );
+    }
     timer = window.setTimeout(() => {
       longPressTriggered = true;
       setLongPressActivated(true);
@@ -108,7 +179,17 @@ export function touchHandler(
   }
 
   function handleTouchEnd(e: TouchEvent) {
-    options().onTouchEnd?.(e, longPressTriggered);
+    const wasLongPressTriggered = longPressTriggered;
+
+    options().onTouchEnd?.(e, wasLongPressTriggered);
+    cancelTouchClassEnter();
+    if (!wasLongPressTriggered) {
+      endTouchClass();
+    } else {
+      scheduleTouchClassEnd(
+        options().touchClassExitDelay ?? TOUCH_CLASS_EXIT_DELAY_MS
+      );
+    }
 
     const isAnchorElement = (e.target as Element)?.closest('a');
     const isButtonElement = (e.target as Element)?.closest('button');
@@ -120,7 +201,7 @@ export function touchHandler(
     const touchedSomethingSharp =
       isAnchorElement || isButtonElement || isDocumentMention || isInternalLink;
 
-    if (longPressTriggered) {
+    if (wasLongPressTriggered) {
       e.stopPropagation();
       e.preventDefault();
     } else if (validShortTouch() && !touchedSomethingSharp) {
@@ -135,6 +216,8 @@ export function touchHandler(
   element.addEventListener('touchcancel', handleTouchCancel, { passive: true });
 
   onCleanup(() => {
+    cancelTouchClassEnter();
+    endTouchClass();
     element.removeEventListener('touchstart', handleTouchStart);
     element.removeEventListener('touchmove', handleTouchMove);
     element.removeEventListener('touchend', handleTouchEnd);

@@ -171,7 +171,7 @@ const MAIL_FILTER_CATEGORIES: FilterCategory[] = [
       {
         id: 'attachment-document',
         label: 'Documents',
-        icon: () => <EntityIcon targetType="unknown" size="xs" />,
+        icon: () => <EntityIcon targetType="files" size="xs" />,
       },
     ],
     multiple: true,
@@ -339,7 +339,7 @@ const DOCUMENTS_FILTER_CATEGORIES: FilterCategory[] = [
       {
         id: 'file-other',
         label: 'Other',
-        icon: () => <EntityIcon targetType="unknown" size="xs" />,
+        icon: () => <EntityIcon targetType="files" size="xs" />,
       },
     ],
     multiple: true,

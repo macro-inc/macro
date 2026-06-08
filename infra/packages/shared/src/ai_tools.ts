@@ -88,6 +88,22 @@ export function getAiToolsInfra(): AiToolsInfra {
     .getSecretVersionOutput({ secretId: INTERNAL_AUTH_KEY_SECRET_NAME })
     .apply((s) => s.secretString);
 
+  const SLACK_MCP_CLIENT_ID = aws.secretsmanager
+    .getSecretVersionOutput({ secretId: 'slack-mcp-client-id' })
+    .apply((secret) => secret.secretString);
+
+  const SLACK_MCP_CLIENT_SECRET = aws.secretsmanager
+    .getSecretVersionOutput({ secretId: 'slack-mcp-client-secret' })
+    .apply((secret) => secret.secretString);
+
+  const GITHUB_CLIENT_ID = aws.secretsmanager
+    .getSecretVersionOutput({ secretId: `github-client-id-${stack}` })
+    .apply((secret) => secret.secretString);
+
+  const GITHUB_CLIENT_SECRET = aws.secretsmanager
+    .getSecretVersionOutput({ secretId: `github-client-secret-${stack}` })
+    .apply((secret) => secret.secretString);
+
   const envVars: AiToolsInfra['envVars'] = [
     {
       name: 'INTERNAL_API_SECRET_KEY',
@@ -145,6 +161,22 @@ export function getAiToolsInfra(): AiToolsInfra {
     {
       name: 'DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME',
       value: CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME,
+    },
+    {
+      name: 'SLACK_MCP_CLIENT_ID',
+      value: pulumi.interpolate`${SLACK_MCP_CLIENT_ID}`,
+    },
+    {
+      name: 'SLACK_MCP_CLIENT_SECRET',
+      value: pulumi.interpolate`${SLACK_MCP_CLIENT_SECRET}`,
+    },
+    {
+      name: 'GITHUB_CLIENT_SECRET',
+      value: pulumi.interpolate`${GITHUB_CLIENT_SECRET}`,
+    },
+    {
+      name: 'GITHUB_CLIENT_ID',
+      value: pulumi.interpolate`${GITHUB_CLIENT_ID}`,
     },
   ];
 

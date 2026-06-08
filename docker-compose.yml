@@ -357,6 +357,8 @@ services:
       dockerfile: Dockerfile
     ports:
       - "8787:8787"
+    volumes:
+      - ./rust/sync-service/src:/app/src
     environment:
       - INTERNAL_API_SECRET_KEY=${INTERNAL_API_SECRET_KEY}
       - DOCUMENT_PERMISSIONS_SECRET=${DOCUMENT_PERMISSION_JWT_SECRET_KEY}

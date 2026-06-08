@@ -454,6 +454,19 @@ export const isDisplayableSoupItem = (
 ): item is DisplayableSoupItem =>
   item.tag !== 'foreignEntity' && item.tag !== 'crmCompany';
 
+/**
+ * The email soup query encodes "no sort timestamp" — e.g. a never-viewed thread
+ * under the `viewed_at` sort — as the Unix epoch. Map it to `undefined` so each
+ * soup view's sort and the row date fall back to their own column
+ * (`updatedAt`/`createdAt`/`viewedAt`) instead of pinning the thread to 1970.
+ */
+function normalizeSentinelTs(
+  ts: string | null | undefined
+): string | undefined {
+  if (!ts) return undefined;
+  return Date.parse(ts) > 0 ? ts : undefined;
+}
+
 export const mapApiSoupItemToEntity = (
   item: DisplayableSoupItem
 ):
@@ -509,11 +522,16 @@ export const mapApiSoupItemToEntity = (
       sizeBytes: a.sizeBytes,
     }));
 
+    // The thread preview has no link id of its own; its participants and
+    // labels are scoped to the owning inbox, so they share its link id.
+    const linkId =
+      item.data.participants?.[0]?.linkId ?? item.data.labels?.[0]?.linkId;
+
     return {
       ...item.data,
       createdAt: item.data.createdAt,
       updatedAt: item.data.updatedAt,
-      sortTs: item.data.sortTs,
+      sortTs: normalizeSentinelTs(item.data.sortTs),
       senderEmail: item.data.senderEmail ?? undefined,
       senderName: item.data.senderName ?? undefined,
       snippet: item.data.snippet ?? undefined,
@@ -523,6 +541,7 @@ export const mapApiSoupItemToEntity = (
       frecencyScore: item.frecency_score,
       viewedAt: item.data.viewedAt,
       projectId: item.data.projectId ?? undefined,
+      linkId,
       participants,
       hasIcsAttachment,
       attachments,

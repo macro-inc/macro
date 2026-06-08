@@ -47,10 +47,10 @@ pub async fn create_in_progress_user_link(
     Ok(link_id)
 }
 
-pub async fn delete_in_progress_user_link(
-    db: &sqlx::Pool<sqlx::Postgres>,
-    link_id: &uuid::Uuid,
-) -> anyhow::Result<()> {
+pub async fn delete_in_progress_user_link<'e, E>(db: E, link_id: &uuid::Uuid) -> anyhow::Result<()>
+where
+    E: sqlx::Executor<'e, Database = sqlx::Postgres>,
+{
     sqlx::query!(
         r#"
             DELETE FROM

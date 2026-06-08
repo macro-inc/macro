@@ -18,10 +18,8 @@ backfill_markdown_content_location_dev *FLAGS:
     SYNC_SERVICE_AUTH_KEY="$(aws secretsmanager get-secret-value --secret-id sync-service-key-dev --query SecretString --output text)"
     INTERNAL_API_SECRET_KEY="$(aws secretsmanager get-secret-value --secret-id document-storage-service-auth-key-dev --query SecretString --output text)"
     eval "$(aws configure export-credentials --format env)"
-    SYNC_SERVICE_URL="https://sync-service-dev3.macroverse.workers.dev"
-    LEXICAL_SERVICE_URL="https://lexical-service-dev.macroverse.workers.dev"
     DOCUMENT_STORAGE_BUCKET="doc-storage-dev"
-    RUST_LOG="${RUST_LOG:-info}" DATABASE_URL="$DATABASE_URL" SYNC_SERVICE_AUTH_KEY="$SYNC_SERVICE_AUTH_KEY" INTERNAL_API_SECRET_KEY="$INTERNAL_API_SECRET_KEY" SYNC_SERVICE_URL="$SYNC_SERVICE_URL" LEXICAL_SERVICE_URL="$LEXICAL_SERVICE_URL" DOCUMENT_STORAGE_BUCKET="$DOCUMENT_STORAGE_BUCKET" \
+    RUST_LOG="${RUST_LOG:-info}" ENVIRONMENT="dev" DATABASE_URL="$DATABASE_URL" SYNC_SERVICE_AUTH_KEY="$SYNC_SERVICE_AUTH_KEY" INTERNAL_API_SECRET_KEY="$INTERNAL_API_SECRET_KEY" DOCUMENT_STORAGE_BUCKET="$DOCUMENT_STORAGE_BUCKET" \
         cargo run -p documents --features backfill_binary --bin backfill_markdown_content_location -- {{ FLAGS }}
 
 # Apply markdown lifecycle backfill against dev DB/sync-service.
@@ -41,10 +39,8 @@ backfill_markdown_content_location_dev_apply *FLAGS:
     SYNC_SERVICE_AUTH_KEY="$(aws secretsmanager get-secret-value --secret-id sync-service-key-dev --query SecretString --output text)"
     INTERNAL_API_SECRET_KEY="$(aws secretsmanager get-secret-value --secret-id document-storage-service-auth-key-dev --query SecretString --output text)"
     eval "$(aws configure export-credentials --format env)"
-    SYNC_SERVICE_URL="https://sync-service-dev3.macroverse.workers.dev"
-    LEXICAL_SERVICE_URL="https://lexical-service-dev.macroverse.workers.dev"
     DOCUMENT_STORAGE_BUCKET="doc-storage-dev"
-    RUST_LOG="${RUST_LOG:-info}" DATABASE_URL="$DATABASE_URL" SYNC_SERVICE_AUTH_KEY="$SYNC_SERVICE_AUTH_KEY" INTERNAL_API_SECRET_KEY="$INTERNAL_API_SECRET_KEY" SYNC_SERVICE_URL="$SYNC_SERVICE_URL" LEXICAL_SERVICE_URL="$LEXICAL_SERVICE_URL" DOCUMENT_STORAGE_BUCKET="$DOCUMENT_STORAGE_BUCKET" \
+    RUST_LOG="${RUST_LOG:-info}" ENVIRONMENT="dev" DATABASE_URL="$DATABASE_URL" SYNC_SERVICE_AUTH_KEY="$SYNC_SERVICE_AUTH_KEY" INTERNAL_API_SECRET_KEY="$INTERNAL_API_SECRET_KEY" DOCUMENT_STORAGE_BUCKET="$DOCUMENT_STORAGE_BUCKET" \
         cargo run -p documents --features backfill_binary --bin backfill_markdown_content_location -- --apply {{ FLAGS }}
 
 # Dry-run markdown lifecycle backfill against prod DB/sync-service.
@@ -57,10 +53,8 @@ backfill_markdown_content_location_prod *FLAGS:
     SYNC_SERVICE_AUTH_KEY="$(aws secretsmanager get-secret-value --secret-id sync-service-key-prod --query SecretString --output text)"
     INTERNAL_API_SECRET_KEY="$(aws secretsmanager get-secret-value --secret-id document-storage-service-auth-key-prod --query SecretString --output text)"
     eval "$(aws configure export-credentials --format env)"
-    SYNC_SERVICE_URL="https://sync-service-prod2.macroverse.workers.dev"
-    LEXICAL_SERVICE_URL="https://lexical-service.macroverse.workers.dev"
     DOCUMENT_STORAGE_BUCKET="macro-document-storage-prod"
-    RUST_LOG="${RUST_LOG:-info}" DATABASE_URL="$DATABASE_URL" SYNC_SERVICE_AUTH_KEY="$SYNC_SERVICE_AUTH_KEY" INTERNAL_API_SECRET_KEY="$INTERNAL_API_SECRET_KEY" SYNC_SERVICE_URL="$SYNC_SERVICE_URL" LEXICAL_SERVICE_URL="$LEXICAL_SERVICE_URL" DOCUMENT_STORAGE_BUCKET="$DOCUMENT_STORAGE_BUCKET" \
+    RUST_LOG="${RUST_LOG:-info}" ENVIRONMENT="prod" DATABASE_URL="$DATABASE_URL" SYNC_SERVICE_AUTH_KEY="$SYNC_SERVICE_AUTH_KEY" INTERNAL_API_SECRET_KEY="$INTERNAL_API_SECRET_KEY" DOCUMENT_STORAGE_BUCKET="$DOCUMENT_STORAGE_BUCKET" \
         cargo run -p documents --features backfill_binary --bin backfill_markdown_content_location -- {{ FLAGS }}
 
 # Apply markdown lifecycle backfill against prod DB/sync-service.
@@ -81,8 +75,6 @@ backfill_markdown_content_location_prod_apply *FLAGS:
     SYNC_SERVICE_AUTH_KEY="$(aws secretsmanager get-secret-value --secret-id sync-service-key-prod --query SecretString --output text)"
     INTERNAL_API_SECRET_KEY="$(aws secretsmanager get-secret-value --secret-id document-storage-service-auth-key-prod --query SecretString --output text)"
     eval "$(aws configure export-credentials --format env)"
-    SYNC_SERVICE_URL="https://sync-service-prod2.macroverse.workers.dev"
-    LEXICAL_SERVICE_URL="https://lexical-service.macroverse.workers.dev"
     DOCUMENT_STORAGE_BUCKET="macro-document-storage-prod"
-    RUST_LOG="${RUST_LOG:-info}" DATABASE_URL="$DATABASE_URL" SYNC_SERVICE_AUTH_KEY="$SYNC_SERVICE_AUTH_KEY" INTERNAL_API_SECRET_KEY="$INTERNAL_API_SECRET_KEY" SYNC_SERVICE_URL="$SYNC_SERVICE_URL" LEXICAL_SERVICE_URL="$LEXICAL_SERVICE_URL" DOCUMENT_STORAGE_BUCKET="$DOCUMENT_STORAGE_BUCKET" \
+    RUST_LOG="${RUST_LOG:-info}" ENVIRONMENT="prod" DATABASE_URL="$DATABASE_URL" SYNC_SERVICE_AUTH_KEY="$SYNC_SERVICE_AUTH_KEY" INTERNAL_API_SECRET_KEY="$INTERNAL_API_SECRET_KEY" DOCUMENT_STORAGE_BUCKET="$DOCUMENT_STORAGE_BUCKET" \
         cargo run -p documents --features backfill_binary --bin backfill_markdown_content_location -- --apply {{ FLAGS }}

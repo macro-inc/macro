@@ -75,6 +75,8 @@ pub struct Link {
     pub fusionauth_user_id: String,
     #[schema(value_type = String)]
     pub email_address: EmailStr<'static>,
+    /// The inbox's own profile photo (its self-contact's SFS photo), if synced.
+    pub photo_url: Option<String>,
     pub provider: UserProvider,
     pub is_sync_active: bool,
     pub sync_status: SyncStatus,
@@ -90,12 +92,14 @@ impl Link {
         signature: Option<String>,
         settings: Settings,
         sync_status: SyncStatus,
+        photo_url: Option<String>,
     ) -> Self {
         Link {
             id: source.id,
             macro_id: source.macro_id,
             fusionauth_user_id: source.fusionauth_user_id,
             email_address: source.email_address,
+            photo_url,
             provider: UserProvider::from(source.provider),
             is_sync_active: source.is_sync_active,
             sync_status,

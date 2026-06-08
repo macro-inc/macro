@@ -35,7 +35,7 @@ const useHasAccess = (requestedPermissions: Permissions) => {
   );
 };
 
-const useIsEditable = () => {
+const useIsEditable = (mustBeConnected: boolean = true) => {
   const source = blockSourceSignal.get;
   const syncSource = blockSyncSourceSignal.get;
   return createMemo(() => {
@@ -44,6 +44,7 @@ const useIsEditable = () => {
     if (isSourceSyncService(source_)) {
       const syncSource_ = syncSource();
       if (!syncSource_) return false;
+      if (!mustBeConnected) return true;
       const status = syncSource_.status();
       return status === SyncSourceStatus.Connected;
     }
@@ -52,10 +53,13 @@ const useIsEditable = () => {
   });
 };
 
-const usePermissionCan = (requestedPermissions: Permissions) => {
+const usePermissionCan = (
+  requestedPermissions: Permissions,
+  mustBeConnected: boolean = true
+) => {
   const isAuthenticated = useIsAuthenticated();
   const hasAccess = useHasAccess(requestedPermissions);
-  const isEditable = useIsEditable();
+  const isEditable = useIsEditable(mustBeConnected);
 
   return createMemo(() => {
     if (!isAuthenticated()) return false;
@@ -66,7 +70,8 @@ const usePermissionCan = (requestedPermissions: Permissions) => {
 
 export const useCanView = () => useHasAccess(Permissions.CAN_VIEW);
 export const useCanComment = () => usePermissionCan(Permissions.CAN_COMMENT);
-export const useCanEdit = () => usePermissionCan(Permissions.CAN_EDIT);
+export const useCanEdit = (mustBeConnected: boolean = true) =>
+  usePermissionCan(Permissions.CAN_EDIT, mustBeConnected);
 export const useIsDocumentOwner = () => useHasAccess(Permissions.OWNER);
 
 const _useReadOnly = () => {

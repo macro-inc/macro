@@ -1,19 +1,16 @@
-import { UserIcon, type UserIconProps } from '@core/component/UserIcon';
+import { inboxIconProps } from '@core/component/inboxIcon';
+import { UserIcon } from '@core/component/UserIcon';
 import { emailToMacroId, useDisplayName } from '@core/user';
 import ChevronDown from '@phosphor/caret-down.svg';
 import Check from '@phosphor/check.svg';
 import { Dropdown } from '@ui';
 import { For, Show } from 'solid-js';
 
-type FromInbox = { id: string; email_address: string };
-
-// Resolve each inbox's identity from its own address, not the link's macro_id:
-// an own secondary inbox shares the parent account's macro_id, so keying on the
-// address gives each inbox its own name and icon.
-function inboxIconProps(inbox: FromInbox): UserIconProps {
-  const macroId = emailToMacroId(inbox.email_address);
-  return macroId ? { id: macroId } : { email: inbox.email_address };
-}
+type FromInbox = {
+  id: string;
+  email_address: string;
+  photo_url?: string | null;
+};
 
 /** A single inbox: the account's user icon, name, and address. */
 function FromInboxOption(props: { inbox: FromInbox }) {
@@ -21,7 +18,8 @@ function FromInboxOption(props: { inbox: FromInbox }) {
   return (
     <>
       <UserIcon
-        {...inboxIconProps(props.inbox)}
+        {...inboxIconProps(props.inbox.email_address)}
+        photoUrl={props.inbox.photo_url ?? undefined}
         size="sm"
         suppressClick
         class="shrink-0"
@@ -47,6 +45,10 @@ export function FromInboxSelector(props: {
 }) {
   const activeInbox = () =>
     props.links.find((l) => l.id === props.activeLinkId) ?? props.links[0];
+  const sortedLinks = () =>
+    [...props.links].sort((a, b) =>
+      a.email_address.localeCompare(b.email_address)
+    );
   return (
     <Show when={activeInbox()}>
       {(active) => (
@@ -61,7 +63,7 @@ export function FromInboxSelector(props: {
           }
         >
           <Dropdown>
-            <Dropdown.Trigger class="gap-2 text-sm text-ink-muted">
+            <Dropdown.Trigger class="flex items-center min-w-0 max-w-full gap-2 text-sm text-ink-muted">
               <Show when={active()} keyed>
                 {(inbox) => <FromInboxOption inbox={inbox} />}
               </Show>
@@ -69,7 +71,7 @@ export function FromInboxSelector(props: {
             </Dropdown.Trigger>
             <Dropdown.Content>
               <Dropdown.Group>
-                <For each={props.links}>
+                <For each={sortedLinks()}>
                   {(inbox) => (
                     <Dropdown.Item onSelect={() => props.onSelect(inbox.id)}>
                       <FromInboxOption inbox={inbox} />

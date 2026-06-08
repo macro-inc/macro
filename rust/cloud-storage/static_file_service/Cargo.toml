@@ -50,3 +50,5 @@ tracing-tree = { workspace = true }
 utoipa = { workspace = true }
 utoipa-swagger-ui = { workspace = true, features = ["axum"] }
 uuid.workspace = true
+
+macro_service_urls = { path = "../macro_service_urls" }

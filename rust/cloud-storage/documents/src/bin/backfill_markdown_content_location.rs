@@ -14,6 +14,7 @@ use documents::outbound::markdown_init::LexicalSyncMarkdownInitializer;
 use documents::outbound::pg_document_repo::PgDocumentRepo;
 use documents::outbound::s3_markdown_source::S3MarkdownObjectReader;
 use lexical_client::LexicalClient;
+use macro_service_urls::{LexicalServiceUrl, SyncServiceUrl};
 use sqlx::postgres::PgPoolOptions;
 use sync_service_client::SyncServiceClient;
 
@@ -89,7 +90,7 @@ async fn main() -> anyhow::Result<()> {
     let database_url = env::var("DATABASE_URL").context("DATABASE_URL must be set")?;
     let sync_service_auth_key =
         env::var("SYNC_SERVICE_AUTH_KEY").context("SYNC_SERVICE_AUTH_KEY must be set")?;
-    let sync_service_url = env::var("SYNC_SERVICE_URL").context("SYNC_SERVICE_URL must be set")?;
+    let sync_service_url = SyncServiceUrl::new()?.to_string();
 
     tracing::info!(
         apply = options.apply,
@@ -158,8 +159,7 @@ fn build_markdown_initializer(
 
     let internal_api_secret_key = env::var("INTERNAL_API_SECRET_KEY")
         .context("INTERNAL_API_SECRET_KEY must be set when --initialize-missing is used")?;
-    let lexical_service_url = env::var("LEXICAL_SERVICE_URL")
-        .context("LEXICAL_SERVICE_URL must be set when --initialize-missing is used")?;
+    let lexical_service_url = LexicalServiceUrl::new()?.to_string();
 
     Ok(OptionalMarkdownInitializer::Enabled(
         LexicalSyncMarkdownInitializer::new(

@@ -1,5 +1,9 @@
 pub use macro_env::Environment;
 use macro_env_var::{env_var, maybe_env_var};
+use macro_service_urls::{
+    DocumentCognitionServiceUrl, DocumentStorageServiceUrl, EmailServiceUrl, LexicalServiceUrl,
+    StaticFileServiceUrl, SyncServiceUrl,
+};
 
 use crate::core::constants::DEFAULT_DOCUMENT_BATCH_LIMIT;
 /// The configuration parameters for the application.
@@ -67,14 +71,9 @@ env_var!(
         pub ChatDeleteQueue,
         pub EmailScheduledQueue,
         pub NotificationQueue,
-        pub DocumentStorageServiceUrl,
         pub DocumentStorageServiceAuthKey,
         pub SearchEventQueue,
-        pub SyncServiceUrl,
         pub SyncServiceAuthKey,
-        pub LexicalServiceUrl,
-        pub EmailServiceUrl,
-        pub StaticFileServiceUrl,
         pub AuthenticationServiceUrl,
         pub AuthenticationServiceSecretKey,
         pub RedisHost,
@@ -83,7 +82,6 @@ env_var!(
         pub DocumentStorageServiceCloudfrontSignerPublicKeyId,
         pub DocumentStorageServiceCloudfrontSignerPrivateKeySecretName,
         pub McpCredentialsKeySecretName,
-        pub DocumentCognitionServiceUrl,
     }
 );
 
@@ -108,6 +106,13 @@ impl Config {
             .and_then(|v| v.parse::<i64>().ok())
             .unwrap_or(DEFAULT_DOCUMENT_BATCH_LIMIT);
 
+        let document_storage_service_url = DocumentStorageServiceUrl::new()?.to_string();
+        let sync_service_url = SyncServiceUrl::new()?.to_string();
+        let lexical_service_url = LexicalServiceUrl::new()?.to_string();
+        let email_service_url = EmailServiceUrl::new()?.to_string();
+        let document_cognition_service_url = DocumentCognitionServiceUrl::new()?.to_string();
+        let static_file_service_url = StaticFileServiceUrl::new()?.to_string();
+
         let EnvVars {
             database_url,
             document_storage_bucket,
@@ -115,14 +120,9 @@ impl Config {
             chat_delete_queue,
             email_scheduled_queue,
             notification_queue,
-            document_storage_service_url,
             document_storage_service_auth_key,
             search_event_queue,
-            sync_service_url,
             sync_service_auth_key,
-            lexical_service_url,
-            email_service_url,
-            static_file_service_url,
             authentication_service_url,
             authentication_service_secret_key,
             redis_host,
@@ -131,7 +131,6 @@ impl Config {
             document_storage_service_cloudfront_signer_public_key_id,
             document_storage_service_cloudfront_signer_private_key_secret_name,
             mcp_credentials_key_secret_name,
-            document_cognition_service_url,
         } = env_vars;
 
         Ok(Config {
@@ -140,7 +139,7 @@ impl Config {
             environment,
             document_batch_limit,
             document_storage_bucket: document_storage_bucket.to_string(),
-            document_storage_service_url: document_storage_service_url.to_string(),
+            document_storage_service_url,
             document_storage_service_auth_key: document_storage_service_auth_key.to_string(),
             document_text_extractor_queue: document_text_extractor_queue.to_string(),
             chat_delete_queue: chat_delete_queue.to_string(),
@@ -148,11 +147,11 @@ impl Config {
             notification_queue: notification_queue.to_string(),
             search_event_queue: search_event_queue.to_string(),
             sync_service_auth_key: sync_service_auth_key.to_string(),
-            sync_service_url: sync_service_url.to_string(),
-            lexical_service_url: lexical_service_url.to_string(),
-            email_service_url: email_service_url.to_string(),
-            document_cognition_service_url: document_cognition_service_url.to_string(),
-            static_file_service_url: static_file_service_url.to_string(),
+            sync_service_url,
+            lexical_service_url,
+            email_service_url,
+            document_cognition_service_url,
+            static_file_service_url,
             authentication_service_url: authentication_service_url.to_string(),
             authentication_service_secret_key: authentication_service_secret_key.to_string(),
             redis_host,

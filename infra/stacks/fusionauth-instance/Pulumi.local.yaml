@@ -8,4 +8,6 @@ config:
     fusionauth-instance:default-from-email: auth-local@macro.com
     fusionauth:host: http://localhost:9011
     fusionauth-instance:fusionauth-signing-key-id: d7d09513-a3f5-401c-9685-34ab6c552453
+    fusionauth-instance:google-client-id-secret-key: google-client-id-dev
+    fusionauth-instance:google-client-secret-secret-key: google-client-secret-dev
     fusionauth:apiKey: bf69486b-4733-4954-a44e-2e1b5f2c8a91

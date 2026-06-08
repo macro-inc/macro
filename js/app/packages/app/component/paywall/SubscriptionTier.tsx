@@ -6,8 +6,8 @@ interface SubscriptionTierProps {
 }
 
 const SubscriptionTier = (props: SubscriptionTierProps) => {
-  const active1 = () => props.tier === 'opus';
-  const active2 = () => props.tier === 'opus' || props.tier === 'sonnet';
+  const active1 = () => props.tier === 'premium';
+  const active2 = () => props.tier === 'premium';
   const active3 = () => !!props.tier;
 
   return (

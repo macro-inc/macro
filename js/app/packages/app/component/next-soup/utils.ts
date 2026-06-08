@@ -35,6 +35,8 @@ import { notificationKeys } from '@queries/notification/keys';
 import {
   bulkMarkNotificationsAsDone,
   bulkMarkNotificationsAsUndone,
+  restoreUserNotifications,
+  snapshotUserNotifications,
 } from '@queries/notification/user-notifications';
 import {
   getSoupEntityById,
@@ -649,11 +651,19 @@ export function resolveMarkEntitiesDoneVariables(args: {
  * override. Returns a context the mutation uses for rollback / reapply.
  */
 export function applyEntitiesDoneOptimistic(args: {
+  entityIds: string[];
   emailIds: string[];
   notificationIds: string[];
 }): MarkEntitiesDoneContext {
-  const { emailIds, notificationIds } = args;
+  const { entityIds, emailIds, notificationIds } = args;
   const emailIdSet = new Set(emailIds);
+  const entityIdSet = new Set(entityIds);
+
+  // Snapshot the affected notifications before marking done. A done
+  // notification gets dropped from the cache (status-update event or a stale
+  // refetch), so undo re-adds it here so the soup `notDoneFilter` predicate
+  // lets the restored entity through again.
+  const notificationSnapshots = snapshotUserNotifications(notificationIds);
 
   type EmailQueryKey = readonly unknown[];
   type EmailCacheData = { pages: { items: EntityData[] }[] };
@@ -716,7 +726,10 @@ export function applyEntitiesDoneOptimistic(args: {
   let soupTxn: ReturnType<typeof removeSoupEntities> | null = null;
 
   const reapply = () => {
-    soupTxn = emailIds.length > 0 ? removeSoupEntities(emailIdSet) : null;
+    // Remove every marked entity from the soup feed cache so the hide is
+    // authoritative for all types; undo restores them via this transaction's
+    // rollback.
+    soupTxn = entityIds.length > 0 ? removeSoupEntities(entityIdSet) : null;
     filterEmailCache();
     setDoneOverride(notificationIds, true);
   };
@@ -732,6 +745,7 @@ export function applyEntitiesDoneOptimistic(args: {
     soupTxn?.rollback();
     soupTxn = null;
     restoreEmailCache();
+    restoreUserNotifications(notificationSnapshots);
     // Force `done=false` — cache may have reconciled to `done=true` from the
     // server, so clearing the override would leave the UI hidden after undo.
     setDoneOverride(notificationIds, false);

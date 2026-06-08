@@ -104,6 +104,8 @@ export type EmailEntity = EntityBase & {
   participants?: EmailThreadParticipants;
   senderEmail?: string;
   senderName?: string;
+  /** The linked inbox (email_links row) this thread belongs to. */
+  linkId?: string;
   labels?: SoupLabel[] | ApiLabel[];
   hasIcsAttachment?: boolean;
   attachments?: EmailAttachment[];

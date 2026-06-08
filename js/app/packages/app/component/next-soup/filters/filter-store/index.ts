@@ -1,4 +1,8 @@
-export { defineQueryFilters, queryStateFrom } from './compile';
+export {
+  compileToAst,
+  defineQueryFilters,
+  queryStateFrom,
+} from './compile';
 export type {
   PropertyFilter,
   Query,

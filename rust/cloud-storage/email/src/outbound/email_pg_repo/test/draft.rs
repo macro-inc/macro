@@ -165,6 +165,124 @@ async fn test_get_draft_replying_to_wrong_link(pool: Pool<Postgres>) -> anyhow::
     Ok(())
 }
 
+// ── delete_draft_message ──────────────────────────────────────────
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_draft"))
+)]
+async fn test_delete_draft_message_keeps_nonempty_thread(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = EmailPgRepo::new(pool);
+
+    let draft_id = Uuid::parse_str("ee000002-0000-0000-0000-000000000002")?;
+    let thread_id = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+
+    repo.delete_draft_message(draft_id, thread_id).await?;
+
+    assert!(
+        repo.get_simple_message(draft_id, &[link_id])
+            .await?
+            .is_none(),
+        "the draft message should be deleted"
+    );
+    assert!(
+        repo.thread_by_id(thread_id).await?.is_some(),
+        "a thread that still has messages should be kept"
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_draft"))
+)]
+async fn test_delete_draft_message_removes_empty_thread(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = EmailPgRepo::new(pool);
+
+    let draft_id = Uuid::parse_str("ee000004-0000-0000-0000-000000000004")?;
+    let thread_id = Uuid::parse_str("33333333-3333-3333-3333-333333333333")?;
+
+    repo.delete_draft_message(draft_id, thread_id).await?;
+
+    assert!(
+        repo.thread_by_id(thread_id).await?.is_none(),
+        "a thread left with no messages should be deleted"
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_draft"))
+)]
+async fn test_delete_draft_message_rejects_sent_message(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = EmailPgRepo::new(pool);
+
+    // ee000003 is a sent message, not a draft; deleting it must not succeed.
+    let sent_id = Uuid::parse_str("ee000003-0000-0000-0000-000000000003")?;
+    let thread_id = Uuid::parse_str("22222222-2222-2222-2222-222222222222")?;
+
+    assert!(
+        repo.delete_draft_message(sent_id, thread_id).await.is_err(),
+        "deleting a non-draft should error and leave it intact"
+    );
+    assert!(
+        repo.thread_by_id(thread_id).await?.is_some(),
+        "the thread of a non-draft must be untouched"
+    );
+
+    Ok(())
+}
+
+// ── cross_inbox_reply_drafts ──────────────────────────────────────
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_draft"))
+)]
+async fn test_cross_inbox_reply_drafts(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = EmailPgRepo::new(pool);
+
+    let msg1 = Uuid::parse_str("ee000001-0000-0000-0000-000000000001")?;
+    let thread1 = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
+    let own_link = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let alt_link = Uuid::parse_str("cccccccc-cccc-cccc-cccc-cccccccccccc")?;
+    let moved_draft = Uuid::parse_str("ee000005-0000-0000-0000-000000000005")?;
+
+    // The reply draft moved to the alt inbox is found, but the same-thread draft
+    // (ee000002 in thread1) is excluded.
+    let found = repo
+        .cross_inbox_reply_drafts(&[msg1], &[own_link, alt_link], thread1)
+        .await?;
+    assert_eq!(
+        found.len(),
+        1,
+        "should surface only the moved cross-inbox draft"
+    );
+    assert_eq!(found[0].db_id, moved_draft);
+    assert_eq!(found[0].link_id, alt_link);
+
+    // Without the alt inbox in scope, nothing is returned (same-thread draft excluded).
+    let none = repo
+        .cross_inbox_reply_drafts(&[msg1], &[own_link], thread1)
+        .await?;
+    assert!(
+        none.is_empty(),
+        "same-thread drafts and inaccessible inboxes must be excluded"
+    );
+
+    Ok(())
+}
+
 // ── upsert_contacts ───────────────────────────────────────────────
 
 #[sqlx::test(

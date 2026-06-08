@@ -1,57 +1,194 @@
-//! Service-level pipeline tests against in-memory mock ports.
+//! Service-level pipeline tests against in-memory mock dependencies.
 //!
-//! These exercise [`TaskDedupService`] end to end without a database: the repo,
-//! embedder, reranker, judge, and notifier are all mocked here so each stage of
-//! the retrieve → rerank → judge → persist → notify pipeline can be asserted in
-//! isolation.
+//! These exercise [`TaskDedupService`] end to end without a database: the
+//! embedder, vector store, reranker, judge, notifier, and match repo are all
+//! mocked here so each stage of the retrieve → rerank → judge → persist → notify
+//! pipeline can be asserted in isolation.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
+use embedding::{
+    Content, Embeddable, EmbeddingModel, KeyedEmbedding, LabeledEmbedding, Match, RerankModel,
+    Reranked, SearchResults, VectorStore,
+};
 use uuid::Uuid;
 
 use super::{TaskDedupConfig, TaskDedupService};
 use crate::domain::models::{
-    JudgeResult, NewTask, TaskDedupError, TaskDuplicate, TaskDuplicateCandidate,
-    TaskSimilarityCandidate,
+    JudgeResult, NewTask, TaskDedupError, TaskDuplicate, TaskSearchParameters,
 };
-use crate::domain::ports::{
-    TaskDedupNotifier, TaskDedupRepo, TaskDuplicateJudge, TaskEmbedder, TaskReranker,
-};
+use crate::domain::ports::{TaskDedupNotifier, TaskDuplicateJudge, TaskMatchRepo};
+
+/// Small embedding width so mock vectors stay tiny.
+const DIMS: usize = 4;
+
+type MockService = TaskDedupService<DIMS, MockEmbedder, MockVectorDb, MockReranker>;
 
 // ---------------------------------------------------------------------------
 // Mocks
 // ---------------------------------------------------------------------------
 
+/// Embedder that emits a zero vector per field exposed by the content.
 struct MockEmbedder;
 
-#[async_trait]
-impl TaskEmbedder for MockEmbedder {
-    async fn embed(&self, _content: &str) -> anyhow::Result<Vec<f32>> {
-        Ok(vec![0.0; 4])
+impl EmbeddingModel<DIMS> for MockEmbedder {
+    async fn embed(
+        &self,
+        content: &(dyn Embeddable + Sync),
+    ) -> anyhow::Result<Vec<LabeledEmbedding<'static, DIMS>>> {
+        Ok(content
+            .embedding_content()
+            .into_iter()
+            .map(|(search_key, text)| LabeledEmbedding {
+                search_key,
+                content: Content::Owned(text.into_owned()),
+                embedding: [0.0; DIMS],
+            })
+            .collect())
     }
 }
 
-/// Reranker that scores documents from a content→score map (default 0.0) and
-/// records every call so tests can assert it ran on each path.
+/// Vector store returning preset `(document_id, content, score)` candidates, each
+/// as a single-field [`SearchResults`]. Records upserts and the last search
+/// parameters so the detect/similarity paths can be asserted.
+#[derive(Clone, Default)]
+struct MockVectorDb {
+    inner: Arc<MockVectorDbInner>,
+}
+
 #[derive(Default)]
+struct MockVectorDbInner {
+    results: Vec<(String, String, f32)>,
+    upserted: Mutex<Vec<String>>,
+    last_params: Mutex<Option<TaskSearchParameters>>,
+}
+
+impl MockVectorDb {
+    fn with_results(results: Vec<(&str, &str, f32)>) -> Self {
+        Self {
+            inner: Arc::new(MockVectorDbInner {
+                results: results
+                    .into_iter()
+                    .map(|(id, content, score)| (id.to_string(), content.to_string(), score))
+                    .collect(),
+                ..Default::default()
+            }),
+        }
+    }
+}
+
+impl VectorStore<DIMS> for MockVectorDb {
+    type Error = anyhow::Error;
+    type Metadata = String;
+    type SearchParameters = TaskSearchParameters;
+
+    async fn upsert_embeddings<'a>(
+        &self,
+        metadata: String,
+        _embeddings: Vec<LabeledEmbedding<'a, DIMS>>,
+    ) -> anyhow::Result<()> {
+        self.inner.upserted.lock().unwrap().push(metadata);
+        Ok(())
+    }
+
+    async fn cosine_search(
+        &self,
+        _query: Vec<KeyedEmbedding<DIMS>>,
+        params: TaskSearchParameters,
+    ) -> anyhow::Result<Vec<SearchResults<String, DIMS>>> {
+        *self.inner.last_params.lock().unwrap() = Some(params);
+        Ok(self
+            .inner
+            .results
+            .iter()
+            .map(|(id, content, score)| SearchResults {
+                metadata: id.clone(),
+                matches: vec![Match {
+                    score: *score,
+                    embedding: LabeledEmbedding {
+                        search_key: "title",
+                        content: Content::Owned(content.clone()),
+                        embedding: [0.0; DIMS],
+                    },
+                }],
+            })
+            .collect())
+    }
+}
+
+/// Reranker that scores candidates from a content→score map (default 0.0),
+/// returning them sorted by descending score (stable for ties) and recording
+/// every call so tests can assert it ran on each path.
+#[derive(Clone, Default)]
 struct MockReranker {
+    inner: Arc<MockRerankerInner>,
+}
+
+#[derive(Default)]
+struct MockRerankerInner {
     scores: HashMap<String, f64>,
     calls: Mutex<Vec<(String, Vec<String>)>>,
 }
 
-#[async_trait]
-impl TaskReranker for MockReranker {
-    async fn rerank(&self, query: &str, documents: &[String]) -> anyhow::Result<Vec<f64>> {
-        self.calls
+impl MockReranker {
+    fn new(scores: &[(&str, f64)]) -> Self {
+        Self {
+            inner: Arc::new(MockRerankerInner {
+                scores: scores.iter().map(|(k, v)| (k.to_string(), *v)).collect(),
+                calls: Mutex::default(),
+            }),
+        }
+    }
+
+    fn calls(&self) -> Vec<(String, Vec<String>)> {
+        self.inner.calls.lock().unwrap().clone()
+    }
+}
+
+impl<const DIMS: usize> RerankModel<DIMS> for MockReranker {
+    async fn rerank<'a, T: Send>(
+        &self,
+        query: Content<'a>,
+        candidates: Vec<SearchResults<T, DIMS>>,
+    ) -> anyhow::Result<Vec<Reranked<T>>> {
+        // Reconstruct each candidate's content the same way the service does so
+        // the content→score map keys still line up.
+        let documents = candidates
+            .iter()
+            .map(|result| {
+                result
+                    .matches
+                    .iter()
+                    .map(|matched| matched.embedding.content.as_ref())
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            })
+            .collect::<Vec<_>>();
+        self.inner
+            .calls
             .lock()
             .unwrap()
-            .push((query.to_string(), documents.to_vec()));
-        Ok(documents
-            .iter()
-            .map(|document| self.scores.get(document).copied().unwrap_or(0.0))
-            .collect())
+            .push((query.into_owned(), documents.clone()));
+
+        let mut scored = candidates
+            .into_iter()
+            .zip(documents)
+            .map(|(result, content)| {
+                let score = self.inner.scores.get(&content).copied().unwrap_or(0.0) as f32;
+                Reranked {
+                    item: result.metadata,
+                    score,
+                }
+            })
+            .collect::<Vec<_>>();
+        scored.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        Ok(scored)
     }
 }
 
@@ -106,22 +243,19 @@ struct RecordedMatch {
     judge_model: Option<String>,
 }
 
-/// In-memory repo: preset retrieval results + a live match store, recording the
-/// writes (embeddings, matches, trims) the service performs.
+/// In-memory match repo: a live match store recording the writes (matches,
+/// trims) the service performs.
 #[derive(Default)]
-struct MockRepo {
-    candidates: Vec<TaskDuplicateCandidate>,
-    similarity_candidates: Vec<TaskSimilarityCandidate>,
+struct MockMatchRepo {
     /// Extra documents `active_duplicate_component` folds in beyond the seeds,
     /// to exercise duplicate-graph closure.
     component_extra: Vec<String>,
     matches: Mutex<Vec<MatchRow>>,
-    upserted_embeddings: Mutex<Vec<String>>,
     upserted_matches: Mutex<Vec<RecordedMatch>>,
     trimmed: Mutex<Vec<(String, i64)>>,
 }
 
-impl MockRepo {
+impl MockMatchRepo {
     fn add_active_match(&self, task_id: &str, duplicate_task_id: &str) -> Uuid {
         let id = Uuid::new_v4();
         self.matches.lock().unwrap().push(MatchRow {
@@ -137,40 +271,7 @@ impl MockRepo {
 }
 
 #[async_trait]
-impl TaskDedupRepo for MockRepo {
-    async fn upsert_embedding(
-        &self,
-        document_id: &str,
-        _model: &str,
-        _content: &str,
-        _embedding: &[f32],
-    ) -> Result<(), TaskDedupError> {
-        self.upserted_embeddings
-            .lock()
-            .unwrap()
-            .push(document_id.to_string());
-        Ok(())
-    }
-
-    async fn candidates(
-        &self,
-        _task: &NewTask,
-        _embedding: &[f32],
-        _limit: i64,
-    ) -> Result<Vec<TaskDuplicateCandidate>, TaskDedupError> {
-        Ok(self.candidates.clone())
-    }
-
-    async fn similarity_candidates(
-        &self,
-        _owner: &str,
-        _team_id: Option<Uuid>,
-        _embedding: &[f32],
-        _limit: i64,
-    ) -> Result<Vec<TaskSimilarityCandidate>, TaskDedupError> {
-        Ok(self.similarity_candidates.clone())
-    }
-
+impl TaskMatchRepo for MockMatchRepo {
     async fn upsert_match(
         &self,
         task_id: &str,
@@ -293,28 +394,21 @@ impl TaskDedupRepo for MockRepo {
         }
         Ok(())
     }
+
+    async fn task_names(
+        &self,
+        document_ids: &[String],
+    ) -> Result<HashMap<String, String>, TaskDedupError> {
+        Ok(document_ids
+            .iter()
+            .map(|id| (id.clone(), format!("{id} name")))
+            .collect())
+    }
 }
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-fn candidate(id: &str, content: &str, vector_score: f64) -> TaskDuplicateCandidate {
-    TaskDuplicateCandidate {
-        document_id: id.to_string(),
-        content: content.to_string(),
-        vector_score,
-    }
-}
-
-fn sim_candidate(id: &str, content: &str, vector_score: f64) -> TaskSimilarityCandidate {
-    TaskSimilarityCandidate {
-        document_id: id.to_string(),
-        name: format!("{id} name"),
-        content: content.to_string(),
-        vector_score,
-    }
-}
 
 fn new_task(document_id: &str) -> NewTask {
     NewTask {
@@ -326,11 +420,41 @@ fn new_task(document_id: &str) -> NewTask {
     }
 }
 
-fn reranker(scores: &[(&str, f64)]) -> Arc<MockReranker> {
-    Arc::new(MockReranker {
-        scores: scores.iter().map(|(k, v)| (k.to_string(), *v)).collect(),
-        calls: Mutex::default(),
-    })
+/// Builds a service, returning it alongside the mocks the test asserts on.
+struct Harness {
+    service: MockService,
+    vector_db: MockVectorDb,
+    reranker: MockReranker,
+    judge: Arc<MockJudge>,
+    notifier: Arc<MockNotifier>,
+    matches: Arc<MockMatchRepo>,
+}
+
+fn build(
+    config: TaskDedupConfig,
+    vector_db: MockVectorDb,
+    reranker: MockReranker,
+    judge: Arc<MockJudge>,
+    notifier: Arc<MockNotifier>,
+    matches: Arc<MockMatchRepo>,
+) -> Harness {
+    let service = TaskDedupService::new(
+        config,
+        MockEmbedder,
+        vector_db.clone(),
+        reranker.clone(),
+        judge.clone(),
+        notifier.clone(),
+        matches.clone(),
+    );
+    Harness {
+        service,
+        vector_db,
+        reranker,
+        judge,
+        notifier,
+        matches,
+    }
 }
 
 fn judge(duplicates: &[&str]) -> Arc<MockJudge> {
@@ -338,23 +462,6 @@ fn judge(duplicates: &[&str]) -> Arc<MockJudge> {
         duplicates: duplicates.iter().map(|s| s.to_string()).collect(),
         calls: Mutex::default(),
     })
-}
-
-fn build(
-    config: TaskDedupConfig,
-    repo: &Arc<MockRepo>,
-    reranker: &Arc<MockReranker>,
-    judge: &Arc<MockJudge>,
-    notifier: &Arc<MockNotifier>,
-) -> TaskDedupService {
-    TaskDedupService::new(
-        config,
-        repo.clone(),
-        Arc::new(MockEmbedder),
-        reranker.clone(),
-        judge.clone(),
-        notifier.clone(),
-    )
 }
 
 fn judged_right_sides(judge: &MockJudge) -> Vec<String> {
@@ -373,32 +480,38 @@ fn judged_right_sides(judge: &MockJudge) -> Vec<String> {
 
 #[tokio::test]
 async fn detect_creates_match_reranks_and_notifies() {
-    let repo = Arc::new(MockRepo {
-        candidates: vec![candidate("A", "cand-a", 0.9)],
-        ..Default::default()
-    });
-    let reranker = reranker(&[]);
-    let judge = judge(&["cand-a"]);
-    let notifier = Arc::new(MockNotifier::default());
-    let service = build(
+    let h = build(
         TaskDedupConfig::default(),
-        &repo,
-        &reranker,
-        &judge,
-        &notifier,
+        MockVectorDb::with_results(vec![("A", "cand-a", 0.9)]),
+        MockReranker::new(&[]),
+        judge(&["cand-a"]),
+        Arc::new(MockNotifier::default()),
+        Arc::new(MockMatchRepo::default()),
     );
 
-    let mut active = service.detect_new_task(new_task("NEW")).await.unwrap();
+    let mut active = h.service.detect_new_task(new_task("NEW")).await.unwrap();
     active.sort();
 
     // Embedding persisted for the new task.
     assert_eq!(
-        *repo.upserted_embeddings.lock().unwrap(),
+        *h.vector_db.inner.upserted.lock().unwrap(),
         vec!["NEW".to_string()]
     );
 
+    // The detect path scopes and excludes the query task and dismissed pairs.
+    let params = h
+        .vector_db
+        .inner
+        .last_params
+        .lock()
+        .unwrap()
+        .clone()
+        .unwrap();
+    assert_eq!(params.exclude_document_id.as_deref(), Some("NEW"));
+    assert!(params.exclude_dismissed);
+
     // A single ordered match was written, tagged with the judge's model.
-    let upserts = repo.upserted_matches.lock().unwrap();
+    let upserts = h.matches.upserted_matches.lock().unwrap();
     assert_eq!(upserts.len(), 1);
     assert_eq!(upserts[0].task_id, "A");
     assert_eq!(upserts[0].duplicate_task_id, "NEW");
@@ -406,14 +519,15 @@ async fn detect_creates_match_reranks_and_notifies() {
     drop(upserts);
 
     // The reranker ran in the judge path.
-    assert_eq!(reranker.calls.lock().unwrap().len(), 1);
+    assert_eq!(h.reranker.calls().len(), 1);
 
     // Both sides were trimmed and notified, and returned as active.
     assert_eq!(active, vec!["A".to_string(), "NEW".to_string()]);
-    let mut notified = notifier.notified.lock().unwrap().clone();
+    let mut notified = h.notifier.notified.lock().unwrap().clone();
     notified.sort();
     assert_eq!(notified, vec!["A".to_string(), "NEW".to_string()]);
-    let trimmed: HashSet<String> = repo
+    let trimmed: HashSet<String> = h
+        .matches
         .trimmed
         .lock()
         .unwrap()
@@ -425,83 +539,73 @@ async fn detect_creates_match_reranks_and_notifies() {
 
 #[tokio::test]
 async fn detect_skips_candidates_below_vector_similarity() {
-    let repo = Arc::new(MockRepo {
-        candidates: vec![candidate("A", "cand-a", 0.9), candidate("B", "cand-b", 0.5)],
-        ..Default::default()
-    });
-    let reranker = reranker(&[]);
-    let judge = judge(&["cand-a", "cand-b"]);
-    let notifier = Arc::new(MockNotifier::default());
-    let service = build(
+    let h = build(
         TaskDedupConfig::default(),
-        &repo,
-        &reranker,
-        &judge,
-        &notifier,
+        MockVectorDb::with_results(vec![("A", "cand-a", 0.9), ("B", "cand-b", 0.5)]),
+        MockReranker::new(&[]),
+        judge(&["cand-a", "cand-b"]),
+        Arc::new(MockNotifier::default()),
+        Arc::new(MockMatchRepo::default()),
     );
 
-    service.detect_new_task(new_task("NEW")).await.unwrap();
+    h.service.detect_new_task(new_task("NEW")).await.unwrap();
 
     // B (0.5 < 0.74) never reaches the reranker or the judge.
-    let calls = reranker.calls.lock().unwrap();
+    let calls = h.reranker.calls();
     assert_eq!(calls.len(), 1);
     assert_eq!(calls[0].1, vec!["cand-a".to_string()]);
-    drop(calls);
-    assert_eq!(judged_right_sides(&judge), vec!["cand-a".to_string()]);
+    assert_eq!(judged_right_sides(&h.judge), vec!["cand-a".to_string()]);
 }
 
 #[tokio::test]
 async fn detect_caps_judge_calls_at_max_candidates() {
-    let repo = Arc::new(MockRepo {
-        candidates: vec![
-            candidate("A", "cand-a", 0.90),
-            candidate("B", "cand-b", 0.85),
-            candidate("C", "cand-c", 0.80),
-        ],
-        ..Default::default()
-    });
-    let reranker = reranker(&[]); // uniform → preserves vector order
-    let judge = judge(&[]);
-    let notifier = Arc::new(MockNotifier::default());
     let config = TaskDedupConfig {
         max_judge_candidates: 2,
         ..Default::default()
     };
-    let service = build(config, &repo, &reranker, &judge, &notifier);
+    let h = build(
+        config,
+        MockVectorDb::with_results(vec![
+            ("A", "cand-a", 0.90),
+            ("B", "cand-b", 0.85),
+            ("C", "cand-c", 0.80),
+        ]),
+        MockReranker::new(&[]), // uniform → preserves vector order
+        judge(&[]),
+        Arc::new(MockNotifier::default()),
+        Arc::new(MockMatchRepo::default()),
+    );
 
-    service.detect_new_task(new_task("NEW")).await.unwrap();
+    h.service.detect_new_task(new_task("NEW")).await.unwrap();
 
     // Only the top 2 (by preserved order) are judged; C is dropped.
     assert_eq!(
-        judged_right_sides(&judge),
+        judged_right_sides(&h.judge),
         vec!["cand-a".to_string(), "cand-b".to_string()]
     );
 }
 
 #[tokio::test]
 async fn detect_uses_rerank_order_to_pick_judged_candidate() {
-    let repo = Arc::new(MockRepo {
-        // A leads by vector score, but the reranker prefers B.
-        candidates: vec![
-            candidate("A", "cand-a", 0.90),
-            candidate("B", "cand-b", 0.80),
-        ],
-        ..Default::default()
-    });
-    let reranker = reranker(&[("cand-a", 0.1), ("cand-b", 0.9)]);
-    let judge = judge(&["cand-b"]);
-    let notifier = Arc::new(MockNotifier::default());
     let config = TaskDedupConfig {
         max_judge_candidates: 1,
         ..Default::default()
     };
-    let service = build(config, &repo, &reranker, &judge, &notifier);
+    let h = build(
+        config,
+        // A leads by vector score, but the reranker prefers B.
+        MockVectorDb::with_results(vec![("A", "cand-a", 0.90), ("B", "cand-b", 0.80)]),
+        MockReranker::new(&[("cand-a", 0.1), ("cand-b", 0.9)]),
+        judge(&["cand-b"]),
+        Arc::new(MockNotifier::default()),
+        Arc::new(MockMatchRepo::default()),
+    );
 
-    service.detect_new_task(new_task("NEW")).await.unwrap();
+    h.service.detect_new_task(new_task("NEW")).await.unwrap();
 
     // Rerank promoted B above A, so B is the only candidate judged and matched.
-    assert_eq!(judged_right_sides(&judge), vec!["cand-b".to_string()]);
-    let upserts = repo.upserted_matches.lock().unwrap();
+    assert_eq!(judged_right_sides(&h.judge), vec!["cand-b".to_string()]);
+    let upserts = h.matches.upserted_matches.lock().unwrap();
     assert_eq!(upserts.len(), 1);
     let pair = (
         upserts[0].task_id.clone(),
@@ -512,51 +616,43 @@ async fn detect_uses_rerank_order_to_pick_judged_candidate() {
 
 #[tokio::test]
 async fn detect_ignores_non_duplicate_judgement() {
-    let repo = Arc::new(MockRepo {
-        candidates: vec![candidate("A", "cand-a", 0.9)],
-        ..Default::default()
-    });
-    let reranker = reranker(&[]);
-    let judge = judge(&[]); // judge says "not a duplicate"
-    let notifier = Arc::new(MockNotifier::default());
-    let service = build(
+    let h = build(
         TaskDedupConfig::default(),
-        &repo,
-        &reranker,
-        &judge,
-        &notifier,
+        MockVectorDb::with_results(vec![("A", "cand-a", 0.9)]),
+        MockReranker::new(&[]),
+        judge(&[]), // judge says "not a duplicate"
+        Arc::new(MockNotifier::default()),
+        Arc::new(MockMatchRepo::default()),
     );
 
-    let active = service.detect_new_task(new_task("NEW")).await.unwrap();
+    let active = h.service.detect_new_task(new_task("NEW")).await.unwrap();
 
     assert!(active.is_empty());
-    assert!(repo.upserted_matches.lock().unwrap().is_empty());
-    assert!(notifier.notified.lock().unwrap().is_empty());
+    assert!(h.matches.upserted_matches.lock().unwrap().is_empty());
+    assert!(h.notifier.notified.lock().unwrap().is_empty());
 }
 
 #[tokio::test]
 async fn detect_closes_duplicate_component() {
-    let repo = Arc::new(MockRepo {
-        candidates: vec![candidate("A", "cand-a", 0.9)],
+    let matches = Arc::new(MockMatchRepo {
         // An existing duplicate edge pulls C into the component.
         component_extra: vec!["C".to_string()],
         ..Default::default()
     });
-    let reranker = reranker(&[]);
-    let judge = judge(&["cand-a"]);
-    let notifier = Arc::new(MockNotifier::default());
-    let service = build(
+    let h = build(
         TaskDedupConfig::default(),
-        &repo,
-        &reranker,
-        &judge,
-        &notifier,
+        MockVectorDb::with_results(vec![("A", "cand-a", 0.9)]),
+        MockReranker::new(&[]),
+        judge(&["cand-a"]),
+        Arc::new(MockNotifier::default()),
+        matches,
     );
 
-    service.detect_new_task(new_task("NEW")).await.unwrap();
+    h.service.detect_new_task(new_task("NEW")).await.unwrap();
 
     // The full {A, C, NEW} component is closed into every pair.
-    let mut pairs: Vec<(String, String)> = repo
+    let mut pairs: Vec<(String, String)> = h
+        .matches
         .upserted_matches
         .lock()
         .unwrap()
@@ -580,26 +676,21 @@ async fn detect_closes_duplicate_component() {
 
 #[tokio::test]
 async fn similarity_search_filters_ranks_and_persists_nothing() {
-    let repo = Arc::new(MockRepo {
-        similarity_candidates: vec![
-            sim_candidate("X", "cx", 0.9),
-            sim_candidate("Y", "cy", 0.5), // below floor
-            sim_candidate("Z", "cz", 0.8),
-        ],
-        ..Default::default()
-    });
-    let reranker = reranker(&[]);
-    let judge = judge(&[]);
-    let notifier = Arc::new(MockNotifier::default());
-    let service = build(
+    let h = build(
         TaskDedupConfig::default(),
-        &repo,
-        &reranker,
-        &judge,
-        &notifier,
+        MockVectorDb::with_results(vec![
+            ("X", "cx", 0.9),
+            ("Y", "cy", 0.5), // below floor
+            ("Z", "cz", 0.8),
+        ]),
+        MockReranker::new(&[]),
+        judge(&[]),
+        Arc::new(MockNotifier::default()),
+        Arc::new(MockMatchRepo::default()),
     );
 
-    let results = service
+    let results = h
+        .service
         .similarity_search("owner", None, "title", "body")
         .await
         .unwrap();
@@ -607,37 +698,45 @@ async fn similarity_search_filters_ranks_and_persists_nothing() {
     // Y filtered out; X and Z surface in (preserved) order.
     let ids: Vec<&str> = results.iter().map(|r| r.task_id.as_str()).collect();
     assert_eq!(ids, vec!["X", "Z"]);
+    // Names are resolved via the match repo.
+    assert_eq!(results[0].task_name, "X name");
 
     // The reranker ran on the survivors only.
-    let calls = reranker.calls.lock().unwrap();
+    let calls = h.reranker.calls();
     assert_eq!(calls.len(), 1);
     assert_eq!(calls[0].1, vec!["cx".to_string(), "cz".to_string()]);
-    drop(calls);
+
+    // The similarity path does not scope-exclude self or dismissed pairs.
+    let params = h
+        .vector_db
+        .inner
+        .last_params
+        .lock()
+        .unwrap()
+        .clone()
+        .unwrap();
+    assert!(params.exclude_document_id.is_none());
+    assert!(!params.exclude_dismissed);
 
     // Nothing was judged or persisted.
-    assert!(judge.calls.lock().unwrap().is_empty());
-    assert!(repo.upserted_embeddings.lock().unwrap().is_empty());
-    assert!(repo.upserted_matches.lock().unwrap().is_empty());
+    assert!(h.judge.calls.lock().unwrap().is_empty());
+    assert!(h.vector_db.inner.upserted.lock().unwrap().is_empty());
+    assert!(h.matches.upserted_matches.lock().unwrap().is_empty());
 }
 
 #[tokio::test]
 async fn similarity_search_orders_by_rerank_score() {
-    let repo = Arc::new(MockRepo {
-        similarity_candidates: vec![sim_candidate("X", "cx", 0.9), sim_candidate("Z", "cz", 0.8)],
-        ..Default::default()
-    });
-    let reranker = reranker(&[("cx", 0.1), ("cz", 0.9)]);
-    let judge = judge(&[]);
-    let notifier = Arc::new(MockNotifier::default());
-    let service = build(
+    let h = build(
         TaskDedupConfig::default(),
-        &repo,
-        &reranker,
-        &judge,
-        &notifier,
+        MockVectorDb::with_results(vec![("X", "cx", 0.9), ("Z", "cz", 0.8)]),
+        MockReranker::new(&[("cx", 0.1), ("cz", 0.9)]),
+        judge(&[]),
+        Arc::new(MockNotifier::default()),
+        Arc::new(MockMatchRepo::default()),
     );
 
-    let results = service
+    let results = h
+        .service
         .similarity_search("owner", None, "title", "body")
         .await
         .unwrap();
@@ -648,24 +747,25 @@ async fn similarity_search_orders_by_rerank_score() {
 
 #[tokio::test]
 async fn similarity_search_truncates_to_duplicate_limit() {
-    let repo = Arc::new(MockRepo {
-        similarity_candidates: vec![
-            sim_candidate("A", "ca", 0.95),
-            sim_candidate("B", "cb", 0.90),
-            sim_candidate("C", "cc", 0.85),
-        ],
-        ..Default::default()
-    });
-    let reranker = reranker(&[]);
-    let judge = judge(&[]);
-    let notifier = Arc::new(MockNotifier::default());
     let config = TaskDedupConfig {
         duplicate_limit: 2,
         ..Default::default()
     };
-    let service = build(config, &repo, &reranker, &judge, &notifier);
+    let h = build(
+        config,
+        MockVectorDb::with_results(vec![
+            ("A", "ca", 0.95),
+            ("B", "cb", 0.90),
+            ("C", "cc", 0.85),
+        ]),
+        MockReranker::new(&[]),
+        judge(&[]),
+        Arc::new(MockNotifier::default()),
+        Arc::new(MockMatchRepo::default()),
+    );
 
-    let results = service
+    let results = h
+        .service
         .similarity_search("owner", None, "title", "body")
         .await
         .unwrap();
@@ -680,71 +780,69 @@ async fn similarity_search_truncates_to_duplicate_limit() {
 
 #[tokio::test]
 async fn dismiss_matches_dismisses_and_notifies_both_sides() {
-    let repo = Arc::new(MockRepo::default());
-    let match_id = repo.add_active_match("D", "O");
-    let reranker = reranker(&[]);
-    let judge = judge(&[]);
-    let notifier = Arc::new(MockNotifier::default());
-    let service = build(
+    let matches = Arc::new(MockMatchRepo::default());
+    let match_id = matches.add_active_match("D", "O");
+    let h = build(
         TaskDedupConfig::default(),
-        &repo,
-        &reranker,
-        &judge,
-        &notifier,
+        MockVectorDb::default(),
+        MockReranker::new(&[]),
+        judge(&[]),
+        Arc::new(MockNotifier::default()),
+        matches,
     );
 
-    service
+    h.service
         .dismiss_matches("D", &[match_id], "user")
         .await
         .unwrap();
 
-    assert!(service.active_duplicates("D").await.unwrap().is_empty());
-    let mut notified = notifier.notified.lock().unwrap().clone();
+    assert!(h.service.active_duplicates("D").await.unwrap().is_empty());
+    let mut notified = h.notifier.notified.lock().unwrap().clone();
     notified.sort();
     assert_eq!(notified, vec!["D".to_string(), "O".to_string()]);
 }
 
 #[tokio::test]
 async fn dismiss_matches_errors_when_match_missing() {
-    let repo = Arc::new(MockRepo::default());
-    let reranker = reranker(&[]);
-    let judge = judge(&[]);
-    let notifier = Arc::new(MockNotifier::default());
-    let service = build(
+    let h = build(
         TaskDedupConfig::default(),
-        &repo,
-        &reranker,
-        &judge,
-        &notifier,
+        MockVectorDb::default(),
+        MockReranker::new(&[]),
+        judge(&[]),
+        Arc::new(MockNotifier::default()),
+        Arc::new(MockMatchRepo::default()),
     );
 
-    let error = service
+    let error = h
+        .service
         .dismiss_matches("D", &[Uuid::new_v4()], "user")
         .await
         .unwrap_err();
 
     assert!(matches!(error, TaskDedupError::MatchNotFound));
-    assert!(notifier.notified.lock().unwrap().is_empty());
+    assert!(h.notifier.notified.lock().unwrap().is_empty());
 }
 
 #[tokio::test]
 async fn ensure_match_contains_checks_membership() {
-    let repo = Arc::new(MockRepo::default());
-    let match_id = repo.add_active_match("D", "O");
-    let reranker = reranker(&[]);
-    let judge = judge(&[]);
-    let notifier = Arc::new(MockNotifier::default());
-    let service = build(
+    let matches = Arc::new(MockMatchRepo::default());
+    let match_id = matches.add_active_match("D", "O");
+    let h = build(
         TaskDedupConfig::default(),
-        &repo,
-        &reranker,
-        &judge,
-        &notifier,
+        MockVectorDb::default(),
+        MockReranker::new(&[]),
+        judge(&[]),
+        Arc::new(MockNotifier::default()),
+        matches,
     );
 
-    service.ensure_match_contains("D", match_id).await.unwrap();
+    h.service
+        .ensure_match_contains("D", match_id)
+        .await
+        .unwrap();
 
-    let error = service
+    let error = h
+        .service
         .ensure_match_contains("D", Uuid::new_v4())
         .await
         .unwrap_err();
@@ -753,43 +851,39 @@ async fn ensure_match_contains_checks_membership() {
 
 #[tokio::test]
 async fn dismiss_match_by_id_dismisses_and_notifies() {
-    let repo = Arc::new(MockRepo::default());
-    let match_id = repo.add_active_match("D", "O");
-    let reranker = reranker(&[]);
-    let judge = judge(&[]);
-    let notifier = Arc::new(MockNotifier::default());
-    let service = build(
+    let matches = Arc::new(MockMatchRepo::default());
+    let match_id = matches.add_active_match("D", "O");
+    let h = build(
         TaskDedupConfig::default(),
-        &repo,
-        &reranker,
-        &judge,
-        &notifier,
+        MockVectorDb::default(),
+        MockReranker::new(&[]),
+        judge(&[]),
+        Arc::new(MockNotifier::default()),
+        matches,
     );
 
-    service.dismiss_match_by_id(match_id).await.unwrap();
+    h.service.dismiss_match_by_id(match_id).await.unwrap();
 
-    assert!(service.active_duplicates("D").await.unwrap().is_empty());
-    let mut notified = notifier.notified.lock().unwrap().clone();
+    assert!(h.service.active_duplicates("D").await.unwrap().is_empty());
+    let mut notified = h.notifier.notified.lock().unwrap().clone();
     notified.sort();
     assert_eq!(notified, vec!["D".to_string(), "O".to_string()]);
 }
 
 #[tokio::test]
 async fn active_duplicates_returns_the_other_side() {
-    let repo = Arc::new(MockRepo::default());
-    repo.add_active_match("D", "O");
-    let reranker = reranker(&[]);
-    let judge = judge(&[]);
-    let notifier = Arc::new(MockNotifier::default());
-    let service = build(
+    let matches = Arc::new(MockMatchRepo::default());
+    matches.add_active_match("D", "O");
+    let h = build(
         TaskDedupConfig::default(),
-        &repo,
-        &reranker,
-        &judge,
-        &notifier,
+        MockVectorDb::default(),
+        MockReranker::new(&[]),
+        judge(&[]),
+        Arc::new(MockNotifier::default()),
+        matches,
     );
 
-    let duplicates = service.active_duplicates("D").await.unwrap();
+    let duplicates = h.service.active_duplicates("D").await.unwrap();
     assert_eq!(duplicates.len(), 1);
     assert_eq!(duplicates[0].task_id, "O");
 }

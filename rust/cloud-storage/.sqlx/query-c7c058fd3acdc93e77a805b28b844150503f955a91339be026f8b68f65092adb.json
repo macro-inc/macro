@@ -1,0 +1,84 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                c.id                AS \"company_id!\",\n                c.team_id           AS \"company_team_id!\",\n                c.email_sync        AS \"company_email_sync!\",\n                c.hidden            AS \"company_hidden!\",\n                c.first_interaction AS \"company_created_at!\",\n                c.last_interaction  AS \"company_updated_at!\",\n                d.id                AS \"domain_id?\",\n                d.domain            AS \"domain?\",\n                d.created_at        AS \"domain_created_at?\",\n                dd.name             AS \"dir_name?\",\n                dd.description      AS \"dir_description?\"\n            FROM crm_companies c\n            LEFT JOIN crm_domains d ON d.company_id = c.id\n            LEFT JOIN crm_domain_directory dd\n                ON LOWER(dd.domain) = LOWER(d.domain)\n            WHERE c.id = $1\n              AND c.team_id = $2\n              AND ($3 OR c.hidden = FALSE)\n            ORDER BY d.created_at ASC NULLS LAST\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "company_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "company_team_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "company_email_sync!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "company_hidden!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "company_created_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "company_updated_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "domain_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
+        "name": "domain?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "domain_created_at?",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "dir_name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "dir_description?",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "c7c058fd3acdc93e77a805b28b844150503f955a91339be026f8b68f65092adb"
+}

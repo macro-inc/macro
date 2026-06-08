@@ -1,6 +1,5 @@
 import type { RawUpdate } from '@core/collab/shared';
 import {
-  type ConnectionFailedError,
   type InitialSync,
   type MissingAckError,
   SyncError,
@@ -29,7 +28,7 @@ import {
 } from '@websocket/solid/socket-effect';
 import { createWebsocketStateSignal } from '@websocket/solid/state-signal';
 import { encodeFrontiers, type Frontiers } from 'loro-crdt';
-import { err, ok, type Result, ResultAsync } from 'neverthrow';
+import { okAsync, type Result, ResultAsync } from 'neverthrow';
 import { createStore } from 'solid-js/store';
 import {
   FromPeer,
@@ -108,38 +107,36 @@ const TIMEOUTS = {
 
 type WithCleanup<T> = T & { cleanup: () => void };
 
-export const createSyncServiceSource = async (
+export const createSyncServiceSource = (
   documentId: string,
   token: string
-): Promise<
-  Result<
-    {
-      source: WithCleanup<SyncSource>;
-      initialSync: InitialSync;
-    },
-    ConnectionFailedError | TimeoutError
-  >
-> => {
+): {
+  source: WithCleanup<SyncSource>;
+  doInitialSync: () => ResultAsync<InitialSync, TimeoutError>;
+} => {
   const ws = createSyncServiceSocket(documentId, token);
 
-  const initialSyncResult = await ResultAsync.fromPromise(
+  // Register the initial-sync listener eagerly so it's in place before the
+  // server's RemoteInitialSync message arrives (~50ms after WS opens).
+  // `doInitialSync()` just returns the cached promise; if it's called late,
+  // it still resolves because the listener captured the message.
+  let initialSyncReceived = false;
+  const initialSyncPromise = ResultAsync.fromPromise(
     raceTimeout(
       untilMessage(ws, (message) => message.isRemoteInitialSync()),
       TIMEOUTS.INITIAL_SYNC,
       true
     ),
     () => SyncError.timeout(TIMEOUTS.INITIAL_SYNC)
-  );
+  ).map((message) => {
+    initialSyncReceived = true;
+    // Start heartbeat only after initial sync completes successfully
+    // This prevents the heartbeat from closing the connection during slow initial syncs
+    ws.startHeartbeat();
+    return message.value as InitialSync;
+  });
 
-  if (initialSyncResult.isErr()) {
-    return err(initialSyncResult.error);
-  }
-
-  const initialSync = initialSyncResult.value;
-
-  // Start heartbeat only after initial sync completes successfully
-  // This prevents the heartbeat from closing the connection during slow initial syncs
-  ws.startHeartbeat();
+  const doInitialSync = () => initialSyncPromise;
 
   const eventBus = createEventBus<SyncSourceEvent>();
 
@@ -251,6 +248,12 @@ export const createSyncServiceSource = async (
   const pushUpdate = (
     update: RawUpdate
   ): ResultAsync<void, MissingAckError> => {
+    // no point in sending messages, since we will do our catch-up sync once the
+    // initial sync comes in
+    if (!initialSyncReceived) {
+      return okAsync(undefined);
+    }
+
     const message = FromPeer.fromPeerUpdate({ update });
     ws.send(message);
 
@@ -310,7 +313,7 @@ export const createSyncServiceSource = async (
     ws.close();
   };
 
-  return ok({
+  return {
     source: {
       documentId,
       listen: eventBus.listen,
@@ -323,8 +326,8 @@ export const createSyncServiceSource = async (
       reconnect,
       cleanup,
     },
-    initialSync: initialSync.value as InitialSync,
-  });
+    doInitialSync,
+  };
 };
 
 const rawUpdateToString = (update: RawUpdate) =>

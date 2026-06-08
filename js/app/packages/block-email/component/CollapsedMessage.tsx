@@ -22,8 +22,9 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
   const senderMacroId = createMemo(() => getSenderMacroId(props.message));
   const senderIconProps = createMemo<UserIconProps>(() => {
     const senderId = senderMacroId();
-    if (senderId) return { id: senderId };
-    return { email: props.message.from?.email ?? '' };
+    const photoUrl = props.message.from?.photo_url ?? undefined;
+    if (senderId) return { id: senderId, photoUrl };
+    return { email: props.message.from?.email ?? '', photoUrl };
   });
 
   const snippet = createMemo(() => {

@@ -5,6 +5,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { UserIcon } from '@core/component/UserIcon';
 import { UserTooltip } from '@core/component/UserTooltip';
 import { useEmail, useUserId } from '@core/context/user';
+import { isMobile } from '@core/mobile/isMobile';
 import {
   type CombinedRecipientItem,
   type CombinedRecipientKind,
@@ -511,7 +512,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
         onInputChange={onInputChange}
         shouldFocusWrap
         placeholder={
-          props.selectedOptions?.length === 0
+          props.selectedOptions?.length === 0 || isMobile()
             ? (props.placeholder ?? placeholderText())
             : undefined
         }

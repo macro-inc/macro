@@ -10,6 +10,7 @@ use macro_entrypoint::MacroEntrypoint;
 use macro_env::Environment;
 use macro_env_var::env_var;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
+use macro_service_urls::ConnectionGatewayUrl;
 use notification::domain::service::SqsNotificationIngress;
 use notification::outbound::queue::SqsQueue;
 use scheduled_action::domain::ports::ScheduledActionDispatcher;
@@ -31,7 +32,6 @@ env_var! {
         Port,
         DatabaseUrl,
         NotificationQueue,
-        ConnectionGatewayUrl,
     }
 }
 
@@ -69,7 +69,7 @@ async fn main() -> Result<()> {
 
     let conn_gateway_client = Arc::new(ConnectionGatewayClient::new(
         internal_api_secret.as_ref().to_string(),
-        env.connection_gateway_url.as_ref().to_string(),
+        ConnectionGatewayUrl::new()?.to_string(),
     ));
     let live_updates = Arc::new(ConnGatewayLiveUpdates::new(Arc::clone(
         &conn_gateway_client,

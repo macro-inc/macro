@@ -59,6 +59,7 @@ use email::{
     domain::{ports::ReadonlyEmailPreviewAdapter, service::EmailServiceImpl},
     outbound::EmailPgRepo,
 };
+use embedding::embedding_provider::openai::TextEmbedding3Small;
 use foreign_entity::{
     domain::service::ForeignEntityServiceImpl, inbound::axum_router::ForeignEntityRouterState,
     outbound::pg_foreign_entity_repo::PgForeignEntityRepo,
@@ -90,8 +91,10 @@ use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImp
 use task_dedup::{
     TaskDedupConfig, TaskDedupService,
     outbound::{
-        connection_gateway::ConnectionGatewayTaskDedupNotifier, embedding::OpenAiTaskEmbedder,
-        judge::AgentDuplicateJudge, postgres::PgTaskDedupRepo, reranker::NoOpTaskReranker,
+        connection_gateway::ConnectionGatewayTaskDedupNotifier,
+        judge::AgentDuplicateJudge,
+        postgres::{PgTaskMatchRepo, PgTaskVectorDb},
+        reranker::NoOpReranker,
     },
 };
 
@@ -213,7 +216,7 @@ async fn main() -> anyhow::Result<()> {
 
     let conn_gateway_client = ConnectionGatewayClient::new(
         internal_api_secret.as_ref().to_string(),
-        config.vars.connection_gateway_url.as_ref().to_string(),
+        config.connection_gateway_url.clone(),
     );
 
     let sync_service_auth_key = match config.environment {
@@ -227,12 +230,12 @@ async fn main() -> anyhow::Result<()> {
 
     let sync_service_client = Arc::new(SyncServiceClient::new(
         sync_service_auth_key,
-        config.vars.sync_service_url.as_ref().to_string(),
+        config.sync_service_url.clone(),
     ));
 
     let lexical_client = Arc::new(LexicalClient::new(
         internal_api_secret.as_ref().to_string(),
-        config.vars.lexical_service_url.as_ref().to_string(),
+        config.lexical_service_url.clone(),
     ));
 
     let jwt_validation_args =
@@ -573,17 +576,25 @@ async fn main() -> anyhow::Result<()> {
     let sqs_client = Arc::new(sqs_client);
     let conn_gateway_client = Arc::new(conn_gateway_client);
     let task_dedup_config = TaskDedupConfig::default();
+    // The OpenAI key is injected as the required `OPENAI_API_KEY` env var
+    // (resolved from the `openai-key` secret at deploy time by the infra stack),
+    // the same way `document_cognition_service` consumes it. Fail fast if it's
+    // empty so the service never starts with a broken task-dedup embedder.
+    let openai_api_key = config.vars.openai_api_key.as_ref().to_owned();
+    anyhow::ensure!(
+        !openai_api_key.trim().is_empty(),
+        "OpenAI API key is required for task dedup embeddings",
+    );
     let task_dedup_service = Arc::new(TaskDedupService::new(
         task_dedup_config.clone(),
-        Arc::new(PgTaskDedupRepo::new(db.clone())),
-        Arc::new(OpenAiTaskEmbedder::new(
-            task_dedup_config.embedding_model.clone(),
-        )),
-        Arc::new(NoOpTaskReranker),
+        TextEmbedding3Small::new(openai_api_key),
+        PgTaskVectorDb::new(db.clone()),
+        NoOpReranker,
         Arc::new(AgentDuplicateJudge::new()),
         Arc::new(ConnectionGatewayTaskDedupNotifier::new(
             conn_gateway_client.clone(),
         )),
+        Arc::new(PgTaskMatchRepo::new(db.clone())),
     ));
     let channels_repo = PgChannelsRepo::new(db.clone());
     let bots_repo = bots::outbound::pg_bots_repo::PgBotsRepo::new(db.clone());
