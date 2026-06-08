@@ -1,11 +1,9 @@
-use serde::Deserialize;
 use tracing::error;
 use worker::{Env, Fetch, Method, Request, RequestInit};
 
 use crate::constants::header_names::MACRO_DOCUMENT_STORAGE_SERVICE_AUTH_HEADER_KEY;
 
 pub trait DssInternal {
-    /// Gets a presigned S3 PUT URL for uploading a shallow snapshot, then uploads the bytes.
     async fn publish_shallow_snapshot(
         &self,
         document_id: &str,
@@ -30,35 +28,6 @@ impl<'a> DssInternalClient<'a> {
         Ok(self.env.var("DSS_INTERNAL_AUTH_KEY")?.to_string())
     }
 
-    async fn get_snapshot_upload_url(&self, document_id: &str) -> worker::Result<String> {
-        let url = format!(
-            "{}/internal/documents/{}/snapshot_upload_url",
-            self.dss_url()?,
-            document_id
-        );
-        let auth_key = self.internal_auth_key()?;
-
-        let mut req = Request::new_with_init(&url, RequestInit::new().with_method(Method::Get))?;
-        req.headers_mut()?
-            .set(MACRO_DOCUMENT_STORAGE_SERVICE_AUTH_HEADER_KEY, &auth_key)?;
-
-        let mut resp = Fetch::Request(req).send().await?;
-        if resp.status_code() != 200 {
-            return Err(worker::Error::from(format!(
-                "DSS snapshot_upload_url returned {}",
-                resp.status_code()
-            )));
-        }
-
-        // It would be nice if we could share the type, but this is small enough
-        // that hopefully it's NBD
-        #[derive(Deserialize)]
-        struct UrlResponse {
-            url: String,
-        }
-        let body: UrlResponse = resp.json().await?;
-        Ok(body.url)
-    }
 }
 
 impl DssInternal for DssInternalClient<'_> {
@@ -67,27 +36,33 @@ impl DssInternal for DssInternalClient<'_> {
         document_id: &str,
         snapshot: &[u8],
     ) -> worker::Result<()> {
-        let upload_url = self.get_snapshot_upload_url(document_id).await?;
-        tracing::trace!(document_id = document_id, "uploading snapshot to DSS");
+        let url = format!(
+            "{}/internal/documents/{}/snapshot",
+            self.dss_url()?,
+            document_id
+        );
+        let auth_key = self.internal_auth_key()?;
 
-        let req = Request::new_with_init(
-            &upload_url,
+        let mut req = Request::new_with_init(
+            &url,
             RequestInit::new()
                 .with_method(Method::Put)
                 .with_body(Some(snapshot.to_vec().into())),
         )?;
-        req.headers().set("Content-Type", "application/octet-stream")?;
-        tracing::trace!("sending snapshot to DSS");
+        req.headers_mut()?
+            .set(MACRO_DOCUMENT_STORAGE_SERVICE_AUTH_HEADER_KEY, &auth_key)?;
+        req.headers_mut()?
+            .set("Content-Type", "application/octet-stream")?;
 
         let resp = Fetch::Request(req).send().await?;
         if resp.status_code() != 200 {
             error!(
                 document_id = document_id,
                 status = resp.status_code(),
-                "S3 snapshot PUT failed"
+                "DSS snapshot upload failed"
             );
             return Err(worker::Error::from(format!(
-                "S3 snapshot PUT returned {}",
+                "DSS snapshot upload returned {}",
                 resp.status_code()
             )));
         }

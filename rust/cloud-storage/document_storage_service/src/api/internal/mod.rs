@@ -125,8 +125,8 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
             put(put_document_update::handler),
         )
         .route(
-            "/documents/{document_id}/snapshot_upload_url",
-            get(snapshot_upload_url::handler),
+            "/documents/{document_id}/snapshot",
+            put(snapshot_upload_url::handler),
         )
         .route("/documents/metadata", post(get_documents_metadata::handler))
         // History routes
