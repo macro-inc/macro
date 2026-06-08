@@ -102,6 +102,19 @@ function checkOverviewTitle(counts: CheckCounts) {
   return 'Checks completed';
 }
 
+function checkOverviewTitleClass(state: CheckVisualState): string {
+  switch (state) {
+    case 'success':
+      return 'text-success';
+    case 'failure':
+      return 'text-failure';
+    case 'pending':
+      return 'text-alert-ink';
+    default:
+      return 'text-ink';
+  }
+}
+
 function showCheckCountSummary(counts: CheckCounts) {
   return counts.failed > 0 || counts.pending > 0;
 }
@@ -194,9 +207,18 @@ function checkDurationText(
   return formatDuration(now - started);
 }
 
-function CheckStateIcon(props: { state: CheckVisualState; circle?: boolean }) {
+function CheckStateIcon(props: {
+  state: CheckVisualState;
+  circle?: boolean;
+  class?: string;
+}) {
   return (
-    <span class="relative inline-flex shrink-0 items-center justify-center">
+    <span
+      class={cn(
+        'relative inline-flex shrink-0 items-center justify-center',
+        props.class
+      )}
+    >
       <Show when={props.state === 'success'}>
         <Show
           when={props.circle}
@@ -256,19 +278,30 @@ function GithubPullRequestChecksPopover(props: {
 
   return (
     <div class="flex flex-col gap-0.5 text-left">
-      <div class="flex flex-col px-2 py-1">
-        <div class="text-base font-medium text-ink">
-          {checkOverviewTitle(counts())}
-        </div>
-        <Show when={showCheckCountSummary(counts())}>
-          <div class="flex items-center gap-2 text-xs text-ink-extra-muted tabular-nums">
-            <span>{counts().successful} succeeded</span>
-            <span>{counts().failed} failed</span>
-            <span>{counts().skipped} skipped</span>
+      <div class="flex items-start gap-2 py-2 pl-2.5 border-b border-b-edge">
+        <CheckStateIcon
+          state={checkState(props.entity)}
+          class="mt-1 [&_svg]:size-4"
+        />
+        <div class="flex min-w-0 flex-col">
+          <div
+            class={cn(
+              'text-base font-medium',
+              checkOverviewTitleClass(checkState(props.entity))
+            )}
+          >
+            {checkOverviewTitle(counts())}
           </div>
-        </Show>
+          <Show when={showCheckCountSummary(counts())}>
+            <div class="flex items-center gap-2 text-xs text-ink-extra-muted tabular-nums">
+              <span>{counts().successful} succeeded</span>
+              <span>{counts().failed} failed</span>
+              <span>{counts().skipped} skipped</span>
+            </div>
+          </Show>
+        </div>
       </div>
-      <div class="max-h-56 p-0.5 overflow-y-auto">
+      <div class="max-h-56 p-2 overflow-y-auto">
         <Show
           when={checks().length > 0}
           fallback={
@@ -357,12 +390,12 @@ export function GithubPullRequestChecksIndicator(props: {
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content
-          class="z-tool-tip max-w-[calc(100vw-32px)]"
+          class="z-tool-tip max-w-[calc(100vw-32px)] min-w-80"
           onClick={(event) => event.stopPropagation()}
         >
           <Surface
-            class="flex items-stretch justify-start rounded-xl p-1.5"
-            depth={2}
+            class="flex items-stretch justify-start rounded-xl w-full"
+            depth={3}
           >
             <GithubPullRequestChecksPopover entity={props.entity} />
           </Surface>
