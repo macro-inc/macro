@@ -45,13 +45,14 @@ export function ThreadReplyInput(props: ThreadReplyInputProps) {
     initialAttachments: props.replyInputState()?.attachments,
   });
 
-  const entityDropZone = createEntityDropZone({
-    droppableId: `thread-reply-entity-drop-${props.messageId}`,
-    tracker,
-  });
-
   const [replyInputHandle, setLocalReplyInputHandle] =
     createSignal<InputHandle>();
+
+  const entityDropZone = createEntityDropZone({
+    droppableId: `thread-reply-entity-drop-${props.messageId}`,
+    onDropEntity: (entity) => replyInputHandle()?.insertEntityMention?.(entity),
+  });
+
   const setReplyInputHandle = (handle: InputHandle) => {
     setLocalReplyInputHandle(handle);
     props.setReplyInputHandle?.(handle);

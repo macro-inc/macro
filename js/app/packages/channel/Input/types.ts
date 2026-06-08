@@ -1,5 +1,6 @@
 import type { EntityIconSelector } from '@core/component/EntityIcon';
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
+import type { EntityData } from '@entity';
 import type { PersistenceKey } from '@queries/persistence';
 import type { InputAttachmentTracker as Tracker } from './attachment-tracker';
 
@@ -74,6 +75,11 @@ export type InputHandle = {
   focus: () => void;
   attachFiles: (files: File[]) => Promise<void>;
   restoreSnapshot: (snapshot: InputSnapshot) => void;
+  /**
+   * Inserts a mention for a dragged soup entity into the editor. Only provided
+   * by inputs that support entity drag-and-drop (e.g. channel inputs).
+   */
+  insertEntityMention?: (entity: EntityData) => void;
 };
 
 export type InputAttachmentTracker = Tracker;

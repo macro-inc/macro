@@ -1,11 +1,9 @@
+import type { EntityData } from '@entity';
 import { type Accessor, createSignal } from 'solid-js';
-import type { InputAttachmentTracker } from '../Input';
-import { createInputAttachmentTracker } from '../Input';
 import { createEntityDropZone } from './create-entity-drop-zone';
 
 type CreateChannelDragStateOptions = {
   channelId: string;
-  attachmentTracker: InputAttachmentTracker;
 };
 
 export type ChannelDragState = {
@@ -16,18 +14,20 @@ export type ChannelDragState = {
   setIsValidChannelDrag: (value: boolean) => void;
   attachFilesToChannel: ((files: File[]) => Promise<void>) | undefined;
   setAttachFilesToChannel: (fn: (files: File[]) => Promise<void>) => void;
+  setInsertEntityMention: (fn: (entity: EntityData) => void) => void;
 };
 
 export function createChannelDragState(
   options: CreateChannelDragStateOptions
 ): ChannelDragState {
-  const tracker = createInputAttachmentTracker();
   const [isDraggingOverChannel, setIsDraggingOverChannel] = createSignal(false);
   const [isValidChannelDrag, setIsValidChannelDrag] = createSignal(true);
 
+  let insertEntityMention: ((entity: EntityData) => void) | undefined;
+
   const entityDropZone = createEntityDropZone({
     droppableId: `channel-entity-drop-${options.channelId}`,
-    tracker,
+    onDropEntity: (entity) => insertEntityMention?.(entity),
   });
 
   let attachFilesToChannel: ((files: File[]) => Promise<void>) | undefined;
@@ -44,6 +44,9 @@ export function createChannelDragState(
     },
     setAttachFilesToChannel: (fn) => {
       attachFilesToChannel = fn;
+    },
+    setInsertEntityMention: (fn) => {
+      insertEntityMention = fn;
     },
   };
 }

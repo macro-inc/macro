@@ -1,11 +1,11 @@
-import type { EntityDragData, EntityDragEvent } from '@entity';
+import type { EntityData, EntityDragData, EntityDragEvent } from '@entity';
 import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
 import { type Accessor, createMemo } from 'solid-js';
-import type { InputAttachmentTracker } from '../Input';
 
 type CreateEntityDropZoneOptions = {
   droppableId: string;
-  tracker: InputAttachmentTracker;
+  /** Called when a soup entity is dropped onto this zone. */
+  onDropEntity: (entity: EntityData) => void;
 };
 
 type EntityDropZone = {
@@ -46,14 +46,7 @@ export function createEntityDropZone(
     const data = event.draggable?.data;
     if (!data || data.dragType !== 'entity') return;
 
-    const fileType = 'fileType' in data ? data.fileType : undefined;
-
-    options.tracker.addAttachment({
-      id: data.id,
-      name: data.name,
-      kind: 'document',
-      iconType: fileType ?? data.type,
-    });
+    options.onDropEntity(data);
   });
 
   return { droppable, isDraggingOver };

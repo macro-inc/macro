@@ -1,4 +1,5 @@
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
+import { INSERT_DOCUMENT_MENTION_COMMAND } from '@core/component/LexicalMarkdown/plugins';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';
 import type { IUser } from '@core/user/types';
@@ -8,8 +9,10 @@ import {
   handleFileFolderDrop,
   uploadFile,
 } from '@core/util/upload';
+import type { EntityData } from '@entity';
 import { isIOS } from '@solid-primitives/platform';
 import { Surface } from '@ui';
+import { $getRoot } from 'lexical';
 import {
   type Accessor,
   createSignal,
@@ -35,6 +38,7 @@ import type {
 } from './types';
 import { isReplyInput } from './types';
 import { uploadInputAttachments } from './upload-attachments';
+import { entityToDocumentMentionInfo } from './utils/entity-mention';
 import { applyInlineFormat, applyNodeFormat } from './utils/formatting';
 
 export type ChannelInputProps = InputCallbacks & {
@@ -214,10 +218,26 @@ export function ChannelInput(props: ChannelInputProps) {
     }
   };
 
+  // Insert a mention for an entity dragged in from the soup, mirroring the
+  // drag-and-drop behavior of markdown documents.
+  const insertEntityMention = (entity: EntityData) => {
+    const mentionInfo = entityToDocumentMentionInfo(entity);
+    if (!mentionInfo) return;
+    const editor = markdownEditor.lexical;
+    // Place the caret at the end so the mention lands after existing content,
+    // even when the editor was not previously focused.
+    editor.update(() => {
+      $getRoot().selectEnd();
+    });
+    editor.dispatchCommand(INSERT_DOCUMENT_MENTION_COMMAND, mentionInfo);
+    markdownEditor.controls.focus();
+  };
+
   props.onReady?.({
     clear: () => markdownEditor.controls.clear(),
     focus: () => markdownEditor.controls.focus(),
     attachFiles: (files) => inputState.commands.attachFiles(files),
+    insertEntityMention,
     restoreSnapshot: (snapshot) => {
       if (!isEditorConnected) {
         pendingRestoreSnapshot = snapshot;
