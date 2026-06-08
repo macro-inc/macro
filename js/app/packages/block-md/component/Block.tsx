@@ -56,7 +56,8 @@ function BlockMarkdownContent({ optimisticSnapshot }: BlockMarkdownProps) {
   createEffect(
     on(blockDataSignal, (data) => {
       if (!data) {
-        setBlockError('MISSING');
+        // TODO: if it's actually missing what do we do?
+        // setBlockError('MISSING');
         return;
       } else {
         setBlockError(null);
