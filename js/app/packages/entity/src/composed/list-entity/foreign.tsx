@@ -1,12 +1,12 @@
 import { Popover } from '@kobalte/core/popover';
-import ArrowRight from '@phosphor/arrow-right.svg';
+import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
 import ChatCircle from '@phosphor/chat-circle.svg';
 import Check from '@phosphor/check.svg';
 import MinusCircle from '@phosphor/minus-circle.svg';
 import X from '@phosphor/x.svg';
 import CheckCircle from '@phosphor-icons/core/assets/fill/check-circle-fill.svg?component-solid';
 import XCircle from '@phosphor-icons/core/assets/fill/x-circle-fill.svg?component-solid';
-import { Button, cn, Surface } from '@ui';
+import { Button, cn, Layer, Surface } from '@ui';
 import {
   createSignal,
   For,
@@ -261,14 +261,14 @@ function GithubPullRequestChecksPopover(props: {
           {checkOverviewTitle(counts())}
         </div>
         <Show when={showCheckCountSummary(counts())}>
-          <div class="flex items-center gap-2 text-[11px] text-ink-extra-muted tabular-nums">
+          <div class="flex items-center gap-2 text-xs text-ink-extra-muted tabular-nums">
             <span>{counts().successful} succeeded</span>
             <span>{counts().failed} failed</span>
             <span>{counts().skipped} skipped</span>
           </div>
         </Show>
       </div>
-      <div class="max-h-56 overflow-y-auto">
+      <div class="max-h-56 p-0.5 overflow-y-auto">
         <Show
           when={checks().length > 0}
           fallback={
@@ -284,9 +284,9 @@ function GithubPullRequestChecksPopover(props: {
                     component={hasUrl() ? 'a' : 'button'}
                     type={!hasUrl() ? 'button' : undefined}
                     class={cn(
-                      'group/check-card flex h-8 w-full min-w-0 items-center gap-2 rounded-lg px-2 text-left text-xs font-medium outline-none',
+                      'group/check-card relative flex h-8 w-full min-w-0 items-center gap-2 rounded-lg px-2 text-left text-xs font-medium outline-none',
                       hasUrl()
-                        ? 'cursor-default hover:bg-ink/5 focus-visible:bg-ink/5'
+                        ? 'cursor-default hover:bg-active hover:ring hover:ring-edge focus-visible:bg-ink/5'
                         : 'cursor-not-allowed opacity-50'
                     )}
                     href={check.url ? check.url : undefined}
@@ -307,7 +307,7 @@ function GithubPullRequestChecksPopover(props: {
                     <Show when={checkDurationText(check, now())}>
                       {(duration) => (
                         <span
-                          class="shrink-0 tabular-nums text-ink-extra-muted/70"
+                          class="w-[7ch] shrink-0 text-right tabular-nums text-ink-extra-muted/70"
                           title={
                             check.status === 'completed'
                               ? 'Duration'
@@ -318,12 +318,16 @@ function GithubPullRequestChecksPopover(props: {
                         </span>
                       )}
                     </Show>
-                    <ArrowRight
-                      class={cn(
-                        'size-3 shrink-0 text-ink-extra-muted opacity-0 transition-opacity',
-                        hasUrl() && 'group-hover/check-card:opacity-100'
-                      )}
-                    />
+                    <Layer depth={5}>
+                      <span
+                        class={cn(
+                          'absolute right-1.5 top-1/2 z-10 inline-flex size-5 -translate-y-1/2 items-center justify-center rounded-md bg-active text-ink-extra-muted opacity-0 shadow-sm ring-1 ring-edge-muted',
+                          hasUrl() && 'group-hover/check-card:opacity-100'
+                        )}
+                      >
+                        <ArrowSquareOut class="size-3" />
+                      </span>
+                    </Layer>
                   </Dynamic>
                 );
               }}
