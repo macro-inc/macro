@@ -27,7 +27,7 @@ You don't _need to_ mention entities to agents. Since your agent has access to t
 
 ## Mentions in Channels
 
-The primary benefit of using Macro instead of Slack is that it is deeply linked to the rest of your workspace. Just mention any entity type and hit enter to insert a `@mention`. When you hit enter or the send button the item will be shared with members of the channel. This avoids the footgun that can happen with Slack\+Notion, Slack\+Drive, etc., where you don't give the permissions and people need to ask "hey can you share \_\_ with me?"
+The primary benefit of using Macro instead of Slack is that it is deeply linked to the rest of your workspace. Just mention any entity type and hit enter to insert an `@mention`. When you hit enter or press the send button, the item is shared with members of the channel. This avoids the footgun that can happen with Slack\+Notion, Slack\+Drive, etc., where you don't give the permissions and people need to ask "hey can you share \_\_ with me?"
 
 <Frame>
   ![Screenshot 2026 06 09 At 3 59 41 PM](/images/Screenshot-2026-06-09-at-3.59.41-PM.png)
@@ -45,7 +45,7 @@ The primary benefit of using Macro instead of Slack is that it is deeply linked 
   />
 </Frame>
 
-When you mention a document or file in a channel, a bidirectional link is created so you can always trace where something has been discussed. For example, on our "8 month roadmap document" members of our team can see that this document has been mentioned by several other documents, a canvas, in the `#engineers` channel, and I can see it's been mentioned in my private DM's with Teo and Nick (other members of the team would not see that last one unless they are in that channel).
+When you mention a document or file in a channel, a bidirectional link is created so you can always trace where something has been discussed. For example, on our "8 month roadmap document" members of our team can see that this document has been mentioned by several other documents, a canvas, in the `#engineers` channel, and I can see it's been mentioned in my private DMs with Teo and Nick (other members of the team would not see that last one unless they are in that channel).
 
 ## Mentions in Email
 
@@ -81,10 +81,10 @@ Use canvases to embed other entities on a 2D plane. This is useful for mind-mapp
 
 ## What happens when you mention...
 
-- **People** by name or email. The person will receive a notification, even if they are not an existing Macro user, if you mention them in a comment or a channel. If you mention them in the body of a task or markdown doc, they will _not_ get mentioned... you need to manually share it with them. We know this is a bit of a weird design decision; the reason we made it after dogfooding for a while is that, any time you want to @mention someone in a doc, you definitionally are not finished writing the doc, so you don't want them to get a notification yet. It's unclear when they _should_ receive that notification, so we determined it best that mentions in the context of documents don't notify or share with mentioned users.
-- **Documents and blocks** any doc, task, canvas, code file, pdf, etc. In the context of a channel, the document will get shared. In a comment, it will not get shared. In a document, it will not get shared.
-- **Contacts and company** records, rendered differently for people vs. organizations. Company and contact records are not shared when mentioned. The sharing of company and content records is determined by Teams.
-- **Channels** or to a specific **message** or thread. Mentioning a channel doesn't grant permissions, nor to a message. There is no way to share a message with someone who is not in a channel at the moment, because the ability to view a message is determined by channel membership. If you need to share a message but not add somebody to a channel, send a screenshot. To add somebody to a channel, don't mention the channel, go to the channel and add them as a participant.
+- **People** by name or email. The person will receive a notification, even if they are not an existing Macro user, if you mention them in a comment or a channel. If you mention them in the body of a task or markdown doc, they will _not_ get notified — you need to manually share it with them. We know this is a bit of a weird design decision; the reason we made it after dogfooding for a while is that, any time you want to @mention someone in a doc, you definitionally are not finished writing the doc, so you don't want them to get a notification yet. It's unclear when they _should_ receive that notification, so we determined it best that mentions in the context of documents don't notify or share with mentioned users.
+- **Documents and blocks** — any doc, task, canvas, code file, PDF, etc. In the context of a channel, the document gets shared. In a comment or a document, it does not.
+- **Contacts and company** records, rendered differently for people vs. organizations. Company and contact records are not shared when mentioned — their sharing is determined by Teams.
+- **Channels**, or a specific **message** or thread. Mentioning a channel doesn't grant permissions, and neither does mentioning a message. There is no way to share a message with someone who isn't in the channel, because the ability to view a message is determined by channel membership. If you need to share a message without adding somebody to a channel, send a screenshot. To add somebody to a channel, don't mention the channel — go to the channel and add them as a participant.
 - **Dates** with a date picker.
 
 In a document or chat, a mention is a navigable link and a source of context. In an **email body** it has side effects: mentioning a person adds them to CC, and mentioning a document inserts a link _and_ updates that document's permissions so recipients can open it. In a **channel** there are two special mentions layered on top of the normal ones — `@here` pings every participant, and `@Macro` invokes the agent inline.

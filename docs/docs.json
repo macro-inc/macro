@@ -83,6 +83,12 @@
               }
             ]
           },
+          {
+            "group": "Integrations",
+            "pages": [
+              "integrations/github"
+            ]
+          },
           "faq",
           "keyboard-shortcuts"
         ]
