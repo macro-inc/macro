@@ -239,11 +239,11 @@ export function useSearchFacets(
     id: 'importance',
     label: 'Importance',
     options: [
+      { id: 'all', label: 'All' },
       { id: 'signal', label: 'Signal' },
       { id: 'noise', label: 'Noise' },
-      { id: 'all', label: 'All' },
     ],
-    defaultId: 'signal',
+    defaultId: 'all',
     selectedId: () => {
       const value = controller.emailImportance();
       if (value === undefined) return 'all';

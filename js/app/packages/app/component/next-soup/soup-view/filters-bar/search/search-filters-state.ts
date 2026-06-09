@@ -50,7 +50,7 @@ export type SearchFiltersState = SearchFiltersSections & {
 };
 
 export const DEFAULT_SECTIONS: SearchFiltersSections = {
-  email: { importance: true },
+  email: { importance: undefined },
   channels: { in: [], from: [] },
   calls: { in: [], from: [], status: undefined },
 };
