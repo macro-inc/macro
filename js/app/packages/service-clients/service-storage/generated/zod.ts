@@ -12194,7 +12194,7 @@ export const postItemsSoupAstGroupedResponse = zod
                       attended: zod
                         .boolean()
                         .describe(
-                          'Whether the requesting user attended this call (i.e. appears in the\n`call_participants` \/ `call_record_participants` table).'
+                          'Whether the requesting user attended this call. Kept for compatibility\nand derived from `status == ATTENDED`.'
                         ),
                       callId: zod.uuid().describe('The call identifier.'),
                       channelId: zod
@@ -12251,6 +12251,11 @@ export const postItemsSoupAstGroupedResponse = zod
                       startedAt: zod.iso
                         .datetime({})
                         .describe('When the call started.'),
+                      status: zod
+                        .enum(['ATTENDED', 'MISSED', 'UNATTENDED'])
+                        .describe(
+                          'Viewer-relative attendance status for a call record.\nSerializes as `ATTENDED`, `MISSED`, or `UNATTENDED`.'
+                        ),
                       summary: zod
                         .string()
                         .nullish()
@@ -13634,7 +13639,7 @@ export const postItemsSoupAstGroupedResponse = zod
                       attended: zod
                         .boolean()
                         .describe(
-                          'Whether the requesting user attended this call (i.e. appears in the\n`call_participants` \/ `call_record_participants` table).'
+                          'Whether the requesting user attended this call. Kept for compatibility\nand derived from `status == ATTENDED`.'
                         ),
                       callId: zod.uuid().describe('The call identifier.'),
                       channelId: zod
@@ -13691,6 +13696,11 @@ export const postItemsSoupAstGroupedResponse = zod
                       startedAt: zod.iso
                         .datetime({})
                         .describe('When the call started.'),
+                      status: zod
+                        .enum(['ATTENDED', 'MISSED', 'UNATTENDED'])
+                        .describe(
+                          'Viewer-relative attendance status for a call record.\nSerializes as `ATTENDED`, `MISSED`, or `UNATTENDED`.'
+                        ),
                       summary: zod
                         .string()
                         .nullish()
