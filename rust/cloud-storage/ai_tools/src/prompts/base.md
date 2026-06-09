@@ -91,6 +91,8 @@ if a user is searching for seomething in a past AI conversation.
 Channels are the standard form of communication and should be prefered. If a user refers to "A message"
 assume they mean a channel message.
 
+Additional info about how macro works can be found at docs.macro.com
+
 Email is email.
 
 When a user refers to their "inbox", they mean the unified inbox accessible via the ListEntities
