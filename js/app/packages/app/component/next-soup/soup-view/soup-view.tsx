@@ -29,10 +29,7 @@ import {
   soupNavigationTouchHighlight,
 } from '@app/component/next-soup/soup-view/soup-navigation-touch-highlight';
 import { activeSoupViewCounts } from '@app/component/next-soup/soup-view/soup-view-cache-key';
-import {
-  SoupViewContextProvider,
-  useSoupView,
-} from '@app/component/next-soup/soup-view/soup-view-context';
+import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { SoupViewCreateButton } from '@app/component/next-soup/soup-view/soup-view-create-button';
 import { SoupViewFileDropzone } from '@app/component/next-soup/soup-view/soup-view-file-dropzone';
 import { SoupViewMobileCreateButton } from '@app/component/next-soup/soup-view/soup-view-mobile-create-button';
@@ -333,6 +330,19 @@ interface SoupViewProps {
 export const SoupView = (props: SoupViewProps) => {
   const soup = useSoup();
   const panel = useSplitPanelOrThrow();
+  const soupView = useSoupView();
+
+  onMount(() => {
+    soupView.initialize(
+      {
+        initialQuery: props.initialFilters,
+        initialSearchText: props.initialSearchText,
+        disableLocalSearch: props.disableLocalSearch,
+        additionalEntities: props.additionalEntities,
+      },
+      true
+    );
+  });
 
   createEffect(() => {
     panel.handle.setDisplayName(props.viewName);
@@ -418,161 +428,149 @@ export const SoupView = (props: SoupViewProps) => {
             : undefined,
       }}
     >
-      <SoupViewContextProvider
-        soup={soup}
-        initialQuery={props.initialFilters}
-        initialSearchText={props.initialSearchText}
-        disableLocalSearch={props.disableLocalSearch}
-        additionalEntities={props.additionalEntities}
-      >
-        <div class="size-full flex flex-col" data-list-view={activeListView()}>
-          <div class="flex flex-col w-full">
-            <SplitHeaderLeft>
-              <div
-                class={cn('h-full flex gap-3 items-center', {
-                  'shrink-0': !narrowSearchExpanded(),
-                  'flex-1 min-w-0': narrowSearchExpanded(),
-                })}
+      <div class="size-full flex flex-col" data-list-view={activeListView()}>
+        <div class="flex flex-col w-full">
+          <SplitHeaderLeft>
+            <div
+              class={cn('h-full flex gap-3 items-center', {
+                'shrink-0': !narrowSearchExpanded(),
+                'flex-1 min-w-0': narrowSearchExpanded(),
+              })}
+            >
+              <Show when={!isMobile() && !narrowSearchExpanded()}>
+                <span class="text-base font-bold">{props.viewName}</span>
+              </Show>
+              <Show
+                when={!narrowSearchExpanded() && !isComponentListView('search')}
               >
-                <Show when={!isMobile() && !narrowSearchExpanded()}>
-                  <span class="text-base font-bold">{props.viewName}</span>
+                <Show when={!isMobile()}>
+                  <CollapsibleHeaderItem
+                    id="tabs"
+                    priority={1}
+                    expanded={() => <SoupViewTabs />}
+                    collapsed={() => <CollapsedSoupViewTabs />}
+                    containerClass="h-full"
+                  />
                 </Show>
-                <Show
-                  when={
-                    !narrowSearchExpanded() && !isComponentListView('search')
-                  }
-                >
-                  <Show when={!isMobile()}>
-                    <CollapsibleHeaderItem
-                      id="tabs"
-                      priority={1}
-                      expanded={() => <SoupViewTabs />}
-                      collapsed={() => <CollapsedSoupViewTabs />}
-                      containerClass="h-full"
+              </Show>
+              <Show
+                when={
+                  !isMobile() &&
+                  !narrowSearchExpanded() &&
+                  isComponentListView('mail')
+                }
+              >
+                <InboxSelector />
+              </Show>
+            </div>
+          </SplitHeaderLeft>
+          <Show when={!isMobile()}>
+            <SplitHeaderRight>
+              <Show
+                when={!narrowSearchExpanded() && !isComponentListView('search')}
+              >
+                <SoupViewCreateButton />
+              </Show>
+              <Show when={narrowSearchExpanded()}>
+                <Layer depth={2}>
+                  <div class="flex-1 min-w-0">
+                    <SoupSearchbar
+                      variant="secondary"
+                      autoFocus
+                      initialValue={props.initialSearchText}
+                      onDismiss={() => setNarrowSearchExpanded(false)}
                     />
-                  </Show>
-                </Show>
-                <Show
-                  when={
-                    !isMobile() &&
-                    !narrowSearchExpanded() &&
-                    isComponentListView('mail')
-                  }
-                >
-                  <InboxSelector />
-                </Show>
-              </div>
-            </SplitHeaderLeft>
-            <Show when={!isMobile()}>
-              <SplitHeaderRight>
-                <Show
-                  when={
-                    !narrowSearchExpanded() && !isComponentListView('search')
-                  }
-                >
-                  <SoupViewCreateButton />
-                </Show>
-                <Show when={narrowSearchExpanded()}>
+                  </div>
+                </Layer>
+              </Show>
+              <Show
+                when={!isComponentListView('search')}
+                fallback={
                   <Layer depth={2}>
-                    <div class="flex-1 min-w-0">
+                    <div class="grow ml-2">
                       <SoupSearchbar
                         variant="secondary"
-                        autoFocus
+                        placeholder="Search, @mention contacts"
                         initialValue={props.initialSearchText}
-                        onDismiss={() => setNarrowSearchExpanded(false)}
                       />
                     </div>
                   </Layer>
-                </Show>
-                <Show
-                  when={!isComponentListView('search')}
-                  fallback={
+                }
+              >
+                <CollapsibleHeaderItem
+                  id="search"
+                  priority={0}
+                  onCollapsedChange={(isCollapsed) => {
+                    setSearchIsCollapsed(isCollapsed);
+                    if (!isCollapsed) setNarrowSearchExpanded(false);
+                  }}
+                  expanded={() => (
                     <Layer depth={2}>
-                      <div class="grow ml-2">
+                      <div class="w-60 ml-2">
                         <SoupSearchbar
                           variant="secondary"
-                          placeholder="Search, @mention contacts"
                           initialValue={props.initialSearchText}
                         />
                       </div>
                     </Layer>
-                  }
-                >
-                  <CollapsibleHeaderItem
-                    id="search"
-                    priority={0}
-                    onCollapsedChange={(isCollapsed) => {
-                      setSearchIsCollapsed(isCollapsed);
-                      if (!isCollapsed) setNarrowSearchExpanded(false);
-                    }}
-                    expanded={() => (
-                      <Layer depth={2}>
-                        <div class="w-60 ml-2">
-                          <SoupSearchbar
-                            variant="secondary"
-                            initialValue={props.initialSearchText}
-                          />
-                        </div>
-                      </Layer>
-                    )}
-                    collapsed={() => (
-                      <Show when={!narrowSearchExpanded()}>
-                        <Tooltip label="Search" hotkey={TOKENS.soup.openSearch}>
-                          <Button
-                            variant="base"
-                            class="p-1 size-7 rounded-lg ml-2 bg-surface"
-                            onClick={() => setNarrowSearchExpanded(true)}
-                            depth={2}
-                          >
-                            <SearchIcon class="size-4 touch:size-6" />
-                          </Button>
-                        </Tooltip>
-                      </Show>
-                    )}
-                  />
-                </Show>
-              </SplitHeaderRight>
-            </Show>
-            <SoupFiltersBar />
-          </div>
-          <div class="relative grow min-h-1 flex max-sm:flex-col flex-row size-full">
-            <Suspense>
-              <SoupViewFileDropzone>
-                <SoupViewList
-                  initialClientFilters={props.initialClientFilters}
-                  initialGroupBy={props.initialGroupBy}
-                  onScrollOffsetBaseline={resetFloatingButtonScrollTracking}
-                  onScrollOffsetChange={handleSoupScrollOffsetChange}
+                  )}
+                  collapsed={() => (
+                    <Show when={!narrowSearchExpanded()}>
+                      <Tooltip label="Search" hotkey={TOKENS.soup.openSearch}>
+                        <Button
+                          variant="base"
+                          class="p-1 size-7 rounded-lg ml-2 bg-surface"
+                          onClick={() => setNarrowSearchExpanded(true)}
+                          depth={2}
+                        >
+                          <SearchIcon class="size-4 touch:size-6" />
+                        </Button>
+                      </Tooltip>
+                    </Show>
+                  )}
                 />
-              </SoupViewFileDropzone>
-            </Suspense>
-            <Show when={isMobile()}>
-              <SoupViewMobileSettingsButton visible={floatingButtonsVisible} />
-              <SoupViewMobileSearchButton
-                open={mobileSearchOpen}
-                visible={floatingButtonsVisible}
-                onOpen={() => setMobileSearchOpen(true)}
+              </Show>
+            </SplitHeaderRight>
+          </Show>
+          <SoupFiltersBar />
+        </div>
+        <div class="relative grow min-h-1 flex max-sm:flex-col flex-row size-full">
+          <Suspense>
+            <SoupViewFileDropzone>
+              <SoupViewList
+                initialClientFilters={props.initialClientFilters}
+                initialGroupBy={props.initialGroupBy}
+                onScrollOffsetBaseline={resetFloatingButtonScrollTracking}
+                onScrollOffsetChange={handleSoupScrollOffsetChange}
               />
-              <SoupViewMobileCreateButton
-                activeView={activeListView}
-                visible={floatingButtonsVisible}
-              />
-              <SoupViewMobileSearchBar
-                open={mobileSearchOpen}
-                onClose={() => setMobileSearchOpen(false)}
-              />
-            </Show>
-          </div>
+            </SoupViewFileDropzone>
+          </Suspense>
           <Show when={isMobile()}>
-            <MobileSoupViewTabs />
+            <SoupViewMobileSettingsButton visible={floatingButtonsVisible} />
+            <SoupViewMobileSearchButton
+              open={mobileSearchOpen}
+              visible={floatingButtonsVisible}
+              onOpen={() => setMobileSearchOpen(true)}
+            />
+            <SoupViewMobileCreateButton
+              activeView={activeListView}
+              visible={floatingButtonsVisible}
+            />
+            <SoupViewMobileSearchBar
+              open={mobileSearchOpen}
+              onClose={() => setMobileSearchOpen(false)}
+            />
           </Show>
         </div>
-        <Suspense>
-          <Show when={ENABLE_UNIFIED_LIST_AI_INPUT && !isMobile()}>
-            <SoupChatInput />
-          </Show>
-        </Suspense>
-      </SoupViewContextProvider>
+        <Show when={isMobile()}>
+          <MobileSoupViewTabs />
+        </Show>
+      </div>
+      <Suspense>
+        <Show when={ENABLE_UNIFIED_LIST_AI_INPUT && !isMobile()}>
+          <SoupChatInput />
+        </Show>
+      </Suspense>
     </SplitPanelContext.Provider>
   );
 };
