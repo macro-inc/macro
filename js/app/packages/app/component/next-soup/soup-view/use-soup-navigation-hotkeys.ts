@@ -137,6 +137,15 @@ export const useSoupNavigationHotkeys = (
     return true;
   };
 
+  const canRunListNavigation = () => {
+    const contentType = splitHandle.content().type;
+    return (
+      contentType === 'component' ||
+      contentType === 'project' ||
+      splitHandle.referredFrom() === 'list-view'
+    );
+  };
+
   // Keep j/k registered on the split scope after the list unmounts. When an
   // entity is opened from a list into the same split, this lets j/k continue
   // navigating the originating soup list and update the split content.
@@ -145,6 +154,7 @@ export const useSoupNavigationHotkeys = (
     scopeId,
     description: 'Down',
     hotkeyToken: TOKENS.entity.step.end,
+    condition: canRunListNavigation,
     keyDownHandler: navigateDown,
     hide: true,
   });
@@ -165,6 +175,7 @@ export const useSoupNavigationHotkeys = (
     scopeId,
     hotkeyToken: TOKENS.entity.step.start,
     description: 'Up',
+    condition: canRunListNavigation,
     keyDownHandler: navigateUp,
     hide: true,
   });
