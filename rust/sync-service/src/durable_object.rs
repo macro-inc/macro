@@ -11,7 +11,7 @@ use matchit::Router;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error, info, instrument, trace, warn};
 use worker::{
-    Cors, Date, DurableObject, Env, Error, Method, Request, Response, ResponseBody,
+    Context, Cors, Date, DurableObject, Env, Error, Method, Request, Response, ResponseBody,
     ResponseBuilder, Result, ScheduledTime, State, WebSocket, WebSocketIncomingMessage,
     WebSocketPair, durable_object,
 };
@@ -904,17 +904,21 @@ impl DurableObject for DocumentSyncSession {
 
             state.mark_exported();
 
-            if let Ok(document_id) = self.document_id().await
-                && let Ok(snapshot) = doc_state.export_shallow_snapshot()
-            {
-                // best effort
-                if let Err(err) = DssInternalClient::new(&self.env)
-                    .publish_shallow_snapshot(&document_id, &snapshot)
-                    .await
+            let document_id = self.document_id().await.ok();
+            let env = self.env.clone();
+            self.state.wait_until(async move {
+                if let Some(document_id) = document_id
+                    && let Ok(snapshot) = doc_state.export_shallow_snapshot()
                 {
-                    warn!(error =? err, "failed to push snapshot to DSS");
+                    // best effort
+                    if let Err(err) = DssInternalClient::new(&env)
+                        .publish_shallow_snapshot(&document_id, &snapshot)
+                        .await
+                    {
+                        warn!(error =? err, "failed to push snapshot to DSS");
+                    }
                 }
-            }
+            });
         }
 
         let sockets = self.state.get_websockets();
