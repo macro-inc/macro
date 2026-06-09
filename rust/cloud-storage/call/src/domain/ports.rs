@@ -348,7 +348,7 @@ pub trait RecordingStorage: Send + Sync + 'static {
     /// Generate a presigned GET URL for a stored preview image key/path.
     ///
     /// The preview key/path is stored as a full S3 object key, for example
-    /// `calls/{room}/{recording_file_name}/PREVIEW.jpg`.
+    /// `calls/{room}/{recording_stem}/PREVIEW.jpg`.
     fn presign_recording_preview_url(
         &self,
         preview_key: &str,

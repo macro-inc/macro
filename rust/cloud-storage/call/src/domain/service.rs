@@ -1571,7 +1571,9 @@ fn derive_preview_key_from_recording_key(recording_key: &str) -> Option<String> 
     if parent.is_empty() || file_name.is_empty() {
         return None;
     }
-    Some(format!("calls/{parent}/{file_name}/PREVIEW.jpg"))
+    let recording_stem = file_name.strip_suffix(".mp4").unwrap_or(file_name);
+
+    Some(format!("calls/{parent}/{recording_stem}/PREVIEW.jpg"))
 }
 
 /// Zero-sized placeholder implementation of [`CallSummarizer`].

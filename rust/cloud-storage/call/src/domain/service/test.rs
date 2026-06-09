@@ -220,10 +220,10 @@ fn extract_key_from_bare_calls_path() {
 }
 
 #[test]
-fn derive_preview_key_from_recording_key_uses_recording_file_path() {
+fn derive_preview_key_from_recording_key_uses_recording_stem_path() {
     assert_eq!(
         derive_preview_key_from_recording_key("abc-123/recording.mp4").as_deref(),
-        Some("calls/abc-123/recording.mp4/PREVIEW.jpg")
+        Some("calls/abc-123/recording/PREVIEW.jpg")
     );
 }
 
@@ -231,7 +231,15 @@ fn derive_preview_key_from_recording_key_uses_recording_file_path() {
 fn derive_preview_key_from_recording_key_accepts_prefixed_recording_key() {
     assert_eq!(
         derive_preview_key_from_recording_key("calls/abc-123/recording.mp4").as_deref(),
-        Some("calls/abc-123/recording.mp4/PREVIEW.jpg")
+        Some("calls/abc-123/recording/PREVIEW.jpg")
+    );
+}
+
+#[test]
+fn derive_preview_key_from_recording_key_strips_only_trailing_mp4_suffix() {
+    assert_eq!(
+        derive_preview_key_from_recording_key("abc-123/recording.v1.mp4").as_deref(),
+        Some("calls/abc-123/recording.v1/PREVIEW.jpg")
     );
 }
 

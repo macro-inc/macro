@@ -4,7 +4,7 @@ use sqlx::{Pool, Postgres};
 ///
 /// `recording_key` is the MP4 key without the `calls/` prefix. `preview_key`
 /// is the stable S3 object key/path for the preview image, for example
-/// `calls/{room}/{recording_file_name}/PREVIEW.jpg`. Returns the total number
+/// `calls/{room}/{recording_stem}/PREVIEW.jpg`. Returns the total number
 /// of active and archived rows updated so callers can retry when no matching
 /// recording row exists yet.
 #[tracing::instrument(skip(db), err)]
@@ -56,7 +56,7 @@ mod test {
     const ARCHIVED_CALL_ID: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_00000000ca12);
     const MATCHING_RECORDING_KEY: &str = "room/recording.mp4";
     const OTHER_RECORDING_KEY: &str = "room/other.mp4";
-    const PREVIEW_KEY: &str = "calls/room/recording.mp4/PREVIEW.jpg";
+    const PREVIEW_KEY: &str = "calls/room/recording/PREVIEW.jpg";
 
     async fn insert_channel(pool: &Pool<Postgres>) -> anyhow::Result<()> {
         sqlx::query(

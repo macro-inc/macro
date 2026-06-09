@@ -712,8 +712,7 @@ async fn set_active_call_recording_key_updates_matching_call(
     repo.set_egress_id(&CALL1, "egress-123").await?;
 
     let recording_key = "0195cea6-fc16-72f2-93b6-144df711f270/2026-04-10T210832.mp4";
-    let preview_key =
-        "calls/0195cea6-fc16-72f2-93b6-144df711f270/2026-04-10T210832.mp4/PREVIEW.jpg";
+    let preview_key = "calls/0195cea6-fc16-72f2-93b6-144df711f270/2026-04-10T210832/PREVIEW.jpg";
 
     // Should update and return true.
     let updated = repo
