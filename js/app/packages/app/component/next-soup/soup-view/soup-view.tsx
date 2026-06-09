@@ -28,7 +28,6 @@ import {
   persistSoupNavigationTouchHighlight,
   soupNavigationTouchHighlight,
 } from '@app/component/next-soup/soup-view/soup-navigation-touch-highlight';
-import { activeSoupViewCounts } from '@app/component/next-soup/soup-view/soup-view-cache-key';
 import {
   SoupViewContextProvider,
   useSoupView,
@@ -887,17 +886,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
   const isProjectList = panel.handle.content().type === 'project';
   const contentId = panel.handle.content().id;
-
-  // Maintained for the channel/email/call sub-filters in
-  // search-filter-controls.tsx, which check duplicate-instance status via
-  // this counter.
-  const prevCount = activeSoupViewCounts.get(contentId) ?? 0;
-  activeSoupViewCounts.set(contentId, prevCount + 1);
-  onCleanup(() => {
-    const count = activeSoupViewCounts.get(contentId) ?? 1;
-    if (count <= 1) activeSoupViewCounts.delete(contentId);
-    else activeSoupViewCounts.set(contentId, count - 1);
-  });
 
   const cacheKey = `soup-view-${panel.handle.id}-${contentId}${previewPanel ? '-preview' : ''}`;
 

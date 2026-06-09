@@ -12,7 +12,12 @@ import {
   Show,
 } from 'solid-js';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
-import type { SearchableOption } from './search-filter-controls';
+
+export type SearchableOption = {
+  id: string;
+  label: string;
+  icon?: () => JSX.Element;
+};
 
 const ITEM_HEIGHT = 36;
 const LISTBOX_CLASS = 'max-h-[240px] overflow-y-auto scrollbar-hidden';
