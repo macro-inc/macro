@@ -1017,13 +1017,8 @@ export function createSplitLayout(
   };
 
   function createNewSplit(options: CreateNewSplitOptions): SplitHandle {
-    const {
-      content,
-      activate,
-      referredFrom,
-      allowDuplicate,
-      initialHistory,
-    } = options;
+    const { content, activate, referredFrom, allowDuplicate, initialHistory } =
+      options;
     const initialContent = content ?? DEFAULT_SPLIT_CONTENT;
     const isDefault = sameContent(initialContent, DEFAULT_SPLIT_CONTENT);
 

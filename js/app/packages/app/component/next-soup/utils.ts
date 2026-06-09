@@ -321,12 +321,7 @@ export const openEntityInSplitFromUnifiedList = async (
   entity: EntityData,
   options: OpenEntityOptions
 ): Promise<void> => {
-  const {
-    allowDuplicate,
-    openInNewSplit,
-    splitHandle,
-    mergeHistory,
-  } = options;
+  const { allowDuplicate, openInNewSplit, splitHandle, mergeHistory } = options;
   let { location } = options;
 
   if (!location && isSnippetEntity(entity)) {

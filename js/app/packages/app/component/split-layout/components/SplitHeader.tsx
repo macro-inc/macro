@@ -25,10 +25,12 @@ import { SplitLayoutContext, SplitPanelContext } from '../context';
 import type { SplitContent } from '../layoutManager';
 import { canSpotlight } from '../utils/canSpotlight';
 
-function getEntitySplitContent(data: EntityDragEvent['draggable']['data']): {
-  type: SplitContent['type'];
-  id: string;
-} | undefined {
+function getEntitySplitContent(data: EntityDragEvent['draggable']['data']):
+  | {
+      type: SplitContent['type'];
+      id: string;
+    }
+  | undefined {
   if (data.type === 'document') {
     return {
       type: fileTypeToBlockName(data.subType?.type ?? data.fileType) as
