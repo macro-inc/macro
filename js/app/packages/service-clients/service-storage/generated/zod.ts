@@ -2660,11 +2660,16 @@ export const postTypingBody = zod
   .describe('Request to emit a typing event.');
 
 /**
- * @summary Handler for `POST /channels/{channel_id}/webhook/{bot_auth_token}`.
+ * @summary Handler for `POST /channels/{channel_id}/webhook`.
  */
 export const postChannelBotWebhookParams = zod.object({
   channel_id: zod.uuid().describe('Channel ID'),
-  bot_auth_token: zod.string().describe('Bot authentication token'),
+});
+
+export const postChannelBotWebhookHeader = zod.object({
+  'x-macro-channel-bot-token': zod
+    .string()
+    .describe('Bot authentication token'),
 });
 
 export const postChannelBotWebhookBody = zod

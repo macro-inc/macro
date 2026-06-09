@@ -34,6 +34,9 @@ use model_error_response::ErrorResponse;
 use std::{future::Future, sync::Arc};
 use uuid::Uuid;
 
+/// Header used to authenticate channel bot webhook requests.
+pub const CHANNEL_BOT_TOKEN_HEADER: &str = "x-macro-channel-bot-token";
+
 /// Narrow adapter for posting channel messages from bot webhooks.
 pub trait ChannelMessagePoster: Clone + Send + Sync + 'static {
     /// Post a message to a channel.
@@ -114,24 +117,6 @@ pub struct ChannelPath {
     pub channel_id: Uuid,
 }
 
-/// Channel webhook path.
-#[derive(serde::Deserialize)]
-pub struct ChannelWebhookPath {
-    /// Channel id.
-    pub channel_id: Uuid,
-    /// Bot authentication token.
-    pub bot_auth_token: String,
-}
-
-impl std::fmt::Debug for ChannelWebhookPath {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ChannelWebhookPath")
-            .field("channel_id", &self.channel_id)
-            .field("bot_auth_token", &"<redacted>")
-            .finish()
-    }
-}
-
 /// Create the authenticated channel-scoped bot creation router.
 pub fn channel_scoped_bot_router<BotSvc, ChannelPoster, AccessSvc, T>(
     state: ChannelBotWebhookRouterState<BotSvc, ChannelPoster, AccessSvc>,
@@ -162,7 +147,7 @@ where
 {
     Router::new()
         .route(
-            "/channels/{channel_id}/webhook/{bot_auth_token}",
+            "/channels/{channel_id}/webhook",
             post(post_channel_webhook_handler::<BotSvc, ChannelPoster, AccessSvc>),
         )
         .with_state(state)
@@ -215,15 +200,15 @@ where
     Ok((StatusCode::CREATED, Json(response)))
 }
 
-/// Handler for `POST /channels/{channel_id}/webhook/{bot_auth_token}`.
+/// Handler for `POST /channels/{channel_id}/webhook`.
 #[utoipa::path(
     post,
     tag = "bots",
     operation_id = "post_channel_bot_webhook",
-    path = "/channels/{channel_id}/webhook/{bot_auth_token}",
+    path = "/channels/{channel_id}/webhook",
     params(
         ("channel_id" = Uuid, Path, description = "Channel ID"),
-        ("bot_auth_token" = String, Path, description = "Bot authentication token")
+        ("x-macro-channel-bot-token" = String, Header, description = "Bot authentication token")
     ),
     request_body = ChannelWebhookRequest,
     responses(
@@ -237,7 +222,7 @@ where
 #[tracing::instrument(err, skip_all, fields(channel_id = tracing::field::Empty))]
 pub async fn post_channel_webhook_handler<BotSvc, ChannelPoster, AccessSvc>(
     State(state): State<ChannelBotWebhookRouterState<BotSvc, ChannelPoster, AccessSvc>>,
-    Path(path): Path<ChannelWebhookPath>,
+    Path(path): Path<ChannelPath>,
     headers: HeaderMap,
     body: Bytes,
 ) -> Result<(StatusCode, Json<ChannelWebhookResponse>), ChannelBotWebhookHandlerErr>
@@ -249,9 +234,10 @@ where
     tracing::Span::current().record("channel_id", tracing::field::display(path.channel_id));
 
     let content = parse_webhook_content(&headers, body)?;
+    let bot_auth_token = channel_bot_token(&headers)?;
     let authenticated = state
         .bot_service
-        .authenticate_channel_token(path.channel_id, &path.bot_auth_token)
+        .authenticate_channel_token(path.channel_id, bot_auth_token)
         .await?;
 
     let response = state
@@ -275,6 +261,19 @@ where
             message_id: response.id,
         }),
     ))
+}
+
+fn channel_bot_token(headers: &HeaderMap) -> Result<&str, ChannelBotWebhookHandlerErr> {
+    let token = headers
+        .get(CHANNEL_BOT_TOKEN_HEADER)
+        .and_then(|value| value.to_str().ok())
+        .ok_or(ChannelBotWebhookHandlerErr::Bot(BotError::Unauthorized))?;
+
+    if token.trim().is_empty() {
+        return Err(ChannelBotWebhookHandlerErr::Bot(BotError::Unauthorized));
+    }
+
+    Ok(token)
 }
 
 fn parse_webhook_content(

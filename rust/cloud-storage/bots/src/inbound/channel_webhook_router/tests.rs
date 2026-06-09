@@ -528,8 +528,9 @@ async fn channel_webhook_router_valid_json_posts_as_bot() {
     let poster = TestChannelPoster::new();
     let request = Request::builder()
         .method("POST")
-        .uri(format!("/channels/{channel_id}/webhook/{token}"))
+        .uri(format!("/channels/{channel_id}/webhook"))
         .header("content-type", "application/json")
+        .header(CHANNEL_BOT_TOKEN_HEADER, token)
         .body(Body::from(
             serde_json::json!({ "content": "hello" }).to_string(),
         ))
@@ -572,8 +573,9 @@ async fn channel_webhook_router_invalid_token_returns_unauthorized_without_posti
     let poster = TestChannelPoster::new();
     let request = Request::builder()
         .method("POST")
-        .uri(format!("/channels/{channel_id}/webhook/mbot_test_invalid"))
+        .uri(format!("/channels/{channel_id}/webhook"))
         .header("content-type", "application/json")
+        .header(CHANNEL_BOT_TOKEN_HEADER, "mbot_test_invalid")
         .body(Body::from(
             serde_json::json!({ "content": "hello" }).to_string(),
         ))
@@ -596,6 +598,36 @@ async fn channel_webhook_router_invalid_token_returns_unauthorized_without_posti
 }
 
 #[tokio::test]
+async fn channel_webhook_router_missing_token_header_returns_unauthorized_without_posting() {
+    let channel_id = Uuid::new_v4();
+    let service = TestBotService::unauthorized_webhook();
+    let poster = TestChannelPoster::new();
+    let request = Request::builder()
+        .method("POST")
+        .uri(format!("/channels/{channel_id}/webhook"))
+        .header("content-type", "application/json")
+        .body(Body::from(
+            serde_json::json!({ "content": "hello" }).to_string(),
+        ))
+        .unwrap();
+
+    let response = webhook_router(service.clone(), poster.clone())
+        .oneshot(request)
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(service.auth_calls.load(Ordering::SeqCst), 0);
+    assert!(
+        poster
+            .calls
+            .lock()
+            .expect("posted message mutex poisoned")
+            .is_empty()
+    );
+}
+
+#[tokio::test]
 async fn channel_webhook_router_wrong_channel_returns_unauthorized_without_posting() {
     let expected_channel_id = Uuid::new_v4();
     let requested_channel_id = Uuid::new_v4();
@@ -605,8 +637,9 @@ async fn channel_webhook_router_wrong_channel_returns_unauthorized_without_posti
     let poster = TestChannelPoster::new();
     let request = Request::builder()
         .method("POST")
-        .uri(format!("/channels/{requested_channel_id}/webhook/{token}"))
+        .uri(format!("/channels/{requested_channel_id}/webhook"))
         .header("content-type", "application/json")
+        .header(CHANNEL_BOT_TOKEN_HEADER, token)
         .body(Body::from(
             serde_json::json!({ "content": "hello" }).to_string(),
         ))
@@ -635,8 +668,9 @@ async fn channel_webhook_router_revoked_token_auth_failure_returns_unauthorized(
     let poster = TestChannelPoster::new();
     let request = Request::builder()
         .method("POST")
-        .uri(format!("/channels/{channel_id}/webhook/mbot_test_revoked"))
+        .uri(format!("/channels/{channel_id}/webhook"))
         .header("content-type", "application/json")
+        .header(CHANNEL_BOT_TOKEN_HEADER, "mbot_test_revoked")
         .body(Body::from(
             serde_json::json!({ "content": "hello" }).to_string(),
         ))
@@ -665,8 +699,9 @@ async fn channel_webhook_router_empty_content_returns_bad_request_without_authen
     let poster = TestChannelPoster::new();
     let request = Request::builder()
         .method("POST")
-        .uri(format!("/channels/{channel_id}/webhook/mbot_test_valid"))
+        .uri(format!("/channels/{channel_id}/webhook"))
         .header("content-type", "application/json")
+        .header(CHANNEL_BOT_TOKEN_HEADER, "mbot_test_valid")
         .body(Body::from(
             serde_json::json!({ "content": "  \n\t" }).to_string(),
         ))

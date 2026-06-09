@@ -3533,10 +3533,10 @@
         }
       }
     },
-    "/channels/{channel_id}/webhook/{bot_auth_token}": {
+    "/channels/{channel_id}/webhook": {
       "post": {
         "tags": ["bots"],
-        "summary": "Handler for `POST /channels/{channel_id}/webhook/{bot_auth_token}`.",
+        "summary": "Handler for `POST /channels/{channel_id}/webhook`.",
         "operationId": "post_channel_bot_webhook",
         "parameters": [
           {
@@ -3550,8 +3550,8 @@
             }
           },
           {
-            "name": "bot_auth_token",
-            "in": "path",
+            "name": "x-macro-channel-bot-token",
+            "in": "header",
             "description": "Bot authentication token",
             "required": true,
             "schema": {
