@@ -9387,9 +9387,17 @@
         "description": "Public sender identity for channel messages.",
         "required": ["type", "id"],
         "properties": {
+          "avatar_url": {
+            "type": ["string", "null"],
+            "description": "Avatar URL for bot senders."
+          },
           "id": {
             "type": "string",
             "description": "Sender id without the storage namespace prefix."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "Display name for bot senders."
           },
           "type": {
             "$ref": "#/components/schemas/ApiMessageSenderType",

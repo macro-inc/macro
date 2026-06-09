@@ -80,6 +80,8 @@ export * from './apiMessageAttachment';
 export * from './apiMessageAttachmentHeight';
 export * from './apiMessageAttachmentWidth';
 export * from './apiMessageSender';
+export * from './apiMessageSenderAvatarUrl';
+export * from './apiMessageSenderName';
 export * from './apiMessageSenderType';
 export * from './apiParticipantRole';
 export * from './apiResolvedChannelMessage';

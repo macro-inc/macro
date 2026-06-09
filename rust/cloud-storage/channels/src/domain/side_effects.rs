@@ -3,7 +3,7 @@
 use crate::domain::{
     events::ChannelEvent,
     models::{
-        BotId, ChannelMetadata, ChannelParticipant, ChannelType, CountedReaction,
+        BotId, BotSenderProfile, ChannelMetadata, ChannelParticipant, ChannelType, CountedReaction,
         MutatedAttachment, MutatedMessage, Sender, SimpleMention, TypingAction,
     },
     ports::{
@@ -71,6 +71,8 @@ pub enum ChannelRealtimeEffect {
         recipients: Vec<MacroUserIdStr<'static>>,
         /// Persisted message payload.
         message: MutatedMessage,
+        /// Public bot profile when the sender is a bot.
+        bot_profile: Option<BotSenderProfile>,
         /// Client mutation nonce echoed to listeners.
         nonce: Option<String>,
     },
@@ -415,9 +417,11 @@ where
                 ..
             } => {
                 let message_id = message.id;
+                let bot_profile = self.bot_profile_for_message(&message).await;
                 self.publish_realtime(ChannelRealtimeEffect::Message {
                     recipients,
                     message,
+                    bot_profile,
                     nonce,
                 })
                 .await;
@@ -431,9 +435,11 @@ where
                 ..
             } => {
                 let message_id = message.id;
+                let bot_profile = self.bot_profile_for_message(&message).await;
                 self.publish_realtime(ChannelRealtimeEffect::Message {
                     recipients,
                     message,
+                    bot_profile,
                     nonce,
                 })
                 .await;
@@ -527,9 +533,11 @@ where
             nonce,
         } = event;
         let recipients = participant_ids(&participants);
+        let bot_profile = self.bot_profile_for_message(&message).await;
         self.publish_realtime(ChannelRealtimeEffect::Message {
             recipients: recipients.clone(),
             message: message.clone(),
+            bot_profile,
             nonce: nonce.clone(),
         })
         .await;
@@ -559,6 +567,14 @@ where
             has_attachments,
         )
         .await;
+    }
+
+    /// Resolve the public bot profile when the message sender is a bot.
+    async fn bot_profile_for_message(&self, message: &MutatedMessage) -> Option<BotSenderProfile> {
+        match &message.sender_id {
+            Sender::Bot(bot_id) => self.context.get_bot_sender_profile(*bot_id).await,
+            Sender::User(_) => None,
+        }
     }
 
     async fn publish_realtime(&self, effect: ChannelRealtimeEffect) {
@@ -1079,6 +1095,13 @@ mod tests {
         ) -> Option<String> {
             Some("https://example.com/avatar.png".to_string())
         }
+
+        async fn get_bot_sender_profile(&self, _bot_id: BotId) -> Option<BotSenderProfile> {
+            Some(BotSenderProfile {
+                name: "Test Bot".to_string(),
+                avatar_url: Some("https://example.com/bot.png".to_string()),
+            })
+        }
     }
 
     #[derive(Clone, Default)]
@@ -1219,6 +1242,7 @@ mod tests {
             recipients,
             message,
             nonce,
+            ..
         } = &realtime_effects[0]
         else {
             panic!("expected message realtime effect");
