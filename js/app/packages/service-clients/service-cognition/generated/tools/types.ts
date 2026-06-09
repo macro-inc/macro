@@ -34,6 +34,16 @@ export type CodeExecutionErrorCode =
   | 'file_not_found'
   | 'string_not_found';
 /**
+ * Viewer-relative attendance status for a call record.
+ * Serializes as `ATTENDED`, `MISSED`, or `UNATTENDED`.
+ */
+export type CallStatus = 'ATTENDED' | 'MISSED' | 'UNATTENDED';
+/**
+ * Schema-only mirror of [`CallStatus`] without variant docs, keeping AI tool
+ * schemas as a simple enum instead of `oneOf`.
+ */
+export type ToolCallStatus = 'ATTENDED' | 'MISSED' | 'UNATTENDED';
+/**
  * Type of channel timeline window to read.
  */
 export type ChannelMessagesWindowType =
@@ -369,6 +379,7 @@ export interface CallRecordMetadata {
   duration_ms: number;
   ended_at: string;
   started_at: string;
+  status: CallStatus;
   updated_at: string;
 }
 export interface CallRecordSearchResponseItemWithMetadata {
@@ -464,6 +475,10 @@ export interface CallRecordSummary {
    * When the call started.
    */
   startedAt: string;
+  /**
+   * The caller's viewer-relative status for this call.
+   */
+  status?: ToolCallStatus | null;
 }
 /**
  * Metadata for a channel fetched from the database
@@ -1216,17 +1231,21 @@ export interface ToolContact {
   name?: string | null;
 }
 /**
- * List recent call records the user can access, ordered by start time descending. Results are scoped to channels the user is a member of. Transcripts are NOT included — call ReadCallRecord with a specific callId to fetch a transcript.
+ * List recent call records the user can access, ordered by start time descending. Status is relative to the caller. Transcripts are NOT included — call ReadCallRecord with a specific callId to fetch a transcript.
  */
 export interface ListCallRecords {
   /**
-   * Optional filter on whether the caller joined the call. true = only calls the user attended; false = only calls the user did not attend; omit to include both.
+   * Deprecated compatibility filter. true = only calls the user attended; false = only calls the user did not attend; omit to include both. Ignored when status is provided.
    */
   attended?: boolean | null;
   /**
    * Optional channel id. When provided, only calls from that channel are returned.
    */
   channelId?: string | null;
+  /**
+   * Optional viewer-relative status filter. ATTENDED = calls the user joined; MISSED = calls the user did not join while they are in the channel; UNATTENDED = calls the user did not join while they are not in the channel. Prefer this over the deprecated attended filter.
+   */
+  status?: ToolCallStatus | null;
 }
 /**
  * Response for [`ListCallRecords`].

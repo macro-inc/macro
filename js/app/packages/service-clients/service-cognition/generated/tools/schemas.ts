@@ -359,6 +359,29 @@ export const SearchToolResponse = z.object({
                   duration_ms: z.number().int(),
                   ended_at: z.string().datetime({ offset: true }),
                   started_at: z.string().datetime({ offset: true }),
+                  status: z.any().superRefine((x, ctx) => {
+                    const schemas = [
+                      z.literal('ATTENDED'),
+                      z.literal('MISSED'),
+                      z.literal('UNATTENDED'),
+                    ];
+                    const errors = schemas.reduce<z.ZodError[]>(
+                      (errors, schema) =>
+                        ((result) =>
+                          result.error ? [...errors, result.error] : errors)(
+                          schema.safeParse(x)
+                        ),
+                      []
+                    );
+                    if (schemas.length - errors.length !== 1) {
+                      ctx.addIssue({
+                        path: ctx.path,
+                        code: 'invalid_union',
+                        unionErrors: errors,
+                        message: 'Invalid input: Should pass single schema',
+                      });
+                    }
+                  }),
                   updated_at: z.string().datetime({ offset: true }),
                 }),
                 z.null(),
@@ -499,6 +522,9 @@ export const GetThreadResponse = z.object({
 export const ListCallRecords = z.object({
   attended: z.union([z.boolean(), z.null()]).optional(),
   channelId: z.union([z.string().uuid(), z.null()]).optional(),
+  status: z
+    .union([z.enum(['ATTENDED', 'MISSED', 'UNATTENDED']), z.null()])
+    .optional(),
 });
 
 export const ListCallRecordsResponse = z.object({
@@ -515,6 +541,9 @@ export const ListCallRecordsResponse = z.object({
       isActive: z.boolean(),
       participants: z.array(z.string()),
       startedAt: z.string().datetime({ offset: true }),
+      status: z
+        .union([z.enum(['ATTENDED', 'MISSED', 'UNATTENDED']), z.null()])
+        .optional(),
     })
   ),
 });

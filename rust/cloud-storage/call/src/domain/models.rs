@@ -3,7 +3,10 @@
 use std::fmt;
 
 use chrono::{DateTime, Utc};
-use item_filters::ast::{LiteralTree, call::CallLiteral};
+use item_filters::{
+    CallStatus,
+    ast::{LiteralTree, call::CallLiteral},
+};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{Query, SimpleSortMethod};
 use uuid::Uuid;
@@ -360,6 +363,9 @@ pub struct CallRecord {
     pub share_with_team: bool,
     /// Whether the call is currently active (from `calls` table).
     pub is_active: bool,
+    /// Viewer-relative call status when fetched in the context of a specific user.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<CallStatus>,
     /// Participants (both active and historic).
     pub participants: Vec<CallRecordParticipant>,
     /// Transcript segments ordered by `sequence_num`.

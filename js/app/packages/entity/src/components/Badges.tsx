@@ -3,6 +3,7 @@ import { tryMacroId, useDisplayName } from '@core/user';
 import UserPlus from '@phosphor/user-plus.svg';
 import { cn, HoverCard } from '@ui';
 import type { ParentProps } from 'solid-js';
+import type { CallStatus } from '../types/entity';
 
 function Badge(props: ParentProps<{ class?: string }>) {
   return (
@@ -103,16 +104,39 @@ function _ImportantBadge() {
   );
 }
 
+type CallStatusBadgeConfig = {
+  class: string;
+  label: string;
+};
+
+function getCallStatusBadgeConfig(status: CallStatus): CallStatusBadgeConfig {
+  switch (status) {
+    case 'ATTENDED':
+      return {
+        class: 'text-ink-extra-muted border-edge-muted px-2',
+        label: 'attended',
+      };
+    case 'MISSED':
+      return {
+        class: 'text-accent-30 border-edge-muted px-2',
+        label: 'missed',
+      };
+    case 'UNATTENDED':
+      return {
+        class: 'text-ink-extra-muted/70 border-edge-muted px-2',
+        label: 'unattended',
+      };
+  }
+}
+
+export function CallStatusBadge(props: { status: CallStatus }) {
+  const config = () => getCallStatusBadgeConfig(props.status);
+
+  return <Badge class={config().class}>{config().label}</Badge>;
+}
+
 export function AttendanceBadge(props: { attended: boolean }) {
   return (
-    <Badge
-      class={
-        props.attended
-          ? 'text-ink-extra-muted border-edge-muted px-2'
-          : 'text-accent-30 border-edge-muted px-2'
-      }
-    >
-      {props.attended ? 'attended' : 'unattended'}
-    </Badge>
+    <CallStatusBadge status={props.attended ? 'ATTENDED' : 'UNATTENDED'} />
   );
 }

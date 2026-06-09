@@ -1,6 +1,10 @@
 import type { SoupBody, SoupItemsQueryFilters } from '@queries/soup/items';
 import type { SoupApiItem } from '@service-storage/generated/schemas';
 import { match } from 'ts-pattern';
+import {
+  callStatusFromAttended,
+  type CallStatus,
+} from './filter-store/types';
 
 const NIL_UUID = '00000000-0000-0000-0000-000000000000';
 
@@ -38,6 +42,19 @@ function isAttendedFilteredOut(
 ): boolean {
   if (attendedFilter !== true && attendedFilter !== false) return false;
   return itemAttended !== attendedFilter;
+}
+
+function isCallAttendanceFilteredOut(
+  statusFilter: CallStatus | null | undefined,
+  attendedFilter: boolean | null | undefined,
+  itemStatus: CallStatus | null | undefined,
+  itemAttended: boolean
+): boolean {
+  if (statusFilter !== undefined && statusFilter !== null) {
+    return (itemStatus ?? callStatusFromAttended(itemAttended)) !== statusFilter;
+  }
+
+  return isAttendedFilteredOut(attendedFilter, itemAttended);
 }
 
 // TODO: this only supports the subset of soup filters needed for cache matching.
@@ -78,7 +95,12 @@ export function filterSoupItemByRequestBody(
       { tag: 'call' },
       ({ data }) =>
         !isIdFilteredOut(body.call_filters?.call_ids, data.callId) &&
-        !isAttendedFilteredOut(body.call_filters?.attended, data.attended)
+        !isCallAttendanceFilteredOut(
+          body.call_filters?.status,
+          body.call_filters?.attended,
+          data.status,
+          data.attended
+        )
     )
     .with(
       { tag: 'crmCompany' },

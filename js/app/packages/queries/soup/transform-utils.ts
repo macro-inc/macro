@@ -425,6 +425,7 @@ export const useSearchResponseItemMapper = () => {
           result.metadata.channel_name ??
           channels().find((c) => c.id === result.channel_id)?.name ??
           undefined;
+        const status = result.metadata.status;
 
         return [
           {
@@ -437,7 +438,8 @@ export const useSearchResponseItemMapper = () => {
             createdAt: result.metadata.started_at,
             updatedAt: result.metadata.updated_at,
             isActive: false,
-            attended: result.metadata.attended,
+            status,
+            attended: status === 'ATTENDED',
             durationMs: result.metadata.duration_ms,
             participantIds: result.participant_ids,
             search,
@@ -576,6 +578,8 @@ export const mapSoupPageToEntityList: (
       }
 
       if (item.tag === 'call') {
+        const status = item.data.status;
+
         return {
           type: 'call',
           id: item.data.callId,
@@ -590,7 +594,8 @@ export const mapSoupPageToEntityList: (
           updatedAt: item.data.endedAt ?? item.data.startedAt,
           sortTs: item.data.endedAt ?? item.data.startedAt,
           isActive: item.data.isActive,
-          attended: item.data.attended,
+          status,
+          attended: status === 'ATTENDED',
           durationMs: item.data.durationMs ?? undefined,
           participantIds: item.data.participants.map((p) => p.userId),
           summary: item.data.summary ?? undefined,

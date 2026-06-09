@@ -1,6 +1,7 @@
 import type { DateValue } from '@core/util/date';
 import type { ApiLabel } from '@service-email/generated/schemas';
 import type {
+  CallStatus as StorageCallStatus,
   GithubPullRequestCheckRun,
   GithubPullRequestComment,
   SoupLabel,
@@ -153,11 +154,15 @@ export type ProjectEntity = EntityBase & {
   projectId?: string;
 };
 
+export type CallStatus = StorageCallStatus;
+
 export type CallEntity = EntityBase & {
   type: 'call';
   channelId: string;
   channelName?: string;
   isActive: boolean;
+  status: CallStatus;
+  /** Compatibility flag derived from status. */
   attended: boolean;
   durationMs?: number;
   participantIds: string[];

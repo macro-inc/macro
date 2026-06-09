@@ -335,10 +335,19 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         filters: defineQueryFilters({}, { skipTargets: ['callf'] }),
         clientFilters: { and: ['calls'] },
       }),
+      missed: () => ({
+        filters: defineQueryFilters(
+          {
+            include: { callStatus: 'MISSED' },
+          },
+          { skipTargets: ['callf'] }
+        ),
+        clientFilters: { and: ['calls'] },
+      }),
       unattended: () => ({
         filters: defineQueryFilters(
           {
-            include: { callAttended: false },
+            include: { callStatus: 'UNATTENDED' },
           },
           { skipTargets: ['callf'] }
         ),

@@ -9541,7 +9541,7 @@
         "properties": {
           "attended": {
             "type": ["boolean", "null"],
-            "description": "Filter by whether the requesting user attended the call.\n`None` = no filter, `Some(true)` = only calls the user joined,\n`Some(false)` = only calls the user did not join."
+            "description": "Legacy filter by whether the requesting user attended the call.\nPrefer [`CallFilters::status`] for new callers.\n`None` = no filter, `Some(true)` = only calls the user joined,\n`Some(false)` = only calls the user did not join."
           },
           "call_ids": {
             "type": "array",
@@ -9563,6 +9563,17 @@
               "type": "string"
             },
             "description": "Speaker macro user ids. Empty to include all."
+          },
+          "status": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CallStatus",
+                "description": "Filter by the requesting user's viewer-relative call status."
+              }
+            ]
           }
         }
       },
@@ -9653,6 +9664,17 @@
             "type": "string",
             "format": "date-time",
             "description": "When the call started (created_at for active, started_at for archived)."
+          },
+          "status": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CallStatus",
+                "description": "Viewer-relative call status when fetched in the context of a specific user."
+              }
+            ]
           },
           "summary": {
             "type": ["string", "null"],
@@ -9814,6 +9836,11 @@
             "description": "Stable DB-row id for the segment."
           }
         }
+      },
+      "CallStatus": {
+        "type": "string",
+        "description": "Viewer-relative attendance status for a call record.\nSerializes as `ATTENDED`, `MISSED`, or `UNATTENDED`.",
+        "enum": ["ATTENDED", "MISSED", "UNATTENDED"]
       },
       "CallTokenResponse": {
         "type": "object",
@@ -15863,13 +15890,14 @@
           "createdBy",
           "startedAt",
           "isActive",
+          "status",
           "attended",
           "participants"
         ],
         "properties": {
           "attended": {
             "type": "boolean",
-            "description": "Whether the requesting user attended this call (i.e. appears in the\n`call_participants` / `call_record_participants` table)."
+            "description": "Whether the requesting user attended this call. Kept for compatibility\nand derived from `status == ATTENDED`."
           },
           "callId": {
             "type": "string",
@@ -15918,6 +15946,10 @@
             "type": "string",
             "format": "date-time",
             "description": "When the call started."
+          },
+          "status": {
+            "$ref": "#/components/schemas/CallStatus",
+            "description": "Viewer-relative call status for the requesting user."
           },
           "summary": {
             "type": ["string", "null"],

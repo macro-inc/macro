@@ -13,6 +13,7 @@ import type { CallRecordParticipant } from './callRecordParticipant';
 import type { CallRecordRecordingPreviewUrl } from './callRecordRecordingPreviewUrl';
 import type { CallRecordRecordingStartedAt } from './callRecordRecordingStartedAt';
 import type { CallRecordRecordingUrl } from './callRecordRecordingUrl';
+import type { CallRecordStatus } from './callRecordStatus';
 import type { CallRecordSummary } from './callRecordSummary';
 import type { CallRecordTranscriptSegment } from './callRecordTranscriptSegment';
 
@@ -57,6 +58,7 @@ this value when present, falling back to `started_at` otherwise. */
   shareWithTeam: boolean;
   /** When the call started (created_at for active, started_at for archived). */
   startedAt: string;
+  status?: CallRecordStatus;
   /** AI-generated summary of the call. Only set on archived `call_records`
 once summarization has run; active calls always return `None`. */
   summary?: CallRecordSummary;

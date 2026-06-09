@@ -980,6 +980,16 @@ export const getCallRecordResponse = zod
       .describe(
         'When the call started (created_at for active, started_at for archived).'
       ),
+    status: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['ATTENDED', 'MISSED', 'UNATTENDED'])
+          .describe(
+            'Viewer-relative attendance status for a call record.\nSerializes as `ATTENDED`, `MISSED`, or `UNATTENDED`.'
+          ),
+      ])
+      .optional(),
     summary: zod
       .string()
       .nullish()
@@ -7126,7 +7136,7 @@ export const getItemsSoupResponse = zod.object({
               attended: zod
                 .boolean()
                 .describe(
-                  'Whether the requesting user attended this call (i.e. appears in the\n`call_participants` \/ `call_record_participants` table).'
+                  'Whether the requesting user attended this call. Kept for compatibility\nand derived from `status == ATTENDED`.'
                 ),
               callId: zod.uuid().describe('The call identifier.'),
               channelId: zod
@@ -7179,6 +7189,11 @@ export const getItemsSoupResponse = zod.object({
               startedAt: zod.iso
                 .datetime({})
                 .describe('When the call started.'),
+              status: zod
+                .enum(['ATTENDED', 'MISSED', 'UNATTENDED'])
+                .describe(
+                  'Viewer-relative attendance status for a call record.\nSerializes as `ATTENDED`, `MISSED`, or `UNATTENDED`.'
+                ),
               summary: zod
                 .string()
                 .nullish()
@@ -7326,7 +7341,7 @@ export const postItemsSoupBody = zod
           .boolean()
           .nullish()
           .describe(
-            'Filter by whether the requesting user attended the call.\n`None` = no filter, `Some(true)` = only calls the user joined,\n`Some(false)` = only calls the user did not join.'
+            'Legacy filter by whether the requesting user attended the call.\nPrefer [`CallFilters::status`] for new callers.\n`None` = no filter, `Some(true)` = only calls the user joined,\n`Some(false)` = only calls the user did not join.'
           ),
         call_ids: zod
           .array(zod.string())
@@ -7344,6 +7359,16 @@ export const postItemsSoupBody = zod
           .array(zod.string())
           .optional()
           .describe('Speaker macro user ids. Empty to include all.'),
+        status: zod
+          .union([
+            zod.null(),
+            zod
+              .enum(['ATTENDED', 'MISSED', 'UNATTENDED'])
+              .describe(
+                'Viewer-relative attendance status for a call record.\nSerializes as `ATTENDED`, `MISSED`, or `UNATTENDED`.'
+              ),
+          ])
+          .optional(),
       })
       .optional()
       .describe('Filters for call records.'),
@@ -8979,7 +9004,7 @@ export const postItemsSoupResponse = zod.object({
               attended: zod
                 .boolean()
                 .describe(
-                  'Whether the requesting user attended this call (i.e. appears in the\n`call_participants` \/ `call_record_participants` table).'
+                  'Whether the requesting user attended this call. Kept for compatibility\nand derived from `status == ATTENDED`.'
                 ),
               callId: zod.uuid().describe('The call identifier.'),
               channelId: zod
@@ -9032,6 +9057,11 @@ export const postItemsSoupResponse = zod.object({
               startedAt: zod.iso
                 .datetime({})
                 .describe('When the call started.'),
+              status: zod
+                .enum(['ATTENDED', 'MISSED', 'UNATTENDED'])
+                .describe(
+                  'Viewer-relative attendance status for a call record.\nSerializes as `ATTENDED`, `MISSED`, or `UNATTENDED`.'
+                ),
               summary: zod
                 .string()
                 .nullish()
@@ -10425,7 +10455,7 @@ export const postItemsSoupAstResponse = zod.object({
               attended: zod
                 .boolean()
                 .describe(
-                  'Whether the requesting user attended this call (i.e. appears in the\n`call_participants` \/ `call_record_participants` table).'
+                  'Whether the requesting user attended this call. Kept for compatibility\nand derived from `status == ATTENDED`.'
                 ),
               callId: zod.uuid().describe('The call identifier.'),
               channelId: zod
@@ -10478,6 +10508,11 @@ export const postItemsSoupAstResponse = zod.object({
               startedAt: zod.iso
                 .datetime({})
                 .describe('When the call started.'),
+              status: zod
+                .enum(['ATTENDED', 'MISSED', 'UNATTENDED'])
+                .describe(
+                  'Viewer-relative attendance status for a call record.\nSerializes as `ATTENDED`, `MISSED`, or `UNATTENDED`.'
+                ),
               summary: zod
                 .string()
                 .nullish()

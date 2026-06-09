@@ -179,7 +179,7 @@
         "properties": {
           "attended": {
             "type": ["boolean", "null"],
-            "description": "Filter by whether the requesting user attended the call.\n`None` = no filter, `Some(true)` = only calls the user joined,\n`Some(false)` = only calls the user did not join."
+            "description": "Legacy filter by whether the requesting user attended the call.\nPrefer [`CallFilters::status`] for new callers.\n`None` = no filter, `Some(true)` = only calls the user joined,\n`Some(false)` = only calls the user did not join."
           },
           "call_ids": {
             "type": "array",
@@ -201,6 +201,17 @@
               "type": "string"
             },
             "description": "Speaker macro user ids. Empty to include all."
+          },
+          "status": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CallStatus",
+                "description": "Filter by the requesting user's viewer-relative call status."
+              }
+            ]
           }
         }
       },
@@ -212,6 +223,7 @@
           "ended_at",
           "duration_ms",
           "updated_at",
+          "status",
           "attended"
         ],
         "properties": {
@@ -235,6 +247,9 @@
           "started_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CallStatus"
           },
           "updated_at": {
             "type": "string",
@@ -339,6 +354,11 @@
             "format": "uuid"
           }
         }
+      },
+      "CallStatus": {
+        "type": "string",
+        "description": "Viewer-relative attendance status for a call record.\nSerializes as `ATTENDED`, `MISSED`, or `UNATTENDED`.",
+        "enum": ["ATTENDED", "MISSED", "UNATTENDED"]
       },
       "ChannelFilters": {
         "type": "object",

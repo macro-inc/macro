@@ -74,6 +74,7 @@ export const VIEW_TAB_LISTS: Record<TabbedListView, TabItem[]> = {
   ],
   calls: [
     { value: 'all', label: 'All' },
+    { value: 'missed', label: 'Missed' },
     { value: 'unattended', label: 'Unattended' },
   ],
   folders: [
