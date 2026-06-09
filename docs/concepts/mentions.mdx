@@ -5,17 +5,26 @@ description: "How blocks reference each other — the @mention primitive that wo
 
 Mentions are the connective tissue of the workspace. Typing `@` in any rich-text surface — a [document](/product/docs), an email body, a channel message, a chat or [automation](/product/agents#automations) prompt, or a task description — opens an autocomplete that lets you reference something else in Macro. Whatever you pick renders as a live inline pill that carries its target's current metadata (a task mention, for instance, shows the task's status and priority), and the reference is recorded as a backlink in the target's [References panel](/concepts/blocks).
 
-## What you can mention
+<Frame>
+  <img
+    src="/images/Screenshot-2026-06-09-at-1.30.59-PM.png"
+    alt="Screenshot 2026 06 09 At 1 30 59 PM"
+    title="Screenshot 2026 06 09 At 1 30 59 PM"
+    className="mx-auto"
+    style={{ width:"57%" }}
+  />
+</Frame>
 
-- **People** — by name or email.
-- **Documents and blocks** — any doc, task, canvas, code file, pdf, etc.
-- **Contacts and companies** — CRM records, rendered differently for people vs. organizations.
-- **Channels** — a deep link to the channel, or to a specific message or thread.
-- **Dates** — date pills.
-- **Groups** — by group alias.
+## What happens when you mention...
+
+- **People** by name or email. The person will receive a notification, even if they are not an existing Macro user, if you mention them in a comment or a channel. If you mention them in the body of a task or markdown doc, they will _not_ get mentioned... you need to manually share it with them. We know this is a bit of a weird design decision; the reason we made it after dogfooding for a while is that, any time you want to @mention someone in a doc, you definitionally are not finished writing the doc, so you don't want them to get a notification yet. It's unclear when they _should_ receive that notification, so we determined it best that mentions in the context of documents don't notify or share with mentioned users.
+- **Documents and blocks** any doc, task, canvas, code file, pdf, etc. In the context of a channel, the document will get shared. In a comment, it will not get shared. In a document, it will not get shared.
+- **Contacts and company** records, rendered differently for people vs. organizations. Company and contact records are not shared when mentioned. The sharing of company and content records is determined by Teams.
+- **Channels** or to a specific **message** or thread. Mentioning a channel doesn't grant permissions, nor to a message. There is no way to share a message with someone who is not in a channel at the moment, because the ability to view a message is determined by channel membership. If you need to share a message but not add somebody to a channel, send a screenshot. To add somebody to a channel, don't mention the channel, go to the channel and add them as a participant.
+- **Dates** with a date picker.
 
 ## What a mention does depends on where you make it
 
-In a document or chat, a mention is a navigable link and a source of context. In an **email body** it has side effects: mentioning a person adds them to CC, and mentioning a document inserts a link *and* updates that document's permissions so recipients can open it. In a **channel** there are two special mentions layered on top of the normal ones — `@here` pings every participant, and `@Macro` invokes the agent inline.
+In a document or chat, a mention is a navigable link and a source of context. In an **email body** it has side effects: mentioning a person adds them to CC, and mentioning a document inserts a link _and_ updates that document's permissions so recipients can open it. In a **channel** there are two special mentions layered on top of the normal ones — `@here` pings every participant, and `@Macro` invokes the agent inline.
 
 The agent leans on mentions heavily: anything you @mention into a chat is pulled in as context, and autocomplete there surfaces your currently open tabs first.
