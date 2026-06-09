@@ -1,7 +1,7 @@
-import type { WebSocketServer } from 'ws';
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
-import { ConstantBackoff, WebsocketBuilder, WebsocketEvent } from '../';
+import type { WebSocketServer } from 'ws';
 import type { Websocket } from '../';
+import { ConstantBackoff, WebsocketBuilder, WebsocketEvent } from '../';
 import { startServer, stopClient, stopServer } from './websocket-test-utils';
 
 /**
