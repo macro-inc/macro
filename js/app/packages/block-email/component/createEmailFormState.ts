@@ -1,4 +1,5 @@
 import { useEmail } from '@core/context/user';
+import { useEmailLinksQuery } from '@queries/email/link';
 import type { ApiMessage } from '@service-email/generated/schemas';
 import type { LexicalEditor } from 'lexical';
 import { createSignal, type Setter } from 'solid-js';
@@ -102,6 +103,24 @@ export function createEmailFormState(
     draft = options?.getDraftForMessageReply(purpose?.messageID);
   }
 
+  const linksQuery = useEmailLinksQuery();
+  // The inbox this compose sends from. Defaults to the inbox that owns the
+  // thread/draft; the user can change it via the "from" selector.
+  const [selectedLinkId, setSelectedLinkId] = createSignal<string | undefined>(
+    (draft ?? replyingTo)?.link_id ?? undefined
+  );
+  // Reply logic ("did I send this?") must be judged against the inbox the
+  // message is sent from, not the account's primary email — otherwise replying
+  // from a secondary or delegated inbox misclassifies the sender and picks the
+  // wrong recipients.
+  const inboxEmail = () => {
+    const linkId = selectedLinkId() ?? (draft ?? replyingTo)?.link_id;
+    const ownerEmail = linkId
+      ? linksQuery.data?.links.find((l) => l.id === linkId)?.email_address
+      : undefined;
+    return ownerEmail ?? userEmail() ?? '';
+  };
+
   const draftContainsAppendedReply = () => {
     const encoded = draft?.body_html_sanitized;
     if (!encoded) return false;
@@ -135,8 +154,8 @@ export function createEmailFormState(
     } else if (replyingTo) {
       initialRecipients =
         replyType === 'reply-all'
-          ? getReplyAllRecipients(replyingTo, userEmail() ?? '')
-          : getReplyRecipientsFromParent(replyingTo, userEmail() ?? '');
+          ? getReplyAllRecipients(replyingTo, inboxEmail())
+          : getReplyRecipientsFromParent(replyingTo, inboxEmail());
     }
 
     return {
@@ -224,11 +243,11 @@ export function createEmailFormState(
 
       switch (rt) {
         case 'reply-all': {
-          calculated = getReplyAllRecipients(msg, userEmail() ?? '');
+          calculated = getReplyAllRecipients(msg, inboxEmail());
           break;
         }
         case 'reply': {
-          calculated = getReplyRecipientsFromParent(msg, userEmail() ?? '');
+          calculated = getReplyRecipientsFromParent(msg, inboxEmail());
         }
       }
 
@@ -269,6 +288,20 @@ export function createEmailFormState(
     setLastReplyTypeApplied(rt);
     onReplyTypeAppliedCb()?.(rt);
     return rt;
+  };
+
+  // Change the inbox this compose sends from. For an active reply, re-derive the
+  // recipients against the newly selected inbox (the sender comparison changes).
+  const setSelectedFromLink = (linkId: string | undefined) => {
+    setSelectedLinkId(linkId);
+    if (!replyingTo || draft || state.replyType === 'forward') return;
+    const recalculated =
+      state.replyType === 'reply-all'
+        ? getReplyAllRecipients(replyingTo, inboxEmail())
+        : getReplyRecipientsFromParent(replyingTo, inboxEmail());
+    setRecipients('to', recalculated.to ?? []);
+    setRecipients('cc', recalculated.cc ?? []);
+    setRecipients('bcc', recalculated.bcc ?? []);
   };
 
   const setSendTime = (date: Date | null) => {
@@ -321,6 +354,8 @@ export function createEmailFormState(
     setSubject,
     replyType: () => state.replyType,
     setReplyType,
+    selectedLinkId: () => selectedLinkId(),
+    setSelectedFromLink,
     shouldFocusInput,
     setShouldFocusInput,
     sendTime: () => state.sendTime,

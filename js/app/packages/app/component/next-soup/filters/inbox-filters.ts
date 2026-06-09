@@ -121,6 +121,8 @@ export function signalFilter(entity: EntityData): boolean {
     case 'automation':
       // Automations only show in the Agents > Scheduled tab, not Inbox.
       return false;
+    case 'foreign':
+      return false;
   }
 }
 

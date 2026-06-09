@@ -64,14 +64,6 @@ fn child_doc_body_omits_raw_content_when_none() {
 }
 
 #[test]
-fn destination_uses_join_shape_for_v2() {
-    use crate::documents_shape::{DOCUMENTS_V2, destination_uses_join_shape};
-    assert!(destination_uses_join_shape(DOCUMENTS_V2));
-    assert!(!destination_uses_join_shape("documents_v1"));
-    assert!(!destination_uses_join_shape("documents_join_test"));
-}
-
-#[test]
 fn resolve_destination_defaults_to_documents_alias() {
     assert_eq!(resolve_destination(None), SearchIndex::Documents.as_ref());
     assert_eq!(resolve_destination(Some("documents_v2")), "documents_v2");

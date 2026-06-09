@@ -955,6 +955,12 @@ export const getCallRecordResponse = zod
           )
       )
       .describe('Participants (both active and historic).'),
+    recordingPreviewUrl: zod
+      .string()
+      .nullish()
+      .describe(
+        'Presigned URL for the call recording preview image, if available.'
+      ),
     recordingStartedAt: zod.iso
       .datetime({})
       .nullish()
@@ -974,6 +980,16 @@ export const getCallRecordResponse = zod
       .describe(
         'When the call started (created_at for active, started_at for archived).'
       ),
+    status: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['ATTENDED', 'MISSED', 'UNATTENDED'])
+          .describe(
+            'Viewer-relative attendance status for a call record.\nSerializes as `ATTENDED`, `MISSED`, or `UNATTENDED`.'
+          ),
+      ])
+      .optional(),
     summary: zod
       .string()
       .nullish()
@@ -1250,7 +1266,7 @@ export const ingestTranscriptBody = zod
 export const createChannelBody = zod
   .object({
     channel_type: zod
-      .enum(['public', 'organization', 'private', 'direct_message', 'team'])
+      .enum(['public', 'private', 'direct_message', 'team'])
       .describe('Type of channel.'),
     name: zod.string().nullish().describe('Optional channel name.'),
     participants: zod
@@ -1509,13 +1525,7 @@ export const getBatchChannelPreviewResponse = zod
                   .string()
                   .describe('Resolved channel display name.'),
                 channel_type: zod
-                  .enum([
-                    'public',
-                    'organization',
-                    'private',
-                    'direct_message',
-                    'team',
-                  ])
+                  .enum(['public', 'private', 'direct_message', 'team'])
                   .describe('Type of channel.'),
               })
               .describe('Preview payload returned for accessible channels.')
@@ -1582,7 +1592,7 @@ export const getChannelResponse = zod
       .string()
       .describe("Resolved display name from the viewer's perspective."),
     channel_type: zod
-      .enum(['public', 'organization', 'private', 'direct_message', 'team'])
+      .enum(['public', 'private', 'direct_message', 'team'])
       .describe('Type of channel.'),
     messages: zod
       .array(
@@ -1832,6 +1842,31 @@ export const getChannelAttachmentsResponse = zod
       .describe('Cursor for the next page, null if no more pages.'),
   })
   .describe('Paginated response of channel attachments.');
+
+/**
+ * @summary Handler for `POST /channels/{channel_id}/bots/scoped`.
+ */
+export const createChannelScopedBotParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+});
+
+export const createChannelScopedBotBody = zod
+  .object({
+    avatar_url: zod.string().nullish().describe('Optional avatar URL.'),
+    description: zod.string().nullish().describe('Optional description.'),
+    handle: zod.string().describe('Stable handle.'),
+    name: zod.string().describe('Display name.'),
+    team_id: zod
+      .uuid()
+      .nullish()
+      .describe('Team owner. Omit for a user-owned bot.'),
+    token_expires_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Optional token expiration timestamp.'),
+    token_label: zod.string().nullish().describe('Optional token label.'),
+  })
+  .describe('Request to create a bot scoped to a channel.');
 
 /**
  * @summary Handler for `POST /channels/{channel_id}/join`.
@@ -2625,6 +2660,31 @@ export const postTypingBody = zod
   .describe('Request to emit a typing event.');
 
 /**
+ * @summary Handler for `POST /channels/{channel_id}/webhook`.
+ */
+export const postChannelBotWebhookParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+});
+
+export const postChannelBotWebhookHeader = zod.object({
+  'x-macro-channel-bot-token': zod
+    .string()
+    .describe('Bot authentication token'),
+});
+
+export const postChannelBotWebhookBody = zod
+  .object({
+    content: zod.string().describe('Message body.'),
+  })
+  .describe('Request to post a channel webhook message.');
+
+export const postChannelBotWebhookResponse = zod
+  .object({
+    message_id: zod.string().describe('Created message id.'),
+  })
+  .describe('Response returned after posting a channel webhook message.');
+
+/**
  * @summary Soft-delete a CRM comment, scoped to the requesting user's team. When it
 was the thread's last live comment, the thread is soft-deleted too
 (reported via `threadDeleted`).
@@ -2694,9 +2754,11 @@ export const editCrmCommentResponse = zod
   .describe('A single comment within a [`CrmThread`].');
 
 /**
- * @summary List the comment threads on a CRM company or contact, scoped to the
-requesting user's team. Returns 404 when the entity isn't owned by the
-team; an owned entity with no threads returns `200 []`.
+ * @summary List the comment threads on a CRM company or contact. Access is
+enforced by [`EntityPermissionExtractor`] against the path's
+`crm_company`/`crm_contact` entity type — hidden parents are
+invisible to plain members. An accessible entity with no threads
+returns `200 []`.
  */
 export const listCrmCommentsParams = zod.object({
   entity_type: zod
@@ -2908,10 +2970,117 @@ export const createCrmCommentResponse = zod
   );
 
 /**
- * @summary List the non-hidden contacts of a CRM company, scoped to the
-requesting user's team. Returns 404 when the company isn't owned by
-the team (so existence doesn't leak across teams); an owned company
-with no visible contacts returns `200 []`.
+ * @summary Fetch a single CRM company by id, hydrated with its domains, the
+primary domain's directory display metadata (name + description),
+and the company's contacts. Access is enforced by
+[`CrmCompanyAccessLevelExtractor`]: the user must be on the team
+that owns the company, and hidden companies are invisible to plain
+members. Admin/owner callers see hidden companies and contacts so
+they can render the right unhide UI.
+ */
+export const getCompanyParams = zod.object({
+  company_id: zod.uuid().describe('The CRM company to fetch'),
+});
+
+export const getCompanyResponse = zod
+  .object({
+    contacts: zod
+      .array(
+        zod
+          .object({
+            companyId: zod
+              .uuid()
+              .describe('The id of the company the contact belongs to.'),
+            createdAt: zod.iso
+              .datetime({})
+              .describe('When the contact record was created.'),
+            email: zod.string().describe("The contact's email address."),
+            firstInteraction: zod.iso
+              .datetime({})
+              .describe('Earliest known interaction with this contact.'),
+            hidden: zod
+              .boolean()
+              .describe(
+                'Whether the contact is hidden from CRM listings for the\nrequesting team. Non-admin viewers never see `hidden = true`\nrows (the endpoint filters them out); admin\/owner callers see\nhidden contacts so they can render the right toggle state.'
+              ),
+            id: zod.uuid().describe('The id of the contact record.'),
+            lastInteraction: zod.iso
+              .datetime({})
+              .describe('Most recent known interaction with this contact.'),
+            name: zod
+              .string()
+              .nullish()
+              .describe('Display name observed for the contact, if any.'),
+            updatedAt: zod.iso
+              .datetime({})
+              .describe('When the contact record was last updated.'),
+          })
+          .describe(
+            'A CRM contact as returned by `GET \/crm\/companies\/{company_id}\/contacts`.'
+          )
+      )
+      .describe(
+        'Contacts attached to this company. Hidden contacts are filtered\nout for non-admin viewers.'
+      ),
+    createdAt: zod.iso
+      .datetime({})
+      .describe('Earliest known interaction with this company.'),
+    description: zod
+      .string()
+      .nullish()
+      .describe(
+        "Display description from the primary domain's directory entry."
+      ),
+    domains: zod
+      .array(
+        zod
+          .object({
+            companyId: zod
+              .uuid()
+              .describe('The id of the company the domain belongs to.'),
+            createdAt: zod.iso
+              .datetime({})
+              .describe('When the domain record was created.'),
+            domain: zod.string().describe('The domain (e.g. \"acme.com\").'),
+            id: zod.uuid().describe('The id of the domain record.'),
+          })
+          .describe('A CRM domain associated with a company.')
+      )
+      .describe(
+        'All domains associated with this company, ordered by creation\ntime ascending (primary first).'
+      ),
+    emailSync: zod
+      .boolean()
+      .describe('Whether email sync is enabled for this company.'),
+    hidden: zod
+      .boolean()
+      .describe(
+        'Whether the company is hidden from CRM listings for the\nrequesting team. Non-admin viewers never see `hidden = true`\nrows (the endpoint 404s for them); admin\/owner callers see\nhidden companies so they can render the right toggle state.'
+      ),
+    id: zod.uuid().describe('The id of the company.'),
+    name: zod
+      .string()
+      .nullish()
+      .describe(
+        "Display name from the primary domain's directory entry, or\n`None` when unresolved."
+      ),
+    teamId: zod
+      .uuid()
+      .describe('The id of the team that owns this company record.'),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('Most recent known interaction with this company.'),
+  })
+  .describe(
+    "A CRM company as returned by `GET \/crm\/companies\/{company_id}`.\nMirrors the soup-listed `crmCompany` shape (`name` \/ `description`\nresolved from the primary domain's `crm_domain_directory` entry) and\nembeds the company's contacts so the panel can render in a single\nrequest."
+  );
+
+/**
+ * @summary List the contacts of a CRM company. Access is enforced by
+[`CrmCompanyAccessLevelExtractor`]: the user must be on the team that
+owns the company. Hidden companies and hidden contacts are invisible
+to plain members; admin/owner callers see hidden rows so they can
+render the right unhide UI.
  */
 export const listCompanyContactsParams = zod.object({
   company_id: zod.uuid().describe('The CRM company whose contacts to list'),
@@ -2929,6 +3098,11 @@ export const listCompanyContactsResponseItem = zod
     firstInteraction: zod.iso
       .datetime({})
       .describe('Earliest known interaction with this contact.'),
+    hidden: zod
+      .boolean()
+      .describe(
+        'Whether the contact is hidden from CRM listings for the\nrequesting team. Non-admin viewers never see `hidden = true`\nrows (the endpoint filters them out); admin\/owner callers see\nhidden contacts so they can render the right toggle state.'
+      ),
     id: zod.uuid().describe('The id of the contact record.'),
     lastInteraction: zod.iso
       .datetime({})
@@ -2949,9 +3123,9 @@ export const listCompanyContactsResponse = zod.array(
 );
 
 /**
- * @summary Toggle `email_sync` on a CRM company. `false` disables CRM email
-sharing for the company and permanently removes its existing CRM
-contacts and contact sources.
+ * @summary Toggle `email_sync` on a CRM company. Purely a visibility flag —
+it gates whether team members can see each other's emails with
+this company. Existing CRM data is unaffected.
  */
 export const setEmailSyncParams = zod.object({
   company_id: zod.uuid().describe('The CRM company to update'),
@@ -2962,7 +3136,7 @@ export const setEmailSyncBody = zod
     email_sync: zod
       .boolean()
       .describe(
-        "New value for `crm_companies.email_sync`. Setting to `false`\npermanently deletes the company's CRM contacts and contact sources."
+        "New value for `crm_companies.email_sync`. Purely a read-side\nvisibility\/permission gate — `soup` queries and email-permission\nchecks require `email_sync = true` before exposing the\ncompany's emails team-wide. Populate continues to write CRM\nhistory regardless, so toggling never destroys data and\nre-enabling never requires a backfill."
       ),
   })
   .describe(
@@ -2970,8 +3144,11 @@ export const setEmailSyncBody = zod
   );
 
 /**
- * @summary Toggle `hidden` on a CRM company. Hiding also disables `email_sync`
-and cascades to clearing the company's contacts and contact sources.
+ * @summary Toggle `hidden` on a CRM company. Hiding also disables
+`email_sync` and soft-hides every contact under the company.
+Un-hide restores contact visibility only; `email_sync` is left
+untouched (the team must re-enable it explicitly). Contact rows
+and contact sources survive the cycle.
  */
 export const setCompanyHiddenParams = zod.object({
   company_id: zod.uuid().describe('The CRM company to update'),
@@ -2982,10 +3159,54 @@ export const setCompanyHiddenBody = zod
     hidden: zod
       .boolean()
       .describe(
-        "New value for `crm_companies.hidden`. Setting to `true` hides\nthe company from CRM listings AND disables `email_sync` (which\npermanently deletes the company's contacts and contact sources).\nSetting to `false` un-hides the company; `email_sync` is left\nuntouched and the team must re-enable it explicitly."
+        'New value for `crm_companies.hidden`. Setting to `true` hides\nthe company from CRM listings, disables `email_sync`, and\nsoft-hides every contact under it (`crm_contacts.hidden = true`).\nContact rows and `crm_contact_sources` are preserved across the\ncycle, so un-hide is a true reverse. Setting to `false`\nun-hides the company and soft-restores its contacts;\n`email_sync` is left untouched and the team must re-enable it\nexplicitly.'
       ),
   })
   .describe('Request body for `PUT \/companies\/{company_id}\/hidden`.');
+
+/**
+ * @summary Fetch a single CRM contact by id. Access is enforced by
+[`CrmContactAccessLevelExtractor`]: the user must be on the team that
+owns the contact's parent company, and hidden contacts are invisible
+to plain members. Admin/owner callers see hidden contacts so they can
+render the right unhide UI.
+ */
+export const getContactParams = zod.object({
+  contact_id: zod.uuid().describe('The CRM contact to fetch'),
+});
+
+export const getContactResponse = zod
+  .object({
+    companyId: zod
+      .uuid()
+      .describe('The id of the company the contact belongs to.'),
+    createdAt: zod.iso
+      .datetime({})
+      .describe('When the contact record was created.'),
+    email: zod.string().describe("The contact's email address."),
+    firstInteraction: zod.iso
+      .datetime({})
+      .describe('Earliest known interaction with this contact.'),
+    hidden: zod
+      .boolean()
+      .describe(
+        'Whether the contact is hidden from CRM listings for the\nrequesting team. Non-admin viewers never see `hidden = true`\nrows (the endpoint filters them out); admin\/owner callers see\nhidden contacts so they can render the right toggle state.'
+      ),
+    id: zod.uuid().describe('The id of the contact record.'),
+    lastInteraction: zod.iso
+      .datetime({})
+      .describe('Most recent known interaction with this contact.'),
+    name: zod
+      .string()
+      .nullish()
+      .describe('Display name observed for the contact, if any.'),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('When the contact record was last updated.'),
+  })
+  .describe(
+    'A CRM contact as returned by `GET \/crm\/companies\/{company_id}\/contacts`.'
+  );
 
 /**
  * @summary Toggle `hidden` on a CRM contact. Hiding is a display-only opt-out
@@ -4917,6 +5138,12 @@ export const getDocumentGithubPullRequestsResponse = zod
             displayName: zod
               .string()
               .describe('A compact label suitable for display in the UI.'),
+            foreignEntityId: zod
+              .uuid()
+              .nullish()
+              .describe(
+                'The internal `foreign_entity.id` UUID for the GitHub pull request row.'
+              ),
             githubKey: zod
               .string()
               .describe(
@@ -6878,13 +7105,7 @@ export const getItemsSoupResponse = zod.object({
             .object({
               channel: zod.object({
                 channel_type: zod
-                  .enum([
-                    'public',
-                    'organization',
-                    'private',
-                    'direct_message',
-                    'team',
-                  ])
+                  .enum(['public', 'private', 'direct_message', 'team'])
                   .describe('Type of channel.'),
                 created_at: zod.iso.datetime({}),
                 id: zod.uuid(),
@@ -6965,7 +7186,7 @@ export const getItemsSoupResponse = zod.object({
               attended: zod
                 .boolean()
                 .describe(
-                  'Whether the requesting user attended this call (i.e. appears in the\n`call_participants` \/ `call_record_participants` table).'
+                  'Whether the requesting user attended this call. Kept for compatibility\nand derived from `status == ATTENDED`.'
                 ),
               callId: zod.uuid().describe('The call identifier.'),
               channelId: zod
@@ -7018,6 +7239,11 @@ export const getItemsSoupResponse = zod.object({
               startedAt: zod.iso
                 .datetime({})
                 .describe('When the call started.'),
+              status: zod
+                .enum(['ATTENDED', 'MISSED', 'UNATTENDED'])
+                .describe(
+                  'Viewer-relative attendance status for a call record.\nSerializes as `ATTENDED`, `MISSED`, or `UNATTENDED`.'
+                ),
               summary: zod
                 .string()
                 .nullish()
@@ -7089,6 +7315,12 @@ export const getItemsSoupResponse = zod.object({
               updatedAt: zod.iso
                 .datetime({})
                 .describe('When the company was last updated.'),
+              viewedAt: zod.iso
+                .datetime({})
+                .nullish()
+                .describe(
+                  'When the requesting user last viewed this company, or `None` if\nnever viewed. Mirrors the `viewed_at` other soup entities carry.'
+                ),
             })
             .describe(
               'A CRM company as displayed in Soup. Carries the core company\nfields plus display metadata resolved from `crm_domain_directory`\nagainst the primary (earliest-created) domain.'
@@ -7159,7 +7391,7 @@ export const postItemsSoupBody = zod
           .boolean()
           .nullish()
           .describe(
-            'Filter by whether the requesting user attended the call.\n`None` = no filter, `Some(true)` = only calls the user joined,\n`Some(false)` = only calls the user did not join.'
+            'Legacy filter by whether the requesting user attended the call.\nPrefer [`CallFilters::status`] for new callers.\n`None` = no filter, `Some(true)` = only calls the user joined,\n`Some(false)` = only calls the user did not join.'
           ),
         call_ids: zod
           .array(zod.string())
@@ -7177,6 +7409,16 @@ export const postItemsSoupBody = zod
           .array(zod.string())
           .optional()
           .describe('Speaker macro user ids. Empty to include all.'),
+        status: zod
+          .union([
+            zod.null(),
+            zod
+              .enum(['ATTENDED', 'MISSED', 'UNATTENDED'])
+              .describe(
+                'Viewer-relative attendance status for a call record.\nSerializes as `ATTENDED`, `MISSED`, or `UNATTENDED`.'
+              ),
+          ])
+          .optional(),
       })
       .optional()
       .describe('Filters for call records.'),
@@ -7313,6 +7555,12 @@ export const postItemsSoupBody = zod
           .optional()
           .describe(
             "CRM company ids to filter by. Examples: ['11111111-...']. Empty to\ninclude all of the team's visible CRM companies."
+          ),
+        hidden: zod
+          .boolean()
+          .nullish()
+          .describe(
+            "Optional `crm_companies.hidden` filter. `None` = visible only\n(default for back-compat with non-admin callers). `Some(false)` =\nvisible only (explicit). `Some(true)` = hidden only — requires\nadmin\/owner team role; enforced upstream in soup's axum router."
           ),
       })
       .optional()
@@ -7451,6 +7699,12 @@ export const postItemsSoupBody = zod
           .optional()
           .describe(
             'Only include emails that have at least one of these labels. Supports both Gmail system labels (e.g. \"INBOX\", \"CATEGORY_PROMOTIONS\") and user-created labels (e.g. \"github\"). Empty to not filter by included labels.\nNote: SPAM and TRASH emails are not indexed in OpenSearch, so they will never appear in results regardless of this filter.'
+          ),
+        link_ids: zod
+          .array(zod.string())
+          .optional()
+          .describe(
+            'Restrict to specific inboxes by email_links.id. Empty means \"any inbox the\ncaller can access\" (soup expands to the full set at the router edge).'
           ),
         notification_filters: zod
           .object({
@@ -8719,13 +8973,7 @@ export const postItemsSoupResponse = zod.object({
             .object({
               channel: zod.object({
                 channel_type: zod
-                  .enum([
-                    'public',
-                    'organization',
-                    'private',
-                    'direct_message',
-                    'team',
-                  ])
+                  .enum(['public', 'private', 'direct_message', 'team'])
                   .describe('Type of channel.'),
                 created_at: zod.iso.datetime({}),
                 id: zod.uuid(),
@@ -8806,7 +9054,7 @@ export const postItemsSoupResponse = zod.object({
               attended: zod
                 .boolean()
                 .describe(
-                  'Whether the requesting user attended this call (i.e. appears in the\n`call_participants` \/ `call_record_participants` table).'
+                  'Whether the requesting user attended this call. Kept for compatibility\nand derived from `status == ATTENDED`.'
                 ),
               callId: zod.uuid().describe('The call identifier.'),
               channelId: zod
@@ -8859,6 +9107,11 @@ export const postItemsSoupResponse = zod.object({
               startedAt: zod.iso
                 .datetime({})
                 .describe('When the call started.'),
+              status: zod
+                .enum(['ATTENDED', 'MISSED', 'UNATTENDED'])
+                .describe(
+                  'Viewer-relative attendance status for a call record.\nSerializes as `ATTENDED`, `MISSED`, or `UNATTENDED`.'
+                ),
               summary: zod
                 .string()
                 .nullish()
@@ -8930,6 +9183,12 @@ export const postItemsSoupResponse = zod.object({
               updatedAt: zod.iso
                 .datetime({})
                 .describe('When the company was last updated.'),
+              viewedAt: zod.iso
+                .datetime({})
+                .nullish()
+                .describe(
+                  'When the requesting user last viewed this company, or `None` if\nnever viewed. Mirrors the `viewed_at` other soup entities carry.'
+                ),
             })
             .describe(
               'A CRM company as displayed in Soup. Carries the core company\nfields plus display metadata resolved from `crm_domain_directory`\nagainst the primary (earliest-created) domain.'
@@ -10165,13 +10424,7 @@ export const postItemsSoupAstResponse = zod.object({
             .object({
               channel: zod.object({
                 channel_type: zod
-                  .enum([
-                    'public',
-                    'organization',
-                    'private',
-                    'direct_message',
-                    'team',
-                  ])
+                  .enum(['public', 'private', 'direct_message', 'team'])
                   .describe('Type of channel.'),
                 created_at: zod.iso.datetime({}),
                 id: zod.uuid(),
@@ -10252,7 +10505,7 @@ export const postItemsSoupAstResponse = zod.object({
               attended: zod
                 .boolean()
                 .describe(
-                  'Whether the requesting user attended this call (i.e. appears in the\n`call_participants` \/ `call_record_participants` table).'
+                  'Whether the requesting user attended this call. Kept for compatibility\nand derived from `status == ATTENDED`.'
                 ),
               callId: zod.uuid().describe('The call identifier.'),
               channelId: zod
@@ -10305,6 +10558,11 @@ export const postItemsSoupAstResponse = zod.object({
               startedAt: zod.iso
                 .datetime({})
                 .describe('When the call started.'),
+              status: zod
+                .enum(['ATTENDED', 'MISSED', 'UNATTENDED'])
+                .describe(
+                  'Viewer-relative attendance status for a call record.\nSerializes as `ATTENDED`, `MISSED`, or `UNATTENDED`.'
+                ),
               summary: zod
                 .string()
                 .nullish()
@@ -10376,6 +10634,12 @@ export const postItemsSoupAstResponse = zod.object({
               updatedAt: zod.iso
                 .datetime({})
                 .describe('When the company was last updated.'),
+              viewedAt: zod.iso
+                .datetime({})
+                .nullish()
+                .describe(
+                  'When the requesting user last viewed this company, or `None` if\nnever viewed. Mirrors the `viewed_at` other soup entities carry.'
+                ),
             })
             .describe(
               'A CRM company as displayed in Soup. Carries the core company\nfields plus display metadata resolved from `crm_domain_directory`\nagainst the primary (earliest-created) domain.'

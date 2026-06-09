@@ -228,6 +228,10 @@ use utoipa::OpenApi;
         channels::inbound::axum_router::get_activity_handler,
         channels::inbound::axum_router::post_activity_handler,
 
+        // bots
+        bots::inbound::channel_webhook_router::create_channel_scoped_bot_handler,
+        bots::inbound::channel_webhook_router::post_channel_webhook_handler,
+
         // calls
         call::inbound::axum_router::get_or_create_call_handler,
         call::inbound::axum_router::check_active_call_handler,
@@ -290,6 +294,8 @@ use utoipa::OpenApi;
         crm::inbound::axum_router::set_company_hidden::handler,
         crm::inbound::axum_router::set_contact_hidden::handler,
         crm::inbound::axum_router::list_company_contacts::handler,
+        crm::inbound::axum_router::get_contact::handler,
+        crm::inbound::axum_router::get_company::handler,
         crm::inbound::axum_router::comments::list_handler,
         crm::inbound::axum_router::comments::create_handler,
         crm::inbound::axum_router::comments::edit_handler,
@@ -439,6 +445,16 @@ use utoipa::OpenApi;
             ApiActivity,
             PostActivityRequest,
 
+            // Bots
+            bots::domain::models::Bot,
+            bots::domain::models::BotKind,
+            bots::domain::models::BotOwner,
+            bots::domain::models::BotToken,
+            bots::domain::models::ChannelWebhookRequest,
+            bots::domain::models::ChannelWebhookResponse,
+            bots::domain::models::CreateChannelScopedBotRequest,
+            bots::domain::models::CreateChannelScopedBotResponse,
+
             // Calls
             call::domain::models::CallTokenResponse,
             call::domain::models::CallActiveResponse,
@@ -525,6 +541,8 @@ use utoipa::OpenApi;
             crm::inbound::axum_router::set_company_hidden::SetCompanyHiddenRequest,
             crm::inbound::axum_router::set_contact_hidden::SetContactHiddenRequest,
             crm::inbound::axum_router::list_company_contacts::CrmContactResponse,
+            crm::inbound::axum_router::get_company::CrmCompanyResponse,
+            crm::inbound::axum_router::get_company::CrmDomainResponse,
             crm::inbound::axum_router::comments::CreateCrmCommentRequest,
             crm::inbound::axum_router::comments::EditCrmCommentRequest,
             crm::domain::comment::CrmCommentEntityType,

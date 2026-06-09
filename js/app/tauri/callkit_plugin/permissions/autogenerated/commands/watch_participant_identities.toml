@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-watch-participant-identities"
+description = "Enables the watch_participant_identities command without any pre-configured scope."
+commands.allow = ["watch_participant_identities"]
+
+[[permission]]
+identifier = "deny-watch-participant-identities"
+description = "Denies the watch_participant_identities command without any pre-configured scope."
+commands.deny = ["watch_participant_identities"]

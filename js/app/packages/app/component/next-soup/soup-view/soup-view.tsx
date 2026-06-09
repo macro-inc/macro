@@ -17,13 +17,17 @@ import type { QueryState } from '@app/component/next-soup/filters/filter-store';
 import type { SetPredicatesInput } from '@app/component/next-soup/filters/filter-store/predicates-store';
 import { useSoup } from '@app/component/next-soup/soup-context';
 import { EmptyState } from '@app/component/next-soup/soup-view/empty-states';
+import { InboxSelector } from '@app/component/next-soup/soup-view/filters-bar/inbox-selector';
 import { SoupFiltersBar } from '@app/component/next-soup/soup-view/filters-bar/soup-filters-bar';
 import { SoupSearchbar } from '@app/component/next-soup/soup-view/filters-bar/soup-view-search-bar';
 import { useFilterRefinements } from '@app/component/next-soup/soup-view/filters-bar/use-filter-refinements';
 import { MaybeSoupEntityActionDrawerManager } from '@app/component/next-soup/soup-view/SoupEntityActionDrawerManager';
 import type { SystemSortOption } from '@app/component/next-soup/soup-view/sort-options';
 import { SoupEntityContextMenu } from '@app/component/next-soup/soup-view/soup-entity-context-menu';
-import { persistSoupNavigationTouchHighlight } from '@app/component/next-soup/soup-view/soup-navigation-touch-highlight';
+import {
+  persistSoupNavigationTouchHighlight,
+  soupNavigationTouchHighlight,
+} from '@app/component/next-soup/soup-view/soup-navigation-touch-highlight';
 import { activeSoupViewCounts } from '@app/component/next-soup/soup-view/soup-view-cache-key';
 import {
   SoupViewContextProvider,
@@ -64,7 +68,6 @@ import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { isListViewID, type ListView } from '@app/constants/list-views';
 import { usePreference } from '@app/preferences/use-preference';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
-import { EmailPermissionsBanner } from '@core/component/EmailPermissionsBanner';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { Resize } from '@core/component/Resize';
@@ -98,7 +101,6 @@ import { PropertyValueIcon } from '@property/component/propertyValue/PropertyVal
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { useQueryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
-import { useEmailLinksQuery } from '@queries/email/link';
 import { invalidateEntityNotifications } from '@queries/notification/user-notifications';
 import {
   invalidateSoupEntity,
@@ -235,6 +237,18 @@ const DefaultGroupHeader = (
   );
 };
 
+/**
+ * Thin indeterminate progress bar shown at the top of the mobile soup list
+ * while a new tab's query loads. Switching tabs keeps the previous tab's rows
+ * on screen (placeholder data), so without this the user gets no feedback that
+ * the new soup query is still in flight.
+ */
+const MobileTabLoadingBar = () => (
+  <div class="pointer-events-none absolute inset-x-0 top-0 z-10 h-0.5 overflow-hidden bg-accent/10">
+    <div class="h-full w-2/5 rounded-full bg-accent animate-indeterminate-bar" />
+  </div>
+);
+
 const useSoupNotificationInvalidators = () => {
   const notificationSource = useGlobalNotificationSource();
   const entityQueryClient = useQueryClient();
@@ -281,6 +295,16 @@ const useSoupNotificationInvalidators = () => {
         invalidateSoupEntity(notification.entity_id);
         invalidateEntityNotifications(notification.entity_id);
       }
+    }
+  );
+
+  createEffectOnEntityTypeNotification(
+    notificationSource,
+    'foreign_entity',
+    (notification) => {
+      refetchSoupEntity(notification.entity_id, 'foreignEntity');
+      invalidateSoupEntity(notification.entity_id);
+      invalidateEntityNotifications(notification.entity_id);
     }
   );
 };
@@ -394,21 +418,6 @@ export const SoupView = (props: SoupViewProps) => {
     },
   });
 
-  const isMailView = createMemo(() => {
-    const content = panel.handle.content();
-    return content.type === 'component' && content.id === 'mail';
-  });
-
-  const emailLinksQuery = useEmailLinksQuery();
-  const hasLinkError = createMemo(() => {
-    if (!isMailView()) return false;
-    if (emailLinksQuery.isPending) return false;
-    return (
-      emailLinksQuery.isError ||
-      (emailLinksQuery.data && emailLinksQuery.data.links.length === 0)
-    );
-  });
-
   return (
     <SplitPanelContext.Provider
       value={{
@@ -452,6 +461,15 @@ export const SoupView = (props: SoupViewProps) => {
                       containerClass="h-full"
                     />
                   </Show>
+                </Show>
+                <Show
+                  when={
+                    !isMobile() &&
+                    !narrowSearchExpanded() &&
+                    isComponentListView('mail')
+                  }
+                >
+                  <InboxSelector />
                 </Show>
               </div>
             </SplitHeaderLeft>
@@ -527,15 +545,7 @@ export const SoupView = (props: SoupViewProps) => {
             </Show>
             <SoupFiltersBar />
           </div>
-          <Show when={hasLinkError()}>
-            <EmailPermissionsBanner />
-          </Show>
-          <div
-            class="relative grow min-h-1 flex max-sm:flex-col flex-row size-full"
-            classList={{
-              'pointer-events-none opacity-10': hasLinkError(),
-            }}
-          >
+          <div class="relative grow min-h-1 flex max-sm:flex-col flex-row size-full">
             <Suspense>
               <SoupViewFileDropzone>
                 <SoupViewList
@@ -600,7 +610,8 @@ export const SoupViewList = (props: SoupViewListProps) => {
     activeTab,
     setActiveTab,
   } = useSoupView();
-  const { hasActiveRefinements, resetToTabDefaults } = useFilterRefinements();
+  const { hasActiveRefinements, hasHiddenItems, resetToTabDefaults } =
+    useFilterRefinements();
 
   const { isKeypressActive } = useIsKeyPressActive();
 
@@ -766,13 +777,17 @@ export const SoupViewList = (props: SoupViewListProps) => {
       return;
     }
 
-    persistSoupNavigationTouchHighlight(event);
+    const finishTouchHighlight = persistSoupNavigationTouchHighlight(event);
 
-    await openEntityInSplitFromUnifiedList(entity, {
-      openInNewSplit: event.shiftKey,
-      location,
-      splitHandle: panel.handle,
-    });
+    try {
+      await openEntityInSplitFromUnifiedList(entity, {
+        openInNewSplit: event.shiftKey,
+        location,
+        splitHandle: panel.handle,
+      });
+    } finally {
+      finishTouchHighlight?.();
+    }
   };
 
   let lastClickedEntityId = -1;
@@ -925,8 +940,11 @@ export const SoupViewList = (props: SoupViewListProps) => {
   onMount(() => {
     batch(() => {
       const savedSort = sortPref();
+
       if (savedSort.length > 0) {
         soup.sort.setAll(savedSort as SystemSortOption[]);
+      } else {
+        soup.sort.setAll(['updated_at']);
       }
       // soup state is shared at the SplitPanel level, so a prior view in the
       // same split (e.g. tasks) may have left grouping state behind. Always
@@ -1047,11 +1065,14 @@ export const SoupViewList = (props: SoupViewListProps) => {
           >
             <div
               class={cn(
-                '@container/u-list size-full unified-list-root flex flex-col',
+                '@container/u-list size-full unified-list-root flex flex-col relative',
                 soup.previewEntity() !== undefined &&
                   'border-r border-edge-muted'
               )}
             >
+              <Show when={isMobile() && source.isPlaceholderData()}>
+                <MobileTabLoadingBar />
+              </Show>
               <StaticMarkdownContext>
                 <Switch>
                   <Match when={source.isLoading() && !rows().length}>
@@ -1073,6 +1094,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                       listView={currentView()}
                       search={!!searchText()}
                       hasRefinementsFromBase={hasActiveRefinements()}
+                      hasHiddenItems={hasHiddenItems()}
                       onClearFilters={resetToTabDefaults}
                     />
                   </Match>
@@ -1109,7 +1131,10 @@ export const SoupViewList = (props: SoupViewListProps) => {
                       >
                         <SoupList
                           cache={listStateCache.get(cacheKey)?.virtualCache}
-                          ref={setLocalEntityListRef}
+                          ref={(el) => {
+                            setLocalEntityListRef(el);
+                            soupNavigationTouchHighlight(el);
+                          }}
                           virtualizerClass={cn(
                             previewVisible() && 'pt-1' /* scuffed */,
                             'scrollbar-hidden'
@@ -1256,6 +1281,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                           soup.focus.setIndex(row.index);
                                         }}
                                         showUnrollNotifications={
+                                          row.original.type !== 'email' &&
                                           soup.predicates.isActive('inbox') &&
                                           !soup.predicates.isActive('noise')
                                         }
@@ -1388,7 +1414,7 @@ const DEFAULT_OVERSCAN = 5;
 const FLOATING_BUTTON_SCROLL_UP_THRESHOLD = 5;
 
 interface SoupListProps {
-  ref?: (el: HTMLElement) => void;
+  ref?: (el: HTMLDivElement) => void;
   virtualizerRef?: (handle: VirtualizerHandle) => void;
   class?: string;
   virtualizerClass?: string;

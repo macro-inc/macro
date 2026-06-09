@@ -14,7 +14,7 @@ async fn get_thread_summary_info_all_non_drafts_with_sent_at(pool: Pool<Postgres
     let link_id = Uuid::parse_str("00000000-0000-0000-0000-00000000001c")?;
     let thread_id = Uuid::parse_str("00000000-0000-0000-0000-000000000301")?;
 
-    let result = get_thread_summary_info(&pool, link_id, &[thread_id]).await?;
+    let result = get_thread_summary_info(&pool, &[link_id], &[thread_id]).await?;
 
     assert_eq!(result.len(), 1);
     let info = result.get(&thread_id).unwrap();
@@ -44,7 +44,7 @@ async fn get_thread_summary_info_all_drafts_fallback_to_updated_at(
     let link_id = Uuid::parse_str("00000000-0000-0000-0000-00000000001c")?;
     let thread_id = Uuid::parse_str("00000000-0000-0000-0000-000000000302")?;
 
-    let result = get_thread_summary_info(&pool, link_id, &[thread_id]).await?;
+    let result = get_thread_summary_info(&pool, &[link_id], &[thread_id]).await?;
 
     assert_eq!(result.len(), 1);
     let info = result.get(&thread_id).unwrap();
@@ -74,7 +74,7 @@ async fn get_thread_summary_info_mixed_drafts_ignores_draft_timestamps(
     let link_id = Uuid::parse_str("00000000-0000-0000-0000-00000000001c")?;
     let thread_id = Uuid::parse_str("00000000-0000-0000-0000-000000000303")?;
 
-    let result = get_thread_summary_info(&pool, link_id, &[thread_id]).await?;
+    let result = get_thread_summary_info(&pool, &[link_id], &[thread_id]).await?;
 
     assert_eq!(result.len(), 1);
     let info = result.get(&thread_id).unwrap();
@@ -108,7 +108,7 @@ async fn get_thread_summary_info_single_message_same_first_and_last(
     let link_id = Uuid::parse_str("00000000-0000-0000-0000-00000000001c")?;
     let thread_id = Uuid::parse_str("00000000-0000-0000-0000-000000000305")?;
 
-    let result = get_thread_summary_info(&pool, link_id, &[thread_id]).await?;
+    let result = get_thread_summary_info(&pool, &[link_id], &[thread_id]).await?;
 
     assert_eq!(result.len(), 1);
     let info = result.get(&thread_id).unwrap();
@@ -136,7 +136,7 @@ async fn get_thread_summary_info_partial_sent_at_prefers_sent_at_over_updated_at
     let link_id = Uuid::parse_str("00000000-0000-0000-0000-00000000001c")?;
     let thread_id = Uuid::parse_str("00000000-0000-0000-0000-000000000306")?;
 
-    let result = get_thread_summary_info(&pool, link_id, &[thread_id]).await?;
+    let result = get_thread_summary_info(&pool, &[link_id], &[thread_id]).await?;
 
     assert_eq!(result.len(), 1);
     let info = result.get(&thread_id).unwrap();
@@ -173,7 +173,7 @@ async fn get_thread_summary_info_multiple_threads(pool: Pool<Postgres>) -> Resul
         Uuid::parse_str("00000000-0000-0000-0000-000000000305")?,
     ];
 
-    let result = get_thread_summary_info(&pool, link_id, &thread_ids).await?;
+    let result = get_thread_summary_info(&pool, &[link_id], &thread_ids).await?;
 
     // Should return info for all 3 threads
     assert_eq!(result.len(), 3);
@@ -196,7 +196,7 @@ async fn get_thread_summary_info_empty_thread_ids_returns_empty(
     let link_id = Uuid::parse_str("00000000-0000-0000-0000-00000000001c")?;
     let thread_ids: Vec<Uuid> = vec![];
 
-    let result = get_thread_summary_info(&pool, link_id, &thread_ids).await?;
+    let result = get_thread_summary_info(&pool, &[link_id], &thread_ids).await?;
 
     assert_eq!(result.len(), 0);
 
@@ -213,7 +213,7 @@ async fn get_thread_summary_info_viewed_at_logic(pool: Pool<Postgres>) -> Result
     let link_id = Uuid::parse_str("00000000-0000-0000-0000-00000000001c")?;
     let thread_id = Uuid::parse_str("00000000-0000-0000-0000-000000000301")?;
 
-    let result = get_thread_summary_info(&pool, link_id, &[thread_id]).await?;
+    let result = get_thread_summary_info(&pool, &[link_id], &[thread_id]).await?;
 
     assert_eq!(result.len(), 1);
     let info = result.get(&thread_id).unwrap();
@@ -238,7 +238,7 @@ async fn get_thread_summary_info_subject_is_from_earliest_message(
     let link_id = Uuid::parse_str("00000000-0000-0000-0000-00000000001c")?;
     let thread_id = Uuid::parse_str("00000000-0000-0000-0000-000000000307")?;
 
-    let result = get_thread_summary_info(&pool, link_id, &[thread_id]).await?;
+    let result = get_thread_summary_info(&pool, &[link_id], &[thread_id]).await?;
 
     assert_eq!(result.len(), 1);
     let info = result.get(&thread_id).unwrap();
@@ -265,7 +265,7 @@ async fn get_thread_summary_info_filter_out_trash(pool: Pool<Postgres>) -> Resul
     let link_id = Uuid::parse_str("00000000-0000-0000-0000-00000000001c")?;
     let thread_id = Uuid::parse_str("00000000-0000-0000-0000-000000000308")?;
 
-    let result = get_thread_summary_info(&pool, link_id, &[thread_id]).await?;
+    let result = get_thread_summary_info(&pool, &[link_id], &[thread_id]).await?;
 
     assert!(result.is_empty());
 

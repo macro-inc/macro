@@ -39,6 +39,8 @@ export class ServiceLoadBalancer extends pulumi.ComponentResource {
       isPrivate?: boolean;
       tags?: Record<string, string>;
       idleTimeout?: number;
+      healthCheck?: Partial<aws.types.input.lb.TargetGroupHealthCheck>;
+      deregistrationDelay?: number;
     },
     opts?: pulumi.ComponentResourceOptions
   ) {
@@ -49,7 +51,14 @@ export class ServiceLoadBalancer extends pulumi.ComponentResource {
       opts
     );
 
-    const { containerPort: port, isPrivate, tags, idleTimeout } = args;
+    const {
+      containerPort: port,
+      isPrivate,
+      tags,
+      idleTimeout,
+      healthCheck,
+      deregistrationDelay,
+    } = args;
     this.serviceName = serviceName;
     const healthCheckPath = args.healthCheckPath ?? '/health';
 
@@ -156,6 +165,8 @@ export class ServiceLoadBalancer extends pulumi.ComponentResource {
       isPrivate,
       tags: tags || {},
       idleTimeout,
+      healthCheck,
+      deregistrationDelay,
     });
 
     this.serviceSg = serviceSg;

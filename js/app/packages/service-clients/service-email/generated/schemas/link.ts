@@ -4,9 +4,10 @@
  * email_service
  * OpenAPI spec version: 0.1.0
  */
-
+import type { LinkPhotoUrl } from './linkPhotoUrl';
 import type { LinkSignature } from './linkSignature';
 import type { Settings } from './settings';
+import type { SyncStatus } from './syncStatus';
 import type { UserProvider } from './userProvider';
 
 export interface Link {
@@ -14,10 +15,14 @@ export interface Link {
   email_address: string;
   fusionauth_user_id: string;
   id: string;
+  is_inbox_only: boolean;
   is_sync_active: boolean;
   macro_id: string;
+  /** The inbox's own profile photo (its self-contact's SFS photo), if synced. */
+  photo_url?: LinkPhotoUrl;
   provider: UserProvider;
   settings: Settings;
   signature?: LinkSignature;
+  sync_status: SyncStatus;
   updated_at: string;
 }

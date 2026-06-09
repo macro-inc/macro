@@ -1,8 +1,8 @@
 import type { Transformer } from '@lexical/markdown';
+import { I_AWAIT_NODE } from './await';
 import { I_MACRO_QUOTE } from './classedBlock';
 import { CUSTOM_TRANSFORMERS } from './customTransformers';
 import { I_IMAGE_CONSTRAINED, IMAGE } from './image';
-import { I_VIDEO } from './video';
 import {
   E_BLOCK_EQUATION_NODE,
   E_INLINE_EQUATION_NODE,
@@ -37,6 +37,7 @@ import {
   SEARCH_MATCH,
 } from './transformers';
 import { UNKNOWN_MENTION } from './unknownMention';
+import { I_VIDEO } from './video';
 import { E_WATERMARK, I_WATERMARK } from './watermark';
 
 export { isConversionOnlyTransformer };
@@ -62,6 +63,7 @@ export const INTERNAL_TRANSFORMERS: Transformer[] = [
   I_DOCUMENT_CARD,
   I_CONTACT_MENTION,
   I_DATE_MENTION,
+  I_AWAIT_NODE,
   I_TABLE_NODE,
   I_MACRO_QUOTE,
   I_EQUATION_NODE,
@@ -129,6 +131,7 @@ export const ALL_TRANSFORMERS: Transformer[] = [
   E_CONTACT_MENTION,
   I_DATE_MENTION,
   E_DATE_MENTION,
+  I_AWAIT_NODE,
   I_MACRO_QUOTE,
   I_EQUATION_NODE,
   I_THEME_MENTION,

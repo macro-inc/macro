@@ -59,6 +59,7 @@ use email::{
     domain::{ports::ReadonlyEmailPreviewAdapter, service::EmailServiceImpl},
     outbound::EmailPgRepo,
 };
+use embedding::embedding_provider::openai::TextEmbedding3Small;
 use foreign_entity::{
     domain::service::ForeignEntityServiceImpl, inbound::axum_router::ForeignEntityRouterState,
     outbound::pg_foreign_entity_repo::PgForeignEntityRepo,
@@ -87,6 +88,15 @@ use sqlx::postgres::PgPoolOptions;
 use std::sync::Arc;
 use sync_service_client::SyncServiceClient;
 use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImpl};
+use task_dedup::{
+    TaskDedupConfig, TaskDedupService,
+    outbound::{
+        connection_gateway::ConnectionGatewayTaskDedupNotifier,
+        judge::AgentDuplicateJudge,
+        postgres::{PgTaskMatchRepo, PgTaskVectorDb},
+        reranker::NoOpReranker,
+    },
+};
 
 mod api;
 mod config;
@@ -206,7 +216,7 @@ async fn main() -> anyhow::Result<()> {
 
     let conn_gateway_client = ConnectionGatewayClient::new(
         internal_api_secret.as_ref().to_string(),
-        config.vars.connection_gateway_url.as_ref().to_string(),
+        config.connection_gateway_url.clone(),
     );
 
     let sync_service_auth_key = match config.environment {
@@ -220,12 +230,12 @@ async fn main() -> anyhow::Result<()> {
 
     let sync_service_client = Arc::new(SyncServiceClient::new(
         sync_service_auth_key,
-        config.vars.sync_service_url.as_ref().to_string(),
+        config.sync_service_url.clone(),
     ));
 
     let lexical_client = Arc::new(LexicalClient::new(
         internal_api_secret.as_ref().to_string(),
-        config.vars.lexical_service_url.as_ref().to_string(),
+        config.lexical_service_url.clone(),
     ));
 
     let jwt_validation_args =
@@ -379,6 +389,7 @@ async fn main() -> anyhow::Result<()> {
         },
         connection_service,
         entity_access_management_service.clone(),
+        ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone())),
     ));
 
     let github_webhook_secret = secretsmanager_client
@@ -402,6 +413,7 @@ async fn main() -> anyhow::Result<()> {
         },
         document_service.clone(),
         foreign_entity_service.clone(),
+        (*notification_ingress_service).clone(),
         PgGithubSyncRepo::new(db.clone()),
         GithubSyncClientImpl::default(),
     );
@@ -563,22 +575,69 @@ async fn main() -> anyhow::Result<()> {
 
     let sqs_client = Arc::new(sqs_client);
     let conn_gateway_client = Arc::new(conn_gateway_client);
-    let channels_repo = PgChannelsRepo::new(db.clone());
-    let bots_service = bots::domain::service::BotServiceImpl::new(
-        bots::outbound::pg_bots_repo::PgBotsRepo::new(db.clone()),
+    let task_dedup_config = TaskDedupConfig::default();
+    // The OpenAI key is injected as the required `OPENAI_API_KEY` env var
+    // (resolved from the `openai-key` secret at deploy time by the infra stack),
+    // the same way `document_cognition_service` consumes it. Fail fast if it's
+    // empty so the service never starts with a broken task-dedup embedder.
+    let openai_api_key = config.vars.openai_api_key.as_ref().to_owned();
+    anyhow::ensure!(
+        !openai_api_key.trim().is_empty(),
+        "OpenAI API key is required for task dedup embeddings",
     );
-
-    let channels_service = ChannelServiceImpl::with_dependencies(
-        channels_repo,
-        SpawnedChannelEventDispatcher::new(ChannelSideEffectService::new(
-            PgChannelSideEffectContext::new(db.clone()),
-            ConnectionGatewayChannelRealtimePublisher::new(conn_gateway_client.clone()),
-            NotificationChannelSender::new(notification_ingress_service.clone()),
-            SqsChannelSearchIndexer::new(sqs_client.clone()),
-            ContactsChannelDispatcher::new(contacts_ingress.clone()),
+    let task_dedup_service = Arc::new(TaskDedupService::new(
+        task_dedup_config.clone(),
+        TextEmbedding3Small::new(openai_api_key),
+        PgTaskVectorDb::new(db.clone()),
+        NoOpReranker,
+        Arc::new(AgentDuplicateJudge::new()),
+        Arc::new(ConnectionGatewayTaskDedupNotifier::new(
+            conn_gateway_client.clone(),
         )),
+        Arc::new(PgTaskMatchRepo::new(db.clone())),
+    ));
+    let channels_repo = PgChannelsRepo::new(db.clone());
+    let bots_repo = bots::outbound::pg_bots_repo::PgBotsRepo::new(db.clone());
+    let bots_service = bots::domain::service::BotServiceImpl::new(bots_repo.clone());
+    let (bot_trigger_sender, bot_trigger_receiver) = tokio::sync::mpsc::unbounded_channel();
+
+    let channel_side_effects = ChannelSideEffectService::new(
+        PgChannelSideEffectContext::new(db.clone()),
+        ConnectionGatewayChannelRealtimePublisher::new(conn_gateway_client.clone()),
+        NotificationChannelSender::new(notification_ingress_service.clone()),
+        SqsChannelSearchIndexer::new(sqs_client.clone()),
+        ContactsChannelDispatcher::new(contacts_ingress.clone()),
+    )
+    .with_bot_trigger_sender(bot_trigger_sender);
+
+    let channels_service = Arc::new(ChannelServiceImpl::with_dependencies(
+        channels_repo,
+        SpawnedChannelEventDispatcher::new(channel_side_effects),
         PgChannelReferenceSharePermissions::new(db.clone(), entity_access_service.clone()),
+    ));
+
+    // Wire Macro AI to react to mentions. The router posts replies through the
+    // channel service we just built and runs the agent loop in-process with the
+    // same pre-configured toolset used by other AI hosts.
+    let macro_agent_tool_context = ai_tools::build_tool_service_context_from_env(db.clone())
+        .await
+        .context("failed to build Macro agent tool context")?;
+    let macro_agent_tools = ai_tools::all_tools();
+    let bot_trigger_router = channel_bots::inbound::BotTriggerRouter::new(
+        channels_service.clone(),
+        Arc::new(channel_bots::outbound::AgentLoopResponder::new(
+            macro_agent_tool_context,
+            macro_agent_tools,
+        )),
     );
+    bot_trigger_router.spawn(bot_trigger_receiver);
+
+    let channel_bot_webhook_state =
+        bots::inbound::channel_webhook_router::ChannelBotWebhookRouterState::new(
+            bots_service.clone(),
+            channels_service.clone(),
+            (*entity_access_service).clone(),
+        );
 
     let api_context = ApiContext {
         contacts_ingress: contacts_ingress.clone(),
@@ -621,13 +680,14 @@ async fn main() -> anyhow::Result<()> {
             service: document_service.clone(),
             access_service: entity_access_service.clone(),
             pool: db.clone(),
+            task_dedup_service,
             creator: documents_hex::domain::create::DocumentCreator::new(
                 document_service,
                 markdown_initializer,
                 documents_hex::outbound::document_bytes_upload::ReqwestDocumentBytesUploader::default(),
             ),
         },
-        channels_state: ChannelsRouterState::new(
+        channels_state: ChannelsRouterState::from_arc(
             channels_service,
             (*entity_access_service).clone(),
         ),
@@ -635,6 +695,7 @@ async fn main() -> anyhow::Result<()> {
             bots_service.clone(),
             (*entity_access_service).clone(),
         ),
+        channel_bot_webhook_state,
         call_state,
         call_webhook_state,
         call_internal_state,

@@ -7,6 +7,8 @@ members = [
   "backfill_entity_access",
   "bot_id",
   "bots",
+  "call_recording_preview_handler",
+  "channel_bots",
   "connection_gateway",
   "contacts_service",
   "convert_service",
@@ -26,6 +28,7 @@ members = [
   "email_service",
   "email_sfs_delete_handler",
   "email_suppression_handler",
+  "embedding",
   "foreign_entity",
   "image_optimizer",
   "image_proxy_service",
@@ -44,6 +47,7 @@ members = [
   "seed_cli",
   "sha_cleanup_worker",
   "static_file_service",
+  "task_dedup",
   "tools/native_app_server",
   "unfurl",
   "unfurl_service",
@@ -51,6 +55,7 @@ members = [
   "upload_extractor_lambda_trigger",
   "user_link_cleanup_handler",
   "worker_trigger",
+  "macro_config"
 ]
 
 [workspace.dependencies]
@@ -60,6 +65,7 @@ async-openai = { version = "0.36.1", features = [
   "byot",
   "chat-completion",
   "completions",
+  "embedding",
 ] }
 async-stream = "0.3.6"
 async-trait = "0.1.86"
@@ -203,3 +209,4 @@ strum_macros = "0.27.1"
 unicode-segmentation = "1.9.0"
 url = "2.5.0"
 zip = "=2.4.2"
+doppler-config = "0.1.1"

@@ -77,10 +77,37 @@ pub async fn list_links_handler(
 
     let tasks = links.into_iter().map(|link| {
         let ctx = ctx.clone();
+        // Secondary mailbox (email differs from its macro user's own) = inbox-only, not a user.
+        let is_inbox_only = !link
+            .email_address
+            .0
+            .as_ref()
+            .eq_ignore_ascii_case(link.macro_id.email_str());
         async move {
             let settings = email_db_client::settings::fetch_settings(&ctx.db, link.id)
                 .await
                 .map_err(ListLinksError::DatabaseError)?;
+
+            let latest_job =
+                email_db_client::backfill::job::get::get_latest_backfill_job_by_link_id(
+                    &ctx.db, link.id,
+                )
+                .await
+                .map_err(ListLinksError::DatabaseError)?;
+            let sync_status = api::link::SyncStatus::derive(
+                link.is_sync_active,
+                latest_job.map(|job| job.status),
+            );
+
+            // The inbox's own photo comes from its self-contact (synced from people/me).
+            let photo_url = email_db_client::contacts::get::fetch_contact_by_email(
+                &ctx.db,
+                link.id,
+                link.email_address.0.as_ref(),
+            )
+            .await
+            .map_err(ListLinksError::DatabaseError)?
+            .and_then(|contact| contact.photo_url);
 
             let signature = if query_params.include_signature {
                 let access_token = fetch_gmail_access_token_from_link(
@@ -103,6 +130,9 @@ pub async fn list_links_handler(
                 link,
                 signature,
                 api::settings::Settings::from(settings),
+                sync_status,
+                photo_url,
+                is_inbox_only,
             ))
         }
     });

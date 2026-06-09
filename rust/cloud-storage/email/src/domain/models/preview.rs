@@ -16,12 +16,12 @@ use super::label::Label;
 #[derive(Debug)]
 pub struct PreviewCursorQuery {
     pub view: PreviewView,
-    pub link_id: Uuid,
+    pub link_ids: Vec<Uuid>,
     pub limit: u32,
     pub query: Query<Uuid, SimpleSortMethod, LiteralTree<EmailLiteral>>,
     /// When `Some(team_id)`, the dynamic query path expands the candidate
-    /// thread set from "only this `link_id`" to "every `link_id` owned by
-    /// any user on this team." Populated by the service after a successful
+    /// thread set from "only `link_ids`" to "every `link_id` owned by any
+    /// user on this team." Populated by the service after a successful
     /// CRM-scope validation (see `validate_crm_scope`).
     pub team_id: Option<Uuid>,
 }
@@ -93,6 +93,7 @@ pub struct EmailThreadPreview {
     pub updated_at: DateTime<Utc>,
     pub viewed_at: Option<DateTime<Utc>>,
     pub project_id: Option<String>,
+    pub link_id: Uuid,
 }
 
 #[non_exhaustive]
@@ -137,7 +138,10 @@ impl SortOn<SimpleSortMethod> for EnrichedEmailThreadPreview {
 
 pub struct GetEmailsRequest {
     pub view: PreviewView,
-    pub link_id: Uuid,
+    /// Every inbox the caller can read for this request. Multi-element when
+    /// the caller has linked secondary inboxes or has been delegated access
+    /// via macro_user_links.
+    pub link_ids: Vec<Uuid>,
     pub macro_id: MacroUserIdStr<'static>,
     pub limit: Option<u32>,
     pub query: Query<Uuid, SimpleSortMethod, LiteralTree<EmailLiteral>>,

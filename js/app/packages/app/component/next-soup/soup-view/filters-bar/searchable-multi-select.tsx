@@ -32,6 +32,8 @@ type SearchableMultiSelectProps = {
   gutter?: number;
   contentClass?: string;
   listboxClass?: string;
+  /** Keep `options` in their given order instead of pinning selected first. */
+  preserveOrder?: boolean;
   open?: Accessor<boolean>;
   onOpenChange?: (open: boolean) => void;
   children: JSX.Element;
@@ -140,13 +142,15 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
 
   const activeOptions = useActiveOptions(props.options, props.activeIds);
   const hasMatches = useHasMatches(props.options, searchQuery);
-  const sortedOptions = useSelectedFirst({
+  const selectedFirstOptions = useSelectedFirst({
     items: props.options,
     selectedIds: props.activeIds,
     searchQuery,
     getId: getOptionId,
     sortDeps: [isOpen],
   });
+  const sortedOptions = () =>
+    props.preserveOrder ? props.options() : selectedFirstOptions();
 
   const handleChange = (selected: SearchableOption[]) => {
     props.onChange(selected.map((o) => o.id));
@@ -173,6 +177,7 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
       optionLabel="label"
       allowsEmptyCollection
       virtualized
+      removeOnBackspace={false}
       placement={props.placement ?? 'bottom-start'}
       gutter={props.gutter ?? 4}
     >
@@ -304,6 +309,7 @@ export const SearchableMultiSelectInline = (
       optionLabel="label"
       allowsEmptyCollection
       virtualized
+      removeOnBackspace={false}
     >
       <div class="flex items-center gap-2 px-3 py-2 border-b border-edge-muted">
         <SearchIcon class="size-3.5 text-ink-muted shrink-0" />

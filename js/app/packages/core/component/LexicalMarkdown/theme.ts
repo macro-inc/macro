@@ -1,7 +1,7 @@
 import './styles.css';
 import type { EditorThemeClasses } from 'lexical';
 
-const VERTICAL_GAP = 'my-4';
+const VERTICAL_GAP = 'my-4 first:mt-1.5 last:mb-1.5';
 
 // SCUFFED THEMING: we have to figure out what to do about code highlighting.
 const codeHighlight: Record<string, string> = {

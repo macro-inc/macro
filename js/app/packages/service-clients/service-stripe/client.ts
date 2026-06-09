@@ -1,10 +1,5 @@
 import { registerClient } from '@core/util/mockClient';
-import {
-  authServiceClient,
-  type PatchSubscriptionTierErrorCode,
-} from '@service-auth/client';
-import type { StripeProductTier } from '@service-auth/generated/schemas/stripeProductTier';
-import { match, P } from 'ts-pattern';
+import { authServiceClient } from '@service-auth/client';
 
 /**
  * Gets Meta _fbp (browser ID) and _fbc (click ID) values from cookies set by the Meta Pixel.
@@ -132,40 +127,6 @@ export const stripeServiceClient = {
 
     return result.value;
   },
-  /**
-   * Changes the current user's subscription tier. Returns a narrow discriminated union so
-   * callers get a type-checked error `code` without drilling into the Result
-   * error array (`result.error?.[0]?.code`), which would silently fall through to the default case
-   * if the shape ever changes. Callers should invalidate the user info query on success.
-   */
-  updateSubscriptionTier: async (
-    tier: StripeProductTier
-  ): Promise<UpdateSubscriptionTierResult> => {
-    const result = await authServiceClient.patchSubscriptionTier({
-      newTier: tier,
-    });
-    if (result.isOk()) return { ok: true };
-    // Narrow the first error's code to our known union; anything else (NETWORK_ERROR,
-    // UNAUTHORIZED, SERVER_ERROR, etc.) collapses to 'UNKNOWN'. `match` + the explicit
-    // P.union of `PatchSubscriptionTierErrorCode` members means adding a new backend
-    // code without widening this union is a compile error.
-    const code = match(result.error[0]?.code)
-      .with(
-        P.union(
-          'TIER_UNCHANGED',
-          'USER_IN_TEAM',
-          'NO_SUBSCRIPTION',
-          'UPDATE_IN_PROGRESS'
-        ),
-        (c) => c
-      )
-      .otherwise(() => 'UNKNOWN' as const);
-    return { ok: false, code };
-  },
 };
-
-type UpdateSubscriptionTierResult =
-  | { ok: true }
-  | { ok: false; code: PatchSubscriptionTierErrorCode | 'UNKNOWN' };
 
 registerClient('stripe', stripeServiceClient);

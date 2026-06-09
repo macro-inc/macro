@@ -288,6 +288,150 @@ fn pull_request_enrichment_copies_details_fields() {
     assert_eq!(enriched.checks, Some(checks));
 }
 
+#[test]
+fn pull_request_foreign_entity_metadata_serializes_enriched_pull_request() {
+    assert_eq!(
+        GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE,
+        "github_pull_request"
+    );
+
+    let reference = pull_request_reference();
+    let details = GithubPullRequestDetails {
+        title: "Add pull request enrichment".to_string(),
+        state: "closed".to_string(),
+        merged_at: Some(utc_datetime("2026-05-25T18:54:21Z")),
+        additions: 42,
+        deletions: 12,
+        comments: Some(vec![pull_request_comment()]),
+        checks: Some(vec![pull_request_check_run()]),
+    };
+    let enriched = EnrichedGithubPullRequest::from_details(reference, details);
+
+    let metadata = enriched.foreign_entity_metadata(None).unwrap();
+
+    assert_eq!(
+        metadata,
+        serde_json::json!({
+            "githubKey": "macro/app/pull/7",
+            "owner": "macro",
+            "repo": "app",
+            "number": 7,
+            "url": "https://github.com/macro/app/pull/7",
+            "displayName": "macro/app#7",
+            "name": "Add pull request enrichment",
+            "status": "merged",
+            "additions": 42,
+            "deletions": 12,
+            "comments": [
+                {
+                    "id": 101,
+                    "body": "Looks good to me",
+                    "authorLogin": "octocat",
+                    "authorAssociation": "MEMBER",
+                    "url": "https://github.com/macro/app/pull/7#issuecomment-101",
+                    "createdAt": "2026-05-25T18:54:21Z",
+                    "updatedAt": "2026-05-25T19:00:00Z",
+                    "source": "issue_comment"
+                }
+            ],
+            "checks": [
+                {
+                    "id": 202,
+                    "name": "ci",
+                    "status": "completed",
+                    "conclusion": "success",
+                    "url": "https://github.com/macro/app/actions/runs/202",
+                    "startedAt": "2026-05-25T18:55:00Z",
+                    "completedAt": "2026-05-25T18:59:00Z"
+                }
+            ]
+        })
+    );
+}
+
+#[test]
+fn pull_request_foreign_entity_metadata_preserves_existing_arrays_when_refresh_omits_them() {
+    let enriched = EnrichedGithubPullRequest::from_details(
+        pull_request_reference(),
+        pull_request_details("open", None),
+    );
+    let existing_metadata = serde_json::json!({
+        "comments": [
+            {
+                "id": 303,
+                "body": "Existing comment"
+            }
+        ],
+        "checks": [
+            {
+                "id": 404,
+                "name": "existing-ci"
+            }
+        ]
+    });
+
+    let metadata = enriched
+        .foreign_entity_metadata(Some(&existing_metadata))
+        .unwrap();
+
+    assert_eq!(
+        metadata,
+        serde_json::json!({
+            "githubKey": "macro/app/pull/7",
+            "owner": "macro",
+            "repo": "app",
+            "number": 7,
+            "url": "https://github.com/macro/app/pull/7",
+            "displayName": "macro/app#7",
+            "name": "Add pull request enrichment",
+            "status": "open",
+            "additions": 42,
+            "deletions": 12,
+            "comments": [
+                {
+                    "id": 303,
+                    "body": "Existing comment"
+                }
+            ],
+            "checks": [
+                {
+                    "id": 404,
+                    "name": "existing-ci"
+                }
+            ]
+        })
+    );
+}
+
+#[test]
+fn pull_request_foreign_entity_metadata_keeps_fresh_arrays() {
+    let comments = vec![pull_request_comment()];
+    let checks = vec![pull_request_check_run()];
+    let details = GithubPullRequestDetails {
+        title: "Add pull request enrichment".to_string(),
+        state: "open".to_string(),
+        merged_at: None,
+        additions: 42,
+        deletions: 12,
+        comments: Some(comments.clone()),
+        checks: Some(checks.clone()),
+    };
+    let enriched = EnrichedGithubPullRequest::from_details(pull_request_reference(), details);
+    let existing_metadata = serde_json::json!({
+        "comments": [{ "id": 303, "body": "Existing comment" }],
+        "checks": [{ "id": 404, "name": "existing-ci" }]
+    });
+    let fresh_comments = serde_json::to_value(&comments).unwrap();
+    let fresh_checks = serde_json::to_value(&checks).unwrap();
+
+    let metadata = enriched
+        .foreign_entity_metadata(Some(&existing_metadata))
+        .unwrap();
+
+    assert_eq!(metadata.get("comments"), Some(&fresh_comments));
+    assert_eq!(metadata.get("checks"), Some(&fresh_checks));
+}
+
 // ---------------------------------------------------------------------------
 // MacroTaskId::from_short_uuid
 // ---------------------------------------------------------------------------

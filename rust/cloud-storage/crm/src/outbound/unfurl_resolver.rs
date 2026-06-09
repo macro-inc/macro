@@ -77,6 +77,7 @@ where
                     name,
                     description: response.description,
                     icon_url: response.favicon_url,
+                    ..Default::default()
                 }
             }
             Err(e) => {

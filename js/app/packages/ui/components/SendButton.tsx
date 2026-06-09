@@ -40,7 +40,10 @@ export function SendButton(props: SendButtonProps) {
       )}
       {...rest}
     >
-      <Show when={!local.pending} fallback={<SpinnerIcon class="animate-spin" />}>
+      <Show
+        when={!local.pending}
+        fallback={<SpinnerIcon class="animate-spin" />}
+      >
         {resolved() ?? <ArrowUp />}
       </Show>
     </Button>

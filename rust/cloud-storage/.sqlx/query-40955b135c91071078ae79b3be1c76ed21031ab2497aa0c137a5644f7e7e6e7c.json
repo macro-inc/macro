@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM call_records WHERE id = $1 RETURNING recording_key, preview_url\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "recording_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "preview_url",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      true
+    ]
+  },
+  "hash": "40955b135c91071078ae79b3be1c76ed21031ab2497aa0c137a5644f7e7e6e7c"
+}

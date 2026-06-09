@@ -15,7 +15,10 @@
       "dark": "#090909"
     }
   },
-  "favicon": "/favicon.svg",
+  "favicon": {
+    "light": "/favicon.svg",
+    "dark": "/favicon.svg"
+  },
   "navigation": {
     "tabs": [
       {
@@ -24,16 +27,13 @@
           {
             "group": "Getting Started",
             "pages": [
-              "index"
-            ]
-          },
-          {
-            "group": "Product",
-            "pages": [
+              "index",
+              "permissions",
+              "keyboard-shortcuts",
+              "faq",
               {
-                "group": "AI Chat",
+                "group": "AI",
                 "pages": [
-                  "product/ai-chat",
                   "AI/mcp/overview",
                   {
                     "group": "Tool Reference",
@@ -58,14 +58,28 @@
                     ]
                   }
                 ]
-              },
-              "product/email",
-              "product/channels",
-              "product/docs",
-              "product/canvas",
-              "product/tasks",
+              }
+            ]
+          },
+          {
+            "group": "Key Concepts",
+            "pages": [
+              "concepts/blocks",
+              "concepts/mentions",
+              "concepts/properties"
+            ]
+          },
+          {
+            "group": "Sidebar",
+            "pages": [
+              "product/inbox",
               "product/search",
-              "product/files"
+              "product/agents",
+              "product/email",
+              "product/docs",
+              "product/tasks",
+              "product/channels",
+              "product/calls"
             ]
           }
         ]
@@ -82,10 +96,6 @@
         ]
       }
     ]
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
   },
   "navbar": {
     "primary": {

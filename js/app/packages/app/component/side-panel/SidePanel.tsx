@@ -167,13 +167,15 @@ function SidePanelLayoutInner(
       </Show>
       <Show when={showOverlay()}>
         <div class="absolute inset-0 z-10 flex flex-col bg-surface">
-          <div class="w-full max-w-2xl mx-auto min-w-0">
-            <SidePanelOutlet
-              sections={props.sections}
-              openIds={props.openIds}
-              setOpenIds={props.setOpenIds}
-            />
-          </div>
+          <Scroll>
+            <div class="w-full max-w-2xl mx-auto min-w-0">
+              <SidePanelOutlet
+                sections={props.sections}
+                openIds={props.openIds}
+                setOpenIds={props.setOpenIds}
+              />
+            </div>
+          </Scroll>
         </div>
       </Show>
     </>
@@ -356,7 +358,7 @@ function Row(props: ParentProps<{ label: JSX.Element }>) {
  * EditTrigger, an anchor, a button) without nesting elements.
  */
 const pillClass = cn(
-  'inline-flex items-center gap-1.5 min-w-0 max-w-full',
+  'inline-flex items-center gap-1.5 min-w-0 max-w-[30ch]',
   'px-2 py-1 leading-tight text-left rounded-full'
 );
 
@@ -368,8 +370,17 @@ function Pill(props: ParentProps<{ class?: string }>) {
 }
 
 /** Empty-state indicator used inside value pills. */
-function EmptyPill() {
-  return <CircleDashedEmpty class="size-3 shrink-0 opacity-50" />;
+function EmptyPill(props: { label?: JSX.Element } = {}) {
+  return (
+    <span class="inline-flex min-w-0 items-center gap-1.5 opacity-50">
+      <Show when={!props.label}>
+        <CircleDashedEmpty class="size-3 shrink-0" />
+      </Show>
+      <Show when={props.label}>
+        <span class="truncate">{props.label}</span>
+      </Show>
+    </span>
+  );
 }
 
 /**

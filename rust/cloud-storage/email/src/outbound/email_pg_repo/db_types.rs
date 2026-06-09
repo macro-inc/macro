@@ -46,6 +46,8 @@ pub struct ThreadPreviewCursorDbRow {
     pub project_id: Option<String>,
     /// The macro user ID of the thread owner, resolved from email_links.
     pub owner_id: String,
+    /// The id of the email_link (inbox) this thread belongs to.
+    pub link_id: Uuid,
 }
 
 #[derive(Debug, sqlx::Type, Clone, Copy, PartialEq, Eq, Doppleganger)]
@@ -115,6 +117,7 @@ impl ThreadPreviewCursorDbRow {
             updated_at,
             project_id,
             owner_id,
+            link_id,
         } = self;
 
         EmailThreadPreview {
@@ -137,6 +140,7 @@ impl ThreadPreviewCursorDbRow {
             updated_at,
             viewed_at,
             project_id,
+            link_id,
         }
     }
 }
@@ -440,6 +444,7 @@ impl From<DbRecipientRow> for (uuid::Uuid, ContactInfo, RecipientType) {
 /// DB row for a simplified message used in draft validation queries.
 pub(crate) struct DbSimpleMessageRow {
     pub id: Uuid,
+    pub link_id: Uuid,
     pub thread_id: Uuid,
     pub provider_thread_id: Option<String>,
     pub headers_jsonb: Option<serde_json::Value>,
@@ -451,6 +456,7 @@ impl From<DbSimpleMessageRow> for SimpleMessageInfo {
     fn from(row: DbSimpleMessageRow) -> Self {
         Self {
             db_id: row.id,
+            link_id: row.link_id,
             thread_db_id: row.thread_id,
             provider_thread_id: row.provider_thread_id,
             headers_json: row.headers_jsonb,

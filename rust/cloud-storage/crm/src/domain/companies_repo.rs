@@ -4,34 +4,51 @@ use crate::domain::comment::{
     CrmComment, CrmCommentEntityType, CrmCommentThread, DeleteCrmCommentResult,
 };
 use crate::domain::model::{
-    CrmCompany, CrmCompanyForSoup, CrmContact, CrmError, CrmScopePrecheck, DomainMetadata,
+    CrmCompanyForSoup, CrmCompanyWithContacts, CrmContact, CrmError, CrmScopePrecheck,
+    DomainMetadata,
 };
 use chrono::{DateTime, Utc};
 use serde_json::Value;
 
-/// Sort order for [`CompaniesRepository::list_companies_for_soup`].
-/// Both variants tiebreak on `id DESC` for deterministic pagination.
+/// Sort order for [`CompaniesRepository::list_companies_for_soup`]. All
+/// variants tiebreak on `id DESC` for deterministic pagination. The two
+/// `Viewed*` variants require a `user_id` (the `UserHistory` join is
+/// per-user); rows the user has never opened sort to NULL (`ViewedAt`
+/// drops them to the bottom; `ViewedUpdated` falls back to
+/// `last_interaction`).
 #[derive(Debug, Clone, Copy)]
 pub enum CrmCompanyListSort {
     /// Sort by `crm_companies.last_interaction` DESC.
     UpdatedAt,
     /// Sort by `crm_companies.first_interaction` DESC.
     CreatedAt,
+    /// Sort by the user's `UserHistory."updatedAt"` DESC (when this user
+    /// last opened the company). Unviewed rows sort to NULL (bottom).
+    ViewedAt,
+    /// Sort by `COALESCE(UserHistory."updatedAt", last_interaction)` DESC
+    /// — recently viewed bubble up, with a graceful fallback to
+    /// activity recency for unviewed rows.
+    ViewedUpdated,
+}
+
+/// Keyset cursor for [`CompaniesRepository::list_companies_for_soup`].
+/// Carries the sort timestamp + id of the previous soup page's last row
+/// so the next page seeks strictly past it. `None` = first page.
+#[derive(Debug, Clone, Copy)]
+pub struct CrmCompanySoupCursor {
+    /// Sort timestamp of the previous page's last row, expressed in the
+    /// sort method's units: `first_interaction` for `CreatedAt`,
+    /// `last_interaction` for `UpdatedAt`, `UserHistory."updatedAt"` for
+    /// `ViewedAt`, and `COALESCE(uh."updatedAt", last_interaction)` for
+    /// `ViewedUpdated`.
+    pub last_sort_ts: DateTime<Utc>,
+    /// Id of the previous page's last row; tiebreaks equal timestamps.
+    pub last_id: uuid::Uuid,
 }
 
 /// The CompaniesRepository defines persistence operations for CRM
 /// companies and their associated domains.
 pub trait CompaniesRepository: Clone + Send + Sync + 'static {
-    /// Fetches the company for the given team that has `domain` registered
-    /// against it, hydrated with the full list of domains belonging to that
-    /// company. Returns `Ok(None)` when no company in the team has the
-    /// domain registered. Domain matching is case-insensitive.
-    fn get_company_by_domain(
-        &self,
-        team_id: &uuid::Uuid,
-        domain: &str,
-    ) -> impl Future<Output = Result<Option<CrmCompany>, CrmError>> + Send;
-
     /// Idempotently records that `email` (which lives on `domain`) was seen
     /// from the mailbox identified by `link_id`, for the team `team_id`.
     /// Performs the company/domain/contact/contact_source upserts in a single
@@ -45,12 +62,12 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
     ///    disable — which flips the flag and purges `crm_companies` in
     ///    one tx — can't race past us and leave an orphan row.
     /// 1. Look up the company for `(team_id, domain)`.
-    ///    - If a row exists with `email_sync = false` the team has opted
-    ///      this domain out (the per-domain killswitch): no rows are
-    ///      written and the method returns `Ok(())` so the caller can
-    ///      ack the job.
-    ///    - If a row exists with `email_sync = true` it is reused and its
-    ///      `updated_at` is refreshed.
+    ///    - If a row exists it is reused and its `updated_at` is
+    ///      refreshed. Populate runs regardless of the company's
+    ///      `email_sync` — that flag is purely a visibility/permission
+    ///      gate consumed at read time (soup, email permissions). The
+    ///      decoupling means re-enabling sync exposes the full history
+    ///      with no backfill, because the writes never stopped.
     ///    - Otherwise a new `crm_companies` row and a matching
     ///      `crm_domains` row are inserted. The company name itself
     ///      lives in `crm_domain_directory` keyed by `domain`, not on
@@ -92,9 +109,8 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
     ///   get `last_interaction = GREATEST(...)` only. Upsert
     ///   `crm_contact_sources`.
     ///
-    /// The `email_sync=false` per-domain killswitch short-circuits in
-    /// both directions. Source rows track all interactions (sent or
-    /// received), not just sent — see also
+    /// Source rows track all interactions (sent or received), not
+    /// just sent — see also
     /// [`CompaniesRepository::depopulate_contact`].
     ///
     /// The caller is expected to have ensured a `crm_domain_directory`
@@ -155,12 +171,14 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
     /// source rows remain for that contact, then `crm_companies` (cascading
     /// to `crm_domains`) if no other contact rows remain for that company
     /// **and** the company has `email_sync = true`. Companies with
-    /// `email_sync = false` (the killswitch opt-out) are kept so the
-    /// team's configuration survives teardown — a future populate will
-    /// re-discover the row and short-circuit on the same flag.
+    /// `email_sync = false` are kept because that flag is an explicit
+    /// team-side opt-out (the team turned off email sharing for this
+    /// company) — preserving the row makes the choice survive a link
+    /// teardown so a future populate doesn't re-discover the company
+    /// in a "default sync = true" state.
     ///
     /// Source and contact rows are derived data and are always cleaned
-    /// up regardless of the killswitch.
+    /// up regardless of the company's `email_sync`.
     ///
     /// The whole cascade runs in a single transaction that begins by
     /// acquiring the same advisory lock [`populate_contact`] takes (key
@@ -190,8 +208,8 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
     ///   3. Delete every `crm_companies` row in `team_id` that has no
     ///      remaining `crm_contacts` AND `email_sync = true`. Companies
     ///      with `email_sync = false` are preserved so the team's
-    ///      killswitch configuration survives teardown. `crm_domains`
-    ///      falls out via FK cascade.
+    ///      explicit "off" choice survives the link teardown.
+    ///      `crm_domains` falls out via FK cascade.
     ///
     /// Scoping every query to `team_id` keeps the blast radius bounded
     /// — sources the link contributed to a *different* team (from a
@@ -223,13 +241,16 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<uuid::Uuid>, CrmError>> + Send;
 
     /// Toggle `crm_companies.email_sync` for `(company_id, team_id)`.
-    /// On disable, the same tx also deletes the company's
-    /// `crm_contacts` and `crm_contact_sources`. Returns
+    /// The flag is purely a **visibility/permission gate** consumed at
+    /// read time — soup queries and email-permission checks require
+    /// `email_sync = true` before exposing emails team-wide. Populate
+    /// runs regardless, so toggling this flag never destroys data and
+    /// re-enabling never requires a backfill. Returns
     /// [`CrmError::CompanyNotFoundForTeam`] on a non-matching pair.
     /// Refuses to set `email_sync = true` when the company has
-    /// `hidden = true` (returns [`CrmError::CompanyHidden`]) — a hidden
-    /// company would otherwise have populate re-create contacts under
-    /// it. Un-hide first if you really want sync back on.
+    /// `hidden = true` (returns [`CrmError::CompanyHidden`]) — keeps
+    /// the "hide = full opt-out" UX (un-hide first if you really want
+    /// sync back on).
     fn set_email_sync(
         &self,
         team_id: &uuid::Uuid,
@@ -237,16 +258,34 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
         email_sync: bool,
     ) -> impl Future<Output = Result<(), CrmError>> + Send;
 
-    /// Toggle `crm_companies.hidden` for `(company_id, team_id)`. When
-    /// `hidden = true` this also sets `email_sync = false` and tears
-    /// down the company's `crm_contacts` and `crm_contact_sources` in
-    /// the **same transaction**, holding the same per-`(team, domain)`
-    /// advisory locks [`set_email_sync`] takes. Un-hide (`hidden =
-    /// false`) only flips the flag; `email_sync` is left as-is.
+    /// Toggle `crm_companies.hidden` for `(company_id, team_id)`. The
+    /// company's contacts cascade with the flag — hide soft-hides every
+    /// `crm_contacts` row (`hidden = TRUE`) and un-hide restores them
+    /// (`hidden = FALSE`). Contact data and `crm_contact_sources` are
+    /// preserved across the cycle, so un-hide is a true reverse of
+    /// hide. The cascade overwrites individual contact-hide state set
+    /// via [`set_contact_hidden`]; un-hide blanket-resets contacts to
+    /// visible regardless of how each one got hidden.
+    ///
+    /// Hide additionally forces `email_sync = false` — purely a
+    /// product/UX coupling that says "hide = full opt-out, including
+    /// team email sharing". Populate doesn't read `email_sync`, so the
+    /// flip has no write-side effect by itself; the contact-cascade
+    /// is what stops a hidden company from accumulating visible
+    /// contacts. Un-hide leaves `email_sync` alone — re-enable
+    /// explicitly via [`set_email_sync`].
+    ///
+    /// Both branches hold the same per-`(team, domain)` advisory locks
+    /// [`populate_contact`] takes so a populate-vs-hide race can't
+    /// observe a stale `hidden` value mid-cascade — without the lock,
+    /// a populate could read `hidden = false` then write a visible
+    /// contact under a company that's about to commit `hidden = true`.
+    ///
     /// Returns [`CrmError::CompanyNotFoundForTeam`] on a non-matching
     /// pair.
     ///
     /// [`set_email_sync`]: CompaniesRepository::set_email_sync
+    /// [`set_contact_hidden`]: CompaniesRepository::set_contact_hidden
     fn set_company_hidden(
         &self,
         team_id: &uuid::Uuid,
@@ -287,30 +326,79 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
     /// Lists a team's CRM companies for the soup feed, hydrated with
     /// domains and primary-domain directory metadata. Honors the
     /// team-level killswitch (missing or `crm_enabled = false` →
-    /// empty) and excludes `hidden = true` rows. Empty `company_ids`
-    /// = all non-hidden companies; non-empty = whitelist. Both sort
-    /// orders tiebreak on `id DESC`.
+    /// empty). `hidden = None` or `Some(false)` returns visible
+    /// companies; `Some(true)` returns hidden companies — the caller
+    /// is responsible for enforcing admin/owner role before reaching
+    /// this method (soup's axum router does this). Empty `company_ids`
+    /// = all rows matching the `hidden` filter; non-empty = whitelist.
+    /// `cursor` seeks strictly past the previous soup page's last row
+    /// (`None` = first page). All sort orders tiebreak on `id DESC`.
+    ///
+    /// `user_id` scopes the per-user `UserHistory` join used by the
+    /// `Viewed*` sort variants. Pass the requesting user's id verbatim
+    /// (as stored in `team_user.user_id` / `UserHistory."userId"`);
+    /// internal callers without a user can pass an empty string —
+    /// `Viewed*` sorts then collapse to NULL (no viewed-at signal).
+    #[allow(clippy::too_many_arguments)]
     fn list_companies_for_soup(
         &self,
         team_id: &uuid::Uuid,
+        user_id: &str,
         company_ids: &[uuid::Uuid],
+        hidden: Option<bool>,
         sort: CrmCompanyListSort,
+        cursor: Option<CrmCompanySoupCursor>,
         limit: i64,
     ) -> impl Future<Output = Result<Vec<CrmCompanyForSoup>, CrmError>> + Send;
 
-    /// Lists the non-hidden contacts of `company_id`, scoped to
-    /// `team_id` via the contact's company. Returns
+    /// Lists the contacts of `company_id`, scoped to `team_id` via the
+    /// contact's company. Returns
     /// [`CrmError::CompanyNotFoundForTeam`] when the company doesn't
-    /// exist or isn't owned by the team (so existence doesn't leak
-    /// across teams); an owned company with no visible contacts
-    /// returns `Ok(vec![])`. Ordered alphabetically (case-insensitive)
-    /// by display name, falling back to email when the contact has no
-    /// name; ties break on `id DESC`.
+    /// exist, isn't owned by the team, or — for non-admin viewers
+    /// (`include_hidden = false`) — is hidden. With `include_hidden =
+    /// false` hidden contacts are filtered out and hidden parent
+    /// companies 404; with `include_hidden = true` (admin/owner) every
+    /// owned contact is returned and hidden parent companies are
+    /// reachable. Ordered alphabetically (case-insensitive) by display
+    /// name, falling back to email when the contact has no name; ties
+    /// break on `id DESC`.
     fn list_contacts_for_company(
         &self,
         team_id: &uuid::Uuid,
         company_id: &uuid::Uuid,
+        include_hidden: bool,
     ) -> impl Future<Output = Result<Vec<CrmContact>, CrmError>> + Send;
+
+    /// Fetches a single CRM contact by id, scoped to `team_id` via the
+    /// contact's company. Returns `Ok(None)` when the contact doesn't
+    /// exist, belongs to a different team, or — for non-admin viewers
+    /// (`include_hidden = false`) — the contact or its parent company
+    /// is hidden. With `include_hidden = true` (admin/owner) every
+    /// owned contact is reachable. The handler converts `None` into a
+    /// 404 [`CrmError::ContactNotFoundForTeam`].
+    fn get_contact_for_team(
+        &self,
+        team_id: &uuid::Uuid,
+        contact_id: &uuid::Uuid,
+        include_hidden: bool,
+    ) -> impl Future<Output = Result<Option<CrmContact>, CrmError>> + Send;
+
+    /// Fetches a single CRM company by id, scoped to `team_id`,
+    /// hydrated with all domains (ordered by `created_at ASC` —
+    /// primary first), the primary domain's `crm_domain_directory`
+    /// display metadata (name + description), and the company's full
+    /// contact list (subject to `include_hidden`). Returns `Ok(None)`
+    /// when the company doesn't exist, belongs to a different team,
+    /// or — for non-admin viewers (`include_hidden = false`) — the
+    /// company is hidden. With `include_hidden = true` (admin/owner)
+    /// every owned company is reachable. The handler converts `None`
+    /// into a 404 [`CrmError::CompanyNotFoundForTeam`].
+    fn get_company_for_team(
+        &self,
+        team_id: &uuid::Uuid,
+        company_id: &uuid::Uuid,
+        include_hidden: bool,
+    ) -> impl Future<Output = Result<Option<CrmCompanyWithContacts>, CrmError>> + Send;
 
     /// Create a CRM comment. With `thread_id = None` a new thread is opened
     /// on `(entity_type, entity_id)` and the comment becomes its root; with
@@ -321,6 +409,9 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
     /// the team, or [`CrmError::ThreadNotFound`] when a supplied `thread_id`
     /// is deleted or doesn't belong to that entity. Returns the full thread
     /// (with all its comments) after the insert.
+    /// `include_hidden` mirrors the read endpoints: non-admin callers
+    /// pass `false` (cannot comment on a hidden entity); admin/owner
+    /// callers pass `true` (can comment regardless of visibility).
     #[allow(clippy::too_many_arguments)]
     fn create_crm_comment(
         &self,
@@ -332,6 +423,7 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
         thread_metadata: Option<Value>,
         text: &str,
         metadata: Option<Value>,
+        include_hidden: bool,
     ) -> impl Future<Output = Result<CrmCommentThread, CrmError>> + Send;
 
     /// List the non-deleted comment threads on `(entity_type, entity_id)`,
@@ -340,34 +432,60 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
     /// company — returns [`CrmError::CompanyNotFoundForTeam`] /
     /// [`CrmError::ContactNotFoundForTeam`] when the entity isn't owned by
     /// the team (so existence doesn't leak across teams); an owned entity
-    /// with no threads returns `Ok(vec![])`.
+    /// with no threads returns `Ok(vec![])`. Hidden entities 404 for
+    /// non-admin viewers (`include_hidden = false`); admins/owners can
+    /// see threads on hidden entities (`include_hidden = true`).
     fn get_crm_comment_threads(
         &self,
         team_id: &uuid::Uuid,
         entity_type: CrmCommentEntityType,
         entity_id: &uuid::Uuid,
+        include_hidden: bool,
     ) -> impl Future<Output = Result<Vec<CrmCommentThread>, CrmError>> + Send;
 
     /// Edit a CRM comment's `text`, scoped to `team_id` via the comment's
-    /// thread → entity → company. Returns the updated comment, or
+    /// thread → entity → company. Owner-only: returns
+    /// [`CrmError::CommentNotOwned`] when `requester` (the caller's macro
+    /// user id) is not the comment's author, or
     /// [`CrmError::CommentNotFound`] when it doesn't exist or isn't owned by
-    /// the team.
+    /// the team. `include_hidden = false` (non-admin) additionally
+    /// returns `CommentNotFound` when the parent entity is hidden.
     fn edit_crm_comment(
         &self,
         team_id: &uuid::Uuid,
         comment_id: &uuid::Uuid,
         text: &str,
+        include_hidden: bool,
+        requester: &str,
     ) -> impl Future<Output = Result<CrmComment, CrmError>> + Send;
 
     /// Soft-delete a CRM comment (sets `deleted_at`), scoped to `team_id`.
     /// When it was the thread's last live comment, the thread is
     /// soft-deleted too (reported via
-    /// [`DeleteCrmCommentResult::thread_deleted`]). Returns
+    /// [`DeleteCrmCommentResult::thread_deleted`]). Owner-only: returns
+    /// [`CrmError::CommentNotOwned`] when `requester` (the caller's macro
+    /// user id) is not the comment's author, or
     /// [`CrmError::CommentNotFound`] when the comment doesn't exist, is
-    /// already deleted, or isn't owned by the team.
+    /// already deleted, or isn't owned by the team. `include_hidden =
+    /// false` (non-admin) additionally returns `CommentNotFound` when
+    /// the parent entity is hidden.
     fn delete_crm_comment(
         &self,
         team_id: &uuid::Uuid,
         comment_id: &uuid::Uuid,
+        include_hidden: bool,
+        requester: &str,
     ) -> impl Future<Output = Result<DeleteCrmCommentResult, CrmError>> + Send;
+
+    /// Resolve a CRM comment to the entity its thread is attached to.
+    /// Returns `Ok(None)` when the comment doesn't exist or is
+    /// soft-deleted. The schema's `crm_thread_one_parent` check
+    /// constraint guarantees exactly one of `company_id` / `contact_id`
+    /// is set on the parent thread, so the variant is unambiguous. This
+    /// is the lookup the comment access extractor uses to dispatch
+    /// access checks to the right entity type.
+    fn get_comment_entity(
+        &self,
+        comment_id: &uuid::Uuid,
+    ) -> impl Future<Output = Result<Option<(CrmCommentEntityType, uuid::Uuid)>, CrmError>> + Send;
 }

@@ -45,6 +45,44 @@ id = "9beead2b7891492f82153d2354e64e92"
 tag = "v1"
 new_sqlite_classes = ["DocumentSyncSession"]
 
+# PLAYGROUND ENV - Shared playground on real Cloudflare infrastructure
+[env.playground]
+name = "sync-service-playground"
+
+[env.playground.vars]
+INTERNAL_API_SECRET_KEY = "SYNC_SERVICE_KEY_PLAYGROUND"
+DOCUMENT_PERMISSIONS_SECRET = "local"
+ENVIRONMENT = "development"
+SPS_URL = "https://search-processing-dev.macro.com"
+
+[env.playground.durable_objects]
+bindings = [
+  { name = "DOCUMENT_SYNC_SESSION", class_name = "DocumentSyncSession" },
+]
+
+[[env.playground.r2_buckets]]
+binding = "DOCUMENT_SNAPSHOT_BUCKET"
+bucket_name = "document-snapshot-bucket-playground"
+
+[[env.playground.d1_databases]]
+binding = "USER_PEER_MAPPING"
+migrations_dir = "./database/user-peer-mapping/migrations/"
+database_name = "user-peer-mapping-playground"
+database_id = "af92b95f-9687-4a6b-89aa-9cf38945ed1c"
+
+[[env.playground.kv_namespaces]]
+binding = "DOCUMENT_VERSIONING_KV"
+id = "bac2723a3bcd436481b8a2b1baa24c8a"
+
+[[env.playground.kv_namespaces]]
+binding = "SNAPSHOT_STORE_KV"
+id = "d107d66e62a942e8a90acdba8b04bd38"
+
+[[env.playground.migrations]]
+tag = "v1"
+new_sqlite_classes = ["DocumentSyncSession"]
+
+
 # DEVELOPMENT ENV - Used in development environment
 [env.dev]
 name = "sync-service-dev3"

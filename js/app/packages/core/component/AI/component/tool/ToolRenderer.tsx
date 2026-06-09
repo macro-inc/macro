@@ -15,6 +15,7 @@ export const useToolError = () => {
 export type RenderContext = {
   renderContext: {
     isStreaming: boolean;
+    grouped?: boolean;
   };
 };
 

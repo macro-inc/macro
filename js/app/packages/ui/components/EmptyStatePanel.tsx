@@ -1,12 +1,14 @@
-import { type Component, For, type JSXElement, Show } from 'solid-js';
+import { openExternalUrl } from '@core/util/url';
+import { type Component, type JSXElement, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { Button } from './Button';
 import { cn } from '../utils/classname';
+import { Button } from './Button';
 
 export interface EmptyStateAction {
   label: string;
   onClick: () => void;
-  hotkeyChord?: string[];
+  /** Optional leading icon, e.g. a plus for "create" actions. */
+  icon?: Component<{ class?: string }>;
 }
 
 export interface EmptyStatePanelProps {
@@ -15,50 +17,18 @@ export interface EmptyStatePanelProps {
   title?: string;
   description?: JSXElement;
   primaryAction?: EmptyStateAction;
-  secondaryAction?: EmptyStateAction;
+  /**
+   * When set, renders a secondary "Documentation" button that opens the given
+   * URL in a new tab. Omit when no relevant documentation page exists.
+   */
+  documentationUrl?: string;
+  documentationLabel?: string;
   align?: 'left' | 'center';
   children?: JSXElement;
   class?: string;
 }
 
 const DEFAULT_GRAPHIC_CLASS = 'h-48 w-48 text-ink-muted';
-
-function ChordPills(props: { keys: string[] }) {
-  return (
-    <span class="ml-2 inline-flex items-center gap-1.5">
-      <For each={props.keys}>
-        {(key, i) => (
-          <>
-            <Show when={i() > 0}>
-              <span class="text-xxs opacity-60">then</span>
-            </Show>
-            <span class="rounded-sm border border-current/30 bg-current/10 px-1 py-px text-xxs leading-none uppercase">
-              {key}
-            </span>
-          </>
-        )}
-      </For>
-    </span>
-  );
-}
-
-function ActionButton(props: {
-  action: EmptyStateAction;
-  variant: 'cta' | 'base';
-}) {
-  return (
-    <Button
-      variant={props.variant}
-      size="md"
-      onClick={props.action.onClick}
-    >
-      {props.action.label}
-      <Show when={props.action.hotkeyChord?.length}>
-        <ChordPills keys={props.action.hotkeyChord!} />
-      </Show>
-    </Button>
-  );
-}
 
 export function EmptyStatePanel(props: EmptyStatePanelProps) {
   const isCentered = () => props.align === 'center';
@@ -67,7 +37,7 @@ export function EmptyStatePanel(props: EmptyStatePanelProps) {
     <div
       role="status"
       class={cn(
-        'flex size-full flex-col px-8',
+        'flex size-full flex-col overflow-y-auto px-8 pb-8',
         '@max-sm:px-4 @max-sm:text-center @max-sm:items-center',
         isCentered()
           ? 'items-center text-center'
@@ -88,7 +58,11 @@ export function EmptyStatePanel(props: EmptyStatePanelProps) {
           {(graphic) => (
             <div
               aria-hidden="true"
-              class={cn(DEFAULT_GRAPHIC_CLASS, props.graphicClass)}
+              class={cn(
+                DEFAULT_GRAPHIC_CLASS,
+                '-mb-8 opacity-70',
+                props.graphicClass
+              )}
             >
               <Dynamic component={graphic()} class="size-full" />
             </div>
@@ -100,13 +74,43 @@ export function EmptyStatePanel(props: EmptyStatePanelProps) {
         <Show when={props.description}>
           <div class="text-sm/6 text-ink-muted">{props.description}</div>
         </Show>
-        <Show when={props.primaryAction || props.secondaryAction}>
-          <div class="mt-2 flex flex-wrap gap-2">
+        <Show when={props.primaryAction || props.documentationUrl}>
+          <div
+            class={cn(
+              'mt-2 flex flex-wrap gap-2',
+              isCentered() ? 'justify-center' : 'justify-start',
+              '@max-sm:w-full @max-sm:flex-col @max-sm:justify-center'
+            )}
+          >
             <Show when={props.primaryAction}>
-              {(action) => <ActionButton action={action()} variant="cta" />}
+              {(action) => (
+                <Button
+                  variant="cta"
+                  size="md"
+                  class={cn(
+                    'rounded-full',
+                    action().icon ? 'pl-3 pr-4' : 'px-4'
+                  )}
+                  onClick={action().onClick}
+                >
+                  <Show when={action().icon}>
+                    {(icon) => <Dynamic component={icon()} class="size-4" />}
+                  </Show>
+                  {action().label}
+                </Button>
+              )}
             </Show>
-            <Show when={props.secondaryAction}>
-              {(action) => <ActionButton action={action()} variant="base" />}
+            <Show when={props.documentationUrl}>
+              {(url) => (
+                <Button
+                  variant="base"
+                  size="md"
+                  class="rounded-full px-4"
+                  onClick={() => openExternalUrl(url())}
+                >
+                  {props.documentationLabel ?? 'Documentation'}
+                </Button>
+              )}
             </Show>
           </div>
         </Show>

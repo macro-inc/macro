@@ -24,6 +24,11 @@ future prompts to provide personalized answers. Focus on:
 - Domain knowledge and expertise
 - Communication style and preferences
 
+If a previous memory is provided in the system prompt, use it as the baseline \
+for the new memory. Preserve still-accurate durable facts, verify and update it \
+with fresh tool research, add important new context, and remove obsolete or \
+unsupported details.
+
 Don't include things that would make sense to find via tool search at runtime. \
 Focus on context that is useful as permanent background knowledge.
 
@@ -85,8 +90,8 @@ impl<Rpo> MemoryServiceImpl<Rpo> {
     }
 }
 
-/// Default max age for memory freshness (7 days).
-const MAX_AGE: std::time::Duration = std::time::Duration::from_hours(24 * 7);
+/// Default max age for memory freshness (1 day).
+const MAX_AGE: std::time::Duration = std::time::Duration::from_hours(24);
 
 impl<Rpo> MemoryService for MemoryServiceImpl<Rpo>
 where
@@ -109,6 +114,7 @@ where
 
         let env = Environment::new_or_prod();
         if needs_generation && !matches!(env, Environment::Local) {
+            let previous_memory = record.as_ref().map(|r| r.memory.clone());
             let pool = self.db.clone();
             let tool_context = self.tool_context.clone();
             let toolset = self.tools.toolset.clone();
@@ -117,7 +123,7 @@ where
                 let repo = crate::outbound::pg_memory_repo::PgMemoryRepo::new(pool.clone());
                 let tools = ToolSetWithPrompt { toolset, prompt };
                 let svc = MemoryServiceImpl::new(pool, repo, tool_context, tools);
-                match svc.generate_memory(user.clone()).await {
+                match svc.generate_memory(user.clone(), previous_memory).await {
                     Ok(_) => tracing::info!(%user, "memory generated"),
                     Err(MemoryError::Rejected(reason)) => {
                         tracing::warn!(%user, %reason, "memory rejected by judge")
@@ -139,13 +145,14 @@ where
     async fn generate_memory(
         &self,
         user: macro_user_id::user_id::MacroUserIdStr<'static>,
+        previous_memory: Option<Memory>,
     ) -> super::Result<Memory> {
         // append user data + datetime to prompt
-        let system_prompt = format!(
-            "{}\n<user_id>{:?}</user_id>\n<datetime>{}</datetime>",
+        let system_prompt = build_generation_system_prompt(
             self.tools.prompt,
-            user,
-            Utc::now().to_rfc2822()
+            &user,
+            &Utc::now().to_rfc2822(),
+            previous_memory.as_deref(),
         );
 
         let agent_loop = AgentLoop::new().with_model(GENERATION_MODEL);
@@ -192,6 +199,24 @@ where
     }
 }
 
+fn build_generation_system_prompt(
+    base_prompt: &str,
+    user: &macro_user_id::user_id::MacroUserIdStr<'_>,
+    datetime: &str,
+    previous_memory: Option<&str>,
+) -> String {
+    let mut prompt =
+        format!("{base_prompt}\n<user_id>{user:?}</user_id>\n<datetime>{datetime}</datetime>");
+
+    if let Some(memory) = previous_memory {
+        prompt.push_str("\n<previous_memory>\n");
+        prompt.push_str(memory);
+        prompt.push_str("\n</previous_memory>");
+    }
+
+    prompt
+}
+
 #[tracing::instrument(skip(memory), err)]
 async fn judge_memory(memory: &str) -> super::Result<()> {
     let user_message = format!(
@@ -215,4 +240,43 @@ async fn judge_memory(memory: &str) -> super::Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use macro_user_id::user_id::MacroUserIdStr;
+
+    fn user_id(value: &str) -> MacroUserIdStr<'static> {
+        MacroUserIdStr::try_from(value.to_string()).expect("valid macro user id")
+    }
+
+    #[test]
+    fn generation_system_prompt_includes_previous_memory_when_present() {
+        let user = user_id("macro|memory-test@example.com");
+        let prompt = build_generation_system_prompt(
+            "base tools prompt",
+            &user,
+            "Mon, 08 Jun 2026 12:00:00 +0000",
+            Some("previous durable facts"),
+        );
+
+        assert!(prompt.contains("base tools prompt"));
+        assert!(prompt.contains("<user_id>macro|memory-test@example.com</user_id>"));
+        assert!(prompt.contains("<datetime>Mon, 08 Jun 2026 12:00:00 +0000</datetime>"));
+        assert!(prompt.contains("<previous_memory>\nprevious durable facts\n</previous_memory>"));
+    }
+
+    #[test]
+    fn generation_system_prompt_omits_previous_memory_when_absent() {
+        let user = user_id("macro|memory-test@example.com");
+        let prompt = build_generation_system_prompt(
+            "base tools prompt",
+            &user,
+            "Mon, 08 Jun 2026 12:00:00 +0000",
+            None,
+        );
+
+        assert!(!prompt.contains("<previous_memory>"));
+    }
 }

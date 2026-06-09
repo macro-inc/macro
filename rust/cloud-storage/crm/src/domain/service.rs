@@ -1,34 +1,29 @@
 //! The CrmService trait and its default implementation.
 
 use crate::domain::{
+    auth::{CrmCommentReceipt, CrmCompanyReceipt, CrmContactReceipt, CrmTeamReceipt},
     comment::{CrmComment, CrmCommentEntityType, CrmCommentThread, DeleteCrmCommentResult},
-    companies_repo::{CompaniesRepository, CrmCompanyListSort},
+    companies_repo::{CompaniesRepository, CrmCompanyListSort, CrmCompanySoupCursor},
     company_metadata_resolver::CompanyMetadataResolver,
     generic_email_domains::is_generic_email_domain,
-    model::{CrmCompany, CrmCompanyForSoup, CrmContact, CrmError, CrmScopePrecheck},
+    model::{CrmCompanyForSoup, CrmCompanyWithContacts, CrmContact, CrmError, CrmScopePrecheck},
 };
 use chrono::{DateTime, Utc};
+use entity_access::domain::models::{EditAccessLevel, MemberTeamRole, ViewAccessLevel};
 use serde_json::Value;
 
 /// The CrmService exposes operations over CRM records (companies, their
 /// domains and contacts).
 pub trait CrmService: Clone + Send + Sync + 'static {
-    /// Fetches the company for the given team that has `domain` registered
-    /// against it, hydrated with all of the company's domains. Returns
-    /// `Ok(None)` when no company in the team has that domain.
-    fn get_company_by_domain(
-        &self,
-        team_id: &uuid::Uuid,
-        domain: &str,
-    ) -> impl Future<Output = Result<Option<CrmCompany>, CrmError>> + Send;
-
     /// Idempotently records that `email` was seen from the mailbox
     /// identified by `link_id`, for the team `team_id`. Upserts
     /// `crm_companies` (+ `crm_domains`), `crm_contacts`, and
     /// `crm_contact_sources` in a single transaction. The call is a
-    /// no-op when either killswitch is engaged: the team-level
-    /// `team_crm_settings.crm_enabled = false`, or the per-domain
-    /// `crm_companies.email_sync = false` for the contact's domain.
+    /// no-op only when the team-level
+    /// `team_crm_settings.crm_enabled = false` killswitch is engaged.
+    /// The per-company `email_sync` flag is a visibility gate only —
+    /// populate writes regardless, so re-enabling sync exposes the
+    /// full history with no backfill.
     ///
     /// `name` is the display name observed for `email` on this user's
     /// link — typically `email_contacts.name`, which the caller looks up
@@ -64,13 +59,13 @@ pub trait CrmService: Clone + Send + Sync + 'static {
     /// `is_sent` flags whether the populating message was sent by the
     /// user. The write matrix:
     ///
-    /// | `is_sent` | No `crm_companies` row | Existing `crm_companies` row (`email_sync=true`) |
+    /// | `is_sent` | No `crm_companies` row | Existing `crm_companies` row |
     /// |---|---|---|
     /// | `true`  | INSERT company + contact + source; `first_interaction = $first_at`, `last_interaction = $last_at`. | UPDATE company `first=LEAST(stored, $first_at), last=GREATEST(stored, $last_at)` + upsert contact (same merge) + upsert source. |
     /// | `false` | **No-op** — no domain-metadata resolve, no inserts. | UPDATE company `last=GREATEST(stored, $last_at)` only (do NOT touch `first_interaction`) + upsert contact (INSERT sets both endpoints; ON CONFLICT bumps `last` only) + upsert source. |
     ///
-    /// The `email_sync=false` per-domain killswitch short-circuits in
-    /// both directions.
+    /// `email_sync` is *not* consulted by this method — it's purely a
+    /// read-side visibility gate.
     #[allow(clippy::too_many_arguments)]
     fn populate_contact(
         &self,
@@ -134,39 +129,35 @@ pub trait CrmService: Clone + Send + Sync + 'static {
         macro_id: &str,
     ) -> impl Future<Output = Result<Option<uuid::Uuid>, CrmError>> + Send;
 
-    /// Toggle `email_sync` for `(company_id, team_id)`. Disable cascades
-    /// to contacts and contact_sources; see
+    /// Toggle `email_sync` for the company addressed by `access`. Purely
+    /// a visibility/permission flag — populate continues to write CRM
+    /// rows regardless. See
     /// [`crate::domain::companies_repo::CompaniesRepository::set_email_sync`].
-    /// Authorization is the caller's responsibility.
     fn set_email_sync(
         &self,
-        team_id: &uuid::Uuid,
-        company_id: &uuid::Uuid,
+        access: &CrmCompanyReceipt<EditAccessLevel>,
         email_sync: bool,
     ) -> impl Future<Output = Result<(), CrmError>> + Send;
 
-    /// Toggle the `hidden` flag on a CRM company for `(company_id,
-    /// team_id)`. Hiding (`true`) also forces `email_sync = false` and
-    /// tears down contacts/sources atomically; see
+    /// Toggle the `hidden` flag on the company addressed by `access`. The
+    /// company's contacts cascade with the flag — hide soft-hides every
+    /// contact (`hidden = TRUE`), un-hide soft-restores them (`hidden =
+    /// FALSE`). Contact rows and `crm_contact_sources` are preserved
+    /// across the cycle. Hide additionally forces `email_sync = false`;
+    /// un-hide leaves `email_sync` as-is. See
     /// [`crate::domain::companies_repo::CompaniesRepository::set_company_hidden`].
-    /// Un-hiding (`false`) leaves `email_sync` as-is — the team must
-    /// re-enable sync explicitly. Authorization is the caller's
-    /// responsibility.
     fn set_company_hidden(
         &self,
-        team_id: &uuid::Uuid,
-        company_id: &uuid::Uuid,
+        access: &CrmCompanyReceipt<EditAccessLevel>,
         hidden: bool,
     ) -> impl Future<Output = Result<(), CrmError>> + Send;
 
-    /// Toggle the `hidden` flag on a CRM contact, scoped to `team_id`
-    /// via the contact's company. Hiding is a display-only opt-out and
-    /// does not affect populate/depopulate. Authorization is the
-    /// caller's responsibility.
+    /// Toggle the `hidden` flag on the contact addressed by `access`.
+    /// Hiding is a display-only opt-out and does not affect
+    /// populate/depopulate.
     fn set_contact_hidden(
         &self,
-        team_id: &uuid::Uuid,
-        contact_id: &uuid::Uuid,
+        access: &CrmContactReceipt<EditAccessLevel>,
         hidden: bool,
     ) -> impl Future<Output = Result<(), CrmError>> + Send;
 
@@ -179,35 +170,60 @@ pub trait CrmService: Clone + Send + Sync + 'static {
         addresses: &[String],
     ) -> impl Future<Output = Result<CrmScopePrecheck, CrmError>> + Send;
 
-    /// List the team's CRM companies for the soup feed. See
+    /// List the team's CRM companies for the soup feed. `user_id` is
+    /// required by the `Viewed*` sort variants (per-user
+    /// `UserHistory` join); see
     /// [`CompaniesRepository::list_companies_for_soup`].
+    #[allow(clippy::too_many_arguments)]
     fn list_companies_for_soup(
         &self,
-        team_id: &uuid::Uuid,
+        access: &CrmTeamReceipt<MemberTeamRole>,
+        user_id: &str,
         company_ids: &[uuid::Uuid],
+        hidden: Option<bool>,
         sort: CrmCompanyListSort,
+        cursor: Option<CrmCompanySoupCursor>,
         limit: i64,
     ) -> impl Future<Output = Result<Vec<CrmCompanyForSoup>, CrmError>> + Send;
 
-    /// List a company's non-hidden contacts, scoped to `team_id`. See
+    /// List the contacts of the company addressed by `access`. The
+    /// caller's role (encoded in the receipt) decides whether hidden
+    /// contacts and a hidden parent company are visible: members see
+    /// neither; admin/owner see both. See
     /// [`CompaniesRepository::list_contacts_for_company`].
     fn list_contacts_for_company(
         &self,
-        team_id: &uuid::Uuid,
-        company_id: &uuid::Uuid,
+        access: &CrmCompanyReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<Vec<CrmContact>, CrmError>> + Send;
 
-    /// Create a comment on a CRM company or contact, optionally as a reply
-    /// to an existing thread. See
-    /// [`CompaniesRepository::create_crm_comment`]. Authorization (team
-    /// membership) is the caller's responsibility; the entity-ownership
-    /// scoping is enforced in the repository.
+    /// Fetch the contact addressed by `access`, scoped to its owning
+    /// team. The receipt's role decides whether a hidden contact (or one
+    /// under a hidden company) is revealed. See
+    /// [`CompaniesRepository::get_contact_for_team`].
+    fn get_contact_for_team(
+        &self,
+        access: &CrmContactReceipt<ViewAccessLevel>,
+    ) -> impl Future<Output = Result<Option<CrmContact>, CrmError>> + Send;
+
+    /// Fetch the company addressed by `access`, hydrated with all
+    /// domains, the primary domain's directory metadata, and the
+    /// company's full contact list. The receipt's role decides whether a
+    /// hidden company and hidden contacts are revealed. See
+    /// [`CompaniesRepository::get_company_for_team`].
+    fn get_company_for_team(
+        &self,
+        access: &CrmCompanyReceipt<ViewAccessLevel>,
+    ) -> impl Future<Output = Result<Option<CrmCompanyWithContacts>, CrmError>> + Send;
+
+    /// Create a comment on the CRM entity addressed by `access`,
+    /// optionally as a reply to an existing thread. The owning entity
+    /// (company or contact) and `include_hidden` are derived from the
+    /// receipt; the entity-ownership scoping is enforced in the
+    /// repository. See [`CompaniesRepository::create_crm_comment`].
     #[allow(clippy::too_many_arguments)]
     fn create_crm_comment(
         &self,
-        team_id: &uuid::Uuid,
-        entity_type: CrmCommentEntityType,
-        entity_id: &uuid::Uuid,
+        access: &CrmCommentReceipt<ViewAccessLevel>,
         owner: &str,
         thread_id: Option<uuid::Uuid>,
         thread_metadata: Option<Value>,
@@ -215,31 +231,45 @@ pub trait CrmService: Clone + Send + Sync + 'static {
         metadata: Option<Value>,
     ) -> impl Future<Output = Result<CrmCommentThread, CrmError>> + Send;
 
-    /// List a CRM entity's comment threads. See
+    /// List the comment threads on the CRM entity addressed by `access`.
+    /// The receipt's role decides whether a hidden parent entity is
+    /// reachable (admin/owner) or 404s (member). See
     /// [`CompaniesRepository::get_crm_comment_threads`].
     fn get_crm_comment_threads(
         &self,
-        team_id: &uuid::Uuid,
-        entity_type: CrmCommentEntityType,
-        entity_id: &uuid::Uuid,
+        access: &CrmCommentReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<Vec<CrmCommentThread>, CrmError>> + Send;
 
-    /// Edit a CRM comment's text, scoped to `team_id`. See
+    /// Edit the text of `comment_id`, scoped to the team in `access`
+    /// (the receipt for the comment's owning entity). A member's receipt
+    /// treats comments on hidden entities as not found. See
     /// [`CompaniesRepository::edit_crm_comment`].
     fn edit_crm_comment(
         &self,
-        team_id: &uuid::Uuid,
+        access: &CrmCommentReceipt<ViewAccessLevel>,
         comment_id: &uuid::Uuid,
         text: &str,
     ) -> impl Future<Output = Result<CrmComment, CrmError>> + Send;
 
-    /// Soft-delete a CRM comment, scoped to `team_id`. See
-    /// [`CompaniesRepository::delete_crm_comment`].
+    /// Soft-delete `comment_id`, scoped to the team in `access`. A
+    /// member's receipt treats comments on hidden entities as not found.
+    /// See [`CompaniesRepository::delete_crm_comment`].
     fn delete_crm_comment(
         &self,
-        team_id: &uuid::Uuid,
+        access: &CrmCommentReceipt<ViewAccessLevel>,
         comment_id: &uuid::Uuid,
     ) -> impl Future<Output = Result<DeleteCrmCommentResult, CrmError>> + Send;
+
+    /// Resolve a comment to its owning CRM entity. `None` when the
+    /// comment doesn't exist or is soft-deleted. Takes a raw
+    /// `comment_id` (not a receipt) because it is the minting primitive
+    /// the comment access extractor calls *before* a receipt exists, to
+    /// dispatch the access check to the right entity type. See
+    /// [`CompaniesRepository::get_comment_entity`].
+    fn get_comment_entity(
+        &self,
+        comment_id: &uuid::Uuid,
+    ) -> impl Future<Output = Result<Option<(CrmCommentEntityType, uuid::Uuid)>, CrmError>> + Send;
 }
 
 /// Implementation of [`CrmService`] backed by a [`CompaniesRepository`]
@@ -290,17 +320,6 @@ where
     CR: CompaniesRepository,
     R: CompanyMetadataResolver,
 {
-    #[tracing::instrument(skip(self), err)]
-    async fn get_company_by_domain(
-        &self,
-        team_id: &uuid::Uuid,
-        domain: &str,
-    ) -> Result<Option<CrmCompany>, CrmError> {
-        self.companies_repository
-            .get_company_by_domain(team_id, domain)
-            .await
-    }
-
     #[tracing::instrument(skip(self), err)]
     #[allow(clippy::too_many_arguments)]
     async fn populate_contact(
@@ -439,39 +458,42 @@ where
             .await
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, access), err)]
     async fn set_email_sync(
         &self,
-        team_id: &uuid::Uuid,
-        company_id: &uuid::Uuid,
+        access: &CrmCompanyReceipt<EditAccessLevel>,
         email_sync: bool,
     ) -> Result<(), CrmError> {
+        let team_id = access.team_id();
+        let company_id = access.company_id()?;
         self.companies_repository
-            .set_email_sync(team_id, company_id, email_sync)
+            .set_email_sync(&team_id, &company_id, email_sync)
             .await
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, access), err)]
     async fn set_company_hidden(
         &self,
-        team_id: &uuid::Uuid,
-        company_id: &uuid::Uuid,
+        access: &CrmCompanyReceipt<EditAccessLevel>,
         hidden: bool,
     ) -> Result<(), CrmError> {
+        let team_id = access.team_id();
+        let company_id = access.company_id()?;
         self.companies_repository
-            .set_company_hidden(team_id, company_id, hidden)
+            .set_company_hidden(&team_id, &company_id, hidden)
             .await
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, access), err)]
     async fn set_contact_hidden(
         &self,
-        team_id: &uuid::Uuid,
-        contact_id: &uuid::Uuid,
+        access: &CrmContactReceipt<EditAccessLevel>,
         hidden: bool,
     ) -> Result<(), CrmError> {
+        let team_id = access.team_id();
+        let contact_id = access.contact_id()?;
         self.companies_repository
-            .set_contact_hidden(team_id, contact_id, hidden)
+            .set_contact_hidden(&team_id, &contact_id, hidden)
             .await
     }
 
@@ -487,89 +509,153 @@ where
             .await
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, access), err)]
+    #[allow(clippy::too_many_arguments)]
     async fn list_companies_for_soup(
         &self,
-        team_id: &uuid::Uuid,
+        access: &CrmTeamReceipt<MemberTeamRole>,
+        user_id: &str,
         company_ids: &[uuid::Uuid],
+        hidden: Option<bool>,
         sort: CrmCompanyListSort,
+        cursor: Option<CrmCompanySoupCursor>,
         limit: i64,
     ) -> Result<Vec<CrmCompanyForSoup>, CrmError> {
+        let team_id = access.team_id();
         self.companies_repository
-            .list_companies_for_soup(team_id, company_ids, sort, limit)
+            .list_companies_for_soup(&team_id, user_id, company_ids, hidden, sort, cursor, limit)
             .await
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, access), err)]
     async fn list_contacts_for_company(
         &self,
-        team_id: &uuid::Uuid,
-        company_id: &uuid::Uuid,
+        access: &CrmCompanyReceipt<ViewAccessLevel>,
     ) -> Result<Vec<CrmContact>, CrmError> {
+        let team_id = access.team_id();
+        let company_id = access.company_id()?;
+        let include_hidden = access.include_hidden();
         self.companies_repository
-            .list_contacts_for_company(team_id, company_id)
+            .list_contacts_for_company(&team_id, &company_id, include_hidden)
             .await
     }
 
-    #[tracing::instrument(skip(self, thread_metadata, text, metadata), err)]
+    #[tracing::instrument(skip(self, access), err)]
+    async fn get_contact_for_team(
+        &self,
+        access: &CrmContactReceipt<ViewAccessLevel>,
+    ) -> Result<Option<CrmContact>, CrmError> {
+        let team_id = access.team_id();
+        let contact_id = access.contact_id()?;
+        let include_hidden = access.include_hidden();
+        self.companies_repository
+            .get_contact_for_team(&team_id, &contact_id, include_hidden)
+            .await
+    }
+
+    #[tracing::instrument(skip(self, access), err)]
+    async fn get_company_for_team(
+        &self,
+        access: &CrmCompanyReceipt<ViewAccessLevel>,
+    ) -> Result<Option<CrmCompanyWithContacts>, CrmError> {
+        let team_id = access.team_id();
+        let company_id = access.company_id()?;
+        let include_hidden = access.include_hidden();
+        self.companies_repository
+            .get_company_for_team(&team_id, &company_id, include_hidden)
+            .await
+    }
+
+    #[tracing::instrument(skip(self, access, thread_metadata, text, metadata), err)]
     #[allow(clippy::too_many_arguments)]
     async fn create_crm_comment(
         &self,
-        team_id: &uuid::Uuid,
-        entity_type: CrmCommentEntityType,
-        entity_id: &uuid::Uuid,
+        access: &CrmCommentReceipt<ViewAccessLevel>,
         owner: &str,
         thread_id: Option<uuid::Uuid>,
         thread_metadata: Option<Value>,
         text: &str,
         metadata: Option<Value>,
     ) -> Result<CrmCommentThread, CrmError> {
+        let (entity_type, entity_id) = access.comment_entity()?;
+        let team_id = access.team_id();
+        let include_hidden = access.include_hidden();
         self.companies_repository
             .create_crm_comment(
-                team_id,
+                &team_id,
                 entity_type,
-                entity_id,
+                &entity_id,
                 owner,
                 thread_id,
                 thread_metadata,
                 text,
                 metadata,
+                include_hidden,
             )
             .await
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, access), err)]
     async fn get_crm_comment_threads(
         &self,
-        team_id: &uuid::Uuid,
-        entity_type: CrmCommentEntityType,
-        entity_id: &uuid::Uuid,
+        access: &CrmCommentReceipt<ViewAccessLevel>,
     ) -> Result<Vec<CrmCommentThread>, CrmError> {
+        let (entity_type, entity_id) = access.comment_entity()?;
+        let team_id = access.team_id();
+        let include_hidden = access.include_hidden();
         self.companies_repository
-            .get_crm_comment_threads(team_id, entity_type, entity_id)
+            .get_crm_comment_threads(&team_id, entity_type, &entity_id, include_hidden)
             .await
     }
 
-    #[tracing::instrument(skip(self, text), err)]
+    #[tracing::instrument(skip(self, access, text), err)]
     async fn edit_crm_comment(
         &self,
-        team_id: &uuid::Uuid,
+        access: &CrmCommentReceipt<ViewAccessLevel>,
         comment_id: &uuid::Uuid,
         text: &str,
     ) -> Result<CrmComment, CrmError> {
+        let team_id = access.team_id();
+        let include_hidden = access.include_hidden();
+        let requester = access
+            .receipt()
+            .get_authenticated_user()
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
         self.companies_repository
-            .edit_crm_comment(team_id, comment_id, text)
+            .edit_crm_comment(
+                &team_id,
+                comment_id,
+                text,
+                include_hidden,
+                requester.as_ref(),
+            )
+            .await
+    }
+
+    #[tracing::instrument(skip(self, access), err)]
+    async fn delete_crm_comment(
+        &self,
+        access: &CrmCommentReceipt<ViewAccessLevel>,
+        comment_id: &uuid::Uuid,
+    ) -> Result<DeleteCrmCommentResult, CrmError> {
+        let team_id = access.team_id();
+        let include_hidden = access.include_hidden();
+        let requester = access
+            .receipt()
+            .get_authenticated_user()
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        self.companies_repository
+            .delete_crm_comment(&team_id, comment_id, include_hidden, requester.as_ref())
             .await
     }
 
     #[tracing::instrument(skip(self), err)]
-    async fn delete_crm_comment(
+    async fn get_comment_entity(
         &self,
-        team_id: &uuid::Uuid,
         comment_id: &uuid::Uuid,
-    ) -> Result<DeleteCrmCommentResult, CrmError> {
+    ) -> Result<Option<(CrmCommentEntityType, uuid::Uuid)>, CrmError> {
         self.companies_repository
-            .delete_crm_comment(team_id, comment_id)
+            .get_comment_entity(comment_id)
             .await
     }
 }
@@ -582,14 +668,6 @@ where
 pub struct NoOpCrmService;
 
 impl CrmService for NoOpCrmService {
-    async fn get_company_by_domain(
-        &self,
-        _team_id: &uuid::Uuid,
-        _domain: &str,
-    ) -> Result<Option<CrmCompany>, CrmError> {
-        unimplemented!("NoOpCrmService.get_company_by_domain")
-    }
-
     async fn populate_contact(
         &self,
         _team_id: &uuid::Uuid,
@@ -627,8 +705,7 @@ impl CrmService for NoOpCrmService {
 
     async fn set_email_sync(
         &self,
-        _team_id: &uuid::Uuid,
-        _company_id: &uuid::Uuid,
+        _access: &CrmCompanyReceipt<EditAccessLevel>,
         _email_sync: bool,
     ) -> Result<(), CrmError> {
         unimplemented!("NoOpCrmService.set_email_sync")
@@ -636,8 +713,7 @@ impl CrmService for NoOpCrmService {
 
     async fn set_company_hidden(
         &self,
-        _team_id: &uuid::Uuid,
-        _company_id: &uuid::Uuid,
+        _access: &CrmCompanyReceipt<EditAccessLevel>,
         _hidden: bool,
     ) -> Result<(), CrmError> {
         unimplemented!("NoOpCrmService.set_company_hidden")
@@ -645,8 +721,7 @@ impl CrmService for NoOpCrmService {
 
     async fn set_contact_hidden(
         &self,
-        _team_id: &uuid::Uuid,
-        _contact_id: &uuid::Uuid,
+        _access: &CrmContactReceipt<EditAccessLevel>,
         _hidden: bool,
     ) -> Result<(), CrmError> {
         unimplemented!("NoOpCrmService.set_contact_hidden")
@@ -661,11 +736,15 @@ impl CrmService for NoOpCrmService {
         unimplemented!("NoOpCrmService.crm_scope_precheck")
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn list_companies_for_soup(
         &self,
-        _team_id: &uuid::Uuid,
+        _access: &CrmTeamReceipt<MemberTeamRole>,
+        _user_id: &str,
         _company_ids: &[uuid::Uuid],
+        _hidden: Option<bool>,
         _sort: CrmCompanyListSort,
+        _cursor: Option<CrmCompanySoupCursor>,
         _limit: i64,
     ) -> Result<Vec<CrmCompanyForSoup>, CrmError> {
         Ok(Vec::new())
@@ -673,18 +752,29 @@ impl CrmService for NoOpCrmService {
 
     async fn list_contacts_for_company(
         &self,
-        _team_id: &uuid::Uuid,
-        _company_id: &uuid::Uuid,
+        _access: &CrmCompanyReceipt<ViewAccessLevel>,
     ) -> Result<Vec<CrmContact>, CrmError> {
         Ok(Vec::new())
+    }
+
+    async fn get_contact_for_team(
+        &self,
+        _access: &CrmContactReceipt<ViewAccessLevel>,
+    ) -> Result<Option<CrmContact>, CrmError> {
+        Ok(None)
+    }
+
+    async fn get_company_for_team(
+        &self,
+        _access: &CrmCompanyReceipt<ViewAccessLevel>,
+    ) -> Result<Option<CrmCompanyWithContacts>, CrmError> {
+        Ok(None)
     }
 
     #[allow(clippy::too_many_arguments)]
     async fn create_crm_comment(
         &self,
-        _team_id: &uuid::Uuid,
-        _entity_type: CrmCommentEntityType,
-        _entity_id: &uuid::Uuid,
+        _access: &CrmCommentReceipt<ViewAccessLevel>,
         _owner: &str,
         _thread_id: Option<uuid::Uuid>,
         _thread_metadata: Option<Value>,
@@ -696,16 +786,14 @@ impl CrmService for NoOpCrmService {
 
     async fn get_crm_comment_threads(
         &self,
-        _team_id: &uuid::Uuid,
-        _entity_type: CrmCommentEntityType,
-        _entity_id: &uuid::Uuid,
+        _access: &CrmCommentReceipt<ViewAccessLevel>,
     ) -> Result<Vec<CrmCommentThread>, CrmError> {
         Ok(Vec::new())
     }
 
     async fn edit_crm_comment(
         &self,
-        _team_id: &uuid::Uuid,
+        _access: &CrmCommentReceipt<ViewAccessLevel>,
         _comment_id: &uuid::Uuid,
         _text: &str,
     ) -> Result<CrmComment, CrmError> {
@@ -714,9 +802,16 @@ impl CrmService for NoOpCrmService {
 
     async fn delete_crm_comment(
         &self,
-        _team_id: &uuid::Uuid,
+        _access: &CrmCommentReceipt<ViewAccessLevel>,
         _comment_id: &uuid::Uuid,
     ) -> Result<DeleteCrmCommentResult, CrmError> {
         unimplemented!("NoOpCrmService.delete_crm_comment")
+    }
+
+    async fn get_comment_entity(
+        &self,
+        _comment_id: &uuid::Uuid,
+    ) -> Result<Option<(CrmCommentEntityType, uuid::Uuid)>, CrmError> {
+        Ok(None)
     }
 }

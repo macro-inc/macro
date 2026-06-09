@@ -984,6 +984,17 @@ impl<
                 .ok();
         }
 
+        if let Some(preview_key) = &record.preview_key {
+            record.recording_preview_url = self
+                .recording_storage
+                .presign_recording_preview_url(preview_key)
+                .await
+                .inspect_err(
+                    |e| tracing::error!(error=?e, "failed to presign recording preview URL"),
+                )
+                .ok();
+        }
+
         record.channel_name = self
             .repo
             .resolve_channel_name(&record.channel_id, user_id.copied())
@@ -1016,7 +1027,7 @@ impl<
             .map_err(|e| CallError::Internal(e.into()))?
             .map(|r| r.channel_id);
 
-        let recording_key = self
+        let storage_keys = self
             .repo
             .delete_call_record(&call_id)
             .await
@@ -1031,14 +1042,35 @@ impl<
             tracing::error!(error=?e, call_id=%call_id, "failed to enqueue call record removal from search");
         }
 
-        if let Some(key) = recording_key {
-            self.recording_storage
-                .delete_recording(&key)
-                .await
-                .inspect_err(|e| {
-                    tracing::error!(error=?e, recording_key=%key, "failed to delete call recording from storage");
-                })
-                .ok();
+        if let Some(storage_keys) = storage_keys {
+            if let Some(key) = storage_keys.recording_key.as_deref() {
+                self.recording_storage
+                    .delete_recording(key)
+                    .await
+                    .inspect_err(|e| {
+                        tracing::error!(error=?e, recording_key=%key, "failed to delete call recording from storage");
+                    })
+                    .ok();
+            }
+
+            let preview_keys = match storage_keys.preview_key {
+                Some(preview_key) => vec![preview_key],
+                None => storage_keys
+                    .recording_key
+                    .as_deref()
+                    .map(derive_preview_keys_from_recording_key)
+                    .unwrap_or_default(),
+            };
+
+            for preview_key in preview_keys {
+                self.recording_storage
+                    .delete_recording_preview(&preview_key)
+                    .await
+                    .inspect_err(|e| {
+                        tracing::error!(error=?e, preview_key=%preview_key, "failed to delete call recording preview from storage");
+                    })
+                    .ok();
+            }
         }
 
         Ok(())
@@ -1531,6 +1563,39 @@ fn extract_recording_key(file_url: &str) -> &str {
         .find("calls/")
         .map(|idx| &file_url[idx + "calls/".len()..])
         .unwrap_or(file_url)
+}
+
+fn recording_key_parent_and_file_name(recording_key: &str) -> Option<(&str, &str)> {
+    let recording_key = recording_key
+        .strip_prefix("calls/")
+        .unwrap_or(recording_key);
+    let (parent, file_name) = recording_key.rsplit_once('/')?;
+    if parent.is_empty() || file_name.is_empty() {
+        return None;
+    }
+    Some((parent, file_name))
+}
+
+fn derive_preview_key_from_recording_key(recording_key: &str) -> Option<String> {
+    let (parent, file_name) = recording_key_parent_and_file_name(recording_key)?;
+    let recording_stem = file_name.strip_suffix(".mp4").unwrap_or(file_name);
+
+    Some(format!("calls/{parent}/{recording_stem}/PREVIEW.jpg"))
+}
+
+fn derive_preview_keys_from_recording_key(recording_key: &str) -> Vec<String> {
+    let Some((parent, file_name)) = recording_key_parent_and_file_name(recording_key) else {
+        return Vec::new();
+    };
+    let Some(preview_key) = derive_preview_key_from_recording_key(recording_key) else {
+        return Vec::new();
+    };
+    let legacy_preview_key = format!("calls/{parent}/{file_name}/PREVIEW.jpg");
+    if preview_key == legacy_preview_key {
+        vec![preview_key]
+    } else {
+        vec![preview_key, legacy_preview_key]
+    }
 }
 
 /// Zero-sized placeholder implementation of [`CallSummarizer`].

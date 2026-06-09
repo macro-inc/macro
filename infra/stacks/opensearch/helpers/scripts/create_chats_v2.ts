@@ -17,7 +17,7 @@
 require('dotenv').config();
 
 import { client } from '../client';
-import { SHARD_SETTINGS } from '../constants';
+import { SHARD_SETTINGS, SLOWLOG_SETTINGS } from '../constants';
 
 const INDEX = 'chats_v2';
 const RELATION_PARENT = 'chat';
@@ -26,6 +26,7 @@ const RELATION_CHILD = 'message';
 const BODY = {
   settings: {
     ...SHARD_SETTINGS,
+    ...SLOWLOG_SETTINGS,
     refresh_interval: '1s',
   },
   mappings: {

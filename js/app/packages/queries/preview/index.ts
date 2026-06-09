@@ -1,4 +1,5 @@
 export {
+  getCachedItemPreview,
   getItemPreview,
   invalidatePreview,
   setPreviewFileType,

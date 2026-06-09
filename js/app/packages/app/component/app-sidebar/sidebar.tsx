@@ -1,4 +1,5 @@
 import { useAnalytics } from '@app/component/analytics-context';
+import { SidebarActiveCallWidget } from '@app/component/app-sidebar/active-call-widget';
 import { ChannelsUnreadWidget } from '@app/component/app-sidebar/channels-unread-widget';
 import {
   InviteModal,
@@ -9,6 +10,7 @@ import {
   SidebarPromoHint,
 } from '@app/component/app-sidebar/sidebar-promo';
 import { CommandState } from '@app/component/command';
+import { InteractiveOnboardingModal } from '@app/component/interactive-onboarding/InteractiveOnboardingModal';
 import { createMenuOpen, setCreateMenuOpen } from '@app/component/Launcher';
 import { requestSearchFocus } from '@app/component/next-soup/soup-view/search-controllers';
 import { useSplitLayout } from '@app/component/split-layout/layout';
@@ -35,6 +37,7 @@ import {
   DEV_MODE_ENV,
   ENABLE_APP_STORE_QR_CODE,
   ENABLE_CALLS,
+  ENABLE_HOME_OVERRIDE,
   ENABLE_NEW_PRICING_OVERRIDE,
   ENABLE_TEAMS_OVERRIDE,
 } from '@core/constant/featureFlags';
@@ -57,7 +60,6 @@ import { AnimatedCallIcon } from '@icon/wide-call';
 import { AnimatedChannelIcon } from '@icon/wide-channel';
 import { AnimatedEmailIcon } from '@icon/wide-email';
 import { AnimatedFileMdIcon } from '@icon/wide-fileMd';
-import { AnimatedFolderIcon } from '@icon/wide-folder';
 import { AnimatedInboxIcon } from '@icon/wide-inbox';
 import { AnimatedNewSplitIcon } from '@icon/wide-newSplit';
 import { AnimatedPlusIcon } from '@icon/wide-plus';
@@ -69,8 +71,10 @@ import { useNotificationSettings } from '@notifications';
 import BellIcon from '@phosphor/bell.svg';
 import CaretUpIcon from '@phosphor/caret-up.svg';
 import DeviceMobileIcon from '@phosphor/device-mobile-speaker.svg';
+import HomeIcon from '@phosphor/house.svg';
 import KeyboardIcon from '@phosphor/keyboard.svg';
 import PaintBucketIcon from '@phosphor/paint-bucket.svg';
+import PlayIcon from '@phosphor/play.svg';
 import PlugIcon from '@phosphor/plug.svg';
 import UserIconPhosphor from '@phosphor/user.svg';
 import UsersThreeIcon from '@phosphor/users-three.svg';
@@ -80,6 +84,7 @@ import { useLocation } from '@solidjs/router';
 import { Button, cn, Dropdown, Hotkey } from '@ui';
 import {
   type Component,
+  createEffect,
   createMemo,
   createSignal,
   For,
@@ -90,7 +95,7 @@ import {
 import { Dynamic } from 'solid-js/web';
 
 interface SidebarItem {
-  id: ListView;
+  id: ListView | (string & {});
   label: string;
   href: string;
   icon?: Component<
@@ -137,10 +142,10 @@ const SIDEBAR_LINKS = [
   },
   {
     id: 'documents',
-    label: 'Documents',
+    label: 'Files',
     href: LIST_VIEW_PATHS.documents,
     icon: AnimatedFileMdIcon,
-    hotkey: 'd',
+    hotkey: 'f',
     hotkeyToken: TOKENS.sidebar.goTo.documents,
   },
   {
@@ -158,14 +163,6 @@ const SIDEBAR_LINKS = [
     icon: AnimatedChannelIcon,
     hotkey: 'c',
     hotkeyToken: TOKENS.sidebar.goTo.channels,
-  },
-  {
-    id: 'folders',
-    label: 'Folders',
-    href: LIST_VIEW_PATHS.folders,
-    icon: AnimatedFolderIcon,
-    hotkey: 'f',
-    hotkeyToken: TOKENS.sidebar.goTo.folders,
   },
 ] satisfies SidebarItem[];
 
@@ -255,7 +252,7 @@ type AppSidebarProps = {
 };
 
 type SidebarHotkeyDeps = {
-  links: SidebarItem[];
+  links: () => SidebarItem[];
   hotkeyVisible: () => boolean;
   setHotkeyVisible: (visible: boolean) => void;
   resetHotkeysState: VoidFunction;
@@ -267,7 +264,7 @@ type SidebarHotkeyDeps = {
 type OpenWithSplitFn = ReturnType<typeof useSplitLayout>['openWithSplit'];
 
 const isComponentEntry =
-  (id: ListView) =>
+  (id: string) =>
   (entry: SplitContent): boolean =>
     entry.type === 'component' && entry.id === id;
 
@@ -280,7 +277,7 @@ const isComponentEntry =
  * and forces a new entry / new split.
  */
 function navigateToSidebarView(args: {
-  viewId: ListView;
+  viewId: SidebarItem['id'];
   shiftKey: boolean;
   activeSplit: SplitHandle | undefined;
   openWithSplit: OpenWithSplitFn;
@@ -333,9 +330,8 @@ const registerSidebarHotkeys = ({
     registrationType: 'add',
   });
 
-  const registeredGoToKeys = new Set<ValidHotkey>([
-    ...links.map((link) => link.hotkey),
-  ]);
+  const registeredGoToKeys = () =>
+    new Set<ValidHotkey>(links().map((link) => link.hotkey));
 
   // When the go to command scope is active, we want to prevent
   // other default hotkeys from running. So doing "g" + some key
@@ -354,7 +350,7 @@ const registerSidebarHotkeys = ({
 
     if (
       context.activeScopeId !== GO_TO_COMMAND_SCOPE ||
-      registeredGoToKeys.has(context.pressedKeysString)
+      registeredGoToKeys().has(context.pressedKeysString)
     ) {
       return false;
     }
@@ -389,49 +385,59 @@ const registerSidebarHotkeys = ({
     },
   });
 
-  // Register navigation shortcuts in the global GO_TO command scope
-  for (const link of links) {
-    const openSidebarView = (e?: KeyboardEvent) => {
-      e?.preventDefault();
-      if (hotkeyVisible()) {
-        resetHotkeysState();
-        debounceResetHotkeysState.clear();
-      }
-
-      if (link.id === 'search' && !e?.shiftKey) {
-        const activeSplit = globalSplitManager()?.activeSplit();
-        const content = activeSplit?.content();
-        if (
-          activeSplit &&
-          content?.type === 'component' &&
-          content.id === 'search'
-        ) {
-          requestSearchFocus(activeSplit.id);
-          return true;
+  // Register navigation shortcuts in the global GO_TO command scope.
+  // This must be reactive because prod feature flags can add links after the
+  // initial render (e.g. Home), and Hotkey UI resolves tokens from the registry.
+  createEffect(() => {
+    const disposers = links().map((link) => {
+      const openSidebarView = (e?: KeyboardEvent) => {
+        e?.preventDefault();
+        if (hotkeyVisible()) {
+          resetHotkeysState();
+          debounceResetHotkeysState.clear();
         }
-      }
 
-      const handle = navigateToSidebarView({
-        viewId: link.id,
-        shiftKey: !!e?.shiftKey,
-        activeSplit: globalSplitManager()?.activeSplit(),
-        openWithSplit,
+        if (link.id === 'search' && !e?.shiftKey) {
+          const activeSplit = globalSplitManager()?.activeSplit();
+          const content = activeSplit?.content();
+          if (
+            activeSplit &&
+            content?.type === 'component' &&
+            content.id === 'search'
+          ) {
+            requestSearchFocus(activeSplit.id);
+            return true;
+          }
+        }
+
+        const handle = navigateToSidebarView({
+          viewId: link.id,
+          shiftKey: !!e?.shiftKey,
+          activeSplit: globalSplitManager()?.activeSplit(),
+          openWithSplit,
+        });
+        if (link.id === 'search' && handle) {
+          requestSearchFocus(handle.id);
+        }
+        return true;
+      };
+
+      return registerHotkey({
+        hotkey: link.hotkey,
+        scopeId: link.standaloneHotkey ? 'global' : GO_TO_COMMAND_SCOPE,
+        hotkeyToken: link.hotkeyToken,
+        description: `Go to ${link.label}`,
+        keyDownHandler: openSidebarView,
+        icon: link.icon,
       });
-      if (link.id === 'search' && handle) {
-        requestSearchFocus(handle.id);
-      }
-      return true;
-    };
-
-    registerHotkey({
-      hotkey: link.hotkey,
-      scopeId: link.standaloneHotkey ? 'global' : GO_TO_COMMAND_SCOPE,
-      hotkeyToken: link.hotkeyToken,
-      description: `Go to ${link.label}`,
-      keyDownHandler: openSidebarView,
-      icon: link.icon,
     });
-  }
+
+    onCleanup(() => {
+      for (const disposer of disposers) {
+        disposer.dispose();
+      }
+    });
+  });
 };
 
 /** Session-only signal so a hint shows after dismissal until the user acknowledges or the timer expires. */
@@ -645,6 +651,7 @@ type SidebarSettingsWidgetProps = {
 
 const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
   const userId = useUserId();
+  const [onboardingModalOpen, setOnboardingModalOpen] = createSignal(false);
 
   const topItems = createMemo(() =>
     SETTINGS_MENU_TOP_ITEMS.filter((item) => props.isTabAvailable(item.tab))
@@ -692,6 +699,17 @@ const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
       </Dropdown.Trigger>
       <Dropdown.Content>
         <Dropdown.Group>
+          <Dropdown.Item
+            class="flex items-center gap-2 px-2.5 py-2 text-sm cursor-default outline-none text-ink-muted"
+            onSelect={() => setOnboardingModalOpen(true)}
+          >
+            <span class="size-5 flex items-center justify-center">
+              <PlayIcon class="size-4 shrink-0 text-ink-extra-muted" />
+            </span>
+            <span class="text-ink">Play tutorial</span>
+          </Dropdown.Item>
+        </Dropdown.Group>
+        <Dropdown.Group>
           <For each={topItems()}>
             {(item) => (
               <Dropdown.Item
@@ -728,6 +746,10 @@ const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
           </For>
         </Dropdown.Group>
       </Dropdown.Content>
+      <InteractiveOnboardingModal
+        open={onboardingModalOpen()}
+        onOpenChange={setOnboardingModalOpen}
+      />
     </Dropdown>
   );
 };
@@ -741,6 +763,15 @@ const CALLS_LINK: SidebarItem = {
   hotkeyToken: TOKENS.sidebar.goTo.calls,
 };
 
+const DASHBOARD_LINK: SidebarItem = {
+  id: 'home',
+  label: 'Home',
+  href: '/home',
+  icon: HomeIcon,
+  hotkey: 'h',
+  hotkeyToken: TOKENS.sidebar.goTo.home,
+};
+
 export const AppSidebar = (props: AppSidebarProps) => {
   const analytics = useAnalytics();
   const layout = useSplitLayout();
@@ -748,6 +779,10 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const isTabAvailable = useIsSettingsTabAvailable();
   const notificationSettings = useNotificationSettings();
   const callCtx = useCallContextOptional();
+
+  const homeViewEnabled = useFeatureFlag('enable-home-view', {
+    enabledOverride: ENABLE_HOME_OVERRIDE,
+  });
 
   const hasPaidAccess = useHasPaidAccess();
 
@@ -775,14 +810,19 @@ export const AppSidebar = (props: AppSidebarProps) => {
 
   const [hotkeyVisible, setHotkeyVisible] = createSignal(false);
 
-  const visibleLinks = createMemo(() => {
-    if (!ENABLE_CALLS()) return SIDEBAR_LINKS;
-    const idx = SIDEBAR_LINKS.findIndex((l) => l.id === 'channels');
-    return [
-      ...SIDEBAR_LINKS.slice(0, idx + 1),
-      CALLS_LINK,
-      ...SIDEBAR_LINKS.slice(idx + 1),
-    ];
+  const visibleLinks = createMemo((): SidebarItem[] => {
+    let links: SidebarItem[] = [...SIDEBAR_LINKS];
+
+    if (homeViewEnabled().enabled) {
+      links = [DASHBOARD_LINK, ...links];
+    }
+
+    if (ENABLE_CALLS()) {
+      const idx = links.findIndex((l) => l.id === 'channels');
+      links = [...links.slice(0, idx + 1), CALLS_LINK, ...links.slice(idx + 1)];
+    }
+
+    return links;
   });
 
   const resetHotkeysState = () => {
@@ -862,7 +902,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
   });
 
   registerSidebarHotkeys({
-    links: visibleLinks(),
+    links: visibleLinks,
     hotkeyVisible,
     setHotkeyVisible,
     resetHotkeysState,
@@ -980,13 +1020,23 @@ export const AppSidebar = (props: AppSidebarProps) => {
         <ChannelsUnreadWidget sidebarState={props.sidebarState ?? 'expanded'} />
       </div>
 
-      <Show when={callCtx?.isInCall()}>
-        <div class="px-2 mb-2 mt-auto" data-ui="in-call-panel">
-          <InCallPanel isSlim={panelIsSlim} />
-        </div>
-      </Show>
+      <div class="mt-auto">
+        <Show when={ENABLE_CALLS()}>
+          <div class="block max-h-[clamp(10%,60%,20rem)]">
+            <SidebarActiveCallWidget
+              sidebarState={props.sidebarState ?? 'expanded'}
+            />
+          </div>
+        </Show>
 
-      <div class={cn('px-2 w-full', !callCtx?.isInCall() && 'mt-auto')}>
+        <Show when={callCtx?.isInCall()}>
+          <div class="px-2 mb-2" data-ui="in-call-panel">
+            <InCallPanel isSlim={panelIsSlim} />
+          </div>
+        </Show>
+      </div>
+
+      <div class="px-2 w-full">
         <hr class="border-transparent mb-2" />
       </div>
 

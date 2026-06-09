@@ -44,6 +44,9 @@ pub enum SearchError {
     #[error("searching with an invalid cursor")]
     /// Searching with an invalid cursor
     InvalidCursor,
+    /// A CRM company filter id was not a valid UUID
+    #[error("invalid crm company id: {0}")]
+    InvalidCrmCompanyId(String),
     /// Opensearch error occurred
     #[error("unable to search")]
     Search(#[from] OpensearchClientError),
@@ -62,6 +65,7 @@ impl IntoResponse for SearchError {
             SearchError::InvalidPageSize
             | SearchError::InvalidQuerySize
             | SearchError::InvalidCursor
+            | SearchError::InvalidCrmCompanyId(_)
             | SearchError::NoQueryOrTermsProvided
             | SearchError::NoChannelIds => StatusCode::BAD_REQUEST,
             SearchError::NameSearch(NameSearchError::IncompatibleCursor) => StatusCode::BAD_REQUEST,

@@ -1,0 +1,21 @@
+[package]
+edition = "2024"
+name = "call_recording_preview_handler"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+aws-sdk-s3 = { workspace = true }
+aws_lambda_events = { workspace = true, features = ["s3"] }
+lambda_runtime = { workspace = true }
+macro_aws_config = { path = "../macro_aws_config", features = ["s3"] }
+macro_entrypoint = { path = "../macro_entrypoint" }
+sqlx = { workspace = true }
+tokio = { workspace = true, features = ["fs", "process", "time"] }
+tracing = { workspace = true }
+urlencoding = { workspace = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+macro_db_migrator = { path = "../macro_db_migrator" }

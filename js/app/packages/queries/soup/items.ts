@@ -47,6 +47,7 @@ export type SoupApiItemFilter = (item: SoupApiItem) => boolean;
 interface SoupItemsQueryOptions {
   enabled?: boolean;
   staleTime?: StaleTime;
+  showSupportedForeignEntities?: boolean;
 }
 
 type SoupAstItemsPage = {
@@ -95,7 +96,11 @@ export const useSoupItemsQuery = (
     },
     select: (data) => {
       return data.pages.flatMap((page) => {
-        return mapSoupPageToEntityList(page, { instructionsIdQuery });
+        return mapSoupPageToEntityList(page, {
+          instructionsIdQuery,
+          showSupportedForeignEntities:
+            options?.().showSupportedForeignEntities,
+        });
       });
     },
     enabled: options?.().enabled,
@@ -173,7 +178,11 @@ export const useSoupAstItemsQuery = (
       select: (data): SoupAstItemsData => {
         const items = data.pages.flatMap((page) => page.items);
         const entities = data.pages.flatMap((page) => {
-          return mapSoupPageToEntityList(page, { instructionsIdQuery });
+          return mapSoupPageToEntityList(page, {
+            instructionsIdQuery,
+            showSupportedForeignEntities:
+              options?.().showSupportedForeignEntities,
+          });
         });
         const rawGroups = data.pages[0]?.groups;
         const groups = rawGroups?.slice().sort(makeGroupComparator(groupBy));

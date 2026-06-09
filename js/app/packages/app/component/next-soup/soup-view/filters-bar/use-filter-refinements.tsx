@@ -15,6 +15,10 @@ import {
   queryStateFrom,
 } from '@app/component/next-soup/filters/filter-store';
 import { mergeQuery } from '@app/component/next-soup/filters/filter-store/query-store';
+import {
+  type CallStatus,
+  callStatusFromAttended,
+} from '@app/component/next-soup/filters/filter-store/types';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import type { ListView } from '@app/constants/list-views';
@@ -37,9 +41,11 @@ import type {
   FilterValue,
 } from './consolidated-filter-chip';
 import {
+  CALL_STATUS_FILTER_OPTIONS,
   cacheCallSubFilters,
   cacheChannelSubFilters,
   cacheEmailSubFilters,
+  getCallStatusLabel,
   INDEX_OPTIONS,
   type SearchableOption,
   useSearchFilterOptions,
@@ -70,8 +76,14 @@ const TAB_ONLY_FILTERS = new Set([
  * and a function to reset filters to the current tab's default state.
  */
 export function useFilterRefinements() {
-  const { soup, queryFilters, assigneeFilter, setAssigneeFilter, activeTab } =
-    useSoupView();
+  const {
+    soup,
+    items,
+    queryFilters,
+    assigneeFilter,
+    setAssigneeFilter,
+    activeTab,
+  } = useSoupView();
   const filterData = () => queryFilters.state;
   const panel = useSplitPanelOrThrow();
   const user = useUserContext();
@@ -644,41 +656,41 @@ export function useFilterRefinements() {
           searchPlaceholder: 'Search speakers...',
         });
 
-        // Call attended filter
-        const callAttended = queryFilters.state.include.callAttended;
-        if (callAttended !== undefined && callAttended !== null) {
-          const key = 'call-attended';
+        // Call status filter
+        const getCurrentCallStatus = (): CallStatus | undefined =>
+          queryFilters.state.include.callStatus ??
+          callStatusFromAttended(queryFilters.state.include.callAttended);
+
+        if (getCurrentCallStatus() !== undefined) {
+          const key = 'call-status';
           seenKeys.add(key);
 
-          const getAttendedValues = (): FilterValue[] => {
-            const attended = queryFilters.state.include.callAttended;
-            if (attended === undefined || attended === null) return [];
-            return [
-              {
-                id: attended ? 'yes' : 'no',
-                label: attended ? 'Attended' : 'Unattended',
-              },
-            ];
+          const getCallStatusValues = (): FilterValue[] => {
+            const status = getCurrentCallStatus();
+            if (status === undefined) return [];
+            return [{ id: status, label: getCallStatusLabel(status) }];
           };
 
           filters.push(
             getOrCreateConsolidatedChip(key, () => ({
               key,
-              categoryLabel: 'Attended',
-              values: getAttendedValues,
-              availableOptions: [
-                { id: 'yes', label: 'Attended' },
-                { id: 'no', label: 'Unattended' },
-              ],
+              categoryLabel: 'Status',
+              values: getCallStatusValues,
+              availableOptions: CALL_STATUS_FILTER_OPTIONS,
               multiple: false,
-              isValueActive: (id) =>
-                id === (queryFilters.state.include.callAttended ? 'yes' : 'no'),
+              isValueActive: (id) => id === getCurrentCallStatus(),
               onToggleValue: (id) =>
-                queryFilters.add({ include: { callAttended: id === 'yes' } }),
-              onRemoveAll: () =>
-                queryFilters.remove({
+                queryFilters.set({
                   include: {
-                    callAttended: queryFilters.state.include.callAttended,
+                    callStatus: id as CallStatus,
+                    callAttended: undefined,
+                  },
+                }),
+              onRemoveAll: () =>
+                queryFilters.set({
+                  include: {
+                    callStatus: undefined,
+                    callAttended: undefined,
                   },
                 }),
             }))
@@ -746,6 +758,71 @@ export function useFilterRefinements() {
     assignees: assigneeFilter(),
   });
 
+  /**
+   * Does at least one item pass the BASE preset's client predicates? Used to
+   * decide whether the empty-state banner should claim items are hidden.
+   * Short-circuits at the first match.
+   *
+   * Note: items() is already server-filtered by current query filters, so if
+   * the user has tightened the server query this may return false even when
+   * items exist. `hasHiddenItems` below compensates by being sticky.
+   */
+  const baseHasItems = createMemo(() => {
+    const preset = currentPreset();
+    if (!preset) return false;
+    const baseAnd = preset.clientFilters.and ?? [];
+    const baseOr = preset.clientFilters.or ?? [];
+    if (baseAnd.length === 0 && baseOr.length === 0) return items().length > 0;
+
+    const ctx = getFilterContext();
+    for (const entity of items()) {
+      let andOk = true;
+      for (const id of baseAnd) {
+        const cfg = soup.predicates.getConfig(id);
+        if (cfg && !cfg.predicate(entity, ctx)) {
+          andOk = false;
+          break;
+        }
+      }
+      if (!andOk) continue;
+      if (baseOr.length > 0) {
+        let orOk = false;
+        for (const id of baseOr) {
+          const cfg = soup.predicates.getConfig(id);
+          if (cfg?.predicate(entity, ctx)) {
+            orOk = true;
+            break;
+          }
+        }
+        if (!orOk) continue;
+      }
+      return true;
+    }
+    return false;
+  });
+
+  /**
+   * Sticky-true while refinements are active so the banner doesn't flicker
+   * off when a server refetch transiently zeroes out items(). Resets on
+   * view/tab change, and snaps to the live state whenever refinements clear.
+   *
+   * Imperfect by design: if the user mounts with refinements already active
+   * and the server returns zero items, this stays false. Getting a true
+   * answer would need a separate base-preset query.
+   */
+  const hasHiddenItems = createMemo<{ key: string; value: boolean }>((prev) => {
+    const key = `${currentView() ?? ''}|${activeTab() ?? ''}`;
+    const refinementsActive = hasActiveRefinements();
+    const itemsExist = baseHasItems();
+
+    if (prev?.key !== key || !refinementsActive) {
+      return { key, value: itemsExist };
+    }
+    return { key, value: prev.value || itemsExist };
+  });
+
+  const hasHiddenItemsValue = () => hasHiddenItems().value;
+
   const getFilterQuery = (optionId: string) => {
     const filter = soup.predicates.getConfig(optionId);
     if (!filter?.query) return undefined;
@@ -791,6 +868,7 @@ export function useFilterRefinements() {
 
   return {
     hasActiveRefinements,
+    hasHiddenItems: hasHiddenItemsValue,
     resetToTabDefaults,
     currentView,
     consolidatedFiltersList,

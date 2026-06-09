@@ -65,6 +65,9 @@ struct MockTeamRepository {
     fail_rollback_remove: bool,
     patch_team_user_role_calls: Arc<Mutex<Vec<(uuid::Uuid, String, TeamRole)>>>,
     patch_team_name_calls: Arc<Mutex<Vec<(uuid::Uuid, Option<String>, Option<String>)>>>,
+    created_team: Team,
+    github_installation_move_calls: Arc<Mutex<Vec<(String, uuid::Uuid)>>>,
+    fail_github_installation_move: bool,
 }
 
 impl MockTeamRepository {
@@ -89,6 +92,16 @@ impl MockTeamRepository {
             fail_rollback_remove: false,
             patch_team_user_role_calls: Arc::new(Mutex::new(Vec::new())),
             patch_team_name_calls: Arc::new(Mutex::new(Vec::new())),
+            created_team: Team::new(
+                uuid::Uuid::from_u128(1000),
+                "Created Team".to_string(),
+                "CREATED_TEAM".to_string(),
+                MacroUserIdStr::parse_from_str("macro|owner@example.com")
+                    .unwrap()
+                    .into_owned(),
+            ),
+            github_installation_move_calls: Arc::new(Mutex::new(Vec::new())),
+            fail_github_installation_move: false,
         }
     }
 
@@ -135,7 +148,29 @@ impl TeamRepository for MockTeamRepository {
         _: &MacroUserIdStr<'_>,
         _: &str,
     ) -> impl Future<Output = Result<Team, CreateTeamError>> + Send {
-        async { unimplemented!() }
+        let team = self.created_team.clone();
+        async move { Ok(team) }
+    }
+
+    fn move_github_app_installation_to_team_if_exists(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        team_id: &uuid::Uuid,
+    ) -> impl Future<Output = Result<(), CreateTeamError>> + Send {
+        self.github_installation_move_calls
+            .lock()
+            .unwrap()
+            .push((user_id.as_ref().to_string(), *team_id));
+        let fail = self.fail_github_installation_move;
+        async move {
+            if fail {
+                Err(CreateTeamError::StorageLayerError(anyhow::anyhow!(
+                    "github installation move failed"
+                )))
+            } else {
+                Ok(())
+            }
+        }
     }
 
     fn invite_users_to_team(
@@ -732,6 +767,77 @@ fn build_service(
 }
 
 // -- Tests --
+
+#[tokio::test]
+async fn test_create_team_moves_github_installation_to_created_team() {
+    let user_id = MacroUserIdStr::parse_from_str("macro|creator@example.com").unwrap();
+    let team = Team::new(
+        uuid::Uuid::from_u128(2000),
+        "New Team".to_string(),
+        "NEW_TEAM".to_string(),
+        user_id.clone().into_owned(),
+    );
+    let mark_sent_calls: Arc<Mutex<Vec<Vec<uuid::Uuid>>>> = Arc::new(Mutex::new(Vec::new()));
+    let mut team_repo = MockTeamRepository::new(Vec::new(), "Test Team", mark_sent_calls);
+    team_repo.created_team = team.clone();
+    let move_calls = team_repo.github_installation_move_calls.clone();
+
+    let service = TeamServiceImpl::new(
+        team_repo,
+        MockCustomerRepository::default(),
+        MockTeamChannelsRepository::default(),
+        MockUserRolesAndPermissionsService::default(),
+        Arc::new(MockNotificationIngress::new(HashSet::new())),
+        NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
+    );
+
+    let created_team = service.create_team(&user_id, "New Team").await.unwrap();
+
+    assert_eq!(created_team.id(), team.id());
+    assert_eq!(
+        *move_calls.lock().unwrap(),
+        vec![(user_id.as_ref().to_string(), *team.id())]
+    );
+}
+
+#[tokio::test]
+async fn test_create_team_propagates_github_installation_move_failure() {
+    let user_id = MacroUserIdStr::parse_from_str("macro|creator@example.com").unwrap();
+    let team = Team::new(
+        uuid::Uuid::from_u128(2001),
+        "New Team".to_string(),
+        "NEW_TEAM".to_string(),
+        user_id.clone().into_owned(),
+    );
+    let mark_sent_calls: Arc<Mutex<Vec<Vec<uuid::Uuid>>>> = Arc::new(Mutex::new(Vec::new()));
+    let mut team_repo = MockTeamRepository::new(Vec::new(), "Test Team", mark_sent_calls);
+    team_repo.created_team = team.clone();
+    team_repo.fail_github_installation_move = true;
+    let move_calls = team_repo.github_installation_move_calls.clone();
+
+    let service = TeamServiceImpl::new(
+        team_repo,
+        MockCustomerRepository::default(),
+        MockTeamChannelsRepository::default(),
+        MockUserRolesAndPermissionsService::default(),
+        Arc::new(MockNotificationIngress::new(HashSet::new())),
+        NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
+    );
+
+    let err = service
+        .create_team(&user_id, "New Team")
+        .await
+        .err()
+        .unwrap();
+
+    assert!(matches!(err, CreateTeamError::StorageLayerError(_)));
+    assert_eq!(
+        *move_calls.lock().unwrap(),
+        vec![(user_id.as_ref().to_string(), *team.id())]
+    );
+}
 
 /// When one notification fails, only the successful invite IDs are passed to
 /// mark_invites_sent.

@@ -33,6 +33,7 @@ axum = [
   "dep:axum-extra",
   "dep:model-error-response",
   "dep:model_user",
+  "dep:task_dedup",
   "dep:utoipa",
   "entity_access/axum",
 ]
@@ -47,7 +48,14 @@ document_create_adapters = [
   "document_create",
   "markdown_init",
 ]
-backfill_binary = ["dep:clap", "dep:macro_entrypoint", "markdown_init", "outbound", "ports"]
+backfill_binary = [
+  "dep:clap",
+  "dep:macro_entrypoint",
+  "dep:macro_service_urls",
+  "markdown_init",
+  "outbound",
+  "ports",
+]
 inbound = ["axum", "document_create_adapters", "ports"]
 markdown_init = ["dep:lexical_client"]
 outbound = [
@@ -59,7 +67,7 @@ outbound = [
   "ports",
 ]
 ports = ["dep:tokio"]
-service = ["dep:entity_access_management", "ports"]
+service = ["dep:entity_access_management", "dep:foreign_entity", "ports"]
 
 [dependencies]
 # Core
@@ -83,6 +91,9 @@ entity_access_management = { path = "../entity_access_management", default-featu
   "outbound",
   "ports",
 ], optional = true }
+foreign_entity = { path = "../foreign_entity", default-features = false, features = [
+  "ports",
+], optional = true }
 macro_aws_config = { path = "../macro_aws_config", features = ["s3"] }
 macro_entrypoint = { path = "../macro_entrypoint", optional = true }
 macro_user_id = { path = "../macro_user_id" }
@@ -92,6 +103,7 @@ model-entity = { path = "../model-entity" }
 models_permissions = { path = "../models_permissions" }
 models_properties = { path = "../models_properties" }
 s3_key = { path = "../s3_key" }
+macro_service_urls = { path = "../macro_service_urls", optional = true }
 
 # Async runtime (for ports)
 tokio = { workspace = true, optional = true }
@@ -112,6 +124,7 @@ futures = { workspace = true }
 hex = { workspace = true, optional = true }
 sqlx = { workspace = true, optional = true }
 sync_service_client = { path = "../sync_service_client" }
+task_dedup = { path = "../task_dedup", optional = true }
 urlencoding = { workspace = true }
 
 # AI Tool dependencies

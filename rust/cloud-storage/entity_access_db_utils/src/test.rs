@@ -6,7 +6,7 @@ use models_permissions::share_permission::channel_share_permission::{
     UpdateChannelSharePermission, UpdateOperation,
 };
 use sqlx::Row as _;
-use sqlx::{Pool, Postgres};
+use sqlx::{Pool, Postgres, Transaction};
 
 use super::*;
 
@@ -48,6 +48,81 @@ async fn fetch_channel_rows(pool: &Pool<Postgres>, channel_id: &str) -> Vec<Row>
         entity_id: r.get("entity_id"),
         entity_type: r.get("entity_type"),
         source_id: r.get("source_id"),
+        access_level: r.get("access_level"),
+        granted_from_project_id: r.get("granted_from_project_id"),
+    })
+    .fetch_all(pool)
+    .await
+    .unwrap()
+}
+
+#[derive(Debug)]
+struct EntityAccessRow {
+    source_id: String,
+    source_type: String,
+    access_level: AccessLevel,
+    granted_from_project_id: Option<String>,
+}
+
+async fn insert_entity_access_for_test(
+    transaction: &mut Transaction<'_, Postgres>,
+    entity_id: &Uuid,
+    entity_type: EntityType,
+    source_id: &str,
+    source_type: EntityAccessSourceType,
+    access_level: AccessLevel,
+    granted_from_project_id: Option<&str>,
+) {
+    // Runtime query (not the compile-time macro) so this test helper does not
+    // require a `.sqlx` cache entry to build.
+    sqlx::query(
+        r#"
+        INSERT INTO entity_access (
+            entity_id,
+            entity_type,
+            source_id,
+            source_type,
+            access_level,
+            granted_from_project_id
+        )
+        VALUES ($1, $2, $3, $4, $5, $6)
+        "#,
+    )
+    .bind(entity_id)
+    .bind(entity_type.as_ref())
+    .bind(source_id)
+    .bind(source_type)
+    .bind(access_level)
+    .bind(granted_from_project_id)
+    .execute(transaction.as_mut())
+    .await
+    .unwrap();
+}
+
+async fn fetch_entity_access_rows(
+    pool: &Pool<Postgres>,
+    entity_id: &Uuid,
+    entity_type: EntityType,
+) -> Vec<EntityAccessRow> {
+    // Runtime query (not the compile-time macro) so this test helper does not
+    // require a `.sqlx` cache entry to build.
+    sqlx::query(
+        r#"
+        SELECT
+            source_id,
+            source_type::text AS source_type,
+            access_level,
+            granted_from_project_id
+        FROM entity_access
+        WHERE entity_id = $1 AND entity_type = $2
+        ORDER BY source_type, source_id, granted_from_project_id NULLS FIRST
+        "#,
+    )
+    .bind(entity_id)
+    .bind(entity_type.as_ref())
+    .map(|r: sqlx::postgres::PgRow| EntityAccessRow {
+        source_id: r.get("source_id"),
+        source_type: r.get("source_type"),
         access_level: r.get("access_level"),
         granted_from_project_id: r.get("granted_from_project_id"),
     })
@@ -353,4 +428,195 @@ async fn upsert_to_project_with_no_children_inserts_only_project_row(pool: Pool<
     assert_eq!(rows[0].entity_type, "project");
     assert!(rows[0].granted_from_project_id.is_none());
     assert_eq!(rows[0].access_level, AccessLevel::View);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../fixtures", scripts("upsert_test_data"))
+)]
+async fn remove_non_owner_user_entity_access_removes_direct_non_owner_users(pool: Pool<Postgres>) {
+    let owner_id = "macro|owner@test.com";
+    let mut tx = pool.begin().await.unwrap();
+
+    insert_entity_access_for_test(
+        &mut tx,
+        &DOC_ROOT_ID,
+        EntityType::Document,
+        owner_id,
+        EntityAccessSourceType::User,
+        AccessLevel::Owner,
+        None,
+    )
+    .await;
+    insert_entity_access_for_test(
+        &mut tx,
+        &DOC_ROOT_ID,
+        EntityType::Document,
+        "macro|viewer@test.com",
+        EntityAccessSourceType::User,
+        AccessLevel::View,
+        None,
+    )
+    .await;
+    insert_entity_access_for_test(
+        &mut tx,
+        &DOC_ROOT_ID,
+        EntityType::Document,
+        "macro|editor@test.com",
+        EntityAccessSourceType::User,
+        AccessLevel::Edit,
+        None,
+    )
+    .await;
+
+    remove_non_owner_user_entity_access(&mut tx, &DOC_ROOT_ID, EntityType::Document, owner_id)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+
+    let rows = fetch_entity_access_rows(&pool, &DOC_ROOT_ID, EntityType::Document).await;
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].source_type, "user");
+    assert_eq!(rows[0].source_id, owner_id);
+    assert_eq!(rows[0].access_level, AccessLevel::Owner);
+    assert!(rows[0].granted_from_project_id.is_none());
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../fixtures", scripts("upsert_test_data"))
+)]
+async fn remove_non_owner_user_entity_access_preserves_non_user_inherited_and_other_entities(
+    pool: Pool<Postgres>,
+) {
+    let owner_id = "macro|owner@test.com";
+    let shared_user_id = "macro|shared@test.com";
+    let root_project_id = ROOT_PROJECT_ID.to_string();
+    let mut tx = pool.begin().await.unwrap();
+
+    insert_entity_access_for_test(
+        &mut tx,
+        &DOC_ROOT_ID,
+        EntityType::Document,
+        owner_id,
+        EntityAccessSourceType::User,
+        AccessLevel::Owner,
+        None,
+    )
+    .await;
+    insert_entity_access_for_test(
+        &mut tx,
+        &DOC_ROOT_ID,
+        EntityType::Document,
+        shared_user_id,
+        EntityAccessSourceType::User,
+        AccessLevel::View,
+        None,
+    )
+    .await;
+    insert_entity_access_for_test(
+        &mut tx,
+        &DOC_ROOT_ID,
+        EntityType::Document,
+        shared_user_id,
+        EntityAccessSourceType::User,
+        AccessLevel::View,
+        Some(root_project_id.as_str()),
+    )
+    .await;
+    insert_entity_access_for_test(
+        &mut tx,
+        &DOC_ROOT_ID,
+        EntityType::Document,
+        "team-1",
+        EntityAccessSourceType::Team,
+        AccessLevel::Edit,
+        None,
+    )
+    .await;
+    insert_entity_access_for_test(
+        &mut tx,
+        &DOC_ROOT_ID,
+        EntityType::Document,
+        "channel-1",
+        EntityAccessSourceType::Channel,
+        AccessLevel::Comment,
+        None,
+    )
+    .await;
+    insert_entity_access_for_test(
+        &mut tx,
+        &DOC_CHILD_ID,
+        EntityType::Document,
+        "macro|other-document@test.com",
+        EntityAccessSourceType::User,
+        AccessLevel::View,
+        None,
+    )
+    .await;
+    insert_entity_access_for_test(
+        &mut tx,
+        &DOC_ROOT_ID,
+        EntityType::Chat,
+        "macro|other-type@test.com",
+        EntityAccessSourceType::User,
+        AccessLevel::View,
+        None,
+    )
+    .await;
+
+    remove_non_owner_user_entity_access(&mut tx, &DOC_ROOT_ID, EntityType::Document, owner_id)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+
+    let target_rows = fetch_entity_access_rows(&pool, &DOC_ROOT_ID, EntityType::Document).await;
+    assert_eq!(target_rows.len(), 4);
+    assert!(target_rows.iter().any(|r| {
+        r.source_type == "user"
+            && r.source_id == owner_id
+            && r.access_level == AccessLevel::Owner
+            && r.granted_from_project_id.is_none()
+    }));
+    assert!(target_rows.iter().any(|r| {
+        r.source_type == "user"
+            && r.source_id == shared_user_id
+            && r.access_level == AccessLevel::View
+            && r.granted_from_project_id.as_deref() == Some(root_project_id.as_str())
+    }));
+    assert!(target_rows.iter().any(|r| {
+        r.source_type == "team"
+            && r.source_id == "team-1"
+            && r.access_level == AccessLevel::Edit
+            && r.granted_from_project_id.is_none()
+    }));
+    assert!(target_rows.iter().any(|r| {
+        r.source_type == "channel"
+            && r.source_id == "channel-1"
+            && r.access_level == AccessLevel::Comment
+            && r.granted_from_project_id.is_none()
+    }));
+    assert!(!target_rows.iter().any(|r| {
+        r.source_type == "user"
+            && r.source_id == shared_user_id
+            && r.granted_from_project_id.is_none()
+    }));
+
+    let other_entity_rows =
+        fetch_entity_access_rows(&pool, &DOC_CHILD_ID, EntityType::Document).await;
+    assert_eq!(other_entity_rows.len(), 1);
+    assert_eq!(other_entity_rows[0].source_type, "user");
+    assert_eq!(
+        other_entity_rows[0].source_id,
+        "macro|other-document@test.com"
+    );
+    assert_eq!(other_entity_rows[0].access_level, AccessLevel::View);
+    assert!(other_entity_rows[0].granted_from_project_id.is_none());
+
+    let other_type_rows = fetch_entity_access_rows(&pool, &DOC_ROOT_ID, EntityType::Chat).await;
+    assert_eq!(other_type_rows.len(), 1);
+    assert_eq!(other_type_rows[0].source_type, "user");
+    assert_eq!(other_type_rows[0].source_id, "macro|other-type@test.com");
+    assert_eq!(other_type_rows[0].access_level, AccessLevel::View);
+    assert!(other_type_rows[0].granted_from_project_id.is_none());
 }

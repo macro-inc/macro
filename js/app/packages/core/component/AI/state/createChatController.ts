@@ -1,5 +1,6 @@
 import type { ChatMessageWithAttachments } from '@core/component/AI/types';
 import { asChatMessage } from '@core/component/AI/util/message';
+import { bufferedStream } from '@core/component/AI/util/stream';
 import { toast } from '@core/component/Toast/Toast';
 import type { ChatMessageStream } from '@service-connection/stream';
 import { getEntityStreams } from '@service-connection/stream';
@@ -109,7 +110,17 @@ export function createChatController(
   function dispatch(event: ControllerEvent) {
     // Handle stream attachment through the state transition
     if (event.type === 'stream_connected' && 'stream' in event) {
-      const { stream: newStream, owner = getOwner() } = event;
+      const { owner = getOwner() } = event;
+      let newStream: ChatMessageStream;
+      if (owner) {
+        const ownedStream = runWithOwner(owner, () =>
+          bufferedStream(event.stream)
+        );
+        if (!ownedStream) return;
+        newStream = ownedStream;
+      } else {
+        newStream = bufferedStream(event.stream);
+      }
       setStream(newStream);
 
       const result = transition(untrack(phase), { type: 'stream_connected' });

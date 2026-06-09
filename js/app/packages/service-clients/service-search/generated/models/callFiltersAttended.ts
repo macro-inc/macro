@@ -6,7 +6,8 @@
  */
 
 /**
- * Filter by whether the requesting user attended the call.
+ * Legacy filter by whether the requesting user attended the call.
+Prefer [`CallFilters::status`] for new callers.
 `None` = no filter, `Some(true)` = only calls the user joined,
 `Some(false)` = only calls the user did not join.
  */

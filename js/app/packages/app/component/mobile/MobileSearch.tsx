@@ -9,7 +9,13 @@ import { runCommand } from '@core/hotkey/utils';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { debouncedDependent } from '@core/util/debounce';
 import { windowSearchMatch } from '@core/util/searchHighlight';
-import { Entity, type EntityData, type WithSearch } from '@entity';
+import { openExternalUrl } from '@core/util/url';
+import {
+  Entity,
+  type EntityData,
+  isGithubPrEntity,
+  type WithSearch,
+} from '@entity';
 import { SearchContent } from '@entity/extractors-search/search-content';
 import { Dialog } from '@kobalte/core/dialog';
 import ArrowLeft from '@phosphor/arrow-left.svg';
@@ -109,15 +115,25 @@ function MobileSearchInner() {
 
     // Handle entity items (documents, channels, chats, etc.)
     if (isEntityItem(item)) {
-      const blockName = itemToBlockName(item.data);
-      if (blockName) {
-        openWithSplit(
-          { type: blockName, id: item.id },
-          {
-            referredFrom: 'kommand-menu',
-            preferNewSplit: openInNewSplit,
-          }
-        );
+      // TODO(dev-rb/github): Route GitHub PRs to /pr.
+      if (isGithubPrEntity(item.data)) {
+        openExternalUrl(item.data.metadata.url);
+        SearchState.close();
+        SearchState.setQuery('');
+        return;
+      }
+
+      if (item.data.type !== 'foreign') {
+        const blockName = itemToBlockName(item.data);
+        if (blockName) {
+          openWithSplit(
+            { type: blockName, id: item.id },
+            {
+              referredFrom: 'kommand-menu',
+              preferNewSplit: openInNewSplit,
+            }
+          );
+        }
       }
       SearchState.close();
       SearchState.setQuery('');

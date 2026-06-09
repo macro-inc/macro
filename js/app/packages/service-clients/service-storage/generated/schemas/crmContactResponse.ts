@@ -18,6 +18,11 @@ export interface CrmContactResponse {
   email: string;
   /** Earliest known interaction with this contact. */
   firstInteraction: string;
+  /** Whether the contact is hidden from CRM listings for the
+requesting team. Non-admin viewers never see `hidden = true`
+rows (the endpoint filters them out); admin/owner callers see
+hidden contacts so they can render the right toggle state. */
+  hidden: boolean;
   /** The id of the contact record. */
   id: string;
   /** Most recent known interaction with this contact. */

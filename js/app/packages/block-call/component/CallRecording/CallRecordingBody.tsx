@@ -173,6 +173,7 @@ export function CallRecordingBody(props: {
                     <div class="overflow-hidden rounded border border-edge-muted/50">
                       <CallRecordingVideo
                         url={url()}
+                        posterUrl={record().recordingPreviewUrl ?? undefined}
                         onTimeUpdate={handleTimeUpdate}
                         setVideoRef={setVideoRef}
                       />

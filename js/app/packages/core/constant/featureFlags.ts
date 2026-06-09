@@ -241,9 +241,17 @@ const _ENABLE_DOCK_NOTITIFCATIONS = resolveFeatureFlag(
 );
 export const ENABLE_TTFT = resolveFeatureFlag('ENABLE_TTFT', DEV_MODE_ENV);
 
-export const ENABLE_MULTI_INBOX = resolveFeatureFlag(
-  'ENABLE_MULTI_INBOX',
-  DEV_MODE_ENV
+export const ENABLE_MULTI_INBOX_OVERRIDE =
+  resolveFeatureFlag('ENABLE_MULTI_INBOX', DEV_MODE_ENV) || undefined;
+
+export const ENABLE_INBOX_RESYNC = resolveFeatureFlag(
+  'ENABLE_INBOX_RESYNC',
+  false
+);
+
+export const ENABLE_INBOX_SYNC_STATUS = resolveFeatureFlag(
+  'ENABLE_INBOX_SYNC_STATUS',
+  false
 );
 
 const _ENABLE_TASKS_TABS = resolveFeatureFlag('ENABLE_TASKS_TABS', true);
@@ -354,12 +362,31 @@ export const ENABLE_TEAM_INVITE_TIERS_OVERRIDE = DEV_MODE_ENV
 
 export const ENABLE_SOUP_GROUP_BY_OVERRIDE = DEV_MODE_ENV ? true : undefined;
 
-export const ENABLE_AUTO_UPDATE_UI = resolveFeatureFlag(
-  'ENABLE_AUTO_UPDATE_UI',
-  true
+export const ENABLE_TASK_DUPLICATES_FLAG = 'enable-task-duplicates';
+export const ENABLE_TASK_DUPLICATES_OVERRIDE = DEV_MODE_ENV ? true : undefined;
+
+export const ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_FLAG =
+  'enable-supported-soup-foreign-entities';
+export const ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE = DEV_MODE_ENV
+  ? true
+  : undefined;
+
+export const DISABLE_AUTO_UPDATE_UI_FLAG = 'disable-auto-update-ui';
+export const ENABLE_AUTO_UPDATE_UI_OVERRIDE = getFeatureFlagOverride(
+  'ENABLE_AUTO_UPDATE_UI'
 );
 
-export const ENABLE_CALLKIT = resolveFeatureFlag('ENABLE_CALLKIT', false);
+export function ENABLE_AUTO_UPDATE_UI(): boolean {
+  if (ENABLE_AUTO_UPDATE_UI_OVERRIDE !== undefined) {
+    return ENABLE_AUTO_UPDATE_UI_OVERRIDE;
+  }
+
+  return !(
+    analytics.posthog.isFeatureEnabled(DISABLE_AUTO_UPDATE_UI_FLAG) ?? false
+  );
+}
+
+export const ENABLE_CALLKIT = resolveFeatureFlag('ENABLE_CALLKIT', true);
 
 export const ENABLE_MARKDOWN_SIDE_PANEL = resolveFeatureFlag(
   'ENABLE_MARKDOWN_SIDE_PANEL',
@@ -375,6 +402,8 @@ export const ENABLE_CREATE_PROPERTY = resolveFeatureFlag(
   'ENABLE_CREATE_PROPERTY',
   false
 );
+
+export const ENABLE_HOME_OVERRIDE = DEV_MODE_ENV ? true : undefined;
 
 export const ENABLE_NEW_PRICING_OVERRIDE =
   resolveFeatureFlag('ENABLE_NEW_PRICING', DEV_MODE_ENV) || undefined;

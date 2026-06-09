@@ -117,6 +117,7 @@ export function ComposeRecipients(props: {
         <RecipientSelector
           inputRef={props.toRef}
           options={ctx.recipientOptions}
+          selfEmail={ctx.fromAddress?.()}
           selectedOptions={ctx.recipients().to}
           setSelectedOptions={(next) => ctx.setRecipients('to', next)}
           placeholder="Macro users or email addresses"
@@ -146,6 +147,7 @@ export function ComposeRecipients(props: {
           <RecipientSelector
             inputRef={props.ccRef}
             options={ctx.recipientOptions}
+            selfEmail={ctx.fromAddress?.()}
             selectedOptions={ctx.recipients().cc}
             setSelectedOptions={(next) => ctx.setRecipients('cc', next)}
             placeholder="Macro users or email addresses"
@@ -171,6 +173,7 @@ export function ComposeRecipients(props: {
           <RecipientSelector
             inputRef={props.bccRef}
             options={ctx.recipientOptions}
+            selfEmail={ctx.fromAddress?.()}
             selectedOptions={ctx.recipients().bcc}
             setSelectedOptions={(next) => ctx.setRecipients('bcc', next)}
             placeholder="Macro users or email addresses"

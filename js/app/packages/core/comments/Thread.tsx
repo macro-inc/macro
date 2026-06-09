@@ -221,7 +221,7 @@ export function Thread(props: {
                     onSend={(content: string) => {
                       if (content.trim() === '') return;
                       // NOTE: we need the server to return the thread id first
-                      commentOperations.createComment({
+                      return commentOperations.createComment({
                         threadId: props.comment.threadId,
                         text: content,
                         mentions: getAndClearCommentMentions(mentionsSignal),
@@ -277,7 +277,7 @@ export function Thread(props: {
                               })
                             }
                             updateReply={(content) => {
-                              Promise.all([
+                              return Promise.all([
                                 commentOperations.updateComment(replyId, {
                                   text: content,
                                   threadId: props.comment.threadId,
@@ -299,7 +299,7 @@ export function Thread(props: {
                     createReply={(content) => {
                       if (content.trim() === '') return;
                       dispatch({ action: 'hard', editing: false });
-                      commentOperations.createComment({
+                      return commentOperations.createComment({
                         threadId: props.comment.threadId,
                         text: content,
                         mentions: getAndClearCommentMentions(mentionsSignal),

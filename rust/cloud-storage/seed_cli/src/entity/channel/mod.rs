@@ -62,8 +62,6 @@ struct SeedChannelRow {
 pub enum CliChannelType {
     /// Public channel
     Public,
-    /// Organization channel
-    Organization,
     /// Private channel
     Private,
     /// Direct message channel
@@ -74,7 +72,6 @@ impl From<CliChannelType> for ChannelType {
     fn from(value: CliChannelType) -> Self {
         match value {
             CliChannelType::Public => ChannelType::Public,
-            CliChannelType::Organization => ChannelType::Organization,
             CliChannelType::Private => ChannelType::Private,
             CliChannelType::DirectMessage => ChannelType::DirectMessage,
         }
@@ -96,9 +93,6 @@ pub struct CreateArgs {
     /// Comma-delimited list of member user IDs
     #[arg(long, value_delimiter = ',')]
     pub channel_members: Vec<String>,
-    /// Organization ID (optional)
-    #[arg(long)]
-    pub org_id: Option<i64>,
 }
 
 impl ChannelArgs {
@@ -119,7 +113,7 @@ async fn create(args: CreateArgs, ctx: SeedCliContext) -> anyhow::Result<()> {
         name: args.channel_name,
         owner_id: args.channel_owner,
         channel_type: args.channel_type.into(),
-        org_id: args.org_id,
+        org_id: None,
         participants: args.channel_members,
         team_id: None,
     };

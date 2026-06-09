@@ -48,13 +48,15 @@ function filterDataToQueryFilters(data: QueryState): EntityFilters {
     include.threadId?.length ||
     include.emailSender?.length ||
     include.emailShared ||
-    include.emailImportance !== undefined
+    include.emailImportance !== undefined ||
+    include.emailLinkId?.length
   ) {
     filters.email_filters = {
       email_thread_ids: include.threadId,
       senders: include.emailSender,
       shared: include.emailShared,
       importance: include.emailImportance,
+      link_ids: include.emailLinkId,
     };
   }
 
@@ -97,13 +99,16 @@ function filterDataToQueryFilters(data: QueryState): EntityFilters {
     include.callId?.length ||
     include.callChannelId?.length ||
     include.callSpeakerId?.length ||
+    include.callStatus !== undefined ||
     include.callAttended !== undefined
   ) {
     filters.call_filters = {
       call_ids: include.callId,
       channel_ids: include.callChannelId,
       speaker_ids: include.callSpeakerId,
-      attended: include.callAttended,
+      status: include.callStatus,
+      attended:
+        include.callStatus === undefined ? include.callAttended : undefined,
     };
   }
 

@@ -146,9 +146,9 @@ function ButtonNoAccess(props: StatusDisplayProps) {
 
 function InlineNoAccess() {
   return (
-    <span class="inline-flex items-center gap-1.5">
-      <span class="size-4">
-        <EyeSlash class="text-ink-muted size-4" />
+    <span class="inline-flex items-baseline gap-1 align-baseline">
+      <span class="relative top-[0.125em] inline-flex size-[1em] shrink-0">
+        <EyeSlash class="size-[1em] text-ink-muted" />
       </span>
       <span class="text-ink-muted">No Access</span>
     </span>
@@ -174,9 +174,9 @@ function ButtonDeleted(props: StatusDisplayProps) {
 
 function InlineDeleted() {
   return (
-    <span class="inline-flex items-center gap-1.5">
-      <span class="size-4">
-        <TrashSimple class="text-ink-muted size-4" />
+    <span class="inline-flex items-baseline gap-1 align-baseline">
+      <span class="relative top-[0.125em] inline-flex size-[1em] shrink-0">
+        <TrashSimple class="size-[1em] text-ink-muted" />
       </span>
       <span class="text-ink-muted">Deleted</span>
     </span>
@@ -204,8 +204,8 @@ function ButtonLoading(props: StatusDisplayProps) {
 
 function InlineLoading() {
   return (
-    <span class="inline-flex items-center gap-1.5">
-      <span class="size-4 animate-spin">
+    <span class="inline-flex items-baseline gap-1 align-baseline">
+      <span class="relative top-[0.125em] inline-flex size-[1em] shrink-0 animate-spin">
         <LoadingSpinner />
       </span>
       <span class="text-ink-muted">Loading...</span>
@@ -342,8 +342,8 @@ export function InlineItemPreview(props: ItemEntity) {
         {(loadedItem) => (
           <Switch>
             <Match when={matches(loadedItem(), isAccessiblePreviewItem)}>
-              <span class="inline-flex items-center gap-1">
-                <span class="size-4">
+              <span class="inline-flex items-baseline gap-1 align-baseline">
+                <span class="relative top-[0.125em] inline-flex size-[1em] shrink-0">
                   <ItemEntityIcon size="fill" />
                 </span>
                 <span class="underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2">

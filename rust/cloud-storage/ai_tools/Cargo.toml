@@ -76,5 +76,7 @@ macro_env = { path = "../macro_env" }
 secretsmanager_client = { path = "../secretsmanager_client" }
 aws-sdk-secretsmanager = { workspace = true }
 
+macro_service_urls = { path = "../macro_service_urls" }
+
 [dev-dependencies]
 cool_asserts = "2"

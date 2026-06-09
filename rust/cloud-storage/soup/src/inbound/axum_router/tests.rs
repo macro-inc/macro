@@ -50,7 +50,7 @@ enum MockCursorKind {
 struct MockSoupCall {
     soup_type: SoupType,
     email_preview_view: PreviewView,
-    link_id: Option<Uuid>,
+    link_ids: Vec<Uuid>,
     cursor_kind: MockCursorKind,
     filter: serde_json::Value,
     expanded_filter: serde_json::Value,
@@ -95,14 +95,14 @@ impl SoupService for MockSoup {
         };
         let soup_type = req.soup_type;
         let email_preview_view = req.email_preview_view.clone();
-        let link_id = req.link_id;
+        let link_ids = req.link_ids.clone();
         let filter = serde_json::to_value(req.cursor.filter()).unwrap();
         let expanded_filter = serde_json::to_value(req.into_ast()?.cursor.filter()).unwrap();
         let mut guard = self.called.lock().unwrap();
         guard.push(MockSoupCall {
             soup_type,
             email_preview_view,
-            link_id,
+            link_ids,
             cursor_kind,
             filter,
             expanded_filter,
@@ -160,6 +160,21 @@ impl EmailService for MockEmail {
         Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
     }
 
+    async fn get_inboxes_for_macro_id(
+        &self,
+        _macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
+    ) -> Result<Vec<email::domain::models::Link>, email::domain::models::EmailErr> {
+        Ok(Vec::new())
+    }
+
+    async fn get_owned_link_for_thread(
+        &self,
+        _macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
+        _thread_id: uuid::Uuid,
+    ) -> Result<Option<email::domain::models::Link>, email::domain::models::EmailErr> {
+        Ok(None)
+    }
+
     async fn get_thread_with_messages(
         &self,
         _receipt: EntityAccessReceipt<ViewAccessLevel>,
@@ -181,6 +196,7 @@ impl EmailService for MockEmail {
     async fn create_draft(
         &self,
         _link: &email::domain::models::Link,
+        _accessible_inboxes: &[email::domain::models::Link],
         _input: email::domain::models::CreateDraftInput,
     ) -> Result<email::domain::models::CreatedDraft, EmailErr> {
         Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
@@ -189,6 +205,7 @@ impl EmailService for MockEmail {
     async fn send_message(
         &self,
         _link: &email::domain::models::Link,
+        _accessible_inboxes: &[email::domain::models::Link],
         _input: email::domain::models::CreateDraftInput,
     ) -> Result<email::domain::models::CreatedDraft, EmailErr> {
         Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
@@ -321,6 +338,20 @@ impl entity_access::domain::ports::EntityAccessService for MockEntityAccess {
         unimplemented!()
     }
 
+    async fn get_crm_entity_permission_with_team(
+        &self,
+        _user_id: Option<
+            &macro_user_id::user_id::MacroUserId<macro_user_id::lowercased::Lowercase<'_>>,
+        >,
+        _entity_id: &str,
+        _entity_type: entity_access::domain::models::EntityType,
+    ) -> Result<
+        (entity_access::domain::models::EntityPermission, uuid::Uuid),
+        entity_access::domain::models::AccessError,
+    > {
+        unimplemented!()
+    }
+
     async fn get_users_by_entity(
         &self,
         _entity_id: &str,
@@ -434,6 +465,21 @@ impl EmailService for MockEmailLinkResult {
         Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
     }
 
+    async fn get_inboxes_for_macro_id(
+        &self,
+        _macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
+    ) -> Result<Vec<email::domain::models::Link>, email::domain::models::EmailErr> {
+        (self.get_link_result)().map(|opt| opt.into_iter().collect())
+    }
+
+    async fn get_owned_link_for_thread(
+        &self,
+        _macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
+        _thread_id: uuid::Uuid,
+    ) -> Result<Option<email::domain::models::Link>, email::domain::models::EmailErr> {
+        (self.get_link_result)()
+    }
+
     async fn get_thread_with_messages(
         &self,
         _receipt: EntityAccessReceipt<ViewAccessLevel>,
@@ -455,6 +501,7 @@ impl EmailService for MockEmailLinkResult {
     async fn create_draft(
         &self,
         _link: &email::domain::models::Link,
+        _accessible_inboxes: &[email::domain::models::Link],
         _input: email::domain::models::CreateDraftInput,
     ) -> Result<email::domain::models::CreatedDraft, EmailErr> {
         Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
@@ -463,6 +510,7 @@ impl EmailService for MockEmailLinkResult {
     async fn send_message(
         &self,
         _link: &email::domain::models::Link,
+        _accessible_inboxes: &[email::domain::models::Link],
         _input: email::domain::models::CreateDraftInput,
     ) -> Result<email::domain::models::CreatedDraft, EmailErr> {
         Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
@@ -548,7 +596,7 @@ async fn it_calls_soup_with_missing_link() {
     let guard = inner_counter.lock().unwrap();
 
     assert_eq!(guard.len(), 1);
-    assert!(guard.first().unwrap().link_id.is_none())
+    assert!(guard.first().unwrap().link_ids.is_empty())
 }
 
 #[tokio::test]
@@ -1523,7 +1571,7 @@ fn ast_endpoint_email_crm_domains_stamps_scope_and_ands_into_tree() {
         ))),
         user: MacroUserIdStr::parse_from_str("macro|alice@example.com").unwrap(),
         email_preview_view: PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox),
-        link_id: None,
+        link_ids: vec![],
     };
     let req: SoupRequest<Option<EntityFilterAst>> = req.into_ast().unwrap();
     let ast = match &req.cursor {
@@ -1551,7 +1599,7 @@ fn ast_endpoint_email_crm_addresses_stamps_scope() {
         ))),
         user: MacroUserIdStr::parse_from_str("macro|alice@example.com").unwrap(),
         email_preview_view: PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox),
-        link_id: None,
+        link_ids: vec![],
     };
     let req: SoupRequest<Option<EntityFilterAst>> = req.into_ast().unwrap();
     let ast = match &req.cursor {
@@ -1579,7 +1627,7 @@ fn ast_endpoint_email_crm_both_lists_rejected() {
         ))),
         user: MacroUserIdStr::parse_from_str("macro|alice@example.com").unwrap(),
         email_preview_view: PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox),
-        link_id: None,
+        link_ids: vec![],
     };
     let res = req.into_ast();
     assert!(res.is_err(), "mutual exclusivity must reject both lists");
@@ -1600,7 +1648,7 @@ fn ast_endpoint_empty_crm_lists_leaves_scope_none() {
         ))),
         user: MacroUserIdStr::parse_from_str("macro|alice@example.com").unwrap(),
         email_preview_view: PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox),
-        link_id: None,
+        link_ids: vec![],
     };
     let req: SoupRequest<Option<EntityFilterAst>> = req.into_ast().unwrap();
     // ast.is_none() because the whole filter is empty.
@@ -1634,7 +1682,7 @@ fn ast_endpoint_crm_ands_with_existing_freeform_ef() {
         ))),
         user: MacroUserIdStr::parse_from_str("macro|alice@example.com").unwrap(),
         email_preview_view: PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox),
-        link_id: None,
+        link_ids: vec![],
     };
     let req: SoupRequest<Option<EntityFilterAst>> = req.into_ast().unwrap();
     let ast = match &req.cursor {
@@ -1689,7 +1737,7 @@ fn ast_endpoint_crm_domains_are_lowercased_in_scope() {
         ))),
         user: MacroUserIdStr::parse_from_str("macro|alice@example.com").unwrap(),
         email_preview_view: PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox),
-        link_id: None,
+        link_ids: vec![],
     };
     let req: SoupRequest<Option<EntityFilterAst>> = req.into_ast().unwrap();
     let ast = match &req.cursor {

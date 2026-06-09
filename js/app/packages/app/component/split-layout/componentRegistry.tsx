@@ -1,18 +1,14 @@
 import { useAnalytics } from '@app/component/analytics-context';
 import { getViewPreset } from '@app/component/app-sidebar/soup-filter-presets';
+import { Home } from '@app/component/home';
 import type { SetPredicatesInput } from '@app/component/next-soup/filters/filter-store/predicates-store';
 import type { Query } from '@app/component/next-soup/filters/filter-store/types';
 import { SoupView } from '@app/component/next-soup/soup-view/soup-view';
-import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import { ChannelCompose } from '@block-channel/component/Compose';
 import { ComposeTask } from '@block-md/component/ComposeTask';
 import { useIsAuthenticated } from '@core/auth';
 import { LoadingBlock } from '@core/component/LoadingBlock';
-import {
-  DEV_MODE_ENV,
-  ENABLE_NEW_ONBOARDING_OVERRIDE,
-  LOCAL_ONLY,
-} from '@core/constant/featureFlags';
+import { DEV_MODE_ENV, LOCAL_ONLY } from '@core/constant/featureFlags';
 import { useUserContext } from '@core/context/user';
 import type { ViewId } from '@core/types/view';
 import { useAutomationEntities } from '@queries/agent-schedule/entities';
@@ -107,6 +103,14 @@ registerComponent('unified-list', () => (
 
 /** BEGIN - APP ROUTES */
 registerComponent(
+  'home',
+  withAuth(() => {
+    usePageViewTracking('home');
+    return <Home />;
+  })
+);
+
+registerComponent(
   'inbox',
   withAuth(() => {
     usePageViewTracking('inbox');
@@ -172,7 +176,7 @@ registerComponent(
     });
     return (
       <SoupView
-        viewName="Documents"
+        viewName="Files"
         initialFilters={preset?.filters}
         initialClientFilters={preset?.clientFilters}
         initialGroupBy={preset?.groupBy}
@@ -296,21 +300,6 @@ registerComponent(
   lazy(() => import('@app/component/import-linear/ImportLinear'))
 );
 registerComponent('settings', () => <SettingsPanelComponentWrapper />);
-const NewOnboarding = lazy(
-  () => import('@app/component/onboarding/onboarding')
-);
-const OldOnboarding = lazy(
-  () => import('@app/component/interactive-onboarding/InteractiveOnboarding')
-);
-registerComponent('welcome', () => (
-  <ShowFeatureFlag
-    key="enable-new-onboarding"
-    enabledOverride={ENABLE_NEW_ONBOARDING_OVERRIDE}
-    fallback={<OldOnboarding />}
-  >
-    <NewOnboarding />
-  </ShowFeatureFlag>
-));
 
 if (LOCAL_ONLY) {
   registerComponent(

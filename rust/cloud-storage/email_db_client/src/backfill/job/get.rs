@@ -93,6 +93,39 @@ pub async fn get_active_backfill_job(
     Ok(record.map(Into::into))
 }
 
+/// Retrieves the most recent backfill job for a link, regardless of status.
+/// Used to derive the inbox sync hint shown in multi-inbox settings.
+#[tracing::instrument(skip(pool), err)]
+pub async fn get_latest_backfill_job_by_link_id(
+    pool: &PgPool,
+    link_id: Uuid,
+) -> anyhow::Result<Option<service::backfill::BackfillJob>> {
+    let record = sqlx::query_as!(
+        db::backfill::BackfillJob,
+        r#"
+        SELECT
+            id,
+            link_id,
+            fusionauth_user_id,
+            threads_requested_limit,
+            total_threads,
+            threads_retrieved_count,
+            status as "status: db::backfill::BackfillJobStatus",
+            created_at,
+            updated_at
+        FROM email_backfill_jobs
+        WHERE link_id = $1
+        ORDER BY created_at DESC
+        LIMIT 1
+        "#,
+        link_id
+    )
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(record.map(Into::into))
+}
+
 /// Retrieves all backfill jobs created in the last 24 hours for a given macro ID
 #[tracing::instrument(skip(pool), err)]
 pub async fn get_recent_jobs_by_fusionauth_user_id(

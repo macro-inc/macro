@@ -3,7 +3,10 @@
 use std::fmt;
 
 use chrono::{DateTime, Utc};
-use item_filters::ast::{LiteralTree, call::CallLiteral};
+use item_filters::{
+    CallStatus,
+    ast::{LiteralTree, call::CallLiteral},
+};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{Query, SimpleSortMethod};
 use uuid::Uuid;
@@ -341,8 +344,13 @@ pub struct CallRecord {
     /// S3 object key for the call recording (internal, not serialized).
     #[serde(skip_serializing)]
     pub recording_key: Option<String>,
+    /// Stored S3 object key/path for the preview image (internal, not serialized).
+    #[serde(skip_serializing)]
+    pub preview_key: Option<String>,
     /// Presigned URL for the call recording, if available.
     pub recording_url: Option<String>,
+    /// Presigned URL for the call recording preview image, if available.
+    pub recording_preview_url: Option<String>,
     /// Resolved display name for the channel.
     pub channel_name: Option<String>,
     /// User-supplied or AI-generated display name for the call. Only set on
@@ -355,10 +363,22 @@ pub struct CallRecord {
     pub share_with_team: bool,
     /// Whether the call is currently active (from `calls` table).
     pub is_active: bool,
+    /// Viewer-relative call status when fetched in the context of a specific user.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<CallStatus>,
     /// Participants (both active and historic).
     pub participants: Vec<CallRecordParticipant>,
     /// Transcript segments ordered by `sequence_num`.
     pub transcript: Vec<CallRecordTranscriptSegment>,
+}
+
+/// Storage object keys associated with a deleted archived call record.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct DeletedCallRecordStorageKeys {
+    /// S3 object key for the MP4 recording, without the `calls/` prefix.
+    pub recording_key: Option<String>,
+    /// Stored S3 object key/path for the preview image.
+    pub preview_key: Option<String>,
 }
 
 /// Lightweight preview of a call record, returned by the batch preview endpoint.

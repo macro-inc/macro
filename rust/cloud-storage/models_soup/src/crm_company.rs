@@ -55,6 +55,9 @@ pub struct SoupCrmCompany {
     pub created_at: DateTime<Utc>,
     /// When the company was last updated.
     pub updated_at: DateTime<Utc>,
+    /// When the requesting user last viewed this company, or `None` if
+    /// never viewed. Mirrors the `viewed_at` other soup entities carry.
+    pub viewed_at: Option<DateTime<Utc>>,
     /// Domains associated with this company, ordered by creation time
     /// ascending (primary first).
     pub domains: Vec<SoupCrmDomain>,
@@ -66,6 +69,7 @@ impl From<CrmCompanyForSoup> for SoupCrmCompany {
             company,
             name,
             description,
+            viewed_at,
         } = c;
         SoupCrmCompany {
             id: company.id,
@@ -76,6 +80,7 @@ impl From<CrmCompanyForSoup> for SoupCrmCompany {
             hidden: company.hidden,
             created_at: company.created_at,
             updated_at: company.updated_at,
+            viewed_at,
             domains: company
                 .domains
                 .into_iter()

@@ -3,3 +3,4 @@
 /target/
 /gen/schemas
 google-services.json
+.macro-tauri-env

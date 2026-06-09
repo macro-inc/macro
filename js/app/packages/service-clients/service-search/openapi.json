@@ -179,7 +179,7 @@
         "properties": {
           "attended": {
             "type": ["boolean", "null"],
-            "description": "Filter by whether the requesting user attended the call.\n`None` = no filter, `Some(true)` = only calls the user joined,\n`Some(false)` = only calls the user did not join."
+            "description": "Legacy filter by whether the requesting user attended the call.\nPrefer [`CallFilters::status`] for new callers.\n`None` = no filter, `Some(true)` = only calls the user joined,\n`Some(false)` = only calls the user did not join."
           },
           "call_ids": {
             "type": "array",
@@ -201,6 +201,17 @@
               "type": "string"
             },
             "description": "Speaker macro user ids. Empty to include all."
+          },
+          "status": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CallStatus",
+                "description": "Filter by the requesting user's viewer-relative call status."
+              }
+            ]
           }
         }
       },
@@ -212,6 +223,7 @@
           "ended_at",
           "duration_ms",
           "updated_at",
+          "status",
           "attended"
         ],
         "properties": {
@@ -235,6 +247,9 @@
           "started_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CallStatus"
           },
           "updated_at": {
             "type": "string",
@@ -339,6 +354,11 @@
             "format": "uuid"
           }
         }
+      },
+      "CallStatus": {
+        "type": "string",
+        "description": "Viewer-relative attendance status for a call record.\nSerializes as `ATTENDED`, `MISSED`, or `UNATTENDED`.",
+        "enum": ["ATTENDED", "MISSED", "UNATTENDED"]
       },
       "ChannelFilters": {
         "type": "object",
@@ -829,6 +849,93 @@
               "type": "string"
             },
             "description": "CRM company ids to filter by. Examples: ['11111111-...']. Empty to\ninclude all of the team's visible CRM companies."
+          },
+          "hidden": {
+            "type": ["boolean", "null"],
+            "description": "Optional `crm_companies.hidden` filter. `None` = visible only\n(default for back-compat with non-admin callers). `Some(false)` =\nvisible only (explicit). `Some(true)` = hidden only — requires\nadmin/owner team role; enforced upstream in soup's axum router."
+          }
+        }
+      },
+      "CrmCompanySearchDomain": {
+        "type": "object",
+        "description": "A CRM domain attached to a company in search results.",
+        "required": ["id", "companyId", "domain", "createdAt"],
+        "properties": {
+          "companyId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of the company the domain belongs to."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the domain record was created."
+          },
+          "domain": {
+            "type": "string",
+            "description": "The domain (lowercased, e.g. \"acme.com\")."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of the domain record."
+          }
+        }
+      },
+      "CrmCompanySearchResponseItem": {
+        "type": "object",
+        "description": "A CRM company match in unified search results. Carries the display\nmetadata resolved from the primary domain plus the highlighted name.",
+        "required": [
+          "id",
+          "teamId",
+          "hidden",
+          "createdAt",
+          "updatedAt",
+          "domains"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the company was created."
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Display description from the primary domain's directory entry."
+          },
+          "domains": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CrmCompanySearchDomain"
+            },
+            "description": "Domains associated with this company, primary first."
+          },
+          "hidden": {
+            "type": "boolean",
+            "description": "Whether the company is hidden from CRM listings."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of the company."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "Display name from the primary domain's directory entry."
+          },
+          "nameHighlighted": {
+            "type": ["string", "null"],
+            "description": "`name` with matched spans wrapped in `<macro_em>…</macro_em>`."
+          },
+          "teamId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of the team that owns this company record."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the company was last updated (the sort key)."
           }
         }
       },
@@ -1164,6 +1271,13 @@
             },
             "description": "Only include emails that have at least one of these labels. Supports both Gmail system labels (e.g. \"INBOX\", \"CATEGORY_PROMOTIONS\") and user-created labels (e.g. \"github\"). Empty to not filter by included labels.\nNote: SPAM and TRASH emails are not indexed in OpenSearch, so they will never appear in results regardless of this filter."
           },
+          "link_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Restrict to specific inboxes by email_links.id. Empty means \"any inbox the\ncaller can access\" (soup expands to the full set at the router edge)."
+          },
           "notification_filters": {
             "$ref": "#/components/schemas/NotificationFilters",
             "description": "Filter by email notification state."
@@ -1274,6 +1388,7 @@
           "owner_id",
           "thread_id",
           "user_id",
+          "link_id",
           "email_message_search_results",
           "participants"
         ],
@@ -1289,6 +1404,11 @@
             "type": "string",
             "format": "uuid",
             "description": "Standardized fields that all item types will share.\nThese field names are being aligned across all item types\nfor consistency in our data model."
+          },
+          "link_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The inbox that owns the thread. Drives the multi-inbox indicator\nwhen the caller has more than one inbox."
           },
           "name": {
             "type": ["string", "null"],
@@ -3568,6 +3688,10 @@
             "$ref": "#/components/schemas/EntityFilters",
             "description": "Entity filters in the same shape as soup. Entity types with a NIL UUID in their primary ID field are excluded from search."
           },
+          "include_crm": {
+            "type": "boolean",
+            "description": "Opt in to searching the caller's team CRM companies (name/domain).\nOff by default: CRM results are only included when this is true and\nthe caller has a qualifying team membership. CRM has no content\nindex, so it is searched only under Name / NameContent."
+          },
           "match_type": {
             "$ref": "#/components/schemas/MatchType",
             "description": "How to match the search terms. 'exact' for precise case-sensitive phrase matches, 'partial' for prefix/partial matches. REQUIRED field."
@@ -3698,6 +3822,23 @@
                   "type": {
                     "type": "string",
                     "enum": ["call"]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CrmCompanySearchResponseItem"
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["company"]
                   }
                 }
               }

@@ -4,6 +4,8 @@ use analytics_client::AnalyticsClient;
 use axum::extract::FromRef;
 use entity_access::domain::service::EntityAccessServiceImpl;
 use entity_access::outbound::PgAccessRepository;
+use foreign_entity::domain::service::ForeignEntityServiceImpl;
+use foreign_entity::outbound::pg_foreign_entity_repo::PgForeignEntityRepo;
 use github::domain::service::GithubLinkServiceImpl;
 use github::outbound::github_auth_client::GithubAuthImpl;
 use github::outbound::github_oauth_client::GithubOauthImpl;
@@ -29,8 +31,6 @@ use roles_and_permissions::{
 };
 use sqlx::PgPool;
 
-use crate::config::LegacyStripePriceIds;
-
 pub(crate) type NotificationIngressType = SqsNotificationIngress<SqsQueue>;
 
 pub(crate) type TeamsServiceType = teams::domain::team_service::TeamServiceImpl<
@@ -51,8 +51,12 @@ pub(crate) type ReferralServiceType = ReferralServiceImpl<
     Arc<SqsNotificationIngress<SqsQueue>>,
 >;
 
-pub(crate) type GithubLinkServiceType =
-    GithubLinkServiceImpl<PgGithubRepo, GithubOauthImpl, GithubAuthImpl>;
+pub(crate) type GithubLinkServiceType = GithubLinkServiceImpl<
+    PgGithubRepo,
+    GithubOauthImpl,
+    GithubAuthImpl,
+    ForeignEntityServiceImpl<PgForeignEntityRepo>,
+>;
 
 pub(crate) type EntityAccessServiceType = EntityAccessServiceImpl<PgAccessRepository>;
 
@@ -81,8 +85,6 @@ pub(crate) struct ApiContext {
     pub analytics_client: Arc<AnalyticsClient>,
     pub referral_service: Arc<ReferralServiceType>,
     pub rate_limit_service: RateLimiter,
-    /// The stripe price ids
-    pub legacy_stripe_price_ids: LegacyStripePriceIds,
     /// The stripe price id
     pub stripe_price_id: String,
 }

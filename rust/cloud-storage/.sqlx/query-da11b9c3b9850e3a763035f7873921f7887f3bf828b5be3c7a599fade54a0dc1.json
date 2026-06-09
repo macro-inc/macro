@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                m.id,\n                CASE WHEN m.task_id = $1 THEN m.duplicate_task_id ELSE m.task_id END AS \"other_task_id!\",\n                d.name AS \"other_task_name!\",\n                m.vector_score AS \"vector_score!\",\n                m.judge_reason\n            FROM task_duplicate_match m\n            JOIN \"Document\" d\n              ON d.id = CASE WHEN m.task_id = $1 THEN m.duplicate_task_id ELSE m.task_id END\n            WHERE m.status = 'active'\n              AND (m.task_id = $1 OR m.duplicate_task_id = $1)\n              AND d.\"deletedAt\" IS NULL\n            ORDER BY m.vector_score DESC, m.created_at DESC\n            LIMIT 10\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "other_task_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "other_task_name!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "vector_score!",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 4,
+        "name": "judge_reason",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "da11b9c3b9850e3a763035f7873921f7887f3bf828b5be3c7a599fade54a0dc1"
+}

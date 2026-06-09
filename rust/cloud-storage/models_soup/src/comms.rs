@@ -72,7 +72,6 @@ pub struct Channel {
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub enum ChannelType {
     Public,
-    Organization,
     Private,
     DirectMessage,
     Team,

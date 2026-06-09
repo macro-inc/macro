@@ -14,10 +14,11 @@ import {
   type PreviewItem,
   useItemPreview,
 } from '@queries/preview';
-import { type ItemType, storageServiceClient } from '@service-storage/client';
+import { useAttachmentReferencesQuery } from '@queries/storage/attachment-references';
+import type { ItemType } from '@service-storage/client';
 import type { ApiAttachmentEntityReference as EntityReference } from '@service-storage/generated/schemas/apiAttachmentEntityReference';
 import type { ApiAttachmentGenericReference as GenericReference } from '@service-storage/generated/schemas/apiAttachmentGenericReference';
-import { createMemo, createResource, For, type JSX, Show } from 'solid-js';
+import { createMemo, For, type JSX, Show } from 'solid-js';
 import { InlineItemPreview } from './ItemPreview';
 import { StaticMarkdown } from './LexicalMarkdown/component/core/StaticMarkdown';
 import { twoLineClampMarkdownTheme } from './LexicalMarkdown/theme';
@@ -209,20 +210,10 @@ function GenericReferenceRow(props: {
 }
 
 export function References(props: ReferenceProps) {
-  const [references] = createResource(async () => {
-    const entityType = props.entityType ?? 'document';
-    const response = await storageServiceClient.attachmentReferences({
-      entity_type: entityType,
-      entity_id: props.documentId,
-    });
-
-    if (response.isErr()) {
-      console.error(response);
-      return [];
-    }
-
-    return response.value.references;
-  });
+  const references = useAttachmentReferencesQuery(
+    () => props.documentId,
+    () => props.entityType ?? 'document'
+  );
   const { openWithSplit } = useSplitLayout();
   const blockOrchestrator = useGlobalBlockOrchestrator();
 
@@ -289,8 +280,8 @@ export function References(props: ReferenceProps) {
   };
 
   const sortedReferences = createMemo(() => {
-    const refs = references() ?? [];
-    return refs.sort((a, b) =>
+    const refs = references.data ?? [];
+    return [...refs].sort((a, b) =>
       compareDateDesc(getReferenceCreatedAt(a), getReferenceCreatedAt(b))
     );
   });

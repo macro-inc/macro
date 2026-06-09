@@ -13,7 +13,8 @@ INSERT INTO comms_channels (id, name, channel_type, org_id, owner_id, created_at
   ('00000000-0000-0000-0000-000000000c02', 'empty-channel', 'public', NULL, 'macro|user-b@test.com',
    '2024-01-01 00:00:00+00', '2024-01-01 00:00:00+00');
 
--- channel members for ch1 (user-c is a member but never joins a call)
+-- channel members for ch1 (user-c is a member but never joins a call; user-d
+-- has direct call access below but is not a channel member)
 INSERT INTO comms_channel_participants (channel_id, user_id, role, joined_at) VALUES
   ('00000000-0000-0000-0000-000000000c01', 'macro|user-a@test.com', 'owner',  '2024-01-01 00:00:00+00'),
   ('00000000-0000-0000-0000-000000000c01', 'macro|user-b@test.com', 'member', '2024-01-01 00:00:00+00'),
@@ -64,12 +65,14 @@ INSERT INTO call_record_transcripts (call_record_id, segment_id, speaker_id, dia
   ('00000000-0000-0000-0000-0000000ca2ed', 'seg-arch-3', 'macro|user-a@test.com', 'spk-arch-b0', 'macro|user-b@test.com', 'archived overridden',
    '2024-01-01 10:00:11+00', '2024-01-01 10:00:13+00', 3);
 
--- entity_access grants for the active call (owner + channel view).
+-- entity_access grants for the active call (owner + channel view + direct user view).
 INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level) VALUES
   ('00000000-0000-0000-0000-0000000ca110', 'call', 'macro|user-a@test.com', 'user',    'owner'),
-  ('00000000-0000-0000-0000-0000000ca110', 'call', '00000000-0000-0000-0000-000000000c01', 'channel', 'view');
+  ('00000000-0000-0000-0000-0000000ca110', 'call', '00000000-0000-0000-0000-000000000c01', 'channel', 'view'),
+  ('00000000-0000-0000-0000-0000000ca110', 'call', 'macro|user-d@test.com', 'user',    'view');
 
--- entity_access grants for the archived call (owner + channel view).
+-- entity_access grants for the archived call (owner + channel view + direct user view).
 INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level) VALUES
   ('00000000-0000-0000-0000-0000000ca2ed', 'call', 'macro|user-a@test.com', 'user',    'owner'),
-  ('00000000-0000-0000-0000-0000000ca2ed', 'call', '00000000-0000-0000-0000-000000000c01', 'channel', 'view');
+  ('00000000-0000-0000-0000-0000000ca2ed', 'call', '00000000-0000-0000-0000-000000000c01', 'channel', 'view'),
+  ('00000000-0000-0000-0000-0000000ca2ed', 'call', 'macro|user-d@test.com', 'user',    'view');

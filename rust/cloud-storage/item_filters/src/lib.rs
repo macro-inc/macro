@@ -218,6 +218,11 @@ pub struct EmailFilters {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub email_thread_ids: Vec<String>,
 
+    /// Restrict to specific inboxes by email_links.id. Empty means "any inbox the
+    /// caller can access" (soup expands to the full set at the router edge).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub link_ids: Vec<String>,
+
     /// A list of project ids to search within. Empty to ignore project filtering.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub project_ids: Vec<String>,
@@ -280,6 +285,7 @@ impl IsEmpty for EmailFilters {
             bcc,
             recipients,
             email_thread_ids,
+            link_ids,
             project_ids,
             importance,
             notification_filters,
@@ -295,6 +301,7 @@ impl IsEmpty for EmailFilters {
             && bcc.is_empty()
             && recipients.is_empty()
             && email_thread_ids.is_empty()
+            && link_ids.is_empty()
             && project_ids.is_empty()
             && importance.is_none()
             && notification_filters.is_empty()
@@ -305,6 +312,20 @@ impl IsEmpty for EmailFilters {
             && crm_addresses.is_empty()
             && !calendar_only.unwrap_or(false)
     }
+}
+
+/// Viewer-relative attendance status for a call record.
+/// Serializes as `ATTENDED`, `MISSED`, or `UNATTENDED`.
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Copy)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
+pub enum CallStatus {
+    /// The viewer is a call participant.
+    Attended,
+    /// The viewer is not a call participant and is in the call's channel.
+    Missed,
+    /// The viewer is not a call participant and is not in the call's channel.
+    Unattended,
 }
 
 /// Filters for call records.
@@ -320,7 +341,11 @@ pub struct CallFilters {
     /// Speaker macro user ids. Empty to include all.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub speaker_ids: Vec<String>,
-    /// Filter by whether the requesting user attended the call.
+    /// Filter by the requesting user's viewer-relative call status.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status: Option<CallStatus>,
+    /// Legacy filter by whether the requesting user attended the call.
+    /// Prefer [`CallFilters::status`] for new callers.
     /// `None` = no filter, `Some(true)` = only calls the user joined,
     /// `Some(false)` = only calls the user did not join.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -333,11 +358,13 @@ impl IsEmpty for CallFilters {
             call_ids,
             channel_ids,
             speaker_ids,
+            status,
             attended,
         } = self;
         call_ids.is_empty()
             && channel_ids.is_empty()
             && speaker_ids.is_empty()
+            && status.is_none()
             && attended.is_none()
     }
 }
@@ -466,12 +493,21 @@ pub struct CrmCompanyFilters {
     /// include all of the team's visible CRM companies.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub company_ids: Vec<String>,
+    /// Optional `crm_companies.hidden` filter. `None` = visible only
+    /// (default for back-compat with non-admin callers). `Some(false)` =
+    /// visible only (explicit). `Some(true)` = hidden only — requires
+    /// admin/owner team role; enforced upstream in soup's axum router.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hidden: Option<bool>,
 }
 
 impl IsEmpty for CrmCompanyFilters {
     fn is_empty(&self) -> bool {
-        let CrmCompanyFilters { company_ids } = self;
-        company_ids.is_empty()
+        let CrmCompanyFilters {
+            company_ids,
+            hidden,
+        } = self;
+        company_ids.is_empty() && hidden.is_none()
     }
 }
 

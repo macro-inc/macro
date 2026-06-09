@@ -13,6 +13,7 @@ use lambda_runtime::{
     tracing::{self},
 };
 use macro_entrypoint::MacroEntrypoint;
+use macro_service_urls::ConnectionGatewayUrl;
 use model::{
     document::{FileType, FileTypeExt},
     folder::{FileSystemNodeWithIds, FolderItem, S3Destination, S3DestinationMap},
@@ -581,8 +582,7 @@ async fn main() -> Result<(), Error> {
     let dss_url = std::env::var("DSS_URL").context("DSS_URL must be set")?;
     let dynamo_table_name =
         std::env::var("DYNAMODB_TABLE").context("DYNAMODB_TABLE must be set")?;
-    let connection_gateway_url =
-        std::env::var("CONNECTION_GATEWAY_URL").context("CONNECTION_GATEWAY_URL must be set")?;
+    let connection_gateway_url = ConnectionGatewayUrl::new()?.to_string();
 
     let config = macro_aws_config::get_macro_aws_config().await;
     let s3_client = S3Client::new(&config);

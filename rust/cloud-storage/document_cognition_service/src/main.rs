@@ -35,6 +35,7 @@ use notification::domain::service::{
 };
 use notification::outbound::queue::SqsQueue;
 use notification::outbound::repository::DbNotificationRepository;
+use notification::outbound::websocket::ConnectionGatewayClient;
 use readonly_pool::ReadOnlyPool;
 use search_service_client::SearchServiceClient;
 use secretsmanager_client::SecretManager;
@@ -98,7 +99,7 @@ async fn main() -> anyhow::Result<()> {
     );
 
     let document_storage_client = DocumentStorageServiceClient::new(
-        internal_auth_key.as_ref().to_string(),
+        config.document_storage_service_auth_key.clone(),
         config.document_storage_service_url.clone(),
     );
 
@@ -119,7 +120,7 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("initialized sync service client");
     let search_service_client = SearchServiceClient::new(
-        internal_auth_key.as_ref().to_string(),
+        config.document_storage_service_auth_key.clone(),
         config.document_storage_service_url.clone(),
     );
 
@@ -165,6 +166,10 @@ async fn main() -> anyhow::Result<()> {
             .context("failed to create connection manager")?;
 
     tracing::info!("initialized connection repo");
+    let connection_gateway_client = Arc::new(ConnectionGatewayClient::new(
+        internal_auth_key.as_ref().to_string(),
+        config.connection_gateway_url.clone(),
+    ));
 
     let ingress_queue = SqsQueue::new(
         aws_sdk_sqs::Client::new(&aws_config),
@@ -266,6 +271,7 @@ async fn main() -> anyhow::Result<()> {
         entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
             entity_access_management::outbound::PgRepository::new(db.clone()),
         ),
+        ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone())),
     );
     let lexical_client_for_tools = (*lexical_client).clone();
     let document_tool_context = DocumentToolContext::new(
@@ -415,7 +421,7 @@ async fn main() -> anyhow::Result<()> {
     let mcp_oauth_state_store =
         mcp_client::outbound::redis_state_store::RedisOAuthStateStore::new(redis_client.clone());
     let mcp_pre_registered =
-        mcp_client::domain::provider_registry::PreRegisteredProviders::from_env();
+        mcp_client::domain::provider_registry::PreRegisteredProviders::from_env()?;
     let mcp_oauth = mcp_client::domain::service::OAuthService::new(
         mcp_server_repo.clone(),
         mcp_oauth_state_store,
@@ -435,6 +441,7 @@ async fn main() -> anyhow::Result<()> {
         internal_auth_key,
         notification_ingress_service,
         connection_repo: connection_manager.persistence,
+        connection_gateway_client,
         soup_service,
         email_service: email_service_for_tools,
         stream_repo,

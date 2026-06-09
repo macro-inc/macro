@@ -247,7 +247,7 @@ where
     async fn create_channel(
         &self,
         actor: Sender,
-        actor_org_id: Option<i64>,
+        _actor_org_id: Option<i64>,
         req: crate::domain::models::CreateChannelRequest,
     ) -> Result<crate::domain::models::CreateChannelResponse, ChannelMutationErr> {
         let actor = require_user_actor(&actor)?;
@@ -273,10 +273,7 @@ where
             ));
         }
 
-        let org_id = match req.channel_type {
-            ChannelType::Organization => actor_org_id,
-            _ => None,
-        };
+        let org_id = None;
         let participants = lower_macro_users(&req.participants);
         if participants.is_empty() {
             return Err(ChannelMutationErr::BadRequest(
@@ -930,11 +927,6 @@ where
             .await
             .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
         match (info.channel_type, participants.len()) {
-            (ChannelType::Organization, _) => {
-                return Err(ChannelMutationErr::BadRequest(
-                    "cannot leave organization channel".to_string(),
-                ));
-            }
             (ChannelType::Private, 2) | (ChannelType::DirectMessage, _) => {
                 return Err(ChannelMutationErr::BadRequest(
                     "cannot leave channel with only 2 participants".to_string(),
@@ -1484,10 +1476,10 @@ where
     async fn create_channel(
         &self,
         actor: Sender,
-        actor_org_id: Option<i64>,
+        _actor_org_id: Option<i64>,
         req: crate::domain::models::CreateChannelRequest,
     ) -> Result<crate::domain::models::CreateChannelResponse, ChannelMutationErr> {
-        ChannelServiceImpl::create_channel(self, actor, actor_org_id, req).await
+        ChannelServiceImpl::create_channel(self, actor, None, req).await
     }
 
     async fn get_or_create_dm(

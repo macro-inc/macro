@@ -99,6 +99,8 @@ export const listTypedNotificationsQueryParams = zod.object({
     .describe('Cursor value. Base64 encoded timestamp and item id.'),
 });
 
+export const listTypedNotificationsResponseItemsItemNotificationMetadataContentNumberMin = 0;
+
 export const listTypedNotificationsResponse = zod
   .object({
     items: zod
@@ -119,6 +121,7 @@ export const listTypedNotificationsResponse = zod
                 'foreign_entity',
                 'static_file',
                 'crm_company',
+                'crm_contact',
               ])
               .describe('The type of an entity in Macro'),
           })
@@ -152,7 +155,6 @@ export const listTypedNotificationsResponse = zod
                           channelName: zod.string().optional(),
                           channelType: zod.enum([
                             'public',
-                            'organization',
                             'private',
                             'directMessage',
                             'team',
@@ -186,7 +188,6 @@ export const listTypedNotificationsResponse = zod
                           channelName: zod.string().optional(),
                           channelType: zod.enum([
                             'public',
-                            'organization',
                             'private',
                             'directMessage',
                             'team',
@@ -397,7 +398,6 @@ export const listTypedNotificationsResponse = zod
                           channelName: zod.string().optional(),
                           channelType: zod.enum([
                             'public',
-                            'organization',
                             'private',
                             'directMessage',
                             'team',
@@ -429,7 +429,6 @@ export const listTypedNotificationsResponse = zod
                           channelName: zod.string().optional(),
                           channelType: zod.enum([
                             'public',
-                            'organization',
                             'private',
                             'directMessage',
                             'team',
@@ -558,6 +557,112 @@ export const listTypedNotificationsResponse = zod
                       tag: zod.enum(['ai_response']),
                     })
                     .describe('An AI assistant responded to a chat.'),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          action: zod
+                            .enum(['opened', 'reopened', 'closed'])
+                            .describe(
+                              'The GitHub pull request webhook action that triggered the notification.'
+                            ),
+                          baseBranch: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The pull request base branch, when available.'
+                            ),
+                          displayName: zod
+                            .string()
+                            .describe(
+                              'A compact label suitable for display in the UI.'
+                            ),
+                          foreignEntityId: zod
+                            .uuid()
+                            .describe(
+                              'The source-specific internal foreign entity row id for this pull request.'
+                            ),
+                          githubKey: zod
+                            .string()
+                            .describe(
+                              'The external GitHub key, in `owner\/repo\/pull\/number` format.'
+                            ),
+                          headBranch: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The pull request head branch, when available.'
+                            ),
+                          mergedAt: zod.iso
+                            .datetime({})
+                            .nullish()
+                            .describe(
+                              'When the pull request was merged, when available.'
+                            ),
+                          number: zod
+                            .number()
+                            .min(
+                              listTypedNotificationsResponseItemsItemNotificationMetadataContentNumberMin
+                            )
+                            .describe('The GitHub pull request number.'),
+                          owner: zod
+                            .string()
+                            .describe(
+                              'The GitHub repository owner or organization.'
+                            ),
+                          previousStatus: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .enum(['open', 'closed', 'merged'])
+                                .describe(
+                                  'The normalized lifecycle status for a GitHub pull request notification.'
+                                ),
+                            ])
+                            .optional(),
+                          repo: zod
+                            .string()
+                            .describe('The GitHub repository name.'),
+                          senderGithubAvatarUrl: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The GitHub avatar URL for the sender, when available.'
+                            ),
+                          senderGithubLogin: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The GitHub login for the sender, when available.'
+                            ),
+                          senderGithubUserId: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The stable GitHub numeric user id for the sender, serialized as a string.'
+                            ),
+                          status: zod
+                            .enum(['open', 'closed', 'merged'])
+                            .describe(
+                              'The normalized lifecycle status for a GitHub pull request notification.'
+                            ),
+                          title: zod
+                            .string()
+                            .describe(
+                              'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
+                            ),
+                          url: zod
+                            .string()
+                            .describe(
+                              'The public GitHub URL for the pull request.'
+                            ),
+                        })
+                        .describe(
+                          'Metadata for a GitHub pull request lifecycle notification.'
+                        ),
+                      tag: zod.enum(['github_pr_event']),
+                    })
+                    .describe('A GitHub pull request changed lifecycle state.'),
                 ])
                 .describe(
                   'Mirrors [`model_notifications::NotificationEvent`] but uses `tag` \/ `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait.'
@@ -617,6 +722,8 @@ export const bulkGetTypedNotificationsByEventItemIdsBody = zod
   })
   .describe('Request body for bulk-fetching notifications by event item IDs.');
 
+export const bulkGetTypedNotificationsByEventItemIdsResponseItemsItemNotificationMetadataContentNumberMin = 0;
+
 export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
   .object({
     items: zod
@@ -637,6 +744,7 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                 'foreign_entity',
                 'static_file',
                 'crm_company',
+                'crm_contact',
               ])
               .describe('The type of an entity in Macro'),
           })
@@ -670,7 +778,6 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                           channelName: zod.string().optional(),
                           channelType: zod.enum([
                             'public',
-                            'organization',
                             'private',
                             'directMessage',
                             'team',
@@ -704,7 +811,6 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                           channelName: zod.string().optional(),
                           channelType: zod.enum([
                             'public',
-                            'organization',
                             'private',
                             'directMessage',
                             'team',
@@ -915,7 +1021,6 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                           channelName: zod.string().optional(),
                           channelType: zod.enum([
                             'public',
-                            'organization',
                             'private',
                             'directMessage',
                             'team',
@@ -947,7 +1052,6 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                           channelName: zod.string().optional(),
                           channelType: zod.enum([
                             'public',
-                            'organization',
                             'private',
                             'directMessage',
                             'team',
@@ -1076,6 +1180,112 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                       tag: zod.enum(['ai_response']),
                     })
                     .describe('An AI assistant responded to a chat.'),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          action: zod
+                            .enum(['opened', 'reopened', 'closed'])
+                            .describe(
+                              'The GitHub pull request webhook action that triggered the notification.'
+                            ),
+                          baseBranch: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The pull request base branch, when available.'
+                            ),
+                          displayName: zod
+                            .string()
+                            .describe(
+                              'A compact label suitable for display in the UI.'
+                            ),
+                          foreignEntityId: zod
+                            .uuid()
+                            .describe(
+                              'The source-specific internal foreign entity row id for this pull request.'
+                            ),
+                          githubKey: zod
+                            .string()
+                            .describe(
+                              'The external GitHub key, in `owner\/repo\/pull\/number` format.'
+                            ),
+                          headBranch: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The pull request head branch, when available.'
+                            ),
+                          mergedAt: zod.iso
+                            .datetime({})
+                            .nullish()
+                            .describe(
+                              'When the pull request was merged, when available.'
+                            ),
+                          number: zod
+                            .number()
+                            .min(
+                              bulkGetTypedNotificationsByEventItemIdsResponseItemsItemNotificationMetadataContentNumberMin
+                            )
+                            .describe('The GitHub pull request number.'),
+                          owner: zod
+                            .string()
+                            .describe(
+                              'The GitHub repository owner or organization.'
+                            ),
+                          previousStatus: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .enum(['open', 'closed', 'merged'])
+                                .describe(
+                                  'The normalized lifecycle status for a GitHub pull request notification.'
+                                ),
+                            ])
+                            .optional(),
+                          repo: zod
+                            .string()
+                            .describe('The GitHub repository name.'),
+                          senderGithubAvatarUrl: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The GitHub avatar URL for the sender, when available.'
+                            ),
+                          senderGithubLogin: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The GitHub login for the sender, when available.'
+                            ),
+                          senderGithubUserId: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The stable GitHub numeric user id for the sender, serialized as a string.'
+                            ),
+                          status: zod
+                            .enum(['open', 'closed', 'merged'])
+                            .describe(
+                              'The normalized lifecycle status for a GitHub pull request notification.'
+                            ),
+                          title: zod
+                            .string()
+                            .describe(
+                              'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
+                            ),
+                          url: zod
+                            .string()
+                            .describe(
+                              'The public GitHub URL for the pull request.'
+                            ),
+                        })
+                        .describe(
+                          'Metadata for a GitHub pull request lifecycle notification.'
+                        ),
+                      tag: zod.enum(['github_pr_event']),
+                    })
+                    .describe('A GitHub pull request changed lifecycle state.'),
                 ])
                 .describe(
                   'Mirrors [`model_notifications::NotificationEvent`] but uses `tag` \/ `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait.'
@@ -1129,6 +1339,8 @@ export const getTypedNotificationsByEventItemIdQueryParams = zod.object({
     .describe('Cursor value. Base64 encoded timestamp and item id.'),
 });
 
+export const getTypedNotificationsByEventItemIdResponseItemsItemNotificationMetadataContentNumberMin = 0;
+
 export const getTypedNotificationsByEventItemIdResponse = zod
   .object({
     items: zod
@@ -1149,6 +1361,7 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                 'foreign_entity',
                 'static_file',
                 'crm_company',
+                'crm_contact',
               ])
               .describe('The type of an entity in Macro'),
           })
@@ -1182,7 +1395,6 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                           channelName: zod.string().optional(),
                           channelType: zod.enum([
                             'public',
-                            'organization',
                             'private',
                             'directMessage',
                             'team',
@@ -1216,7 +1428,6 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                           channelName: zod.string().optional(),
                           channelType: zod.enum([
                             'public',
-                            'organization',
                             'private',
                             'directMessage',
                             'team',
@@ -1427,7 +1638,6 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                           channelName: zod.string().optional(),
                           channelType: zod.enum([
                             'public',
-                            'organization',
                             'private',
                             'directMessage',
                             'team',
@@ -1459,7 +1669,6 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                           channelName: zod.string().optional(),
                           channelType: zod.enum([
                             'public',
-                            'organization',
                             'private',
                             'directMessage',
                             'team',
@@ -1588,6 +1797,112 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                       tag: zod.enum(['ai_response']),
                     })
                     .describe('An AI assistant responded to a chat.'),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          action: zod
+                            .enum(['opened', 'reopened', 'closed'])
+                            .describe(
+                              'The GitHub pull request webhook action that triggered the notification.'
+                            ),
+                          baseBranch: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The pull request base branch, when available.'
+                            ),
+                          displayName: zod
+                            .string()
+                            .describe(
+                              'A compact label suitable for display in the UI.'
+                            ),
+                          foreignEntityId: zod
+                            .uuid()
+                            .describe(
+                              'The source-specific internal foreign entity row id for this pull request.'
+                            ),
+                          githubKey: zod
+                            .string()
+                            .describe(
+                              'The external GitHub key, in `owner\/repo\/pull\/number` format.'
+                            ),
+                          headBranch: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The pull request head branch, when available.'
+                            ),
+                          mergedAt: zod.iso
+                            .datetime({})
+                            .nullish()
+                            .describe(
+                              'When the pull request was merged, when available.'
+                            ),
+                          number: zod
+                            .number()
+                            .min(
+                              getTypedNotificationsByEventItemIdResponseItemsItemNotificationMetadataContentNumberMin
+                            )
+                            .describe('The GitHub pull request number.'),
+                          owner: zod
+                            .string()
+                            .describe(
+                              'The GitHub repository owner or organization.'
+                            ),
+                          previousStatus: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .enum(['open', 'closed', 'merged'])
+                                .describe(
+                                  'The normalized lifecycle status for a GitHub pull request notification.'
+                                ),
+                            ])
+                            .optional(),
+                          repo: zod
+                            .string()
+                            .describe('The GitHub repository name.'),
+                          senderGithubAvatarUrl: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The GitHub avatar URL for the sender, when available.'
+                            ),
+                          senderGithubLogin: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The GitHub login for the sender, when available.'
+                            ),
+                          senderGithubUserId: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The stable GitHub numeric user id for the sender, serialized as a string.'
+                            ),
+                          status: zod
+                            .enum(['open', 'closed', 'merged'])
+                            .describe(
+                              'The normalized lifecycle status for a GitHub pull request notification.'
+                            ),
+                          title: zod
+                            .string()
+                            .describe(
+                              'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
+                            ),
+                          url: zod
+                            .string()
+                            .describe(
+                              'The public GitHub URL for the pull request.'
+                            ),
+                        })
+                        .describe(
+                          'Metadata for a GitHub pull request lifecycle notification.'
+                        ),
+                      tag: zod.enum(['github_pr_event']),
+                    })
+                    .describe('A GitHub pull request changed lifecycle state.'),
                 ])
                 .describe(
                   'Mirrors [`model_notifications::NotificationEvent`] but uses `tag` \/ `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait.'
@@ -1656,6 +1971,8 @@ export const getTypedNotificationByIdParams = zod.object({
   notification_id: zod.uuid().describe('ID of the notification'),
 });
 
+export const getTypedNotificationByIdResponseNotificationMetadataContentNumberMin = 0;
+
 export const getTypedNotificationByIdResponse = zod
   .object({
     entity_id: zod.string().describe('The id of that entity'),
@@ -1672,6 +1989,7 @@ export const getTypedNotificationByIdResponse = zod
         'foreign_entity',
         'static_file',
         'crm_company',
+        'crm_contact',
       ])
       .describe('The type of an entity in Macro'),
   })
@@ -1705,7 +2023,6 @@ export const getTypedNotificationByIdResponse = zod
                   channelName: zod.string().optional(),
                   channelType: zod.enum([
                     'public',
-                    'organization',
                     'private',
                     'directMessage',
                     'team',
@@ -1737,7 +2054,6 @@ export const getTypedNotificationByIdResponse = zod
                   channelName: zod.string().optional(),
                   channelType: zod.enum([
                     'public',
-                    'organization',
                     'private',
                     'directMessage',
                     'team',
@@ -1930,7 +2246,6 @@ export const getTypedNotificationByIdResponse = zod
                   channelName: zod.string().optional(),
                   channelType: zod.enum([
                     'public',
-                    'organization',
                     'private',
                     'directMessage',
                     'team',
@@ -1960,7 +2275,6 @@ export const getTypedNotificationByIdResponse = zod
                   channelName: zod.string().optional(),
                   channelType: zod.enum([
                     'public',
-                    'organization',
                     'private',
                     'directMessage',
                     'team',
@@ -2077,6 +2391,102 @@ export const getTypedNotificationByIdResponse = zod
               tag: zod.enum(['ai_response']),
             })
             .describe('An AI assistant responded to a chat.'),
+          zod
+            .object({
+              content: zod
+                .object({
+                  action: zod
+                    .enum(['opened', 'reopened', 'closed'])
+                    .describe(
+                      'The GitHub pull request webhook action that triggered the notification.'
+                    ),
+                  baseBranch: zod
+                    .string()
+                    .nullish()
+                    .describe('The pull request base branch, when available.'),
+                  displayName: zod
+                    .string()
+                    .describe(
+                      'A compact label suitable for display in the UI.'
+                    ),
+                  foreignEntityId: zod
+                    .uuid()
+                    .describe(
+                      'The source-specific internal foreign entity row id for this pull request.'
+                    ),
+                  githubKey: zod
+                    .string()
+                    .describe(
+                      'The external GitHub key, in `owner\/repo\/pull\/number` format.'
+                    ),
+                  headBranch: zod
+                    .string()
+                    .nullish()
+                    .describe('The pull request head branch, when available.'),
+                  mergedAt: zod.iso
+                    .datetime({})
+                    .nullish()
+                    .describe(
+                      'When the pull request was merged, when available.'
+                    ),
+                  number: zod
+                    .number()
+                    .min(
+                      getTypedNotificationByIdResponseNotificationMetadataContentNumberMin
+                    )
+                    .describe('The GitHub pull request number.'),
+                  owner: zod
+                    .string()
+                    .describe('The GitHub repository owner or organization.'),
+                  previousStatus: zod
+                    .union([
+                      zod.null(),
+                      zod
+                        .enum(['open', 'closed', 'merged'])
+                        .describe(
+                          'The normalized lifecycle status for a GitHub pull request notification.'
+                        ),
+                    ])
+                    .optional(),
+                  repo: zod.string().describe('The GitHub repository name.'),
+                  senderGithubAvatarUrl: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      'The GitHub avatar URL for the sender, when available.'
+                    ),
+                  senderGithubLogin: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      'The GitHub login for the sender, when available.'
+                    ),
+                  senderGithubUserId: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      'The stable GitHub numeric user id for the sender, serialized as a string.'
+                    ),
+                  status: zod
+                    .enum(['open', 'closed', 'merged'])
+                    .describe(
+                      'The normalized lifecycle status for a GitHub pull request notification.'
+                    ),
+                  title: zod
+                    .string()
+                    .describe(
+                      'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
+                    ),
+                  url: zod
+                    .string()
+                    .describe('The public GitHub URL for the pull request.'),
+                })
+                .describe(
+                  'Metadata for a GitHub pull request lifecycle notification.'
+                ),
+              tag: zod.enum(['github_pr_event']),
+            })
+            .describe('A GitHub pull request changed lifecycle state.'),
         ])
         .describe(
           'Mirrors [`model_notifications::NotificationEvent`] but uses `tag` \/ `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait.'

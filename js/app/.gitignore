@@ -10,6 +10,7 @@ node_modules/**/*
 
 .turbo
 .mono
+.bundle-smoke/
 
 # Environments
 .venv

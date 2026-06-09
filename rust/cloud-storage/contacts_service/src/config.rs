@@ -1,5 +1,6 @@
 use anyhow::Context;
 pub use macro_env::Environment;
+use macro_service_urls::ConnectionGatewayUrl;
 
 pub struct Config {
     /// port number of service
@@ -45,7 +46,7 @@ impl Config {
             .parse::<i32>()
             .unwrap();
 
-        let connection_gateway_url = std::env::var("CONNECTION_GATEWAY_URL").ok();
+        let connection_gateway_url = Some(ConnectionGatewayUrl::new()?.to_string());
 
         let environment = Environment::new_or_prod();
 

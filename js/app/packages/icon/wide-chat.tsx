@@ -7,8 +7,11 @@ export const AnimatedChatIcon = (props: {
       width="100%"
       height="100%"
       viewBox="0 -4 24 24"
-      fill="currentColor"
-      stroke="none"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.5"
+      stroke-linecap="round"
+      stroke-linejoin="round"
       xmlns="http://www.w3.org/2000/svg"
       overflow="visible"
       class={`animated-chat-icon ${props.triggerAnimation ? 'animating' : ''} ${props.class ?? ''}`}
@@ -46,11 +49,31 @@ export const AnimatedChatIcon = (props: {
           }
         }
       `}</style>
-      <path d="M23 0H2V2H22V14H24V1C24 0.453333 23.5467 0 23 0Z" />
-      <path d="M2 2H0V15C0 15.5467 0.453333 16 1 16H20L22 18V14H2V2Z" />
-      <path class="dot-1" d="M9 7H7V9H9V7Z" />
-      <path class="dot-2" d="M13 7H11V9H13V7Z" />
-      <path class="dot-3" d="M17 7H15V9H17V7Z" />
+      <path d="M2.625 0.625L21.375 0.625A2 2 0 0 1 23.375 2.625L23.375 18L20.75 15.375L2.625 15.375A2 2 0 0 1 0.625 13.375L0.625 2.625A2 2 0 0 1 2.625 0.625Z" />
+      <circle
+        class="dot-1"
+        cx="8"
+        cy="8"
+        r="1.2"
+        fill="currentColor"
+        stroke="none"
+      />
+      <circle
+        class="dot-2"
+        cx="12"
+        cy="8"
+        r="1.2"
+        fill="currentColor"
+        stroke="none"
+      />
+      <circle
+        class="dot-3"
+        cx="16"
+        cy="8"
+        r="1.2"
+        fill="currentColor"
+        stroke="none"
+      />
     </svg>
   );
 };

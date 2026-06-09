@@ -11,6 +11,7 @@ import type { HeadingNode, QuoteNode } from '@lexical/rich-text';
 import type { TableCellNode, TableNode, TableRowNode } from '@lexical/table';
 import {
   $isClassedBlockNode,
+  type AwaitNode,
   type ClassedBlockNode,
   type ContactMentionNode,
   type DateMentionNode,
@@ -65,9 +66,11 @@ import {
 } from '@core/constant/featureFlags';
 import type { MarkNode } from '@lexical/mark';
 import type { SearchMatchNode } from '@lexical-core/nodes/SearchMatchNode';
+import { getCachedItemPreview } from '@queries/preview';
 import { theme as baseTheme, createTheme } from '../../theme';
 import { forceSingleLine, setEditorStateFromMarkdown } from '../../utils';
 import { StaticCodeBoxAccessory } from '../accessory/CodeBoxAccessory';
+import { Await as AwaitDecorator } from '../decorator/Await';
 import { ContactMention as ContactMentionDecorator } from '../decorator/ContactMention';
 import { DateMention as DateMentionDecorator } from '../decorator/DateMention';
 import { DocumentCard as DocumentCardDecorator } from '../decorator/DocumentCard';
@@ -227,14 +230,24 @@ type NodeComponent<T extends LexicalNode = LexicalNode> = {
 type ElementNodeComponent<T extends ElementNode = ElementNode> = ParentProps &
   NodeComponent<T>;
 
+type StaticRenderOptions = {
+  lazy: boolean;
+};
+
 type RenderableEntity<T extends LexicalNode = LexicalNode> = {
   guard: (node: LexicalNode) => node is T;
-  render: (props: NodeComponent<T>) => JSX.Element;
+  render: (
+    props: NodeComponent<T>,
+    options: StaticRenderOptions
+  ) => JSX.Element;
 };
 
 type RenderableElement<T extends ElementNode = ElementNode> = {
   guard: (node: LexicalNode) => node is T;
-  render: (props: ElementNodeComponent<T>) => JSX.Element;
+  render: (
+    props: ElementNodeComponent<T>,
+    options: StaticRenderOptions
+  ) => JSX.Element;
 };
 
 const Text: RenderableEntity<TextNode> = {
@@ -278,21 +291,29 @@ const MentionPlaceholder = () => (
 const DocumentMention: RenderableEntity<DocumentMentionNode> = {
   guard: (node: LexicalNode): node is DocumentMentionNode =>
     node.__type === 'document-mention',
-  render: (props) => {
+  render: (props, options) => {
     const componentProps = props.node.exportComponentProps();
     const key = props.node.getKey();
+    const mention = () =>
+      DocumentMentionDecorator({
+        ...componentProps,
+        key,
+        theme: props.theme,
+      });
+    const shouldRenderLazy =
+      options.lazy &&
+      getCachedItemPreview(componentProps.documentId) === undefined;
+
     return (
       <span class={getTextClassName(props.node, props.theme)}>
-        <LazyDecorator
-          placeholder={<MentionPlaceholder />}
-          render={() =>
-            DocumentMentionDecorator({
-              ...componentProps,
-              key,
-              theme: props.theme,
-            })
-          }
-        />
+        {shouldRenderLazy ? (
+          <LazyDecorator
+            placeholder={<MentionPlaceholder />}
+            render={mention}
+          />
+        ) : (
+          mention()
+        )}
       </span>
     );
   },
@@ -366,6 +387,24 @@ const GroupMention: RenderableEntity<GroupMentionNode> = {
       })}
     </span>
   ),
+};
+
+const Await: RenderableEntity<AwaitNode> = {
+  guard: (node: LexicalNode): node is AwaitNode => node.__type === 'await',
+  render: (props) => {
+    const componentProps = props.node.exportComponentProps();
+    return (
+      <span>
+        {AwaitDecorator({
+          awaitId: componentProps.awaitId,
+          text: componentProps.text,
+          inline: componentProps.inline ?? true,
+          key: props.node.getKey(),
+          theme: props.theme,
+        })}
+      </span>
+    );
+  },
 };
 
 const Snapshot: RenderableEntity<SnapshotNode> = {
@@ -703,6 +742,7 @@ const InlineEntities: Array<RenderableEntity> = [
   ContactMention,
   DateMention,
   GroupMention,
+  Await,
   Snapshot,
   Image,
   Video,
@@ -729,27 +769,36 @@ const Elements: RenderableElement[] = [
   ClassedBlock,
 ] as const;
 
-function Render(props: NodeComponent | ElementNodeComponent) {
+function Render(
+  props: (NodeComponent | ElementNodeComponent) & StaticRenderOptions
+) {
   let entity = InlineEntities.find((entity) => entity.guard(props.node));
   if (entity) {
-    return entity.render({
-      ...props,
-      theme: props.theme,
-    });
+    return entity.render(
+      {
+        ...props,
+        theme: props.theme,
+      },
+      { lazy: props.lazy }
+    );
   }
 
   const element = Elements.find((entity) => entity.guard(props.node));
 
   if (element) {
     let elemNode = props.node as ElementNode;
-    return element.render({
-      node: elemNode,
-      children: MapRender({
-        children: elemNode.getChildren(),
+    return element.render(
+      {
+        node: elemNode,
+        children: MapRender({
+          children: elemNode.getChildren(),
+          theme: props.theme,
+          lazy: props.lazy,
+        }),
         theme: props.theme,
-      }),
-      theme: props.theme,
-    });
+      },
+      { lazy: props.lazy }
+    );
   }
 
   console.error('Static Markdown: no render found for node', props.node);
@@ -759,15 +808,17 @@ function Render(props: NodeComponent | ElementNodeComponent) {
 function MapRender(props: {
   children: LexicalNode[];
   theme: EditorThemeClasses;
+  lazy: boolean;
 }) {
   return props.children.map((child) => (
-    <Render node={child} theme={props.theme} />
+    <Render node={child} theme={props.theme} lazy={props.lazy} />
   ));
 }
 
 function Document(props: {
   rootNode: RootNode;
   theme: EditorThemeClasses;
+  lazy: boolean;
   rootRef?: (ref: HTMLDivElement) => void;
   singleLine?: boolean;
 }): JSX.Element {
@@ -780,7 +831,11 @@ function Document(props: {
       )}
       ref={props.rootRef}
     >
-      <MapRender children={props.rootNode.getChildren()} theme={props.theme} />
+      <MapRender
+        children={props.rootNode.getChildren()}
+        theme={props.theme}
+        lazy={props.lazy}
+      />
     </div>
   );
 }
@@ -788,7 +843,8 @@ function Document(props: {
 const context = createContext<{
   editor: LexicalEditor | null;
   theme: Accessor<EditorThemeClasses>;
-}>({ editor: null, theme: () => baseTheme });
+  lazy: Accessor<boolean>;
+}>({ editor: null, theme: () => baseTheme, lazy: () => true });
 
 export function StaticMarkdown(props: {
   markdown: string;
@@ -798,8 +854,13 @@ export function StaticMarkdown(props: {
   rootRef?: (ref: HTMLDivElement) => void;
   target?: 'internal' | 'external' | 'both';
   singleLine?: boolean;
+  lazy?: boolean;
 }) {
-  let { editor: contextEditor, theme: parentTheme } = useContext(context);
+  let {
+    editor: contextEditor,
+    theme: parentTheme,
+    lazy: parentLazy,
+  } = useContext(context);
   let [editorState, setEditorState] = createSignal<EditorState | null>(null);
 
   if (contextEditor === null) {
@@ -812,6 +873,8 @@ export function StaticMarkdown(props: {
     if (!props.theme) return parentTheme();
     return createTheme(props.theme ?? {}, parentTheme());
   };
+
+  const lazy = () => props.lazy ?? parentLazy();
 
   const currentEditor = createMemo(() => {
     if (contextEditor) {
@@ -857,6 +920,7 @@ export function StaticMarkdown(props: {
       return Document({
         rootNode: $getRoot(),
         theme: mergedTheme(),
+        lazy: lazy(),
         rootRef: props.rootRef,
       });
     });
@@ -868,6 +932,7 @@ export function StaticMarkdown(props: {
 export function StaticMarkdownContext(props: {
   children: JSX.Element;
   theme?: EditorThemeClasses;
+  lazy?: boolean;
 }) {
   const mergedTheme = () => {
     if (!props.theme) return baseTheme;
@@ -879,7 +944,13 @@ export function StaticMarkdownContext(props: {
   );
 
   return (
-    <context.Provider value={{ editor: editor(), theme: mergedTheme }}>
+    <context.Provider
+      value={{
+        editor: editor(),
+        theme: mergedTheme,
+        lazy: () => props.lazy ?? true,
+      }}
+    >
       {props.children}
     </context.Provider>
   );

@@ -26,7 +26,7 @@ import type { UserMentionRecord } from '@core/component/LexicalMarkdown/utils/me
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_EMAIL_SCHEDULED_SEND } from '@core/constant/featureFlags';
-import { useEmail, useUserId } from '@core/context/user';
+import { useEmail } from '@core/context/user';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { fileSelector } from '@core/directive/fileSelector';
 import { observedSize } from '@core/directive/observedSize';
@@ -34,7 +34,6 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
 import { trackMention } from '@core/signal/mention';
-import { tryMacroId, useDisplayName } from '@core/user';
 import { plural } from '@core/util/string';
 import { handleFileFolderDrop } from '@core/util/upload';
 
@@ -51,6 +50,7 @@ import Forward from '@phosphor/arrow-bend-up-right.svg';
 
 import ChevronDown from '@phosphor/caret-down.svg';
 import Paperclip from '@phosphor/paperclip.svg';
+import PencilSimple from '@phosphor/pencil-simple.svg';
 import Quotes from '@phosphor/quotes.svg';
 
 import TextAa from '@phosphor/text-aa.svg';
@@ -68,7 +68,11 @@ import {
   useSaveDraftMutation,
 } from '@queries/email/draft';
 import { emailKeys } from '@queries/email/keys';
-import { useEmailLinksQuery } from '@queries/email/link';
+import {
+  useEmailLinksQuery,
+  useNonPrimaryEmailLinkIdHeader,
+  usePrimaryEmailLinkId,
+} from '@queries/email/link';
 import {
   useSendMessageMutation,
   useUnscheduleMessageMutation,
@@ -132,6 +136,7 @@ import {
   useEmailContext,
 } from './EmailContext';
 import { getOrInitEmailFormContext } from './EmailFormContext';
+import { FromInboxSelector } from './FromInboxSelector';
 
 false && fileFolderDrop;
 false && fileSelector;
@@ -201,7 +206,7 @@ function RecipientDropRow(props: {
 
   return (
     <div
-      class={cn('flex flex-row items-center', props.class)}
+      class={cn('flex flex-row items-start min-w-0', props.class)}
       classList={{ 'bg-accent/10': isDragOver() }}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
@@ -318,7 +323,7 @@ function TruncatedRecipientList(props: {
   return (
     <div
       use:observedSize={{ setSize: setContainerRect }}
-      class="flex items-center text-sm overflow-hidden whitespace-nowrap mt-1 min-w-0 flex-1"
+      class="flex items-center text-sm overflow-hidden whitespace-nowrap min-w-0"
       onclick={props.onClick}
     >
       {/* Hidden measurement element - must have same font styles */}
@@ -428,6 +433,24 @@ export function BaseInput(props: {
   });
   const blockId = useBlockId();
   const emailLinksQuery = useEmailLinksQuery();
+  const userEmail = useEmail();
+
+  const toHeaderLinkId = useNonPrimaryEmailLinkIdHeader();
+  const primaryLinkId = usePrimaryEmailLinkId();
+  // The inbox this input acts in: the open thread's inbox, else the primary
+  // inbox for a new message. Mutations send it as X-Email-Link-Id when it's a
+  // non-primary inbox so the draft/send targets the right account.
+  const activeLinkId = () =>
+    form().selectedLinkId() ??
+    ctx.thread()?.link_id ??
+    props.draft?.link_id ??
+    primaryLinkId() ??
+    emailLinksQuery.data?.links[0]?.id;
+  const headerLinkId = () => toHeaderLinkId(activeLinkId());
+  // The address of the inbox this input sends from, for the "from" display.
+  const activeInboxEmail = () =>
+    emailLinksQuery.data?.links.find((l) => l.id === activeLinkId())
+      ?.email_address ?? userEmail();
 
   const [bodyMacro, setBodyMacro] = createSignal<string>('');
   const [expandedRecipientsRef, setExpandedRecipientsRef] =
@@ -641,10 +664,6 @@ export function BaseInput(props: {
     return registerToggleAppendedThread(editor);
   });
 
-  const userEmail = useEmail();
-  const userId = useUserId();
-  const [userName] = useDisplayName(tryMacroId(userId() ?? ''));
-
   let draftSaveTimer: number | undefined;
   let pendingDeletion = false;
   let pendingSend = false;
@@ -691,7 +710,10 @@ export function BaseInput(props: {
     if (!draftToSave) {
       const draftId = savedDraftId();
       if (draftId) {
-        await deleteDraftMutation.mutateAsync({ draftId });
+        await deleteDraftMutation.mutateAsync({
+          draftId,
+          linkId: headerLinkId(),
+        });
         refetchThreadMessages();
       }
       setSavedDraftId(undefined);
@@ -721,6 +743,7 @@ export function BaseInput(props: {
         provider_thread_id: currentThread?.provider_id,
         thread_db_id: currentThread?.db_id,
       },
+      linkId: headerLinkId(),
     });
 
     const draftId = draftResponse.draft.db_id;
@@ -739,6 +762,7 @@ export function BaseInput(props: {
         const uploaded = await uploadAttachmentMutation.mutateAsync({
           draftID: draftId,
           attachments: attachments.map((a) => a.file),
+          linkId: headerLinkId(),
         });
 
         // Assign the attachment ids to attachments for later use
@@ -764,6 +788,7 @@ export function BaseInput(props: {
           attachments: forwardedAttachments.map((a) => ({
             attachmentID: a.attachmentID,
           })),
+          linkId: headerLinkId(),
         });
       }
 
@@ -783,6 +808,15 @@ export function BaseInput(props: {
   onCleanup(() => {
     if (draftSaveTimer) window.clearTimeout(draftSaveTimer);
   });
+
+  // Persist the draft immediately when the user switches the sending inbox, even
+  // without a text edit, so it moves to the new inbox and the choice survives a
+  // refresh. Driven by the explicit switch (below) rather than inbox reactivity.
+  const persistDraftOnSenderSwitch = (linkId: string) => {
+    form().setSelectedFromLink(linkId);
+    if (draftSaveTimer) window.clearTimeout(draftSaveTimer);
+    void executeSaveDraft();
+  };
 
   // After a send, the bottom input stays mounted and its replyingTo flips to
   // the just-sent message once the thread refetches. Cancel the inhibited
@@ -929,7 +963,7 @@ export function BaseInput(props: {
         logger.error('No links found');
         return;
       }
-      linkId = linksData.links[0].id;
+      linkId = primaryLinkId() ?? linksData.links[0].id;
     }
 
     const currentEditor = editor();
@@ -1007,6 +1041,7 @@ export function BaseInput(props: {
         thread_db_id: currentThread?.db_id,
         to,
       },
+      linkId: toHeaderLinkId(linkId),
     });
 
     // Block any save scheduled by reset side effects (form().reset() callDirty,
@@ -1047,7 +1082,10 @@ export function BaseInput(props: {
     const draftId = savedDraftId();
     try {
       if (draftId) {
-        await deleteDraftMutation.mutateAsync({ draftId });
+        await deleteDraftMutation.mutateAsync({
+          draftId,
+          linkId: headerLinkId(),
+        });
         refetchThreadMessages();
       }
       resetState();
@@ -1246,11 +1284,13 @@ export function BaseInput(props: {
       removeForwardedAttachmentMutation.mutate({
         draftID: currentDraftID,
         attachmentID: attachment.attachmentID,
+        linkId: headerLinkId(),
       });
     } else {
       removeAttachmentMutation.mutate({
         draftID: currentDraftID,
         attachmentID: attachment.attachmentID,
+        linkId: headerLinkId(),
       });
     }
   };
@@ -1272,6 +1312,7 @@ export function BaseInput(props: {
     if (!date && currentSendTime && currentDraft) {
       unscheduleMessageMutation.mutate({
         draftID: currentDraft,
+        linkId: headerLinkId(),
       });
       form().setSendTime(date);
       return;
@@ -1289,15 +1330,21 @@ export function BaseInput(props: {
         return;
       }
 
-      await emailClient.scheduleMessage({
-        draftID,
-        send_time: date.toISOString(),
-      });
+      await emailClient.scheduleMessage(
+        {
+          draftID,
+          send_time: date.toISOString(),
+        },
+        headerLinkId()
+      );
 
       // Mark the thread as done
       const threadID = ctx.thread()?.db_id;
       if (threadID) {
-        await emailClient.flagArchived({ id: threadID, value: true });
+        await emailClient.flagArchived(
+          { id: threadID, value: true },
+          headerLinkId()
+        );
       }
     }
   };
@@ -1338,7 +1385,7 @@ export function BaseInput(props: {
       solid
     >
       {/* Top Bar */}
-      <div class="relative flex items-start gap-2 px-3 pt-1.5 pb-0.5">
+      <div class="relative flex items-start gap-2 px-3 pt-1.5 pb-0.5 min-w-0">
         <Dropdown>
           <Dropdown.Trigger>
             <Switch>
@@ -1388,24 +1435,47 @@ export function BaseInput(props: {
         <Show
           when={showExpandedRecipients()}
           fallback={
-            <TruncatedRecipientList
-              toRecipients={form().recipients().to}
-              ccRecipients={form().recipients().cc}
-              bccRecipients={form().recipients().bcc}
+            <div
+              class="flex flex-1 items-center gap-1.5 min-w-0 mt-1 text-sm text-ink-muted"
               onClick={() => setShowExpandedRecipients(true)}
-            />
+            >
+              <Show
+                when={!isMobile()}
+                fallback={
+                  <PencilSimple class="size-4 shrink-0 text-ink-muted ml-auto" />
+                }
+              >
+                <TruncatedRecipientList
+                  toRecipients={form().recipients().to}
+                  ccRecipients={form().recipients().cc}
+                  bccRecipients={form().recipients().bcc}
+                  onClick={() => setShowExpandedRecipients(true)}
+                />
+                <Show when={(emailLinksQuery.data?.links.length ?? 0) > 1}>
+                  <span class="shrink-0 text-ink-extra-muted">·</span>
+                  <span class="min-w-0 shrink-[2] truncate">
+                    from {activeInboxEmail()}
+                  </span>
+                </Show>
+                <PencilSimple class="size-3.5 shrink-0 text-ink-extra-muted" />
+              </Show>
+            </div>
           }
         >
           <div
             ref={setExpandedRecipientsRef}
-            class="w-full text-sm text-ink-muted"
+            class="flex-1 min-w-0 text-sm text-ink-muted"
           >
             {/* Expanded FROM */}
-            <div class="flex flex-row items-baseline py-0.5">
-              <div class="min-w-8">from</div>
-              <span class="ml-2">
-                {userName()} &lt;{userEmail()}&gt;
-              </span>
+            <div class="flex flex-row items-center py-0.5 min-w-0">
+              <div class="w-10 shrink-0">from</div>
+              <div class="pl-2 min-w-0 flex-1">
+                <FromInboxSelector
+                  links={emailLinksQuery.data?.links ?? []}
+                  activeLinkId={activeLinkId()}
+                  onSelect={persistDraftOnSenderSwitch}
+                />
+              </div>
             </div>
             {/* Expanded TO */}
 
@@ -1415,10 +1485,12 @@ export function BaseInput(props: {
               dragState={recipientDragState}
               onDrop={handleRecipientDrop}
             >
-              <div class="min-w-8">to</div>
+              <div class="w-10 shrink-0 pt-2">to</div>
               <RecipientSelector<EmailRecipient['kind']>
+                class="min-w-0"
                 inputRef={setToRef}
                 options={ctx.recipientOptions}
+                selfEmail={activeInboxEmail()}
                 selectedOptions={form().recipients().to}
                 setSelectedOptions={withDraftSave((v) =>
                   form().setRecipients('to', v)
@@ -1439,10 +1511,12 @@ export function BaseInput(props: {
                 dragState={recipientDragState}
                 onDrop={handleRecipientDrop}
               >
-                <div class="min-w-8">cc</div>
+                <div class="w-10 shrink-0 pt-2">cc</div>
                 <RecipientSelector<EmailRecipient['kind']>
+                  class="min-w-0"
                   inputRef={setCcRef}
                   options={ctx.recipientOptions}
+                  selfEmail={activeInboxEmail()}
                   selectedOptions={form().recipients().cc}
                   setSelectedOptions={withDraftSave((v) =>
                     form().setRecipients('cc', v)
@@ -1464,10 +1538,12 @@ export function BaseInput(props: {
                 dragState={recipientDragState}
                 onDrop={handleRecipientDrop}
               >
-                <div class="min-w-8">bcc</div>
+                <div class="w-10 shrink-0 pt-2">bcc</div>
                 <RecipientSelector<EmailRecipient['kind']>
+                  class="min-w-0"
                   inputRef={setBccRef}
                   options={ctx.recipientOptions}
+                  selfEmail={activeInboxEmail()}
                   selectedOptions={form().recipients().bcc}
                   setSelectedOptions={withDraftSave((v) =>
                     form().setRecipients('bcc', v)

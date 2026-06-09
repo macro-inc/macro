@@ -67,7 +67,7 @@ share_permission_db_utils = { path = "../share_permission_db_utils", optional = 
 sqlx = { workspace = true, optional = true }
 sqs_client = { path = "../sqs_client", default-features = false, features = ["search"], optional = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = ["macros"], optional = true }
+tokio = { workspace = true, features = ["macros", "sync"], optional = true }
 tracing = { workspace = true }
 utoipa = { workspace = true, optional = true }
 uuid = { workspace = true }

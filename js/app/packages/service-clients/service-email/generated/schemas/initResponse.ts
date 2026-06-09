@@ -7,11 +7,12 @@
 import type { InitResponseBackfillJobId } from './initResponseBackfillJobId';
 
 export interface InitResponse {
-  /** Present when init enqueued a backfill job. Absent for the graph path,
-where the child link's backfill already ran under its own macro_id. */
+  /** Present when init enqueued a backfill job. Absent for cross-user delegation,
+where the child link's backfill already ran under its own macro_id; present for
+the self-link bootstrap, where a fresh link is provisioned and backfilled. */
   backfill_job_id?: InitResponseBackfillJobId;
-  /** The email_links row id for the now-accessible inbox. For the graph path
-(cross-account add) this is the *existing* child link the caller now
-delegates over; for the data-source path it's a freshly upserted row. */
+  /** The email_links row id for the now-accessible inbox. For cross-user delegation
+this is the *existing* child link the caller now delegates over; for the
+self-link bootstrap and the data-source path it's a freshly upserted row. */
   link_id: string;
 }

@@ -85,6 +85,8 @@ interface MockAppChromeProps {
   onCreateClick?: () => void;
   /** When true, glows the create button until it's clicked for the first time. */
   highlightCreate?: boolean;
+  /** Scope to bind mock app hotkeys into. Defaults to global for legacy use. */
+  scopeId?: string;
 }
 
 export function MockAppChrome(props: MockAppChromeProps) {
@@ -127,20 +129,28 @@ export function MockAppChrome(props: MockAppChromeProps) {
   const group = createHotkeyGroup();
 
   onMount(() => {
-    registerHotkey({
+    const leaderRegistration = registerHotkey({
       hotkey: GO_TO_LEADER_KEY,
-      scopeId: 'global',
+      scopeId: props.scopeId ?? 'global',
       description: 'Go to page',
       keyDownHandler: () => false,
-      activateCommandScopeId: GO_TO_COMMAND_SCOPE,
       hide: true,
       registrationType: 'add',
+      ...(props.scopeId
+        ? { activateCommandScope: true as const }
+        : { activateCommandScopeId: GO_TO_COMMAND_SCOPE }),
     }).withGroup(group);
+
+    const commandScopeId = props.scopeId
+      ? leaderRegistration.commandScopeId
+      : GO_TO_COMMAND_SCOPE;
+
+    if (!commandScopeId) return;
 
     for (const link of MOCK_SIDEBAR_LINKS) {
       registerHotkey({
         hotkey: link.hotkey as ValidHotkey,
-        scopeId: GO_TO_COMMAND_SCOPE,
+        scopeId: commandScopeId,
         description: `Go to ${link.label}`,
         keyDownHandler: () => {
           setFilter(link.id as SandboxSidebarFilter);

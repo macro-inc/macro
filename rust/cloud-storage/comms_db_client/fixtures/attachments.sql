@@ -2,7 +2,7 @@ INSERT INTO comms_channels (id, name, channel_type, org_id, owner_id)
 VALUES ('11111111-1111-1111-1111-111111111111', 'private 1', 'private', NULL, 'user1'),
        ('22222222-2222-2222-2222-222222222222', NULL, 'direct_message', NULL, 'user3'),
        ('33333333-3333-3333-3333-333333333333', 'public channel', 'public', NULL, 'user5'),
-       ('44444444-4444-4444-4444-444444444444', 'org channel', 'organization', 12345, 'user1'),
+       ('44444444-4444-4444-4444-444444444444', 'org channel', 'private', NULL, 'user1'),
        ('55555555-5555-5555-5555-555555555555', 'private 2', 'private', NULL, 'user2'),
        ('66666666-6666-6666-6666-666666666666', NULL, 'direct_message', NULL, 'user1');
 

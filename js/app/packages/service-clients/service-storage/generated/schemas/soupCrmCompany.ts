@@ -6,6 +6,7 @@
  */
 import type { SoupCrmCompanyDescription } from './soupCrmCompanyDescription';
 import type { SoupCrmCompanyName } from './soupCrmCompanyName';
+import type { SoupCrmCompanyViewedAt } from './soupCrmCompanyViewedAt';
 import type { SoupCrmDomain } from './soupCrmDomain';
 
 /**
@@ -35,4 +36,7 @@ these out by default. */
   teamId: string;
   /** When the company was last updated. */
   updatedAt: string;
+  /** When the requesting user last viewed this company, or `None` if
+never viewed. Mirrors the `viewed_at` other soup entities carry. */
+  viewedAt?: SoupCrmCompanyViewedAt;
 }

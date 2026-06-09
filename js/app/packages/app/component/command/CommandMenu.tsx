@@ -8,7 +8,8 @@ import { getActiveCommandsFromScope } from '@core/hotkey/getCommands';
 import type { RegisterHotkeyReturn } from '@core/hotkey/types';
 import { runCommand } from '@core/hotkey/utils';
 import { debouncedDependent } from '@core/util/debounce';
-import { type EntityData, InlineEntity } from '@entity';
+import { openExternalUrl } from '@core/util/url';
+import { type EntityData, InlineEntity, isGithubPrEntity } from '@entity';
 import Macro from '@icon/macro-logo.svg';
 import ArrowLeft from '@phosphor/arrow-left.svg';
 import { cn, Dialog, Hotkey, Panel } from '@ui';
@@ -102,6 +103,12 @@ export function CommandMenuInner(props: {
   items?: () => CommandMenuItem[];
   /** Called when the user selects an item from the menu */
   onSelect?: (item: CommandMenuItem) => void;
+  /**
+   * When true, selecting an item only fires `onSelect` — no navigation,
+   * command, or search is run. Used by the onboarding sandbox so selecting a
+   * sandbox entity doesn't navigate the real app to a non-existent doc.
+   */
+  disableDefaultAction?: boolean;
   /** Optional class merged onto the Panel wrapper. */
   class?: string;
   /** Optional depth for the Panel wrapper. */
@@ -164,6 +171,12 @@ export function CommandMenuInner(props: {
     if (!item) return;
 
     props.onSelect?.(item);
+    if (props.disableDefaultAction) {
+      // Close like a normal selection, just without navigating/running.
+      CommandState.close();
+      CommandState.setQuery('');
+      return;
+    }
     analytics.track('command_menu_use', { itemType: item.bucket });
 
     if (isCommandItem(item)) {
@@ -197,15 +210,25 @@ export function CommandMenuInner(props: {
 
     // Handle entity items (documents, channels, chats, etc.)
     if (isEntityItem(item)) {
-      const blockName = itemToBlockName(item.data);
-      if (blockName) {
-        openWithSplit(
-          { type: blockName, id: item.id },
-          {
-            referredFrom: 'kommand-menu',
-            preferNewSplit: openInNewSplit,
-          }
-        );
+      // TODO(dev-rb/github): Route GitHub PRs to /pr.
+      if (isGithubPrEntity(item.data)) {
+        openExternalUrl(item.data.metadata.url);
+        CommandState.close();
+        CommandState.setQuery('');
+        return;
+      }
+
+      if (item.data.type !== 'foreign') {
+        const blockName = itemToBlockName(item.data);
+        if (blockName) {
+          openWithSplit(
+            { type: blockName, id: item.id },
+            {
+              referredFrom: 'kommand-menu',
+              preferNewSplit: openInNewSplit,
+            }
+          );
+        }
       }
       CommandState.close();
       CommandState.setQuery('');

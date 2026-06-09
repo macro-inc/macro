@@ -3,18 +3,23 @@ import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchWithToken } from '@core/util/fetchWithToken';
 import { registerClient } from '@core/util/mockClient';
 import type { ObjectLike } from '@core/util/result';
-import { type SafeFetchInit, safeFetch } from '@core/util/safeFetch';
+import {
+  type ErrorResponseHandler,
+  type SafeFetchInit,
+  safeFetch,
+} from '@core/util/safeFetch';
 import { logger } from '@observability';
 import { makePersisted } from '@solid-primitives/storage';
-import { ok } from 'neverthrow';
+import { err, ok } from 'neverthrow';
 import { createSignal } from 'solid-js';
 import { fetchWithAuth as _fetchWithAuth } from './fetch';
 import type {
   EnrichGithubPullRequestsProxyRequest,
   EnrichGithubPullRequestsResponse,
+  GithubLinkStatusResponse,
+  GmailLinkStatusResponse,
   InitGithubLinkResponse,
   InitGmailLinkResponse,
-  PatchSubscriptionTierRequest,
   PatchUserTutorialRequest,
   SendMobileWelcomeEmailResponse,
   UserQuota,
@@ -131,11 +136,35 @@ async function getAccessToken(): Promise<string | null> {
   return accessToken;
 }
 
-export type PatchSubscriptionTierErrorCode =
-  | 'TIER_UNCHANGED'
-  | 'USER_IN_TEAM'
-  | 'NO_SUBSCRIPTION'
-  | 'UPDATE_IN_PROGRESS';
+export type GithubReauthenticationErrorCode = 'REAUTHENTICATION_REQUIRED';
+
+const githubErrorResponseHandler: ErrorResponseHandler<GithubReauthenticationErrorCode> =
+  async function handleGithubErrorResponse(response) {
+    switch (response.status) {
+      case 428:
+        return {
+          code: 'REAUTHENTICATION_REQUIRED',
+          message: 'GitHub reauthentication required',
+        };
+      case 401:
+        return { code: 'UNAUTHORIZED', message: 'Unauthorized access' };
+      case 403:
+        return { code: 'FORBIDDEN', message: 'Forbidden' };
+      case 404:
+        return { code: 'NOT_FOUND', message: 'Resource not found' };
+      case 409:
+        return { code: 'CONFLICT', message: 'Resource conflict' };
+      case 410:
+        return { code: 'GONE', message: 'Resource deleted' };
+      case 500:
+        return { code: 'SERVER_ERROR', message: 'Internal server error' };
+      default:
+        return {
+          code: 'HTTP_ERROR',
+          message: `HTTP error! status: ${response.status}`,
+        };
+    }
+  };
 
 export const authServiceClient = {
   async logout() {
@@ -231,8 +260,8 @@ export const authServiceClient = {
   },
   async putProfilePicture(args: PutProfilePictureParams) {
     return (
-      await fetchWithAuth<ProfilePictures>(
-        `${authHost}/user/profile_picture?url=${args.url}`,
+      await fetchWithAuth<EmptyResponse>(
+        `${authHost}/user/profile_picture?url=${encodeURIComponent(args.url)}`,
         {
           method: 'PUT',
         }
@@ -323,13 +352,14 @@ export const authServiceClient = {
 
   async enrichGithubPullRequests(args: EnrichGithubPullRequestsProxyRequest) {
     return (
-      await fetchWithAuth<EnrichGithubPullRequestsResponse>(
-        `${authHost}/github_pull_requests/enrich`,
-        {
-          method: 'POST',
-          body: JSON.stringify(args),
-        }
-      )
+      await fetchWithAuth<
+        EnrichGithubPullRequestsResponse,
+        GithubReauthenticationErrorCode
+      >(`${authHost}/github_pull_requests/enrich`, {
+        method: 'POST',
+        body: JSON.stringify(args),
+        errorResponseHandler: githubErrorResponseHandler,
+      })
     ).map((result) => result);
   },
   async patchUserTutorial(args: PatchUserTutorialRequest) {
@@ -486,63 +516,28 @@ export const authServiceClient = {
     ).map((result) => result.url);
   },
 
-  /**
-   * Patches the current user's subscription tier. Backend swaps both the RBAC role and
-   * Stripe subscription line item; caller should invalidate user info afterwards so the
-   * new permissions are picked up.
-   *
-   * Maps each distinct backend failure (distinguished by HTTP status) to a semantic code
-   * the UI can switch on. Uses `_fetchWithAuth` directly so the `CustomErrorCode` generic
-   * survives the module-level `fetchWithAuth` cast.
-   */
-  async patchSubscriptionTier(args: PatchSubscriptionTierRequest) {
-    return _fetchWithAuth<{}, PatchSubscriptionTierErrorCode>(
-      `${authHost}/user/stripe/subscription`,
-      {
-        method: 'PATCH',
-        body: JSON.stringify(args),
-        errorResponseHandler: async (response) => {
-          // Custom handler fully replaces fetchWithAuth's default mapping, so preserve
-          // the base cases we still want (401/500) alongside our endpoint-specific codes.
-          switch (response.status) {
-            case 400:
-              return {
-                code: 'TIER_UNCHANGED',
-                message: 'Subscription is already on the requested tier',
-              };
-            case 401:
-              return { code: 'UNAUTHORIZED', message: 'Unauthorized access' };
-            case 403:
-              return {
-                code: 'USER_IN_TEAM',
-                message:
-                  'User is a member of a team; tier is managed by the team owner',
-              };
-            case 404:
-              return {
-                code: 'NO_SUBSCRIPTION',
-                message: 'User does not have an active subscription',
-              };
-            case 409:
-              return {
-                code: 'UPDATE_IN_PROGRESS',
-                message:
-                  'Another subscription update is already in progress for this user',
-              };
-            case 500:
-              return {
-                code: 'SERVER_ERROR',
-                message: 'Internal server error',
-              };
-            default:
-              return {
-                code: 'HTTP_ERROR',
-                message: `HTTP error! status: ${response.status}`,
-              };
-          }
-        },
-      }
-    );
+  async checkGithubLinkStatus() {
+    return (
+      await fetchWithAuth<
+        GithubLinkStatusResponse,
+        GithubReauthenticationErrorCode
+      >(`${authHost}/link/github/status`, {
+        method: 'GET',
+        errorResponseHandler: githubErrorResponseHandler,
+      })
+    ).map((result) => result);
+  },
+
+  async checkGmailLinkStatus() {
+    return (
+      await fetchWithAuth<
+        GmailLinkStatusResponse,
+        GithubReauthenticationErrorCode
+      >(`${authHost}/link/gmail/status`, {
+        method: 'GET',
+        errorResponseHandler: githubErrorResponseHandler,
+      })
+    ).map((result) => result);
   },
 
   /**
@@ -587,6 +582,15 @@ export const authServiceClient = {
         method: 'DELETE',
       })
     ).map((_result) => {});
+  },
+
+  async reauthenticateGithub(originalUrl?: string) {
+    const deleteResult = await authServiceClient.deleteGithubLink();
+    if (deleteResult.isErr()) {
+      return err(deleteResult.error);
+    }
+
+    return authServiceClient.initGithubLink(originalUrl);
   },
 
   async sendMobileWelcomeEmail(email: string) {

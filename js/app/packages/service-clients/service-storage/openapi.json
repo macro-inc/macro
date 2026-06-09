@@ -2150,6 +2150,87 @@
         }
       }
     },
+    "/channels/{channel_id}/bots/scoped": {
+      "post": {
+        "tags": ["bots"],
+        "summary": "Handler for `POST /channels/{channel_id}/bots/scoped`.",
+        "operationId": "create_channel_scoped_bot",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateChannelScopedBotRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateChannelScopedBotResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/channels/{channel_id}/join": {
       "post": {
         "tags": ["channels"],
@@ -3452,6 +3533,96 @@
         }
       }
     },
+    "/channels/{channel_id}/webhook": {
+      "post": {
+        "tags": ["bots"],
+        "summary": "Handler for `POST /channels/{channel_id}/webhook`.",
+        "operationId": "post_channel_bot_webhook",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "x-macro-channel-bot-token",
+            "in": "header",
+            "description": "Bot authentication token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChannelWebhookRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelWebhookResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/crm/comment/{comment_id}": {
       "delete": {
         "tags": ["crm::inbound::axum_router::comments"],
@@ -3585,7 +3756,7 @@
     "/crm/comments/{entity_type}/{entity_id}": {
       "get": {
         "tags": ["crm::inbound::axum_router::comments"],
-        "summary": "List the comment threads on a CRM company or contact, scoped to the\nrequesting user's team. Returns 404 when the entity isn't owned by the\nteam; an owned entity with no threads returns `200 []`.",
+        "summary": "List the comment threads on a CRM company or contact. Access is\nenforced by [`EntityPermissionExtractor`] against the path's\n`crm_company`/`crm_contact` entity type — hidden parents are\ninvisible to plain members. An accessible entity with no threads\nreturns `200 []`.",
         "operationId": "list_crm_comments",
         "parameters": [
           {
@@ -3733,10 +3904,71 @@
         }
       }
     },
+    "/crm/companies/{company_id}": {
+      "get": {
+        "tags": ["crm::inbound::axum_router::get_company"],
+        "summary": "Fetch a single CRM company by id, hydrated with its domains, the\nprimary domain's directory display metadata (name + description),\nand the company's contacts. Access is enforced by\n[`CrmCompanyAccessLevelExtractor`]: the user must be on the team\nthat owns the company, and hidden companies are invisible to plain\nmembers. Admin/owner callers see hidden companies and contacts so\nthey can render the right unhide UI.",
+        "operationId": "get_company",
+        "parameters": [
+          {
+            "name": "company_id",
+            "in": "path",
+            "description": "The CRM company to fetch",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrmCompanyResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/crm/companies/{company_id}/contacts": {
       "get": {
         "tags": ["crm::inbound::axum_router::list_company_contacts"],
-        "summary": "List the non-hidden contacts of a CRM company, scoped to the\nrequesting user's team. Returns 404 when the company isn't owned by\nthe team (so existence doesn't leak across teams); an owned company\nwith no visible contacts returns `200 []`.",
+        "summary": "List the contacts of a CRM company. Access is enforced by\n[`CrmCompanyAccessLevelExtractor`]: the user must be on the team that\nowns the company. Hidden companies and hidden contacts are invisible\nto plain members; admin/owner callers see hidden rows so they can\nrender the right unhide UI.",
         "operationId": "list_company_contacts",
         "parameters": [
           {
@@ -3800,7 +4032,7 @@
     "/crm/companies/{company_id}/email-sync": {
       "put": {
         "tags": ["crm::inbound::axum_router::set_email_sync"],
-        "summary": "Toggle `email_sync` on a CRM company. `false` disables CRM email\nsharing for the company and permanently removes its existing CRM\ncontacts and contact sources.",
+        "summary": "Toggle `email_sync` on a CRM company. Purely a visibility flag —\nit gates whether team members can see each other's emails with\nthis company. Existing CRM data is unaffected.",
         "operationId": "set_email_sync",
         "parameters": [
           {
@@ -3874,7 +4106,7 @@
     "/crm/companies/{company_id}/hidden": {
       "put": {
         "tags": ["crm::inbound::axum_router::set_company_hidden"],
-        "summary": "Toggle `hidden` on a CRM company. Hiding also disables `email_sync`\nand cascades to clearing the company's contacts and contact sources.",
+        "summary": "Toggle `hidden` on a CRM company. Hiding also disables\n`email_sync` and soft-hides every contact under the company.\nUn-hide restores contact visibility only; `email_sync` is left\nuntouched (the team must re-enable it explicitly). Contact rows\nand contact sources survive the cycle.",
         "operationId": "set_company_hidden",
         "parameters": [
           {
@@ -3901,6 +4133,67 @@
         "responses": {
           "204": {
             "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/crm/contacts/{contact_id}": {
+      "get": {
+        "tags": ["crm::inbound::axum_router::get_contact"],
+        "summary": "Fetch a single CRM contact by id. Access is enforced by\n[`CrmContactAccessLevelExtractor`]: the user must be on the team that\nowns the contact's parent company, and hidden contacts are invisible\nto plain members. Admin/owner callers see hidden contacts so they can\nrender the right unhide UI.",
+        "operationId": "get_contact",
+        "parameters": [
+          {
+            "name": "contact_id",
+            "in": "path",
+            "description": "The CRM contact to fetch",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrmContactResponse"
+                }
+              }
+            }
           },
           "401": {
             "description": "",
@@ -6417,6 +6710,16 @@
               }
             }
           },
+          "403": {
+            "description": "CRM-scoped queries require team membership, or requesting hidden CRM companies requires admin/owner team role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "500": {
             "description": "",
             "content": {
@@ -6461,6 +6764,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SoupPage"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CRM-scoped queries require team membership, or requesting hidden CRM companies requires admin/owner team role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -6511,6 +6824,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SoupPage"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CRM-scoped queries require team membership, or requesting hidden CRM companies requires admin/owner team role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -9320,6 +9643,162 @@
           }
         }
       },
+      "Bot": {
+        "type": "object",
+        "description": "Bot row.",
+        "required": [
+          "id",
+          "kind",
+          "name",
+          "handle",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "avatar_url": {
+            "type": ["string", "null"],
+            "description": "Optional avatar URL."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation timestamp."
+          },
+          "created_by": {
+            "type": ["string", "null"],
+            "description": "User that created this bot."
+          },
+          "deleted_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Soft-delete timestamp."
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Optional description."
+          },
+          "handle": {
+            "type": "string",
+            "description": "Stable handle."
+          },
+          "id": {
+            "$ref": "#/components/schemas/BotId",
+            "description": "Bot id."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/BotKind",
+            "description": "Bot kind."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "owner": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BotOwner",
+                "description": "Owner for owned bots."
+              }
+            ]
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Update timestamp."
+          }
+        }
+      },
+      "BotId": {
+        "type": "string"
+      },
+      "BotKind": {
+        "type": "string",
+        "description": "Bot kind.",
+        "enum": ["owned", "system"]
+      },
+      "BotOwner": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "User-owned bot.",
+            "required": ["user_id", "type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["user"]
+              },
+              "user_id": {
+                "type": "string",
+                "description": "Owner user id."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Team-owned bot.",
+            "required": ["team_id", "type"],
+            "properties": {
+              "team_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Owner team id."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["team"]
+              }
+            }
+          }
+        ],
+        "description": "Bot owner."
+      },
+      "BotToken": {
+        "type": "object",
+        "description": "Bot token metadata.",
+        "required": ["id", "bot_id", "token_prefix", "created_at"],
+        "properties": {
+          "bot_id": {
+            "$ref": "#/components/schemas/BotId",
+            "description": "Owning bot id."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation timestamp."
+          },
+          "expires_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Expiration timestamp."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Token id."
+          },
+          "label": {
+            "type": ["string", "null"],
+            "description": "Optional token label."
+          },
+          "last_used_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Last successful use."
+          },
+          "revoked_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Revocation timestamp."
+          },
+          "token_prefix": {
+            "type": "string",
+            "description": "Token lookup prefix."
+          }
+        }
+      },
       "BranchNameResponse": {
         "type": "object",
         "description": "Branch name response.",
@@ -9389,7 +9868,7 @@
         "properties": {
           "attended": {
             "type": ["boolean", "null"],
-            "description": "Filter by whether the requesting user attended the call.\n`None` = no filter, `Some(true)` = only calls the user joined,\n`Some(false)` = only calls the user did not join."
+            "description": "Legacy filter by whether the requesting user attended the call.\nPrefer [`CallFilters::status`] for new callers.\n`None` = no filter, `Some(true)` = only calls the user joined,\n`Some(false)` = only calls the user did not join."
           },
           "call_ids": {
             "type": "array",
@@ -9411,6 +9890,17 @@
               "type": "string"
             },
             "description": "Speaker macro user ids. Empty to include all."
+          },
+          "status": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CallStatus",
+                "description": "Filter by the requesting user's viewer-relative call status."
+              }
+            ]
           }
         }
       },
@@ -9476,6 +9966,10 @@
             },
             "description": "Participants (both active and historic)."
           },
+          "recordingPreviewUrl": {
+            "type": ["string", "null"],
+            "description": "Presigned URL for the call recording preview image, if available."
+          },
           "recordingStartedAt": {
             "type": ["string", "null"],
             "format": "date-time",
@@ -9497,6 +9991,17 @@
             "type": "string",
             "format": "date-time",
             "description": "When the call started (created_at for active, started_at for archived)."
+          },
+          "status": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CallStatus",
+                "description": "Viewer-relative call status when fetched in the context of a specific user."
+              }
+            ]
           },
           "summary": {
             "type": ["string", "null"],
@@ -9658,6 +10163,11 @@
             "description": "Stable DB-row id for the segment."
           }
         }
+      },
+      "CallStatus": {
+        "type": "string",
+        "description": "Viewer-relative attendance status for a call record.\nSerializes as `ATTENDED`, `MISSED`, or `UNATTENDED`.",
+        "enum": ["ATTENDED", "MISSED", "UNATTENDED"]
       },
       "CallTokenResponse": {
         "type": "object",
@@ -9995,7 +10505,29 @@
       "ChannelType": {
         "type": "string",
         "description": "Type of channel.",
-        "enum": ["public", "organization", "private", "direct_message", "team"]
+        "enum": ["public", "private", "direct_message", "team"]
+      },
+      "ChannelWebhookRequest": {
+        "type": "object",
+        "description": "Request to post a channel webhook message.",
+        "required": ["content"],
+        "properties": {
+          "content": {
+            "type": "string",
+            "description": "Message body."
+          }
+        }
+      },
+      "ChannelWebhookResponse": {
+        "type": "object",
+        "description": "Response returned after posting a channel webhook message.",
+        "required": ["message_id"],
+        "properties": {
+          "message_id": {
+            "type": "string",
+            "description": "Created message id."
+          }
+        }
       },
       "ChannelWithParticipants": {
         "type": "object",
@@ -10293,6 +10825,62 @@
           "id": {
             "type": "string",
             "description": "Created channel id."
+          }
+        }
+      },
+      "CreateChannelScopedBotRequest": {
+        "type": "object",
+        "description": "Request to create a bot scoped to a channel.",
+        "required": ["name", "handle"],
+        "properties": {
+          "avatar_url": {
+            "type": ["string", "null"],
+            "description": "Optional avatar URL."
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Optional description."
+          },
+          "handle": {
+            "type": "string",
+            "description": "Stable handle."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "team_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Team owner. Omit for a user-owned bot."
+          },
+          "token_expires_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Optional token expiration timestamp."
+          },
+          "token_label": {
+            "type": ["string", "null"],
+            "description": "Optional token label."
+          }
+        }
+      },
+      "CreateChannelScopedBotResponse": {
+        "type": "object",
+        "description": "Response containing a newly created channel-scoped bot and token.",
+        "required": ["bot", "token", "bot_token"],
+        "properties": {
+          "bot": {
+            "$ref": "#/components/schemas/Bot",
+            "description": "Created bot."
+          },
+          "bot_token": {
+            "type": "string",
+            "description": "Raw bot token."
+          },
+          "token": {
+            "$ref": "#/components/schemas/BotToken",
+            "description": "Token metadata."
           }
         }
       },
@@ -10833,6 +11421,76 @@
               "type": "string"
             },
             "description": "CRM company ids to filter by. Examples: ['11111111-...']. Empty to\ninclude all of the team's visible CRM companies."
+          },
+          "hidden": {
+            "type": ["boolean", "null"],
+            "description": "Optional `crm_companies.hidden` filter. `None` = visible only\n(default for back-compat with non-admin callers). `Some(false)` =\nvisible only (explicit). `Some(true)` = hidden only — requires\nadmin/owner team role; enforced upstream in soup's axum router."
+          }
+        }
+      },
+      "CrmCompanyResponse": {
+        "type": "object",
+        "description": "A CRM company as returned by `GET /crm/companies/{company_id}`.\nMirrors the soup-listed `crmCompany` shape (`name` / `description`\nresolved from the primary domain's `crm_domain_directory` entry) and\nembeds the company's contacts so the panel can render in a single\nrequest.",
+        "required": [
+          "id",
+          "teamId",
+          "emailSync",
+          "hidden",
+          "createdAt",
+          "updatedAt",
+          "domains",
+          "contacts"
+        ],
+        "properties": {
+          "contacts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CrmContactResponse"
+            },
+            "description": "Contacts attached to this company. Hidden contacts are filtered\nout for non-admin viewers."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Earliest known interaction with this company."
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Display description from the primary domain's directory entry."
+          },
+          "domains": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CrmDomainResponse"
+            },
+            "description": "All domains associated with this company, ordered by creation\ntime ascending (primary first)."
+          },
+          "emailSync": {
+            "type": "boolean",
+            "description": "Whether email sync is enabled for this company."
+          },
+          "hidden": {
+            "type": "boolean",
+            "description": "Whether the company is hidden from CRM listings for the\nrequesting team. Non-admin viewers never see `hidden = true`\nrows (the endpoint 404s for them); admin/owner callers see\nhidden companies so they can render the right toggle state."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of the company."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "Display name from the primary domain's directory entry, or\n`None` when unresolved."
+          },
+          "teamId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of the team that owns this company record."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Most recent known interaction with this company."
           }
         }
       },
@@ -10843,6 +11501,7 @@
           "id",
           "companyId",
           "email",
+          "hidden",
           "firstInteraction",
           "lastInteraction",
           "createdAt",
@@ -10868,6 +11527,10 @@
             "format": "date-time",
             "description": "Earliest known interaction with this contact."
           },
+          "hidden": {
+            "type": "boolean",
+            "description": "Whether the contact is hidden from CRM listings for the\nrequesting team. Non-admin viewers never see `hidden = true`\nrows (the endpoint filters them out); admin/owner callers see\nhidden contacts so they can render the right toggle state."
+          },
           "id": {
             "type": "string",
             "format": "uuid",
@@ -10886,6 +11549,32 @@
             "type": "string",
             "format": "date-time",
             "description": "When the contact record was last updated."
+          }
+        }
+      },
+      "CrmDomainResponse": {
+        "type": "object",
+        "description": "A CRM domain associated with a company.",
+        "required": ["id", "companyId", "domain", "createdAt"],
+        "properties": {
+          "companyId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of the company the domain belongs to."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the domain record was created."
+          },
+          "domain": {
+            "type": "string",
+            "description": "The domain (e.g. \"acme.com\")."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of the domain record."
           }
         }
       },
@@ -12027,6 +12716,13 @@
               "type": "string"
             },
             "description": "Only include emails that have at least one of these labels. Supports both Gmail system labels (e.g. \"INBOX\", \"CATEGORY_PROMOTIONS\") and user-created labels (e.g. \"github\"). Empty to not filter by included labels.\nNote: SPAM and TRASH emails are not indexed in OpenSearch, so they will never appear in results regardless of this filter."
+          },
+          "link_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Restrict to specific inboxes by email_links.id. Empty means \"any inbox the\ncaller can access\" (soup expands to the full set at the router edge)."
           },
           "notification_filters": {
             "$ref": "#/components/schemas/NotificationFilters",
@@ -13456,6 +14152,11 @@
           "displayName": {
             "type": "string",
             "description": "A compact label suitable for display in the UI."
+          },
+          "foreignEntityId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The internal `foreign_entity.id` UUID for the GitHub pull request row."
           },
           "githubKey": {
             "type": "string",
@@ -15273,7 +15974,7 @@
         "properties": {
           "hidden": {
             "type": "boolean",
-            "description": "New value for `crm_companies.hidden`. Setting to `true` hides\nthe company from CRM listings AND disables `email_sync` (which\npermanently deletes the company's contacts and contact sources).\nSetting to `false` un-hides the company; `email_sync` is left\nuntouched and the team must re-enable it explicitly."
+            "description": "New value for `crm_companies.hidden`. Setting to `true` hides\nthe company from CRM listings, disables `email_sync`, and\nsoft-hides every contact under it (`crm_contacts.hidden = true`).\nContact rows and `crm_contact_sources` are preserved across the\ncycle, so un-hide is a true reverse. Setting to `false`\nun-hides the company and soft-restores its contacts;\n`email_sync` is left untouched and the team must re-enable it\nexplicitly."
           }
         }
       },
@@ -15295,7 +15996,7 @@
         "properties": {
           "email_sync": {
             "type": "boolean",
-            "description": "New value for `crm_companies.email_sync`. Setting to `false`\npermanently deletes the company's CRM contacts and contact sources."
+            "description": "New value for `crm_companies.email_sync`. Purely a read-side\nvisibility/permission gate — `soup` queries and email-permission\nchecks require `email_sync = true` before exposing the\ncompany's emails team-wide. Populate continues to write CRM\nhistory regardless, so toggling never destroys data and\nre-enabling never requires a backfill."
           }
         }
       },
@@ -15594,13 +16295,14 @@
           "createdBy",
           "startedAt",
           "isActive",
+          "status",
           "attended",
           "participants"
         ],
         "properties": {
           "attended": {
             "type": "boolean",
-            "description": "Whether the requesting user attended this call (i.e. appears in the\n`call_participants` / `call_record_participants` table)."
+            "description": "Whether the requesting user attended this call. Kept for compatibility\nand derived from `status == ATTENDED`."
           },
           "callId": {
             "type": "string",
@@ -15649,6 +16351,10 @@
             "type": "string",
             "format": "date-time",
             "description": "When the call started."
+          },
+          "status": {
+            "$ref": "#/components/schemas/CallStatus",
+            "description": "Viewer-relative call status for the requesting user."
           },
           "summary": {
             "type": ["string", "null"],
@@ -15841,6 +16547,11 @@
             "type": "string",
             "format": "date-time",
             "description": "When the company was last updated."
+          },
+          "viewedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the requesting user last viewed this company, or `None` if\nnever viewed. Mirrors the `viewed_at` other soup entities carry."
           }
         }
       },

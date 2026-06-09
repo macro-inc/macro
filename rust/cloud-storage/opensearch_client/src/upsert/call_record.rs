@@ -3,10 +3,7 @@ use std::collections::HashSet;
 use models_opensearch::SearchIndex;
 
 use super::BulkUpsertResult;
-use crate::{
-    Result, call_records_shape::destination_uses_join_shape, date_format::EpochSeconds,
-    error::OpensearchClientError,
-};
+use crate::{Result, date_format::EpochSeconds};
 
 /// Relation name for parent docs in the call_records join field.
 const PARENT_RELATION: &str = "call";
@@ -42,55 +39,9 @@ pub(crate) async fn upsert_call_record_segment(
     index_override: Option<&str>,
 ) -> Result<()> {
     let destination = resolve_destination(index_override);
-    if destination_uses_join_shape(destination) {
-        return bulk_upsert_call_record_segments_join(
-            client,
-            std::slice::from_ref(args),
-            destination,
-        )
+    bulk_upsert_call_record_segments_inner(client, std::slice::from_ref(args), destination)
         .await
-        .map(|_| ());
-    }
-    upsert_call_record_segment_flat(client, args, destination).await
-}
-
-async fn upsert_call_record_segment_flat(
-    client: &opensearch::OpenSearch,
-    args: &UpsertCallRecordSegmentArgs,
-    index: &str,
-) -> Result<()> {
-    let id = &args.transcript_id;
-    let response = client
-        .index(opensearch::IndexParts::IndexId(index, id))
-        .body(args)
-        .send()
-        .await
-        .map_err(|err| OpensearchClientError::DeserializationFailed {
-            details: err.to_string(),
-            method: Some("upsert_call_record_segment".to_string()),
-        })?;
-
-    let status_code = response.status_code();
-    if status_code.is_success() {
-        tracing::trace!(id=%id, "call record segment upserted");
-        return Ok(());
-    }
-
-    let body =
-        response
-            .text()
-            .await
-            .map_err(|err| OpensearchClientError::DeserializationFailed {
-                details: err.to_string(),
-                method: Some("upsert_call_record_segment".to_string()),
-            })?;
-
-    tracing::error!(status_code=%status_code, body=%body, "error upserting call record segment");
-
-    Err(OpensearchClientError::Unknown {
-        details: body,
-        method: Some("upsert_call_record_segment".to_string()),
-    })
+        .map(|_| ())
 }
 
 #[tracing::instrument(skip(client, segments), err)]
@@ -104,32 +55,7 @@ pub(crate) async fn bulk_upsert_call_record_segments(
     }
 
     let index = resolve_destination(index_override);
-    if destination_uses_join_shape(index) {
-        bulk_upsert_call_record_segments_join(client, segments, index).await
-    } else {
-        bulk_upsert_call_record_segments_flat(client, segments, index).await
-    }
-}
-
-async fn bulk_upsert_call_record_segments_flat(
-    client: &opensearch::OpenSearch,
-    segments: &[UpsertCallRecordSegmentArgs],
-    index: &str,
-) -> Result<BulkUpsertResult> {
-    let mut bulk_body = Vec::with_capacity(segments.len() * 2);
-
-    for seg in segments {
-        let action = serde_json::json!({ "index": { "_id": seg.transcript_id } });
-        bulk_body.push(action.to_string());
-        bulk_body.push(serde_json::to_string(seg).map_err(|e| {
-            OpensearchClientError::DeserializationFailed {
-                details: e.to_string(),
-                method: Some("bulk_upsert_call_record_segments".to_string()),
-            }
-        })?);
-    }
-
-    super::bulk_upsert_to_index(client, index, bulk_body, "bulk_upsert_call_record_segments").await
+    bulk_upsert_call_record_segments_inner(client, segments, index).await
 }
 
 /// Builds the JSON document body for the parent call doc.
@@ -170,7 +96,7 @@ fn child_doc_body(seg: &UpsertCallRecordSegmentArgs) -> serde_json::Value {
 /// Writes one parent call doc per unique call_id and one child segment
 /// doc per row, all rooted at the call_id via `_routing` so the parent
 /// and all its segments live on the same shard.
-async fn bulk_upsert_call_record_segments_join(
+async fn bulk_upsert_call_record_segments_inner(
     client: &opensearch::OpenSearch,
     segments: &[UpsertCallRecordSegmentArgs],
     index: &str,
@@ -201,7 +127,7 @@ async fn bulk_upsert_call_record_segments_join(
         client,
         index,
         bulk_body,
-        "bulk_upsert_call_record_segments_join",
+        "bulk_upsert_call_record_segments_inner",
     )
     .await
 }

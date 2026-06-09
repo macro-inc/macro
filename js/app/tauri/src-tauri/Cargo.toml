@@ -10,10 +10,11 @@ version = "0.1.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [lib]
-crate-type = ["cdylib", "rlib", "staticlib"]
+crate-type = ["staticlib", "rlib"]
 name = "app_lib"
 
 [build-dependencies]
+serde_json = "1.0"
 tauri-build = { version = "2.3.1", features = [] }
 
 [features]

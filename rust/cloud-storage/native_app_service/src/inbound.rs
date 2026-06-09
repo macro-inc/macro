@@ -4,12 +4,13 @@ use axum::Json;
 use axum::response::IntoResponse;
 use axum::{
     Router,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     routing::get,
 };
+use serde::Deserialize;
 
 use crate::domain::models::{
-    AllTargets, Arch, BundleUpdate, BundleUpdateRequest, DesktopTarget, DesktopUpdate, IOSVerifier,
+    AllTargets, Arch, BundleAction, BundleUpdateRequest, DesktopTarget, DesktopUpdate, IOSVerifier,
 };
 use crate::domain::ports::NativeAppService;
 
@@ -35,7 +36,7 @@ pub fn native_app_router<S: NativeAppService, T>(state: RouterState<S>) -> Route
             get(desktop_update_handler),
         )
         .route(
-            "/update/bundle/{all_target}/{arch}/{current_version}",
+            "/update/bundle/{all_target}/{arch}",
             get(bundle_update_handler),
         )
         .route(
@@ -54,20 +55,28 @@ async fn desktop_update_handler(
 
 async fn bundle_update_handler<S: NativeAppService>(
     State(s): State<RouterState<S>>,
-    Path((target, arch, semver)): Path<(AllTargets, Arch, semver::Version)>,
-) -> UpdateResult<Json<BundleUpdate>> {
+    Path((target, arch)): Path<(AllTargets, Arch)>,
+    Query(query): Query<BundleUpdateQuery>,
+) -> UpdateResult<Json<BundleAction>> {
     match s
         .inner
         .get_bundle_update(BundleUpdateRequest {
             target,
             arch,
-            semver,
+            current_bundle_build: query.current_bundle_build,
+            native_build: query.native_build,
         })
         .await
     {
         Ok(Some(update)) => UpdateResult::UpdateFound(Json(update)),
         Ok(None) | Err(_) => UpdateResult::NoUpdateAvailable,
     }
+}
+
+#[derive(Debug, Deserialize)]
+struct BundleUpdateQuery {
+    current_bundle_build: u64,
+    native_build: u64,
 }
 
 #[derive(Debug)]

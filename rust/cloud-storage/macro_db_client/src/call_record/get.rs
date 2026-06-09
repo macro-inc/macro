@@ -18,6 +18,8 @@ pub struct CallRecordMetadataRow {
     pub custom_name: Option<String>,
     /// Whether the requesting user was a participant on the call.
     pub attended: bool,
+    /// Viewer-relative call status for the requesting user.
+    pub status: String,
 }
 
 #[derive(Debug, Clone)]
@@ -40,12 +42,12 @@ pub struct CallRecordSearchPayload {
     pub segments: Vec<CallRecordTranscriptSegment>,
 }
 
-/// `attended` optionally narrows by participation.
-#[tracing::instrument(skip(db))]
+/// `status_filter` optionally narrows visible calls by viewer-relative status.
+#[tracing::instrument(skip(db, status_filter))]
 pub async fn get_accessible_call_ids(
     db: &sqlx::Pool<sqlx::Postgres>,
     user_id: &str,
-    attended: Option<bool>,
+    status_filter: &[String],
 ) -> anyhow::Result<Vec<Uuid>> {
     sqlx::query_scalar!(
         r#"
@@ -59,29 +61,44 @@ pub async fn get_accessible_call_ids(
             WHERE t.user_id = $1
             UNION ALL
             SELECT $1
-        )
-        SELECT DISTINCT cr.id AS "id!"
-        FROM call_records cr
-        WHERE (
-            EXISTS (
-                SELECT 1 FROM entity_access ea
-                WHERE ea.entity_id = cr.id
-                  AND ea.entity_type = 'call'
-                  AND ea.source_id IN (SELECT source_id FROM user_source_ids)
-            ) OR EXISTS (
-                SELECT 1 FROM "SharePermission" sp
-                WHERE sp.id = cr.share_permission_id
-                  AND sp."isPublic" = true
-                  AND sp."publicAccessLevel" IS NOT NULL
+        ),
+        visible_calls AS (
+            SELECT
+                cr.id,
+                CASE
+                    WHEN EXISTS (
+                        SELECT 1 FROM call_record_participants crp
+                        WHERE crp.call_record_id = cr.id AND crp.user_id = $1
+                    ) THEN 'ATTENDED'
+                    WHEN EXISTS (
+                        SELECT 1 FROM comms_channel_participants ccp
+                        WHERE ccp.channel_id = cr.channel_id
+                          AND ccp.user_id = $1
+                          AND ccp.left_at IS NULL
+                    ) THEN 'MISSED'
+                    ELSE 'UNATTENDED'
+                END AS status
+            FROM call_records cr
+            WHERE (
+                EXISTS (
+                    SELECT 1 FROM entity_access ea
+                    WHERE ea.entity_id = cr.id
+                      AND ea.entity_type = 'call'
+                      AND ea.source_id IN (SELECT source_id FROM user_source_ids)
+                ) OR EXISTS (
+                    SELECT 1 FROM "SharePermission" sp
+                    WHERE sp.id = cr.share_permission_id
+                      AND sp."isPublic" = true
+                      AND sp."publicAccessLevel" IS NOT NULL
+                )
             )
         )
-        AND ($2::bool IS NULL OR EXISTS (
-            SELECT 1 FROM call_record_participants crp
-            WHERE crp.call_record_id = cr.id AND crp.user_id = $1
-        ) = $2)
+        SELECT id AS "id!"
+        FROM visible_calls
+        WHERE cardinality($2::text[]) = 0 OR status = ANY($2)
         "#,
         user_id,
-        attended,
+        status_filter,
     )
     .fetch_all(db)
     .await
@@ -203,7 +220,7 @@ pub async fn get_call_record_search_payload(
     }))
 }
 
-/// `user_id` drives the per-row `attended` flag.
+/// `user_id` drives the per-row viewer-specific status and legacy `attended` flag.
 #[tracing::instrument(skip(db))]
 pub async fn get_call_records_metadata(
     db: &sqlx::Pool<sqlx::Postgres>,
@@ -228,7 +245,20 @@ pub async fn get_call_records_metadata(
             EXISTS (
                 SELECT 1 FROM call_record_participants crp
                 WHERE crp.call_record_id = cr.id AND crp.user_id = $2
-            ) AS "attended!"
+            ) AS "attended!",
+            CASE
+                WHEN EXISTS (
+                    SELECT 1 FROM call_record_participants crp
+                    WHERE crp.call_record_id = cr.id AND crp.user_id = $2
+                ) THEN 'ATTENDED'
+                WHEN EXISTS (
+                    SELECT 1 FROM comms_channel_participants ccp
+                    WHERE ccp.channel_id = cr.channel_id
+                      AND ccp.user_id = $2
+                      AND ccp.left_at IS NULL
+                ) THEN 'MISSED'
+                ELSE 'UNATTENDED'
+            END AS "status!"
         FROM call_records cr
         WHERE cr.id = ANY($1)
         "#,

@@ -55,6 +55,7 @@ import {
   updateDraftTimestamp,
 } from '../util/taskComposerStorage';
 import { InlinePropertyValue } from './InlinePropertyValue';
+import { SimilarTasksSection } from './TaskDuplicateList';
 
 // Show these props in the composer (Linear-style left-to-right order).
 const COMPOSER_PROPERTIES = [
@@ -575,6 +576,17 @@ export function ComposeTask(props: ComposeTaskProps) {
     props.onClose?.();
   };
 
+  const handleOpenSimilarTask = (taskId: string) => {
+    // Closing snapshots the draft (incl. these results); open the existing task
+    // in a new split so the composer's work isn't lost.
+    splitPanel.handle.close();
+    props.onClose?.();
+    openWithSplit(
+      { type: 'task', id: taskId },
+      { referredFrom: null, preferNewSplit: true }
+    );
+  };
+
   const handleClearDraft = () => {
     clearTaskComposerDraft();
     setTitle('');
@@ -846,6 +858,12 @@ export function ComposeTask(props: ComposeTaskProps) {
           </Button>
         </div>
       </div>
+
+      <SimilarTasksSection
+        title={title}
+        content={content}
+        onOpenTask={handleOpenSimilarTask}
+      />
     </div>
   );
 }

@@ -1,0 +1,16 @@
+lambda_name := file_name(justfile_directory())
+
+test:
+    cargo test --all-features
+
+# Build through cross by default so the zip contains a Lambda-compatible Linux binary.
+build compiler="cross":
+    SQLX_OFFLINE=true cargo lambda build {{ if compiler == "" { "" } else { "--compiler " + compiler } }} --release --bin {{lambda_name}} --output-format zip
+    {{ justfile_directory() }}/scripts/package-ffmpeg.sh
+
+watch:
+    cargo lambda watch
+
+# invoke the lambda locally after watch is running
+invoke:
+    cargo lambda invoke {{lambda_name}} --data-file event.json

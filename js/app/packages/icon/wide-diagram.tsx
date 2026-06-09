@@ -10,8 +10,11 @@ export const AnimatedDiagramIcon = (props: {
       width="100%"
       height="100%"
       viewBox="0 -3 18 18"
-      fill="currentColor"
-      stroke="none"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.125"
+      stroke-linecap="round"
+      stroke-linejoin="round"
       xmlns="http://www.w3.org/2000/svg"
       overflow="visible"
       class={`animated-diagram-icon ${props.triggerAnimation ? 'animating' : ''} ${props.class ?? ''}`}
@@ -21,11 +24,13 @@ export const AnimatedDiagramIcon = (props: {
         .animated-diagram-icon {
           .left-node, .right-node, .center-node, .left-arm, .right-arm {
             transition: transform 0.4s ease;
-            transform-origin: center;
           }
-          #${maskId} .moving-square {
+          /* scale from the square-end so the arms stretch/shrink to the diamond
+             without their caps poking into the square nodes */
+          .left-arm { transform-origin: 2.625px 4.6875px; }
+          .right-arm { transform-origin: 15.375px 4.6875px; }
+          #${maskId} .cover-right {
             transition: transform 0.4s ease;
-            transform-origin: 14.25 0;
           }
         }
         .animated-diagram-icon.animating {
@@ -36,50 +41,71 @@ export const AnimatedDiagramIcon = (props: {
             transform: translate(0, -0.75px);
           }
           .left-arm {
-            transform: translate(0, -1px);
+            transform: scaleY(0.78);
           }
           .right-arm {
-            transform: translate(0, 2.5px);
+            transform: translate(0, 2.65px) scaleY(0.8);
           }
-          #${maskId} .moving-square {
+          /* footprint slides with the right node so the square covers the arm */
+          #${maskId} .cover-right {
             transform: translate(0, 9.5px);
           }
         }
       `}</style>
-      <mask id={maskId}>
-        <rect width="18" height="18" fill="white" />
-        <rect x="1.5" y="1.5" width="2.25" height="2.25" fill="black" />
+
+      {/* The footprint sits on the right node's stroke centerline (its rect path)
+          and slides down in sync with it, so that square appears to cover the arm
+          behind it. Aligning to the centerline keeps the mask seam hidden under
+          the node's own stroke on every edge. */}
+      <mask id={maskId} maskUnits="userSpaceOnUse">
+        <rect x="-2" y="-3" width="22" height="22" fill="white" />
         <rect
-          class="moving-square"
-          x="14.25"
-          y="1.5"
-          width="2.25"
-          height="2.25"
+          class="cover-right"
           fill="black"
+          x="13.3125"
+          y="0.5625"
+          width="4.125"
+          height="4.125"
         />
       </mask>
+
+      {/* Connectors + diamond — masked so the square nodes appear to cover them */}
       <g mask={`url(#${maskId})`}>
-        <path
-          class="center-node"
-          d="M16.1199 7.33998H12.4499L8.95988 3.84998L5.46988 7.33998H1.87988V8.83998H5.45988L8.94988 12.34L12.4399 8.83998H16.1099V7.33998H16.1199ZM8.94988 10.22L6.82988 8.09998L8.94988 5.97998L11.0699 8.09998L8.94988 10.22Z"
-        />
-        <path
-          class="right-arm"
-          d="M16.1201 4.58997H14.6201V8.08997H16.1201V4.58997Z"
-        />
-        <path
-          class="right-node"
-          d="M18 5.25H12.75V0H18V5.25ZM14.25 3.75H16.5V1.5H14.25V3.75Z"
-        />
-        <path
-          class="left-arm"
-          d="M3.37988 4.58997H1.87988V8.08997H3.37988V4.58997Z"
-        />
-        <path
-          class="left-node"
-          d="M5.25 5.25H0V0H5.25V5.25ZM1.5 3.75H3.75V1.5H1.5V3.75Z"
-        />
+        {/* Center diamond node + horizontal connectors */}
+        <g class="center-node">
+          <rect
+            x="6.475"
+            y="5.615"
+            width="4.95"
+            height="4.95"
+            rx="1"
+            transform="rotate(45 8.95 8.09)"
+          />
+          <line x1="5.45" y1="8.09" x2="2.625" y2="8.09" />
+          <line x1="12.45" y1="8.09" x2="15.375" y2="8.09" />
+        </g>
+        {/* Vertical connector arms */}
+        <line class="left-arm" x1="2.625" y1="4.6875" x2="2.625" y2="8.09" />
+        <line class="right-arm" x1="15.375" y1="4.6875" x2="15.375" y2="8.09" />
       </g>
+
+      {/* Square nodes (drawn on top) */}
+      <rect
+        class="right-node"
+        x="13.3125"
+        y="0.5625"
+        width="4.125"
+        height="4.125"
+        rx="1"
+      />
+      <rect
+        class="left-node"
+        x="0.5625"
+        y="0.5625"
+        width="4.125"
+        height="4.125"
+        rx="1"
+      />
     </svg>
   );
 };

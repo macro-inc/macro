@@ -15,9 +15,21 @@
     "log:default",
     "auth:allow-authenticate",
     "device-info:default",
-    "pasteboard:allow-stage-pasteboard-image",
-    "photo-library:allow-pick-photo-library-images",
     "call-kit:allow-get-voip-token",
-    "call-kit:allow-end-active-call"
+    "call-kit:allow-end-active-call",
+    "call-kit:allow-get-pending-answered-call",
+    "call-kit:allow-watch-call-answered",
+    "call-kit:allow-watch-call-ended",
+    "call-kit:allow-watch-connection-state",
+    "call-kit:allow-watch-drawer-opened",
+    "call-kit:allow-watch-participant-identities",
+    "call-kit:allow-get-active-call-state",
+    "call-kit:allow-start-outgoing-call",
+    "call-kit:allow-set-video-enabled",
+    "call-kit:allow-set-video-overlay-mode",
+    "call-kit:allow-set-call-drawer-channel-title",
+    "call-kit:allow-set-call-drawer-theme",
+    "call-kit:allow-set-participant-display-name",
+    "call-kit:allow-switch-camera"
   ]
 }

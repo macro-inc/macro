@@ -125,16 +125,18 @@ pub(crate) async fn list_other_contacts(
     let http_client = client.inner.clone();
 
     // Determine the base URL based on whether this is a full or incremental sync.
+    // Request the PROFILE source alongside CONTACT: the default CONTACT-only source
+    // returns no photos for "other contacts", so profile photos require PROFILE.
     let base_url = if let Some(token) = sync_token {
         // Incremental sync: Use syncToken, omit pageSize
         format!(
-            "{}/otherContacts?readMask=names,emailAddresses,photos&requestSyncToken=true&syncToken={}",
+            "{}/otherContacts?readMask=names,emailAddresses,photos&sources=READ_SOURCE_TYPE_CONTACT&sources=READ_SOURCE_TYPE_PROFILE&requestSyncToken=true&syncToken={}",
             client.contacts_url, token
         )
     } else {
         // Full sync: Use pageSize
         format!(
-            "{}/otherContacts?readMask=names,emailAddresses,photos&pageSize=1000&requestSyncToken=true",
+            "{}/otherContacts?readMask=names,emailAddresses,photos&sources=READ_SOURCE_TYPE_CONTACT&sources=READ_SOURCE_TYPE_PROFILE&pageSize=1000&requestSyncToken=true",
             client.contacts_url
         )
     };

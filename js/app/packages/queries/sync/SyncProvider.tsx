@@ -9,6 +9,7 @@ import {
   applyNotificationStatusUpdate,
   notificationStatusUpdatePayloadSchema,
 } from '@queries/notification/user-notifications';
+import { handleTaskDuplicateMatchesUpdated } from '@queries/storage/task-duplicates';
 // Side-effect import: registers the scheduled-action live-update websocket
 // listener. Must be imported somewhere that always loads on app start — this
 // provider is guaranteed to mount alongside the other sync handlers.
@@ -84,6 +85,13 @@ export function QuerySyncProvider(props: SyncProviderProps) {
           return;
         }
         applyNotificationStatusUpdate(result.data);
+      })
+      .with({ type: 'task_duplicate_matches_updated' }, () => {
+        withParsedWebsocketPayload(
+          data.type,
+          data.data,
+          handleTaskDuplicateMatchesUpdated
+        );
       })
       .otherwise(() => {});
   });

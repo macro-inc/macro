@@ -65,6 +65,7 @@ import { ChannelInputContainer } from '../Input/ChannelInputContainer';
 import { hasSendableInputContent } from '../Input/utils/sendable-content';
 import { ChannelThread } from '../Thread';
 import { buildQuoteReplyValue } from '../Thread/utils/message-actions';
+import { ActiveCallMessage } from './ActiveCallMessage';
 import { ChannelDropZone } from './ChannelDropZone';
 import { createChannelDragState } from './create-channel-drag-state';
 import { createChannelFindBar } from './create-channel-find-bar';
@@ -235,7 +236,6 @@ export function Channel(props: ChannelProps) {
 
   const dragState = createChannelDragState({
     channelId: props.channelId,
-    attachmentTracker,
   });
 
   const channelName = useChannelName(props.channelId);
@@ -532,6 +532,7 @@ export function Channel(props: ChannelProps) {
                     </Show>
                   </div>
                 </Show>
+                <ActiveCallMessage channelId={props.channelId} />
               </div>
               <DebugSuspense name="Channel.input">
                 <ChannelInputContainer
@@ -557,6 +558,7 @@ export function Channel(props: ChannelProps) {
                     })}
                     onReady={(handle) => {
                       dragState.setAttachFilesToChannel(handle.attachFiles);
+                      dragState.setEntityMentionInputHandlers(handle);
                       setChannelInputHandle(handle);
                     }}
                     onChange={(snapshot) =>

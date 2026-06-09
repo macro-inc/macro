@@ -1,6 +1,7 @@
 import { renameItem } from '@core/component/FileList/itemOperations';
 import { toast } from '@core/component/Toast/Toast';
 import type { EntityData } from '@entity';
+import { callKeys } from '@queries/call/keys';
 import { channelKeys } from '@queries/channel/keys';
 import { queryClient } from '@queries/client';
 import { setHistoryItemName } from '@queries/history/history';
@@ -90,6 +91,8 @@ const validateEntityRename = (entity: EntityData): void => {
     case 'project':
     case 'call':
       return;
+    case 'foreign':
+      throw new Error('Foreign entities do not support renaming');
     default:
       throw new Error(`Unsupported entity type: ${entity.type}`);
   }
@@ -123,7 +126,8 @@ const renameDssSetData = (
     } else if (
       itemType !== 'email' &&
       itemType !== 'channel_message' &&
-      itemType !== 'automation'
+      itemType !== 'automation' &&
+      itemType !== 'foreign'
     ) {
       txns.set(
         id,
@@ -162,10 +166,13 @@ const renameCallRecordSetData = (
 ): void => {
   entities.forEach(({ id, newName, itemType }) => {
     if (itemType !== 'call') return;
-    queryClient.setQueryData<CallRecord>(['call', 'record', id], (prev) => {
-      if (!prev) return prev;
-      return { ...prev, customName: newName };
-    });
+    queryClient.setQueryData<CallRecord>(
+      callKeys.record(id).queryKey,
+      (prev) => {
+        if (!prev) return prev;
+        return { ...prev, customName: newName };
+      }
+    );
   });
 };
 

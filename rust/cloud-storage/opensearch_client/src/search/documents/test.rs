@@ -1,55 +1,6 @@
 use super::*;
 use opensearch_query_builder::ToOpenSearchJson;
 
-// `build_bool_query` dispatches on `alias_uses_join_shape()`, which is
-// cached via OnceLock for the process lifetime — so tests call the
-// explicit flat/join variants directly to stay deterministic regardless
-// of env state.
-
-#[test]
-fn test_build_bool_query_flat_shape() -> anyhow::Result<()> {
-    let builder = DocumentQueryBuilder::new(vec!["test".to_string()])
-        .match_type("exact")
-        .page_size(20)
-        .page(1)
-        .user_id("user123")
-        .collapse(true)
-        .ids(vec!["doc1".to_string(), "doc2".to_string()]);
-
-    let result = builder.build_bool_query_flat()?;
-
-    let expected = serde_json::json!({
-        "bool": {
-            "filter": [
-                {
-                    "bool": {
-                        "minimum_should_match": 1,
-                        "should": [
-                            {"terms": {"entity_id": ["doc1", "doc2"]}},
-                            {"term": {"owner_id": "user123"}}
-                        ]
-                    }
-                },
-                {"term": {"_index": "documents"}}
-            ],
-            "must": [
-                {
-                    "bool": {
-                        "minimum_should_match": 1,
-                        "should": [
-                            {"match_phrase": {"content": "test"}}
-                        ]
-                    }
-                }
-            ]
-        }
-    });
-
-    assert_eq!(result.build().to_json(), expected);
-
-    Ok(())
-}
-
 #[test]
 fn test_build_bool_query_join_shape_multi_term_and() -> anyhow::Result<()> {
     let builder = DocumentQueryBuilder::new(vec!["foo".to_string(), "bar".to_string()])
@@ -58,7 +9,7 @@ fn test_build_bool_query_join_shape_multi_term_and() -> anyhow::Result<()> {
         .page(0)
         .user_id("alice");
 
-    let json = builder.build_bool_query_join()?.build().to_json();
+    let json = builder.build_bool_query()?.build().to_json();
 
     let filter = json["bool"]["filter"].as_array().expect("filter array");
     assert!(
@@ -99,7 +50,7 @@ fn test_build_bool_query_join_shape_quoted_phrase_uses_match_phrase() -> anyhow:
         .match_type("partial")
         .user_id("alice");
 
-    let json = builder.build_bool_query_join()?.build().to_json();
+    let json = builder.build_bool_query()?.build().to_json();
     let must = &json["bool"]["must"][0]["has_child"]["query"];
     assert!(
         must.get("match_phrase").is_some(),
@@ -115,7 +66,7 @@ fn test_build_bool_query_join_shape_short_term_no_prefix() -> anyhow::Result<()>
         .match_type("partial")
         .user_id("alice");
 
-    let json = builder.build_bool_query_join()?.build().to_json();
+    let json = builder.build_bool_query()?.build().to_json();
     let must = &json["bool"]["must"][0]["has_child"]["query"];
     assert!(
         must.get("match_phrase").is_some(),
@@ -130,7 +81,7 @@ fn test_build_bool_query_join_shape_exact_match_type_uses_match_phrase() -> anyh
         .match_type("exact")
         .user_id("alice");
 
-    let json = builder.build_bool_query_join()?.build().to_json();
+    let json = builder.build_bool_query()?.build().to_json();
     let must = &json["bool"]["must"][0]["has_child"]["query"];
     assert!(
         must.get("match_phrase").is_some(),
@@ -147,7 +98,7 @@ fn test_build_bool_query_join_shape_ids_only_filter() -> anyhow::Result<()> {
         .ids(vec!["doc1".to_string(), "doc2".to_string()])
         .ids_only(true);
 
-    let json = builder.build_bool_query_join()?.build().to_json();
+    let json = builder.build_bool_query()?.build().to_json();
     let filter = json["bool"]["filter"].as_array().expect("filter array");
     assert!(
         filter.contains(&serde_json::json!({
@@ -171,7 +122,7 @@ fn test_build_bool_query_join_shape_sub_type_filter() -> anyhow::Result<()> {
         .user_id("alice")
         .sub_types(vec!["task".to_string()]);
 
-    let json = builder.build_bool_query_join()?.build().to_json();
+    let json = builder.build_bool_query()?.build().to_json();
     let filter = json["bool"]["filter"].as_array().expect("filter array");
     assert!(
         filter.contains(&serde_json::json!({"terms": {"sub_type": ["task"]}})),
@@ -186,7 +137,7 @@ fn test_build_bool_query_join_shape_has_inner_hits() -> anyhow::Result<()> {
         .match_type("partial")
         .user_id("alice");
 
-    let json = builder.build_bool_query_join()?.build().to_json();
+    let json = builder.build_bool_query()?.build().to_json();
     let must = json["bool"]["must"].as_array().expect("must array");
     for (idx, clause) in must.iter().enumerate() {
         let inner = &clause["has_child"]["inner_hits"];
@@ -204,11 +155,11 @@ fn test_build_bool_query_join_shape_has_inner_hits() -> anyhow::Result<()> {
 }
 
 #[test]
-fn document_index_deserializes_parent_shape_with_no_node_id_or_raw_content() {
-    // Join-shape parent docs only carry parent metadata in `_source`;
-    // `node_id` and `raw_content` are child-only fields and are
-    // absent. Deserialization has to succeed (otherwise the unified
-    // search response 500s on any v2 hit) and produce None for both.
+fn document_index_deserializes_parent_shape() {
+    // Parent docs carry only parent-level metadata in `_source`; the
+    // matching chunks' node_id / raw_content come via `inner_hits`.
+    // Deserialization has to succeed (otherwise the unified search
+    // response 500s on any parent hit).
     let parent = serde_json::json!({
         "entity_id": "00000000-0000-0000-0000-000000000001",
         "document_name": "Q3 Planning",
@@ -220,28 +171,6 @@ fn document_index_deserializes_parent_shape_with_no_node_id_or_raw_content() {
 
     let doc: DocumentIndex =
         serde_json::from_value(parent).expect("parent _source should deserialize");
-    assert!(doc.node_id.is_none(), "parent shape should have no node_id");
-    assert!(
-        doc.raw_content.is_none(),
-        "parent shape should have no raw_content"
-    );
-}
-
-#[test]
-fn document_index_deserializes_flat_chunk_shape_with_node_id() {
-    // Flat-shape chunk docs carry node_id (and optionally raw_content)
-    // directly. Make sure they keep deserializing after the move to
-    // Option<String>.
-    let chunk = serde_json::json!({
-        "entity_id": "00000000-0000-0000-0000-000000000001",
-        "document_name": "Q3 Planning",
-        "node_id": "0",
-        "owner_id": "macro|alice@example.com",
-        "file_type": "pdf",
-        "content": "Page text",
-        "updated_at_seconds": 1779000000_i64,
-    });
-
-    let doc: DocumentIndex = serde_json::from_value(chunk).expect("flat chunk should deserialize");
-    assert_eq!(doc.node_id.as_deref(), Some("0"));
+    assert_eq!(doc.document_name, "Q3 Planning");
+    assert_eq!(doc.owner_id, "macro|alice@example.com");
 }
