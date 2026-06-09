@@ -1,12 +1,14 @@
 import { NIL_UUID } from '@app/component/next-soup/filters/filter-store';
 import { throwOnErr } from '@core/util/result';
 import type { CrmCompanyEntity } from '@entity';
-import { crmKeys } from '@queries/crm/keys';
 import { storageServiceClient } from '@service-storage/client';
 import type { CrmCompanyResponse } from '@service-storage/generated/schemas/crmCompanyResponse';
 import type { CrmContactResponse } from '@service-storage/generated/schemas/crmContactResponse';
-import { useQuery } from '@tanstack/solid-query';
+import { useMutation, useQuery } from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';
+import { queryClient } from '../client';
+import { soupKeys } from '../soup/keys';
+import { crmKeys } from './keys';
 
 const COMPANY_STALE_TIME = 60 * 1000;
 
@@ -79,4 +81,65 @@ function responseToEntity(response: CrmCompanyResponse): CrmCompanyEntity {
       createdAt: d.createdAt,
     })),
   };
+}
+
+/**
+ * Toggles `crm_companies.hidden` via `PUT /crm/companies/{id}/hidden`. Hiding
+ * also disables `email_sync` and soft-hides the company's contacts; un-hide
+ * restores contact visibility (contact rows and sources survive the cycle).
+ * Invalidates soup (the company drops out of / returns to the listings) and the
+ * company detail query so an open panel reflects the new hidden/email-sync state.
+ */
+export function useSetCompanyHiddenMutation() {
+  return useMutation(() => ({
+    mutationFn: ({
+      companyId,
+      hidden,
+    }: {
+      companyId: string;
+      hidden: boolean;
+    }) =>
+      throwOnErr(() =>
+        storageServiceClient.setCompanyHidden({ companyId, hidden })
+      ),
+    onSuccess: (_data, { companyId }) =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: soupKeys._def }),
+        queryClient.invalidateQueries({
+          queryKey: crmKeys.company(companyId).queryKey,
+        }),
+      ]),
+  }));
+}
+
+/**
+ * Toggles `crm_companies.email_sync` via `PUT /crm/companies/{id}/email-sync`.
+ * Purely a read-side visibility gate controlling whether the team can see each
+ * other's emails with this company — existing CRM data is never destroyed and
+ * re-enabling needs no backfill.
+ */
+export function useSetEmailSyncMutation() {
+  return useMutation(() => ({
+    mutationFn: ({
+      companyId,
+      emailSync,
+    }: {
+      companyId: string;
+      emailSync: boolean;
+    }) =>
+      throwOnErr(() =>
+        storageServiceClient.setEmailSync({ companyId, emailSync })
+      ),
+    // Return the invalidation promise so the mutation stays pending until the
+    // refetches resolve — the company entity, empty-state message, and emails
+    // list flip in one beat. Soup carries the team-wide email visibility change;
+    // the company detail query backs the panel's `emailSync` empty-state text.
+    onSuccess: (_data, { companyId }) =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: soupKeys._def }),
+        queryClient.invalidateQueries({
+          queryKey: crmKeys.company(companyId).queryKey,
+        }),
+      ]),
+  }));
 }

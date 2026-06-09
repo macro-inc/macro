@@ -1,12 +1,12 @@
 import { SidePanel } from '@app/component/side-panel';
 import { SplitToolbarLeft } from '@app/component/split-layout/components/SplitToolbar';
+import { useCompanyQuery } from '@queries/crm/companies';
 import { CompanyContactsSection } from './CompanyContactsSection';
 import { CompanyDiscussionSection } from './CompanyDiscussionSection';
 import { CompanyEmailsSection } from './CompanyEmailsSection';
 import { CompanyHeader } from './CompanyHeader';
 import { CompanyMetadataSection } from './CompanyMetadataSection';
 import { CompanySharingSection } from './CompanySharingSection';
-import { useCompanyQuery } from './use-company-query';
 
 /**
  * Root of the company detail view. Owns the company query and pushes the

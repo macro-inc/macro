@@ -1,8 +1,8 @@
 import { toast } from '@core/component/Toast/Toast';
+import { useSetContactHiddenMutation } from '@queries/crm/contacts';
 import type { CrmContactResponse } from '@service-storage/generated/schemas/crmContactResponse';
 import { cn, InlineCheckbox } from '@ui';
 import { Show } from 'solid-js';
-import { useSetContactHiddenMutation } from './use-set-contact-hidden-mutation';
 
 const TOGGLE_BUTTON_CLASS =
   'inline-flex items-center gap-2 rounded-md h-7 px-2.5 text-xs select-none w-fit border border-ink-muted/[0.08] bg-ink-muted/[0.025] text-ink hover:bg-ink-muted/[0.06]';

@@ -196,7 +196,10 @@ export type CrmCompanyEntity = EntityBase & {
   type: 'crm_company';
   teamId: string;
   description?: string;
-  emailSync: boolean;
+  /** Whether team-wide email visibility is enabled for this company.
+   * `undefined` means not loaded — search results don't carry it; the
+   * full value arrives with the soup row or the company detail query. */
+  emailSync?: boolean;
   /** Whether the company has been hidden from the CRM listings. Only
    * admin/owner team members can see `hidden: true` rows from the soup
    * endpoint. */

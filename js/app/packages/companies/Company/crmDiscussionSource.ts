@@ -6,16 +6,18 @@ import type {
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { compareDateAsc } from '@core/util/date';
-import { throwOnErr } from '@core/util/result';
+import {
+  useCreateCrmCommentMutation,
+  useCrmCommentsQuery,
+  useDeleteCrmCommentMutation,
+  useEditCrmCommentMutation,
+} from '@queries/crm/comments';
 import { crmKeys } from '@queries/crm/keys';
-import { storageServiceClient } from '@service-storage/client';
 import type { CrmComment } from '@service-storage/generated/schemas/crmComment';
 import type { CrmCommentEntityType } from '@service-storage/generated/schemas/crmCommentEntityType';
 import type { CrmCommentThread } from '@service-storage/generated/schemas/crmCommentThread';
-import { useQuery, useQueryClient } from '@tanstack/solid-query';
+import { useQueryClient } from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';
-
-const CRM_COMMENTS_STALE_TIME = 60 * 1000;
 
 /** Maps a server `CrmCommentThread` (uuid ids) to the normalized view model. */
 function toViewThread(ct: CrmCommentThread): DiscussionThread {
@@ -58,8 +60,9 @@ function upsertThread(
  * [`DiscussionSource`] backed by the CRM comments API for a company or
  * contact. Ids are already uuid strings, so no id adaptation is needed; the
  * `DISCUSSION:` mark filter doesn't apply either (every CRM thread is a
- * discussion). Backed by a TanStack query with point cache updates after
- * each mutation. Must be called within a component owner.
+ * discussion). Backed by the `@queries/crm/comments` TanStack query with
+ * point cache updates after each mutation. Must be called within a
+ * component owner.
  */
 export function useCrmDiscussionSource(
   entityType: CrmCommentEntityType,
@@ -68,22 +71,10 @@ export function useCrmDiscussionSource(
   const userId = useUserId();
   const queryClient = useQueryClient();
 
-  const commentsQuery = useQuery(() => {
-    const id = entityId();
-    return {
-      queryKey: crmKeys.comments(entityType, id ?? '').queryKey,
-      queryFn: () => {
-        if (!id) {
-          throw new Error('entity id is required to fetch comments');
-        }
-        return throwOnErr(() =>
-          storageServiceClient.crmComments.list({ entityType, entityId: id })
-        );
-      },
-      enabled: !!id,
-      staleTime: CRM_COMMENTS_STALE_TIME,
-    };
-  });
+  const commentsQuery = useCrmCommentsQuery(entityType, entityId);
+  const createMutation = useCreateCrmCommentMutation();
+  const editMutation = useEditCrmCommentMutation();
+  const deleteMutation = useDeleteCrmCommentMutation();
 
   const threads = createMemo<DiscussionThread[]>(() =>
     (commentsQuery.data ?? []).map(toViewThread)
@@ -124,69 +115,69 @@ export function useCrmDiscussionSource(
     async createThread(text) {
       const id = entityId();
       if (!id) return;
-      const res = await storageServiceClient.crmComments.create({
-        entityType,
-        entityId: id,
-        body: { text },
-      });
-      if (res.isErr()) {
-        console.error('Unable to create CRM comment');
+      try {
+        const thread = await createMutation.mutateAsync({
+          entityType,
+          entityId: id,
+          text,
+        });
+        setThreads((prev) => upsertThread(prev, thread));
+      } catch (error) {
+        console.error('Unable to create CRM comment', error);
         toast.failure('Could not post comment');
-        return;
       }
-      setThreads((prev) => upsertThread(prev, res.value));
     },
     async createReply(threadId, text) {
       const id = entityId();
       if (!id) return;
-      const res = await storageServiceClient.crmComments.create({
-        entityType,
-        entityId: id,
-        body: { text, threadId },
-      });
-      if (res.isErr()) {
-        console.error('Unable to reply to CRM comment');
+      try {
+        const thread = await createMutation.mutateAsync({
+          entityType,
+          entityId: id,
+          text,
+          threadId,
+        });
+        setThreads((prev) => upsertThread(prev, thread));
+      } catch (error) {
+        console.error('Unable to reply to CRM comment', error);
         toast.failure('Could not post reply');
-        return;
       }
-      setThreads((prev) => upsertThread(prev, res.value));
     },
     async editComment(comment, text) {
-      const res = await storageServiceClient.crmComments.edit({
-        commentId: comment.id,
-        body: { text },
-      });
-      if (res.isErr()) {
-        console.error('Unable to edit CRM comment');
+      try {
+        const updated = await editMutation.mutateAsync({
+          commentId: comment.id,
+          text,
+        });
+        replaceComment(updated);
+      } catch (error) {
+        console.error('Unable to edit CRM comment', error);
         toast.failure('Could not edit comment');
-        return;
       }
-      replaceComment(res.value);
     },
     async deleteComment(comment) {
-      const res = await storageServiceClient.crmComments.delete({
-        commentId: comment.id,
-      });
-      if (res.isErr()) {
-        console.error('Unable to delete CRM comment');
+      try {
+        const { threadId, threadDeleted } = await deleteMutation.mutateAsync({
+          commentId: comment.id,
+        });
+        setThreads((prev) =>
+          threadDeleted
+            ? prev.filter((ct) => ct.thread.threadId !== threadId)
+            : prev.map((ct) =>
+                ct.thread.threadId === threadId
+                  ? {
+                      ...ct,
+                      comments: ct.comments.filter(
+                        (c) => c.commentId !== comment.id
+                      ),
+                    }
+                  : ct
+              )
+        );
+      } catch (error) {
+        console.error('Unable to delete CRM comment', error);
         toast.failure('Could not delete comment');
-        return;
       }
-      const { threadId, threadDeleted } = res.value;
-      setThreads((prev) =>
-        threadDeleted
-          ? prev.filter((ct) => ct.thread.threadId !== threadId)
-          : prev.map((ct) =>
-              ct.thread.threadId === threadId
-                ? {
-                    ...ct,
-                    comments: ct.comments.filter(
-                      (c) => c.commentId !== comment.id
-                    ),
-                  }
-                : ct
-            )
-      );
     },
   };
 }

@@ -1,5 +1,6 @@
 import { SidePanel } from '@app/component/side-panel';
 import { SplitToolbarLeft } from '@app/component/split-layout/components/SplitToolbar';
+import { useContactQuery } from '@queries/crm/contacts';
 import { useIsTeamAdmin } from '@queries/team/teams';
 import { Show } from 'solid-js';
 import { ContactDiscussionSection } from './ContactDiscussionSection';
@@ -7,7 +8,6 @@ import { ContactEmailsSection } from './ContactEmailsSection';
 import { ContactHeader } from './ContactHeader';
 import { ContactMetadataSection } from './ContactMetadataSection';
 import { ContactSharingSection } from './ContactSharingSection';
-import { useContactQuery } from './use-contact-query';
 
 /**
  * Root of the contact detail view. Owns the contact query and pushes the

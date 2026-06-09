@@ -1,11 +1,13 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { toast } from '@core/component/Toast/Toast';
 import type { CrmCompanyEntity } from '@entity';
+import {
+  useSetCompanyHiddenMutation,
+  useSetEmailSyncMutation,
+} from '@queries/crm/companies';
 import { useIsTeamAdmin } from '@queries/team/teams';
 import { cn, InlineCheckbox } from '@ui';
 import { Show } from 'solid-js';
-import { useSetCompanyHiddenMutation } from './use-set-company-hidden-mutation';
-import { useSetEmailSyncMutation } from './use-set-email-sync-mutation';
 
 const TOGGLE_BUTTON_CLASS =
   'inline-flex items-center gap-2 rounded-md h-7 px-2.5 text-xs select-none w-fit border border-ink-muted/[0.08] bg-ink-muted/[0.025] text-ink hover:bg-ink-muted/[0.06]';
@@ -60,7 +62,9 @@ export function CompanySharingSection(props: { company?: CrmCompanyEntity }) {
     >
       {(company) => {
         const isShared = () => !company().hidden;
-        const isSyncing = () => company().emailSync;
+        // The detail query always supplies a real boolean; `?? false` only
+        // covers the type-level "not loaded" case (search-derived entities).
+        const isSyncing = () => company().emailSync ?? false;
         // Disable interaction during pending mutations, when the backend
         // would reject (409 CompanyHidden on re-enabling sync for a hidden
         // company — un-share first), or for non-admins. The greyed-out

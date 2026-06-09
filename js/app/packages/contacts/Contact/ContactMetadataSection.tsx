@@ -1,6 +1,6 @@
 import { NIL_UUID } from '@app/component/next-soup/filters/filter-store';
 import { useSplitLayout } from '@app/component/split-layout/layout';
-import { useCompanyQuery } from '@companies/Company/use-company-query';
+import { useCompanyQuery } from '@queries/crm/companies';
 import type { CrmContactResponse } from '@service-storage/generated/schemas/crmContactResponse';
 import { type JSX, Show } from 'solid-js';
 

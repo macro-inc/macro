@@ -26,6 +26,14 @@ export function CompanyEmailsSection(props: { company?: CrmCompanyEntity }) {
     fetchNextPage: () => emailsQuery.fetchNextPage(),
   });
 
+  const emptyMessage = () => {
+    if (view() === 'me') return 'No emails with this company in your inbox.';
+    if (props.company?.emailSync === false) {
+      return 'Email sync is disabled for this company.';
+    }
+    return 'No emails with this company yet.';
+  };
+
   return (
     <div class="flex flex-col gap-2">
       <div class="flex items-center justify-between gap-2">
@@ -49,11 +57,7 @@ export function CompanyEmailsSection(props: { company?: CrmCompanyEntity }) {
           when={emails().length > 0}
           fallback={
             <div class="rounded-lg border border-dashed border-edge-muted p-6 text-center text-sm text-ink-muted">
-              {view() === 'me'
-                ? 'No emails with this company in your inbox.'
-                : props.company?.emailSync === false
-                  ? 'Email sync is disabled for this company.'
-                  : 'No emails with this company yet.'}
+              {emptyMessage()}
             </div>
           }
         >

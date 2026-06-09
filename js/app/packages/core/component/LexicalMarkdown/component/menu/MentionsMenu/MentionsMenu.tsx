@@ -125,13 +125,14 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       })
     : undefined;
 
-  const customCompanies = props.entities
-    ? useEntityMentionFromList({
-        items: props.entities,
-        buckets: ['crm_company'],
-        searchTerm,
-      })
-    : undefined;
+  const customCompanies =
+    ENABLE_CRM && props.entities
+      ? useEntityMentionFromList({
+          items: props.entities,
+          buckets: ['crm_company'],
+          searchTerm,
+        })
+      : undefined;
 
   const { searchedEntities: docs } =
     customDocs ??
@@ -147,14 +148,16 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       searchTerm,
     });
 
-  const { searchedEntities: companyEntities } =
-    customCompanies ??
-    useEntityMention({
-      buckets: ['crm_company'],
-      searchTerm,
-    });
-  // CRM companies only surface in mentions when the feature is enabled.
-  const companies = () => (ENABLE_CRM ? (companyEntities() ?? []) : []);
+  // CRM companies only surface in mentions when the feature is enabled —
+  // the mention hook isn't even wired up otherwise.
+  const companyMention = ENABLE_CRM
+    ? (customCompanies ??
+      useEntityMention({
+        buckets: ['crm_company'],
+        searchTerm,
+      }))
+    : undefined;
+  const companies = () => companyMention?.searchedEntities() ?? [];
 
   const { emails, emailSearchQuery: emailUnifiedSearchInfiniteQuery } =
     hasCustomEntities()

@@ -1,7 +1,7 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import type { CrmCompanyEntity } from '@entity';
+import type { CompanyContact } from '@queries/crm/companies';
 import { createMemo, createSignal, For, Show } from 'solid-js';
-import type { CompanyContact } from './use-company-query';
 
 export function CompanyContactsSection(props: {
   company?: CrmCompanyEntity;

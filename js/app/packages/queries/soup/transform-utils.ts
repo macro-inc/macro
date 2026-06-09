@@ -299,8 +299,9 @@ export const useSearchResponseItemMapper = () => {
             name: result.name || primaryDomain || 'Unknown Company',
             ownerId: result.teamId,
             description: result.description ?? undefined,
-            // Not returned by search; the full value loads when opened.
-            emailSync: false,
+            // Not returned by search — left undefined ("not loaded") so
+            // consumers don't mistake it for a real `false`.
+            emailSync: undefined,
             hidden: result.hidden,
             createdAt: result.createdAt,
             updatedAt: result.updatedAt,
