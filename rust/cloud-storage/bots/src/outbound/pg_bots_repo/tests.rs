@@ -1,8 +1,9 @@
 use super::*;
 use crate::domain::{
-    models::{CreateBotRequest, CreateBotTokenRequest},
+    models::{CreateBotRequest, CreateBotTokenRequest, CreateChannelScopedBotRequest},
     ports::{BotError, BotService},
     service::BotServiceImpl,
+    tokens,
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::PgPool;
@@ -23,6 +24,18 @@ fn create_req(handle: &str) -> CreateBotRequest {
         handle: handle.to_string(),
         description: Some("Posts alarm notifications".to_string()),
         avatar_url: None,
+    }
+}
+
+fn create_channel_scoped_req(handle: &str) -> CreateChannelScopedBotRequest {
+    CreateChannelScopedBotRequest {
+        team_id: None,
+        name: "Datadog Alerts".to_string(),
+        handle: handle.to_string(),
+        description: Some("Posts alarm notifications".to_string()),
+        avatar_url: None,
+        token_label: Some("Webhook".to_string()),
+        token_expires_at: None,
     }
 }
 
@@ -109,6 +122,46 @@ async fn insert_channel(pool: &PgPool, channel_id: Uuid) -> anyhow::Result<()> {
     .await?;
 
     Ok(())
+}
+
+async fn active_channel_participant_count(
+    pool: &PgPool,
+    channel_id: Uuid,
+    bot_id: BotId,
+) -> anyhow::Result<i64> {
+    let count = sqlx::query_scalar(
+        r#"
+        SELECT COUNT(*) AS "count!"
+        FROM comms_channel_participants
+        WHERE channel_id = $1
+          AND user_id = $2
+          AND left_at IS NULL
+        "#,
+    )
+    .bind(channel_id)
+    .bind(principal_id(bot_id))
+    .fetch_one(pool)
+    .await?;
+
+    Ok(count)
+}
+
+async fn token_last_used_at(
+    pool: &PgPool,
+    token_id: Uuid,
+) -> anyhow::Result<Option<chrono::DateTime<chrono::Utc>>> {
+    let last_used_at = sqlx::query_scalar(
+        r#"
+        SELECT last_used_at
+        FROM bot_tokens
+        WHERE id = $1
+        "#,
+    )
+    .bind(token_id)
+    .fetch_one(pool)
+    .await?;
+
+    Ok(last_used_at)
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -218,6 +271,135 @@ async fn add_remove_channel_bot_requires_bot_usability_and_soft_removes(
 
     assert!(left_at.is_some());
     assert!(service.list_channel_bots(channel_id).await?.is_empty());
+
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn create_channel_scoped_bot_creates_bot_participant_and_token(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let service = service(&pool);
+    let channel_id = Uuid::new_v4();
+    insert_channel(&pool, channel_id).await?;
+
+    let created = service
+        .create_channel_scoped_bot(
+            user_id(USER_OWNER),
+            channel_id,
+            create_channel_scoped_req("scoped-alerts"),
+        )
+        .await?;
+
+    assert_eq!(created.bot.kind, BotKind::Owned);
+    assert_eq!(created.bot.handle, "scoped-alerts");
+    assert_eq!(created.bot.created_by.as_deref(), Some(USER_OWNER));
+    assert_eq!(created.token.bot_id, created.bot.id);
+    assert_eq!(created.token.label.as_deref(), Some("Webhook"));
+    assert_eq!(
+        tokens::token_prefix(&created.bot_token),
+        Some(created.token.token_prefix.as_str())
+    );
+    assert_eq!(
+        active_channel_participant_count(&pool, channel_id, created.bot.id).await?,
+        1
+    );
+
+    let authenticated = service
+        .authenticate_channel_token(channel_id, &created.bot_token)
+        .await?;
+    assert_eq!(authenticated.bot_id, created.bot.id);
+    assert_eq!(authenticated.kind, BotKind::Owned);
+    assert!(token_last_used_at(&pool, created.token.id).await?.is_some());
+
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn authenticate_channel_token_rejects_wrong_channel_without_marking_used(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let service = service(&pool);
+    let channel_id = Uuid::new_v4();
+    let other_channel_id = Uuid::new_v4();
+    insert_channel(&pool, channel_id).await?;
+    insert_channel(&pool, other_channel_id).await?;
+
+    let created = service
+        .create_channel_scoped_bot(
+            user_id(USER_OWNER),
+            channel_id,
+            create_channel_scoped_req("wrong-channel"),
+        )
+        .await?;
+
+    let err = service
+        .authenticate_channel_token(other_channel_id, &created.bot_token)
+        .await
+        .expect_err("channel-scoped token must not authenticate for another channel");
+
+    assert!(matches!(err, BotError::Unauthorized));
+    assert!(token_last_used_at(&pool, created.token.id).await?.is_none());
+
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn authenticate_channel_token_rejects_revoked_token(pool: PgPool) -> anyhow::Result<()> {
+    let service = service(&pool);
+    let channel_id = Uuid::new_v4();
+    insert_channel(&pool, channel_id).await?;
+
+    let created = service
+        .create_channel_scoped_bot(
+            user_id(USER_OWNER),
+            channel_id,
+            create_channel_scoped_req("revoked-scoped"),
+        )
+        .await?;
+
+    service
+        .revoke_token(user_id(USER_OWNER), created.bot.id, created.token.id)
+        .await?;
+
+    let err = service
+        .authenticate_channel_token(channel_id, &created.bot_token)
+        .await
+        .expect_err("revoked channel-scoped token must not authenticate");
+
+    assert!(matches!(err, BotError::Unauthorized));
+    assert!(token_last_used_at(&pool, created.token.id).await?.is_none());
+
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn authenticate_channel_token_rejects_removed_channel_membership(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let service = service(&pool);
+    let channel_id = Uuid::new_v4();
+    insert_channel(&pool, channel_id).await?;
+
+    let created = service
+        .create_channel_scoped_bot(
+            user_id(USER_OWNER),
+            channel_id,
+            create_channel_scoped_req("removed-scoped"),
+        )
+        .await?;
+
+    service
+        .remove_bot_from_channel(user_id(USER_OWNER), channel_id, created.bot.id)
+        .await?;
+
+    let err = service
+        .authenticate_channel_token(channel_id, &created.bot_token)
+        .await
+        .expect_err("removed bot participant must not authenticate");
+
+    assert!(matches!(err, BotError::Unauthorized));
+    assert!(token_last_used_at(&pool, created.token.id).await?.is_none());
 
     Ok(())
 }

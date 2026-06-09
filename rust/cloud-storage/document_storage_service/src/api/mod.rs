@@ -212,6 +212,11 @@ fn api_router(state: ApiContext) -> Router {
         .merge(bots::inbound::axum_router::bots_router(
             state.bots_state.clone(),
         ))
+        .merge(
+            bots::inbound::channel_webhook_router::channel_bot_webhook_router(
+                state.channel_bot_webhook_state.clone(),
+            ),
+        )
         .nest(
             "/foreign_entity",
             foreign_entity::inbound::axum_router::foreign_entity_router(

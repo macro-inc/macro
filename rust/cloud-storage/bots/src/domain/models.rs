@@ -175,6 +175,26 @@ pub struct AddChannelBotRequest {
     pub bot_id: BotId,
 }
 
+/// Request to create a bot scoped to a channel.
+#[derive(Debug, Clone, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct CreateChannelScopedBotRequest {
+    /// Team owner. Omit for a user-owned bot.
+    pub team_id: Option<Uuid>,
+    /// Display name.
+    pub name: String,
+    /// Stable handle.
+    pub handle: String,
+    /// Optional description.
+    pub description: Option<String>,
+    /// Optional avatar URL.
+    pub avatar_url: Option<String>,
+    /// Optional token label.
+    pub token_label: Option<String>,
+    /// Optional token expiration timestamp.
+    pub token_expires_at: Option<DateTime<Utc>>,
+}
+
 /// Response containing a newly minted token. The raw token is shown once.
 #[derive(Debug, Clone, Serialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
@@ -183,4 +203,32 @@ pub struct CreateBotTokenResponse {
     pub token: BotToken,
     /// Raw bearer token.
     pub bearer_token: String,
+}
+
+/// Response containing a newly created channel-scoped bot and token.
+#[derive(Debug, Clone, Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct CreateChannelScopedBotResponse {
+    /// Created bot.
+    pub bot: Bot,
+    /// Token metadata.
+    pub token: BotToken,
+    /// Raw bot token.
+    pub bot_token: String,
+}
+
+/// Request to post a channel webhook message.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct ChannelWebhookRequest {
+    /// Message body.
+    pub content: String,
+}
+
+/// Response returned after posting a channel webhook message.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct ChannelWebhookResponse {
+    /// Created message id.
+    pub message_id: String,
 }

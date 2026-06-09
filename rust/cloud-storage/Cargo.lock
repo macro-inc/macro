@@ -1727,6 +1727,7 @@ dependencies = [
  "anyhow",
  "axum",
  "bot_id",
+ "channels",
  "chrono",
  "entity_access",
  "hex",

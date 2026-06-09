@@ -1844,6 +1844,31 @@ export const getChannelAttachmentsResponse = zod
   .describe('Paginated response of channel attachments.');
 
 /**
+ * @summary Handler for `POST /channels/{channel_id}/bots/scoped`.
+ */
+export const createChannelScopedBotParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+});
+
+export const createChannelScopedBotBody = zod
+  .object({
+    avatar_url: zod.string().nullish().describe('Optional avatar URL.'),
+    description: zod.string().nullish().describe('Optional description.'),
+    handle: zod.string().describe('Stable handle.'),
+    name: zod.string().describe('Display name.'),
+    team_id: zod
+      .uuid()
+      .nullish()
+      .describe('Team owner. Omit for a user-owned bot.'),
+    token_expires_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Optional token expiration timestamp.'),
+    token_label: zod.string().nullish().describe('Optional token label.'),
+  })
+  .describe('Request to create a bot scoped to a channel.');
+
+/**
  * @summary Handler for `POST /channels/{channel_id}/join`.
  */
 export const joinChannelParams = zod.object({
@@ -2633,6 +2658,26 @@ export const postTypingBody = zod
     thread_id: zod.string().nullish().describe('Optional thread id.'),
   })
   .describe('Request to emit a typing event.');
+
+/**
+ * @summary Handler for `POST /channels/{channel_id}/webhook/{bot_auth_token}`.
+ */
+export const postChannelBotWebhookParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+  bot_auth_token: zod.string().describe('Bot authentication token'),
+});
+
+export const postChannelBotWebhookBody = zod
+  .object({
+    content: zod.string().describe('Message body.'),
+  })
+  .describe('Request to post a channel webhook message.');
+
+export const postChannelBotWebhookResponse = zod
+  .object({
+    message_id: zod.string().describe('Created message id.'),
+  })
+  .describe('Response returned after posting a channel webhook message.');
 
 /**
  * @summary Soft-delete a CRM comment, scoped to the requesting user's team. When it
