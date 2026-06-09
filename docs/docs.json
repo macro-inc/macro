@@ -24,57 +24,18 @@
     "tabs": [
       {
         "tab": "Documentation",
-        "groups": [
+        "pages": [
           {
-            "group": "Getting Started",
-            "pages": [
-              "index",
-              "permissions",
-              "keyboard-shortcuts",
-              "faq",
-              {
-                "group": "AI",
-                "pages": [
-                  "AI/mcp/overview",
-                  {
-                    "group": "Tool Reference",
-                    "pages": [
-                      "AI/mcp/tools/index",
-                      "AI/mcp/tools/bash-code-execution",
-                      "AI/mcp/tools/content-search",
-                      "AI/mcp/tools/create-document",
-                      "AI/mcp/tools/get-entity-properties",
-                      "AI/mcp/tools/get-thread",
-                      "AI/mcp/tools/list-entities",
-                      "AI/mcp/tools/name-search",
-                      "AI/mcp/tools/read-content",
-                      "AI/mcp/tools/read-metadata",
-                      "AI/mcp/tools/read-thread",
-                      "AI/mcp/tools/send-email",
-                      "AI/mcp/tools/set-entity-property",
-                      "AI/mcp/tools/text-editor-code-execution",
-                      "AI/mcp/tools/update-thread-labels",
-                      "AI/mcp/tools/web-fetch",
-                      "AI/mcp/tools/web-search"
-                    ]
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "group": "Key Concepts",
-            "pages": [
-              "concepts/blocks",
-              "concepts/mentions",
-              "concepts/properties"
-            ]
-          },
-          {
-            "group": "Sidebar",
+            "group": "Features",
             "pages": [
               "product/inbox",
               "product/search",
+              "product/unified-memory"
+            ]
+          },
+          {
+            "group": "Blocks",
+            "pages": [
               "product/agents",
               "product/email",
               "product/docs",
@@ -82,7 +43,46 @@
               "product/channels",
               "product/calls"
             ]
-          }
+          },
+          {
+            "group": "Key Concepts",
+            "pages": [
+              "concepts/blocks",
+              "concepts/mentions",
+              "concepts/properties",
+              "permissions"
+            ]
+          },
+          {
+            "group": "Agents",
+            "pages": [
+              "AI/mcp/overview",
+              {
+                "group": "Tool Reference",
+                "pages": [
+                  "AI/mcp/tools/index",
+                  "AI/mcp/tools/bash-code-execution",
+                  "AI/mcp/tools/content-search",
+                  "AI/mcp/tools/create-document",
+                  "AI/mcp/tools/get-entity-properties",
+                  "AI/mcp/tools/get-thread",
+                  "AI/mcp/tools/list-entities",
+                  "AI/mcp/tools/name-search",
+                  "AI/mcp/tools/read-content",
+                  "AI/mcp/tools/read-metadata",
+                  "AI/mcp/tools/read-thread",
+                  "AI/mcp/tools/send-email",
+                  "AI/mcp/tools/set-entity-property",
+                  "AI/mcp/tools/text-editor-code-execution",
+                  "AI/mcp/tools/update-thread-labels",
+                  "AI/mcp/tools/web-fetch",
+                  "AI/mcp/tools/web-search"
+                ]
+              }
+            ]
+          },
+          "faq",
+          "keyboard-shortcuts"
         ]
       },
       {
