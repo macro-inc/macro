@@ -9,6 +9,7 @@ import {
 } from '@block-email/component/compose/ComposeContext';
 import type { DraftFormAttachment } from '@block-email/component/createEmailFormState';
 import type { EmailRecipient } from '@block-email/component/EmailContext';
+import { decodeBase64Utf8 } from '@block-email/util/decodeBase64';
 import { prepareEmailBody } from '@block-email/util/prepareEmailBody';
 import { convertContactInfoToEmailRecipient } from '@block-email/util/recipientConversion';
 import { useChatContext } from '@core/component/AI/context';
@@ -174,7 +175,10 @@ export function ComposeTool(props: ComposeToolProps) {
       (props.initialData.cc ?? []).map((r) => ({ ...r, name: r.name ?? null }))
     ),
     bcc: toEmailRecipients(
-      (props.initialData.bcc ?? []).map((r) => ({ ...r, name: r.name ?? null }))
+      (props.initialData.bcc ?? []).map((r) => ({
+        ...r,
+        name: r.name ?? null,
+      }))
     ),
   });
   const [subject, setSubject] = createSignal(props.initialData.subject ?? '');
@@ -311,12 +315,24 @@ export function ComposeTool(props: ComposeToolProps) {
     toast.success('Email sent');
   }
 
+  // `body` is markdown while the AI is drafting, but every persist path
+  // (flushUpdate, handleSend) replaces it with the base64url-encoded HTML
+  // that the SendEmail tool contract requires at send time. Decode and route
+  // to the editor slot that matches what the field actually holds.
+  const initialBody = (): { html?: string; markdown?: string } => {
+    const body = props.initialData.body;
+    if (!body) return {};
+    const decoded = decodeBase64Utf8(body);
+    if (decoded.startsWith('<body')) return { html: decoded };
+    return { markdown: body };
+  };
+
   const ctx: ComposeContextValue = {
     subject,
     attachments: () => [],
     sendTime: () => undefined,
-    initialHtml: () => undefined,
-    initialMarkdown: () => props.initialData.body ?? undefined,
+    initialHtml: () => initialBody().html,
+    initialMarkdown: () => initialBody().markdown,
     setRecipients: (field, value) => {
       setRecipients((prev) => ({ ...prev, [field]: value }));
       scheduleUpdate();
@@ -361,7 +377,7 @@ export function ComposeTool(props: ComposeToolProps) {
         <ComposeLayout
           bodyDebugName={`chat-compose:${props.chatId}:${props.messageId}:${props.toolCallId}`}
           class={cn(
-            'flex flex-col w-full text-xs border border-edge-muted rounded-lg p-4 bg-surface',
+            'flex flex-col w-full text-xs rounded-lg p-4 bg-surface',
             uiDisabled() &&
               '[&_button:disabled]:opacity-50 [&_button:disabled]:text-ink-disabled [&_input:disabled]:text-ink-muted'
           )}
