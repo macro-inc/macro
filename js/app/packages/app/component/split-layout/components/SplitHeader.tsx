@@ -182,7 +182,7 @@ function SoupNavigationButtons() {
 
   return (
     <Show when={shouldShow()}>
-      <div class="flex items-center gap-1">
+      <div class="flex items-center gap-0.5 pl-1">
         <Button
           class="p-1 rounded-lg"
           label="Previous item"
