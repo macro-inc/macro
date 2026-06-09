@@ -75,7 +75,7 @@ pub async fn promote_link_to_shared(
     .execute(&mut *conn)
     .await?;
 
-    sqlx::query!(
+    let rehomed = sqlx::query!(
         r#"
         UPDATE email_links
         SET macro_id = $1, updated_at = NOW()
@@ -86,6 +86,13 @@ pub async fn promote_link_to_shared(
     )
     .execute(&mut *conn)
     .await?;
+
+    // The link is read outside this transaction, so it may have been deleted before
+    // re-homing. A zero-row update would otherwise commit a mailbox user and edges
+    // with no inbox attached; abort so the caller's transaction rolls back instead.
+    if rehomed.rows_affected() == 0 {
+        anyhow::bail!("no email_links row {existing_link_id} to re-home; aborting promotion");
+    }
 
     crate::macro_user_links::insert_edge(&mut *conn, original_owner_macro_id, &mailbox_macro_id)
         .await?;

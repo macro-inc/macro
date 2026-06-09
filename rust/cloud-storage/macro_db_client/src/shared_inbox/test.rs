@@ -116,3 +116,39 @@ async fn promote_is_atomic_on_rollback(pool: Pool<Postgres>) -> anyhow::Result<(
 
     Ok(())
 }
+
+#[sqlx::test]
+async fn promote_errors_when_link_missing(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    insert_user(&pool, OWNER, "alice@company.test").await;
+    insert_user(&pool, CONNECTOR, "bob@company.test").await;
+
+    // The link vanished between lookup and promotion (e.g. owner disconnected it).
+    let missing_link_id = Uuid::new_v4();
+    let mut tx = pool.begin().await?;
+    let result = promote_link_to_shared(
+        &mut tx,
+        missing_link_id,
+        OWNER,
+        CONNECTOR,
+        MAILBOX_EMAIL,
+        None,
+    )
+    .await;
+    drop(tx);
+    assert!(
+        result.is_err(),
+        "promotion must fail when no link is re-homed"
+    );
+
+    // The aborted transaction left no phantom mailbox user behind.
+    let mailbox_macro_id = format!("macro|{MAILBOX_EMAIL}");
+    let mailbox_user = sqlx::query!(r#"SELECT id FROM "User" WHERE id = $1"#, mailbox_macro_id)
+        .fetch_optional(&pool)
+        .await?;
+    assert!(
+        mailbox_user.is_none(),
+        "phantom mailbox user must not persist"
+    );
+
+    Ok(())
+}
