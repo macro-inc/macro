@@ -46,6 +46,10 @@ function getEntitySplitContent(data: EntityDragEvent['draggable']['data']):
 
   if (data.type === 'foreign') return undefined;
 
+  // CRM entity types map to their dedicated blocks (entity type !== block name).
+  if (data.type === 'crm_company') return { type: 'company', id: data.id };
+  if (data.type === 'crm_contact') return { type: 'contact', id: data.id };
+
   return { type: data.type, id: data.id };
 }
 
