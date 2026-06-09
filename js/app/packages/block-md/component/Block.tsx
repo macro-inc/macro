@@ -3,8 +3,12 @@ import { useBlockEntityCommands } from '@app/component/next-soup/actions';
 import { SidePanel } from '@app/component/side-panel';
 import { useBlockId } from '@core/block';
 import { createLoroManager, type LoroManager } from '@core/collab/manager';
-import { IDBSnapshotStore } from '@core/collab/snapshot-store';
-import { BrowserWALStore } from '@core/collab/wal';
+import type { RawUpdate } from '@core/collab/shared';
+import {
+  IDBSnapshotStore,
+  LORO_SNAPSHOT_DB_NAME,
+} from '@core/collab/snapshot-store';
+import { BrowserWALStore, LORO_WAL_DB_NAME } from '@core/collab/wal';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { ENABLE_MARKDOWN_SIDE_PANEL } from '@core/constant/featureFlags';
 import { blockErrorSignal, blockSyncSourceSignal } from '@core/signal/load';
@@ -42,8 +46,8 @@ type SetBlockError = (value: 'INVALID' | null) => void;
 
 async function ingestLocalSnapshot(
   loroManager: MarkdownLoroManager,
-  snapshotStore: IDBSnapshotStore,
-  walStore: BrowserWALStore
+  snapshotStore: IDBSnapshotStore<RawUpdate>,
+  walStore: BrowserWALStore<RawUpdate>
 ) {
   const localSnapshot = await snapshotStore.load();
   if (!localSnapshot) return;
@@ -88,14 +92,17 @@ function BlockMarkdownContent({ optimisticSnapshot }: BlockMarkdownProps) {
   const getSyncSource = blockSyncSourceSignal.get;
   const setBlockError = blockErrorSignal.set;
 
-  const wasDirty = BrowserWALStore.isDirtyHint(blockId);
+  const wasDirty = BrowserWALStore.isDirtyHint(LORO_WAL_DB_NAME, blockId);
   const loroManager = createLoroManager(MARKDOWN_LORO_SCHEMA, {
     liveSyncSource: () => getSyncSource()!,
     wasDirty,
   });
 
-  const snapshotStore = new IDBSnapshotStore(blockId);
-  const walStore = new BrowserWALStore(blockId);
+  const snapshotStore = new IDBSnapshotStore<RawUpdate>(
+    LORO_SNAPSHOT_DB_NAME,
+    blockId
+  );
+  const walStore = new BrowserWALStore<RawUpdate>(LORO_WAL_DB_NAME, blockId);
 
   createEffect(
     on(blockDataSignal, (data) => {
@@ -122,8 +129,7 @@ function BlockMarkdownContent({ optimisticSnapshot }: BlockMarkdownProps) {
 
   const instructionsMdId = useInstructionsMdIdQuery();
   const notificationSource = useGlobalNotificationSource();
-  const mustBeConnected = optimisticSnapshot === undefined;
-  const canEdit = useCanEdit(mustBeConnected);
+  const canEdit = useCanEdit();
   const { displayName } = useMarkdownName();
   const isInstructionsMd = createMemo(() => blockId === instructionsMdId.data);
 

@@ -8,13 +8,13 @@ import type { Awareness } from './awareness';
 import { type LoroManager, LoroStateTag, type StateUpdate } from './manager';
 import type { GenericRootSchema, LoroRawUpdate, RawUpdate } from './shared';
 import type { SnapshotStore } from './snapshot-store';
-import type {
-  LiveSyncSource,
-  SyncSourceEvent,
-  TimeoutError,
-  WALSyncSource,
-} from './source';
+
+// SnapshotStore in the engine is always Loro updates — RawUpdate.
+type LoroSnapshotStore = SnapshotStore<RawUpdate>;
+
+import type { LiveSyncSource, SyncSourceEvent, TimeoutError } from './source';
 import { compareLoroDocVersions, loroDocFromSnapshot } from './utils';
+import type { WALSyncer } from './wal';
 
 const SNAPSHOT_INTERVAL_MS = 5_000;
 
@@ -23,7 +23,7 @@ export type EngineBindings<S extends GenericRootSchema> = {
 };
 
 export type SyncSources = {
-  wal: WALSyncSource;
+  wal: WALSyncer<RawUpdate>;
   live: LiveSyncSource;
 };
 
@@ -34,7 +34,7 @@ export type SyncEngineParams<S extends GenericRootSchema, D> = {
   bindings: EngineBindings<S>;
   readonly?: () => boolean;
   onRunningChange?: (v: boolean) => void;
-  snapshotStore?: SnapshotStore;
+  snapshotStore?: LoroSnapshotStore;
 };
 
 type SnapshotThunk = () => ResultAsync<Uint8Array, TimeoutError>;
@@ -54,7 +54,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
   private readonly syncLock = new Mutex();
   private unsubscribe?: () => void;
   private snapshotInterval?: ReturnType<typeof setInterval>;
-  private readonly snapshotStore?: SnapshotStore;
+  private readonly snapshotStore?: LoroSnapshotStore;
   private readonly defaultSnapshotThunk: SnapshotThunk;
   private readonly onRunningChange: (v: boolean) => void;
 
@@ -205,7 +205,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
 
   private async handleLocalUpdates(update: LoroRawUpdate) {
     if (this.readonly()) return;
-    void this.syncs.wal.pushUpdate(update);
+    void this.syncs.wal.append(update);
   }
 
   private async persistSnapshot() {

@@ -3,48 +3,53 @@ import type { LoroManager } from './manager';
 import type { GenericRootSchema, RawUpdate } from './shared';
 import type { WALStore } from './wal';
 
-export interface SnapshotStore {
-  save(snapshot: RawUpdate): Promise<void>;
-  load(): Promise<RawUpdate | null>;
+export interface SnapshotStore<T> {
+  save(snapshot: T): Promise<void>;
+  load(): Promise<T | null>;
   delete(): Promise<void>;
 }
 
-const DB_NAME = 'macro-document-snapshots';
+/** DB name for the Loro doc-snapshot store. */
+export const LORO_SNAPSHOT_DB_NAME = 'macro-document-snapshots';
+
 const DB_VERSION = 1;
 const STORE = 'snapshots';
 
-interface SnapshotSchema extends DBSchema {
+interface SnapshotSchema<T> extends DBSchema {
   snapshots: {
     key: string;
-    value: { documentId: string; snapshot: Uint8Array };
+    value: { scopeId: string; snapshot: T };
   };
 }
 
-export class IDBSnapshotStore implements SnapshotStore {
-  private db: Promise<IDBPDatabase<SnapshotSchema>>;
+export class IDBSnapshotStore<T> implements SnapshotStore<T> {
+  private db: Promise<IDBPDatabase<SnapshotSchema<T>>>;
 
-  constructor(private readonly documentId: string) {
-    this.db = idbOpen<SnapshotSchema>(DB_NAME, DB_VERSION, {
+  constructor(
+    dbName: string,
+    private readonly scopeId: string
+  ) {
+    this.db = idbOpen<SnapshotSchema<T>>(dbName, DB_VERSION, {
       upgrade(db) {
-        db.createObjectStore(STORE, { keyPath: 'documentId' });
+        db.createObjectStore(STORE, { keyPath: 'scopeId' });
       },
     });
   }
 
-  public async save(snapshot: RawUpdate): Promise<void> {
+  public async save(snapshot: T): Promise<void> {
     const db = await this.db;
-    await db.put(STORE, { documentId: this.documentId, snapshot });
+    await db.put(STORE, { scopeId: this.scopeId, snapshot });
   }
 
-  public async load(): Promise<RawUpdate | null> {
+  public async load(): Promise<T | null> {
     const db = await this.db;
-    const row = await db.get(STORE, this.documentId);
+    const row = await db.get(STORE, this.scopeId);
     return row?.snapshot ?? null;
   }
 
   public async delete(): Promise<void> {
     const db = await this.db;
-    await db.delete(STORE, this.documentId);
+    await db.delete(STORE, this.scopeId);
   }
 }
 
@@ -55,8 +60,8 @@ export class IDBSnapshotStore implements SnapshotStore {
  */
 export async function loadCachedState<S extends GenericRootSchema>(
   loroManager: LoroManager<S>,
-  snapshotStore: SnapshotStore,
-  walStore: WALStore
+  snapshotStore: SnapshotStore<RawUpdate>,
+  walStore: WALStore<RawUpdate>
 ): Promise<boolean> {
   const snapshot = await snapshotStore.load();
   if (!snapshot) return false;

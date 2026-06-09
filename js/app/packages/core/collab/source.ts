@@ -67,17 +67,6 @@ export enum SyncSourceStatus {
   Connecting,
 }
 
-export type WALSyncSource = {
-  readonly documentId: string;
-  readonly listen: Listen<SyncSourceEvent>;
-  /** Persists a single outbound update. Resolves once written, not when delivered. */
-  pushUpdate: (update: RawUpdate) => Promise<boolean>;
-  /** Pushes any undelivered entries to the live source. Idempotent. */
-  flush: () => Promise<void>;
-  /** Drops WAL entries whose updates are now captured in a durable snapshot. */
-  pruneDelivered: () => Promise<void>;
-};
-
 export type LiveSyncSource = {
   readonly documentId: string;
   readonly listen: Listen<SyncSourceEvent>;

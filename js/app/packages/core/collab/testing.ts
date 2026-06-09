@@ -3,18 +3,18 @@ import { vi } from 'vitest';
 import type { LoroManager } from './manager';
 import type { GenericRootSchema, LoroRawUpdate, RawUpdate } from './shared';
 import type { SnapshotStore } from './snapshot-store';
-import type { SyncSourceEvent, WALSyncSource } from './source';
+import type { SyncSourceEvent } from './source';
 import { type LiveSyncSource, SyncSourceStatus } from './source';
-import type { WALEntry, WALStore } from './wal';
+import { type WALEntry, type WALStore, WALSyncer } from './wal';
 
-export class MockSnapshotStore implements SnapshotStore {
-  private snapshot: RawUpdate | null = null;
+export class MockSnapshotStore<T> implements SnapshotStore<T> {
+  private snapshot: T | null = null;
 
-  public async save(snapshot: RawUpdate): Promise<void> {
+  public async save(snapshot: T): Promise<void> {
     this.snapshot = snapshot;
   }
 
-  public async load(): Promise<RawUpdate | null> {
+  public async load(): Promise<T | null> {
     return this.snapshot;
   }
 
@@ -23,8 +23,8 @@ export class MockSnapshotStore implements SnapshotStore {
   }
 }
 
-export class MockWALStore implements WALStore {
-  private entries: WALEntry[] = [];
+export class MockWALStore<T> implements WALStore<T> {
+  private entries: WALEntry<T>[] = [];
   private nextId = 0;
   private gate: Promise<void> = Promise.resolve();
   private openGate: () => void = () => {};
@@ -38,7 +38,7 @@ export class MockWALStore implements WALStore {
     this.gate = Promise.resolve();
   }
 
-  public async append(update: RawUpdate): Promise<void> {
+  public async append(update: T): Promise<void> {
     this.entries.push({
       id: this.nextId++,
       update,
@@ -47,7 +47,7 @@ export class MockWALStore implements WALStore {
     });
   }
 
-  public async getAll(): Promise<WALEntry[]> {
+  public async getAll(): Promise<WALEntry<T>[]> {
     await this.gate;
     return this.entries.map((e) => ({ ...e }));
   }
@@ -77,29 +77,26 @@ export class MockWALStore implements WALStore {
   public markClean(): void {}
 
   /** Test helper: seed an entry with an explicit createdAt timestamp. */
-  public seedEntry(update: RawUpdate, createdAt: number): number {
+  public seedEntry(update: T, createdAt: number): number {
     const id = this.nextId++;
     this.entries.push({ id, update, delivered: false, createdAt });
     return id;
   }
 }
 
-export class MockWALSyncSource implements WALSyncSource {
-  private listeners = new Set<(event: SyncSourceEvent) => void>();
-
-  public documentId = 'doc-1';
-  public pushUpdate = vi.fn(async (): Promise<boolean> => true);
-  public flush = vi.fn(async (): Promise<void> => {});
-  public pruneDelivered = vi.fn(async (): Promise<void> => {});
-
-  public listen(cb: (event: SyncSourceEvent) => void) {
-    this.listeners.add(cb);
-    return () => this.listeners.delete(cb);
-  }
-
-  public emit(event: SyncSourceEvent) {
-    this.listeners.forEach((cb) => void cb(event));
-  }
+/** Build a real WALSyncer wired to a MockLiveSyncSource, with reconnect →
+ *  flush wired up (which `createWALSyncSource` does for production callers). */
+export function makeTestWAL(
+  live: MockLiveSyncSource,
+  store: MockWALStore<RawUpdate> = new MockWALStore<RawUpdate>()
+): { wal: WALSyncer<RawUpdate>; walStore: MockWALStore<RawUpdate> } {
+  const wal = new WALSyncer<RawUpdate>(store, (updates) =>
+    live.pushUpdate(updates)
+  );
+  live.listen((event) => {
+    if (event.type === 'reconnect') void wal.flush();
+  });
+  return { wal, walStore: store };
 }
 
 export class MockLiveSyncSource implements LiveSyncSource {

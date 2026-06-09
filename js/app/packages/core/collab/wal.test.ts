@@ -1,22 +1,23 @@
 import { describe, expect, it, vi } from 'vitest';
-import { MockLiveSyncSource, MockWALStore } from './testing';
-import { IDBWALSyncSource, WAL_TTL_MS } from './wal';
+import type { RawUpdate } from './shared';
+import { MockLiveSyncSource, MockWALStore, makeTestWAL } from './testing';
+import { WAL_TTL_MS, WALSyncer } from './wal';
 
 function makeWAL(live: MockLiveSyncSource) {
-  const walStore = new MockWALStore();
-  const wal = new IDBWALSyncSource(live, walStore);
-  return { wal, walStore };
+  return makeTestWAL(live);
 }
 
-async function undeliveredCount(walStore: MockWALStore): Promise<number> {
+async function undeliveredCount(
+  walStore: MockWALStore<RawUpdate>
+): Promise<number> {
   const entries = await walStore.getAll();
   return entries.filter((e) => !e.delivered).length;
 }
 
 // Flush retry logic:
-// When pushUpdate is called while a flush is already running:
+// When append is called while a flush is already running:
 //   1. isFlushing = true — the new flush() call returns immediately at the guard
-//   2. hasNewPending = true — set by pushUpdate to mark that something new arrived
+//   2. hasNewPending = true — set by append to mark that something new arrived
 // When the current flush finishes:
 //   - If it succeeded (delivered everything) AND hasNewPending is true → runs flush() again
 //     to pick up what arrived during the in-flight flush
@@ -26,14 +27,14 @@ async function undeliveredCount(walStore: MockWALStore): Promise<number> {
 // WAL entries are marked delivered (not deleted) on ack. They are only dropped when
 // pruneDelivered() is called by the snapshot tick after a durable snapshot save.
 
-describe('IDBWALSyncSource', () => {
+describe('WALSyncer', () => {
   it('persists before delivering, marks delivered on ack', async () => {
     const live = new MockLiveSyncSource();
     const { wal, walStore } = makeWAL(live);
     const update = new Uint8Array([1, 2, 3]);
 
     walStore.pause();
-    await wal.pushUpdate(update);
+    await wal.append(update);
 
     expect(await walStore.count()).toBe(1); // written to the WAL
     expect(live.pushUpdate).not.toHaveBeenCalled(); // but wal store is paused
@@ -52,7 +53,7 @@ describe('IDBWALSyncSource', () => {
     const { wal, walStore } = makeWAL(live);
 
     walStore.pause();
-    await wal.pushUpdate(new Uint8Array([1, 2, 3]));
+    await wal.append(new Uint8Array([1, 2, 3]));
     walStore.resume();
     await wal.pendingFlush;
 
@@ -65,9 +66,9 @@ describe('IDBWALSyncSource', () => {
     const { wal, walStore } = makeWAL(live);
 
     walStore.pause();
-    await wal.pushUpdate(new Uint8Array([1]));
-    await wal.pushUpdate(new Uint8Array([2]));
-    await wal.pushUpdate(new Uint8Array([3]));
+    await wal.append(new Uint8Array([1]));
+    await wal.append(new Uint8Array([2]));
+    await wal.append(new Uint8Array([3]));
     walStore.resume();
     await wal.pendingFlush;
 
@@ -85,9 +86,9 @@ describe('IDBWALSyncSource', () => {
     const { wal, walStore } = makeWAL(live);
 
     walStore.pause();
-    await wal.pushUpdate(new Uint8Array([1]));
-    await wal.pushUpdate(new Uint8Array([2]));
-    await wal.pushUpdate(new Uint8Array([3]));
+    await wal.append(new Uint8Array([1]));
+    await wal.append(new Uint8Array([2]));
+    await wal.append(new Uint8Array([3]));
     walStore.resume();
     await wal.pendingFlush;
 
@@ -101,7 +102,7 @@ describe('IDBWALSyncSource', () => {
     const { wal, walStore } = makeWAL(live);
 
     walStore.pause();
-    await wal.pushUpdate(new Uint8Array([1, 2, 3]));
+    await wal.append(new Uint8Array([1, 2, 3]));
     walStore.resume();
     await wal.pendingFlush;
 
@@ -121,11 +122,11 @@ describe('IDBWALSyncSource', () => {
     const { wal, walStore } = makeWAL(live);
     const { resolve } = live.holdNextPush();
 
-    await wal.pushUpdate(new Uint8Array([1]));
+    await wal.append(new Uint8Array([1]));
     await vi.waitFor(() => expect(live.pushUpdate).toHaveBeenCalledOnce());
 
     live.setPushResult(true);
-    await wal.pushUpdate(new Uint8Array([2]));
+    await wal.append(new Uint8Array([2]));
 
     resolve(true);
     await wal.pendingFlush;
@@ -139,8 +140,8 @@ describe('IDBWALSyncSource', () => {
     const { wal, walStore } = makeWAL(live);
     const { resolve } = live.holdNextPush();
 
-    await wal.pushUpdate(new Uint8Array([1]));
-    await wal.pushUpdate(new Uint8Array([2]));
+    await wal.append(new Uint8Array([1]));
+    await wal.append(new Uint8Array([2]));
 
     expect(live.pushUpdate).toHaveBeenCalledOnce();
 
@@ -154,7 +155,7 @@ describe('IDBWALSyncSource', () => {
     const live = new MockLiveSyncSource();
     const { wal, walStore } = makeWAL(live);
 
-    await wal.pushUpdate(new Uint8Array([1]));
+    await wal.append(new Uint8Array([1]));
     await wal.pendingFlush;
     expect(await undeliveredCount(walStore)).toBe(0);
 
@@ -179,14 +180,14 @@ describe('IDBWALSyncSource', () => {
 
     // First batch: succeeds -> entries 1 and 2 marked delivered.
     walStore.pause();
-    await wal.pushUpdate(new Uint8Array([1]));
-    await wal.pushUpdate(new Uint8Array([2]));
+    await wal.append(new Uint8Array([1]));
+    await wal.append(new Uint8Array([2]));
     walStore.resume();
     await wal.pendingFlush;
 
     // Second batch: fails -> entry 3 stays undelivered.
     live.setPushResult(false);
-    await wal.pushUpdate(new Uint8Array([3]));
+    await wal.append(new Uint8Array([3]));
     await wal.pendingFlush;
 
     expect(await walStore.count()).toBe(3);
@@ -202,7 +203,7 @@ describe('IDBWALSyncSource', () => {
     live.setPushResult(false);
     const { wal, walStore } = makeWAL(live);
 
-    await wal.pushUpdate(new Uint8Array([1]));
+    await wal.append(new Uint8Array([1]));
     await wal.pendingFlush;
 
     expect(await undeliveredCount(walStore)).toBe(1);
@@ -212,7 +213,7 @@ describe('IDBWALSyncSource', () => {
   });
 
   it('pruneExpired drops entries older than the TTL', async () => {
-    const walStore = new MockWALStore();
+    const walStore = new MockWALStore<RawUpdate>();
     const now = Date.now();
     walStore.seedEntry(new Uint8Array([1]), now - WAL_TTL_MS - 1000); // expired
     walStore.seedEntry(new Uint8Array([2]), now - 60_000); // fresh
@@ -227,11 +228,11 @@ describe('IDBWALSyncSource', () => {
 
   it('prunes expired entries on construction so cold-start replay skips them', async () => {
     const live = new MockLiveSyncSource();
-    const walStore = new MockWALStore();
+    const walStore = new MockWALStore<RawUpdate>();
     walStore.seedEntry(new Uint8Array([1]), Date.now() - WAL_TTL_MS - 1000);
     walStore.seedEntry(new Uint8Array([2]), Date.now() - 60_000);
 
-    new IDBWALSyncSource(live, walStore);
+    new WALSyncer(walStore, (updates) => live.pushUpdate(updates));
 
     // Constructor schedules the prune asynchronously — wait for it.
     await vi.waitFor(async () => {

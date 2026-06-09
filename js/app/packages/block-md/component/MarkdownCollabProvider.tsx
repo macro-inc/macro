@@ -2,7 +2,10 @@ import { markdownBlockErrorSignal } from '@block-md/signal/error';
 import { createAwareness } from '@core/collab/awareness';
 import { createSyncEngine } from '@core/collab/engine';
 import type { LoroManager } from '@core/collab/manager';
-import { IDBSnapshotStore } from '@core/collab/snapshot-store';
+import {
+  IDBSnapshotStore,
+  LORO_SNAPSHOT_DB_NAME,
+} from '@core/collab/snapshot-store';
 import { createWALSyncSource } from '@core/collab/wal';
 import {
   $convertLexicalSelectionToCursors,
@@ -119,7 +122,10 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
         syncStateToLexical(state as unknown as SerializedEditorState),
     },
     readonly: readOnly,
-    snapshotStore: new IDBSnapshotStore(syncSource()!.documentId),
+    snapshotStore: new IDBSnapshotStore(
+      LORO_SNAPSHOT_DB_NAME,
+      syncSource()!.documentId
+    ),
   });
 
   const { refreshRemoteCursors, RemoteCursorsOverlay } = useRemoteCursors({
