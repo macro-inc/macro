@@ -42,7 +42,6 @@ export interface BlockMarkdownProps {
 }
 
 type MarkdownLoroManager = LoroManager<typeof MARKDOWN_LORO_SCHEMA>;
-type SetBlockError = (value: 'INVALID' | null) => void;
 
 async function ingestLocalSnapshot(
   loroManager: MarkdownLoroManager,
@@ -61,19 +60,18 @@ async function ingestLocalSnapshot(
 
 async function ingestRemoteSnapshot(
   loroManager: MarkdownLoroManager,
-  doInitialSync: MarkdownData['doInitialSync'],
-  setBlockError: SetBlockError
-) {
+  doInitialSync: MarkdownData['doInitialSync']
+): Promise<boolean> {
   const sync = await doInitialSync();
   if (sync.isErr()) {
     console.error('Failed to receive initial sync', sync.error);
-    if (!loroManager.isInitialized()) setBlockError('INVALID');
-    return;
+    return loroManager.isInitialized();
   }
   await loroManager.ingest({
     kind: 'dss',
     snapshot: sync.value.snapshot,
   });
+  return true;
 }
 
 export default function BlockMarkdown(props: BlockMarkdownProps) {
@@ -122,8 +120,11 @@ function BlockMarkdownContent({ optimisticSnapshot }: BlockMarkdownProps) {
         });
       }
 
-      void ingestLocalSnapshot(loroManager, snapshotStore, walStore);
-      void ingestRemoteSnapshot(loroManager, data.doInitialSync, setBlockError);
+      // unawaited
+      ingestLocalSnapshot(loroManager, snapshotStore, walStore);
+      ingestRemoteSnapshot(loroManager, data.doInitialSync).then((ok) => {
+        if (!ok) setBlockError('INVALID');
+      });
     })
   );
 
