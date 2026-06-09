@@ -188,11 +188,33 @@ function SoupNavigationButtons() {
   const soup = useSoup();
   if (!context) return null;
 
-  const rows = () => soup.rows();
+  const rows = createMemo(() => soup.rows());
   const currentIndex = () => soup.focus.index();
-  const canNavigateUp = () => rows().length > 0 && currentIndex() !== 0;
-  const canNavigateDown = () =>
-    rows().length > 0 && currentIndex() !== rows().length - 1;
+
+  const navigationReferredFrom = createMemo(() => {
+    const referredFrom = context.handle.referredFrom();
+    if (referredFrom !== 'inbox' && referredFrom !== 'mail') {
+      return;
+    }
+
+    return referredFrom;
+  });
+
+  const shouldShow = createMemo(() => {
+    const referredFrom = navigationReferredFrom();
+    const isNavigableListView =
+      referredFrom === 'inbox' || referredFrom === 'mail';
+
+    return isNavigableListView && rows().length > 0;
+  });
+
+  const canNavigateUp = createMemo(() => {
+    return rows().length > 0 && currentIndex() !== 0;
+  });
+
+  const canNavigateDown = createMemo(() => {
+    return rows().length > 0 && currentIndex() !== rows().length - 1;
+  });
 
   const navigate = (offset: number) => {
     const next = soup.navigate.by(offset);
@@ -201,11 +223,12 @@ function SoupNavigationButtons() {
     void openEntityInSplitFromUnifiedList(next.row.original, {
       splitHandle: context.handle,
       mergeHistory: true,
+      referredFrom: navigationReferredFrom(),
     });
   };
 
   return (
-    <Show when={isListViewID(context.handle.referredFrom()) && rows().length}>
+    <Show when={shouldShow()}>
       <div class="flex items-center gap-1">
         <Button
           class="p-1 rounded-lg"

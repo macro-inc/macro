@@ -785,6 +785,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
         openInNewSplit: event.shiftKey,
         location,
         splitHandle: panel.handle,
+        referredFrom: currentView(),
       });
     } finally {
       finishTouchHighlight?.();

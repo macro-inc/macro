@@ -5,7 +5,7 @@ import { entityIdSelector } from '@core/dom-selectors';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { EntityData } from '@entity';
-import { type Accessor, onCleanup } from 'solid-js';
+import { type Accessor, createMemo, onCleanup } from 'solid-js';
 import type { VirtualizerHandle } from 'virtua/solid';
 import type { SoupState } from '../create-soup-state';
 
@@ -34,6 +34,17 @@ export const useSoupNavigationHotkeys = (
     });
   };
 
+  const navigationReferredFrom = createMemo(() => {
+    const content = splitHandle.content();
+
+    if (content.type === 'component' && isListViewID(content.id)) {
+      return content.id;
+    }
+
+    const referredFrom = splitHandle.referredFrom();
+    return isListViewID(referredFrom) ? referredFrom : undefined;
+  });
+
   const openEntity = (entity: EntityData) => {
     const handleContent = splitHandle.content().type;
 
@@ -42,6 +53,7 @@ export const useSoupNavigationHotkeys = (
     openEntityInSplitFromUnifiedList(entity, {
       splitHandle,
       mergeHistory: true,
+      referredFrom: navigationReferredFrom(),
     });
   };
 
@@ -140,10 +152,12 @@ export const useSoupNavigationHotkeys = (
 
   const canRunListNavigation = () => {
     const contentType = splitHandle.content().type;
+    const referredFrom = navigationReferredFrom();
     return (
       contentType === 'component' ||
       contentType === 'project' ||
-      isListViewID(splitHandle.referredFrom())
+      referredFrom === 'inbox' ||
+      referredFrom === 'mail'
     );
   };
 

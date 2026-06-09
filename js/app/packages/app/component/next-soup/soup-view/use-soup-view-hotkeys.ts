@@ -179,6 +179,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
       openEntityInSplitFromUnifiedList(entity, {
         splitHandle,
         location,
+        referredFrom: currentView(),
       });
       return true;
     },
@@ -232,6 +233,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
 
       openEntityInSplitFromUnifiedList(entity, {
         splitHandle,
+        referredFrom: currentView(),
       });
       return true;
     },
@@ -341,6 +343,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
       openEntityInSplitFromUnifiedList(entity, {
         splitHandle,
         openInNewSplit: true,
+        referredFrom: currentView(),
       });
       return true;
     },
