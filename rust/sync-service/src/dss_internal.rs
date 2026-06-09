@@ -27,7 +27,6 @@ impl<'a> DssInternalClient<'a> {
     fn internal_auth_key(&self) -> worker::Result<String> {
         Ok(self.env.var("DSS_INTERNAL_AUTH_KEY")?.to_string())
     }
-
 }
 
 impl DssInternal for DssInternalClient<'_> {

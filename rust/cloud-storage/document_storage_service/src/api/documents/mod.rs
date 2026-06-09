@@ -6,6 +6,7 @@ use axum::{
 use tower::ServiceBuilder;
 
 // NOTE: copy_document is now served by the documents hex crate router
+pub(in crate::api) mod cached_snapshot_url;
 pub(in crate::api) mod delete_document;
 pub(in crate::api) mod export_document;
 pub(in crate::api) mod get_batch_preview;
@@ -31,7 +32,6 @@ pub(in crate::api) mod put_document_update;
 pub(in crate::api) mod revert_delete_document;
 pub(in crate::api) mod save_document;
 pub(in crate::api) mod simple_save;
-pub(in crate::api) mod cached_snapshot_url;
 pub(in crate::api) mod snapshot_upload_url;
 
 mod utils;
@@ -136,7 +136,8 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         )
         .route(
             "/{document_id}/processing",
-            get(get_document_processing_result::handler).layer(ensure_document_exists_middleware.clone()),
+            get(get_document_processing_result::handler)
+                .layer(ensure_document_exists_middleware.clone()),
         )
         .route(
             "/{document_id}/cached_snapshot_url",
