@@ -343,6 +343,14 @@ export const createSyncServiceSource = (
   };
 
   const pushAwareness = (awareness: RawUpdate) => {
+    // Awareness is ephemeral (cursor positions with a short server-side TTL),
+    // so never let it sit in the send buffer: replaying a backlog of stale
+    // cursor moves after a reconnect would flood the room for no benefit.
+    // Drop it unless the socket is open right now — the next local cursor
+    // move re-publishes fresh state anyway.
+    if (ws.underlyingWebsocket?.readyState !== WebSocket.OPEN) {
+      return;
+    }
     const message = FromPeer.fromPeerAwareness({ awareness });
     ws.send(message);
   };

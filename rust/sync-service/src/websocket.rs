@@ -133,14 +133,20 @@ pub async fn process_message(
             {
                 // ACK the sender first: the update is durably stored at this
                 // point, and a failed send to some *other* peer must not block
-                // the ack, or the sender tears down a healthy connection.
+                // the ack, or the sender tears down a healthy connection. The
+                // reverse holds too — if the sender's socket is broken the
+                // peers below must still receive the update (the sender will
+                // re-send it after reconnecting, which is a harmless
+                // duplicate), so a failed ack is logged rather than returned.
                 let message = FromRemote::RemoteUpdateAck {
                     update: SliceWrapper::Raw(&update),
                 };
                 let mut buf = buf.lock("serialize RemoteUpdateAck in PeerUpdate handler");
                 let serialized =
                     serialize(message, &mut buf).context("Failed serializing update")?;
-                ws.send_with_bytes(serialized).context("failed to send ack")?;
+                if let Err(e) = ws.send_with_bytes(serialized) {
+                    tracing::warn!(error = ?e, "failed to send ack to the update's sender");
+                }
             }
 
             {

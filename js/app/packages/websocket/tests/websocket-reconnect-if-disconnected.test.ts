@@ -96,6 +96,34 @@ describe('reconnectIfDisconnected()', () => {
     expect(serverConnections).toBe(2);
   });
 
+  test('never revives a websocket the user closed', async () => {
+    client = new WebsocketBuilder(url)
+      .withBackoff(new ConstantBackoff(50))
+      .withMaxRetries(0)
+      .build();
+
+    await untilOpen(client);
+
+    const closed = new Promise<void>((resolve) =>
+      client!.addEventListener(WebsocketEvent.Close, () => resolve(), {
+        once: true,
+      })
+    );
+    client.close();
+    await closed;
+
+    // Late revival signals (a pending pushUpdate resend, an 'online' event
+    // racing component cleanup) must not resurrect a deliberately closed
+    // socket — that would leak a connection nobody owns.
+    client.reconnectIfDisconnected();
+    client.reconnectIfDisconnected();
+    await new Promise((r) => setTimeout(r, 300));
+
+    expect(client.underlyingWebsocket.readyState).toBe(WebSocket.CLOSED);
+    expect(client.closedByUser).toBe(true);
+    expect(serverConnections).toBe(1);
+  });
+
   test('simultaneous revival signals create exactly one new connection', async () => {
     // Delay url resolution so the window where a second signal could start a
     // competing connect attempt is wide open.

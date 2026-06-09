@@ -285,7 +285,10 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
   public close(code?: number, reason?: string): void {
     this.cancelScheduledConnectionRetry(); // cancel any scheduled retries
     this._closedByUser = true; // mark websocket as closed by user
-    this._underlyingWebsocket.close(code, reason); // close underlying websocket with provided code and reason
+    // The underlying websocket is unassigned while the first connect attempt
+    // is still resolving its url; tryConnect observes _closedByUser and
+    // won't open a socket after this point.
+    (this._underlyingWebsocket as WebSocket | undefined)?.close(code, reason);
     this.stopHeartbeat();
   }
 
@@ -830,11 +833,13 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
   /**
    * Reconnects only if there is no usable connection: a no-op while the
    * underlying websocket is OPEN, still CONNECTING, or a connect attempt is
-   * resolving its url. Safe to call from connectivity signals like 'online'
-   * or 'visibilitychange' without disturbing a healthy connection.
+   * resolving its url, and a no-op after the user closed the websocket
+   * (only an explicit reconnect() may override a user close). Safe to call
+   * from connectivity signals like 'online' or 'visibilitychange' without
+   * disturbing a healthy connection.
    */
   reconnectIfDisconnected() {
-    if (this.connectPending) {
+    if (this.connectPending || this._closedByUser) {
       return;
     }
     const readyState = (
