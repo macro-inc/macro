@@ -1,4 +1,5 @@
-import { createEffect, createSignal, onCleanup } from 'solid-js';
+import type { JSX } from 'solid-js';
+import { createEffect, createSignal, onCleanup, Show } from 'solid-js';
 
 export function CallRecordingVideo(props: {
   url: string;
@@ -8,15 +9,19 @@ export function CallRecordingVideo(props: {
     source: 'playback' | 'seeking' | 'seeked'
   ) => void;
   setVideoRef?: (el: HTMLVideoElement) => void;
-}) {
+}): JSX.Element {
   const [isLoaded, setIsLoaded] = createSignal(false);
+  const [playbackError, setPlaybackError] = createSignal(false);
   const [posterBlobUrl, setPosterBlobUrl] = createSignal<string>();
+  const hasVisibleVideo = () =>
+    isLoaded() || !!posterBlobUrl() || playbackError();
   let rafId: number | null = null;
 
   createEffect<string | undefined>((previousUrl) => {
     const url = props.url;
     if (url !== previousUrl) {
       setIsLoaded(false);
+      setPlaybackError(false);
     }
     return url;
   });
@@ -75,25 +80,37 @@ export function CallRecordingVideo(props: {
     };
     rafId = requestAnimationFrame(tick);
   };
+
+  function markPlaybackReady(): void {
+    setIsLoaded(true);
+    setPlaybackError(false);
+  }
+
+  function handlePlaybackError(): void {
+    stopTicking();
+    setPlaybackError(true);
+  }
+
   onCleanup(stopTicking);
 
   return (
-    <div class="p-4 flex justify-center items-start overflow-hidden">
+    <div class="p-4 flex flex-col justify-center items-center gap-3 overflow-hidden">
       <video
         ref={props.setVideoRef}
         class="max-w-full max-h-full rounded transition-opacity duration-200"
         classList={{
-          'opacity-0': !isLoaded() && !posterBlobUrl(),
-          'opacity-100': isLoaded() || !!posterBlobUrl(),
+          'opacity-0': !hasVisibleVideo(),
+          'opacity-100': hasVisibleVideo(),
         }}
         controls
         crossorigin="anonymous"
         poster={posterBlobUrl()}
         src={props.url}
-        onLoadedData={() => setIsLoaded(true)}
-        onCanPlay={() => setIsLoaded(true)}
+        onError={handlePlaybackError}
+        onLoadedData={markPlaybackReady}
+        onCanPlay={markPlaybackReady}
         onPlaying={(event) => {
-          setIsLoaded(true);
+          markPlaybackReady();
           startTicking(event.currentTarget);
         }}
         onPlay={(event) => startTicking(event.currentTarget)}
@@ -115,6 +132,29 @@ export function CallRecordingVideo(props: {
           props.onTimeUpdate?.(event.currentTarget.currentTime, 'playback')
         }
       />
+      <Show when={playbackError()}>
+        <div
+          role="alert"
+          class="w-full max-w-lg rounded border border-alert/30 bg-alert-bg px-3 py-2 text-sm text-alert-ink"
+        >
+          <p class="font-medium">
+            This recording uses a media format your browser can't play.
+          </p>
+          <p class="mt-1 text-alert-ink/80">
+            You can still open or download the recording to play it in another
+            app.
+          </p>
+          <a
+            href={props.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            download=""
+            class="mt-2 inline-flex font-medium text-alert-ink underline underline-offset-2 hover:text-alert-ink/80"
+          >
+            Open or download recording
+          </a>
+        </div>
+      </Show>
     </div>
   );
 }
