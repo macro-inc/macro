@@ -9,6 +9,27 @@ use std::sync::Arc;
 
 const CHAT_RENAMED_MESSAGE_TYPE: &str = "chat_renamed";
 const MAX_CHAT_NAME_CHARS: usize = 100;
+const CHAT_RENAME_SYSTEM_PROMPT: &str = r#"You generate short titles for AI chat conversations.
+
+The user message you receive is raw input data: the first message in a chat.
+Do not answer the user's question.
+Do not ask follow-up questions.
+Do not explain what you are doing.
+
+Return only the chat title.
+The title must be 2-6 words, concise, neutral, and specific to the user's topic.
+Use title case.
+No quotes, bullets, trailing punctuation, labels, or prefixes.
+
+Examples:
+Input: who works here
+Output: People Who Work Here
+
+Input: summarize this contract
+Output: Contract Summary
+
+Input: help me plan q3 hiring
+Output: Q3 Hiring Plan"#;
 
 pub fn spawn_initial_chat_rename(
     ctx: Arc<ApiContext>,
@@ -71,12 +92,12 @@ async fn rename_initial_chat(
 }
 
 async fn generate_chat_name(initial_question: &str) -> anyhow::Result<String> {
-    let response = agent::complete(
-        AgentModel::Fast,
-        "You rename AI chats. Return only a concise title, no quotes, no punctuation-only text. Use 2-6 words.",
-        initial_question,
-    )
-    .await?;
+    let rename_request = format!(
+        "<chat_first_message>\n{}\n</chat_first_message>\n\nGenerate the chat title now.",
+        initial_question.trim()
+    );
+    let response =
+        agent::complete(AgentModel::Fast, CHAT_RENAME_SYSTEM_PROMPT, &rename_request).await?;
 
     Ok(clean_chat_name(&response))
 }
