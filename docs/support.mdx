@@ -1,0 +1,55 @@
+---
+title: "Help & support"
+description: "How to get help with Macro, and fixes for the most common issues."
+---
+
+## Get help
+
+<CardGroup cols={2}>
+  <Card title="Email support" icon="envelope" href="mailto:support@macro.com">
+    Write to support@macro.com — include what you were doing and what you expected to happen.
+  </Card>
+  <Card title="Book a call" icon="calendar" href="https://cal.com/team/macro/macro-demo-call">
+    A member of our team will walk you through setup or dig into a problem live.
+  </Card>
+  <Card title="File a bug on GitHub" icon="github" href="https://github.com/macro-inc/macro/issues">
+    Macro is open source — bug reports (and pull requests) are welcome on the monorepo.
+  </Card>
+  <Card title="Watch the demo" icon="play" href="https://www.youtube.com/watch?v=Fn5hdzXsQQ8">
+    Many "how do I…" questions are answered in the product walkthrough.
+  </Card>
+</CardGroup>
+
+For specific topics: [licensing@macro.com](mailto:licensing@macro.com) for commercial licensing, [self-host@macro.com](mailto:self-host@macro.com) for HIPAA/FedRAMP and self-hosted deployments, and [teo@macro.com](mailto:teo@macro.com) if you want to contribute but aren't sure where to start.
+
+## Common issues
+
+<AccordionGroup>
+  <Accordion title="Someone referenced a doc or task I can't open">
+    You don't have access yet. Ask them to @mention it in a channel you're both in — that shares it with every member automatically — or to share it with you directly from the item's Share menu. See [Permissions](/permissions).
+  </Accordion>
+
+  <Accordion title="An email I'm expecting isn't in my inbox">
+    Check the **Noise** tab — Macro filters lower-priority senders out of Signal. If a sender is misclassified, right-click any of their threads to move them between Signal and Noise; the change sticks for future emails. See [Signal vs Noise](/product/email#signal-vs-noise).
+  </Accordion>
+
+  <Accordion title="I @mentioned someone in a doc and they weren't notified">
+    That's by design: mentions in a document's <b>body</b> don't notify or share. Mention them in a <b>comment</b>, or share the doc with them explicitly. The reasoning is covered in [Mentions](/concepts/mentions#what-happens-when-you-mention).
+  </Accordion>
+
+  <Accordion title="I don't see a feature the docs describe (Companies, splits, …)">
+    Two usual causes: some features roll out gradually, so your account may not have them yet — and some features are desktop-only, like [splits](/concepts/blocks#splits) and keyboard shortcuts. See [Apps & platforms](/apps).
+  </Accordion>
+
+  <Accordion title="A call wasn't supposed to be shared with my team">
+    Calls are shared to team memory by default. During a call, uncheck the toggle in the bottom left to keep it personal — the call still goes to your own memory, just not the team's. See [Calls](/product/calls).
+  </Accordion>
+
+  <Accordion title="My agent says it can't access something">
+    Agents inherit your permissions — if you can't open it, neither can they. Get access to the item first (see the first question above), then ask again. See [Mentions in Agents](/concepts/mentions#mentions-in-agents).
+  </Accordion>
+</AccordionGroup>
+
+<Info>
+  When reporting a bug, include your platform (web or iOS), the block type involved (email, doc, channel, …), and a link to the affected item if you have one — it cuts the back-and-forth in half.
+</Info>

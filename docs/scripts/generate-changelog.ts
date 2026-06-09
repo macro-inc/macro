@@ -1,6 +1,8 @@
 /**
  * Pulls releases from macro-inc/macro matching the vYYYY.M.D.N format
- * and generates a single changelog MDX page using <Update> components.
+ * and generates changelog MDX pages using <Update> components: one
+ * landing page (introduction.mdx) with the latest month's releases, plus
+ * one archive page per month so no single route carries every release.
  *
  * Usage: bun run scripts/generate-changelog.ts
  *
@@ -59,6 +61,33 @@ function escapeForMdx(text: string): string {
   );
 }
 
+const MONTH_NAMES = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+
+/** Year and month parsed from a vYYYY.M.D.N tag. */
+function tagMonth(tag: string): { year: number; month: number } {
+  const [year, month] = tag.slice(1).split(".").map(Number);
+  return { year, month };
+}
+
+function renderUpdate(r: Release, current: boolean): string {
+  const label = current ? `${r.tag_name} (Current)` : r.tag_name;
+  const body = escapeForMdx((r.body ?? "").trim());
+  return `    <Update label="${label}">\n${body}\n    </Update>`;
+}
+
 async function main() {
   console.log(`Fetching releases from ${REPO}...`);
   const allReleases = await fetchAllReleases();
@@ -74,42 +103,84 @@ async function main() {
     `Found ${releases.length} releases matching ${TAG_PATTERN.source}`
   );
 
-  // Clean out old per-release MDX files
+  // Clean out old generated MDX files
   mkdirSync(CHANGELOG_DIR, { recursive: true });
   for (const file of readdirSync(CHANGELOG_DIR)) {
-    if (file !== "introduction.mdx") {
-      rmSync(join(CHANGELOG_DIR, file));
-    }
+    rmSync(join(CHANGELOG_DIR, file));
   }
 
-  const updates = releases.map((r, i) => {
-    const label = i === 0 ? `${r.tag_name} (Current)` : r.tag_name;
-    const body = escapeForMdx((r.body ?? "").trim());
-    return `    <Update label="${label}">\n${body}\n    </Update>`;
-  });
+  // Group releases by tag month, newest month first (releases are already
+  // sorted newest-first, so insertion order is the display order)
+  const months = new Map<string, Release[]>();
+  for (const r of releases) {
+    const { year, month } = tagMonth(r.tag_name);
+    const key = `${year}-${String(month).padStart(2, "0")}`;
+    (months.get(key) ?? months.set(key, []).get(key)!).push(r);
+  }
 
-  const mdx = `---
+  const monthKeys = [...months.keys()];
+  const [latestKey, ...archiveKeys] = monthKeys;
+
+  // Landing page: the latest month's releases
+  const latestReleases = months.get(latestKey) ?? [];
+  const latestUpdates = latestReleases.map((r, i) => renderUpdate(r, i === 0));
+
+  const intro = `---
 title: Changelog
 icon: clock-rotate-left
+description: All notable changes to Macro, pulled from GitHub Releases.
 ---
 
 All notable changes to Macro, pulled from [GitHub Releases](https://github.com/${REPO}/releases).
 
-Releases follow the format \`vYYYY.M.D.patch\`.
+Releases follow the format \`vYYYY.M.D.patch\`. Earlier months are in the sidebar.
+
+${latestUpdates.join("\n\n")}
+`;
+
+  writeFileSync(join(CHANGELOG_DIR, "introduction.mdx"), intro);
+  console.log(
+    `Wrote changelog/introduction.mdx (${latestReleases.length} releases)`
+  );
+
+  // One archive page per earlier month
+  for (const key of archiveKeys) {
+    const [year, month] = key.split("-").map(Number);
+    const title = `${MONTH_NAMES[month - 1]} ${year}`;
+    const monthReleases = months.get(key)!;
+    const updates = monthReleases.map((r) => renderUpdate(r, false));
+
+    const mdx = `---
+title: "${title}"
+description: "Macro releases from ${title}."
+---
 
 ${updates.join("\n\n")}
 `;
 
-  writeFileSync(join(CHANGELOG_DIR, "introduction.mdx"), mdx);
-  console.log("Wrote changelog/introduction.mdx");
+    writeFileSync(join(CHANGELOG_DIR, `${key}.mdx`), mdx);
+    console.log(`Wrote changelog/${key}.mdx (${monthReleases.length} releases)`);
+  }
 
-  // Update docs.json with changelog tab
+  // Update docs.json with changelog tab: latest month up top, then one
+  // group per year of archive pages
   const docsJson = JSON.parse(readFileSync(DOCS_JSON_PATH, "utf-8"));
   const tabs = docsJson.navigation.tabs as Array<Record<string, unknown>>;
 
   const filtered = tabs.filter(
     (t) => (t.tab as string).toLowerCase() !== "changelog"
   );
+
+  const yearGroups: Array<{ group: string; pages: string[] }> = [];
+  for (const key of archiveKeys) {
+    const year = key.split("-")[0];
+    let group = yearGroups.find((g) => g.group === year);
+    if (!group) {
+      group = { group: year, pages: [] };
+      yearGroups.push(group);
+    }
+    group.pages.push(`changelog/${key}`);
+  }
 
   filtered.push({
     tab: "Changelog",
@@ -118,6 +189,7 @@ ${updates.join("\n\n")}
         group: "Releases",
         pages: ["changelog/introduction"],
       },
+      ...yearGroups,
     ],
   });
 

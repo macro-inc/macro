@@ -16,7 +16,7 @@ Each split maintains its own history. Use <kbd>opt</kbd> <kbd>\[</kbd> or <kbd>o
 Create a split with <kbd>cmd</kbd>\+<kbd>\\</kbd>, focus left/right with <kbd>shift</kbd>\+<kbd>h</kbd> / <kbd>shift</kbd>\+<kbd>l</kbd>, maximize with <kbd>shift</kbd>\+<kbd>escape</kbd>, close with <kbd>cmd</kbd>\+<kbd>escape</kbd>.
 
 <Frame>
-  ![Screenshot 2026 06 09 At 4 49 29 PM](/images/Screenshot-2026-06-09-at-4.49.29-PM.png)
+  ![Multiple splits open side by side in a single Macro tab](/images/Screenshot-2026-06-09-at-4.49.29-PM.png)
 </Frame>
 
 The number of splits you can have open at once is determined by your monitor size and zoom. If there isn't room for another split, the new one replaces the rightmost split.
@@ -28,8 +28,8 @@ Most block types have on-hover previews to provide context without needing to cl
 <Frame>
   <img
     src="/images/Screenshot-2026-06-09-at-4.49.50-PM.png"
-    alt="Screenshot 2026 06 09 At 4 49 50 PM"
-    title="Screenshot 2026 06 09 At 4 49 50 PM"
+    alt="A hover preview of a task mention showing the task's status and details"
+    title="Task hover preview"
     className="mx-auto"
     style={{ width:"81%" }}
   />
@@ -40,7 +40,7 @@ Most block types have on-hover previews to provide context without needing to cl
 Most blocks embed read-only in a markdown doc, with editing and markup tools disabled. Note that, unlike mentioning docs in channels — where permissions are automatically granted to members of the channel — permissions are not auto-granted for embeds or mentions in documents. You'll have to also share the files you embed.
 
 <Frame>
-  ![Screenshot 2026 06 09 At 4 50 07 PM](/images/Screenshot-2026-06-09-at-4.50.07-PM.png)
+  ![A block embedded read-only inside a markdown document](/images/Screenshot-2026-06-09-at-4.50.07-PM.png)
 </Frame>
 
 To create an embed, first create an @mention by hitting `@` or dragging and dropping, then hover and click **Convert to embed**.
@@ -48,8 +48,8 @@ To create an embed, first create an @mention by hitting `@` or dragging and drop
 <Frame>
   <img
     src="/images/Screenshot-2026-06-09-at-4.50.18-PM.png"
-    alt="Screenshot 2026 06 09 At 4 50 18 PM"
-    title="Screenshot 2026 06 09 At 4 50 18 PM"
+    alt="The Convert to embed option shown when hovering an @mention"
+    title="Convert to embed"
     className="mx-auto"
     style={{ width:"59%" }}
   />
@@ -58,5 +58,5 @@ To create an embed, first create an @mention by hitting `@` or dragging and drop
 ## More about blocks
 
 - **References, sharing & permissions** — Every block has a References panel (backlinks to everywhere it's mentioned or embedded) and the same share dialog, with owner / editor / commenter / viewer access levels plus public links for documents.
-- **Real-time collaboration** — Collaborative blocks (docs, canvas, pdf markup) sync through **Loro CRDTs** over a **Cloudflare Durable Objects** backend: the Rust `sync-service` spins up one Durable Object "room" per document, and clients connect over WebSocket to `/document/:id`. This is what gives you multiplayer editing, presence cursors, and full offline support.
+- **Real-time collaboration** — Collaborative blocks (docs, pdf markup) sync through **Loro CRDTs** over a **Cloudflare Durable Objects** backend: the Rust `sync-service` spins up one Durable Object "room" per document, and clients connect over WebSocket to `/document/:id`. This is what gives you multiplayer editing, presence cursors, and full offline support.
 - **Search & Inbox** — One unified [Search](/product/search) index covers every block type, filterable by type and by mentioned person. The unified [Inbox](/product/inbox) pulls open notifications from across blocks into a single recency-sorted list.

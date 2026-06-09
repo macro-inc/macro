@@ -1,0 +1,80 @@
+<svg viewBox="0 0 760 470" xmlns="http://www.w3.org/2000/svg" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <defs>
+    <radialGradient id="coreGlow" cx="50%" cy="50%" r="60%">
+      <stop offset="0%" stop-color="#ff8f05" stop-opacity="0.14"/>
+      <stop offset="100%" stop-color="#ff8f05" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect x="0" y="0" width="760" height="470" fill="#090909"/>
+
+  <!-- connection lines: blocks to core -->
+  <g stroke="#3a3a3a" stroke-width="1.25">
+    <path d="M 172 80  C 250 80, 280 150, 310 178" fill="none"/>
+    <path d="M 172 170 C 230 170, 250 190, 300 200" fill="none"/>
+    <path d="M 172 260 C 230 260, 250 240, 300 228" fill="none"/>
+    <path d="M 172 350 C 250 350, 280 280, 310 250" fill="none"/>
+    <path d="M 588 80  C 510 80, 480 150, 450 178" fill="none"/>
+    <path d="M 588 170 C 530 170, 510 190, 460 200" fill="none"/>
+    <path d="M 588 260 C 530 260, 510 240, 460 228" fill="none"/>
+    <path d="M 588 350 C 510 350, 480 280, 450 250" fill="none"/>
+  </g>
+
+  <!-- agents line: core to agents -->
+  <path d="M 380 274 L 380 366" stroke="#ff8f05" stroke-width="1.5" fill="none"/>
+  <circle cx="380" cy="274" r="3" fill="#ff8f05"/>
+  <circle cx="380" cy="366" r="3" fill="#ff8f05"/>
+  <text x="392" y="326" fill="#9a9a9a" font-size="12">agents read and write everything</text>
+
+  <!-- block chips: left -->
+  <g>
+    <g>
+      <rect x="40" y="56" width="132" height="48" rx="10" fill="#161616" stroke="#2e2e2e"/>
+      <text x="106" y="85" fill="#e8e8e8" font-size="14" text-anchor="middle">Email</text>
+    </g>
+    <g>
+      <rect x="40" y="146" width="132" height="48" rx="10" fill="#161616" stroke="#2e2e2e"/>
+      <text x="106" y="175" fill="#e8e8e8" font-size="14" text-anchor="middle">Messages</text>
+    </g>
+    <g>
+      <rect x="40" y="236" width="132" height="48" rx="10" fill="#161616" stroke="#2e2e2e"/>
+      <text x="106" y="265" fill="#e8e8e8" font-size="14" text-anchor="middle">Tasks</text>
+    </g>
+    <g>
+      <rect x="40" y="326" width="132" height="48" rx="10" fill="#161616" stroke="#2e2e2e"/>
+      <text x="106" y="355" fill="#e8e8e8" font-size="14" text-anchor="middle">Docs</text>
+    </g>
+  </g>
+
+  <!-- block chips: right -->
+  <g>
+    <g>
+      <rect x="588" y="56" width="132" height="48" rx="10" fill="#161616" stroke="#2e2e2e"/>
+      <text x="654" y="85" fill="#e8e8e8" font-size="14" text-anchor="middle">Calls</text>
+    </g>
+    <g>
+      <rect x="588" y="146" width="132" height="48" rx="10" fill="#161616" stroke="#2e2e2e"/>
+      <text x="654" y="175" fill="#e8e8e8" font-size="14" text-anchor="middle">Files</text>
+    </g>
+    <g>
+      <rect x="588" y="236" width="132" height="48" rx="10" fill="#161616" stroke="#2e2e2e"/>
+      <text x="654" y="265" fill="#e8e8e8" font-size="14" text-anchor="middle">Canvas</text>
+    </g>
+    <g>
+      <rect x="588" y="326" width="132" height="48" rx="10" fill="#161616" stroke="#2e2e2e"/>
+      <text x="654" y="355" fill="#e8e8e8" font-size="14" text-anchor="middle">Pull requests</text>
+    </g>
+  </g>
+
+  <!-- core -->
+  <ellipse cx="380" cy="214" rx="170" ry="105" fill="url(#coreGlow)"/>
+  <rect x="300" y="154" width="160" height="120" rx="14" fill="#1a1208" stroke="#ff8f05" stroke-width="1.5"/>
+  <text x="380" y="204" fill="#ffffff" font-size="16" font-weight="600" text-anchor="middle">Unified memory</text>
+  <text x="380" y="228" fill="#c9c9c9" font-size="12" text-anchor="middle">one database</text>
+  <text x="380" y="246" fill="#9a9a9a" font-size="12" text-anchor="middle">personal + team</text>
+
+  <!-- agents -->
+  <rect x="296" y="366" width="168" height="52" rx="12" fill="#161616" stroke="#ff8f05" stroke-width="1.25"/>
+  <text x="380" y="389" fill="#ffffff" font-size="14" font-weight="600" text-anchor="middle">Agents</text>
+  <text x="380" y="407" fill="#9a9a9a" font-size="11" text-anchor="middle">chats · @Macro · automations</text>
+</svg>

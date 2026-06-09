@@ -26,6 +26,9 @@
         "tab": "Documentation",
         "pages": [
           "index",
+          "getting-started",
+          "switch-to-macro",
+          "apps",
           {
             "group": "Features",
             "pages": [
@@ -40,10 +43,12 @@
               "product/agents",
               "product/email",
               "product/docs",
+              "product/canvas",
               "product/tasks",
               "product/channels",
               "product/calls",
-              "product/folders"
+              "product/folders",
+              "product/crm"
             ]
           },
           {
@@ -58,6 +63,7 @@
           {
             "group": "Agents",
             "pages": [
+              "AI/recipes",
               "AI/mcp/overview",
               {
                 "group": "Tool Reference",
@@ -89,6 +95,14 @@
               "integrations/github"
             ]
           },
+          {
+            "group": "Account",
+            "pages": [
+              "account/teams",
+              "account/billing"
+            ]
+          },
+          "support",
           "faq",
           "keyboard-shortcuts"
         ]
@@ -100,6 +114,22 @@
             "group": "Releases",
             "pages": [
               "changelog/introduction"
+            ]
+          },
+          {
+            "group": "2026",
+            "pages": [
+              "changelog/2026-05",
+              "changelog/2026-04",
+              "changelog/2026-03",
+              "changelog/2026-02",
+              "changelog/2026-01"
+            ]
+          },
+          {
+            "group": "2025",
+            "pages": [
+              "changelog/2025-12"
             ]
           }
         ]
