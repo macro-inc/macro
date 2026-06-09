@@ -130,6 +130,7 @@ const rootPreload: RoutePreloadFunc = async (args) => {
     'utm_term',
     'utm_content',
     'rdt_cid',
+    'fbclid',
     'gclid',
     'twclid',
     '_fbc',
