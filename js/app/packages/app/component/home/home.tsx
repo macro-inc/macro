@@ -23,6 +23,8 @@ import { cognitionApiServiceClient } from '@service-cognition/client';
 import { Navigate } from '@solidjs/router';
 import { createMemo } from 'solid-js';
 import { HomeSectionBoundary } from './home-section-boundary';
+import { registerHotkey } from '@core/hotkey/hotkeys';
+import { TOKENS } from '@core/hotkey/tokens';
 
 const MACRO_LOGO_PATH =
   'm6.25 4.038-2.242 0.8792v5.8184l-1.756-1.6582-2.242 0.8792v6.6766c0 0.2568 0.106 0.502 0.292 0.6784l2.794 2.6422 2.244-0.879v-5.8184l7.084 6.6974 2.244-0.879v-5.8184l7.086 6.6976 2.24-0.8792v-6.6766c0-0.2568-0.104-0.5022-0.292-0.6784l-8.124-7.6816-2.244 0.879v5.8184z';
@@ -141,7 +143,7 @@ function HomeContent() {
   );
 }
 
-const HomeChatInputInner = () => {
+const HomeChatInput = () => {
   const analytics = useAnalytics();
   const splitPanelContext = useSplitPanelOrThrow();
   const input = useChatInputContext();
@@ -157,6 +159,18 @@ const HomeChatInputInner = () => {
     },
     block: 'chat',
     showOpenTabs: true,
+  });
+
+  registerHotkey({
+    hotkey: 'enter',
+    scopeId: splitPanelContext.splitHotkeyScope,
+    description: 'Focus Chat Input',
+    keyDownHandler: () => {
+      editor.controls.focus();
+      return true;
+    },
+    hotkeyToken: TOKENS.block.focus,
+    hide: true,
   });
 
   const renameMutation = createRenameDssEntityMutation();
@@ -228,13 +242,9 @@ const HomeChatInputInner = () => {
             return true;
           }}
           isPersistent={true}
-          autoFocusOnMount={false}
+          autoFocusOnMount={true}
         />
       </div>
     </div>
   );
-};
-
-const HomeChatInput = () => {
-  return <HomeChatInputInner />;
 };
