@@ -86,7 +86,7 @@ pub fn all_tools() -> ToolSetWithPrompt {
         .add_subtoolset::<ToolNotificationToolContext>(notification_toolset())
         .add_subtoolset::<ToolEmailToolContext>(email_toolset())
         .add_tool::<Subagent, ToolServiceContext>();
-    let prompt = prompts::TOOLS_PROMPT;
+    let prompt = *prompts::TOOLS_PROMPT;
     let toolset = Arc::new(toolset);
     ToolSetWithPrompt { toolset, prompt }
 }
@@ -105,7 +105,7 @@ pub fn mcp_tools() -> ToolSetWithPrompt {
         .add_subtoolset::<ToolNotificationToolContext>(notification_toolset())
         .add_subtoolset::<ToolEmailToolContext>(email_mcp_toolset())
         .add_tool::<Subagent, ToolServiceContext>();
-    let prompt = prompts::TOOLS_PROMPT;
+    let prompt = *prompts::TOOLS_PROMPT;
     let toolset = Arc::new(toolset);
     ToolSetWithPrompt { toolset, prompt }
 }

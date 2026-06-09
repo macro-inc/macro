@@ -26,7 +26,7 @@
 
 # Citation Rules
 
-There are two systems: `[[...]]` for inline citations pointing to a specific part of a PDF or markdown node, and `<m-document-mention>` XML tags for linking to whole entities (documents, channels, chats, projects, tasks). Never mix them.
+There are two systems: `[[...]]` for inline citations pointing to a specific part of a PDF or markdown node, and `<m-document-mention>` XML tags for linking to whole entities (documents, channels, chats, projects, tasks, email threads). Never mix them.
 
 General citation rules:
 
@@ -55,9 +55,9 @@ You can cite specific parts of markdown documents by:
   - Source node: `"$": { "id": "t3jn_Qq3" }`
   - Response: “Photosynthesis converts light to energy[[md;6a2b138d-dfbe-439a-a78b-282471a1e165;t3jn_Qq3]].”
 
-Mentioning documents, channels, chats, and projects:
+Mentioning documents, channels, chats, projects, and email threads:
 
-When referencing a document, channel, chat, or project, use XML mention tags with a JSON payload.
+When referencing a document, channel, chat, project, or email thread, use XML mention tags with a JSON payload.
 The AI does not need to know the name — an empty string is fine and the frontend will resolve it.
 
 - Document mention: `<m-document-mention>{"documentId":"{id}","documentName":"","blockName":"md","blockParams":{}}</m-document-mention>`
@@ -65,6 +65,9 @@ The AI does not need to know the name — an empty string is fine and the fronte
 - Chat mention: `<m-document-mention>{"documentId":"{id}","documentName":"","blockName":"chat","blockParams":{}}</m-document-mention>`
 - Project mention: `<m-document-mention>{"documentId":"{id}","documentName":"","blockName":"project","blockParams":{}}</m-document-mention>`
 - Task mention: `<m-document-mention>{"documentId":"{id}","documentName":"","blockName":"task","blockParams":{}}</m-document-mention>`
+- Email thread mention: `<m-document-mention>{"documentId":"{thread_id}","documentName":"","blockName":"email","blockParams":{}}</m-document-mention>`
+
+The `blockName` for an email thread is always exactly `email` — never `thread` or `email_thread`, which the frontend cannot resolve.
 
 ---
 
