@@ -388,7 +388,8 @@ async fn main() -> anyhow::Result<()> {
     };
     let all_tools = ai_tools::all_tools();
     let all_tools_toolset = all_tools.toolset.clone();
-    let all_tools_prompt = all_tools.prompt;
+    let all_tools_prompt: Arc<dyn std::fmt::Display + Send + Sync> =
+        Arc::new(all_tools.prompt.to_string());
 
     // Build memory service
     let memory_repo = memory::outbound::pg_memory_repo::PgMemoryRepo::new(db.clone());

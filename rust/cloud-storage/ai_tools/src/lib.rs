@@ -3,7 +3,6 @@
 use ai_toolset::AsyncToolCollection;
 use ai_toolset::schema::{CombinedToolSchemas, ToolSchemaGenerator};
 mod build_context;
-pub mod prompts;
 mod schemas;
 pub mod search;
 pub mod serde_utils;
@@ -49,7 +48,7 @@ pub type AiToolSet = AsyncToolCollection<ToolServiceContext>;
 
 pub struct ToolSetWithPrompt {
     pub toolset: Arc<AiToolSet>,
-    pub prompt: &'static str,
+    pub prompt: Box<dyn std::fmt::Display + Send + Sync>,
 }
 
 impl ToolSchemaGenerator for ToolSetWithPrompt {
@@ -86,9 +85,11 @@ pub fn all_tools() -> ToolSetWithPrompt {
         .add_subtoolset::<ToolNotificationToolContext>(notification_toolset())
         .add_subtoolset::<ToolEmailToolContext>(email_toolset())
         .add_tool::<Subagent, ToolServiceContext>();
-    let prompt = *prompts::TOOLS_PROMPT;
     let toolset = Arc::new(toolset);
-    ToolSetWithPrompt { toolset, prompt }
+    ToolSetWithPrompt {
+        toolset,
+        prompt: Box::new(&prompt::TOOL_USE_PROMPT),
+    }
 }
 
 /// Combined schema with shared, deduplicated `$defs`.
@@ -105,14 +106,16 @@ pub fn mcp_tools() -> ToolSetWithPrompt {
         .add_subtoolset::<ToolNotificationToolContext>(notification_toolset())
         .add_subtoolset::<ToolEmailToolContext>(email_mcp_toolset())
         .add_tool::<Subagent, ToolServiceContext>();
-    let prompt = *prompts::TOOLS_PROMPT;
     let toolset = Arc::new(toolset);
-    ToolSetWithPrompt { toolset, prompt }
+    ToolSetWithPrompt {
+        toolset,
+        prompt: Box::new(&prompt::TOOL_USE_PROMPT),
+    }
 }
 
 pub fn no_tools() -> ToolSetWithPrompt {
     ToolSetWithPrompt {
-        prompt: prompts::BASE_PROMPT,
+        prompt: Box::new(&prompt::BASE_PROMPT),
         toolset: Arc::new(AsyncToolCollection::new()),
     }
 }

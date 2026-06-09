@@ -118,7 +118,8 @@ where
             let pool = self.db.clone();
             let tool_context = self.tool_context.clone();
             let toolset = self.tools.toolset.clone();
-            let prompt = self.tools.prompt;
+            let prompt: Box<dyn std::fmt::Display + Send + Sync> =
+                Box::new(self.tools.prompt.to_string());
             tokio::spawn(async move {
                 let repo = crate::outbound::pg_memory_repo::PgMemoryRepo::new(pool.clone());
                 let tools = ToolSetWithPrompt { toolset, prompt };
@@ -149,7 +150,7 @@ where
     ) -> super::Result<Memory> {
         // append user data + datetime to prompt
         let system_prompt = build_generation_system_prompt(
-            self.tools.prompt,
+            &self.tools.prompt,
             &user,
             &Utc::now().to_rfc2822(),
             previous_memory.as_deref(),
@@ -200,7 +201,7 @@ where
 }
 
 fn build_generation_system_prompt(
-    base_prompt: &str,
+    base_prompt: impl std::fmt::Display,
     user: &macro_user_id::user_id::MacroUserIdStr<'_>,
     datetime: &str,
     previous_memory: Option<&str>,

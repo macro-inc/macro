@@ -140,6 +140,7 @@ dependencies = [
  "models_search",
  "non_empty",
  "notification",
+ "prompt",
  "properties",
  "rand 0.9.4",
  "readonly_pool",
@@ -3383,6 +3384,7 @@ dependencies = [
  "models_permissions",
  "non_empty",
  "notification",
+ "prompt",
  "properties",
  "readonly_pool",
  "redis",
@@ -8914,6 +8916,10 @@ dependencies = [
  "quote",
  "syn 2.0.117",
 ]
+
+[[package]]
+name = "prompt"
+version = "0.1.0"
 
 [[package]]
 name = "properties"

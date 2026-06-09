@@ -80,9 +80,9 @@ pub async fn structured_completion(
         }
     })?;
 
-    let tools_prompt = match request.toolset {
-        ToolSet::All => ctx.all_tools_prompt,
-        ToolSet::None => ai_tools::prompts::BASE_PROMPT,
+    let tools_prompt: &(dyn std::fmt::Display + Sync) = match request.toolset {
+        ToolSet::All => &ctx.all_tools_prompt,
+        ToolSet::None => &prompt::BASE_PROMPT,
     };
 
     let system_prompt = match &request.additional_instructions {
