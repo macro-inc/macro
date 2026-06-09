@@ -9,6 +9,7 @@ import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { utf8Encode } from '@core/util/string';
 import { createRenameDssEntityMutation } from '@macro-entity';
 import { refetchHistory } from '@queries/history/history';
+import { useEditDocumentMutation } from '@queries/storage/document-metadata';
 import { storageServiceClient } from '@service-storage/client';
 import { createCallback } from '@solid-primitives/rootless';
 import { createMemo } from 'solid-js';
@@ -61,16 +62,13 @@ export function useRenameMarkdownDocument() {
 
 export function useSaveMarkdownDocumentName() {
   const documentId = useBlockId();
+  const editDocumentMutation = useEditDocumentMutation();
 
-  return createCallback(async (newName: string) => {
-    const saveRes = await storageServiceClient.editDocument({
+  return createCallback((newName: string) => {
+    return editDocumentMutation.mutateAsync({
       documentId,
       documentName: newName,
     });
-
-    if (saveRes.isErr()) {
-      console.error('error on markdown document name save');
-    }
   });
 }
 

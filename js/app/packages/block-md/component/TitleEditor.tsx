@@ -133,9 +133,9 @@ function titleNavigationPlugin(
 
 export const TitlePlaceholderSignal = createBlockSignal<string | undefined>();
 
-const RENAME_DEBOUNCE_MS = 2000;
+const RENAME_DEBOUNCE_MS = 1000;
 const BACKEND_RENAME_DEBOUNCE_MS = 200;
-const BACKEND_RENAME_MAX_WAIT_MS = 1500;
+const BACKEND_RENAME_MAX_WAIT_MS = 1000;
 
 export function TitleEditor(
   props: { autoFocusOnMount?: boolean; mustBeConnected?: boolean } = {}
@@ -192,6 +192,8 @@ export function TitleEditor(
     backendRenameInFlight = true;
     try {
       await saveMarkdownDocumentName(nextName);
+    } catch (error) {
+      console.error('error on markdown document name save', error);
     } finally {
       backendRenameInFlight = false;
       if (pendingBackendName !== undefined) {
