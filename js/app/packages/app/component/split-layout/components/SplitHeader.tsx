@@ -12,8 +12,6 @@ import CaretDown from '@phosphor/caret-down.svg';
 import CaretLeft from '@phosphor/caret-left.svg';
 import CaretRight from '@phosphor/caret-right.svg';
 import CaretUp from '@phosphor/caret-up.svg';
-import EyeIcon from '@phosphor/eye.svg';
-import EyeSlashIcon from '@phosphor/eye-slash.svg';
 import CloseIcon from '@phosphor/x.svg';
 import { mergeRefs } from '@solid-primitives/refs';
 import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
@@ -135,51 +133,6 @@ function SplitCloseButton() {
         <CloseIcon class="size-4" />
       </Button>
     </Show>
-  );
-}
-
-function _SplitPreviewToggle() {
-  const context = useContext(SplitPanelContext);
-  if (!ENABLE_PREVIEW || !context || !context.previewState) return null;
-
-  // Only show toggle for unified-list component and project block
-  const isUnifiedList = createMemo(() => {
-    const content = context.handle.content();
-    if (ENABLE_PROJECT_VIEW_PREVIEW && content.type === 'project') return true;
-    return content.type === 'component' && content.id === 'unified-list';
-  });
-
-  const [preview, setPreview] = context.previewState;
-
-  return (
-    <Show when={isUnifiedList()}>
-      <div class="max-sm:rotate-90">
-        <Button
-          class="p-1 rounded-lg"
-          classList={{
-            'bg-accent/20 text-accent': preview(),
-          }}
-          label={!preview() ? 'Split View (Preview)' : 'Full View (List)'}
-          hotkey={TOKENS.unifiedList.togglePreview}
-          tabIndex={-1}
-          onClick={() => setPreview((prev) => !prev)}
-        >
-          {preview() ? <EyeSlashIcon /> : <EyeIcon />}
-        </Button>
-      </div>
-    </Show>
-  );
-}
-
-function _SplitControlButtons() {
-  return (
-    <div class="flex flex-row items-center px-2 h-full shrink-0">
-      <div class="mobile:hidden">
-        <SplitCloseButton />
-      </div>
-      <SplitBackButton />
-      <SplitForwardButton />
-    </div>
   );
 }
 
