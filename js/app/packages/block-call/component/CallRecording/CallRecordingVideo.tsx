@@ -10,6 +10,7 @@ export function CallRecordingVideo(props: {
   setVideoRef?: (el: HTMLVideoElement) => void;
 }) {
   const [isLoaded, setIsLoaded] = createSignal(false);
+  const [posterBlobUrl, setPosterBlobUrl] = createSignal<string>();
   let rafId: number | null = null;
 
   createEffect<string | undefined>((previousUrl) => {
@@ -18,6 +19,41 @@ export function CallRecordingVideo(props: {
       setIsLoaded(false);
     }
     return url;
+  });
+
+  createEffect(() => {
+    const posterUrl = props.posterUrl;
+    setPosterBlobUrl(undefined);
+    if (!posterUrl) return;
+
+    const abortController = new AbortController();
+    let objectUrl: string | undefined;
+
+    onCleanup(() => {
+      abortController.abort();
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    });
+
+    void (async () => {
+      try {
+        const response = await fetch(posterUrl, {
+          mode: 'cors',
+          signal: abortController.signal,
+        });
+        if (!response.ok) {
+          throw new Error(`Failed to fetch poster: ${response.status}`);
+        }
+
+        const blob = await response.blob();
+        if (abortController.signal.aborted) return;
+
+        objectUrl = URL.createObjectURL(blob);
+        setPosterBlobUrl(objectUrl);
+      } catch (error) {
+        if (abortController.signal.aborted) return;
+        console.error('Failed to load call recording preview poster', error);
+      }
+    })();
   });
 
   const stopTicking = () => {
@@ -47,12 +83,12 @@ export function CallRecordingVideo(props: {
         ref={props.setVideoRef}
         class="max-w-full max-h-full rounded transition-opacity duration-200"
         classList={{
-          'opacity-0': !isLoaded() && !props.posterUrl,
-          'opacity-100': isLoaded() || !!props.posterUrl,
+          'opacity-0': !isLoaded() && !posterBlobUrl(),
+          'opacity-100': isLoaded() || !!posterBlobUrl(),
         }}
         controls
         crossorigin="anonymous"
-        poster={props.posterUrl}
+        poster={posterBlobUrl()}
         src={props.url}
         onLoadedData={() => setIsLoaded(true)}
         onCanPlay={() => setIsLoaded(true)}
