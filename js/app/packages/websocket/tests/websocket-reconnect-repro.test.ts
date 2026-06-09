@@ -15,14 +15,16 @@ import { startServer, stopClient, stopServer } from './websocket-test-utils';
  * subsequent edit triggered another missed ack -> reconnect -> loop.
  */
 describe('reconnect() should produce a usable connection', () => {
-  const port = 42421;
-  const url = `ws://localhost:${port}`;
-
+  let url: string;
   let server: WebSocketServer | undefined;
   let client: Websocket | undefined;
 
   beforeEach(async () => {
-    server = await startServer(port, 5000);
+    server = await startServer(0, 5000);
+    const address = server.address();
+    const port =
+      typeof address === 'object' && address !== null ? address.port : 0;
+    url = `ws://localhost:${port}`;
   });
 
   afterEach(async () => {

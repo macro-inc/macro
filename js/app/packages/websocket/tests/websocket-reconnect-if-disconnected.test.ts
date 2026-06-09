@@ -15,16 +15,18 @@ import { startServer, stopClient, stopServer } from './websocket-test-utils';
  *    laptop wake) produce exactly one new connection, never two.
  */
 describe('reconnectIfDisconnected()', () => {
-  const port = 42431;
-  const url = `ws://localhost:${port}`;
-
+  let url: string;
   let server: WebSocketServer | undefined;
   let client: Websocket | undefined;
   let serverConnections = 0;
 
   beforeEach(async () => {
     serverConnections = 0;
-    server = await startServer(port, 5000);
+    server = await startServer(0, 5000);
+    const address = server.address();
+    const port =
+      typeof address === 'object' && address !== null ? address.port : 0;
+    url = `ws://localhost:${port}`;
     server.on('connection', () => serverConnections++);
   });
 

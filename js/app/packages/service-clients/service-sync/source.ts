@@ -86,12 +86,13 @@ function createSyncServiceSocket(documentId: string, initialToken: string) {
 
   return new WebsocketBuilder(getUrl)
     .withSerializer(new BebopSerializer(FromPeer, FromRemote))
-    // Capped exponential backoff (500ms doubling up to 8s). With 20 retries
-    // that is ~2 minutes of automatic attempts; after that something is very
-    // wrong and we stop hammering. A given-up socket is revived by 'online' /
-    // 'visibilitychange' signals or by the user editing (see pushUpdate) —
-    // unlike before, exhausting the budget no longer strands the socket
-    // permanently.
+    // Capped exponential backoff. The scheduler calls next() before the first
+    // retry, so the delays are 250*2^1 = 500ms doubling to a 250*2^5 = 8s
+    // cap; 20 retries ≈ 2 minutes of automatic attempts, after which
+    // something is very wrong and we stop hammering. A given-up socket is
+    // revived by 'online' / 'visibilitychange' signals or by the user editing
+    // (see pushUpdate) — unlike before, exhausting the budget no longer
+    // strands the socket permanently.
     .withBackoff(new ExponentialBackoff(250, 5))
     .withMaxRetries(20)
     // Queue messages sent while disconnected; they are flushed in order once
@@ -390,7 +391,7 @@ export const createSyncServiceSource = (
   // When the browser regains connectivity or the tab becomes visible again,
   // kick the connection immediately instead of waiting out the current
   // backoff timer (which may also have been throttled in background tabs).
-  const handleOnline = () => reconnect();
+  const handleOnline = reconnect;
   const handleVisibilityChange = () => {
     if (document.visibilityState === 'visible') {
       reconnect();
