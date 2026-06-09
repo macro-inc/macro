@@ -152,3 +152,59 @@ async fn promote_errors_when_link_missing(pool: Pool<Postgres>) -> anyhow::Resul
 
     Ok(())
 }
+
+#[sqlx::test]
+async fn promote_marks_mailbox_and_teardown_removes_everything(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    insert_user(&pool, OWNER, "alice@company.test").await;
+    insert_user(&pool, CONNECTOR, "bob@company.test").await;
+    let link_id = insert_data_source_link(&pool, OWNER, MAILBOX_EMAIL).await;
+
+    let mut conn = pool.acquire().await?;
+    promote_link_to_shared(&mut conn, link_id, OWNER, CONNECTOR, MAILBOX_EMAIL, None).await?;
+    let mailbox_macro_id = format!("macro|{MAILBOX_EMAIL}");
+
+    // Promotion marks the mailbox; a regular macro_id is not marked.
+    assert!(is_promoted_shared_mailbox(&mut conn, &mailbox_macro_id).await?);
+    assert!(!is_promoted_shared_mailbox(&mut conn, OWNER).await?);
+
+    // Simulate the cascading link delete that precedes minted-user teardown, then tear down.
+    sqlx::query!(r#"DELETE FROM email_links WHERE id = $1"#, link_id)
+        .execute(&pool)
+        .await?;
+    delete_promoted_mailbox_user(&mut conn, &mailbox_macro_id).await?;
+
+    // The minted User, its macro_user, the marker, and both edges are gone.
+    let user = sqlx::query!(r#"SELECT id FROM "User" WHERE id = $1"#, mailbox_macro_id)
+        .fetch_optional(&pool)
+        .await?;
+    assert!(user.is_none(), "minted mailbox User must be removed");
+    assert!(!is_promoted_shared_mailbox(&mut conn, &mailbox_macro_id).await?);
+    assert!(
+        crate::macro_user_links::get_primaries_for_child(&pool, &mailbox_macro_id)
+            .await?
+            .is_empty(),
+        "delegation edges must be cascaded away"
+    );
+
+    Ok(())
+}
+
+#[sqlx::test]
+async fn delete_promoted_mailbox_user_is_noop_for_real_account(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    // OWNER is a real account, not a promoted mailbox — teardown must never delete it.
+    insert_user(&pool, OWNER, "alice@company.test").await;
+
+    let mut conn = pool.acquire().await?;
+    delete_promoted_mailbox_user(&mut conn, OWNER).await?;
+
+    let user = sqlx::query!(r#"SELECT id FROM "User" WHERE id = $1"#, OWNER)
+        .fetch_optional(&pool)
+        .await?;
+    assert!(user.is_some(), "a real account must not be torn down");
+
+    Ok(())
+}

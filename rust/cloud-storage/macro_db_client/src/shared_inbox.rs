@@ -75,6 +75,19 @@ pub async fn promote_link_to_shared(
     .execute(&mut *conn)
     .await?;
 
+    // Mark this macro_id as a promoted shared mailbox so teardown can distinguish it from a
+    // real account: the last delegate removing access tears it down rather than orphaning it.
+    sqlx::query!(
+        r#"
+        INSERT INTO promoted_shared_mailboxes (macro_id)
+        VALUES ($1)
+        ON CONFLICT (macro_id) DO NOTHING
+        "#,
+        &mailbox_macro_id,
+    )
+    .execute(&mut *conn)
+    .await?;
+
     let rehomed = sqlx::query!(
         r#"
         UPDATE email_links
@@ -103,4 +116,55 @@ pub async fn promote_link_to_shared(
         mailbox_macro_id,
         link_id: existing_link_id,
     })
+}
+
+/// Whether `macro_id` is a mailbox minted by shared-inbox promotion (no human owner),
+/// as opposed to a real account someone was delegated to.
+#[tracing::instrument(skip(conn), err)]
+pub async fn is_promoted_shared_mailbox(
+    conn: &mut sqlx::PgConnection,
+    macro_id: &str,
+) -> anyhow::Result<bool> {
+    let exists = sqlx::query_scalar!(
+        r#"
+        SELECT EXISTS(
+            SELECT 1 FROM promoted_shared_mailboxes WHERE macro_id = $1
+        ) AS "exists!"
+        "#,
+        macro_id,
+    )
+    .fetch_one(&mut *conn)
+    .await?;
+
+    Ok(exists)
+}
+
+/// Deletes the macro user minted for a promoted shared mailbox once its single link has
+/// been torn down. Removing the `User` row cascades its `macro_user_links` edges and the
+/// `promoted_shared_mailboxes` marker; the backing `macro_user` row is removed explicitly.
+/// No-op when `macro_id` is not a promoted mailbox.
+#[tracing::instrument(skip(conn), err)]
+pub async fn delete_promoted_mailbox_user(
+    conn: &mut sqlx::PgConnection,
+    macro_id: &str,
+) -> anyhow::Result<()> {
+    let row = sqlx::query!(
+        r#"
+        DELETE FROM "User"
+        WHERE id = $1
+          AND EXISTS (SELECT 1 FROM promoted_shared_mailboxes WHERE macro_id = $1)
+        RETURNING macro_user_id
+        "#,
+        macro_id,
+    )
+    .fetch_optional(&mut *conn)
+    .await?;
+
+    if let Some(row) = row {
+        sqlx::query!(r#"DELETE FROM macro_user WHERE id = $1"#, row.macro_user_id)
+            .execute(&mut *conn)
+            .await?;
+    }
+
+    Ok(())
 }
