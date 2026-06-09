@@ -64,14 +64,15 @@ impl IntoResponse for StructuredCompletionError {
         (status = 500, description = "Internal error", body = StructuredCompletionError),
     )
 )]
-#[tracing::instrument(skip(state, _model_access, user_context, request), fields(user_id = %user_context.user_id), err)]
+#[tracing::instrument(skip(state, model_access, user_context, request), fields(user_id = %user_context.user_id), err)]
 pub async fn structured_completion(
     State(state): State<ApiContext>,
-    _model_access: ChatModelAccess,
+    model_access: ChatModelAccess,
     Extension(user_context): Extension<UserContext>,
     Json(request): Json<StructuredCompletionRequest>,
 ) -> Result<Json<StructuredCompletionResponse>, StructuredCompletionError> {
     let ctx = Arc::new(state);
+    let model = model_access.model();
 
     let user_id = MacroUserIdStr::try_from(user_context.user_id.clone()).map_err(|_| {
         StructuredCompletionError {
@@ -105,7 +106,7 @@ pub async fn structured_completion(
     };
     let rig_messages = agent::to_rig_messages(&[user_message]);
 
-    let agent_loop = AgentLoop::new().with_model(request.model);
+    let agent_loop = AgentLoop::new().with_model(model);
     let mut session = agent_loop
         .session(
             toolset,
@@ -164,7 +165,7 @@ pub async fn structured_completion(
     let rig_messages = agent::to_rig_messages(&conversation);
 
     let result = agent::structured_output::dynamic_structured_completion(
-        request.model,
+        model,
         &system_prompt,
         rig_messages,
         request.output_schema,
