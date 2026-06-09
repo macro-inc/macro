@@ -132,8 +132,8 @@ impl std::fmt::Debug for ChannelWebhookPath {
     }
 }
 
-/// Create a channel bot webhook router.
-pub fn channel_bot_webhook_router<BotSvc, ChannelPoster, AccessSvc, T>(
+/// Create the authenticated channel-scoped bot creation router.
+pub fn channel_scoped_bot_router<BotSvc, ChannelPoster, AccessSvc, T>(
     state: ChannelBotWebhookRouterState<BotSvc, ChannelPoster, AccessSvc>,
 ) -> Router<T>
 where
@@ -147,6 +147,20 @@ where
             "/channels/{channel_id}/bots/scoped",
             post(create_channel_scoped_bot_handler::<BotSvc, ChannelPoster, AccessSvc>),
         )
+        .with_state(state)
+}
+
+/// Create the unauthenticated channel bot webhook router.
+pub fn channel_bot_webhook_router<BotSvc, ChannelPoster, AccessSvc, T>(
+    state: ChannelBotWebhookRouterState<BotSvc, ChannelPoster, AccessSvc>,
+) -> Router<T>
+where
+    BotSvc: BotService,
+    ChannelPoster: ChannelMessagePoster,
+    AccessSvc: EntityAccessService,
+    T: Send + Sync,
+{
+    Router::new()
         .route(
             "/channels/{channel_id}/webhook/{bot_auth_token}",
             post(post_channel_webhook_handler::<BotSvc, ChannelPoster, AccessSvc>),

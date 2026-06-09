@@ -403,7 +403,7 @@ fn router(
     poster: TestChannelPoster,
     role: EntityParticipantRole,
 ) -> Router {
-    channel_bot_webhook_router(ChannelBotWebhookRouterState::new(
+    channel_scoped_bot_router(ChannelBotWebhookRouterState::new(
         service,
         poster,
         TestAccessService::new(role),
