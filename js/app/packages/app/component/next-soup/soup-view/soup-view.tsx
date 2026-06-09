@@ -1281,6 +1281,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                           soup.focus.setIndex(row.index);
                                         }}
                                         showUnrollNotifications={
+                                          row.original.type !== 'email' &&
                                           soup.predicates.isActive('inbox') &&
                                           !soup.predicates.isActive('noise')
                                         }
