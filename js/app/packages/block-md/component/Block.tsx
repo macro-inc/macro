@@ -13,7 +13,7 @@ import { DocumentDebouncedNotificationReadMarker } from '@notifications';
 import { fetchCachedSnapshot } from '@queries/storage/cached-snapshot';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
 import { Scroll } from '@ui';
-import type { Result } from 'neverthrow';
+import { err, ok, type Result } from 'neverthrow';
 import {
   createEffect,
   createMemo,
@@ -38,16 +38,17 @@ export interface BlockMarkdownProps {
   optimisticSnapshot?: Uint8Array<ArrayBufferLike>;
 }
 
+type SyncError = 'UNAUTHORIZED' | 'INVALID' | 'GONE';
+
 type SyncArgs = {
   data: NonNullable<ReturnType<typeof blockDataSignal>>;
   loroManager: LoroManager<typeof MARKDOWN_LORO_SCHEMA>;
-  setBlockError: (error: 'MISSING' | 'INVALID') => void;
 };
 
 async function syncFromOptimistic(
   args: SyncArgs & { optimisticSnapshot: Uint8Array<ArrayBufferLike> }
-): Promise<void> {
-  const { data, loroManager, setBlockError, optimisticSnapshot } = args;
+): Promise<Result<void, SyncError>> {
+  const { data, loroManager, optimisticSnapshot } = args;
   await loroManager.initializeFromSnapshot(optimisticSnapshot);
 
   const syncResult: Result<InitialSync, TimeoutError> =
@@ -55,36 +56,42 @@ async function syncFromOptimistic(
 
   if (syncResult.isErr()) {
     console.error('Failed to receive initial sync', syncResult.error);
-    setBlockError('INVALID');
-    return;
+    return err('INVALID');
   }
 
   data.syncSource.pushUpdate(
     loroManager.getDoc().export({ mode: 'update' }),
     loroManager.getPeerId()
   );
+
+  return ok();
+}
+
+async function loadCachedSnapshotIfFirst(
+  blockId: string,
+  loroManager: LoroManager<typeof MARKDOWN_LORO_SCHEMA>,
+  gotDoSnapshot: () => boolean
+): Promise<Result<void, SyncError>> {
+  try {
+    const bytes = await fetchCachedSnapshot(blockId);
+    if (!gotDoSnapshot()) {
+      await loroManager.initializeFromSnapshot(bytes);
+    }
+  } catch (error) {
+    console.warn('Failed to load cached snapshot', error);
+    return err('INVALID');
+  }
+  return ok();
 }
 
 async function syncFromCacheThenDO(
   args: SyncArgs & { blockId: string }
-): Promise<void> {
-  const { data, loroManager, setBlockError, blockId } = args;
+): Promise<Result<void, SyncError>> {
+  const { data, loroManager, blockId } = args;
 
   let gotDoSnapshot = false;
 
-  // load the fallback snapshot. only use it if it comes before the DO sync
-  // though
-  (async () => {
-    try {
-      const bytes = await fetchCachedSnapshot(blockId);
-
-      if (!gotDoSnapshot) {
-        await loroManager.initializeFromSnapshot(bytes);
-      }
-    } catch (error) {
-      console.warn('Failed to load cached snapshot', error);
-    }
-  })();
+  void loadCachedSnapshotIfFirst(blockId, loroManager, () => gotDoSnapshot);
 
   try {
     const syncResult: Result<InitialSync, TimeoutError> =
@@ -92,8 +99,7 @@ async function syncFromCacheThenDO(
 
     if (syncResult.isErr()) {
       console.error('Failed to receive initial sync', syncResult.error);
-      setBlockError('INVALID');
-      return;
+      return err('INVALID');
     }
 
     const result = await loroManager.initializeFromSnapshot(
@@ -104,12 +110,14 @@ async function syncFromCacheThenDO(
 
     if (result.isErr()) {
       console.error('Failed to initialize loro doc', result.error);
-      setBlockError('INVALID');
+      return err('INVALID');
     }
   } catch (error) {
     console.error('Failed to sync from cache', error);
-    setBlockError('INVALID');
+    return err('INVALID');
   }
+
+  return ok();
 }
 
 export default function BlockMarkdown(props: BlockMarkdownProps) {
@@ -138,14 +146,15 @@ function BlockMarkdownContent({ optimisticSnapshot }: BlockMarkdownProps) {
         setBlockError(null);
       }
       if (optimisticSnapshot) {
-        syncFromOptimistic({
-          data,
-          loroManager,
-          setBlockError,
-          optimisticSnapshot,
-        });
+        syncFromOptimistic({ data, loroManager, optimisticSnapshot }).then(
+          (r) => {
+            if (r.isErr()) setBlockError(r.error);
+          }
+        );
       } else {
-        syncFromCacheThenDO({ data, loroManager, setBlockError, blockId });
+        syncFromCacheThenDO({ data, loroManager, blockId }).then((r) => {
+          if (r.isErr()) setBlockError(r.error);
+        });
       }
     })
   );
