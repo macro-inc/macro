@@ -348,6 +348,7 @@ export const useSearchResponseItemMapper = () => {
             id: result.thread_id,
             name,
             ownerId: result.owner_id,
+            linkId: result.link_id,
             createdAt: result.created_at,
             updatedAt: result.updated_at,
             viewedAt: result.viewed_at,

@@ -211,6 +211,7 @@ export const SearchToolResponse = z.object({
             is_draft: z.boolean(),
             is_important: z.boolean(),
             is_read: z.boolean(),
+            link_id: z.string().uuid(),
             name: z.union([z.string(), z.null()]).optional(),
             owner_id: z.string(),
             participants: z.array(

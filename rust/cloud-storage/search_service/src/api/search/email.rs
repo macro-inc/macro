@@ -173,6 +173,7 @@ pub fn construct_search_result(
                         thread_id: entity_id,
                         owner_id: info.user_id.clone(),
                         user_id: info.user_id,
+                        link_id: info.link_id,
                         name: info.subject.clone(),
                         subject: info.subject,
                         email_message_search_results: hits,

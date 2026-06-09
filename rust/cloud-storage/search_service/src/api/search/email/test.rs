@@ -14,6 +14,7 @@ fn create_email_history(thread_id: &str) -> models_email::service::message::Thre
         viewed_at: None,
         snippet: None,
         user_id: "user1".to_string(),
+        link_id: Uuid::new_v4(),
         subject: Some("subject".to_string()),
         sender: "sender@example.com".to_string(),
         pretty_sender: "Pretty Sender".to_string(),
