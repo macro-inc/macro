@@ -9,7 +9,7 @@ import type {
   GithubPullRequest,
   GithubPullRequestsResponse,
 } from '@service-storage/generated/schemas';
-import { useQuery } from '@tanstack/solid-query';
+import { useQuery, useQueryClient } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { documentGithubPullRequestsKeys } from './keys';
 
@@ -20,6 +20,10 @@ type DocumentIdInput =
   | undefined
   | Accessor<string | null | undefined>;
 type EnabledInput = boolean | Accessor<boolean>;
+
+type FetchDocumentGithubPullRequestsOptions = {
+  onInitialResponse?: (response: GithubPullRequestsResponse) => void;
+};
 
 function readDocumentId(
   documentId: DocumentIdInput
@@ -74,8 +78,28 @@ function createPullRequestFallbacksByKey(
   );
 }
 
+function hasStoredEnrichedGithubPullRequestData(
+  pullRequest: GithubPullRequest
+): boolean {
+  return (
+    pullRequest.additions != null ||
+    pullRequest.checks != null ||
+    pullRequest.comments != null ||
+    pullRequest.deletions != null ||
+    pullRequest.name != null ||
+    pullRequest.status != null
+  );
+}
+
+function hasStoredEnrichedGithubPullRequests(
+  response: GithubPullRequestsResponse
+): boolean {
+  return response.pullRequests.some(hasStoredEnrichedGithubPullRequestData);
+}
+
 export async function fetchDocumentGithubPullRequests(
-  documentId: string
+  documentId: string,
+  options?: FetchDocumentGithubPullRequestsOptions
 ): Promise<GithubPullRequestsResponse> {
   const rawResponse = await throwOnErr(() =>
     storageServiceClient.getDocumentGithubPullRequests({ documentId })
@@ -83,6 +107,10 @@ export async function fetchDocumentGithubPullRequests(
 
   if (rawResponse.pullRequests.length === 0) {
     return rawResponse;
+  }
+
+  if (hasStoredEnrichedGithubPullRequests(rawResponse)) {
+    options?.onInitialResponse?.(rawResponse);
   }
 
   const enrichedResponse = await authServiceClient.enrichGithubPullRequests({
@@ -113,20 +141,27 @@ export function useDocumentGithubPullRequestsQuery(
   documentId: DocumentIdInput,
   enabled?: EnabledInput
 ) {
+  const queryClient = useQueryClient();
+
   return useQuery(() => {
     const currentDocumentId = readDocumentId(documentId);
+    const queryKey = currentDocumentId
+      ? documentGithubPullRequestsKeys.list(currentDocumentId).queryKey
+      : documentGithubPullRequestsKeys.list._def;
 
     return {
-      queryKey: currentDocumentId
-        ? documentGithubPullRequestsKeys.list(currentDocumentId).queryKey
-        : documentGithubPullRequestsKeys.list._def,
+      queryKey,
       queryFn: () => {
         if (!currentDocumentId) {
           throw new Error(
             'Document ID is required to fetch GitHub pull requests'
           );
         }
-        return fetchDocumentGithubPullRequests(currentDocumentId);
+        return fetchDocumentGithubPullRequests(currentDocumentId, {
+          onInitialResponse: (initialResponse) => {
+            queryClient.setQueryData(queryKey, initialResponse);
+          },
+        });
       },
       staleTime: DOCUMENT_GITHUB_PULL_REQUESTS_STALE_TIME,
       enabled: !!currentDocumentId && readEnabled(enabled),

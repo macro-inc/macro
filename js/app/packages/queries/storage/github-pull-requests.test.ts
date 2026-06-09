@@ -148,6 +148,46 @@ describe('fetchDocumentGithubPullRequests', () => {
     });
   });
 
+  it('emits storage-enriched PRs before auth enrichment resolves', async () => {
+    const shallowAuthPullRequest = createShallowAuthPullRequest(rawPullRequest);
+    const onInitialResponse = vi.fn();
+    let resolveEnrichment!: (response: unknown) => void;
+    const enrichmentPromise = new Promise((resolve) => {
+      resolveEnrichment = resolve;
+    });
+
+    mocks.getDocumentGithubPullRequests.mockResolvedValue(
+      resultOk({ pullRequests: [storageMetadataPullRequest] })
+    );
+    mocks.enrichGithubPullRequests.mockReturnValue(enrichmentPromise);
+
+    const responsePromise = fetchDocumentGithubPullRequests('document-1', {
+      onInitialResponse,
+    });
+
+    await vi.waitFor(() => {
+      expect(onInitialResponse).toHaveBeenCalledWith({
+        pullRequests: [storageMetadataPullRequest],
+      });
+    });
+
+    resolveEnrichment(resultOk({ pullRequests: [shallowAuthPullRequest] }));
+    await expect(responsePromise).resolves.toEqual({
+      pullRequests: [storageMetadataPullRequest],
+    });
+  });
+
+  it('does not emit shallow storage PRs as an initial enriched response', async () => {
+    const onInitialResponse = vi.fn();
+    mocks.enrichGithubPullRequests.mockResolvedValue(
+      resultOk({ pullRequests: [createShallowAuthPullRequest(rawPullRequest)] })
+    );
+
+    await fetchDocumentGithubPullRequests('document-1', { onInitialResponse });
+
+    expect(onInitialResponse).not.toHaveBeenCalled();
+  });
+
   it('uses auth enrichment metadata when present while preserving the foreign entity id', async () => {
     const enrichedPullRequest: EnrichedGithubPullRequest = {
       ...rawPullRequest,
