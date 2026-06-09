@@ -31,6 +31,7 @@ export const binaryDocumentKeys = createQueryKeys('binaryDocument', {
   }),
 });
 
+
 export const documentGithubPullRequestsKeys = createQueryKeys(
   'documentGithubPullRequests',
   {

@@ -8,10 +8,10 @@ import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { ENABLE_MARKDOWN_SIDE_PANEL } from '@core/constant/featureFlags';
 import { blockErrorSignal } from '@core/signal/load';
 import { useCanEdit } from '@core/signal/permissions';
-import { MARKDOWN_LORO_SCHEMA } from '@lexical-core/markdown-loro-schema';
+import { MARKDOWN_LORO_SCHEMA, type MarkdownLoroSchemaType } from '@lexical-core/markdown-loro-schema';
 import { DocumentDebouncedNotificationReadMarker } from '@notifications';
-import { fetchCachedSnapshot } from '@queries/storage/cached-snapshot';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
+import { storageServiceClient } from '@service-storage/client';
 import { Scroll } from '@ui';
 import { err, ok, type Result } from 'neverthrow';
 import {
@@ -40,15 +40,17 @@ export interface BlockMarkdownProps {
 
 type SyncError = 'UNAUTHORIZED' | 'INVALID' | 'GONE';
 
-type SyncArgs = {
-  data: NonNullable<ReturnType<typeof blockDataSignal>>;
-  loroManager: LoroManager<typeof MARKDOWN_LORO_SCHEMA>;
-};
+type BlockData = NonNullable<ReturnType<typeof blockDataSignal>>;
 
-async function syncFromOptimistic(
-  args: SyncArgs & { optimisticSnapshot: Uint8Array<ArrayBufferLike> }
-): Promise<Result<void, SyncError>> {
-  const { data, loroManager, optimisticSnapshot } = args;
+async function syncFromOptimistic({
+  data,
+  loroManager,
+  optimisticSnapshot,
+}: {
+  data: BlockData;
+  loroManager: LoroManager<MarkdownLoroSchemaType>;
+  optimisticSnapshot: Uint8Array<ArrayBufferLike>;
+}): Promise<Result<void, SyncError>> {
   await loroManager.initializeFromSnapshot(optimisticSnapshot);
 
   const syncResult: Result<InitialSync, TimeoutError> =
@@ -67,31 +69,31 @@ async function syncFromOptimistic(
   return ok();
 }
 
-async function loadCachedSnapshotIfFirst(
-  blockId: string,
-  loroManager: LoroManager<typeof MARKDOWN_LORO_SCHEMA>,
-  gotDoSnapshot: () => boolean
-): Promise<Result<void, SyncError>> {
-  try {
-    const bytes = await fetchCachedSnapshot(blockId);
-    if (!gotDoSnapshot()) {
-      await loroManager.initializeFromSnapshot(bytes);
-    }
-  } catch (error) {
-    console.warn('Failed to load cached snapshot', error);
-    return err('INVALID');
-  }
-  return ok();
-}
-
-async function syncFromCacheThenDO(
-  args: SyncArgs & { blockId: string }
-): Promise<Result<void, SyncError>> {
-  const { data, loroManager, blockId } = args;
+async function syncFromDO({
+  data,
+  loroManager,
+  blockId,
+}: {
+  data: BlockData;
+  loroManager: LoroManager<MarkdownLoroSchemaType>;
+  blockId: string;
+}): Promise<Result<void, SyncError>> {
 
   let gotDoSnapshot = false;
 
-  void loadCachedSnapshotIfFirst(blockId, loroManager, () => gotDoSnapshot);
+  // unawaited: only use S3 snapshot if DO hasn't responded first
+  // NOTE: gotDoSnapshot flips to true when DO snapshot is used, and it may
+  // happen WHILE we are fetching a cached snapshot THEORETICALLY
+  (async () => {
+    try {
+      const result = await storageServiceClient.fetchCachedSnapshot(blockId);
+      if (!gotDoSnapshot && result.isOk()) {
+        await loroManager.initializeFromSnapshot(result.value);
+      }
+    } catch (error) {
+      console.warn('Failed to load cached snapshot', error);
+    }
+  })();
 
   try {
     const syncResult: Result<InitialSync, TimeoutError> =
@@ -113,7 +115,7 @@ async function syncFromCacheThenDO(
       return err('INVALID');
     }
   } catch (error) {
-    console.error('Failed to sync from cache', error);
+    console.error('Failed to sync from DO', error);
     return err('INVALID');
   }
 
@@ -146,13 +148,15 @@ function BlockMarkdownContent({ optimisticSnapshot }: BlockMarkdownProps) {
         setBlockError(null);
       }
       if (optimisticSnapshot) {
+        // unawaited
         syncFromOptimistic({ data, loroManager, optimisticSnapshot }).then(
           (r) => {
             if (r.isErr()) setBlockError(r.error);
           }
         );
       } else {
-        syncFromCacheThenDO({ data, loroManager, blockId }).then((r) => {
+        // unawaited
+        syncFromDO({ data, loroManager, blockId }).then((r) => {
           if (r.isErr()) setBlockError(r.error);
         });
       }
