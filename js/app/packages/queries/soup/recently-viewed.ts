@@ -1,3 +1,4 @@
+import { NIL_UUID } from '@app/component/next-soup/filters/filter-store';
 import { throwOnErr } from '@core/util/result';
 import { storageServiceClient } from '@service-storage/client';
 import { useQuery } from '@tanstack/solid-query';
@@ -21,10 +22,13 @@ const recentlyViewedArgs: SoupItemsQueryArgs = {
   body: {
     // No viewed_at signal on calls or crm_companies — exclude both.
     call_filters: {
-      call_ids: ['00000000-0000-0000-0000-000000000000'],
+      call_ids: [NIL_UUID],
     },
     crm_company_filters: {
-      company_ids: ['00000000-0000-0000-0000-000000000000'],
+      company_ids: [NIL_UUID],
+    },
+    foreign_entity_filters: {
+      ids: [NIL_UUID],
     },
   },
 };
