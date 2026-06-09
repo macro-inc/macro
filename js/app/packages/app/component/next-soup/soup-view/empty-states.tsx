@@ -5,6 +5,9 @@ import { McpSetupCards } from '@core/component/AI/component/McpSetupCards';
 import { toast } from '@core/component/Toast/Toast';
 import { useEmailLinks, useEmailLinksStatus } from '@core/email-link';
 import EmptyStateAiIcon from '@design/empty-state-ai.svg';
+import EmptyStateAutomationsIcon from '@design/empty-state-automations.svg';
+import EmptyStateCallsIcon from '@design/empty-state-calls.svg';
+import EmptyStateChannelsIcon from '@design/empty-state-channels.svg';
 import EmptyStateDocIcon from '@design/empty-state-doc.svg';
 import EmptyStateEmailIcon from '@design/empty-state-email.svg';
 import EmptyStateFolderIcon from '@design/empty-state-folder.svg';
@@ -40,6 +43,7 @@ const FALLBACK_CONTENT: Partial<Record<ListView, FallbackContent>> = {
   },
   channels: {
     plural: 'channels',
+    graphic: EmptyStateChannelsIcon,
     description:
       'Channels are shared spaces for team conversations organized by topic, project, or team. Create a channel to start collaborating with your team.',
     create: { label: 'New channel', blockName: 'channel' },
@@ -47,6 +51,7 @@ const FALLBACK_CONTENT: Partial<Record<ListView, FallbackContent>> = {
   },
   calls: {
     plural: 'calls',
+    graphic: EmptyStateCallsIcon,
     description: (
       <>
         See recordings, transcriptions and summaries of your Macro calls.
@@ -210,7 +215,7 @@ export function EmptyState(props: {
       >
         <EmptyStatePanel
           align="center"
-          graphic={EmptyStateInboxZeroIcon}
+          graphic={EmptyStateAutomationsIcon}
           title="No automations to show"
           description="Automations run in the background to handle repetitive work for you — like triaging messages, updating tasks, or sending follow-ups."
           primaryAction={{
@@ -240,6 +245,11 @@ export function EmptyState(props: {
           graphic={EmptyStateFolderIcon}
           title="No folders"
           description="Folders let you organize conversations, documents, and tasks into projects. Create a folder or drop files below to get started."
+          primaryAction={{
+            label: 'New folder',
+            icon: PlusIcon,
+            onClick: () => runCreateAction('project'),
+          }}
           documentationUrl={`${DOCS_BASE}/product/folders`}
         >
           <FolderDropZone />
