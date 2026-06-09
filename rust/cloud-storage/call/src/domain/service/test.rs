@@ -10,7 +10,8 @@ use crate::domain::models::{CallError, CallWebhookEvent, EgressS3Config, VoipPus
 use crate::domain::ports::CallRtcClient;
 
 use super::{
-    derive_preview_key_from_recording_key, exclude_voip_recipients, extract_recording_key,
+    derive_preview_key_from_recording_key, derive_preview_keys_from_recording_key,
+    exclude_voip_recipients, extract_recording_key,
 };
 
 #[cfg(feature = "outbound")]
@@ -246,6 +247,17 @@ fn derive_preview_key_from_recording_key_strips_only_trailing_mp4_suffix() {
 #[test]
 fn derive_preview_key_from_recording_key_returns_none_without_parent() {
     assert!(derive_preview_key_from_recording_key("recording.mp4").is_none());
+}
+
+#[test]
+fn derive_preview_keys_from_recording_key_includes_new_and_legacy_mp4_paths() {
+    assert_eq!(
+        derive_preview_keys_from_recording_key("abc-123/recording.mp4"),
+        vec![
+            "calls/abc-123/recording/PREVIEW.jpg".to_string(),
+            "calls/abc-123/recording.mp4/PREVIEW.jpg".to_string(),
+        ]
+    );
 }
 
 #[test]
