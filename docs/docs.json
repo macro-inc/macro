@@ -3,7 +3,8 @@
   "theme": "mint",
   "name": "Macro",
   "appearance": {
-    "default": "dark"
+    "default": "dark",
+    "strict": true
   },
   "colors": {
     "primary": "#ff8f05",
@@ -103,5 +104,14 @@
       "label": "Get Macro",
       "href": "https://macro.com"
     }
-  }
+  },
+  "fonts": {
+    "heading": {
+      "family": "Roboto Slab"
+    },
+    "body": {
+      "family": "Rajdhani"
+    }
+  },
+  "description": "Product and technical documentation for Macro, the unified interface for email, messages, tasks, calls, agents, pull requests, docs, CRM — linked together with shared AI memory."
 }
