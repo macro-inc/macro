@@ -379,7 +379,10 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
     default: 'all',
     tabs: {
       all: () => ({
-        filters: {},
+        // Temporary: search has no full-text index over foreign entities yet,
+        // so exclude them all from the search view (matching no record id)
+        // until search supports them.
+        filters: { include: { foreignEntityRecordId: [NIL_UUID] } },
         clientFilters: {},
       }),
     },
