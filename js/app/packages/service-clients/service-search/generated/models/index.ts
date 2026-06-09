@@ -7,6 +7,7 @@
 
 export * from './callFilters';
 export * from './callFiltersAttended';
+export * from './callFiltersStatus';
 export * from './callRecordMetadata';
 export * from './callRecordMetadataChannelName';
 export * from './callRecordSearchResponseItem';
@@ -21,6 +22,7 @@ export * from './callRecordSearchResultSequenceNum';
 export * from './callRecordSearchResultSpeakerId';
 export * from './callRecordSearchResultStartedAt';
 export * from './callRecordSearchResultTranscriptId';
+export * from './callStatus';
 export * from './channelFilters';
 export * from './channelFiltersImportance';
 export * from './channelFiltersOrgId';

@@ -230,12 +230,12 @@ pub trait CallRepository: Send + Sync + 'static {
         user_id: MacroUserIdStr<'a>,
     ) -> impl Future<Output = Result<Vec<CallRecordPreview>, Self::Err>> + Send;
 
-    /// Fetch the most recent call records where the given user was a
-    /// participant, spanning both active (`calls` + `call_participants`)
-    /// and archived (`call_records` + `call_record_participants`) tables.
-    /// Transcript data is intentionally omitted. Results are ordered by
-    /// start time descending and capped at `limit`.
-    /// An optional filter tree can narrow results (e.g. by channel_id).
+    /// Fetch the most recent call records visible to the given user, spanning
+    /// both active (`calls`) and archived (`call_records`) tables. Each record
+    /// includes viewer-specific status derived from call participation and
+    /// current channel membership. Transcript data is intentionally omitted.
+    /// Results are ordered by start time descending and capped at `limit`.
+    /// An optional filter tree can narrow results (e.g. by channel_id or status).
     fn get_call_records_by_user<'a>(
         &self,
         user_id: MacroUserIdStr<'a>,
@@ -645,8 +645,9 @@ pub trait CallService: Send + Sync + 'static {
 /// needs a read-only list of recent call records, not the full call
 /// management API.
 pub trait CallRecordQueryService: Send + Sync + 'static {
-    /// Fetch the most recent call records the user participated in,
-    /// ordered by `started_at` descending. Transcript data is excluded.
+    /// Fetch the most recent call records visible to the user, ordered by
+    /// `started_at` descending. Transcript data is excluded, and status is
+    /// computed relative to the requesting user.
     fn get_user_call_records(
         &self,
         req: GetCallRecordsRequest,

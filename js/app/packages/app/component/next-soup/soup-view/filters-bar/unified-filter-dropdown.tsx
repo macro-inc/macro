@@ -41,6 +41,7 @@ import {
   Switch,
 } from 'solid-js';
 import {
+  CALL_STATUS_OPTIONS,
   INDEX_OPTIONS,
   type SearchableOption,
   useCallSearchFilter,
@@ -455,7 +456,7 @@ const SearchableFilterSubmenu = (props: {
   );
 };
 
-/** Single-value sub-menu (e.g. Importance, Attended). */
+/** Single-value sub-menu (e.g. Importance, Status). */
 function SingleValueSubmenu<T>(props: {
   label: string;
   options: { label: string; value: T }[];
@@ -544,16 +545,7 @@ const EmailSearchSubContent = (props: {
   />
 );
 
-const ATTENDED_OPTIONS: {
-  label: string;
-  value: boolean | undefined;
-}[] = [
-  { label: 'Attended', value: true },
-  { label: 'Unattended', value: false },
-  { label: 'All', value: undefined },
-];
-
-/** In + From + Attended (calls). */
+/** In + From + Status (calls). */
 const CallSearchSubContent = (props: {
   call: ReturnType<typeof useCallSearchFilter>;
   channelOptions: Accessor<SearchableOption[]>;
@@ -581,10 +573,10 @@ const CallSearchSubContent = (props: {
         onOpenChange={(v) => setOpenSub(v ? 'from' : null)}
       />
       <SingleValueSubmenu
-        label="Attended"
-        options={ATTENDED_OPTIONS}
-        current={() => props.call.attended() ?? undefined}
-        onSelect={props.call.setAttended}
+        label="Status"
+        options={CALL_STATUS_OPTIONS}
+        current={() => props.call.status() ?? undefined}
+        onSelect={props.call.setStatus}
       />
     </>
   );

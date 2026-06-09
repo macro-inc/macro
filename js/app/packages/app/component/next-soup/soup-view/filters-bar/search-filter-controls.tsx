@@ -5,6 +5,10 @@ import {
   type Query,
 } from '@app/component/next-soup/filters/filter-store';
 import {
+  type CallStatus,
+  callStatusFromAttended,
+} from '@app/component/next-soup/filters/filter-store/types';
+import {
   activeSoupViewCounts,
   soupViewCacheKey,
 } from '@app/component/next-soup/soup-view/soup-view-cache-key';
@@ -32,6 +36,35 @@ export type SearchableOption = {
   label: string;
   icon?: () => JSX.Element;
 };
+
+const CALL_STATUS_LABELS: Record<CallStatus, string> = {
+  ATTENDED: 'Attended',
+  MISSED: 'Missed',
+  UNATTENDED: 'Unattended',
+};
+
+export const CALL_STATUS_OPTIONS: {
+  label: string;
+  value: CallStatus | undefined;
+}[] = [
+  { label: CALL_STATUS_LABELS.ATTENDED, value: 'ATTENDED' },
+  { label: CALL_STATUS_LABELS.MISSED, value: 'MISSED' },
+  { label: CALL_STATUS_LABELS.UNATTENDED, value: 'UNATTENDED' },
+  { label: 'All', value: undefined },
+];
+
+export const CALL_STATUS_FILTER_OPTIONS: {
+  id: CallStatus;
+  label: string;
+}[] = [
+  { id: 'ATTENDED', label: CALL_STATUS_LABELS.ATTENDED },
+  { id: 'MISSED', label: CALL_STATUS_LABELS.MISSED },
+  { id: 'UNATTENDED', label: CALL_STATUS_LABELS.UNATTENDED },
+];
+
+export function getCallStatusLabel(status: CallStatus): string {
+  return CALL_STATUS_LABELS[status];
+}
 
 /**
  * Picker for the "In" chip (channels + DMs). Used by channel-message and
@@ -127,6 +160,7 @@ type EmailSubFilters = Pick<EmailFilters, 'importance'>;
 type CallSubFilters = {
   channel_ids?: string[];
   speaker_ids?: string[];
+  status?: CallStatus | null;
   attended?: boolean | null;
 };
 
@@ -209,6 +243,19 @@ export function cacheCallSubFilters(
   } catch {
     // best-effort
   }
+}
+
+function getInitialCallStatus(
+  cached: CallSubFilters,
+  query: Query
+): CallStatus | undefined {
+  if ('status' in cached) return cached.status ?? undefined;
+  if ('attended' in cached) return callStatusFromAttended(cached.attended);
+
+  return (
+    query.include?.callStatus ??
+    callStatusFromAttended(query.include?.callAttended)
+  );
 }
 
 type SearchFilterHookOpts = {
@@ -296,10 +343,9 @@ export function useEmailSearchFilter(opts: SearchFilterHookOpts) {
 type CallFieldMap = {
   callChannelId: string[] | undefined;
   callSpeakerId: string[] | undefined;
-  callAttended: boolean | undefined;
 };
 
-/** Call-record search filters (in:, from:, attended). */
+/** Call-record search filters (in:, from:, status). */
 export function useCallSearchFilter(opts: SearchFilterHookOpts) {
   const { soup, queryFilters } = useSoupView();
   const { changeIndex } = useSearchIndexController();
@@ -324,15 +370,30 @@ export function useCallSearchFilter(opts: SearchFilterHookOpts) {
   const speakerIds = createMemo(
     () => queryFilters.state.include.callSpeakerId ?? []
   );
-  const attended = createMemo(() => queryFilters.state.include.callAttended);
+  const status = createMemo(
+    () =>
+      queryFilters.state.include.callStatus ??
+      callStatusFromAttended(queryFilters.state.include.callAttended)
+  );
+
+  const setStatus = (value: CallStatus | undefined) =>
+    batch(() => {
+      if (!isActive()) changeIndex('calls');
+      queryFilters.set({
+        include: {
+          callStatus: value,
+          callAttended: undefined,
+        },
+      });
+    });
 
   createEffect(() => {
     if (!opts.isSearchView() || !isActive()) return;
     const sub: CallSubFilters = {};
+    const currentStatus = status();
     if (channelIds().length) sub.channel_ids = channelIds();
     if (speakerIds().length) sub.speaker_ids = speakerIds();
-    if (attended() !== undefined && attended() !== null)
-      sub.attended = attended();
+    if (currentStatus !== undefined) sub.status = currentStatus;
     cacheCallSubFilters(opts.contentId, sub);
   });
 
@@ -344,8 +405,8 @@ export function useCallSearchFilter(opts: SearchFilterHookOpts) {
     speakerIds,
     setSpeakerIds: (ids: string[]) =>
       mutate('callSpeakerId', ids.length ? ids : undefined),
-    attended,
-    setAttended: (val: boolean | undefined) => mutate('callAttended', val),
+    status,
+    setStatus,
   };
 }
 
@@ -399,17 +460,15 @@ export function useSearchIndexController() {
         });
       } else if (opt.value === 'calls') {
         const cached = getCachedCallSubFilters(contentId);
-        const attended =
-          'attended' in cached
-            ? (cached.attended ?? undefined)
-            : opt.queryFilters.include?.callAttended;
+        const status = getInitialCallStatus(cached, opt.queryFilters);
 
         queryFilters.replace({
           include: {
             ...opt.queryFilters.include,
             callChannelId: cached.channel_ids,
             callSpeakerId: cached.speaker_ids,
-            callAttended: attended,
+            callStatus: status,
+            callAttended: undefined,
           },
           exclude: opt.queryFilters.exclude,
         });

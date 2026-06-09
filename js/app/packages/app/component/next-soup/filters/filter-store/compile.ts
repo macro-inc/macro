@@ -111,6 +111,7 @@ const FIELD_CONFIG: Record<
   callId: { target: 'callf', field: 'CallId' },
   callChannelId: { target: 'callf', field: 'ChannelId' },
   callSpeakerId: { target: 'callf', field: 'Speaker' },
+  callStatus: { target: 'callf', field: 'Status' },
   callAttended: { target: 'callf', field: 'Attended' },
   foreignEntityRecordId: { target: 'fef', field: 'id' },
   crmCompanyId: { target: 'ccf', field: 'id' },

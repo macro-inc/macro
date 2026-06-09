@@ -7387,6 +7387,7 @@ dependencies = [
  "document_sub_type",
  "doppleganger",
  "email",
+ "item_filters",
  "macro_user_id",
  "model-entity",
  "models_pagination",

@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use super::*;
-use crate::{CallFilters, ForeignEntityFilters, PropertyFilter};
+use crate::{CallFilters, CallStatus, ForeignEntityFilters, PropertyFilter};
 use cool_asserts::assert_matches;
 use model_file_type::FileType;
 use serde_json::json;
@@ -799,6 +799,39 @@ fn entity_type_ast_deserialization_rejects_invalid() {
         result.is_err(),
         "direct AST deserialization should reject invalid entity type"
     );
+}
+
+#[test]
+fn call_filter_status_expands_status_only() {
+    let f = CallFilters {
+        status: Some(CallStatus::Missed),
+        ..Default::default()
+    };
+    let ast = CallFilters::expand_ast(f)
+        .unwrap()
+        .expect("status filter should expand to a literal");
+    let json = serde_json::to_value(&ast).unwrap();
+    let exp = json!({ "l": { "Status": "MISSED" } });
+    assert_eq!(json, exp);
+}
+
+#[test]
+fn call_filter_status_expands_channel_and_status_as_and() {
+    let channel_id = Uuid::new_v4();
+    let f = CallFilters {
+        channel_ids: vec![channel_id.to_string()],
+        status: Some(CallStatus::Unattended),
+        ..Default::default()
+    };
+    let ast = CallFilters::expand_ast(f).unwrap().unwrap();
+    let json = serde_json::to_value(&ast).unwrap();
+    let exp = json!({
+        "&": [
+            { "l": { "ChannelId": channel_id } },
+            { "l": { "Status": "UNATTENDED" } }
+        ]
+    });
+    assert_eq!(json, exp);
 }
 
 #[test]

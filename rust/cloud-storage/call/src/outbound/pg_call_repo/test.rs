@@ -1,14 +1,17 @@
 use std::{ops::Deref, sync::Arc, sync::LazyLock};
 
 use crate::domain::models::{
-    AddParticipantError, CallRecordPreview, CustomSpeakerAssignment, EditCallRecordRequest,
-    TranscriptSegmentRequest,
+    AddParticipantError, CallRecord, CallRecordPreview, CustomSpeakerAssignment,
+    EditCallRecordRequest, TranscriptSegmentRequest,
 };
 use crate::domain::ports::CallRepository;
 use crate::outbound::pg_call_repo::PgCallRepo;
 use chrono::{Duration, SubsecRound, Utc};
 use filter_ast::Expr;
-use item_filters::ast::{LiteralTree, call::CallLiteral};
+use item_filters::{
+    CallStatus,
+    ast::{LiteralTree, call::CallLiteral},
+};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use models_permissions::share_permission::UpdateSharePermissionRequestV2;
@@ -21,6 +24,15 @@ use uuid::Uuid;
 
 fn attended_filter(b: bool) -> LiteralTree<CallLiteral> {
     Some(Arc::new(Expr::Literal(CallLiteral::Attended(b))))
+}
+
+fn status_filter(status: CallStatus) -> LiteralTree<CallLiteral> {
+    Some(Arc::new(Expr::Literal(CallLiteral::Status(status))))
+}
+
+fn not_status_filter(status: CallStatus) -> LiteralTree<CallLiteral> {
+    let expr = Expr::Literal(CallLiteral::Status(status));
+    Some(Arc::new(Expr::is_not(expr)))
 }
 
 fn call_ids_filter(ids: &[Uuid]) -> LiteralTree<CallLiteral> {
@@ -46,9 +58,25 @@ static USER_B: LazyLock<MacroUserIdStr<'static>> =
     LazyLock::new(|| MacroUserIdStr::parse_from_str("macro|user-b@test.com").unwrap());
 static USER_C: LazyLock<MacroUserIdStr<'static>> =
     LazyLock::new(|| MacroUserIdStr::parse_from_str("macro|user-c@test.com").unwrap());
+static USER_D: LazyLock<MacroUserIdStr<'static>> =
+    LazyLock::new(|| MacroUserIdStr::parse_from_str("macro|user-d@test.com").unwrap());
 
 fn repo(pool: Pool<Postgres>) -> PgCallRepo {
     PgCallRepo::new(pool)
+}
+
+fn call_status(records: &[CallRecord], call_id: Uuid) -> Option<CallStatus> {
+    records
+        .iter()
+        .find(|record| record.call_id == call_id)
+        .and_then(|record| record.status)
+}
+
+fn assert_records_have_status(records: &[CallRecord], expected: CallStatus) {
+    assert!(
+        records.iter().all(|record| record.status == Some(expected)),
+        "expected every record to have status {expected:?}: {records:#?}"
+    );
 }
 
 fn axis_unit_vector(axis: usize) -> Vec<f32> {
@@ -1262,6 +1290,7 @@ async fn get_call_record_returns_active_call(pool: Pool<Postgres>) -> anyhow::Re
     assert_eq!(record.channel_id, CH1);
     assert!(record.is_active);
     assert!(!record.share_with_team);
+    assert_eq!(record.status, None);
     assert!(record.ended_at.is_none());
     assert!(record.duration_ms.is_none());
 
@@ -1314,6 +1343,7 @@ async fn get_call_record_returns_archived_call(pool: Pool<Postgres>) -> anyhow::
     assert_eq!(record.channel_id, CH1);
     assert!(!record.is_active);
     assert!(!record.share_with_team);
+    assert_eq!(record.status, None);
     assert!(record.ended_at.is_some());
     assert_eq!(record.duration_ms, Some(300_000));
     assert_eq!(record.egress_id.as_deref(), Some("egress-arch-1"));
@@ -1494,6 +1524,156 @@ async fn get_call_records_by_user_includes_channel_member_not_in_call(
             .iter()
             .any(|r| r.call_id == CALL_ARCHIVED && !r.is_active)
     );
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn get_call_records_by_user_status_attended_for_participant(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+
+    let records = repo
+        .get_call_records_by_user(USER_A.deref().copied(), 10, &None)
+        .await?;
+
+    assert_eq!(records.len(), 2);
+    assert_eq!(call_status(&records, CALL1), Some(CallStatus::Attended));
+    assert_eq!(
+        call_status(&records, CALL_ARCHIVED),
+        Some(CallStatus::Attended)
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn get_call_records_by_user_status_missed_for_channel_nonparticipant(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+
+    let records = repo
+        .get_call_records_by_user(USER_C.deref().copied(), 10, &None)
+        .await?;
+
+    assert_eq!(records.len(), 2);
+    assert_eq!(call_status(&records, CALL1), Some(CallStatus::Missed));
+    assert_eq!(
+        call_status(&records, CALL_ARCHIVED),
+        Some(CallStatus::Missed)
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn get_call_records_by_user_status_unattended_for_accessible_non_channel_nonparticipant(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+
+    let records = repo
+        .get_call_records_by_user(USER_D.deref().copied(), 10, &None)
+        .await?;
+
+    assert_eq!(records.len(), 2);
+    assert_eq!(call_status(&records, CALL1), Some(CallStatus::Unattended));
+    assert_eq!(
+        call_status(&records, CALL_ARCHIVED),
+        Some(CallStatus::Unattended)
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn get_call_records_by_user_status_filters_return_exact_matches(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+
+    let attended = status_filter(CallStatus::Attended);
+    let attended_records = repo
+        .get_call_records_by_user(USER_A.deref().copied(), 10, &attended)
+        .await?;
+    assert_eq!(attended_records.len(), 2);
+    assert_records_have_status(&attended_records, CallStatus::Attended);
+
+    let missed = status_filter(CallStatus::Missed);
+    let missed_records = repo
+        .get_call_records_by_user(USER_C.deref().copied(), 10, &missed)
+        .await?;
+    assert_eq!(missed_records.len(), 2);
+    assert_records_have_status(&missed_records, CallStatus::Missed);
+
+    let unattended = status_filter(CallStatus::Unattended);
+    let unattended_records = repo
+        .get_call_records_by_user(USER_D.deref().copied(), 10, &unattended)
+        .await?;
+    assert_eq!(unattended_records.len(), 2);
+    assert_records_have_status(&unattended_records, CallStatus::Unattended);
+
+    let no_unattended_for_channel_member = repo
+        .get_call_records_by_user(USER_C.deref().copied(), 10, &unattended)
+        .await?;
+    assert!(no_unattended_for_channel_member.is_empty());
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn get_call_records_by_user_status_legacy_attended_false_returns_not_participant_statuses(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    let filter = attended_filter(false);
+
+    let missed_records = repo
+        .get_call_records_by_user(USER_C.deref().copied(), 10, &filter)
+        .await?;
+    assert_eq!(missed_records.len(), 2);
+    assert_records_have_status(&missed_records, CallStatus::Missed);
+
+    let unattended_records = repo
+        .get_call_records_by_user(USER_D.deref().copied(), 10, &filter)
+        .await?;
+    assert_eq!(unattended_records.len(), 2);
+    assert_records_have_status(&unattended_records, CallStatus::Unattended);
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn get_call_records_by_user_status_not_filter_complements_status(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    let not_attended = not_status_filter(CallStatus::Attended);
+
+    let participant_records = repo
+        .get_call_records_by_user(USER_A.deref().copied(), 10, &not_attended)
+        .await?;
+    assert!(participant_records.is_empty());
+
+    let missed_records = repo
+        .get_call_records_by_user(USER_C.deref().copied(), 10, &not_attended)
+        .await?;
+    assert_eq!(missed_records.len(), 2);
+    assert_records_have_status(&missed_records, CallStatus::Missed);
     Ok(())
 }
 

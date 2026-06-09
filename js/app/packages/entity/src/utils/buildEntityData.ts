@@ -25,6 +25,7 @@ export type BuildEntityDataArgs = {
   enabled?: boolean;
   channelId?: string;
   isActive?: boolean;
+  status?: CallEntity['status'];
   attended?: boolean;
   participantIds?: string[];
   isRead?: boolean;
@@ -136,12 +137,16 @@ export function buildEntityData(
     })
     .with('call', (): CallEntity | undefined => {
       if (!args.channelId) return undefined;
+      const status: CallEntity['status'] =
+        args.status ?? (args.attended ? 'ATTENDED' : 'UNATTENDED');
+
       return {
         ...base,
         type: 'call',
         channelId: args.channelId,
         isActive: args.isActive ?? false,
-        attended: args.attended ?? false,
+        status,
+        attended: status === 'ATTENDED',
         participantIds: args.participantIds ?? [],
       };
     })

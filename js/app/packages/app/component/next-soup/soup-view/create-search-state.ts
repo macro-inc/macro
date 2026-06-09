@@ -97,13 +97,16 @@ function filterDataToQueryFilters(data: QueryState): EntityFilters {
     include.callId?.length ||
     include.callChannelId?.length ||
     include.callSpeakerId?.length ||
+    include.callStatus !== undefined ||
     include.callAttended !== undefined
   ) {
     filters.call_filters = {
       call_ids: include.callId,
       channel_ids: include.callChannelId,
       speaker_ids: include.callSpeakerId,
-      attended: include.callAttended,
+      status: include.callStatus,
+      attended:
+        include.callStatus === undefined ? include.callAttended : undefined,
     };
   }
 

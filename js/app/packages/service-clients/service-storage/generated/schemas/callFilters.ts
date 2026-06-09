@@ -5,12 +5,14 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { CallFiltersAttended } from './callFiltersAttended';
+import type { CallFiltersStatus } from './callFiltersStatus';
 
 /**
  * Filters for call records.
  */
 export interface CallFilters {
-  /** Filter by whether the requesting user attended the call.
+  /** Legacy filter by whether the requesting user attended the call.
+Prefer [`CallFilters::status`] for new callers.
 `None` = no filter, `Some(true)` = only calls the user joined,
 `Some(false)` = only calls the user did not join. */
   attended?: CallFiltersAttended;
@@ -20,4 +22,5 @@ export interface CallFilters {
   channel_ids?: string[];
   /** Speaker macro user ids. Empty to include all. */
   speaker_ids?: string[];
+  status?: CallFiltersStatus;
 }
