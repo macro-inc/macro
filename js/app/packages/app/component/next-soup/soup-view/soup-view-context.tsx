@@ -50,6 +50,7 @@ import type { SoupPage } from '@service-storage/generated/schemas';
 import type { InfiniteData } from '@tanstack/solid-query';
 import {
   type Accessor,
+  batch,
   createContext,
   createEffect,
   createMemo,
@@ -79,8 +80,16 @@ type DataSource<T> = {
   fetchNextPage: VoidFunction;
 };
 
+type SoupViewInitializeOptions = {
+  initialQuery?: Query;
+  initialSearchText?: string;
+  disableLocalSearch?: boolean;
+  additionalEntities?: Accessor<EntityData[]>;
+};
+
 interface SoupViewContextValues {
   soup: SoupState;
+  initialize: (options?: SoupViewInitializeOptions, force?: boolean) => void;
   source: DataSource<EntityData>;
   searchText: Accessor<string>;
   setSearchText: (value: string) => void;
@@ -117,16 +126,9 @@ export const useSoupView = () => {
 
 export const useMaybeSoupView = () => useContext(SoupViewContext);
 
-interface SoupViewContextProviderProps {
+interface SoupViewContextProviderProps extends SoupViewInitializeOptions {
   soup?: SoupState;
-  initialQuery?: Query;
-  initialSearchText?: string;
-  disableLocalSearch?: boolean;
-  /**
-   * Additional client-side entities to merge into the soup item stream.
-   * Visibility is still controlled by the active client filters.
-   */
-  additionalEntities?: Accessor<EntityData[]>;
+  initialEnabled?: boolean;
 }
 
 type ApiSortMethod = NonNullable<SoupParams['sort_method']>;
@@ -141,6 +143,13 @@ export const SoupViewContextProvider: FlowComponent<
   SoupViewContextProviderProps
 > = (props) => {
   const soup = props.soup ?? createSoupState();
+  const [enabled, setEnabled] = createSignal(props.initialEnabled ?? false);
+  const [config, setConfig] = createSignal<SoupViewInitializeOptions>({
+    initialQuery: props.initialQuery,
+    initialSearchText: props.initialSearchText,
+    disableLocalSearch: props.disableLocalSearch,
+    additionalEntities: props.additionalEntities,
+  });
 
   const queryClient = useQueryClient();
 
@@ -231,6 +240,7 @@ export const SoupViewContextProvider: FlowComponent<
   };
 
   const [searchPaused, setSearchPaused] = createSignal(false);
+  const sourceSearchPaused = createMemo(() => searchPaused() || !enabled());
   const [assigneeFilter, setAssigneeFilter] = useEntryState<string[]>(
     'soup.assigneeFilter',
     { default: [] }
@@ -287,11 +297,27 @@ export const SoupViewContextProvider: FlowComponent<
     soup,
     filters: () => queryFilters.state,
     assignees: assigneeFilter,
-    disableLocalSearch: props.disableLocalSearch,
-    searchPaused,
+    disableLocalSearch: () => config().disableLocalSearch ?? false,
+    searchPaused: sourceSearchPaused,
     searchText,
     setSearchText,
   });
+
+  const initialize = (
+    options: SoupViewInitializeOptions = {},
+    force = false
+  ) => {
+    batch(() => {
+      setConfig(options);
+      if ((!persistedFilters && options.initialQuery) || force) {
+        queryFilters.replace(options.initialQuery ?? null);
+      }
+      if ((options.initialSearchText !== undefined && !searchText()) || force) {
+        setSearchText(options.initialSearchText ?? '');
+      }
+      setEnabled(true);
+    });
+  };
 
   const notificationSource = useGlobalNotificationSource();
   const userId = useUserId();
@@ -317,7 +343,7 @@ export const SoupViewContextProvider: FlowComponent<
       groupBy: groupByField(),
     }),
     () => ({
-      enabled: !search.isSearching(),
+      enabled: enabled() && !search.isSearching(),
     })
   );
 
@@ -334,7 +360,7 @@ export const SoupViewContextProvider: FlowComponent<
           isWithNotification(e) ? e : attachNotifications(e)
         ) as SoupEntity[];
 
-        const extras = props.additionalEntities?.() ?? [];
+        const extras = config().additionalEntities?.() ?? [];
 
         if (extras.length === 0) return base;
 
@@ -430,7 +456,7 @@ export const SoupViewContextProvider: FlowComponent<
       const items = itemsQuery.data?.items;
       const dataVersion = itemsQuery.dataUpdatedAt;
 
-      if (!field || !groups || !items) {
+      if (!enabled() || !field || !groups || !items) {
         return [];
       }
 
@@ -488,7 +514,7 @@ export const SoupViewContextProvider: FlowComponent<
               { instructionsIdQuery }
             ).map((e) => attachNotifications(e)) as SoupEntity[];
           },
-          enabled: true,
+          enabled: enabled(),
           staleTime: Infinity,
         };
       });
@@ -598,6 +624,7 @@ export const SoupViewContextProvider: FlowComponent<
 
   const context = {
     soup,
+    initialize,
     source: {
       data: entities,
       isLoading: () => itemsQuery.isLoading,
@@ -607,12 +634,16 @@ export const SoupViewContextProvider: FlowComponent<
       isFetchingNextPage: () =>
         itemsQuery.isFetchingNextPage || searchQuery.isFetchingNextPage,
       hasNextPage: () => {
+        if (!enabled()) return false;
+
         return (
           (itemsQuery.isEnabled && itemsQuery.hasNextPage) ||
           (searchQuery.isEnabled && searchQuery.hasNextPage)
         );
       },
       fetchNextPage: () => {
+        if (!enabled()) return;
+
         if (itemsQuery.isEnabled) {
           itemsQuery.fetchNextPage();
         }
@@ -625,7 +656,7 @@ export const SoupViewContextProvider: FlowComponent<
     rows,
     searchText: search.searchText,
     setSearchText: search.setSearchText,
-    searchPaused,
+    searchPaused: sourceSearchPaused,
     setSearchPaused,
     featuredIds: search.featuredIds,
     isSearchServiceLoading: search.isSearchServiceLoading,

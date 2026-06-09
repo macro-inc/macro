@@ -129,7 +129,7 @@ interface CreateSearchStateArgs {
   soup: SoupState;
   filters: Accessor<QueryState>;
   assignees: Accessor<string[]>;
-  disableLocalSearch?: boolean;
+  disableLocalSearch?: Accessor<boolean>;
   searchPaused?: Accessor<boolean>;
   /**
    * Reactive search text. Owned by the caller so it can be wired to
@@ -214,7 +214,7 @@ export const createSearchState = ({
 
   const localFuzzyResults = createMemo(
     on(debouncedSearchForLocal, (query) => {
-      if (disableLocalSearch) return [];
+      if (disableLocalSearch?.()) return [];
       if (!query || query.length === 0) return [];
       const pool = entityPool();
       // TODO: we can optimize fresh search for small feature counts since we
