@@ -35,6 +35,55 @@ describe('reconnect() should produce a usable connection', () => {
   });
 
   test(
+    'explicit reconnect() revives a close() that landed during url resolution',
+    async () => {
+      const received: string[] = [];
+      let connections = 0;
+      server!.on('connection', (ws) => {
+        connections++;
+        ws.on('message', (data) => received.push(data.toString()));
+      });
+
+      // Slow url resolution keeps connectPending true long enough for both
+      // calls below to land inside the same in-flight connect attempt.
+      const slowResolver = async () => {
+        await new Promise((r) => setTimeout(r, 150));
+        return url;
+      };
+
+      client = new WebsocketBuilder(slowResolver)
+        .withBackoff(new ConstantBackoff(100))
+        .build();
+
+      // close() while the first connect attempt is still resolving its url,
+      // then an explicit reconnect() in the same window. The reconnect must
+      // override the close by adopting the in-flight attempt — not be
+      // silently swallowed by the connect-pending guard.
+      client.close();
+      client.reconnect();
+
+      await Promise.race([
+        new Promise<void>((resolve) =>
+          client!.addEventListener(WebsocketEvent.Open, () => resolve(), {
+            once: true,
+          })
+        ),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('socket was never revived')), 3000)
+        ),
+      ]);
+
+      expect(client.closedByUser).toBe(false);
+      expect(client.send('revived')).toBe(true);
+      await new Promise((r) => setTimeout(r, 250));
+      expect(received).toContain('revived');
+      // The pending attempt was adopted, not duplicated.
+      expect(connections).toBe(1);
+    },
+    10_000
+  );
+
+  test(
     'send() works again after a manual reconnect()',
     async () => {
       const received: string[] = [];

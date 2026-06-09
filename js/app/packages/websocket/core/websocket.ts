@@ -816,15 +816,20 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
    * connection.
    */
   reconnect() {
+    // An explicit reconnect always overrides a prior user close — clear the
+    // flag before the pending check so a close() that landed while a connect
+    // attempt was resolving its url doesn't strand the instance (tryConnect
+    // bails on _closedByUser after the url resolves).
+    this._closedByUser = false;
     if (this.connectPending) {
       // A fresh connection is already being established (e.g. 'online' and
       // 'visibilitychange' firing together on wake) — starting a second
-      // tryConnect would orphan the first socket.
+      // tryConnect would orphan the first socket. With _closedByUser cleared
+      // above, the in-flight attempt is adopted as this reconnect.
       return;
     }
     this.cancelScheduledConnectionRetry();
     this.stopHeartbeat();
-    this._closedByUser = false;
     this.clearWebsocket(); // detach listeners from (and close) the old socket
     this.connectionState = WebsocketConnectionState.Reconnecting;
     this.tryConnect();
