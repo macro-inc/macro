@@ -1,11 +1,11 @@
 import type { DateValue } from '@core/util/date';
 import type { ApiLabel } from '@service-email/generated/schemas';
 import type {
-  CallStatus as StorageCallStatus,
   GithubPullRequestCheckRun,
   GithubPullRequestComment,
   SoupLabel,
   SoupProperty,
+  CallStatus as StorageCallStatus,
 } from '@service-storage/generated/schemas';
 
 export type EntityBase = {

@@ -14,11 +14,11 @@ import {
   type Query,
   queryStateFrom,
 } from '@app/component/next-soup/filters/filter-store';
-import {
-  callStatusFromAttended,
-  type CallStatus,
-} from '@app/component/next-soup/filters/filter-store/types';
 import { mergeQuery } from '@app/component/next-soup/filters/filter-store/query-store';
+import {
+  type CallStatus,
+  callStatusFromAttended,
+} from '@app/component/next-soup/filters/filter-store/types';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import type { ListView } from '@app/constants/list-views';
@@ -41,10 +41,10 @@ import type {
   FilterValue,
 } from './consolidated-filter-chip';
 import {
+  CALL_STATUS_FILTER_OPTIONS,
   cacheCallSubFilters,
   cacheChannelSubFilters,
   cacheEmailSubFilters,
-  CALL_STATUS_FILTER_OPTIONS,
   getCallStatusLabel,
   INDEX_OPTIONS,
   type SearchableOption,

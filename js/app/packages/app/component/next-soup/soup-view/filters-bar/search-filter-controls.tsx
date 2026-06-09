@@ -5,8 +5,8 @@ import {
   type Query,
 } from '@app/component/next-soup/filters/filter-store';
 import {
-  callStatusFromAttended,
   type CallStatus,
+  callStatusFromAttended,
 } from '@app/component/next-soup/filters/filter-store/types';
 import {
   activeSoupViewCounts,

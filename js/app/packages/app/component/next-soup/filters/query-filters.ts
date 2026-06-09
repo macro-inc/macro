@@ -1,10 +1,7 @@
 import type { SoupBody, SoupItemsQueryFilters } from '@queries/soup/items';
 import type { SoupApiItem } from '@service-storage/generated/schemas';
 import { match } from 'ts-pattern';
-import {
-  callStatusFromAttended,
-  type CallStatus,
-} from './filter-store/types';
+import { type CallStatus, callStatusFromAttended } from './filter-store/types';
 
 const NIL_UUID = '00000000-0000-0000-0000-000000000000';
 
@@ -51,7 +48,9 @@ function isCallAttendanceFilteredOut(
   itemAttended: boolean
 ): boolean {
   if (statusFilter !== undefined && statusFilter !== null) {
-    return (itemStatus ?? callStatusFromAttended(itemAttended)) !== statusFilter;
+    return (
+      (itemStatus ?? callStatusFromAttended(itemAttended)) !== statusFilter
+    );
   }
 
   return isAttendedFilteredOut(attendedFilter, itemAttended);
