@@ -41,8 +41,8 @@ use super::content::{DocumentContent, DocumentContentLocation, DocumentContentSt
 use super::models::{
     CloudFrontConfig, CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs,
     CreateTaskRequest, DocumentError, EditDocumentRepoArgs, EditDocumentServiceArgs,
-    FileTypeUpdate, GithubPullRequestsResponse, LocationQueryParams, TaskBranchName,
-    TeamTaskMetadata,
+    FileTypeUpdate, GithubPullRequest, GithubPullRequestsResponse, LocationQueryParams,
+    TaskBranchName, TeamTaskMetadata,
 };
 #[cfg(feature = "document_create")]
 use super::ports::create::DocumentCreationService;
@@ -131,21 +131,52 @@ fn foreign_entity_matches_source_id(foreign_entity: &ForeignEntity, source_id: &
         && foreign_entity.stored_for_auth_entity == source_id.auth_entity
 }
 
-fn first_visible_foreign_entity_id(
-    foreign_entities: &[ForeignEntity],
+fn first_visible_foreign_entity<'a>(
+    foreign_entities: &'a [ForeignEntity],
     source_ids: Option<&[SourceId]>,
-) -> Option<uuid::Uuid> {
-    foreign_entities
-        .iter()
-        .find(|foreign_entity| {
-            foreign_entity.foreign_entity_source == GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE
-                && source_ids.is_none_or(|source_ids| {
-                    source_ids.iter().any(|source_id| {
-                        foreign_entity_matches_source_id(foreign_entity, source_id)
-                    })
-                })
-        })
-        .map(|foreign_entity| foreign_entity.id)
+) -> Option<&'a ForeignEntity> {
+    foreign_entities.iter().find(|foreign_entity| {
+        foreign_entity.foreign_entity_source == GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE
+            && source_ids.is_none_or(|source_ids| {
+                source_ids
+                    .iter()
+                    .any(|source_id| foreign_entity_matches_source_id(foreign_entity, source_id))
+            })
+    })
+}
+
+fn hydrate_github_pull_request_from_foreign_entity(
+    pull_request: &mut GithubPullRequest,
+    foreign_entity: &ForeignEntity,
+) {
+    let Ok(mut hydrated_pull_request) = serde_json::from_value::<GithubPullRequest>(
+        foreign_entity.metadata.clone(),
+    )
+    .inspect_err(|error| {
+        tracing::warn!(
+            error = ?error,
+            foreign_entity_id = %foreign_entity.id,
+            fallback_github_key = %pull_request.github_key,
+            "failed to parse GitHub pull request foreign entity metadata"
+        );
+    }) else {
+        pull_request.foreign_entity_id = Some(foreign_entity.id);
+        return;
+    };
+
+    if hydrated_pull_request.github_key != pull_request.github_key {
+        tracing::warn!(
+            foreign_entity_id = %foreign_entity.id,
+            metadata_github_key = %hydrated_pull_request.github_key,
+            fallback_github_key = %pull_request.github_key,
+            "ignoring mismatched GitHub pull request foreign entity metadata"
+        );
+        pull_request.foreign_entity_id = Some(foreign_entity.id);
+        return;
+    }
+
+    hydrated_pull_request.foreign_entity_id = Some(foreign_entity.id);
+    *pull_request = hydrated_pull_request;
 }
 
 impl<
@@ -817,8 +848,11 @@ impl<
                 .await
                 .map_err(|error| DocumentError::Internal(error.into()))?;
 
-            pull_request.foreign_entity_id =
-                first_visible_foreign_entity_id(&foreign_entities, source_ids.as_deref());
+            if let Some(foreign_entity) =
+                first_visible_foreign_entity(&foreign_entities, source_ids.as_deref())
+            {
+                hydrate_github_pull_request_from_foreign_entity(pull_request, foreign_entity);
+            }
         }
 
         Ok(response)

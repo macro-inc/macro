@@ -46,22 +46,32 @@ function toGithubPullRequestRef(
 }
 
 function toStorageGithubPullRequest(
-  pullRequest: EnrichedGithubPullRequest
+  pullRequest: EnrichedGithubPullRequest,
+  fallbackPullRequest: GithubPullRequest | undefined
 ): GithubPullRequest {
   return {
-    additions: pullRequest.additions,
-    checks: pullRequest.checks,
-    comments: pullRequest.comments,
-    deletions: pullRequest.deletions,
+    additions: pullRequest.additions ?? fallbackPullRequest?.additions,
+    checks: pullRequest.checks ?? fallbackPullRequest?.checks,
+    comments: pullRequest.comments ?? fallbackPullRequest?.comments,
+    deletions: pullRequest.deletions ?? fallbackPullRequest?.deletions,
     displayName: pullRequest.displayName,
+    foreignEntityId: fallbackPullRequest?.foreignEntityId,
     githubKey: pullRequest.githubKey,
-    name: pullRequest.name,
+    name: pullRequest.name ?? fallbackPullRequest?.name,
     number: pullRequest.number,
     owner: pullRequest.owner,
     repo: pullRequest.repo,
-    status: pullRequest.status,
+    status: pullRequest.status ?? fallbackPullRequest?.status,
     url: pullRequest.url,
   };
+}
+
+function createPullRequestFallbacksByKey(
+  pullRequests: GithubPullRequest[]
+): Map<string, GithubPullRequest> {
+  return new Map(
+    pullRequests.map((pullRequest) => [pullRequest.githubKey, pullRequest])
+  );
 }
 
 export async function fetchDocumentGithubPullRequests(
@@ -83,9 +93,18 @@ export async function fetchDocumentGithubPullRequests(
     return rawResponse;
   }
 
+  const fallbackPullRequestsByKey = createPullRequestFallbacksByKey(
+    rawResponse.pullRequests
+  );
+
   return {
     pullRequests: enrichedResponse.value.pullRequests.map(
-      toStorageGithubPullRequest
+      (pullRequest, index) =>
+        toStorageGithubPullRequest(
+          pullRequest,
+          fallbackPullRequestsByKey.get(pullRequest.githubKey) ??
+            rawResponse.pullRequests[index]
+        )
     ),
   };
 }
