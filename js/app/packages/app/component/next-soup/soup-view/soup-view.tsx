@@ -1,7 +1,3 @@
-// TEMP: force every view to render its empty state regardless of data.
-// Set back to false (or remove) before merging. See empty-states.tsx.
-const FORCE_EMPTY_STATE = true;
-
 import { VIEW_TAB_PRESETS } from '@app/component/app-sidebar/soup-filter-presets';
 import {
   useGlobalBlockOrchestrator,
@@ -1079,14 +1075,11 @@ export const SoupViewList = (props: SoupViewListProps) => {
               </Show>
               <StaticMarkdownContext>
                 <Switch>
-                  <Match
-                    when={!FORCE_EMPTY_STATE && source.isLoading() && !rows().length}
-                  >
+                  <Match when={source.isLoading() && !rows().length}>
                     <LoadingBlock />
                   </Match>
                   <Match
                     when={
-                      !FORCE_EMPTY_STATE &&
                       (isSearchServiceLoading() || isLocalSearchSettling()) &&
                       !rows().length
                     }
@@ -1096,7 +1089,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                       Searching...
                     </div>
                   </Match>
-                  <Match when={FORCE_EMPTY_STATE || !rows().length}>
+                  <Match when={!rows().length}>
                     <EmptyState
                       listView={currentView()}
                       search={!!searchText()}
