@@ -34,8 +34,8 @@ import type {
   UnifiedSearchResponseItem,
 } from '@service-search/generated/models';
 import type {
-  SoupApiItem,
   GithubPullRequest,
+  SoupApiItem,
   SoupDocument,
   SoupPage,
 } from '@service-storage/generated/schemas';
