@@ -685,6 +685,9 @@ export const SoupViewList = (props: SoupViewListProps) => {
     soup,
     splitHandle: panel.handle,
     virtualizerHandle,
+    hasNextPage: source.hasNextPage,
+    isFetchingNextPage: source.isFetchingNextPage,
+    fetchNextPage: source.fetchNextPage,
   });
 
   // Register entity action hotkeys

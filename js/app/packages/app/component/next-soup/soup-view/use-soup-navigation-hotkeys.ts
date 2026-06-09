@@ -13,6 +13,9 @@ type UseSoupNavigationHotkeysOptions = {
   soup: SoupState;
   splitHandle: SplitHandle;
   virtualizerHandle: Accessor<VirtualizerHandle | undefined>;
+  hasNextPage?: Accessor<boolean>;
+  isFetchingNextPage?: Accessor<boolean>;
+  fetchNextPage?: () => void;
 };
 
 export const useSoupNavigationHotkeys = (
@@ -95,13 +98,30 @@ export const useSoupNavigationHotkeys = (
 
   const group = createHotkeyGroup();
 
+  const { fetchNextPage, isFetchingNextPage, hasNextPage } = options;
+
+  const LOAD_MORE_DISTANCE_FROM_END = 3;
+
+  const fetchNextPageIfNeeded = () => {
+    if (!hasNextPage?.() || isFetchingNextPage?.()) return;
+    fetchNextPage?.();
+  };
+
   const navigateDown = () => {
+    const rowCount = soup.rows().length;
     const next = soup.navigate.down();
 
-    if (!next) return true;
+    if (!next) {
+      fetchNextPageIfNeeded();
+      return true;
+    }
 
     scrollTo(next.index);
     openEntity(next.row.original);
+
+    if (next.index >= rowCount - 1 - LOAD_MORE_DISTANCE_FROM_END) {
+      fetchNextPageIfNeeded();
+    }
 
     return true;
   };
