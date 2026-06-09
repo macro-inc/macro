@@ -25,6 +25,7 @@
       {
         "tab": "Documentation",
         "pages": [
+          "index",
           {
             "group": "Features",
             "pages": [
