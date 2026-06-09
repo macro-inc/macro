@@ -196,7 +196,6 @@ const ProjectEntityList = (props: {
     <SoupContextProvider soup={props.soup}>
       <SoupViewContextProvider
         soup={props.soup}
-        initialEnabled
         initialQuery={defineQueryFilters({
           include: {
             // Filter documents by project

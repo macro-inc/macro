@@ -3,7 +3,6 @@ import { registerHotkey } from 'core/hotkey/hotkeys';
 
 interface EmailHotkeyHandlers {
   blockSender: () => boolean;
-  markDone: () => boolean;
   markSenderSignal: () => boolean;
   markSenderNoise: () => boolean;
   navigateToPreviousMessage: () => boolean;
@@ -48,14 +47,6 @@ export function registerEmailHotkeys(
     },
     hotkeyToken: TOKENS.email.forward,
     displayPriority: 7,
-  });
-  registerHotkey({
-    hotkey: 'e',
-    scopeId,
-    description: 'Mark done',
-    keyDownHandler: handlers.markDone,
-    hotkeyToken: TOKENS.entity.action.markDone,
-    displayPriority: 10,
   });
   registerHotkey({
     scopeId: scopeId,

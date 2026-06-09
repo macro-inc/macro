@@ -151,7 +151,7 @@ export const useEntityActionHotkeys = (
     },
     displayPriority: 10,
     tags: [HotkeyTags.SelectionModification],
-  }).withGroup(group);
+  });
 
   // Delete - 'delete', 'backspace'
   registerHotkey({

@@ -1,11 +1,10 @@
 import { openEntityInSplitFromUnifiedList } from '@app/component/next-soup/utils';
 import type { SplitHandle } from '@app/component/split-layout/layoutManager';
-import { isListViewID } from '@app/constants/list-views';
 import { entityIdSelector } from '@core/dom-selectors';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { EntityData } from '@entity';
-import { type Accessor, createMemo, onCleanup } from 'solid-js';
+import { type Accessor, onCleanup } from 'solid-js';
 import type { VirtualizerHandle } from 'virtua/solid';
 import type { SoupState } from '../create-soup-state';
 
@@ -14,9 +13,6 @@ type UseSoupNavigationHotkeysOptions = {
   soup: SoupState;
   splitHandle: SplitHandle;
   virtualizerHandle: Accessor<VirtualizerHandle | undefined>;
-  hasNextPage?: Accessor<boolean>;
-  isFetchingNextPage?: Accessor<boolean>;
-  fetchNextPage?: () => void;
 };
 
 export const useSoupNavigationHotkeys = (
@@ -34,17 +30,6 @@ export const useSoupNavigationHotkeys = (
     });
   };
 
-  const navigationReferredFrom = createMemo(() => {
-    const content = splitHandle.content();
-
-    if (content.type === 'component' && isListViewID(content.id)) {
-      return content.id;
-    }
-
-    const referredFrom = splitHandle.referredFrom();
-    return isListViewID(referredFrom) ? referredFrom : undefined;
-  });
-
   const openEntity = (entity: EntityData) => {
     const handleContent = splitHandle.content().type;
 
@@ -53,7 +38,6 @@ export const useSoupNavigationHotkeys = (
     openEntityInSplitFromUnifiedList(entity, {
       splitHandle,
       mergeHistory: true,
-      referredFrom: navigationReferredFrom(),
     });
   };
 
@@ -111,30 +95,13 @@ export const useSoupNavigationHotkeys = (
 
   const group = createHotkeyGroup();
 
-  const { fetchNextPage, isFetchingNextPage, hasNextPage } = options;
-
-  const LOAD_MORE_DISTANCE_FROM_END = 3;
-
-  const fetchNextPageIfNeeded = () => {
-    if (!hasNextPage?.() || isFetchingNextPage?.()) return;
-    fetchNextPage?.();
-  };
-
   const navigateDown = () => {
-    const rowCount = soup.rows().length;
     const next = soup.navigate.down();
 
-    if (!next) {
-      fetchNextPageIfNeeded();
-      return true;
-    }
+    if (!next) return true;
 
     scrollTo(next.index);
     openEntity(next.row.original);
-
-    if (next.index >= rowCount - 1 - LOAD_MORE_DISTANCE_FROM_END) {
-      fetchNextPageIfNeeded();
-    }
 
     return true;
   };
@@ -150,29 +117,14 @@ export const useSoupNavigationHotkeys = (
     return true;
   };
 
-  const canRunListNavigation = () => {
-    const contentType = splitHandle.content().type;
-    const referredFrom = navigationReferredFrom();
-    return (
-      contentType === 'component' ||
-      contentType === 'project' ||
-      referredFrom === 'inbox' ||
-      referredFrom === 'mail'
-    );
-  };
-
-  // Keep j/k registered on the split scope after the list unmounts. When an
-  // entity is opened from a list into the same split, this lets j/k continue
-  // navigating the originating soup list and update the split content.
   registerHotkey({
     hotkey: ['j'],
     scopeId,
     description: 'Down',
     hotkeyToken: TOKENS.entity.step.end,
-    condition: canRunListNavigation,
     keyDownHandler: navigateDown,
     hide: true,
-  });
+  }).withGroup(group);
 
   registerHotkey({
     hotkey: ['arrowdown'],
@@ -182,18 +134,14 @@ export const useSoupNavigationHotkeys = (
     hide: true,
   }).withGroup(group);
 
-  // Keep j/k registered on the split scope after the list unmounts. When an
-  // entity is opened from a list into the same split, this lets j/k continue
-  // navigating the originating soup list and update the split content.
   registerHotkey({
     hotkey: ['k'],
     scopeId,
     hotkeyToken: TOKENS.entity.step.start,
     description: 'Up',
-    condition: canRunListNavigation,
     keyDownHandler: navigateUp,
     hide: true,
-  });
+  }).withGroup(group);
 
   registerHotkey({
     hotkey: ['arrowup'],

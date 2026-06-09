@@ -1,8 +1,4 @@
-import type {
-  ReferredFrom,
-  SplitHandle,
-} from '@app/component/split-layout/layoutManager';
-import { isListViewID } from '@app/constants/list-views';
+import type { SplitHandle } from '@app/component/split-layout/layoutManager';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { URL_PARAMS as CALL_PARAMS } from '@block-call/constants';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
@@ -312,7 +308,6 @@ interface OpenEntityOptions {
   splitHandle?: SplitHandle;
   mergeHistory?: boolean;
   allowDuplicate?: boolean;
-  referredFrom?: ReferredFrom;
 }
 
 /**
@@ -360,19 +355,10 @@ export const openEntityInSplitFromUnifiedList = async (
     params = { [CALL_PARAMS.transcriptId]: location.transcriptId };
   }
 
-  const sourceContent =
-    splitHandle?.content() ?? splitManager.activeSplit()?.content();
-
-  const sourceListView =
-    sourceContent?.type === 'component' && isListViewID(sourceContent.id)
-      ? sourceContent.id
-      : undefined;
-  const referredFrom = options.referredFrom ?? sourceListView;
-
   splitManager.openWithSplit(
     { ...content, params },
     {
-      referredFrom,
+      referredFrom: 'list-view',
       activate: true,
       preferNewSplit: openInNewSplit,
       handle: splitHandle,

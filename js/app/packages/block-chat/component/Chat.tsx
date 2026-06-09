@@ -312,7 +312,7 @@ function ChatInner(props: {
               chatId={chat.chatId()}
               onSend={onSend}
               onStop={onStop}
-              autoFocusOnMount={!isPreview && !navigatedFromJK()}
+              autoFocusOnMount={!isPreview}
             />
           </div>
         </div>
