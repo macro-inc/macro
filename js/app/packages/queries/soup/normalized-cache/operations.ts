@@ -201,6 +201,7 @@ export function insertSoupEntity(item: SoupApiItem): SoupTransaction {
     );
 
     if (!nextPage) {
+      queryClient.invalidateQueries({ queryKey: key });
       continue;
     }
 

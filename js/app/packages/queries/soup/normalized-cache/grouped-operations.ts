@@ -90,6 +90,7 @@ export function syncGroupedParents(entityId: string, entity: SoupApiItem) {
     const nextGroupKeys = computeGroupKeysForItem(entity, meta.groupBy);
 
     if (nextGroupKeys === undefined) {
+      queryClient.invalidateQueries({ queryKey: query.queryKey });
       continue;
     }
 
@@ -121,7 +122,12 @@ export function syncGroupedParents(entityId: string, entity: SoupApiItem) {
       pages.push(next);
     }
 
-    if (needsInvalidation || !changed) continue;
+    if (needsInvalidation) {
+      queryClient.invalidateQueries({ queryKey: query.queryKey });
+      continue;
+    }
+
+    if (!changed) continue;
 
     query.setData({ ...prev, pages }, { manual: true });
   }
@@ -145,7 +151,10 @@ export function syncGroupQueries(entityId: string, entity: SoupApiItem) {
     if (!meta.groupBy || meta.groupKey == null) continue;
 
     const nextGroupKeys = computeGroupKeysForItem(entity, meta.groupBy);
-    if (nextGroupKeys === undefined) continue;
+    if (nextGroupKeys === undefined) {
+      queryClient.invalidateQueries({ queryKey: query.queryKey });
+      continue;
+    }
 
     const filter = meta.itemFilter;
     let shouldHave = nextGroupKeys.includes(meta.groupKey);
@@ -248,7 +257,11 @@ export function insertGroupQueries(item: SoupApiItem, itemId: string) {
     if (!meta.groupBy || meta.groupKey == null) continue;
 
     const targetKeys = computeGroupKeysForItem(item, meta.groupBy);
-    if (!targetKeys?.includes(meta.groupKey)) continue;
+    if (targetKeys === undefined) {
+      queryClient.invalidateQueries({ queryKey: query.queryKey });
+      continue;
+    }
+    if (!targetKeys.includes(meta.groupKey)) continue;
 
     const firstPage = prev.pages[0];
     if (firstPage.group.itemIds.includes(itemId)) continue;
