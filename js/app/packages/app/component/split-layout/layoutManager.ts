@@ -1,4 +1,4 @@
-import { LIST_VIEW_ID } from '@app/constants/list-views';
+import { LIST_VIEW_ID, type ListView } from '@app/constants/list-views';
 import type {
   BlockAlias,
   BlockAliasContext,
@@ -116,7 +116,7 @@ export type PopoverSplitHandle = {
 };
 
 export type ReferredFrom =
-  | 'list-view'
+  | ListView
   | 'kommand-menu'
   | 'mention'
   | 'attachment'
@@ -128,7 +128,6 @@ export type ReferredFrom =
   | 'hotkey'
   | 'quick-access'
   | 'file-upload'
-  | 'search'
   | null;
 
 export type SplitState = {
