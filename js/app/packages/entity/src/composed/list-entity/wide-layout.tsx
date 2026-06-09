@@ -1,5 +1,4 @@
 import { useMaybeSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
-import { tryWarmSnapshot } from '@queries/storage/cached-snapshot';
 import { cn } from '@ui';
 import { Match, Show, Switch } from 'solid-js';
 import { AttendanceBadge, SharedBadge } from '../../components/Badges';
@@ -46,7 +45,6 @@ export function WideLayout(props: LayoutProps) {
       style={{
         'grid-template-areas': '"indicator content meta timestamp"',
       }}
-      onMouseEnter={() => tryWarmSnapshot(props.entity)}
     >
       <Entity.Slot placement="indicator" class="relative size-full group">
         <div class="absolute inset-0 grid place-items-center group-hover:opacity-0">

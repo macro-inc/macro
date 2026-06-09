@@ -1104,27 +1104,6 @@ export const storageServiceClient = {
     ).map((result) => result.data);
   },
 
-  async fetchCachedSnapshot(documentId: string): Promise<Uint8Array> {
-    const result = await dssFetch<{ url: string }>(
-      `/documents/${documentId}/cached_snapshot_url`
-    );
-
-    if (result.isErr()) {
-      throw new Error(
-        `cached snapshot not available: ${result.error
-          .map((e) => e.message)
-          .join(', ')}`
-      );
-    }
-
-    const response = await fetch(result.value.url);
-    if (!response.ok) {
-      throw new Error(`cached snapshot fetch failed: ${response.status}`);
-    }
-
-    return new Uint8Array(await response.arrayBuffer());
-  },
-
   async getDocumentShortId({
     documentId,
   }: {
