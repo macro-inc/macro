@@ -1293,6 +1293,15 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "force_share",
+            "in": "query",
+            "description": "**OPTIONAL**. Confirms promoting a mailbox already connected by another user into a shared inbox.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
@@ -1322,6 +1331,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SharedInboxConflictResponse"
                 }
               }
             }
@@ -4597,6 +4616,30 @@
         "properties": {
           "signature_on_replies_forwards": {
             "type": ["boolean", "null"]
+          }
+        }
+      },
+      "SharedInboxConflictResponse": {
+        "type": "object",
+        "description": "Returned with a `409 Conflict` when a connect targets an external mailbox another\nmacro user has already connected. The client surfaces a confirmation; on confirm it\nretries `/email/init` with `force_share=true` to promote the mailbox to a shared inbox.",
+        "required": [
+          "email_address",
+          "existing_owner_email",
+          "existing_link_id"
+        ],
+        "properties": {
+          "email_address": {
+            "type": "string",
+            "description": "The mailbox address that is already connected."
+          },
+          "existing_link_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The existing link that would be shared if the caller confirms."
+          },
+          "existing_owner_email": {
+            "type": "string",
+            "description": "The email of the macro user who first connected the mailbox."
           }
         }
       },
