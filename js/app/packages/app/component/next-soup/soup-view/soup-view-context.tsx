@@ -27,6 +27,7 @@ import {
   type ListView,
   soupItemMatchesListView,
 } from '@app/constants/list-views';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
   ENABLE_FEATURED_SEARCH_RESULTS,
   ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_FLAG,
