@@ -100,6 +100,9 @@ function ProfileImage(props: {
     >
       {(url) => (
         <Avatar.Image
+          // Solid surface circle behind the picture so a transparent profile
+          // picture shows surface color rather than what's rendered behind the avatar.
+          class="bg-surface"
           src={staticFileSizedUrl(url, 'small')}
           onError={(e) => {
             if (e.currentTarget.src !== url) {
