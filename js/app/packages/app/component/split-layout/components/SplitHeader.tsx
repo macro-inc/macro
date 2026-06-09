@@ -179,7 +179,7 @@ function SoupNavigationButtons() {
   };
 
   return (
-    <Show when={context.handle.referredFrom() === 'list-view' && rows().length}>
+    <Show when={isListViewID(context.handle.referredFrom()) && rows().length}>
       <div class="flex items-center gap-1">
         <Button
           class="p-1 rounded-lg"

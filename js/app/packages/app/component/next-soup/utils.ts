@@ -1,4 +1,5 @@
 import type { SplitHandle } from '@app/component/split-layout/layoutManager';
+import { isListViewID } from '@app/constants/list-views';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { URL_PARAMS as CALL_PARAMS } from '@block-call/constants';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
@@ -344,10 +345,18 @@ export const openEntityInSplitFromUnifiedList = async (
     params = { [CALL_PARAMS.transcriptId]: location.transcriptId };
   }
 
+  const sourceContent =
+    splitHandle?.content() ?? splitManager.activeSplit()?.content();
+
+  const sourceListView =
+    sourceContent?.type === 'component' && isListViewID(sourceContent.id)
+      ? sourceContent.id
+      : undefined;
+
   splitManager.openWithSplit(
     { ...content, params },
     {
-      referredFrom: 'list-view',
+      referredFrom: sourceListView,
       activate: true,
       preferNewSplit: openInNewSplit,
       handle: splitHandle,
