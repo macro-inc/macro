@@ -76,7 +76,9 @@ async fn get_access_token(
         .into_iter()
         .find(|l| l.display_name.as_str() == email)
         .ok_or_else(|| {
-            tracing::error!(
+            // NOTE: this is going to be something we encounter a lot until users reauthenticate
+            // their gmail so I'm downgrading to a debug to not overflow logs
+            tracing::debug!(
                 "link not found for user id {} and idp id {}",
                 fusionauth_user_id,
                 idp_id.as_str()
