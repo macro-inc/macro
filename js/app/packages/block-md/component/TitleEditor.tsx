@@ -43,7 +43,10 @@ import {
   untrack,
 } from 'solid-js';
 import { blockDataSignal, mdStore } from '../signal/markdownBlockData';
-import { useRenameMarkdownDocument } from '../signal/save';
+import {
+  useRenameMarkdownDocument,
+  useSaveMarkdownDocumentName,
+} from '../signal/save';
 import { useMarkdownName } from './MarkdownNameProvider';
 
 /**
@@ -130,6 +133,10 @@ function titleNavigationPlugin(
 
 export const TitlePlaceholderSignal = createBlockSignal<string | undefined>();
 
+const RENAME_DEBOUNCE_MS = 2000;
+const BACKEND_RENAME_DEBOUNCE_MS = 200;
+const BACKEND_RENAME_MAX_WAIT_MS = 1500;
+
 export function TitleEditor(
   props: { autoFocusOnMount?: boolean; mustBeConnected?: boolean } = {}
 ) {
@@ -139,6 +146,7 @@ export function TitleEditor(
 
   const canEdit = useCanEdit(props.mustBeConnected);
   const renameMarkdownDocument = useRenameMarkdownDocument();
+  const saveMarkdownDocumentName = useSaveMarkdownDocumentName();
   const {
     persistedName: persistedDocumentName,
     editorName: mdDocumentName,
@@ -158,21 +166,60 @@ export function TitleEditor(
         oldName: string;
       }
     | undefined;
+  let pendingBackendName: string | undefined;
+  let backendRenameInFlight = false;
+  let backendRenameMaxWaitTimer: ReturnType<typeof setTimeout> | undefined;
 
-  const flushPendingRename = () => {
+  const clearBackendRenameMaxWait = () => {
+    if (backendRenameMaxWaitTimer === undefined) return;
+    clearTimeout(backendRenameMaxWaitTimer);
+    backendRenameMaxWaitTimer = undefined;
+  };
+
+  const flushPendingTanstackRename = () => {
     const next = pendingRename;
     pendingRename = undefined;
     if (!next || !canEdit()) return;
     void renameMarkdownDocument(next.newName, next.oldName);
   };
 
+  const flushPendingBackendRename = async () => {
+    if (backendRenameInFlight) return;
+    const nextName = pendingBackendName;
+    pendingBackendName = undefined;
+    clearBackendRenameMaxWait();
+    if (nextName === undefined || !canEdit()) return;
+    backendRenameInFlight = true;
+    try {
+      await saveMarkdownDocumentName(nextName);
+    } finally {
+      backendRenameInFlight = false;
+      if (pendingBackendName !== undefined) {
+        void flushPendingBackendRename();
+      }
+    }
+  };
+
   const scheduleRename = (newName: string, oldName: string) => {
     if (newName === oldName) return;
     pendingRename = { newName, oldName };
-    debouncedFlushRename();
+    pendingBackendName = newName;
+    debouncedFlushTanstackRename();
+    debouncedFlushBackendRename();
+    backendRenameMaxWaitTimer ??= setTimeout(() => {
+      backendRenameMaxWaitTimer = undefined;
+      void flushPendingBackendRename();
+    }, BACKEND_RENAME_MAX_WAIT_MS);
   };
 
-  const debouncedFlushRename = debounce(flushPendingRename, 2000);
+  const debouncedFlushTanstackRename = debounce(
+    flushPendingTanstackRename,
+    RENAME_DEBOUNCE_MS
+  );
+  const debouncedFlushBackendRename = debounce(
+    flushPendingBackendRename,
+    BACKEND_RENAME_DEBOUNCE_MS
+  );
 
   const [state, setState] = createSignal('');
   const [initialized, setInitialized] = createSignal(false);
@@ -237,8 +284,11 @@ export function TitleEditor(
     el.addEventListener('blur', onBlur);
     setRootConnected(true);
     onCleanup(() => {
-      debouncedFlushRename.clear();
-      flushPendingRename();
+      debouncedFlushTanstackRename.clear();
+      debouncedFlushBackendRename.clear();
+      clearBackendRenameMaxWait();
+      flushPendingTanstackRename();
+      void flushPendingBackendRename();
       cleanup();
       el.removeEventListener('focus', onFocus);
       el.removeEventListener('blur', onBlur);

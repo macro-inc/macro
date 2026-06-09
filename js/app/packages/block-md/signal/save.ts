@@ -48,7 +48,7 @@ export function useRenameMarkdownDocument() {
   const renameMutation = createRenameDssEntityMutation();
 
   return (newName: string, oldName: string) => {
-    renameMutation.mutate({
+    return renameMutation.mutateAsync({
       entity: {
         type: 'document',
         name: oldName,
@@ -57,6 +57,21 @@ export function useRenameMarkdownDocument() {
       newName,
     });
   };
+}
+
+export function useSaveMarkdownDocumentName() {
+  const documentId = useBlockId();
+
+  return createCallback(async (newName: string) => {
+    const saveRes = await storageServiceClient.editDocument({
+      documentId,
+      documentName: newName,
+    });
+
+    if (saveRes.isErr()) {
+      console.error('error on markdown document name save');
+    }
+  });
 }
 
 export function useDownloadDocumentAsMarkdownText() {
