@@ -24,10 +24,6 @@ export const LIST_VIEW_PATHS = {
   search: '/search',
 } as const satisfies Record<ListView, string>;
 
-const _isListViewPath = (path: string) => {
-  return LIST_VIEW_PATHS[path as ListView] !== undefined;
-};
-
 export const LIST_VIEW_ID = {
   inbox: 'inbox',
   agents: 'agents',
