@@ -161,11 +161,6 @@ export const ENABLE_CANVAS_VIDEO = resolveFeatureFlag(
   true
 );
 
-export const ENABLE_SPLIT_GUTTER_DROP_INSERT = resolveFeatureFlag(
-  'ENABLE_SPLIT_GUTTER_DROP_INSERT',
-  false
-);
-
 // TODO: figure out why the image does not load into canvas after upload
 export const ENABLE_CANVAS_HEIC = resolveFeatureFlag(
   'ENABLE_CANVAS_HEIC',

@@ -53,8 +53,6 @@ const pointerWithin: CollisionDetector = (_draggable, droppables, context) => {
 
   return hits.toSorted(
     (a, b) =>
-      Number(b.data.dropTargetPriority ?? 0) -
-        Number(a.data.dropTargetPriority ?? 0) ||
       a.layout.width * a.layout.height - b.layout.width * b.layout.height ||
       Number(b.id === context.activeDroppableId) -
         Number(a.id === context.activeDroppableId)

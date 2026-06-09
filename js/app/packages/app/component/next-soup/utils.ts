@@ -308,7 +308,6 @@ interface OpenEntityOptions {
   splitHandle?: SplitHandle;
   mergeHistory?: boolean;
   allowDuplicate?: boolean;
-  insertIndex?: number;
 }
 
 /**
@@ -324,7 +323,6 @@ export const openEntityInSplitFromUnifiedList = async (
 ): Promise<void> => {
   const {
     allowDuplicate,
-    insertIndex,
     openInNewSplit,
     splitHandle,
     mergeHistory,
@@ -371,7 +369,6 @@ export const openEntityInSplitFromUnifiedList = async (
       handle: splitHandle,
       mergeHistory,
       allowDuplicate,
-      insertIndex,
     }
   );
 

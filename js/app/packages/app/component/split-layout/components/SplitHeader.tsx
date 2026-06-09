@@ -28,7 +28,7 @@ import { canSpotlight } from '../utils/canSpotlight';
 function getEntitySplitContent(data: EntityDragEvent['draggable']['data']): {
   type: SplitContent['type'];
   id: string;
-} {
+} | undefined {
   if (data.type === 'document') {
     return {
       type: fileTypeToBlockName(data.subType?.type ?? data.fileType) as
@@ -41,6 +41,8 @@ function getEntitySplitContent(data: EntityDragEvent['draggable']['data']): {
   if (data.type === 'channel_message') {
     return { type: 'channel', id: data.channelId };
   }
+
+  if (data.type === 'foreign') return undefined;
 
   return { type: data.type, id: data.id };
 }
@@ -160,6 +162,7 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
 
     const current = panel.handle.content();
     const next = getEntitySplitContent(data);
+    if (!next) return;
     if (current.type === next.type && current.id === next.id) return;
 
     void openEntityInSplitFromUnifiedList(data, {

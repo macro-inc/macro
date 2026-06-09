@@ -1,15 +1,11 @@
 import { useGlobalBlockOrchestrator } from '@app/component/GlobalAppState';
-import { openEntityInSplitFromUnifiedList } from '@app/component/next-soup/utils';
 import { isSidebarVisible } from '@app/component/sidebarVisibility';
 import { activeElement } from '@app/signal/focus';
 import { Resize } from '@core/component/Resize';
-import { ENABLE_SPLIT_GUTTER_DROP_INSERT } from '@core/constant/featureFlags';
 import { splitContainerSelector } from '@core/dom-selectors';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { tabTitleSignal } from '@core/signal/tabTitle';
-import type { EntityDragEvent } from '@entity';
 import { useNavigate } from '@solidjs/router';
-import { useDragDropContext } from '@thisbeyond/solid-dnd';
 import { cn } from '@ui';
 import {
   type Accessor,
@@ -278,7 +274,6 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
   const decodedPairs = () => decodePairs(props.pairs);
   const blockOrchestrator = useGlobalBlockOrchestrator();
   const splitManager = createSplitLayout(blockOrchestrator, decodedPairs());
-  const [dragDropState] = useDragDropContext() ?? [];
   const [, setTabTitle] = tabTitleSignal;
 
   // Create the mobile swipe layout once on mobile devices.
@@ -328,25 +323,6 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
               direction="horizontal"
               gutter={8}
               captureResizeCtx={splitManager.setResizeContext}
-              gutterDrop={
-                ENABLE_SPLIT_GUTTER_DROP_INSERT
-                  ? {
-                      idPrefix: 'split-resize-gutter-drop',
-                      isEnabled: () =>
-                        dragDropState?.active.draggable?.data?.dragType ===
-                          'entity' && splitManager.canAppendSplit(),
-                      onDrop: (insertIndex, event) => {
-                        const data = (event as EntityDragEvent).draggable
-                          ?.data;
-                        if (!data || data.dragType !== 'entity') return;
-                        void openEntityInSplitFromUnifiedList(data, {
-                          openInNewSplit: true,
-                          insertIndex,
-                        });
-                      },
-                    }
-                  : undefined
-              }
             >
               <For each={ids()}>
                 {(id, index) => (
