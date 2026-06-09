@@ -1,9 +1,11 @@
 import type { CallStatus } from '@app/component/next-soup/filters/filter-store/types';
 import { EntityIcon } from '@core/component/EntityIcon';
+import { inboxIconProps } from '@core/component/inboxIcon';
 import { UserIcon } from '@core/component/UserIcon';
 import { useQuickAccess } from '@core/context/quickAccess';
 import { useUserId } from '@core/context/user';
 import { EntityIcon as EntityIconWithAvatar } from '@entity/extractors/entity-icon';
+import { useEmailLinksQuery } from '@queries/email/link';
 import { type Accessor, createMemo, type JSX } from 'solid-js';
 import type { SearchableOption } from '../searchable-multi-select';
 import type {
@@ -152,6 +154,29 @@ function usePersonPicker(): Accessor<SearchableOption[]> {
   });
 }
 
+/** Picker for the email "Inbox" chip — the user's linked inboxes. */
+function useInboxPicker(): Accessor<SearchableOption[]> {
+  const linksQuery = useEmailLinksQuery();
+
+  return createMemo(() =>
+    (linksQuery.data?.links ?? [])
+      .map((link) => ({
+        id: link.id,
+        label: link.email_address,
+        icon: () => (
+          <UserIcon
+            {...inboxIconProps(link.email_address)}
+            photoUrl={link.photo_url ?? undefined}
+            size="sm"
+            suppressClick
+            showTooltip={false}
+          />
+        ),
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label))
+  );
+}
+
 function singleFacet(args: {
   id: string;
   label: string;
@@ -218,6 +243,8 @@ export function useSearchFacets(
 ): Accessor<SearchFacetVM[]> {
   const channelOptions = useChannelPicker();
   const personOptions = usePersonPicker();
+  const inboxOptions = useInboxPicker();
+  const hasMultipleInboxes = createMemo(() => inboxOptions().length > 1);
 
   const type = singleFacet({
     id: 'type',
@@ -251,6 +278,16 @@ export function useSearchFacets(
     },
     onSelect: (id) =>
       controller.setEmailImportance(id === 'all' ? undefined : id === 'signal'),
+  });
+
+  const inbox = multiFacet({
+    id: 'email-inbox',
+    label: 'Inbox',
+    neutralLabel: 'All inboxes',
+    placeholder: 'Search inboxes...',
+    options: inboxOptions,
+    activeIds: controller.emailInbox,
+    onChange: controller.setEmailInbox,
   });
 
   const channelIn = multiFacet({
@@ -312,7 +349,9 @@ export function useSearchFacets(
   return createMemo(() => {
     switch (controller.type()) {
       case 'email':
-        return [type, importance];
+        return hasMultipleInboxes()
+          ? [type, importance, inbox]
+          : [type, importance];
       case 'channels':
         return [type, channelIn, channelFrom];
       case 'calls':
