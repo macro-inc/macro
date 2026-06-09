@@ -48,13 +48,15 @@ function filterDataToQueryFilters(data: QueryState): EntityFilters {
     include.threadId?.length ||
     include.emailSender?.length ||
     include.emailShared ||
-    include.emailImportance !== undefined
+    include.emailImportance !== undefined ||
+    include.emailLinkId?.length
   ) {
     filters.email_filters = {
       email_thread_ids: include.threadId,
       senders: include.emailSender,
       shared: include.emailShared,
       importance: include.emailImportance,
+      link_ids: include.emailLinkId,
     };
   }
 

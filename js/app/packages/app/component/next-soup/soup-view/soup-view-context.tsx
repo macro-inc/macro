@@ -10,6 +10,7 @@ import type { FilterContext } from '@app/component/next-soup/filters/configs/';
 import {
   compileToAst,
   NIL_UUID,
+  type QueryState,
 } from '@app/component/next-soup/filters/filter-store';
 import type { SetPredicatesInput } from '@app/component/next-soup/filters/filter-store/predicates-store';
 import {
@@ -272,18 +273,21 @@ export const SoupViewContextProvider: FlowComponent<
     }
   });
 
-  const soupBody = createMemo(() => {
+  const applyInboxFilter = (state: QueryState): QueryState => {
     const inboxes = inboxFilter();
-    if (inboxes === undefined) return queryFilters.compile();
-    const state = queryFilters.state;
-    return compileToAst({
+    if (inboxes === undefined) return state;
+    return {
       ...state,
       include: {
         ...state.include,
         emailLinkId: inboxes.length ? inboxes : [NIL_UUID],
       },
-    });
-  });
+    };
+  };
+
+  const soupBody = createMemo(() =>
+    compileToAst(applyInboxFilter(queryFilters.state))
+  );
 
   const [searchText, setSearchText] = useEntryState<string>('search.text', {
     default: props.initialSearchText ?? '',
@@ -291,7 +295,7 @@ export const SoupViewContextProvider: FlowComponent<
 
   const search = createSearchState({
     soup,
-    filters: () => queryFilters.state,
+    filters: () => applyInboxFilter(queryFilters.state),
     assignees: assigneeFilter,
     disableLocalSearch: props.disableLocalSearch,
     searchPaused,
