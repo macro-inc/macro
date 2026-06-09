@@ -891,6 +891,11 @@ pub enum PostGroupedSoupAstRequest {
     GroupPage(PostGroupedSoupAstGroupPageRequest),
 }
 
+enum GroupedSoupRequestMode {
+    Initial,
+    GroupPage,
+}
+
 /// Gets the items grouped by the specified field using AST filters.
 #[utoipa::path(
     post,
@@ -919,12 +924,16 @@ where
     EAS: EntityAccessService,
 {
     let (filters, params, mode) = match request {
-        PostGroupedSoupAstRequest::Initial(request) => {
-            (request.filters, request.params.into(), "initial")
-        }
-        PostGroupedSoupAstRequest::GroupPage(request) => {
-            (request.filters, request.params.into(), "group_page")
-        }
+        PostGroupedSoupAstRequest::Initial(request) => (
+            request.filters,
+            request.params.into(),
+            GroupedSoupRequestMode::Initial,
+        ),
+        PostGroupedSoupAstRequest::GroupPage(request) => (
+            request.filters,
+            request.params.into(),
+            GroupedSoupRequestMode::GroupPage,
+        ),
     };
 
     let filters = filters
@@ -936,11 +945,11 @@ where
         .await?;
 
     Ok(Json(match mode {
-        "initial" => GroupedSoupPage::Initial(GroupedSoupInitialPage {
+        GroupedSoupRequestMode::Initial => GroupedSoupPage::Initial(GroupedSoupInitialPage {
             items: response.items,
             groups: response.groups,
         }),
-        "group_page" => {
+        GroupedSoupRequestMode::GroupPage => {
             let Some(group) = response.groups.into_iter().next() else {
                 return Err(SoupHandlerErr::Expand);
             };
@@ -949,7 +958,6 @@ where
                 group,
             })
         }
-        _ => unreachable!(),
     }))
 }
 
