@@ -12,6 +12,7 @@ import type {
   EmailEntity,
   EntityData,
 } from '@entity';
+import GithubIcon from '@icon/mcp-github.svg';
 import WideBook from '@icon/wide-book.svg';
 import WideCalendar from '@icon/wide-calendar.svg';
 import PhoneCall from '@icon/wide-call.svg';
@@ -79,6 +80,7 @@ export type EntityWithValidIcon =
   | 'sharedProject'
   | 'emailRead'
   | 'emailInvite'
+  | 'githubPullRequest'
   | 'archive'
   | 'files'
   | 'html';
@@ -252,6 +254,12 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     background: 'bg-calendar/20',
     prettyName: 'Calendar Invite',
   },
+  githubPullRequest: {
+    icon: GithubIcon,
+    foreground: 'text-default',
+    background: 'bg-default/20',
+    prettyName: 'GitHub Pull Request',
+  },
   task: {
     icon: Check,
     foreground: 'text-task',
@@ -319,6 +327,7 @@ const WIDE_ICONS: Record<EntityWithValidIcon, Component> = {
   default: WideUnknown,
   emailRead: WideEmail,
   emailInvite: WideCalendar,
+  githubPullRequest: GithubIcon,
   task: WideTask,
   automation: Robot,
 };

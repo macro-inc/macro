@@ -1,5 +1,6 @@
-// Re-export paste so users don't need to depend on it directly
+// Re-export paste and serde so users don't need to depend on them directly
 pub use paste;
+pub use serde;
 use thiserror::Error;
 
 const APP_SECRETS_JSON_ENV: &str = "APP_SECRETS_JSON";
@@ -220,6 +221,16 @@ macro_rules! env_var {
                     }
                 }
             }
+
+            impl<'de> $crate::serde::Deserialize<'de> for $n {
+                fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+                where
+                    D: $crate::serde::Deserializer<'de>,
+                {
+                    let value = <String as $crate::serde::Deserialize>::deserialize(deserializer)?;
+                    Ok(Self::Runtime(std::sync::Arc::from(value)))
+                }
+            }
         }
     };
     (
@@ -387,6 +398,16 @@ macro_rules! maybe_env_var {
                         Self::Runtime(i) => &*i,
                         Self::Comptime(i) => i
                     }
+                }
+            }
+
+            impl<'de> $crate::serde::Deserialize<'de> for $n {
+                fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+                where
+                    D: $crate::serde::Deserializer<'de>,
+                {
+                    let value = <String as $crate::serde::Deserialize>::deserialize(deserializer)?;
+                    Ok(Self::Runtime(std::sync::Arc::from(value)))
                 }
             }
         }

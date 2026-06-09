@@ -4,6 +4,7 @@ import {
   type IUser,
   useAugmentUserWithDmActivity,
   useContacts,
+  useIsInboxOnlyLinkedChild,
 } from '@core/user';
 import type { DateValue } from '@core/util/date';
 import type { ChannelEntity } from '@entity';
@@ -211,6 +212,7 @@ export const [QuickAccessProvider, useQuickAccess] =
       const { channels, isLoading: channelsLoading } = useChannelsContext();
       const contacts = useContacts();
       const augmentUserWithDmActivity = useAugmentUserWithDmActivity();
+      const isInboxOnlyLinkedChild = useIsInboxOnlyLinkedChild();
       const instructionsIdQuery = useInstructionsMdIdQuery();
 
       // globally hidden ids
@@ -376,6 +378,7 @@ export const [QuickAccessProvider, useQuickAccess] =
         // Process contacts (users)
         const contactData = contacts();
         for (const contact of contactData) {
+          if (isInboxOnlyLinkedChild(contact.id)) continue;
           const augmentedUser = augmentUserWithDmActivity(contact);
           seenIds.add(augmentedUser.id);
 

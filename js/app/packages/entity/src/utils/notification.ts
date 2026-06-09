@@ -1,8 +1,9 @@
 import { ENABLE_DOCUMENT_MENTION_NOTIFICATIONS } from '@core/constant/featureFlags';
-import type { NotificationType } from '@core/types';
+import type { Entity, NotificationType } from '@core/types';
 import { notificationIsRead, type UnifiedNotification } from '@notifications';
 import type { NotificationStack } from '@notifications/notification-stacking';
 import { match } from 'ts-pattern';
+import type { EntityData } from '../types/entity';
 import type { Notification } from '../types/notification';
 
 type CallStartedNotificationMetadata = {
@@ -15,6 +16,22 @@ type CallStartedNotificationMetadata = {
 type KnownNotificationMetadata =
   | UnifiedNotification['notification_metadata']
   | CallStartedNotificationMetadata;
+
+export function toNotificationEntity(entity: EntityData): Entity {
+  if (entity.type === 'email') {
+    return { type: 'email_thread', id: entity.id };
+  }
+
+  if (entity.type === 'foreign') {
+    return { type: 'foreign_entity', id: entity.id };
+  }
+
+  if (entity.type === 'channel_message') {
+    return { type: 'channel', id: entity.channelId };
+  }
+
+  return entity;
+}
 
 /**
  * Filters out invalid notification types that shouldn't be displayed

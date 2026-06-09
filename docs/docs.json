@@ -62,6 +62,14 @@
             ]
           },
           {
+            "group": "Key Concepts",
+            "pages": [
+              "concepts/blocks",
+              "concepts/mentions",
+              "concepts/properties"
+            ]
+          },
+          {
             "group": "Sidebar",
             "pages": [
               "product/inbox",
@@ -88,10 +96,6 @@
         ]
       }
     ]
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
   },
   "navbar": {
     "primary": {

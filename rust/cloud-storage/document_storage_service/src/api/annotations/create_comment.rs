@@ -150,6 +150,20 @@ pub async fn create_comment_handler(
                 if let Some(Mentions { mention_id, .. }) = &req.mentions
                     && !recipients.mention_recipients.is_empty()
                 {
+                    // If the document is public, grant the mentioned users access so
+                    // the comment surfaces in their soup/inbox — a notification alone
+                    // isn't enough for the document to appear there.
+                    let mention_recipients: Vec<MacroUserIdStr<'_>> =
+                        recipients.mention_recipients.iter().cloned().collect();
+
+                    let _ = macro_db_client::share_on_mention::share_public_document_with_mentioned_users(
+                        &db,
+                        &document_id,
+                        &mention_recipients,
+                    )
+                    .await
+                    .inspect_err(|e| tracing::error!(error=?e, "unable to update entity access"));
+
                     let request = notif_ctx
                         .build_mention_notif(recipients.mention_recipients, mention_id)
                         .into_request()

@@ -16,6 +16,7 @@ export { CallStartedNotifier } from './CallStartedNotifier';
 export { ChannelCallAutoJoin } from './ChannelCallAutoJoin';
 export { ChannelCallButton } from './ChannelCallButton';
 export { ChannelCallTab } from './ChannelCallTab';
+export { getCallJoinTab, getCallLeaveTab } from './call-tabs';
 export type {
   InCallPanelControls,
   InCallPanelMember,
@@ -35,6 +36,11 @@ export {
   useInCallPanel,
 } from './InCallPanel';
 export { joinChannelCall } from './join-channel-call';
+export { NativeCallProvider } from './native-call-state';
 export { openChannelCallTab } from './open-channel-call-tab';
 export { useCall } from './use-call';
-export { useCallKitSetup } from './use-callkit';
+export {
+  CallKitSync,
+  isNativeIosCallKitEnabled,
+  useCallKitSetup,
+} from './use-callkit';

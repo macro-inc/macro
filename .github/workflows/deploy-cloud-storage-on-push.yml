@@ -158,10 +158,13 @@ jobs:
             ulimit -n 10240
             just "$LAMBDA/build"
             test -f "target/lambda/$LAMBDA/bootstrap.zip"
+            if [[ "$LAMBDA" == "call_recording_preview_handler" ]]; then
+              test -f "target/lambda/$LAMBDA/ffmpeg-layer.zip"
+            fi
             echo "::endgroup::"
           '
           mkdir -p "lambda-artifacts/target/lambda/$LAMBDA"
-          cp "rust/cloud-storage/target/lambda/$LAMBDA/bootstrap.zip" "lambda-artifacts/target/lambda/$LAMBDA/bootstrap.zip"
+          cp -a "rust/cloud-storage/target/lambda/$LAMBDA/." "lambda-artifacts/target/lambda/$LAMBDA/"
 
       - name: Upload Lambda artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

@@ -31,6 +31,7 @@ build_dev_service_images:
 # Build all lambda functions
 build_lambdas compiler="":
     ulimit -n 10240 && just docx_unzip_handler/build {{compiler}}
+    ulimit -n 10240 && just call_recording_preview_handler/build {{compiler}}
     ulimit -n 10240 && just delete_chat_handler/build {{compiler}}
     ulimit -n 10240 && just organization_retention_handler/build {{compiler}}
     ulimit -n 10240 && just organization_retention_trigger/build {{compiler}}
@@ -102,6 +103,7 @@ setup_test_envs:
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./task_dedup/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crm/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./bots/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./call_recording_preview_handler/.env
 
 setup_macrodb:
     just macro_db_client/create_db

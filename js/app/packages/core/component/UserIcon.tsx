@@ -8,6 +8,7 @@ import {
   tryMacroId,
   useDisplayName,
   useDisplayNameParts,
+  useIsInboxOnlyLinkedChild,
 } from '@core/user';
 import MacroLogo from '@icon/macro-logo.svg';
 import Trash from '@phosphor-icons/core/regular/trash.svg?component-solid';
@@ -160,9 +161,10 @@ export function UserIcon(props: UserIconProps) {
 
   const { replaceOrInsertSplit } = useSplitLayout();
   const getOrCreateDmMutation = useGetOrCreateDirectMessageMutation();
+  const isInboxOnlyLinkedChild = useIsInboxOnlyLinkedChild();
 
   const getOrCreateDm = () => {
-    if (!props.id) return;
+    if (!props.id || isInboxOnlyLinkedChild(props.id)) return;
     getOrCreateDmMutation.mutate(
       { recipient_id: props.id },
       {

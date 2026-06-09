@@ -1,6 +1,7 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
+import { useIsInboxOnlyLinkedChild } from '@core/user';
 import WideChat from '@icon/wide-chat.svg';
 import WideCopy from '@icon/wide-copy.svg';
 import WideTask from '@icon/wide-task.svg';
@@ -35,6 +36,9 @@ export function UserTooltip(props: UserTooltipProps) {
     props.onClose?.();
   }
   const currentUserId = useUserId();
+  const isInboxOnlyLinkedChild = useIsInboxOnlyLinkedChild();
+  const canTreatAsUser = () =>
+    !!props.id && !props.isDeleted && !isInboxOnlyLinkedChild(props.id);
   const { openWithSplit, popoverSplit } = useSplitLayout();
   const getOrCreateDmMutation = useGetOrCreateDirectMessageMutation({
     onError: () => toast.failure('Failed to open direct message'),
@@ -116,17 +120,13 @@ export function UserTooltip(props: UserTooltipProps) {
                 Copy email
               </ActionItem>
             </Show>
-            <Show
-              when={
-                props.id && !props.isDeleted && props.id !== currentUserId()
-              }
-            >
+            <Show when={canTreatAsUser() && props.id !== currentUserId()}>
               <ActionItem onClick={openDM}>
                 <WideChat class="size-3.5" />
                 DM
               </ActionItem>
             </Show>
-            <Show when={props.id && !props.isDeleted}>
+            <Show when={canTreatAsUser()}>
               <ActionItem onClick={openTaskComposer}>
                 <WideTask class="size-3.5" />
                 Assign task

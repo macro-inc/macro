@@ -21,7 +21,7 @@ export function Dialog(props: DialogProps) {
         <KobalteDialog.Overlay class="fixed inset-0 z-modal bg-modal-overlay pattern-edge-muted pattern-diagonal-4" />
         <div
           class={cn(
-            'fixed inset-0 z-modal flex justify-center px-2',
+            'fixed top-0 bottom-(--virtual-keyboard-height,0) inset-x-0 z-modal flex justify-center px-2',
             props.position === 'center'
               ? 'items-center'
               : 'items-start pt-[10vh]'

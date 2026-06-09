@@ -236,7 +236,6 @@ export function Channel(props: ChannelProps) {
 
   const dragState = createChannelDragState({
     channelId: props.channelId,
-    attachmentTracker,
   });
 
   const channelName = useChannelName(props.channelId);
@@ -559,6 +558,7 @@ export function Channel(props: ChannelProps) {
                     })}
                     onReady={(handle) => {
                       dragState.setAttachFilesToChannel(handle.attachFiles);
+                      dragState.setEntityMentionInputHandlers(handle);
                       setChannelInputHandle(handle);
                     }}
                     onChange={(snapshot) =>

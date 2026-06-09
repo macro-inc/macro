@@ -7,6 +7,7 @@ members = [
   "backfill_entity_access",
   "bot_id",
   "bots",
+  "call_recording_preview_handler",
   "channel_bots",
   "connection_gateway",
   "contacts_service",
@@ -54,6 +55,7 @@ members = [
   "upload_extractor_lambda_trigger",
   "user_link_cleanup_handler",
   "worker_trigger",
+  "macro_config"
 ]
 
 [workspace.dependencies]

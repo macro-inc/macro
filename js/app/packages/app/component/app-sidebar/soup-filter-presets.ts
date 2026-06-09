@@ -5,6 +5,7 @@ import {
   type Query,
 } from '@app/component/next-soup/filters/filter-store';
 import type { ListView } from '@app/constants/list-views';
+import { ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE } from '@core/constant/featureFlags';
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { startOfDay, subWeeks } from 'date-fns';
 
@@ -91,6 +92,8 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
             channelId: [NIL_UUID],
             chatId: [NIL_UUID],
             folderId: [NIL_UUID],
+            foreignEntityRecordId:
+              ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE ? [NIL_UUID] : [],
           },
           emailView: 'all',
         },

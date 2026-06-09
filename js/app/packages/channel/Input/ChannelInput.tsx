@@ -1,4 +1,14 @@
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
+import { DragInsertIndicator } from '@core/component/LexicalMarkdown/component/misc/DragInsertIndicator';
+import {
+  createDragInsertStore,
+  INSERT_DOCUMENT_MENTION_COMMAND,
+} from '@core/component/LexicalMarkdown/plugins';
+import {
+  clearDragInsertPreview,
+  insertDocumentMentionAtDragCoordinates,
+  updateDragInsertPreviewFromCoordinates,
+} from '@core/component/LexicalMarkdown/utils/dragInsertUtils';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';
 import type { IUser } from '@core/user/types';
@@ -8,8 +18,10 @@ import {
   handleFileFolderDrop,
   uploadFile,
 } from '@core/util/upload';
+import type { EntityData } from '@entity';
 import { isIOS } from '@solid-primitives/platform';
 import { Surface } from '@ui';
+import { $getRoot } from 'lexical';
 import {
   type Accessor,
   createSignal,
@@ -27,6 +39,7 @@ import { FormatButtons } from './FormatButtons';
 import { Input } from './Input';
 import { createMentionsTracker } from './mentions-tracker';
 import type {
+  EntityMentionInsertCoordinates,
   InputAttachmentTracker,
   InputCallbacks,
   InputData,
@@ -35,6 +48,7 @@ import type {
 } from './types';
 import { isReplyInput } from './types';
 import { uploadInputAttachments } from './upload-attachments';
+import { entityToDocumentMentionInfo } from './utils/entity-mention';
 import { applyInlineFormat, applyNodeFormat } from './utils/formatting';
 
 export type ChannelInputProps = InputCallbacks & {
@@ -200,6 +214,25 @@ export function ChannelInput(props: ChannelInputProps) {
     },
     onAttachFromDisk: (files) => inputState.commands.attachFiles(files),
   });
+  const markdownHandle = markdownEditor.buildHandle();
+  const lexicalEditor = () => markdownHandle.lexical;
+  const [entityDragInsertStore, setEntityDragInsertStore] =
+    createDragInsertStore();
+
+  const isInsideEditorDropBounds = (
+    coordinates: EntityMentionInsertCoordinates
+  ) => {
+    const rect =
+      scrollContainer()?.getBoundingClientRect() ??
+      lexicalEditor().getRootElement()?.getBoundingClientRect();
+    if (!rect) return false;
+    return (
+      coordinates.clientX >= rect.left &&
+      coordinates.clientX <= rect.right &&
+      coordinates.clientY >= rect.top &&
+      coordinates.clientY <= rect.bottom
+    );
+  };
   // On iOS, blur before clearing so dictation finalizes and discards its buffer
   // (otherwise it re-injects the sent text into the cleared editor). Re-focus
   // via rAF so the keyboard stays up: rAF fires after Lexical's update commits,
@@ -214,10 +247,56 @@ export function ChannelInput(props: ChannelInputProps) {
     }
   };
 
+  const previewEntityMentionInsertion = (
+    coordinates: EntityMentionInsertCoordinates
+  ) => {
+    updateDragInsertPreviewFromCoordinates({
+      editor: lexicalEditor(),
+      coordinates,
+      setState: setEntityDragInsertStore,
+      isValidDropTarget: isInsideEditorDropBounds,
+    });
+  };
+
+  const clearEntityMentionInsertionPreview = () => {
+    clearDragInsertPreview(setEntityDragInsertStore);
+  };
+
+  // Insert a mention for an entity dragged in from the soup. When the drop
+  // happens over editor content, mirror markdown documents by inserting before
+  // or after the nearest top-level node; otherwise keep the old append fallback.
+  const insertEntityMention = (
+    entity: EntityData,
+    coordinates?: EntityMentionInsertCoordinates
+  ) => {
+    clearEntityMentionInsertionPreview();
+    const mentionInfo = entityToDocumentMentionInfo(entity);
+    if (!mentionInfo) return;
+
+    if (
+      !insertDocumentMentionAtDragCoordinates({
+        editor: lexicalEditor(),
+        coordinates,
+        mentionInfo,
+        isValidDropTarget: isInsideEditorDropBounds,
+      })
+    ) {
+      const editor = lexicalEditor();
+      editor.update(() => {
+        $getRoot().selectEnd();
+      });
+      editor.dispatchCommand(INSERT_DOCUMENT_MENTION_COMMAND, mentionInfo);
+    }
+    markdownEditor.controls.focus();
+  };
+
   props.onReady?.({
     clear: () => markdownEditor.controls.clear(),
     focus: () => markdownEditor.controls.focus(),
     attachFiles: (files) => inputState.commands.attachFiles(files),
+    insertEntityMention,
+    previewEntityMentionInsertion,
+    clearEntityMentionInsertionPreview,
     restoreSnapshot: (snapshot) => {
       if (!isEditorConnected) {
         pendingRestoreSnapshot = snapshot;
@@ -294,6 +373,11 @@ export function ChannelInput(props: ChannelInputProps) {
                     isEditorConnected = true;
                     flushPendingRestore();
                   }}
+                />
+                <DragInsertIndicator
+                  editor={lexicalEditor()}
+                  state={entityDragInsertStore}
+                  active
                 />
               </Input.Editor>
             </Input.EditorShell>

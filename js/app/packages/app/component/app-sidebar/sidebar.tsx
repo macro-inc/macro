@@ -86,6 +86,7 @@ import { useLocation } from '@solidjs/router';
 import { Button, cn, Dropdown, Hotkey } from '@ui';
 import {
   type Component,
+  createEffect,
   createMemo,
   createSignal,
   For,
@@ -261,7 +262,7 @@ type AppSidebarProps = {
 };
 
 type SidebarHotkeyDeps = {
-  links: SidebarItem[];
+  links: () => SidebarItem[];
   hotkeyVisible: () => boolean;
   setHotkeyVisible: (visible: boolean) => void;
   resetHotkeysState: VoidFunction;
@@ -339,9 +340,8 @@ const registerSidebarHotkeys = ({
     registrationType: 'add',
   });
 
-  const registeredGoToKeys = new Set<ValidHotkey>([
-    ...links.map((link) => link.hotkey),
-  ]);
+  const registeredGoToKeys = () =>
+    new Set<ValidHotkey>(links().map((link) => link.hotkey));
 
   // When the go to command scope is active, we want to prevent
   // other default hotkeys from running. So doing "g" + some key
@@ -360,7 +360,7 @@ const registerSidebarHotkeys = ({
 
     if (
       context.activeScopeId !== GO_TO_COMMAND_SCOPE ||
-      registeredGoToKeys.has(context.pressedKeysString)
+      registeredGoToKeys().has(context.pressedKeysString)
     ) {
       return false;
     }
@@ -395,49 +395,59 @@ const registerSidebarHotkeys = ({
     },
   });
 
-  // Register navigation shortcuts in the global GO_TO command scope
-  for (const link of links) {
-    const openSidebarView = (e?: KeyboardEvent) => {
-      e?.preventDefault();
-      if (hotkeyVisible()) {
-        resetHotkeysState();
-        debounceResetHotkeysState.clear();
-      }
-
-      if (link.id === 'search' && !e?.shiftKey) {
-        const activeSplit = globalSplitManager()?.activeSplit();
-        const content = activeSplit?.content();
-        if (
-          activeSplit &&
-          content?.type === 'component' &&
-          content.id === 'search'
-        ) {
-          requestSearchFocus(activeSplit.id);
-          return true;
+  // Register navigation shortcuts in the global GO_TO command scope.
+  // This must be reactive because prod feature flags can add links after the
+  // initial render (e.g. Home), and Hotkey UI resolves tokens from the registry.
+  createEffect(() => {
+    const disposers = links().map((link) => {
+      const openSidebarView = (e?: KeyboardEvent) => {
+        e?.preventDefault();
+        if (hotkeyVisible()) {
+          resetHotkeysState();
+          debounceResetHotkeysState.clear();
         }
-      }
 
-      const handle = navigateToSidebarView({
-        viewId: link.id,
-        shiftKey: !!e?.shiftKey,
-        activeSplit: globalSplitManager()?.activeSplit(),
-        openWithSplit,
+        if (link.id === 'search' && !e?.shiftKey) {
+          const activeSplit = globalSplitManager()?.activeSplit();
+          const content = activeSplit?.content();
+          if (
+            activeSplit &&
+            content?.type === 'component' &&
+            content.id === 'search'
+          ) {
+            requestSearchFocus(activeSplit.id);
+            return true;
+          }
+        }
+
+        const handle = navigateToSidebarView({
+          viewId: link.id,
+          shiftKey: !!e?.shiftKey,
+          activeSplit: globalSplitManager()?.activeSplit(),
+          openWithSplit,
+        });
+        if (link.id === 'search' && handle) {
+          requestSearchFocus(handle.id);
+        }
+        return true;
+      };
+
+      return registerHotkey({
+        hotkey: link.hotkey,
+        scopeId: link.standaloneHotkey ? 'global' : GO_TO_COMMAND_SCOPE,
+        hotkeyToken: link.hotkeyToken,
+        description: `Go to ${link.label}`,
+        keyDownHandler: openSidebarView,
+        icon: link.icon,
       });
-      if (link.id === 'search' && handle) {
-        requestSearchFocus(handle.id);
-      }
-      return true;
-    };
-
-    registerHotkey({
-      hotkey: link.hotkey,
-      scopeId: link.standaloneHotkey ? 'global' : GO_TO_COMMAND_SCOPE,
-      hotkeyToken: link.hotkeyToken,
-      description: `Go to ${link.label}`,
-      keyDownHandler: openSidebarView,
-      icon: link.icon,
     });
-  }
+
+    onCleanup(() => {
+      for (const disposer of disposers) {
+        disposer.dispose();
+      }
+    });
+  });
 };
 
 /** Session-only signal so a hint shows after dismissal until the user acknowledges or the timer expires. */
@@ -902,7 +912,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
   });
 
   registerSidebarHotkeys({
-    links: visibleLinks(),
+    links: visibleLinks,
     hotkeyVisible,
     setHotkeyVisible,
     resetHotkeysState,

@@ -235,6 +235,18 @@ const DefaultGroupHeader = (
   );
 };
 
+/**
+ * Thin indeterminate progress bar shown at the top of the mobile soup list
+ * while a new tab's query loads. Switching tabs keeps the previous tab's rows
+ * on screen (placeholder data), so without this the user gets no feedback that
+ * the new soup query is still in flight.
+ */
+const MobileTabLoadingBar = () => (
+  <div class="pointer-events-none absolute inset-x-0 top-0 z-10 h-0.5 overflow-hidden bg-accent/10">
+    <div class="h-full w-2/5 rounded-full bg-accent animate-indeterminate-bar" />
+  </div>
+);
+
 const useSoupNotificationInvalidators = () => {
   const notificationSource = useGlobalNotificationSource();
   const entityQueryClient = useQueryClient();
@@ -281,6 +293,16 @@ const useSoupNotificationInvalidators = () => {
         invalidateSoupEntity(notification.entity_id);
         invalidateEntityNotifications(notification.entity_id);
       }
+    }
+  );
+
+  createEffectOnEntityTypeNotification(
+    notificationSource,
+    'foreign_entity',
+    (notification) => {
+      refetchSoupEntity(notification.entity_id, 'foreignEntity');
+      invalidateSoupEntity(notification.entity_id);
+      invalidateEntityNotifications(notification.entity_id);
     }
   );
 };
@@ -919,8 +941,11 @@ export const SoupViewList = (props: SoupViewListProps) => {
   onMount(() => {
     batch(() => {
       const savedSort = sortPref();
+
       if (savedSort.length > 0) {
         soup.sort.setAll(savedSort as SystemSortOption[]);
+      } else {
+        soup.sort.setAll(['updated_at']);
       }
       // soup state is shared at the SplitPanel level, so a prior view in the
       // same split (e.g. tasks) may have left grouping state behind. Always
@@ -1041,11 +1066,14 @@ export const SoupViewList = (props: SoupViewListProps) => {
           >
             <div
               class={cn(
-                '@container/u-list size-full unified-list-root flex flex-col',
+                '@container/u-list size-full unified-list-root flex flex-col relative',
                 soup.previewEntity() !== undefined &&
                   'border-r border-edge-muted'
               )}
             >
+              <Show when={isMobile() && source.isPlaceholderData()}>
+                <MobileTabLoadingBar />
+              </Show>
               <StaticMarkdownContext>
                 <Switch>
                   <Match when={source.isLoading() && !rows().length}>

@@ -21,6 +21,7 @@ use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use macro_service_urls::AppServiceUrl;
+use macro_service_urls::DocumentStorageServiceUrl;
 use native_app_service::{
     domain::{models::PlatformData, service::NativeAppServiceImpl},
     outbound::DefaultBundleFetcher,
@@ -155,7 +156,7 @@ async fn main() -> anyhow::Result<()> {
 
     let document_storage_service_client = DocumentStorageServiceClient::new(
         config.service_internal_auth_key.clone(),
-        config.document_storage_service_url.clone(),
+        DocumentStorageServiceUrl::new()?.to_string(),
     );
     tracing::trace!("initialized document storage service client");
 

@@ -9,10 +9,8 @@ import {
   type AudioCaptureOptions,
   ConnectionState,
   type LocalTrack,
-  type LocalTrackPublication,
   type RemoteParticipant,
   Room,
-  RoomEvent,
   Track,
 } from 'livekit-client';
 import {
@@ -24,6 +22,16 @@ import {
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { CallAudioSink } from './CallAudioSink';
+import {
+  type CallSessionConnectMetadata,
+  type CallSessionDisconnectOptions,
+  createCallSessionController,
+} from './CallSessionController';
+import { createLivekitJsCallController } from './LivekitJsCallController';
+import {
+  type NativeCallConnectionState,
+  useMaybeNativeCallState,
+} from './native-call-state';
 
 export type CallParticipantInfo = {
   identity: string;
@@ -187,6 +195,15 @@ async function applyNativeAudioProcessingToMicTrack(
   }
 }
 
+// Swift exposes a transient `disconnecting` state that livekit-client lacks.
+const NATIVE_TO_LIVEKIT_STATE = {
+  disconnected: ConnectionState.Disconnected,
+  connecting: ConnectionState.Connecting,
+  connected: ConnectionState.Connected,
+  reconnecting: ConnectionState.Reconnecting,
+  disconnecting: ConnectionState.Disconnected,
+} satisfies Record<NativeCallConnectionState, ConnectionState>;
+
 type CallStoreState = {
   connectionState: ConnectionState;
   activeChannelId: string | null;
@@ -318,10 +335,15 @@ export type CallState = {
   activeAudioOutputDeviceId: () => string | null;
   /** Currently active video input device ID */
   activeVideoInputDeviceId: () => string | null;
-  /** Connect to a call using a token response */
-  connect: (tokenResponse: CallTokenResponse) => Promise<void>;
-  /** Disconnect from the current call */
-  disconnect: () => Promise<void>;
+  /** Whether joining this channel needs a fresh call token */
+  shouldRequestSessionToken: (channelId: string) => boolean;
+  /** Connect the active call session using the right platform controller */
+  connectSession: (
+    tokenResponse: CallTokenResponse,
+    metadata?: CallSessionConnectMetadata
+  ) => Promise<void>;
+  /** Disconnect the active call session using the right platform controller */
+  disconnectSession: (options?: CallSessionDisconnectOptions) => Promise<void>;
   /** Toggle local audio */
   toggleAudio: () => Promise<void>;
   /** Toggle local video */
@@ -392,6 +414,7 @@ export function useCallContextOptional(): CallState | undefined {
  * and all readonly call state. Returns reactive state + mutation actions.
  */
 function createCallState() {
+  const nativeCall = useMaybeNativeCallState();
   const [room, setRoom] = createSignal<Room | null>(null);
   const [store, setStore] = createStore<CallStoreState>({
     ...initialState,
@@ -418,6 +441,8 @@ function createCallState() {
   function isCurrentMediaSetup(targetRoom: Room, setupVersion: number) {
     return room() === targetRoom && mediaSetupVersion === setupVersion;
   }
+
+  const currentNativeCallSnapshot = () => nativeCall?.snapshot() ?? null;
 
   function currentMicrophoneCaptureOptions(
     deviceId?: string | null
@@ -666,11 +691,6 @@ function createCallState() {
     setStore('trackVersion', (v) => v + 1);
   }
 
-  function syncParticipantMap(r: Room) {
-    setStore('remoteParticipants', new Map(r.remoteParticipants));
-    bumpTrackVersion();
-  }
-
   function resetState() {
     // Preserve joinError across room teardown — LiveKit can emit Disconnected
     // when the network drops or reconnects; wiping joinError would hide the
@@ -683,49 +703,7 @@ function createCallState() {
     });
   }
 
-  function attachRoomListeners(r: Room) {
-    r.on(RoomEvent.ConnectionStateChanged, (state: ConnectionState) => {
-      console.debug('[call] connection state changed', {
-        state,
-        room: store.activeChannelId,
-        call: store.activeCallId,
-      });
-      setStore('connectionState', state);
-    });
-
-    r.on(RoomEvent.ParticipantConnected, () => syncParticipantMap(r));
-    r.on(RoomEvent.ParticipantDisconnected, () => syncParticipantMap(r));
-
-    r.on(RoomEvent.TrackSubscribed, bumpTrackVersion);
-    r.on(RoomEvent.TrackUnsubscribed, bumpTrackVersion);
-    r.on(RoomEvent.TrackPublished, bumpTrackVersion);
-    r.on(RoomEvent.TrackUnpublished, bumpTrackVersion);
-    r.on(RoomEvent.TrackMuted, bumpTrackVersion);
-    r.on(RoomEvent.TrackUnmuted, bumpTrackVersion);
-    r.on(RoomEvent.LocalTrackPublished, bumpTrackVersion);
-
-    r.on(RoomEvent.ActiveSpeakersChanged, () => {
-      setStore('speakerVersion', (v) => v + 1);
-    });
-
-    r.on(RoomEvent.LocalTrackUnpublished, (pub: LocalTrackPublication) => {
-      if (pub.source === Track.Source.ScreenShare) {
-        setStore('isScreenSharing', false);
-      }
-      bumpTrackVersion();
-    });
-    r.on(RoomEvent.Disconnected, (reason?: unknown) => {
-      console.warn('[call] room disconnected', {
-        reason,
-        room: store.activeChannelId,
-        call: store.activeCallId,
-      });
-      resetState();
-    });
-  }
-
-  function destroyRoom() {
-    cancelPendingMediaSetup();
+  function destroyRoomProcessors() {
     const krisp = krispFilter();
     if (krisp) {
       krisp.destroy().catch((e) => {
@@ -741,12 +719,6 @@ function createCallState() {
       });
       setBlurProcessor(null);
     }
-    const r = room();
-    if (r) {
-      r.removeAllListeners();
-      setRoom(null);
-    }
-    resetState();
   }
 
   // --- device enumeration ---
@@ -870,6 +842,13 @@ function createCallState() {
   }
 
   async function switchVideoInput(deviceId: string) {
+    if (currentNativeCallSnapshot()) {
+      console.info(
+        '[callkit] ignoring JS video input switch; native drawer controls camera'
+      );
+      return;
+    }
+
     const r = room();
     if (!r) return;
     try {
@@ -896,79 +875,43 @@ function createCallState() {
   };
   navigator.mediaDevices?.addEventListener('devicechange', handleDeviceChange);
 
+  const currentConnectionState = () => {
+    const native = currentNativeCallSnapshot();
+    return native
+      ? NATIVE_TO_LIVEKIT_STATE[native.connectionState]
+      : store.connectionState;
+  };
+
+  const currentActiveChannelId = () =>
+    currentNativeCallSnapshot()?.channelId ??
+    store.activeChannelId ??
+    store.optimisticJoinChannelId;
+
+  const currentActiveCallId = () =>
+    currentNativeCallSnapshot()?.callId ?? store.activeCallId;
+
+  const currentIsAudioMuted = () =>
+    currentNativeCallSnapshot()?.isAudioMuted ?? store.isAudioMuted;
+
+  const currentIsVideoMuted = () =>
+    currentNativeCallSnapshot()?.isVideoMuted ?? store.isVideoMuted;
+
+  const currentIsInCall = () =>
+    isActiveCallConnectionState(currentConnectionState()) ||
+    (currentNativeCallSnapshot() === null &&
+      store.optimisticJoinChannelId !== null);
+
+  const currentIsConnecting = () =>
+    (currentNativeCallSnapshot() === null &&
+      store.optimisticJoinChannelId !== null) ||
+    currentConnectionState() === ConnectionState.Connecting ||
+    currentConnectionState() === ConnectionState.Reconnecting ||
+    currentConnectionState() === ConnectionState.SignalReconnecting;
+
+  const currentJoinError = () =>
+    currentNativeCallSnapshot() ? null : store.joinError;
+
   // --- mutations ---
-
-  async function connect(tokenResponse: CallTokenResponse) {
-    const existingRoom = room();
-
-    if (
-      existingRoom &&
-      store.activeChannelId === tokenResponse.channelId &&
-      isActiveCallConnectionState(store.connectionState)
-    ) {
-      // A duplicate join can arrive while LiveKit is already connected or
-      // recovering its signaling connection. Do not call room.connect() again;
-      // that replaces the SDK's reconnection attempt and can wedge the peer
-      // connection until the user manually leaves/rejoins.
-      console.debug('[call] ignoring duplicate connect for active room', {
-        channelId: tokenResponse.channelId,
-        state: store.connectionState,
-      });
-      setStore('activeCallId', tokenResponse.callId);
-      setStore('optimisticJoinChannelId', null);
-      setStore('joinError', null);
-      return;
-    }
-
-    // If switching channels, or if a previous disconnected room instance is
-    // still hanging around after a failed reconnect, tear it down and build a
-    // fresh Room. This gives retry/auto-rejoin the same clean slate as a manual
-    // leave + join.
-    if (existingRoom) {
-      await existingRoom.disconnect();
-      destroyRoom();
-    }
-
-    const targetRoom = new Room({
-      audioCaptureDefaults: currentMicrophoneCaptureOptions(),
-    });
-    attachRoomListeners(targetRoom);
-    setRoom(targetRoom);
-
-    setStore('activeChannelId', tokenResponse.channelId);
-    setStore('activeCallId', tokenResponse.callId);
-    setStore('isSharedWithTeam', true);
-
-    try {
-      await targetRoom.connect(tokenResponse.serverUrl, tokenResponse.token);
-      // Real connection established — optimistic flag no longer needed
-      setStore('optimisticJoinChannelId', null);
-      setStore('joinError', null);
-    } catch (e) {
-      console.error('failed to connect to LiveKit room', e);
-      destroyRoom();
-      throw e;
-    }
-
-    // Sync participants that were already in the room when we connected.
-    setStore('remoteParticipants', new Map(targetRoom.remoteParticipants));
-    bumpTrackVersion();
-
-    // Default to microphone on, video off as soon as the room is connected.
-    setStore('isAudioMuted', false);
-    setStore('isVideoMuted', true);
-
-    // Treat the LiveKit connection itself as the join success boundary. Local
-    // media/device setup can be interrupted by OS-level flows (e.g. macOS
-    // screenshot) or slow permission/device APIs; if we await it here, the
-    // join mutation timeout can fire after the user is already in the room and
-    // run failed-join cleanup, which calls DELETE /call/:channel and kicks the
-    // user out. Run the non-critical setup in the background instead.
-    const setupVersion = nextMediaSetupVersion();
-    void finishLocalMediaSetup(targetRoom, setupVersion).catch((e) => {
-      console.error('failed to finish local call media setup', e);
-    });
-  }
 
   async function finishLocalMediaSetup(targetRoom: Room, setupVersion: number) {
     if (!isCurrentMediaSetup(targetRoom, setupVersion)) return;
@@ -1004,17 +947,53 @@ function createCallState() {
     trackActiveDevices(targetRoom);
   }
 
-  async function disconnect() {
-    const r = room();
-    if (r) {
-      cancelPendingMediaSetup();
-      try {
-        await r.disconnect();
-      } finally {
-        destroyRoom();
-      }
-    }
-  }
+  const livekitJs = createLivekitJsCallController({
+    room,
+    setRoom,
+    state: () => ({
+      activeChannelId: store.activeChannelId,
+      activeCallId: store.activeCallId,
+      connectionState: store.connectionState,
+    }),
+    currentMicrophoneCaptureOptions,
+    isActiveConnectionState: isActiveCallConnectionState,
+    cancelPendingMediaSetup,
+    nextMediaSetupVersion,
+    finishLocalMediaSetup,
+    destroyProcessors: destroyRoomProcessors,
+    resetState,
+    setConnectionState: (state) => setStore('connectionState', state),
+    setActiveCall: (channelId, callId) => {
+      setStore('activeChannelId', channelId);
+      setStore('activeCallId', callId);
+    },
+    setDuplicateConnectCallId: (callId) => {
+      setStore('activeCallId', callId);
+      setStore('optimisticJoinChannelId', null);
+      setStore('joinError', null);
+    },
+    setInitialMediaState: () => {
+      setStore('isAudioMuted', false);
+      setStore('isVideoMuted', true);
+    },
+    setRemoteParticipants: (participants) => {
+      setStore('remoteParticipants', participants);
+    },
+    setSharedWithTeam: (value) => setStore('isSharedWithTeam', value),
+    clearOptimisticJoin: () => {
+      setStore('optimisticJoinChannelId', null);
+      setStore('joinError', null);
+    },
+    bumpTrackVersion,
+    bumpSpeakerVersion: () => setStore('speakerVersion', (v) => v + 1),
+    setScreenSharing: (value) => setStore('isScreenSharing', value),
+  });
+
+  const callSession = createCallSessionController({
+    nativeCall,
+    jsConnect: livekitJs.connect,
+    jsDisconnect: livekitJs.disconnect,
+  });
 
   async function toggleAudio() {
     const r = room();
@@ -1040,6 +1019,13 @@ function createCallState() {
   }
 
   async function toggleVideo() {
+    if (currentNativeCallSnapshot()) {
+      console.info(
+        '[callkit] ignoring JS video toggle; native drawer controls camera'
+      );
+      return;
+    }
+
     const r = room();
     if (!r) return;
     const newMuted = !store.isVideoMuted;
@@ -1165,11 +1151,7 @@ function createCallState() {
   // --- cleanup ---
 
   const handleBeforeUnload = () => {
-    const r = room();
-    if (r) {
-      cancelPendingMediaSetup();
-      r.disconnect();
-    }
+    livekitJs.disconnectBeforeUnload();
   };
   window.addEventListener('beforeunload', handleBeforeUnload);
 
@@ -1179,12 +1161,7 @@ function createCallState() {
       'devicechange',
       handleDeviceChange
     );
-    cancelPendingMediaSetup();
-    const r = room();
-    if (r) {
-      r.disconnect();
-      r.removeAllListeners();
-    }
+    livekitJs.dispose();
   });
 
   // --- public API ---
@@ -1192,13 +1169,10 @@ function createCallState() {
   const state: CallState = {
     // readonly state
     room,
-    connectionState: () => store.connectionState,
-    isInCall: () =>
-      isActiveCallConnectionState(store.connectionState) ||
-      store.optimisticJoinChannelId !== null,
-    activeChannelId: () =>
-      store.activeChannelId ?? store.optimisticJoinChannelId,
-    activeCallId: () => store.activeCallId,
+    connectionState: currentConnectionState,
+    isInCall: currentIsInCall,
+    activeChannelId: currentActiveChannelId,
+    activeCallId: currentActiveCallId,
     remoteParticipants: () => store.remoteParticipants,
     trackVersion: () => store.trackVersion,
     isLocalSpeaking: () => {
@@ -1211,8 +1185,8 @@ function createCallState() {
       store.speakerVersion;
       return participant.isSpeaking;
     },
-    isAudioMuted: () => store.isAudioMuted,
-    isVideoMuted: () => store.isVideoMuted,
+    isAudioMuted: currentIsAudioMuted,
+    isVideoMuted: currentIsVideoMuted,
     isScreenSharing: () => store.isScreenSharing,
     audioInputDevices: () => store.audioInputDevices,
     audioOutputDevices: () => store.audioOutputDevices,
@@ -1220,15 +1194,12 @@ function createCallState() {
     activeAudioInputDeviceId: () => store.activeAudioInputDeviceId,
     activeAudioOutputDeviceId: () => store.activeAudioOutputDeviceId,
     activeVideoInputDeviceId: () => store.activeVideoInputDeviceId,
-    isConnecting: () =>
-      store.optimisticJoinChannelId !== null ||
-      store.connectionState === ConnectionState.Connecting ||
-      store.connectionState === ConnectionState.Reconnecting ||
-      store.connectionState === ConnectionState.SignalReconnecting,
+    isConnecting: currentIsConnecting,
 
     // mutations
-    connect,
-    disconnect,
+    shouldRequestSessionToken: callSession.shouldRequestToken,
+    connectSession: callSession.connectWithToken,
+    disconnectSession: callSession.disconnect,
     toggleAudio,
     toggleVideo,
     toggleScreenShare,
@@ -1241,16 +1212,15 @@ function createCallState() {
     toggleNoiseSuppression,
     beginOptimisticJoin,
     rollbackOptimisticJoin,
-    joinError: () => store.joinError,
+    joinError: currentJoinError,
     setJoinError,
     callPageChannelId: () => store.callPageChannelId,
     syncCallPageTab,
     isCallPage: () => {
       store.callPageChannelId;
-      store.activeChannelId;
-      store.optimisticJoinChannelId;
+      currentActiveChannelId();
       const page = store.callPageChannelId;
-      const active = store.activeChannelId ?? store.optimisticJoinChannelId;
+      const active = currentActiveChannelId();
       return page !== null && active !== null && page === active;
     },
     backgroundEffect: () => store.backgroundEffect,

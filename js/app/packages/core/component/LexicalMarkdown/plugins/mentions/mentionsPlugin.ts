@@ -254,6 +254,9 @@ const getDocumentMentionItemType = (
     .with('channel_message', () => 'channel')
     .with('automation', () => 'automation')
     .with('call', () => 'call')
+    .with('foreign', () => {
+      throw new Error('foreign entities cannot be document mentions');
+    })
     .exhaustive();
 };
 

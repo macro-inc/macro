@@ -2,7 +2,7 @@ import { getChannelParams } from '@block-channel/utils/link';
 import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { buildSimpleEntityUrl } from '@core/util/url';
-import type { EntityData } from '@entity';
+import { type EntityData, isGithubPrEntity } from '@entity';
 import type { SoupState } from '../create-soup-state';
 
 /**
@@ -33,6 +33,9 @@ const getEntityUrlParams = (
 };
 
 const getEntityUrl = (entity: EntityData): string => {
+  // TODO(dev-rb/github): Return the Macro /pr/:id URL.
+  if (isGithubPrEntity(entity)) return entity.metadata.url;
+
   return buildSimpleEntityUrl(
     {
       type: getEntityUrlType(entity),

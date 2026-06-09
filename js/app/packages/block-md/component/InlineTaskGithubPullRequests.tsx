@@ -4,7 +4,7 @@ import { useDocumentGithubPullRequestsQuery } from '@queries/storage/github-pull
 import type { GithubPullRequest } from '@service-storage/generated/schemas';
 import { Layer } from '@ui';
 import { cn } from '@ui/utils/classname';
-import { createMemo, For, type JSX, Show } from 'solid-js';
+import { createMemo, For, type JSX, Show, Suspense } from 'solid-js';
 
 const PILL_CLASS = cn(
   'inline-flex items-center gap-1.5 min-w-0 ring ring-edge-muted',
@@ -41,18 +41,42 @@ function pullRequestTitle(pr: GithubPullRequest): string {
   return changes ? `${label} · ${changes}` : label;
 }
 
-export function InlineTaskGithubPullRequests(): JSX.Element {
-  const blockId = useBlockId();
-  const isTask = useBlockAliasedName() === 'task';
-  const query = useDocumentGithubPullRequestsQuery(blockId, isTask);
+function InlineTaskGithubPullRequestsSkeleton(): JSX.Element {
+  return (
+    <Layer depth={2}>
+      <div
+        aria-hidden="true"
+        class={cn(PILL_CLASS, 'pointer-events-none select-none')}
+      >
+        <GithubIcon class="size-3 shrink-0 text-ink-extra-muted" />
+        <span class="skeleton-shimmer h-3 w-24 rounded-full bg-ink/10" />
+      </div>
+    </Layer>
+  );
+}
+
+function InlineTaskGithubPullRequestsContent(props: {
+  blockId: string;
+}): JSX.Element {
+  const query = useDocumentGithubPullRequestsQuery(props.blockId);
 
   const pullRequests = createMemo((): GithubPullRequest[] => {
-    if (!isTask || query.isLoading || query.isError) return [];
+    if (query.isError) return [];
     return query.data?.pullRequests ?? [];
   });
 
+  const isWaitingForPullRequests = () =>
+    !query.isError && query.isFetching && pullRequests().length === 0;
+
   return (
-    <Show when={pullRequests().length > 0}>
+    <Show
+      when={pullRequests().length > 0}
+      fallback={
+        <Show when={isWaitingForPullRequests()}>
+          <InlineTaskGithubPullRequestsSkeleton />
+        </Show>
+      }
+    >
       <For each={pullRequests()}>
         {(pr) => {
           const name = pullRequestName(pr);
@@ -98,6 +122,19 @@ export function InlineTaskGithubPullRequests(): JSX.Element {
           );
         }}
       </For>
+    </Show>
+  );
+}
+
+export function InlineTaskGithubPullRequests(): JSX.Element {
+  const blockId = useBlockId();
+  const isTask = useBlockAliasedName() === 'task';
+
+  return (
+    <Show when={isTask}>
+      <Suspense fallback={<InlineTaskGithubPullRequestsSkeleton />}>
+        <InlineTaskGithubPullRequestsContent blockId={blockId} />
+      </Suspense>
     </Show>
   );
 }

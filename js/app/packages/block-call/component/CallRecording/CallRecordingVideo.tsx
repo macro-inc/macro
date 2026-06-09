@@ -1,7 +1,8 @@
-import { createSignal, onCleanup } from 'solid-js';
+import { createEffect, createSignal, onCleanup } from 'solid-js';
 
 export function CallRecordingVideo(props: {
   url: string;
+  posterUrl?: string;
   onTimeUpdate?: (
     seconds: number,
     source: 'playback' | 'seeking' | 'seeked'
@@ -9,7 +10,51 @@ export function CallRecordingVideo(props: {
   setVideoRef?: (el: HTMLVideoElement) => void;
 }) {
   const [isLoaded, setIsLoaded] = createSignal(false);
+  const [posterBlobUrl, setPosterBlobUrl] = createSignal<string>();
   let rafId: number | null = null;
+
+  createEffect<string | undefined>((previousUrl) => {
+    const url = props.url;
+    if (url !== previousUrl) {
+      setIsLoaded(false);
+    }
+    return url;
+  });
+
+  createEffect(() => {
+    const posterUrl = props.posterUrl;
+    setPosterBlobUrl(undefined);
+    if (!posterUrl) return;
+
+    const abortController = new AbortController();
+    let objectUrl: string | undefined;
+
+    onCleanup(() => {
+      abortController.abort();
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    });
+
+    void (async () => {
+      try {
+        const response = await fetch(posterUrl, {
+          mode: 'cors',
+          signal: abortController.signal,
+        });
+        if (!response.ok) {
+          throw new Error(`Failed to fetch poster: ${response.status}`);
+        }
+
+        const blob = await response.blob();
+        if (abortController.signal.aborted) return;
+
+        objectUrl = URL.createObjectURL(blob);
+        setPosterBlobUrl(objectUrl);
+      } catch (error) {
+        if (abortController.signal.aborted) return;
+        console.error('Failed to load call recording preview poster', error);
+      }
+    })();
+  });
 
   const stopTicking = () => {
     if (rafId !== null) {
@@ -37,9 +82,13 @@ export function CallRecordingVideo(props: {
       <video
         ref={props.setVideoRef}
         class="max-w-full max-h-full rounded transition-opacity duration-200"
-        classList={{ 'opacity-0': !isLoaded(), 'opacity-100': isLoaded() }}
+        classList={{
+          'opacity-0': !isLoaded() && !posterBlobUrl(),
+          'opacity-100': isLoaded() || !!posterBlobUrl(),
+        }}
         controls
         crossorigin="anonymous"
+        poster={posterBlobUrl()}
         src={props.url}
         onLoadedData={() => setIsLoaded(true)}
         onCanPlay={() => setIsLoaded(true)}

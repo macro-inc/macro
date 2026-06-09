@@ -22,6 +22,7 @@ type LambdaArgs<T extends Record<string, any>> = {
   timeout?: number;
   memorySize?: number;
   reservedConcurrentExecutions?: number;
+  layers?: pulumi.Input<pulumi.Input<string>[]>;
   tags: { [key: string]: string };
 };
 
@@ -43,6 +44,7 @@ export class Lambda<
       timeout,
       memorySize,
       reservedConcurrentExecutions,
+      layers,
       tags,
     }: LambdaArgs<T>,
     opts?: pulumi.ComponentResourceOptions
@@ -136,6 +138,7 @@ export class Lambda<
         handler: 'bootstrap',
         runtime: 'provided.al2023',
         architectures: ['x86_64'],
+        layers,
         timeout: timeout ? timeout : 30,
         role: role.arn,
         memorySize,

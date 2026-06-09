@@ -6,6 +6,9 @@ use std::sync::Arc;
 use macro_env::Environment;
 use thiserror::Error;
 
+#[cfg(test)]
+mod test;
+
 /// a trait to abstract away the expected interface for fetching a secret from a remote server
 pub trait SecretManager: Send + Sync {
     /// The error that can be returned from the server
@@ -76,6 +79,18 @@ where
     }
 }
 
+impl<'de, T> serde::Deserialize<'de> for LocalOrRemoteSecret<T>
+where
+    T: serde::Deserialize<'de>,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        T::deserialize(deserializer).map(LocalOrRemoteSecret::Local)
+    }
+}
+
 impl<T> LocalOrRemoteSecret<T>
 where
     T: AsRef<str> + Send,
@@ -90,6 +105,29 @@ where
     {
         secret_manager.get_maybe_secret_value(Environment::new_or_prod(), val)
     }
+
+    /// Resolve a locally deserialized secret through a secret manager for the provided environment.
+    ///
+    /// This is useful for values produced by Serde-based config loading: deserialization can only
+    /// construct the local env-var wrapper, while remote secret lookup requires an async secret
+    /// manager.
+    pub async fn resolve_from_secret_manager<S>(
+        self,
+        environment: Environment,
+        secret_manager: &S,
+    ) -> Result<Self, S::Err>
+    where
+        S: SecretManager,
+    {
+        match self {
+            LocalOrRemoteSecret::Local(var) => {
+                secret_manager
+                    .get_maybe_secret_value(environment, var)
+                    .await
+            }
+            LocalOrRemoteSecret::Remote(secret) => Ok(LocalOrRemoteSecret::Remote(secret)),
+        }
+    }
 }
 
 /// Optional variant of [`LocalOrRemoteSecret`]. `None` represents an env var
@@ -98,6 +136,18 @@ where
 /// that, when absent, lets callers fall back to a different code path).
 #[derive(Clone)]
 pub struct OptionalLocalOrRemoteSecret<T>(pub Option<LocalOrRemoteSecret<T>>);
+
+impl<'de, T> serde::Deserialize<'de> for OptionalLocalOrRemoteSecret<T>
+where
+    LocalOrRemoteSecret<T>: serde::Deserialize<'de>,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        Option::<LocalOrRemoteSecret<T>>::deserialize(deserializer).map(OptionalLocalOrRemoteSecret)
+    }
+}
 
 impl<T> OptionalLocalOrRemoteSecret<T>
 where
@@ -116,6 +166,26 @@ where
         match val {
             Some(v) => Ok(Self(Some(
                 LocalOrRemoteSecret::new_from_secret_manager(v, secret_manager).await?,
+            ))),
+            None => Ok(Self(None)),
+        }
+    }
+
+    /// Resolve a locally deserialized optional secret through a secret manager for the provided
+    /// environment.
+    pub async fn resolve_from_secret_manager<S>(
+        self,
+        environment: Environment,
+        secret_manager: &S,
+    ) -> Result<Self, S::Err>
+    where
+        S: SecretManager,
+    {
+        match self.0 {
+            Some(secret) => Ok(Self(Some(
+                secret
+                    .resolve_from_secret_manager(environment, secret_manager)
+                    .await?,
             ))),
             None => Ok(Self(None)),
         }

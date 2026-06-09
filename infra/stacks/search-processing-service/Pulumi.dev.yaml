@@ -4,6 +4,3 @@ config:
   search-processing-service:macro_db_readonly_secret_key: macro-db-readonly-dev
   search-processing-service:opensearch_password_key: macro-opensearch-password-dev
   search-processing-service:internal_auth_key: document-storage-service-auth-key-dev
-  search-processing-service:documents_index_uses_join: "true"
-  search-processing-service:chats_index_uses_join: "true"
-  search-processing-service:call_records_index_uses_join: "true"

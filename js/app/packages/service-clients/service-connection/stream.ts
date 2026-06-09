@@ -34,26 +34,27 @@ export interface Stream<K extends keyof StreamType> {
   isDone: Accessor<boolean>;
 }
 
-type StreamController<K extends keyof StreamType> = {
+export type StreamController<K extends keyof StreamType> = {
   stream: Stream<K>;
   setData: Setter<StreamType[K][]>;
   setDone: () => void;
-  id: StreamId;
+  id: Accessor<StreamId | undefined>;
 };
 
-function newController<K extends keyof StreamType>(
-  id: StreamId
+export function createStreamController<K extends keyof StreamType>(
+  id: StreamId | Accessor<StreamId | undefined>
 ): StreamController<K> {
   const [data, setData] = createSignal<StreamType[K][]>([]);
   const [isDone, setIsDone] = createSignal(false);
+  const idSignal = typeof id === 'function' ? id : () => id;
 
   return {
     stream: {
-      id: () => id,
+      id: idSignal,
       data,
       isDone,
     },
-    id,
+    id: idSignal,
     setData,
     setDone: () => setIsDone(true),
   };
@@ -128,7 +129,7 @@ createConnectionWebsocketEffect((message) => {
   // is 1st item
   else {
     // new stream
-    const newStream = newController(item.id);
+    const newStream = createStreamController(item.id);
     // process item
     if (streamIsDone(item.id.entity_type, item.payload)) {
       newStream.setDone();
@@ -156,7 +157,7 @@ export function subscribe<K extends keyof StreamType>(
     }
     return streams[entity_id][stream_id].stream.stream as Stream<K>;
   } else {
-    const controller = newController({
+    const controller = createStreamController({
       entity_id,
       entity_type,
       stream_id,
@@ -184,3 +185,4 @@ export function getEntityStreams<K extends keyof StreamType>(
 }
 
 export type ChatMessageStream = Stream<'chat'>;
+export type ChatStreamController = StreamController<'chat'>;

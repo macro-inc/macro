@@ -69,5 +69,8 @@ pub async fn enrich_search_response(
                 .map(UnifiedSearchResponseItem::Call)
                 .collect())
         }
+        // CRM companies are enriched separately (they need the team
+        // receipt) via `crm_company::enrich_crm_companies`.
+        SearchEntityType::CrmCompanies => Ok(vec![]),
     }
 }

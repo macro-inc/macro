@@ -18,11 +18,13 @@ mod var {
 #[serde(rename_all = "lowercase")]
 pub enum Environment {
     /// Production environment
+    #[serde(alias = "prod", alias = "prd")]
     Production,
     /// Dev and or staging environment
-    /// TODO: update and add new value when we have real staging
+    #[serde(alias = "dev", alias = "development")]
     Develop,
     /// The server is running on localhost
+    #[serde(alias = "lcl", alias = "localhost")]
     Local,
 }
 

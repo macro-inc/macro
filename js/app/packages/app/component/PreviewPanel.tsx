@@ -78,6 +78,10 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
     } else if (props.selectedEntity.type === 'channel_message') {
       blockType = 'channel';
       blockId = props.selectedEntity.channelId;
+    } else if (props.selectedEntity.type === 'foreign') {
+      // TODO(dev-rb/github): Preview GitHub PRs with /pr.
+      blockType = 'unknown';
+      blockId = props.selectedEntity.id;
     } else {
       blockType = props.selectedEntity.type;
       blockId = props.selectedEntity.id;

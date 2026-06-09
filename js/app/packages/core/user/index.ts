@@ -13,6 +13,7 @@ export {
   useDisplayNameParts,
 } from './displayName';
 export { useAugmentUserWithDmActivity } from './dmActivity';
+export { useIsInboxOnlyLinkedChild } from './inboxOnly';
 export {
   emailToMacroId,
   type MacroId,

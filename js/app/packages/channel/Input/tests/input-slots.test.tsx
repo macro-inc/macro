@@ -93,6 +93,24 @@ vi.mock(
   '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder',
   () => ({
     buildConfig: () => {
+      const controls = {
+        clear: vi.fn(),
+        focus: vi.fn(),
+      };
+      const lexical = {
+        focus: vi.fn(),
+        dispatchCommand: vi.fn(),
+        getElementByKey: vi.fn(),
+        getRootElement: vi.fn(),
+        update: vi.fn((callback: () => void) => callback()),
+      };
+      const handle = {
+        controls,
+        lexical,
+        plugins: { use: vi.fn() },
+        selection: undefined,
+        _internal: {},
+      };
       const builder: any = {
         namespace: () => builder,
         withMentions: () => builder,
@@ -107,14 +125,9 @@ vi.mock(
         use: () => builder,
         onChange: () => builder,
         onEnter: () => builder,
-        controls: {
-          clear: vi.fn(),
-          focus: vi.fn(),
-        },
-        lexical: {
-          focus: vi.fn(),
-          dispatchCommand: vi.fn(),
-        },
+        buildHandle: () => handle,
+        controls,
+        lexical,
         selection: undefined,
       };
       return builder;
@@ -123,7 +136,12 @@ vi.mock(
 );
 
 vi.mock('@core/component/LexicalMarkdown/plugins', () => ({
+  createDragInsertStore: () => [
+    { nodeKey: null, position: null, visible: false },
+    vi.fn(),
+  ],
   DefaultShortcuts: {},
+  INSERT_DOCUMENT_MENTION_COMMAND: 'INSERT_DOCUMENT_MENTION_COMMAND',
   NODE_TRANSFORM: 'NODE_TRANSFORM',
   keyboardShortcutsPlugin: () => () => () => {},
 }));

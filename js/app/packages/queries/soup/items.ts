@@ -60,6 +60,7 @@ interface SoupItemsQueryOptions {
     groupKey?: string;
     itemFilter?: (item: SoupApiItem) => boolean;
   };
+  showSupportedForeignEntities?: boolean;
 }
 
 /**
@@ -124,7 +125,11 @@ export const useSoupItemsQuery = (
     },
     select: (data) => {
       return data.pages.flatMap((page) => {
-        return mapSoupPageToEntityList(page, { instructionsIdQuery });
+        return mapSoupPageToEntityList(page, {
+          instructionsIdQuery,
+          showSupportedForeignEntities:
+            options?.().showSupportedForeignEntities,
+        });
       });
     },
     enabled: options?.().enabled,
@@ -205,11 +210,17 @@ export const useSoupAstItemsQuery = (
             for (const id of g.itemIds) {
               const item = itemsById[id];
 
-              if (
-                item &&
-                isDisplayableSoupItem(item) &&
-                !isInstructionsMdDoc(item, instructionsIdQuery)
-              ) {
+              let displayable = false;
+
+              if (item.tag === 'foreignEntity') {
+                displayable =
+                  options?.().showSupportedForeignEntities === true &&
+                  item.data.foreignEntitySource === 'github_pull_request';
+              } else {
+                displayable =
+                  item && !isInstructionsMdDoc(item, instructionsIdQuery);
+              }
+              if (displayable && isDisplayableSoupItem(item)) {
                 const mapped = mapApiSoupItemToEntity(item);
                 entities.push(mapped);
               }

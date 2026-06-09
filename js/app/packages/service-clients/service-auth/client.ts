@@ -260,8 +260,8 @@ export const authServiceClient = {
   },
   async putProfilePicture(args: PutProfilePictureParams) {
     return (
-      await fetchWithAuth<ProfilePictures>(
-        `${authHost}/user/profile_picture?url=${args.url}`,
+      await fetchWithAuth<EmptyResponse>(
+        `${authHost}/user/profile_picture?url=${encodeURIComponent(args.url)}`,
         {
           method: 'PUT',
         }

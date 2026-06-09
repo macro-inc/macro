@@ -18,6 +18,8 @@ import type {
   DocumentEntity,
   EmailEntity,
   EntityData,
+  ForeignEntity,
+  GithubPullRequestEntity,
   ProjectEntity,
   SearchData,
   WithSearch,
@@ -33,6 +35,7 @@ import type {
 } from '@service-search/generated/models';
 import type {
   SoupApiItem,
+  GithubPullRequest,
   SoupDocument,
   SoupPage,
 } from '@service-storage/generated/schemas';
@@ -50,8 +53,17 @@ type InnerSearchResult =
 
 type DisplayableSoupItem = Exclude<
   SoupPage['items'][number],
-  { tag: 'foreignEntity' } | { tag: 'crmCompany' }
+  { tag: 'crmCompany' }
 >;
+
+type SoupEntity =
+  | DocumentEntity
+  | ChatEntity
+  | ProjectEntity
+  | EmailEntity
+  | ChannelEntity
+  | CallEntity
+  | ForeignEntity;
 
 type TypedInnerSearchResult =
   | { results: InnerSearchResult[]; type?: undefined }
@@ -274,6 +286,11 @@ export const useSearchResponseItemMapper = () => {
     searchQuery: string
   ): (WithSearch<EntityData> | undefined)[] => {
     switch (result.type) {
+      // CRM companies are opt-in via `include_crm`, which soup search does
+      // not set, so this is never hit at runtime. Handle it as a no-op to
+      // keep the union exhaustive; soup doesn't render CRM companies yet.
+      case 'company':
+        return [];
       case 'document': {
         if (!result.metadata || result.metadata.deleted_at) return [];
         const searchFileType =
@@ -451,8 +468,7 @@ const resolveDocumentEntityName = (
 
 export const isDisplayableSoupItem = (
   item: SoupPage['items'][number]
-): item is DisplayableSoupItem =>
-  item.tag !== 'foreignEntity' && item.tag !== 'crmCompany';
+): item is DisplayableSoupItem => item.tag !== 'crmCompany';
 
 /**
  * The email soup query encodes "no sort timestamp" — e.g. a never-viewed thread
@@ -599,6 +615,45 @@ export const mapApiSoupItemToEntity = (
     return out;
   }
 
+  if (item.tag === 'foreignEntity') {
+    const metadata = item.data.metadata as unknown as GithubPullRequest;
+
+    let status: GithubPullRequestEntity['metadata']['status'] = 'open';
+
+    if (metadata.status === 'merged') {
+      status = 'merged';
+    } else if (metadata.status === 'closed') {
+      status = 'closed';
+    }
+
+    const out: GithubPullRequestEntity = {
+      type: 'foreign',
+      id: item.data.id,
+      name: metadata.name ?? metadata.displayName,
+      ownerId: item.data.storedForId,
+      createdAt: item.data.createdAt,
+      updatedAt: item.data.updatedAt,
+      foreignSource: 'github_pull_request',
+      foreignId: item.data.foreignEntityId,
+      storedForId: item.data.storedForId,
+      storedForAuthEntity: item.data.storedForAuthEntity,
+      metadata: {
+        number: metadata.number,
+        name: metadata.name ?? metadata.displayName,
+        owner: metadata.owner,
+        repo: metadata.repo,
+        url: metadata.url,
+        status: status,
+        additions: metadata.additions ?? 0,
+        deletions: metadata.deletions ?? 0,
+        comments: metadata.comments ?? [],
+        checks: metadata.checks?.filter(Boolean) ?? [],
+      },
+    };
+
+    return out;
+  }
+
   return {
     ...item.data,
     createdAt: item.data.createdAt,
@@ -634,21 +689,23 @@ export const mapSoupPageToEntityList: (
   data: SoupPage,
   options: {
     instructionsIdQuery: UseQueryResult<string | null | undefined, Error>;
+    showSupportedForeignEntities?: boolean;
   }
-) => (
-  | DocumentEntity
-  | ChatEntity
-  | ProjectEntity
-  | EmailEntity
-  | ChannelEntity
-  | CallEntity
-)[] = (data, options) => {
+) => SoupEntity[] = (data, options) => {
   return data.items
-    .filter(
-      (item): item is DisplayableSoupItem =>
+    .filter((item): item is DisplayableSoupItem => {
+      if (item.tag === 'foreignEntity') {
+        return (
+          options.showSupportedForeignEntities === true &&
+          item.data.foreignEntitySource === 'github_pull_request'
+        );
+      }
+
+      return (
         isDisplayableSoupItem(item) &&
         (item.tag !== 'document' ||
           !isInstructionsMdDoc(item, options.instructionsIdQuery))
-    )
+      );
+    })
     .map(mapApiSoupItemToEntity);
 };

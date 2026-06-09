@@ -1,0 +1,21 @@
+---
+title: "Mentions"
+description: "How blocks reference each other — the @mention primitive that works across every surface in Macro."
+---
+
+Mentions are the connective tissue of the workspace. Typing `@` in any rich-text surface — a [document](/product/docs), an email body, a channel message, a chat or [automation](/product/agents#automations) prompt, or a task description — opens an autocomplete that lets you reference something else in Macro. Whatever you pick renders as a live inline pill that carries its target's current metadata (a task mention, for instance, shows the task's status and priority), and the reference is recorded as a backlink in the target's [References panel](/concepts/blocks).
+
+## What you can mention
+
+- **People** — by name or email.
+- **Documents and blocks** — any doc, task, canvas, code file, pdf, etc.
+- **Contacts and companies** — CRM records, rendered differently for people vs. organizations.
+- **Channels** — a deep link to the channel, or to a specific message or thread.
+- **Dates** — date pills.
+- **Groups** — by group alias.
+
+## What a mention does depends on where you make it
+
+In a document or chat, a mention is a navigable link and a source of context. In an **email body** it has side effects: mentioning a person adds them to CC, and mentioning a document inserts a link *and* updates that document's permissions so recipients can open it. In a **channel** there are two special mentions layered on top of the normal ones — `@here` pings every participant, and `@Macro` invokes the agent inline.
+
+The agent leans on mentions heavily: anything you @mention into a chat is pulled in as context, and autocomplete there surfaces your currently open tabs first.

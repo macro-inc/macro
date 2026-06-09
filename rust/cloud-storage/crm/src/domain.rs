@@ -22,3 +22,10 @@ pub mod service;
 /// Capability-token receipt wrappers gating per-entity CRM service calls
 #[cfg(feature = "ports")]
 pub mod auth;
+
+/// Port + domain types for CRM company search (name/domain)
+#[cfg(feature = "search")]
+pub mod search_repo;
+/// The CRM search service trait and implementation
+#[cfg(feature = "search")]
+pub mod search_service;

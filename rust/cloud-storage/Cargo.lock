@@ -666,6 +666,7 @@ dependencies = [
  "macro_auth",
  "macro_aws_config",
  "macro_cache_client",
+ "macro_config",
  "macro_cors",
  "macro_db_client",
  "macro_entrypoint",
@@ -1931,6 +1932,24 @@ dependencies = [
  "tokio",
  "tracing",
  "utoipa",
+ "uuid",
+]
+
+[[package]]
+name = "call_recording_preview_handler"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "aws-sdk-s3",
+ "aws_lambda_events",
+ "lambda_runtime",
+ "macro_aws_config",
+ "macro_db_migrator",
+ "macro_entrypoint",
+ "sqlx",
+ "tokio",
+ "tracing",
+ "urlencoding",
  "uuid",
 ]
 
@@ -6458,6 +6477,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "macro_config"
+version = "0.1.0"
+dependencies = [
+ "macro_config_derive",
+ "macro_env_var",
+ "remote_env_var",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tracing",
+]
+
+[[package]]
+name = "macro_config_derive"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
+]
+
+[[package]]
 name = "macro_cors"
 version = "0.1.0"
 dependencies = [
@@ -6542,6 +6583,7 @@ name = "macro_env_var"
 version = "0.1.0"
 dependencies = [
  "paste",
+ "serde",
  "serde_json",
  "thiserror 2.0.18",
  "tracing",
@@ -9501,6 +9543,9 @@ name = "remote_env_var"
 version = "0.1.0"
 dependencies = [
  "macro_env",
+ "macro_env_var",
+ "serde",
+ "serde_json",
  "thiserror 2.0.18",
  "tracing",
 ]
@@ -10215,8 +10260,10 @@ dependencies = [
  "chrono",
  "comms",
  "comms_db_client",
+ "crm",
  "document_sub_type",
  "email_db_client",
+ "entity_access",
  "futures",
  "http-body-util",
  "indexmap 2.14.0",
@@ -10249,6 +10296,7 @@ dependencies = [
  "tower-http",
  "tracing",
  "utoipa",
+ "uuid",
 ]
 
 [[package]]

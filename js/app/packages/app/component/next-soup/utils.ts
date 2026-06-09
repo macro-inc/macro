@@ -15,12 +15,15 @@ import type { BlockOrchestrator } from '@core/orchestrator';
 import type { DateValue } from '@core/util/date';
 import { throwOnErr } from '@core/util/result';
 import { waitForFrames } from '@core/util/sleep';
+import { openExternalUrl } from '@core/util/url';
 import {
   type EntityData,
   getSnippetHit,
+  isGithubPrEntity,
   isSearchEntity,
   isSnippetEntity,
   type SearchLocation,
+  toNotificationEntity,
   type WithSearch,
 } from '@entity';
 import { queryKeys } from '@macro-entity';
@@ -331,6 +334,13 @@ export const openEntityInSplitFromUnifiedList = async (
     return;
   }
 
+  // TODO(dev-rb/github): Route GitHub PRs to /pr.
+  if (isGithubPrEntity(entity)) {
+    openExternalUrl(entity.metadata.url);
+    return;
+  }
+  if (entity.type === 'foreign') return;
+
   const blockOrchestrator = splitManager.getOrchestrator();
 
   const content = getEntitySplitContent(entity);
@@ -372,6 +382,7 @@ export const openEntityInSplitFromUnifiedList = async (
   }
 };
 
+// TODO(dev-rb/github): Map GitHub PRs to { type: 'pr', id }.
 function getEntitySplitContent(entity: EntityData) {
   return match(entity)
     .with({ type: 'document' }, (entity) => {
@@ -382,6 +393,9 @@ function getEntitySplitContent(entity: EntityData) {
     })
     .with({ type: 'channel_message' }, (entity) => {
       return { type: 'channel' as const, id: entity.channelId };
+    })
+    .with({ type: 'foreign' }, (entity) => {
+      return { type: 'unknown' as const, id: entity.id };
     })
     .otherwise((entity) => {
       return { type: entity.type, id: entity.id };
@@ -637,11 +651,13 @@ export function resolveMarkEntitiesDoneVariables(args: {
 }): { emailIds: string[]; notificationIds: string[] } {
   const { entities, notificationSource } = args;
   const emailIds = entities.filter((e) => e.type === 'email').map((e) => e.id);
-  const notificationIds = entities.flatMap((entity) =>
-    (
-      notificationSource.notificationsByEntity()[compositeEntity(entity)] ?? []
-    ).map((n) => n.id)
-  );
+  const notificationIds = entities.flatMap((entity) => {
+    return (
+      notificationSource.notificationsByEntity()[
+        compositeEntity(toNotificationEntity(entity))
+      ] ?? []
+    ).map((n) => n.id);
+  });
   return { emailIds, notificationIds };
 }
 

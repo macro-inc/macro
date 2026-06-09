@@ -93,6 +93,7 @@ export function useEntityDropAttachment(
       .with('chat', () => undefined)
       .with('call', () => undefined)
       .with('automation', () => undefined)
+      .with('foreign', () => undefined)
       .exhaustive();
 
     if (attachment) {
