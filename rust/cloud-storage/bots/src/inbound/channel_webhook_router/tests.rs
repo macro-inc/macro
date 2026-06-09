@@ -566,6 +566,38 @@ async fn channel_webhook_router_valid_json_posts_as_bot() {
 }
 
 #[tokio::test]
+async fn channel_webhook_router_raw_body_starting_with_brace_posts_as_bot() {
+    let channel_id = Uuid::new_v4();
+    let bot_id = BotId::from_uuid(Uuid::new_v4());
+    let token = "mbot_test_valid";
+    let content = "{raw alert payload";
+    let service = TestBotService::for_webhook(channel_id, token, bot_id);
+    let poster = TestChannelPoster::new();
+    let request = Request::builder()
+        .method("POST")
+        .uri(format!("/channels/{channel_id}/webhook"))
+        .header("content-type", "text/plain")
+        .header(CHANNEL_BOT_TOKEN_HEADER, token)
+        .body(Body::from(content))
+        .unwrap();
+
+    let response = webhook_router(service.clone(), poster.clone())
+        .oneshot(request)
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(service.auth_calls.load(Ordering::SeqCst), 1);
+
+    let calls = poster.calls.lock().expect("posted message mutex poisoned");
+    assert_eq!(calls.len(), 1);
+    let call = &calls[0];
+    assert_eq!(call.actor, Sender::Bot(bot_id));
+    assert_eq!(call.channel_id, channel_id);
+    assert_eq!(call.req.content, content);
+}
+
+#[tokio::test]
 async fn channel_webhook_router_invalid_token_returns_unauthorized_without_posting() {
     let channel_id = Uuid::new_v4();
     let bot_id = BotId::from_uuid(Uuid::new_v4());

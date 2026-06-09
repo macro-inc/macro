@@ -286,9 +286,9 @@ fn parse_webhook_content(
         ));
     }
 
-    if is_json_body(headers, &body) {
-        let request = serde_json::from_slice::<ChannelWebhookRequest>(&body)
-            .map_err(|_| ChannelBotWebhookHandlerErr::BadRequest("content is required"))?;
+    if is_json_body(headers)
+        && let Ok(request) = serde_json::from_slice::<ChannelWebhookRequest>(&body)
+    {
         return require_non_empty_content(request.content);
     }
 
@@ -298,8 +298,8 @@ fn parse_webhook_content(
     require_non_empty_content(content)
 }
 
-fn is_json_body(headers: &HeaderMap, body: &[u8]) -> bool {
-    has_json_content_type(headers) || first_non_whitespace_byte(body) == Some(b'{')
+fn is_json_body(headers: &HeaderMap) -> bool {
+    has_json_content_type(headers)
 }
 
 fn has_json_content_type(headers: &HeaderMap) -> bool {
@@ -307,12 +307,6 @@ fn has_json_content_type(headers: &HeaderMap) -> bool {
         .get(CONTENT_TYPE)
         .and_then(|value| value.to_str().ok())
         .is_some_and(|value| value.to_ascii_lowercase().contains("json"))
-}
-
-fn first_non_whitespace_byte(body: &[u8]) -> Option<u8> {
-    body.iter()
-        .copied()
-        .find(|byte| !byte.is_ascii_whitespace())
 }
 
 fn require_non_empty_content(content: String) -> Result<String, ChannelBotWebhookHandlerErr> {
