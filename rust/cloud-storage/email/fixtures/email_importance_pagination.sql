@@ -1,9 +1,8 @@
--- Fixture for importance-filter pagination under-fill tests.
+-- Fixture for importance-filter pagination tests.
 --
--- Two inbox links. On each link the most-recent threads are NOT important
--- and the important threads are older, so a query that applies the candidate
--- LIMIT before the importance filter under-fills the page (it fills the limit
--- with recent non-important threads, then drops them all).
+-- Two inbox links. On each link the most-recent threads are not important and
+-- the important threads are older, so an importance match cannot be satisfied
+-- by taking the most-recent threads alone.
 --
 -- Link 1 (a1111111…): 3 recent non-important + 4 older important inbox threads.
 -- Link 2 (b2222222…): 2 important inbox threads.
