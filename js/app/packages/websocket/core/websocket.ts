@@ -847,13 +847,9 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
     if (this.connectPending || this._closedByUser) {
       return;
     }
-    const readyState = (
-      this._underlyingWebsocket as WebSocket | undefined
-    )?.readyState;
-    if (
-      readyState === WebSocket.OPEN ||
-      readyState === WebSocket.CONNECTING
-    ) {
+    const readyState = (this._underlyingWebsocket as WebSocket | undefined)
+      ?.readyState;
+    if (readyState === WebSocket.OPEN || readyState === WebSocket.CONNECTING) {
       return;
     }
     this.reconnect();

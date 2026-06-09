@@ -43,62 +43,58 @@ describe('missed heartbeats should reset on received pong', () => {
     server = undefined;
   });
 
-  test(
-    'non-consecutive misses, each recovered, do not close the connection',
-    async () => {
-      const missed: number[] = [];
-      let closed = false;
+  test('non-consecutive misses, each recovered, do not close the connection', async () => {
+    const missed: number[] = [];
+    let closed = false;
 
-      client = new WebsocketBuilder(url)
-        .withBackoff(new ConstantBackoff(60_000)) // don't reconnect during test
-        .withHeartbeat({
-          interval: 150,
-          timeout: 80,
-          pingMessage: 'ping',
-          pongMessage: 'pong',
-          maxMissedHeartbeats: 2,
-        })
-        .build();
+    client = new WebsocketBuilder(url)
+      .withBackoff(new ConstantBackoff(60_000)) // don't reconnect during test
+      .withHeartbeat({
+        interval: 150,
+        timeout: 80,
+        pingMessage: 'ping',
+        pongMessage: 'pong',
+        maxMissedHeartbeats: 2,
+      })
+      .build();
 
-      client.addEventListener(WebsocketEvent.HeartbeatMissed, (_w, e) => {
-        missed.push((e as CustomEvent).detail.missedHeartbeats);
-      });
-      client.addEventListener(WebsocketEvent.Close, () => {
-        closed = true;
-      });
+    client.addEventListener(WebsocketEvent.HeartbeatMissed, (_w, e) => {
+      missed.push((e as CustomEvent).detail.missedHeartbeats);
+    });
+    client.addEventListener(WebsocketEvent.Close, () => {
+      closed = true;
+    });
 
-      await new Promise<void>((resolve) =>
-        client!.addEventListener(WebsocketEvent.Open, () => resolve(), {
-          once: true,
-        })
-      );
+    await new Promise<void>((resolve) =>
+      client!.addEventListener(WebsocketEvent.Open, () => resolve(), {
+        once: true,
+      })
+    );
 
-      const missOne = async () => {
-        server!.setRespondToPings(false);
-        const target = missed.length + 1;
-        while (missed.length < target) {
-          await new Promise((r) => setTimeout(r, 20));
-        }
-        server!.setRespondToPings(true);
-        // several healthy ping/pong cycles — these pongs should reset the
-        // missed-heartbeat counter
-        await new Promise((r) => setTimeout(r, 500));
-      };
+    const missOne = async () => {
+      server!.setRespondToPings(false);
+      const target = missed.length + 1;
+      while (missed.length < target) {
+        await new Promise((r) => setTimeout(r, 20));
+      }
+      server!.setRespondToPings(true);
+      // several healthy ping/pong cycles — these pongs should reset the
+      // missed-heartbeat counter
+      await new Promise((r) => setTimeout(r, 500));
+    };
 
-      await missOne(); // isolated miss #1, recovered
-      expect(closed).toBe(false);
-      await missOne(); // isolated miss #2, recovered
-      expect(closed).toBe(false);
-      await missOne(); // isolated miss #3, recovered
-      await new Promise((r) => setTimeout(r, 300));
+    await missOne(); // isolated miss #1, recovered
+    expect(closed).toBe(false);
+    await missOne(); // isolated miss #2, recovered
+    expect(closed).toBe(false);
+    await missOne(); // isolated miss #3, recovered
+    await new Promise((r) => setTimeout(r, 300));
 
-      // Each miss was followed by healthy pongs, so the counter reset and the
-      // connection stays open. Without the reset the counter accumulated
-      // 1, 2, 3 and the third isolated miss closed the connection.
-      expect(closed).toBe(false);
-      // Every recorded miss is an isolated first miss, never a streak.
-      expect(missed.every((m) => m === 1)).toBe(true);
-    },
-    20_000
-  );
+    // Each miss was followed by healthy pongs, so the counter reset and the
+    // connection stays open. Without the reset the counter accumulated
+    // 1, 2, 3 and the third isolated miss closed the connection.
+    expect(closed).toBe(false);
+    // Every recorded miss is an isolated first miss, never a streak.
+    expect(missed.every((m) => m === 1)).toBe(true);
+  }, 20_000);
 });
