@@ -1371,6 +1371,14 @@ impl<
         Ok(())
     }
 
+    async fn get_snapshot(&self, document_id: &str) -> anyhow::Result<Option<Vec<u8>>> {
+        self.upload_url_service.get_snapshot(document_id).await
+    }
+
+    async fn upload_snapshot(&self, document_id: &str, bytes: Vec<u8>) -> anyhow::Result<()> {
+        self.upload_url_service.upload_snapshot(document_id, bytes).await
+    }
+
     /// Assigns the task properties to a document
     #[tracing::instrument(skip(self, request), err)]
     async fn handle_task_properties(

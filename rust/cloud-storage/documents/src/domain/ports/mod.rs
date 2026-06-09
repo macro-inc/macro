@@ -234,7 +234,7 @@ pub trait DocumentRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
-/// Port for generating S3 presigned upload URLs.
+/// Port for generating S3 presigned upload URLs and direct S3 storage operations.
 pub trait PresignedUploadUrlPort: Send + Sync + 'static {
     /// Generate a presigned URL for uploading to the document storage bucket.
     fn put_document_storage_presigned_url(
@@ -257,6 +257,19 @@ pub trait PresignedUploadUrlPort: Send + Sync + 'static {
         &self,
         source_key: &str,
         destination_key: &str,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
+
+    /// Returns the raw bytes of the cached Loro snapshot, or `None` if no snapshot exists.
+    fn get_snapshot(
+        &self,
+        document_id: &str,
+    ) -> impl Future<Output = anyhow::Result<Option<Vec<u8>>>> + Send;
+
+    /// Stores raw snapshot bytes in object storage for the given document.
+    fn upload_snapshot(
+        &self,
+        document_id: &str,
+        bytes: Vec<u8>,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 }
 
@@ -291,6 +304,7 @@ pub trait TaskPropertiesPort: Send + Sync + 'static {
         to_task_id: &str,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 }
+
 
 /// Service interface for document operations.
 ///
@@ -418,4 +432,17 @@ pub trait DocumentService: Send + Sync + 'static {
         document_id: &str,
         request: &CreateTaskRequest,
     ) -> impl Future<Output = Result<(), DocumentError>> + Send;
+
+    /// Returns the raw bytes of the cached Loro snapshot, or `None` if no snapshot exists.
+    fn get_snapshot(
+        &self,
+        document_id: &str,
+    ) -> impl Future<Output = anyhow::Result<Option<Vec<u8>>>> + Send;
+
+    /// Stores raw snapshot bytes in object storage for the given document.
+    fn upload_snapshot(
+        &self,
+        document_id: &str,
+        bytes: Vec<u8>,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
 }
