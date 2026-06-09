@@ -223,6 +223,10 @@ export function registerLoroHistory(
   let isGroupActive = false;
   let prevChangeTime = Date.now();
   let prevChangeType = OTHER;
+  // Don't record history until the editor has been initialized and CLEAR_HISTORY_COMMAND
+  // has been dispatched. Without this guard, setEditorState during initialization triggers
+  // groupStart() on a Loro doc that may have no committed ops, causing a WASM panic.
+  let isReadyForHistory = false;
 
   const getMergeAction = (
     prevState: null | EditorState,
@@ -309,6 +313,10 @@ export function registerLoroHistory(
     dirtyLeaves: Set<string>;
     tags: Set<string>;
   }): void => {
+    if (!isReadyForHistory) {
+      return;
+    }
+
     const mergeAction = getMergeAction(
       prevEditorState,
       editorState,
@@ -393,6 +401,7 @@ export function registerLoroHistory(
           isGroupActive = false;
         }
         undoManager.clear();
+        isReadyForHistory = true;
         editor.dispatchCommand(CAN_UNDO_COMMAND, false);
         editor.dispatchCommand(CAN_REDO_COMMAND, false);
         return false;
@@ -410,6 +419,7 @@ export function registerLoroHistory(
           isGroupActive = false;
         }
         undoManager.clear();
+        isReadyForHistory = true;
         editor.dispatchCommand(CAN_UNDO_COMMAND, false);
         editor.dispatchCommand(CAN_REDO_COMMAND, false);
         return true;
