@@ -49,7 +49,7 @@ pub async fn handler(
 
     let sender_map = email_db_client::messages::get::get_message_sender_and_pretty_sender(
         &ctx.db,
-        link.id,
+        &[link.id],
         &req_body.message_ids,
     )
     .await?;

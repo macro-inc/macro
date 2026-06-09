@@ -86,6 +86,7 @@ impl From<UnifiedSearchArgs> for EmailSearchArgs {
         EmailSearchArgs {
             terms: args.email_search_args.terms,
             user_id: args.user_id,
+            user_ids: args.email_search_args.user_ids,
             page: args.page,
             page_size: args.page_size,
             match_type: args.match_type,
@@ -175,6 +176,7 @@ pub struct UnifiedDocumentSearchArgs {
 #[derive(Debug, Default, Clone)]
 pub struct UnifiedEmailSearchArgs {
     pub terms: Vec<String>,
+    pub user_ids: Vec<String>,
     pub thread_ids: Vec<String>,
     pub link_ids: Vec<String>,
     pub sender: Vec<String>,
