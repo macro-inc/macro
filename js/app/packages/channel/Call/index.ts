@@ -35,6 +35,11 @@ export {
   splitInCallMembersForAvatars,
   useInCallPanel,
 } from './InCallPanel';
+export type { IncomingCall } from './incoming-call-state';
+export {
+  dismissIncomingCall,
+  useIncomingCalls,
+} from './incoming-call-state';
 export { joinChannelCall } from './join-channel-call';
 export { NativeCallProvider } from './native-call-state';
 export { openChannelCallTab } from './open-channel-call-tab';

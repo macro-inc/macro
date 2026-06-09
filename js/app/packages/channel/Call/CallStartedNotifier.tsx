@@ -4,12 +4,19 @@ import { useUserId } from '@core/context/user';
 import { usePlatformNotificationState } from '@notifications';
 import { DefaultUserNameResolver } from '@notifications/notification-resolvers';
 import {
-  invalidateActiveCallQueries,
   setActiveCallEndedCache,
   setActiveCallStartedCache,
 } from '@queries/call/call';
 import { createConnectionWebsocketEffect } from '@service-connection/websocket';
+import { createEffect } from 'solid-js';
 import { useCallContext } from './CallContext';
+import {
+  addIncomingCall,
+  dismissIncomingCall,
+  endIncomingCall,
+  registerIncomingCallCleanup,
+  registerIncomingCallNotification,
+} from './incoming-call-state';
 import { joinChannelCall } from './join-channel-call';
 
 type CallStartedPayload = {
@@ -134,6 +141,11 @@ export function CallStartedNotifier() {
   const channelsCtx = useChannelsContext();
   const notif = usePlatformNotificationState();
 
+  createEffect(() => {
+    const callId = callCtx.activeCallId();
+    if (callId) dismissIncomingCall(callId);
+  });
+
   createConnectionWebsocketEffect((data) => {
     if (!ENABLE_CALLS()) return;
 
@@ -146,7 +158,7 @@ export function CallStartedNotifier() {
       if (!channelId || !callId) return;
 
       setActiveCallEndedCache({ channelId, callId });
-      void invalidateActiveCallQueries();
+      endIncomingCall({ channelId, callId });
       return;
     }
 
@@ -159,16 +171,30 @@ export function CallStartedNotifier() {
     } = payload;
     if (!channelId || !callId) return;
 
+    const createdAt = new Date().toISOString();
     setActiveCallStartedCache({
       channelId,
       callId,
-      createdAt: new Date().toISOString(),
+      createdAt,
       createdBy: createdBy ?? '',
     });
-    void invalidateActiveCallQueries();
 
     if (callCtx.activeCallId() === callId) return;
     if (createdBy && createdBy === userId()) return;
+
+    addIncomingCall({
+      channelId,
+      callId,
+      createdAt,
+      createdBy: createdBy ?? null,
+    });
+    const incomingCallTimeoutId = window.setTimeout(
+      () => dismissIncomingCall(callId),
+      MAX_RING_DURATION_MS
+    );
+    registerIncomingCallCleanup(callId, () =>
+      window.clearTimeout(incomingCallTimeoutId)
+    );
 
     void emitCallStartedNotification({
       channelId,
@@ -217,18 +243,21 @@ async function emitCallStartedNotification(args: {
   });
 
   if (handle === 'not-granted' || handle === 'disabled-in-ui') return;
+  registerIncomingCallNotification(callId, handle);
 
   // Only the tab that surfaced the notification keeps re-ringing — non-leader
   // tabs short-circuit above with 'not-granted', so loops don't stack.
   const ringer = startRingingLoop(isJoined);
+  registerIncomingCallCleanup(callId, ringer.stop);
 
   handle.onClick(() => {
     window.focus();
     void joinChannelCall(channelId);
     handle.close();
     ringer.stop();
+    dismissIncomingCall(callId);
   });
   handle.onDismiss(() => {
-    ringer.stop();
+    dismissIncomingCall(callId);
   });
 }

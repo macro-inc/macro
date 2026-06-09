@@ -1,12 +1,26 @@
-import { openChannelCallTab, useCallContextOptional } from '@channel/Call';
+import {
+  dismissIncomingCall,
+  joinChannelCall,
+  openChannelCallTab,
+  useCallContextOptional,
+  useIncomingCalls,
+} from '@channel/Call';
+import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
 import { useChannelsContext } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
 import PhoneIcon from '@icon/wide-call.svg';
-import { useActiveCallsForChannelsQuery } from '@queries/call/call';
+import { ContextMenu } from '@kobalte/core/context-menu';
 import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
 import { ChannelTypeEnum } from '@service-storage/client';
 import { Avatar, Button, cn, Tooltip } from '@ui';
-import { createMemo, createSignal, For, onCleanup, Show } from 'solid-js';
+import {
+  createMemo,
+  createSignal,
+  For,
+  type JSX,
+  onCleanup,
+  Show,
+} from 'solid-js';
 import type { SidebarState } from './sidebar';
 
 const SLIM_MAX = 4;
@@ -97,9 +111,38 @@ function formatDuration(startedAt: string | undefined, nowMs: number) {
   return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 }
 
+function IncomingCallContextMenu(props: {
+  callId: string;
+  channelId: string;
+  slim: boolean;
+  children: JSX.Element;
+}) {
+  return (
+    <ContextMenu>
+      <ContextMenu.Trigger class={props.slim ? 'block size-8' : 'block w-full'}>
+        {props.children}
+      </ContextMenu.Trigger>
+
+      <ContextMenu.Portal>
+        <ContextMenuContent class="text-xs text-ink-muted">
+          <MenuItem
+            text="Join call"
+            onClick={() => void joinChannelCall(props.channelId)}
+          />
+          <MenuItem
+            text="Dismiss"
+            onClick={() => dismissIncomingCall(props.callId)}
+          />
+        </ContextMenuContent>
+      </ContextMenu.Portal>
+    </ContextMenu>
+  );
+}
+
 export function SidebarActiveCallWidget(props: { sidebarState: SidebarState }) {
   const channelsCtx = useChannelsContext();
   const callCtx = useCallContextOptional();
+  const incomingCalls = useIncomingCalls();
   const userId = useUserId();
   const [nowMs, setNowMs] = createSignal(Date.now());
   const durationTimer = globalThis.setInterval(
@@ -108,10 +151,6 @@ export function SidebarActiveCallWidget(props: { sidebarState: SidebarState }) {
   );
   onCleanup(() => globalThis.clearInterval(durationTimer));
 
-  const activeCallsQuery = useActiveCallsForChannelsQuery(() =>
-    channelsCtx.channels().map((channel) => channel.id)
-  );
-
   const activeCalls = createMemo(() => {
     const channelsById = channelsCtx.channelsById();
     const joinedChannelId = callCtx?.isInCall()
@@ -119,14 +158,17 @@ export function SidebarActiveCallWidget(props: { sidebarState: SidebarState }) {
       : null;
     const joinedCallId = callCtx?.isInCall() ? callCtx.activeCallId() : null;
 
-    return (
-      activeCallsQuery.data?.filter((call) => {
+    return incomingCalls
+      .filter((call) => {
         if (!channelsById[call.channelId]) return false;
         return (
           call.channelId !== joinedChannelId && call.callId !== joinedCallId
         );
-      }) ?? []
-    );
+      })
+      .sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
   });
 
   const activeCallChannels = createMemo(() =>
@@ -162,25 +204,31 @@ export function SidebarActiveCallWidget(props: { sidebarState: SidebarState }) {
                     : `${displayName(channel())} call`;
                 };
                 return (
-                  <Tooltip label={label()} placement="right">
-                    <Button
-                      class="relative flex items-center cursor-default rounded-md text-ink-extra-muted not-disabled:hover:bg-ink/3 justify-center size-8"
-                      draggable={false}
-                      variant="ghost"
-                      size="sm"
-                      onMouseDown={(e) => {
-                        if (e.button !== 0) return;
-                        e.preventDefault();
-                        void openChannelCallTab(call.channelId);
-                      }}
-                    >
-                      <ChannelCallBadge
-                        channel={channel()}
-                        letters={channelLetters().get(call.channelId) ?? '?'}
-                        slim
-                      />
-                    </Button>
-                  </Tooltip>
+                  <IncomingCallContextMenu
+                    callId={call.callId}
+                    channelId={call.channelId}
+                    slim
+                  >
+                    <Tooltip label={label()} placement="right">
+                      <Button
+                        class="relative flex items-center cursor-default rounded-md text-ink-extra-muted not-disabled:hover:bg-ink/3 justify-center size-8"
+                        draggable={false}
+                        variant="ghost"
+                        size="sm"
+                        onMouseDown={(e) => {
+                          if (e.button !== 0) return;
+                          e.preventDefault();
+                          void openChannelCallTab(call.channelId);
+                        }}
+                      >
+                        <ChannelCallBadge
+                          channel={channel()}
+                          letters={channelLetters().get(call.channelId) ?? '?'}
+                          slim
+                        />
+                      </Button>
+                    </Tooltip>
+                  </IncomingCallContextMenu>
                 );
               }}
             </For>
@@ -194,10 +242,10 @@ export function SidebarActiveCallWidget(props: { sidebarState: SidebarState }) {
       >
         <section class="size-full flex flex-col justify-center px-2 py-1.5">
           <header class="text-xs font-medium text-ink-muted ml-2 mb-1 whitespace-nowrap">
-            <h1>Active calls</h1>
+            <h1>Incoming calls</h1>
           </header>
 
-          <div class="flex-1">
+          <div class="flex-1 w-full">
             <For each={activeCalls()}>
               {(call) => {
                 const channel = () =>
@@ -210,33 +258,40 @@ export function SidebarActiveCallWidget(props: { sidebarState: SidebarState }) {
                     : `${displayName(channel())} call`;
                 };
                 return (
-                  <Button
-                    class={cn(
-                      'flex items-center cursor-default rounded-md text-ink-extra-muted not-disabled:hover:bg-ink/3',
-                      'justify-start gap-2 w-full h-8 py-1'
-                    )}
-                    draggable={false}
-                    variant="ghost"
-                    size="sm"
-                    title={label()}
-                    onMouseDown={(e) => {
-                      if (e.button !== 0) return;
-                      e.preventDefault();
-                      void openChannelCallTab(call.channelId);
-                    }}
+                  <IncomingCallContextMenu
+                    callId={call.callId}
+                    channelId={call.channelId}
+                    slim={false}
                   >
-                    <ChannelCallBadge
-                      channel={channel()}
-                      letters={channelLetters().get(call.channelId) ?? '?'}
-                      slim={false}
-                    />
-                    <span class="text-sm font-medium truncate">
-                      {displayName(channel())}
-                    </span>
-                    <span class="shrink-0 size-5 flex items-center justify-center text-xs font-medium bg-success/15 text-success rounded-md ml-auto">
-                      <PhoneIcon class="size-3" />
-                    </span>
-                  </Button>
+                    <Tooltip class="w-full" label={label()} placement="right">
+                      <Button
+                        class={cn(
+                          'flex items-center cursor-default rounded-md text-ink-extra-muted not-disabled:hover:bg-ink/3',
+                          'justify-start gap-2 w-full h-8 py-1'
+                        )}
+                        draggable={false}
+                        variant="ghost"
+                        size="sm"
+                        onMouseDown={(e) => {
+                          if (e.button !== 0) return;
+                          e.preventDefault();
+                          void openChannelCallTab(call.channelId);
+                        }}
+                      >
+                        <ChannelCallBadge
+                          channel={channel()}
+                          letters={channelLetters().get(call.channelId) ?? '?'}
+                          slim={false}
+                        />
+                        <span class="text-sm font-medium truncate">
+                          {displayName(channel())}
+                        </span>
+                        <span class="shrink-0 size-5 flex items-center justify-center text-xs font-medium bg-success/15 text-success rounded-md ml-auto">
+                          <PhoneIcon class="size-3" />
+                        </span>
+                      </Button>
+                    </Tooltip>
+                  </IncomingCallContextMenu>
                 );
               }}
             </For>
