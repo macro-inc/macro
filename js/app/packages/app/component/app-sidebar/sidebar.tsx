@@ -61,7 +61,6 @@ import { AnimatedCallIcon } from '@icon/wide-call';
 import { AnimatedChannelIcon } from '@icon/wide-channel';
 import { AnimatedEmailIcon } from '@icon/wide-email';
 import { AnimatedFileMdIcon } from '@icon/wide-fileMd';
-import { AnimatedFolderIcon } from '@icon/wide-folder';
 import { AnimatedInboxIcon } from '@icon/wide-inbox';
 import { AnimatedNewSplitIcon } from '@icon/wide-newSplit';
 import { AnimatedPlusIcon } from '@icon/wide-plus';
