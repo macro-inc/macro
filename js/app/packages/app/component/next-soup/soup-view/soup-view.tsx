@@ -294,6 +294,16 @@ const useSoupNotificationInvalidators = () => {
       }
     }
   );
+
+  createEffectOnEntityTypeNotification(
+    notificationSource,
+    'foreign_entity',
+    (notification) => {
+      refetchSoupEntity(notification.entity_id, 'foreignEntity');
+      invalidateSoupEntity(notification.entity_id);
+      invalidateEntityNotifications(notification.entity_id);
+    }
+  );
 };
 
 const listStateCache = new Map<
@@ -931,8 +941,11 @@ export const SoupViewList = (props: SoupViewListProps) => {
   onMount(() => {
     batch(() => {
       const savedSort = sortPref();
+
       if (savedSort.length > 0) {
         soup.sort.setAll(savedSort as SystemSortOption[]);
+      } else {
+        soup.sort.setAll(['updated_at']);
       }
       // soup state is shared at the SplitPanel level, so a prior view in the
       // same split (e.g. tasks) may have left grouping state behind. Always
@@ -1269,6 +1282,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                           soup.focus.setIndex(row.index);
                                         }}
                                         showUnrollNotifications={
+                                          row.original.type !== 'email' &&
                                           soup.predicates.isActive('inbox') &&
                                           !soup.predicates.isActive('noise')
                                         }

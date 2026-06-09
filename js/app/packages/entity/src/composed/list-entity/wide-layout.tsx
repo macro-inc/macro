@@ -1,7 +1,7 @@
 import { useMaybeSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { cn } from '@ui';
 import { Match, Show, Switch } from 'solid-js';
-import { AttendanceBadge, SharedBadge } from '../../components/Badges';
+import { CallStatusBadge, SharedBadge } from '../../components/Badges';
 import { MultiSelectCheckbox } from '../../components/MultiSelectCheckbox';
 import { ProjectBreadCrumb } from '../../components/ProjectBreadCrumb';
 import { UnreadIndicator } from '../../components/UnreadIndicator';
@@ -12,6 +12,7 @@ import {
   isChannelEntity,
   isChannelMessageEntity,
   isEmailEntity,
+  isGithubPrEntity,
   isProjectContainedEntity,
   isTaskEntity,
 } from '../../types/entity';
@@ -20,6 +21,10 @@ import { AutomationWideContent } from './automation';
 import { CallParticipants, CallWideContent } from './call';
 import { ChannelMessageWideContent, ChannelWideContent } from './channel';
 import { EmailWideContent, useOwningInbox } from './email';
+import {
+  GithubPullRequestChecksIndicator,
+  GithubPullRequestPills,
+} from './foreign';
 import type { LayoutProps } from './shared';
 
 export function WideLayout(props: LayoutProps) {
@@ -100,6 +105,16 @@ export function WideLayout(props: LayoutProps) {
           <Match when={isAutomationEntity(props.entity) && props.entity}>
             {(entity) => <AutomationWideContent entity={entity()} />}
           </Match>
+          <Match when={isGithubPrEntity(props.entity) && props.entity}>
+            {(entity) => (
+              <span class="flex min-w-0 items-center gap-1">
+                <span class="min-w-0 truncate">
+                  <Entity.Title entity={entity()} />
+                </span>
+                <GithubPullRequestChecksIndicator entity={entity()} />
+              </span>
+            )}
+          </Match>
           <Match when={props.entity}>
             {(entity) => <Entity.Title entity={entity()} />}
           </Match>
@@ -116,14 +131,21 @@ export function WideLayout(props: LayoutProps) {
             </span>
           )}
         </Show>
-        <Show when={props.isShared && !owningInbox()}>
+        <Show
+          when={
+            props.isShared && !owningInbox() && !isGithubPrEntity(props.entity)
+          }
+        >
           <SharedBadge ownerId={props.entity.ownerId} />
+        </Show>
+        <Show when={isGithubPrEntity(props.entity) && props.entity}>
+          {(entity) => <GithubPullRequestPills entity={entity()} />}
         </Show>
         <Show when={isCallEntity(props.entity) && props.entity}>
           {(entity) => (
             <>
               <Show when={(soupView?.activeTab() ?? 'all') === 'all'}>
-                <AttendanceBadge attended={entity().attended} />
+                <CallStatusBadge status={entity().status} />
               </Show>
               <span class="flex w-10 shrink-0 justify-end">
                 <CallParticipants participantIds={entity().participantIds} />

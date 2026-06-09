@@ -64,6 +64,13 @@ export default defineConfig({
       {
         extends: './packages/core/vitest.config.ts',
         test: {
+          include: ['packages/block-call/**/*.{test,spec}.{ts,tsx}'],
+          name: 'block-call',
+        },
+      },
+      {
+        extends: './packages/core/vitest.config.ts',
+        test: {
           include: ['packages/channel/**/*.{test,spec}.{ts,tsx}'],
           name: 'channel',
         },

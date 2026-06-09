@@ -1,12 +1,15 @@
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
-use quote::{format_ident, quote};
+use quote::{ToTokens, format_ident, quote};
 use syn::{
     Data, DeriveInput, Fields, GenericArgument, LitStr, PathArguments, Type, parse_macro_input,
     parse_quote,
 };
 
-#[proc_macro_derive(MacroConfig, attributes(macro_config_default, serde))]
+#[proc_macro_derive(
+    MacroConfig,
+    attributes(macro_config_default, serde, from_ref, from_ref_all)
+)]
 pub fn derive_macro_config(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
@@ -20,6 +23,10 @@ fn expand_macro_config(input: DeriveInput) -> syn::Result<TokenStream2> {
     let struct_name = input.ident;
     let struct_name_string = struct_name.to_string();
     let rename_all = serde_rename_all(&input.attrs)?;
+    // `#[from_ref_all]` on the struct opts every field into a generated `FromRef` impl, for
+    // fully-typed configs where each field is a distinct marker type. Individual fields can
+    // still opt in with `#[from_ref]` when the struct isn't fully typed yet.
+    let from_ref_all = has_from_ref_all(&input.attrs);
 
     let fields = match input.data {
         Data::Struct(data) => match data.fields {
@@ -51,6 +58,7 @@ fn expand_macro_config(input: DeriveInput) -> syn::Result<TokenStream2> {
         });
         let default = macro_config_default(&field.attrs)?;
         let is_option = default.is_none() && is_option_type(&ty);
+        let from_ref = from_ref_all || has_from_ref(&field.attrs);
         let variant = format_ident!("Field{index}");
 
         field_data.push(FieldData {
@@ -59,6 +67,7 @@ fn expand_macro_config(input: DeriveInput) -> syn::Result<TokenStream2> {
             key,
             default,
             is_option,
+            from_ref,
             variant,
         });
     }
@@ -136,6 +145,38 @@ fn expand_macro_config(input: DeriveInput) -> syn::Result<TokenStream2> {
     let (impl_generics, _, where_clause) = impl_generics_with_de.split_for_impl();
     let (_, ty_generics, _) = input.generics.split_for_impl();
 
+    // Fields covered by FromRef each get a `macro_config::FromRef<Struct>` impl keyed on the
+    // field's type. Since the impl is type-keyed, two covered fields of the same type would
+    // collide (E0119), so reject that here with a clear message rather than a raw coherence error.
+    let mut seen_from_ref: std::collections::HashMap<String, ()> = std::collections::HashMap::new();
+    for field in field_data.iter().filter(|field| field.from_ref) {
+        let key = field.ty.to_token_stream().to_string();
+        if seen_from_ref.insert(key.clone(), ()).is_some() {
+            return Err(syn::Error::new_spanned(
+                &field.ty,
+                format!(
+                    "duplicate FromRef field type `{key}`: every field covered by \
+                     `#[from_ref]`/`#[from_ref_all]` must be a distinct type so \
+                     `FromRef<{struct_name}>` is unambiguous"
+                ),
+            ));
+        }
+    }
+    let (from_ref_impl_generics, _, from_ref_where_clause) = input.generics.split_for_impl();
+    let from_ref_impls = field_data.iter().filter(|field| field.from_ref).map(|field| {
+        let ident = &field.ident;
+        let ty = &field.ty;
+        quote! {
+            impl #from_ref_impl_generics ::macro_config::FromRef<#struct_name #ty_generics> for #ty
+                #from_ref_where_clause
+            {
+                fn from_ref(env: &#struct_name #ty_generics) -> Self {
+                    ::core::clone::Clone::clone(&env.#ident)
+                }
+            }
+        }
+    });
+
     Ok(quote! {
         impl #impl_generics ::macro_config::__serde::Deserialize<'de> for #struct_name #ty_generics #where_clause {
             fn deserialize<__D>(deserializer: __D) -> Result<Self, __D::Error>
@@ -209,6 +250,8 @@ fn expand_macro_config(input: DeriveInput) -> syn::Result<TokenStream2> {
                 deserializer.deserialize_struct(#struct_name_string, FIELDS, __MacroConfigVisitor)
             }
         }
+
+        #(#from_ref_impls)*
     })
 }
 
@@ -218,7 +261,22 @@ struct FieldData {
     key: String,
     default: Option<TokenStream2>,
     is_option: bool,
+    from_ref: bool,
     variant: syn::Ident,
+}
+
+/// Whether a field is tagged with `#[from_ref]`, opting it into a generated
+/// `macro_config::FromRef<Struct>` impl for its type.
+fn has_from_ref(attrs: &[syn::Attribute]) -> bool {
+    attrs.iter().any(|attr| attr.path().is_ident("from_ref"))
+}
+
+/// Whether the struct is tagged with `#[from_ref_all]`, opting every field into a generated
+/// `macro_config::FromRef<Struct>` impl. Requires all field types to be distinct.
+fn has_from_ref_all(attrs: &[syn::Attribute]) -> bool {
+    attrs
+        .iter()
+        .any(|attr| attr.path().is_ident("from_ref_all"))
 }
 
 fn macro_config_default(attrs: &[syn::Attribute]) -> syn::Result<Option<TokenStream2>> {

@@ -19,6 +19,18 @@ use std::str::FromStr;
 #[cfg(test)]
 mod test;
 
+/// Extract a narrowed value out of a larger config struct `E`.
+///
+/// `#[derive(MacroConfig)]` generates one impl per field tagged with `#[from_ref]` (or every
+/// field when the struct is tagged `#[from_ref_all]`), so a consumer can require just the
+/// values it needs via a bound like `where AnthropicApiKey: FromRef<E>` instead of depending
+/// on a concrete config type. Field types covered by `FromRef` must be distinct, since the
+/// impl is keyed on the field's type.
+pub trait FromRef<E> {
+    /// Build `Self` from a reference to the config struct.
+    fn from_ref(env: &E) -> Self;
+}
+
 /// Typed result
 pub type MacroConfigResult<T> = Result<T, MacroConfigError>;
 

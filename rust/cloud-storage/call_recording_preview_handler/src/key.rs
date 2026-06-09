@@ -73,9 +73,13 @@ pub(crate) fn preview_keys_from_decoded_s3_key(decoded_key: &str) -> KeyDecision
         return KeyDecision::Skip(SkipReason::NonMp4);
     }
 
+    let Some(recording_stem) = file_name.strip_suffix(MP4_SUFFIX) else {
+        return KeyDecision::Skip(SkipReason::NonMp4);
+    };
+
     KeyDecision::Process(PreviewKeys {
         source_key: decoded_key.to_string(),
         recording_key: recording_key.to_string(),
-        preview_key: format!("{CALLS_PREFIX}{parent}/{file_name}/{PREVIEW_FILENAME}"),
+        preview_key: format!("{CALLS_PREFIX}{parent}/{recording_stem}/{PREVIEW_FILENAME}"),
     })
 }

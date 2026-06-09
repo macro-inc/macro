@@ -10,10 +10,10 @@ export const CALL_RECORDS_ALIAS = 'call_records';
 // Underlying physical indices (versioned). Bump the suffix to roll a new
 // version, then swap the alias atomically.
 export const CHANNELS_INDEX = 'channels_v2';
-export const CHATS_INDEX = 'chats_v1';
+export const CHATS_INDEX = 'chats_v2';
 export const DOCUMENTS_INDEX = 'documents_v2';
 export const EMAILS_INDEX = 'emails_v1';
-export const CALL_RECORDS_INDEX = 'call_records_v1';
+export const CALL_RECORDS_INDEX = 'call_records_v2';
 
 export const ALIAS_TO_INDEX: Record<string, string> = {
   [CHANNELS_ALIAS]: CHANNELS_INDEX,

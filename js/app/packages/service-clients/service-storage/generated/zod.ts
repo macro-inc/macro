@@ -980,6 +980,16 @@ export const getCallRecordResponse = zod
       .describe(
         'When the call started (created_at for active, started_at for archived).'
       ),
+    status: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['ATTENDED', 'MISSED', 'UNATTENDED'])
+          .describe(
+            'Viewer-relative attendance status for a call record.\nSerializes as `ATTENDED`, `MISSED`, or `UNATTENDED`.'
+          ),
+      ])
+      .optional(),
     summary: zod
       .string()
       .nullish()
@@ -1834,6 +1844,31 @@ export const getChannelAttachmentsResponse = zod
   .describe('Paginated response of channel attachments.');
 
 /**
+ * @summary Handler for `POST /channels/{channel_id}/bots/scoped`.
+ */
+export const createChannelScopedBotParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+});
+
+export const createChannelScopedBotBody = zod
+  .object({
+    avatar_url: zod.string().nullish().describe('Optional avatar URL.'),
+    description: zod.string().nullish().describe('Optional description.'),
+    handle: zod.string().describe('Stable handle.'),
+    name: zod.string().describe('Display name.'),
+    team_id: zod
+      .uuid()
+      .nullish()
+      .describe('Team owner. Omit for a user-owned bot.'),
+    token_expires_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Optional token expiration timestamp.'),
+    token_label: zod.string().nullish().describe('Optional token label.'),
+  })
+  .describe('Request to create a bot scoped to a channel.');
+
+/**
  * @summary Handler for `POST /channels/{channel_id}/join`.
  */
 export const joinChannelParams = zod.object({
@@ -2623,6 +2658,31 @@ export const postTypingBody = zod
     thread_id: zod.string().nullish().describe('Optional thread id.'),
   })
   .describe('Request to emit a typing event.');
+
+/**
+ * @summary Handler for `POST /channels/{channel_id}/webhook`.
+ */
+export const postChannelBotWebhookParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+});
+
+export const postChannelBotWebhookHeader = zod.object({
+  'x-macro-channel-bot-token': zod
+    .string()
+    .describe('Bot authentication token'),
+});
+
+export const postChannelBotWebhookBody = zod
+  .object({
+    content: zod.string().describe('Message body.'),
+  })
+  .describe('Request to post a channel webhook message.');
+
+export const postChannelBotWebhookResponse = zod
+  .object({
+    message_id: zod.string().describe('Created message id.'),
+  })
+  .describe('Response returned after posting a channel webhook message.');
 
 /**
  * @summary Soft-delete a CRM comment, scoped to the requesting user's team. When it
@@ -7126,7 +7186,7 @@ export const getItemsSoupResponse = zod.object({
               attended: zod
                 .boolean()
                 .describe(
-                  'Whether the requesting user attended this call (i.e. appears in the\n`call_participants` \/ `call_record_participants` table).'
+                  'Whether the requesting user attended this call. Kept for compatibility\nand derived from `status == ATTENDED`.'
                 ),
               callId: zod.uuid().describe('The call identifier.'),
               channelId: zod
@@ -7179,6 +7239,11 @@ export const getItemsSoupResponse = zod.object({
               startedAt: zod.iso
                 .datetime({})
                 .describe('When the call started.'),
+              status: zod
+                .enum(['ATTENDED', 'MISSED', 'UNATTENDED'])
+                .describe(
+                  'Viewer-relative attendance status for a call record.\nSerializes as `ATTENDED`, `MISSED`, or `UNATTENDED`.'
+                ),
               summary: zod
                 .string()
                 .nullish()
@@ -7326,7 +7391,7 @@ export const postItemsSoupBody = zod
           .boolean()
           .nullish()
           .describe(
-            'Filter by whether the requesting user attended the call.\n`None` = no filter, `Some(true)` = only calls the user joined,\n`Some(false)` = only calls the user did not join.'
+            'Legacy filter by whether the requesting user attended the call.\nPrefer [`CallFilters::status`] for new callers.\n`None` = no filter, `Some(true)` = only calls the user joined,\n`Some(false)` = only calls the user did not join.'
           ),
         call_ids: zod
           .array(zod.string())
@@ -7344,6 +7409,16 @@ export const postItemsSoupBody = zod
           .array(zod.string())
           .optional()
           .describe('Speaker macro user ids. Empty to include all.'),
+        status: zod
+          .union([
+            zod.null(),
+            zod
+              .enum(['ATTENDED', 'MISSED', 'UNATTENDED'])
+              .describe(
+                'Viewer-relative attendance status for a call record.\nSerializes as `ATTENDED`, `MISSED`, or `UNATTENDED`.'
+              ),
+          ])
+          .optional(),
       })
       .optional()
       .describe('Filters for call records.'),
@@ -8979,7 +9054,7 @@ export const postItemsSoupResponse = zod.object({
               attended: zod
                 .boolean()
                 .describe(
-                  'Whether the requesting user attended this call (i.e. appears in the\n`call_participants` \/ `call_record_participants` table).'
+                  'Whether the requesting user attended this call. Kept for compatibility\nand derived from `status == ATTENDED`.'
                 ),
               callId: zod.uuid().describe('The call identifier.'),
               channelId: zod
@@ -9032,6 +9107,11 @@ export const postItemsSoupResponse = zod.object({
               startedAt: zod.iso
                 .datetime({})
                 .describe('When the call started.'),
+              status: zod
+                .enum(['ATTENDED', 'MISSED', 'UNATTENDED'])
+                .describe(
+                  'Viewer-relative attendance status for a call record.\nSerializes as `ATTENDED`, `MISSED`, or `UNATTENDED`.'
+                ),
               summary: zod
                 .string()
                 .nullish()
@@ -10425,7 +10505,7 @@ export const postItemsSoupAstResponse = zod.object({
               attended: zod
                 .boolean()
                 .describe(
-                  'Whether the requesting user attended this call (i.e. appears in the\n`call_participants` \/ `call_record_participants` table).'
+                  'Whether the requesting user attended this call. Kept for compatibility\nand derived from `status == ATTENDED`.'
                 ),
               callId: zod.uuid().describe('The call identifier.'),
               channelId: zod
@@ -10478,6 +10558,11 @@ export const postItemsSoupAstResponse = zod.object({
               startedAt: zod.iso
                 .datetime({})
                 .describe('When the call started.'),
+              status: zod
+                .enum(['ATTENDED', 'MISSED', 'UNATTENDED'])
+                .describe(
+                  'Viewer-relative attendance status for a call record.\nSerializes as `ATTENDED`, `MISSED`, or `UNATTENDED`.'
+                ),
               summary: zod
                 .string()
                 .nullish()

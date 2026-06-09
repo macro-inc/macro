@@ -347,6 +347,25 @@ fn make_foreign_entity(
     }
 }
 
+fn make_foreign_entity_with_metadata(
+    id: uuid::Uuid,
+    foreign_entity_id: &str,
+    foreign_entity_source: &str,
+    stored_for_id: &str,
+    stored_for_auth_entity: &str,
+    metadata: serde_json::Value,
+) -> ForeignEntity {
+    let mut foreign_entity = make_foreign_entity(
+        id,
+        foreign_entity_id,
+        foreign_entity_source,
+        stored_for_id,
+        stored_for_auth_entity,
+    );
+    foreign_entity.metadata = metadata;
+    foreign_entity
+}
+
 fn expect_authenticated_team_lookup(repo: &mut MockDocumentRepo, team_ids: Vec<uuid::Uuid>) {
     repo.expect_get_team_ids_for_user()
         .withf(|user_id| user_id == "macro|user@user.com")
@@ -374,6 +393,23 @@ fn assert_pull_request_ref(
     );
 }
 
+fn assert_no_enriched_pull_request_metadata(pull_request: &GithubPullRequest) {
+    assert!(pull_request.name.is_none());
+    assert!(pull_request.status.is_none());
+    assert!(pull_request.additions.is_none());
+    assert!(pull_request.deletions.is_none());
+    assert!(pull_request.comments.is_none());
+    assert!(pull_request.checks.is_none());
+
+    let pull_request_json = serde_json::to_value(pull_request).unwrap();
+    assert!(pull_request_json.get("name").is_none());
+    assert!(pull_request_json.get("status").is_none());
+    assert!(pull_request_json.get("additions").is_none());
+    assert!(pull_request_json.get("deletions").is_none());
+    assert!(pull_request_json.get("comments").is_none());
+    assert!(pull_request_json.get("checks").is_none());
+}
+
 fn assert_raw_pull_request(
     pull_request: &GithubPullRequest,
     github_key: &str,
@@ -383,17 +419,30 @@ fn assert_raw_pull_request(
 ) {
     assert_pull_request_ref(pull_request, github_key, owner, repo, number);
     assert!(pull_request.foreign_entity_id.is_none());
-    assert!(pull_request.name.is_none());
-    assert!(pull_request.status.is_none());
-    assert!(pull_request.additions.is_none());
-    assert!(pull_request.deletions.is_none());
-    assert!(pull_request.comments.is_none());
-    assert!(pull_request.checks.is_none());
+    assert_no_enriched_pull_request_metadata(pull_request);
 
     let pull_request_json = serde_json::to_value(pull_request).unwrap();
     assert!(pull_request_json.get("foreignEntityId").is_none());
-    assert!(pull_request_json.get("comments").is_none());
-    assert!(pull_request_json.get("checks").is_none());
+}
+
+fn assert_shallow_pull_request_with_foreign_entity_id(
+    pull_request: &GithubPullRequest,
+    github_key: &str,
+    owner: &str,
+    repo: &str,
+    number: u64,
+    foreign_entity_id: uuid::Uuid,
+) {
+    assert_pull_request_ref(pull_request, github_key, owner, repo, number);
+    assert_eq!(pull_request.foreign_entity_id, Some(foreign_entity_id));
+    assert_no_enriched_pull_request_metadata(pull_request);
+
+    let pull_request_json = serde_json::to_value(pull_request).unwrap();
+    let expected_foreign_entity_id = serde_json::json!(foreign_entity_id.to_string());
+    assert_eq!(
+        pull_request_json.get("foreignEntityId"),
+        Some(&expected_foreign_entity_id)
+    );
 }
 
 #[tokio::test]
@@ -537,6 +586,173 @@ async fn test_get_task_github_pull_requests_adds_user_foreign_entity_id() {
 }
 
 #[tokio::test]
+async fn test_get_task_github_pull_requests_hydrates_visible_foreign_entity_metadata() {
+    let document_id = "00000000-0000-0000-0000-000000000008";
+    let expected_short_id = short_id_for_entity_id(document_id).unwrap();
+    let foreign_entity_id = uuid::uuid!("00000000-0000-0000-0000-000000000501");
+    let mut repo = make_mock_repo();
+
+    repo.expect_get_task_github_pull_request_keys()
+        .withf(move |task_short_id| task_short_id == expected_short_id)
+        .return_once(|_| {
+            Box::pin(std::future::ready(Ok(vec![
+                "macro/repo/pull/14".to_string(),
+            ])))
+        });
+    expect_authenticated_team_lookup(&mut repo, Vec::new());
+
+    let metadata = serde_json::json!({
+        "githubKey": "macro/repo/pull/14",
+        "owner": "macro",
+        "repo": "repo",
+        "number": 14,
+        "url": "https://github.com/macro/repo/pull/14",
+        "displayName": "macro/repo#14",
+        "name": "Hydrate GitHub pull request metadata",
+        "status": "open",
+        "additions": 120,
+        "deletions": 34,
+        "comments": [
+            {
+                "id": 9001,
+                "body": "Looks ready to merge.",
+                "authorLogin": "alice",
+                "authorAssociation": "MEMBER",
+                "url": "https://github.com/macro/repo/pull/14#issuecomment-9001",
+                "createdAt": "2026-06-09T12:00:00Z",
+                "updatedAt": "2026-06-09T12:05:00Z",
+                "source": "issue_comment"
+            }
+        ],
+        "checks": [
+            {
+                "id": 7001,
+                "name": "ci/test",
+                "status": "completed",
+                "conclusion": "success",
+                "url": "https://github.com/macro/repo/actions/runs/7001",
+                "startedAt": "2026-06-09T11:00:00Z",
+                "completedAt": "2026-06-09T11:03:00Z"
+            }
+        ]
+    });
+
+    let service = make_test_service_with_foreign_entities(
+        repo,
+        vec![make_foreign_entity_with_metadata(
+            foreign_entity_id,
+            "macro/repo/pull/14",
+            GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE,
+            "macro|user@user.com",
+            "user",
+            metadata.clone(),
+        )],
+    );
+
+    let response = service
+        .get_task_github_pull_requests(
+            authenticated_receipt(document_id),
+            &task_document_context(document_id),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.pull_requests.len(), 1);
+    let mut expected_pull_request = metadata;
+    expected_pull_request.as_object_mut().unwrap().insert(
+        "foreignEntityId".to_string(),
+        serde_json::json!(foreign_entity_id.to_string()),
+    );
+    assert_eq!(
+        serde_json::to_value(&response.pull_requests[0]).unwrap(),
+        expected_pull_request
+    );
+}
+
+#[tokio::test]
+async fn test_get_task_github_pull_requests_falls_back_when_foreign_entity_metadata_is_malformed() {
+    let document_id = "00000000-0000-0000-0000-000000000009";
+    let expected_short_id = short_id_for_entity_id(document_id).unwrap();
+    let malformed_foreign_entity_id = uuid::uuid!("00000000-0000-0000-0000-000000000601");
+    let mismatched_foreign_entity_id = uuid::uuid!("00000000-0000-0000-0000-000000000602");
+    let mut repo = make_mock_repo();
+
+    repo.expect_get_task_github_pull_request_keys()
+        .withf(move |task_short_id| task_short_id == expected_short_id)
+        .return_once(|_| {
+            Box::pin(std::future::ready(Ok(vec![
+                "macro/repo/pull/15".to_string(),
+                "macro/repo/pull/16".to_string(),
+            ])))
+        });
+    expect_authenticated_team_lookup(&mut repo, Vec::new());
+
+    let service = make_test_service_with_foreign_entities(
+        repo,
+        vec![
+            make_foreign_entity_with_metadata(
+                malformed_foreign_entity_id,
+                "macro/repo/pull/15",
+                GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE,
+                "macro|user@user.com",
+                "user",
+                serde_json::json!({
+                    "githubKey": "macro/repo/pull/15",
+                    "owner": "macro"
+                }),
+            ),
+            make_foreign_entity_with_metadata(
+                mismatched_foreign_entity_id,
+                "macro/repo/pull/16",
+                GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE,
+                "macro|user@user.com",
+                "user",
+                serde_json::json!({
+                    "githubKey": "macro/repo/pull/999",
+                    "owner": "macro",
+                    "repo": "repo",
+                    "number": 999,
+                    "url": "https://github.com/macro/repo/pull/999",
+                    "displayName": "macro/repo#999",
+                    "name": "Wrong pull request metadata",
+                    "status": "merged",
+                    "additions": 999,
+                    "deletions": 999,
+                    "comments": [],
+                    "checks": []
+                }),
+            ),
+        ],
+    );
+
+    let response = service
+        .get_task_github_pull_requests(
+            authenticated_receipt(document_id),
+            &task_document_context(document_id),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.pull_requests.len(), 2);
+    assert_shallow_pull_request_with_foreign_entity_id(
+        &response.pull_requests[0],
+        "macro/repo/pull/15",
+        "macro",
+        "repo",
+        15,
+        malformed_foreign_entity_id,
+    );
+    assert_shallow_pull_request_with_foreign_entity_id(
+        &response.pull_requests[1],
+        "macro/repo/pull/16",
+        "macro",
+        "repo",
+        16,
+        mismatched_foreign_entity_id,
+    );
+}
+
+#[tokio::test]
 async fn test_get_task_github_pull_requests_adds_team_foreign_entity_id() {
     let document_id = "00000000-0000-0000-0000-000000000003";
     let expected_short_id = short_id_for_entity_id(document_id).unwrap();
@@ -655,12 +871,47 @@ async fn test_get_task_github_pull_requests_ignores_unrelated_stored_source() {
 
     let service = make_test_service_with_foreign_entities(
         repo,
-        vec![make_foreign_entity(
+        vec![make_foreign_entity_with_metadata(
             unrelated_foreign_entity_id,
             "macro/repo/pull/11",
             GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE,
             "macro|other@user.com",
             "user",
+            serde_json::json!({
+                "githubKey": "macro/repo/pull/11",
+                "owner": "macro",
+                "repo": "repo",
+                "number": 11,
+                "url": "https://github.com/macro/repo/pull/11",
+                "displayName": "macro/repo#11",
+                "name": "Invisible pull request metadata",
+                "status": "open",
+                "additions": 55,
+                "deletions": 13,
+                "comments": [
+                    {
+                        "id": 3001,
+                        "body": "This comment should not be visible.",
+                        "authorLogin": "mallory",
+                        "authorAssociation": "CONTRIBUTOR",
+                        "url": "https://github.com/macro/repo/pull/11#issuecomment-3001",
+                        "createdAt": "2026-06-09T10:00:00Z",
+                        "updatedAt": "2026-06-09T10:01:00Z",
+                        "source": "issue_comment"
+                    }
+                ],
+                "checks": [
+                    {
+                        "id": 3002,
+                        "name": "ci/private",
+                        "status": "completed",
+                        "conclusion": "failure",
+                        "url": "https://github.com/macro/repo/actions/runs/3002",
+                        "startedAt": "2026-06-09T09:00:00Z",
+                        "completedAt": "2026-06-09T09:04:00Z"
+                    }
+                ]
+            }),
         )],
     );
 

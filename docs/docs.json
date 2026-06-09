@@ -62,6 +62,14 @@
             ]
           },
           {
+            "group": "Key Concepts",
+            "pages": [
+              "concepts/blocks",
+              "concepts/mentions",
+              "concepts/properties"
+            ]
+          },
+          {
             "group": "Sidebar",
             "pages": [
               "product/inbox",

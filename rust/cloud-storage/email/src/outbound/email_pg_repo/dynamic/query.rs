@@ -198,12 +198,15 @@ fn push_thread_candidate_select(
         build_thread_email_filter(email_filter, sort_ts_field).push_into(builder);
     }
 
-    // Push address (Sender/Cc/Bcc/Recipient) constraints into the candidate
-    // WHERE so pagination's LIMIT counts threads that actually contain a
-    // matching message. The actual matching set is materialized once in the
-    // top-level `matching_threads` CTE; the candidate WHERE just references
-    // it via `t.id IN (SELECT thread_id FROM matching_threads)`.
-    if has_address_literals(email_filter) {
+    // Ensure the candidate LIMIT only counts threads that will survive the
+    // CROSS JOIN LATERAL's message match. When a per-message filter is in
+    // play (importance, or a view-level message filter) mirror the full
+    // lateral predicate as a correlated EXISTS; otherwise push address-only
+    // constraints through the index-driven `matching_threads` CTE referenced
+    // via `t.id IN (SELECT thread_id FROM matching_threads)`.
+    if wants_message_exists_pushdown(email_filter, view) {
+        build_thread_message_exists_filter(email_filter, view, &params.resolved).push_into(builder);
+    } else if has_address_literals(email_filter) {
         build_thread_address_filter(email_filter).push_into(builder);
     }
 
@@ -258,7 +261,15 @@ fn build_query(
     let view_message_filter = build_view_message_filter(view);
 
     let needs_shared_cte = !matches!(params.shared, SharedEmailFilter::Exclude);
-    let matching_threads_body = build_matching_threads_cte_body(email_filter, &params.resolved);
+    // When the candidate stage pushes a full per-message EXISTS (importance,
+    // or a view-level message filter), it already enforces "thread has a
+    // message the lateral will surface", so the address-only
+    // `matching_threads` CTE is redundant.
+    let matching_threads_body = if wants_message_exists_pushdown(email_filter, view) {
+        None
+    } else {
+        build_matching_threads_cte_body(email_filter, &params.resolved)
+    };
 
     let mut builder = sqlx::QueryBuilder::new("");
     if needs_shared_cte || matching_threads_body.is_some() {

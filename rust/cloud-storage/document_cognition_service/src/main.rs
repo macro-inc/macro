@@ -35,6 +35,7 @@ use notification::domain::service::{
 };
 use notification::outbound::queue::SqsQueue;
 use notification::outbound::repository::DbNotificationRepository;
+use notification::outbound::websocket::ConnectionGatewayClient;
 use readonly_pool::ReadOnlyPool;
 use search_service_client::SearchServiceClient;
 use secretsmanager_client::SecretManager;
@@ -165,6 +166,10 @@ async fn main() -> anyhow::Result<()> {
             .context("failed to create connection manager")?;
 
     tracing::info!("initialized connection repo");
+    let connection_gateway_client = Arc::new(ConnectionGatewayClient::new(
+        internal_auth_key.as_ref().to_string(),
+        config.connection_gateway_url.clone(),
+    ));
 
     let ingress_queue = SqsQueue::new(
         aws_sdk_sqs::Client::new(&aws_config),
@@ -436,6 +441,7 @@ async fn main() -> anyhow::Result<()> {
         internal_auth_key,
         notification_ingress_service,
         connection_repo: connection_manager.persistence,
+        connection_gateway_client,
         soup_service,
         email_service: email_service_for_tools,
         stream_repo,

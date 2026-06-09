@@ -115,6 +115,10 @@ pub struct SearchQueryBuilder<T: SearchQueryConfig> {
     pub page_size: u32,
     /// The user id to search for
     pub user_id: String,
+    /// Additional user ids to filter access by. When non-empty the access
+    /// filter matches any of these (terms) instead of the single `user_id`.
+    /// Used for multi-inbox email search across delegated inboxes.
+    pub user_ids: Vec<String>,
     /// Whether to collapse the results to be a single result per ID_KEY
     /// Defaults to false.
     pub collapse: bool,
@@ -136,6 +140,7 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
             page: 0,
             page_size: 10,
             user_id: String::new(),
+            user_ids: Vec::new(),
             collapse: false,
             ids_only: false,
             ids: Vec::new(),
@@ -166,6 +171,11 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
 
     pub fn user_id(mut self, user_id: &str) -> Self {
         self.user_id = user_id.to_string();
+        self
+    }
+
+    pub fn user_ids(mut self, user_ids: Vec<String>) -> Self {
+        self.user_ids = user_ids;
         self
     }
 
@@ -200,7 +210,11 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
         } else {
             let user_id_key =
                 user_id_key.ok_or(OpensearchClientError::UserIdKeyRequired(T::ENTITY_INDEX))?;
-            let user_id_query = QueryType::term(user_id_key.to_string(), self.user_id.clone());
+            let user_id_query = if self.user_ids.is_empty() {
+                QueryType::term(user_id_key.to_string(), self.user_id.clone())
+            } else {
+                QueryType::terms(user_id_key.to_string(), self.user_ids.clone())
+            };
 
             // If there are no ids provided we can return only the user id query to filter over
             if self.ids.is_empty() {
@@ -216,10 +230,7 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
 
             filter_bool_query.should(QueryType::terms(T::ID_KEY.to_string(), self.ids.to_vec()));
 
-            filter_bool_query.should(QueryType::term(
-                user_id_key.to_string(),
-                self.user_id.clone(),
-            ));
+            filter_bool_query.should(user_id_query);
 
             Ok(filter_bool_query.build().into())
         }

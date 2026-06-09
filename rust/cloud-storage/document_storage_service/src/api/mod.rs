@@ -212,6 +212,11 @@ fn api_router(state: ApiContext) -> Router {
         .merge(bots::inbound::axum_router::bots_router(
             state.bots_state.clone(),
         ))
+        .merge(
+            bots::inbound::channel_webhook_router::channel_scoped_bot_router(
+                state.channel_bot_webhook_state.clone(),
+            ),
+        )
         .nest(
             "/foreign_entity",
             foreign_entity::inbound::axum_router::foreign_entity_router(
@@ -235,6 +240,12 @@ fn api_router(state: ApiContext) -> Router {
                     state.jwt_validation_args.clone(),
                     macro_middleware::auth::attach_user::handler,
                 )),
+        )
+        // Merge after the user-auth layer so webhook calls authenticate only with the bot token.
+        .merge(
+            bots::inbound::channel_webhook_router::channel_bot_webhook_router(
+                state.channel_bot_webhook_state.clone(),
+            ),
         )
         .nest(
             "/internal",

@@ -1,5 +1,15 @@
 export type EmailView = 'inbox' | 'drafts' | 'sent' | 'all';
 
+export type CallStatus = 'ATTENDED' | 'MISSED' | 'UNATTENDED';
+
+export function callStatusFromAttended(
+  attended: boolean | null | undefined
+): CallStatus | undefined {
+  if (attended === true) return 'ATTENDED';
+  if (attended === false) return 'UNATTENDED';
+  return undefined;
+}
+
 export type DateRangeFilter = {
   gt?: string;
   gte?: string;
@@ -56,6 +66,7 @@ export type ScalarFieldFilters = {
   chatDone?: boolean;
   folderSeen?: boolean;
   folderDone?: boolean;
+  callStatus?: CallStatus;
   callAttended?: boolean;
   documentCreatedAt?: DateRangeFilter;
   documentUpdatedAt?: DateRangeFilter;

@@ -352,6 +352,12 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         internal_auth_key: LocalOrRemoteSecret::Local(InternalApiSecretKey::Comptime("testing")),
         notification_ingress_service,
         connection_repo: MockConnectionRepo::new(),
+        connection_gateway_client: Arc::new(
+            notification::outbound::websocket::ConnectionGatewayClient::new(
+                "testing".to_string(),
+                "http://localhost".to_string(),
+            ),
+        ),
         soup_service,
         email_service: email_service_for_tools.clone(),
         stream_repo: MockStreamRepo::new(),

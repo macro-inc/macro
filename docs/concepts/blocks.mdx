@@ -1,0 +1,62 @@
+---
+title: "Blocks"
+description: "Blocks are the core building block of Macro. They work together like Lego."
+---
+
+Everything in Macro is a **block**. The current first-party block types are `md` (documents), `email`, `channel`, `chat` (agents), `automation`, `project` (tasks), `contact` (crm), `company` (crm), `call`, `canvas`, `code`, `image`, `video`, `pdf`, and `unknown` (fallback).
+
+# **Splits**
+
+On Desktop — but not on mobile — Macro has its own window manager that let's you multi-task in your browser in one tab. By default when you open Macro you have one _split_.
+
+To open a @mention or list item in a new split, in general, you can press <kbd>shift</kbd>.
+
+Each split maintains its own history. Use <kbd>opt</kbd> <kbd>\[</kbd> or <kbd>opt</kbd> <kbd>\]</kbd> to move back and forward, or just press the chevron icons in the top bar of the split.
+
+Create a split with <kbd>cmd</kbd>\+<kbd>\\</kbd>, focus left/right with <kbd>shift</kbd>\+<kbd>h</kbd> / <kbd>shift</kbd>\+<kbd>l</kbd>, maximize with <kbd>shift</kbd>\+<kbd>escape</kbd>, close with <kbd>cmd</kbd>\+<kbd>escape</kbd>.
+
+<Frame>
+  ![Screenshot 2026 06 09 At 1 27 24 PM](/images/Screenshot-2026-06-09-at-1.27.24-PM.png)
+</Frame>
+
+The number of splits you can have open at once is determined by your monitor size and zoom. If you don't have enough splits to open something in a new split, it will replace the right split.
+
+# Previews
+
+Most block types have on-hover previews to provide context without needing to click. When you @mention a block in any markdown area (e.g. task, doc, channel, etc.) and you or anybody else hovers, they will see the preview. For example, here is a task preview:
+
+<Frame>
+  <img
+    src="/images/Screenshot-2026-06-09-at-1.28.03-PM.png"
+    alt="Screenshot 2026 06 09 At 1 28 03 PM"
+    title="Screenshot 2026 06 09 At 1 28 03 PM"
+    className="mx-auto"
+    style={{ width:"81%" }}
+  />
+</Frame>
+
+# **Embeds**
+
+Most blocks embed read-only in a markdown doc, with editing and markup tools disabled. Note that, unlike sharing docs in channels via mentions, where permissions are automatically granted to members of the channel, permissions are not auto-granted for embeds or mentions, you'll have to also share files that are embedded.
+
+<Frame>
+  ![Screenshot 2026 06 09 At 1 28 32 PM](/images/Screenshot-2026-06-09-at-1.28.32-PM.png)
+</Frame>
+
+To create an embed, first create a @mention by hitting `@` or dragging and dropping, then hover and click "Convert to embed."
+
+<Frame>
+  <img
+    src="/images/Screenshot-2026-06-09-at-1.28.45-PM.png"
+    alt="Screenshot 2026 06 09 At 1 28 45 PM"
+    title="Screenshot 2026 06 09 At 1 28 45 PM"
+    className="mx-auto"
+    style={{ width:"59%" }}
+  />
+</Frame>
+
+# More about blocks
+
+- **References, sharing & permissions** — Every block has a References panel (backlinks to everywhere it's mentioned or embedded) and the same share dialog, with owner / editor / commenter / viewer access levels plus public links for documents.
+- **Real-time collaboration** — Collaborative blocks (docs, canvas, pdf markup) sync through **Loro CRDTs** over a **Cloudflare Durable Objects** backend: the Rust `sync-service` spins up one Durable Object "room" per document, and clients connect over WebSocket to `/document/:id`. This is what gives you multiplayer editing, presence cursors, and full offline support.
+- **Search & Inbox** — One unified [Search](/product/search) index covers every block type, filterable by type and by mentioned person. The unified [Inbox](/product/inbox) pulls open notifications from across blocks into a single recency-sorted list.

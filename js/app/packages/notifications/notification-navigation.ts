@@ -242,6 +242,7 @@ function getSupportedHandler(
       const meta = notification.notification_metadata;
       if (meta.tag !== 'github_pr_event') return null;
       return async () => {
+        // TODO(dev-rb/github): Route GitHub PR notifications to /pr.
         openExternalUrl(meta.content.url);
       };
     })

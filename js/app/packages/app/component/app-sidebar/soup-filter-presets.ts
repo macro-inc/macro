@@ -5,6 +5,7 @@ import {
   type Query,
 } from '@app/component/next-soup/filters/filter-store';
 import type { ListView } from '@app/constants/list-views';
+import { ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE } from '@core/constant/featureFlags';
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { startOfDay, subWeeks } from 'date-fns';
 
@@ -91,6 +92,8 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
             channelId: [NIL_UUID],
             chatId: [NIL_UUID],
             folderId: [NIL_UUID],
+            foreignEntityRecordId:
+              ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE ? [NIL_UUID] : [],
           },
           emailView: 'all',
         },
@@ -239,6 +242,12 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         }),
         clientFilters: { and: ['document-or-file'] },
       }),
+      folders: () => ({
+        filters: defineQueryFilters({
+          exclude: { folderId: [NIL_UUID] },
+        }),
+        clientFilters: { and: ['folders'] },
+      }),
       all: () => ({
         filters: defineQueryFilters({
           exclude: { subType: ['task'] },
@@ -332,10 +341,19 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         filters: defineQueryFilters({}, { skipTargets: ['callf'] }),
         clientFilters: { and: ['calls'] },
       }),
+      missed: () => ({
+        filters: defineQueryFilters(
+          {
+            include: { callStatus: 'MISSED' },
+          },
+          { skipTargets: ['callf'] }
+        ),
+        clientFilters: { and: ['calls'] },
+      }),
       unattended: () => ({
         filters: defineQueryFilters(
           {
-            include: { callAttended: false },
+            include: { callStatus: 'UNATTENDED' },
           },
           { skipTargets: ['callf'] }
         ),
@@ -367,7 +385,10 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
     default: 'all',
     tabs: {
       all: () => ({
-        filters: {},
+        // Temporary: search has no full-text index over foreign entities yet,
+        // so exclude them all from the search view (matching no record id)
+        // until search supports them.
+        filters: { include: { foreignEntityRecordId: [NIL_UUID] } },
         clientFilters: {},
       }),
     },

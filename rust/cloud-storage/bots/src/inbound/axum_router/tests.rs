@@ -1,5 +1,7 @@
 use super::*;
-use crate::domain::models::AuthenticatedBot;
+use crate::domain::models::{
+    AuthenticatedBot, CreateChannelScopedBotRequest, CreateChannelScopedBotResponse,
+};
 use crate::{domain::service::BotServiceImpl, outbound::pg_bots_repo::PgBotsRepo};
 use axum::{
     Extension,
@@ -60,6 +62,15 @@ impl BotService for TestBotService {
         _caller: MacroUserIdStr<'static>,
         _req: CreateBotRequest,
     ) -> Result<Bot, BotError> {
+        unimplemented!()
+    }
+
+    async fn create_channel_scoped_bot(
+        &self,
+        _caller: MacroUserIdStr<'static>,
+        _channel_id: Uuid,
+        _req: CreateChannelScopedBotRequest,
+    ) -> Result<CreateChannelScopedBotResponse, BotError> {
         unimplemented!()
     }
 
@@ -143,6 +154,14 @@ impl BotService for TestBotService {
     }
 
     async fn authenticate_token(&self, _token: &str) -> Result<AuthenticatedBot, BotError> {
+        unimplemented!()
+    }
+
+    async fn authenticate_channel_token(
+        &self,
+        _channel_id: Uuid,
+        _token: &str,
+    ) -> Result<AuthenticatedBot, BotError> {
         unimplemented!()
     }
 }

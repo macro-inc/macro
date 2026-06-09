@@ -1,16 +1,96 @@
 ---
 title: "Welcome to Macro"
+description: "Extremely fast, unified interface for all your work, all linked together in one database."
 ---
 
 <iframe src="https://www.youtube.com/embed/Fn5hdzXsQQ8" title="YouTube video player" frameborder="0" className="w-full aspect-video rounded-xl" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen />
 
-## Welcome to Macro
+Macro is an integrated workspace that brings together email, messaging, tasks, documents, and files with powerful bidirectional @linking. Built with a Solid frontend and Rust backend, Macro delivers exceptional performance and a unified experience across all your work.
 
-Macro is an integrated productivity platform where everything is connected through @links. Every text editing surface in the app works the same: @mention anything. Email, channels, docs, tasks, canvas, and files — all searchable, all interlinked. Here you will learn the onboarding process from signing up your team to managing your project.
+# Core Blocks
 
-## Macro Onboarding
+For each block, we've studied the best prior art and tried to make it even better. For example, Email is faster than Superhuman with a unified inbox. Messaging is designed to be more focused, and less noisy, than Slack. Docs are simpler than Notion. Tasks steal from Linear but are less ceremonious (cycles, points, etc. are there if you _really want_ but we advise not).
 
-Learn how to use Macro whether you're still getting started alone or with a team
+**All of this works together as a single integrated system: one interface, one bidirectional database with shared memory for your agents.**
+
+<Frame>
+  <img
+    src="/images/Screenshot-2026-06-09-at-11.33.57-AM.png"
+    alt="Screenshot 2026 06 09 At 11 33 57 AM"
+    title="Screenshot 2026 06 09 At 11 33 57 AM"
+    lightAlt="Screenshot 2026 06 09 At 11 33 57 AM"
+    darkAlt="screenshot of the macro unified inbox showing available blocks"
+    className="dark:hidden"
+  />
+  <img
+    src="/images/Screenshot-2026-06-09-at-11.33.57-AM.png"
+    alt="Screenshot 2026 06 09 At 11 33 57 AM"
+    title="Screenshot 2026 06 09 At 11 33 57 AM"
+    lightAlt="Screenshot 2026 06 09 At 11 33 57 AM"
+    darkAlt="screenshot of the macro unified inbox showing available blocks"
+    className="hidden dark:block"
+  />
+</Frame>
+
+The following are the core first-party blocks available in Macro today. Each links to the specific documentation page, with videos where applicable, for each block.
+
+<CardGroup cols={2}>
+  <Card title="Email" icon="envelope" href="/product/email">
+    Multi-account unified inbox, keyboard shortcuts, and shared inboxes. Gmail.
+  </Card>
+
+  <Card title="Messages" icon="comments">
+    Channels and direct messages designed for technical discussions.
+  </Card>
+
+  <Card title="Tasks" icon="check-square">
+    Linear-inspired tasks tightly integrated with channels, email and agents.
+  </Card>
+
+  <Card title="Docs" icon="file-text">
+    Real-time collaborative, markdown-native docs using CRDTs, @mentions.
+  </Card>
+
+  <Card title="Canvas" icon="diagram-project">
+    2D board with embedded @links to tasks, files, and emails. 
+  </Card>
+
+  <Card title="Agents" icon="sparkles">
+    Unified memory, team-level memory. Can take action on your behalf.
+  </Card>
+
+  <Card title="Calls" icon="video">
+    Recorded, transcribed and logged to  team-level memory for agents.
+  </Card>
+
+  <Card title="File Storage" icon="folder">
+    Recorded, transcribed and logged to  team-level memory for agents.
+  </Card>
+
+  <Card title="Pull Requests" icon="code-merge">
+    Linked to tasks, embeddable in channels, available to agents.
+  </Card>
+
+  <Card title="CRM" icon="chart-network">
+    Customer & Contact objects, custom properties, email sync, enrichment.
+  </Card>
+</CardGroup>
+
+# Key Features
+
+### Bidirectional @linking
+
+Macro's @linking system connects everything in your workspace. When you @mention a document in a channel message, both the message and document know about each other. This creates a web of context you can navigate in both directions.
+
+### Intelligent permissions
+
+Permissions inherit from channels. Send a document to someone and they automatically get access. No complex permission dialogs or sharing workflows.
+
+### Built for speed
+
+With a Rust backend and optimized Solid frontend, Macro is designed for performance. Instant search, real-time collaboration, and keyboard-driven workflows keep you moving fast.
+
+# Demos & Case Studies
 
 - [Demo](https://www.youtube.com/watch?v=Fn5hdzXsQQ8&t=1s) - Founder and CEO, Jacob Beckerman, walks you through Macro's core features
 - [Live Onboarding](https://cal.com/team/macro/macro-demo-call?metadata%5Bfbp%5D=fb.1.1776871324003.617255820779493826&month=2026-06) - Book a time for a member of our team to guide you through onboarding and any questions

@@ -163,7 +163,8 @@ export type ItemType =
   | 'email'
   | 'channel_message'
   | 'call'
-  | 'automation';
+  | 'automation'
+  | 'foreign';
 
 export const DEFAULT_ITEM_TYPE: ItemType = 'document';
 

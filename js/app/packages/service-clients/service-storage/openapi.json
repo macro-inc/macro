@@ -2150,6 +2150,87 @@
         }
       }
     },
+    "/channels/{channel_id}/bots/scoped": {
+      "post": {
+        "tags": ["bots"],
+        "summary": "Handler for `POST /channels/{channel_id}/bots/scoped`.",
+        "operationId": "create_channel_scoped_bot",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateChannelScopedBotRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateChannelScopedBotResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/channels/{channel_id}/join": {
       "post": {
         "tags": ["channels"],
@@ -3420,6 +3501,96 @@
             }
           },
           "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel_id}/webhook": {
+      "post": {
+        "tags": ["bots"],
+        "summary": "Handler for `POST /channels/{channel_id}/webhook`.",
+        "operationId": "post_channel_bot_webhook",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "x-macro-channel-bot-token",
+            "in": "header",
+            "description": "Bot authentication token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChannelWebhookRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelWebhookResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
             "description": "",
             "content": {
               "application/json": {
@@ -9472,6 +9643,162 @@
           }
         }
       },
+      "Bot": {
+        "type": "object",
+        "description": "Bot row.",
+        "required": [
+          "id",
+          "kind",
+          "name",
+          "handle",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "avatar_url": {
+            "type": ["string", "null"],
+            "description": "Optional avatar URL."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation timestamp."
+          },
+          "created_by": {
+            "type": ["string", "null"],
+            "description": "User that created this bot."
+          },
+          "deleted_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Soft-delete timestamp."
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Optional description."
+          },
+          "handle": {
+            "type": "string",
+            "description": "Stable handle."
+          },
+          "id": {
+            "$ref": "#/components/schemas/BotId",
+            "description": "Bot id."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/BotKind",
+            "description": "Bot kind."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "owner": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BotOwner",
+                "description": "Owner for owned bots."
+              }
+            ]
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Update timestamp."
+          }
+        }
+      },
+      "BotId": {
+        "type": "string"
+      },
+      "BotKind": {
+        "type": "string",
+        "description": "Bot kind.",
+        "enum": ["owned", "system"]
+      },
+      "BotOwner": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "User-owned bot.",
+            "required": ["user_id", "type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["user"]
+              },
+              "user_id": {
+                "type": "string",
+                "description": "Owner user id."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Team-owned bot.",
+            "required": ["team_id", "type"],
+            "properties": {
+              "team_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Owner team id."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["team"]
+              }
+            }
+          }
+        ],
+        "description": "Bot owner."
+      },
+      "BotToken": {
+        "type": "object",
+        "description": "Bot token metadata.",
+        "required": ["id", "bot_id", "token_prefix", "created_at"],
+        "properties": {
+          "bot_id": {
+            "$ref": "#/components/schemas/BotId",
+            "description": "Owning bot id."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation timestamp."
+          },
+          "expires_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Expiration timestamp."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Token id."
+          },
+          "label": {
+            "type": ["string", "null"],
+            "description": "Optional token label."
+          },
+          "last_used_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Last successful use."
+          },
+          "revoked_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Revocation timestamp."
+          },
+          "token_prefix": {
+            "type": "string",
+            "description": "Token lookup prefix."
+          }
+        }
+      },
       "BranchNameResponse": {
         "type": "object",
         "description": "Branch name response.",
@@ -9541,7 +9868,7 @@
         "properties": {
           "attended": {
             "type": ["boolean", "null"],
-            "description": "Filter by whether the requesting user attended the call.\n`None` = no filter, `Some(true)` = only calls the user joined,\n`Some(false)` = only calls the user did not join."
+            "description": "Legacy filter by whether the requesting user attended the call.\nPrefer [`CallFilters::status`] for new callers.\n`None` = no filter, `Some(true)` = only calls the user joined,\n`Some(false)` = only calls the user did not join."
           },
           "call_ids": {
             "type": "array",
@@ -9563,6 +9890,17 @@
               "type": "string"
             },
             "description": "Speaker macro user ids. Empty to include all."
+          },
+          "status": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CallStatus",
+                "description": "Filter by the requesting user's viewer-relative call status."
+              }
+            ]
           }
         }
       },
@@ -9653,6 +9991,17 @@
             "type": "string",
             "format": "date-time",
             "description": "When the call started (created_at for active, started_at for archived)."
+          },
+          "status": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CallStatus",
+                "description": "Viewer-relative call status when fetched in the context of a specific user."
+              }
+            ]
           },
           "summary": {
             "type": ["string", "null"],
@@ -9814,6 +10163,11 @@
             "description": "Stable DB-row id for the segment."
           }
         }
+      },
+      "CallStatus": {
+        "type": "string",
+        "description": "Viewer-relative attendance status for a call record.\nSerializes as `ATTENDED`, `MISSED`, or `UNATTENDED`.",
+        "enum": ["ATTENDED", "MISSED", "UNATTENDED"]
       },
       "CallTokenResponse": {
         "type": "object",
@@ -10153,6 +10507,28 @@
         "description": "Type of channel.",
         "enum": ["public", "private", "direct_message", "team"]
       },
+      "ChannelWebhookRequest": {
+        "type": "object",
+        "description": "Request to post a channel webhook message.",
+        "required": ["content"],
+        "properties": {
+          "content": {
+            "type": "string",
+            "description": "Message body."
+          }
+        }
+      },
+      "ChannelWebhookResponse": {
+        "type": "object",
+        "description": "Response returned after posting a channel webhook message.",
+        "required": ["message_id"],
+        "properties": {
+          "message_id": {
+            "type": "string",
+            "description": "Created message id."
+          }
+        }
+      },
       "ChannelWithParticipants": {
         "type": "object",
         "required": ["channel", "participants"],
@@ -10449,6 +10825,62 @@
           "id": {
             "type": "string",
             "description": "Created channel id."
+          }
+        }
+      },
+      "CreateChannelScopedBotRequest": {
+        "type": "object",
+        "description": "Request to create a bot scoped to a channel.",
+        "required": ["name", "handle"],
+        "properties": {
+          "avatar_url": {
+            "type": ["string", "null"],
+            "description": "Optional avatar URL."
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Optional description."
+          },
+          "handle": {
+            "type": "string",
+            "description": "Stable handle."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "team_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Team owner. Omit for a user-owned bot."
+          },
+          "token_expires_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Optional token expiration timestamp."
+          },
+          "token_label": {
+            "type": ["string", "null"],
+            "description": "Optional token label."
+          }
+        }
+      },
+      "CreateChannelScopedBotResponse": {
+        "type": "object",
+        "description": "Response containing a newly created channel-scoped bot and token.",
+        "required": ["bot", "token", "bot_token"],
+        "properties": {
+          "bot": {
+            "$ref": "#/components/schemas/Bot",
+            "description": "Created bot."
+          },
+          "bot_token": {
+            "type": "string",
+            "description": "Raw bot token."
+          },
+          "token": {
+            "$ref": "#/components/schemas/BotToken",
+            "description": "Token metadata."
           }
         }
       },
@@ -15863,13 +16295,14 @@
           "createdBy",
           "startedAt",
           "isActive",
+          "status",
           "attended",
           "participants"
         ],
         "properties": {
           "attended": {
             "type": "boolean",
-            "description": "Whether the requesting user attended this call (i.e. appears in the\n`call_participants` / `call_record_participants` table)."
+            "description": "Whether the requesting user attended this call. Kept for compatibility\nand derived from `status == ATTENDED`."
           },
           "callId": {
             "type": "string",
@@ -15918,6 +16351,10 @@
             "type": "string",
             "format": "date-time",
             "description": "When the call started."
+          },
+          "status": {
+            "$ref": "#/components/schemas/CallStatus",
+            "description": "Viewer-relative call status for the requesting user."
           },
           "summary": {
             "type": ["string", "null"],

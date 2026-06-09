@@ -11,7 +11,23 @@ description: "Channels are where you and your team collaborate. They serve as th
 
 In Macro, you are not restricted to messaging only your team and anyone can be added to a channel by entering in their email. If users do not have a Macro account they will receive an email telling them about their channel notification.
 
-As general best practices, channels should be well named and organized by topic. Notify the whole channel of your message by using @here or directly by using @user.
+<CardGroup cols={2}>
+  <Card title="Channels & Groups" icon="users">
+    Organize team conversations by topic, project, or team
+  </Card>
+
+  <Card title="Threaded Replies" icon="comments">
+    Keep discussions organized with threaded conversations
+  </Card>
+
+  <Card title="Bidirectional Links" icon="link">
+    @mention docs, tasks, and emails to create traceable references
+  </Card>
+
+  <Card title="Rich Messages" icon="pen-fancy">
+    Format messages with the same editor used everywhere in Macro
+  </Card>
+</CardGroup>
 
 > To create a channel use shortcut <kbd>c</kbd> \+ <kbd>m</kbd>
 
@@ -20,3 +36,113 @@ You can also @Macro which will call an agent to address your message in a channe
 <Frame>
   ![Screenshot 2026 06 03 At 4 54 24 PM](/images/Screenshot-2026-06-03-at-4.54.24-PM.png)
 </Frame>
+
+## Message Features
+
+### Rich Text Editing
+
+Compose messages using Macro's unified rich text editor:
+
+- **Formatting**: Bold, italic, code blocks, lists
+- **@mentions**: Reference users, documents, tasks, files, and more
+- **Attachments**: Add files, images, and media
+- **Markdown**: Full markdown support for quick formatting
+
+### Reactions
+
+React to messages with emoji to acknowledge or respond quickly without creating additional message noise.
+
+### Thread Replies
+
+Keep conversations organized by replying in threads:
+
+1. Click on any message to view or start a thread
+2. Thread replies appear indented under the parent message
+3. Thread indicators show when new replies are added
+
+<Tip>
+  Threads help keep channels clean by organizing side conversations and reducing notification noise.
+</Tip>
+
+## @Linking System
+
+One of Macro's most powerful features is the bidirectional @linking system in messages:
+
+<Steps>
+  <Step title="Type @">
+    Start typing `@` to open the mentions menu
+  </Step>
+  <Step title="Select an item">
+    Choose from documents, tasks, emails, files, users, or other channels
+  </Step>
+  <Step title="Create the link">
+    The mention creates a bidirectional reference you can trace back later
+  </Step>
+</Steps>
+
+### What You Can @Mention
+
+- **Users**: Notify team members (`@username`)
+- **Documents**: Reference notes, wikis, and collaborative docs
+- **Tasks**: Link to specific tasks or projects
+- **Files**: Reference PDFs, images, videos, and other files
+- **Emails**: Link to email threads
+- **Channels**: Reference other channels or conversations
+- **Dates**: Create date references (`@tomorrow`, `@next week`)
+- **Groups**: Mention groups like `@here` or `@team`
+
+<Note>
+  When you @mention a document or task in a channel message, it creates a reference you can trace back. The mentioned item will show where it was referenced, creating a bidirectional link.
+</Note>
+
+## Message Editing
+
+Edit messages after sending to fix typos or update information:
+
+- Edited messages show an "edited" indicator
+- Full edit history is preserved
+- Recipients don't receive duplicate notifications
+
+## Attachments
+
+Share files and media in messages:
+
+- **Drag and drop**: Drop files directly into the message composer
+- **File picker**: Browse and select from your storage
+- **Auto-import**: Attachments are automatically added to file storage
+- **Inline previews**: Images and supported files show inline previews
+
+<Info>
+  Attachments shared in channels are automatically imported to Macro's file storage, making them searchable and accessible from anywhere.
+</Info>
+
+## Typing Indicators
+
+See when other participants are typing in real-time, reducing redundant messages and improving conversation flow.
+
+## Participant Management
+
+Manage channel membership:
+
+- Add or remove participants
+- View all channel members
+- See participant status and presence
+
+## Integration with Macro
+
+Channel messages integrate seamlessly with the rest of Macro:
+
+- **Search**: Find messages with `type:channel` or search by content
+- **AI Chat**: Ask questions about channel conversations
+- **Canvas**: Embed channel messages in diagrams
+- **Documents**: Reference channel discussions in docs
+
+## Best Practices
+
+<Tip>
+  - Use channels to organize conversations by topic or project
+  - @mention documents and tasks to create traceable references
+  - Use threads for side conversations to keep the main channel clean
+  - React with emoji instead of sending "thanks" messages
+  - Edit messages to fix mistakes rather than sending corrections
+</Tip>

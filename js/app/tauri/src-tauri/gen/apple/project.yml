@@ -74,7 +74,6 @@ targets:
           - macro
         UIBackgroundModes:
           - audio
-          - picture-in-picture
           - voip
     entitlements:
       path: app_iOS/app_iOS.entitlements

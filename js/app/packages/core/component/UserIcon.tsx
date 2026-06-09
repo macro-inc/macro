@@ -8,7 +8,7 @@ import {
   tryMacroId,
   useDisplayName,
   useDisplayNameParts,
-  useIsInboxOnlyLinkedChild,
+  useIsConnectedSecondaryInbox,
 } from '@core/user';
 import MacroLogo from '@icon/macro-logo.svg';
 import Trash from '@phosphor-icons/core/regular/trash.svg?component-solid';
@@ -100,6 +100,9 @@ function ProfileImage(props: {
     >
       {(url) => (
         <Avatar.Image
+          // Solid surface circle behind the picture so a transparent profile
+          // picture shows surface color rather than what's rendered behind the avatar.
+          class="bg-surface"
           src={staticFileSizedUrl(url, 'small')}
           onError={(e) => {
             if (e.currentTarget.src !== url) {
@@ -161,10 +164,10 @@ export function UserIcon(props: UserIconProps) {
 
   const { replaceOrInsertSplit } = useSplitLayout();
   const getOrCreateDmMutation = useGetOrCreateDirectMessageMutation();
-  const isInboxOnlyLinkedChild = useIsInboxOnlyLinkedChild();
+  const isConnectedSecondaryInbox = useIsConnectedSecondaryInbox();
 
   const getOrCreateDm = () => {
-    if (!props.id || isInboxOnlyLinkedChild(props.id)) return;
+    if (!props.id || isConnectedSecondaryInbox(props.id)) return;
     getOrCreateDmMutation.mutate(
       { recipient_id: props.id },
       {

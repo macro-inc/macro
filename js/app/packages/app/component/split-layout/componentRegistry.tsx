@@ -176,7 +176,7 @@ registerComponent(
     });
     return (
       <SoupView
-        viewName="Documents"
+        viewName="Files"
         initialFilters={preset?.filters}
         initialClientFilters={preset?.clientFilters}
         initialGroupBy={preset?.groupBy}

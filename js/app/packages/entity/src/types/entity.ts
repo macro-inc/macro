@@ -1,8 +1,11 @@
 import type { DateValue } from '@core/util/date';
 import type { ApiLabel } from '@service-email/generated/schemas';
 import type {
+  GithubPullRequestCheckRun,
+  GithubPullRequestComment,
   SoupLabel,
   SoupProperty,
+  CallStatus as StorageCallStatus,
 } from '@service-storage/generated/schemas';
 
 export type EntityBase = {
@@ -15,6 +18,41 @@ export type EntityBase = {
   viewedAt?: DateValue | null;
   sortTs?: DateValue | null;
 };
+
+type ForeignEntityBase = EntityBase & {
+  type: 'foreign';
+  foreignId: string;
+  storedForId: string;
+  storedForAuthEntity: 'team' | (string & {});
+};
+
+export type UnknownForeignEntity = ForeignEntityBase & {
+  foreignSource: 'unknown';
+  rawForeignSource: string;
+  metadata: {
+    [key: string]: unknown;
+  };
+};
+
+// Consider making this a generic pull request entity so we can display
+// pull requests from other sources besides github
+export type GithubPullRequestEntity = ForeignEntityBase & {
+  foreignSource: 'github_pull_request';
+  metadata: {
+    number: number;
+    name: string;
+    owner: string;
+    repo: string;
+    url: string;
+    status: 'open' | 'merged' | 'closed';
+    additions: number;
+    deletions: number;
+    comments: GithubPullRequestComment[];
+    checks: GithubPullRequestCheckRun[];
+  };
+};
+
+export type ForeignEntity = UnknownForeignEntity | GithubPullRequestEntity;
 
 export type ChannelEntity = EntityBase & {
   type: 'channel';
@@ -116,11 +154,15 @@ export type ProjectEntity = EntityBase & {
   projectId?: string;
 };
 
+export type CallStatus = StorageCallStatus;
+
 export type CallEntity = EntityBase & {
   type: 'call';
   channelId: string;
   channelName?: string;
   isActive: boolean;
+  status: CallStatus;
+  /** Compatibility flag derived from status. */
   attended: boolean;
   durationMs?: number;
   participantIds: string[];
@@ -152,7 +194,8 @@ export type EntityData =
   | EmailEntity
   | ProjectEntity
   | CallEntity
-  | AutomationEntity;
+  | AutomationEntity
+  | ForeignEntity;
 
 const ENTITY_TYPE_VALUES = new Set<EntityData['type']>([
   'channel',
@@ -163,6 +206,7 @@ const ENTITY_TYPE_VALUES = new Set<EntityData['type']>([
   'project',
   'call',
   'automation',
+  'foreign',
 ]);
 
 const _isEntityData = (item: unknown): item is EntityData => {
@@ -183,6 +227,20 @@ export const isTaskEntity = (entity: EntityData): entity is TaskEntity => {
     entity.fileType === 'md' &&
     entity.subType?.type === 'task'
   );
+};
+
+export const isGithubPrEntity = (
+  entity: EntityData
+): entity is GithubPullRequestEntity => {
+  return (
+    entity.type === 'foreign' && entity.foreignSource === 'github_pull_request'
+  );
+};
+
+export const isUnknownForeignEntity = (
+  entity: EntityData
+): entity is UnknownForeignEntity => {
+  return entity.type === 'foreign' && entity.foreignSource === 'unknown';
 };
 
 export const isChannelEntity = (

@@ -15,6 +15,10 @@ import {
   queryStateFrom,
 } from '@app/component/next-soup/filters/filter-store';
 import { mergeQuery } from '@app/component/next-soup/filters/filter-store/query-store';
+import {
+  type CallStatus,
+  callStatusFromAttended,
+} from '@app/component/next-soup/filters/filter-store/types';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import type { ListView } from '@app/constants/list-views';
@@ -37,9 +41,11 @@ import type {
   FilterValue,
 } from './consolidated-filter-chip';
 import {
+  CALL_STATUS_FILTER_OPTIONS,
   cacheCallSubFilters,
   cacheChannelSubFilters,
   cacheEmailSubFilters,
+  getCallStatusLabel,
   INDEX_OPTIONS,
   type SearchableOption,
   useSearchFilterOptions,
@@ -650,41 +656,41 @@ export function useFilterRefinements() {
           searchPlaceholder: 'Search speakers...',
         });
 
-        // Call attended filter
-        const callAttended = queryFilters.state.include.callAttended;
-        if (callAttended !== undefined && callAttended !== null) {
-          const key = 'call-attended';
+        // Call status filter
+        const getCurrentCallStatus = (): CallStatus | undefined =>
+          queryFilters.state.include.callStatus ??
+          callStatusFromAttended(queryFilters.state.include.callAttended);
+
+        if (getCurrentCallStatus() !== undefined) {
+          const key = 'call-status';
           seenKeys.add(key);
 
-          const getAttendedValues = (): FilterValue[] => {
-            const attended = queryFilters.state.include.callAttended;
-            if (attended === undefined || attended === null) return [];
-            return [
-              {
-                id: attended ? 'yes' : 'no',
-                label: attended ? 'Attended' : 'Unattended',
-              },
-            ];
+          const getCallStatusValues = (): FilterValue[] => {
+            const status = getCurrentCallStatus();
+            if (status === undefined) return [];
+            return [{ id: status, label: getCallStatusLabel(status) }];
           };
 
           filters.push(
             getOrCreateConsolidatedChip(key, () => ({
               key,
-              categoryLabel: 'Attended',
-              values: getAttendedValues,
-              availableOptions: [
-                { id: 'yes', label: 'Attended' },
-                { id: 'no', label: 'Unattended' },
-              ],
+              categoryLabel: 'Status',
+              values: getCallStatusValues,
+              availableOptions: CALL_STATUS_FILTER_OPTIONS,
               multiple: false,
-              isValueActive: (id) =>
-                id === (queryFilters.state.include.callAttended ? 'yes' : 'no'),
+              isValueActive: (id) => id === getCurrentCallStatus(),
               onToggleValue: (id) =>
-                queryFilters.add({ include: { callAttended: id === 'yes' } }),
-              onRemoveAll: () =>
-                queryFilters.remove({
+                queryFilters.set({
                   include: {
-                    callAttended: queryFilters.state.include.callAttended,
+                    callStatus: id as CallStatus,
+                    callAttended: undefined,
+                  },
+                }),
+              onRemoveAll: () =>
+                queryFilters.set({
+                  include: {
+                    callStatus: undefined,
+                    callAttended: undefined,
                   },
                 }),
             }))

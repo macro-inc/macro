@@ -2,8 +2,13 @@ import { useEmailLinksQuery } from '@queries/email/link';
 import { createMemo } from 'solid-js';
 import { macroIdToEmail, tryMacroId } from './macroId';
 
-/** Predicate: is this macro id one of the current user's inbox-only delegated inboxes. */
-export function useIsInboxOnlyLinkedChild() {
+/**
+ * Predicate: is this macro id a connected secondary inbox (an extra mailbox the
+ * current user attached to their own account, flagged `is_inbox_only`) rather than
+ * a real user. Not to be confused with a delegated/shared inbox, which is a separate
+ * loggable user (its own macro id) and reports `is_inbox_only = false`.
+ */
+export function useIsConnectedSecondaryInbox() {
   const linksQuery = useEmailLinksQuery();
 
   const inboxOnlyEmails = createMemo(() => {

@@ -14,7 +14,7 @@ import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
 import { useUrlParams } from '@core/component/ParamsProvider';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
-import { useCanEdit } from '@core/signal/permissions';
+import { useCanComment } from '@core/signal/permissions';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import CaretDown from '@phosphor/caret-down.svg';
@@ -63,7 +63,7 @@ function buildCommentMentions(
 }
 
 export function TaskDiscussion() {
-  const canEdit = useCanEdit();
+  const canComment = useCanComment();
   const createThread = useCreateDiscussionThread();
   const [isExpanded, setIsExpanded] = createSignal(true);
 
@@ -126,7 +126,7 @@ export function TaskDiscussion() {
               </For>
             </div>
 
-            <Show when={canEdit()}>
+            <Show when={canComment()}>
               <div>
                 <DiscussionInput
                   input={{ mode: 'channel', placeholder: 'Leave a comment...' }}
@@ -150,7 +150,7 @@ function DiscussionThread(props: {
   targetCommentId: number | null;
 }) {
   const userId = useUserId();
-  const canEdit = useCanEdit();
+  const canComment = useCanComment();
   const blockId = useBlockId();
   const createReply = useCreateDiscussionReply();
   const editComment = useEditDiscussionComment();
@@ -193,18 +193,19 @@ function DiscussionThread(props: {
   const makeActions = (comment: Comment, isRoot: boolean): MessageActions => {
     const own = isOwn(comment);
     return {
-      onReply: isRoot
-        ? () => {
-            setIsReplying(true);
-          }
-        : undefined,
+      onReply:
+        isRoot && canComment()
+          ? () => {
+              setIsReplying(true);
+            }
+          : undefined,
       onEdit: own
         ? () => {
             setEditingId(comment.commentId);
           }
         : undefined,
       onDelete:
-        own && canEdit()
+        own && canComment()
           ? async () => {
               await deleteComment(comment.commentId, {});
             }
@@ -277,7 +278,7 @@ function DiscussionThread(props: {
                       )}
                     </For>
 
-                    <Show when={isReplying() && canEdit()}>
+                    <Show when={isReplying() && canComment()}>
                       <div class="ph-no-capture">
                         <Show when={!hasReplies()}>
                           <Thread.ReplyAuthor
@@ -305,7 +306,7 @@ function DiscussionThread(props: {
                       </div>
                     </Show>
 
-                    <Show when={!isReplying() && canEdit()}>
+                    <Show when={!isReplying() && canComment()}>
                       <Thread.ActionsFooter>
                         <Thread.ReplyButton
                           getFocusTarget={() =>

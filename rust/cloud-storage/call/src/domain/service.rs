@@ -1053,14 +1053,16 @@ impl<
                     .ok();
             }
 
-            let preview_key = storage_keys.preview_key.or_else(|| {
-                storage_keys
+            let preview_keys = match storage_keys.preview_key {
+                Some(preview_key) => vec![preview_key],
+                None => storage_keys
                     .recording_key
                     .as_deref()
-                    .and_then(derive_preview_key_from_recording_key)
-            });
+                    .map(derive_preview_keys_from_recording_key)
+                    .unwrap_or_default(),
+            };
 
-            if let Some(preview_key) = preview_key {
+            for preview_key in preview_keys {
                 self.recording_storage
                     .delete_recording_preview(&preview_key)
                     .await
@@ -1563,7 +1565,7 @@ fn extract_recording_key(file_url: &str) -> &str {
         .unwrap_or(file_url)
 }
 
-fn derive_preview_key_from_recording_key(recording_key: &str) -> Option<String> {
+fn recording_key_parent_and_file_name(recording_key: &str) -> Option<(&str, &str)> {
     let recording_key = recording_key
         .strip_prefix("calls/")
         .unwrap_or(recording_key);
@@ -1571,7 +1573,29 @@ fn derive_preview_key_from_recording_key(recording_key: &str) -> Option<String> 
     if parent.is_empty() || file_name.is_empty() {
         return None;
     }
-    Some(format!("calls/{parent}/{file_name}/PREVIEW.jpg"))
+    Some((parent, file_name))
+}
+
+fn derive_preview_key_from_recording_key(recording_key: &str) -> Option<String> {
+    let (parent, file_name) = recording_key_parent_and_file_name(recording_key)?;
+    let recording_stem = file_name.strip_suffix(".mp4").unwrap_or(file_name);
+
+    Some(format!("calls/{parent}/{recording_stem}/PREVIEW.jpg"))
+}
+
+fn derive_preview_keys_from_recording_key(recording_key: &str) -> Vec<String> {
+    let Some((parent, file_name)) = recording_key_parent_and_file_name(recording_key) else {
+        return Vec::new();
+    };
+    let Some(preview_key) = derive_preview_key_from_recording_key(recording_key) else {
+        return Vec::new();
+    };
+    let legacy_preview_key = format!("calls/{parent}/{file_name}/PREVIEW.jpg");
+    if preview_key == legacy_preview_key {
+        vec![preview_key]
+    } else {
+        vec![preview_key, legacy_preview_key]
+    }
 }
 
 /// Zero-sized placeholder implementation of [`CallSummarizer`].

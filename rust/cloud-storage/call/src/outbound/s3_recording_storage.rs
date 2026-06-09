@@ -95,8 +95,8 @@ mod test {
     #[test]
     fn preview_object_key_uses_stored_key_path_without_prefix_changes() {
         assert_eq!(
-            preview_object_key("calls/room/recording.mp4/PREVIEW.jpg"),
-            "calls/room/recording.mp4/PREVIEW.jpg"
+            preview_object_key("calls/room/recording/PREVIEW.jpg"),
+            "calls/room/recording/PREVIEW.jpg"
         );
     }
 }

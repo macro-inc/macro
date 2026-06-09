@@ -30,46 +30,6 @@ impl<T, U> Paginated<T, U> {
     }
 }
 
-impl<T, I, S: Sortable, F> PaginatedCursor<T, I, S, F>
-where
-    T: Identify<Id = I>,
-    I: Serialize,
-    S: Serialize,
-    CursorVal<S>: Serialize,
-    F: Serialize,
-{
-    /// Ensures a cursor is present as long as items is non-empty.
-    /// Useful when post-processing (e.g. CROSS JOIN LATERAL) may have filtered
-    /// rows after the initial limit, making the standard "len < limit means
-    /// last page" heuristic unreliable.
-    pub fn ensure_cursor(
-        self,
-        limit: usize,
-        mut cb: impl FnMut(&T) -> CursorVal<S>,
-        filter: F,
-    ) -> Self {
-        if self.next_cursor.is_some() || self.items.is_empty() {
-            return self;
-        }
-
-        let next_cursor = self
-            .items
-            .last()
-            .map(|last| Cursor {
-                id: last.id(),
-                limit,
-                val: cb(last),
-                filter,
-            })
-            .map(Base64Str::encode_json);
-
-        Paginated {
-            items: self.items,
-            next_cursor,
-        }
-    }
-}
-
 /// Top level cursor information encodes all the required information for paginating by [Cursor]
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Cursor<Id, C, F> {

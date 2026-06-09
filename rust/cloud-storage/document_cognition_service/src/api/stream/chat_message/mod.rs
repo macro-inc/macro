@@ -8,6 +8,7 @@ use crate::api::utils::log;
 use crate::core::constants::DEFAULT_CHAT_NAME;
 use crate::model::stream::{ChatStream, JwtPayload, SendChatMessagePayload, StreamError, ToolSet};
 use crate::service::ai_stream_registry::CancellationSubscription;
+use crate::service::chat_renamer::spawn_initial_chat_rename;
 use crate::service::get_chat::get_chat;
 use crate::service::notification::notify;
 use agent::AgentModel;
@@ -182,9 +183,10 @@ async fn send_chat_message_inner(
     let model = model_access.model();
 
     // Try to get the chat first - if it doesn't exist or no chat_id provided, create it
-    let (chat, actual_chat_id) = if requested_chat_id.is_empty() {
+    let (chat, actual_chat_id, created_new_chat) = if requested_chat_id.is_empty() {
         // No chat_id provided - create a new chat
-        create_new_chat(&ctx, &user_id, model, &stream_id).await?
+        let (chat, chat_id) = create_new_chat(&ctx, &user_id, model, &stream_id).await?;
+        (chat, chat_id, true)
     } else {
         match get_chat(&ctx, &requested_chat_id, user_id.0.as_ref()).await {
             Ok(chat) => {
@@ -215,7 +217,7 @@ async fn send_chat_message_inner(
                         _ => (),
                     },
                 };
-                (chat, requested_chat_id)
+                (chat, requested_chat_id, false)
             }
             Err(_) => {
                 // Chat doesn't exist - create a new one
@@ -223,10 +225,12 @@ async fn send_chat_message_inner(
                     requested_chat_id = %requested_chat_id,
                     "Chat not found, creating new chat"
                 );
-                create_new_chat(&ctx, &user_id, model, &stream_id).await?
+                let (chat, chat_id) = create_new_chat(&ctx, &user_id, model, &stream_id).await?;
+                (chat, chat_id, true)
             }
         }
     };
+    let should_auto_rename_chat = created_new_chat || chat.messages.is_empty();
 
     // Convert HTTP request to internal payload for existing functions
     let payload = SendChatMessagePayload {
@@ -254,6 +258,16 @@ async fn send_chat_message_inner(
             }
         })?;
     let user_message_id = resolved.message_id;
+
+    if should_auto_rename_chat {
+        spawn_initial_chat_rename(
+            ctx.clone(),
+            (*user_id).clone(),
+            actual_chat_id.clone(),
+            stream_id.clone(),
+            request.content.clone(),
+        );
+    }
 
     // Fetch all resolved attachment content for the chat (current + prior messages)
     let all_resolved_parts: Vec<FormattedParts> = ctx
