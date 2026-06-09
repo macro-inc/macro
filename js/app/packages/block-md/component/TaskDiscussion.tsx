@@ -193,11 +193,12 @@ function DiscussionThread(props: {
   const makeActions = (comment: Comment, isRoot: boolean): MessageActions => {
     const own = isOwn(comment);
     return {
-      onReply: isRoot && canComment()
-        ? () => {
-            setIsReplying(true);
-          }
-        : undefined,
+      onReply:
+        isRoot && canComment()
+          ? () => {
+              setIsReplying(true);
+            }
+          : undefined,
       onEdit: own
         ? () => {
             setEditingId(comment.commentId);
