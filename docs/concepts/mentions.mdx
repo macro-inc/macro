@@ -17,13 +17,13 @@ Mentions are the connective tissue of the workspace. Typing `@` in any rich-text
 
 ## Mentions in Agents
 
-Mentioning entities to AI agents inserts a pointer so the AI can read the docs. In the case of markdown docs, I can access images in the markdown doc. Your agents inherit the permissions you have. If you try and give an agent a doc/entity that you don't have access to, your agents won't have access either, and your agent will tell you as much.
+Mentioning entities to AI agents inserts a pointer so the AI can read the docs. In the case of markdown docs, the agent can also read images embedded in the doc. Your agents inherit the permissions you have. If you try and give an agent a doc/entity that you don't have access to, your agents won't have access either, and your agent will tell you as much.
 
 <Frame>
   ![Screenshot 2026 06 09 At 3 59 21 PM](/images/Screenshot-2026-06-09-at-3.59.21-PM.png)
 </Frame>
 
-You don't _need to_ mention entities to agents. Since your agent has access to the search tool and list tool, it can find things in your workspace for itself. We recommend
+You don't _need to_ mention entities to agents. Since your agent has access to the search tool and list tool, it can find things in your workspace for itself. We recommend mentioning entities when you already know what the agent should look at — it skips a round of searching and guarantees the right context.
 
 ## Mentions in Channels
 
@@ -45,7 +45,7 @@ The primary benefit of using Macro instead of Slack is that it is deeply linked 
   />
 </Frame>
 
-When you mention a document or file in a channel, a bidirectional link is created so you can always trace where something has been discussed. For example, on our "8 month roadmap document" members of our team can see that this document has been mentioned by severl other documents, a canvas, in the `#engineers` channel, and I can see it's been mentioned in my private DM's with Teo and Nick (other members of the team would not see that last one unless they are in that channel).
+When you mention a document or file in a channel, a bidirectional link is created so you can always trace where something has been discussed. For example, on our "8 month roadmap document" members of our team can see that this document has been mentioned by several other documents, a canvas, in the `#engineers` channel, and I can see it's been mentioned in my private DM's with Teo and Nick (other members of the team would not see that last one unless they are in that channel).
 
 ## Mentions in Email
 
@@ -55,7 +55,7 @@ Mentioning people causes them to be added to cc on the email thread.
   ![Screenshot 2026 06 09 At 4 00 50 PM](/images/Screenshot-2026-06-09-at-4.00.50-PM.png)
 </Frame>
 
-The auto-sharing that happens when you in channels doesn't happen in email, due to the nature of how email chains can be forwarded and people added, the list of people who might need access isn't known in advance to traceable over time. Thus, you'll need to manually ensure that the recipients of your mentions in email are able to access your link. When you hit send and view the @mention in another email client is will just appear as a hyperlink.
+The auto-sharing that happens when you mention in channels doesn't happen in email: because email chains can be forwarded and people added, the list of people who might need access isn't known in advance or traceable over time. Thus, you'll need to manually ensure that the recipients of your mentions in email are able to access your link. When you hit send, the @mention will appear as a plain hyperlink in other email clients.
 
 ## Mentions in Documents
 

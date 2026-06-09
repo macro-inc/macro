@@ -42,7 +42,8 @@
               "product/docs",
               "product/tasks",
               "product/channels",
-              "product/calls"
+              "product/calls",
+              "product/folders"
             ]
           },
           {
