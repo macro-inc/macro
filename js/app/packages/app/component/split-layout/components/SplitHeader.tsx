@@ -180,7 +180,7 @@ function SoupNavigationButtons() {
 
   return (
     <Show when={context.handle.referredFrom() === 'list-view' && rows().length}>
-      <div class="flex items-center gap-1 pr-1">
+      <div class="flex items-center gap-1">
         <Button
           class="p-1 rounded-lg"
           label="Previous item"
@@ -247,12 +247,13 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
           </div>
         </Show>*/}
 
-        <div
-          class="min-w-4 h-full grow shrink flex items-center justify-end gap-0.5 px-2"
-          ref={(ref) => {
-            panel.layoutRefs.headerRight = ref;
-          }}
-        >
+        <div class="min-w-4 h-full grow shrink flex items-center justify-end gap-0.5 px-2">
+          <div
+            class="contents"
+            ref={(ref) => {
+              panel.layoutRefs.headerRight = ref;
+            }}
+          />
           <SoupNavigationButtons />
         </div>
       </div>
