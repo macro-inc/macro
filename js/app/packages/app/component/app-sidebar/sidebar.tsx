@@ -147,7 +147,7 @@ const SIDEBAR_LINKS = [
     label: 'Files',
     href: LIST_VIEW_PATHS.documents,
     icon: AnimatedFileMdIcon,
-    hotkey: 'd',
+    hotkey: 'f',
     hotkeyToken: TOKENS.sidebar.goTo.documents,
   },
   {
