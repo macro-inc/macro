@@ -385,6 +385,32 @@ pub async fn handler(
                     .await
                     .context("Failed to commit shared-inbox promotion transaction")?;
 
+                // Relocate the mailbox's Google grant onto a dedicated FusionAuth user so the
+                // inbox keeps syncing regardless of which connector stays. Best-effort and done
+                // after the commit: on failure the inbox keeps working under the original
+                // owner's grant (prior behavior) and the relocation can be retried.
+                match ctx
+                    .auth_service_client
+                    .relocate_inbox_grant(&linked_email, &existing_link.fusionauth_user_id)
+                    .await
+                {
+                    Ok(shared_fusionauth_user_id) => {
+                        email_db_client::links::update::update_link_fusionauth_user_id(
+                            &ctx.db,
+                            promoted.link_id,
+                            &shared_fusionauth_user_id,
+                        )
+                        .await
+                        .inspect_err(|e| {
+                            tracing::error!(error=?e, "Failed to re-home link fusionauth_user_id after grant relocation");
+                        })
+                        .ok();
+                    }
+                    Err(e) => {
+                        tracing::error!(error=?e, "Failed to relocate shared-inbox grant; inbox keeps syncing under the original owner's grant");
+                    }
+                }
+
                 return Ok((
                     StatusCode::OK,
                     Json(InitResponse {
