@@ -1061,10 +1061,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                           }}
                           virtualizerClass={cn(
                             previewVisible() && 'pt-1' /* scuffed */,
-                            'scrollbar-hidden',
-                            // Clear the floating mobile tabs + dock so the last
-                            // row isn't hidden behind them.
-                            isMobile() && 'pb-[calc(var(--safe-bottom)+6.5rem)]'
+                            'scrollbar-hidden'
                           )}
                           class="overflow-hidden flex min-w-0"
                           virtualizerRef={registerVirtualizerHandler}

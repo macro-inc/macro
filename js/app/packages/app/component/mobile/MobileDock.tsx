@@ -210,7 +210,7 @@ export function MobileDock() {
 
   return (
     <Layer depth={4}>
-      <div class="z-mobile-nav-bar pointer-events-none fixed inset-x-0 bottom-0 flex items-center gap-5 px-4 pb-[calc(var(--safe-bottom)+0.5rem)]">
+      <div class="z-mobile-nav-bar pointer-events-none fixed inset-x-0 bottom-0 flex items-center gap-5 px-4 pb-6">
         <MobileDockButton
           icon={HomeIcon}
           animateIcon={false}

@@ -124,10 +124,7 @@ function LayoutInner(props: RouteSectionProps) {
   return (
     <div
       class={cn(
-        'relative flex flex-col justify-between w-dvw h-[calc(var(--dvh,1dvh)*100)] pt-(--safe-top) pl-(--safe-left) pr-(--safe-right)',
-        {
-          'pb-(--safe-bottom)': !virtualKeyboardVisible(),
-        }
+        'relative flex flex-col justify-between w-dvw h-[calc(var(--dvh,1dvh)*100)] pt-(--safe-top) pl-(--safe-left) pr-(--safe-right)'
       )}
     >
       <Show when={shouldUsePanelSafeAreaBackground()}>
