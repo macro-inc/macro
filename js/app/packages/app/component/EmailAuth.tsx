@@ -3,6 +3,7 @@ import { updateUserAuth } from '@core/auth';
 import { redirectToEmailAuth } from '@core/auth/email';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { toast } from '@core/component/Toast/Toast';
+import { useSettingsState } from '@core/constant/SettingsState';
 import { useEmailLinks } from '@core/email-link';
 import { whenSettled } from '@core/util/whenSettled';
 import { invalidateAllAfterLogin } from '@queries/auth/user-info';
@@ -99,6 +100,7 @@ function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { query, initEmailLink } = useEmailLinks();
+  const { setActiveTabId } = useSettingsState();
   const [conflict, setConflict] = createSignal<{
     linkId: string;
     emailAddress: string;
@@ -109,6 +111,11 @@ function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
     navigate(props.successPath, { replace: true });
   };
 
+  const navigateToAccountSettings = () => {
+    setActiveTabId('Account');
+    navigate('/component/mail/component/settings', { replace: true });
+  };
+
   const runInit = async (linkId: string, forceShare: boolean) => {
     await initEmailLink({ linkId, forceShare }).match(
       async () => {
@@ -117,11 +124,11 @@ function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
         // than flashing a stale list until its own refetch lands.
         await query.refetch();
         toast.success('Inbox connected');
-        navigateToSuccess();
+        navigateToAccountSettings();
       },
       (err) => {
         if (err.tag === 'AlreadyInitialized') {
-          navigateToSuccess();
+          navigateToAccountSettings();
           return;
         }
         // The mailbox is already connected by someone else. Hold the callback open
