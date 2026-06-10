@@ -18,7 +18,11 @@ pub async fn put_snapshot_handler<T: DocumentService, Svc: EntityAccessService>(
     Path(Params { document_id }): Path<Params>,
     body: Bytes,
 ) -> impl IntoResponse {
-    match state.service.upload_snapshot(&document_id, body.to_vec()).await {
+    match state
+        .service
+        .upload_snapshot(&document_id, body.to_vec())
+        .await
+    {
         Ok(()) => StatusCode::OK.into_response(),
         Err(e) => {
             tracing::error!(error=?e, document_id=document_id, "failed to upload snapshot");

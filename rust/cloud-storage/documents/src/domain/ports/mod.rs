@@ -305,7 +305,6 @@ pub trait TaskPropertiesPort: Send + Sync + 'static {
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 }
 
-
 /// Service interface for document operations.
 ///
 /// Orchestrates business logic using the repository and external services.

@@ -8,7 +8,10 @@ import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { ENABLE_MARKDOWN_SIDE_PANEL } from '@core/constant/featureFlags';
 import { blockErrorSignal } from '@core/signal/load';
 import { useCanEdit } from '@core/signal/permissions';
-import { MARKDOWN_LORO_SCHEMA, type MarkdownLoroSchemaType } from '@lexical-core/markdown-loro-schema';
+import {
+  MARKDOWN_LORO_SCHEMA,
+  type MarkdownLoroSchemaType,
+} from '@lexical-core/markdown-loro-schema';
 import { DocumentDebouncedNotificationReadMarker } from '@notifications';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
 import { storageServiceClient } from '@service-storage/client';
@@ -78,7 +81,6 @@ async function syncFromDO({
   loroManager: LoroManager<MarkdownLoroSchemaType>;
   blockId: string;
 }): Promise<Result<void, SyncError>> {
-
   let gotDoSnapshot = false;
 
   // unawaited: only use S3 snapshot if DO hasn't responded first

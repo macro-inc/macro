@@ -101,9 +101,7 @@ impl PresignedUploadUrlPort for S3UploadUrlAdapter {
             .await;
 
         match resp {
-            Err(e) if e.as_service_error().map(|e| e.is_no_such_key()) == Some(true) => {
-                Ok(None)
-            }
+            Err(e) if e.as_service_error().map(|e| e.is_no_such_key()) == Some(true) => Ok(None),
             Err(e) => Err(e).context("failed get_object for snapshot"),
             Ok(output) => {
                 let bytes = output
