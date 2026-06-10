@@ -13,7 +13,10 @@ import type {
   GroupHeaderProps,
   SoupRow,
 } from '@app/component/next-soup/create-soup-state';
-import type { QueryState } from '@app/component/next-soup/filters/filter-store';
+import type {
+  Query,
+  QueryState,
+} from '@app/component/next-soup/filters/filter-store';
 import type { SetPredicatesInput } from '@app/component/next-soup/filters/filter-store/predicates-store';
 import { useSoup } from '@app/component/next-soup/soup-context';
 import { EmptyState } from '@app/component/next-soup/soup-view/empty-states';
@@ -341,16 +344,28 @@ export const SoupView = (props: SoupViewProps) => {
   const panel = useSplitPanelOrThrow();
   const soupView = useSoupView();
 
+  const entryState = panel.handle.currentEntryState();
+
+  const persistedFilters = entryState?.['search.filters'] as Query | undefined;
+  const persistedPredicates = entryState?.['search.predicates'] as
+    | SetPredicatesInput<string>
+    | undefined;
+
+  // We handle the restore of the persistence here instead of within the context
+  // because the context is no longer recreated for each soup view because we
+  // moved it within the `SplitPanel`.
+  //
+  // We only restore the following because they either live as state in the
+  // context or are used within the context to produce the output (like the
+  // client filters, local search state, and additionalEntities)
   onMount(() => {
-    soupView.initialize(
-      {
-        initialQuery: props.initialFilters,
-        initialSearchText: props.initialSearchText,
-        disableLocalSearch: props.disableLocalSearch,
-        additionalEntities: props.additionalEntities,
-      },
-      true
-    );
+    soupView.initialize({
+      initialQuery: persistedFilters ?? props.initialFilters,
+      initialClientFilters: persistedPredicates ?? props.initialClientFilters,
+      initialSearchText: props.initialSearchText,
+      disableLocalSearch: props.disableLocalSearch,
+      additionalEntities: props.additionalEntities,
+    });
   });
 
   createEffect(() => {
@@ -547,7 +562,6 @@ export const SoupView = (props: SoupViewProps) => {
           <Suspense>
             <SoupViewFileDropzone>
               <SoupViewList
-                initialClientFilters={props.initialClientFilters}
                 initialGroupBy={props.initialGroupBy}
                 onScrollOffsetBaseline={resetFloatingButtonScrollTracking}
                 onScrollOffsetChange={handleSoupScrollOffsetChange}
@@ -587,7 +601,6 @@ export const SoupView = (props: SoupViewProps) => {
 interface SoupViewListProps {
   customScrollbarHidden?: boolean;
   scopeId?: string;
-  initialClientFilters?: SetPredicatesInput<string>;
   initialGroupBy?: string;
   onScrollOffsetBaseline?: (offset: number) => void;
   onScrollOffsetChange?: (offset: number) => void;
@@ -956,14 +969,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
           : props.initialGroupBy
       );
       soup.grouping.collapseAll(persistedCollapsedGroups ?? []);
-
-      // Apply view-supplied client filters only when per-entry state didn't
-      // already populate them in SoupViewContextProvider.
-      const hasEntryFilters =
-        panel.handle.currentEntryState()?.['search.predicates'] !== undefined;
-      if (!hasEntryFilters && props.initialClientFilters) {
-        soup.predicates.set(props.initialClientFilters);
-      }
 
       // Default tab for list views; entry state already restored it via
       // `useEntryState` in SoupViewContextProvider when applicable.

@@ -89,6 +89,7 @@ type DataSource<T> = {
 
 type SoupViewInitializeOptions = {
   initialQuery?: Query;
+  initialClientFilters?: SetPredicatesInput<string>;
   initialSearchText?: string;
   disableLocalSearch?: boolean;
   additionalEntities?: Accessor<EntityData[]>;
@@ -96,7 +97,7 @@ type SoupViewInitializeOptions = {
 
 interface SoupViewContextValues {
   soup: SoupState;
-  initialize: (options?: SoupViewInitializeOptions, force?: boolean) => void;
+  initialize: (options?: SoupViewInitializeOptions) => void;
   source: DataSource<EntityData>;
   searchText: Accessor<string>;
   setSearchText: (value: string) => void;
@@ -153,6 +154,7 @@ export const SoupViewContextProvider: FlowComponent<
   const [enabled, setEnabled] = createSignal(props.initialEnabled ?? false);
   const [config, setConfig] = createSignal<SoupViewInitializeOptions>({
     initialQuery: props.initialQuery,
+    initialClientFilters: props.initialClientFilters,
     initialSearchText: props.initialSearchText,
     disableLocalSearch: props.disableLocalSearch,
     additionalEntities: props.additionalEntities,
@@ -176,13 +178,8 @@ export const SoupViewContextProvider: FlowComponent<
 
   const panel = useSplitPanelOrThrow();
 
-  // Restore filter state from this history entry if it was captured during a
-  // previous nav-away; otherwise fall back to the caller-provided initial.
-  const persistedFilters = panel.handle.currentEntryState()?.[
-    'search.filters'
-  ] as Query | undefined;
   const store = createQueryStore({
-    initial: persistedFilters ?? props.initialQuery,
+    initial: props.initialQuery,
   });
 
   const filterCaptorTeardown = panel.handle.registerEntryStateCaptor(
@@ -194,12 +191,6 @@ export const SoupViewContextProvider: FlowComponent<
   // Client-side predicate state (drives the "Type: X" chips and other
   // toggleable filters) also needs to round-trip per entry, since the chip UI
   // reads predicates directly and would otherwise show empty after back-nav.
-  const persistedPredicates = panel.handle.currentEntryState()?.[
-    'search.predicates'
-  ] as SetPredicatesInput<string> | undefined;
-  if (persistedPredicates) {
-    soup.predicates.set(persistedPredicates);
-  }
   const predicatesCaptorTeardown = panel.handle.registerEntryStateCaptor(
     'search.predicates',
     (): SetPredicatesInput<string> => ({
@@ -313,18 +304,12 @@ export const SoupViewContextProvider: FlowComponent<
     setSearchText,
   });
 
-  const initialize = (
-    options: SoupViewInitializeOptions = {},
-    force = false
-  ) => {
+  const initialize = (options: SoupViewInitializeOptions = {}) => {
     batch(() => {
       setConfig(options);
-      if ((!persistedFilters && options.initialQuery) || force) {
-        queryFilters.replace(options.initialQuery ?? null);
-      }
-      if ((options.initialSearchText !== undefined && !searchText()) || force) {
-        setSearchText(options.initialSearchText ?? '');
-      }
+      queryFilters.replace(options.initialQuery ?? null);
+      soup.predicates.set(options.initialClientFilters ?? {});
+      setSearchText(options.initialSearchText ?? '');
       setEnabled(true);
     });
   };
