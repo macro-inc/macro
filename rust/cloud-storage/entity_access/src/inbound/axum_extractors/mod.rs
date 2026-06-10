@@ -6,8 +6,6 @@
 mod call;
 mod channel;
 mod chat;
-mod crm_company;
-mod crm_contact;
 mod document;
 mod entity_permission;
 mod foreign_entity;
@@ -20,8 +18,6 @@ mod thread;
 pub use call::{CallAccessLevelExtractor, CallWithChannelIdAccessLevelExtractor};
 pub use channel::ChannelAccessLevelExtractor;
 pub use chat::ChatAccessLevelExtractor;
-pub use crm_company::CrmCompanyAccessLevelExtractor;
-pub use crm_contact::CrmContactAccessLevelExtractor;
 pub use document::DocumentAccessExtractor;
 pub use entity_permission::EntityPermissionExtractor;
 pub use foreign_entity::ForeignEntityAccessLevelExtractor;

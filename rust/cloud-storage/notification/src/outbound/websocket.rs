@@ -107,7 +107,8 @@ struct BatchSendUniqueMessagesBody<'a> {
 }
 
 impl ConnectionGatewayClient {
-    async fn batch_send_to_entities<T: Serialize + Send + Sync>(
+    /// Send a payload to connection gateway entities with the provided message type.
+    pub async fn batch_send_to_entities<T: Serialize + Send + Sync>(
         &self,
         message_type: &str,
         payload: &T,

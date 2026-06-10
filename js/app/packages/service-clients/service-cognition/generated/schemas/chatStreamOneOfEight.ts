@@ -4,16 +4,9 @@
  * Document Cognition Service
  * OpenAPI spec version: 1.0.0
  */
-import type { AssistantMessagePart } from './assistantMessagePart';
 import type { ChatStreamOneOfEightType } from './chatStreamOneOfEightType';
 
-/**
- * Indicates a response from the chat completion API for a given message
- */
 export type ChatStreamOneOfEight = {
-  chat_id: string;
-  content: AssistantMessagePart;
-  message_id: string;
   stream_id: string;
   type: ChatStreamOneOfEightType;
 };

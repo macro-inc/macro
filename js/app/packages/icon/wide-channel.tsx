@@ -16,45 +16,48 @@ export const AnimatedChannelIcon = (props: {
       overflow="visible"
       class={`animated-channel-icon ${props.triggerAnimation ? 'animating' : ''} ${props.class ?? ''}`}
     >
-      {/*<title>Animated channel icon</title>*/}
+      {/*<title>Channel icon</title>*/}
       <style>{`
-        @keyframes head-bounce {
-          0% {
-            transform: translateY(0);
-          }
-          50% {
-            transform: translateY(-2px);
-          }
-          80% {
-            transform: translateY(1px);
-          }
-          100% {
-            transform: translateY(0);
-          }
+        /* The .animating class is toggled by the triggerAnimation prop; callers
+           drive it differently — held for the duration of hover in the desktop
+           sidebar (SidebarActionButton etc.), and pulsed for a fixed duration on
+           onPointerDown/tap in the mobile dock (MobileDockButton). While
+           .animating is set, the offset/leaning hash resolves into a regular hash
+           and stays there: horizontals slide to horizontally-centered
+           (translateX), verticals straighten to fully vertical by morphing their
+           path 'd'. It eases back when .animating clears. Morphing 'd' (rather
+           than skewX) avoids shearing the round caps and keeps the stroke scaling
+           normally with icon size. */
+        .animated-channel-icon .channel-h {
+          transition: transform 0.35s ease-in-out;
         }
-        .animated-channel-icon {
-          .head-left, .head-center, .head-right {
-            transition: transform 0.4s ease;
-          }
+        /* Browser support for the .channel-v / .channel-v-* path morph below
+           (via 'transition: d'): Chrome/Edge >=52/79 and Firefox >=97, but NOT
+           Safari/WebKit — including the macOS Tauri WKWebView — where the 'd'
+           property parses but has no effect, so the verticals won't straighten
+           there (the translateX horizontals still animate). A WebKit fallback
+           (SMIL or JS morph) is TODO in a separate PR covering the other
+           animating icons too. */
+        .animated-channel-icon .channel-v {
+          transition: d 0.35s ease-in-out;
         }
-        .animated-channel-icon.animating {
-          .head-left {
-            animation: head-bounce .2s;
-          }
-          .head-center {
-            animation: head-bounce .2s 0.2s;
-          }
-          .head-right {
-            animation: head-bounce .2s 0.4s;
-          }
+        .animated-channel-icon.animating .channel-h-top {
+          transform: translateX(-1px);
+        }
+        .animated-channel-icon.animating .channel-h-bottom {
+          transform: translateX(1px);
+        }
+        .animated-channel-icon.animating .channel-v-left {
+          d: path("M9 15.5L9 0.5");
+        }
+        .animated-channel-icon.animating .channel-v-right {
+          d: path("M15 15.5L15 0.5");
         }
       `}</style>
-      <circle class="head-center" cx="12" cy="8" r="3.04" />
-      <circle class="head-right" cx="20.333" cy="3.667" r="3.04" />
-      <circle class="head-left" cx="3.667" cy="3.667" r="3.04" />
-      <path d="M0 9.99C0.9 8.99 2.23 8.33 3.693 8.33C5.16 8.33 6.44 8.96 7.333 9.94" />
-      <path d="M16.667 9.99C17.567 8.99 18.894 8.33 20.36 8.33C21.827 8.33 23.107 8.96 24 9.94" />
-      <path d="M7.107 16C7.887 14.06 9.78 12.667 12.007 12.667C14.234 12.667 16.12 14.06 16.907 16" />
+      <path class="channel-h channel-h-top" d="M2 5H24" />
+      <path class="channel-h channel-h-bottom" d="M0 11H22" />
+      <path class="channel-v channel-v-left" d="M6.5 15.5L11.5 0.5" />
+      <path class="channel-v channel-v-right" d="M12.5 15.5L17.5 0.5" />
     </svg>
   );
 };

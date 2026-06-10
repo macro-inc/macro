@@ -82,6 +82,7 @@ where
     #[tracing::instrument(err, skip(self, source_ids, query))]
     async fn get_foreign_entities_for_user(
         &self,
+        requesting_user: Option<String>,
         source_ids: Vec<SourceId>,
         limit: u32,
         query: ForeignEntityListQuery,
@@ -95,7 +96,7 @@ where
         }
 
         self.repo
-            .get_foreign_entities_for_user(source_ids, limit, query)
+            .get_foreign_entities_for_user(requesting_user, source_ids, limit, query)
             .await
             .map_err(|error| ForeignEntityError::Internal(error.into()))
     }

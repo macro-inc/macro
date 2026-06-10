@@ -75,4 +75,20 @@ mod tests {
         );
         assert!(verify_hash(&generated.hash, &hash_token(&generated.token)));
     }
+
+    #[test]
+    fn generated_token_is_url_path_safe() {
+        let generated = generate_token();
+
+        assert!(generated.token.is_ascii());
+        assert!(
+            generated
+                .token
+                .chars()
+                .all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
+        );
+        assert!(!generated.token.contains('/'));
+        assert!(!generated.token.contains('?'));
+        assert!(!generated.token.contains('#'));
+    }
 }

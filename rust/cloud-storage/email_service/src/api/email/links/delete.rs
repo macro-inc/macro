@@ -59,6 +59,40 @@ pub async fn delete_link_handler(
             )
             .await
             .context("failed to delete delegation edge")?;
+
+            // A promoted shared mailbox has no human owner — it lives only through its
+            // delegation edges. When the last delegate leaves, tear the mailbox down so it
+            // doesn't linger as an orphaned link + minted user that nobody can reach.
+            let remaining = macro_db_client::macro_user_links::get_primaries_for_child(
+                &ctx.db,
+                link.macro_id.as_ref(),
+            )
+            .await
+            .context("failed to count remaining shared-inbox delegates")?;
+
+            if remaining.is_empty() {
+                let mut conn = ctx
+                    .db
+                    .acquire()
+                    .await
+                    .context("failed to acquire connection")?;
+                let is_promoted = macro_db_client::shared_inbox::is_promoted_shared_mailbox(
+                    &mut conn,
+                    link.macro_id.as_ref(),
+                )
+                .await
+                .context("failed to check promoted shared mailbox")?;
+
+                if is_promoted {
+                    ctx.sqs_client
+                        .enqueue_link_manager_notification(LinkManagerMessage::DeleteLink {
+                            link_id: link.id,
+                            deletion_reason: DeletionReason::ManuallyDisabled,
+                        })
+                        .await
+                        .context("failed to enqueue shared-inbox teardown")?;
+                }
+            }
         }
     }
 

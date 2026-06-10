@@ -444,7 +444,9 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<CrmCommentThread>, CrmError>> + Send;
 
     /// Edit a CRM comment's `text`, scoped to `team_id` via the comment's
-    /// thread → entity → company. Returns the updated comment, or
+    /// thread → entity → company. Owner-only: returns
+    /// [`CrmError::CommentNotOwned`] when `requester` (the caller's macro
+    /// user id) is not the comment's author, or
     /// [`CrmError::CommentNotFound`] when it doesn't exist or isn't owned by
     /// the team. `include_hidden = false` (non-admin) additionally
     /// returns `CommentNotFound` when the parent entity is hidden.
@@ -454,12 +456,15 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
         comment_id: &uuid::Uuid,
         text: &str,
         include_hidden: bool,
+        requester: &str,
     ) -> impl Future<Output = Result<CrmComment, CrmError>> + Send;
 
     /// Soft-delete a CRM comment (sets `deleted_at`), scoped to `team_id`.
     /// When it was the thread's last live comment, the thread is
     /// soft-deleted too (reported via
-    /// [`DeleteCrmCommentResult::thread_deleted`]). Returns
+    /// [`DeleteCrmCommentResult::thread_deleted`]). Owner-only: returns
+    /// [`CrmError::CommentNotOwned`] when `requester` (the caller's macro
+    /// user id) is not the comment's author, or
     /// [`CrmError::CommentNotFound`] when the comment doesn't exist, is
     /// already deleted, or isn't owned by the team. `include_hidden =
     /// false` (non-admin) additionally returns `CommentNotFound` when
@@ -469,6 +474,7 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
         team_id: &uuid::Uuid,
         comment_id: &uuid::Uuid,
         include_hidden: bool,
+        requester: &str,
     ) -> impl Future<Output = Result<DeleteCrmCommentResult, CrmError>> + Send;
 
     /// Resolve a CRM comment to the entity its thread is attached to.

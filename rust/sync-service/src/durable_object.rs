@@ -11,7 +11,7 @@ use matchit::Router;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error, info, instrument, trace, warn};
 use worker::{
-    Cors, Date, DurableObject, Env, Error, Method, Request, Response, ResponseBody,
+    Context, Cors, Date, DurableObject, Env, Error, Method, Request, Response, ResponseBody,
     ResponseBuilder, Result, ScheduledTime, State, WebSocket, WebSocketIncomingMessage,
     WebSocketPair, durable_object,
 };
@@ -20,6 +20,7 @@ use crate::{
     auth::{AccessLevel, TokenFrom, decode_jwt},
     constants::USER_PEER_D1_BINDING,
     d1::{PeerWithUserId, get_user_id_from_peer_id, insert_user_mapping},
+    dss_internal::{DssInternal, DssInternalClient},
     error::ResultExt,
     generated::schema::InitializeFromSnapshotRequest,
     keepalive::{DEFAULT_TIME_TO_LIVE, keepalive},
@@ -381,6 +382,27 @@ impl DocumentSyncSession {
                 .lock("DocumentSyncSession::session_storage set within initialize_handler") =
                 Some(session_storage);
         }
+
+        // Broadcast initial sync to any sockets that connected before init landed.
+        if let Ok(state) = self.document_state().await
+            && let Ok(snapshot) = state.export_shallow_snapshot()
+        {
+            let awareness = self.awareness.encode_all();
+            for ws in &self.state.get_websockets() {
+                if let Err(e) = websocket::send_initial_sync(
+                    ws,
+                    snapshot.as_slice(),
+                    awareness.as_slice(),
+                    self.msg_buffer.clone(),
+                ) {
+                    warn!(
+                        error =? e,
+                        "failed to send delayed initial sync to a waiting peer"
+                    );
+                }
+            }
+        }
+
         Response::empty()
     }
 
@@ -525,7 +547,11 @@ impl DocumentSyncSession {
     async fn connect_handler(&self, req: Request, document_id: &str) -> Result<Response> {
         let (res, elap) = timeit!({
             let claims = or_unauth!(decode_jwt(&req, &self.env, TokenFrom::QueryParams).ok());
-            self.maybe_set_document_id(document_id).await?;
+            if self.maybe_set_document_id(document_id).await? {
+                trace!("init document_id={document_id}");
+            } else {
+                trace!("document_id={document_id} already set");
+            }
 
             //  Below is websocket stuff only i.e connect
             let pair = WebSocketPair::new().context("failed to create websocket pair")?;
@@ -548,20 +574,28 @@ impl DocumentSyncSession {
                 .lock("DocumentSyncSession::ws_meta_map insert in connect_handler")
                 .insert(ws_id, ws_meta);
 
+            // If the snapshot is already in storage, send the initial sync now.
+            // Otherwise accept the WS without sending — initialize_handler will
+            // broadcast initial sync to this socket once /initialize lands.
             let snapshot = self
                 .document_state()
-                .await?
-                .export_shallow_snapshot()
-                .context("failed to export snapshot")?;
+                .await
+                .and_then(|state| state.export_shallow_snapshot());
 
-            trace!("got_snapshot_len = {}", snapshot.len());
-            websocket::send_initial_sync(
-                &pair.server,
-                snapshot.as_slice(),
-                self.awareness.encode_all().as_slice(),
-                self.msg_buffer.clone(),
-            )
-            .context("failed to send initial sync message")?;
+            if let Ok(snapshot) = snapshot {
+                websocket::send_initial_sync(
+                    &pair.server,
+                    snapshot.as_slice(),
+                    self.awareness.encode_all().as_slice(),
+                    self.msg_buffer.clone(),
+                )
+                .context("failed to send initial sync message")?;
+            } else {
+                debug!(
+                    document_id = document_id,
+                    "snapshot not yet available; deferring initial sync until /initialize"
+                );
+            }
 
             Response::from_websocket(pair.client).context("failed to create websocket response")?
         });
@@ -574,7 +608,7 @@ impl DocumentSyncSession {
         Ok(res)
     }
 
-    async fn maybe_set_document_id(&self, document_id: &str) -> Result<()> {
+    async fn maybe_set_document_id(&self, document_id: &str) -> Result<bool> {
         if !self.document_id_is_some() {
             debug!("Setting DO::kv({DOCUMENT_ID_KEY}, {document_id})");
             self.state
@@ -585,8 +619,10 @@ impl DocumentSyncSession {
                 .document_id
                 .lock("DocumentSyncSession::document_id set within maybe_set_document_id") =
                 Some(Arc::new(document_id.to_string()));
+            Ok(true)
+        } else {
+            Ok(false)
         }
-        Ok(())
     }
 
     /// Check if provided document_id exists.
@@ -867,27 +903,33 @@ impl DurableObject for DocumentSyncSession {
                 .context("failed deleting applied ops")?;
 
             state.mark_exported();
+
+            let document_id = self.document_id().await.ok();
+            let env = self.env.clone();
+            self.state.wait_until(async move {
+                if let Some(document_id) = document_id
+                    && let Ok(snapshot) = doc_state.export_shallow_snapshot()
+                {
+                    // best effort
+                    if let Err(err) = DssInternalClient::new(&env)
+                        .publish_shallow_snapshot(&document_id, &snapshot)
+                        .await
+                    {
+                        warn!(error =? err, "failed to push snapshot to DSS");
+                    }
+                }
+            });
         }
 
-        let sockets = self.state.get_websockets();
-
-        // on a schedule we should broadcast the current snapshot of the document
-        // to all connected clients
-        if !sockets.is_empty() {
+        // Re-arm the alarm while clients are connected so the in-memory state
+        // stays warm and pending updates keep getting persisted. Updates reach
+        // peers when they happen (PeerUpdate broadcast); pushing a full
+        // snapshot to every client on every alarm tick only burned bandwidth
+        // and stalled clients on large documents.
+        if !self.state.get_websockets().is_empty() {
             bump_alarm(&self.state)
                 .await
                 .context("failed to keep document alive")?;
-
-            let snapshot = state
-                .export_shallow_snapshot()
-                .context("failed to export snapshot")?;
-
-            websocket::broadcast_snapshot(
-                sockets.as_slice(),
-                snapshot.as_slice(),
-                self.msg_buffer.clone(),
-            )
-            .context("failed to broadcast snapshot")?;
         } else {
             info!("durable object has reached 0 connections")
         }

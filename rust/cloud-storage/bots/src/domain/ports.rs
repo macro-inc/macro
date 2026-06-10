@@ -2,7 +2,8 @@
 
 use super::models::{
     AuthenticatedBot, Bot, BotId, BotOwner, BotToken, BotTokenCandidate, CreateBotRequest,
-    CreateBotTokenRequest, CreateBotTokenResponse, PatchBotRequest,
+    CreateBotTokenRequest, CreateBotTokenResponse, CreateChannelScopedBotRequest,
+    CreateChannelScopedBotResponse, PatchBotRequest,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use std::future::Future;
@@ -20,6 +21,17 @@ pub trait BotRepo: Clone + Send + Sync + 'static {
         created_by: MacroUserIdStr<'static>,
         req: CreateBotRequest,
     ) -> impl Future<Output = Result<Bot, Self::Err>> + Send;
+
+    /// Create an owned bot, add it to a channel, and create a token atomically.
+    fn create_channel_scoped_bot(
+        &self,
+        owner: BotOwner,
+        created_by: MacroUserIdStr<'static>,
+        channel_id: Uuid,
+        token_hash: Vec<u8>,
+        token_prefix: String,
+        req: CreateChannelScopedBotRequest,
+    ) -> impl Future<Output = Result<(Bot, BotToken), Self::Err>> + Send;
 
     /// List active bots manageable by a caller.
     fn list_manageable_bots(
@@ -96,6 +108,13 @@ pub trait BotRepo: Clone + Send + Sync + 'static {
         token_prefix: &str,
     ) -> impl Future<Output = Result<Vec<BotTokenCandidate>, Self::Err>> + Send;
 
+    /// Lookup token candidates by channel and prefix.
+    fn channel_token_candidates(
+        &self,
+        channel_id: Uuid,
+        token_prefix: &str,
+    ) -> impl Future<Output = Result<Vec<BotTokenCandidate>, Self::Err>> + Send;
+
     /// Mark a token as used.
     fn mark_token_used(&self, token_id: Uuid)
     -> impl Future<Output = Result<(), Self::Err>> + Send;
@@ -109,6 +128,14 @@ pub trait BotService: Clone + Send + Sync + 'static {
         caller: MacroUserIdStr<'static>,
         req: CreateBotRequest,
     ) -> impl Future<Output = Result<Bot, BotError>> + Send;
+
+    /// Create a bot owned by the caller and scoped to a channel.
+    fn create_channel_scoped_bot(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        channel_id: Uuid,
+        req: CreateChannelScopedBotRequest,
+    ) -> impl Future<Output = Result<CreateChannelScopedBotResponse, BotError>> + Send;
 
     /// List bots manageable by the caller.
     fn list_bots(
@@ -186,6 +213,13 @@ pub trait BotService: Clone + Send + Sync + 'static {
     /// Authenticate a raw bearer token.
     fn authenticate_token(
         &self,
+        token: &str,
+    ) -> impl Future<Output = Result<AuthenticatedBot, BotError>> + Send;
+
+    /// Authenticate a raw bot token scoped to a channel.
+    fn authenticate_channel_token(
+        &self,
+        channel_id: Uuid,
         token: &str,
     ) -> impl Future<Output = Result<AuthenticatedBot, BotError>> + Send;
 }

@@ -20,6 +20,7 @@ macro_aws_config = { path = "../macro_aws_config", features = ["s3"] }
 macro_entrypoint = { path = "../macro_entrypoint" }
 model = { path = "../model" }
 s3_key = { path = "../s3_key" }
+macro_service_urls = { path = "../macro_service_urls" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true, features = ["postgres", "runtime-tokio-rustls"] }
@@ -31,4 +32,3 @@ urlencoding = { workspace = true }
 [[bin]]
 name = "document_upload_finalizer_local_worker"
 path = "src/bin/local_worker.rs"
-

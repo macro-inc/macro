@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-start-outgoing-call"
+description = "Enables the start_outgoing_call command without any pre-configured scope."
+commands.allow = ["start_outgoing_call"]
+
+[[permission]]
+identifier = "deny-start-outgoing-call"
+description = "Denies the start_outgoing_call command without any pre-configured scope."
+commands.deny = ["start_outgoing_call"]

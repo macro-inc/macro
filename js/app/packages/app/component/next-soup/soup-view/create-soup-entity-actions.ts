@@ -116,6 +116,8 @@ export function createSoupEntityActions(): {
       const entity = entities[0];
       const splitManager = globalSplitManager();
       if (!splitManager) return false;
+      // TODO(dev-rb/github): Allow GitHub PRs once they map to /pr.
+      if (entity.type === 'foreign') return false;
       const contentId =
         entity.type === 'channel_message' ? entity.channelId : entity.id;
       const contentType = itemToBlockName(entity);
@@ -162,7 +164,23 @@ export function createSoupEntityActions(): {
           await blockHandle?.goToLocationFromParams(
             getChannelParams(entity.messageId, entity.threadId)
           );
-        } else {
+        } else if (entity.type === 'crm_company') {
+          splitManager.createNewSplit({
+            content: {
+              type: 'company',
+              id: entity.id,
+            },
+            referredFrom: 'entity-actions-menu',
+          });
+        } else if (entity.type === 'crm_contact') {
+          splitManager.createNewSplit({
+            content: {
+              type: 'contact',
+              id: entity.id,
+            },
+            referredFrom: 'entity-actions-menu',
+          });
+        } else if (entity.type !== 'foreign') {
           splitManager.createNewSplit({
             content: {
               type: entity.type,

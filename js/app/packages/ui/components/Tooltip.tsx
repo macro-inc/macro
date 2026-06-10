@@ -5,6 +5,7 @@ import { Surface } from '@ui';
 import type { ParentProps } from 'solid-js';
 import { For, Show } from 'solid-js';
 import { Hotkey } from '../../ui/components/Hotkey';
+import { cn } from '../utils/classname';
 
 type TooltipProps = ParentProps<{
   hotkey?: HotkeyToken | HotkeyToken[];
@@ -15,6 +16,7 @@ type TooltipProps = ParentProps<{
   shortcut?: string | string[];
   placement?: Placement;
   as?: 'div' | 'span';
+  class?: string;
   label: string;
 }>;
 
@@ -57,7 +59,7 @@ export function Tooltip(props: TooltipProps) {
       gutter={4}
     >
       <KobalteTooltip.Trigger
-        class="inline-flex items-center"
+        class={cn('inline-flex items-center', props.class)}
         as={props.as ?? 'div'}
       >
         {props.children}

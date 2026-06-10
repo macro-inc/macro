@@ -11,8 +11,10 @@ import {
   Show,
   Switch,
 } from 'solid-js';
-import type { SearchableOption } from './search-filter-controls';
-import { SearchableMultiSelect } from './searchable-multi-select';
+import {
+  SearchableMultiSelect,
+  type SearchableOption,
+} from './searchable-multi-select';
 
 export type FilterValue = {
   id: string;

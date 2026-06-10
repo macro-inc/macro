@@ -8,11 +8,14 @@ export {
 } from './combinedRecipient';
 export { useContacts } from './contactService';
 export {
+  getInitials,
+  getInitialsFromName,
   seedMockDisplayNames,
   useDisplayName,
   useDisplayNameParts,
 } from './displayName';
 export { useAugmentUserWithDmActivity } from './dmActivity';
+export { useIsConnectedSecondaryInbox } from './inboxOnly';
 export {
   emailToMacroId,
   type MacroId,

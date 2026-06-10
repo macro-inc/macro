@@ -11,9 +11,11 @@ type InfiniteQueryConfig<TData, TSelect = TData[]> = {
   queryFn: (ctx: { pageParam: string | null }) => Promise<TData>;
   getNextPageParam: (lastPage: TData) => string | null;
   initialData?: InfiniteData<TData, string | null>;
+  placeholderData?: InfiniteData<TData, string | null>;
   select?: (pages: TData[]) => TSelect;
   enabled?: boolean;
   staleTime?: number;
+  meta?: Record<string, unknown>;
 };
 
 type InfiniteQueryResult<TData, TSelect> = {
@@ -29,9 +31,14 @@ type InfiniteQueryResult<TData, TSelect> = {
   >;
 };
 
+type InfiniteQueriesResult<TData, TSelect> = {
+  list: Accessor<InfiniteQueryResult<TData, TSelect>[]>;
+  map: Accessor<Map<string, InfiniteQueryResult<TData, TSelect>>>;
+};
+
 export function createInfiniteQueries<TData, TSelect = TData[]>(
   getConfigs: Accessor<InfiniteQueryConfig<TData, TSelect>[]>
-): Accessor<InfiniteQueryResult<TData, TSelect>[]> {
+): InfiniteQueriesResult<TData, TSelect> {
   const queries = mapArray(
     () => getConfigs().map((c) => c.key),
     (key): InfiniteQueryResult<TData, TSelect> => {
@@ -65,6 +72,11 @@ export function createInfiniteQueries<TData, TSelect = TData[]>(
             TData | null,
             string | null
           >,
+          placeholderData: config?.placeholderData as InfiniteData<
+            TData | null,
+            string | null
+          >,
+          meta: config?.meta,
         };
       });
 
@@ -88,5 +100,13 @@ export function createInfiniteQueries<TData, TSelect = TData[]>(
     }
   );
 
-  return queries;
+  const queriesByKey = createMemo(() => {
+    const map = new Map<string, InfiniteQueryResult<TData, TSelect>>();
+    for (const query of queries()) {
+      map.set(query.key, query);
+    }
+    return map;
+  });
+
+  return { list: queries, map: queriesByKey };
 }

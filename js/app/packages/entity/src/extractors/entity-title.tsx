@@ -2,13 +2,13 @@ import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/S
 import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
 import { blockNameToDefaultFile } from '@core/constant/allBlocks';
 import { formatDocumentName } from '@service-storage/util/filename';
-import { Show } from 'solid-js';
+import { type JSX, Show } from 'solid-js';
 import { match } from 'ts-pattern';
-import type { EntityData } from '../types/entity';
+import { type EntityData, isGithubPrEntity } from '../types/entity';
 import { isSearchEntity } from '../types/search';
 
-function extractRawTitle(entity: EntityData): string {
-  return match(entity)
+function extractRawTitle(entity: EntityData): JSX.Element {
+  return match<EntityData, JSX.Element>(entity)
     .with({ type: 'document' }, (e) =>
       formatDocumentName(e.name, e.fileType, {
         fullyQualifiedBlockName: true,
@@ -23,6 +23,20 @@ function extractRawTitle(entity: EntityData): string {
     .with(
       { type: 'automation' },
       (e) => e.name || blockNameToDefaultFile('automation')
+    )
+    .when(isGithubPrEntity, (e) => (
+      <>
+        {e.metadata.name}{' '}
+        <span class="text-ink-extra-muted font-normal">
+          #{e.metadata.number}
+        </span>
+      </>
+    ))
+    .with({ type: 'foreign' }, (e) => e.name)
+    .with({ type: 'crm_company' }, (e) => e.name || 'Unknown Company')
+    .with(
+      { type: 'crm_contact' },
+      (e) => e.name || e.email || 'Unknown Contact'
     )
     .otherwise(() => 'Unknown');
 }
@@ -54,7 +68,7 @@ export function EntityTitle(props: { entity: EntityData }) {
       fallback={<span class="truncate">{titleData().text}</span>}
     >
       <StaticMarkdown
-        markdown={titleData().text}
+        markdown={titleData().text as string}
         theme={unifiedListMarkdownTheme}
         singleLine={true}
       />

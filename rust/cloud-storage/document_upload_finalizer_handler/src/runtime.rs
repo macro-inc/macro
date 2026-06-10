@@ -2,6 +2,7 @@ use anyhow::Context as _;
 use documents::outbound::markdown_init::LexicalSyncMarkdownInitializer;
 use documents::outbound::pg_document_repo::PgDocumentRepo;
 use lexical_client::LexicalClient;
+use macro_service_urls::{LexicalServiceUrl, SyncServiceUrl};
 use sqlx::postgres::PgPoolOptions;
 use sync_service_client::SyncServiceClient;
 
@@ -24,10 +25,8 @@ impl AppContext {
             .context("INTERNAL_API_SECRET_KEY must be provided")?;
         let sync_service_auth_key = std::env::var("SYNC_SERVICE_AUTH_KEY")
             .context("SYNC_SERVICE_AUTH_KEY must be provided")?;
-        let lexical_service_url =
-            std::env::var("LEXICAL_SERVICE_URL").context("LEXICAL_SERVICE_URL must be provided")?;
-        let sync_service_url =
-            std::env::var("SYNC_SERVICE_URL").context("SYNC_SERVICE_URL must be provided")?;
+        let lexical_service_url = LexicalServiceUrl::new()?.to_string();
+        let sync_service_url = SyncServiceUrl::new()?.to_string();
 
         let db_pool = PgPoolOptions::new()
             .max_connections(5)

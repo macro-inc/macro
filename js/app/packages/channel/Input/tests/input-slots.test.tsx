@@ -27,6 +27,34 @@ vi.mock('@core/util/upload', () => ({
   uploadFile: vi.fn(),
 }));
 
+// Several service clients in StaticMarkdown's import graph build websocket
+// connections at module scope, which jsdom cannot do. Stub the builder so
+// every module-scope socket is inert.
+vi.mock('@websocket', async (importOriginal) => {
+  const actual = await importOriginal<object>();
+  const socket = {
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    send: () => {},
+    close: () => {},
+  };
+  const builder: object = new Proxy(
+    {},
+    {
+      get: (_target, prop) => {
+        if (typeof prop === 'symbol' || prop === 'then') return undefined;
+        return prop === 'build' ? () => socket : () => builder;
+      },
+    }
+  );
+  return {
+    ...actual,
+    WebsocketBuilder: function WebsocketBuilder() {
+      return builder;
+    },
+  };
+});
+
 vi.mock('@core/constant/allBlocks', () => ({
   fileTypeToBlockName: (type?: string | null) => type ?? 'unknown',
 }));
@@ -93,6 +121,24 @@ vi.mock(
   '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder',
   () => ({
     buildConfig: () => {
+      const controls = {
+        clear: vi.fn(),
+        focus: vi.fn(),
+      };
+      const lexical = {
+        focus: vi.fn(),
+        dispatchCommand: vi.fn(),
+        getElementByKey: vi.fn(),
+        getRootElement: vi.fn(),
+        update: vi.fn((callback: () => void) => callback()),
+      };
+      const handle = {
+        controls,
+        lexical,
+        plugins: { use: vi.fn() },
+        selection: undefined,
+        _internal: {},
+      };
       const builder: any = {
         namespace: () => builder,
         withMentions: () => builder,
@@ -107,14 +153,9 @@ vi.mock(
         use: () => builder,
         onChange: () => builder,
         onEnter: () => builder,
-        controls: {
-          clear: vi.fn(),
-          focus: vi.fn(),
-        },
-        lexical: {
-          focus: vi.fn(),
-          dispatchCommand: vi.fn(),
-        },
+        buildHandle: () => handle,
+        controls,
+        lexical,
         selection: undefined,
       };
       return builder;
@@ -123,7 +164,12 @@ vi.mock(
 );
 
 vi.mock('@core/component/LexicalMarkdown/plugins', () => ({
+  createDragInsertStore: () => [
+    { nodeKey: null, position: null, visible: false },
+    vi.fn(),
+  ],
   DefaultShortcuts: {},
+  INSERT_DOCUMENT_MENTION_COMMAND: 'INSERT_DOCUMENT_MENTION_COMMAND',
   NODE_TRANSFORM: 'NODE_TRANSFORM',
   keyboardShortcutsPlugin: () => () => () => {},
 }));
@@ -147,7 +193,7 @@ import { createInputAttachmentTracker } from '../attachment-tracker';
 import { ChannelInput } from '../ChannelInput';
 import { DropOverlay } from '../DropOverlay';
 import { Root } from '../Root';
-import type { InputData } from '../types';
+import type { InputData, InputHandle } from '../types';
 
 const baseInput: InputData = {
   mode: 'channel',
@@ -251,6 +297,26 @@ describe('Input slots', () => {
       'disabled',
       true
     );
+  });
+
+  it('exposes send through the input handle', async () => {
+    const onSend = vi.fn();
+    let handle: InputHandle | undefined;
+
+    render(() => (
+      <ChannelInput
+        input={{ ...baseInput, value: 'handle send' }}
+        onReady={(nextHandle) => {
+          handle = nextHandle;
+        }}
+        onSend={onSend}
+      />
+    ));
+
+    await handle?.send();
+
+    expect(onSend).toHaveBeenCalledOnce();
+    expect(onSend.mock.calls[0]?.[0]?.value).toBe('handle send');
   });
 
   it('shows invalid state in drop overlay', () => {

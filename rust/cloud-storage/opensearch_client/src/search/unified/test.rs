@@ -459,6 +459,22 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
 
     let result = build_unified_search_request(&unified_search_args)?;
 
+    // Documents and chats are join-shape (has_child); compute their
+    // sub-queries from the builders rather than inlining the has_child
+    // JSON. Emails and channels are flat and stay inline below.
+    let doc_should = QueryType::from(
+        DocumentQueryBuilder::from(DocumentSearchArgs::from(unified_search_args.clone()))
+            .build_bool_query()?
+            .build(),
+    )
+    .to_json();
+    let chat_should = QueryType::from(
+        ChatQueryBuilder::from(ChatSearchArgs::from(unified_search_args.clone()))
+            .build_bool_query()?
+            .build(),
+    )
+    .to_json();
+
     let expected = serde_json::json!({
       "collapse": {
         "field": "entity_id"
@@ -482,48 +498,7 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
         "bool": {
           "minimum_should_match": 1,
           "should": [
-            {
-              "bool": {
-                "filter": [
-                  {
-                    "bool": {
-                      "minimum_should_match": 1,
-                      "should": [
-                        {
-                          "terms": {
-                            "entity_id": ["id1", "id2"]
-                          }
-                        },
-                        {
-                          "term": {
-                            "owner_id": "user"
-                          }
-                        }
-                      ]
-                    }
-                  },
-                  {
-                    "term": {
-                      "_index": "documents"
-                    }
-                  }
-                ],
-                "must": [
-                  {
-                    "bool": {
-                      "minimum_should_match": 1,
-                      "should": [
-                        {
-                          "match_phrase": {
-                            "content": "test"
-                          }
-                        }
-                      ]
-                    }
-                  }
-                ]
-              }
-            },
+            doc_should,
             {
               "bool": {
                 "filter": [
@@ -717,71 +692,7 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
                 ]
               }
             },
-            {
-              "bool": {
-                "filter": [
-                  {
-                    "bool": {
-                      "minimum_should_match": 1,
-                      "should": [
-                        {
-                          "terms": {
-                            "entity_id": ["id1", "id2"]
-                          }
-                        },
-                        {
-                          "term": {
-                            "user_id": "user"
-                          }
-                        }
-                      ]
-                    }
-                  },
-                  {
-                    "term": {
-                      "_index": "chats"
-                    }
-                  },
-                  {
-                    "bool": {
-                      "minimum_should_match": 1,
-                      "should": [
-                        {
-                          "wildcard": {
-                            "role": {
-                              "case_insensitive": true,
-                              "value": "*id1*"
-                            }
-                          }
-                        },
-                        {
-                          "wildcard": {
-                            "role": {
-                              "case_insensitive": true,
-                              "value": "*id2*"
-                            }
-                          }
-                        }
-                      ]
-                    }
-                  }
-                ],
-                "must": [
-                  {
-                    "bool": {
-                      "minimum_should_match": 1,
-                      "should": [
-                        {
-                          "match_phrase": {
-                            "content": "test"
-                          }
-                        }
-                      ]
-                    }
-                  }
-                ]
-              }
-            }
+            chat_should
           ]
         }
       },
@@ -870,6 +781,16 @@ fn test_build_unified_search_request_single_index() -> anyhow::Result<()> {
     };
 
     let result = build_unified_search_request(&unified_search_args)?;
+
+    // Documents are join-shape (has_child); compute the sub-query from the
+    // builder rather than inlining the has_child JSON.
+    let doc_should = QueryType::from(
+        DocumentQueryBuilder::from(DocumentSearchArgs::from(unified_search_args.clone()))
+            .build_bool_query()?
+            .build(),
+    )
+    .to_json();
+
     let expected = serde_json::json!(
           {
       "collapse": {
@@ -894,48 +815,7 @@ fn test_build_unified_search_request_single_index() -> anyhow::Result<()> {
         "bool": {
           "minimum_should_match": 1,
           "should": [
-            {
-              "bool": {
-                "filter": [
-                  {
-                    "bool": {
-                      "minimum_should_match": 1,
-                      "should": [
-                        {
-                          "terms": {
-                            "entity_id": ["id1", "id2"]
-                          }
-                        },
-                        {
-                          "term": {
-                            "owner_id": "user"
-                          }
-                        }
-                      ]
-                    }
-                  },
-                  {
-                    "term": {
-                      "_index": "documents"
-                    }
-                  }
-                ],
-                "must": [
-                  {
-                    "bool": {
-                      "minimum_should_match": 1,
-                      "should": [
-                        {
-                          "match_phrase": {
-                            "content": "test"
-                          }
-                        }
-                      ]
-                    }
-                  }
-                ]
-              }
-            }
+            doc_should
           ]
         }
       },

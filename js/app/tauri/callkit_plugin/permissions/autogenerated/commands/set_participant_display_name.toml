@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-set-participant-display-name"
+description = "Enables the set_participant_display_name command without any pre-configured scope."
+commands.allow = ["set_participant_display_name"]
+
+[[permission]]
+identifier = "deny-set-participant-display-name"
+description = "Denies the set_participant_display_name command without any pre-configured scope."
+commands.deny = ["set_participant_display_name"]

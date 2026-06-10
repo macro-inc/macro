@@ -77,15 +77,36 @@ pub async fn edit_comment_handler(
                     document_id: res.document_id.to_string(),
                     owner: res.document_owner.clone(),
                     file_type: res.file_type.clone(),
-                    sub_type: res.sub_type.map(|_| NotificationDocumentSubType::Task),
+                    sub_type: res.sub_type.map(|sub_type| match sub_type {
+                        document_sub_type::DocumentSubType::Task => {
+                            NotificationDocumentSubType::Task
+                        }
+                        document_sub_type::DocumentSubType::Snippet => {
+                            NotificationDocumentSubType::Snippet
+                        }
+                    }),
                     sender_id: user_id.clone().try_into().ok(),
                     sender_profile_picture_url,
                 };
 
-                let recipient_ids = users
+                let recipient_ids: std::collections::HashSet<MacroUserIdStr<'static>> = users
                     .iter()
                     .filter_map(|id| MacroUserIdStr::try_from(id.clone()).ok())
                     .collect();
+
+                // If the document is public, grant the mentioned users access so
+                // the comment surfaces in their soup/inbox — a notification alone
+                // isn't enough for the document to appear there.
+                let mention_recipients: Vec<MacroUserIdStr<'_>> =
+                    recipient_ids.iter().cloned().collect();
+
+                let _ = macro_db_client::share_on_mention::share_public_document_with_mentioned_users(
+                    &db,
+                    &res.document_id,
+                    &mention_recipients,
+                )
+                .await
+                .inspect_err(|e| tracing::error!(error =? e, "couldn't share public document with mentioned users"));
 
                 let request = notif_ctx
                     .build_mention_notif(recipient_ids, &mention_id)

@@ -5,9 +5,12 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { DocumentPreviewDataSubTypeOneOf } from './documentPreviewDataSubTypeOneOf';
+import type { DocumentPreviewDataSubTypeOneOfThree } from './documentPreviewDataSubTypeOneOfThree';
 
 /**
  * The sub type of a document preview with associated properties.
 Task-related properties are encoded within the variant to ensure valid states.
  */
-export type DocumentPreviewDataSubType = DocumentPreviewDataSubTypeOneOf;
+export type DocumentPreviewDataSubType =
+  | DocumentPreviewDataSubTypeOneOf
+  | DocumentPreviewDataSubTypeOneOfThree;

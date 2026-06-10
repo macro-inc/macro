@@ -11,7 +11,10 @@ use chrono::Utc;
 use comms::outbound::postgres::channel_name::batch_resolve_channel_names;
 use entity_access::domain::models::AccessLevel;
 use filter_ast::Expr;
-use item_filters::ast::{LiteralTree, call::CallLiteral};
+use item_filters::{
+    CallStatus,
+    ast::{LiteralTree, call::CallLiteral},
+};
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::channel_share_permission::ChannelSharePermission;
@@ -21,7 +24,8 @@ use uuid::Uuid;
 use crate::domain::models::{
     AddParticipantError, Call, CallParticipant, CallRecord, CallRecordParticipant,
     CallRecordPreview, CallRecordPreviewData, CallRecordTranscriptSegment, CustomSpeakerAssignment,
-    EditCallRecordRequest, EnrichedCallTranscript, TranscriptSegmentRequest, WithCallId,
+    DeletedCallRecordStorageKeys, EditCallRecordRequest, EnrichedCallTranscript,
+    TranscriptSegmentRequest, WithCallId,
 };
 use crate::domain::ports::CallRepository;
 
@@ -54,6 +58,7 @@ fn collect_channel_ids(expr: &Expr<CallLiteral>, ids: &mut Vec<Uuid>) {
     match expr {
         Expr::Literal(CallLiteral::ChannelId(id)) => ids.push(*id),
         Expr::Literal(CallLiteral::CallId(_)) => {}
+        Expr::Literal(CallLiteral::Status(_)) => {}
         Expr::Literal(CallLiteral::Attended(_)) => {}
         // Speaker is transcript-segment-only; soup's call list ignores it.
         Expr::Literal(CallLiteral::Speaker(_)) => {}
@@ -79,6 +84,7 @@ fn collect_call_ids(expr: &Expr<CallLiteral>, ids: &mut Vec<Uuid>) {
     match expr {
         Expr::Literal(CallLiteral::CallId(id)) => ids.push(*id),
         Expr::Literal(CallLiteral::ChannelId(_)) => {}
+        Expr::Literal(CallLiteral::Status(_)) => {}
         Expr::Literal(CallLiteral::Attended(_)) => {}
         Expr::Literal(CallLiteral::Speaker(_)) => {}
         Expr::And(a, b) | Expr::Or(a, b) => {
@@ -89,23 +95,132 @@ fn collect_call_ids(expr: &Expr<CallLiteral>, ids: &mut Vec<Uuid>) {
     }
 }
 
-/// Extract the `attended` literal from a call filter AST, if any.
-///
-/// `ExpandFrame::expand_ast` only emits at most one `Attended` literal, so we
-/// return the first one we find during a simple traversal.
-fn extract_attended(filter: &LiteralTree<CallLiteral>) -> Option<bool> {
-    let expr = filter.as_ref()?;
-    find_attended(expr)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct CallStatusSet {
+    attended: bool,
+    missed: bool,
+    unattended: bool,
 }
 
-fn find_attended(expr: &Expr<CallLiteral>) -> Option<bool> {
+impl CallStatusSet {
+    fn one(status: CallStatus) -> Self {
+        match status {
+            CallStatus::Attended => Self {
+                attended: true,
+                missed: false,
+                unattended: false,
+            },
+            CallStatus::Missed => Self {
+                attended: false,
+                missed: true,
+                unattended: false,
+            },
+            CallStatus::Unattended => Self {
+                attended: false,
+                missed: false,
+                unattended: true,
+            },
+        }
+    }
+
+    fn not_participant() -> Self {
+        Self {
+            attended: false,
+            missed: true,
+            unattended: true,
+        }
+    }
+
+    fn is_all(self) -> bool {
+        self.attended && self.missed && self.unattended
+    }
+
+    fn complement(self) -> Self {
+        Self {
+            attended: !self.attended,
+            missed: !self.missed,
+            unattended: !self.unattended,
+        }
+    }
+
+    fn intersect(self, other: Self) -> Self {
+        Self {
+            attended: self.attended && other.attended,
+            missed: self.missed && other.missed,
+            unattended: self.unattended && other.unattended,
+        }
+    }
+
+    fn union(self, other: Self) -> Self {
+        Self {
+            attended: self.attended || other.attended,
+            missed: self.missed || other.missed,
+            unattended: self.unattended || other.unattended,
+        }
+    }
+
+    fn values(self) -> Vec<CallStatus> {
+        let mut statuses = Vec::new();
+        if self.attended {
+            statuses.push(CallStatus::Attended);
+        }
+        if self.missed {
+            statuses.push(CallStatus::Missed);
+        }
+        if self.unattended {
+            statuses.push(CallStatus::Unattended);
+        }
+        statuses
+    }
+}
+
+fn call_status_sql_value(status: CallStatus) -> &'static str {
+    match status {
+        CallStatus::Attended => "ATTENDED",
+        CallStatus::Missed => "MISSED",
+        CallStatus::Unattended => "UNATTENDED",
+    }
+}
+
+fn call_status_from_sql(value: &str) -> CallStatus {
+    match value {
+        "ATTENDED" => CallStatus::Attended,
+        "MISSED" => CallStatus::Missed,
+        "UNATTENDED" => CallStatus::Unattended,
+        _ => unreachable!("call status query returned an unsupported status"),
+    }
+}
+
+/// Extract viewer-relative status constraints from a call filter AST.
+///
+/// Legacy `Attended(false)` means the viewer is not a participant, which now
+/// includes both missed and unattended calls.
+fn extract_status_filter(filter: &LiteralTree<CallLiteral>) -> Option<Vec<CallStatus>> {
+    let expr = filter.as_ref()?;
+    let status_set = status_set_for_expr(expr)?;
+    (!status_set.is_all()).then(|| status_set.values())
+}
+
+fn status_set_for_expr(expr: &Expr<CallLiteral>) -> Option<CallStatusSet> {
     match expr {
-        Expr::Literal(CallLiteral::Attended(b)) => Some(*b),
-        Expr::Literal(CallLiteral::CallId(_)) => None,
-        Expr::Literal(CallLiteral::ChannelId(_)) => None,
-        Expr::Literal(CallLiteral::Speaker(_)) => None,
-        Expr::And(a, b) | Expr::Or(a, b) => find_attended(a).or_else(|| find_attended(b)),
-        Expr::Not(inner) => find_attended(inner).map(|b| !b),
+        Expr::Literal(CallLiteral::Status(status)) => Some(CallStatusSet::one(*status)),
+        Expr::Literal(CallLiteral::Attended(true)) => {
+            Some(CallStatusSet::one(CallStatus::Attended))
+        }
+        Expr::Literal(CallLiteral::Attended(false)) => Some(CallStatusSet::not_participant()),
+        Expr::Literal(CallLiteral::CallId(_))
+        | Expr::Literal(CallLiteral::ChannelId(_))
+        | Expr::Literal(CallLiteral::Speaker(_)) => None,
+        Expr::And(a, b) => match (status_set_for_expr(a), status_set_for_expr(b)) {
+            (Some(left), Some(right)) => Some(left.intersect(right)),
+            (Some(status_set), None) | (None, Some(status_set)) => Some(status_set),
+            (None, None) => None,
+        },
+        Expr::Or(a, b) => match (status_set_for_expr(a), status_set_for_expr(b)) {
+            (Some(left), Some(right)) => Some(left.union(right)),
+            _ => None,
+        },
+        Expr::Not(inner) => status_set_for_expr(inner).map(CallStatusSet::complement),
     }
 }
 
@@ -529,7 +644,7 @@ impl CallRepository for PgCallRepo {
         // Fetch and lock the active call so concurrent archive_call callers serialize.
         let call = sqlx::query!(
             r#"
-            SELECT id, channel_id, room_name, created_by, created_at, egress_id, recording_key, recording_started_at, share_permission_id, share_with_team
+            SELECT id, channel_id, room_name, created_by, created_at, egress_id, recording_key, preview_url, recording_started_at, share_permission_id, share_with_team
             FROM calls
             WHERE id = $1
             FOR UPDATE
@@ -573,12 +688,12 @@ impl CallRepository for PgCallRepo {
             .signed_duration_since(call.created_at)
             .num_milliseconds()
             .max(0);
-        // Insert into call_records (including egress_id and any early recording_key).
+        // Insert into call_records (including egress_id and any early recording keys).
         // The record keeps the same id as the original call.
         sqlx::query!(
             r#"
-            INSERT INTO call_records (id, channel_id, room_name, created_by, started_at, ended_at, duration_ms, egress_id, recording_key, recording_started_at, share_permission_id, share_with_team)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            INSERT INTO call_records (id, channel_id, room_name, created_by, started_at, ended_at, duration_ms, egress_id, recording_key, preview_url, recording_started_at, share_permission_id, share_with_team)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
             "#,
             call_id,
             call.channel_id,
@@ -589,6 +704,7 @@ impl CallRepository for PgCallRepo {
             duration_ms,
             call.egress_id,
             call.recording_key,
+            call.preview_url,
             call.recording_started_at,
             &call.share_permission_id,
             call.share_with_team,
@@ -927,7 +1043,7 @@ impl CallRepository for PgCallRepo {
         // Try active `calls` first.
         if let Some(active) = sqlx::query!(
             r#"
-            SELECT id, channel_id, room_name, created_by, created_at, egress_id, recording_key, recording_started_at, share_with_team
+            SELECT id, channel_id, room_name, created_by, created_at, egress_id, recording_key, preview_url, recording_started_at, share_with_team
             FROM calls
             WHERE id = $1
             "#,
@@ -991,12 +1107,15 @@ impl CallRepository for PgCallRepo {
                 egress_id: active.egress_id,
                 recording_started_at: active.recording_started_at,
                 recording_key: active.recording_key,
+                preview_key: active.preview_url,
                 recording_url: None,
+                recording_preview_url: None,
                 channel_name: None,
                 custom_name: None,
                 summary: None,
                 share_with_team: active.share_with_team,
                 is_active: true,
+                status: None,
                 participants,
                 transcript,
             }));
@@ -1005,7 +1124,7 @@ impl CallRepository for PgCallRepo {
         // Fall back to archived `call_records`.
         let Some(archived) = sqlx::query!(
             r#"
-            SELECT id, channel_id, room_name, created_by, started_at, ended_at, duration_ms, egress_id, recording_key, recording_started_at, custom_name, summary, share_with_team
+            SELECT id, channel_id, room_name, created_by, started_at, ended_at, duration_ms, egress_id, recording_key, preview_url, recording_started_at, custom_name, summary, share_with_team
             FROM call_records
             WHERE id = $1
             "#,
@@ -1073,12 +1192,15 @@ impl CallRepository for PgCallRepo {
             egress_id: archived.egress_id,
             recording_started_at: archived.recording_started_at,
             recording_key: archived.recording_key,
+            preview_key: archived.preview_url,
             recording_url: None,
+            recording_preview_url: None,
             channel_name: None,
             custom_name: archived.custom_name,
             summary: archived.summary,
             share_with_team: archived.share_with_team,
             is_active: false,
+            status: None,
             participants,
             transcript,
         }))
@@ -1197,7 +1319,16 @@ impl CallRepository for PgCallRepo {
         let has_channel_filter = !channel_ids.is_empty();
         let call_ids = extract_call_ids(filter);
         let has_call_id_filter = !call_ids.is_empty();
-        let attended = extract_attended(filter);
+        let status_filter = extract_status_filter(filter);
+        let has_status_filter = status_filter.is_some();
+        let status_filter_values: Vec<String> = status_filter
+            .as_deref()
+            .unwrap_or(&[])
+            .iter()
+            .copied()
+            .map(call_status_sql_value)
+            .map(str::to_string)
+            .collect();
 
         let rows = sqlx::query!(
             r#"
@@ -1211,64 +1342,105 @@ impl CallRepository for PgCallRepo {
                 WHERE t.user_id = $1
                 UNION ALL
                 SELECT $1 AS source_id
+            ),
+            visible_calls AS (
+                SELECT
+                    c.id AS call_id,
+                    c.channel_id,
+                    c.room_name,
+                    c.created_by,
+                    c.created_at AS started_at,
+                    NULL::timestamptz AS ended_at,
+                    NULL::bigint AS duration_ms,
+                    c.egress_id,
+                    c.recording_key,
+                    c.preview_url,
+                    c.recording_started_at,
+                    NULL::text AS custom_name,
+                    NULL::text AS summary,
+                    c.share_with_team,
+                    true AS is_active,
+                    CASE
+                        WHEN EXISTS (
+                            SELECT 1 FROM call_participants cp
+                            WHERE cp.call_id = c.id AND cp.user_id = $1
+                        ) THEN 'ATTENDED'::text
+                        WHEN EXISTS (
+                            SELECT 1 FROM comms_channel_participants ccp
+                            WHERE ccp.channel_id = c.channel_id
+                              AND ccp.user_id = $1
+                              AND ccp.left_at IS NULL
+                        ) THEN 'MISSED'::text
+                        ELSE 'UNATTENDED'::text
+                    END AS status
+                FROM calls c
+                WHERE EXISTS (
+                    SELECT 1 FROM entity_access ea
+                    JOIN user_source_ids u ON u.source_id = ea.source_id
+                    WHERE ea.entity_id = c.id
+                      AND ea.entity_type = 'call'
+                )
+                AND ($3::bool IS FALSE OR c.channel_id = ANY($4))
+                AND ($5::bool IS FALSE OR c.id = ANY($6))
+                UNION ALL
+                SELECT
+                    cr.id AS call_id,
+                    cr.channel_id,
+                    cr.room_name,
+                    cr.created_by,
+                    cr.started_at,
+                    cr.ended_at,
+                    cr.duration_ms,
+                    cr.egress_id,
+                    cr.recording_key,
+                    cr.preview_url,
+                    cr.recording_started_at,
+                    cr.custom_name,
+                    cr.summary,
+                    cr.share_with_team,
+                    false AS is_active,
+                    CASE
+                        WHEN EXISTS (
+                            SELECT 1 FROM call_record_participants crp
+                            WHERE crp.call_record_id = cr.id AND crp.user_id = $1
+                        ) THEN 'ATTENDED'::text
+                        WHEN EXISTS (
+                            SELECT 1 FROM comms_channel_participants ccp
+                            WHERE ccp.channel_id = cr.channel_id
+                              AND ccp.user_id = $1
+                              AND ccp.left_at IS NULL
+                        ) THEN 'MISSED'::text
+                        ELSE 'UNATTENDED'::text
+                    END AS status
+                FROM call_records cr
+                WHERE EXISTS (
+                    SELECT 1 FROM entity_access ea
+                    JOIN user_source_ids u ON u.source_id = ea.source_id
+                    WHERE ea.entity_id = cr.id
+                      AND ea.entity_type = 'call'
+                )
+                AND ($3::bool IS FALSE OR cr.channel_id = ANY($4))
+                AND ($5::bool IS FALSE OR cr.id = ANY($6))
             )
             SELECT
-                id as "call_id!",
-                channel_id as "channel_id!",
-                room_name as "room_name!",
-                created_by as "created_by!",
-                created_at as "started_at!",
-                NULL::timestamptz as "ended_at",
-                NULL::bigint as "duration_ms",
-                egress_id,
-                recording_key,
-                recording_started_at,
-                NULL::text as "custom_name",
-                NULL::text as "summary",
-                share_with_team as "share_with_team!",
-                true as "is_active!"
-            FROM calls c
-            WHERE EXISTS (
-                SELECT 1 FROM entity_access ea
-                JOIN user_source_ids u ON u.source_id = ea.source_id
-                WHERE ea.entity_id = c.id
-                  AND ea.entity_type = 'call'
-            )
-            AND ($3::bool IS FALSE OR c.channel_id = ANY($4))
-            AND ($5::bool IS NULL OR EXISTS (
-                SELECT 1 FROM call_participants cp
-                WHERE cp.call_id = c.id AND cp.user_id = $1
-            ) = $5)
-            AND ($6::bool IS FALSE OR c.id = ANY($7))
-            UNION ALL
-            SELECT
-                id as "call_id!",
+                call_id as "call_id!",
                 channel_id as "channel_id!",
                 room_name as "room_name!",
                 created_by as "created_by!",
                 started_at as "started_at!",
-                ended_at as "ended_at",
-                duration_ms as "duration_ms",
+                ended_at,
+                duration_ms,
                 egress_id,
                 recording_key,
+                preview_url,
                 recording_started_at,
                 custom_name,
                 summary,
                 share_with_team as "share_with_team!",
-                false as "is_active!"
-            FROM call_records cr
-            WHERE EXISTS (
-                SELECT 1 FROM entity_access ea
-                JOIN user_source_ids u ON u.source_id = ea.source_id
-                WHERE ea.entity_id = cr.id
-                  AND ea.entity_type = 'call'
-            )
-            AND ($3::bool IS FALSE OR cr.channel_id = ANY($4))
-            AND ($5::bool IS NULL OR EXISTS (
-                SELECT 1 FROM call_record_participants crp
-                WHERE crp.call_record_id = cr.id AND crp.user_id = $1
-            ) = $5)
-            AND ($6::bool IS FALSE OR cr.id = ANY($7))
+                is_active as "is_active!",
+                status as "status!"
+            FROM visible_calls
+            WHERE ($7::bool IS FALSE OR status = ANY($8::text[]))
             ORDER BY "started_at!" DESC
             LIMIT $2
             "#,
@@ -1276,55 +1448,64 @@ impl CallRepository for PgCallRepo {
             limit as i64,
             has_channel_filter,
             &channel_ids,
-            attended,
             has_call_id_filter,
             &call_ids,
+            has_status_filter,
+            &status_filter_values,
         )
         .fetch_all(&self.pool)
         .await?;
 
+        // Split ids by source table: active participants live in
+        // `call_participants` (keyed call_id), archived in
+        // `call_record_participants` (keyed call_record_id). Ids are disjoint
+        // across the two tables, so a single UNION ALL fetches all participants
+        // in one round-trip; we then group by id in memory (avoids N+1).
+        let mut active_ids: Vec<Uuid> = Vec::new();
+        let mut archived_ids: Vec<Uuid> = Vec::new();
+        for row in &rows {
+            if row.is_active {
+                active_ids.push(row.call_id);
+            } else {
+                archived_ids.push(row.call_id);
+            }
+        }
+
+        let mut participants_by_call: HashMap<Uuid, Vec<CallRecordParticipant>> =
+            HashMap::with_capacity(rows.len());
+
+        for p in sqlx::query!(
+            r#"
+            SELECT call_id AS "id!", user_id AS "user_id!", joined_at AS "joined_at!", left_at
+            FROM call_participants
+            WHERE call_id = ANY($1)
+            UNION ALL
+            SELECT call_record_id AS "id!", user_id AS "user_id!", joined_at AS "joined_at!", left_at
+            FROM call_record_participants
+            WHERE call_record_id = ANY($2)
+            ORDER BY 3 ASC
+            "#,
+            &active_ids,
+            &archived_ids,
+        )
+        .fetch_all(&self.pool)
+        .await?
+        {
+            participants_by_call
+                .entry(p.id)
+                .or_default()
+                .push(CallRecordParticipant {
+                    user_id: p.user_id,
+                    joined_at: p.joined_at,
+                    left_at: p.left_at,
+                });
+        }
+
         let mut records = Vec::with_capacity(rows.len());
         for row in rows {
-            // Fetch participants from the appropriate table.
-            let participants = if row.is_active {
-                sqlx::query!(
-                    r#"
-                    SELECT user_id, joined_at, left_at
-                    FROM call_participants
-                    WHERE call_id = $1
-                    ORDER BY joined_at ASC
-                    "#,
-                    row.call_id,
-                )
-                .fetch_all(&self.pool)
-                .await?
-                .into_iter()
-                .map(|p| CallRecordParticipant {
-                    user_id: p.user_id,
-                    joined_at: p.joined_at,
-                    left_at: p.left_at,
-                })
-                .collect()
-            } else {
-                sqlx::query!(
-                    r#"
-                    SELECT user_id, joined_at, left_at
-                    FROM call_record_participants
-                    WHERE call_record_id = $1
-                    ORDER BY joined_at ASC
-                    "#,
-                    row.call_id,
-                )
-                .fetch_all(&self.pool)
-                .await?
-                .into_iter()
-                .map(|p| CallRecordParticipant {
-                    user_id: p.user_id,
-                    joined_at: p.joined_at,
-                    left_at: p.left_at,
-                })
-                .collect()
-            };
+            let participants = participants_by_call
+                .remove(&row.call_id)
+                .unwrap_or_default();
 
             records.push(CallRecord {
                 call_id: row.call_id,
@@ -1337,12 +1518,15 @@ impl CallRepository for PgCallRepo {
                 egress_id: row.egress_id,
                 recording_started_at: row.recording_started_at,
                 recording_key: row.recording_key,
+                preview_key: row.preview_url,
                 recording_url: None,
+                recording_preview_url: None,
                 channel_name: None,
                 custom_name: row.custom_name,
                 summary: row.summary,
                 share_with_team: row.share_with_team,
                 is_active: row.is_active,
+                status: Some(call_status_from_sql(&row.status)),
                 participants,
                 transcript: Vec::new(),
             });
@@ -1426,12 +1610,15 @@ impl CallRepository for PgCallRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn delete_call_record(&self, call_record_id: &Uuid) -> Result<Option<String>, Self::Err> {
+    async fn delete_call_record(
+        &self,
+        call_record_id: &Uuid,
+    ) -> Result<Option<DeletedCallRecordStorageKeys>, Self::Err> {
         let mut tx = self.pool.begin().await?;
 
         let row = sqlx::query!(
             r#"
-            DELETE FROM call_records WHERE id = $1 RETURNING recording_key
+            DELETE FROM call_records WHERE id = $1 RETURNING recording_key, preview_url
             "#,
             call_record_id,
         )
@@ -1446,7 +1633,10 @@ impl CallRepository for PgCallRepo {
         .await?;
 
         tx.commit().await?;
-        Ok(row.and_then(|r| r.recording_key))
+        Ok(row.map(|r| DeletedCallRecordStorageKeys {
+            recording_key: r.recording_key,
+            preview_key: r.preview_url,
+        }))
     }
 
     #[tracing::instrument(skip(self), err)]

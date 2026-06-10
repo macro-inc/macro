@@ -3,6 +3,8 @@ import * as awsx from '@pulumi/awsx';
 import * as pulumi from '@pulumi/pulumi';
 import {
   DATADOG_API_KEY,
+  DEFAULT_CONTINUE_BEFORE_STEADY_STATE,
+  EcsDeploymentFailureAlarm,
   datadogAgentContainer,
   fargateLogRouterSidecarContainer,
 } from '../../resources';
@@ -41,6 +43,7 @@ export class Service extends pulumi.ComponentResource {
         privateSubnetIds: string[];
       };
       ecsClusterArn?: string;
+      continueBeforeSteadyState?: boolean;
       sidecarContainers?: Record<
         string,
         awsx.types.input.ecs.TaskDefinitionContainerDefinitionArgs
@@ -78,6 +81,9 @@ export class Service extends pulumi.ComponentResource {
           subnets: vpc.privateSubnetIds,
           securityGroups: [loadBalancer.serviceSgId],
         },
+        continueBeforeSteadyState:
+          args.continueBeforeSteadyState ??
+          DEFAULT_CONTINUE_BEFORE_STEADY_STATE,
         deploymentCircuitBreaker: {
           enable: true,
           rollback: true,
@@ -129,6 +135,16 @@ export class Service extends pulumi.ComponentResource {
           ...args.iamPolicies,
         ],
       }
+    );
+
+    new EcsDeploymentFailureAlarm(
+      `${serviceName}-deployment-failure`,
+      {
+        serviceName,
+        serviceArn: this.service.service.arn,
+        tags: args.tags,
+      },
+      { parent: this }
     );
 
     this.serviceName = this.service.service.name;

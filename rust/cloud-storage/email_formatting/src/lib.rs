@@ -2,7 +2,7 @@ use askama::Template;
 use chrono::{DateTime, Utc};
 use hmac::Hmac;
 use macro_env::Environment;
-use macro_service_urls::EnvExtMacroServiceUrls;
+use macro_service_urls::NotificationServiceUrl;
 use macro_user_id::cowlike::CowLike;
 use model_notifications::NotifEvent;
 use notification::domain::models::{
@@ -106,7 +106,7 @@ impl EmailDigestNotification {
         }
         let num_truncated = input_len - preview_len;
 
-        let mut unsubscribe_url = env.notification_service();
+        let mut unsubscribe_url = NotificationServiceUrl::new_for_environment(env)?.parse_url()?;
         unsubscribe_url.set_path(&format!(
             "/user_notifications/preferences/{}/disable",
             Self::TYPE_NAME

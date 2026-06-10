@@ -768,28 +768,6 @@ export default function caretFromPoint(
   }
 }
 
-export function $insertWrappedBefore(
-  key: NodeKey,
-  node: LexicalNode,
-  wrapper: () => ElementNode = $createParagraphNode
-) {
-  const targetNode = $getNodeByKey(key);
-  if (!targetNode) return;
-  const wrappedElem = wrapper().append(node);
-  targetNode.insertBefore(wrappedElem);
-}
-
-export function $insertWrappedAfter(
-  key: NodeKey,
-  node: LexicalNode,
-  wrapper: () => ElementNode = $createParagraphNode
-) {
-  const targetNode = $getNodeByKey(key);
-  if (!targetNode) return;
-  const wrappedElem = wrapper().append(node);
-  targetNode.insertAfter(wrappedElem);
-}
-
 /**
  * @deprecated
  * Moving from this to the cleanState functionality as the bottom of this file.

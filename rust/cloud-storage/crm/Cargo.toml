@@ -19,6 +19,9 @@ default = ["inbound", "outbound", "ports"]
 inbound = ["axum", "ports"]
 outbound = ["dep:reqwest", "dep:sqlx", "dep:unfurl", "ports"]
 ports = []
+# Read-only CRM search (name/domain). Pulls only sqlx + ports — no
+# reqwest/unfurl/axum — so search consumers stay lightweight.
+search = ["dep:sqlx", "ports"]
 
 [dependencies]
 anyhow = { workspace = true }

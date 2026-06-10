@@ -67,7 +67,7 @@ impl NewDocumentMetadata {
             team_id: kind.team_id,
             email_attachment_id: self.email_attachment_id,
             created_at: self.created_at,
-            is_task: kind.subtype.is_task(),
+            sub_type: kind.subtype.sub_type(),
             skip_history: self.skip_history,
         }
     }
@@ -126,15 +126,23 @@ struct RepoDocumentKind {
 enum RepoDocumentSubtype {
     Regular,
     MarkdownTask,
+    MarkdownSnippet,
 }
 
 impl RepoDocumentSubtype {
-    fn is_task(&self) -> bool {
-        matches!(self, RepoDocumentSubtype::MarkdownTask)
+    fn sub_type(&self) -> Option<document_sub_type::DocumentSubType> {
+        match self {
+            RepoDocumentSubtype::Regular => None,
+            RepoDocumentSubtype::MarkdownTask => Some(document_sub_type::DocumentSubType::Task),
+            RepoDocumentSubtype::MarkdownSnippet => {
+                Some(document_sub_type::DocumentSubType::Snippet)
+            }
+        }
     }
 }
 
-/// Markdown-specific subtype. Task-ness only exists for markdown documents.
+/// Markdown-specific subtype. Task-ness and snippet-ness only exist for
+/// markdown documents.
 #[derive(Debug, Clone)]
 pub enum MarkdownSubtype {
     /// A regular markdown note.
@@ -149,6 +157,9 @@ pub enum MarkdownSubtype {
         /// when the creator belongs to exactly one team.
         team_id: Option<uuid::Uuid>,
     },
+    /// A snippet document — reusable markdown insertable in any markdown area.
+    /// Snippets are created personal; team sharing is toggled separately.
+    Snippet,
 }
 
 impl MarkdownSubtype {
@@ -301,10 +312,18 @@ impl NewPlainTextDocumentBuilder<FileType, String> {
         let kind = if self.file_type == FileType::Md {
             PlainTextDocumentKind::Markdown(self.markdown_subtype)
         } else {
-            if matches!(self.markdown_subtype, MarkdownSubtype::Task { .. }) {
-                return Err(DocumentError::BadRequest(
-                    "tasks must be markdown documents".to_string(),
-                ));
+            match self.markdown_subtype {
+                MarkdownSubtype::Task { .. } => {
+                    return Err(DocumentError::BadRequest(
+                        "tasks must be markdown documents".to_string(),
+                    ));
+                }
+                MarkdownSubtype::Snippet => {
+                    return Err(DocumentError::BadRequest(
+                        "snippets must be markdown documents".to_string(),
+                    ));
+                }
+                MarkdownSubtype::Note => {}
             }
             PlainTextDocumentKind::Text(NonMarkdownFileType::new(self.file_type)?)
         };
@@ -493,7 +512,7 @@ where
             subtype,
         } = document;
         let task = match &subtype {
-            MarkdownSubtype::Note => None,
+            MarkdownSubtype::Note | MarkdownSubtype::Snippet => None,
             MarkdownSubtype::Task {
                 property_values,
                 share_with_team,
@@ -514,10 +533,10 @@ where
             RepoDocumentKind {
                 file_type: Some(FileType::Md),
                 sha: EMPTY_SHA256.to_string(),
-                subtype: if task.is_some() {
-                    RepoDocumentSubtype::MarkdownTask
-                } else {
-                    RepoDocumentSubtype::Regular
+                subtype: match &subtype {
+                    MarkdownSubtype::Note => RepoDocumentSubtype::Regular,
+                    MarkdownSubtype::Task { .. } => RepoDocumentSubtype::MarkdownTask,
+                    MarkdownSubtype::Snippet => RepoDocumentSubtype::MarkdownSnippet,
                 },
                 team_id,
             },

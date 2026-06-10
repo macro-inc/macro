@@ -61,6 +61,8 @@ tokio = { workspace = true, features = [
 ], optional = true }
 macro_env_var = { path = "../macro_env_var", optional = true }
 
+macro_service_urls = { path = "../macro_service_urls" }
+
 [dev-dependencies]
 macro_db_migrator = { path = "../macro_db_migrator" }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

@@ -27,18 +27,22 @@ pub(in crate::api::search) async fn enrich_emails(
         return Ok(vec![]);
     }
 
-    // Get the email link for this user
-    let link = email_db_client::links::get::fetch_link_by_macro_id(&ctx.db, user_id)
+    // Resolve every inbox the user can access (their own + delegated) so hits
+    // from delegated inboxes are enriched rather than dropped.
+    let inboxes = email_db_client::links::get::fetch_inboxes_for_macro_id(&ctx.db, user_id)
         .await
-        .map_err(SearchError::InternalError)?
-        .ok_or_else(|| SearchError::InternalError(anyhow::anyhow!("Link not found for user")))?;
+        .map_err(SearchError::InternalError)?;
+    if inboxes.is_empty() {
+        return Ok(vec![]);
+    }
+    let link_ids: Vec<Uuid> = inboxes.iter().map(|l| l.id).collect();
 
     // Extract thread IDs from results
     let thread_ids: Vec<Uuid> = results.iter().map(|r| r.entity_id).collect();
 
     // Fetch email thread metadata directly from DB
     let thread_histories =
-        email_db_client::user_history::get_thread_summary_info(&ctx.db, link.id, &thread_ids)
+        email_db_client::user_history::get_thread_summary_info(&ctx.db, &link_ids, &thread_ids)
             .await
             .map_err(SearchError::InternalError)?;
 
@@ -60,7 +64,7 @@ pub(in crate::api::search) async fn enrich_emails(
     let (message_senders_map, contacts_map) = tokio::try_join!(
         email_db_client::messages::get::get_message_sender_and_pretty_sender(
             &ctx.db,
-            link.id,
+            &link_ids,
             &message_ids,
         ),
         email_db_client::contacts::get::fetch_contacts_by_thread_ids(&ctx.db, &thread_ids),
@@ -169,6 +173,7 @@ pub fn construct_search_result(
                         thread_id: entity_id,
                         owner_id: info.user_id.clone(),
                         user_id: info.user_id,
+                        link_id: info.link_id,
                         name: info.subject.clone(),
                         subject: info.subject,
                         email_message_search_results: hits,

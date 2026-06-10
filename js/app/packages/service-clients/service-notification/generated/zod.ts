@@ -171,6 +171,12 @@ export const listTypedNotificationsResponse = zod
                             messageId: zod
                               .string()
                               .describe('The message you were mentioned in'),
+                            senderDisplayName: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Display name for non-user senders such as bots'
+                              ),
                             senderProfilePictureUrl: zod.string().nullish(),
                             threadId: zod
                               .string()
@@ -204,6 +210,12 @@ export const listTypedNotificationsResponse = zod
                             messageId: zod
                               .string()
                               .describe('The message you were mentioned in'),
+                            senderDisplayName: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Display name for non-user senders such as bots'
+                              ),
                             senderProfilePictureUrl: zod.string().nullish(),
                             threadId: zod
                               .string()
@@ -227,9 +239,14 @@ export const listTypedNotificationsResponse = zod
                               .union([
                                 zod.null(),
                                 zod
-                                  .object({
-                                    type: zod.enum(['task']),
-                                  })
+                                  .union([
+                                    zod.object({
+                                      type: zod.enum(['task']),
+                                    }),
+                                    zod.object({
+                                      type: zod.enum(['snippet']),
+                                    }),
+                                  ])
                                   .describe(
                                     'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
                                   ),
@@ -262,9 +279,14 @@ export const listTypedNotificationsResponse = zod
                             .union([
                               zod.null(),
                               zod
-                                .object({
-                                  type: zod.enum(['task']),
-                                })
+                                .union([
+                                  zod.object({
+                                    type: zod.enum(['task']),
+                                  }),
+                                  zod.object({
+                                    type: zod.enum(['snippet']),
+                                  }),
+                                ])
                                 .describe(
                                   'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
                                 ),
@@ -301,9 +323,14 @@ export const listTypedNotificationsResponse = zod
                             .union([
                               zod.null(),
                               zod
-                                .object({
-                                  type: zod.enum(['task']),
-                                })
+                                .union([
+                                  zod.object({
+                                    type: zod.enum(['task']),
+                                  }),
+                                  zod.object({
+                                    type: zod.enum(['snippet']),
+                                  }),
+                                ])
                                 .describe(
                                   'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
                                 ),
@@ -342,9 +369,14 @@ export const listTypedNotificationsResponse = zod
                             .union([
                               zod.null(),
                               zod
-                                .object({
-                                  type: zod.enum(['task']),
-                                })
+                                .union([
+                                  zod.object({
+                                    type: zod.enum(['task']),
+                                  }),
+                                  zod.object({
+                                    type: zod.enum(['snippet']),
+                                  }),
+                                ])
                                 .describe(
                                   'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
                                 ),
@@ -415,7 +447,16 @@ export const listTypedNotificationsResponse = zod
                             messageId: zod.string().describe('The message id'),
                             sender: zod
                               .string()
-                              .describe('The user who sent the message'),
+                              .nullish()
+                              .describe(
+                                'The user who sent the message, when sent by a user'
+                              ),
+                            senderDisplayName: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Display name for non-user senders such as bots'
+                              ),
                             senderProfilePictureUrl: zod.string().nullish(),
                           })
                         ),
@@ -445,6 +486,12 @@ export const listTypedNotificationsResponse = zod
                             messageId: zod
                               .string()
                               .describe('The id of the new message'),
+                            senderDisplayName: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Display name for non-user senders such as bots'
+                              ),
                             senderProfilePictureUrl: zod.string().nullish(),
                             threadId: zod
                               .string()
@@ -459,7 +506,10 @@ export const listTypedNotificationsResponse = zod
                               ),
                             userId: zod
                               .string()
-                              .describe('The sender id of the reply'),
+                              .nullish()
+                              .describe(
+                                'The sender id of the reply, when sent by a user'
+                              ),
                           })
                         ),
                       tag: zod.enum(['channel_message_reply']),
@@ -526,9 +576,14 @@ export const listTypedNotificationsResponse = zod
                             .union([
                               zod.null(),
                               zod
-                                .object({
-                                  type: zod.enum(['task']),
-                                })
+                                .union([
+                                  zod.object({
+                                    type: zod.enum(['task']),
+                                  }),
+                                  zod.object({
+                                    type: zod.enum(['snippet']),
+                                  }),
+                                ])
                                 .describe(
                                   'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
                                 ),
@@ -794,6 +849,12 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                             messageId: zod
                               .string()
                               .describe('The message you were mentioned in'),
+                            senderDisplayName: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Display name for non-user senders such as bots'
+                              ),
                             senderProfilePictureUrl: zod.string().nullish(),
                             threadId: zod
                               .string()
@@ -827,6 +888,12 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                             messageId: zod
                               .string()
                               .describe('The message you were mentioned in'),
+                            senderDisplayName: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Display name for non-user senders such as bots'
+                              ),
                             senderProfilePictureUrl: zod.string().nullish(),
                             threadId: zod
                               .string()
@@ -850,9 +917,14 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                               .union([
                                 zod.null(),
                                 zod
-                                  .object({
-                                    type: zod.enum(['task']),
-                                  })
+                                  .union([
+                                    zod.object({
+                                      type: zod.enum(['task']),
+                                    }),
+                                    zod.object({
+                                      type: zod.enum(['snippet']),
+                                    }),
+                                  ])
                                   .describe(
                                     'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
                                   ),
@@ -885,9 +957,14 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                             .union([
                               zod.null(),
                               zod
-                                .object({
-                                  type: zod.enum(['task']),
-                                })
+                                .union([
+                                  zod.object({
+                                    type: zod.enum(['task']),
+                                  }),
+                                  zod.object({
+                                    type: zod.enum(['snippet']),
+                                  }),
+                                ])
                                 .describe(
                                   'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
                                 ),
@@ -924,9 +1001,14 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                             .union([
                               zod.null(),
                               zod
-                                .object({
-                                  type: zod.enum(['task']),
-                                })
+                                .union([
+                                  zod.object({
+                                    type: zod.enum(['task']),
+                                  }),
+                                  zod.object({
+                                    type: zod.enum(['snippet']),
+                                  }),
+                                ])
                                 .describe(
                                   'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
                                 ),
@@ -965,9 +1047,14 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                             .union([
                               zod.null(),
                               zod
-                                .object({
-                                  type: zod.enum(['task']),
-                                })
+                                .union([
+                                  zod.object({
+                                    type: zod.enum(['task']),
+                                  }),
+                                  zod.object({
+                                    type: zod.enum(['snippet']),
+                                  }),
+                                ])
                                 .describe(
                                   'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
                                 ),
@@ -1038,7 +1125,16 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                             messageId: zod.string().describe('The message id'),
                             sender: zod
                               .string()
-                              .describe('The user who sent the message'),
+                              .nullish()
+                              .describe(
+                                'The user who sent the message, when sent by a user'
+                              ),
+                            senderDisplayName: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Display name for non-user senders such as bots'
+                              ),
                             senderProfilePictureUrl: zod.string().nullish(),
                           })
                         ),
@@ -1068,6 +1164,12 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                             messageId: zod
                               .string()
                               .describe('The id of the new message'),
+                            senderDisplayName: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Display name for non-user senders such as bots'
+                              ),
                             senderProfilePictureUrl: zod.string().nullish(),
                             threadId: zod
                               .string()
@@ -1082,7 +1184,10 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                               ),
                             userId: zod
                               .string()
-                              .describe('The sender id of the reply'),
+                              .nullish()
+                              .describe(
+                                'The sender id of the reply, when sent by a user'
+                              ),
                           })
                         ),
                       tag: zod.enum(['channel_message_reply']),
@@ -1149,9 +1254,14 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                             .union([
                               zod.null(),
                               zod
-                                .object({
-                                  type: zod.enum(['task']),
-                                })
+                                .union([
+                                  zod.object({
+                                    type: zod.enum(['task']),
+                                  }),
+                                  zod.object({
+                                    type: zod.enum(['snippet']),
+                                  }),
+                                ])
                                 .describe(
                                   'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
                                 ),
@@ -1411,6 +1521,12 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                             messageId: zod
                               .string()
                               .describe('The message you were mentioned in'),
+                            senderDisplayName: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Display name for non-user senders such as bots'
+                              ),
                             senderProfilePictureUrl: zod.string().nullish(),
                             threadId: zod
                               .string()
@@ -1444,6 +1560,12 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                             messageId: zod
                               .string()
                               .describe('The message you were mentioned in'),
+                            senderDisplayName: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Display name for non-user senders such as bots'
+                              ),
                             senderProfilePictureUrl: zod.string().nullish(),
                             threadId: zod
                               .string()
@@ -1467,9 +1589,14 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                               .union([
                                 zod.null(),
                                 zod
-                                  .object({
-                                    type: zod.enum(['task']),
-                                  })
+                                  .union([
+                                    zod.object({
+                                      type: zod.enum(['task']),
+                                    }),
+                                    zod.object({
+                                      type: zod.enum(['snippet']),
+                                    }),
+                                  ])
                                   .describe(
                                     'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
                                   ),
@@ -1502,9 +1629,14 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                             .union([
                               zod.null(),
                               zod
-                                .object({
-                                  type: zod.enum(['task']),
-                                })
+                                .union([
+                                  zod.object({
+                                    type: zod.enum(['task']),
+                                  }),
+                                  zod.object({
+                                    type: zod.enum(['snippet']),
+                                  }),
+                                ])
                                 .describe(
                                   'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
                                 ),
@@ -1541,9 +1673,14 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                             .union([
                               zod.null(),
                               zod
-                                .object({
-                                  type: zod.enum(['task']),
-                                })
+                                .union([
+                                  zod.object({
+                                    type: zod.enum(['task']),
+                                  }),
+                                  zod.object({
+                                    type: zod.enum(['snippet']),
+                                  }),
+                                ])
                                 .describe(
                                   'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
                                 ),
@@ -1582,9 +1719,14 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                             .union([
                               zod.null(),
                               zod
-                                .object({
-                                  type: zod.enum(['task']),
-                                })
+                                .union([
+                                  zod.object({
+                                    type: zod.enum(['task']),
+                                  }),
+                                  zod.object({
+                                    type: zod.enum(['snippet']),
+                                  }),
+                                ])
                                 .describe(
                                   'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
                                 ),
@@ -1655,7 +1797,16 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                             messageId: zod.string().describe('The message id'),
                             sender: zod
                               .string()
-                              .describe('The user who sent the message'),
+                              .nullish()
+                              .describe(
+                                'The user who sent the message, when sent by a user'
+                              ),
+                            senderDisplayName: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Display name for non-user senders such as bots'
+                              ),
                             senderProfilePictureUrl: zod.string().nullish(),
                           })
                         ),
@@ -1685,6 +1836,12 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                             messageId: zod
                               .string()
                               .describe('The id of the new message'),
+                            senderDisplayName: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Display name for non-user senders such as bots'
+                              ),
                             senderProfilePictureUrl: zod.string().nullish(),
                             threadId: zod
                               .string()
@@ -1699,7 +1856,10 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                               ),
                             userId: zod
                               .string()
-                              .describe('The sender id of the reply'),
+                              .nullish()
+                              .describe(
+                                'The sender id of the reply, when sent by a user'
+                              ),
                           })
                         ),
                       tag: zod.enum(['channel_message_reply']),
@@ -1766,9 +1926,14 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                             .union([
                               zod.null(),
                               zod
-                                .object({
-                                  type: zod.enum(['task']),
-                                })
+                                .union([
+                                  zod.object({
+                                    type: zod.enum(['task']),
+                                  }),
+                                  zod.object({
+                                    type: zod.enum(['snippet']),
+                                  }),
+                                ])
                                 .describe(
                                   'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
                                 ),
@@ -2037,6 +2202,12 @@ export const getTypedNotificationByIdResponse = zod
                     messageId: zod
                       .string()
                       .describe('The message you were mentioned in'),
+                    senderDisplayName: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Display name for non-user senders such as bots'
+                      ),
                     senderProfilePictureUrl: zod.string().nullish(),
                     threadId: zod
                       .string()
@@ -2068,6 +2239,12 @@ export const getTypedNotificationByIdResponse = zod
                     messageId: zod
                       .string()
                       .describe('The message you were mentioned in'),
+                    senderDisplayName: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Display name for non-user senders such as bots'
+                      ),
                     senderProfilePictureUrl: zod.string().nullish(),
                     threadId: zod
                       .string()
@@ -2089,9 +2266,14 @@ export const getTypedNotificationByIdResponse = zod
                       .union([
                         zod.null(),
                         zod
-                          .object({
-                            type: zod.enum(['task']),
-                          })
+                          .union([
+                            zod.object({
+                              type: zod.enum(['task']),
+                            }),
+                            zod.object({
+                              type: zod.enum(['snippet']),
+                            }),
+                          ])
                           .describe(
                             'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
                           ),
@@ -2122,9 +2304,14 @@ export const getTypedNotificationByIdResponse = zod
                     .union([
                       zod.null(),
                       zod
-                        .object({
-                          type: zod.enum(['task']),
-                        })
+                        .union([
+                          zod.object({
+                            type: zod.enum(['task']),
+                          }),
+                          zod.object({
+                            type: zod.enum(['snippet']),
+                          }),
+                        ])
                         .describe(
                           'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
                         ),
@@ -2157,9 +2344,14 @@ export const getTypedNotificationByIdResponse = zod
                     .union([
                       zod.null(),
                       zod
-                        .object({
-                          type: zod.enum(['task']),
-                        })
+                        .union([
+                          zod.object({
+                            type: zod.enum(['task']),
+                          }),
+                          zod.object({
+                            type: zod.enum(['snippet']),
+                          }),
+                        ])
                         .describe(
                           'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
                         ),
@@ -2194,9 +2386,14 @@ export const getTypedNotificationByIdResponse = zod
                     .union([
                       zod.null(),
                       zod
-                        .object({
-                          type: zod.enum(['task']),
-                        })
+                        .union([
+                          zod.object({
+                            type: zod.enum(['task']),
+                          }),
+                          zod.object({
+                            type: zod.enum(['snippet']),
+                          }),
+                        ])
                         .describe(
                           'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
                         ),
@@ -2261,7 +2458,16 @@ export const getTypedNotificationByIdResponse = zod
                     messageId: zod.string().describe('The message id'),
                     sender: zod
                       .string()
-                      .describe('The user who sent the message'),
+                      .nullish()
+                      .describe(
+                        'The user who sent the message, when sent by a user'
+                      ),
+                    senderDisplayName: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Display name for non-user senders such as bots'
+                      ),
                     senderProfilePictureUrl: zod.string().nullish(),
                   })
                 ),
@@ -2289,6 +2495,12 @@ export const getTypedNotificationByIdResponse = zod
                     messageId: zod
                       .string()
                       .describe('The id of the new message'),
+                    senderDisplayName: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Display name for non-user senders such as bots'
+                      ),
                     senderProfilePictureUrl: zod.string().nullish(),
                     threadId: zod
                       .string()
@@ -2299,7 +2511,12 @@ export const getTypedNotificationByIdResponse = zod
                       .describe(
                         'The user who sent the root message of the thread'
                       ),
-                    userId: zod.string().describe('The sender id of the reply'),
+                    userId: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The sender id of the reply, when sent by a user'
+                      ),
                   })
                 ),
               tag: zod.enum(['channel_message_reply']),
@@ -2362,9 +2579,14 @@ export const getTypedNotificationByIdResponse = zod
                     .union([
                       zod.null(),
                       zod
-                        .object({
-                          type: zod.enum(['task']),
-                        })
+                        .union([
+                          zod.object({
+                            type: zod.enum(['task']),
+                          }),
+                          zod.object({
+                            type: zod.enum(['snippet']),
+                          }),
+                        ])
                         .describe(
                           'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
                         ),

@@ -34,6 +34,16 @@ export type CodeExecutionErrorCode =
   | 'file_not_found'
   | 'string_not_found';
 /**
+ * Viewer-relative attendance status for a call record.
+ * Serializes as `ATTENDED`, `MISSED`, or `UNATTENDED`.
+ */
+export type CallStatus = 'ATTENDED' | 'MISSED' | 'UNATTENDED';
+/**
+ * Schema-only mirror of [`CallStatus`] without variant docs, keeping AI tool
+ * schemas as a simple enum instead of `oneOf`.
+ */
+export type ToolCallStatus = 'ATTENDED' | 'MISSED' | 'UNATTENDED';
+/**
  * Type of channel timeline window to read.
  */
 export type ChannelMessagesWindowType =
@@ -86,7 +96,7 @@ export type DocumentContentState = 'unknown' | 'pending' | 'ready';
  * The document sub type enum represents all values of document sub types.
  * These values should match the `document_sub_type_value` table in macrodb.
  */
-export type DocumentSubType = 'task';
+export type DocumentSubType = 'task' | 'snippet';
 export type EmailPreset = 'signal';
 export type EntityItem =
   | {
@@ -218,6 +228,9 @@ export type UnifiedSearchResponseItem =
     })
   | (CallRecordSearchResponseItemWithMetadata & {
       type: 'call';
+    })
+  | (CrmCompanySearchResponseItem & {
+      type: 'company';
     });
 /**
  * Response from the SendEmail tool.
@@ -366,6 +379,7 @@ export interface CallRecordMetadata {
   duration_ms: number;
   ended_at: string;
   started_at: string;
+  status: CallStatus;
   updated_at: string;
 }
 export interface CallRecordSearchResponseItemWithMetadata {
@@ -461,6 +475,10 @@ export interface CallRecordSummary {
    * When the call started.
    */
   startedAt: string;
+  /**
+   * The caller's viewer-relative status for this call.
+   */
+  status?: ToolCallStatus | null;
 }
 /**
  * Metadata for a channel fetched from the database
@@ -746,7 +764,7 @@ export interface MarkdownNode {
   type: string;
 }
 /**
- * Search items by their content: document body text; email subject/body/sender/recipient/cc/bcc and the display names on those addresses; chat messages; call transcripts. Use this for targeted keyword/content lookup, not for activity-summary questions like "what happened today", "what's going on", "catch me up", or "what happened in standup today"; those should start with ListEntities using time/type/channel filters. Whitespace-separated terms are ANDed. For documents and emails, every term must match somewhere in the document — different terms can appear in different chunks/pages or different fields. For documents and emails specifically, each single-word term is matched as a prefix (so `scri` matches `script`); for emails the prefix expansion also runs against the local-part of address fields. For chats, channels, and call transcripts the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the content, not the user's natural-language description; long phrases will not match. Wrap a term in double quotes (e.g. `"deal review"` or `"alice@example.com"`) to force exact-token / exact-phrase matching instead of prefix. If the user's request combines a person with a topic, run separate searches rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type.
+ * Search items by their content: document body text; email subject/body/sender/recipient/cc/bcc and the display names on those addresses; chat messages; call transcripts. This is keyword search, not semantic search: queries only match literal words/tokens, prefixes, or exact quoted terms that appear in the indexed content. Use this for targeted keyword/content lookup, not for activity-summary questions like "what happened today", "what's going on", "catch me up", or "what happened in standup today"; those should start with ListEntities using time/type/channel filters. Whitespace-separated terms are ANDed. For documents and emails, every term must match somewhere in the document — different terms can appear in different chunks/pages or different fields. For documents and emails specifically, each single-word term is matched as a prefix (so `scri` matches `script`); for emails the prefix expansion also runs against the local-part of address fields. For chats, channels, and call transcripts the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the content, not the user's natural-language description; long phrases will not match. Wrap a term in double quotes (e.g. `"deal review"` or `"alice@example.com"`) to force exact-token / exact-phrase matching instead of prefix. If the user's request combines a person with a topic, run separate searches rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type.
  */
 export interface ContentSearch {
   /**
@@ -797,6 +815,69 @@ export interface CreateDocumentResponse {
    * The id of the document
    */
   documentId: string;
+}
+/**
+ * A CRM domain attached to a company in search results.
+ */
+export interface CrmCompanySearchDomain {
+  /**
+   * The id of the company the domain belongs to.
+   */
+  companyId: string;
+  /**
+   * When the domain record was created.
+   */
+  createdAt: string;
+  /**
+   * The domain (lowercased, e.g. "acme.com").
+   */
+  domain: string;
+  /**
+   * The id of the domain record.
+   */
+  id: string;
+}
+/**
+ * A CRM company match in unified search results. Carries the display
+ * metadata resolved from the primary domain plus the highlighted name.
+ */
+export interface CrmCompanySearchResponseItem {
+  /**
+   * When the company was created.
+   */
+  createdAt: string;
+  /**
+   * Display description from the primary domain's directory entry.
+   */
+  description?: string | null;
+  /**
+   * Domains associated with this company, primary first.
+   */
+  domains: CrmCompanySearchDomain[];
+  /**
+   * Whether the company is hidden from CRM listings.
+   */
+  hidden: boolean;
+  /**
+   * The id of the company.
+   */
+  id: string;
+  /**
+   * Display name from the primary domain's directory entry.
+   */
+  name?: string | null;
+  /**
+   * `name` with matched spans wrapped in `<macro_em>…</macro_em>`.
+   */
+  nameHighlighted?: string | null;
+  /**
+   * The id of the team that owns this company record.
+   */
+  teamId: string;
+  /**
+   * When the company was last updated (the sort key).
+   */
+  updatedAt: string;
 }
 /**
  * API-visible content lifecycle and location metadata.
@@ -921,6 +1002,11 @@ export interface EmailSearchResponseItemWithMetadata {
   is_draft: boolean;
   is_important: boolean;
   is_read: boolean;
+  /**
+   * The inbox that owns the thread. Drives the multi-inbox indicator
+   * when the caller has more than one inbox.
+   */
+  link_id: string;
   /**
    * Subject of the email thread
    */
@@ -1150,17 +1236,21 @@ export interface ToolContact {
   name?: string | null;
 }
 /**
- * List recent call records the user can access, ordered by start time descending. Results are scoped to channels the user is a member of. Transcripts are NOT included — call ReadCallRecord with a specific callId to fetch a transcript.
+ * List recent call records the user can access, ordered by start time descending. Status is relative to the caller. Transcripts are NOT included — call ReadCallRecord with a specific callId to fetch a transcript.
  */
 export interface ListCallRecords {
   /**
-   * Optional filter on whether the caller joined the call. true = only calls the user attended; false = only calls the user did not attend; omit to include both.
+   * Deprecated compatibility filter. true = only calls the user attended; false = only calls the user did not attend; omit to include both. Ignored when status is provided.
    */
   attended?: boolean | null;
   /**
    * Optional channel id. When provided, only calls from that channel are returned.
    */
   channelId?: string | null;
+  /**
+   * Optional viewer-relative status filter. ATTENDED = calls the user joined; MISSED = calls the user did not join while they are in the channel; UNATTENDED = calls the user did not join while they are not in the channel. Prefer this over the deprecated attended filter.
+   */
+  status?: ToolCallStatus | null;
 }
 /**
  * Response for [`ListCallRecords`].
@@ -1464,7 +1554,7 @@ export interface MarkNotificationsSeen {
   notificationIds: string[];
 }
 /**
- * Search items by their name or title: document name, email subject, chat title, project name, the channel name a call belongs to. Use this for targeted name/title lookup, not for activity-summary questions like "what happened today", "what's going on", "catch me up", or "what happened in standup today"; those should start with ListEntities using time/type/channel filters. For emails, whitespace-separated terms are ANDed and each is a prefix match against the subject. For all other types the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the title, not the user's natural-language description; long phrases will not match. Wrap a term in double quotes (e.g. `"deal review"`) to force exact-token matching instead of prefix. If the user's request combines a person with a topic, run separate searches (NameSearch for the person, ContentSearch for the topic) rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type.
+ * Search items by their name or title: document name, email subject, chat title, project name, the channel name a call belongs to. This is keyword search, not semantic search: queries only match literal words/tokens, prefixes, or exact quoted terms that appear in the indexed title/name. Use this for targeted name/title lookup, not for activity-summary questions like "what happened today", "what's going on", "catch me up", or "what happened in standup today"; those should start with ListEntities using time/type/channel filters. For emails, whitespace-separated terms are ANDed and each is a prefix match against the subject. For all other types the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the title, not the user's natural-language description; long phrases will not match. Wrap a term in double quotes (e.g. `"deal review"`) to force exact-token matching instead of prefix. If the user's request combines a person with a topic, run separate searches (NameSearch for the person, ContentSearch for the topic) rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type.
  */
 export interface NameSearch {
   /**

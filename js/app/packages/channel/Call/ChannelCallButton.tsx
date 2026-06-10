@@ -1,16 +1,16 @@
 import { useChannelTab } from '@channel/Channel/ChannelTabContext';
-import { DEFAULT_CHANNEL_TAB } from '@channel/Channel/channel-tabs';
 import PhoneIcon from '@icon/wide-call.svg';
 import { useActiveCallQuery } from '@queries/call/call';
 import { Button, cn } from '@ui';
 import { Show } from 'solid-js';
+import { getCallJoinTab, getCallLeaveTab } from './call-tabs';
 import { useCall } from './use-call';
 
 export function ChannelCallButton(props: { channelId: string }) {
   const { setActiveTab } = useChannelTab();
   const call = useCall(() => props.channelId, {
-    onJoin: () => setActiveTab('call'),
-    onLeave: () => setActiveTab(DEFAULT_CHANNEL_TAB),
+    onJoin: () => setActiveTab(getCallJoinTab()),
+    onLeave: () => setActiveTab(getCallLeaveTab()),
   });
 
   const activeCallQuery = useActiveCallQuery(() => props.channelId);

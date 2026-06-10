@@ -122,6 +122,11 @@ export const ENABLE_MARKDOWN_LIVE_COLLABORATION = resolveFeatureFlag(
 
 export const ENABLE_EMAIL = resolveFeatureFlag('ENABLE_EMAIL', true);
 
+// CRM companies & contacts frontend: the Companies view + sidebar entry, the
+// company/contact detail blocks, CRM mentions / quick-access, and CRM rows in
+// global search. override with VITE_ENABLE_CRM.
+export const ENABLE_CRM = resolveFeatureFlag('ENABLE_CRM', DEV_MODE_ENV);
+
 export const ENABLE_BLOCK_IN_BLOCK = resolveFeatureFlag(
   'ENABLE_BLOCK_IN_BLOCK',
   true
@@ -236,10 +241,8 @@ const _ENABLE_DOCK_NOTITIFCATIONS = resolveFeatureFlag(
 );
 export const ENABLE_TTFT = resolveFeatureFlag('ENABLE_TTFT', DEV_MODE_ENV);
 
-export const ENABLE_MULTI_INBOX = resolveFeatureFlag(
-  'ENABLE_MULTI_INBOX',
-  DEV_MODE_ENV
-);
+export const ENABLE_MULTI_INBOX_OVERRIDE =
+  resolveFeatureFlag('ENABLE_MULTI_INBOX', DEV_MODE_ENV) || undefined;
 
 export const ENABLE_INBOX_RESYNC = resolveFeatureFlag(
   'ENABLE_INBOX_RESYNC',
@@ -345,14 +348,6 @@ export function ENABLE_CALLS(): boolean {
   return analytics.posthog.isFeatureEnabled('enable-calls') ?? false;
 }
 
-// The sidebar active-calls widget fans out to one GET /call/{channelId}/active
-// request per channel every 15s. Flagged off until it's batched / socket-driven.
-export function ENABLE_SIDEBAR_ACTIVE_CALLS(): boolean {
-  return (
-    analytics.posthog.isFeatureEnabled('enable-sidebar-active-calls') ?? false
-  );
-}
-
 export const ENABLE_NEW_ONBOARDING_OVERRIDE = DEV_MODE_ENV ? true : undefined;
 
 export const ENABLE_NEW_LOGIN_OVERRIDE = DEV_MODE_ENV ? true : undefined;
@@ -370,12 +365,44 @@ export const ENABLE_SOUP_GROUP_BY_OVERRIDE = DEV_MODE_ENV ? true : undefined;
 export const ENABLE_TASK_DUPLICATES_FLAG = 'enable-task-duplicates';
 export const ENABLE_TASK_DUPLICATES_OVERRIDE = DEV_MODE_ENV ? true : undefined;
 
-export const ENABLE_AUTO_UPDATE_UI = resolveFeatureFlag(
-  'ENABLE_AUTO_UPDATE_UI',
-  true
+// Snippets: reusable markdown documents, the `c` launcher entry, and the `;`
+// insert menu. PostHog-gated (currently targeted at the Macro team) with a
+// dev-mode default; override with VITE_ENABLE_SNIPPETS.
+export const ENABLE_SNIPPETS_FLAG = 'enable-snippets';
+export const ENABLE_SNIPPETS_OVERRIDE =
+  resolveFeatureFlag('ENABLE_SNIPPETS', DEV_MODE_ENV) || undefined;
+
+/** Non-reactive check for imperative call sites (e.g. editor key handlers). */
+export function ENABLE_SNIPPETS(): boolean {
+  if (ENABLE_SNIPPETS_OVERRIDE !== undefined) {
+    return ENABLE_SNIPPETS_OVERRIDE;
+  }
+
+  return analytics.posthog.isFeatureEnabled(ENABLE_SNIPPETS_FLAG) ?? false;
+}
+
+export const ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_FLAG =
+  'enable-supported-soup-foreign-entities';
+export const ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE = DEV_MODE_ENV
+  ? true
+  : undefined;
+
+export const DISABLE_AUTO_UPDATE_UI_FLAG = 'disable-auto-update-ui';
+export const ENABLE_AUTO_UPDATE_UI_OVERRIDE = getFeatureFlagOverride(
+  'ENABLE_AUTO_UPDATE_UI'
 );
 
-export const ENABLE_CALLKIT = resolveFeatureFlag('ENABLE_CALLKIT', false);
+export function ENABLE_AUTO_UPDATE_UI(): boolean {
+  if (ENABLE_AUTO_UPDATE_UI_OVERRIDE !== undefined) {
+    return ENABLE_AUTO_UPDATE_UI_OVERRIDE;
+  }
+
+  return !(
+    analytics.posthog.isFeatureEnabled(DISABLE_AUTO_UPDATE_UI_FLAG) ?? false
+  );
+}
+
+export const ENABLE_CALLKIT = resolveFeatureFlag('ENABLE_CALLKIT', true);
 
 export const ENABLE_MARKDOWN_SIDE_PANEL = resolveFeatureFlag(
   'ENABLE_MARKDOWN_SIDE_PANEL',

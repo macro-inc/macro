@@ -18,11 +18,13 @@ mod var {
 #[serde(rename_all = "lowercase")]
 pub enum Environment {
     /// Production environment
+    #[serde(alias = "prod", alias = "prd")]
     Production,
     /// Dev and or staging environment
-    /// TODO: update and add new value when we have real staging
+    #[serde(alias = "dev", alias = "development")]
     Develop,
     /// The server is running on localhost
+    #[serde(alias = "lcl", alias = "localhost")]
     Local,
 }
 
@@ -48,6 +50,15 @@ impl Environment {
     /// attempt to create a new [Environment] falling back to prod if we fail to construct
     pub fn new_or_prod() -> Self {
         Self::new_from_env().unwrap_or(Environment::Production)
+    }
+
+    /// Convert the environment variable into a doppler slug
+    pub fn to_doppler_slug(self) -> String {
+        match self {
+            Environment::Production => "prd".to_string(),
+            Environment::Develop => "dev".to_string(),
+            Environment::Local => "lcl".to_string(),
+        }
     }
 }
 

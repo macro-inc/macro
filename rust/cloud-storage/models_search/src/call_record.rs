@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use item_filters::CallFilters;
+use item_filters::{CallFilters, CallStatus};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -37,6 +37,7 @@ pub struct CallRecordMetadata {
     pub duration_ms: i64,
     pub updated_at: DateTime<Utc>,
     pub channel_name: Option<String>,
+    pub status: CallStatus,
     pub attended: bool,
 }
 

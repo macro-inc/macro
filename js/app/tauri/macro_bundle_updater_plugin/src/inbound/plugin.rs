@@ -137,6 +137,7 @@ impl BundleUpdateEvent {
 pub struct MacroBundleUpdaterPlugin {
     base_url: Url,
     embedded_bundle_build: u64,
+    auto_update: bool,
 }
 
 impl MacroBundleUpdaterPlugin {
@@ -145,7 +146,19 @@ impl MacroBundleUpdaterPlugin {
         Self {
             base_url,
             embedded_bundle_build,
+            auto_update: true,
         }
+    }
+
+    /// Enable or disable automatic update activity.
+    ///
+    /// When disabled, the plugin never restores or applies a cached OTA bundle
+    /// at startup and never starts update checks on its own, so the embedded
+    /// bundle (or dev server) always wins. Explicit commands
+    /// (`check_for_update`, `perform_update`, `clear_bundle`) still work.
+    pub fn with_auto_update(mut self, enabled: bool) -> Self {
+        self.auto_update = enabled;
+        self
     }
 }
 
@@ -358,7 +371,11 @@ impl<R: Runtime> Plugin<R> for MacroBundleUpdaterPlugin {
         let mut service = Service::new(client, fs, system_info, self.embedded_bundle_build);
         let mut acknowledge_setup_apply = false;
         let mut start_update_check = false;
-        if let Ok(cache_dir) = app.path().app_cache_dir() {
+        if !self.auto_update {
+            tracing::info!(
+                "[bundle-update] automatic bundle updates are disabled in this build"
+            );
+        } else if let Ok(cache_dir) = app.path().app_cache_dir() {
             let restored_pending = tauri::async_runtime::block_on(async {
                 service.load_bundle_root(&cache_dir, native_build()).await
             });

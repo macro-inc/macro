@@ -5,13 +5,13 @@ import MicrophoneSlash from '@phosphor/microphone-slash.svg';
 import Screencast from '@phosphor/screencast.svg';
 import VideoCamera from '@phosphor/video-camera.svg';
 import VideoCameraSlash from '@phosphor/video-camera-slash.svg';
-import { cn, Dropdown } from '@ui';
+import { cn, Dropdown, InlineCheckbox } from '@ui';
 import { Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import { useCallContext } from '../CallContext';
 import { CallDeviceList } from '../CallDeviceList';
 import { useToggleShareWithTeam } from '../use-toggle-share-with-team';
-import { InlineCheckbox, MenuDivider, MenuLabel } from './CallMenuPrimitives';
+import { MenuDivider, MenuLabel } from './CallMenuPrimitives';
 
 const ITEM_ICON_CLASS = 'size-3.5 shrink-0 text-ink-muted';
 

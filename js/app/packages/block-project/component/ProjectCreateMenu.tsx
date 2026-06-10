@@ -11,6 +11,7 @@ import {
   createMarkdownFile,
   createTask,
 } from '@core/util/create';
+import type { ObjectLike } from '@core/util/result';
 import CaretDown from '@phosphor/caret-down.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import CirclePlus from '@phosphor/plus-circle.svg';
@@ -32,6 +33,7 @@ type CreateBlockSpec = {
   icon: Component;
   loading?: boolean;
   createFn: (projectId: string) => Promise<string>;
+  params?: ObjectLike;
 };
 
 const BLOCK_CREATE_SPECS: CreateBlockSpec[] = [
@@ -54,6 +56,7 @@ const BLOCK_CREATE_SPECS: CreateBlockSpec[] = [
       if (!result) throw new Error('Failed to create markdown file');
       return result;
     },
+    params: { fromScratch: true },
   },
   {
     label: 'Task',
@@ -153,8 +156,9 @@ function makeCreateBlock({
     blockName: BlockName | BlockAlias;
     createFn: () => Promise<string>;
     loading?: boolean;
+    params?: Record<string, unknown>;
   }) => {
-    const { blockName, createFn, loading } = spec;
+    const { blockName, createFn, loading, params } = spec;
 
     const shouldInsert = pressedKeys().has('shift');
 
@@ -172,7 +176,7 @@ function makeCreateBlock({
       const id = await tryCreate();
       if (!id) return;
 
-      const block = { type: blockName, id };
+      const block = { type: blockName, id, params };
 
       shouldInsert
         ? insertSplit(block, 'entity-actions-menu')
@@ -196,7 +200,7 @@ function makeCreateBlock({
 
       if (split)
         split.replace({
-          next: { type: blockName, id },
+          next: { type: blockName, id, params },
           mergeHistory: true,
           referredFrom: 'entity-actions-menu',
         });
@@ -231,6 +235,7 @@ function ProjectCreateDialog(props: {
                       blockName: spec.blockName,
                       loading: spec.loading,
                       createFn: () => spec.createFn(props.projectId),
+                      params: spec.params,
                     });
                   }}
                 >
@@ -271,6 +276,7 @@ function MenuContent(props: { projectId: string }) {
         blockName: spec.blockName,
         loading: spec.loading,
         createFn: () => spec.createFn(props.projectId),
+        params: spec.params,
       }),
   }));
 

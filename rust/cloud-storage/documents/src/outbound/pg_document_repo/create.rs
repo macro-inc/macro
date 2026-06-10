@@ -53,22 +53,22 @@ pub async fn insert_document_row<'a>(
 pub async fn set_document_sub_type(
     transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     document_id: &uuid::Uuid,
-    is_task: bool,
+    sub_type: Option<DocumentSubType>,
 ) -> Result<Option<DocumentSubType>, sqlx::Error> {
-    // Insert document sub-type (for tasks)
-    if is_task {
+    // Insert document sub-type (for tasks and snippets)
+    if let Some(sub_type) = sub_type {
         sqlx::query!(
             r#"
                 INSERT INTO document_sub_type (document_id, sub_type)
                 VALUES ($1, $2)
                 "#,
             &document_id.to_string(),
-            DocumentSubType::Task as _
+            sub_type as _
         )
         .execute(transaction.as_mut())
         .await?;
 
-        Ok(Some(DocumentSubType::Task))
+        Ok(Some(sub_type))
     } else {
         Ok(None)
     }

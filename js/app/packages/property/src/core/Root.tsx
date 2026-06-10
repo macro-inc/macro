@@ -1,3 +1,4 @@
+import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { cn, Dropdown } from '@ui';
 import { createSignal, type JSX, onMount, splitProps } from 'solid-js';
 import type { Property } from '../types';
@@ -100,7 +101,7 @@ export function Root(props: PropertyRootProps) {
         open={editorOpen()}
         onOpenChange={handleOpenChange}
         getAnchorRect={() => editorAnchor()?.getBoundingClientRect()}
-        placement="bottom-start"
+        placement={virtualKeyboardVisible() ? 'top-start' : 'bottom-start'}
       >
         <div
           ref={rootEl}

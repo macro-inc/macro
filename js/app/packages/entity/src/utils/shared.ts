@@ -6,6 +6,8 @@ export function useIsShared(entity: EntityData) {
   return () => {
     if (entity.type === 'channel') return false;
     if (entity.type === 'call') return false;
+    if (entity.type === 'foreign') return entity.storedForId !== userId();
+    if (entity.type === 'crm_company') return false;
     if (entity.ownerId === userId()) return false;
     return true;
   };

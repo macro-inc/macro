@@ -123,6 +123,15 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
             "/documents/{document_id}/update",
             put(put_document_update::handler),
         )
+        .route(
+            "/documents/{document_id}/snapshot",
+            put(
+                documents_hex::inbound::axum_router::put_snapshot::put_snapshot_handler::<
+                    DocumentService,
+                    EntityAccessService,
+                >,
+            ),
+        )
         .route("/documents/metadata", post(get_documents_metadata::handler))
         // History routes
         .route(

@@ -60,4 +60,25 @@ describe('message sender normalization', () => {
       id: '00000000-0000-0000-0000-000000000001',
     });
   });
+
+  it('keeps enriched bot name and avatar from the API sender', () => {
+    const enriched = {
+      ...legacyMessage('bot|00000000-0000-0000-0000-000000000001'),
+      sender: {
+        type: 'bot' as const,
+        id: '00000000-0000-0000-0000-000000000001',
+        name: 'Deploy Bot',
+        avatar_url: 'https://example.com/bot.png',
+      },
+    };
+
+    const message = normalizeChannelMessageSender(enriched);
+
+    expect(message.sender).toEqual({
+      type: 'bot',
+      id: '00000000-0000-0000-0000-000000000001',
+      name: 'Deploy Bot',
+      avatar_url: 'https://example.com/bot.png',
+    });
+  });
 });

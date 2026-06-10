@@ -32,7 +32,9 @@ pub mod organization;
 pub mod pins;
 pub mod projects;
 pub mod recents;
+pub mod share_on_mention;
 pub mod share_permission;
+pub mod shared_inbox;
 #[cfg(feature = "team")]
 pub mod team;
 pub mod user;

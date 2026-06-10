@@ -6,7 +6,7 @@ mod tests;
 use crate::domain::{
     models::{
         AuthenticatedBot, Bot, BotId, BotKind, BotOwner, BotToken, BotTokenCandidate,
-        CreateBotRequest, CreateBotTokenRequest, PatchBotRequest,
+        CreateBotRequest, CreateBotTokenRequest, CreateChannelScopedBotRequest, PatchBotRequest,
     },
     ports::BotRepo,
 };
@@ -31,6 +31,13 @@ impl PgBotsRepo {
 
 fn principal_id(bot_id: BotId) -> String {
     bot_id.to_storage_string()
+}
+
+fn owner_columns(owner: BotOwner) -> (Option<String>, Option<Uuid>) {
+    match owner {
+        BotOwner::User { user_id } => (Some(user_id), None),
+        BotOwner::Team { team_id } => (None, Some(team_id)),
+    }
 }
 
 #[derive(Debug)]
@@ -164,10 +171,7 @@ impl BotRepo for PgBotsRepo {
         req: CreateBotRequest,
     ) -> Result<Bot, Self::Err> {
         let bot_id = BotId::from_uuid(macro_uuid::generate_uuid_v7());
-        let (owner_user_id, team_id) = match owner {
-            BotOwner::User { user_id } => (Some(user_id), None),
-            BotOwner::Team { team_id } => (None, Some(team_id)),
-        };
+        let (owner_user_id, team_id) = owner_columns(owner);
         let row = sqlx::query_as!(
             BotRow,
             r#"
@@ -203,6 +207,99 @@ impl BotRepo for PgBotsRepo {
         .context("failed to create bot")?;
 
         map_bot_row(row)
+    }
+
+    async fn create_channel_scoped_bot(
+        &self,
+        owner: BotOwner,
+        created_by: MacroUserIdStr<'static>,
+        channel_id: Uuid,
+        token_hash: Vec<u8>,
+        token_prefix: String,
+        req: CreateChannelScopedBotRequest,
+    ) -> Result<(Bot, BotToken), Self::Err> {
+        let bot_id = BotId::from_uuid(macro_uuid::generate_uuid_v7());
+        let token_id = macro_uuid::generate_uuid_v7();
+        let (owner_user_id, team_id) = owner_columns(owner);
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .context("failed to begin channel-scoped bot transaction")?;
+
+        let bot_row = sqlx::query_as!(
+            BotRow,
+            r#"
+            INSERT INTO bots (
+                id, kind, owner_user_id, team_id, name, handle, description, avatar_url, created_by
+            )
+            VALUES ($1, 'owned', $2, $3, $4, $5, $6, $7, $8)
+            RETURNING
+                id,
+                kind,
+                owner_user_id,
+                team_id,
+                name,
+                handle,
+                description,
+                avatar_url,
+                created_by,
+                created_at,
+                updated_at,
+                deleted_at
+            "#,
+            bot_id.as_uuid(),
+            owner_user_id,
+            team_id,
+            req.name,
+            req.handle,
+            req.description,
+            req.avatar_url,
+            created_by.as_ref(),
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .context("failed to create channel-scoped bot")?;
+
+        sqlx::query!(
+            r#"
+            INSERT INTO comms_channel_participants (channel_id, user_id, role, left_at)
+            VALUES ($1, $2, 'member'::comms_participant_role, NULL)
+            "#,
+            channel_id,
+            principal_id(bot_id),
+        )
+        .execute(&mut *tx)
+        .await
+        .context("failed to add channel-scoped bot to channel")?;
+
+        let token_row = sqlx::query_as!(
+            BotTokenRow,
+            r#"
+            INSERT INTO bot_tokens (
+                id, bot_id, token_hash, token_prefix, label, expires_at
+            )
+            VALUES ($1, $2, $3, $4, $5, $6)
+            RETURNING id, bot_id, token_prefix, label, last_used_at, expires_at, revoked_at, created_at
+            "#,
+            token_id,
+            bot_id.as_uuid(),
+            token_hash,
+            token_prefix,
+            req.token_label,
+            req.token_expires_at,
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .context("failed to create channel-scoped bot token")?;
+
+        let bot = map_bot_row(bot_row)?;
+        let token = map_token_row(token_row);
+        tx.commit()
+            .await
+            .context("failed to commit channel-scoped bot transaction")?;
+
+        Ok((bot, token))
     }
 
     async fn list_manageable_bots(
@@ -539,6 +636,46 @@ impl BotRepo for PgBotsRepo {
         .fetch_all(&self.pool)
         .await
         .context("failed to lookup bot token candidates")?;
+
+        rows.into_iter()
+            .map(TokenCandidateRow::into_candidate)
+            .collect()
+    }
+
+    async fn channel_token_candidates(
+        &self,
+        channel_id: Uuid,
+        token_prefix: &str,
+    ) -> Result<Vec<BotTokenCandidate>, Self::Err> {
+        let rows = sqlx::query_as!(
+            TokenCandidateRow,
+            r#"
+            SELECT
+                bt.id AS token_id,
+                bt.bot_id,
+                bt.token_hash,
+                bt.token_prefix,
+                bt.label,
+                bt.last_used_at,
+                bt.expires_at,
+                bt.revoked_at,
+                bt.created_at,
+                b.kind
+            FROM bot_tokens bt
+            JOIN bots b ON b.id = bt.bot_id
+            JOIN comms_channel_participants cp
+              ON cp.channel_id = $1
+             AND cp.user_id = ('bot|' || b.id::text)
+             AND cp.left_at IS NULL
+            WHERE bt.token_prefix = $2
+              AND b.deleted_at IS NULL
+            "#,
+            channel_id,
+            token_prefix,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .context("failed to lookup channel bot token candidates")?;
 
         rows.into_iter()
             .map(TokenCandidateRow::into_candidate)

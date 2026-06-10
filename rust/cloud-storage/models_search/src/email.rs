@@ -62,6 +62,9 @@ pub struct EmailSearchResponseItem {
     pub thread_id: uuid::Uuid,
     /// The id of the owner of the email thread
     pub user_id: String,
+    /// The inbox that owns the thread. Drives the multi-inbox indicator
+    /// when the caller has more than one inbox.
+    pub link_id: uuid::Uuid,
     /// The search results for the document
     /// This may be empty if the search result match was on the email subject only
     pub email_message_search_results: Vec<EmailSearchResult>,

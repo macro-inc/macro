@@ -2,17 +2,14 @@ use axum::{
     Json,
     extract::{Path, State},
 };
-use entity_access::{
-    domain::{
-        models::{AccessLevel, ViewAccessLevel},
-        ports::EntityAccessService,
-    },
-    inbound::axum_extractors::CrmContactAccessLevelExtractor,
-};
+use entity_access::domain::{models::ViewAccessLevel, ports::EntityAccessService};
 use model_error_response::ErrorResponse;
 use uuid::Uuid;
 
-use crate::domain::{model::CrmError, service::CrmService};
+use crate::{
+    domain::{model::CrmError, service::CrmService},
+    inbound::axum_extractors::CrmContactAccessLevelExtractor,
+};
 
 use super::{CrmRouterState, list_company_contacts::CrmContactResponse};
 
@@ -41,14 +38,9 @@ pub async fn handler<C: CrmService, Eas: EntityAccessService>(
     State(state): State<CrmRouterState<C, Eas>>,
     Path(contact_id): Path<Uuid>,
 ) -> Result<Json<CrmContactResponse>, CrmError> {
-    let include_hidden = access
-        .entity_access_receipt
-        .entity_permission()
-        .allows_access_level(AccessLevel::Edit);
-
     let contact = state
         .service
-        .get_contact_for_team(&access.team_id, &contact_id, include_hidden)
+        .get_contact_for_team(&access.receipt)
         .await?
         .ok_or(CrmError::ContactNotFoundForTeam)?;
 

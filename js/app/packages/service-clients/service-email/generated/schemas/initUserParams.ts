@@ -10,4 +10,8 @@ export type InitUserParams = {
    * **OPTIONAL**. The in_progress_user_link id from a /link/gmail flow.
    */
   link_id?: string;
+  /**
+   * **OPTIONAL**. Confirms promoting a mailbox already connected by another user into a shared inbox.
+   */
+  force_share?: boolean;
 };

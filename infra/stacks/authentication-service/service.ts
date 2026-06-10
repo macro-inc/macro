@@ -3,6 +3,8 @@ import * as awsx from '@pulumi/awsx';
 import * as pulumi from '@pulumi/pulumi';
 import {
   DATADOG_API_KEY,
+  DEFAULT_CONTINUE_BEFORE_STEADY_STATE,
+  EcsDeploymentFailureAlarm,
   datadogAgentContainer,
   fargateLogRouterSidecarContainer,
   serviceLoadBalancer,
@@ -34,6 +36,10 @@ type Args = {
   serviceContainerPort: number;
   isPrivate?: boolean;
   containerEnvVars?: { name: string; value: pulumi.Output<string> | string }[];
+  containerSecrets: {
+    name: string;
+    valueFrom: pulumi.Output<string> | string;
+  }[];
   healthCheckPath: string;
   tags: { [key: string]: string };
   queueArns: pulumi.Output<string>[];
@@ -41,6 +47,7 @@ type Args = {
 
 export class AuthenticationService extends pulumi.ComponentResource {
   public role: aws.iam.Role;
+  public executionRole: aws.iam.Role;
   public ecr: awsx.ecr.Repository;
   public serviceAlbSg: aws.ec2.SecurityGroup;
   public serviceSg: aws.ec2.SecurityGroup;
@@ -62,6 +69,7 @@ export class AuthenticationService extends pulumi.ComponentResource {
       healthCheckPath,
       isPrivate,
       containerEnvVars,
+      containerSecrets,
       clusterName,
       tags,
       secretKeyArns,
@@ -103,7 +111,28 @@ export class AuthenticationService extends pulumi.ComponentResource {
           Statement: [
             {
               Action: ['secretsmanager:GetSecretValue'],
-              Resource: [...secretKeyArns],
+              Resource: [
+                ...secretKeyArns,
+                ...containerSecrets.map((s) => s.valueFrom),
+              ],
+              Effect: 'Allow',
+            },
+          ],
+        },
+        tags: this.tags,
+      },
+      { parent: this }
+    );
+
+    const executionSecretsPolicy = new aws.iam.Policy(
+      `${BASE_NAME}-execution-secrets-policy`,
+      {
+        policy: {
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Action: ['secretsmanager:GetSecretValue'],
+              Resource: containerSecrets.map((s) => s.valueFrom),
               Effect: 'Allow',
             },
           ],
@@ -138,25 +167,31 @@ export class AuthenticationService extends pulumi.ComponentResource {
       { parent: this }
     );
 
+    const ecsTaskAssumeRolePolicy = aws.iam.assumeRolePolicyForPrincipal({
+      Service: 'ecs-tasks.amazonaws.com',
+    });
+
     this.role = new aws.iam.Role(
       `${BASE_NAME}-role`,
       {
         name: `${BASE_NAME}-role-${stack}`,
-        assumeRolePolicy: {
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Action: 'sts:AssumeRole',
-              Principal: {
-                Service: 'ecs-tasks.amazonaws.com',
-              },
-              Effect: 'Allow',
-              Sid: '',
-            },
-          ],
-        },
+        assumeRolePolicy: ecsTaskAssumeRolePolicy,
         tags: this.tags,
         managedPolicyArns: [secretsPolicy.arn, sesPolicy.arn, queuePolicy.arn],
+      },
+      { parent: this }
+    );
+
+    this.executionRole = new aws.iam.Role(
+      `${BASE_NAME}-execution-role`,
+      {
+        name: `${BASE_NAME}-execution-role-${stack}`,
+        assumeRolePolicy: ecsTaskAssumeRolePolicy,
+        tags: this.tags,
+        managedPolicyArns: [
+          'arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy',
+          executionSecretsPolicy.arn,
+        ],
       },
       { parent: this }
     );
@@ -212,6 +247,7 @@ export class AuthenticationService extends pulumi.ComponentResource {
           subnets: vpc.privateSubnetIds,
           securityGroups: [this.serviceSg.id],
         },
+        continueBeforeSteadyState: DEFAULT_CONTINUE_BEFORE_STEADY_STATE,
         deploymentCircuitBreaker: {
           enable: true,
           rollback: true,
@@ -219,6 +255,9 @@ export class AuthenticationService extends pulumi.ComponentResource {
         taskDefinitionArgs: {
           taskRole: {
             roleArn: this.role.arn,
+          },
+          executionRole: {
+            roleArn: this.executionRole.arn,
           },
           containers: {
             log_router: fargateLogRouterSidecarContainer,
@@ -232,11 +271,8 @@ export class AuthenticationService extends pulumi.ComponentResource {
               environment: [
                 { name: 'BASE_URL', value: this.domain },
                 ...(containerEnvVars ?? []),
-                {
-                  name: 'FUSIONAUTH_OAUTH_REDIRECT_URI',
-                  value: `https://${SERVICE_DOMAIN_NAME}/oauth/redirect`,
-                },
               ],
+              secrets: [...containerSecrets],
               logConfiguration: {
                 logDriver: 'awsfirelens',
                 options: {
@@ -496,6 +532,16 @@ export class AuthenticationService extends pulumi.ComponentResource {
   }
 
   setupServiceAlarms() {
+    new EcsDeploymentFailureAlarm(
+      `${BASE_NAME}-deployment-failure-alarm`,
+      {
+        serviceName: BASE_NAME,
+        serviceArn: this.service.service.arn,
+        tags: this.tags,
+      },
+      { parent: this }
+    );
+
     new aws.cloudwatch.MetricAlarm(
       `${BASE_NAME}-high-cpu-alarm`,
       {

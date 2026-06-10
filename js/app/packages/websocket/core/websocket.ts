@@ -42,6 +42,7 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
   private _closedByUser: boolean = false; // whether the websocket was closed by the user
   private _lastConnection?: Date; // timestamp of the last connection
   private _underlyingWebsocket: WebSocket; // the underlying websocket, e.g. native browser websocket
+  private connectPending: boolean = false; // whether tryConnect is resolving its url / creating a socket
   private retryTimeout?: ReturnType<typeof globalThis.setTimeout>; // timeout for the next retry, if any
 
   private heartbeatInterval?: ReturnType<typeof setInterval> | undefined; // interval for the heartbeat
@@ -284,7 +285,10 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
   public close(code?: number, reason?: string): void {
     this.cancelScheduledConnectionRetry(); // cancel any scheduled retries
     this._closedByUser = true; // mark websocket as closed by user
-    this._underlyingWebsocket.close(code, reason); // close underlying websocket with provided code and reason
+    // The underlying websocket is unassigned while the first connect attempt
+    // is still resolving its url; tryConnect observes _closedByUser and
+    // won't open a socket after this point.
+    (this._underlyingWebsocket as WebSocket | undefined)?.close(code, reason);
     this.stopHeartbeat();
   }
 
@@ -330,52 +334,65 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
   /**
    * Creates a new browser-native websocket and connects it to the given URL with the given protocols
    * and adds all event listeners to the browser-native websocket.
-   *
-   * @return the created browser-native websocket which is also stored in the '_underlyingWebsocket' property.
    */
-  private async tryConnect(): Promise<WebSocket> {
-    const url = await resolveUrl(this._urlResolver);
-    this._url = url;
-    const event = new CustomEvent<UrlResolvedEventDetail>(
-      WebsocketEvent.UrlResolved,
-      {
-        detail: {
-          url: this._url,
-        },
+  private async tryConnect(): Promise<void> {
+    this.connectPending = true;
+    try {
+      const url = await resolveUrl(this._urlResolver);
+
+      // The websocket may have been closed by the user while the url was
+      // resolving (e.g. a token fetch); don't open a connection nobody owns.
+      if (this._closedByUser) {
+        return;
       }
-    );
-    this.dispatchEvent(WebsocketEvent.UrlResolved, event);
-    const factory = this._options.factory ?? platformWebSocketFactory;
-    const newSocket = factory(this.url, this.protocols); // create new browser-native websocket and add all event listeners
-    this._underlyingWebsocket = newSocket;
-    this._underlyingWebsocket.addEventListener(
-      WebsocketEvent.Open,
-      this.handleOpenEvent
-    );
-    this._underlyingWebsocket.addEventListener(
-      WebsocketEvent.Close,
-      this.handleCloseEvent
-    );
-    this._underlyingWebsocket.addEventListener(
-      WebsocketEvent.Error,
-      this.handleErrorEvent
-    );
-    this._underlyingWebsocket.addEventListener(
-      WebsocketEvent.Message,
-      this.handleMessageEvent
-    );
 
-    if (this.binaryType !== undefined) {
-      this._underlyingWebsocket.binaryType = this.binaryType;
+      this._url = url;
+      const event = new CustomEvent<UrlResolvedEventDetail>(
+        WebsocketEvent.UrlResolved,
+        {
+          detail: {
+            url: this._url,
+          },
+        }
+      );
+      this.dispatchEvent(WebsocketEvent.UrlResolved, event);
+      const factory = this._options.factory ?? platformWebSocketFactory;
+      const newSocket = factory(this.url, this.protocols); // create new browser-native websocket and add all event listeners
+      this._underlyingWebsocket = newSocket;
+      this._underlyingWebsocket.addEventListener(
+        WebsocketEvent.Open,
+        this.handleOpenEvent
+      );
+      this._underlyingWebsocket.addEventListener(
+        WebsocketEvent.Close,
+        this.handleCloseEvent
+      );
+      this._underlyingWebsocket.addEventListener(
+        WebsocketEvent.Error,
+        this.handleErrorEvent
+      );
+      this._underlyingWebsocket.addEventListener(
+        WebsocketEvent.Message,
+        this.handleMessageEvent
+      );
+
+      if (this.binaryType !== undefined) {
+        this._underlyingWebsocket.binaryType = this.binaryType;
+      }
+    } finally {
+      this.connectPending = false;
     }
-
-    return this._underlyingWebsocket;
   }
 
   /**
    * Removes all event listeners from the browser-native websocket and closes it.
    */
   private clearWebsocket() {
+    // Nothing to clear while the first connection attempt is still resolving
+    // its url (the underlying websocket is only assigned in tryConnect).
+    if (!this._underlyingWebsocket) {
+      return;
+    }
     this._underlyingWebsocket.removeEventListener(
       WebsocketEvent.Open,
       this.handleOpenEvent
@@ -396,10 +413,14 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
     // Only close if the connection is OPEN or CLOSING
     // The ws library throws an error when closing a CONNECTING WebSocket
     const readyState = this._underlyingWebsocket.readyState;
-    if (
-      readyState !== WebSocket.CONNECTING &&
-      readyState !== WebSocket.CLOSED
-    ) {
+    if (readyState === WebSocket.CONNECTING) {
+      // Close the abandoned attempt once it opens so it doesn't linger
+      // half-connected on the server.
+      const abandoned = this._underlyingWebsocket;
+      abandoned.addEventListener(WebsocketEvent.Open, () => abandoned.close(), {
+        once: true,
+      });
+    } else if (readyState !== WebSocket.CLOSED) {
       this._underlyingWebsocket.close();
     }
   }
@@ -430,6 +451,10 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
       clearTimeout(this.heartbeatTimeout);
       this.heartbeatTimeout = undefined;
     }
+
+    // A pong proves the connection is alive; only consecutive misses should
+    // count towards maxMissedHeartbeats.
+    this.missedHeartbeats = 0;
 
     const receivedHeartbeatEvent = new CustomEvent<HeartbeatEventDetail>(
       WebsocketEvent.HeartbeatReceived,
@@ -529,8 +554,12 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
             { detail }
           );
           this.dispatchEvent(WebsocketEvent.Reconnect, reconnectEvent);
-          this.backoff.reset();
         }
+
+        // Reset on every successful open (not only on reconnects), otherwise
+        // retries spent establishing the first connection permanently eat
+        // into the maxRetries budget.
+        this.backoff?.reset();
 
         if (
           this._options.heartbeat &&
@@ -779,8 +808,50 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
     }, this._options.heartbeat.interval);
   }
 
+  /**
+   * Tears down the current underlying websocket and connects a fresh one.
+   *
+   * Unlike close(), this does NOT mark the websocket as closed by the user:
+   * send(), heartbeats and automatic retries keep working on the new
+   * connection.
+   */
   reconnect() {
-    this.close();
+    // An explicit reconnect always overrides a prior user close — clear the
+    // flag before the pending check so a close() that landed while a connect
+    // attempt was resolving its url doesn't strand the instance (tryConnect
+    // bails on _closedByUser after the url resolves).
+    this._closedByUser = false;
+    if (this.connectPending) {
+      // A fresh connection is already being established (e.g. 'online' and
+      // 'visibilitychange' firing together on wake) — starting a second
+      // tryConnect would orphan the first socket. With _closedByUser cleared
+      // above, the in-flight attempt is adopted as this reconnect.
+      return;
+    }
+    this.cancelScheduledConnectionRetry();
+    this.stopHeartbeat();
+    this.clearWebsocket(); // detach listeners from (and close) the old socket
+    this.connectionState = WebsocketConnectionState.Reconnecting;
     this.tryConnect();
+  }
+
+  /**
+   * Reconnects only if there is no usable connection: a no-op while the
+   * underlying websocket is OPEN, still CONNECTING, or a connect attempt is
+   * resolving its url, and a no-op after the user closed the websocket
+   * (only an explicit reconnect() may override a user close). Safe to call
+   * from connectivity signals like 'online' or 'visibilitychange' without
+   * disturbing a healthy connection.
+   */
+  reconnectIfDisconnected() {
+    if (this.connectPending || this._closedByUser) {
+      return;
+    }
+    const readyState = (this._underlyingWebsocket as WebSocket | undefined)
+      ?.readyState;
+    if (readyState === WebSocket.OPEN || readyState === WebSocket.CONNECTING) {
+      return;
+    }
+    this.reconnect();
   }
 }

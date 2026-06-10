@@ -60,6 +60,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
     hotkeyGroup,
     onMutate: (variables) =>
       applyEntitiesDoneOptimistic({
+        entityIds: variables.entities.map((entity) => entity.id),
         emailIds: variables.emailIds,
         notificationIds: variables.notificationIds,
       }),

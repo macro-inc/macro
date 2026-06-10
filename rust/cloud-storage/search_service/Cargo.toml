@@ -20,8 +20,12 @@ axum = { workspace = true }
 chrono = { workspace = true }
 comms = { path = "../comms", default-features = false, features = ["outbound"] }
 comms_db_client = { path = "../comms_db_client" }
+crm = { path = "../crm", default-features = false, features = ["search"] }
 document_sub_type = { path = "../document_sub_type" }
 email_db_client = { path = "../email_db_client" }
+entity_access = { path = "../entity_access", default-features = false, features = [
+  "outbound",
+] }
 futures = { workspace = true }
 http-body-util = { workspace = true }
 indexmap = "2"
@@ -55,6 +59,7 @@ tower = { workspace = true }
 tower-http = { workspace = true }
 tracing = { workspace = true }
 utoipa = { workspace = true }
+uuid = { workspace = true }
 
 [dev-dependencies]
 macro_auth = { path = "../macro_auth", features = ["testing"] }

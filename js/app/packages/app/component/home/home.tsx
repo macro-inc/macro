@@ -18,6 +18,8 @@ import { ENABLE_HOME_OVERRIDE } from '@core/constant/featureFlags';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { useUserContext } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
+import { registerHotkey } from '@core/hotkey/hotkeys';
+import { TOKENS } from '@core/hotkey/tokens';
 import { isPaymentError } from '@core/util/handlePaymentError';
 import { createRenameDssEntityMutation } from '@macro-entity';
 import { invalidateAllSoup } from '@queries/soup/normalized-cache';
@@ -149,7 +151,7 @@ function HomeContent() {
   );
 }
 
-const HomeChatInputInner = () => {
+const HomeChatInput = () => {
   const analytics = useAnalytics();
   const splitPanelContext = useSplitPanelOrThrow();
   const input = useChatInputContext();
@@ -165,6 +167,18 @@ const HomeChatInputInner = () => {
     },
     block: 'chat',
     showOpenTabs: true,
+  });
+
+  registerHotkey({
+    hotkey: 'enter',
+    scopeId: splitPanelContext.splitHotkeyScope,
+    description: 'Focus Chat Input',
+    keyDownHandler: () => {
+      editor.controls.focus();
+      return true;
+    },
+    hotkeyToken: TOKENS.block.focus,
+    hide: true,
   });
 
   const renameMutation = createRenameDssEntityMutation();
@@ -236,13 +250,9 @@ const HomeChatInputInner = () => {
             return true;
           }}
           isPersistent={true}
-          autoFocusOnMount={false}
+          autoFocusOnMount={true}
         />
       </div>
     </div>
   );
-};
-
-const HomeChatInput = () => {
-  return <HomeChatInputInner />;
 };

@@ -1,7 +1,7 @@
 import type { EntityItem } from '@core/context/quickAccess';
 import { trackMention } from '@core/signal/mention';
 import type { DateOption } from '@core/util/dateSearch/useDateSearch';
-import type { ChannelEntity, EmailEntity } from '@entity';
+import type { ChannelEntity, CrmCompanyEntity, EmailEntity } from '@entity';
 import { REMOVE_INLINE_SEARCH_COMMAND } from '../../../../plugins';
 import {
   INSERT_DATE_MENTION_COMMAND,
@@ -14,6 +14,22 @@ import type {
 } from '../../../../utils/mentionsUtils';
 import { handleUserMention } from '../../../../utils/mentionsUtils';
 import { getBlockNameFromEntity } from './entityUtils';
+
+// Resolve the display name for a mention insert. `entity.name` is the
+// happy path; falls back per-bucket so the inserted mention is never
+// blank — empty string here would render an invisible mention until the
+// preview fetch lands and re-triggers a Lexical render (typically only
+// after the next keystroke).
+function entityDisplayName(item: EntityItem): string {
+  const name = item.data.name;
+  if (name) return name;
+  if (item.bucket === 'email') return 'No Subject';
+  if (item.bucket === 'crm_company') {
+    const domain = (item.data as CrmCompanyEntity).domains?.[0]?.domain;
+    return domain ?? 'Unknown company';
+  }
+  return '';
+}
 
 /**
  * Handle entity mention (documents, channels, emails, etc.).
@@ -34,7 +50,7 @@ async function handleEntityMention(
   const entity = item.data;
 
   const blockNameForMention = getBlockNameFromEntity(item);
-  const itemName = entity.name ?? (item.bucket === 'email' ? 'No Subject' : '');
+  const itemName = entityDisplayName(item);
 
   let mentionId: string | undefined;
   if (

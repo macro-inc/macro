@@ -4,7 +4,12 @@ import { fileTypeToResolvedBlockName } from '@core/constant/allBlocks';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import { throttledDependent } from '@core/util/debounce';
 import type { NonNullableFields } from '@core/util/withRequired';
-import { type EntityData, isChannelMessageEntity, isTaskEntity } from '@entity';
+import {
+  type EntityData,
+  isChannelMessageEntity,
+  isSnippetEntity,
+  isTaskEntity,
+} from '@entity';
 import { createContextProvider } from '@solid-primitives/context';
 import {
   type Component,
@@ -68,7 +73,12 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
           alias: 'task',
           baseType: 'md',
         } as BlockAliasContext)
-      : undefined;
+      : isSnippetEntity(props.selectedEntity)
+        ? ({
+            alias: 'snippet',
+            baseType: 'md',
+          } as BlockAliasContext)
+        : undefined;
 
     let blockType: BlockName;
     let blockId: string;
@@ -78,6 +88,16 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
     } else if (props.selectedEntity.type === 'channel_message') {
       blockType = 'channel';
       blockId = props.selectedEntity.channelId;
+    } else if (props.selectedEntity.type === 'foreign') {
+      // TODO(dev-rb/github): Preview GitHub PRs with /pr.
+      blockType = 'unknown';
+      blockId = props.selectedEntity.id;
+    } else if (props.selectedEntity.type === 'crm_company') {
+      blockType = 'company';
+      blockId = props.selectedEntity.id;
+    } else if (props.selectedEntity.type === 'crm_contact') {
+      blockType = 'contact';
+      blockId = props.selectedEntity.id;
     } else {
       blockType = props.selectedEntity.type;
       blockId = props.selectedEntity.id;

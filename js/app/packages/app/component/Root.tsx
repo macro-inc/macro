@@ -7,6 +7,7 @@ import { ROUTER_BASE } from '@app/constants/routerBase';
 import { PosthogProvider, usePosthog } from '@app/lib/analytics/posthog';
 import { setHotkeyRoot } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { CallKitSync } from '@channel/Call';
 import { CallProvider } from '@channel/Call/CallContext';
 import { CallStartedNotifier } from '@channel/Call/CallStartedNotifier';
 import { ChatAttachmentsInit } from '@core/component/AI/signal/globalAttachments';
@@ -47,6 +48,7 @@ import {
   prefetchUserInfo,
   useUserInfoQuery,
 } from '@queries/auth/user-info';
+import { useChatRenameWebsocketSync } from '@queries/chat';
 import { prefetchHistory } from '@queries/history/history';
 import { invalidateUserNotifications } from '@queries/notification/user-notifications';
 import { QuerySyncProvider } from '@queries/sync/SyncProvider';
@@ -128,6 +130,7 @@ const rootPreload: RoutePreloadFunc = async (args) => {
     'utm_term',
     'utm_content',
     'rdt_cid',
+    'fbclid',
     'gclid',
     'twclid',
     '_fbc',
@@ -283,6 +286,10 @@ const ROUTES: RouteDefinition[] = [
     component: LAYOUT_ROUTE.component,
   },
   {
+    path: '/companies',
+    component: LAYOUT_ROUTE.component,
+  },
+  {
     path: '/files',
     component: LAYOUT_ROUTE.component,
   },
@@ -360,6 +367,7 @@ const ROUTES: RouteDefinition[] = [
 function ConfiguredGlobalAppStateProvider(props: ParentProps) {
   // Initialize global notification helpers
   const notifInterface = usePlatformNotificationState();
+  useChatRenameWebsocketSync();
 
   const onNotification = (notification: UnifiedNotification) => {
     if (notifInterface === 'not-supported') return;
@@ -515,6 +523,7 @@ export function Root() {
                   <MutationUndoProvider>
                     <ChannelsContextProvider>
                       <CallProvider>
+                        <CallKitSync />
                         <CallStartedNotifier />
                         <QuickAccessProvider>
                           <SearchProvider>

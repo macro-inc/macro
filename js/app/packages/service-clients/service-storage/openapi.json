@@ -969,6 +969,58 @@
         }
       }
     },
+    "/call/ring-status/{call_id}": {
+      "get": {
+        "tags": ["call::inbound::axum_router"],
+        "summary": "Handler for `GET /call/ring-status/{call_id}`.",
+        "description": "Reports whether the authenticated user should keep ringing for the call.\nPolled by native clients while the CallKit incoming-call UI is showing, so\na ring can be cancelled when the user answers on another device\n(`answered`) or the call ends before anyone answers (`ended`).\n\nOutside the user-auth layer: the bearer credential is the recipient's\nLiveKit JWT from the VoIP push payload, verified with the LiveKit secret.",
+        "operationId": "get_ring_status",
+        "parameters": [
+          {
+            "name": "call_id",
+            "in": "path",
+            "description": "Call ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RingStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/call/webhook": {
       "post": {
         "tags": ["call::inbound::axum_router"],
@@ -2113,6 +2165,87 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiChannelAttachmentsPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel_id}/bots/scoped": {
+      "post": {
+        "tags": ["bots"],
+        "summary": "Handler for `POST /channels/{channel_id}/bots/scoped`.",
+        "operationId": "create_channel_scoped_bot",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateChannelScopedBotRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateChannelScopedBotResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -3452,6 +3585,96 @@
         }
       }
     },
+    "/channels/{channel_id}/webhook": {
+      "post": {
+        "tags": ["bots"],
+        "summary": "Handler for `POST /channels/{channel_id}/webhook`.",
+        "operationId": "post_channel_bot_webhook",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "x-macro-channel-bot-token",
+            "in": "header",
+            "description": "Bot authentication token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChannelWebhookRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelWebhookResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/crm/comment/{comment_id}": {
       "delete": {
         "tags": ["crm::inbound::axum_router::comments"],
@@ -4359,6 +4582,73 @@
             }
           },
           "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/documents/create_snippet": {
+      "post": {
+        "tags": ["document"],
+        "summary": "Creates a snippet document with initialized markdown content in one\nbackend-owned lifecycle. Snippets are created personal; team sharing is\ntoggled separately via `PUT /documents/{document_id}/team_share`.",
+        "operationId": "create_snippet_handler",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSnippetRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Response for creating a snippet.",
+                  "required": ["documentId"],
+                  "properties": {
+                    "documentId": {
+                      "type": "string",
+                      "description": "The document ID of the created snippet."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
             "description": "",
             "content": {
               "application/json": {
@@ -5932,6 +6222,144 @@
         }
       }
     },
+    "/documents/{document_id}/team_share": {
+      "get": {
+        "tags": ["document"],
+        "summary": "Gets the team-share state of a document. The team is resolved from the\ndocument owner's team membership; `teamId` is omitted when the owner does\nnot belong to a team.",
+        "operationId": "get_document_team_share",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Document ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentTeamShareResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["document"],
+        "summary": "Sets the team-share state of a document. Sharing grants the document\nowner's team Edit access; unsharing removes the team's access. Requires\nEdit access on the document.",
+        "operationId": "set_document_team_share",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Document ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetDocumentTeamShareRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentTeamShareResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/documents/{document_id}/views": {
       "get": {
         "tags": ["document"],
@@ -6653,6 +7081,66 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SoupPage"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CRM-scoped queries require team membership, or requesting hidden CRM companies requires admin/owner team role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/items/soup/ast/grouped": {
+      "post": {
+        "tags": ["soup::inbound::axum_router"],
+        "summary": "Gets the items grouped by the specified field using AST filters.",
+        "operationId": "post_items_soup_ast_grouped",
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Base64 encoded cursor value.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostGroupedSoupAstRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupedSoupPage"
                 }
               }
             }
@@ -9176,6 +9664,94 @@
           }
         }
       },
+      "ApiGroupByField": {
+        "oneOf": [
+          {
+            "type": "string",
+            "description": "Smart date buckets: Today, Yesterday, This Week, Last Week, This Month, Last Month, Older",
+            "enum": ["date"]
+          },
+          {
+            "type": "string",
+            "description": "Group by entity type (document, email, channel, etc.)",
+            "enum": ["entity_type"]
+          },
+          {
+            "type": "string",
+            "description": "Group by project",
+            "enum": ["project"]
+          },
+          {
+            "type": "object",
+            "description": "Group by a property value (e.g., status, priority, or custom properties)",
+            "required": ["property"],
+            "properties": {
+              "property": {
+                "type": "object",
+                "description": "Group by a property value (e.g., status, priority, or custom properties)",
+                "required": ["property_definition_id"],
+                "properties": {
+                  "entity_type": {
+                    "oneOf": [
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "$ref": "#/components/schemas/ApiPropertyEntityType",
+                        "description": "Optional entity type filter for the property lookup"
+                      }
+                    ]
+                  },
+                  "property_definition_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "The property definition UUID to group by"
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "description": "API representation of group-by field."
+      },
+      "ApiGroupMeta": {
+        "type": "object",
+        "description": "API representation of group metadata.\n\nItems belonging to this group are referenced by `item_ids`, each of which\nlooks up an entry in `GroupedSoupPage.items` (a normalized pool).",
+        "required": ["key", "label", "total_count", "item_ids"],
+        "properties": {
+          "display_order": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Display order for sorting groups (lower = first)"
+          },
+          "item_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Ordered ids of items in this group for the current page.\nEach id keys into `GroupedSoupPage.items`."
+          },
+          "key": {
+            "type": "string",
+            "description": "Group key - format depends on group_by field"
+          },
+          "label": {
+            "type": "string",
+            "description": "Human-readable label for the group"
+          },
+          "next_cursor": {
+            "type": ["string", "null"],
+            "description": "Cursor to load more items specifically from this group"
+          },
+          "total_count": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Total count of items in this group across all pages",
+            "minimum": 0
+          }
+        }
+      },
       "ApiMessageAttachment": {
         "type": "object",
         "description": "An attachment on a message.",
@@ -9216,9 +9792,17 @@
         "description": "Public sender identity for channel messages.",
         "required": ["type", "id"],
         "properties": {
+          "avatar_url": {
+            "type": ["string", "null"],
+            "description": "Avatar URL for bot senders."
+          },
           "id": {
             "type": "string",
             "description": "Sender id without the storage namespace prefix."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "Display name for bot senders."
           },
           "type": {
             "$ref": "#/components/schemas/ApiMessageSenderType",
@@ -9235,6 +9819,20 @@
         "type": "string",
         "description": "Participant role in a channel.",
         "enum": ["owner", "admin", "member"]
+      },
+      "ApiPropertyEntityType": {
+        "type": "string",
+        "description": "Entity type for property lookups (API representation).",
+        "enum": [
+          "CHANNEL",
+          "CHAT",
+          "COMPANY",
+          "DOCUMENT",
+          "PROJECT",
+          "TASK",
+          "THREAD",
+          "USER"
+        ]
       },
       "ApiResolvedChannelMessage": {
         "type": "object",
@@ -9450,6 +10048,17 @@
                 "enum": ["task"]
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "A snippet document — reusable markdown",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["snippet"]
+              }
+            }
           }
         ],
         "description": "Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task."
@@ -9469,6 +10078,162 @@
           "sha": {
             "type": "string",
             "description": "The sha of the bom part content\nThere is an index on sha for more performant queries based on it."
+          }
+        }
+      },
+      "Bot": {
+        "type": "object",
+        "description": "Bot row.",
+        "required": [
+          "id",
+          "kind",
+          "name",
+          "handle",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "avatar_url": {
+            "type": ["string", "null"],
+            "description": "Optional avatar URL."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation timestamp."
+          },
+          "created_by": {
+            "type": ["string", "null"],
+            "description": "User that created this bot."
+          },
+          "deleted_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Soft-delete timestamp."
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Optional description."
+          },
+          "handle": {
+            "type": "string",
+            "description": "Stable handle."
+          },
+          "id": {
+            "$ref": "#/components/schemas/BotId",
+            "description": "Bot id."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/BotKind",
+            "description": "Bot kind."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "owner": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BotOwner",
+                "description": "Owner for owned bots."
+              }
+            ]
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Update timestamp."
+          }
+        }
+      },
+      "BotId": {
+        "type": "string"
+      },
+      "BotKind": {
+        "type": "string",
+        "description": "Bot kind.",
+        "enum": ["owned", "system"]
+      },
+      "BotOwner": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "User-owned bot.",
+            "required": ["user_id", "type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["user"]
+              },
+              "user_id": {
+                "type": "string",
+                "description": "Owner user id."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Team-owned bot.",
+            "required": ["team_id", "type"],
+            "properties": {
+              "team_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Owner team id."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["team"]
+              }
+            }
+          }
+        ],
+        "description": "Bot owner."
+      },
+      "BotToken": {
+        "type": "object",
+        "description": "Bot token metadata.",
+        "required": ["id", "bot_id", "token_prefix", "created_at"],
+        "properties": {
+          "bot_id": {
+            "$ref": "#/components/schemas/BotId",
+            "description": "Owning bot id."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation timestamp."
+          },
+          "expires_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Expiration timestamp."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Token id."
+          },
+          "label": {
+            "type": ["string", "null"],
+            "description": "Optional token label."
+          },
+          "last_used_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Last successful use."
+          },
+          "revoked_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Revocation timestamp."
+          },
+          "token_prefix": {
+            "type": "string",
+            "description": "Token lookup prefix."
           }
         }
       },
@@ -9541,7 +10306,7 @@
         "properties": {
           "attended": {
             "type": ["boolean", "null"],
-            "description": "Filter by whether the requesting user attended the call.\n`None` = no filter, `Some(true)` = only calls the user joined,\n`Some(false)` = only calls the user did not join."
+            "description": "Legacy filter by whether the requesting user attended the call.\nPrefer [`CallFilters::status`] for new callers.\n`None` = no filter, `Some(true)` = only calls the user joined,\n`Some(false)` = only calls the user did not join."
           },
           "call_ids": {
             "type": "array",
@@ -9563,6 +10328,17 @@
               "type": "string"
             },
             "description": "Speaker macro user ids. Empty to include all."
+          },
+          "status": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CallStatus",
+                "description": "Filter by the requesting user's viewer-relative call status."
+              }
+            ]
           }
         }
       },
@@ -9628,6 +10404,10 @@
             },
             "description": "Participants (both active and historic)."
           },
+          "recordingPreviewUrl": {
+            "type": ["string", "null"],
+            "description": "Presigned URL for the call recording preview image, if available."
+          },
           "recordingStartedAt": {
             "type": ["string", "null"],
             "format": "date-time",
@@ -9649,6 +10429,17 @@
             "type": "string",
             "format": "date-time",
             "description": "When the call started (created_at for active, started_at for archived)."
+          },
+          "status": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CallStatus",
+                "description": "Viewer-relative call status when fetched in the context of a specific user."
+              }
+            ]
           },
           "summary": {
             "type": ["string", "null"],
@@ -9810,6 +10601,11 @@
             "description": "Stable DB-row id for the segment."
           }
         }
+      },
+      "CallStatus": {
+        "type": "string",
+        "description": "Viewer-relative attendance status for a call record.\nSerializes as `ATTENDED`, `MISSED`, or `UNATTENDED`.",
+        "enum": ["ATTENDED", "MISSED", "UNATTENDED"]
       },
       "CallTokenResponse": {
         "type": "object",
@@ -10149,6 +10945,28 @@
         "description": "Type of channel.",
         "enum": ["public", "private", "direct_message", "team"]
       },
+      "ChannelWebhookRequest": {
+        "type": "object",
+        "description": "Request to post a channel webhook message.",
+        "required": ["content"],
+        "properties": {
+          "content": {
+            "type": "string",
+            "description": "Message body."
+          }
+        }
+      },
+      "ChannelWebhookResponse": {
+        "type": "object",
+        "description": "Response returned after posting a channel webhook message.",
+        "required": ["message_id"],
+        "properties": {
+          "message_id": {
+            "type": "string",
+            "description": "Created message id."
+          }
+        }
+      },
       "ChannelWithParticipants": {
         "type": "object",
         "required": ["channel", "participants"],
@@ -10445,6 +11263,62 @@
           "id": {
             "type": "string",
             "description": "Created channel id."
+          }
+        }
+      },
+      "CreateChannelScopedBotRequest": {
+        "type": "object",
+        "description": "Request to create a bot scoped to a channel.",
+        "required": ["name", "handle"],
+        "properties": {
+          "avatar_url": {
+            "type": ["string", "null"],
+            "description": "Optional avatar URL."
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Optional description."
+          },
+          "handle": {
+            "type": "string",
+            "description": "Stable handle."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "team_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Team owner. Omit for a user-owned bot."
+          },
+          "token_expires_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Optional token expiration timestamp."
+          },
+          "token_label": {
+            "type": ["string", "null"],
+            "description": "Optional token label."
+          }
+        }
+      },
+      "CreateChannelScopedBotResponse": {
+        "type": "object",
+        "description": "Response containing a newly created channel-scoped bot and token.",
+        "required": ["bot", "token", "bot_token"],
+        "properties": {
+          "bot": {
+            "$ref": "#/components/schemas/Bot",
+            "description": "Created bot."
+          },
+          "bot_token": {
+            "type": "string",
+            "description": "Raw bot token."
+          },
+          "token": {
+            "$ref": "#/components/schemas/BotToken",
+            "description": "Token metadata."
           }
         }
       },
@@ -10765,6 +11639,37 @@
           "error": {
             "type": "boolean",
             "description": "Indicates if an error occurred"
+          }
+        }
+      },
+      "CreateSnippetRequest": {
+        "type": "object",
+        "description": "Request body for creating a snippet — a reusable markdown document that can\nbe inserted into any markdown area.",
+        "required": ["snippetName"],
+        "properties": {
+          "markdown": {
+            "type": ["string", "null"],
+            "description": "Markdown source text. Defaults to an empty snippet document."
+          },
+          "projectId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Optional project ID to associate the snippet with."
+          },
+          "snippetName": {
+            "type": "string",
+            "description": "The name of the snippet."
+          }
+        }
+      },
+      "CreateSnippetResponse": {
+        "type": "object",
+        "description": "Response for creating a snippet.",
+        "required": ["documentId"],
+        "properties": {
+          "documentId": {
+            "type": "string",
+            "description": "The document ID of the created snippet."
           }
         }
       },
@@ -11812,6 +12717,17 @@
                 "enum": ["task"]
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "A snippet document — reusable markdown",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["snippet"]
+              }
+            }
           }
         ],
         "description": "The sub type of a document preview with associated properties.\nTask-related properties are encoded within the variant to ensure valid states."
@@ -11948,7 +12864,23 @@
       "DocumentSubType": {
         "type": "string",
         "description": "The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.",
-        "enum": ["task"]
+        "enum": ["task", "snippet"]
+      },
+      "DocumentTeamShareResponse": {
+        "type": "object",
+        "description": "The team-share state of a document. The team is resolved from the document\nowner's team membership.",
+        "required": ["sharedWithTeam"],
+        "properties": {
+          "sharedWithTeam": {
+            "type": "boolean",
+            "description": "Whether the document is currently shared with the owner's team."
+          },
+          "teamId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The owner's team the document is (or would be) shared with. `None` when\nthe owner does not belong to a team."
+          }
+        }
       },
       "EditAnchorRequest": {
         "oneOf": [
@@ -13123,6 +14055,10 @@
               "type": "string"
             },
             "description": "Internal foreign entity record IDs to filter by. Empty to include all records."
+          },
+          "includes_me": {
+            "type": "boolean",
+            "description": "When true, only return foreign entities whose metadata lists the requesting user as a\nparticipant (GitHub `involves:me` semantics for `github_pull_request` records). False or\nabsent applies no filter. Serialized in filter ASTs as the `\"me\"` literal."
           }
         }
       },
@@ -13849,6 +14785,157 @@
             "description": "Parsed pull requests, in repository query order."
           }
         }
+      },
+      "GroupedInitialParams": {
+        "type": "object",
+        "description": "Parameters for the initial grouped soup query.",
+        "required": ["group_by"],
+        "properties": {
+          "group_by": {
+            "$ref": "#/components/schemas/ApiGroupByField",
+            "description": "Field to group results by (required)."
+          },
+          "per_group_limit": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Limit the number of items returned per group. Defaults to 20. Max 500.",
+            "minimum": 0
+          },
+          "sort_method": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GroupedSoupSort",
+                "description": "Sort method. Defaults to viewed_updated."
+              }
+            ]
+          }
+        }
+      },
+      "GroupedPageParams": {
+        "type": "object",
+        "description": "Parameters for fetching one page within a specific group.",
+        "required": ["group_by", "group_key"],
+        "properties": {
+          "group_by": {
+            "$ref": "#/components/schemas/ApiGroupByField",
+            "description": "Field to group results by (required)."
+          },
+          "group_key": {
+            "type": "string",
+            "description": "Group key to fetch."
+          },
+          "limit": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Limit the number of items returned. Defaults to 20. Max 500.",
+            "minimum": 0
+          },
+          "sort_method": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GroupedSoupSort",
+                "description": "Sort method. Defaults to viewed_updated."
+              }
+            ]
+          }
+        }
+      },
+      "GroupedSoupGroupPage": {
+        "type": "object",
+        "description": "Response for fetching a page within one group.",
+        "required": ["items", "group"],
+        "properties": {
+          "group": {
+            "$ref": "#/components/schemas/ApiGroupMeta",
+            "description": "Metadata and item membership for the requested group page."
+          },
+          "items": {
+            "type": "object",
+            "description": "Items in this page, keyed by id. Ordering lives in `group.item_ids`.",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/SoupApiItem"
+            },
+            "propertyNames": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        }
+      },
+      "GroupedSoupInitialPage": {
+        "type": "object",
+        "description": "Response for the initial grouped soup query.\n\nItems are returned as a pool keyed by id; each `ApiGroupMeta.item_ids`\ndescribes the ordered membership of one group.",
+        "required": ["items", "groups"],
+        "properties": {
+          "groups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiGroupMeta"
+            },
+            "description": "Ordered group metadata for this grouped response."
+          },
+          "items": {
+            "type": "object",
+            "description": "Items in this page, keyed by id. Ordering lives in `groups[].item_ids`.",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/SoupApiItem"
+            },
+            "propertyNames": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        }
+      },
+      "GroupedSoupPage": {
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GroupedSoupInitialPage"
+              },
+              {
+                "type": "object",
+                "required": ["mode"],
+                "properties": {
+                  "mode": {
+                    "type": "string",
+                    "enum": ["initial"]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GroupedSoupGroupPage"
+              },
+              {
+                "type": "object",
+                "required": ["mode"],
+                "properties": {
+                  "mode": {
+                    "type": "string",
+                    "enum": ["group_page"]
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "description": "Response for grouped soup queries."
+      },
+      "GroupedSoupSort": {
+        "type": "string",
+        "description": "Sort method for grouped queries (frecency not supported).",
+        "enum": ["viewed_at", "created_at", "updated_at", "viewed_updated"]
       },
       "HashMap": {
         "type": "object",
@@ -14749,6 +15836,71 @@
           }
         }
       },
+      "PostGroupedSoupAstGroupPageRequest": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiEntityFilterAst",
+            "description": "Filters to apply (AST format)"
+          },
+          {
+            "$ref": "#/components/schemas/GroupedPageParams",
+            "description": "Grouping parameters (required)"
+          }
+        ],
+        "description": "Request body for fetching one page within a specific group."
+      },
+      "PostGroupedSoupAstInitialRequest": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiEntityFilterAst",
+            "description": "Filters to apply (AST format)"
+          },
+          {
+            "$ref": "#/components/schemas/GroupedInitialParams",
+            "description": "Grouping parameters (required)"
+          }
+        ],
+        "description": "Request body for the initial grouped soup query."
+      },
+      "PostGroupedSoupAstRequest": {
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PostGroupedSoupAstInitialRequest"
+              },
+              {
+                "type": "object",
+                "required": ["mode"],
+                "properties": {
+                  "mode": {
+                    "type": "string",
+                    "enum": ["initial"]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PostGroupedSoupAstGroupPageRequest"
+              },
+              {
+                "type": "object",
+                "required": ["mode"],
+                "properties": {
+                  "mode": {
+                    "type": "string",
+                    "enum": ["group_page"]
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "description": "Request body for grouped soup queries with AST filters."
+      },
       "PostMessageRequest": {
         "type": "object",
         "description": "Request to send a channel message.",
@@ -15458,6 +16610,22 @@
           }
         }
       },
+      "RingStatus": {
+        "type": "string",
+        "description": "Per-user status of an incoming-call ring, as reported by the\nring-status endpoint while a native client is ringing.",
+        "enum": ["ringing", "answered", "ended"]
+      },
+      "RingStatusResponse": {
+        "type": "object",
+        "description": "Response body for `GET /call/ring-status/{call_id}`.",
+        "required": ["status"],
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/RingStatus",
+            "description": "The ring status for the authenticated user."
+          }
+        }
+      },
       "S3ObjectInfo": {
         "type": "object",
         "required": ["bucket", "key"],
@@ -15550,6 +16718,17 @@
           "hidden": {
             "type": "boolean",
             "description": "New value for `crm_contacts.hidden`. `true` hides the contact\nfrom CRM listings for the team; `false` un-hides it. Display-only\n— does not affect populate/depopulate."
+          }
+        }
+      },
+      "SetDocumentTeamShareRequest": {
+        "type": "object",
+        "description": "Request body for setting a document's team-share state.",
+        "required": ["shareWithTeam"],
+        "properties": {
+          "shareWithTeam": {
+            "type": "boolean",
+            "description": "Whether the document should be shared with the owner's team."
           }
         }
       },
@@ -15859,13 +17038,14 @@
           "createdBy",
           "startedAt",
           "isActive",
+          "status",
           "attended",
           "participants"
         ],
         "properties": {
           "attended": {
             "type": "boolean",
-            "description": "Whether the requesting user attended this call (i.e. appears in the\n`call_participants` / `call_record_participants` table)."
+            "description": "Whether the requesting user attended this call. Kept for compatibility\nand derived from `status == ATTENDED`."
           },
           "callId": {
             "type": "string",
@@ -15914,6 +17094,10 @@
             "type": "string",
             "format": "date-time",
             "description": "When the call started."
+          },
+          "status": {
+            "$ref": "#/components/schemas/CallStatus",
+            "description": "Viewer-relative call status for the requesting user."
           },
           "summary": {
             "type": ["string", "null"],
@@ -16106,6 +17290,11 @@
             "type": "string",
             "format": "date-time",
             "description": "When the company was last updated."
+          },
+          "viewedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the requesting user last viewed this company, or `None` if\nnever viewed. Mirrors the `viewed_at` other soup entities carry."
           }
         }
       },
@@ -16247,6 +17436,17 @@
               "type": {
                 "type": "string",
                 "enum": ["task"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A snippet document — reusable markdown",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["snippet"]
               }
             }
           }

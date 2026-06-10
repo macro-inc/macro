@@ -2,6 +2,7 @@ mod auth;
 mod cf_worker;
 mod constants;
 mod d1;
+mod dss_internal;
 mod durable_object;
 mod error;
 mod generated;

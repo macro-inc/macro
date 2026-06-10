@@ -35,6 +35,15 @@
         "upload_extractor_lambda_trigger"
       ]
     },
+    "call-recording": {
+      "source_paths": [
+        "rust/cloud-storage/call_recording_preview_handler/**"
+      ],
+      "stack_path": "infra/stacks/call-recording/**",
+      "deploy_lambdas": [
+        "call_recording_preview_handler"
+      ]
+    },
     "connection-gateway": {
       "source_paths": [
         "rust/cloud-storage/connection_gateway/**"
@@ -83,6 +92,7 @@
     "document-storage-service": {
       "source_paths": [
         "rust/cloud-storage/document_storage_service/**",
+        "rust/cloud-storage/call/**",
         "rust/cloud-storage/github/**",
         "rust/cloud-storage/delete_chat_handler/**",
         "rust/cloud-storage/docx_unzip_handler/**",

@@ -5,7 +5,7 @@ use axum::{
 };
 use model::response::ErrorResponse;
 use roles_and_permissions::domain::model::UserRolesAndPermissionsError;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use stripe::{ParseIdError, StripeError};
 use thiserror::Error;
 use utoipa::ToSchema;
@@ -29,20 +29,8 @@ pub enum StripeOperationError {
     UnexpectedStripeResponse,
     #[error("User already has an active subscription")]
     AlreadySubscribed,
-    #[error("User does not have an active subscription")]
-    NoActiveSubscription,
-    #[error("User does not have a subscription tier role")]
-    NoSubscriptionRole,
-    #[error("User has multiple subscription tier roles")]
-    InconsistentSubscriptionRoles,
-    #[error("Another subscription update is already in progress for this user")]
-    SubscriptionUpdateInProgress,
-    #[error("User is a member of a team; tier is managed by the team owner")]
-    UserInTeam,
     #[error("Teams service error")]
     TeamsErr(#[from] teams::domain::model::TeamError),
-    #[error("Subscription is already on the requested tier")]
-    TierUnchanged,
     #[error("Roles and permissions error")]
     RolesErr(#[from] UserRolesAndPermissionsError),
 }
@@ -61,15 +49,7 @@ impl IntoResponse for StripeOperationError {
             StripeOperationError::PromoCodeNotFound => StatusCode::NOT_FOUND,
             StripeOperationError::UnexpectedStripeResponse => StatusCode::INTERNAL_SERVER_ERROR,
             StripeOperationError::AlreadySubscribed => StatusCode::CONFLICT,
-            StripeOperationError::NoActiveSubscription => StatusCode::NOT_FOUND,
-            StripeOperationError::NoSubscriptionRole => StatusCode::NOT_FOUND,
-            StripeOperationError::InconsistentSubscriptionRoles => {
-                StatusCode::INTERNAL_SERVER_ERROR
-            }
-            StripeOperationError::SubscriptionUpdateInProgress => StatusCode::CONFLICT,
-            StripeOperationError::UserInTeam => StatusCode::FORBIDDEN,
             StripeOperationError::TeamsErr(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            StripeOperationError::TierUnchanged => StatusCode::BAD_REQUEST,
             StripeOperationError::RolesErr(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
         (
@@ -80,15 +60,6 @@ impl IntoResponse for StripeOperationError {
         )
             .into_response()
     }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Default, ToSchema, strum::EnumIter)]
-#[serde(rename_all = "lowercase")]
-pub enum StripeProductTier {
-    #[default]
-    Haiku,
-    Sonnet,
-    Opus,
 }
 
 /// Response containing the Stripe session URL

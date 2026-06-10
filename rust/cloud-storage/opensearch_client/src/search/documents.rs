@@ -2,7 +2,6 @@ use std::collections::HashMap;
 
 use crate::{
     Result, delegate_methods,
-    documents_shape::{alias_uses_join_shape, documents_search_alias},
     search::{
         builder::{SearchQueryBuilder, SearchQueryConfig},
         model::{Highlight, SearchGotoContent, SearchGotoDocument, SearchHit, parse_highlight_hit},
@@ -77,34 +76,11 @@ impl DocumentQueryBuilder {
         self
     }
 
-    pub fn build_bool_query<'a>(&'a self) -> Result<BoolQueryBuilder<'a>> {
-        if alias_uses_join_shape() {
-            return self.build_bool_query_join();
-        }
-        self.build_bool_query_flat()
-    }
-
-    /// Flat-chunk path: every chunk is its own top-level OpenSearch doc
-    /// and the whole user query becomes a single phrase[-prefix] match
-    /// on `content`.
-    fn build_bool_query_flat<'a>(&'a self) -> Result<BoolQueryBuilder<'a>> {
-        let mut query = self.inner.build_content_bool_query()?;
-
-        if !self.sub_types.is_empty() {
-            query.filter(QueryType::terms(
-                "sub_type".to_string(),
-                self.sub_types.clone(),
-            ));
-        }
-
-        Ok(query)
-    }
-
-    /// Parent/child join path: one `has_child` clause per term, ANDed
+    /// Parent/child join query: one `has_child` clause per term, ANDed
     /// inside `bool.must`. Parent metadata filters (owner, ids,
     /// sub_type) sit on `bool.filter` directly because they live on
     /// the parent doc.
-    fn build_bool_query_join<'a>(&'a self) -> Result<BoolQueryBuilder<'a>> {
+    pub fn build_bool_query<'a>(&'a self) -> Result<BoolQueryBuilder<'a>> {
         if self.inner.ids_only && self.inner.ids.is_empty() {
             return Err(crate::error::OpensearchClientError::EmptyIdsWithIdsOnly(
                 DocumentSearchConfig::ENTITY_INDEX,
@@ -116,12 +92,10 @@ impl DocumentQueryBuilder {
 
         let mut bool_query = BoolQueryBuilder::new();
 
-        // Restrict to parent documents in the documents alias (overridable
-        // via DOCUMENTS_INDEX_NAME for local end-to-end testing against a
-        // side alias).
+        // Restrict to parent documents in the documents alias.
         bool_query.filter(QueryType::term(
             "_index",
-            documents_search_alias().to_string(),
+            DocumentSearchConfig::ENTITY_INDEX.index_name().to_string(),
         ));
         bool_query.filter(QueryType::term(
             "document_relation",
@@ -253,8 +227,6 @@ fn build_child_content_query<'a>(term: &str, match_type: &str) -> QueryType<'a> 
 pub(crate) struct DocumentIndex {
     pub entity_id: uuid::Uuid,
     pub document_name: String,
-    pub node_id: Option<String>,
-    pub raw_content: Option<String>,
     pub owner_id: String,
     pub file_type: String,
     pub updated_at_seconds: Option<i64>,

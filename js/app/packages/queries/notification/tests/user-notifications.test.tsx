@@ -31,9 +31,15 @@ vi.mock('@service-notification/client', () => ({
 
 vi.mock('@queries/soup/normalized-cache', () => ({
   optimisticUpdateSoupItemUpdatedAt: vi.fn(),
+  hasSoupEntity: vi.fn(() => false),
+  refetchSoupEntity: vi.fn(),
 }));
 
-import { optimisticUpdateSoupItemUpdatedAt } from '@queries/soup/normalized-cache';
+import {
+  hasSoupEntity,
+  optimisticUpdateSoupItemUpdatedAt,
+  refetchSoupEntity,
+} from '@queries/soup/normalized-cache';
 import { notificationServiceClient } from '@service-notification/client';
 
 const mockBulkMarkNotificationAsSeen = vi.mocked(
@@ -45,6 +51,8 @@ const mockBulkMarkNotificationAsDone = vi.mocked(
 const mockOptimisticUpdateSoupItemUpdatedAt = vi.mocked(
   optimisticUpdateSoupItemUpdatedAt
 );
+const mockHasSoupEntity = vi.mocked(hasSoupEntity);
+const mockRefetchSoupEntity = vi.mocked(refetchSoupEntity);
 
 let testQueryClient: QueryClient;
 
@@ -417,6 +425,7 @@ describe('optimisticInsertNotification', () => {
   });
 
   it('should insert notification at the beginning of the first page', () => {
+    mockHasSoupEntity.mockReturnValue(true);
     const n1 = createMockNotification({ id: 'n1' });
     const n2 = createMockNotification({ id: 'n2' });
     seedQueryCache([createMockNotificationPage([n1, n2])]);
@@ -434,6 +443,7 @@ describe('optimisticInsertNotification', () => {
       'document',
       newNotification.created_at
     );
+    expect(mockRefetchSoupEntity).not.toHaveBeenCalled();
   });
 
   it('should not insert duplicate notifications', () => {
@@ -450,7 +460,8 @@ describe('optimisticInsertNotification', () => {
     expect(notifications[1].id).toBe('n2');
   });
 
-  it('should map email notifications to emailThread soup tag', () => {
+  it('should bump the updatedAt of an already-cached email thread', () => {
+    mockHasSoupEntity.mockReturnValue(true);
     seedQueryCache([createMockNotificationPage([])]);
 
     const emailNotification = createMockNotification({
@@ -466,9 +477,30 @@ describe('optimisticInsertNotification', () => {
       'emailThread',
       '2024-01-01T00:00:00.000Z'
     );
+    expect(mockRefetchSoupEntity).not.toHaveBeenCalled();
   });
 
-  it('should skip soup update when notification has no created_at', () => {
+  it('should refetch a brand-new soup entity that is not cached', () => {
+    mockHasSoupEntity.mockReturnValue(false);
+    seedQueryCache([createMockNotificationPage([])]);
+
+    const emailNotification = createMockNotification({
+      entity_type: 'email_thread',
+      entity_id: 'thread-1',
+      created_at: '2024-01-01T00:00:00.000Z',
+    });
+
+    optimisticInsertNotification(emailNotification);
+
+    expect(mockRefetchSoupEntity).toHaveBeenCalledWith(
+      'thread-1',
+      'emailThread'
+    );
+    expect(mockOptimisticUpdateSoupItemUpdatedAt).not.toHaveBeenCalled();
+  });
+
+  it('should skip the timestamp bump when a cached entity has no created_at', () => {
+    mockHasSoupEntity.mockReturnValue(true);
     seedQueryCache([createMockNotificationPage([])]);
 
     const notificationWithoutCreatedAt = createMockNotification({
@@ -478,6 +510,7 @@ describe('optimisticInsertNotification', () => {
     optimisticInsertNotification(notificationWithoutCreatedAt);
 
     expect(mockOptimisticUpdateSoupItemUpdatedAt).not.toHaveBeenCalled();
+    expect(mockRefetchSoupEntity).not.toHaveBeenCalled();
   });
 
   it('should skip soup update for unsupported entity types', () => {
@@ -491,5 +524,6 @@ describe('optimisticInsertNotification', () => {
     optimisticInsertNotification(userNotification);
 
     expect(mockOptimisticUpdateSoupItemUpdatedAt).not.toHaveBeenCalled();
+    expect(mockRefetchSoupEntity).not.toHaveBeenCalled();
   });
 });

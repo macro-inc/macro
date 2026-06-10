@@ -2,7 +2,9 @@ import type { Maybe } from '@core/types';
 import { type ResultError, throwOnErr } from '@core/util/result';
 import type { UnifiedNotification } from '@notifications/types';
 import {
+  hasSoupEntity,
   optimisticUpdateSoupItemUpdatedAt,
+  refetchSoupEntity,
   type SoupEntityTag,
 } from '@queries/soup/normalized-cache';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
@@ -553,6 +555,66 @@ function notificationEntityTypeToSoupTag(
     .exhaustive();
 }
 
+/**
+ * Snapshot the cached notification objects for the given ids. The returned
+ * items can later be put back via `restoreUserNotifications`. Optimistic
+ * mark-done flows rely on this so undo can resurrect notifications that get
+ * dropped from the cache once the server confirms the done — whether by the
+ * `notification_status_updated` event or a stale refetch. A plain `done`
+ * override can't overlay a notification that is no longer in the cache.
+ */
+export function snapshotUserNotifications(ids: string[]): NotificationItem[] {
+  if (ids.length === 0) return [];
+  const idSet = new Set(ids);
+  const found = new Map<string, NotificationItem>();
+  for (const [, data] of queryClient.getQueriesData<
+    NotificationData<UserNotificationsPageParam>
+  >({ queryKey: notificationKeys.user._def })) {
+    if (!data) continue;
+    for (const page of data.pages) {
+      for (const notification of page.items) {
+        if (idSet.has(notification.id) && !found.has(notification.id)) {
+          found.set(notification.id, notification);
+        }
+      }
+    }
+  }
+  return [...found.values()];
+}
+
+/**
+ * Re-insert snapshotted notifications that are no longer in the cache (e.g.
+ * dropped after a mark-done was confirmed), marking each not-done so it
+ * re-enters not-done filtered views. Notifications still present are left
+ * untouched.
+ */
+export function restoreUserNotifications(notifications: NotificationItem[]) {
+  if (notifications.length === 0) return;
+  queryClient.setQueriesData<NotificationData<UserNotificationsPageParam>>(
+    { queryKey: notificationKeys.user._def },
+    (data) => {
+      if (!data) return data;
+      const present = new Set(
+        data.pages.flatMap((page) => page.items.map((n) => n.id))
+      );
+      const missing = notifications
+        .filter((n) => !present.has(n.id))
+        .map((n) => ({ ...n, done: false }));
+      if (missing.length === 0) return data;
+      return {
+        ...data,
+        pages: data.pages.map((page, index) =>
+          index === 0 ? { ...page, items: [...missing, ...page.items] } : page
+        ),
+      };
+    }
+  );
+  queryClient.invalidateQueries({
+    queryKey: notificationKeys.user._def,
+    refetchType: 'none',
+  });
+}
+
 export function optimisticInsertNotification(
   notification: UnifiedNotification
 ) {
@@ -578,12 +640,18 @@ export function optimisticInsertNotification(
     }
   );
 
-  if (soupTag && notification.created_at) {
-    optimisticUpdateSoupItemUpdatedAt(
-      notification.entity_id,
-      soupTag,
-      notification.created_at
-    );
+  if (soupTag) {
+    if (hasSoupEntity(notification.entity_id)) {
+      if (notification.created_at) {
+        optimisticUpdateSoupItemUpdatedAt(
+          notification.entity_id,
+          soupTag,
+          notification.created_at
+        );
+      }
+    } else {
+      refetchSoupEntity(notification.entity_id, soupTag);
+    }
   }
 
   // Cache is already updated via setQueriesData above. Mark as stale without

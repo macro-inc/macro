@@ -10,6 +10,7 @@ import {
   useBlockId,
   useMaybeBlockAliasedName,
 } from '@core/block';
+import type { LoroManager } from '@core/collab/manager';
 import { DecoratorRenderer } from '@core/component/LexicalMarkdown/component/core/DecoratorRenderer';
 import { FocusClickTarget } from '@core/component/LexicalMarkdown/component/core/FocusClickTarget';
 import {
@@ -24,6 +25,7 @@ import { FloatingEquationMenu } from '@core/component/LexicalMarkdown/component/
 import { FloatingLinkMenu } from '@core/component/LexicalMarkdown/component/menu/FloatingLinkMenu';
 import { GenerateMenu } from '@core/component/LexicalMarkdown/component/menu/GenerateMenu';
 import { MentionsMenu } from '@core/component/LexicalMarkdown/component/menu/MentionsMenu/MentionsMenu';
+import { SnippetsMenu } from '@core/component/LexicalMarkdown/component/menu/SnippetsMenu';
 import TableActionMenu, {
   anchorElemRefSignal,
   menuButtonRefSignal,
@@ -95,10 +97,9 @@ import {
 } from '@core/component/LexicalMarkdown/plugins/media';
 import { createAccessoryStore } from '@core/component/LexicalMarkdown/plugins/node-accessory';
 import { restoreFocusPlugin } from '@core/component/LexicalMarkdown/plugins/restore-focus';
+import { snippetsPlugin } from '@core/component/LexicalMarkdown/plugins/snippets';
 import { createMenuOperations } from '@core/component/LexicalMarkdown/shared/inlineMenu';
 import {
-  $insertWrappedAfter,
-  $insertWrappedBefore,
   editorFocusSignal,
   editorIsEmpty,
   getSaveState,
@@ -106,6 +107,11 @@ import {
   initializeEditorWithState,
   setEditorStateFromMarkdown,
 } from '@core/component/LexicalMarkdown/utils';
+import {
+  getValidDragInsertPosition,
+  insertDocumentMentionAtDragInsertPosition,
+  updateDragInsertPreviewFromCoordinates,
+} from '@core/component/LexicalMarkdown/utils/dragInsertUtils';
 import {
   createFilesReadyHandler,
   getDragDropPosition,
@@ -129,7 +135,6 @@ import { blockElementSignal } from '@core/signal/blockElement';
 import {
   blockFileSignal,
   blockHandleSignal,
-  blockLoroManagerSignal,
   blockSourceSignal,
 } from '@core/signal/load';
 import { trackMention } from '@core/signal/mention';
@@ -140,7 +145,6 @@ import { bufToString } from '@core/util/string';
 import { handleFileFolderDrop } from '@core/util/upload';
 import type { EntityDragEvent } from '@entity';
 import {
-  $createDocumentMentionNode,
   $isInlineSearchNode,
   AwaitNode,
   CommentNode,
@@ -198,7 +202,11 @@ const EDITOR_PADDING_BOTTOM = 200;
 // For tasks, the click target is a small fixed pad so the activity section stays visible.
 const TASK_EDITOR_PADDING_BOTTOM = 48;
 
-export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
+export function MarkdownEditor(props: {
+  autoFocusOnMount?: boolean;
+  loroManager: Accessor<LoroManager | undefined>;
+  mustBeConnected?: boolean;
+}) {
   const blockData = blockDataSignal.get;
   const blockId = useBlockId();
   const userId = useUserId();
@@ -210,7 +218,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
   const saveMarkdownDocument = useSaveMarkdownDocument();
   const setMdStore = mdStore.set;
   const md = mdStore.get;
-  const canEdit = useCanEdit();
+  const canEdit = useCanEdit(props.mustBeConnected);
   const canComment = useCanComment();
   const [blockElement] = blockElementSignal;
   const [findAndReplaceStore, setFindAndReplaceStore] = FindAndReplaceStore;
@@ -287,6 +295,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
   const mentionsMenuOperations = createMenuOperations();
   const emojiMenuOperations = createMenuOperations();
   const actionsMenuOperations = createMenuOperations();
+  const snippetsMenuOperations = createMenuOperations();
 
   // store for the drag insert pluign.
   const [dragInsertStore, setDragInsertStore] = createDragInsertStore();
@@ -317,6 +326,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
       clientY: currentPos.y,
     };
     const item = event.draggable.data;
+    if (item.type === 'foreign') return;
     const blockName = itemToBlockName(item);
     if (!blockName) return;
     let id = event.draggable.data.id as string;
@@ -338,9 +348,9 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
 
     const res = wrapDndEvent(event);
     if (!res) return;
-    const { key, position } = getDragDropPosition(editor, res.mousePos, true);
 
     if (res.blockName === 'image' || res.blockName === 'video') {
+      getDragDropPosition(editor, res.mousePos, true);
       editor.dispatchCommand(INSERT_MEDIA_COMMAND, {
         type: 'dss',
         id: res.id,
@@ -350,36 +360,29 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
     }
 
     if (res.blockName === undefined) return;
-    if (!key || !position) return;
+    const dragInsertPosition = getValidDragInsertPosition(editor, res.mousePos);
+    if (!dragInsertPosition) return;
 
     const mentionId = await trackMention(blockId, 'document', res.id);
 
-    editor.update(() => {
-      let blockParams: Record<string, string> | undefined;
-      if (res.blockName === 'channel') {
-        blockParams = {};
-        if (res.item.messageId) {
-          blockParams[CHANNEL_PARAMS.message] = res.item.messageId;
-        }
-        if (res.item.threadId) {
-          blockParams[CHANNEL_PARAMS.thread] = res.item.threadId;
-        }
+    let blockParams: Record<string, string> | undefined;
+    if (res.blockName === 'channel') {
+      blockParams = {};
+      if (res.item.messageId) {
+        blockParams[CHANNEL_PARAMS.message] = res.item.messageId;
       }
-      const mention = $createDocumentMentionNode({
-        documentId: res.id,
-        documentName: res.item.name,
-        blockName: res.blockName,
-        blockParams,
-        mentionUuid: mentionId,
-        createdAt: Date.now(),
-      });
+      if (res.item.threadId) {
+        blockParams[CHANNEL_PARAMS.thread] = res.item.threadId;
+      }
+    }
 
-      if (position === 'before') {
-        $insertWrappedBefore(key, mention);
-      } else {
-        $insertWrappedAfter(key, mention);
-      }
-      mention.selectEnd();
+    insertDocumentMentionAtDragInsertPosition(editor, dragInsertPosition, {
+      documentId: res.id,
+      documentName: res.item.name,
+      blockName: res.blockName,
+      blockParams,
+      mentionUuid: mentionId,
+      createdAt: Date.now(),
     });
   };
 
@@ -390,10 +393,11 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
     const res = wrapDndEvent(event);
     if (!res) return;
     const { mousePos } = res;
-    const { key, position } = getDragDropPosition(editor, mousePos, false);
-    if (key !== null && position !== null) {
-      setDragInsertStore({ nodeKey: key, position, visible: true });
-    }
+    updateDragInsertPreviewFromCoordinates({
+      editor,
+      coordinates: mousePos,
+      setState: setDragInsertStore,
+    });
   }, 60);
 
   onDragEnd((event: EntityDragEvent) => {
@@ -496,8 +500,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
     if (!IS_SYNC()) {
       return createPeerIdValidator(() => undefined, false);
     }
-    const loroManager = blockLoroManagerSignal.get;
-    const peerId = () => loroManager()?.getPeerIdStr();
+    const peerId = () => props.loroManager()?.getPeerIdStr();
     return createPeerIdValidator(peerId, true);
   };
 
@@ -508,7 +511,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
     .markdownShortcuts()
     .delete()
     .state<EditorState>(setState, 'json')
-    .history(400)
+    .history(400, props.loroManager())
     .use(tabIndentationPlugin())
     .use(selectionDataPlugin(lexicalWrapper))
     .use(horizontalRulePlugin())
@@ -523,6 +526,12 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
         menu: mentionsMenuOperations,
         peerIdValidator: peerIdValidator(),
         sourceDocumentId: blockId,
+      })
+    )
+    .use(
+      snippetsPlugin({
+        menu: snippetsMenuOperations,
+        peerIdValidator: peerIdValidator(),
       })
     )
     .use(
@@ -608,8 +617,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
   }
 
   if (ENABLE_MARKDOWN_LIVE_COLLABORATION) {
-    const getBlockLoroManager = blockLoroManagerSignal.get;
-    const peerId = () => getBlockLoroManager()?.getPeerIdStr();
+    const peerId = () => props.loroManager()?.getPeerIdStr();
     plugins.use(
       peerIdPlugin({
         peerId,
@@ -728,6 +736,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
       mentionsMenuOperations.isOpen() ||
       emojiMenuOperations.isOpen() ||
       actionsMenuOperations.isOpen() ||
+      snippetsMenuOperations.isOpen() ||
       titleEditorMenuOpen()
     );
   });
@@ -959,6 +968,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
             editorFocus={editorFocus}
             setEditorReady={setEditorReady}
             setEditorError={setEditorError}
+            loroManager={props.loroManager}
           />
         </Show>
 
@@ -1018,6 +1028,12 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
           showOpenTabs
         />
 
+        <SnippetsMenu
+          editor={editor}
+          menu={snippetsMenuOperations}
+          useBlockBoundary={true}
+        />
+
         <ActionMenu editor={editor} menu={actionsMenuOperations} />
 
         <FloatingMenuGroup>
@@ -1039,7 +1055,10 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
         </Show>
 
         <Show when={ENABLE_MARKDOWN_COMMENTS}>
-          <CommentsProvider activeComment={activeCommentIdParam} />
+          <CommentsProvider
+            activeComment={activeCommentIdParam}
+            loroManager={props.loroManager}
+          />
         </Show>
 
         <Show when={canEdit()}>

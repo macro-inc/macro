@@ -8,7 +8,7 @@ import { openEmailAuthPopup } from '@core/auth/email';
 
 import { invalidateUserInfo } from '@queries/auth/user-info';
 import { invalidateEmailLinks, useEmailLinksQuery } from '@queries/email/link';
-import { emailClient } from '@service-email/client';
+import { emailClient, SHARED_INBOX_CONFLICT_CODE } from '@service-email/client';
 import type {
   ListLinksResponse,
   ResyncResponse,
@@ -38,7 +38,27 @@ export function useEmailLinksStatus() {
 type EmailInitError =
   /** The email link has already been initialized*/
   | { tag: 'AlreadyInitialized' }
+  /** The mailbox is already connected by another user; confirm to share it. */
+  | { tag: 'SharedInboxConflict'; emailAddress: string; ownerEmail: string }
   | { tag: 'FailedToInitialize'; message: string };
+
+function parseSharedInboxConflict(message: string): {
+  emailAddress: string;
+  ownerEmail: string;
+} {
+  try {
+    const parsed = JSON.parse(message) as {
+      emailAddress?: string;
+      existingOwnerEmail?: string;
+    };
+    return {
+      emailAddress: parsed.emailAddress ?? '',
+      ownerEmail: parsed.existingOwnerEmail ?? '',
+    };
+  } catch {
+    return { emailAddress: '', ownerEmail: '' };
+  }
+}
 
 /**
  * Calls email service to start syncing and initialize a new email link.
@@ -47,29 +67,39 @@ type EmailInitError =
  * read the `in_progress_user_link` row and provision a second `email_links` scoped to
  * that linked email. Omit for the first-time signup path.
  *
+ * Pass `forceShare` to confirm promoting a mailbox another user already connected into
+ * a shared inbox, after the user accepts the `SharedInboxConflict` prompt.
+ *
  * @returns ok if syncing was started, err if syncing failed
  */
 function initEmailLink(args?: {
   linkId?: string;
+  forceShare?: boolean;
 }): ResultAsync<void, EmailInitError> {
   return ResultAsync.fromSafePromise(
-    emailClient.init({ linkId: args?.linkId })
+    emailClient.init({ linkId: args?.linkId, forceShare: args?.forceShare })
   ).andThen((initResult) => {
     if (initResult.isErr()) {
+      const conflict = initResult.error.find(
+        (e) => e.code === SHARED_INBOX_CONFLICT_CODE
+      );
+      if (conflict) {
+        const conflictError: EmailInitError = {
+          tag: 'SharedInboxConflict',
+          ...parseSharedInboxConflict(conflict.message),
+        };
+        return err<void, EmailInitError>(conflictError);
+      }
       const badRequestError = initResult.error.find(
         // TODO: this is cope but seems like error.code not being set correctly
         (e) => e.message.includes('400')
       );
-      return err(
-        badRequestError
-          ? { tag: 'AlreadyInitialized' as const }
-          : {
-              tag: 'FailedToInitialize' as const,
-              message: 'Failed to initialize',
-            }
-      );
+      const error: EmailInitError = badRequestError
+        ? { tag: 'AlreadyInitialized' }
+        : { tag: 'FailedToInitialize', message: 'Failed to initialize' };
+      return err<void, EmailInitError>(error);
     }
-    return okAsync(undefined);
+    return okAsync<void, EmailInitError>(undefined);
   });
 }
 
@@ -113,20 +143,6 @@ function disconnectEmail(): ResultAsync<void, 'failed-to-disconnect'> {
   return ResultAsync.fromSafePromise(emailClient.stopSync()).andThen(
     (response) =>
       response.isErr() ? err('failed-to-disconnect') : okAsync(void 0)
-  );
-}
-
-/**
- * Removes a linked inbox. For an owned inbox the backend cascades the full
- * teardown; for a delegated inbox it only drops the delegation edge.
- *
- * @returns ok if the inbox was removed, err if it failed
- */
-function removeInbox(linkId: string): ResultAsync<void, 'failed-to-remove'> {
-  return ResultAsync.fromSafePromise(
-    emailClient.deleteLink({ linkId })
-  ).andThen((response) =>
-    response.isErr() ? err('failed-to-remove') : okAsync(void 0)
   );
 }
 
@@ -189,7 +205,7 @@ export function useEmailLinks() {
   return {
     query: query,
     isConnected: () => hasEmailLinks(query),
-    initEmailLink: (args?: { linkId?: string }) =>
+    initEmailLink: (args?: { linkId?: string; forceShare?: boolean }) =>
       initEmailLink(args).map(startEmailPolling).map(invalidations),
     connect: () =>
       connectEmail()
@@ -197,7 +213,6 @@ export function useEmailLinks() {
         .map(startEmailPolling)
         .andTee(invalidations),
     disconnect: () => disconnectEmail().andTee(invalidations),
-    removeInbox: (linkId: string) => removeInbox(linkId).andTee(invalidations),
     resyncInbox: (linkId: string) =>
       resyncInbox(linkId).andTee(() => invalidateEmailLinks()),
     invalidate: () => invalidateEmailLinks(),

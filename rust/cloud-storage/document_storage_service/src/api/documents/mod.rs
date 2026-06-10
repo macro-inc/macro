@@ -134,7 +134,8 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         )
         .route(
             "/{document_id}/processing",
-            get(get_document_processing_result::handler).layer(ensure_document_exists_middleware),
+            get(get_document_processing_result::handler)
+                .layer(ensure_document_exists_middleware.clone()),
         )
         .with_state(state)
         .route(

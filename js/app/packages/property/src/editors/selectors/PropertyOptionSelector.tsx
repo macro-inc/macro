@@ -1,3 +1,4 @@
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useKeyPressed } from '@core/util/useKeyPressed';
 import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
 import SearchIcon from '@phosphor/magnifying-glass.svg';
@@ -271,6 +272,9 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
   const showClearItem = () =>
     !!props.clearOption && !dropdown.searchQuery().trim();
 
+  // Hide search on touch device, makes using the menus awkward
+  const showSearchInput = () => !isTouchDevice();
+
   // Get selectable items: optional clear + filtered options + optional add.
   const selectableItems = createMemo(() => {
     const items: SelectableItem[] = [];
@@ -343,17 +347,19 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
     >
       <Show when={!props.error}>
         <div>
-          <div class="relative">
-            <DropdownSearchInput
-              value={dropdown.searchQuery()}
-              inputRef={(element) => {
-                searchInputRef = element;
-              }}
-              inputType={props.config.inputType ?? 'text'}
-              onInput={dropdown.setSearchQuery}
-              placeholder={props.config.placeholder}
-            />
-          </div>
+          <Show when={showSearchInput()}>
+            <div class="relative">
+              <DropdownSearchInput
+                value={dropdown.searchQuery()}
+                inputRef={(element) => {
+                  searchInputRef = element;
+                }}
+                inputType={props.config.inputType ?? 'text'}
+                onInput={dropdown.setSearchQuery}
+                placeholder={props.config.placeholder}
+              />
+            </div>
+          </Show>
 
           <Show
             when={props.options.length > 0}

@@ -15,12 +15,15 @@ import type { BlockOrchestrator } from '@core/orchestrator';
 import type { DateValue } from '@core/util/date';
 import { throwOnErr } from '@core/util/result';
 import { waitForFrames } from '@core/util/sleep';
+import { openExternalUrl } from '@core/util/url';
 import {
   type EntityData,
   getSnippetHit,
+  isGithubPrEntity,
+  isHitSnippetEntity,
   isSearchEntity,
-  isSnippetEntity,
   type SearchLocation,
+  toNotificationEntity,
   type WithSearch,
 } from '@entity';
 import { queryKeys } from '@macro-entity';
@@ -35,6 +38,8 @@ import { notificationKeys } from '@queries/notification/keys';
 import {
   bulkMarkNotificationsAsDone,
   bulkMarkNotificationsAsUndone,
+  restoreUserNotifications,
+  snapshotUserNotifications,
 } from '@queries/notification/user-notifications';
 import {
   getSoupEntityById,
@@ -302,6 +307,7 @@ interface OpenEntityOptions {
   location?: SearchLocation;
   splitHandle?: SplitHandle;
   mergeHistory?: boolean;
+  allowDuplicate?: boolean;
 }
 
 /**
@@ -315,10 +321,10 @@ export const openEntityInSplitFromUnifiedList = async (
   entity: EntityData,
   options: OpenEntityOptions
 ): Promise<void> => {
-  const { openInNewSplit, splitHandle, mergeHistory } = options;
+  const { allowDuplicate, openInNewSplit, splitHandle, mergeHistory } = options;
   let { location } = options;
 
-  if (!location && isSnippetEntity(entity)) {
+  if (!location && isHitSnippetEntity(entity)) {
     location = getSnippetHit(entity)?.location;
   }
 
@@ -328,6 +334,13 @@ export const openEntityInSplitFromUnifiedList = async (
     console.error('No split manager found');
     return;
   }
+
+  // TODO(dev-rb/github): Route GitHub PRs to /pr.
+  if (isGithubPrEntity(entity)) {
+    openExternalUrl(entity.metadata.url);
+    return;
+  }
+  if (entity.type === 'foreign') return;
 
   const blockOrchestrator = splitManager.getOrchestrator();
 
@@ -350,6 +363,7 @@ export const openEntityInSplitFromUnifiedList = async (
       preferNewSplit: openInNewSplit,
       handle: splitHandle,
       mergeHistory,
+      allowDuplicate,
     }
   );
 
@@ -370,6 +384,7 @@ export const openEntityInSplitFromUnifiedList = async (
   }
 };
 
+// TODO(dev-rb/github): Map GitHub PRs to { type: 'pr', id }.
 function getEntitySplitContent(entity: EntityData) {
   return match(entity)
     .with({ type: 'document' }, (entity) => {
@@ -380,6 +395,15 @@ function getEntitySplitContent(entity: EntityData) {
     })
     .with({ type: 'channel_message' }, (entity) => {
       return { type: 'channel' as const, id: entity.channelId };
+    })
+    .with({ type: 'foreign' }, (entity) => {
+      return { type: 'unknown' as const, id: entity.id };
+    })
+    .with({ type: 'crm_company' }, (entity) => {
+      return { type: 'company' as const, id: entity.id };
+    })
+    .with({ type: 'crm_contact' }, (entity) => {
+      return { type: 'contact' as const, id: entity.id };
     })
     .otherwise((entity) => {
       return { type: entity.type, id: entity.id };
@@ -635,11 +659,13 @@ export function resolveMarkEntitiesDoneVariables(args: {
 }): { emailIds: string[]; notificationIds: string[] } {
   const { entities, notificationSource } = args;
   const emailIds = entities.filter((e) => e.type === 'email').map((e) => e.id);
-  const notificationIds = entities.flatMap((entity) =>
-    (
-      notificationSource.notificationsByEntity()[compositeEntity(entity)] ?? []
-    ).map((n) => n.id)
-  );
+  const notificationIds = entities.flatMap((entity) => {
+    return (
+      notificationSource.notificationsByEntity()[
+        compositeEntity(toNotificationEntity(entity))
+      ] ?? []
+    ).map((n) => n.id);
+  });
   return { emailIds, notificationIds };
 }
 
@@ -649,11 +675,19 @@ export function resolveMarkEntitiesDoneVariables(args: {
  * override. Returns a context the mutation uses for rollback / reapply.
  */
 export function applyEntitiesDoneOptimistic(args: {
+  entityIds: string[];
   emailIds: string[];
   notificationIds: string[];
 }): MarkEntitiesDoneContext {
-  const { emailIds, notificationIds } = args;
+  const { entityIds, emailIds, notificationIds } = args;
   const emailIdSet = new Set(emailIds);
+  const entityIdSet = new Set(entityIds);
+
+  // Snapshot the affected notifications before marking done. A done
+  // notification gets dropped from the cache (status-update event or a stale
+  // refetch), so undo re-adds it here so the soup `notDoneFilter` predicate
+  // lets the restored entity through again.
+  const notificationSnapshots = snapshotUserNotifications(notificationIds);
 
   type EmailQueryKey = readonly unknown[];
   type EmailCacheData = { pages: { items: EntityData[] }[] };
@@ -716,7 +750,10 @@ export function applyEntitiesDoneOptimistic(args: {
   let soupTxn: ReturnType<typeof removeSoupEntities> | null = null;
 
   const reapply = () => {
-    soupTxn = emailIds.length > 0 ? removeSoupEntities(emailIdSet) : null;
+    // Remove every marked entity from the soup feed cache so the hide is
+    // authoritative for all types; undo restores them via this transaction's
+    // rollback.
+    soupTxn = entityIds.length > 0 ? removeSoupEntities(entityIdSet) : null;
     filterEmailCache();
     setDoneOverride(notificationIds, true);
   };
@@ -732,6 +769,7 @@ export function applyEntitiesDoneOptimistic(args: {
     soupTxn?.rollback();
     soupTxn = null;
     restoreEmailCache();
+    restoreUserNotifications(notificationSnapshots);
     // Force `done=false` — cache may have reconciled to `done=true` from the
     // server, so clearing the override would leave the UI hidden after undo.
     setDoneOverride(notificationIds, false);
