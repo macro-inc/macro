@@ -105,8 +105,11 @@ async function fetchDocumentPreviews(ids: string[]): Promise<PreviewItem[]> {
             doc.sub_type === null || doc.sub_type === undefined
               ? undefined
               : {
-                  type: doc.sub_type.type as 'task',
-                  is_completed: doc.sub_type.is_completed,
+                  type: doc.sub_type.type,
+                  is_completed:
+                    'is_completed' in doc.sub_type
+                      ? doc.sub_type.is_completed
+                      : undefined,
                 },
         };
       case 'no_access':

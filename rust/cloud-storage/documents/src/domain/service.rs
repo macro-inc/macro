@@ -40,9 +40,9 @@ use super::branch_name::{build_task_branch_name, user_branch_prefix};
 use super::content::{DocumentContent, DocumentContentLocation, DocumentContentState};
 use super::models::{
     CloudFrontConfig, CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs,
-    CreateTaskRequest, DocumentError, EditDocumentRepoArgs, EditDocumentServiceArgs,
-    FileTypeUpdate, GithubPullRequest, GithubPullRequestsResponse, LocationQueryParams,
-    TaskBranchName, TeamTaskMetadata,
+    CreateTaskRequest, DocumentError, DocumentTeamShareResponse, EditDocumentRepoArgs,
+    EditDocumentServiceArgs, FileTypeUpdate, GithubPullRequest, GithubPullRequestsResponse,
+    LocationQueryParams, TaskBranchName, TeamTaskMetadata,
 };
 #[cfg(feature = "document_create")]
 use super::ports::create::DocumentCreationService;
@@ -1473,5 +1473,58 @@ impl<
         }
 
         Ok(())
+    }
+
+    #[tracing::instrument(skip(self, entity_access_receipt))]
+    async fn get_team_share(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<DocumentTeamShareResponse, DocumentError> {
+        let document_id = &entity_access_receipt.entity().entity_id;
+
+        let state = self
+            .repo
+            .get_team_share(document_id)
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))?;
+
+        Ok(state.into())
+    }
+
+    #[tracing::instrument(skip(self, entity_access_receipt))]
+    async fn set_team_share(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<EditAccessLevel>,
+        share: bool,
+    ) -> Result<DocumentTeamShareResponse, DocumentError> {
+        let document_id = entity_access_receipt.entity().entity_id.clone();
+
+        let state = self
+            .repo
+            .set_team_share(&document_id, share)
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))?;
+
+        if share && state.team_id.is_none() {
+            return Err(DocumentError::BadRequest(
+                "document owner does not belong to a team".to_string(),
+            ));
+        }
+
+        let _ = self
+            .connection_service
+            .send_invalidation_event(InvalidationEvent::<()> {
+                invalidation_reason: InvalidationReason::Metadata,
+                entity_id: Cow::Owned(document_id),
+                entity_type: entity_access_receipt.entity().entity_type,
+                invalidated_by: entity_access_receipt.auth().clone(),
+                metadata: None,
+            })
+            .await
+            .inspect_err(|e| {
+                tracing::error!(error=?e, "failed to send invalidation event");
+            });
+
+        Ok(state.into())
     }
 }

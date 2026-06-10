@@ -5,6 +5,7 @@ export { createInputAttachmentTracker } from './attachment-tracker';
 export { ChannelInput } from './ChannelInput';
 export { createConfiguredChannelMarkdownEditor } from './configured-markdown-editor';
 export { InputProvider, useInput, useInputCommands } from './context';
+export { createCollapsedInputState } from './create-collapsed-input-state';
 export { createInputState } from './create-input-state';
 export { DropOverlay } from './DropOverlay';
 export { DropZone } from './DropZone';

@@ -78,6 +78,7 @@ export type InputCommands = {
 export type InputHandle = {
   clear: () => void;
   focus: () => void;
+  send: () => Promise<boolean>;
   attachFiles: (files: File[]) => Promise<void>;
   restoreSnapshot: (snapshot: InputSnapshot) => void;
   /**

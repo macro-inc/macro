@@ -119,6 +119,8 @@ export interface EditorConfig {
   type: EditorType;
   namespace: string;
   mentions?: MentionsOptions;
+  /** Snippets (`;` menu) follow mentions by default; pass false to opt out. */
+  snippets?: false;
   emojis?: EmojisOptions;
   links?: LinksOptions;
   history?: HistoryOptions;
@@ -151,6 +153,7 @@ export interface EditorInternals {
   actionsMenuOps: ReturnType<typeof createMenuOperations> | undefined;
   mentionsMenuOps: ReturnType<typeof createMenuOperations> | undefined;
   emojisMenuOps: ReturnType<typeof createMenuOperations> | undefined;
+  snippetsMenuOps: ReturnType<typeof createMenuOperations> | undefined;
   accessoryStore: ReturnType<typeof createAccessoryStore>[0] | undefined;
   dragInsertStore: ReturnType<typeof createDragInsertStore>[0] | undefined;
   draggableBlockStore:

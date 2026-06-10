@@ -20,8 +20,8 @@ import {
   type EntityData,
   getSnippetHit,
   isGithubPrEntity,
+  isHitSnippetEntity,
   isSearchEntity,
-  isSnippetEntity,
   type SearchLocation,
   toNotificationEntity,
   type WithSearch,
@@ -324,7 +324,7 @@ export const openEntityInSplitFromUnifiedList = async (
   const { allowDuplicate, openInNewSplit, splitHandle, mergeHistory } = options;
   let { location } = options;
 
-  if (!location && isSnippetEntity(entity)) {
+  if (!location && isHitSnippetEntity(entity)) {
     location = getSnippetHit(entity)?.location;
   }
 

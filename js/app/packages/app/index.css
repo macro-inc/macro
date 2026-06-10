@@ -154,6 +154,7 @@
   --color-html:        oklch(from var(--a0) l c  47deg);
   --color-note:        oklch(from var(--a0) l c 293deg);
   --color-task:        oklch(from var(--a0) l c 150deg);
+  --color-snippet:     oklch(from var(--a0) l c 330deg);
   --color-pdf:         oklch(from var(--a0) l c  25deg);
   --color-rss:         oklch(from var(--a0) l c 260deg);
   --color-default:     var(--c1);

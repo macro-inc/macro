@@ -25,6 +25,7 @@ import { FloatingEquationMenu } from '@core/component/LexicalMarkdown/component/
 import { FloatingLinkMenu } from '@core/component/LexicalMarkdown/component/menu/FloatingLinkMenu';
 import { GenerateMenu } from '@core/component/LexicalMarkdown/component/menu/GenerateMenu';
 import { MentionsMenu } from '@core/component/LexicalMarkdown/component/menu/MentionsMenu/MentionsMenu';
+import { SnippetsMenu } from '@core/component/LexicalMarkdown/component/menu/SnippetsMenu';
 import TableActionMenu, {
   anchorElemRefSignal,
   menuButtonRefSignal,
@@ -96,6 +97,7 @@ import {
 } from '@core/component/LexicalMarkdown/plugins/media';
 import { createAccessoryStore } from '@core/component/LexicalMarkdown/plugins/node-accessory';
 import { restoreFocusPlugin } from '@core/component/LexicalMarkdown/plugins/restore-focus';
+import { snippetsPlugin } from '@core/component/LexicalMarkdown/plugins/snippets';
 import { createMenuOperations } from '@core/component/LexicalMarkdown/shared/inlineMenu';
 import {
   editorFocusSignal,
@@ -293,6 +295,7 @@ export function MarkdownEditor(props: {
   const mentionsMenuOperations = createMenuOperations();
   const emojiMenuOperations = createMenuOperations();
   const actionsMenuOperations = createMenuOperations();
+  const snippetsMenuOperations = createMenuOperations();
 
   // store for the drag insert pluign.
   const [dragInsertStore, setDragInsertStore] = createDragInsertStore();
@@ -526,6 +529,12 @@ export function MarkdownEditor(props: {
       })
     )
     .use(
+      snippetsPlugin({
+        menu: snippetsMenuOperations,
+        peerIdValidator: peerIdValidator(),
+      })
+    )
+    .use(
       actionsPlugin({
         menu: actionsMenuOperations,
         peerIdValidator: peerIdValidator(),
@@ -727,6 +736,7 @@ export function MarkdownEditor(props: {
       mentionsMenuOperations.isOpen() ||
       emojiMenuOperations.isOpen() ||
       actionsMenuOperations.isOpen() ||
+      snippetsMenuOperations.isOpen() ||
       titleEditorMenuOpen()
     );
   });
@@ -1016,6 +1026,12 @@ export function MarkdownEditor(props: {
           menu={mentionsMenuOperations}
           useBlockBoundary={true}
           showOpenTabs
+        />
+
+        <SnippetsMenu
+          editor={editor}
+          menu={snippetsMenuOperations}
+          useBlockBoundary={true}
         />
 
         <ActionMenu editor={editor} menu={actionsMenuOperations} />

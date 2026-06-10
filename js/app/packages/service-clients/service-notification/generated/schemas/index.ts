@@ -114,6 +114,8 @@ export * from './notifEventOneOfTwothreeTag';
 export * from './notificationBulkRequest';
 export * from './notificationDocumentSubType';
 export * from './notificationDocumentSubTypeOneOf';
+export * from './notificationDocumentSubTypeOneOfThree';
+export * from './notificationDocumentSubTypeOneOfThreeType';
 export * from './notificationDocumentSubTypeOneOfType';
 export * from './notificationServiceApiVersion';
 export * from './notificationTypeName';

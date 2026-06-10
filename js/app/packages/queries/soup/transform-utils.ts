@@ -21,6 +21,7 @@ import type {
   EntityData,
   ForeignEntity,
   GithubPullRequestEntity,
+  NamedSubType,
   ProjectEntity,
   SearchData,
   WithSearch,
@@ -348,7 +349,12 @@ export const useSearchResponseItemMapper = () => {
         return [
           {
             type: 'document',
-            subType: result.sub_type === 'task' ? { type: 'task' } : null,
+            subType:
+              result.sub_type === 'task'
+                ? { type: 'task' }
+                : result.sub_type === 'snippet'
+                  ? { type: 'snippet' }
+                  : null,
             id: result.document_id,
             name: result.name || blockNameToDefaultFile(result.file_type),
             ownerId: result.owner_id,
@@ -496,7 +502,10 @@ const resolveDocumentEntityName = (
         ? null
         : {
             type: entity.subType.type,
-            is_completed: entity.subType.is_completed,
+            is_completed:
+              'is_completed' in entity.subType
+                ? entity.subType.is_completed
+                : undefined,
           },
   });
 };
@@ -688,8 +697,11 @@ export const mapApiSoupItemToEntity = (item: DisplayableSoupItem): SoupEntity =>
         item.data.subType === null || item.data.subType === undefined
           ? undefined
           : {
-              type: item.data.subType.type as 'task',
-              is_completed: item.data.subType.is_completed,
+              type: item.data.subType.type as NamedSubType,
+              is_completed:
+                'is_completed' in item.data.subType
+                  ? item.data.subType.is_completed
+                  : undefined,
             },
       name: resolveDocumentEntityName(item.data),
     }))
