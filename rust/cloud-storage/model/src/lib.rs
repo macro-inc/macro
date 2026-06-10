@@ -35,8 +35,3 @@ pub struct IDWithTimeStamps {
 pub struct StringID {
     pub id: String,
 }
-
-// Build-benchmark probe: hub-crate change (model has ~98 reverse deps).
-// Expected effect: 27 of 32 deploy artifacts rebuild; spared are
-// unfurl-service binaries and the call-recording, dlp-handler, and
-// static-file-service lambda jobs. Safe to remove.
