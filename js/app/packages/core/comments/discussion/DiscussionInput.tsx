@@ -190,6 +190,7 @@ export function DiscussionInput(props: DiscussionInputProps) {
       setMentions([]);
     },
     focus: () => markdownEditor.controls.focus(),
+    send: () => commands.send(),
     attachFiles: async (files: File[]) => {
       // Insert images into the editor
       for (const file of files) {

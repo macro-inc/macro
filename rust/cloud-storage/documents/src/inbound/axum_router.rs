@@ -7,7 +7,9 @@
 //! - `GET /{document_id}/branch_name` — get short ID + task-aware git branch name (when the document is a task)
 //! - `GET /{document_id}/github_prs` — get GitHub pull requests associated with a task document
 //! - `GET /{document_id}/short_id` — get document short ID
+//! - `GET`/`PUT /{document_id}/team_share` — get/set the document's team-share state
 //! - `POST /create_markdown` — create and initialize a markdown document
+//! - `POST /create_snippet` — create and initialize a snippet document
 //! - `DELETE /{document_id}` — soft-delete a document
 
 #[cfg(test)]
@@ -17,6 +19,8 @@ pub mod copy_document;
 pub mod create_document;
 #[cfg(feature = "document_create")]
 pub mod create_markdown;
+#[cfg(feature = "document_create")]
+pub mod create_snippet;
 pub mod create_task;
 pub mod delete_document;
 pub mod edit_document;
@@ -28,6 +32,7 @@ pub mod get_location;
 pub mod get_short_id;
 pub mod put_snapshot;
 pub mod task_duplicates;
+pub mod team_share;
 
 use std::sync::Arc;
 
@@ -47,6 +52,8 @@ use task_dedup::PgTaskDedupService;
 
 #[cfg(feature = "document_create")]
 use self::create_markdown::create_markdown_handler;
+#[cfg(feature = "document_create")]
+use self::create_snippet::create_snippet_handler;
 use self::{
     copy_document::copy_document_handler,
     create_document::create_document_handler,
@@ -64,6 +71,7 @@ use self::{
         delete_this_duplicate_task_handler, dismiss_task_duplicates_handler,
         get_task_duplicates_handler, task_similarity_search_handler,
     },
+    team_share::{get_team_share_handler, set_team_share_handler},
 };
 
 use crate::domain::models::DocumentError;
@@ -200,6 +208,11 @@ where
         .route(
             "/{document_id}/snapshot",
             axum::routing::put(put_snapshot_handler::<T, Svc>),
+        )
+        .route(
+            "/{document_id}/team_share",
+            axum::routing::get(get_team_share_handler::<T, Svc>)
+                .put(set_team_share_handler::<T, Svc>),
         );
 
     let document_id_routes = document_id_routes.layer(middleware::from_fn_with_state(
@@ -220,10 +233,15 @@ where
         );
 
     #[cfg(feature = "document_create")]
-    let router = router.route(
-        "/create_markdown",
-        axum::routing::post(create_markdown_handler::<T, Svc>),
-    );
+    let router = router
+        .route(
+            "/create_markdown",
+            axum::routing::post(create_markdown_handler::<T, Svc>),
+        )
+        .route(
+            "/create_snippet",
+            axum::routing::post(create_snippet_handler::<T, Svc>),
+        );
 
     router.with_state(state)
 }

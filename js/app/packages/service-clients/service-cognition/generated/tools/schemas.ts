@@ -131,7 +131,30 @@ export const SearchToolResponse = z.object({
               .optional(),
             name: z.string(),
             owner_id: z.string(),
-            sub_type: z.union([z.literal('task'), z.null()]).optional(),
+            sub_type: z
+              .union([
+                z.any().superRefine((x, ctx) => {
+                  const schemas = [z.literal('task'), z.literal('snippet')];
+                  const errors = schemas.reduce<z.ZodError[]>(
+                    (errors, schema) =>
+                      ((result) =>
+                        result.error ? [...errors, result.error] : errors)(
+                        schema.safeParse(x)
+                      ),
+                    []
+                  );
+                  if (schemas.length - errors.length !== 1) {
+                    ctx.addIssue({
+                      path: ctx.path,
+                      code: 'invalid_union',
+                      unionErrors: errors,
+                      message: 'Invalid input: Should pass single schema',
+                    });
+                  }
+                }),
+                z.null(),
+              ])
+              .optional(),
           }),
           z.object({ type: z.literal('document') })
         ),
@@ -1760,7 +1783,29 @@ export const ReadMetadataResponse = z.object({
     projectId: z.union([z.string(), z.null()]).optional(),
     projectName: z.union([z.string(), z.null()]).optional(),
     sha: z.union([z.string(), z.null()]).optional(),
-    subType: z.union([z.literal('task'), z.null()]).optional(),
+    subType: z
+      .union([
+        z.any().superRefine((x, ctx) => {
+          const schemas = [z.literal('task'), z.literal('snippet')];
+          const errors = schemas.reduce<z.ZodError[]>(
+            (errors, schema) =>
+              ((result) => (result.error ? [...errors, result.error] : errors))(
+                schema.safeParse(x)
+              ),
+            []
+          );
+          if (schemas.length - errors.length !== 1) {
+            ctx.addIssue({
+              path: ctx.path,
+              code: 'invalid_union',
+              unionErrors: errors,
+              message: 'Invalid input: Should pass single schema',
+            });
+          }
+        }),
+        z.null(),
+      ])
+      .optional(),
     teamId: z.union([z.string(), z.null()]).optional(),
     teamTaskId: z.union([z.number().int(), z.null()]).optional(),
     updatedAt: z

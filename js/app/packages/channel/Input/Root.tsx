@@ -1,3 +1,4 @@
+import { usePreserveFocusOnButtonTaps } from '@core/mobile/usePreserveFocusOnButtonTaps';
 import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
 import { cn } from '@ui';
 import { type JSX, splitProps } from 'solid-js';
@@ -27,6 +28,7 @@ export function Root(props: RootProps) {
 
   let containerRef: HTMLDivElement | undefined;
   useTouchOutsideToDismissKeyboard(() => containerRef);
+  usePreserveFocusOnButtonTaps(() => containerRef);
 
   return (
     <div

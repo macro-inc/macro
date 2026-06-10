@@ -304,6 +304,7 @@ pub struct ChannelReplyMetadata {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum NotificationDocumentSubType {
     Task,
+    Snippet,
 }
 
 /// Someone mentioned a document in a channel

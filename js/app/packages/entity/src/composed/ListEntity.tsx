@@ -30,7 +30,7 @@ import { Entity } from '../entity';
 import type { EntityRowConfig } from '../extractors-notification';
 import {
   isHitSnippetComplete,
-  isSnippetEntity,
+  isHitSnippetEntity,
 } from '../extractors-search/snippet-entity';
 import { isChannelEntity, isEmailEntity } from '../types/entity';
 import { isWithNotification } from '../types/notification';
@@ -115,7 +115,7 @@ export function ListEntity(props: ListEntityProps) {
   // value when windowSearchMatch trimmed text — otherwise the inline
   // snippet already shows everything.
   const isContentHitsRedundant = () => {
-    if (!isSnippetEntity(props.entity)) return false;
+    if (!isHitSnippetEntity(props.entity)) return false;
     if (!isSearchEntity(props.entity)) return false;
     const hits = props.entity.search.contentHitData;
     if (!hits || hits.length !== 1) return false;

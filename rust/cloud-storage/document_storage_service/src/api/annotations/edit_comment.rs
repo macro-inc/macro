@@ -77,7 +77,14 @@ pub async fn edit_comment_handler(
                     document_id: res.document_id.to_string(),
                     owner: res.document_owner.clone(),
                     file_type: res.file_type.clone(),
-                    sub_type: res.sub_type.map(|_| NotificationDocumentSubType::Task),
+                    sub_type: res.sub_type.map(|sub_type| match sub_type {
+                        document_sub_type::DocumentSubType::Task => {
+                            NotificationDocumentSubType::Task
+                        }
+                        document_sub_type::DocumentSubType::Snippet => {
+                            NotificationDocumentSubType::Snippet
+                        }
+                    }),
                     sender_id: user_id.clone().try_into().ok(),
                     sender_profile_picture_url,
                 };

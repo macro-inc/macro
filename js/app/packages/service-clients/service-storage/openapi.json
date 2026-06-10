@@ -4552,6 +4552,73 @@
         }
       }
     },
+    "/documents/create_snippet": {
+      "post": {
+        "tags": ["document"],
+        "summary": "Creates a snippet document with initialized markdown content in one\nbackend-owned lifecycle. Snippets are created personal; team sharing is\ntoggled separately via `PUT /documents/{document_id}/team_share`.",
+        "operationId": "create_snippet_handler",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSnippetRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Response for creating a snippet.",
+                  "required": ["documentId"],
+                  "properties": {
+                    "documentId": {
+                      "type": "string",
+                      "description": "The document ID of the created snippet."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/documents/create_task": {
       "post": {
         "tags": ["document"],
@@ -6096,6 +6163,144 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/GenericErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/documents/{document_id}/team_share": {
+      "get": {
+        "tags": ["document"],
+        "summary": "Gets the team-share state of a document. The team is resolved from the\ndocument owner's team membership; `teamId` is omitted when the owner does\nnot belong to a team.",
+        "operationId": "get_document_team_share",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Document ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentTeamShareResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["document"],
+        "summary": "Sets the team-share state of a document. Sharing grants the document\nowner's team Edit access; unsharing removes the team's access. Requires\nEdit access on the document.",
+        "operationId": "set_document_team_share",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Document ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetDocumentTeamShareRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentTeamShareResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -9791,6 +9996,17 @@
                 "enum": ["task"]
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "A snippet document — reusable markdown",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["snippet"]
+              }
+            }
           }
         ],
         "description": "Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task."
@@ -11374,6 +11590,37 @@
           }
         }
       },
+      "CreateSnippetRequest": {
+        "type": "object",
+        "description": "Request body for creating a snippet — a reusable markdown document that can\nbe inserted into any markdown area.",
+        "required": ["snippetName"],
+        "properties": {
+          "markdown": {
+            "type": ["string", "null"],
+            "description": "Markdown source text. Defaults to an empty snippet document."
+          },
+          "projectId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Optional project ID to associate the snippet with."
+          },
+          "snippetName": {
+            "type": "string",
+            "description": "The name of the snippet."
+          }
+        }
+      },
+      "CreateSnippetResponse": {
+        "type": "object",
+        "description": "Response for creating a snippet.",
+        "required": ["documentId"],
+        "properties": {
+          "documentId": {
+            "type": "string",
+            "description": "The document ID of the created snippet."
+          }
+        }
+      },
       "CreateTaskRequest": {
         "type": "object",
         "description": "Request body for creating a task.",
@@ -12418,6 +12665,17 @@
                 "enum": ["task"]
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "A snippet document — reusable markdown",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["snippet"]
+              }
+            }
           }
         ],
         "description": "The sub type of a document preview with associated properties.\nTask-related properties are encoded within the variant to ensure valid states."
@@ -12554,7 +12812,23 @@
       "DocumentSubType": {
         "type": "string",
         "description": "The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.",
-        "enum": ["task"]
+        "enum": ["task", "snippet"]
+      },
+      "DocumentTeamShareResponse": {
+        "type": "object",
+        "description": "The team-share state of a document. The team is resolved from the document\nowner's team membership.",
+        "required": ["sharedWithTeam"],
+        "properties": {
+          "sharedWithTeam": {
+            "type": "boolean",
+            "description": "Whether the document is currently shared with the owner's team."
+          },
+          "teamId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The owner's team the document is (or would be) shared with. `None` when\nthe owner does not belong to a team."
+          }
+        }
       },
       "EditAnchorRequest": {
         "oneOf": [
@@ -16379,6 +16653,17 @@
           }
         }
       },
+      "SetDocumentTeamShareRequest": {
+        "type": "object",
+        "description": "Request body for setting a document's team-share state.",
+        "required": ["shareWithTeam"],
+        "properties": {
+          "shareWithTeam": {
+            "type": "boolean",
+            "description": "Whether the document should be shared with the owner's team."
+          }
+        }
+      },
       "SetEmailSyncRequest": {
         "type": "object",
         "description": "Request body for `PUT /crm/companies/{company_id}/email-sync`.",
@@ -17083,6 +17368,17 @@
               "type": {
                 "type": "string",
                 "enum": ["task"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A snippet document — reusable markdown",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["snippet"]
               }
             }
           }

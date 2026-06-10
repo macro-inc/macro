@@ -33,6 +33,6 @@ export function getCategorySearchFilters(
 
   return {
     filters: SEARCH_INDEX_SEEDS[indexValue],
-    clientFilters: { or: [indexValue] },
+    clientFilters: { and: ['search-supported'], or: [indexValue] },
   };
 }

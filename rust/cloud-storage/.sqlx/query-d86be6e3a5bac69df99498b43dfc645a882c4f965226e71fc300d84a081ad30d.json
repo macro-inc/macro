@@ -86,7 +86,8 @@
             "name": "document_sub_type_value",
             "kind": {
               "Enum": [
-                "task"
+                "task",
+                "snippet"
               ]
             }
           }

@@ -17,6 +17,7 @@ export function getBlockNameFromEntity(
     .with('chat', () => 'chat' as const)
     .with('project', () => 'project' as const)
     .with('task', () => 'task' as const)
+    .with('snippet', () => 'snippet' as const)
     .with('note', () => 'md' as const)
     .with('crm_company', () => 'company' as const)
     .otherwise(() => {

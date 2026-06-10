@@ -119,6 +119,43 @@ export async function createTask(
   return documentId;
 }
 
+type CreateSnippetArgs = {
+  title?: string;
+  content?: string;
+  projectId?: string;
+};
+
+/**
+ * Creates a snippet using the create_snippet endpoint.
+ * Content is initialized via sync service. Snippets are created personal;
+ * team sharing is toggled from the snippet's side panel.
+ */
+export async function createSnippet(
+  args?: CreateSnippetArgs
+): Promise<string | undefined> {
+  const result = await storageServiceClient.createSnippet({
+    snippetName: args?.title ?? '',
+    markdown: args?.content ?? '',
+    projectId: args?.projectId,
+  });
+
+  invalidateUserQuota();
+
+  if (result.isErr()) return;
+
+  const { documentId } = result.value;
+
+  setPreviewOnCreate({
+    itemId: documentId,
+    itemType: 'document',
+    name: args?.title ?? '',
+    fileType: 'md',
+    subType: { type: 'snippet' },
+  });
+  refetchSoupEntity(documentId, 'document');
+  return documentId;
+}
+
 export async function createCodeFileFromText({
   code,
   extension,
