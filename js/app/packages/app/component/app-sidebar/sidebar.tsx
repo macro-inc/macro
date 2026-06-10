@@ -79,7 +79,7 @@ import UsersThreeIcon from '@phosphor/users-three.svg';
 import { debounce } from '@solid-primitives/scheduled';
 import { makePersisted } from '@solid-primitives/storage';
 import { useLocation } from '@solidjs/router';
-import { Button, cn, Dropdown, Hotkey } from '@ui';
+import { Button, cn, Dropdown, Hotkey, navRowClass } from '@ui';
 import {
   type Component,
   createEffect,
@@ -476,9 +476,7 @@ const SidebarShortcutLink = (props: SidebarShortcutLinkProps) => {
     <Button
       draggable={false}
       variant="ghost"
-      class={cn(
-        'flex items-center justify-start text-sm gap-2 cursor-default w-full rounded-md py-1 text-ink-extra-muted not-disabled:hover:bg-ink/3'
-      )}
+      class={navRowClass()}
       tooltipPlacement="right"
       label={props.isSlim() ? props.label : undefined}
       onMouseEnter={() => setIsHovering(true)}
@@ -517,9 +515,7 @@ const SidebarActionButton = (props: SidebarActionButtonProps) => {
 
   return (
     <Button
-      class={cn(
-        'flex items-center justify-start group-data-[slim=true]/sidebar:justify-center text-sm gap-2 cursor-default w-full rounded-md py-1 text-ink-extra-muted not-disabled:hover:bg-ink/3'
-      )}
+      class={cn(navRowClass(), 'group-data-[slim=true]/sidebar:justify-center')}
       variant="ghost"
       tooltipPlacement="right"
       label={props.isSlim() ? props.label : undefined}
@@ -1115,8 +1111,8 @@ const SidebarLink = (props: SidebarLinkProps) => {
           data-sidebar-link={props.id}
           data-active={isActive() ? '' : undefined}
           class={cn(
-            'flex items-center justify-start group-data-[slim=true]/sidebar:justify-center text-sm gap-2 cursor-default w-full rounded-md py-1 text-ink-extra-muted not-disabled:hover:bg-ink/3',
-            isActive() && 'bg-ink/6 not-disabled:hover:bg-ink/6 text-ink'
+            navRowClass({ active: isActive() }),
+            'group-data-[slim=true]/sidebar:justify-center'
           )}
           tooltipPlacement="right"
           onMouseEnter={() => setIsHovering(true)}
