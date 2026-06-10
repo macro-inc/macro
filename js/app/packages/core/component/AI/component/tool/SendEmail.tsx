@@ -1,6 +1,6 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { EntityIcon } from '@core/component/EntityIcon';
-import { InlineItemPreview } from '@core/component/ItemPreview';
+import { ItemPreview } from '@core/component/ItemPreview';
 import CaretRight from '@phosphor/caret-right.svg';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import type { SendEmail } from '@service-cognition/generated/tools/types';
@@ -136,7 +136,7 @@ function SentEmailResponse(props: {
                 <span class="text-ink">{getRecipientsLabel(props.args)}</span>
               </span>
               <Suspense>
-                <InlineItemPreview id={props.threadId} type="email" />
+                <ItemPreview class="ring-0" id={props.threadId} type="email" />
               </Suspense>
             </div>
             <span class="shrink-0 text-ink-muted">

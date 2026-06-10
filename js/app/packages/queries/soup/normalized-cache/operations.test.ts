@@ -36,6 +36,9 @@ vi.mock('./normalizer', () => ({
     }
     return undefined;
   },
+  SOUP_NORM_PREFIX: 'soup:',
+  soupNormKey: (id: string) => `soup:${id}`,
+  stripSoupNormPrefix: (normKey: string) => normKey.slice('soup:'.length),
 }));
 
 import { soupKeys } from '../keys';
@@ -140,7 +143,9 @@ function mockSearchCache(
   };
 }
 
-const soupSeedKey = [...soupKeys.astItems._def, 'seed'];
+/** Legacy `items` query (flat SoupPage shape) — used by the bulk of the
+ * pre-existing tests since they assert behavior agnostic of kind. */
+const soupSeedKey = [...soupKeys.items._def, 'seed'];
 const searchSeedKey = [...soupKeys.search._def, 'seed'];
 
 function seedSoupQuery(data: InfiniteData<SoupPage, unknown>) {
@@ -469,5 +474,259 @@ describe('optimisticUpdateSoupItemUpdatedAt', () => {
     );
 
     expect(mockNormalizer.setNormalizedData).not.toHaveBeenCalled();
+  });
+});
+
+// -- Normalized grouped cache tests --
+
+import type { GroupByField, GroupMeta } from '../grouped/types';
+import type { SoupAstItemsGroupedPage } from '../items';
+
+const STATUS_DEF = 'status-def-id';
+const STATUS_GROUP_BY: GroupByField = {
+  type: 'property',
+  propertyDefinitionId: STATUS_DEF,
+};
+
+/** Build a task-like document item with a status property value. */
+function mockTaskItem(id: string, statusOption: string): SoupApiItem {
+  return {
+    tag: 'document',
+    data: {
+      id,
+      title: `task ${id}`,
+      properties: [
+        {
+          definition: { id: STATUS_DEF },
+          value: { type: 'SelectOption', value: [statusOption] },
+        },
+      ],
+    },
+    frecency_score: 1,
+  } as unknown as SoupApiItem;
+}
+
+function buildGroup(
+  key: string,
+  itemIds: string[],
+  totalCount?: number,
+  displayOrder?: number
+): GroupMeta {
+  return {
+    key,
+    label: key,
+    displayOrder: displayOrder ?? null,
+    totalCount: totalCount ?? itemIds.length,
+    itemIds,
+    nextCursor: null,
+  };
+}
+
+function mockGroupedParentCache(
+  items: SoupApiItem[],
+  groups: GroupMeta[]
+): InfiniteData<SoupAstItemsGroupedPage, unknown> {
+  const itemsById: Record<string, SoupApiItem> = {};
+  for (const it of items) itemsById[getSoupItemId(it)] = it;
+  return {
+    pages: [
+      {
+        kind: 'grouped',
+        items: itemsById,
+        groups,
+        nextCursor: null,
+      },
+    ],
+    pageParams: [null],
+  };
+}
+
+/** Seed a grouped astItems query with status property grouping metadata. */
+function seedGroupedAstQuery(
+  data: InfiniteData<SoupAstItemsGroupedPage, unknown>,
+  suffix = 'grouped-seed'
+) {
+  const key = [...soupKeys.astItems._def, {}, {}, STATUS_GROUP_BY, suffix];
+  testQueryClient.setQueryDefaults(key, { meta: { groupBy: STATUS_GROUP_BY } });
+  testQueryClient.setQueryData(key, data);
+  return key;
+}
+
+describe('insertSoupEntity — grouped cache', () => {
+  it('adds item to items pool and prepends id to target group itemIds', () => {
+    const items = [
+      mockTaskItem('a-1', 'in_progress'),
+      mockTaskItem('b-1', 'done'),
+    ];
+    const groups = [
+      buildGroup('in_progress', ['a-1'], 3, 0),
+      buildGroup('done', ['b-1'], 2, 1),
+    ];
+    const key = seedGroupedAstQuery(mockGroupedParentCache(items, groups));
+
+    insertSoupEntity(mockTaskItem('a-new', 'in_progress'));
+
+    const cached =
+      testQueryClient.getQueryData<
+        InfiniteData<SoupAstItemsGroupedPage, unknown>
+      >(key)!;
+    const page = cached.pages[0];
+
+    // Pool gained the new item.
+    expect(page.items['a-new']).toBeDefined();
+    // in_progress gained the id at the top; totalCount bumped.
+    const inProgress = page.groups.find((g) => g.key === 'in_progress')!;
+    expect(inProgress.itemIds).toEqual(['a-new', 'a-1']);
+    expect(inProgress.totalCount).toBe(4);
+    // done untouched.
+    const done = page.groups.find((g) => g.key === 'done')!;
+    expect(done.itemIds).toEqual(['b-1']);
+    expect(done.totalCount).toBe(2);
+  });
+
+  it('rollback restores grouped cache', () => {
+    const items = [mockTaskItem('a-1', 'in_progress')];
+    const groups = [buildGroup('in_progress', ['a-1'], 1, 0)];
+    const key = seedGroupedAstQuery(mockGroupedParentCache(items, groups));
+
+    const tx = insertSoupEntity(mockTaskItem('a-new', 'in_progress'));
+    tx.rollback();
+
+    const restored =
+      testQueryClient.getQueryData<
+        InfiniteData<SoupAstItemsGroupedPage, unknown>
+      >(key)!;
+    expect(restored.pages[0].items['a-new']).toBeUndefined();
+    expect(restored.pages[0].groups[0].itemIds).toEqual(['a-1']);
+    expect(restored.pages[0].groups[0].totalCount).toBe(1);
+  });
+});
+
+describe('removeSoupEntities — grouped cache', () => {
+  it('drops from pool, filters itemIds, decrements totalCount per affected group', () => {
+    const items = [
+      mockTaskItem('a-1', 'in_progress'),
+      mockTaskItem('a-2', 'in_progress'),
+      mockTaskItem('b-1', 'done'),
+    ];
+    const groups = [
+      buildGroup('in_progress', ['a-1', 'a-2'], 5, 0),
+      buildGroup('done', ['b-1'], 3, 1),
+    ];
+    const key = seedGroupedAstQuery(mockGroupedParentCache(items, groups));
+
+    removeSoupEntities(new Set(['a-1']));
+
+    const cached =
+      testQueryClient.getQueryData<
+        InfiniteData<SoupAstItemsGroupedPage, unknown>
+      >(key)!;
+    const page = cached.pages[0];
+    expect(page.items['a-1']).toBeUndefined();
+    expect(page.items['a-2']).toBeDefined();
+
+    const inProgress = page.groups.find((g) => g.key === 'in_progress')!;
+    expect(inProgress.itemIds).toEqual(['a-2']);
+    expect(inProgress.totalCount).toBe(4);
+
+    // done untouched.
+    const done = page.groups.find((g) => g.key === 'done')!;
+    expect(done.itemIds).toEqual(['b-1']);
+    expect(done.totalCount).toBe(3);
+  });
+
+  it('rollback restores grouped cache', () => {
+    const items = [mockTaskItem('a-1', 'in_progress')];
+    const groups = [buildGroup('in_progress', ['a-1'], 1, 0)];
+    const key = seedGroupedAstQuery(mockGroupedParentCache(items, groups));
+
+    const tx = removeSoupEntities(new Set(['a-1']));
+    tx.rollback();
+
+    const restored =
+      testQueryClient.getQueryData<
+        InfiniteData<SoupAstItemsGroupedPage, unknown>
+      >(key)!;
+    expect(restored.pages[0].items['a-1']).toBeDefined();
+    expect(restored.pages[0].groups[0].itemIds).toEqual(['a-1']);
+    expect(restored.pages[0].groups[0].totalCount).toBe(1);
+  });
+});
+
+describe('optimisticUpdateSoupEntity — cross-group move', () => {
+  it('moves item id between groups via itemIds mutations only', () => {
+    const items = [
+      mockTaskItem('a-1', 'in_progress'),
+      mockTaskItem('a-2', 'in_progress'),
+      mockTaskItem('b-1', 'done'),
+    ];
+    const groups = [
+      buildGroup('in_progress', ['a-1', 'a-2'], 5, 0),
+      buildGroup('done', ['b-1'], 3, 1),
+    ];
+    const key = seedGroupedAstQuery(mockGroupedParentCache(items, groups));
+
+    // Simulate what normy would do during the merge: the canonical entity
+    // (status now `done`) is what reconcile reads from normy's store.
+    const merged = mockTaskItem('a-1', 'done');
+    mockNormalizer.getObjectById.mockReturnValue(merged);
+    // The cache itself also reflects the merge — apply via setQueryData so
+    // TanStack Query sees the new reference rather than mutating in place.
+    const cached =
+      testQueryClient.getQueryData<
+        InfiniteData<SoupAstItemsGroupedPage, unknown>
+      >(key)!;
+    testQueryClient.setQueryData<
+      InfiniteData<SoupAstItemsGroupedPage, unknown>
+    >(key, {
+      ...cached,
+      pages: cached.pages.map((p, i) =>
+        i === 0 ? { ...p, items: { ...p.items, 'a-1': merged } } : p
+      ),
+    });
+
+    optimisticUpdateSoupEntity({
+      tag: 'document',
+      data: { id: 'a-1' },
+      frecency_score: 1,
+    } as unknown as Parameters<typeof optimisticUpdateSoupEntity>[0]);
+
+    const after =
+      testQueryClient.getQueryData<
+        InfiniteData<SoupAstItemsGroupedPage, unknown>
+      >(key)!;
+    const page = after.pages[0];
+
+    expect(page.items['a-1']).toBeDefined();
+
+    const inProgress = page.groups.find((g) => g.key === 'in_progress')!;
+    const done = page.groups.find((g) => g.key === 'done')!;
+    expect(inProgress.itemIds).toEqual(['a-2']);
+    expect(inProgress.totalCount).toBe(4);
+    expect(done.itemIds).toEqual(['a-1', 'b-1']);
+    expect(done.totalCount).toBe(4);
+  });
+
+  it('no-op when grouping membership did not change', () => {
+    const items = [mockTaskItem('a-1', 'in_progress')];
+    const groups = [buildGroup('in_progress', ['a-1'], 1, 0)];
+    const key = seedGroupedAstQuery(mockGroupedParentCache(items, groups));
+
+    mockNormalizer.getObjectById.mockReturnValue(
+      mockTaskItem('a-1', 'in_progress')
+    );
+
+    optimisticUpdateSoupEntity({
+      tag: 'document',
+      data: { id: 'a-1' },
+      frecency_score: 1,
+    } as unknown as Parameters<typeof optimisticUpdateSoupEntity>[0]);
+
+    const after =
+      testQueryClient.getQueryData<
+        InfiniteData<SoupAstItemsGroupedPage, unknown>
+      >(key)!;
+    expect(after.pages[0].groups[0].itemIds).toEqual(['a-1']);
+    expect(after.pages[0].groups[0].totalCount).toBe(1);
   });
 });

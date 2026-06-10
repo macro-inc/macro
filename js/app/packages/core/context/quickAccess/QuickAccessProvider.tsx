@@ -4,12 +4,13 @@ import {
   type IUser,
   useAugmentUserWithDmActivity,
   useContacts,
-  useIsInboxOnlyLinkedChild,
+  useIsConnectedSecondaryInbox,
 } from '@core/user';
 import type { DateValue } from '@core/util/date';
-import type { ChannelEntity } from '@entity';
+import type { ChannelEntity, CrmCompanyEntity } from '@entity';
 import { queryReadyGate } from '@queries/gate';
 import { type HistoryItem, useHistoryQuery } from '@queries/history/history';
+import { useQuickAccessCrmCompaniesQuery } from '@queries/soup/quick-access-crm-companies';
 import { useRecentlyViewedSoupQuery } from '@queries/soup/recently-viewed';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
 import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
@@ -164,6 +165,19 @@ function getUserVersion(user: IUser): string {
   return `${user.name}|${user.email}|${user.lastInteraction}`;
 }
 
+function getCrmCompanySearchText(company: CrmCompanyEntity): string {
+  const domains = company.domains.map((d) => d.domain).join(' ');
+  return domains ? `${company.name} | ${domains}` : company.name;
+}
+
+function getCrmCompanyVersion(
+  company: CrmCompanyEntity,
+  viewedAt?: string
+): string {
+  const domains = company.domains.map((d) => d.domain).join(',');
+  return `${company.name}|${domains}|${company.updatedAt}|${viewedAt}`;
+}
+
 /**
  * Merge two *already* sorted index arrays into a single sorted array.
  */
@@ -212,8 +226,10 @@ export const [QuickAccessProvider, useQuickAccess] =
       const { channels, isLoading: channelsLoading } = useChannelsContext();
       const contacts = useContacts();
       const augmentUserWithDmActivity = useAugmentUserWithDmActivity();
-      const isInboxOnlyLinkedChild = useIsInboxOnlyLinkedChild();
+      const isConnectedSecondaryInbox = useIsConnectedSecondaryInbox();
       const instructionsIdQuery = useInstructionsMdIdQuery();
+      const { query: crmCompaniesQuery, companies: crmCompaniesAccessor } =
+        useQuickAccessCrmCompaniesQuery();
 
       // globally hidden ids
       const [hiddenIds, setHiddenIds] = createSignal<Set<string>>(new Set());
@@ -378,7 +394,7 @@ export const [QuickAccessProvider, useQuickAccess] =
         // Process contacts (users)
         const contactData = contacts();
         for (const contact of contactData) {
-          if (isInboxOnlyLinkedChild(contact.id)) continue;
+          if (isConnectedSecondaryInbox(contact.id)) continue;
           const augmentedUser = augmentUserWithDmActivity(contact);
           seenIds.add(augmentedUser.id);
 
@@ -418,6 +434,71 @@ export const [QuickAccessProvider, useQuickAccess] =
           } else {
             allEntries.push({
               id: augmentedUser.id,
+              bucket: cached.item.bucket,
+              sortTimestamp: cached.item.sortTimestamp,
+            });
+          }
+        }
+
+        // Process CRM companies (live soup list, complements the
+        // recently-viewed feed which only has companies the user has
+        // opened). Sort timestamp prefers viewed_at; falls back to
+        // updated_at for unviewed companies — same shape as channels.
+        const crmCompanyData = crmCompaniesAccessor();
+        for (const company of crmCompanyData) {
+          if (hidden.has(company.id)) continue;
+          seenIds.add(company.id);
+
+          const viewedAt =
+            viewedAtMap.get(company.id) ?? company.viewedAt ?? undefined;
+
+          const version = getCrmCompanyVersion(
+            company,
+            viewedAt as string | undefined
+          );
+          const cached = itemCache.get(company.id);
+
+          if (!cached || cached.version !== version) {
+            const reason = !cached
+              ? 'new'
+              : `changed (${cached.version} -> ${version})`;
+            transformedItems.push({
+              id: company.id,
+              name: company.name,
+              type: 'crm_company',
+              reason,
+            });
+            const entity: CrmCompanyEntity = {
+              ...company,
+              viewedAt: (viewedAt ?? company.viewedAt) as DateValue | null,
+            };
+            const viewedAtMs = toTimestamp(viewedAt);
+            const updatedAtMs = toTimestamp(company.updatedAt);
+            const sortTimestamp = viewedAtMs || updatedAtMs;
+
+            const quickAccessItem: QuickAccessItem = {
+              kind: 'entity',
+              id: company.id,
+              bucket: 'crm_company',
+              searchText: getCrmCompanySearchText(entity),
+              sortTimestamp,
+              timestamps: {
+                viewedAt,
+                updatedAt: company.updatedAt,
+                createdAt: company.createdAt,
+              },
+              data: entity,
+            };
+
+            itemCache.set(company.id, { item: quickAccessItem, version });
+            allEntries.push({
+              id: company.id,
+              bucket: 'crm_company',
+              sortTimestamp,
+            });
+          } else {
+            allEntries.push({
+              id: company.id,
               bucket: cached.item.bucket,
               sortTimestamp: cached.item.sortTimestamp,
             });
@@ -550,10 +631,13 @@ export const [QuickAccessProvider, useQuickAccess] =
         });
       };
 
+      // CRM companies are additive — they fold into the list when their query
+      // resolves rather than gating quick access on a slower/failing CRM fetch.
       const isLoading = () => historyQuery.isLoading || channelsLoading();
 
       const refresh = () => {
         historyQuery.refetch();
+        crmCompaniesQuery.refetch();
       };
 
       return {

@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use super::*;
-use crate::{CallFilters, ForeignEntityFilters, PropertyFilter};
+use crate::{CallFilters, CallStatus, ForeignEntityFilters, PropertyFilter};
 use cool_asserts::assert_matches;
 use model_file_type::FileType;
 use serde_json::json;
@@ -802,6 +802,39 @@ fn entity_type_ast_deserialization_rejects_invalid() {
 }
 
 #[test]
+fn call_filter_status_expands_status_only() {
+    let f = CallFilters {
+        status: Some(CallStatus::Missed),
+        ..Default::default()
+    };
+    let ast = CallFilters::expand_ast(f)
+        .unwrap()
+        .expect("status filter should expand to a literal");
+    let json = serde_json::to_value(&ast).unwrap();
+    let exp = json!({ "l": { "Status": "MISSED" } });
+    assert_eq!(json, exp);
+}
+
+#[test]
+fn call_filter_status_expands_channel_and_status_as_and() {
+    let channel_id = Uuid::new_v4();
+    let f = CallFilters {
+        channel_ids: vec![channel_id.to_string()],
+        status: Some(CallStatus::Unattended),
+        ..Default::default()
+    };
+    let ast = CallFilters::expand_ast(f).unwrap().unwrap();
+    let json = serde_json::to_value(&ast).unwrap();
+    let exp = json!({
+        "&": [
+            { "l": { "ChannelId": channel_id } },
+            { "l": { "Status": "UNATTENDED" } }
+        ]
+    });
+    assert_eq!(json, exp);
+}
+
+#[test]
 fn it_expands_call_filter_with_attended_only() {
     let f = CallFilters {
         attended: Some(true),
@@ -956,6 +989,62 @@ fn foreign_entity_sources_expand_as_or_tree() {
         "|": [
             { "l": { "fes": "github" } },
             { "l": { "fes": "linear" } }
+        ]
+    });
+
+    assert_eq!(json, exp);
+}
+
+#[test]
+fn foreign_entity_includes_me_expands_as_me_literal() {
+    let f = EntityFilters {
+        foreign_entity_filters: ForeignEntityFilters {
+            includes_me: true,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let ast = Arc::into_inner(
+        EntityFilterAst::new_from_filters(f)
+            .unwrap()
+            .unwrap()
+            .foreign_entity_filter
+            .unwrap(),
+    )
+    .unwrap();
+
+    let json = serde_json::to_value(ast).unwrap();
+    let exp = json!({ "l": "me" });
+
+    assert_eq!(json, exp);
+}
+
+#[test]
+fn foreign_entity_includes_me_ands_with_sources() {
+    let f = EntityFilters {
+        foreign_entity_filters: ForeignEntityFilters {
+            foreign_entity_sources: vec!["github_pull_request".to_string()],
+            includes_me: true,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let ast = Arc::into_inner(
+        EntityFilterAst::new_from_filters(f)
+            .unwrap()
+            .unwrap()
+            .foreign_entity_filter
+            .unwrap(),
+    )
+    .unwrap();
+
+    let json = serde_json::to_value(ast).unwrap();
+    let exp = json!({
+        "&": [
+            { "l": { "fes": "github_pull_request" } },
+            { "l": "me" }
         ]
     });
 

@@ -89,3 +89,22 @@ export const SingleSelectCheck = (props: { active: boolean }) => (
     class={cn('size-3 text-accent shrink-0', !props.active && 'hidden')}
   />
 );
+
+/**
+ * Inline checkbox affordance — a small square that fills accent when checked
+ * and shows an outlined empty box when not. Matches the soup-menu checkbox
+ * pattern. Visual-only; pair with a clickable parent for the actual toggle.
+ */
+export const InlineCheckbox = (props: { checked: boolean }) => (
+  <span
+    aria-hidden
+    class={cn(
+      'inline-flex items-center justify-center size-3.5 shrink-0 rounded-sm',
+      props.checked
+        ? 'bg-accent text-surface'
+        : 'bg-transparent border border-edge-muted text-transparent'
+    )}
+  >
+    <CheckIcon class="size-2.5" />
+  </span>
+);

@@ -122,6 +122,11 @@ export const ENABLE_MARKDOWN_LIVE_COLLABORATION = resolveFeatureFlag(
 
 export const ENABLE_EMAIL = resolveFeatureFlag('ENABLE_EMAIL', true);
 
+// CRM companies & contacts frontend: the Companies view + sidebar entry, the
+// company/contact detail blocks, CRM mentions / quick-access, and CRM rows in
+// global search. override with VITE_ENABLE_CRM.
+export const ENABLE_CRM = resolveFeatureFlag('ENABLE_CRM', DEV_MODE_ENV);
+
 export const ENABLE_BLOCK_IN_BLOCK = resolveFeatureFlag(
   'ENABLE_BLOCK_IN_BLOCK',
   true
@@ -341,14 +346,6 @@ export function ENABLE_CALLS(): boolean {
   }
 
   return analytics.posthog.isFeatureEnabled('enable-calls') ?? false;
-}
-
-// The sidebar active-calls widget fans out to one GET /call/{channelId}/active
-// request per channel every 15s. Flagged off until it's batched / socket-driven.
-export function ENABLE_SIDEBAR_ACTIVE_CALLS(): boolean {
-  return (
-    analytics.posthog.isFeatureEnabled('enable-sidebar-active-calls') ?? false
-  );
 }
 
 export const ENABLE_NEW_ONBOARDING_OVERRIDE = DEV_MODE_ENV ? true : undefined;

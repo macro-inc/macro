@@ -307,6 +307,7 @@ interface OpenEntityOptions {
   location?: SearchLocation;
   splitHandle?: SplitHandle;
   mergeHistory?: boolean;
+  allowDuplicate?: boolean;
 }
 
 /**
@@ -320,7 +321,7 @@ export const openEntityInSplitFromUnifiedList = async (
   entity: EntityData,
   options: OpenEntityOptions
 ): Promise<void> => {
-  const { openInNewSplit, splitHandle, mergeHistory } = options;
+  const { allowDuplicate, openInNewSplit, splitHandle, mergeHistory } = options;
   let { location } = options;
 
   if (!location && isSnippetEntity(entity)) {
@@ -362,6 +363,7 @@ export const openEntityInSplitFromUnifiedList = async (
       preferNewSplit: openInNewSplit,
       handle: splitHandle,
       mergeHistory,
+      allowDuplicate,
     }
   );
 
@@ -396,6 +398,12 @@ function getEntitySplitContent(entity: EntityData) {
     })
     .with({ type: 'foreign' }, (entity) => {
       return { type: 'unknown' as const, id: entity.id };
+    })
+    .with({ type: 'crm_company' }, (entity) => {
+      return { type: 'company' as const, id: entity.id };
+    })
+    .with({ type: 'crm_contact' }, (entity) => {
+      return { type: 'contact' as const, id: entity.id };
     })
     .otherwise((entity) => {
       return { type: entity.type, id: entity.id };

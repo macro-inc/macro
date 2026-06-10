@@ -179,7 +179,7 @@
         "properties": {
           "attended": {
             "type": ["boolean", "null"],
-            "description": "Filter by whether the requesting user attended the call.\n`None` = no filter, `Some(true)` = only calls the user joined,\n`Some(false)` = only calls the user did not join."
+            "description": "Legacy filter by whether the requesting user attended the call.\nPrefer [`CallFilters::status`] for new callers.\n`None` = no filter, `Some(true)` = only calls the user joined,\n`Some(false)` = only calls the user did not join."
           },
           "call_ids": {
             "type": "array",
@@ -201,6 +201,17 @@
               "type": "string"
             },
             "description": "Speaker macro user ids. Empty to include all."
+          },
+          "status": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CallStatus",
+                "description": "Filter by the requesting user's viewer-relative call status."
+              }
+            ]
           }
         }
       },
@@ -212,6 +223,7 @@
           "ended_at",
           "duration_ms",
           "updated_at",
+          "status",
           "attended"
         ],
         "properties": {
@@ -235,6 +247,9 @@
           "started_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CallStatus"
           },
           "updated_at": {
             "type": "string",
@@ -339,6 +354,11 @@
             "format": "uuid"
           }
         }
+      },
+      "CallStatus": {
+        "type": "string",
+        "description": "Viewer-relative attendance status for a call record.\nSerializes as `ATTENDED`, `MISSED`, or `UNATTENDED`.",
+        "enum": ["ATTENDED", "MISSED", "UNATTENDED"]
       },
       "ChannelFilters": {
         "type": "object",
@@ -1368,6 +1388,7 @@
           "owner_id",
           "thread_id",
           "user_id",
+          "link_id",
           "email_message_search_results",
           "participants"
         ],
@@ -1383,6 +1404,11 @@
             "type": "string",
             "format": "uuid",
             "description": "Standardized fields that all item types will share.\nThese field names are being aligned across all item types\nfor consistency in our data model."
+          },
+          "link_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The inbox that owns the thread. Drives the multi-inbox indicator\nwhen the caller has more than one inbox."
           },
           "name": {
             "type": ["string", "null"],
@@ -2075,6 +2101,10 @@
               "type": "string"
             },
             "description": "Internal foreign entity record IDs to filter by. Empty to include all records."
+          },
+          "includes_me": {
+            "type": "boolean",
+            "description": "When true, only return foreign entities whose metadata lists the requesting user as a\nparticipant (GitHub `involves:me` semantics for `github_pull_request` records). False or\nabsent applies no filter. Serialized in filter ASTs as the `\"me\"` literal."
           }
         }
       },

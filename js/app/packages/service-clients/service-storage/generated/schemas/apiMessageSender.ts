@@ -4,14 +4,20 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { ApiMessageSenderAvatarUrl } from './apiMessageSenderAvatarUrl';
+import type { ApiMessageSenderName } from './apiMessageSenderName';
 import type { ApiMessageSenderType } from './apiMessageSenderType';
 
 /**
  * Public sender identity for channel messages.
  */
 export interface ApiMessageSender {
+  /** Avatar URL for bot senders. */
+  avatar_url?: ApiMessageSenderAvatarUrl;
   /** Sender id without the storage namespace prefix. */
   id: string;
+  /** Display name for bot senders. */
+  name?: ApiMessageSenderName;
   /** Sender type. */
   type: ApiMessageSenderType;
 }

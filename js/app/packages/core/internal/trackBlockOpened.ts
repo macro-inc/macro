@@ -19,9 +19,31 @@ function isSoupEntityTag(
   itemType: ItemType
 ): itemType is ItemType & SoupEntityTag {
   return match(itemType)
-    .with('email', 'channel_message', 'automation', 'foreign', () => false)
+    .with(
+      'email',
+      'channel_message',
+      'automation',
+      'foreign',
+      'crm_company',
+      'crm_contact',
+      () => false
+    )
     .with('document', 'chat', 'project', 'channel', 'call', () => true)
     .exhaustive();
+}
+
+// Item types we want recorded in UserHistory on open. CRM types aren't
+// CloudStorageItemType (they're not stored in document_storage), but the
+// /history endpoint accepts any item_type as text and the soup's
+// `viewed_updated` sort joins UserHistory generically — so writing
+// these rows is what surfaces recently-opened companies/contacts in
+// Quick Access and the @ mention menu.
+function shouldTrackInUserHistory(itemType: ItemType): boolean {
+  return (
+    isCloudStorageItem(itemType) ||
+    itemType === 'crm_company' ||
+    itemType === 'crm_contact'
+  );
 }
 
 /**
@@ -45,7 +67,7 @@ export function track({
     refetchSoupEntity(itemId, itemType);
   }
 
-  if (!isCloudStorageItem(itemType)) return;
+  if (!shouldTrackInUserHistory(itemType)) return;
 
   const upsertToHistoryMutation = useUpsertToHistoryMutation(undefined, client);
   upsertToHistoryMutation.mutate({ itemId, itemType });

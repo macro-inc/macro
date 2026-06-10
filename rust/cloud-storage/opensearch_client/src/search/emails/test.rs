@@ -97,6 +97,7 @@ fn test_email_search_args_quoted_phrase_uses_phrase_query_in_sqs() -> anyhow::Re
     let builder: EmailQueryBuilder = EmailSearchArgs {
         terms: vec!["reply test".to_string()],
         user_id: "macro|alice@example.com".to_string(),
+        user_ids: vec![],
         thread_ids: vec![],
         link_ids: vec![],
         sender: vec![],
@@ -133,6 +134,7 @@ fn test_email_search_args_build_injects_simple_query_string() -> anyhow::Result<
     let builder: EmailQueryBuilder = EmailSearchArgs {
         terms: vec!["hello".to_string(), "test".to_string()],
         user_id: "macro|alice@example.com".to_string(),
+        user_ids: vec![],
         thread_ids: vec![],
         link_ids: vec![],
         sender: vec![],

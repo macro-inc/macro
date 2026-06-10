@@ -1,0 +1,119 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH user_source_ids AS (\n                SELECT cp.channel_id::text AS source_id\n                FROM comms_channel_participants cp\n                WHERE cp.user_id = $1 AND cp.left_at IS NULL\n                UNION ALL\n                SELECT t.team_id::text AS source_id\n                FROM team_user t\n                WHERE t.user_id = $1\n                UNION ALL\n                SELECT $1 AS source_id\n            ),\n            visible_calls AS (\n                SELECT\n                    c.id AS call_id,\n                    c.channel_id,\n                    c.room_name,\n                    c.created_by,\n                    c.created_at AS started_at,\n                    NULL::timestamptz AS ended_at,\n                    NULL::bigint AS duration_ms,\n                    c.egress_id,\n                    c.recording_key,\n                    c.preview_url,\n                    c.recording_started_at,\n                    NULL::text AS custom_name,\n                    NULL::text AS summary,\n                    c.share_with_team,\n                    true AS is_active,\n                    CASE\n                        WHEN EXISTS (\n                            SELECT 1 FROM call_participants cp\n                            WHERE cp.call_id = c.id AND cp.user_id = $1\n                        ) THEN 'ATTENDED'::text\n                        WHEN EXISTS (\n                            SELECT 1 FROM comms_channel_participants ccp\n                            WHERE ccp.channel_id = c.channel_id\n                              AND ccp.user_id = $1\n                              AND ccp.left_at IS NULL\n                        ) THEN 'MISSED'::text\n                        ELSE 'UNATTENDED'::text\n                    END AS status\n                FROM calls c\n                WHERE EXISTS (\n                    SELECT 1 FROM entity_access ea\n                    JOIN user_source_ids u ON u.source_id = ea.source_id\n                    WHERE ea.entity_id = c.id\n                      AND ea.entity_type = 'call'\n                )\n                AND ($3::bool IS FALSE OR c.channel_id = ANY($4))\n                AND ($5::bool IS FALSE OR c.id = ANY($6))\n                UNION ALL\n                SELECT\n                    cr.id AS call_id,\n                    cr.channel_id,\n                    cr.room_name,\n                    cr.created_by,\n                    cr.started_at,\n                    cr.ended_at,\n                    cr.duration_ms,\n                    cr.egress_id,\n                    cr.recording_key,\n                    cr.preview_url,\n                    cr.recording_started_at,\n                    cr.custom_name,\n                    cr.summary,\n                    cr.share_with_team,\n                    false AS is_active,\n                    CASE\n                        WHEN EXISTS (\n                            SELECT 1 FROM call_record_participants crp\n                            WHERE crp.call_record_id = cr.id AND crp.user_id = $1\n                        ) THEN 'ATTENDED'::text\n                        WHEN EXISTS (\n                            SELECT 1 FROM comms_channel_participants ccp\n                            WHERE ccp.channel_id = cr.channel_id\n                              AND ccp.user_id = $1\n                              AND ccp.left_at IS NULL\n                        ) THEN 'MISSED'::text\n                        ELSE 'UNATTENDED'::text\n                    END AS status\n                FROM call_records cr\n                WHERE EXISTS (\n                    SELECT 1 FROM entity_access ea\n                    JOIN user_source_ids u ON u.source_id = ea.source_id\n                    WHERE ea.entity_id = cr.id\n                      AND ea.entity_type = 'call'\n                )\n                AND ($3::bool IS FALSE OR cr.channel_id = ANY($4))\n                AND ($5::bool IS FALSE OR cr.id = ANY($6))\n            )\n            SELECT\n                call_id as \"call_id!\",\n                channel_id as \"channel_id!\",\n                room_name as \"room_name!\",\n                created_by as \"created_by!\",\n                started_at as \"started_at!\",\n                ended_at,\n                duration_ms,\n                egress_id,\n                recording_key,\n                preview_url,\n                recording_started_at,\n                custom_name,\n                summary,\n                share_with_team as \"share_with_team!\",\n                is_active as \"is_active!\",\n                status as \"status!\"\n            FROM visible_calls\n            WHERE ($7::bool IS FALSE OR status = ANY($8::text[]))\n            ORDER BY \"started_at!\" DESC\n            LIMIT $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "call_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "channel_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "room_name!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "created_by!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "started_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "ended_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "duration_ms",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 7,
+        "name": "egress_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "recording_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "preview_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "recording_started_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "custom_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "summary",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
+        "name": "share_with_team!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 14,
+        "name": "is_active!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 15,
+        "name": "status!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8",
+        "Bool",
+        "UuidArray",
+        "Bool",
+        "UuidArray",
+        "Bool",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "79edd9ca0d31434d5d7a4db78a6b3f8eb316ff51e1099e40611ba77f5c048828"
+}

@@ -18,6 +18,7 @@ export function getBlockNameFromEntity(
     .with('project', () => 'project' as const)
     .with('task', () => 'task' as const)
     .with('note', () => 'md' as const)
+    .with('crm_company', () => 'company' as const)
     .otherwise(() => {
       const entity = item.data;
       if ('fileType' in entity && typeof entity.fileType === 'string') {

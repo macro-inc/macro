@@ -222,7 +222,36 @@ impl<
                 .and_then(|value| value.as_u64()),
             comments: None,
             checks: None,
+            participant_github_user_ids: Self::participant_ids_from_payload(pull_request),
         })
+    }
+
+    /// Collect the stable numeric ids of the author, requested reviewers, and assignees from a
+    /// webhook `pull_request` payload. Commenters are not present in the payload; they are
+    /// unioned in from existing metadata or a live fetch.
+    fn participant_ids_from_payload(
+        pull_request: Option<&serde_json::Value>,
+    ) -> Option<Vec<String>> {
+        let pull_request = pull_request?;
+        let mut ids = std::collections::BTreeSet::new();
+
+        ids.extend(
+            pull_request
+                .get("user")
+                .and_then(|user| user.get("id"))
+                .and_then(|value| value.as_u64()),
+        );
+        for field in ["requested_reviewers", "assignees"] {
+            if let Some(users) = pull_request.get(field).and_then(|value| value.as_array()) {
+                ids.extend(
+                    users
+                        .iter()
+                        .filter_map(|user| user.get("id").and_then(|value| value.as_u64())),
+                );
+            }
+        }
+
+        (!ids.is_empty()).then(|| ids.iter().map(u64::to_string).collect())
     }
 
     /// Build pull request metadata from live GitHub details when possible,
@@ -291,6 +320,9 @@ impl<
             deletions: Some(details.deletions),
             comments: details.comments,
             checks: details.checks,
+            participant_github_user_ids: details
+                .participant_github_user_ids
+                .or(fallback.participant_github_user_ids),
         }
     }
 

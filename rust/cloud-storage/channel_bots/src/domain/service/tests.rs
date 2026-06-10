@@ -133,6 +133,7 @@ fn context_message(
         updated_at: now,
         edited_at: None,
         deleted_at: None,
+        bot_profile: None,
     }
 }
 

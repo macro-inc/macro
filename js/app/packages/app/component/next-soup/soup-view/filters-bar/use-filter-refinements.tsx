@@ -10,7 +10,6 @@ import {
 } from '@app/component/next-soup/filters';
 import {
   defineQueryFilters,
-  NIL_UUID,
   type Query,
   queryStateFrom,
 } from '@app/component/next-soup/filters/filter-store';
@@ -25,26 +24,12 @@ import { deepEqual } from '@core/util/compareUtils';
 import CircleDashedIcon from '@phosphor/circle-dashed.svg';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { useContacts } from '@queries/contacts/contacts';
-import {
-  type Accessor,
-  batch,
-  createMemo,
-  createSignal,
-  type JSX,
-} from 'solid-js';
+import { batch, createMemo, createSignal, type JSX } from 'solid-js';
 import type {
   ConsolidatedFilter,
   FilterValue,
 } from './consolidated-filter-chip';
-import {
-  cacheCallSubFilters,
-  cacheChannelSubFilters,
-  cacheEmailSubFilters,
-  INDEX_OPTIONS,
-  type SearchableOption,
-  useSearchFilterOptions,
-  useSearchIndexController,
-} from './search-filter-controls';
+import type { SearchableOption } from './searchable-multi-select';
 import {
   buildContactLabel,
   VIEW_FILTER_CATEGORIES,
@@ -83,13 +68,14 @@ export function useFilterRefinements() {
   const user = useUserContext();
   const contacts = useContacts();
   const currentUserId = useUserId();
-  const { channelOptions, channelLabelMap, senderOptions, senderLabelMap } =
-    useSearchFilterOptions();
-  const { changeIndex } = useSearchIndexController();
 
   const getPresetContext = (): PresetContext => ({
     userId: user.userId(),
     email: user.email(),
+    // Filter refinements don't surface admin-gated tabs, so passing
+    // false here is safe — the value only matters where the resolver
+    // gates on it (companies → hidden).
+    isTeamAdmin: false,
   });
 
   const currentView = createMemo(() => {
@@ -250,17 +236,6 @@ export function useFilterRefinements() {
     if (!view) return [];
     return VIEW_FILTER_CATEGORIES[view as ListView] ?? [];
   });
-
-  const setFilterIds =
-    (
-      field: 'callChannelId' | 'callSpeakerId' | 'channelId' | 'channelSenderId'
-    ) =>
-    (ids: string[]) =>
-      queryFilters.set({
-        include: {
-          [field]: ids,
-        },
-      });
 
   /**
    * Cache for consolidated filter chips, similar to chipCache but for the new format.
@@ -431,68 +406,6 @@ export function useFilterRefinements() {
       );
     }
 
-    // Search index type filters (single-select, replaces)
-    const coveredByView = new Set<string>(
-      viewCategories().flatMap((c) => c.options.map((o) => o.id))
-    );
-    const activeIndexOptions: FilterValue[] = [];
-    for (const option of INDEX_OPTIONS) {
-      const optionId = option.value as FilterID;
-      if (
-        soup.predicates.isActive(optionId) &&
-        !coveredByView.has(optionId) &&
-        !presetFilterIds.has(optionId)
-      ) {
-        activeIndexOptions.push({
-          id: option.value,
-          label: option.label,
-          icon: option.icon,
-        });
-      }
-    }
-
-    if (activeIndexOptions.length > 0) {
-      const key = 'type:index';
-      seenKeys.add(key);
-
-      const getActiveIndexValues = (): FilterValue[] => {
-        const result: FilterValue[] = [];
-        for (const option of INDEX_OPTIONS) {
-          const optionId = option.value as FilterID;
-          if (
-            soup.predicates.isActive(optionId) &&
-            !coveredByView.has(optionId) &&
-            !presetFilterIds.has(optionId)
-          ) {
-            result.push({
-              id: option.value,
-              label: option.label,
-              icon: option.icon,
-            });
-          }
-        }
-        return result;
-      };
-
-      filters.push(
-        getOrCreateConsolidatedChip(key, () => ({
-          key,
-          categoryLabel: 'Type',
-          categoryLabelPlural: 'Types',
-          values: getActiveIndexValues,
-          availableOptions: INDEX_OPTIONS.map((o) => ({
-            id: o.value,
-            label: o.label,
-            icon: o.icon,
-          })),
-          multiple: false,
-          isValueActive: (id) => soup.predicates.isActive(id),
-          onToggleValue: (id) => changeIndex(id),
-          onRemoveAll: () => changeIndex('all'),
-        }))
-      );
-    }
-
     // Assignee filter (consolidated) - using searchable approach
     const pushAssigneeConsolidatedChip = () => {
       const key = 'assignee';
@@ -542,202 +455,6 @@ export function useFilterRefinements() {
     };
 
     pushAssigneeConsolidatedChip();
-
-    // Searchable filters helper for consolidated chips
-    const pushSearchableConsolidatedChip = (args: {
-      key: string;
-      categoryLabel: string;
-      getIds: () => string[];
-      searchableOptions: Accessor<SearchableOption[]>;
-      labelMap: Accessor<Map<string, string>>;
-      onChange: (ids: string[]) => void;
-      searchPlaceholder: string;
-    }) => {
-      const popupOpen =
-        consolidatedChipCache.get(args.key)?.isPopupOpen?.() ?? false;
-      const ids = args.getIds();
-      if (ids.length === 0 && !popupOpen) return;
-
-      seenKeys.add(args.key);
-
-      // Compute values as accessor for reactivity
-      const getValues = (): FilterValue[] => {
-        const options = args.searchableOptions();
-        return args.getIds().map((id) => {
-          const opt = options.find((o) => o.id === id);
-          return {
-            id,
-            label: args.labelMap().get(id) ?? id,
-            icon: opt?.icon,
-          };
-        });
-      };
-
-      filters.push(
-        getOrCreateConsolidatedChip(args.key, () => {
-          const [isPopupOpen, _setPopupOpen] = createSignal(false);
-          const setPopupOpen = (v: boolean) => {
-            if (!v) {
-              queueMicrotask(() =>
-                panel.panelRef()?.focus({ preventScroll: true })
-              );
-            }
-            _setPopupOpen(v);
-          };
-          return {
-            key: args.key,
-            categoryLabel: args.categoryLabel,
-            values: getValues,
-            searchableOptions: args.searchableOptions,
-            activeSearchableIds: args.getIds,
-            onSearchableChange: args.onChange,
-            searchPlaceholder: args.searchPlaceholder,
-            isPopupOpen,
-            setPopupOpen,
-            onRemoveAll: () => args.onChange([]),
-          };
-        })
-      );
-    };
-
-    // Channel In/From filters
-    pushSearchableConsolidatedChip({
-      key: 'channel-in',
-      categoryLabel: 'In',
-      getIds: () =>
-        (queryFilters.state.include.channelId ?? []).filter(
-          (id) => id !== NIL_UUID
-        ),
-      searchableOptions: channelOptions,
-      labelMap: channelLabelMap,
-      onChange: setFilterIds('channelId'),
-      searchPlaceholder: 'Search channels...',
-    });
-
-    pushSearchableConsolidatedChip({
-      key: 'channel-from',
-      categoryLabel: 'From',
-      getIds: () => queryFilters.state.include.channelSenderId ?? [],
-      searchableOptions: senderOptions,
-      labelMap: senderLabelMap,
-      onChange: setFilterIds('channelSenderId'),
-      searchPlaceholder: 'Search senders...',
-    });
-
-    // Search view specific filters
-    if (currentView() === 'search') {
-      if (soup.predicates.isActive('calls')) {
-        pushSearchableConsolidatedChip({
-          key: 'call-in',
-          categoryLabel: 'In',
-          getIds: () =>
-            (queryFilters.state.include.callChannelId ?? []).filter(
-              (id) => id !== NIL_UUID
-            ),
-          searchableOptions: channelOptions,
-          labelMap: channelLabelMap,
-          onChange: setFilterIds('callChannelId'),
-          searchPlaceholder: 'Search channels...',
-        });
-
-        pushSearchableConsolidatedChip({
-          key: 'call-from',
-          categoryLabel: 'From',
-          getIds: () => queryFilters.state.include.callSpeakerId ?? [],
-          searchableOptions: senderOptions,
-          labelMap: senderLabelMap,
-          onChange: setFilterIds('callSpeakerId'),
-          searchPlaceholder: 'Search speakers...',
-        });
-
-        // Call attended filter
-        const callAttended = queryFilters.state.include.callAttended;
-        if (callAttended !== undefined && callAttended !== null) {
-          const key = 'call-attended';
-          seenKeys.add(key);
-
-          const getAttendedValues = (): FilterValue[] => {
-            const attended = queryFilters.state.include.callAttended;
-            if (attended === undefined || attended === null) return [];
-            return [
-              {
-                id: attended ? 'yes' : 'no',
-                label: attended ? 'Attended' : 'Unattended',
-              },
-            ];
-          };
-
-          filters.push(
-            getOrCreateConsolidatedChip(key, () => ({
-              key,
-              categoryLabel: 'Attended',
-              values: getAttendedValues,
-              availableOptions: [
-                { id: 'yes', label: 'Attended' },
-                { id: 'no', label: 'Unattended' },
-              ],
-              multiple: false,
-              isValueActive: (id) =>
-                id === (queryFilters.state.include.callAttended ? 'yes' : 'no'),
-              onToggleValue: (id) =>
-                queryFilters.add({ include: { callAttended: id === 'yes' } }),
-              onRemoveAll: () =>
-                queryFilters.remove({
-                  include: {
-                    callAttended: queryFilters.state.include.callAttended,
-                  },
-                }),
-            }))
-          );
-        }
-      }
-
-      // Email importance filter
-      if (
-        soup.predicates.isActive('email') &&
-        queryFilters.state.include.emailImportance !== undefined
-      ) {
-        const key = 'email-importance';
-        seenKeys.add(key);
-
-        const getImportanceValues = (): FilterValue[] => {
-          const importance = filterData().include.emailImportance;
-          if (importance === undefined) return [];
-          return [
-            {
-              id: importance ? 'signal' : 'noise',
-              label: importance ? 'Signal' : 'Noise',
-            },
-          ];
-        };
-
-        filters.push(
-          getOrCreateConsolidatedChip(key, () => ({
-            key,
-            categoryLabel: 'Importance',
-            values: getImportanceValues,
-            availableOptions: [
-              { id: 'signal', label: 'Signal' },
-              { id: 'noise', label: 'Noise' },
-            ],
-            multiple: false,
-            isValueActive: (id) =>
-              id ===
-              (filterData().include.emailImportance ? 'signal' : 'noise'),
-            onToggleValue: (id) =>
-              queryFilters.add({
-                include: { emailImportance: id === 'signal' },
-              }),
-            onRemoveAll: () =>
-              queryFilters.remove({
-                include: {
-                  emailImportance: queryFilters.state.include.emailImportance,
-                },
-              }),
-          }))
-        );
-      }
-    }
 
     // Evict stale chips
     for (const key of consolidatedChipCache.keys()) {
@@ -848,15 +565,10 @@ export function useFilterRefinements() {
     const preset = currentPreset();
     if (!preset) return;
 
-    const contentId = panel.handle.content().id;
-
     batch(() => {
       soup.predicates.set(preset.clientFilters);
       queryFilters.replace(preset.filters ?? null);
       setAssigneeFilter([]);
-      cacheChannelSubFilters(contentId, {});
-      cacheCallSubFilters(contentId, {});
-      cacheEmailSubFilters(contentId, {});
     });
   };
 

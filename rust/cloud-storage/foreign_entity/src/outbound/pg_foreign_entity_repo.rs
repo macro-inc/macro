@@ -5,7 +5,7 @@ mod tests;
 
 use chrono::{DateTime, Utc};
 use filter_ast::Expr;
-use item_filters::ast::{LiteralTree, foreign_entity::ForeignEntityLiteral};
+use item_filters::ast::foreign_entity::ForeignEntityLiteral;
 use models_pagination::SimpleSortMethod;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -18,6 +18,7 @@ struct ForeignEntityBatchQuery<'a> {
     source_auth_entities: &'a [String],
     sort_method: SimpleSortMethod,
     filter_jsonpath: Option<&'a str>,
+    participant_github_user_id: Option<&'a str>,
     cursor_id: Option<Uuid>,
     cursor_value: Option<DateTime<Utc>>,
     limit: i64,
@@ -30,8 +31,46 @@ fn source_id_parts(source_ids: &[SourceId]) -> (Vec<String>, Vec<String>) {
         .unzip()
 }
 
-fn foreign_entity_filter_jsonpath(filter: &LiteralTree<ForeignEntityLiteral>) -> Option<String> {
-    filter.as_deref().map(foreign_entity_expr_jsonpath)
+/// Marker error for filters that place [`ForeignEntityLiteral::IncludesMe`] somewhere it cannot
+/// be hoisted into the dedicated SQL predicate (under `Or`/`Not`).
+struct UnsupportedIncludesMe;
+
+fn contains_includes_me(expr: &Expr<ForeignEntityLiteral>) -> bool {
+    match expr {
+        Expr::And(left, right) | Expr::Or(left, right) => {
+            contains_includes_me(left) || contains_includes_me(right)
+        }
+        Expr::Not(inner) => contains_includes_me(inner),
+        Expr::Literal(literal) => matches!(literal, ForeignEntityLiteral::IncludesMe),
+    }
+}
+
+/// Strip [`ForeignEntityLiteral::IncludesMe`] literals off the top-level AND spine of a filter
+/// tree, returning the flag and the jsonpath for the residual filter. The literal cannot be
+/// expressed in the jsonpath (it needs the indexed metadata containment predicate), so any
+/// occurrence under `Or`/`Not` is an error.
+fn extract_includes_me(
+    expr: &Expr<ForeignEntityLiteral>,
+) -> Result<(bool, Option<String>), UnsupportedIncludesMe> {
+    match expr {
+        Expr::And(left, right) => {
+            let (left_me, left_jsonpath) = extract_includes_me(left)?;
+            let (right_me, right_jsonpath) = extract_includes_me(right)?;
+            let jsonpath = match (left_jsonpath, right_jsonpath) {
+                (Some(left), Some(right)) => Some(format!("({left} && {right})")),
+                (left, right) => left.or(right),
+            };
+            Ok((left_me || right_me, jsonpath))
+        }
+        Expr::Literal(ForeignEntityLiteral::IncludesMe) => Ok((true, None)),
+        other => {
+            if contains_includes_me(other) {
+                Err(UnsupportedIncludesMe)
+            } else {
+                Ok((false, Some(foreign_entity_expr_jsonpath(other))))
+            }
+        }
+    }
 }
 
 fn foreign_entity_expr_jsonpath(expr: &Expr<ForeignEntityLiteral>) -> String {
@@ -58,6 +97,9 @@ fn foreign_entity_literal_jsonpath(literal: &ForeignEntityLiteral) -> String {
         ForeignEntityLiteral::ForeignEntitySource(source) => {
             jsonpath_text_eq("foreignEntitySource", source)
         }
+        // IncludesMe is hoisted into a dedicated SQL predicate by extract_includes_me and never
+        // reaches the jsonpath; if one slips through, match nothing rather than everything.
+        ForeignEntityLiteral::IncludesMe => "(1 == 0)".to_string(),
     }
 }
 
@@ -88,6 +130,7 @@ impl PgForeignEntityRepo {
             source_auth_entities,
             sort_method,
             filter_jsonpath,
+            participant_github_user_id,
             cursor_id,
             cursor_value,
             limit,
@@ -134,6 +177,10 @@ impl PgForeignEntityRepo {
                         ($4::text)::jsonpath
                     )
                   )
+                  AND (
+                    $8::text IS NULL
+                    OR (fe.metadata -> 'participantGithubUserIds') ? $8::text
+                  )
                 ORDER BY fe.foreign_entity_source, fe.foreign_entity_id, sort_at DESC, fe.id DESC
             )
             SELECT
@@ -158,8 +205,25 @@ impl PgForeignEntityRepo {
             cursor_value,
             cursor_id,
             limit,
+            participant_github_user_id,
         )
         .fetch_all(&self.pool)
+        .await
+    }
+
+    async fn github_user_id_for_macro_user(
+        &self,
+        macro_user_id: &str,
+    ) -> Result<Option<String>, sqlx::Error> {
+        sqlx::query_scalar!(
+            r#"
+            SELECT github_user_id
+            FROM github_links
+            WHERE macro_id = $1
+            "#,
+            macro_user_id,
+        )
+        .fetch_optional(&self.pool)
         .await
     }
 }
@@ -224,6 +288,7 @@ impl ForeignEntityRepository for PgForeignEntityRepo {
     #[tracing::instrument(err, skip(self, source_ids, query))]
     async fn get_foreign_entities_for_user(
         &self,
+        requesting_user: Option<String>,
         source_ids: Vec<SourceId>,
         limit: u32,
         query: ForeignEntityListQuery,
@@ -232,8 +297,35 @@ impl ForeignEntityRepository for PgForeignEntityRepo {
             return Ok(Vec::new());
         }
 
+        let (includes_me, filter_jsonpath) = match query
+            .filter()
+            .as_deref()
+            .map(extract_includes_me)
+            .transpose()
+        {
+            Ok(split) => split.unwrap_or((false, None)),
+            Err(UnsupportedIncludesMe) => {
+                tracing::warn!(
+                    "IncludesMe under Or/Not in a foreign entity filter is unsupported; returning no results"
+                );
+                return Ok(Vec::new());
+            }
+        };
+
+        let participant_github_user_id = if includes_me {
+            let Some(requesting_user) = requesting_user else {
+                return Ok(Vec::new());
+            };
+            match self.github_user_id_for_macro_user(&requesting_user).await? {
+                Some(github_user_id) => Some(github_user_id),
+                // No linked GitHub identity: the user participates in nothing.
+                None => return Ok(Vec::new()),
+            }
+        } else {
+            None
+        };
+
         let (source_ids, source_auth_entities) = source_id_parts(&source_ids);
-        let filter_jsonpath = foreign_entity_filter_jsonpath(query.filter());
         let (cursor_id, cursor_value) = query.vals();
 
         self.get_foreign_entities_for_user_batch(ForeignEntityBatchQuery {
@@ -241,6 +333,7 @@ impl ForeignEntityRepository for PgForeignEntityRepo {
             source_auth_entities: &source_auth_entities,
             sort_method: *query.sort_method(),
             filter_jsonpath: filter_jsonpath.as_deref(),
+            participant_github_user_id: participant_github_user_id.as_deref(),
             cursor_id: cursor_id.copied(),
             cursor_value: cursor_value.copied(),
             limit: limit as i64,

@@ -632,6 +632,13 @@ async fn main() -> anyhow::Result<()> {
     );
     bot_trigger_router.spawn(bot_trigger_receiver);
 
+    let channel_bot_webhook_state =
+        bots::inbound::channel_webhook_router::ChannelBotWebhookRouterState::new(
+            bots_service.clone(),
+            channels_service.clone(),
+            (*entity_access_service).clone(),
+        );
+
     let api_context = ApiContext {
         contacts_ingress: contacts_ingress.clone(),
         soup_router_state: SoupRouterState::new(
@@ -688,6 +695,7 @@ async fn main() -> anyhow::Result<()> {
             bots_service.clone(),
             (*entity_access_service).clone(),
         ),
+        channel_bot_webhook_state,
         call_state,
         call_webhook_state,
         call_internal_state,

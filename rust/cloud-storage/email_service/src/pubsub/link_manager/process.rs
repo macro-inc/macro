@@ -286,6 +286,25 @@ async fn handle_delete(
         }
     }
 
+    // If the deleted link was a promoted shared mailbox, remove its minted macro user too
+    // (this also cascades its delegation edges and the promoted-mailbox marker). No-op for
+    // ordinary inboxes; best-effort, since the link and its data are already gone.
+    match ctx.db.acquire().await {
+        Ok(mut conn) => {
+            if let Err(e) = macro_db_client::shared_inbox::delete_promoted_mailbox_user(
+                &mut conn,
+                link.macro_id.as_ref(),
+            )
+            .await
+            {
+                tracing::error!(error=?e, "Failed to delete minted user for promoted shared mailbox");
+            }
+        }
+        Err(e) => {
+            tracing::error!(error=?e, "Failed to acquire connection for promoted mailbox cleanup");
+        }
+    }
+
     tracing::info!("Successfully deleted link");
 
     Ok(())

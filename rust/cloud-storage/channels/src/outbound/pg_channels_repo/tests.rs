@@ -1,6 +1,6 @@
 use crate::domain::models::{
-    AttachmentEntityReference, ChannelMessageFilters, CreateEntityMentionOptions,
-    MessagePageDirection, NotificationFilters, ParticipantRole,
+    AttachmentEntityReference, BotId, BotSenderProfile, ChannelMessageFilters,
+    CreateEntityMentionOptions, MessagePageDirection, NotificationFilters, ParticipantRole,
 };
 use crate::domain::ports::ChannelRepo;
 use crate::outbound::pg_channels_repo::PgChannelsRepo;
@@ -1467,5 +1467,47 @@ async fn attachment_references_merges_channel_and_generic_newest_first(
         matches!(refs[1], AttachmentEntityReference::Channel(_)),
         "older channel reference should come second"
     );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn bot_profiles_includes_soft_deleted_bots(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let active = Uuid::new_v4();
+    let deleted = Uuid::new_v4();
+    sqlx::query(
+        r#"
+        INSERT INTO bots (id, kind, owner_user_id, name, handle, avatar_url, deleted_at)
+        VALUES
+            ($1, 'owned', $3, 'Active Bot', 'active-bot', 'https://example.com/a.png', NULL),
+            ($2, 'owned', $3, 'Deleted Bot', 'deleted-bot', NULL, now())
+        "#,
+    )
+    .bind(active)
+    .bind(deleted)
+    .bind(USER_A)
+    .execute(&pool)
+    .await?;
+
+    let missing = BotId::from_uuid(Uuid::new_v4());
+    let profiles = repo(pool)
+        .get_bot_profiles(&[BotId::from_uuid(active), BotId::from_uuid(deleted), missing])
+        .await?;
+
+    assert_eq!(profiles.len(), 2);
+    assert_eq!(
+        profiles.get(&BotId::from_uuid(active)),
+        Some(&BotSenderProfile {
+            name: "Active Bot".to_string(),
+            avatar_url: Some("https://example.com/a.png".to_string()),
+        })
+    );
+    assert_eq!(
+        profiles.get(&BotId::from_uuid(deleted)),
+        Some(&BotSenderProfile {
+            name: "Deleted Bot".to_string(),
+            avatar_url: None,
+        })
+    );
+    assert!(!profiles.contains_key(&missing));
     Ok(())
 }

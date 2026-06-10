@@ -1,6 +1,5 @@
 import { SidePanel } from '@app/component/side-panel';
 import { useCallContextOptional } from '@channel/Call/CallContext';
-import { InlineCheckbox } from '@channel/Call/CallControls/CallMenuPrimitives';
 import { useBlockId } from '@core/block';
 import { References } from '@core/component/References';
 import { UserIcon } from '@core/component/UserIcon';
@@ -13,7 +12,7 @@ import {
 } from '@queries/call/call';
 import { useAttachmentReferencesQuery } from '@queries/storage/attachment-references';
 import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
-import { cn } from '@ui';
+import { cn, InlineCheckbox } from '@ui';
 import { type Accessor, Show, Suspense } from 'solid-js';
 import { formatCallDuration } from '../../utils';
 

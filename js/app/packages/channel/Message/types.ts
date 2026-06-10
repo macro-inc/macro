@@ -1,10 +1,13 @@
 import type { ApiCountedReaction } from '@service-storage/generated/schemas/apiCountedReaction';
 import type { ApiMessageAttachment } from '@service-storage/generated/schemas/apiMessageAttachment';
+import type { ApiMessageSender } from '@service-storage/generated/schemas/apiMessageSender';
 
 export type MessageData = {
   id: string;
   content: string;
   sender_id: string;
+  /** Structured sender identity; carries bot name/avatar for bot senders. */
+  sender?: ApiMessageSender;
   created_at: string;
   updated_at: string;
   deleted_at?: string | null;

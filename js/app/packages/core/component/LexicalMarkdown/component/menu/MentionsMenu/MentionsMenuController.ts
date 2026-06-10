@@ -8,6 +8,7 @@ export type MentionBucketId =
   | 'users'
   | 'documents'
   | 'channels'
+  | 'companies'
   | 'emails'
   | 'dates'
   | 'openTabs';

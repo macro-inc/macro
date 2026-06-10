@@ -164,6 +164,22 @@ export function createSoupEntityActions(): {
           await blockHandle?.goToLocationFromParams(
             getChannelParams(entity.messageId, entity.threadId)
           );
+        } else if (entity.type === 'crm_company') {
+          splitManager.createNewSplit({
+            content: {
+              type: 'company',
+              id: entity.id,
+            },
+            referredFrom: 'entity-actions-menu',
+          });
+        } else if (entity.type === 'crm_contact') {
+          splitManager.createNewSplit({
+            content: {
+              type: 'contact',
+              id: entity.id,
+            },
+            referredFrom: 'entity-actions-menu',
+          });
         } else if (entity.type !== 'foreign') {
           splitManager.createNewSplit({
             content: {

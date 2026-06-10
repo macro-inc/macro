@@ -3,6 +3,7 @@ import type { BlockName } from '@core/block';
 import { useMaybeBlockId, useMaybeBlockName } from '@core/block';
 import { SUPPORTED_CHAT_ATTACHMENT_BLOCKS } from '@core/component/AI/constant/fileType';
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
+import { ENABLE_CRM } from '@core/constant/featureFlags';
 import { type EntityItem, useQuickAccess } from '@core/context/quickAccess';
 import clickOutside from '@core/directive/clickOutside';
 import { isMobile } from '@core/mobile/isMobile';
@@ -124,6 +125,15 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       })
     : undefined;
 
+  const customCompanies =
+    ENABLE_CRM && props.entities
+      ? useEntityMentionFromList({
+          items: props.entities,
+          buckets: ['crm_company'],
+          searchTerm,
+        })
+      : undefined;
+
   const { searchedEntities: docs } =
     customDocs ??
     useEntityMention({
@@ -137,6 +147,17 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       buckets: ['channel'],
       searchTerm,
     });
+
+  // CRM companies only surface in mentions when the feature is enabled —
+  // the mention hook isn't even wired up otherwise.
+  const companyMention = ENABLE_CRM
+    ? (customCompanies ??
+      useEntityMention({
+        buckets: ['crm_company'],
+        searchTerm,
+      }))
+    : undefined;
+  const companies = () => companyMention?.searchedEntities() ?? [];
 
   const { emails, emailSearchQuery: emailUnifiedSearchInfiniteQuery } =
     hasCustomEntities()
@@ -215,6 +236,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       ...users,
       ...(docs() ?? []),
       ...(channels() ?? []),
+      ...(companies() ?? []),
       ...(emails() ?? []),
       ...(dates() ?? []),
     ];
@@ -251,6 +273,12 @@ function MentionsMenuInner(props: MentionsMenuProps) {
         label: 'Channels',
         getData: () => channels() ?? [],
         getFullCount: () => channels()?.length ?? 0,
+      },
+      {
+        id: 'companies',
+        label: 'Companies',
+        getData: () => companies() ?? [],
+        getFullCount: () => companies()?.length ?? 0,
       },
       {
         id: 'emails',

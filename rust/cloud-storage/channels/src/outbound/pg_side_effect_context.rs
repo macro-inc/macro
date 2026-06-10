@@ -4,6 +4,7 @@
 mod tests;
 
 use crate::domain::{
+    models::{BotId, BotSenderProfile},
     ports::ChannelSideEffectContext,
     side_effects::{ChannelDocumentMention, ThreadNotificationContext},
 };
@@ -136,6 +137,29 @@ impl ChannelSideEffectContext for PgChannelSideEffectContext {
     ) -> Option<String> {
         get_sender_profile_picture_url(&self.pool, &sender_id).await
     }
+
+    async fn get_bot_sender_profile(&self, bot_id: BotId) -> Option<BotSenderProfile> {
+        get_bot_sender_profile(&self.pool, bot_id).await
+    }
+}
+
+async fn get_bot_sender_profile(db: &PgPool, bot_id: BotId) -> Option<BotSenderProfile> {
+    sqlx::query!(
+        r#"
+        SELECT name, avatar_url
+        FROM bots
+        WHERE id = $1
+        "#,
+        bot_id.as_uuid(),
+    )
+    .fetch_optional(db)
+    .await
+    .ok()
+    .flatten()
+    .map(|row| BotSenderProfile {
+        name: row.name,
+        avatar_url: row.avatar_url,
+    })
 }
 
 async fn get_sender_profile_picture_url(

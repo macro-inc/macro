@@ -132,6 +132,7 @@ impl ForeignEntityService for NoopForeignEntityService {
 
     async fn get_foreign_entities_for_user(
         &self,
+        _requesting_user: Option<String>,
         _source_ids: Vec<SourceId>,
         _limit: u32,
         _query: ForeignEntityListQuery,
@@ -171,6 +172,7 @@ struct RecordingForeignEntityState {
 
 #[derive(Clone)]
 struct RecordedForeignEntityCall {
+    requesting_user: Option<String>,
     source_ids: Vec<SourceId>,
     limit: u32,
     query: ForeignEntityListQuery,
@@ -208,6 +210,8 @@ fn foreign_entity_matches_literal(entity: &ForeignEntity, literal: &ForeignEntit
         ForeignEntityLiteral::ForeignEntitySource(source) => {
             entity.foreign_entity_source.as_str() == source.as_str()
         }
+        // "me" resolution happens in the repository; the fake cannot resolve it, so fail closed.
+        ForeignEntityLiteral::IncludesMe => false,
     }
 }
 
@@ -268,6 +272,7 @@ impl ForeignEntityService for RecordingForeignEntityService {
 
     async fn get_foreign_entities_for_user(
         &self,
+        requesting_user: Option<String>,
         source_ids: Vec<SourceId>,
         limit: u32,
         query: ForeignEntityListQuery,
@@ -279,6 +284,7 @@ impl ForeignEntityService for RecordingForeignEntityService {
             .lock()
             .unwrap()
             .push(RecordedForeignEntityCall {
+                requesting_user,
                 source_ids: source_ids.clone(),
                 limit,
                 query,
@@ -586,6 +592,7 @@ async fn team_receipt_contributes_team_foreign_entity_source_id() {
             SourceId::new(team_id.to_string(), "team"),
         ]
     );
+    assert_eq!(calls[0].requesting_user, Some(user.to_string()));
 }
 
 #[tokio::test]

@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { CallRecordMetadataChannelName } from './callRecordMetadataChannelName';
+import type { CallStatus } from './callStatus';
 
 export interface CallRecordMetadata {
   attended: boolean;
@@ -13,5 +14,6 @@ export interface CallRecordMetadata {
   duration_ms: number;
   ended_at: string;
   started_at: string;
+  status: CallStatus;
   updated_at: string;
 }

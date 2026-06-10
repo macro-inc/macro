@@ -93,6 +93,15 @@ impl Serialize for Sender {
     }
 }
 
+/// Public bot profile attached to bot-authored messages.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct BotSenderProfile {
+    /// Bot display name.
+    pub name: String,
+    /// Bot avatar URL.
+    pub avatar_url: Option<String>,
+}
+
 /// Request to fetch a page of channel messages.
 #[derive(Debug)]
 pub struct GetChannelMessagesRequest {
@@ -208,6 +217,8 @@ pub struct ChannelMessage {
     pub channel_id: Uuid,
     /// User who sent the message.
     pub sender_id: String,
+    /// Bot profile when the sender is a bot.
+    pub bot_profile: Option<BotSenderProfile>,
     /// Message body.
     pub content: String,
     /// When the message was created.
@@ -261,6 +272,8 @@ pub struct ThreadReply {
     pub id: Uuid,
     /// User who sent the reply.
     pub sender_id: String,
+    /// Bot profile when the sender is a bot.
+    pub bot_profile: Option<BotSenderProfile>,
     /// Reply body.
     pub content: String,
     /// When the reply was created.
@@ -396,6 +409,8 @@ pub struct ChannelContextMessage {
     pub thread_id: Option<Uuid>,
     /// User who sent the message.
     pub sender_id: String,
+    /// Bot profile when the sender is a bot.
+    pub bot_profile: Option<BotSenderProfile>,
     /// Message content.
     pub content: String,
     /// When the message was created.

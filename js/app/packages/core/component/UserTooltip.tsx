@@ -1,7 +1,7 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
-import { useIsInboxOnlyLinkedChild } from '@core/user';
+import { useIsConnectedSecondaryInbox } from '@core/user';
 import WideChat from '@icon/wide-chat.svg';
 import WideCopy from '@icon/wide-copy.svg';
 import WideTask from '@icon/wide-task.svg';
@@ -36,9 +36,9 @@ export function UserTooltip(props: UserTooltipProps) {
     props.onClose?.();
   }
   const currentUserId = useUserId();
-  const isInboxOnlyLinkedChild = useIsInboxOnlyLinkedChild();
+  const isConnectedSecondaryInbox = useIsConnectedSecondaryInbox();
   const canTreatAsUser = () =>
-    !!props.id && !props.isDeleted && !isInboxOnlyLinkedChild(props.id);
+    !!props.id && !props.isDeleted && !isConnectedSecondaryInbox(props.id);
   const { openWithSplit, popoverSplit } = useSplitLayout();
   const getOrCreateDmMutation = useGetOrCreateDirectMessageMutation({
     onError: () => toast.failure('Failed to open direct message'),

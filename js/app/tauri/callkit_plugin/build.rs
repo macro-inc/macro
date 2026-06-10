@@ -4,6 +4,8 @@ use std::{
 };
 
 const COMMANDS: &[&str] = &[
+    "register_listener",
+    "remove_listener",
     "get_voip_token",
     "end_active_call",
     "get_pending_answered_call",

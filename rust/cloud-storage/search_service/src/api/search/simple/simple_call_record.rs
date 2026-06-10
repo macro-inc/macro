@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use item_filters::CallFilters;
+use item_filters::{CallFilters, CallStatus};
 
 use crate::api::context::SearchHandlerState;
 use crate::api::search::simple::SearchError;
@@ -17,10 +17,11 @@ pub(in crate::api::search) async fn filter_calls(
     user_id: &str,
     filters: &CallFilters,
 ) -> Result<FilterCallResponse, SearchError> {
+    let status_filter = status_filter_values(filters);
     let accessible = macro_db_client::call_record::get::get_accessible_call_ids(
         &ctx.db,
         user_id,
-        filters.attended,
+        &status_filter,
     )
     .await
     .map_err(SearchError::InternalError)?;
@@ -41,4 +42,24 @@ pub(in crate::api::search) async fn filter_calls(
         call_ids,
         channel_ids: filters.channel_ids.clone(),
     })
+}
+
+fn status_filter_values(filters: &CallFilters) -> Vec<String> {
+    if let Some(status) = filters.status {
+        return vec![status_value(status).to_string()];
+    }
+
+    match filters.attended {
+        Some(true) => vec!["ATTENDED".to_string()],
+        Some(false) => vec!["MISSED".to_string(), "UNATTENDED".to_string()],
+        None => Vec::new(),
+    }
+}
+
+fn status_value(status: CallStatus) -> &'static str {
+    match status {
+        CallStatus::Attended => "ATTENDED",
+        CallStatus::Missed => "MISSED",
+        CallStatus::Unattended => "UNATTENDED",
+    }
 }

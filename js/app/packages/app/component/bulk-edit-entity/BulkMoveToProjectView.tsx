@@ -1,10 +1,12 @@
 import { EntityIcon } from '@core/component/EntityIcon';
+import { toast } from '@core/component/Toast/Toast';
 import { scrollToKeepGap } from '@core/util/scrollToKeepGap';
 import { type EntityData, InlineEntity } from '@entity';
 import { Dialog } from '@kobalte/core/dialog';
 import { createBulkMoveToProjectDssEntityMutation } from '@macro-entity';
+import FolderPlusIcon from '@phosphor-icons/core/regular/folder-plus.svg?component-solid';
 import CloseIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
-import { useProjectsQuery } from '@queries/storage/projects';
+import { createProject, useProjectsQuery } from '@queries/storage/projects';
 import type { Project } from '@service-storage/generated/schemas';
 import { Button, cn } from '@ui';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
@@ -27,6 +29,7 @@ export const BulkMoveToProjectView = (props: {
   onError?: (error: unknown) => void;
 }) => {
   let listRef!: HTMLDivElement;
+  let searchInputRef: HTMLInputElement | undefined;
   const bulkMoveToProjectMutation = createBulkMoveToProjectDssEntityMutation();
   const projectsQuery = useProjectsQuery();
   const projects = () => projectsQuery.data ?? [];
@@ -37,6 +40,9 @@ export const BulkMoveToProjectView = (props: {
     [key: string]: boolean;
   }>({});
   const [focusedIndex, setFocusedIndex] = createSignal(-1);
+  const [isCreatingFolder, setIsCreatingFolder] = createSignal(false);
+  const [newFolderName, setNewFolderName] = createSignal('');
+  const [isSavingFolder, setIsSavingFolder] = createSignal(false);
   const [attachHotkeys, moveToProjectHotkeyScopeId] = useHotkeyDOMScope(
     'bulk-move-to-project',
     true
@@ -50,6 +56,7 @@ export const BulkMoveToProjectView = (props: {
       scopeId: moveToProjectHotkeyScopeId,
       description: 'Down',
       keyDownHandler: () => {
+        if (isCreatingFolder()) return false;
         const items = flattenedProjects().items;
         if (items.length === 0) return false;
 
@@ -79,6 +86,7 @@ export const BulkMoveToProjectView = (props: {
       scopeId: moveToProjectHotkeyScopeId,
       description: 'Up',
       keyDownHandler: () => {
+        if (isCreatingFolder()) return false;
         const items = flattenedProjects().items;
         if (items.length === 0) return false;
 
@@ -108,6 +116,7 @@ export const BulkMoveToProjectView = (props: {
       scopeId: moveToProjectHotkeyScopeId,
       description: 'Expand',
       keyDownHandler: () => {
+        if (isCreatingFolder()) return false;
         const items = flattenedProjects().items;
         const currentIndex = focusedIndex();
         if (currentIndex === -1) return false;
@@ -155,6 +164,7 @@ export const BulkMoveToProjectView = (props: {
       scopeId: moveToProjectHotkeyScopeId,
       description: 'Collapse',
       keyDownHandler: () => {
+        if (isCreatingFolder()) return false;
         const items = flattenedProjects().items;
         const currentIndex = focusedIndex();
         if (currentIndex === -1) return false;
@@ -334,6 +344,51 @@ export const BulkMoveToProjectView = (props: {
     }));
   };
 
+  const startCreatingFolder = () => {
+    setNewFolderName(searchQuery().trim());
+    setIsCreatingFolder(true);
+  };
+
+  const cancelCreatingFolder = () => {
+    setIsCreatingFolder(false);
+    setNewFolderName('');
+    searchInputRef?.focus();
+  };
+
+  const submitNewFolder = async () => {
+    const name = newFolderName().trim();
+    if (!name || isSavingFolder()) return;
+    setIsSavingFolder(true);
+    try {
+      const projectId = await createProject({ name });
+      if (!projectId) {
+        toast.failure('Failed to create folder');
+        return;
+      }
+      setIsCreatingFolder(false);
+      setNewFolderName('');
+      setSearchQuery('');
+      // Select the new folder so "Move" immediately targets it
+      const created = projects().find((p) => p.id === projectId);
+      setSelectedProject(
+        created ?? { id: projectId, name, userId: '', type: 'project' }
+      );
+      searchInputRef?.focus();
+      requestAnimationFrame(() => {
+        scrollToKeepGap({
+          container: listRef,
+          target: listRef.querySelector('.focused') as HTMLElement,
+          align: 'top',
+        });
+      });
+    } catch (error) {
+      console.error('Failed to create folder:', error);
+      toast.failure('Failed to create folder');
+    } finally {
+      setIsSavingFolder(false);
+    }
+  };
+
   const finishEditing = async () => {
     const selected = selectedProject();
     if (selected) {
@@ -399,6 +454,7 @@ export const BulkMoveToProjectView = (props: {
         <div class="border border-edge-muted rounded-sm overflow-hidden">
           <input
             ref={(el) => {
+              searchInputRef = el;
               requestAnimationFrame(() =>
                 requestAnimationFrame(() => el.focus())
               );
@@ -496,6 +552,65 @@ export const BulkMoveToProjectView = (props: {
                 );
               }}
             </For>
+          </div>
+
+          <div class="border-t border-edge-muted">
+            <Show
+              when={isCreatingFolder()}
+              fallback={
+                <button
+                  type="button"
+                  class="flex w-full items-center gap-2 px-2 py-1.5 text-sm text-ink-muted hover:bg-hover hover:text-ink"
+                  onClick={startCreatingFolder}
+                >
+                  <FolderPlusIcon class="size-4 shrink-0" />
+                  New folder
+                </button>
+              }
+            >
+              <div class="flex items-center gap-2 px-2 py-1">
+                <FolderPlusIcon class="size-4 shrink-0 text-ink-muted" />
+                <input
+                  ref={(el) => {
+                    requestAnimationFrame(() => el.focus());
+                  }}
+                  type="text"
+                  placeholder="Folder name"
+                  value={newFolderName()}
+                  onInput={(e) => setNewFolderName(e.currentTarget.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      submitNewFolder();
+                    } else if (e.key === 'Escape') {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      cancelCreatingFolder();
+                    }
+                  }}
+                  class="flex-1 min-w-0 py-1 text-sm bg-transparent text-ink placeholder:text-ink-placeholder focus:outline-none"
+                />
+                <Button
+                  size="sm"
+                  variant="base"
+                  class="rounded-xs shrink-0"
+                  disabled={!newFolderName().trim() || isSavingFolder()}
+                  onClick={submitNewFolder}
+                >
+                  Create
+                </Button>
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  class="shrink-0"
+                  tooltip="Cancel"
+                  onClick={cancelCreatingFolder}
+                >
+                  <CloseIcon />
+                </Button>
+              </div>
+            </Show>
           </div>
         </div>
 
