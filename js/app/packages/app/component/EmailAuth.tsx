@@ -128,8 +128,9 @@ function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
         });
         navigateToAccountSettings();
       },
-      (err) => {
+      async (err) => {
         if (err.tag === 'AlreadyInitialized') {
+          await query.refetch();
           navigateToAccountSettings();
           return;
         }
