@@ -1,4 +1,5 @@
 import { useAnalytics } from '@app/component/analytics-context';
+import { getViewPreset } from '@app/component/app-sidebar/soup-filter-presets';
 import { getSearchSplit } from '@app/component/next-soup/soup-view/search-controllers';
 import { isListViewID } from '@app/constants/list-views';
 import { globalSplitManager } from '@app/signal/splitLayout';
@@ -236,9 +237,13 @@ export function CommandMenuInner(props: {
     }
 
     if (isSearchItem(item)) {
+      // Fall back to the search preset (not `{}`) so uncategorized searches
+      // keep the search view's baseline exclusions (foreign entities, CRM).
+      const preset = getViewPreset('search');
       const overrides = getCategorySearchFilters(item.category);
-      const filters = overrides?.filters ?? {};
-      const clientFilters = overrides?.clientFilters ?? {};
+      const filters = overrides?.filters ?? preset?.filters ?? {};
+      const clientFilters =
+        overrides?.clientFilters ?? preset?.clientFilters ?? {};
       const splitManager = globalSplitManager();
       const active = splitManager?.activeSplit();
       const activeContent = active?.content();

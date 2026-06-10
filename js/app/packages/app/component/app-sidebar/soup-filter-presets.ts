@@ -5,10 +5,7 @@ import {
   type Query,
 } from '@app/component/next-soup/filters/filter-store';
 import type { ListView } from '@app/constants/list-views';
-import {
-  ENABLE_CRM,
-  ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE,
-} from '@core/constant/featureFlags';
+import { ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE } from '@core/constant/featureFlags';
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { startOfDay, subWeeks } from 'date-fns';
 
@@ -420,17 +417,17 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
       all: () => ({
         // Temporary: search has no full-text index over foreign entities yet,
         // so always exclude them (matching no record id) until search supports
-        // them. CRM companies are included only when the CRM feature is enabled
-        // (the nil-uuid sentinel excludes them otherwise).
-        filters: ENABLE_CRM
-          ? { include: { foreignEntityRecordId: [NIL_UUID] } }
-          : {
-              include: {
-                foreignEntityRecordId: [NIL_UUID],
-                crmCompanyId: [NIL_UUID],
-              },
-            },
-        clientFilters: {},
+        // them. CRM rows are NIL-excluded the same way. `search-supported`
+        // mirrors these exclusions client-side so entities that enter the
+        // soup cache outside this query (e.g. websocket-driven inserts)
+        // don't surface in the search feed.
+        filters: {
+          include: {
+            foreignEntityRecordId: [NIL_UUID],
+            crmCompanyId: [NIL_UUID],
+          },
+        },
+        clientFilters: { and: ['search-supported'] },
       }),
     },
   },
