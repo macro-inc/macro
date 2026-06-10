@@ -257,6 +257,14 @@ impl DocumentService for StubDocumentService {
     ) -> Result<(), DocumentError> {
         unimplemented!()
     }
+
+    async fn get_snapshot(&self, _document_id: &str) -> anyhow::Result<Option<Vec<u8>>> {
+        unimplemented!()
+    }
+
+    async fn upload_snapshot(&self, _document_id: &str, _bytes: Vec<u8>) -> anyhow::Result<()> {
+        unimplemented!()
+    }
 }
 
 /// Stateful stub repo that tracks task IDs per github key.
