@@ -56,9 +56,11 @@ import { useSettingsState } from '@core/constant/SettingsState';
 import PaywallComponent from '../paywall/PaywallComponent';
 import PaywallTeamMemberView from '../paywall/PaywallTeamMemberView';
 import PaywallTeamOwnerView from '../paywall/PaywallTeamOwnerView';
-import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
-import { useEmailLinks, useEmailLinksStatus } from '@core/email-link';
-import { useInitGmailLink } from '@queries/auth';
+import {
+  useAddInboxFlow,
+  useEmailLinks,
+  useEmailLinksStatus,
+} from '@core/email-link';
 import { useRemoveInboxMutation } from '@queries/email/link';
 import {
   type SupportedNotificationSettings,
@@ -347,16 +349,7 @@ export function Account() {
     setIsEmailActionPending(false);
   };
 
-  const initGmailLink = useInitGmailLink();
-  const handleAddInbox = async () => {
-    const callbackUrl = `${window.location.origin}${ROUTER_BASE_CONCAT}inbox-link-callback`;
-    const result = await initGmailLink.mutateAsync(callbackUrl);
-    if (result.isOk()) {
-      window.location.href = result.value.authorization_url;
-    } else {
-      toast.failure('Failed to start Gmail link flow');
-    }
-  };
+  const handleAddInbox = useAddInboxFlow();
 
   const handleResyncInbox = async (linkId: string) => {
     setResyncingIds((prev) => new Set(prev).add(linkId));

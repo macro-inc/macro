@@ -5,7 +5,9 @@ import {
   type TimeoutError,
 } from '@core/auth/channel';
 import { openEmailAuthPopup } from '@core/auth/email';
+import { toast } from '@core/component/Toast/Toast';
 
+import { useInitGmailLink } from '@queries/auth';
 import { invalidateUserInfo } from '@queries/auth/user-info';
 import { invalidateEmailLinks, useEmailLinksQuery } from '@queries/email/link';
 import { emailClient, SHARED_INBOX_CONFLICT_CODE } from '@service-email/client';
@@ -188,6 +190,24 @@ export function initAndStartEmailSync() {
   };
 
   return initEmailLink().map(startEmailPolling).map(invalidations);
+}
+
+/**
+ * Starts the add-inbox flow: fetches the Gmail link authorization URL and
+ * navigates the browser to the OAuth consent page. The callback returns to
+ * `/inbox-link-callback`, which provisions the new link.
+ */
+export function useAddInboxFlow() {
+  const initGmailLink = useInitGmailLink();
+  return async () => {
+    const callbackUrl = `${window.location.origin}${ROUTER_BASE_CONCAT}inbox-link-callback`;
+    const result = await initGmailLink.mutateAsync(callbackUrl);
+    if (result.isOk()) {
+      window.location.href = result.value.authorization_url;
+    } else {
+      toast.failure('Failed to start Gmail link flow');
+    }
+  };
 }
 
 /**
