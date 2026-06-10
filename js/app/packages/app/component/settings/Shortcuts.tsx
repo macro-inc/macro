@@ -191,11 +191,11 @@ const shortcutSections: ShortcutSection[] = [
   {
     title: 'Splits',
     items: [
-      { keys: ['opt+]']           , codes: ['AltLeft', 'BracketRight']    , description: 'Go forward in current split' },
-      { keys: ['cmd+escape']      , codes: ['MetaLeft', 'Escape']         , description: 'Go home / close split'       },
       { keys: ['opt+[']           , codes: ['AltLeft', 'BracketLeft']     , description: 'Go back in current split'    },
-      { keys: ['shift+arrowright'], codes: ['ShiftLeft', 'ArrowRight']    , description: 'Focus split to the right'    },
+      { keys: ['opt+]']           , codes: ['AltLeft', 'BracketRight']    , description: 'Go forward in current split' },
       { keys: ['shift+arrowleft'] , codes: ['ShiftLeft', 'ArrowLeft']     , description: 'Focus split to the left'     },
+      { keys: ['shift+arrowright'], codes: ['ShiftLeft', 'ArrowRight']    , description: 'Focus split to the right'    },
+      { keys: ['cmd+escape']      , codes: ['MetaLeft', 'Escape']         , description: 'Go home / close split'       },
       { keys: ['shift+escape']    , codes: ['ShiftLeft', 'Escape']        , description: 'Spotlight split'             },
       { keys: ['\\']              , codes: ['Backslash']                  , description: 'Create a split'              },
     ],
@@ -205,20 +205,16 @@ const shortcutSections: ShortcutSection[] = [
     items: [
       { keys: ['enter']          , codes: ['Enter']                   , description: 'Open item in current split' },
       { keys: ['shift+enter']    , codes: ['ShiftLeft', 'Enter']      , description: 'Open item in a new split'   },
-      { keys: ['space']          , codes: ['Space']                   , description: 'Preview item'               },
+      { keys: ['arrowup']        , codes: ['ArrowUp']                 , description: 'Move up'                    },
+      { keys: ['arrowdown']      , codes: ['ArrowDown']               , description: 'Move down'                  },
+      { keys: ['shift+arrowup']  , codes: ['ShiftLeft', 'ArrowUp']    , description: 'Select up'                  },
       { keys: ['shift+arrowdown'], codes: ['ShiftLeft', 'ArrowDown']  , description: 'Select down'                },
+      { keys: ['arrowleft']      , codes: ['ArrowLeft']               , description: 'Collapse item'              },
+      { keys: ['arrowright']     , codes: ['ArrowRight']              , description: 'Expand item'                },
+      { keys: ['space']          , codes: ['Space']                   , description: 'Preview item'               },
       { keys: ['f']              , codes: ['KeyF']                    , description: 'Open filter menu'           },
       { keys: ['x']              , codes: ['KeyX']                    , description: 'Select items'               },
-      { keys: ['arrowleft']      , codes: ['ArrowLeft']               , description: 'Collapse item'              },
-      { keys: ['arrowdown']      , codes: ['ArrowDown']               , description: 'Move down'                  },
-
-      { keys: ['arrowright']     , codes: ['ArrowRight']              , description: 'Expand item'                },
-
-
       { keys: ['e']              , codes: ['KeyE']                    , description: 'Mark done'                  },
-      { keys: ['arrowup']        , codes: ['ArrowUp']                 , description: 'Move up'                    },
-      { keys: ['shift+arrowup']  , codes: ['ShiftLeft', 'ArrowUp']    , description: 'Select up'                  },
-
     ],
   },
 ];
