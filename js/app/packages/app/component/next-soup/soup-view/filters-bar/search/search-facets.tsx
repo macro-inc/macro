@@ -1,12 +1,11 @@
 import type { CallStatus } from '@app/component/next-soup/filters/filter-store/types';
 import { EntityIcon } from '@core/component/EntityIcon';
-import { inboxIconProps } from '@core/component/inboxIcon';
 import { UserIcon } from '@core/component/UserIcon';
 import { useQuickAccess } from '@core/context/quickAccess';
 import { useUserId } from '@core/context/user';
 import { EntityIcon as EntityIconWithAvatar } from '@entity/extractors/entity-icon';
-import { useEmailLinksQuery } from '@queries/email/link';
 import { type Accessor, createMemo, type JSX } from 'solid-js';
+import { useInboxPicker } from '../inbox-picker';
 import type { SearchableOption } from '../searchable-multi-select';
 import type {
   SearchFiltersController,
@@ -95,6 +94,7 @@ export type SearchFacetVM = FacetBase &
         activeIds: Accessor<string[]>;
         onChange: (ids: string[]) => void;
         placeholder: string;
+        preserveOrder?: boolean;
       }
   );
 
@@ -154,29 +154,6 @@ function usePersonPicker(): Accessor<SearchableOption[]> {
   });
 }
 
-/** Picker for the email "Inbox" chip — the user's linked inboxes. */
-function useInboxPicker(): Accessor<SearchableOption[]> {
-  const linksQuery = useEmailLinksQuery();
-
-  return createMemo(() =>
-    (linksQuery.data?.links ?? [])
-      .map((link) => ({
-        id: link.id,
-        label: link.email_address,
-        icon: () => (
-          <UserIcon
-            {...inboxIconProps(link.email_address)}
-            photoUrl={link.photo_url ?? undefined}
-            size="sm"
-            suppressClick
-            showTooltip={false}
-          />
-        ),
-      }))
-      .sort((a, b) => a.label.localeCompare(b.label))
-  );
-}
-
 function singleFacet(args: {
   id: string;
   label: string;
@@ -234,46 +211,6 @@ function multiFacet(args: {
 }
 
 /**
- * Multi facet over a small closed set where the default state shows every
- * option checked, so a checked box always means "included". `undefined` =
- * all (default), `[]` = explicitly none, a subset = those. Re-checking every
- * option collapses back to the default.
- */
-function allCheckedMultiFacet(args: {
-  id: string;
-  label: string;
-  allLabel: string;
-  noneLabel: string;
-  placeholder: string;
-  options: Accessor<SearchableOption[]>;
-  selectedIds: Accessor<string[] | undefined>;
-  onChange: (ids: string[] | undefined) => void;
-}): SearchFacetVM {
-  return {
-    kind: 'multi',
-    id: args.id,
-    label: args.label,
-    options: args.options,
-    activeIds: () => args.selectedIds() ?? args.options().map((o) => o.id),
-    onChange: (ids) =>
-      args.onChange(ids.length === args.options().length ? undefined : ids),
-    placeholder: args.placeholder,
-    isDefault: () => args.selectedIds() === undefined,
-    reset: () => args.onChange(undefined),
-    values: () => {
-      const ids = args.selectedIds();
-      if (ids === undefined) return [{ id: 'all', label: args.allLabel }];
-      if (ids.length === 0) return [{ id: 'none', label: args.noneLabel }];
-      const options = args.options();
-      return ids.map((id) => {
-        const option = options.find((o) => o.id === id);
-        return { id, label: option?.label ?? id, icon: option?.icon };
-      });
-    },
-  };
-}
-
-/**
  * Materializes the facet registry against the controller. Each facet is
  * defined once; which ones render follows the active type. Adding a facet =
  * one definition here + its compile line in `compileSearchQuery`.
@@ -283,8 +220,10 @@ export function useSearchFacets(
 ): Accessor<SearchFacetVM[]> {
   const channelOptions = useChannelPicker();
   const personOptions = usePersonPicker();
-  const inboxOptions = useInboxPicker();
-  const hasMultipleInboxes = createMemo(() => inboxOptions().length > 1);
+  const inboxPicker = useInboxPicker({
+    selectedIds: controller.emailInbox,
+    setSelectedIds: controller.setEmailInbox,
+  });
 
   const type = singleFacet({
     id: 'type',
@@ -320,16 +259,28 @@ export function useSearchFacets(
       controller.setEmailImportance(id === 'all' ? undefined : id === 'signal'),
   });
 
-  const inbox = allCheckedMultiFacet({
+  const inbox: SearchFacetVM = {
+    kind: 'multi',
     id: 'email-inbox',
     label: 'Inbox',
-    allLabel: 'All inboxes',
-    noneLabel: 'No inboxes',
+    options: inboxPicker.options,
+    activeIds: inboxPicker.activeIds,
+    onChange: inboxPicker.onChange,
     placeholder: 'Search inboxes...',
-    options: inboxOptions,
-    selectedIds: controller.emailInbox,
-    onChange: controller.setEmailInbox,
-  });
+    preserveOrder: true,
+    isDefault: inboxPicker.isDefault,
+    reset: inboxPicker.reset,
+    values: () => {
+      const ids = controller.emailInbox();
+      if (ids === undefined) return [{ id: 'all', label: 'All inboxes' }];
+      if (ids.length === 0) return [{ id: 'none', label: 'No inboxes' }];
+      const options = inboxPicker.options();
+      return ids.map((id) => {
+        const option = options.find((o) => o.id === id);
+        return { id, label: option?.label ?? id, icon: option?.icon };
+      });
+    },
+  };
 
   const channelIn = multiFacet({
     id: 'channel-in',
@@ -390,7 +341,7 @@ export function useSearchFacets(
   return createMemo(() => {
     switch (controller.type()) {
       case 'email':
-        return hasMultipleInboxes()
+        return inboxPicker.hasMultiple()
           ? [type, importance, inbox]
           : [type, importance];
       case 'channels':
