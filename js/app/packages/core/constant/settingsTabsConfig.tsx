@@ -53,6 +53,19 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
   },
 ];
 
+/** Flattened view of {@link SETTINGS_TAB_GROUPS} for direct tab lookups. */
+const SETTINGS_TAB_ITEMS = SETTINGS_TAB_GROUPS.flatMap((group) => group.items);
+
+/**
+ * Look up a single tab's presentation (label + icon). Lets consumers that
+ * surface individual tabs (e.g. the sidebar's quick links) reuse the config's
+ * label/icon instead of hardcoding their own.
+ */
+export const getSettingsTabItem = (
+  tab: SettingsTab
+): SettingsTabItem | undefined =>
+  SETTINGS_TAB_ITEMS.find((item) => item.tab === tab);
+
 /**
  * Returns a predicate gating which settings tabs are available given feature
  * flags and platform. This is the single gate that the settings panel and the

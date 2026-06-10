@@ -1,10 +1,4 @@
-import {
-  type Component,
-  createSignal,
-  type JSX,
-  type ParentProps,
-  Show,
-} from 'solid-js';
+import { type Component, createSignal, type ParentProps, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { cn } from '../utils/classname';
 import { Button } from './Button';
@@ -96,7 +90,7 @@ function SideNavItem(props: SideNavItemProps) {
           </div>
         )}
       </Show>
-      <span class="whitespace-nowrap">{props.children as JSX.Element}</span>
+      <span class="whitespace-nowrap">{props.children}</span>
     </Button>
   );
 }

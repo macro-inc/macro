@@ -1,10 +1,7 @@
 import { For, onMount, Show, Suspense } from 'solid-js';
 import { type SettingsTab, useSettingsState } from '@core/constant/SettingsState';
 import { useSettingsTabs } from '@core/constant/settingsTabsConfig';
-import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isMobile } from '@core/mobile/isMobile';
-import { ENABLE_APP_STORE_QR_CODE, ENABLE_TEAMS_OVERRIDE } from '@core/constant/featureFlags';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { MobileApp } from './MobileApp';
 import { Agent } from './Agent';
 import { Appearance } from './Appearance';
@@ -20,7 +17,6 @@ import {
   SplitHeaderRight,
 } from '../split-layout/components/SplitHeader';
 import { SettingsButton } from './SettingsButton';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 
 export function SettingsPanelComponentWrapper() {
   return (
@@ -41,8 +37,12 @@ type SettingsPanelProps = {
 
 function SettingsPanel(props: SettingsPanelProps) {
   const { closeSettings, activeTabId, setActiveTabId } = useSettingsState();
-  const teamsFlag = useFeatureFlag('enable-teams-settings', { enabledOverride: ENABLE_TEAMS_OVERRIDE });
-  const { groups, flatTabs } = useSettingsTabs();
+  const { groups, flatTabs, isAvailable } = useSettingsTabs();
+
+  // A tab's content renders only when it's both selected and still available
+  // (gating lives solely in the settings tab config).
+  const isCurrentTab = (tab: SettingsTab) =>
+    activeTabId() === tab && isAvailable(tab);
 
   // Set up hotkey scope for settings panel
   const [attachHotkeys, settingsHotkeyScope] = useHotkeyDOMScope('settings');
@@ -189,26 +189,26 @@ function SettingsPanel(props: SettingsPanelProps) {
         </Show>
 
         <div class="relative grow min-h-1 min-w-0 overflow-auto">
-          <Show when={activeTabId() === 'Account'}>
+          <Show when={isCurrentTab('Account')}>
             <Suspense>
               <Account />
             </Suspense>
           </Show>
-          <Show when={activeTabId() === 'Appearance'}>
+          <Show when={isCurrentTab('Appearance')}>
             <Appearance />
           </Show>
-          <Show when={activeTabId() === 'Shortcuts' && !isTouchDevice()}>
+          <Show when={isCurrentTab('Shortcuts')}>
             <Shortcuts />
           </Show>
-          <Show when={activeTabId() === 'Team' && teamsFlag().enabled}>
+          <Show when={isCurrentTab('Team')}>
             <Suspense>
               <Team />
             </Suspense>
           </Show>
-          <Show when={activeTabId() === 'Mobile App' && ENABLE_APP_STORE_QR_CODE && !isNativeMobilePlatform()}>
+          <Show when={isCurrentTab('Mobile App')}>
             <MobileApp />
           </Show>
-          <Show when={activeTabId() === 'Agent' && !isNativeMobilePlatform()}>
+          <Show when={isCurrentTab('Agent')}>
             <Agent />
           </Show>
         </div>

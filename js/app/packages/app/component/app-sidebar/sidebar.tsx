@@ -44,6 +44,7 @@ import {
   useSettingsState,
 } from '@core/constant/SettingsState';
 import {
+  getSettingsTabItem,
   useSettingsTabAvailable,
   useSettingsTabs,
 } from '@core/constant/settingsTabsConfig';
@@ -71,11 +72,8 @@ import { ContextMenu } from '@kobalte/core/context-menu';
 import { useNotificationSettings } from '@notifications';
 import BellIcon from '@phosphor/bell.svg';
 import CaretUpIcon from '@phosphor/caret-up.svg';
-import DeviceMobileIcon from '@phosphor/device-mobile-speaker.svg';
 import HomeIcon from '@phosphor/house.svg';
 import PlayIcon from '@phosphor/play.svg';
-import PlugIcon from '@phosphor/plug.svg';
-import UsersThreeIcon from '@phosphor/users-three.svg';
 import { debounce } from '@solid-primitives/scheduled';
 import { makePersisted } from '@solid-primitives/storage';
 import { useLocation } from '@solidjs/router';
@@ -685,6 +683,13 @@ const DASHBOARD_LINK: SidebarItem = {
   hotkeyToken: TOKENS.sidebar.goTo.home,
 };
 
+/**
+ * Settings tabs surfaced as always-visible quick links above the settings
+ * widget. Label/icon come from the settings tab config (see
+ * `getSettingsTabItem`); this list only decides which tabs to promote.
+ */
+const PROMOTED_SETTINGS_TABS: SettingsTab[] = ['Mobile App', 'Agent', 'Team'];
+
 export const AppSidebar = (props: AppSidebarProps) => {
   const analytics = useAnalytics();
   const layout = useSplitLayout();
@@ -1006,30 +1011,22 @@ export const AppSidebar = (props: AppSidebarProps) => {
       </Show>
 
       <div class="w-full px-2 flex flex-col gap-1 mb-1">
-        <Show when={isTabAvailable('Mobile App')}>
-          <SidebarShortcutLink
-            label="App"
-            isSlim={isSlim}
-            onClick={() => openSettingsTab('Mobile App')}
-            icon={() => <DeviceMobileIcon class="size-4" />}
-          />
-        </Show>
-        <Show when={isTabAvailable('Agent')}>
-          <SidebarShortcutLink
-            label="MCPs"
-            isSlim={isSlim}
-            onClick={() => openSettingsTab('Agent')}
-            icon={() => <PlugIcon class="size-4" />}
-          />
-        </Show>
-        <Show when={isTabAvailable('Team')}>
-          <SidebarShortcutLink
-            label="Team"
-            isSlim={isSlim}
-            onClick={() => openSettingsTab('Team')}
-            icon={() => <UsersThreeIcon class="size-4" />}
-          />
-        </Show>
+        <For each={PROMOTED_SETTINGS_TABS}>
+          {(tab) => (
+            <Show
+              when={isTabAvailable(tab) ? getSettingsTabItem(tab) : undefined}
+            >
+              {(item) => (
+                <SidebarShortcutLink
+                  label={item().label}
+                  isSlim={isSlim}
+                  onClick={() => openSettingsTab(tab)}
+                  icon={item().icon}
+                />
+              )}
+            </Show>
+          )}
+        </For>
       </div>
 
       <div class="w-full px-2">
