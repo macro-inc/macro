@@ -515,7 +515,7 @@ export const SoupViewContextProvider: FlowComponent<
       const groupMeta = buildGroupMeta(apiGroup);
       const groupData = groupQueryFor(apiGroup.key)?.data();
       const groupEntities =
-        groupData?.entities.map(
+        groupData?.map(
           (entity) =>
             (isWithNotification(entity)
               ? entity
