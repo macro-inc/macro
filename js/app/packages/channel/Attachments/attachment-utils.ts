@@ -113,5 +113,11 @@ export function getEntityClickContent(entity: EntityData): SplitContent {
     .with({ type: 'foreign' }, () => {
       throw new Error('foreign entities do not support channel attachments');
     })
+    .with({ type: 'crm_company' }, () => {
+      throw new Error('crm companies are not openable as attachments');
+    })
+    .with({ type: 'crm_contact' }, () => {
+      throw new Error('crm contacts are not openable as attachments');
+    })
     .exhaustive();
 }

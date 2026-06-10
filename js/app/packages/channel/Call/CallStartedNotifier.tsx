@@ -159,10 +159,11 @@ export function CallStartedNotifier() {
     } = payload;
     if (!channelId || !callId) return;
 
+    const createdAt = new Date().toISOString();
     setActiveCallStartedCache({
       channelId,
       callId,
-      createdAt: new Date().toISOString(),
+      createdAt,
       createdBy: createdBy ?? '',
     });
     void invalidateActiveCallQueries();

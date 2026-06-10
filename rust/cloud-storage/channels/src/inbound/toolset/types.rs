@@ -403,6 +403,7 @@ mod tests {
         ThreadReply {
             id: Uuid::new_v4(),
             sender_id: "macro|reply@example.com".to_string(),
+            bot_profile: None,
             content: "reply".to_string(),
             created_at: dt(seconds),
             updated_at: dt(seconds),
@@ -418,6 +419,7 @@ mod tests {
             id,
             channel_id: Uuid::new_v4(),
             sender_id: "macro|sender@example.com".to_string(),
+            bot_profile: None,
             content: "parent".to_string(),
             created_at: dt(1),
             updated_at: dt(1),

@@ -130,6 +130,7 @@ const rootPreload: RoutePreloadFunc = async (args) => {
     'utm_term',
     'utm_content',
     'rdt_cid',
+    'fbclid',
     'gclid',
     'twclid',
     '_fbc',
@@ -282,6 +283,10 @@ const ROUTES: RouteDefinition[] = [
   },
   {
     path: '/calls',
+    component: LAYOUT_ROUTE.component,
+  },
+  {
+    path: '/companies',
     component: LAYOUT_ROUTE.component,
   },
   {

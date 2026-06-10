@@ -7,7 +7,8 @@ import { useEmailLinks } from '@core/email-link';
 import { whenSettled } from '@core/util/whenSettled';
 import { invalidateAllAfterLogin } from '@queries/auth/user-info';
 import { useNavigate, useSearchParams } from '@solidjs/router';
-import { onMount, Suspense } from 'solid-js';
+import { Button, Dialog, Panel } from '@ui';
+import { createSignal, onMount, Show, Suspense } from 'solid-js';
 
 type EmailAuthParams = {
   callbackPath: string;
@@ -98,9 +99,45 @@ function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { query, initEmailLink } = useEmailLinks();
+  const [conflict, setConflict] = createSignal<{
+    linkId: string;
+    emailAddress: string;
+    ownerEmail: string;
+  } | null>(null);
 
   const navigateToSuccess = () => {
     navigate(props.successPath, { replace: true });
+  };
+
+  const runInit = async (linkId: string, forceShare: boolean) => {
+    await initEmailLink({ linkId, forceShare }).match(
+      async () => {
+        // Pull the newly-provisioned link into the cache before leaving the
+        // callback so the inbox panel shows it immediately on return rather
+        // than flashing a stale list until its own refetch lands.
+        await query.refetch();
+        toast.success('Inbox connected');
+        navigateToSuccess();
+      },
+      (err) => {
+        if (err.tag === 'AlreadyInitialized') {
+          navigateToSuccess();
+          return;
+        }
+        // The mailbox is already connected by someone else. Hold the callback open
+        // and let the user confirm sharing it before retrying with forceShare.
+        if (err.tag === 'SharedInboxConflict' && !forceShare) {
+          setConflict({
+            linkId,
+            emailAddress: err.emailAddress,
+            ownerEmail: err.ownerEmail,
+          });
+          return;
+        }
+        toast.failure('Failed to add inbox');
+        navigateToSuccess();
+      }
+    );
   };
 
   whenSettled(
@@ -114,24 +151,7 @@ function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
         return;
       }
 
-      await initEmailLink({ linkId }).match(
-        async () => {
-          // Pull the newly-provisioned link into the cache before leaving the
-          // callback so the inbox panel shows it immediately on return rather
-          // than flashing a stale list until its own refetch lands.
-          await query.refetch();
-          toast.success('Inbox connected');
-          navigateToSuccess();
-        },
-        (err) => {
-          if (err.tag === 'AlreadyInitialized') {
-            navigateToSuccess();
-            return;
-          }
-          toast.failure('Failed to add inbox');
-          navigateToSuccess();
-        }
-      );
+      await runInit(linkId, false);
     },
     (error) => {
       toast.failure(error.message);
@@ -139,7 +159,62 @@ function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
     }
   );
 
-  return <LoadingBlock />;
+  return (
+    <Show when={conflict()} fallback={<LoadingBlock />}>
+      {(c) => (
+        <Dialog
+          open
+          onOpenChange={(open) => {
+            if (!open) {
+              setConflict(null);
+              navigateToSuccess();
+            }
+          }}
+          position="center"
+          class="w-120"
+        >
+          <Panel active depth={2} class="rounded-xl">
+            <Panel.Header class="px-6">
+              <Dialog.Title class="text-ink text-sm font-semibold">
+                Share this inbox?
+              </Dialog.Title>
+            </Panel.Header>
+            <Panel.Body class="p-6 font-sans flex flex-col gap-3">
+              <Dialog.Description class="text-ink-muted text-sm/tight font-normal">
+                <span class="text-ink">{c().emailAddress}</span> is already
+                connected by <span class="text-ink">{c().ownerEmail}</span>.
+                Share it so you both manage one inbox instead of syncing a
+                duplicate copy.
+              </Dialog.Description>
+              <div class="pt-3 justify-end items-center gap-3 inline-flex">
+                <Button
+                  variant="base"
+                  depth={3}
+                  onClick={() => {
+                    setConflict(null);
+                    navigateToSuccess();
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="active"
+                  depth={3}
+                  onClick={() => {
+                    const linkId = c().linkId;
+                    setConflict(null);
+                    void runInit(linkId, true);
+                  }}
+                >
+                  Share inbox
+                </Button>
+              </div>
+            </Panel.Body>
+          </Panel>
+        </Dialog>
+      )}
+    </Show>
+  );
 }
 
 function EmailSignUp(

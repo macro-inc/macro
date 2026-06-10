@@ -56,7 +56,7 @@ members = [
   "user_link_cleanup_handler",
   "worker_trigger",
   "macro_config"
-]
+, "prompt"]
 
 [workspace.dependencies]
 anyhow = "1.0.100"

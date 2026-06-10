@@ -62,6 +62,7 @@ export const BlockRegistry = [
   'video',
   'email',
   'contact',
+  'company',
   'automation',
 ] as const;
 
@@ -96,6 +97,7 @@ export const NonDocumentBlockTypes = [
   'project',
   'email',
   'contact',
+  'company',
   'automation',
 ] as const as (BlockName | BlockAlias)[];
 
@@ -146,6 +148,7 @@ const _ValidBlockCombinations: BlockCombinationRules = {
   unknown: allBlockNames,
   video: allBlockNames,
   contact: allBlockNames,
+  company: allBlockNames,
   task: allBlockNames,
   automation: allBlockNames,
   csv: allBlockNames,
@@ -167,6 +170,7 @@ export const ValidNestingCombinations: BlockCombinationRules = {
   unknown: new Set([]),
   video: new Set([]),
   contact: new Set([]),
+  company: new Set([]),
   task: new Set([]),
   automation: new Set([]),
   csv: new Set([]),

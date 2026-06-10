@@ -157,6 +157,10 @@ export function fileTypeToBlockName(
 
   if (blockOrFiletype === 'channel_message') return 'channel';
 
+  // CRM entity types map to their dedicated blocks (entity type !== block name).
+  if (blockOrFiletype === 'crm_company') return 'company';
+  if (blockOrFiletype === 'crm_contact') return 'contact';
+
   if (ENABLE_DOCX_TO_PDF) {
     if (blockOrFiletype === 'docx' || blockOrFiletype === 'write') {
       return icon ? 'write' : 'pdf';
@@ -205,7 +209,7 @@ export function blockNameToDefaultFile(block?: BlockName | string | null) {
 }
 
 export type ItemLike = {
-  type: ItemType | 'call';
+  type: ItemType | 'call' | 'crm_company';
   fileType?: BasicDocumentFileType;
   subType?: SubType | BasicDocumentSubTypeProperty;
   name?: string;

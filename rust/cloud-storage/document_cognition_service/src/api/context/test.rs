@@ -331,7 +331,8 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     };
     let all_tools = ai_tools::all_tools();
     let all_tools_toolset = all_tools.toolset.clone();
-    let all_tools_prompt = all_tools.prompt;
+    let all_tools_prompt: Arc<dyn std::fmt::Display + Send + Sync> =
+        Arc::new(all_tools.prompt.to_string());
 
     let memory_repo = memory::outbound::pg_memory_repo::PgMemoryRepo::new(pool.clone());
     let memory_service = Arc::new(memory::domain::service::MemoryServiceImpl::new(

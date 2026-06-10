@@ -1003,6 +1003,11 @@ export interface EmailSearchResponseItemWithMetadata {
   is_important: boolean;
   is_read: boolean;
   /**
+   * The inbox that owns the thread. Drives the multi-inbox indicator
+   * when the caller has more than one inbox.
+   */
+  link_id: string;
+  /**
    * Subject of the email thread
    */
   name?: string | null;

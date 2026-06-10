@@ -46,6 +46,13 @@ pub enum InitError {
 
     #[error("Invalid input")]
     Parse(#[from] macro_user_id::error::ParseErr),
+
+    #[error("Inbox is already connected by another user")]
+    SharedInboxConflict {
+        email_address: String,
+        existing_owner_email: String,
+        existing_link_id: Uuid,
+    },
 }
 
 impl IntoResponse for InitError {
@@ -58,10 +65,39 @@ impl IntoResponse for InitError {
             InitError::EnqueueError | InitError::DatabaseError(_) | InitError::GmailError(_) => {
                 StatusCode::INTERNAL_SERVER_ERROR
             }
+            InitError::SharedInboxConflict { .. } => StatusCode::CONFLICT,
         };
 
-        (status_code, self.to_string()).into_response()
+        match self {
+            InitError::SharedInboxConflict {
+                email_address,
+                existing_owner_email,
+                existing_link_id,
+            } => (
+                status_code,
+                Json(SharedInboxConflictResponse {
+                    email_address,
+                    existing_owner_email,
+                    existing_link_id,
+                }),
+            )
+                .into_response(),
+            other => (status_code, other.to_string()).into_response(),
+        }
     }
+}
+
+/// Returned with a `409 Conflict` when a connect targets an external mailbox another
+/// macro user has already connected. The client surfaces a confirmation; on confirm it
+/// retries `/email/init` with `force_share=true` to promote the mailbox to a shared inbox.
+#[derive(Debug, serde::Serialize, serde::Deserialize, ToSchema)]
+pub struct SharedInboxConflictResponse {
+    /// The mailbox address that is already connected.
+    pub email_address: String,
+    /// The email of the macro user who first connected the mailbox.
+    pub existing_owner_email: String,
+    /// The existing link that would be shared if the caller confirms.
+    pub existing_link_id: Uuid,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, ToSchema)]
@@ -82,6 +118,10 @@ pub struct InitParams {
     /// Optional link id from a `/link/gmail` flow. When set, init provisions the inbox
     /// for the email recorded on the in_progress_user_link row instead of the JWT email.
     link_id: Option<Uuid>,
+    /// When set, a connect that collides with a mailbox already connected by another
+    /// macro user promotes it to a shared inbox instead of returning a 409 conflict.
+    #[serde(default)]
+    force_share: bool,
 }
 
 /// Initialize email functionality for the user. Populates initial threads and enables inbox syncing.
@@ -91,19 +131,24 @@ pub struct InitParams {
     path = "/email/init",
     params(
         ("link_id" = Option<Uuid>, Query, description = "**OPTIONAL**. The in_progress_user_link id from a /link/gmail flow."),
+        ("force_share" = Option<bool>, Query, description = "**OPTIONAL**. Confirms promoting a mailbox already connected by another user into a shared inbox."),
     ),
     operation_id = "init_user",
     responses(
             (status = 200, body=InitResponse),
             (status = 400, body=ErrorResponse),
             (status = 401, body=ErrorResponse),
+            (status = 409, body=SharedInboxConflictResponse),
             (status = 500, body=ErrorResponse),
     )
 )]
 #[tracing::instrument(skip(ctx, user_extractor), fields(user_id=user_extractor.user_context.user_id, fusionauth_user_id=user_extractor.user_context.fusion_user_id), err)]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    Query(InitParams { link_id }): Query<InitParams>,
+    Query(InitParams {
+        link_id,
+        force_share,
+    }): Query<InitParams>,
     user_extractor: MacroUserExtractor,
 ) -> Result<Response, InitError> {
     let MacroUserExtractor {
@@ -268,6 +313,75 @@ pub async fn handler(
                 .is_some()
             {
                 return Err(InitError::AlreadyInitialized);
+            }
+
+            // The linked email is not itself a macro user, but another macro user may
+            // already have connected this exact mailbox as a data-source link. Connecting
+            // it again would store and sync a second copy of the same mailbox. Instead,
+            // promote the single existing link to a shared macro user so both connectors
+            // delegate over one link. Promotion turns the mailbox into a shared user, so
+            // it is gated behind an explicit `force_share` confirmation.
+            if existing_owner.is_none()
+                && let Some(existing_link) = email_db_client::links::get::fetch_link_by_email(
+                    &ctx.db,
+                    &linked_email,
+                    link::UserProvider::Gmail,
+                )
+                .await
+                .context("Failed to look up existing link for shared-mailbox dedup")?
+                && existing_link.macro_id.as_ref() != user_context.user_id.as_str()
+            {
+                if !force_share {
+                    return Err(InitError::SharedInboxConflict {
+                        email_address: linked_email.clone(),
+                        existing_owner_email: existing_link.macro_id.email_str().to_string(),
+                        existing_link_id: existing_link.id,
+                    });
+                }
+
+                let organization_id =
+                    macro_db_client::user::get_user_organization::get_user_organization(
+                        ctx.db.clone(),
+                        existing_link.macro_id.as_ref(),
+                    )
+                    .await
+                    .context("Failed to fetch organization for shared-inbox owner")?;
+
+                let mut tx = ctx
+                    .db
+                    .begin()
+                    .await
+                    .context("Failed to begin shared-inbox promotion transaction")?;
+
+                let promoted = macro_db_client::shared_inbox::promote_link_to_shared(
+                    &mut tx,
+                    existing_link.id,
+                    existing_link.macro_id.as_ref(),
+                    &user_context.user_id,
+                    &linked_email,
+                    organization_id,
+                )
+                .await
+                .context("Failed to promote link to shared inbox")?;
+
+                macro_db_client::in_progress_user_link::delete_in_progress_user_link(
+                    &mut *tx, &link_id,
+                )
+                .await
+                .context("Failed to delete in_progress_user_link after shared-inbox promotion")?;
+
+                tx.commit()
+                    .await
+                    .context("Failed to commit shared-inbox promotion transaction")?;
+
+                return Ok((
+                    StatusCode::OK,
+                    Json(InitResponse {
+                        link_id: promoted.link_id,
+                        backfill_job_id: None,
+                    }),
+                )
+                    .into_response());
             }
 
             let gmail_token =

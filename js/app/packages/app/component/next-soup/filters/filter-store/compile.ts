@@ -115,6 +115,7 @@ const FIELD_CONFIG: Record<
   callAttended: { target: 'callf', field: 'Attended' },
   foreignEntityRecordId: { target: 'fef', field: 'id' },
   crmCompanyId: { target: 'ccf', field: 'id' },
+  crmCompanyHidden: { target: 'ccf', field: 'hidden' },
 };
 
 const DATE_RANGE_FIELDS: Record<
@@ -287,11 +288,6 @@ export function compileToAst(state: QueryState): TargetAstMap {
 
   if (state.emailView) {
     result.emailView = state.emailView;
-  }
-
-  // crm companies are opt-in: excluded unless a view sets `crmCompanyId`.
-  if (!result.ccf) {
-    result.ccf = AST.literal('id', NIL_UUID);
   }
 
   return result;

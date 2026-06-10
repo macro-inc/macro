@@ -298,7 +298,8 @@ async fn run_notification_cycle<I: NotificationIngress>(
         notification_entity: EntityType::Channel
             .with_entity_string(uuid::Uuid::now_v7().to_string()),
         notification: ChannelMessageSendMetadata {
-            sender: MacroUserIdStr::try_from_email("fake-user@example.com").unwrap(),
+            sender: Some(MacroUserIdStr::try_from_email("fake-user@example.com").unwrap()),
+            sender_display_name: None,
             message_content: "This is a message".to_string(),
             message_id: uuid::Uuid::now_v7().to_string(),
             has_attachments: false,

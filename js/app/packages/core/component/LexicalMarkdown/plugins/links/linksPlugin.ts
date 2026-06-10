@@ -13,7 +13,7 @@ import {
   $wrapNodeInElement,
   mergeRegister,
 } from '@lexical/utils';
-import { $createUnlinkedTextNode } from '@lexical-core';
+import { $createUnlinkedTextNode } from '@lexical-core/nodes/UnlinkedTextNode';
 import type { LexicalEditor } from 'lexical';
 import {
   $createParagraphNode,
@@ -31,8 +31,6 @@ import {
   TextNode,
 } from 'lexical';
 import linkify, { type Match } from 'linkify-it';
-import { createSignal } from 'solid-js';
-import { editorFocusSignal } from '../../utils';
 
 const strictLinkifier = new linkify(undefined, {
   fuzzyLink: false,
@@ -200,7 +198,6 @@ function $convertAutoLinkToLinkNode(node: AutoLinkNode): LinkNode {
   const linkNode = $createLinkNode(url);
   linkNode.append($createTextNode(text));
   node.replace(linkNode);
-  linkNode.selectEnd();
   return linkNode;
 }
 
@@ -344,8 +341,6 @@ function registerLinksPlugin(editor: LexicalEditor, props: LinkPluginProps) {
     ...props,
   };
 
-  const [_editorFocus, setEditorFocus] = createSignal(false);
-
   let hoveredLink: ILinkInfo | undefined;
 
   const handleClick = (e: MouseEvent) => {
@@ -398,8 +393,6 @@ function registerLinksPlugin(editor: LexicalEditor, props: LinkPluginProps) {
   };
 
   return mergeRegister(
-    editorFocusSignal(editor, setEditorFocus),
-
     editor.registerRootListener((root, prevRoot) => {
       if (root) {
         root.addEventListener('click', handleClick);

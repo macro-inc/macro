@@ -18,6 +18,9 @@ serde_json = "1.0"
 tauri-build = { version = "2.3.1", features = [] }
 
 [features]
+# Automatic OTA bundle updates: check on launch/resume, apply cached bundles at
+# startup. Disabled via `--no-default-features` (just ios-dev,
+# ios-build-no-update) so the embedded bundle / dev server is always served.
 auto_apply_update = []
 default = ["auto_apply_update"]
 

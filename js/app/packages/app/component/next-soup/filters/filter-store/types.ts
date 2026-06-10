@@ -68,6 +68,7 @@ export type ScalarFieldFilters = {
   folderDone?: boolean;
   callStatus?: CallStatus;
   callAttended?: boolean;
+  crmCompanyHidden?: boolean;
   documentCreatedAt?: DateRangeFilter;
   documentUpdatedAt?: DateRangeFilter;
   chatCreatedAt?: DateRangeFilter;

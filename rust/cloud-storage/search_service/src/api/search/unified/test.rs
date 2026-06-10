@@ -83,6 +83,7 @@ fn test_sort_unified_search_results() {
                 subject: Some("Email Subject".to_string()),
                 thread_id: email_id,
                 user_id: "user1".to_string(),
+                link_id: email_id,
                 email_message_search_results: vec![],
                 participants: vec![],
             },

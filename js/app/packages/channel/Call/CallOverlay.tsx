@@ -2,12 +2,11 @@ import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { UserIcon } from '@core/component/UserIcon';
 import { useAuthor, useUserId } from '@core/context/user';
 import { tryMacroId, useDisplayName } from '@core/user';
-import { cn, Tooltip } from '@ui';
+import { cn, InlineCheckbox, Tooltip } from '@ui';
 import { type RemoteParticipant, Track } from 'livekit-client';
 import { For, type JSXElement, Show } from 'solid-js';
 import { useCallContext } from './CallContext';
 import { CallControls } from './CallControls/CallControls';
-import { InlineCheckbox } from './CallControls/CallMenuPrimitives';
 import {
   CALL_PANEL_MEDIUM_NARROW_PX,
   CALL_PANEL_VERY_NARROW_PX,

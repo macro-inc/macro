@@ -5,7 +5,10 @@ import {
   type Query,
 } from '@app/component/next-soup/filters/filter-store';
 import type { ListView } from '@app/constants/list-views';
-import { ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE } from '@core/constant/featureFlags';
+import {
+  ENABLE_CRM,
+  ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE,
+} from '@core/constant/featureFlags';
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { startOfDay, subWeeks } from 'date-fns';
 
@@ -26,6 +29,9 @@ type SoupFiltersPreset = {
 export type PresetContext = {
   userId: string | undefined;
   email: string | undefined;
+  /** True iff the current user has admin/owner team role. Drives
+   * visibility of admin-only tabs (e.g. companies → hidden). */
+  isTeamAdmin: boolean;
 };
 
 type TabPresetResolver = (ctx: PresetContext) => SoupFiltersPreset | undefined;
@@ -86,6 +92,8 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
       }),
       all: () => ({
         filters: {
+          // crm companies aren't surfaced outside the Companies view.
+          include: { crmCompanyId: [NIL_UUID] },
           exclude: {
             documentId: [NIL_UUID],
             threadId: [NIL_UUID],
@@ -242,6 +250,12 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         }),
         clientFilters: { and: ['document-or-file'] },
       }),
+      folders: () => ({
+        filters: defineQueryFilters({
+          exclude: { folderId: [NIL_UUID] },
+        }),
+        clientFilters: { and: ['folders'] },
+      }),
       all: () => ({
         filters: defineQueryFilters({
           exclude: { subType: ['task'] },
@@ -355,6 +369,31 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
       }),
     },
   },
+  companies: {
+    default: 'active',
+    tabs: {
+      active: () => ({
+        filters: defineQueryFilters(
+          { include: { crmCompanyHidden: false } },
+          { skipTargets: ['ccf'] }
+        ),
+        clientFilters: { and: ['crm-company-active'] },
+      }),
+      // Admin/owner only — the BE rejects `hidden: true` requests from
+      // non-admins with 403. Returning `undefined` hides the tab for
+      // non-admins via the same pattern context-required views use.
+      hidden: (ctx) => {
+        if (!ctx.isTeamAdmin) return undefined;
+        return {
+          filters: defineQueryFilters(
+            { include: { crmCompanyHidden: true } },
+            { skipTargets: ['ccf'] }
+          ),
+          clientFilters: { and: ['crm-company-hidden'] },
+        };
+      },
+    },
+  },
   folders: {
     default: 'owned',
     tabs: {
@@ -379,7 +418,18 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
     default: 'all',
     tabs: {
       all: () => ({
-        filters: {},
+        // Temporary: search has no full-text index over foreign entities yet,
+        // so always exclude them (matching no record id) until search supports
+        // them. CRM companies are included only when the CRM feature is enabled
+        // (the nil-uuid sentinel excludes them otherwise).
+        filters: ENABLE_CRM
+          ? { include: { foreignEntityRecordId: [NIL_UUID] } }
+          : {
+              include: {
+                foreignEntityRecordId: [NIL_UUID],
+                crmCompanyId: [NIL_UUID],
+              },
+            },
         clientFilters: {},
       }),
     },
@@ -427,6 +477,7 @@ export function getViewPreset(
   const presetCtx: PresetContext = ctx ?? {
     userId: undefined,
     email: undefined,
+    isTeamAdmin: false,
   };
   const resolved = resolver(presetCtx);
   if (resolved) return resolved;

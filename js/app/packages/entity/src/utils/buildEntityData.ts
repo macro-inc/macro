@@ -54,101 +54,104 @@ export function buildEntityData(
 
   const base = { id, name, ownerId };
 
-  return match<BlockName | BlockAlias, EntityData | undefined>(blockName)
-    .with(
-      'task',
-      (): TaskEntity => ({
-        ...base,
-        type: 'document',
-        fileType: 'md',
-        subType: { type: 'task', is_completed: args.isCompleted ?? false },
-        projectId: args.projectId,
+  return (
+    match<BlockName | BlockAlias, EntityData | undefined>(blockName)
+      .with(
+        'task',
+        (): TaskEntity => ({
+          ...base,
+          type: 'document',
+          fileType: 'md',
+          subType: { type: 'task', is_completed: args.isCompleted ?? false },
+          projectId: args.projectId,
+        })
+      )
+      .with(
+        'md',
+        (): DocumentEntity => ({
+          ...base,
+          type: 'document',
+          fileType: 'md',
+          projectId: args.projectId,
+        })
+      )
+      .with(
+        'pdf',
+        'write',
+        'code',
+        'image',
+        'canvas',
+        'video',
+        'unknown',
+        'csv',
+        (name): DocumentEntity => ({
+          ...base,
+          type: 'document',
+          fileType: args.fileType ?? name,
+          projectId: args.projectId,
+        })
+      )
+      .with(
+        'chat',
+        (): ChatEntity => ({
+          ...base,
+          type: 'chat',
+          projectId: args.projectId,
+        })
+      )
+      .with(
+        'project',
+        (): ProjectEntity => ({
+          ...base,
+          type: 'project',
+          projectId: args.projectId,
+        })
+      )
+      .with('channel', (): ChannelEntity | undefined => {
+        if (!args.channelType) return undefined;
+        return {
+          ...base,
+          type: 'channel',
+          channelType: args.channelType,
+        };
       })
-    )
-    .with(
-      'md',
-      (): DocumentEntity => ({
-        ...base,
-        type: 'document',
-        fileType: 'md',
-        projectId: args.projectId,
+      .with(
+        'email',
+        (): EmailEntity => ({
+          ...base,
+          type: 'email',
+          isRead: args.isRead ?? true,
+          isDraft: args.isDraft ?? false,
+          isImportant: args.isImportant ?? false,
+          done: args.done ?? false,
+        })
+      )
+      .with('automation', (): AutomationEntity | undefined => {
+        if (!args.cron) return undefined;
+        return {
+          ...base,
+          type: 'automation',
+          cron: args.cron,
+          enabled: args.enabled ?? false,
+        };
       })
-    )
-    .with(
-      'pdf',
-      'write',
-      'code',
-      'image',
-      'canvas',
-      'video',
-      'contact',
-      'unknown',
-      'csv',
-      (name): DocumentEntity => ({
-        ...base,
-        type: 'document',
-        fileType: args.fileType ?? name,
-        projectId: args.projectId,
-      })
-    )
-    .with(
-      'chat',
-      (): ChatEntity => ({
-        ...base,
-        type: 'chat',
-        projectId: args.projectId,
-      })
-    )
-    .with(
-      'project',
-      (): ProjectEntity => ({
-        ...base,
-        type: 'project',
-        projectId: args.projectId,
-      })
-    )
-    .with('channel', (): ChannelEntity | undefined => {
-      if (!args.channelType) return undefined;
-      return {
-        ...base,
-        type: 'channel',
-        channelType: args.channelType,
-      };
-    })
-    .with(
-      'email',
-      (): EmailEntity => ({
-        ...base,
-        type: 'email',
-        isRead: args.isRead ?? true,
-        isDraft: args.isDraft ?? false,
-        isImportant: args.isImportant ?? false,
-        done: args.done ?? false,
-      })
-    )
-    .with('automation', (): AutomationEntity | undefined => {
-      if (!args.cron) return undefined;
-      return {
-        ...base,
-        type: 'automation',
-        cron: args.cron,
-        enabled: args.enabled ?? false,
-      };
-    })
-    .with('call', (): CallEntity | undefined => {
-      if (!args.channelId) return undefined;
-      const status: CallEntity['status'] =
-        args.status ?? (args.attended ? 'ATTENDED' : 'UNATTENDED');
+      .with('call', (): CallEntity | undefined => {
+        if (!args.channelId) return undefined;
+        const status: CallEntity['status'] =
+          args.status ?? (args.attended ? 'ATTENDED' : 'UNATTENDED');
 
-      return {
-        ...base,
-        type: 'call',
-        channelId: args.channelId,
-        isActive: args.isActive ?? false,
-        status,
-        attended: status === 'ATTENDED',
-        participantIds: args.participantIds ?? [],
-      };
-    })
-    .exhaustive();
+        return {
+          ...base,
+          type: 'call',
+          channelId: args.channelId,
+          isActive: args.isActive ?? false,
+          status,
+          attended: status === 'ATTENDED',
+          participantIds: args.participantIds ?? [],
+        };
+      })
+      // CRM companies/contacts aren't constructed from block args; soup is the source.
+      .with('company', 'contact', (): undefined => undefined)
+      .exhaustive()
+  );
 }

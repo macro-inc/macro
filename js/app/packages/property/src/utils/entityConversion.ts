@@ -73,6 +73,11 @@ export function macroEntityToPropertyEntityType(
     .with({ type: 'document' }, () => EntityType.DOCUMENT)
     .with({ type: 'channel_message' }, () => EntityType.CHANNEL)
     .with({ type: 'call' }, () => EntityType.CHANNEL)
+    .with({ type: 'crm_company' }, () => EntityType.COMPANY)
+    .with({ type: 'crm_contact' }, () => {
+      // No CONTACT in the properties-service EntityType yet.
+      throw new Error('crm contacts do not support properties');
+    })
     .with({ type: 'automation' }, () => {
       throw new Error('automation entities do not support properties');
     })

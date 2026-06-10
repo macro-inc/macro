@@ -1388,6 +1388,7 @@
           "owner_id",
           "thread_id",
           "user_id",
+          "link_id",
           "email_message_search_results",
           "participants"
         ],
@@ -1403,6 +1404,11 @@
             "type": "string",
             "format": "uuid",
             "description": "Standardized fields that all item types will share.\nThese field names are being aligned across all item types\nfor consistency in our data model."
+          },
+          "link_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The inbox that owns the thread. Drives the multi-inbox indicator\nwhen the caller has more than one inbox."
           },
           "name": {
             "type": ["string", "null"],

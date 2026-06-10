@@ -3,6 +3,7 @@ import type { DateValue } from '@core/util/date';
 import type {
   ChannelEntity,
   ChatEntity,
+  CrmCompanyEntity,
   DocumentEntity,
   EmailEntity,
   EntityData,
@@ -24,7 +25,8 @@ export type Bucket =
   | 'note'
   | 'chat'
   | 'project'
-  | 'email';
+  | 'email'
+  | 'crm_company';
 
 export type EntityBucket = Exclude<Bucket, 'person'>;
 
@@ -38,6 +40,7 @@ const ALL_BUCKETS: Bucket[] = [
   'chat',
   'project',
   'email',
+  'crm_company',
 ];
 
 export type BucketCombination = 'all' | 'channels' | 'documents';
@@ -111,6 +114,7 @@ export type BucketItemMap = {
   chat: EntityItem<ChatEntity>;
   project: EntityItem<ProjectEntity>;
   email: EntityItem<EmailEntity>;
+  crm_company: EntityItem<CrmCompanyEntity>;
   person: UserItem;
 };
 

@@ -7,8 +7,10 @@ import TrayIcon from '@phosphor/tray.svg';
 import { useEmailLinksQuery } from '@queries/email/link';
 import { Button } from '@ui';
 import { createMemo, Show } from 'solid-js';
-import type { SearchableOption } from './search-filter-controls';
-import { SearchableMultiSelect } from './searchable-multi-select';
+import {
+  SearchableMultiSelect,
+  type SearchableOption,
+} from './searchable-multi-select';
 
 /**
  * Scopes the list to a subset of the user's linked inboxes. Multi-select,

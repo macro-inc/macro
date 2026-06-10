@@ -109,6 +109,18 @@ export function callsFilter(entity: EntityData): boolean {
   return entity.type === 'call';
 }
 
+export function crmCompanyFilter(entity: EntityData): boolean {
+  return entity.type === 'crm_company';
+}
+
+export function crmCompanyActiveFilter(entity: EntityData): boolean {
+  return entity.type === 'crm_company' && !entity.hidden;
+}
+
+export function crmCompanyHiddenFilter(entity: EntityData): boolean {
+  return entity.type === 'crm_company' && entity.hidden;
+}
+
 export function filesAndFolderFilter(entity: EntityData): boolean {
   if (entity.type !== 'project' && entity.type !== 'document') return false;
 

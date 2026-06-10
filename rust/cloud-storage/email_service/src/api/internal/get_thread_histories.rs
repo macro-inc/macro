@@ -49,7 +49,7 @@ pub async fn handler(
 
     let history_map = email_db_client::user_history::get_thread_summary_info(
         &ctx.db,
-        link.id,
+        &[link.id],
         &req_body.thread_ids,
     )
     .await?;

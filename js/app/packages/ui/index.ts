@@ -13,7 +13,11 @@ export { Button } from './components/Button';
 export { ButtonGroup } from './components/ButtonGroup';
 export type { ChatInputProps, ChatInputRows } from './components/ChatInput';
 export type { CheckboxProps } from './components/Checkbox';
-export { Checkbox, SingleSelectCheck } from './components/Checkbox';
+export {
+  Checkbox,
+  InlineCheckbox,
+  SingleSelectCheck,
+} from './components/Checkbox';
 export type { DialogProps } from './components/Dialog';
 export { Dialog } from './components/Dialog';
 export { Dropdown } from './components/Dropdown';

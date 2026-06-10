@@ -2,7 +2,7 @@ use super::*;
 use crate::domain::{
     events::ChannelEvent,
     models::{
-        Activity, ActivityType, BotId, ChannelAttachment, ChannelAttachmentType,
+        Activity, ActivityType, BotId, BotSenderProfile, ChannelAttachment, ChannelAttachmentType,
         ChannelContextMessage, ChannelInfo, ChannelMessageFilters, ChannelMetadata,
         ChannelParticipant, ChannelType, CountedReaction, CreateEntityMentionOptions,
         EntityMention, MessageAttachment, MessagePageDirection, MutatedAttachment, MutatedMessage,
@@ -179,6 +179,97 @@ async fn returns_messages_with_thread_info() {
     assert_eq!(msg.reactions.len(), 1);
     assert_eq!(msg.attachments.len(), 1);
     assert!(page.next_cursor.is_none());
+}
+
+#[tokio::test]
+async fn attaches_bot_profiles_to_bot_authored_messages() {
+    let seeded_bot = BotId::from_uuid(Uuid::new_v4());
+    let unseeded_bot = bot_id::MACRO_AI_BOT_ID;
+    let parent_id = Uuid::new_v4();
+    let macro_ai_msg_id = Uuid::new_v4();
+
+    let mut bot_row = make_row(parent_id, 10);
+    bot_row.sender_id = seeded_bot.to_storage_string();
+    let mut macro_ai_row = make_row(macro_ai_msg_id, 5);
+    macro_ai_row.sender_id = unseeded_bot.to_storage_string();
+
+    let reply_row = ThreadReplyRow {
+        id: Uuid::new_v4(),
+        thread_id: parent_id,
+        sender_id: seeded_bot.to_storage_string(),
+        content: "reply".into(),
+        created_at: Utc::now(),
+        updated_at: Utc::now(),
+        edited_at: None,
+    };
+
+    let profile = BotSenderProfile {
+        name: "Deploy Bot".to_string(),
+        avatar_url: Some("https://example.com/bot.png".to_string()),
+    };
+
+    let mut repo = MockChannelRepo::new();
+    let rows = vec![bot_row, macro_ai_row];
+    repo.expect_get_top_level_messages()
+        .returning(move |_, _, _, _, _, _| {
+            let rows = rows.clone();
+            Box::pin(async move {
+                Ok(TopLevelMessagesQueryResult {
+                    rows,
+                    has_more_newer: false,
+                })
+            })
+        });
+    let reply_clone = reply_row.clone();
+    repo.expect_get_thread_data().returning(move |_, _| {
+        let mut map = HashMap::new();
+        map.insert(
+            parent_id,
+            ThreadData {
+                reply_count: 1,
+                latest_reply_at: None,
+                preview_replies: vec![reply_clone.clone()],
+            },
+        );
+        Box::pin(async move { Ok(map) })
+    });
+    repo.expect_get_reactions_batch()
+        .returning(|_| Box::pin(async { Ok(HashMap::new()) }));
+    repo.expect_get_attachments_batch()
+        .returning(|_| Box::pin(async { Ok(HashMap::new()) }));
+    let profile_clone = profile.clone();
+    repo.expect_get_bot_profiles().returning(move |bot_ids| {
+        assert_eq!(bot_ids.len(), 2, "bot senders should be deduplicated");
+        assert!(bot_ids.contains(&seeded_bot));
+        assert!(bot_ids.contains(&unseeded_bot));
+        let mut map = HashMap::new();
+        map.insert(seeded_bot, profile_clone.clone());
+        Box::pin(async move { Ok(map) })
+    });
+
+    let svc = ChannelServiceImpl::new(repo);
+    let page = svc
+        .get_channel_messages(
+            Uuid::nil(),
+            Query::Sort(CreatedAt, ()),
+            MessagePageDirection::Older,
+            50,
+            &ChannelMessageFilters::default(),
+            None,
+        )
+        .await
+        .unwrap()
+        .page;
+
+    assert_eq!(page.items.len(), 2);
+    let bot_msg = page.items.iter().find(|m| m.id == parent_id).unwrap();
+    assert_eq!(bot_msg.bot_profile, Some(profile.clone()));
+    assert_eq!(bot_msg.thread.preview[0].bot_profile, Some(profile));
+
+    // The Macro AI system bot has no `bots` row, so it stays unenriched and the
+    // frontend falls back to its built-in special case.
+    let macro_ai_msg = page.items.iter().find(|m| m.id == macro_ai_msg_id).unwrap();
+    assert!(macro_ai_msg.bot_profile.is_none());
 }
 
 #[derive(Clone)]
@@ -649,6 +740,13 @@ impl ChannelRepo for FakeMutationRepo {
             emoji: "👍".to_string(),
             users: vec!["macro|sender@test.com".to_string()],
         }])
+    }
+
+    async fn get_bot_profiles(
+        &self,
+        _bot_ids: &[BotId],
+    ) -> Result<HashMap<BotId, BotSenderProfile>, Self::Err> {
+        Ok(HashMap::new())
     }
 }
 

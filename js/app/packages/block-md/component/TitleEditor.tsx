@@ -172,7 +172,7 @@ export function TitleEditor(
     debouncedFlushRename();
   };
 
-  const debouncedFlushRename = debounce(flushPendingRename, 2000);
+  const debouncedFlushRename = debounce(flushPendingRename, 400);
 
   const [state, setState] = createSignal('');
   const [initialized, setInitialized] = createSignal(false);

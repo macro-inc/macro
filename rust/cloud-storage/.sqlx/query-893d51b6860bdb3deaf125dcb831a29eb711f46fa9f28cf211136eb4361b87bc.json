@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO promoted_shared_mailboxes (macro_id)\n        VALUES ($1)\n        ON CONFLICT (macro_id) DO NOTHING\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "893d51b6860bdb3deaf125dcb831a29eb711f46fa9f28cf211136eb4361b87bc"
+}

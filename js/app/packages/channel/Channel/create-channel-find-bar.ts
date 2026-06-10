@@ -54,16 +54,23 @@ export function createChannelFindBar(
       // through the channel's thread list (replies cluster with their parent
       // thread instead of jumping around when sorted strictly by message_id).
       const searchQuery = useSearchChannelQuery(
-        () => ({
-          params: { page_size: FIND_BAR_PAGE_SIZE },
-          body: {
-            match_type: 'partial',
-            query: submittedQuery(),
-            search_on: 'content',
-            channel_ids: [options.channelId()],
-            sort: ChannelSortTimestamp.thread,
-          },
-        }),
+        () => {
+          const query = submittedQuery();
+          // Exact (phrase) match once more than one word is typed so the query
+          // matches the literal phrase; partial (prefix) match for a single
+          // word so it still behaves like find-as-you-type.
+          const isMultiWord = query.trim().split(/\s+/).length > 1;
+          return {
+            params: { page_size: FIND_BAR_PAGE_SIZE },
+            body: {
+              match_type: isMultiWord ? 'exact' : 'partial',
+              query,
+              search_on: 'content',
+              channel_ids: [options.channelId()],
+              sort: ChannelSortTimestamp.thread,
+            },
+          };
+        },
         () => ({ enabled: isOpen() && submittedQuery().length > 0 })
       );
 

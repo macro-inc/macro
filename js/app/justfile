@@ -1,14 +1,19 @@
 # iOS: dev-facing, for testing in Simulator
-ios-dev:
+ios-dev: ios-prepare-tauri-api
     cd tauri/src-tauri && cargo tauri ios dev --open -- --no-default-features
 
 # iOS: prod-facing build, with bundle auto-update turned off, for testing locally on actual iPhone
-ios-build-no-update:
+ios-build-no-update: ios-prepare-tauri-api
     cd tauri/src-tauri && cargo tauri ios build --open -- --no-default-features
 
 # iOS: build for release
-ios-build:
+ios-build: ios-prepare-tauri-api
     cd tauri/src-tauri && cargo tauri ios build --open
+
+# Xcode resolves SwiftPM packages before Tauri's Rust build script can generate
+# local plugin Swift dependencies, so prepare the ignored Tauri iOS API first.
+ios-prepare-tauri-api:
+    bun scripts/prepare-tauri-ios-api.mjs
 
 # Tauri build hook (run automatically via beforeDevCommand) — not meant to be run directly
 [private]

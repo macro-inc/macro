@@ -37,9 +37,9 @@ import {
   DEV_MODE_ENV,
   ENABLE_APP_STORE_QR_CODE,
   ENABLE_CALLS,
+  ENABLE_CRM,
   ENABLE_HOME_OVERRIDE,
   ENABLE_NEW_PRICING_OVERRIDE,
-  ENABLE_SIDEBAR_ACTIVE_CALLS,
   ENABLE_TEAMS_OVERRIDE,
 } from '@core/constant/featureFlags';
 import {
@@ -59,9 +59,9 @@ import { AnimatedSquareCommandKIcon } from '@icon/square-command-k';
 import { AnimatedSquareSidebarIcon } from '@icon/square-sidebar';
 import { AnimatedCallIcon } from '@icon/wide-call';
 import { AnimatedChannelIcon } from '@icon/wide-channel';
+import { AnimatedCompanyIcon } from '@icon/wide-company';
 import { AnimatedEmailIcon } from '@icon/wide-email';
 import { AnimatedFileMdIcon } from '@icon/wide-fileMd';
-import { AnimatedFolderIcon } from '@icon/wide-folder';
 import { AnimatedInboxIcon } from '@icon/wide-inbox';
 import { AnimatedNewSplitIcon } from '@icon/wide-newSplit';
 import { AnimatedPlusIcon } from '@icon/wide-plus';
@@ -144,10 +144,10 @@ const SIDEBAR_LINKS = [
   },
   {
     id: 'documents',
-    label: 'Documents',
+    label: 'Files',
     href: LIST_VIEW_PATHS.documents,
     icon: AnimatedFileMdIcon,
-    hotkey: 'd',
+    hotkey: 'f',
     hotkeyToken: TOKENS.sidebar.goTo.documents,
   },
   {
@@ -166,14 +166,18 @@ const SIDEBAR_LINKS = [
     hotkey: 'c',
     hotkeyToken: TOKENS.sidebar.goTo.channels,
   },
-  {
-    id: 'folders',
-    label: 'Folders',
-    href: LIST_VIEW_PATHS.folders,
-    icon: AnimatedFolderIcon,
-    hotkey: 'f',
-    hotkeyToken: TOKENS.sidebar.goTo.folders,
-  },
+  ...(ENABLE_CRM
+    ? ([
+        {
+          id: 'companies',
+          label: 'Companies',
+          href: LIST_VIEW_PATHS.companies,
+          icon: AnimatedCompanyIcon,
+          hotkey: 'o',
+          hotkeyToken: TOKENS.sidebar.goTo.companies,
+        },
+      ] satisfies SidebarItem[])
+    : []),
 ] satisfies SidebarItem[];
 
 export type SidebarState = 'hidden' | 'expanded' | 'slim';
@@ -1031,7 +1035,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
       </div>
 
       <div class="mt-auto">
-        <Show when={ENABLE_CALLS() && ENABLE_SIDEBAR_ACTIVE_CALLS()}>
+        <Show when={ENABLE_CALLS()}>
           <div class="block max-h-[clamp(10%,60%,20rem)]">
             <SidebarActiveCallWidget
               sidebarState={props.sidebarState ?? 'expanded'}

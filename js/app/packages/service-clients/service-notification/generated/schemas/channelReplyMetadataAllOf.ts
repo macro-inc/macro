@@ -4,19 +4,23 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
+import type { ChannelReplyMetadataAllOfSenderDisplayName } from './channelReplyMetadataAllOfSenderDisplayName';
 import type { ChannelReplyMetadataAllOfSenderProfilePictureUrl } from './channelReplyMetadataAllOfSenderProfilePictureUrl';
 import type { ChannelReplyMetadataAllOfThreadParentSenderId } from './channelReplyMetadataAllOfThreadParentSenderId';
+import type { ChannelReplyMetadataAllOfUserId } from './channelReplyMetadataAllOfUserId';
 
 export type ChannelReplyMetadataAllOf = {
   /** The message content */
   messageContent: string;
   /** The id of the new message */
   messageId: string;
+  /** Display name for non-user senders such as bots */
+  senderDisplayName?: ChannelReplyMetadataAllOfSenderDisplayName;
   senderProfilePictureUrl?: ChannelReplyMetadataAllOfSenderProfilePictureUrl;
   /** The id of the thread that has the reply */
   threadId: string;
   /** The user who sent the root message of the thread */
   threadParentSenderId?: ChannelReplyMetadataAllOfThreadParentSenderId;
-  /** The sender id of the reply */
-  userId: string;
+  /** The sender id of the reply, when sent by a user */
+  userId?: ChannelReplyMetadataAllOfUserId;
 };
