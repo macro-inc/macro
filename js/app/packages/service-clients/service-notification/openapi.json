@@ -2015,6 +2015,16 @@
                 "enum": ["task"]
               }
             }
+          },
+          {
+            "type": "object",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["snippet"]
+              }
+            }
           }
         ],
         "description": "The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern."

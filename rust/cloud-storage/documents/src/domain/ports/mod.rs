@@ -25,8 +25,9 @@ use model_entity::Entity;
 
 use super::models::{
     BranchNameContext, CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs,
-    CreateTaskRequest, DocumentError, EditDocumentRepoArgs, EditDocumentServiceArgs,
-    GithubPullRequestsResponse, LocationQueryParams, TaskBranchName, TeamTaskMetadata,
+    CreateTaskRequest, DocumentError, DocumentTeamShare, DocumentTeamShareResponse,
+    EditDocumentRepoArgs, EditDocumentServiceArgs, GithubPullRequestsResponse, LocationQueryParams,
+    TaskBranchName, TeamTaskMetadata,
 };
 
 /// Repository for accessing document data from the database.
@@ -191,6 +192,19 @@ pub trait DocumentRepo: Send + Sync + 'static {
         team_id: &uuid::Uuid,
         document_id: &str,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Get the team-share state of a document, resolved against the owner's team.
+    fn get_team_share(
+        &self,
+        document_id: &str,
+    ) -> impl Future<Output = Result<DocumentTeamShare, Self::Err>> + Send;
+
+    /// Grant or revoke the document owner's team's access on the document.
+    fn set_team_share(
+        &self,
+        document_id: &str,
+        share: bool,
+    ) -> impl Future<Output = Result<DocumentTeamShare, Self::Err>> + Send;
 
     /// Get document metadata at a specific version ID.
     fn get_document_metadata_at_version(
@@ -418,4 +432,17 @@ pub trait DocumentService: Send + Sync + 'static {
         document_id: &str,
         request: &CreateTaskRequest,
     ) -> impl Future<Output = Result<(), DocumentError>> + Send;
+
+    /// Get the team-share state of a document, resolved against the owner's team.
+    fn get_team_share(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> impl Future<Output = Result<DocumentTeamShareResponse, DocumentError>> + Send;
+
+    /// Grant or revoke the document owner's team's access on the document.
+    fn set_team_share(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<EditAccessLevel>,
+        share: bool,
+    ) -> impl Future<Output = Result<DocumentTeamShareResponse, DocumentError>> + Send;
 }

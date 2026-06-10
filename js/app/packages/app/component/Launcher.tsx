@@ -20,6 +20,7 @@ import {
   createChat,
   createCodeFileFromText,
   createMarkdownFile,
+  createSnippet,
 } from '@core/util/create';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import { AnimatedChatIcon } from '@icon/wide-chat';
@@ -34,6 +35,8 @@ import { AnimatedFileCodeIcon } from '@icon/wide-fileCode';
 import { AnimatedFileMdIcon } from '@icon/wide-fileMd';
 import { AnimatedFolderIcon } from '@icon/wide-folder';
 import WideFolder from '@icon/wide-folder.svg';
+import { AnimatedSnippetIcon } from '@icon/wide-snippet';
+import WideSnippet from '@icon/wide-snippet.svg';
 import { AnimatedStarIcon } from '@icon/wide-star';
 import WideStar from '@icon/wide-star.svg';
 import { AnimatedTaskIcon } from '@icon/wide-task';
@@ -98,7 +101,7 @@ const createBlock = async (spec: {
   // If we are creating a new markdown document "from scratch" then we can let
   // them instantly start editing
   const createMdParams =
-    blockName === 'md'
+    blockName === 'md' || blockName === 'snippet'
       ? { optimisticSnapshot: await getMarkdownGoldenBytes() }
       : undefined;
 
@@ -184,6 +187,18 @@ export function runCreateAction(
       createComponent({
         componentId: 'task-compose',
         asPopover: true,
+      });
+      return;
+    case 'snippet':
+      createBlock({
+        blockName: 'snippet',
+        loading: true,
+        createFn: () =>
+          createSnippet({
+            title: '',
+            content: '',
+          }),
+        shouldInsert,
       });
       return;
     case 'email':
@@ -274,6 +289,20 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     hotkey: 't' as const,
     keyDownHandler: () => {
       runCreateAction('task');
+      return true;
+    },
+  },
+  {
+    label: 'Snippet',
+    icon: WideSnippet,
+    animatedIcon: AnimatedSnippetIcon,
+    description: 'Create snippet',
+    blockName: 'snippet',
+    hotkeyToken: TOKENS.create.snippet,
+    altHotkeyToken: TOKENS.create.snippetNewSplit,
+    hotkey: 's' as const,
+    keyDownHandler: () => {
+      runCreateAction('snippet', { shouldInsert: pressedKeys().has('shift') });
       return true;
     },
   },

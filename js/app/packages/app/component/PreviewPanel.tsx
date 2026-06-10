@@ -4,7 +4,12 @@ import { fileTypeToResolvedBlockName } from '@core/constant/allBlocks';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import { throttledDependent } from '@core/util/debounce';
 import type { NonNullableFields } from '@core/util/withRequired';
-import { type EntityData, isChannelMessageEntity, isTaskEntity } from '@entity';
+import {
+  type EntityData,
+  isChannelMessageEntity,
+  isSnippetEntity,
+  isTaskEntity,
+} from '@entity';
 import { createContextProvider } from '@solid-primitives/context';
 import {
   type Component,
@@ -68,7 +73,12 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
           alias: 'task',
           baseType: 'md',
         } as BlockAliasContext)
-      : undefined;
+      : isSnippetEntity(props.selectedEntity)
+        ? ({
+            alias: 'snippet',
+            baseType: 'md',
+          } as BlockAliasContext)
+        : undefined;
 
     let blockType: BlockName;
     let blockId: string;

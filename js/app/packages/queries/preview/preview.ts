@@ -218,7 +218,7 @@ export function setPreviewOnCreate({
   itemType: ItemType;
   name?: string;
   fileType?: string;
-  subType?: { type: 'task'; is_completed?: boolean };
+  subType?: { type: 'task' | 'snippet'; is_completed?: boolean };
 }) {
   const defaultPreviewItem: AccessiblePreviewItem = {
     id: itemId,
