@@ -43,9 +43,7 @@ export function AddInboxDialog() {
         </Panel.Header>
         <Panel.Body class="p-6 font-sans flex flex-col gap-3">
           <Dialog.Description class="text-ink-muted text-sm/tight font-normal">
-            Connect another Gmail account to Macro. You'll be redirected to
-            Google to choose the account and approve access — its mail will then
-            sync alongside your existing inboxes.
+            Connect another Gmail account to Macro.
           </Dialog.Description>
           <div class="pt-3 justify-end items-center gap-3 inline-flex">
             <Button
