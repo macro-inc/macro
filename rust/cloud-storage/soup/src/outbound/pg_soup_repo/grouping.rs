@@ -60,6 +60,12 @@ pub struct GroupJoinClause {
 /// per element, so multi-value properties (e.g. assignees) place each item into
 /// every group it belongs to. Items without a matching row, or with an empty
 /// array / scalar value, produce a single row with NULL `val` (→ "Not Set").
+///
+/// Rows whose value blob doesn't match the definition's `data_type` are
+/// filtered out (→ "Not Set"): the group-key CASE dispatches on the blob's
+/// self-declared `values->>'type'`, so without this gate a mis-shaped row
+/// (e.g. select options stored under an entity-reference definition) would
+/// fabricate groups keyed by foreign values.
 pub fn group_join_clause(field: &GroupByField) -> Option<GroupJoinClause> {
     match field {
         GroupByField::Property {
@@ -76,6 +82,8 @@ pub fn group_join_clause(field: &GroupByField) -> Option<GroupJoinClause> {
                     "LEFT JOIN LATERAL (
                         SELECT ep.values, elem.val
                         FROM entity_properties ep
+                        INNER JOIN property_definitions pd
+                            ON pd.id = ep.property_definition_id
                         LEFT JOIN LATERAL jsonb_array_elements(
                             CASE WHEN jsonb_typeof(ep.values->'value') = 'array'
                                  THEN ep.values->'value'
@@ -84,6 +92,12 @@ pub fn group_join_clause(field: &GroupByField) -> Option<GroupJoinClause> {
                         ) elem(val) ON TRUE
                         WHERE ep.entity_id = t.id::text
                           AND ep.property_definition_id = '{}'
+                          AND ep.values->>'type' = CASE pd.data_type
+                                WHEN 'ENTITY'        THEN 'EntityReference'
+                                WHEN 'SELECT_STRING' THEN 'SelectOption'
+                                WHEN 'SELECT_NUMBER' THEN 'SelectOption'
+                                WHEN 'LINK'          THEN 'Link'
+                              END
                           {}
                     ) ep_group ON TRUE",
                     property_definition_id, entity_type_filter

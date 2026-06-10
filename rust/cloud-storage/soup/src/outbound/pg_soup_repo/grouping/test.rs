@@ -7,7 +7,7 @@ use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use models_grouping::date_bucket_sql_key;
 use models_grouping::{GroupingConfig, date_bucket_order};
-use models_pagination::{Query, SimpleSortMethod};
+use models_pagination::{Identify, Query, SimpleSortMethod};
 use sqlx::{Pool, Postgres};
 
 #[test]
@@ -146,6 +146,98 @@ async fn test_grouped_by_project(pool: Pool<Postgres>) -> anyhow::Result<()> {
                 .expect("Non-empty group_key should be a valid UUID");
         }
     }
+
+    Ok(())
+}
+
+/// A row stored under the grouped property's definition id but with a
+/// mismatched value shape must NOT become a phantom group. The group join
+/// gates rows on the definition's `data_type`, so a `SelectOption` blob under
+/// the ASSIGNEES (entity-reference) definition falls through to "Not Set"
+/// instead of emitting its option ids as group keys.
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("mixed_items_expanded")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn test_grouped_by_assignees_mismatched_value_shape(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    use system_properties::SystemPropertyKey;
+
+    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
+    let assignees = SystemPropertyKey::ASSIGNEES_UUID;
+
+    // Healthy assignees row on one task.
+    sqlx::query(
+        r#"INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)
+           VALUES ($1, '11111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'TASK', $2,
+                   '{"type": "EntityReference", "value": [{"entity_type": "user", "entity_id": "macro|user-1@test.com"}]}')"#,
+    )
+    .bind(uuid::Uuid::new_v4())
+    .bind(assignees)
+    .execute(&pool)
+    .await?;
+
+    // Mis-shaped row: status option ids stored under the ASSIGNEES definition.
+    // Uses a non-TASK entity_type, so every scoped reader (property panels,
+    // populate_properties) misses it — only the unscoped grouping join sees it.
+    sqlx::query(
+        r#"INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)
+           VALUES ($1, '11111111-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'DOCUMENT', $2,
+                   '{"type": "SelectOption", "value": ["00000001-0000-0000-0002-000000000001", "00000001-0000-0000-0002-000000000002"]}')"#,
+    )
+    .bind(uuid::Uuid::new_v4())
+    .bind(assignees)
+    .execute(&pool)
+    .await?;
+
+    let items = expanded_dynamic_cursor_soup_grouped(
+        &pool,
+        GroupedDynamicCursorArgs {
+            user_id: user_id.copied(),
+            limit: 50,
+            cursor: Query::Sort(
+                SimpleSortMethod::ViewedUpdated,
+                EntityFilterAst::mock_empty(),
+            ),
+            exclude_frecency: false,
+            grouping: GroupingConfig {
+                field: GroupByField::Property {
+                    property_definition_id: assignees,
+                    entity_type: None,
+                },
+                group_key: None,
+                per_group_limit: None,
+            },
+        },
+    )
+    .await?;
+
+    let keys: std::collections::HashSet<&str> =
+        items.iter().map(|i| i.group_key.as_str()).collect();
+
+    assert!(
+        keys.contains("macro|user-1@test.com"),
+        "real assignee group missing: {keys:?}"
+    );
+    assert!(
+        !keys.contains("00000001-0000-0000-0002-000000000001")
+            && !keys.contains("00000001-0000-0000-0002-000000000002"),
+        "mis-shaped row fabricated phantom groups: {keys:?}"
+    );
+
+    // The mis-shaped row's item still appears, bucketed under "Not Set".
+    let not_set_has_item = items.iter().any(|i| {
+        i.group_key.is_empty()
+            && i.item.id().to_string() == "11111111-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+    });
+    assert!(
+        not_set_has_item,
+        "item with mis-shaped property row should land in Not Set"
+    );
 
     Ok(())
 }
