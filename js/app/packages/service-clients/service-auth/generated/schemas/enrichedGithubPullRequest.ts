@@ -9,6 +9,7 @@ import type { EnrichedGithubPullRequestChecks } from './enrichedGithubPullReques
 import type { EnrichedGithubPullRequestComments } from './enrichedGithubPullRequestComments';
 import type { EnrichedGithubPullRequestDeletions } from './enrichedGithubPullRequestDeletions';
 import type { EnrichedGithubPullRequestName } from './enrichedGithubPullRequestName';
+import type { EnrichedGithubPullRequestParticipantGithubUserIds } from './enrichedGithubPullRequestParticipantGithubUserIds';
 import type { EnrichedGithubPullRequestStatus } from './enrichedGithubPullRequestStatus';
 
 /**
@@ -42,6 +43,10 @@ export interface EnrichedGithubPullRequest {
   number: number;
   /** The GitHub repository owner or organization. */
   owner: string;
+  /** Stable numeric GitHub user ids (as strings) for everyone involved in the pull request.
+Queried by the foreign entity `includes_me` filter, so stored metadata merges this as a
+union rather than replacing it (partial write paths must not drop known participants). */
+  participantGithubUserIds?: EnrichedGithubPullRequestParticipantGithubUserIds;
   /** The GitHub repository name. */
   repo: string;
   status?: EnrichedGithubPullRequestStatus;

@@ -245,6 +245,7 @@ async fn get_for_user_returns_matching_user_and_team_sources(pool: PgPool) {
 
     let entities = repo
         .get_foreign_entities_for_user(
+            None,
             vec![
                 SourceId::user("macro|user@example.com"),
                 SourceId::team(team_id),
@@ -276,7 +277,12 @@ async fn get_for_user_empty_sources_returns_empty(pool: PgPool) {
     .await;
 
     let entities = repo
-        .get_foreign_entities_for_user(Vec::new(), 10, list_query(SimpleSortMethod::UpdatedAt))
+        .get_foreign_entities_for_user(
+            None,
+            Vec::new(),
+            10,
+            list_query(SimpleSortMethod::UpdatedAt),
+        )
         .await
         .expect("empty source list should succeed");
 
@@ -324,6 +330,7 @@ async fn get_for_user_dedupes_duplicate_source_grants(pool: PgPool) {
 
     let entities = repo
         .get_foreign_entities_for_user(
+            None,
             vec![
                 SourceId::user("macro|user@example.com"),
                 SourceId::team(team_id),
@@ -393,6 +400,7 @@ async fn get_for_user_paginates_by_created_at(pool: PgPool) {
 
     let first_page = repo
         .get_foreign_entities_for_user(
+            None,
             vec![SourceId::user("macro|user@example.com")],
             2,
             list_query(SimpleSortMethod::CreatedAt),
@@ -401,6 +409,7 @@ async fn get_for_user_paginates_by_created_at(pool: PgPool) {
         .expect("first created_at page should be fetched");
     let second_page = repo
         .get_foreign_entities_for_user(
+            None,
             vec![SourceId::user("macro|user@example.com")],
             2,
             cursor_query(&first_page[1], SimpleSortMethod::CreatedAt),
@@ -467,6 +476,7 @@ async fn get_for_user_paginates_by_updated_at(pool: PgPool) {
 
     let first_page = repo
         .get_foreign_entities_for_user(
+            None,
             vec![SourceId::user("macro|user@example.com")],
             2,
             list_query(SimpleSortMethod::UpdatedAt),
@@ -475,6 +485,7 @@ async fn get_for_user_paginates_by_updated_at(pool: PgPool) {
         .expect("first updated_at page should be fetched");
     let second_page = repo
         .get_foreign_entities_for_user(
+            None,
             vec![SourceId::user("macro|user@example.com")],
             2,
             cursor_query(&first_page[1], SimpleSortMethod::UpdatedAt),
@@ -511,6 +522,7 @@ async fn get_for_user_applies_foreign_entity_filters(pool: PgPool) {
     )));
     let source_matches = repo
         .get_foreign_entities_for_user(
+            None,
             vec![SourceId::user("macro|user@example.com")],
             10,
             filter_query(source_filter),
@@ -523,6 +535,7 @@ async fn get_for_user_applies_foreign_entity_filters(pool: PgPool) {
     ))));
     let not_linear_matches = repo
         .get_foreign_entities_for_user(
+            None,
             vec![SourceId::user("macro|user@example.com")],
             10,
             filter_query(not_linear_filter),
@@ -532,6 +545,198 @@ async fn get_for_user_applies_foreign_entity_filters(pool: PgPool) {
 
     assert_eq!(source_matches, vec![github.clone()]);
     assert_eq!(not_linear_matches, vec![github]);
+}
+
+async fn insert_pr_with_participants(
+    repo: &PgForeignEntityRepo,
+    foreign_entity_id: &str,
+    stored_for_id: &str,
+    participant_github_user_ids: Option<&[&str]>,
+) -> ForeignEntity {
+    let mut metadata = json!({ "displayName": foreign_entity_id });
+    if let Some(participants) = participant_github_user_ids {
+        metadata["participantGithubUserIds"] = json!(participants);
+    }
+
+    repo.create_foreign_entity(
+        Uuid::now_v7(),
+        CreateForeignEntity {
+            foreign_entity_id: foreign_entity_id.into(),
+            foreign_entity_source: "github_pull_request".into(),
+            metadata,
+            stored_for_id: stored_for_id.into(),
+            stored_for_auth_entity: "user".into(),
+        },
+    )
+    .await
+    .expect("pull request foreign entity should be inserted")
+}
+
+async fn insert_github_link(pool: &PgPool, macro_id: &str, github_user_id: &str) {
+    let macro_user_id = Uuid::now_v7();
+    let email = format!("{macro_user_id}@example.com");
+
+    sqlx::query(
+        r#"
+        INSERT INTO public.macro_user (id, username, email, stripe_customer_id)
+        VALUES ($1, $2, $3, $4)
+        "#,
+    )
+    .bind(macro_user_id)
+    .bind(macro_id)
+    .bind(&email)
+    .bind(format!("cus_{macro_user_id}"))
+    .execute(pool)
+    .await
+    .expect("macro_user row should be inserted");
+
+    sqlx::query(
+        r#"
+        INSERT INTO public."User" (id, email, macro_user_id)
+        VALUES ($1, $2, $3)
+        "#,
+    )
+    .bind(macro_id)
+    .bind(&email)
+    .bind(macro_user_id)
+    .execute(pool)
+    .await
+    .expect("User row should be inserted");
+
+    sqlx::query(
+        r#"
+        INSERT INTO github_links (id, macro_id, fusionauth_user_id, github_username, github_user_id)
+        VALUES ($1, $2, $3, $4, $5)
+        "#,
+    )
+    .bind(Uuid::now_v7())
+    .bind(macro_id)
+    .bind(Uuid::now_v7())
+    .bind(format!("gh-{github_user_id}"))
+    .bind(github_user_id)
+    .execute(pool)
+    .await
+    .expect("github_links row should be inserted");
+}
+
+fn includes_me_filter() -> LiteralTree<ForeignEntityLiteral> {
+    Some(Arc::new(Expr::val(ForeignEntityLiteral::IncludesMe)))
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn get_for_user_includes_me_filters_to_participant_metadata(pool: PgPool) {
+    let repo = PgForeignEntityRepo::new(pool.clone());
+    let macro_id = "macro|user@example.com";
+    insert_github_link(&pool, macro_id, "42").await;
+
+    let involved =
+        insert_pr_with_participants(&repo, "involved-pr", macro_id, Some(&["7", "42"])).await;
+    insert_pr_with_participants(&repo, "other-pr", macro_id, Some(&["7"])).await;
+    insert_pr_with_participants(&repo, "legacy-pr", macro_id, None).await;
+
+    let entities = repo
+        .get_foreign_entities_for_user(
+            Some(macro_id.to_string()),
+            vec![SourceId::user(macro_id)],
+            10,
+            filter_query(includes_me_filter()),
+        )
+        .await
+        .expect("includes_me filter should be applied");
+
+    assert_eq!(entities, vec![involved]);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn get_for_user_includes_me_without_github_link_returns_empty(pool: PgPool) {
+    let repo = PgForeignEntityRepo::new(pool);
+    let macro_id = "macro|user@example.com";
+    insert_pr_with_participants(&repo, "involved-pr", macro_id, Some(&["42"])).await;
+
+    let entities = repo
+        .get_foreign_entities_for_user(
+            Some(macro_id.to_string()),
+            vec![SourceId::user(macro_id)],
+            10,
+            filter_query(includes_me_filter()),
+        )
+        .await
+        .expect("includes_me without a github link should succeed");
+
+    assert!(entities.is_empty());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn get_for_user_includes_me_without_requesting_user_returns_empty(pool: PgPool) {
+    let repo = PgForeignEntityRepo::new(pool.clone());
+    let macro_id = "macro|user@example.com";
+    insert_github_link(&pool, macro_id, "42").await;
+    insert_pr_with_participants(&repo, "involved-pr", macro_id, Some(&["42"])).await;
+
+    let entities = repo
+        .get_foreign_entities_for_user(
+            None,
+            vec![SourceId::user(macro_id)],
+            10,
+            filter_query(includes_me_filter()),
+        )
+        .await
+        .expect("includes_me without a requesting user should succeed");
+
+    assert!(entities.is_empty());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn get_for_user_includes_me_composes_with_other_filters(pool: PgPool) {
+    let repo = PgForeignEntityRepo::new(pool.clone());
+    let macro_id = "macro|user@example.com";
+    insert_github_link(&pool, macro_id, "42").await;
+
+    let involved = insert_pr_with_participants(&repo, "involved-pr", macro_id, Some(&["42"])).await;
+    insert_pr_with_participants(&repo, "other-pr", macro_id, Some(&["7"])).await;
+    insert_foreign_entity_for_source(&repo, "linear-issue", "linear_issue", macro_id, "user").await;
+
+    let filter = Some(Arc::new(Expr::and(
+        Expr::val(ForeignEntityLiteral::ForeignEntitySource(
+            "github_pull_request".to_string(),
+        )),
+        Expr::val(ForeignEntityLiteral::IncludesMe),
+    )));
+    let entities = repo
+        .get_foreign_entities_for_user(
+            Some(macro_id.to_string()),
+            vec![SourceId::user(macro_id)],
+            10,
+            filter_query(filter),
+        )
+        .await
+        .expect("includes_me composed with a source filter should be applied");
+
+    assert_eq!(entities, vec![involved]);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn get_for_user_includes_me_under_not_fails_closed(pool: PgPool) {
+    let repo = PgForeignEntityRepo::new(pool.clone());
+    let macro_id = "macro|user@example.com";
+    insert_github_link(&pool, macro_id, "42").await;
+    insert_pr_with_participants(&repo, "involved-pr", macro_id, Some(&["42"])).await;
+    insert_pr_with_participants(&repo, "other-pr", macro_id, Some(&["7"])).await;
+
+    let filter = Some(Arc::new(Expr::is_not(Expr::val(
+        ForeignEntityLiteral::IncludesMe,
+    ))));
+    let entities = repo
+        .get_foreign_entities_for_user(
+            Some(macro_id.to_string()),
+            vec![SourceId::user(macro_id)],
+            10,
+            filter_query(filter),
+        )
+        .await
+        .expect("unsupported includes_me placement should fail closed");
+
+    assert!(entities.is_empty());
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

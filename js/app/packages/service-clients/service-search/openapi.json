@@ -2101,6 +2101,10 @@
               "type": "string"
             },
             "description": "Internal foreign entity record IDs to filter by. Empty to include all records."
+          },
+          "includes_me": {
+            "type": "boolean",
+            "description": "When true, only return foreign entities whose metadata lists the requesting user as a\nparticipant (GitHub `involves:me` semantics for `github_pull_request` records). False or\nabsent applies no filter. Serialized in filter ASTs as the `\"me\"` literal."
           }
         }
       },

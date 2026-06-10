@@ -7833,6 +7833,12 @@ export const postItemsSoupBody = zod
           .describe(
             'Internal foreign entity record IDs to filter by. Empty to include all records.'
           ),
+        includes_me: zod
+          .boolean()
+          .optional()
+          .describe(
+            'When true, only return foreign entities whose metadata lists the requesting user as a\nparticipant (GitHub `involves:me` semantics for `github_pull_request` records). False or\nabsent applies no filter. Serialized in filter ASTs as the `\"me\"` literal.'
+          ),
       })
       .optional()
       .describe('Filters for foreign entity records.'),
