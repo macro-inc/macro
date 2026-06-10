@@ -18,12 +18,16 @@ export const AnimatedChannelIcon = (props: {
     >
       {/*<title>Channel icon</title>*/}
       <style>{`
-        /* While hovered (.animating is held for the whole hover), the offset/
-           leaning hash resolves into a regular hash and stays there: horizontals
-           slide to horizontally-centered (translateX), verticals straighten to
-           fully vertical by morphing their path 'd'. Eases back on mouse-leave.
-           Morphing 'd' (rather than skewX) avoids shearing the round caps and
-           keeps the stroke scaling normally with icon size. */
+        /* The .animating class is toggled by the triggerAnimation prop; callers
+           drive it differently — held for the duration of hover in the desktop
+           sidebar (SidebarActionButton etc.), and pulsed for a fixed duration on
+           onPointerDown/tap in the mobile dock (MobileDockButton). While
+           .animating is set, the offset/leaning hash resolves into a regular hash
+           and stays there: horizontals slide to horizontally-centered
+           (translateX), verticals straighten to fully vertical by morphing their
+           path 'd'. It eases back when .animating clears. Morphing 'd' (rather
+           than skewX) avoids shearing the round caps and keeps the stroke scaling
+           normally with icon size. */
         .animated-channel-icon .channel-h {
           transition: transform 0.35s ease-in-out;
         }
