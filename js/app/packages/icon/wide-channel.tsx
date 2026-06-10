@@ -1,21 +1,5 @@
 import { createUniqueId } from 'solid-js';
 
-// One-shot "zip in" animation, driven by the .animating class (toggled by the
-// triggerAnimation prop, same as the other animated icons). When .animating is applied
-// the whole hash disappears — each line starts off-screen (clipped) — then the 4 pieces
-// zip in along their own axes (4 distinct directions) and settle with a slight overshoot.
-//
-// Each line zips in along its own axis (opposite within each pair, so all 4 differ):
-//   channel-h-top    in from the left          (+X axis)
-//   channel-h-bottom in from the right         (-X axis)
-//   channel-v-left   in from the bottom-left   ((5,-15) axis)
-//   channel-v-right  in from the top-right     ((5,-15) axis)
-//
-// The off-screen start offsets clear the 24x24 clip box along each line's axis. The
-// 0%/15% hold gives a short beat with the hash gone before the pieces zip in. Built on
-// `transform` (not `d` morphing), so unlike the old version it animates in Safari/WebKit
-// too (incl. the macOS Tauri WKWebView).
-
 export const AnimatedChannelIcon = (props: {
   triggerAnimation?: boolean;
   class?: string;
