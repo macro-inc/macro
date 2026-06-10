@@ -1,21 +1,24 @@
 import { ENABLE_SNIPPETS } from '@core/constant/featureFlags';
-import { mergeRegister } from '@lexical/utils';
+import { $dfsIterator, mergeRegister } from '@lexical/utils';
 import type { PeerIdValidator } from '@lexical-core';
 import {
   $collapseInlineSearch,
+  $createAwaitNode,
   $createInlineSearchNode,
   $handleInlineSearchNodeMutation,
   $handleInlineSearchNodeTransform,
+  $isAwaitNode,
+  $isInlineSearchNode,
   $removeInlineSearch,
+  HISTORY_MERGE_TAG,
   InlineSearchNode,
   InlineSearchNodesType,
   validTriggerPosition,
 } from '@lexical-core';
 import { fetchSnippetRaw } from '@queries/storage/snippets';
 import {
-  $getSelection,
+  $getNodeByKey,
   $insertNodes,
-  $isRangeSelection,
   $parseSerializedNode,
   COMMAND_PRIORITY_CRITICAL,
   COMMAND_PRIORITY_HIGH,
@@ -26,7 +29,9 @@ import {
   KEY_ESCAPE_COMMAND,
   type LexicalCommand,
   type LexicalEditor,
+  type LexicalNode,
 } from 'lexical';
+import { nanoid } from 'nanoid';
 import { createLexicalWrapper } from '../../context/LexicalWrapperContext';
 import type { MenuOperations } from '../../shared/inlineMenu';
 import {
@@ -57,65 +62,37 @@ type SnippetsPluginProps = {
   sourceDocumentId?: string;
 };
 
-type SelectionBookmark = {
-  anchorKey: string;
-  anchorOffset: number;
-  anchorType: 'text' | 'element';
-  focusKey: string;
-  focusOffset: number;
-  focusType: 'text' | 'element';
-};
-
-function getSelectionBookmark(editor: LexicalEditor): SelectionBookmark | null {
-  return editor.getEditorState().read(() => {
-    const selection = $getSelection();
-    if (!$isRangeSelection(selection)) return null;
-
-    return {
-      anchorKey: selection.anchor.key,
-      anchorOffset: selection.anchor.offset,
-      anchorType: selection.anchor.type,
-      focusKey: selection.focus.key,
-      focusOffset: selection.focus.offset,
-      focusType: selection.focus.type,
-    };
-  });
+function $isSnippetSearchNode(
+  node: LexicalNode | null | undefined
+): node is InlineSearchNode {
+  return (
+    $isInlineSearchNode(node) &&
+    node.getTextContent().trim().charAt(0) === InlineSearchNodesType.Snippets
+  );
 }
 
-function selectionMatchesBookmark(bookmark: SelectionBookmark) {
-  const selection = $getSelection();
-  if (!$isRangeSelection(selection)) return false;
+function $getActiveSnippetSearchNode(): InlineSearchNode | null {
+  for (const { node } of $dfsIterator()) {
+    if ($isSnippetSearchNode(node)) {
+      return node;
+    }
+  }
 
-  return (
-    selection.anchor.key === bookmark.anchorKey &&
-    selection.anchor.offset === bookmark.anchorOffset &&
-    selection.anchor.type === bookmark.anchorType &&
-    selection.focus.key === bookmark.focusKey &&
-    selection.focus.offset === bookmark.focusOffset &&
-    selection.focus.type === bookmark.focusType
-  );
+  return null;
 }
 
 /**
  * Fetch a snippet document's content and render it to internal markdown.
- * Content lives in sync-service; a throwaway markdown editor converts the
+ * Content lives in sync-service; a plugin-scoped markdown editor converts the
  * serialized state to a markdown string the target editor can ingest.
  */
-async function fetchSnippetMarkdown(documentId: string): Promise<string> {
+async function fetchSnippetMarkdown(
+  documentId: string,
+  extractionEditor: LexicalEditor
+): Promise<string> {
   const rawState = await fetchSnippetRaw({ documentId });
-
-  const { editor, cleanup } = createLexicalWrapper({
-    type: 'markdown',
-    namespace: 'snippet-markdown-extractor',
-    isInteractable: () => false,
-  });
-
-  try {
-    initializeEditorWithState(editor, rawState);
-    return editorStateAsMarkdown(editor, 'internal');
-  } finally {
-    cleanup();
-  }
+  initializeEditorWithState(extractionEditor, rawState);
+  return editorStateAsMarkdown(extractionEditor, 'internal');
 }
 
 /**
@@ -151,52 +128,104 @@ function registerSnippetsPlugin(
     editable: false,
     nodes: [...Array.from(editor._nodes.values()).map((node) => node.klass)],
   });
+  const { editor: extractionEditor, cleanup: cleanupExtractionEditor } =
+    createLexicalWrapper({
+      type: 'markdown',
+      namespace: 'snippet-markdown-extractor',
+      isInteractable: () => false,
+    });
 
-  async function insertSnippet(payload: {
+  function insertSnippet(payload: {
     documentId: string;
     sourceDocumentId?: string;
   }) {
     const sourceDocumentId = payload.sourceDocumentId ?? props.sourceDocumentId;
     if (sourceDocumentId === payload.documentId) {
-      console.info(
-        'aborting snippet insertion: source snippet selected itself'
+      return;
+    }
+
+    const replaceAwaitNode = (
+      insertedAwaitNodeKey: string,
+      $createReplacement?: () => LexicalNode[] | null | undefined
+    ) => {
+      editor.update(
+        () => {
+          const target = $getNodeByKey(insertedAwaitNodeKey);
+          if (!$isAwaitNode(target)) {
+            return;
+          }
+
+          const nodes = $createReplacement?.() ?? [];
+          if (nodes.length === 0) {
+            const next = target.getNextSibling();
+            const prev = target.getPreviousSibling();
+            target.remove();
+            if (next) next.selectStart();
+            else if (prev) prev.selectEnd();
+            return;
+          }
+
+          const first = nodes[0]!;
+          target.replace(first);
+          let cursor = first;
+          for (let i = 1; i < nodes.length; i++) {
+            const next = nodes[i]!;
+            cursor.insertAfter(next);
+            cursor = next;
+          }
+          cursor.selectEnd();
+        },
+        { tag: HISTORY_MERGE_TAG }
       );
-      return;
-    }
+    };
 
-    editor.dispatchCommand(REMOVE_SNIPPET_SEARCH_COMMAND, undefined);
-    menu.setSearchTerm('');
-    menu.setIsOpen(false);
-
-    const selectionBookmark = getSelectionBookmark(editor);
-    if (!selectionBookmark) {
-      console.info('aborting snippet insertion: no valid selection bookmark');
-      return;
-    }
-
-    try {
-      const markdown = await fetchSnippetMarkdown(payload.documentId);
-      if (!markdown.trim()) return;
-
-      // Same technique as the markdown paste plugin: parse the markdown with a
-      // throwaway editor restricted to the target editor's nodes, then insert
-      // the resulting nodes at the cursor.
-      editor.update(() => {
-        if (!selectionMatchesBookmark(selectionBookmark)) {
-          console.info('aborting snippet insertion: selection changed');
+    const fetchAndReplaceSnippet = async (insertedAwaitNodeKey: string) => {
+      try {
+        const markdown = await fetchSnippetMarkdown(
+          payload.documentId,
+          extractionEditor
+        );
+        if (!markdown.trim()) {
+          replaceAwaitNode(insertedAwaitNodeKey);
           return;
         }
 
-        setEditorStateFromMarkdown(parseEditor, markdown, 'both');
-        const state = parseEditor.getEditorState().toJSON();
-        const nodes = state.root.children.map((node) =>
-          $parseSerializedNode(node)
-        );
-        $insertNodes(nodes);
+        replaceAwaitNode(insertedAwaitNodeKey, () => {
+          // Same technique as the markdown paste plugin: parse the markdown with
+          // a throwaway editor restricted to the target editor's nodes, then
+          // insert the resulting nodes at the await placeholder.
+          setEditorStateFromMarkdown(parseEditor, markdown, 'both');
+          const state = parseEditor.getEditorState().toJSON();
+          return state.root.children.map((node) => $parseSerializedNode(node));
+        });
+      } catch (error) {
+        console.error('failed to insert snippet content', error);
+        replaceAwaitNode(insertedAwaitNodeKey);
+      }
+    };
+
+    const awaitId = nanoid(21);
+
+    menu.setSearchTerm('');
+    menu.setIsOpen(false);
+
+    editor.update(() => {
+      const insertionNode = $getActiveSnippetSearchNode();
+      if (!insertionNode) {
+        return;
+      }
+
+      insertionNode.selectEnd();
+      insertionNode.remove();
+      const awaitNode = $createAwaitNode({
+        awaitId,
+        text: 'Inserting snippet...',
+        inline: true,
       });
-    } catch (error) {
-      console.error('failed to insert snippet content', error);
-    }
+      const awaitNodeKey = awaitNode.getKey();
+      $insertNodes([awaitNode]);
+      void fetchAndReplaceSnippet(awaitNodeKey);
+    });
   }
 
   function typeSymbolCommand() {
@@ -213,7 +242,7 @@ function registerSnippetsPlugin(
     return false;
   }
 
-  return mergeRegister(
+  const cleanup = mergeRegister(
     registerSymbolListener(),
     // When you type ;
     editor.registerCommand(
@@ -273,6 +302,11 @@ function registerSnippetsPlugin(
         )
     )
   );
+
+  return () => {
+    cleanup();
+    cleanupExtractionEditor();
+  };
 }
 
 export function snippetsPlugin(props: SnippetsPluginProps) {

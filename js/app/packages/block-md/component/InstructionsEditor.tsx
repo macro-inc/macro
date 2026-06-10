@@ -17,6 +17,7 @@ import {
   LexicalWrapperContext,
 } from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
 import {
+  awaitPlugin,
   CLOSE_INLINE_SEARCH_COMMAND,
   DefaultShortcuts,
   documentMetadataPlugin,
@@ -197,6 +198,7 @@ export function InstructionsEditor(props: {
     )
     .use(textPastePlugin())
     .use(markdownPastePlugin())
+    .use(awaitPlugin())
     .use(
       keyboardShortcutsPlugin({
         shortcuts: DefaultShortcuts,
