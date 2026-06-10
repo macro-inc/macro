@@ -1,4 +1,9 @@
 import { NIL_UUID } from '@app/component/next-soup/filters/filter-store';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import {
+  ENABLE_SNIPPETS_FLAG,
+  ENABLE_SNIPPETS_OVERRIDE,
+} from '@core/constant/featureFlags';
 import { isSnippetEntity, type SnippetEntity } from '@entity';
 import { useSoupItemsQuery } from '@queries/soup/items';
 import { createMemo } from 'solid-js';
@@ -20,6 +25,10 @@ const STALE_TIME = 5 * 60 * 1000;
  * snippet sub type.
  */
 export function useQuickAccessSnippetsQuery() {
+  const snippetsFlag = useFeatureFlag(ENABLE_SNIPPETS_FLAG, {
+    enabledOverride: ENABLE_SNIPPETS_OVERRIDE,
+  });
+
   const query = useSoupItemsQuery(
     () => ({
       params: {
@@ -37,7 +46,7 @@ export function useQuickAccessSnippetsQuery() {
         project_filters: { project_ids: [NIL_UUID] },
       },
     }),
-    () => ({ staleTime: STALE_TIME })
+    () => ({ staleTime: STALE_TIME, enabled: snippetsFlag().enabled })
   );
 
   const snippets = createMemo<SnippetEntity[]>(

@@ -1,3 +1,4 @@
+import { ENABLE_SNIPPETS } from '@core/constant/featureFlags';
 import { mergeRegister } from '@lexical/utils';
 import type { PeerIdValidator } from '@lexical-core';
 import {
@@ -69,6 +70,9 @@ function registerSnippetsPlugin(
   const { menu } = props;
 
   function typeSymbolCommand() {
+    // Checked per keystroke so the PostHog flag applies without a reload;
+    // when disabled the `;` falls through as regular text.
+    if (!ENABLE_SNIPPETS()) return false;
     const shouldTrigger = validTriggerPosition(editor);
     if (shouldTrigger) {
       editor.update(() => {

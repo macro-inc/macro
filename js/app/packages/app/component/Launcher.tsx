@@ -1,8 +1,13 @@
 import { analytics } from '@app/lib/analytics';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { setAutomationComposerOpen } from '@block-automation/component';
 import type { BlockAlias, BlockName } from '@core/block';
 import { getIconConfig } from '@core/component/EntityIcon';
-import { ENABLE_ANIMATED_ICONS } from '@core/constant/featureFlags';
+import {
+  ENABLE_ANIMATED_ICONS,
+  ENABLE_SNIPPETS_FLAG,
+  ENABLE_SNIPPETS_OVERRIDE,
+} from '@core/constant/featureFlags';
 import {
   createHotkeyGroup,
   registerHotkey,
@@ -498,7 +503,13 @@ type LauncherInnerProps = {
 
 export const LauncherInner = (props: LauncherInnerProps) => {
   const hkGroup = createHotkeyGroup();
-  const blocks = () => props.blocks ?? CREATABLE_BLOCKS;
+  const snippetsFlag = useFeatureFlag(ENABLE_SNIPPETS_FLAG, {
+    enabledOverride: ENABLE_SNIPPETS_OVERRIDE,
+  });
+  const blocks = () =>
+    (props.blocks ?? CREATABLE_BLOCKS).filter(
+      (block) => block.blockName !== 'snippet' || snippetsFlag().enabled
+    );
   const [attachHotkeys, launcherScope] = useHotkeyDOMScope('create-menu', true);
 
   let ref!: HTMLDivElement;
