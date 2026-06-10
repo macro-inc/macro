@@ -52,7 +52,10 @@ mapfile -t outs < <(nix build --no-link --print-build-logs --print-out-paths "${
 rm -rf "$OUTPUT_DIR"
 mkdir -p "$OUTPUT_DIR/target/lambda"
 for out in "${outs[@]}"; do
-  cp -a "$out"/. "$OUTPUT_DIR/target/lambda/"
+  # Copy the handler dir(s) inside each out path. NOT `cp -a "$out"/.` — that
+  # form also applies the store dir's read-only mode onto target/lambda
+  # itself, breaking the next iteration's copy in multi-handler services.
+  cp -a "$out"/* "$OUTPUT_DIR/target/lambda/"
 done
 # Store copies are read-only; make the tree writable so a re-run's rm -rf works.
 chmod -R u+w "$OUTPUT_DIR"
