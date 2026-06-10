@@ -77,17 +77,17 @@ import {
 import { codePlugin } from '@core/component/LexicalMarkdown/plugins/code/codePlugin';
 import { emojisPlugin } from '@core/component/LexicalMarkdown/plugins/emojis/emojisPlugin';
 import {
-  createHoverTooltipStore,
-  HoverTooltip,
-  hoverTooltipPlugin,
-} from '@core/component/LexicalMarkdown/plugins/hover-tooltip';
-import {
   DO_SEARCH_COMMAND,
   FloatingSearchHighlight,
   findAndReplacePlugin,
   type NodekeyOffset,
   SearchHighlight,
 } from '@core/component/LexicalMarkdown/plugins/find-and-replace';
+import {
+  createHoverTooltipStore,
+  HoverTooltip,
+  hoverTooltipPlugin,
+} from '@core/component/LexicalMarkdown/plugins/hover-tooltip';
 import { iosCursorScrollPlugin } from '@core/component/LexicalMarkdown/plugins/ios-cursor-scroll';
 import {
   GO_TO_LOCATION_COMMAND,

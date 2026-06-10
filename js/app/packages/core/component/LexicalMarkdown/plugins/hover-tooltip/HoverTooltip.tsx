@@ -1,7 +1,7 @@
 import { UserIcon } from '@core/component/UserIcon';
-import { syncServiceClient } from '@service-sync/client';
 import { macroIdToEmail, tryMacroId, useDisplayNameParts } from '@core/user';
 import { formatRelativeTimestamp } from '@entity';
+import { syncServiceClient } from '@service-sync/client';
 import { debounce } from '@solid-primitives/scheduled';
 import {
   createEffect,
@@ -25,12 +25,7 @@ function UserLine(props: { userId: string; editedAt: Date }) {
 
   return (
     <span class="inline-flex items-center gap-1">
-      <UserIcon
-        id={props.userId}
-        size="sm"
-        suppressClick
-        showTooltip={false}
-      />
+      <UserIcon id={props.userId} size="sm" suppressClick showTooltip={false} />
       {name()}, {formatRelativeTimestamp(props.editedAt)}
     </span>
   );
