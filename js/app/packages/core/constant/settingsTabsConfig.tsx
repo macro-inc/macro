@@ -1,4 +1,5 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import BugIcon from '@phosphor/bug.svg';
 import DeviceMobileIcon from '@phosphor/device-mobile-speaker.svg';
 import KeyboardIcon from '@phosphor/keyboard.svg';
 import PaintBucketIcon from '@phosphor/paint-bucket.svg';
@@ -6,6 +7,7 @@ import PlugIcon from '@phosphor/plug.svg';
 import UserIconPhosphor from '@phosphor/user.svg';
 import UsersThreeIcon from '@phosphor/users-three.svg';
 import { type Component, createMemo } from 'solid-js';
+import { useHasPermission } from '../context/user';
 import { isNativeMobilePlatform } from '../mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '../mobile/isTouchDevice';
 import {
@@ -13,6 +15,7 @@ import {
   ENABLE_APP_STORE_QR_CODE,
   ENABLE_TEAMS_OVERRIDE,
 } from './featureFlags';
+import { PERMISSION_IDS } from './permissions';
 import type { SettingsTab } from './SettingsState';
 
 export type SettingsTabItem = {
@@ -51,6 +54,10 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
       { tab: 'Agent', label: 'MCPs', icon: PlugIcon },
     ],
   },
+  {
+    label: 'Admin',
+    items: [{ tab: 'Admin', label: 'Debug', icon: BugIcon }],
+  },
 ];
 
 /** Flattened view of {@link SETTINGS_TAB_GROUPS} for direct tab lookups. */
@@ -76,6 +83,7 @@ export const useSettingsTabAvailable = () => {
   const teamsFlag = useFeatureFlag('enable-teams-settings', {
     enabledOverride: ENABLE_TEAMS_OVERRIDE,
   });
+  const hasAdminPanel = useHasPermission(PERMISSION_IDS.WRITE_ADMIN_PANEL);
 
   return (tab: SettingsTab): boolean => {
     switch (tab) {
@@ -92,6 +100,8 @@ export const useSettingsTabAvailable = () => {
         return !isNativeMobilePlatform();
       case 'Mobile':
         return isNativeMobilePlatform() && DEV_MODE_ENV;
+      case 'Admin':
+        return hasAdminPanel();
       default:
         return false;
     }
