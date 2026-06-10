@@ -138,6 +138,18 @@
       "@channel/*": [
         "./packages/channel/*"
       ],
+      "@companies/*": [
+        "./packages/companies/*"
+      ],
+      "@block-company/*": [
+        "./packages/block-company/*"
+      ],
+      "@contacts/*": [
+        "./packages/contacts/*"
+      ],
+      "@block-contact/*": [
+        "./packages/block-contact/*"
+      ],
       "@block-email/*": [
         "./packages/block-email/*"
       ],

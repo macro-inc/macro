@@ -37,6 +37,7 @@ import {
   DEV_MODE_ENV,
   ENABLE_APP_STORE_QR_CODE,
   ENABLE_CALLS,
+  ENABLE_CRM,
   ENABLE_HOME_OVERRIDE,
   ENABLE_NEW_PRICING_OVERRIDE,
   ENABLE_TEAMS_OVERRIDE,
@@ -58,6 +59,7 @@ import { AnimatedSquareCommandKIcon } from '@icon/square-command-k';
 import { AnimatedSquareSidebarIcon } from '@icon/square-sidebar';
 import { AnimatedCallIcon } from '@icon/wide-call';
 import { AnimatedChannelIcon } from '@icon/wide-channel';
+import { AnimatedCompanyIcon } from '@icon/wide-company';
 import { AnimatedEmailIcon } from '@icon/wide-email';
 import { AnimatedFileMdIcon } from '@icon/wide-fileMd';
 import { AnimatedInboxIcon } from '@icon/wide-inbox';
@@ -164,6 +166,18 @@ const SIDEBAR_LINKS = [
     hotkey: 'c',
     hotkeyToken: TOKENS.sidebar.goTo.channels,
   },
+  ...(ENABLE_CRM
+    ? ([
+        {
+          id: 'companies',
+          label: 'Companies',
+          href: LIST_VIEW_PATHS.companies,
+          icon: AnimatedCompanyIcon,
+          hotkey: 'o',
+          hotkeyToken: TOKENS.sidebar.goTo.companies,
+        },
+      ] satisfies SidebarItem[])
+    : []),
 ] satisfies SidebarItem[];
 
 export type SidebarState = 'hidden' | 'expanded' | 'slim';

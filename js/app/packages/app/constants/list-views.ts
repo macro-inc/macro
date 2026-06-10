@@ -6,6 +6,7 @@ export const LIST_VIEWS = [
   'tasks',
   'channels',
   'calls',
+  'companies',
   'folders',
   'search',
 ] as const;
@@ -20,6 +21,7 @@ export const LIST_VIEW_PATHS = {
   tasks: '/tasks',
   channels: '/channels',
   calls: '/calls',
+  companies: '/companies',
   folders: '/folders',
   search: '/search',
 } as const satisfies Record<ListView, string>;
@@ -32,6 +34,7 @@ export const LIST_VIEW_ID = {
   tasks: 'tasks',
   channels: 'channels',
   calls: 'calls',
+  companies: 'companies',
   folders: 'folders',
   search: 'search',
 } as const satisfies Record<ListView, string>;

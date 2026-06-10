@@ -33,6 +33,11 @@ function extractRawTitle(entity: EntityData): JSX.Element {
       </>
     ))
     .with({ type: 'foreign' }, (e) => e.name)
+    .with({ type: 'crm_company' }, (e) => e.name || 'Unknown Company')
+    .with(
+      { type: 'crm_contact' },
+      (e) => e.name || e.email || 'Unknown Contact'
+    )
     .otherwise(() => 'Unknown');
 }
 

@@ -1,7 +1,12 @@
 //! Connection-gateway realtime adapter for channel side effects.
 
+#[cfg(test)]
+mod test;
+
 use crate::domain::{
-    models::{CountedReaction, MutatedAttachment, TypingAction},
+    models::{
+        BotSenderProfile, CountedReaction, MutatedAttachment, MutatedMessage, Sender, TypingAction,
+    },
     ports::ChannelRealtimePublisher,
     side_effects::ChannelRealtimeEffect,
 };
@@ -55,12 +60,14 @@ impl ChannelRealtimePublisher for ConnectionGatewayChannelRealtimePublisher {
             ChannelRealtimeEffect::Message {
                 recipients,
                 message,
+                bot_profile,
                 nonce,
             } => {
+                let sender = MessageRealtimeSender::new(&message.sender_id, bot_profile);
                 self.send_update(
                     "comms_message",
                     WithNonce {
-                        data: message,
+                        data: MessageRealtimeData { message, sender },
                         nonce,
                     },
                     recipients,
@@ -142,6 +149,44 @@ struct WithNonce<T: Serialize> {
     data: T,
     #[serde(skip_serializing_if = "Option::is_none")]
     nonce: Option<String>,
+}
+
+#[derive(Serialize)]
+struct MessageRealtimeData {
+    #[serde(flatten)]
+    message: MutatedMessage,
+    /// Structured sender identity, shaped like the REST `ApiMessageSender`.
+    sender: MessageRealtimeSender,
+}
+
+#[derive(Serialize)]
+struct MessageRealtimeSender {
+    #[serde(rename = "type")]
+    sender_type: &'static str,
+    id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    avatar_url: Option<String>,
+}
+
+impl MessageRealtimeSender {
+    fn new(sender: &Sender, bot_profile: Option<BotSenderProfile>) -> Self {
+        match sender {
+            Sender::Bot(bot_id) => Self {
+                sender_type: "bot",
+                id: bot_id.as_uuid().to_string(),
+                name: bot_profile.as_ref().map(|profile| profile.name.clone()),
+                avatar_url: bot_profile.and_then(|profile| profile.avatar_url),
+            },
+            Sender::User(user_id) => Self {
+                sender_type: "user",
+                id: user_id.as_ref().to_string(),
+                name: None,
+                avatar_url: None,
+            },
+        }
+    }
 }
 
 #[derive(Serialize)]

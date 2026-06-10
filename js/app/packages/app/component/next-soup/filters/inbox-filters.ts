@@ -118,6 +118,12 @@ export function signalFilter(entity: EntityData): boolean {
       return true;
     case 'call':
       return true;
+    case 'crm_company':
+      // CRM companies only show in the Companies view, not Inbox.
+      return false;
+    case 'crm_contact':
+      // CRM contacts only show in CRM views, not Inbox.
+      return false;
     case 'automation':
       // Automations only show in the Agents > Scheduled tab, not Inbox.
       return false;

@@ -22,6 +22,7 @@ import type {
   ResyncResponse,
   SendMessageRequest,
   SendMessageResponse,
+  SharedInboxConflictResponse,
   UpdateLabelBatchRequest,
   UpdateLabelBatchResponse,
   UpdateThreadLabelRequest,
@@ -62,16 +63,47 @@ function emailFetch<T extends ObjectLike = never>(
   return fetchWithToken<T>(`${emailHost}${url}`, init);
 }
 
+/**
+ * Error code `init` returns when the target mailbox is already connected by another
+ * macro user. The caller confirms with the user, then retries with `forceShare`.
+ */
+export const SHARED_INBOX_CONFLICT_CODE = 'SHARED_INBOX_CONFLICT' as const;
+
 export const emailClient = {
-  async init(args?: { linkId?: string }) {
-    const path = args?.linkId
-      ? `/email/init?link_id=${encodeURIComponent(args.linkId)}`
-      : '/email/init';
-    return (
-      await emailFetch<EmptyResponse>(path, {
+  async init(args?: { linkId?: string; forceShare?: boolean }) {
+    const params = new URLSearchParams();
+    if (args?.linkId) params.set('link_id', args.linkId);
+    if (args?.forceShare) params.set('force_share', 'true');
+    const query = params.toString();
+    const path = query ? `/email/init?${query}` : '/email/init';
+
+    return fetchWithToken<EmptyResponse, typeof SHARED_INBOX_CONFLICT_CODE>(
+      `${emailHost}${path}`,
+      {
         method: 'POST',
-      })
-    ).map((result) => result);
+        // A custom handler replaces safeFetch's default status mapping, so non-409
+        // statuses fall back to the same HTTP_ERROR shape callers already branch on.
+        errorResponseHandler: async (response) => {
+          if (response.status === 409) {
+            const body = (await response
+              .json()
+              .catch(() => null)) as SharedInboxConflictResponse | null;
+            return {
+              code: SHARED_INBOX_CONFLICT_CODE,
+              // The caller formats the prompt; the fields it needs ride along as JSON.
+              message: JSON.stringify({
+                emailAddress: body?.email_address ?? '',
+                existingOwnerEmail: body?.existing_owner_email ?? '',
+              }),
+            };
+          }
+          return {
+            code: 'HTTP_ERROR',
+            message: `HTTP error! status: ${response.status}`,
+          };
+        },
+      }
+    );
   },
   async getThread(args: {
     offset?: number;

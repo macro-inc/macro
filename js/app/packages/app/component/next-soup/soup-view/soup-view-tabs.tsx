@@ -19,6 +19,7 @@ import { type TabItem, Tabs } from '@core/component/Tabs';
 import { TabsInset } from '@core/component/TabsInset';
 import { TabsInsetDropdown } from '@core/component/TabsInsetDropdown';
 import { useUserContext } from '@core/context/user';
+import { useIsTeamAdmin } from '@queries/team/teams';
 import { batch, createEffect, createMemo, For, Match, Switch } from 'solid-js';
 
 /** Views that have tab definitions. Shared between VIEW_TAB_LISTS and VIEW_TAB_PRESETS. */
@@ -31,6 +32,7 @@ export type TabbedListView = Extract<
   | 'tasks'
   | 'channels'
   | 'calls'
+  | 'companies'
   | 'folders'
 >;
 
@@ -78,6 +80,13 @@ export const VIEW_TAB_LISTS: Record<TabbedListView, TabItem[]> = {
     { value: 'missed', label: 'Missed' },
     { value: 'unattended', label: 'Unattended' },
   ],
+  companies: [
+    { value: 'active', label: 'Active' },
+    // The 'hidden' tab is gated to admin/owner team members — see
+    // `filterTabsForUser` below and the preset resolver in
+    // soup-filter-presets.ts.
+    { value: 'hidden', label: 'Hidden' },
+  ],
   folders: [
     { value: 'owned', label: 'Owned' },
     { value: 'all', label: 'All' },
@@ -106,10 +115,12 @@ export const useApplyPreset = () => {
   const { queryFilters, setActiveTab, activeTab, assigneeFilter } =
     useSoupView();
   const user = useUserContext();
+  const isTeamAdmin = useIsTeamAdmin();
 
   const getPresetContext = (): PresetContext => ({
     userId: user.userId(),
     email: user.email(),
+    isTeamAdmin: isTeamAdmin(),
   });
 
   const getFilterQuery = (id: string, ctx: FilterContext) => {
@@ -201,10 +212,24 @@ export const SoupViewTabs = () => {
   );
 };
 
+/** Drops admin-only tabs for non-admin users (currently: companies → hidden). */
+function filterTabsForUser(
+  view: TabbedListView,
+  list: TabItem[],
+  isTeamAdmin: boolean
+): TabItem[] {
+  if (view === 'companies' && !isTeamAdmin) {
+    return list.filter((t) => t.value !== 'hidden');
+  }
+  return list;
+}
+
 const ViewTabs = (props: { view: TabbedListView }) => {
   const { applyTabPreset } = useApplyPreset();
   const { activeTab } = useSoupView();
-  const list = () => VIEW_TAB_LISTS[props.view];
+  const isTeamAdmin = useIsTeamAdmin();
+  const list = () =>
+    filterTabsForUser(props.view, VIEW_TAB_LISTS[props.view], isTeamAdmin());
 
   return (
     <TabsInset
@@ -221,6 +246,7 @@ export const CollapsedSoupViewTabs = () => {
   const listView = useCurrentListView();
   const { applyTabPreset } = useApplyPreset();
   const { activeTab } = useSoupView();
+  const isTeamAdmin = useIsTeamAdmin();
 
   const view = createMemo(() => {
     const v = listView();
@@ -229,7 +255,7 @@ export const CollapsedSoupViewTabs = () => {
 
   const list = createMemo(() => {
     const v = view();
-    return v ? VIEW_TAB_LISTS[v] : [];
+    return v ? filterTabsForUser(v, VIEW_TAB_LISTS[v], isTeamAdmin()) : [];
   });
 
   const defaultValue = createMemo(() => {
@@ -280,7 +306,9 @@ export const MobileSoupViewTabs = () => {
 const MobileViewTabs = (props: { view: TabbedListView }) => {
   const { applyTabPreset } = useApplyPreset();
   const { activeTab } = useSoupView();
-  const list = () => VIEW_TAB_LISTS[props.view];
+  const isTeamAdmin = useIsTeamAdmin();
+  const list = () =>
+    filterTabsForUser(props.view, VIEW_TAB_LISTS[props.view], isTeamAdmin());
 
   let wrapperRef: HTMLDivElement | undefined;
 

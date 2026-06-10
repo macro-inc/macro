@@ -1,16 +1,16 @@
 use crate::domain::{
     events::ChannelEvent,
     models::{
-        Activity, ActivityType, AddParticipantsRequest, AttachmentEntityReference,
-        ChannelAttachmentType, ChannelContextMessage, ChannelMessage, ChannelMessageFilters,
-        ChannelMetadata, ChannelParticipant, ChannelPreview, ChannelPreviewData, ChannelType,
-        CreateEntityMentionOptions, DeleteMessageQuery, EntityMention, GetOrCreateAction,
-        GetOrCreateChannelResponse, GetOrCreateDmRequest, GetOrCreatePrivateRequest,
-        MessagePageDirection, NewChannelAttachment, ParticipantRole, PatchChannelRequest,
-        PatchMessageRequest, PostMessageRequest, PostMessageResponse, PostReactionRequest,
-        PostTypingRequest, ReactionAction, ReferencedShareItem, RemoveParticipantsRequest,
-        ResolvedChannelMessage, Sender, SimpleMention, ThreadInfo, ThreadReply, TopLevelMessageRow,
-        WithChannelId,
+        Activity, ActivityType, AddParticipantsRequest, AttachmentEntityReference, BotId,
+        BotSenderProfile, ChannelAttachmentType, ChannelContextMessage, ChannelMessage,
+        ChannelMessageFilters, ChannelMetadata, ChannelParticipant, ChannelPreview,
+        ChannelPreviewData, ChannelType, CreateEntityMentionOptions, DeleteMessageQuery,
+        EntityMention, GetOrCreateAction, GetOrCreateChannelResponse, GetOrCreateDmRequest,
+        GetOrCreatePrivateRequest, MessagePageDirection, NewChannelAttachment, ParticipantRole,
+        PatchChannelRequest, PatchMessageRequest, PostMessageRequest, PostMessageResponse,
+        PostReactionRequest, PostTypingRequest, ReactionAction, ReferencedShareItem,
+        RemoveParticipantsRequest, ResolvedChannelMessage, Sender, SimpleMention, ThreadInfo,
+        ThreadReply, TopLevelMessageRow, WithChannelId,
     },
     ports::{
         ChannelAttachmentsPage, ChannelEventDispatcher, ChannelMessagesErr,
@@ -20,6 +20,7 @@ use crate::domain::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{CreatedAt, PaginateOn, Query};
+use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
 #[cfg(test)]
@@ -109,19 +110,23 @@ where
             .map_err(anyhow::Error::from)?;
 
         let mut all_ids: Vec<Uuid> = parent_ids.clone();
+        let mut sender_ids: Vec<&str> = rows.iter().map(|r| r.sender_id.as_str()).collect();
         for td in thread_data.values() {
             for reply in &td.preview_replies {
                 all_ids.push(reply.id);
+                sender_ids.push(reply.sender_id.as_str());
             }
         }
 
-        let (reactions, attachments) = tokio::join!(
+        let (reactions, attachments, bot_profiles) = tokio::join!(
             self.repo.get_reactions_batch(&all_ids),
             self.repo.get_attachments_batch(&all_ids),
+            self.get_bot_profiles_for_senders(sender_ids),
         );
 
         let reactions = reactions.map_err(anyhow::Error::from)?;
         let attachments = attachments.map_err(anyhow::Error::from)?;
+        let bot_profiles = bot_profiles?;
 
         let messages: Vec<ChannelMessage> = rows
             .into_iter()
@@ -133,6 +138,7 @@ where
                             .iter()
                             .map(|r| ThreadReply {
                                 id: r.id,
+                                bot_profile: bot_profile_for(&bot_profiles, &r.sender_id),
                                 sender_id: r.sender_id.clone(),
                                 content: r.content.clone(),
                                 created_at: r.created_at,
@@ -148,6 +154,7 @@ where
                 ChannelMessage {
                     id: row.id,
                     channel_id: row.channel_id,
+                    bot_profile: bot_profile_for(&bot_profiles, &row.sender_id),
                     sender_id: row.sender_id,
                     content: row.content,
                     created_at: row.created_at,
@@ -167,6 +174,36 @@ where
 
         Ok(messages)
     }
+
+    /// Batch-fetch public bot profiles for any bot senders among `sender_ids`.
+    async fn get_bot_profiles_for_senders(
+        &self,
+        sender_ids: impl IntoIterator<Item = &str>,
+    ) -> Result<HashMap<BotId, BotSenderProfile>, ChannelMessagesErr> {
+        let bot_ids: HashSet<BotId> = sender_ids
+            .into_iter()
+            .filter_map(|id| BotId::parse_storage_str(id).ok())
+            .collect();
+        if bot_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        let bot_ids: Vec<BotId> = bot_ids.into_iter().collect();
+        self.repo
+            .get_bot_profiles(&bot_ids)
+            .await
+            .map_err(anyhow::Error::from)
+            .map_err(ChannelMessagesErr::Repo)
+    }
+}
+
+/// Resolve the bot profile for a sender id, if the sender is a known bot.
+fn bot_profile_for(
+    profiles: &HashMap<BotId, BotSenderProfile>,
+    sender_id: &str,
+) -> Option<BotSenderProfile> {
+    let bot_id = BotId::parse_storage_str(sender_id).ok()?;
+    profiles.get(&bot_id).cloned()
 }
 
 fn lower_macro_users(users: &[String]) -> Vec<String> {
@@ -1337,11 +1374,21 @@ where
         before: i64,
         after: i64,
     ) -> Result<Vec<ChannelContextMessage>, ChannelMessagesErr> {
-        self.repo
+        let mut messages = self
+            .repo
             .get_messages_with_context(channel_id, message_id, before.max(0), after.max(0))
             .await
             .map_err(anyhow::Error::from)
-            .map_err(ChannelMessagesErr::Repo)
+            .map_err(ChannelMessagesErr::Repo)?;
+
+        let bot_profiles = self
+            .get_bot_profiles_for_senders(messages.iter().map(|m| m.sender_id.as_str()))
+            .await?;
+        for message in &mut messages {
+            message.bot_profile = bot_profile_for(&bot_profiles, &message.sender_id);
+        }
+
+        Ok(messages)
     }
 
     #[tracing::instrument(err, skip(self, user_id))]
@@ -1435,18 +1482,21 @@ where
         }
 
         let reply_ids: Vec<Uuid> = reply_rows.iter().map(|row| row.id).collect();
-        let (reactions, attachments) = tokio::join!(
+        let (reactions, attachments, bot_profiles) = tokio::join!(
             self.repo.get_reactions_batch(&reply_ids),
             self.repo.get_attachments_batch(&reply_ids),
+            self.get_bot_profiles_for_senders(reply_rows.iter().map(|row| row.sender_id.as_str())),
         );
 
         let reactions = reactions.map_err(anyhow::Error::from)?;
         let attachments = attachments.map_err(anyhow::Error::from)?;
+        let bot_profiles = bot_profiles?;
 
         let replies = reply_rows
             .into_iter()
             .map(|row| ThreadReply {
                 id: row.id,
+                bot_profile: bot_profile_for(&bot_profiles, &row.sender_id),
                 sender_id: row.sender_id,
                 content: row.content,
                 created_at: row.created_at,

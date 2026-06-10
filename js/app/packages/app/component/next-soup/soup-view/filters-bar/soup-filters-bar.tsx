@@ -1,4 +1,5 @@
 import { useAnalytics } from '@app/component/analytics-context';
+import { SearchFiltersRow } from '@app/component/next-soup/soup-view/filters-bar/search/search-filters-row';
 import { SoupActiveFiltersBar } from '@app/component/next-soup/soup-view/filters-bar/soup-active-filters-bar';
 import { SoupViewContextGroup } from '@app/component/next-soup/soup-view/filters-bar/soup-view-context-group';
 import { SoupViewContextSort } from '@app/component/next-soup/soup-view/filters-bar/soup-view-context-sort';
@@ -61,14 +62,14 @@ export function SoupFiltersBar() {
     <Show when={!isMobile()}>
       <SplitToolbarLeft>
         <div class="flex items-start gap-1 min-w-0 flex-1">
-          <Show when={!isSearchView()}>
+          <Show when={!isSearchView()} fallback={<SearchFiltersRow />}>
             <SoupViewContextSort />
             <SoupViewContextGroup />
+            <UnifiedFilterDropdown
+              open={filterDropdownOpen}
+              onOpenChange={setFilterDropdownOpen}
+            />
           </Show>
-          <UnifiedFilterDropdown
-            open={filterDropdownOpen}
-            onOpenChange={setFilterDropdownOpen}
-          />
         </div>
       </SplitToolbarLeft>
       <SplitToolbarRight>
@@ -86,10 +87,12 @@ export function SoupFiltersBar() {
         </Tooltip>
       </SplitToolbarRight>
       {/* Active filters bar - shown below the toolbar when there are filters */}
-      <SoupActiveFiltersBar
-        filters={consolidatedFiltersList()}
-        onClearAll={resetToTabDefaults}
-      />
+      <Show when={!isSearchView()}>
+        <SoupActiveFiltersBar
+          filters={consolidatedFiltersList()}
+          onClearAll={resetToTabDefaults}
+        />
+      </Show>
     </Show>
   );
 }

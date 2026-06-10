@@ -28,7 +28,6 @@ import {
   persistSoupNavigationTouchHighlight,
   soupNavigationTouchHighlight,
 } from '@app/component/next-soup/soup-view/soup-navigation-touch-highlight';
-import { activeSoupViewCounts } from '@app/component/next-soup/soup-view/soup-view-cache-key';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { SoupViewCreateButton } from '@app/component/next-soup/soup-view/soup-view-create-button';
 import { SoupViewFileDropzone } from '@app/component/next-soup/soup-view/soup-view-file-dropzone';
@@ -890,17 +889,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
   const isProjectList = panel.handle.content().type === 'project';
   const contentId = panel.handle.content().id;
 
-  // Maintained for the channel/email/call sub-filters in
-  // search-filter-controls.tsx, which check duplicate-instance status via
-  // this counter.
-  const prevCount = activeSoupViewCounts.get(contentId) ?? 0;
-  activeSoupViewCounts.set(contentId, prevCount + 1);
-  onCleanup(() => {
-    const count = activeSoupViewCounts.get(contentId) ?? 1;
-    if (count <= 1) activeSoupViewCounts.delete(contentId);
-    else activeSoupViewCounts.set(contentId, count - 1);
-  });
-
   const cacheKey = `soup-view-${panel.handle.id}-${contentId}${previewPanel ? '-preview' : ''}`;
 
   // Cross-session, view-kind-scoped user preferences. Each has its own
@@ -908,10 +896,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
   const [sortPref, setSortPref] = usePreference<string[]>(
     `macro:pref:soup:${contentId}:sort`,
     { default: [] }
-  );
-  const [groupByPref, setGroupByPref] = usePreference<string | undefined>(
-    `macro:pref:soup:${contentId}:groupBy`,
-    { default: undefined }
   );
 
   // Preview-pane open state is transient per history entry: captured into
@@ -939,6 +923,20 @@ export const SoupViewList = (props: SoupViewListProps) => {
   );
   onCleanup(collapsedCaptorTeardown);
 
+  // Active grouping is per-entry state too, so back/forward restores the
+  // grouping the user left each entry with. `null` (vs. key absent) records
+  // an explicit "no grouping" choice, which would otherwise be
+  // indistinguishable from a fresh entry.
+  const persistedGroupBy = panel.handle.currentEntryState()?.['soup.groupBy'] as
+    | string
+    | null
+    | undefined;
+  const groupByCaptorTeardown = panel.handle.registerEntryStateCaptor(
+    'soup.groupBy',
+    () => soup.grouping.activeGroupId() ?? null
+  );
+  onCleanup(groupByCaptorTeardown);
+
   onMount(() => {
     batch(() => {
       const savedSort = sortPref();
@@ -950,8 +948,13 @@ export const SoupViewList = (props: SoupViewListProps) => {
       }
       // soup state is shared at the SplitPanel level, so a prior view in the
       // same split (e.g. tasks) may have left grouping state behind. Always
-      // reset to this view's saved or initial grouping, even when undefined.
-      soup.grouping.setActiveGroupId(groupByPref() ?? props.initialGroupBy);
+      // reset to this entry's captured or initial grouping, even when
+      // undefined.
+      soup.grouping.setActiveGroupId(
+        persistedGroupBy !== undefined
+          ? (persistedGroupBy ?? undefined)
+          : props.initialGroupBy
+      );
       soup.grouping.collapseAll(persistedCollapsedGroups ?? []);
 
       // Apply view-supplied client filters only when per-entry state didn't
@@ -978,13 +981,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
     on(
       () => soup.sort.active().map((s) => s.id),
       (ids) => setSortPref(ids),
-      { defer: true }
-    )
-  );
-  createEffect(
-    on(
-      () => soup.grouping.activeGroupId(),
-      (id) => setGroupByPref(id),
       { defer: true }
     )
   );

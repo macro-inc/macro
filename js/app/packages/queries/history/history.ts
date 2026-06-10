@@ -1,7 +1,6 @@
 import { catchToResult, throwOnErr } from '@core/util/result';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
-import { storageServiceClient } from '@service-storage/client';
-import type { CloudStorageItemType } from '@service-storage/generated/schemas/cloudStorageItemType';
+import { type ItemType, storageServiceClient } from '@service-storage/client';
 import {
   type QueryClient,
   queryOptions,
@@ -98,7 +97,7 @@ export function refetchHistory() {
 
 type UpsertToHistoryParams = {
   itemId: string;
-  itemType: CloudStorageItemType;
+  itemType: ItemType;
 };
 
 type UpsertToHistoryContext = {
@@ -164,7 +163,7 @@ export function useUpsertToHistoryMutation(
  * Prefer `useUpsertToHistoryMutation` when inside a component.
  */
 export async function postNewHistoryItem(
-  itemType: CloudStorageItemType,
+  itemType: ItemType,
   itemId: string
 ): Promise<boolean> {
   const maybeAdded = await storageServiceClient.upsertItemToUserHistory({
@@ -179,7 +178,7 @@ export async function postNewHistoryItem(
 
 /** Standalone function to remove an item from history. */
 export async function removeHistoryItem(
-  itemType: CloudStorageItemType,
+  itemType: ItemType,
   itemId: string
 ): Promise<boolean> {
   setHistoryData((old) => {

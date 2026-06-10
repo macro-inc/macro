@@ -1,0 +1,98 @@
+---
+title: "Agent recipes"
+description: "Copy-paste prompts for the most useful things agents can do in your Macro workspace."
+---
+
+Agents in Macro aren't a side feature — they sit on top of [unified memory](/product/unified-memory), so one prompt can reach your email, messages, tasks, docs, calls, and connectors. These recipes are starting points: paste them into an agent chat (<kbd>c</kbd> + <kbd>a</kbd>), an [automation](/product/agents#automations), a channel via **@Macro**, or any [MCP client](/AI/mcp/overview) connected to your workspace.
+
+## Daily inbox brief
+
+Create an [automation](/product/agents#automations) (agents module → **Automations** tab → **Create an automation**) scheduled for each morning:
+
+```text
+Every weekday at 8am: summarize what's in my Signal inbox.
+Group it into: needs a reply today, FYI, and waiting on others.
+Keep it under ten bullets.
+```
+
+The result lands in your inbox at the scheduled time, every day.
+
+## Project status on demand
+
+Ask in any agent chat — no need to point it at anything, since memory is refreshed from your team's activity:
+
+```text
+What's the latest status of [project]? Check recent tasks, channel
+discussion, and call transcripts, and tell me what changed this week
+and what's blocking.
+```
+
+You can @mention a specific channel, doc, or task in the prompt to skip the search and guarantee the right context — see [Mentions in Agents](/concepts/mentions#mentions-in-agents).
+
+## Weekly team recap
+
+An automation for Friday afternoons:
+
+```text
+Every Friday at 4pm: write a recap of the week for @#general —
+tasks completed, tasks started, key decisions from calls, and
+anything that slipped. Link to the relevant items.
+```
+
+## Turn a call into tasks
+
+After a call ends, its transcript is already in your workspace. From the call (or any chat):
+
+```text
+Go through @[yesterday's planning call] and create a task for each
+action item we committed to. Assign them to whoever took the item,
+and link the call in each task.
+```
+
+## Draft replies in your voice
+
+```text
+Draft a reply to @[email thread]. Tone: warm but brief. We can do
+the June 20 date, but ask them to send the revised scope first.
+```
+
+Review the draft, then tell the agent to send it — or send it yourself from the composer.
+
+## Answer questions inside a channel
+
+Mention **@Macro** in any [channel](/product/channels) to pull an agent into the conversation, with the channel as context:
+
+```text
+@Macro summarize this thread for someone joining late, and list
+the open questions nobody has answered yet.
+```
+
+## Import from another tool
+
+Connect the tool under **Settings → Connectors**, then:
+
+```text
+Import my Notion docs from the "Engineering" workspace as Macro
+docs. Keep the folder structure and skip anything archived.
+```
+
+See [Switch to Macro](/switch-to-macro) for tool-by-tool migration guides.
+
+## Use your workspace from Claude Code
+
+Once you've [connected the Macro MCP server](/AI/mcp/overview), your coding agent has the same reach — it can search your workspace, read threads and docs, create documents, send email, and update task properties with the [MCP tools](/AI/mcp/tools/index):
+
+```text
+Find the Macro task for the bug I'm fixing, read the linked channel
+discussion, and when I'm done, set the task status to In Review and
+post a summary of the fix as a comment.
+```
+
+```text
+Read the customer thread about the export bug, then draft (don't
+send) a reply explaining the fix that shipped in today's release.
+```
+
+<Tip>
+  Agents inherit your permissions: they can only see what you can see, and anything they create or send is attributed to you. Start prompts with "draft, don't send" while you calibrate trust.
+</Tip>

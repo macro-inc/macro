@@ -125,6 +125,7 @@ export function EntityIcon(props: EntityIconProps) {
         () => 'githubPullRequest'
       )
       .with({ type: 'foreign' }, () => 'default')
+      .with({ type: 'crm_company' }, () => 'crm_company')
       .otherwise(() => 'default');
   };
 

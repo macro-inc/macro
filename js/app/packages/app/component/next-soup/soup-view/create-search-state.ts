@@ -1,7 +1,10 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import type { SoupState } from '@app/component/next-soup/create-soup-state';
 import type { FilterContext } from '@app/component/next-soup/filters/configs/base';
-import type { QueryState } from '@app/component/next-soup/filters/filter-store';
+import {
+  NIL_UUID,
+  type QueryState,
+} from '@app/component/next-soup/filters/filter-store';
 import { useSearchContext } from '@app/component/next-soup/search-context';
 import {
   createSoupFreshSearch,
@@ -186,14 +189,40 @@ export const createSearchState = ({
 
   const searchUnifiedNameContentRequest = createMemo(
     (): UnifiedSearchRequest => {
+      const state = filters();
       const query = debouncedSearchForService();
-      const baseFilters = filterDataToQueryFilters(filters());
+      const baseFilters = filterDataToQueryFilters(state);
 
+      // CRM is opt-in on the backend. A view includes CRM in search unless it
+      // NIL-excludes the CRM target (the same sentinel pattern other entity
+      // types use) — so the Companies view (CRM-scoped) and the global Search
+      // view (no exclusions) search CRM, while every other view excludes it.
+      const includeCrm = !(state.include.crmCompanyId ?? []).includes(NIL_UUID);
+
+      if (!includeCrm) {
+        return {
+          search_on: 'name_content',
+          match_type: 'partial',
+          query,
+          filters: baseFilters,
+        };
+      }
+
+      // CRM is opt-in on the backend. Search surfaces visible companies
+      // everywhere except the admin Companies → Hidden tab, which sets
+      // `crmCompanyHidden: true` to search the hidden set. Elsewhere (global
+      // Search, Companies → Active) `crmCompanyHidden` is false/undefined →
+      // visible only. Non-CRM targets are already NIL-excluded by the
+      // Companies preset.
       return {
         search_on: 'name_content',
         match_type: 'partial',
         query,
-        filters: baseFilters,
+        include_crm: true,
+        filters: {
+          ...baseFilters,
+          crm_company_filters: { hidden: state.include.crmCompanyHidden },
+        },
       };
     }
   );

@@ -15,6 +15,7 @@ import type {
   ChannelMessageEntity,
   ChatEntity,
   ContentHitData,
+  CrmCompanyEntity,
   DocumentEntity,
   EmailEntity,
   EntityData,
@@ -50,10 +51,9 @@ type InnerSearchResult =
   | ProjectSearchResult
   | CallRecordSearchResult;
 
-type DisplayableSoupItem = Exclude<
-  SoupPage['items'][number],
-  { tag: 'crmCompany' }
->;
+// Every soup tag is handled by the map below (companies and foreign/GitHub-PR
+// entities included), so nothing is excluded here.
+type DisplayableSoupItem = SoupPage['items'][number];
 
 type SoupEntity =
   | DocumentEntity
@@ -62,6 +62,7 @@ type SoupEntity =
   | EmailEntity
   | ChannelEntity
   | CallEntity
+  | CrmCompanyEntity
   | ForeignEntity;
 
 type TypedInnerSearchResult =
@@ -285,11 +286,41 @@ export const useSearchResponseItemMapper = () => {
     searchQuery: string
   ): (WithSearch<EntityData> | undefined)[] => {
     switch (result.type) {
-      // CRM companies are opt-in via `include_crm`, which soup search does
-      // not set, so this is never hit at runtime. Handle it as a no-op to
-      // keep the union exhaustive; soup doesn't render CRM companies yet.
-      case 'company':
-        return [];
+      case 'company': {
+        const primaryDomain = result.domains[0]?.domain;
+        const nameHighlight = result.nameHighlighted
+          ? mergeAdjacentMacroEmTags(result.nameHighlighted)
+          : null;
+        return [
+          {
+            type: 'crm_company',
+            id: result.id,
+            teamId: result.teamId,
+            name: result.name || primaryDomain || 'Unknown Company',
+            ownerId: result.teamId,
+            description: result.description ?? undefined,
+            // Not returned by search — left undefined ("not loaded") so
+            // consumers don't mistake it for a real `false`.
+            emailSync: undefined,
+            hidden: result.hidden,
+            createdAt: result.createdAt,
+            updatedAt: result.updatedAt,
+            sortTs: result.updatedAt,
+            domains: result.domains.map((d) => ({
+              id: d.id,
+              companyId: d.companyId,
+              domain: d.domain,
+              createdAt: d.createdAt,
+            })),
+            search: {
+              nameHighlight,
+              senderHighlightTerms: null,
+              contentHitData: null,
+              source: 'service',
+            },
+          },
+        ];
+      }
       case 'document': {
         if (!result.metadata || result.metadata.deleted_at) return [];
         const searchFileType =
@@ -497,8 +528,6 @@ export const mapSoupPageToEntityList: (
         );
       }
 
-      if (item.tag === 'crmCompany') return false;
-
       return (
         item.tag !== 'document' ||
         !options.instructionsIdQuery.isSuccess ||
@@ -669,6 +698,30 @@ export const mapSoupPageToEntityList: (
         };
 
         return out;
+      }
+
+      if (item.tag === 'crmCompany') {
+        const primaryDomain = item.data.domains[0]?.domain;
+        return {
+          type: 'crm_company',
+          id: item.data.id,
+          teamId: item.data.teamId,
+          name: item.data.name || primaryDomain || 'Unknown Company',
+          ownerId: item.data.teamId,
+          description: item.data.description ?? undefined,
+          emailSync: item.data.emailSync,
+          hidden: item.data.hidden,
+          createdAt: item.data.createdAt,
+          updatedAt: item.data.updatedAt,
+          sortTs: item.data.updatedAt,
+          frecencyScore: item.frecency_score,
+          domains: item.data.domains.map((d) => ({
+            id: d.id,
+            companyId: d.companyId,
+            domain: d.domain,
+            createdAt: d.createdAt,
+          })),
+        } satisfies CrmCompanyEntity;
       }
 
       return {

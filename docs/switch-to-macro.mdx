@@ -1,0 +1,59 @@
+---
+title: "Switch to Macro"
+description: "Migration guides for moving from Notion, Slack, Superhuman, and Linear to Macro."
+---
+
+Macro replaces several tools at once, but you don't have to cut over in one weekend. The pattern that works: connect your old tools first so nothing is lost, move your daily workflow into Macro, and let the old tools wind down to read-only. This page covers the most common starting points.
+
+## From Superhuman
+
+This is the easiest switch, because Superhuman — like Macro — is a client on top of Gmail. There's no migration at all:
+
+1. Connect your Gmail or Google Workspace account (ideally at signup, or later in **Settings**).
+2. Your mail, labels, and history are already there — Macro syncs with Gmail directly.
+3. Keep your muscle memory: the same <kbd>j</kbd> / <kbd>k</kbd> / <kbd>e</kbd> triage shortcuts work in Macro.
+
+What you gain: [multiple accounts in one inbox](/product/email#multi-account-inbox), [Signal/Noise filtering](/product/email#signal-vs-noise), an inbox that also carries your messages, tasks, and @mentions — and an [agent](/product/agents) that can draft and send email. There's no reason you can't run both during the transition, but most people stop opening Superhuman within a week.
+
+## From Notion
+
+Macro can import your Notion content with an agent:
+
+1. Go to **Settings → Connectors** and connect Notion.
+2. Open an agent chat (<kbd>c</kbd> + <kbd>a</kbd>) and ask it to import — for example:
+
+```text
+Import my Notion docs from the "Engineering" workspace as Macro docs.
+Keep the folder structure and skip anything archived.
+```
+
+The agent reads pages through the Notion connector and recreates them as [Macro documents](/product/docs). Macro docs are markdown-native, so Notion pages translate cleanly. For structured Notion databases, consider whether each one is really [tasks](/product/tasks), [CRM records](/product/crm), or a doc with [properties](/concepts/properties) — Macro has purpose-built blocks for the things people usually force into Notion databases.
+
+You can also keep Notion connected indefinitely so agents can reference legacy content without migrating it. For the full philosophical argument, see the [FAQ](/faq) or our [comparison video](https://youtu.be/hyU1XYmxkYM).
+
+## From Slack
+
+[Channels](/product/channels) in Macro are deliberately quieter than Slack — inline replies, less notification noise — and deeply linked to the rest of your workspace.
+
+1. Create a channel per team or project (<kbd>c</kbd> + <kbd>m</kbd>).
+2. Add people by email — they don't need a Macro account yet to be included.
+3. Lean on [@mentions](/concepts/mentions): mentioning a doc or task in a channel automatically shares it with every member, which replaces the Slack-and-Notion permission-request dance entirely.
+
+If you're not ready to leave Slack — archives, Slack Connect with customers — connect it under **Settings → Connectors** as an MCP connector so agents in Macro can still search it. Many teams run Macro for internal communication and keep Slack only for external channels during the transition.
+
+## From Linear
+
+Macro's tasks are openly Linear-inspired, minus the ceremony: status, priority, assignee, and not much else by default (more is there [if you really want it](/concepts/properties)).
+
+- The [GitHub integration](/integrations/github) covers the workflow you're used to — copy a branch name from a task, and the task moves to In Progress → In Review → Done as you branch, open the PR, and merge.
+- Tasks are visible to your whole team by default, and you can create them from any email or channel message in one click.
+
+For migration, most teams simply recreate their open work — finished issues rarely justify carrying over. If you do want history, connect Linear under **Settings → Connectors** and have an agent bring open issues across.
+
+## Everything else
+
+Any tool with an MCP server can be connected under **Settings → Connectors**, which makes it readable to your agents — useful both as a migration path (ask an agent to copy content over) and as a permanent bridge for tools you keep. And your files largely migrate themselves: email attachments are auto-extracted into [file storage](/product/folders), and anything you drag into a channel or doc is imported and searchable.
+
+<Card title="Want help switching?" icon="calendar" href="https://cal.com/team/macro/macro-demo-call">
+  Book a call and we'll walk your team through the migration.
+</Card>

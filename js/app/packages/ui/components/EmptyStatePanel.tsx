@@ -105,7 +105,7 @@ export function EmptyStatePanel(props: EmptyStatePanelProps) {
                 <Button
                   variant="base"
                   size="md"
-                  class="rounded-full px-4"
+                  class="rounded-full border-edge bg-ink/5 px-4"
                   onClick={() => openExternalUrl(url())}
                 >
                   {props.documentationLabel ?? 'Documentation'}

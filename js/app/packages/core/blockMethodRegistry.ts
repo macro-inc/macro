@@ -31,6 +31,7 @@ export interface BlockMethodRegistry {
   video: EmptySpec;
   email: EmptySpec;
   contact: EmptySpec;
+  company: EmptySpec;
   color: EmptySpec;
   component: EmptySpec;
   task: EmptySpec;

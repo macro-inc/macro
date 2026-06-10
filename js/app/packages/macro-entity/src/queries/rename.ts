@@ -63,6 +63,10 @@ const getEntityRenameData = (
   operation: EntityRenameOperation
 ): EntityRenameData | null => {
   const { entity, newName } = operation;
+  // crm companies/contacts aren't renamable and have no storage item type.
+  if (entity.type === 'crm_company' || entity.type === 'crm_contact') {
+    return null;
+  }
   return {
     id: entity.id,
     itemType: entity.type,
@@ -127,7 +131,12 @@ const renameDssSetData = (
       itemType !== 'email' &&
       itemType !== 'channel_message' &&
       itemType !== 'automation' &&
-      itemType !== 'foreign'
+      itemType !== 'foreign' &&
+      // CRM companies/contacts aren't renamed via the FileList path (their
+      // names derive from the directory/email, and their soup tags are
+      // camelCase 'crmCompany'/'crmContact', not these snake-case itemTypes).
+      itemType !== 'crm_company' &&
+      itemType !== 'crm_contact'
     ) {
       txns.set(
         id,

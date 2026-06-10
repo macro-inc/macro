@@ -185,6 +185,39 @@ export type AutomationEntity = EntityBase & {
   isRunning?: boolean;
 };
 
+export type CrmCompanyDomain = {
+  id: string;
+  companyId: string;
+  domain: string;
+  createdAt?: DateValue | null;
+};
+
+export type CrmCompanyEntity = EntityBase & {
+  type: 'crm_company';
+  teamId: string;
+  description?: string;
+  /** Whether team-wide email visibility is enabled for this company.
+   * `undefined` means not loaded — search results don't carry it; the
+   * full value arrives with the soup row or the company detail query. */
+  emailSync?: boolean;
+  /** Whether the company has been hidden from the CRM listings. Only
+   * admin/owner team members can see `hidden: true` rows from the soup
+   * endpoint. */
+  hidden: boolean;
+  domains: CrmCompanyDomain[];
+};
+
+export type CrmContactEntity = EntityBase & {
+  type: 'crm_contact';
+  /** The company the contact belongs to. */
+  companyId: string;
+  /** The contact's email address. */
+  email: string;
+  /** Whether the contact has been hidden from the CRM listings. Only
+   * admin/owner team members can see `hidden: true` rows. */
+  hidden: boolean;
+};
+
 export type EntityData =
   | ChannelEntity
   | ChannelMessageEntity
@@ -194,6 +227,8 @@ export type EntityData =
   | EmailEntity
   | ProjectEntity
   | CallEntity
+  | CrmCompanyEntity
+  | CrmContactEntity
   | AutomationEntity
   | ForeignEntity;
 
@@ -205,6 +240,8 @@ const ENTITY_TYPE_VALUES = new Set<EntityData['type']>([
   'email',
   'project',
   'call',
+  'crm_company',
+  'crm_contact',
   'automation',
   'foreign',
 ]);
@@ -275,6 +312,18 @@ export const isAutomationEntity = (
   entity: EntityData
 ): entity is AutomationEntity => {
   return entity.type === 'automation';
+};
+
+export const isCrmCompanyEntity = (
+  entity: EntityData
+): entity is CrmCompanyEntity => {
+  return entity.type === 'crm_company';
+};
+
+export const isCrmContactEntity = (
+  entity: EntityData
+): entity is CrmContactEntity => {
+  return entity.type === 'crm_contact';
 };
 
 export const isDocumentEntity = (

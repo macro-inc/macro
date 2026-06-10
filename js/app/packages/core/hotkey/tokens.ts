@@ -95,6 +95,7 @@ export const TOKENS = {
       tasks: 'sidebar.goTo.tasks',
       channels: 'sidebar.goTo.channels',
       calls: 'sidebar.goTo.calls',
+      companies: 'sidebar.goTo.companies',
       folders: 'sidebar.goTo.folders',
     },
   },

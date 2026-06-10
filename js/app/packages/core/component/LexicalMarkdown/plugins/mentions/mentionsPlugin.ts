@@ -123,7 +123,9 @@ export type ItemMention = {
     | 'color'
     | 'call'
     | 'group'
-    | 'automation';
+    | 'automation'
+    | 'crm_company'
+    | 'crm_contact';
   itemId: string;
   fileType?: string;
   documentName?: string;
@@ -177,6 +179,12 @@ function $mentionItemFromNode(node: MentionNode): ItemMention {
     } else if (blockName === 'email') {
       fileType = 'email';
       itemType = 'thread';
+    } else if (blockName === 'company') {
+      fileType = 'company';
+      itemType = 'crm_company';
+    } else if (blockName === 'contact') {
+      fileType = 'contact';
+      itemType = 'crm_contact';
     } else if (blockName === 'unknown') {
       fileType = 'unknown';
     }
@@ -257,6 +265,8 @@ const getDocumentMentionItemType = (
     .with('foreign', () => {
       throw new Error('foreign entities cannot be document mentions');
     })
+    .with('crm_company', () => 'crm_company')
+    .with('crm_contact', () => 'crm_contact')
     .exhaustive();
 };
 

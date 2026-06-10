@@ -86,7 +86,7 @@ pub struct ApiContext {
     pub call_tool_context: ToolCallToolContext,
     pub tool_service_context: ToolServiceContext,
     pub all_tools: Arc<AiToolSet>,
-    pub all_tools_prompt: &'static str,
+    pub all_tools_prompt: Arc<dyn std::fmt::Display + Send + Sync>,
     pub entity_access_service: Arc<DcsEntityAccessService>,
     pub message_service: Arc<DcsMessageService>,
     pub ai_stream_registry: AiStreamRegistry,

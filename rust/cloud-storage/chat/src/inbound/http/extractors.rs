@@ -7,11 +7,12 @@ use axum::http::request::Parts;
 use axum::response::IntoResponse;
 use model::user::UserContext;
 use roles_and_permissions::domain::model::PermissionId;
+use std::collections::HashSet;
 
 /// Axum extractor that resolves the AI model a user is entitled to based on
 /// their permissions.
 ///
-/// Paid users (any AI write permission) get Opus.  Free users get Haiku.
+/// Paid users get their highest subscribed model. Free users get Haiku.
 #[derive(Debug)]
 pub struct ChatModelAccess(AgentModel);
 
@@ -26,8 +27,6 @@ impl ChatModelAccess {
 pub enum ChatModelAccessRejection {
     /// The `UserContext` extension was missing (middleware not applied).
     MissingUserContext,
-    /// The `UserContext` had no permissions attached.
-    MissingPermissions,
 }
 
 impl IntoResponse for ChatModelAccessRejection {
@@ -36,12 +35,21 @@ impl IntoResponse for ChatModelAccessRejection {
             Self::MissingUserContext => {
                 (StatusCode::INTERNAL_SERVER_ERROR, "missing user context").into_response()
             }
-            Self::MissingPermissions => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "missing user permissions",
-            )
-                .into_response(),
         }
+    }
+}
+
+fn model_for_permissions(permissions: Option<&HashSet<String>>) -> AgentModel {
+    let Some(permissions) = permissions else {
+        return AgentModel::Haiku4_5;
+    };
+
+    if permissions.contains(&PermissionId::WriteOpus.to_string()) {
+        AgentModel::Opus4_7
+    } else if permissions.contains(&PermissionId::WriteSonnet.to_string()) {
+        AgentModel::Sonnet4_6
+    } else {
+        AgentModel::Haiku4_5
     }
 }
 
@@ -54,21 +62,66 @@ impl<S: Send + Sync> FromRequestParts<S> for ChatModelAccess {
             .get::<UserContext>()
             .ok_or(ChatModelAccessRejection::MissingUserContext)?;
 
-        let permissions = user_context
-            .permissions
-            .as_ref()
-            .ok_or(ChatModelAccessRejection::MissingPermissions)?;
+        Ok(ChatModelAccess(model_for_permissions(
+            user_context.permissions.as_ref(),
+        )))
+    }
+}
 
-        let is_paid = permissions.contains(&PermissionId::WriteOpus.to_string())
-            || permissions.contains(&PermissionId::WriteSonnet.to_string())
-            || permissions.contains(&PermissionId::WriteHaiku.to_string());
+#[cfg(test)]
+mod test {
+    use super::*;
 
-        let model = if is_paid {
-            AgentModel::Opus4_7
-        } else {
+    fn permissions(values: &[PermissionId]) -> HashSet<String> {
+        values.iter().map(ToString::to_string).collect()
+    }
+
+    #[test]
+    fn missing_permissions_resolve_to_haiku() {
+        assert_eq!(model_for_permissions(None), AgentModel::Haiku4_5);
+    }
+
+    #[test]
+    fn empty_permissions_resolve_to_haiku() {
+        let permissions = HashSet::new();
+
+        assert_eq!(
+            model_for_permissions(Some(&permissions)),
             AgentModel::Haiku4_5
-        };
+        );
+    }
 
-        Ok(ChatModelAccess(model))
+    #[test]
+    fn haiku_permission_resolves_to_haiku() {
+        let permissions = permissions(&[PermissionId::WriteHaiku]);
+
+        assert_eq!(
+            model_for_permissions(Some(&permissions)),
+            AgentModel::Haiku4_5
+        );
+    }
+
+    #[test]
+    fn sonnet_permission_resolves_to_sonnet() {
+        let permissions = permissions(&[PermissionId::WriteHaiku, PermissionId::WriteSonnet]);
+
+        assert_eq!(
+            model_for_permissions(Some(&permissions)),
+            AgentModel::Sonnet4_6
+        );
+    }
+
+    #[test]
+    fn opus_permission_resolves_to_opus() {
+        let permissions = permissions(&[
+            PermissionId::WriteHaiku,
+            PermissionId::WriteSonnet,
+            PermissionId::WriteOpus,
+        ]);
+
+        assert_eq!(
+            model_for_permissions(Some(&permissions)),
+            AgentModel::Opus4_7
+        );
     }
 }

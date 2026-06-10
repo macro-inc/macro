@@ -1648,9 +1648,17 @@ export const getChannelResponse = zod
               .describe('Reactions on this message.'),
             sender: zod
               .object({
+                avatar_url: zod
+                  .string()
+                  .nullish()
+                  .describe('Avatar URL for bot senders.'),
                 id: zod
                   .string()
                   .describe('Sender id without the storage namespace prefix.'),
+                name: zod
+                  .string()
+                  .nullish()
+                  .describe('Display name for bot senders.'),
                 type: zod.enum(['user', 'bot']).describe('Public sender type.'),
               })
               .describe('Public sender identity for channel messages.'),
@@ -1716,11 +1724,19 @@ export const getChannelResponse = zod
                           .describe('Reactions on this reply.'),
                         sender: zod
                           .object({
+                            avatar_url: zod
+                              .string()
+                              .nullish()
+                              .describe('Avatar URL for bot senders.'),
                             id: zod
                               .string()
                               .describe(
                                 'Sender id without the storage namespace prefix.'
                               ),
+                            name: zod
+                              .string()
+                              .nullish()
+                              .describe('Display name for bot senders.'),
                             type: zod
                               .enum(['user', 'bot'])
                               .describe('Public sender type.'),
@@ -2075,9 +2091,17 @@ export const getChannelMessagesResponse = zod
               .describe('Reactions on this message.'),
             sender: zod
               .object({
+                avatar_url: zod
+                  .string()
+                  .nullish()
+                  .describe('Avatar URL for bot senders.'),
                 id: zod
                   .string()
                   .describe('Sender id without the storage namespace prefix.'),
+                name: zod
+                  .string()
+                  .nullish()
+                  .describe('Display name for bot senders.'),
                 type: zod.enum(['user', 'bot']).describe('Public sender type.'),
               })
               .describe('Public sender identity for channel messages.'),
@@ -2143,11 +2167,19 @@ export const getChannelMessagesResponse = zod
                           .describe('Reactions on this reply.'),
                         sender: zod
                           .object({
+                            avatar_url: zod
+                              .string()
+                              .nullish()
+                              .describe('Avatar URL for bot senders.'),
                             id: zod
                               .string()
                               .describe(
                                 'Sender id without the storage namespace prefix.'
                               ),
+                            name: zod
+                              .string()
+                              .nullish()
+                              .describe('Display name for bot senders.'),
                             type: zod
                               .enum(['user', 'bot'])
                               .describe('Public sender type.'),
@@ -2319,9 +2351,17 @@ export const postChannelMessagesResponse = zod
               .describe('Reactions on this message.'),
             sender: zod
               .object({
+                avatar_url: zod
+                  .string()
+                  .nullish()
+                  .describe('Avatar URL for bot senders.'),
                 id: zod
                   .string()
                   .describe('Sender id without the storage namespace prefix.'),
+                name: zod
+                  .string()
+                  .nullish()
+                  .describe('Display name for bot senders.'),
                 type: zod.enum(['user', 'bot']).describe('Public sender type.'),
               })
               .describe('Public sender identity for channel messages.'),
@@ -2387,11 +2427,19 @@ export const postChannelMessagesResponse = zod
                           .describe('Reactions on this reply.'),
                         sender: zod
                           .object({
+                            avatar_url: zod
+                              .string()
+                              .nullish()
+                              .describe('Avatar URL for bot senders.'),
                             id: zod
                               .string()
                               .describe(
                                 'Sender id without the storage namespace prefix.'
                               ),
+                            name: zod
+                              .string()
+                              .nullish()
+                              .describe('Display name for bot senders.'),
                             type: zod
                               .enum(['user', 'bot'])
                               .describe('Public sender type.'),
@@ -2469,9 +2517,17 @@ export const getMessageWithContextResponse = zod
             id: zod.uuid().describe('Message id.'),
             sender: zod
               .object({
+                avatar_url: zod
+                  .string()
+                  .nullish()
+                  .describe('Avatar URL for bot senders.'),
                 id: zod
                   .string()
                   .describe('Sender id without the storage namespace prefix.'),
+                name: zod
+                  .string()
+                  .nullish()
+                  .describe('Display name for bot senders.'),
                 type: zod.enum(['user', 'bot']).describe('Public sender type.'),
               })
               .describe('Public sender identity for channel messages.'),
@@ -2541,9 +2597,14 @@ export const getThreadRepliesResponseItem = zod
       .describe('Reactions on this reply.'),
     sender: zod
       .object({
+        avatar_url: zod
+          .string()
+          .nullish()
+          .describe('Avatar URL for bot senders.'),
         id: zod
           .string()
           .describe('Sender id without the storage namespace prefix.'),
+        name: zod.string().nullish().describe('Display name for bot senders.'),
         type: zod.enum(['user', 'bot']).describe('Public sender type.'),
       })
       .describe('Public sender identity for channel messages.'),
