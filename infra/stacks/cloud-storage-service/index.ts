@@ -7,7 +7,6 @@ import {
   getMacroNotify,
   getSearchEventQueue,
   getServiceUrl,
-  SERVICE_DOMAIN_NAME,
   ServiceUrl,
   stack,
 } from '../../packages/shared';
@@ -660,7 +659,7 @@ const cloudStorageService = new CloudStorageService(
         // Public base URL native clients use to poll call ring status
         // while the CallKit incoming-call UI is showing.
         name: 'CALL_RING_STATUS_BASE_URL',
-        value: `https://${SERVICE_DOMAIN_NAME}`,
+        value: getServiceUrl(ServiceUrl.DOCUMENT_STORAGE_SERVICE_URL),
       },
       // OpenTelemetry / Datadog tracing configuration
       {
