@@ -56,11 +56,8 @@ import { useSettingsState } from '@core/constant/SettingsState';
 import PaywallComponent from '../paywall/PaywallComponent';
 import PaywallTeamMemberView from '../paywall/PaywallTeamMemberView';
 import PaywallTeamOwnerView from '../paywall/PaywallTeamOwnerView';
-import {
-  useAddInboxFlow,
-  useEmailLinks,
-  useEmailLinksStatus,
-} from '@core/email-link';
+import { useEmailLinks, useEmailLinksStatus } from '@core/email-link';
+import { AddInboxDialog, openAddInboxDialog } from '../AddInboxDialog';
 import { useRemoveInboxMutation } from '@queries/email/link';
 import {
   type SupportedNotificationSettings,
@@ -349,7 +346,6 @@ export function Account() {
     setIsEmailActionPending(false);
   };
 
-  const handleAddInbox = useAddInboxFlow();
 
   const handleResyncInbox = async (linkId: string) => {
     setResyncingIds((prev) => new Set(prev).add(linkId));
@@ -651,7 +647,7 @@ export function Account() {
                             variant="base"
                             size="sm"
                             depth={3}
-                            onClick={handleAddInbox}
+                            onClick={openAddInboxDialog}
                             aria-label="Add inbox"
                           >
                             <PlusIcon class="size-4" />
@@ -816,6 +812,8 @@ export function Account() {
                 </Panel.Body>
               </Panel>
             </Dialog>
+
+            <AddInboxDialog />
 
             <Show when={isNativeMobilePlatform()}>
               <div class="border-t border-edge pt-4">

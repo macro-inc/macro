@@ -1,8 +1,8 @@
+import { openAddInboxDialog } from '@app/component/AddInboxDialog';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { ENABLE_MULTI_INBOX_OVERRIDE } from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
-import { useAddInboxFlow } from '@core/email-link';
 import { Combobox } from '@kobalte/core/combobox';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import PlusIcon from '@phosphor/plus.svg';
@@ -29,7 +29,6 @@ export function InboxSelector() {
     enabledOverride: ENABLE_MULTI_INBOX_OVERRIDE,
   });
   const { openSettings } = useSettingsState();
-  const addInbox = useAddInboxFlow();
 
   const label = () => {
     const ids = inboxFilter();
@@ -56,7 +55,7 @@ export function InboxSelector() {
                 icon: () => <PlusIcon class="size-4" />,
                 onSelect: () => {
                   openSettings('Account');
-                  void addInbox();
+                  openAddInboxDialog();
                 },
               }
             : undefined
