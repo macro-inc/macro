@@ -37,21 +37,27 @@ if command -v cachix >/dev/null 2>&1 && [[ -n "${CACHIX_CACHE_NAME:-}" ]]; then
 fi
 
 # Build every handler for this service in one nix invocation: independent
-# derivations build in parallel, and unchanged ones are pure cache hits.
+# derivations build in parallel, unchanged ones are pure cache hits, and the
+# out paths are captured here (stdout) while build logs stream to stderr —
+# no per-handler re-invocation of nix.
 installables=()
 for lambda in "${LAMBDAS[@]}"; do
   installables+=(".#deploy-lambda-${lambda}")
 done
-nix build --no-link --print-build-logs "${installables[@]}"
+mapfile -t outs < <(nix build --no-link --print-build-logs --print-out-paths "${installables[@]}")
 
-# Assemble target/lambda/<name>/*.zip from each handler's store path.
+# Assemble target/lambda/<name>/*.zip. Each out path is laid out as
+# <out>/<handler>/{bootstrap.zip,...} (see deployLambdaPackage in flake.nix),
+# so the copy needs no name mapping.
 rm -rf "$OUTPUT_DIR"
 mkdir -p "$OUTPUT_DIR/target/lambda"
+for out in "${outs[@]}"; do
+  cp -a "$out"/. "$OUTPUT_DIR/target/lambda/"
+done
+# Store copies are read-only; make the tree writable so a re-run's rm -rf works.
+chmod -R u+w "$OUTPUT_DIR"
+
 for lambda in "${LAMBDAS[@]}"; do
-  # Already built above, so this just resolves the (cached) out path.
-  out="$(nix build --no-link --print-out-paths ".#deploy-lambda-${lambda}")"
-  mkdir -p "$OUTPUT_DIR/target/lambda/$lambda"
-  cp -a "$out/$lambda/." "$OUTPUT_DIR/target/lambda/$lambda/"
   test -f "$OUTPUT_DIR/target/lambda/$lambda/bootstrap.zip"
   if [[ "$lambda" == "call_recording_preview_handler" ]]; then
     test -f "$OUTPUT_DIR/target/lambda/$lambda/ffmpeg-layer.zip"
