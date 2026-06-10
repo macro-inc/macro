@@ -306,123 +306,115 @@ jobs:
         if: always()
         uses: ./.github/actions/teardown-nix
 
-  # ────────────────────────────────────────────────────────────────────
-  # TEMP (this branch only): deploy disabled while benchmarking the build
-  # path. migrate-db and deploy-services are commented out below; the
-  # build jobs still produce and hand off artifacts so timings stay
-  # realistic. Uncomment to restore the full pipeline.
-  # ────────────────────────────────────────────────────────────────────
-#   migrate-db:
-#     name: Run Database Migrations
-#     runs-on: db-migrator
-#     needs: [build-service-binaries, build-lambda-artifacts]
-#     steps:
-#       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-#         with:
-#           sparse-checkout: .github/
-#       - name: Run migrations
-#         uses: ./.github/actions/migrate-cloud-storage-db
-#         with:
-#           environment: ${{ inputs.environment }}
+  migrate-db:
+    name: Run Database Migrations
+    runs-on: db-migrator
+    needs: [build-service-binaries, build-lambda-artifacts]
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          sparse-checkout: .github/
+      - name: Run migrations
+        uses: ./.github/actions/migrate-cloud-storage-db
+        with:
+          environment: ${{ inputs.environment }}
 
-#   deploy-services:
-#     name: Deploy ${{ matrix.service }}
-#     needs: [setup, build-service-binaries, build-lambda-artifacts, migrate-db]
-#     if: ${{ needs.setup.outputs.matrix != '[]' }}
-#     # Deploys via Pulumi + Docker; AWS auth is via explicit static keys
-#     # (configure-aws-credentials), so no dependency on a RunsOn instance role.
-#     # NOTE: adjust to a provisioned Blacksmith runner label for the org.
-#     runs-on: blacksmith-8vcpu-ubuntu-2404
-#     # Pin PULUMI_HOME to a fixed path (outside the workspace, which the deploy
-#     # action's checkout cleans) so the plugins subdir can be backed by a sticky
-#     # disk. Propagates into the composite action's pulumi step via the job env.
-#     env:
-#       PULUMI_HOME: /pulumi
-#     strategy:
-#       fail-fast: false
-#       # No max-parallel: all services deploy concurrently.
-#       matrix:
-#         service: ${{ fromJson(needs.setup.outputs.matrix) }}
-#     steps:
-#       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+  deploy-services:
+    name: Deploy ${{ matrix.service }}
+    needs: [setup, build-service-binaries, build-lambda-artifacts, migrate-db]
+    if: ${{ needs.setup.outputs.matrix != '[]' }}
+    # Deploys via Pulumi + Docker; AWS auth is via explicit static keys
+    # (configure-aws-credentials), so no dependency on a RunsOn instance role.
+    # NOTE: adjust to a provisioned Blacksmith runner label for the org.
+    runs-on: blacksmith-8vcpu-ubuntu-2404
+    # Pin PULUMI_HOME to a fixed path (outside the workspace, which the deploy
+    # action's checkout cleans) so the plugins subdir can be backed by a sticky
+    # disk. Propagates into the composite action's pulumi step via the job env.
+    env:
+      PULUMI_HOME: /pulumi
+    strategy:
+      fail-fast: false
+      # No max-parallel: all services deploy concurrently.
+      matrix:
+        service: ${{ fromJson(needs.setup.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
 
-#       - name: Get project name
-#         id: project-name
-#         uses: ./.github/actions/get-project-name
-#         with:
-#           service-name: ${{ matrix.service }}
+      - name: Get project name
+        id: project-name
+        uses: ./.github/actions/get-project-name
+        with:
+          service-name: ${{ matrix.service }}
 
-#       - name: Check artifact config
-#         id: check-artifacts
-#         env:
-#           SERVICE: ${{ matrix.service }}
-#         run: |
-#           has_binaries=$(jq -r --arg service "$SERVICE" '((.services[$service].deploy_binaries // []) | length) > 0' .github/services-config.json)
-#           has_lambdas=$(jq -r --arg service "$SERVICE" '((.services[$service].deploy_lambdas // []) | length) > 0' .github/services-config.json)
-#           echo "has_binaries=$has_binaries" >> "$GITHUB_OUTPUT"
-#           echo "has_lambdas=$has_lambdas" >> "$GITHUB_OUTPUT"
+      - name: Check artifact config
+        id: check-artifacts
+        env:
+          SERVICE: ${{ matrix.service }}
+        run: |
+          has_binaries=$(jq -r --arg service "$SERVICE" '((.services[$service].deploy_binaries // []) | length) > 0' .github/services-config.json)
+          has_lambdas=$(jq -r --arg service "$SERVICE" '((.services[$service].deploy_lambdas // []) | length) > 0' .github/services-config.json)
+          echo "has_binaries=$has_binaries" >> "$GITHUB_OUTPUT"
+          echo "has_lambdas=$has_lambdas" >> "$GITHUB_OUTPUT"
 
-#       # Clone the handoff snapshots committed by the build jobs (which this job
-#       # `needs`). Mounted outside the workspace at /handoff-* so the composite
-#       # action's own checkout (which cleans the workspace) can't touch them.
-#       # Gated on the artifact flags so services with no binaries/lambdas don't
-#       # mount an empty disk.
-#       - name: Mount binaries handoff sticky disk
-#         if: ${{ steps.check-artifacts.outputs.has_binaries == 'true' }}
-#         uses: useblacksmith/stickydisk@v1
-#         with:
-#           key: ${{ github.repository }}-handoff-binaries-${{ matrix.service }}-${{ github.sha }}
-#           path: /handoff-binaries
+      # Clone the handoff snapshots committed by the build jobs (which this job
+      # `needs`). Mounted outside the workspace at /handoff-* so the composite
+      # action's own checkout (which cleans the workspace) can't touch them.
+      # Gated on the artifact flags so services with no binaries/lambdas don't
+      # mount an empty disk.
+      - name: Mount binaries handoff sticky disk
+        if: ${{ steps.check-artifacts.outputs.has_binaries == 'true' }}
+        uses: useblacksmith/stickydisk@v1
+        with:
+          key: ${{ github.repository }}-handoff-binaries-${{ matrix.service }}-${{ github.sha }}
+          path: /handoff-binaries
 
-#       - name: Mount lambdas handoff sticky disk
-#         if: ${{ steps.check-artifacts.outputs.has_lambdas == 'true' }}
-#         uses: useblacksmith/stickydisk@v1
-#         with:
-#           key: ${{ github.repository }}-handoff-lambdas-${{ matrix.service }}-${{ github.sha }}
-#           path: /handoff-lambdas
+      - name: Mount lambdas handoff sticky disk
+        if: ${{ steps.check-artifacts.outputs.has_lambdas == 'true' }}
+        uses: useblacksmith/stickydisk@v1
+        with:
+          key: ${{ github.repository }}-handoff-lambdas-${{ matrix.service }}-${{ github.sha }}
+          path: /handoff-lambdas
 
-#       # Cache Pulumi's provider plugins ($PULUMI_HOME/plugins) on a sticky disk.
-#       # Plugins are version-pinned by infra/ and identical across services, so a
-#       # single stable-keyed disk is shared by every deploy job: the first run
-#       # downloads + commits, later runs clone it warm and skip the ~45s pull.
-#       - name: Cache Pulumi plugins (sticky disk)
-#         uses: useblacksmith/stickydisk@v1
-#         with:
-#           key: ${{ github.repository }}-pulumi-plugins
-#           path: /pulumi/plugins
+      # Cache Pulumi's provider plugins ($PULUMI_HOME/plugins) on a sticky disk.
+      # Plugins are version-pinned by infra/ and identical across services, so a
+      # single stable-keyed disk is shared by every deploy job: the first run
+      # downloads + commits, later runs clone it warm and skip the ~45s pull.
+      - name: Cache Pulumi plugins (sticky disk)
+        uses: useblacksmith/stickydisk@v1
+        with:
+          key: ${{ github.repository }}-pulumi-plugins
+          path: /pulumi/plugins
 
-#       # PULUMI_HOME (/pulumi) and its mounted plugins subdir come up root-owned;
-#       # make them writable so pulumi can write credentials + plugins as the
-#       # runner. No-op when the runner already runs as root.
-#       - name: Ensure Pulumi home is writable
-#         shell: bash
-#         run: |
-#           set -euo pipefail
-#           if [ "$(id -u)" -ne 0 ]; then sudo chown -R "$(id -u):$(id -g)" /pulumi; fi
+      # PULUMI_HOME (/pulumi) and its mounted plugins subdir come up root-owned;
+      # make them writable so pulumi can write credentials + plugins as the
+      # runner. No-op when the runner already runs as root.
+      - name: Ensure Pulumi home is writable
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$(id -u)" -ne 0 ]; then sudo chown -R "$(id -u):$(id -g)" /pulumi; fi
 
-#       - name: Deploy ${{ matrix.service }}
-#         uses: ./.github/actions/deploy-cloud-storage-pulumi
-#         with:
-#           environment: ${{ inputs.environment }}
-#           # Blacksmith buildkit builder: keeps the docker layer cache on a
-#           # per-Dockerfile sticky disk so heavy bases (LibreOffice/Collabora)
-#           # stay warm instead of re-pulling from ECR each deploy.
-#           use-blacksmith-builder: 'true'
-#           aws-access-key: ${{ secrets.AWS_ACCESS_KEY }}
-#           aws-secret-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-#           pulumi-access-token: ${{ secrets.PULUMI_ACCESS_TOKEN }}
-#           pulumi-service-name: ${{ steps.project-name.outputs.project-name }}
-#           prebuilt-binaries-tar: ${{ steps.check-artifacts.outputs.has_binaries == 'true' && '/handoff-binaries/prebuilt-binaries.tar.gz' || '' }}
-#           lambda-artifacts-tar: ${{ steps.check-artifacts.outputs.has_lambdas == 'true' && '/handoff-lambdas/lambda-artifacts.tar.gz' || '' }}
-#           dd-app-key: ${{ secrets.DD_APP_KEY }}
-#           dd-api-key: ${{ secrets.DD_API_KEY }}
+      - name: Deploy ${{ matrix.service }}
+        uses: ./.github/actions/deploy-cloud-storage-pulumi
+        with:
+          environment: ${{ inputs.environment }}
+          # Blacksmith buildkit builder: keeps the docker layer cache on a
+          # per-Dockerfile sticky disk so heavy bases (LibreOffice/Collabora)
+          # stay warm instead of re-pulling from ECR each deploy.
+          use-blacksmith-builder: 'true'
+          aws-access-key: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-secret-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          pulumi-access-token: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+          pulumi-service-name: ${{ steps.project-name.outputs.project-name }}
+          prebuilt-binaries-tar: ${{ steps.check-artifacts.outputs.has_binaries == 'true' && '/handoff-binaries/prebuilt-binaries.tar.gz' || '' }}
+          lambda-artifacts-tar: ${{ steps.check-artifacts.outputs.has_lambdas == 'true' && '/handoff-lambdas/lambda-artifacts.tar.gz' || '' }}
+          dd-app-key: ${{ secrets.DD_APP_KEY }}
+          dd-api-key: ${{ secrets.DD_API_KEY }}
 
   deployment-summary:
     name: Deployment Summary
     runs-on: ubuntu-latest
-    # TEMP (this branch only): deploy-services removed from needs while the
-    # deploy jobs are commented out above.
-    needs: [setup, warm-binaries, warm-lambdas, build-service-binaries, build-lambda-artifacts]
+    needs: [setup, warm-binaries, warm-lambdas, build-service-binaries, build-lambda-artifacts, deploy-services]
     if: always()
     steps:
       - name: Check deployment results
@@ -441,12 +433,11 @@ jobs:
           elif [[ "${{ needs.build-lambda-artifacts.result }}" == "failure" ]]; then
             echo "❌ One or more Lambda artifact builds failed"
             exit 1
-          # TEMP (this branch only): deploy disabled for build benchmarking.
-          # elif [[ "${{ needs.deploy-services.result }}" == "failure" ]]; then
-          #   echo "❌ One or more service deployments failed"
-          #   exit 1
-          # elif [[ "${{ needs.deploy-services.result }}" == "skipped" ]]; then
-          #   echo "⏭️ No services to deploy"
+          elif [[ "${{ needs.deploy-services.result }}" == "failure" ]]; then
+            echo "❌ One or more service deployments failed"
+            exit 1
+          elif [[ "${{ needs.deploy-services.result }}" == "skipped" ]]; then
+            echo "⏭️ No services to deploy"
           else
-            echo "✅ All builds completed successfully (deploy disabled on this branch)"
+            echo "✅ All service deployments completed successfully for ${{ inputs.environment }} environment"
           fi
