@@ -29,6 +29,27 @@ type HoverTooltipPluginProps = {
   setState: (state: Partial<HoverTooltipState>) => void;
 };
 
+/**
+ * Given a DOM element under the cursor, find the stable Lexical id of the
+ * nearest ancestor text-bearing node. Must be called inside `editor.read()`
+ * so the Lexical state is readable.
+ *
+ * Returns null when the cursor isn't over a text node, or when no ancestor
+ * has been assigned a stable id yet (typically transient nodes).
+ */
+function $resolveHoveredNodeId(target: HTMLElement): string | null {
+  const node = $getNearestNodeFromDOMNode(target);
+  if (!node || !$isTextNode(node)) return null;
+
+  let cursor: LexicalNode | null = node;
+  while (cursor) {
+    const id = $getId(cursor);
+    if (id) return id;
+    cursor = cursor.getParent();
+  }
+  return null;
+}
+
 function registerHoverTooltipPlugin(
   editor: LexicalEditor,
   props: HoverTooltipPluginProps
@@ -49,26 +70,16 @@ function registerHoverTooltipPlugin(
       return;
     }
 
-    editor.read(() => {
-      const node = $getNearestNodeFromDOMNode(target);
-      if (!node || !$isTextNode(node)) {
-        props.setState({ hovering: false, nodeId: null });
-        return;
-      }
-      // Walk up to the nearest ancestor that has a stable ID.
-      let cursor: LexicalNode | null = node;
-      let nodeId: string | null = null;
-      while (cursor) {
-        nodeId = $getId(cursor);
-        if (nodeId) break;
-        cursor = cursor.getParent();
-      }
-      props.setState({
-        hovering: true,
-        x: e.clientX,
-        y: e.clientY,
-        nodeId,
-      });
+    const nodeId = editor.read(() => $resolveHoveredNodeId(target));
+    if (nodeId === null) {
+      props.setState({ hovering: false, nodeId: null });
+      return;
+    }
+    props.setState({
+      hovering: true,
+      x: e.clientX,
+      y: e.clientY,
+      nodeId,
     });
   };
 

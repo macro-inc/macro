@@ -1,6 +1,8 @@
 import { UserIcon } from '@core/component/UserIcon';
 import { syncServiceClient } from '@service-sync/client';
 import { macroIdToEmail, tryMacroId, useDisplayNameParts } from '@core/user';
+import { formatRelativeTimestamp } from '@entity';
+import { debounce } from '@solid-primitives/scheduled';
 import {
   createEffect,
   createResource,
@@ -12,26 +14,14 @@ import {
 import type { Store } from 'solid-js/store';
 import type { HoverTooltipState } from './hoverTooltipPlugin';
 
-const SHOW_DELAY_MS = 600;
-
-function formatRelativeTime(date: Date): string {
-  const sec = Math.floor((Date.now() - date.getTime()) / 1000);
-  if (sec < 60) return 'just now';
-  const min = Math.floor(sec / 60);
-  if (min < 60) return `${min} minute${min === 1 ? '' : 's'} ago`;
-  const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr} hour${hr === 1 ? '' : 's'} ago`;
-  const day = Math.floor(hr / 24);
-  if (day < 7) return `${day} day${day === 1 ? '' : 's'} ago`;
-  return date.toLocaleDateString();
-}
+const FETCH_DELAY_MS = 400;
+const SHOW_DELAY_MS = 500;
 
 function UserLine(props: { userId: string; editedAt: Date }) {
   const macroId = tryMacroId(props.userId);
   const { firstName } = useDisplayNameParts(macroId);
   const name = () =>
-    firstName() ||
-    (macroId ? macroIdToEmail(macroId).split('@')[0] : props.userId);
+    firstName() || (macroId ? macroIdToEmail(macroId) : props.userId);
 
   return (
     <span class="inline-flex items-center gap-1">
@@ -41,7 +31,7 @@ function UserLine(props: { userId: string; editedAt: Date }) {
         suppressClick
         showTooltip={false}
       />
-      {name()}, {formatRelativeTime(props.editedAt)}
+      {name()}, {formatRelativeTimestamp(props.editedAt)}
     </span>
   );
 }
@@ -51,29 +41,46 @@ export function HoverTooltip(props: {
   documentId: string;
 }) {
   const [visible, setVisible] = createSignal(false);
+  // The nodeId we've actually committed to fetching for. Debounced from the
+  // raw hovered nodeId so we don't fire a request the instant the cursor
+  // crosses a text node.
+  const [armedNodeId, setArmedNodeId] = createSignal<string | null>(null);
   let shownAtX = 0;
   let shownAtY = 0;
-  let timer: ReturnType<typeof setTimeout> | null = null;
+  let showTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const debouncedArm = debounce((nodeId: string | null) => {
+    setArmedNodeId(nodeId);
+  }, FETCH_DELAY_MS);
 
   const hide = () => {
-    if (timer) {
-      clearTimeout(timer);
-      timer = null;
-    }
+    debouncedArm.clear();
+    if (showTimer) clearTimeout(showTimer);
+    showTimer = null;
+    setArmedNodeId(null);
     setVisible(false);
   };
 
-  const [blame] = createResource(
-    () => (props.state.hovering ? props.state.nodeId : null),
-    async (nodeId) => {
-      const res = await syncServiceClient.getNodeBlame({
-        documentId: props.documentId,
-        nodeId,
-      });
-      return res.isOk() ? res.value : null;
-    }
-  );
+  const [blame] = createResource(armedNodeId, async (nodeId) => {
+    const res = await syncServiceClient.getNodeBlame({
+      documentId: props.documentId,
+      nodeId,
+    });
+    return res.isOk() ? res.value : null;
+  });
 
+  // Drive the fetch — debounced on nodeId only, ignores cursor x/y.
+  createEffect(() => {
+    const nodeId = props.state.hovering ? props.state.nodeId : null;
+    if (nodeId === null) {
+      debouncedArm.clear();
+      setArmedNodeId(null);
+    } else {
+      debouncedArm(nodeId);
+    }
+  });
+
+  // Drive the visibility — based on cursor stillness (x/y).
   createEffect(() => {
     const { hovering, x, y } = props.state;
 
@@ -85,9 +92,9 @@ export function HoverTooltip(props: {
       return;
     }
 
-    // Pre-show: each move restarts the timer. It only fires when the cursor settles.
-    if (timer) clearTimeout(timer);
-    timer = setTimeout(() => {
+    // Pre-show: each move restarts the show timer.
+    if (showTimer) clearTimeout(showTimer);
+    showTimer = setTimeout(() => {
       shownAtX = x;
       shownAtY = y;
       setVisible(true);
