@@ -310,6 +310,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     animatedIcon: AnimatedSnippetIcon,
     description: 'Create snippet',
     blockName: 'snippet',
+    documentationUrl: `${DOCS_BASE}/product/snippets`,
     hotkeyToken: TOKENS.create.snippet,
     altHotkeyToken: TOKENS.create.snippetNewSplit,
     hotkey: 's' as const,
