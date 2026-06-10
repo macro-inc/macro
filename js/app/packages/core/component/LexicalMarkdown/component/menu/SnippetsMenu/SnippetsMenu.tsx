@@ -63,6 +63,8 @@ function SnippetsMenuInner(props: SnippetsMenuProps) {
     buckets: ['snippet'],
     searchTerm,
   });
+  const filteredSnippets = () =>
+    snippets().filter((snippet) => snippet.id !== props.sourceDocumentId);
 
   const [selectedIndex, setSelectedIndex] = createSignal(0);
   const [mountSelection, setMountSelection] = createSignal<Selection | null>();
@@ -94,7 +96,7 @@ function SnippetsMenuInner(props: SnippetsMenuProps) {
   });
 
   createEffect(() => {
-    const count = snippets().length;
+    const count = filteredSnippets().length;
     if (count > 0 && selectedIndex() >= count) {
       setSelectedIndex(count - 1);
     }
@@ -119,12 +121,12 @@ function SnippetsMenuInner(props: SnippetsMenuProps) {
   useMenuKeyboardNavigation({
     isActive: menuOpen,
     onUp: () => {
-      const items = snippets();
+      const items = filteredSnippets();
       if (items.length === 0) return;
       setSelectedIndex((selectedIndex() - 1 + items.length) % items.length);
     },
     onDown: () => {
-      const items = snippets();
+      const items = filteredSnippets();
       if (items.length === 0) return;
       setSelectedIndex((selectedIndex() + 1) % items.length);
     },
@@ -135,7 +137,7 @@ function SnippetsMenuInner(props: SnippetsMenuProps) {
       // block horizontal arrows
     },
     onSelect: () => {
-      const selectedItem = snippets()[selectedIndex()];
+      const selectedItem = filteredSnippets()[selectedIndex()];
       if (selectedItem) {
         itemAction(selectedItem);
       } else {
@@ -204,7 +206,7 @@ function SnippetsMenuInner(props: SnippetsMenuProps) {
               Snippets
             </div>
             <Show
-              when={snippets().length > 0}
+              when={filteredSnippets().length > 0}
               fallback={
                 <div class="px-3.5 pb-1 text-ink-extra-muted">
                   {searchTerm() ? 'No results' : 'No snippets yet'}
@@ -215,7 +217,7 @@ function SnippetsMenuInner(props: SnippetsMenuProps) {
                 class="overflow-y-auto scrollbar-hidden"
                 style={{ 'max-height': `${contentMaxHeight()}px` }}
               >
-                <For each={snippets()}>
+                <For each={filteredSnippets()}>
                   {(item, index) => (
                     <MentionsMenuItem
                       item={item}
