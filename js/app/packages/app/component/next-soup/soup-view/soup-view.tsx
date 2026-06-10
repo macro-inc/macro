@@ -112,7 +112,6 @@ import {
   batch,
   createEffect,
   createMemo,
-  createRenderEffect,
   createSignal,
   type JSX,
   Match,
@@ -123,7 +122,6 @@ import {
   Suspense,
   Switch,
 } from 'solid-js';
-import { createStore, reconcile } from 'solid-js/store';
 import { Dynamic } from 'solid-js/web';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
 import type { CacheSnapshot } from 'virtua/unstable_core';
@@ -619,6 +617,8 @@ export const SoupViewList = (props: SoupViewListProps) => {
     isLocalSearchSettling,
     activeTab,
     setActiveTab,
+    fetchNextGroupPage,
+    isFetchingGroupPage,
   } = useSoupView();
   const { hasActiveRefinements, hasHiddenItems, resetToTabDefaults } =
     useFilterRefinements();
@@ -739,6 +739,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
     currentView,
     activeTab,
     applyTabPreset,
+    fetchNextGroupPage,
   });
 
   // Create markDone action for swipe/click handlers
@@ -1225,7 +1226,9 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                           )}
                                         >
                                           <Show
-                                            when={!group().isLoading()}
+                                            when={
+                                              !isFetchingGroupPage(group().key)
+                                            }
                                             fallback={
                                               <Button
                                                 variant="base"
@@ -1252,7 +1255,9 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                                 'border-transparent':
                                                   highlighted(),
                                               })}
-                                              onClick={() => group().loadMore()}
+                                              onClick={() => {
+                                                fetchNextGroupPage(group().key);
+                                              }}
                                             >
                                               <CaretDownIcon class="size-2.5" />
                                               Load More
@@ -1439,12 +1444,6 @@ const SoupList = (props: SoupListProps) => {
   const itemSize = createMemo(() => props.itemSize ?? DEFAULT_ITEM_SIZE);
   const overscan = createMemo(() => props.overscan ?? DEFAULT_OVERSCAN);
 
-  const [stableRows, setStableRows] = createStore<SoupRow[]>([]);
-
-  createRenderEffect(() => {
-    setStableRows(reconcile(props.rows, { key: 'id' }));
-  });
-
   const handleScroll = (offset: number) => {
     const handle = virtualizerHandle();
 
@@ -1480,7 +1479,7 @@ const SoupList = (props: SoupListProps) => {
         cache={props.cache}
         ref={registerVirtualizerHandler}
         class={cn('overscroll-none', props.virtualizerClass)}
-        data={stableRows}
+        data={props.rows}
         itemSize={itemSize()}
         bufferSize={overscan() * itemSize()}
         onScroll={handleScroll}

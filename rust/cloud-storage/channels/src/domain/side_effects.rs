@@ -119,6 +119,36 @@ pub enum ChannelRealtimeEffect {
     },
 }
 
+/// The sender of a channel message for notification purposes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum NotificationSender {
+    /// A user sender.
+    User(MacroUserIdStr<'static>),
+    /// A bot sender resolved to its public display name.
+    Bot {
+        /// Bot display name.
+        name: String,
+    },
+}
+
+impl NotificationSender {
+    /// The sender's user id, when the sender is a user.
+    pub fn as_user(&self) -> Option<&MacroUserIdStr<'static>> {
+        match self {
+            NotificationSender::User(id) => Some(id),
+            NotificationSender::Bot { .. } => None,
+        }
+    }
+
+    /// The sender's display name, when the sender is a bot.
+    pub fn display_name(&self) -> Option<&str> {
+        match self {
+            NotificationSender::User(_) => None,
+            NotificationSender::Bot { name } => Some(name),
+        }
+    }
+}
+
 /// Shared channel-message notification payload.
 #[derive(Debug, Clone)]
 pub struct ChannelMentionNotification {
@@ -136,8 +166,8 @@ pub struct ChannelMentionNotification {
     pub metadata: ChannelMetadata,
     /// Optional sender profile picture URL.
     pub sender_profile_picture_url: Option<String>,
-    /// Sender user id.
-    pub sender_id: MacroUserIdStr<'static>,
+    /// Message sender.
+    pub sender: NotificationSender,
 }
 
 /// Metadata for a mentioned document.
@@ -189,8 +219,8 @@ pub enum ChannelNotificationEffect {
         thread_id: Uuid,
         /// Reply message id.
         message_id: Uuid,
-        /// Sender user id.
-        sender_id: MacroUserIdStr<'static>,
+        /// Message sender.
+        sender: NotificationSender,
         /// Reply body.
         message_content: String,
         /// Whether the reply has attachments.
@@ -210,8 +240,8 @@ pub enum ChannelNotificationEffect {
         channel_id: Uuid,
         /// Message id.
         message_id: Uuid,
-        /// Sender user id.
-        sender_id: MacroUserIdStr<'static>,
+        /// Message sender.
+        sender: NotificationSender,
         /// Message body.
         message_content: String,
         /// Whether the message has attachments.
@@ -537,7 +567,7 @@ where
         self.publish_realtime(ChannelRealtimeEffect::Message {
             recipients: recipients.clone(),
             message: message.clone(),
-            bot_profile,
+            bot_profile: bot_profile.clone(),
             nonce: nonce.clone(),
         })
         .await;
@@ -555,17 +585,15 @@ where
 
         self.search.index_message(channel_id, message.id).await;
         self.dispatch_bot_triggers(channel_id, &message, &mentions);
-        if message.sender_id.is_bot() {
-            return;
-        }
-        self.send_message_posted_notifications(
+        self.send_message_posted_notifications(PostedMessageNotificationInputs {
             channel_id,
             metadata,
             participants,
             message,
             mentions,
             has_attachments,
-        )
+            bot_profile,
+        })
         .await;
     }
 
@@ -591,17 +619,34 @@ where
         }
     }
 
-    async fn send_message_posted_notifications(
-        &self,
-        channel_id: Uuid,
-        metadata: ChannelMetadata,
-        participants: Vec<ChannelParticipant>,
-        message: MutatedMessage,
-        mentions: Vec<SimpleMention>,
-        has_attachments: bool,
-    ) {
-        let Some(sender_id) = message.sender_id.as_user().cloned() else {
-            return;
+    async fn send_message_posted_notifications(&self, inputs: PostedMessageNotificationInputs) {
+        let PostedMessageNotificationInputs {
+            channel_id,
+            metadata,
+            participants,
+            message,
+            mentions,
+            has_attachments,
+            bot_profile,
+        } = inputs;
+        let resolved_sender = match &message.sender_id {
+            Sender::User(user_id) => ResolvedNotificationSender {
+                sender: NotificationSender::User(user_id.clone()),
+                profile_picture_url: self
+                    .context
+                    .get_sender_profile_picture_url(user_id.clone())
+                    .await,
+            },
+            Sender::Bot(bot_id) => match bot_profile {
+                Some(profile) => ResolvedNotificationSender {
+                    sender: NotificationSender::Bot { name: profile.name },
+                    profile_picture_url: profile.avatar_url,
+                },
+                None => {
+                    tracing::warn!(bot_id = %bot_id, "missing bot profile, skipping message notifications");
+                    return;
+                }
+            },
         };
         let context = match self
             .build_posted_message_context(
@@ -609,7 +654,7 @@ where
                 metadata,
                 &participants,
                 &message,
-                sender_id,
+                resolved_sender,
                 mentions,
             )
             .await
@@ -635,7 +680,10 @@ where
                 &context,
             )
             .await;
-        } else if context.is_first_top_level_message {
+        } else if context.is_first_top_level_message && context.sender.as_user().is_some() {
+            // Bot first messages fall through to a regular channel-message
+            // notification; invites (which can email unregistered users) are
+            // only sent on behalf of user senders.
             self.send_first_message_invites(channel_id, &message, context)
                 .await;
         } else {
@@ -650,16 +698,20 @@ where
         metadata: ChannelMetadata,
         participants: &[ChannelParticipant],
         message: &MutatedMessage,
-        sender_id: MacroUserIdStr<'static>,
+        resolved_sender: ResolvedNotificationSender,
         mentions: Vec<SimpleMention>,
     ) -> anyhow::Result<PostedMessageNotificationContext> {
+        let ResolvedNotificationSender {
+            sender,
+            profile_picture_url: sender_profile_picture_url,
+        } = resolved_sender;
         let message_count = self
             .context
             .get_channel_message_count(channel_id)
             .await
             .map_err(Into::into)?;
         let is_first_top_level_message = message_count <= 1 && message.thread_id.is_none();
-        let existing_user_ids = if is_first_top_level_message {
+        let existing_user_ids = if is_first_top_level_message && sender.as_user().is_some() {
             let participant_ids: Vec<_> = participants
                 .iter()
                 .filter_map(|participant| MacroUserIdStr::parse_from_str(&participant.user_id).ok())
@@ -690,19 +742,17 @@ where
         let thread_context = self
             .load_thread_notification_context(message.thread_id)
             .await;
-        let sender_profile_picture_url = self
-            .context
-            .get_sender_profile_picture_url(sender_id.clone())
-            .await;
-
-        let excluded_user_ids = std::iter::once(sender_id.as_ref().to_string())
+        let excluded_user_ids = sender
+            .as_user()
+            .map(|user_id| user_id.as_ref().to_string())
+            .into_iter()
             .chain(user_mentions.iter().cloned())
             .collect::<Vec<_>>();
         let recipients_without_sender = recipients_excluding(
             participants
                 .iter()
                 .map(|participant| participant.user_id.as_str()),
-            std::iter::once(sender_id.as_ref()),
+            sender.as_user().map(|user_id| user_id.as_ref()),
         )
         .collect();
         let recipients_without_sender_and_mentions = recipients_excluding(
@@ -715,7 +765,7 @@ where
 
         Ok(PostedMessageNotificationContext {
             metadata,
-            sender_id,
+            sender,
             sender_profile_picture_url,
             user_mentions,
             document_mentions,
@@ -784,11 +834,11 @@ where
                 thread_id: message.thread_id,
                 metadata: context.metadata.clone(),
                 sender_profile_picture_url: context.sender_profile_picture_url.clone(),
-                sender_id: context.sender_id.clone(),
+                sender: context.sender.clone(),
             },
             recipient_ids: recipients_excluding(
                 context.user_mentions.iter().map(String::as_str),
-                std::iter::once(context.sender_id.as_ref()),
+                context.sender.as_user().map(|user_id| user_id.as_ref()),
             )
             .collect(),
         })
@@ -816,7 +866,7 @@ where
                     thread_id: message.thread_id,
                     metadata: context.metadata.clone(),
                     sender_profile_picture_url: context.sender_profile_picture_url.clone(),
-                    sender_id: context.sender_id.clone(),
+                    sender: context.sender.clone(),
                 },
                 document: document.clone(),
                 recipient_ids: context.recipients_without_sender.clone(),
@@ -842,7 +892,7 @@ where
             channel_id,
             thread_id,
             message_id: message.id,
-            sender_id: context.sender_id.clone(),
+            sender: context.sender.clone(),
             message_content: message.content.clone(),
             has_attachments,
             thread_parent_sender_id: context.thread_context.parent_sender_id.clone(),
@@ -867,9 +917,12 @@ where
         message: &MutatedMessage,
         context: PostedMessageNotificationContext,
     ) {
+        let Some(invited_by_user_id) = context.sender.as_user().cloned() else {
+            return;
+        };
         self.send_invite_notification(InviteNotificationRequest {
             channel_id,
-            invited_by_user_id: context.sender_id.clone(),
+            invited_by_user_id,
             recipient_user_ids: context
                 .recipients_without_sender_and_mentions
                 .into_iter()
@@ -892,7 +945,7 @@ where
         self.send_notification(ChannelNotificationEffect::ChannelMessage {
             channel_id,
             message_id: message.id,
-            sender_id: context.sender_id.clone(),
+            sender: context.sender.clone(),
             message_content: message.content.clone(),
             has_attachments,
             metadata: context.metadata.clone(),
@@ -967,9 +1020,26 @@ where
     }
 }
 
+/// Inputs for deriving notifications from a posted message.
+struct PostedMessageNotificationInputs {
+    channel_id: Uuid,
+    metadata: ChannelMetadata,
+    participants: Vec<ChannelParticipant>,
+    message: MutatedMessage,
+    mentions: Vec<SimpleMention>,
+    has_attachments: bool,
+    bot_profile: Option<BotSenderProfile>,
+}
+
+/// Sender identity and avatar resolved for notification delivery.
+struct ResolvedNotificationSender {
+    sender: NotificationSender,
+    profile_picture_url: Option<String>,
+}
+
 struct PostedMessageNotificationContext {
     metadata: ChannelMetadata,
-    sender_id: MacroUserIdStr<'static>,
+    sender: NotificationSender,
     sender_profile_picture_url: Option<String>,
     user_mentions: Vec<String>,
     document_mentions: Vec<ChannelDocumentMention>,
@@ -1056,6 +1126,22 @@ mod tests {
     struct FakeContext {
         message_count: i64,
         document_mentions: Vec<ChannelDocumentMention>,
+        bot_profile: Option<BotSenderProfile>,
+        thread_context: ThreadNotificationContext,
+    }
+
+    impl Default for FakeContext {
+        fn default() -> Self {
+            Self {
+                message_count: 2,
+                document_mentions: Vec::new(),
+                bot_profile: Some(BotSenderProfile {
+                    name: "Test Bot".to_string(),
+                    avatar_url: Some("https://example.com/bot.png".to_string()),
+                }),
+                thread_context: ThreadNotificationContext::default(),
+            }
+        }
     }
 
     impl ChannelSideEffectContext for FakeContext {
@@ -1086,7 +1172,7 @@ mod tests {
             &self,
             _thread_id: Uuid,
         ) -> Result<ThreadNotificationContext, Self::Err> {
-            Ok(ThreadNotificationContext::default())
+            Ok(self.thread_context.clone())
         }
 
         async fn get_sender_profile_picture_url(
@@ -1097,10 +1183,7 @@ mod tests {
         }
 
         async fn get_bot_sender_profile(&self, _bot_id: BotId) -> Option<BotSenderProfile> {
-            Some(BotSenderProfile {
-                name: "Test Bot".to_string(),
-                avatar_url: Some("https://example.com/bot.png".to_string()),
-            })
+            self.bot_profile.clone()
         }
     }
 
@@ -1184,10 +1267,7 @@ mod tests {
         let search = FakeSearch::default();
         let contacts = FakeContacts::default();
         let service = ChannelSideEffectService::new(
-            FakeContext {
-                message_count: 2,
-                document_mentions: Vec::new(),
-            },
+            FakeContext::default(),
             realtime.clone(),
             notifications.clone(),
             search.clone(),
@@ -1261,6 +1341,7 @@ mod tests {
         assert_eq!(notification_effects.len(), 1);
         let ChannelNotificationEffect::ChannelMessage {
             message_id: notified_message_id,
+            sender: notified_sender,
             recipient_ids,
             metadata,
             ..
@@ -1269,13 +1350,112 @@ mod tests {
             panic!("expected channel message notification effect");
         };
         assert_eq!(*notified_message_id, message_id);
+        assert_eq!(*notified_sender, NotificationSender::User(sender.clone()));
         assert_eq!(metadata.channel_name, "Project");
         assert_eq!(recipient_ids.len(), 1);
         assert!(recipient_ids.contains(&recipient));
     }
 
+    /// Build a MessagePosted event for a bot-sent message.
+    fn bot_message_posted_event(
+        channel_id: Uuid,
+        message_id: Uuid,
+        thread_id: Option<Uuid>,
+        participant_principals: &[&str],
+    ) -> ChannelEvent {
+        let now = Utc::now();
+        ChannelEvent::MessagePosted {
+            channel_id,
+            metadata: ChannelMetadata {
+                channel_type: ChannelType::Private,
+                channel_name: "Project".to_string(),
+            },
+            participants: participant_principals
+                .iter()
+                .map(|principal| ChannelParticipant {
+                    channel_id,
+                    user_id: principal.to_string(),
+                    role: ParticipantRole::Member,
+                    joined_at: now,
+                    left_at: None,
+                })
+                .collect(),
+            message: MutatedMessage {
+                id: message_id,
+                channel_id,
+                thread_id,
+                sender_id: Sender::Bot(BotId::from_uuid(Uuid::new_v4())),
+                content: "hello".to_string(),
+                created_at: now,
+                updated_at: now,
+                edited_at: None,
+                deleted_at: None,
+            },
+            mentions: Vec::new(),
+            has_attachments: false,
+            attachments: Vec::new(),
+            nonce: None,
+        }
+    }
+
     #[tokio::test]
-    async fn bot_message_posted_keeps_realtime_and_search_but_skips_notifications() {
+    async fn bot_message_posted_sends_channel_message_notification() {
+        let channel_id = Uuid::new_v4();
+        let message_id = Uuid::new_v4();
+        let recipient = user("recipient@example.com");
+        let realtime = FakeRealtime::default();
+        let notifications = FakeNotifications::default();
+        let search = FakeSearch::default();
+        let service = ChannelSideEffectService::new(
+            FakeContext::default(),
+            realtime.clone(),
+            notifications.clone(),
+            search.clone(),
+            FakeContacts::default(),
+        );
+
+        service
+            .handle(bot_message_posted_event(
+                channel_id,
+                message_id,
+                None,
+                &[recipient.as_ref()],
+            ))
+            .await;
+
+        assert_eq!(realtime.effects.lock().unwrap().len(), 1);
+        assert_eq!(
+            *search.indexed.lock().unwrap(),
+            vec![(channel_id, message_id)]
+        );
+
+        let notification_effects = notifications.effects.lock().unwrap();
+        assert_eq!(notification_effects.len(), 1);
+        let ChannelNotificationEffect::ChannelMessage {
+            sender,
+            sender_profile_picture_url,
+            recipient_ids,
+            ..
+        } = &notification_effects[0]
+        else {
+            panic!("expected channel message notification effect");
+        };
+        assert_eq!(
+            *sender,
+            NotificationSender::Bot {
+                name: "Test Bot".to_string()
+            }
+        );
+        assert_eq!(
+            sender_profile_picture_url.as_deref(),
+            Some("https://example.com/bot.png")
+        );
+        assert_eq!(recipient_ids.len(), 1);
+        assert!(recipient_ids.contains(&recipient));
+    }
+
+    #[tokio::test]
+    async fn bot_message_without_profile_skips_notifications() {
         let channel_id = Uuid::new_v4();
         let message_id = Uuid::new_v4();
         let recipient = user("recipient@example.com");
@@ -1284,46 +1464,22 @@ mod tests {
         let search = FakeSearch::default();
         let service = ChannelSideEffectService::new(
             FakeContext {
-                message_count: 2,
-                document_mentions: Vec::new(),
+                bot_profile: None,
+                ..FakeContext::default()
             },
             realtime.clone(),
             notifications.clone(),
             search.clone(),
             FakeContacts::default(),
         );
-        let now = Utc::now();
 
         service
-            .handle(ChannelEvent::MessagePosted {
+            .handle(bot_message_posted_event(
                 channel_id,
-                metadata: ChannelMetadata {
-                    channel_type: ChannelType::Private,
-                    channel_name: "Project".to_string(),
-                },
-                participants: vec![ChannelParticipant {
-                    channel_id,
-                    user_id: recipient.as_ref().to_string(),
-                    role: ParticipantRole::Member,
-                    joined_at: now,
-                    left_at: None,
-                }],
-                message: MutatedMessage {
-                    id: message_id,
-                    channel_id,
-                    thread_id: None,
-                    sender_id: Sender::Bot(BotId::from_uuid(Uuid::new_v4())),
-                    content: "hello".to_string(),
-                    created_at: now,
-                    updated_at: now,
-                    edited_at: None,
-                    deleted_at: None,
-                },
-                mentions: Vec::new(),
-                has_attachments: false,
-                attachments: Vec::new(),
-                nonce: None,
-            })
+                message_id,
+                None,
+                &[recipient.as_ref()],
+            ))
             .await;
 
         assert_eq!(realtime.effects.lock().unwrap().len(), 1);
@@ -1335,6 +1491,124 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn bot_first_message_sends_channel_message_not_invite() {
+        let channel_id = Uuid::new_v4();
+        let recipient = user("recipient@example.com");
+        let notifications = FakeNotifications::default();
+        let service = ChannelSideEffectService::new(
+            FakeContext {
+                message_count: 1,
+                ..FakeContext::default()
+            },
+            FakeRealtime::default(),
+            notifications.clone(),
+            FakeSearch::default(),
+            FakeContacts::default(),
+        );
+
+        service
+            .handle(bot_message_posted_event(
+                channel_id,
+                Uuid::new_v4(),
+                None,
+                &[recipient.as_ref()],
+            ))
+            .await;
+
+        let notification_effects = notifications.effects.lock().unwrap();
+        assert_eq!(notification_effects.len(), 1);
+        assert!(matches!(
+            &notification_effects[0],
+            ChannelNotificationEffect::ChannelMessage { .. }
+        ));
+    }
+
+    #[tokio::test]
+    async fn bot_thread_reply_sends_reply_notification() {
+        let channel_id = Uuid::new_v4();
+        let recipient = user("recipient@example.com");
+        let parent_sender = user("parent@example.com");
+        let notifications = FakeNotifications::default();
+        let service = ChannelSideEffectService::new(
+            FakeContext {
+                thread_context: ThreadNotificationContext {
+                    participants: vec![recipient.clone(), parent_sender.clone()],
+                    parent_sender_id: Some(parent_sender.clone()),
+                },
+                ..FakeContext::default()
+            },
+            FakeRealtime::default(),
+            notifications.clone(),
+            FakeSearch::default(),
+            FakeContacts::default(),
+        );
+
+        service
+            .handle(bot_message_posted_event(
+                channel_id,
+                Uuid::new_v4(),
+                Some(Uuid::new_v4()),
+                &[recipient.as_ref(), parent_sender.as_ref()],
+            ))
+            .await;
+
+        let notification_effects = notifications.effects.lock().unwrap();
+        assert_eq!(notification_effects.len(), 1);
+        let ChannelNotificationEffect::Reply {
+            sender,
+            thread_parent_sender_id,
+            recipient_ids,
+            ..
+        } = &notification_effects[0]
+        else {
+            panic!("expected reply notification effect");
+        };
+        assert_eq!(
+            *sender,
+            NotificationSender::Bot {
+                name: "Test Bot".to_string()
+            }
+        );
+        assert_eq!(*thread_parent_sender_id, Some(parent_sender.clone()));
+        assert!(recipient_ids.contains(&recipient));
+        assert!(recipient_ids.contains(&parent_sender));
+    }
+
+    #[tokio::test]
+    async fn bot_participant_is_never_a_notification_recipient() {
+        let channel_id = Uuid::new_v4();
+        let recipient = user("recipient@example.com");
+        let bot_principal = BotId::from_uuid(Uuid::new_v4()).to_storage_string();
+        let notifications = FakeNotifications::default();
+        let service = ChannelSideEffectService::new(
+            FakeContext::default(),
+            FakeRealtime::default(),
+            notifications.clone(),
+            FakeSearch::default(),
+            FakeContacts::default(),
+        );
+
+        service
+            .handle(bot_message_posted_event(
+                channel_id,
+                Uuid::new_v4(),
+                None,
+                &[recipient.as_ref(), bot_principal.as_str()],
+            ))
+            .await;
+
+        let notification_effects = notifications.effects.lock().unwrap();
+        assert_eq!(notification_effects.len(), 1);
+        let ChannelNotificationEffect::ChannelMessage { recipient_ids, .. } =
+            &notification_effects[0]
+        else {
+            panic!("expected channel message notification effect");
+        };
+        assert_eq!(recipient_ids.len(), 1);
+        assert!(recipient_ids.contains(&recipient));
+    }
+
+    #[tokio::test]
     async fn user_message_with_bot_mention_enqueues_bot_trigger() {
         let channel_id = Uuid::new_v4();
         let message_id = Uuid::new_v4();
@@ -1342,10 +1616,7 @@ mod tests {
         let recipient = user("recipient@example.com");
         let (bot_trigger_sender, mut bot_trigger_receiver) = tokio::sync::mpsc::unbounded_channel();
         let service = ChannelSideEffectService::new(
-            FakeContext {
-                message_count: 2,
-                document_mentions: Vec::new(),
-            },
+            FakeContext::default(),
             FakeRealtime::default(),
             FakeNotifications::default(),
             FakeSearch::default(),
@@ -1417,13 +1688,13 @@ mod tests {
         let notifications = FakeNotifications::default();
         let service = ChannelSideEffectService::new(
             FakeContext {
-                message_count: 2,
                 document_mentions: vec![ChannelDocumentMention {
                     document_name: "Spec".to_string(),
                     owner: sender.clone(),
                     file_type: None,
                     sub_type: None,
                 }],
+                ..FakeContext::default()
             },
             FakeRealtime::default(),
             notifications.clone(),

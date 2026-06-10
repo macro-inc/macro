@@ -1,16 +1,11 @@
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
-import { inboxIconProps } from '@core/component/inboxIcon';
-import { UserIcon } from '@core/component/UserIcon';
 import { Combobox } from '@kobalte/core/combobox';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import TrayIcon from '@phosphor/tray.svg';
-import { useEmailLinksQuery } from '@queries/email/link';
 import { Button } from '@ui';
-import { createMemo, Show } from 'solid-js';
-import {
-  SearchableMultiSelect,
-  type SearchableOption,
-} from './searchable-multi-select';
+import { Show } from 'solid-js';
+import { useInboxPicker } from './inbox-picker';
+import { SearchableMultiSelect } from './searchable-multi-select';
 
 /**
  * Scopes the list to a subset of the user's linked inboxes. Multi-select,
@@ -19,51 +14,28 @@ import {
  * into `Owner` email literals.
  */
 export function InboxSelector() {
-  const linksQuery = useEmailLinksQuery();
-  const links = () => linksQuery.data?.links ?? [];
   const { inboxFilter, setInboxFilter } = useSoupView();
-
-  const options = createMemo((): SearchableOption[] =>
-    links()
-      .map((link) => ({
-        id: link.id,
-        label: link.email_address,
-        icon: () => (
-          <UserIcon
-            {...inboxIconProps(link.email_address)}
-            photoUrl={link.photo_url ?? undefined}
-            size="sm"
-            suppressClick
-            showTooltip={false}
-          />
-        ),
-      }))
-      .sort((a, b) => a.label.localeCompare(b.label))
-  );
-
-  const activeIds = createMemo(() => {
-    const selected = inboxFilter();
-    return selected === undefined ? links().map((l) => l.id) : selected;
+  const picker = useInboxPicker({
+    selectedIds: inboxFilter,
+    setSelectedIds: setInboxFilter,
   });
-
-  const onChange = (ids: string[]) =>
-    setInboxFilter(ids.length === links().length ? undefined : ids);
 
   const label = () => {
     const ids = inboxFilter();
     if (ids === undefined) return 'All inboxes';
     if (ids.length === 0) return 'No inboxes';
     if (ids.length === 1)
-      return links().find((l) => l.id === ids[0])?.email_address ?? '1 inbox';
+      return picker.options().find((o) => o.id === ids[0])?.label ?? '1 inbox';
     return `${ids.length} inboxes`;
   };
 
   return (
-    <Show when={links().length > 1}>
+    <Show when={picker.hasMultiple()}>
       <SearchableMultiSelect
-        options={options}
-        activeIds={activeIds}
-        onChange={onChange}
+        options={picker.options}
+        activeIds={picker.activeIds}
+        onChange={picker.onChange}
+        onOnly={picker.selectOnly}
         placeholder="Search inboxes..."
         preserveOrder
       >

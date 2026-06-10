@@ -36,7 +36,8 @@ type UseSoupViewHotkeysOptions = {
   previewState: Accessor<boolean>;
   currentView: Accessor<ListView | undefined>;
   activeTab: Accessor<string | undefined>;
-  applyTabPreset: (view: ListView, tabId: string) => boolean;
+  applyTabPreset: (view: ListView, tabId: string) => void;
+  fetchNextGroupPage: (groupKey: string) => Promise<void>;
 };
 
 export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
@@ -49,6 +50,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     currentView,
     activeTab,
     applyTabPreset,
+    fetchNextGroupPage,
   } = options;
 
   const analytics = useAnalytics();
@@ -155,7 +157,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
       // If focused on a load more row, trigger load more and stay at same index
       if (focusedRow.getIsLoadMore() && focusedRow.group) {
         const currentIndex = focusedRow.index;
-        focusedRow.group.loadMore().then(() => {
+        fetchNextGroupPage(focusedRow.group.key).then(() => {
           soup.navigate.toIndex(currentIndex);
           virtualizerHandle()?.scrollToIndex(currentIndex, {
             align: 'nearest',

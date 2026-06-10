@@ -40,7 +40,9 @@ export const SEARCH_INDEX_SEEDS: Record<SearchIndexId, Query> = {
 };
 
 export type SearchFiltersSections = {
-  email: { importance: boolean | undefined };
+  // inboxIds: `undefined` = all inboxes (default), `[]` = explicitly none,
+  // a subset = those inboxes — same model as the mail view's inbox filter.
+  email: { importance: boolean | undefined; inboxIds: string[] | undefined };
   channels: { in: string[]; from: string[] };
   calls: { in: string[]; from: string[]; status: CallStatus | undefined };
 };
@@ -50,7 +52,7 @@ export type SearchFiltersState = SearchFiltersSections & {
 };
 
 export const DEFAULT_SECTIONS: SearchFiltersSections = {
-  email: { importance: undefined },
+  email: { importance: undefined, inboxIds: undefined },
   channels: { in: [], from: [] },
   calls: { in: [], from: [], status: undefined },
 };
@@ -78,6 +80,11 @@ export function compileSearchQuery(state: SearchFiltersState): Query {
   if (state.type === 'email') {
     if (state.email.importance !== undefined) {
       include.emailImportance = state.email.importance;
+    }
+    if (state.email.inboxIds !== undefined) {
+      include.emailLinkId = state.email.inboxIds.length
+        ? state.email.inboxIds
+        : [NIL_UUID];
     }
   } else if (state.type === 'channels') {
     if (state.channels.in.length) include.channelId = state.channels.in;
@@ -117,6 +124,10 @@ export function createSearchFiltersController() {
     (ids ?? []).filter((id) => id !== NIL_UUID);
 
   const emailImportance = () => include().emailImportance;
+  const emailInbox = createMemo<string[] | undefined>(() => {
+    const ids = include().emailLinkId;
+    return ids === undefined ? undefined : withoutNil(ids);
+  });
   const channelIn = createMemo(() => withoutNil(include().channelId));
   const channelFrom = createMemo(() => withoutNil(include().channelSenderId));
   const callIn = createMemo(() => withoutNil(include().callChannelId));
@@ -125,7 +136,7 @@ export function createSearchFiltersController() {
     include().callStatus ?? callStatusFromAttended(include().callAttended);
 
   const currentSections = (): SearchFiltersSections => ({
-    email: { importance: emailImportance() },
+    email: { importance: emailImportance(), inboxIds: emailInbox() },
     channels: { in: channelIn(), from: channelFrom() },
     calls: { in: callIn(), from: callFrom(), status: callStatus() },
   });
@@ -151,7 +162,10 @@ export function createSearchFiltersController() {
     if (next === current) return;
 
     if (current === 'email') {
-      stash = { ...stash, email: { importance: emailImportance() } };
+      stash = {
+        ...stash,
+        email: { importance: emailImportance(), inboxIds: emailInbox() },
+      };
     } else if (current === 'channels') {
       stash = { ...stash, channels: { in: channelIn(), from: channelFrom() } };
     } else if (current === 'calls') {
@@ -169,7 +183,12 @@ export function createSearchFiltersController() {
     setType,
     emailImportance,
     setEmailImportance: (importance: boolean | undefined) =>
-      applySections({ email: { importance } }),
+      applySections({ email: { importance, inboxIds: emailInbox() } }),
+    emailInbox,
+    setEmailInbox: (ids: string[] | undefined) =>
+      applySections({
+        email: { importance: emailImportance(), inboxIds: ids },
+      }),
     channelIn,
     setChannelIn: (ids: string[]) =>
       applySections({ channels: { in: ids, from: channelFrom() } }),

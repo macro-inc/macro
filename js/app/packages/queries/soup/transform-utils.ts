@@ -36,12 +36,14 @@ import type {
 } from '@service-search/generated/models';
 import type {
   GithubPullRequest,
+  SoupApiItem,
   SoupDocument,
   SoupPage,
 } from '@service-storage/generated/schemas';
 import type { ChannelType } from '@service-storage/generated/schemas/channelType';
 import type { UseQueryResult } from '@tanstack/solid-query';
 import { differenceInMilliseconds } from 'date-fns';
+import { match } from 'ts-pattern';
 
 type InnerSearchResult =
   | DocumentSearchResult
@@ -499,6 +501,10 @@ const resolveDocumentEntityName = (
   });
 };
 
+export const isDisplayableSoupItem = (
+  _: SoupPage['items'][number]
+): _ is DisplayableSoupItem => true;
+
 /**
  * The email soup query encodes "no sort timestamp" — e.g. a never-viewed thread
  * under the `viewed_at` sort — as the Unix epoch. Map it to `undefined` so each
@@ -511,6 +517,217 @@ function normalizeSentinelTs(
   if (!ts) return undefined;
   return Date.parse(ts) > 0 ? ts : undefined;
 }
+
+export const mapApiSoupItemToEntity = (item: DisplayableSoupItem): SoupEntity =>
+  match(item)
+    .with({ tag: 'chat' }, (item) => ({
+      ...item.data,
+      createdAt: item.data.createdAt,
+      updatedAt: item.data.updatedAt,
+      type: item.tag,
+      name: item.data.name || 'New Chat',
+      frecencyScore: item.frecency_score,
+      viewedAt: item.data.viewedAt,
+      projectId: item.data.projectId ?? undefined,
+    }))
+    .with({ tag: 'project' }, (item) => ({
+      createdAt: item.data.createdAt,
+      updatedAt: item.data.updatedAt,
+      id: item.data.id,
+      ownerId: item.data.ownerId,
+      frecencyScore: item.frecency_score,
+      viewedAt: item.data.viewedAt,
+      projectId: item.data.parentId ?? undefined,
+      type: item.tag,
+      name: item.data.name || 'New Project',
+    }))
+    .with({ tag: 'emailThread' }, (item) => {
+      const participants = item.data.participants?.map((p) => ({
+        email: p.emailAddress ?? '',
+        name: p.name ?? '',
+      }));
+
+      const hasIcsAttachment = item.data.attachments?.some(
+        (a) =>
+          a.mimeType === 'text/calendar' ||
+          a.filename?.toLowerCase().endsWith('.ics')
+      );
+
+      const attachments = item.data.attachments?.map((a) => ({
+        id: a.id,
+        filename: a.filename,
+        mimeType: a.mimeType,
+        sizeBytes: a.sizeBytes,
+      }));
+
+      // The thread preview has no link id of its own; its participants and
+      // labels are scoped to the owning inbox, so they share its link id.
+      const linkId =
+        item.data.participants?.[0]?.linkId ?? item.data.labels?.[0]?.linkId;
+
+      return {
+        ...item.data,
+        createdAt: item.data.createdAt,
+        updatedAt: item.data.updatedAt,
+        sortTs: normalizeSentinelTs(item.data.sortTs),
+        senderEmail: item.data.senderEmail ?? undefined,
+        senderName: item.data.senderName ?? undefined,
+        snippet: item.data.snippet ?? undefined,
+        done: !item.data.inboxVisible,
+        type: 'email',
+        name: item.data.name || 'Email Thread',
+        frecencyScore: item.frecency_score,
+        viewedAt: item.data.viewedAt,
+        projectId: item.data.projectId ?? undefined,
+        linkId,
+        participants,
+        hasIcsAttachment,
+        attachments,
+      } satisfies EmailEntity;
+    })
+    .with({ tag: 'call' }, (item) => {
+      const status = item.data.status;
+
+      return {
+        type: 'call',
+        id: item.data.callId,
+        name:
+          item.data.customName ??
+          item.data.channelName ??
+          blockNameToDefaultFile('call'),
+        channelId: item.data.channelId,
+        channelName: item.data.channelName ?? undefined,
+        ownerId: item.data.createdBy,
+        createdAt: item.data.startedAt,
+        updatedAt: item.data.endedAt ?? item.data.startedAt,
+        sortTs: item.data.endedAt ?? item.data.startedAt,
+        isActive: item.data.isActive,
+        status,
+        attended: status === 'ATTENDED',
+        durationMs: item.data.durationMs ?? undefined,
+        participantIds: item.data.participants.map((p) => p.userId),
+        summary: item.data.summary ?? undefined,
+      } satisfies CallEntity;
+    })
+    .with({ tag: 'channel' }, (item) => {
+      const latestMessage =
+        item.data.latest_message ?? item.data.latest_non_thread_message;
+
+      const out: ChannelEntity = {
+        type: 'channel',
+        id: item.data.channel.id,
+        name: item.data.channel.name || 'Unknown Channel',
+        channelType: item.data.channel.channel_type,
+        ownerId: item.data.channel.owner_id,
+        frecencyScore: item.frecency_score ?? 0,
+        updatedAt: item.data.channel.updated_at,
+        createdAt: item.data.channel.created_at,
+        participantIds: item.data.participants.map((p) => p.user_id),
+        viewedAt: item.data.viewed_at ?? item.data.interacted_at,
+        interactedAt: item.data.interacted_at,
+        latestMessage: latestMessage
+          ? {
+              messageId: latestMessage.message_id,
+              threadId: latestMessage.thread_id ?? undefined,
+              content: latestMessage.content,
+              senderId: latestMessage.sender_id,
+              createdAt: latestMessage.created_at,
+            }
+          : undefined,
+      };
+      return out;
+    })
+    .with({ tag: 'foreignEntity' }, (item) => {
+      const metadata = item.data.metadata as unknown as GithubPullRequest;
+
+      let status: GithubPullRequestEntity['metadata']['status'] = 'open';
+
+      if (metadata.status === 'merged') {
+        status = 'merged';
+      } else if (metadata.status === 'closed') {
+        status = 'closed';
+      }
+
+      const out: GithubPullRequestEntity = {
+        type: 'foreign',
+        id: item.data.id,
+        name: metadata.name ?? metadata.displayName,
+        ownerId: item.data.storedForId,
+        createdAt: item.data.createdAt,
+        updatedAt: item.data.updatedAt,
+        foreignSource: 'github_pull_request',
+        foreignId: item.data.foreignEntityId,
+        storedForId: item.data.storedForId,
+        storedForAuthEntity: item.data.storedForAuthEntity,
+        metadata: {
+          number: metadata.number,
+          name: metadata.name ?? metadata.displayName,
+          owner: metadata.owner,
+          repo: metadata.repo,
+          url: metadata.url,
+          status: status,
+          additions: metadata.additions ?? 0,
+          deletions: metadata.deletions ?? 0,
+          comments: metadata.comments ?? [],
+          checks: metadata.checks?.filter(Boolean) ?? [],
+        },
+      };
+
+      return out;
+    })
+    .with({ tag: 'document' }, (item) => ({
+      ...item.data,
+      createdAt: item.data.createdAt,
+      updatedAt: item.data.updatedAt,
+      type: item.tag,
+      frecencyScore: item.frecency_score,
+      viewedAt: item.data.viewedAt,
+      fileType: item.data.fileType ?? undefined,
+      projectId: item.data.projectId ?? undefined,
+      subType:
+        item.data.subType === null || item.data.subType === undefined
+          ? undefined
+          : {
+              type: item.data.subType.type as 'task',
+              is_completed: item.data.subType.is_completed,
+            },
+      name: resolveDocumentEntityName(item.data),
+    }))
+    .with({ tag: 'crmCompany' }, (item) => {
+      const primaryDomain = item.data.domains[0]?.domain;
+      return {
+        type: 'crm_company',
+        id: item.data.id,
+        teamId: item.data.teamId,
+        name: item.data.name || primaryDomain || 'Unknown Company',
+        ownerId: item.data.teamId,
+        description: item.data.description ?? undefined,
+        emailSync: item.data.emailSync,
+        hidden: item.data.hidden,
+        createdAt: item.data.createdAt,
+        updatedAt: item.data.updatedAt,
+        sortTs: item.data.updatedAt,
+        frecencyScore: item.frecency_score,
+        domains: item.data.domains.map((d) => ({
+          id: d.id,
+          companyId: d.companyId,
+          domain: d.domain,
+          createdAt: d.createdAt,
+        })),
+      } satisfies CrmCompanyEntity;
+    })
+    .exhaustive();
+
+export const isInstructionsMdDoc = (
+  item: SoupApiItem,
+  instructionsIdQuery: UseQueryResult<string | null | undefined, Error>
+) => {
+  if (item.tag !== 'document') return false;
+
+  if (!instructionsIdQuery.isSuccess) return false;
+
+  return item.data.id === instructionsIdQuery.data;
+};
 
 export const mapSoupPageToEntityList: (
   data: SoupPage,
@@ -530,217 +747,8 @@ export const mapSoupPageToEntityList: (
 
       return (
         item.tag !== 'document' ||
-        !options.instructionsIdQuery.isSuccess ||
-        item.data.id !== options.instructionsIdQuery.data
+        !isInstructionsMdDoc(item, options.instructionsIdQuery)
       );
     })
-    .map((item): SoupEntity => {
-      if (item.tag === 'chat') {
-        return {
-          ...item.data,
-          createdAt: item.data.createdAt,
-          updatedAt: item.data.updatedAt,
-          type: item.tag,
-          name: item.data.name || 'New Chat',
-          frecencyScore: item.frecency_score,
-          viewedAt: item.data.viewedAt,
-          projectId: item.data.projectId ?? undefined,
-        };
-      }
-
-      if (item.tag === 'project') {
-        return {
-          createdAt: item.data.createdAt,
-          updatedAt: item.data.updatedAt,
-          id: item.data.id,
-          ownerId: item.data.ownerId,
-          frecencyScore: item.frecency_score,
-          viewedAt: item.data.viewedAt,
-          projectId: item.data.parentId ?? undefined,
-          type: item.tag,
-          name: item.data.name || 'New Project',
-        };
-      }
-
-      if (item.tag === 'emailThread') {
-        const participants = item.data.participants?.map((p) => ({
-          email: p.emailAddress ?? '',
-          name: p.name ?? '',
-        }));
-
-        const hasIcsAttachment = item.data.attachments?.some(
-          (a) =>
-            a.mimeType === 'text/calendar' ||
-            a.filename?.toLowerCase().endsWith('.ics')
-        );
-
-        const attachments = item.data.attachments?.map((a) => ({
-          id: a.id,
-          filename: a.filename,
-          mimeType: a.mimeType,
-          sizeBytes: a.sizeBytes,
-        }));
-
-        // The thread preview has no link id of its own; its participants and
-        // labels are scoped to the owning inbox, so they share its link id.
-        const linkId =
-          item.data.participants?.[0]?.linkId ?? item.data.labels?.[0]?.linkId;
-
-        return {
-          ...item.data,
-          createdAt: item.data.createdAt,
-          updatedAt: item.data.updatedAt,
-          sortTs: normalizeSentinelTs(item.data.sortTs),
-          senderEmail: item.data.senderEmail ?? undefined,
-          senderName: item.data.senderName ?? undefined,
-          snippet: item.data.snippet ?? undefined,
-          done: !item.data.inboxVisible,
-          type: 'email',
-          name: item.data.name || 'Email Thread',
-          frecencyScore: item.frecency_score,
-          viewedAt: item.data.viewedAt,
-          projectId: item.data.projectId ?? undefined,
-          linkId,
-          participants,
-          hasIcsAttachment,
-          attachments,
-        };
-      }
-
-      if (item.tag === 'call') {
-        const status = item.data.status;
-
-        return {
-          type: 'call',
-          id: item.data.callId,
-          name:
-            item.data.customName ??
-            item.data.channelName ??
-            blockNameToDefaultFile('call'),
-          channelId: item.data.channelId,
-          channelName: item.data.channelName ?? undefined,
-          ownerId: item.data.createdBy,
-          createdAt: item.data.startedAt,
-          updatedAt: item.data.endedAt ?? item.data.startedAt,
-          sortTs: item.data.endedAt ?? item.data.startedAt,
-          isActive: item.data.isActive,
-          status,
-          attended: status === 'ATTENDED',
-          durationMs: item.data.durationMs ?? undefined,
-          participantIds: item.data.participants.map((p) => p.userId),
-          summary: item.data.summary ?? undefined,
-        } satisfies CallEntity;
-      }
-
-      if (item.tag === 'channel') {
-        const latestMessage =
-          item.data.latest_message ?? item.data.latest_non_thread_message;
-
-        const out: ChannelEntity = {
-          type: 'channel',
-          id: item.data.channel.id,
-          name: item.data.channel.name || 'Unknown Channel',
-          channelType: item.data.channel.channel_type,
-          ownerId: item.data.channel.owner_id,
-          frecencyScore: item.frecency_score ?? 0,
-          updatedAt: item.data.channel.updated_at,
-          createdAt: item.data.channel.created_at,
-          participantIds: item.data.participants.map((p) => p.user_id),
-          viewedAt: item.data.viewed_at ?? item.data.interacted_at,
-          interactedAt: item.data.interacted_at,
-          latestMessage: latestMessage
-            ? {
-                messageId: latestMessage.message_id,
-                threadId: latestMessage.thread_id ?? undefined,
-                content: latestMessage.content,
-                senderId: latestMessage.sender_id,
-                createdAt: latestMessage.created_at,
-              }
-            : undefined,
-        };
-        return out;
-      }
-
-      if (item.tag === 'foreignEntity') {
-        const metadata = item.data.metadata as unknown as GithubPullRequest;
-
-        let status: GithubPullRequestEntity['metadata']['status'] = 'open';
-
-        if (metadata.status === 'merged') {
-          status = 'merged';
-        } else if (metadata.status === 'closed') {
-          status = 'closed';
-        }
-
-        const out: GithubPullRequestEntity = {
-          type: 'foreign',
-          id: item.data.id,
-          name: metadata.name ?? metadata.displayName,
-          ownerId: item.data.storedForId,
-          createdAt: item.data.createdAt,
-          updatedAt: item.data.updatedAt,
-          foreignSource: 'github_pull_request',
-          foreignId: item.data.foreignEntityId,
-          storedForId: item.data.storedForId,
-          storedForAuthEntity: item.data.storedForAuthEntity,
-          metadata: {
-            number: metadata.number,
-            name: metadata.name ?? metadata.displayName,
-            owner: metadata.owner,
-            repo: metadata.repo,
-            url: metadata.url,
-            status: status,
-            additions: metadata.additions ?? 0,
-            deletions: metadata.deletions ?? 0,
-            comments: metadata.comments ?? [],
-            checks: metadata.checks?.filter(Boolean) ?? [],
-          },
-        };
-
-        return out;
-      }
-
-      if (item.tag === 'crmCompany') {
-        const primaryDomain = item.data.domains[0]?.domain;
-        return {
-          type: 'crm_company',
-          id: item.data.id,
-          teamId: item.data.teamId,
-          name: item.data.name || primaryDomain || 'Unknown Company',
-          ownerId: item.data.teamId,
-          description: item.data.description ?? undefined,
-          emailSync: item.data.emailSync,
-          hidden: item.data.hidden,
-          createdAt: item.data.createdAt,
-          updatedAt: item.data.updatedAt,
-          sortTs: item.data.updatedAt,
-          frecencyScore: item.frecency_score,
-          domains: item.data.domains.map((d) => ({
-            id: d.id,
-            companyId: d.companyId,
-            domain: d.domain,
-            createdAt: d.createdAt,
-          })),
-        } satisfies CrmCompanyEntity;
-      }
-
-      return {
-        ...item.data,
-        createdAt: item.data.createdAt,
-        updatedAt: item.data.updatedAt,
-        type: item.tag,
-        frecencyScore: item.frecency_score,
-        viewedAt: item.data.viewedAt,
-        fileType: item.data.fileType ?? undefined,
-        projectId: item.data.projectId ?? undefined,
-        subType:
-          item.data.subType === null || item.data.subType === undefined
-            ? undefined
-            : {
-                type: item.data.subType.type as 'task',
-                is_completed: item.data.subType.is_completed,
-              },
-        name: resolveDocumentEntityName(item.data),
-      };
-    });
+    .map(mapApiSoupItemToEntity);
 };

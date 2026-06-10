@@ -6851,6 +6851,66 @@
         }
       }
     },
+    "/items/soup/ast/grouped": {
+      "post": {
+        "tags": ["soup::inbound::axum_router"],
+        "summary": "Gets the items grouped by the specified field using AST filters.",
+        "operationId": "post_items_soup_ast_grouped",
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Base64 encoded cursor value.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostGroupedSoupAstRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupedSoupPage"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CRM-scoped queries require team membership, or requesting hidden CRM companies requires admin/owner team role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/pins": {
       "get": {
         "tags": ["pins::get_pins"],
@@ -9347,6 +9407,94 @@
           }
         }
       },
+      "ApiGroupByField": {
+        "oneOf": [
+          {
+            "type": "string",
+            "description": "Smart date buckets: Today, Yesterday, This Week, Last Week, This Month, Last Month, Older",
+            "enum": ["date"]
+          },
+          {
+            "type": "string",
+            "description": "Group by entity type (document, email, channel, etc.)",
+            "enum": ["entity_type"]
+          },
+          {
+            "type": "string",
+            "description": "Group by project",
+            "enum": ["project"]
+          },
+          {
+            "type": "object",
+            "description": "Group by a property value (e.g., status, priority, or custom properties)",
+            "required": ["property"],
+            "properties": {
+              "property": {
+                "type": "object",
+                "description": "Group by a property value (e.g., status, priority, or custom properties)",
+                "required": ["property_definition_id"],
+                "properties": {
+                  "entity_type": {
+                    "oneOf": [
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "$ref": "#/components/schemas/ApiPropertyEntityType",
+                        "description": "Optional entity type filter for the property lookup"
+                      }
+                    ]
+                  },
+                  "property_definition_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "The property definition UUID to group by"
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "description": "API representation of group-by field."
+      },
+      "ApiGroupMeta": {
+        "type": "object",
+        "description": "API representation of group metadata.\n\nItems belonging to this group are referenced by `item_ids`, each of which\nlooks up an entry in `GroupedSoupPage.items` (a normalized pool).",
+        "required": ["key", "label", "total_count", "item_ids"],
+        "properties": {
+          "display_order": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Display order for sorting groups (lower = first)"
+          },
+          "item_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Ordered ids of items in this group for the current page.\nEach id keys into `GroupedSoupPage.items`."
+          },
+          "key": {
+            "type": "string",
+            "description": "Group key - format depends on group_by field"
+          },
+          "label": {
+            "type": "string",
+            "description": "Human-readable label for the group"
+          },
+          "next_cursor": {
+            "type": ["string", "null"],
+            "description": "Cursor to load more items specifically from this group"
+          },
+          "total_count": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Total count of items in this group across all pages",
+            "minimum": 0
+          }
+        }
+      },
       "ApiMessageAttachment": {
         "type": "object",
         "description": "An attachment on a message.",
@@ -9414,6 +9562,20 @@
         "type": "string",
         "description": "Participant role in a channel.",
         "enum": ["owner", "admin", "member"]
+      },
+      "ApiPropertyEntityType": {
+        "type": "string",
+        "description": "Entity type for property lookups (API representation).",
+        "enum": [
+          "CHANNEL",
+          "CHAT",
+          "COMPANY",
+          "DOCUMENT",
+          "PROJECT",
+          "TASK",
+          "THREAD",
+          "USER"
+        ]
       },
       "ApiResolvedChannelMessage": {
         "type": "object",
@@ -14294,6 +14456,157 @@
           }
         }
       },
+      "GroupedInitialParams": {
+        "type": "object",
+        "description": "Parameters for the initial grouped soup query.",
+        "required": ["group_by"],
+        "properties": {
+          "group_by": {
+            "$ref": "#/components/schemas/ApiGroupByField",
+            "description": "Field to group results by (required)."
+          },
+          "per_group_limit": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Limit the number of items returned per group. Defaults to 20. Max 500.",
+            "minimum": 0
+          },
+          "sort_method": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GroupedSoupSort",
+                "description": "Sort method. Defaults to viewed_updated."
+              }
+            ]
+          }
+        }
+      },
+      "GroupedPageParams": {
+        "type": "object",
+        "description": "Parameters for fetching one page within a specific group.",
+        "required": ["group_by", "group_key"],
+        "properties": {
+          "group_by": {
+            "$ref": "#/components/schemas/ApiGroupByField",
+            "description": "Field to group results by (required)."
+          },
+          "group_key": {
+            "type": "string",
+            "description": "Group key to fetch."
+          },
+          "limit": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Limit the number of items returned. Defaults to 20. Max 500.",
+            "minimum": 0
+          },
+          "sort_method": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GroupedSoupSort",
+                "description": "Sort method. Defaults to viewed_updated."
+              }
+            ]
+          }
+        }
+      },
+      "GroupedSoupGroupPage": {
+        "type": "object",
+        "description": "Response for fetching a page within one group.",
+        "required": ["items", "group"],
+        "properties": {
+          "group": {
+            "$ref": "#/components/schemas/ApiGroupMeta",
+            "description": "Metadata and item membership for the requested group page."
+          },
+          "items": {
+            "type": "object",
+            "description": "Items in this page, keyed by id. Ordering lives in `group.item_ids`.",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/SoupApiItem"
+            },
+            "propertyNames": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        }
+      },
+      "GroupedSoupInitialPage": {
+        "type": "object",
+        "description": "Response for the initial grouped soup query.\n\nItems are returned as a pool keyed by id; each `ApiGroupMeta.item_ids`\ndescribes the ordered membership of one group.",
+        "required": ["items", "groups"],
+        "properties": {
+          "groups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiGroupMeta"
+            },
+            "description": "Ordered group metadata for this grouped response."
+          },
+          "items": {
+            "type": "object",
+            "description": "Items in this page, keyed by id. Ordering lives in `groups[].item_ids`.",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/SoupApiItem"
+            },
+            "propertyNames": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        }
+      },
+      "GroupedSoupPage": {
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GroupedSoupInitialPage"
+              },
+              {
+                "type": "object",
+                "required": ["mode"],
+                "properties": {
+                  "mode": {
+                    "type": "string",
+                    "enum": ["initial"]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GroupedSoupGroupPage"
+              },
+              {
+                "type": "object",
+                "required": ["mode"],
+                "properties": {
+                  "mode": {
+                    "type": "string",
+                    "enum": ["group_page"]
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "description": "Response for grouped soup queries."
+      },
+      "GroupedSoupSort": {
+        "type": "string",
+        "description": "Sort method for grouped queries (frecency not supported).",
+        "enum": ["viewed_at", "created_at", "updated_at", "viewed_updated"]
+      },
       "HashMap": {
         "type": "object",
         "additionalProperties": {
@@ -15192,6 +15505,71 @@
             "description": "Channel id to record activity for."
           }
         }
+      },
+      "PostGroupedSoupAstGroupPageRequest": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiEntityFilterAst",
+            "description": "Filters to apply (AST format)"
+          },
+          {
+            "$ref": "#/components/schemas/GroupedPageParams",
+            "description": "Grouping parameters (required)"
+          }
+        ],
+        "description": "Request body for fetching one page within a specific group."
+      },
+      "PostGroupedSoupAstInitialRequest": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiEntityFilterAst",
+            "description": "Filters to apply (AST format)"
+          },
+          {
+            "$ref": "#/components/schemas/GroupedInitialParams",
+            "description": "Grouping parameters (required)"
+          }
+        ],
+        "description": "Request body for the initial grouped soup query."
+      },
+      "PostGroupedSoupAstRequest": {
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PostGroupedSoupAstInitialRequest"
+              },
+              {
+                "type": "object",
+                "required": ["mode"],
+                "properties": {
+                  "mode": {
+                    "type": "string",
+                    "enum": ["initial"]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PostGroupedSoupAstGroupPageRequest"
+              },
+              {
+                "type": "object",
+                "required": ["mode"],
+                "properties": {
+                  "mode": {
+                    "type": "string",
+                    "enum": ["group_page"]
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "description": "Request body for grouped soup queries with AST filters."
       },
       "PostMessageRequest": {
         "type": "object",

@@ -5,6 +5,7 @@ import { useQuickAccess } from '@core/context/quickAccess';
 import { useUserId } from '@core/context/user';
 import { EntityIcon as EntityIconWithAvatar } from '@entity/extractors/entity-icon';
 import { type Accessor, createMemo, type JSX } from 'solid-js';
+import { useInboxPicker } from '../inbox-picker';
 import type { SearchableOption } from '../searchable-multi-select';
 import type {
   SearchFiltersController,
@@ -93,6 +94,8 @@ export type SearchFacetVM = FacetBase &
         activeIds: Accessor<string[]>;
         onChange: (ids: string[]) => void;
         placeholder: string;
+        preserveOrder?: boolean;
+        onOnly?: (id: string) => void;
       }
   );
 
@@ -218,6 +221,10 @@ export function useSearchFacets(
 ): Accessor<SearchFacetVM[]> {
   const channelOptions = useChannelPicker();
   const personOptions = usePersonPicker();
+  const inboxPicker = useInboxPicker({
+    selectedIds: controller.emailInbox,
+    setSelectedIds: controller.setEmailInbox,
+  });
 
   const type = singleFacet({
     id: 'type',
@@ -252,6 +259,30 @@ export function useSearchFacets(
     onSelect: (id) =>
       controller.setEmailImportance(id === 'all' ? undefined : id === 'signal'),
   });
+
+  const inbox: SearchFacetVM = {
+    kind: 'multi',
+    id: 'email-inbox',
+    label: 'Inbox',
+    options: inboxPicker.options,
+    activeIds: inboxPicker.activeIds,
+    onChange: inboxPicker.onChange,
+    onOnly: inboxPicker.selectOnly,
+    placeholder: 'Search inboxes...',
+    preserveOrder: true,
+    isDefault: inboxPicker.isDefault,
+    reset: inboxPicker.reset,
+    values: () => {
+      const ids = controller.emailInbox();
+      if (ids === undefined) return [{ id: 'all', label: 'All inboxes' }];
+      if (ids.length === 0) return [{ id: 'none', label: 'No inboxes' }];
+      const options = inboxPicker.options();
+      return ids.map((id) => {
+        const option = options.find((o) => o.id === id);
+        return { id, label: option?.label ?? id, icon: option?.icon };
+      });
+    },
+  };
 
   const channelIn = multiFacet({
     id: 'channel-in',
@@ -312,7 +343,9 @@ export function useSearchFacets(
   return createMemo(() => {
     switch (controller.type()) {
       case 'email':
-        return [type, importance];
+        return inboxPicker.hasMultiple()
+          ? [type, importance, inbox]
+          : [type, importance];
       case 'channels':
         return [type, channelIn, channelFrom];
       case 'calls':
