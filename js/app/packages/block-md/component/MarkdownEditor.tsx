@@ -545,6 +545,7 @@ export function MarkdownEditor(props: {
       snippetsPlugin({
         menu: snippetsMenuOperations,
         peerIdValidator: peerIdValidator(),
+        sourceDocumentId: blockId,
       })
     )
     .use(

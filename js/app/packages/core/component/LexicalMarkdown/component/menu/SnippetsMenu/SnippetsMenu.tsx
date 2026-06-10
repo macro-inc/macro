@@ -111,6 +111,7 @@ function SnippetsMenuInner(props: SnippetsMenuProps) {
     analytics.track('snippets_menu_use', {});
     props.editor.dispatchCommand(INSERT_SNIPPET_COMMAND, {
       documentId: item.id,
+      sourceDocumentId: props.sourceDocumentId,
     });
   };
 

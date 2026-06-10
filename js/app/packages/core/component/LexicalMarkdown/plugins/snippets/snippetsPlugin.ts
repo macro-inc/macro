@@ -11,9 +11,11 @@ import {
   InlineSearchNodesType,
   validTriggerPosition,
 } from '@lexical-core';
-import { storageServiceClient } from '@service-storage/client';
+import { fetchSnippetRaw } from '@queries/storage/snippets';
 import {
+  $getSelection,
   $insertNodes,
+  $isRangeSelection,
   $parseSerializedNode,
   COMMAND_PRIORITY_CRITICAL,
   COMMAND_PRIORITY_HIGH,
@@ -46,12 +48,53 @@ export const REMOVE_SNIPPET_SEARCH_COMMAND: LexicalCommand<void> =
 
 export const INSERT_SNIPPET_COMMAND: LexicalCommand<{
   documentId: string;
+  sourceDocumentId?: string;
 }> = createCommand('INSERT_SNIPPET_COMMAND');
 
 type SnippetsPluginProps = {
   menu: MenuOperations;
   peerIdValidator?: PeerIdValidator;
+  sourceDocumentId?: string;
 };
+
+type SelectionBookmark = {
+  anchorKey: string;
+  anchorOffset: number;
+  anchorType: 'text' | 'element';
+  focusKey: string;
+  focusOffset: number;
+  focusType: 'text' | 'element';
+};
+
+function getSelectionBookmark(editor: LexicalEditor): SelectionBookmark | null {
+  return editor.getEditorState().read(() => {
+    const selection = $getSelection();
+    if (!$isRangeSelection(selection)) return null;
+
+    return {
+      anchorKey: selection.anchor.key,
+      anchorOffset: selection.anchor.offset,
+      anchorType: selection.anchor.type,
+      focusKey: selection.focus.key,
+      focusOffset: selection.focus.offset,
+      focusType: selection.focus.type,
+    };
+  });
+}
+
+function selectionMatchesBookmark(bookmark: SelectionBookmark) {
+  const selection = $getSelection();
+  if (!$isRangeSelection(selection)) return false;
+
+  return (
+    selection.anchor.key === bookmark.anchorKey &&
+    selection.anchor.offset === bookmark.anchorOffset &&
+    selection.anchor.type === bookmark.anchorType &&
+    selection.focus.key === bookmark.focusKey &&
+    selection.focus.offset === bookmark.focusOffset &&
+    selection.focus.type === bookmark.focusType
+  );
+}
 
 /**
  * Fetch a snippet document's content and render it to internal markdown.
@@ -59,7 +102,7 @@ type SnippetsPluginProps = {
  * serialized state to a markdown string the target editor can ingest.
  */
 async function fetchSnippetMarkdown(documentId: string): Promise<string> {
-  const rawState = await storageServiceClient.getSnippetRaw({ documentId });
+  const rawState = await fetchSnippetRaw({ documentId });
 
   const { editor, cleanup } = createLexicalWrapper({
     type: 'markdown',
@@ -109,31 +152,51 @@ function registerSnippetsPlugin(
     nodes: [...Array.from(editor._nodes.values()).map((node) => node.klass)],
   });
 
-  async function insertSnippet(documentId: string) {
+  async function insertSnippet(payload: {
+    documentId: string;
+    sourceDocumentId?: string;
+  }) {
+    const sourceDocumentId = payload.sourceDocumentId ?? props.sourceDocumentId;
+    if (sourceDocumentId === payload.documentId) {
+      console.info(
+        'aborting snippet insertion: source snippet selected itself'
+      );
+      return;
+    }
+
     editor.dispatchCommand(REMOVE_SNIPPET_SEARCH_COMMAND, undefined);
     menu.setSearchTerm('');
     menu.setIsOpen(false);
 
-    let markdown: string;
-    try {
-      markdown = await fetchSnippetMarkdown(documentId);
-    } catch (error) {
-      console.error('failed to load snippet content', error);
+    const selectionBookmark = getSelectionBookmark(editor);
+    if (!selectionBookmark) {
+      console.info('aborting snippet insertion: no valid selection bookmark');
       return;
     }
-    if (!markdown.trim()) return;
 
-    // Same technique as the markdown paste plugin: parse the markdown with a
-    // throwaway editor restricted to the target editor's nodes, then insert
-    // the resulting nodes at the cursor.
-    editor.update(() => {
-      setEditorStateFromMarkdown(parseEditor, markdown, 'both');
-      const state = parseEditor.getEditorState().toJSON();
-      const nodes = state.root.children.map((node) =>
-        $parseSerializedNode(node)
-      );
-      $insertNodes(nodes);
-    });
+    try {
+      const markdown = await fetchSnippetMarkdown(payload.documentId);
+      if (!markdown.trim()) return;
+
+      // Same technique as the markdown paste plugin: parse the markdown with a
+      // throwaway editor restricted to the target editor's nodes, then insert
+      // the resulting nodes at the cursor.
+      editor.update(() => {
+        if (!selectionMatchesBookmark(selectionBookmark)) {
+          console.info('aborting snippet insertion: selection changed');
+          return;
+        }
+
+        setEditorStateFromMarkdown(parseEditor, markdown, 'both');
+        const state = parseEditor.getEditorState().toJSON();
+        const nodes = state.root.children.map((node) =>
+          $parseSerializedNode(node)
+        );
+        $insertNodes(nodes);
+      });
+    } catch (error) {
+      console.error('failed to insert snippet content', error);
+    }
   }
 
   function typeSymbolCommand() {
@@ -176,8 +239,8 @@ function registerSnippetsPlugin(
     ),
     editor.registerCommand(
       INSERT_SNIPPET_COMMAND,
-      ({ documentId }) => {
-        insertSnippet(documentId);
+      (payload) => {
+        void insertSnippet(payload);
         return true;
       },
       COMMAND_PRIORITY_HIGH

@@ -192,6 +192,7 @@ export function InstructionsEditor(props: {
       snippetsPlugin({
         menu: snippetsMenuOperations,
         peerIdValidator: peerIdValidator(),
+        sourceDocumentId: blockId,
       })
     )
     .use(textPastePlugin())
