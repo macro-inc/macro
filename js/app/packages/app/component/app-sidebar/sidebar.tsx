@@ -24,7 +24,6 @@ import type {
   SplitContent,
   SplitHandle,
 } from '@app/component/split-layout/layoutManager';
-import { DOCS_BASE } from '@app/constants/docs-links';
 import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
 import {
   LIST_VIEW_ID,
@@ -61,7 +60,6 @@ import type { ValidHotkey } from '@core/hotkey/types';
 import { activateClosestDOMScope } from '@core/hotkey/utils';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { openExternalUrl } from '@core/util/url';
 import LogoIcon from '@icon/macro-logo.svg';
 import { AnimatedSquareCommandKIcon } from '@icon/square-command-k';
 import { AnimatedSquareSidebarIcon } from '@icon/square-sidebar';
@@ -82,7 +80,6 @@ import BellIcon from '@phosphor/bell.svg';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CaretUpIcon from '@phosphor/caret-up.svg';
 import DeviceMobileIcon from '@phosphor/device-mobile-speaker.svg';
-import EyeIcon from '@phosphor/eye.svg';
 import HomeIcon from '@phosphor/house.svg';
 import KeyboardIcon from '@phosphor/keyboard.svg';
 import PaintBucketIcon from '@phosphor/paint-bucket.svg';
@@ -117,8 +114,6 @@ interface SidebarItem {
   hotkey: ValidHotkey;
   hotkeyToken: HotkeyToken;
   standaloneHotkey?: boolean;
-  /** Public documentation page for this view, if one exists. */
-  documentationUrl?: string;
 }
 
 const SIDEBAR_LINKS = [
@@ -129,7 +124,6 @@ const SIDEBAR_LINKS = [
     icon: AnimatedInboxIcon,
     hotkey: 'i',
     hotkeyToken: TOKENS.sidebar.goTo.inbox,
-    documentationUrl: `${DOCS_BASE}/product/inbox`,
   },
   {
     id: 'search',
@@ -139,7 +133,6 @@ const SIDEBAR_LINKS = [
     hotkey: '/',
     hotkeyToken: TOKENS.sidebar.goTo.search,
     standaloneHotkey: true,
-    documentationUrl: `${DOCS_BASE}/product/search`,
   },
   {
     id: 'agents',
@@ -148,7 +141,6 @@ const SIDEBAR_LINKS = [
     icon: AnimatedStarIcon,
     hotkey: 'a',
     hotkeyToken: TOKENS.sidebar.goTo.agents,
-    documentationUrl: `${DOCS_BASE}/product/agents`,
   },
   {
     id: 'mail',
@@ -157,7 +149,6 @@ const SIDEBAR_LINKS = [
     icon: AnimatedEmailIcon,
     hotkey: 'e',
     hotkeyToken: TOKENS.sidebar.goTo.mail,
-    documentationUrl: `${DOCS_BASE}/product/email`,
   },
   {
     id: 'documents',
@@ -166,7 +157,6 @@ const SIDEBAR_LINKS = [
     icon: AnimatedFileMdIcon,
     hotkey: 'f',
     hotkeyToken: TOKENS.sidebar.goTo.documents,
-    documentationUrl: `${DOCS_BASE}/product/docs`,
   },
   {
     id: 'tasks',
@@ -175,7 +165,6 @@ const SIDEBAR_LINKS = [
     icon: AnimatedTaskIcon,
     hotkey: 't',
     hotkeyToken: TOKENS.sidebar.goTo.tasks,
-    documentationUrl: `${DOCS_BASE}/product/tasks`,
   },
   {
     id: 'channels',
@@ -184,7 +173,6 @@ const SIDEBAR_LINKS = [
     icon: AnimatedChannelIcon,
     hotkey: 'c',
     hotkeyToken: TOKENS.sidebar.goTo.channels,
-    documentationUrl: `${DOCS_BASE}/product/channels`,
   },
   ...(ENABLE_CRM
     ? ([
@@ -195,7 +183,6 @@ const SIDEBAR_LINKS = [
           icon: AnimatedCompanyIcon,
           hotkey: 'o',
           hotkeyToken: TOKENS.sidebar.goTo.companies,
-          documentationUrl: `${DOCS_BASE}/product/crm`,
         },
       ] satisfies SidebarItem[])
     : []),
@@ -796,7 +783,6 @@ const CALLS_LINK: SidebarItem = {
   icon: AnimatedCallIcon,
   hotkey: 'l',
   hotkeyToken: TOKENS.sidebar.goTo.calls,
-  documentationUrl: `${DOCS_BASE}/product/calls`,
 };
 
 const DASHBOARD_LINK: SidebarItem = {
@@ -1335,27 +1321,6 @@ const SidebarLink = (props: SidebarLinkProps) => {
           >
             <div class="group-data-[slim=true]/sidebar:hidden ml-auto">
               <div class="flex gap-1 items-center text-ink-extra-muted font-normal text-xxs">
-                {/* span, not button: rendered inside the link's <Button>. The
-                    parent navigates on mousedown, so stop that here too. */}
-                <Show when={props.documentationUrl}>
-                  {(url) => (
-                    <span
-                      role="link"
-                      title={`Learn more about ${props.label}`}
-                      class="flex items-center -my-1 px-0.5 text-ink-extra-muted hover:text-ink transition-colors"
-                      onMouseDown={(e) => {
-                        e.stopPropagation();
-                        e.preventDefault();
-                      }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openExternalUrl(url());
-                      }}
-                    >
-                      <EyeIcon class="size-3.5" />
-                    </span>
-                  )}
-                </Show>
                 <Show when={!props.standaloneHotkey}>
                   <div class="text-xxs text-ink-extra-muted rounded-sm ml-auto border border-ink/5 px-1.5 py-0.5 -my-1">
                     <Hotkey token={TOKENS.sidebar.goToLeader} />
