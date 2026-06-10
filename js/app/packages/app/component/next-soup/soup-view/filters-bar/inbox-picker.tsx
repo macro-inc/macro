@@ -42,6 +42,7 @@ export function useInboxPicker(args: {
     activeIds: () => args.selectedIds() ?? options().map((o) => o.id),
     onChange: (ids: string[]) =>
       args.setSelectedIds(ids.length === options().length ? undefined : ids),
+    selectOnly: (id: string) => args.setSelectedIds([id]),
     isDefault: () => args.selectedIds() === undefined,
     reset: () => args.setSelectedIds(undefined),
   };

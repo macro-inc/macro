@@ -39,6 +39,8 @@ type SearchableMultiSelectProps = {
   listboxClass?: string;
   /** Keep `options` in their given order instead of pinning selected first. */
   preserveOrder?: boolean;
+  /** Render a per-row "Only" action that narrows the selection to that row. */
+  onOnly?: (id: string) => void;
   open?: Accessor<boolean>;
   onOpenChange?: (open: boolean) => void;
   children: JSX.Element;
@@ -46,6 +48,7 @@ type SearchableMultiSelectProps = {
 
 const SearchableMultiSelectItem = (itemProps: {
   item: CollectionNode<SearchableOption>;
+  onOnly?: (id: string) => void;
 }) => (
   <Combobox.Item
     item={itemProps.item}
@@ -72,12 +75,32 @@ const SearchableMultiSelectItem = (itemProps: {
     <Combobox.ItemLabel class="flex-1 truncate text-ink-muted group-data-selected:text-ink">
       {itemProps.item.rawValue.label}
     </Combobox.ItemLabel>
+    <Show when={itemProps.onOnly}>
+      {(onOnly) => (
+        <button
+          type="button"
+          class="shrink-0 text-xxs text-ink-muted opacity-0 group-hover:opacity-100 group-data-highlighted:opacity-100 hover:text-ink"
+          onPointerDown={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+          onPointerUp={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            onOnly()(itemProps.item.rawValue.id);
+          }}
+        >
+          Only
+        </button>
+      )}
+    </Show>
   </Combobox.Item>
 );
 
 const VirtualizedListbox = (props: {
   options: SearchableOption[];
   class?: string;
+  onOnly?: (id: string) => void;
 }) => {
   let handle: VirtualizerHandle | undefined;
   return (
@@ -96,7 +119,9 @@ const VirtualizedListbox = (props: {
           data={[...items()]}
           itemSize={ITEM_HEIGHT}
         >
-          {(item) => <SearchableMultiSelectItem item={item} />}
+          {(item) => (
+            <SearchableMultiSelectItem item={item} onOnly={props.onOnly} />
+          )}
         </Virtualizer>
       )}
     </Combobox.Listbox>
@@ -220,6 +245,7 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
                 <VirtualizedListbox
                   options={sortedOptions()}
                   class={props.listboxClass}
+                  onOnly={props.onOnly}
                 />
               </Show>
             </div>

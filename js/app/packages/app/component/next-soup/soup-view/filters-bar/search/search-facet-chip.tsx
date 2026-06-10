@@ -105,6 +105,7 @@ const MultiValueSegment = (props: {
       options={props.facet.options}
       activeIds={props.facet.activeIds}
       onChange={props.facet.onChange}
+      onOnly={props.facet.onOnly}
       placeholder={props.facet.placeholder}
       preserveOrder={props.facet.preserveOrder}
       placement="bottom-start"

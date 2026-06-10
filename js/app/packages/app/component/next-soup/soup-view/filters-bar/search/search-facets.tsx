@@ -95,6 +95,7 @@ export type SearchFacetVM = FacetBase &
         onChange: (ids: string[]) => void;
         placeholder: string;
         preserveOrder?: boolean;
+        onOnly?: (id: string) => void;
       }
   );
 
@@ -266,6 +267,7 @@ export function useSearchFacets(
     options: inboxPicker.options,
     activeIds: inboxPicker.activeIds,
     onChange: inboxPicker.onChange,
+    onOnly: inboxPicker.selectOnly,
     placeholder: 'Search inboxes...',
     preserveOrder: true,
     isDefault: inboxPicker.isDefault,

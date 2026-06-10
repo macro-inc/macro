@@ -35,6 +35,7 @@ export function InboxSelector() {
         options={picker.options}
         activeIds={picker.activeIds}
         onChange={picker.onChange}
+        onOnly={picker.selectOnly}
         placeholder="Search inboxes..."
         preserveOrder
       >
