@@ -103,6 +103,11 @@ function registerSnippetsPlugin(
   }
 
   const { menu } = props;
+  const parseEditor = createEditor({
+    namespace: 'snippet-parser',
+    editable: false,
+    nodes: [...Array.from(editor._nodes.values()).map((node) => node.klass)],
+  });
 
   async function insertSnippet(documentId: string) {
     editor.dispatchCommand(REMOVE_SNIPPET_SEARCH_COMMAND, undefined);
@@ -122,13 +127,6 @@ function registerSnippetsPlugin(
     // throwaway editor restricted to the target editor's nodes, then insert
     // the resulting nodes at the cursor.
     editor.update(() => {
-      const parseEditor = createEditor({
-        namespace: 'snippet-parser',
-        editable: false,
-        nodes: [
-          ...Array.from(editor._nodes.values()).map((node) => node.klass),
-        ],
-      });
       setEditorStateFromMarkdown(parseEditor, markdown, 'both');
       const state = parseEditor.getEditorState().toJSON();
       const nodes = state.root.children.map((node) =>

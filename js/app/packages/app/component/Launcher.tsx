@@ -510,6 +510,8 @@ export const LauncherInner = (props: LauncherInnerProps) => {
     (props.blocks ?? CREATABLE_BLOCKS).filter(
       (block) => block.blockName !== 'snippet' || snippetsFlag().enabled
     );
+  const topRowBlocks = () => blocks().slice(0, 5);
+  const bottomRowBlocks = () => blocks().slice(5);
   const [attachHotkeys, launcherScope] = useHotkeyDOMScope('create-menu', true);
 
   let ref!: HTMLDivElement;
@@ -529,21 +531,6 @@ export const LauncherInner = (props: LauncherInnerProps) => {
     }
 
     return true;
-  };
-
-  // Mirrors the grid-cols-2 / sm:grid-cols-4 / xl:grid-cols-N classes in the JSX
-  const getColumnCount = () => {
-    const width = window.innerWidth;
-    const length = blocks().length;
-    if (width >= 1280) {
-      if (length >= 8) return 8;
-      if (length >= 7) return 7;
-      if (length >= 6) return 6;
-      if (length >= 5) return 5;
-      return 4;
-    }
-    if (width >= 640) return 4;
-    return 2;
   };
 
   const moveFocus = (delta: number) => {
@@ -628,7 +615,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
     description: 'Navigate Up',
     keyDownHandler: (e) => {
       e?.preventDefault();
-      return moveFocus(-getColumnCount());
+      return true;
     },
   }).withGroup(hkGroup);
 
@@ -638,7 +625,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
     description: 'Navigate Down',
     keyDownHandler: (e) => {
       e?.preventDefault();
-      return moveFocus(getColumnCount());
+      return true;
     },
   }).withGroup(hkGroup);
 
@@ -703,16 +690,6 @@ export const LauncherInner = (props: LauncherInnerProps) => {
 
   onCleanup(hkGroup.dispose);
 
-  // horrible but tailwind requires the full strings
-  const gridColsClass = () => {
-    const length = blocks().length;
-    if (length >= 8) return 'xl:grid-cols-8';
-    if (length >= 7) return 'xl:grid-cols-7';
-    if (length >= 6) return 'xl:grid-cols-6';
-    if (length >= 5) return 'xl:grid-cols-5';
-    return '';
-  };
-
   return (
     <div class="bg-surface ring-1 ring-edge-muted rounded-xl">
       <div class="flex items-center justify-between p-2 px-6 border-b border-edge-muted">
@@ -748,22 +725,33 @@ export const LauncherInner = (props: LauncherInnerProps) => {
         </p>
       </div>
       <div
-        class={cn(
-          'relative grid grid-cols-2 sm:grid-cols-4 gap-3 p-6 isolate brackets-never',
-          gridColsClass()
-        )}
+        class="relative flex flex-col gap-3 p-6 isolate brackets-never"
         ref={ref}
       >
-        <For each={blocks()}>
-          {(item, index) => (
-            <LauncherMenuItem
-              creatableBlock={item}
-              onMouseEnter={() => setFocusedIndex(index())}
-              onFocus={() => setFocusedIndex(index())}
-              focused={focusedIndex() === index()}
-            />
-          )}
-        </For>
+        <div class="grid grid-cols-5 gap-3">
+          <For each={topRowBlocks()}>
+            {(item, index) => (
+              <LauncherMenuItem
+                creatableBlock={item}
+                onMouseEnter={() => setFocusedIndex(index())}
+                onFocus={() => setFocusedIndex(index())}
+                focused={focusedIndex() === index()}
+              />
+            )}
+          </For>
+        </div>
+        <div class="flex justify-center gap-3">
+          <For each={bottomRowBlocks()}>
+            {(item, index) => (
+              <LauncherMenuItem
+                creatableBlock={item}
+                onMouseEnter={() => setFocusedIndex(index() + 5)}
+                onFocus={() => setFocusedIndex(index() + 5)}
+                focused={focusedIndex() === index() + 5}
+              />
+            )}
+          </For>
+        </div>
       </div>
     </div>
   );

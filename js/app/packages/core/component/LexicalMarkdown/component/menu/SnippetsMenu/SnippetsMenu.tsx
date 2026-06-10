@@ -1,5 +1,4 @@
 import { useAnalytics } from '@app/component/analytics-context';
-import { useMaybeBlockId } from '@core/block';
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
 import type { EntityItem } from '@core/context/quickAccess';
 import clickOutside from '@core/directive/clickOutside';
@@ -9,7 +8,6 @@ import { Surface } from '@ui';
 import type { LexicalEditor } from 'lexical';
 import {
   createEffect,
-  createMemo,
   createSignal,
   For,
   onCleanup,
@@ -65,13 +63,6 @@ function SnippetsMenuInner(props: SnippetsMenuProps) {
     buckets: ['snippet'],
     searchTerm,
   });
-  const blockId = useMaybeBlockId();
-  const sourceDocumentId = () => props.sourceDocumentId ?? blockId;
-  const filteredSnippets = createMemo(() => {
-    const ignoredId = sourceDocumentId();
-    if (!ignoredId) return snippets();
-    return snippets().filter((snippet) => snippet.id !== ignoredId);
-  });
 
   const [selectedIndex, setSelectedIndex] = createSignal(0);
   const [mountSelection, setMountSelection] = createSignal<Selection | null>();
@@ -103,7 +94,7 @@ function SnippetsMenuInner(props: SnippetsMenuProps) {
   });
 
   createEffect(() => {
-    const count = filteredSnippets().length;
+    const count = snippets().length;
     if (count > 0 && selectedIndex() >= count) {
       setSelectedIndex(count - 1);
     }
@@ -128,12 +119,12 @@ function SnippetsMenuInner(props: SnippetsMenuProps) {
   useMenuKeyboardNavigation({
     isActive: menuOpen,
     onUp: () => {
-      const items = filteredSnippets();
+      const items = snippets();
       if (items.length === 0) return;
       setSelectedIndex((selectedIndex() - 1 + items.length) % items.length);
     },
     onDown: () => {
-      const items = filteredSnippets();
+      const items = snippets();
       if (items.length === 0) return;
       setSelectedIndex((selectedIndex() + 1) % items.length);
     },
@@ -144,7 +135,7 @@ function SnippetsMenuInner(props: SnippetsMenuProps) {
       // block horizontal arrows
     },
     onSelect: () => {
-      const selectedItem = filteredSnippets()[selectedIndex()];
+      const selectedItem = snippets()[selectedIndex()];
       if (selectedItem) {
         itemAction(selectedItem);
       } else {
@@ -213,7 +204,7 @@ function SnippetsMenuInner(props: SnippetsMenuProps) {
               Snippets
             </div>
             <Show
-              when={filteredSnippets().length > 0}
+              when={snippets().length > 0}
               fallback={
                 <div class="px-3.5 pb-1 text-ink-extra-muted">
                   {searchTerm() ? 'No results' : 'No snippets yet'}
@@ -224,7 +215,7 @@ function SnippetsMenuInner(props: SnippetsMenuProps) {
                 class="overflow-y-auto scrollbar-hidden"
                 style={{ 'max-height': `${contentMaxHeight()}px` }}
               >
-                <For each={filteredSnippets()}>
+                <For each={snippets()}>
                   {(item, index) => (
                     <MentionsMenuItem
                       item={item}

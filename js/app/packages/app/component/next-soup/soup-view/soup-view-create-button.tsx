@@ -21,7 +21,7 @@ import { NewCallButton } from './NewCallButton';
 const VIEW_CREATE_BLOCKNAMES: Partial<
   Record<ListView, (BlockName | BlockAlias)[]>
 > = {
-  documents: ['md', 'canvas', 'code'],
+  documents: ['md', 'snippet', 'canvas', 'code'],
   tasks: ['task'],
   agents: ['chat', 'automation'],
   mail: ['email'],
@@ -56,7 +56,7 @@ const VIEW_ONLY_BLOCK_LABELS: Partial<Record<BlockName | BlockAlias, string>> =
 const VIEW_CREATE_LABELS: Partial<Record<ListView, string>> = {
   agents: 'Agent',
   channels: 'Channel',
-  documents: 'Document',
+  documents: 'New',
   folders: 'Folder',
   mail: 'Email',
   tasks: 'Task',

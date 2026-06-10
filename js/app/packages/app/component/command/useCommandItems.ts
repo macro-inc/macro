@@ -236,7 +236,7 @@ function useQuickAccessBuckets(): Record<
     all: allWithCommands,
     channels: quickAccess.useList('channel'),
     dms: quickAccess.useList('dm'),
-    documents: quickAccess.useList('note', 'document'),
+    documents: quickAccess.useList('note', 'document', 'snippet'),
     tasks: quickAccess.useList('task'),
     chats: quickAccess.useList('chat'),
     projects: quickAccess.useList('project'),

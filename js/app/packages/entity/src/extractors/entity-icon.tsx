@@ -21,6 +21,7 @@ import {
   isCallEntity,
   isChannelEntity,
   isChannelMessageEntity,
+  isSnippetEntity,
   isTaskEntity,
 } from '../types/entity';
 
@@ -110,6 +111,7 @@ export function EntityIcon(props: EntityIconProps) {
       .when(isChannelEntity, ({ channelType }) => channelType)
       .when(isChannelMessageEntity, ({ channelType }) => channelType)
       .when(isTaskEntity, () => 'task')
+      .when(isSnippetEntity, () => 'snippet')
       .with({ type: 'document' }, ({ fileType }) => {
         return fileType ?? 'default';
       })
