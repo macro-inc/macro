@@ -52,6 +52,7 @@ import {
   Switch,
 } from 'solid-js';
 import { usePermissions } from '@core/context/user';
+import { PERMISSION_IDS } from '@core/constant/permissions';
 import { useSettingsState } from '@core/constant/SettingsState';
 import PaywallComponent from '../paywall/PaywallComponent';
 import PaywallTeamMemberView from '../paywall/PaywallTeamMemberView';
@@ -459,7 +460,7 @@ export function Account() {
           </Panel.Header>
 
           <Panel.Toolbar class="h-full w-full">
-            <Show when={permissions()?.includes('write:stripe_subscription') && !isNativeMobilePlatform()}>
+            <Show when={permissions()?.includes(PERMISSION_IDS.WRITE_STRIPE_SUBSCRIPTION) && !isNativeMobilePlatform()}>
               <div class="px-4 py-2 w-full">
                 <ShowFeatureFlag
                   key="enable-new-pricing"

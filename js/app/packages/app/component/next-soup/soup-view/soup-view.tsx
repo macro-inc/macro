@@ -65,6 +65,7 @@ import {
 import { SplitPanelContext } from '@app/component/split-layout/context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { isListViewID, type ListView } from '@app/constants/list-views';
+import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { usePreference } from '@app/preferences/use-preference';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
@@ -612,6 +613,11 @@ export const SoupViewList = (props: SoupViewListProps) => {
   const { hasActiveRefinements, hasHiddenItems, resetToTabDefaults } =
     useFilterRefinements();
 
+  // Debug: force nav views to render their empty state regardless of content.
+  const forceEmptyState = useDebugSetting(
+    DEBUG_SETTING_KEYS.FORCE_EMPTY_STATES
+  );
+
   const { isKeypressActive } = useIsKeyPressActive();
 
   const [virtualizerHandle, setVirtualizerHandle] =
@@ -1086,7 +1092,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                       Searching...
                     </div>
                   </Match>
-                  <Match when={!rows().length}>
+                  <Match when={!rows().length || forceEmptyState()}>
                     <EmptyState
                       listView={currentView()}
                       search={!!searchText()}

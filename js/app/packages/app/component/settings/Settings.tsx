@@ -6,7 +6,10 @@ import { DEV_MODE_ENV, ENABLE_APP_STORE_QR_CODE, ENABLE_TEAMS_OVERRIDE } from '@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { MobileApp } from './MobileApp';
 import { Agent } from './Agent';
+import { Admin } from './Admin';
 import { Appearance } from './Appearance';
+import { useHasPermission } from '@core/context/user';
+import { PERMISSION_IDS } from '@core/constant/permissions';
 import { TabsInset } from '@core/component/TabsInset';
 import { TabsInsetDropdown } from '@core/component/TabsInsetDropdown';
 import { Account } from './Account';
@@ -42,6 +45,7 @@ type SettingsPanelProps = {
 function SettingsPanel(props: SettingsPanelProps) {
   const { closeSettings, activeTabId, setActiveTabId } = useSettingsState();
     const teamsFlag = useFeatureFlag('enable-teams-settings', { enabledOverride: ENABLE_TEAMS_OVERRIDE });
+  const hasAdminPanel = useHasPermission(PERMISSION_IDS.WRITE_ADMIN_PANEL);
 
   // Set up hotkey scope for settings panel
   const [attachHotkeys, settingsHotkeyScope] = useHotkeyDOMScope('settings');
@@ -57,6 +61,7 @@ function SettingsPanel(props: SettingsPanelProps) {
     if (ENABLE_APP_STORE_QR_CODE && !isNativeMobilePlatform()) { tabs.push({ value: 'Mobile App', label: 'App' }) }
     if (!isNativeMobilePlatform()) { tabs.push({ value: 'Agent', label: 'MCPs' }) }
     if (isNativeMobilePlatform() && DEV_MODE_ENV) { tabs.push({ value: 'Mobile', label: 'Mobile Dev Tools' }) }
+    if (hasAdminPanel()) { tabs.push({ value: 'Admin', label: 'Admin' }) }
     return tabs;
   }
 
@@ -223,6 +228,9 @@ function SettingsPanel(props: SettingsPanelProps) {
         </Show>
         <Show when={activeTabId() === 'Agent' && !isNativeMobilePlatform()}>
           <Agent />
+        </Show>
+        <Show when={activeTabId() === 'Admin' && hasAdminPanel()}>
+          <Admin />
         </Show>
       </div>
 
