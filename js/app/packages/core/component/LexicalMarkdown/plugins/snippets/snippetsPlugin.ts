@@ -11,18 +11,27 @@ import {
   InlineSearchNodesType,
   validTriggerPosition,
 } from '@lexical-core';
+import { storageServiceClient } from '@service-storage/client';
 import {
   $insertNodes,
+  $parseSerializedNode,
   COMMAND_PRIORITY_CRITICAL,
   COMMAND_PRIORITY_HIGH,
   COMMAND_PRIORITY_LOW,
   createCommand,
+  createEditor,
   KEY_ENTER_COMMAND,
   KEY_ESCAPE_COMMAND,
   type LexicalCommand,
   type LexicalEditor,
 } from 'lexical';
+import { createLexicalWrapper } from '../../context/LexicalWrapperContext';
 import type { MenuOperations } from '../../shared/inlineMenu';
+import {
+  editorStateAsMarkdown,
+  initializeEditorWithState,
+  setEditorStateFromMarkdown,
+} from '../../utils';
 
 const TYPE_SNIPPET_SYMBOL_COMMAND: LexicalCommand<void> = createCommand(
   'SNIPPET_SYMBOL_COMMAND'
@@ -35,10 +44,36 @@ export const CLOSE_SNIPPET_SEARCH_COMMAND: LexicalCommand<void> = createCommand(
 export const REMOVE_SNIPPET_SEARCH_COMMAND: LexicalCommand<void> =
   createCommand('REMOVE_SNIPPET_SEARCH_COMMAND');
 
+export const INSERT_SNIPPET_COMMAND: LexicalCommand<{
+  documentId: string;
+}> = createCommand('INSERT_SNIPPET_COMMAND');
+
 type SnippetsPluginProps = {
   menu: MenuOperations;
   peerIdValidator?: PeerIdValidator;
 };
+
+/**
+ * Fetch a snippet document's content and render it to internal markdown.
+ * Content lives in sync-service; a throwaway markdown editor converts the
+ * serialized state to a markdown string the target editor can ingest.
+ */
+async function fetchSnippetMarkdown(documentId: string): Promise<string> {
+  const rawState = await storageServiceClient.getSnippetRaw({ documentId });
+
+  const { editor, cleanup } = createLexicalWrapper({
+    type: 'markdown',
+    namespace: 'snippet-markdown-extractor',
+    isInteractable: () => false,
+  });
+
+  try {
+    initializeEditorWithState(editor, rawState);
+    return editorStateAsMarkdown(editor, 'internal');
+  } finally {
+    cleanup();
+  }
+}
 
 /**
  * Registers the `;` trigger for the snippets menu. Typing `;` at a valid
@@ -68,6 +103,40 @@ function registerSnippetsPlugin(
   }
 
   const { menu } = props;
+
+  async function insertSnippet(documentId: string) {
+    editor.dispatchCommand(REMOVE_SNIPPET_SEARCH_COMMAND, undefined);
+    menu.setSearchTerm('');
+    menu.setIsOpen(false);
+
+    let markdown: string;
+    try {
+      markdown = await fetchSnippetMarkdown(documentId);
+    } catch (error) {
+      console.error('failed to load snippet content', error);
+      return;
+    }
+    if (!markdown.trim()) return;
+
+    // Same technique as the markdown paste plugin: parse the markdown with a
+    // throwaway editor restricted to the target editor's nodes, then insert
+    // the resulting nodes at the cursor.
+    editor.update(() => {
+      const parseEditor = createEditor({
+        namespace: 'snippet-parser',
+        editable: false,
+        nodes: [
+          ...Array.from(editor._nodes.values()).map((node) => node.klass),
+        ],
+      });
+      setEditorStateFromMarkdown(parseEditor, markdown, 'both');
+      const state = parseEditor.getEditorState().toJSON();
+      const nodes = state.root.children.map((node) =>
+        $parseSerializedNode(node)
+      );
+      $insertNodes(nodes);
+    });
+  }
 
   function typeSymbolCommand() {
     // Checked per keystroke so the PostHog flag applies without a reload;
@@ -105,6 +174,14 @@ function registerSnippetsPlugin(
     editor.registerCommand(
       REMOVE_SNIPPET_SEARCH_COMMAND,
       () => $removeInlineSearch(props.peerIdValidator),
+      COMMAND_PRIORITY_HIGH
+    ),
+    editor.registerCommand(
+      INSERT_SNIPPET_COMMAND,
+      ({ documentId }) => {
+        insertSnippet(documentId);
+        return true;
+      },
       COMMAND_PRIORITY_HIGH
     ),
     // Menu ENTERS should not propagate to the editor.

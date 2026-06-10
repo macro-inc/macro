@@ -1032,6 +1032,7 @@ export function MarkdownEditor(props: {
           editor={editor}
           menu={snippetsMenuOperations}
           useBlockBoundary={true}
+          sourceDocumentId={blockId}
         />
 
         <ActionMenu editor={editor} menu={actionsMenuOperations} />

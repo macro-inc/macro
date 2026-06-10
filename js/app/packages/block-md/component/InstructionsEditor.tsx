@@ -436,6 +436,7 @@ export function InstructionsEditor(props: {
           editor={editor}
           menu={snippetsMenuOperations}
           useBlockBoundary={true}
+          sourceDocumentId={blockId}
         />
 
         <Show when={DEBUG}>
