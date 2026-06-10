@@ -1,5 +1,5 @@
-use super::generate::{CombinedToolEntry, ToolSchema, ToolSchemaGenerator, ToolSchemas};
-use schemars::{JsonSchema, schema_for};
+use super::frontend_typegen::{FrontendToolEntry, ToolSchemaGenerator};
+use schemars::JsonSchema;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
@@ -32,27 +32,13 @@ where
     I: JsonSchema + Clone + Debug,
     O: JsonSchema + Clone + Debug,
 {
-    fn generate_schemas(&self) -> ToolSchemas {
-        let input_schema = schema_for!(I);
-        let output_schema = schema_for!(O);
-        let input_schema_json = serde_json::to_value(&input_schema).expect("input schema");
-        let output_schema_json = serde_json::to_value(&output_schema).expect("output schema");
-        ToolSchemas {
-            schemas: vec![ToolSchema {
-                name: self.name.to_owned(),
-                input_schema: input_schema_json,
-                output_schema: output_schema_json,
-            }],
-        }
-    }
-
     fn register_schemas(
         &self,
         generator: &mut schemars::SchemaGenerator,
-    ) -> Vec<CombinedToolEntry> {
+    ) -> Vec<FrontendToolEntry> {
         generator.subschema_for::<I>();
         generator.subschema_for::<O>();
-        vec![CombinedToolEntry {
+        vec![FrontendToolEntry {
             name: self.name.to_owned(),
             input: I::schema_name().into_owned(),
             output: O::schema_name().into_owned(),

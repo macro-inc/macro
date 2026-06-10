@@ -87,23 +87,22 @@ impl AsyncTool<Arc<SearchServiceClient>> for ContentSearch {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ai_toolset::generate_tool_input_schema;
-    use ai_toolset::tool_object::validate_tool_schema;
+    use ai_toolset::schema::generate_validated_input_schema;
 
     #[test]
     fn test_content_search_schema_validation() {
-        let schema = generate_tool_input_schema!(ContentSearch);
-
-        let result = validate_tool_schema(&schema);
+        let result = generate_validated_input_schema::<ContentSearch>();
         assert!(result.is_ok(), "{:?}", result);
 
-        let (name, description) = result.unwrap();
+        let validated = result.unwrap();
         assert_eq!(
-            name, "ContentSearch",
+            validated.name, "ContentSearch",
             "Tool name should match the schemars title"
         );
         assert!(
-            description.contains("Search items by their content"),
+            validated
+                .description
+                .contains("Search items by their content"),
             "Description should contain expected text"
         );
     }

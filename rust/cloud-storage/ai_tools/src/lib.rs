@@ -1,7 +1,7 @@
 #![recursion_limit = "256"]
 
 use ai_toolset::AsyncToolCollection;
-use ai_toolset::schema::{CombinedToolSchemas, ToolSchemaGenerator};
+use ai_toolset::schema::{FrontendSchemas, ToolSchemaGenerator, frontend_schemas_builder};
 mod build_context;
 mod schemas;
 pub mod search;
@@ -52,14 +52,10 @@ pub struct ToolSetWithPrompt {
 }
 
 impl ToolSchemaGenerator for ToolSetWithPrompt {
-    fn generate_schemas(&self) -> ai_toolset::schema::ToolSchemas {
-        self.toolset.generate_schemas()
-    }
-
     fn register_schemas(
         &self,
         generator: &mut schemars::SchemaGenerator,
-    ) -> Vec<ai_toolset::schema::CombinedToolEntry> {
+    ) -> Vec<ai_toolset::schema::FrontendToolEntry> {
         self.toolset.register_schemas(generator)
     }
 }
@@ -92,9 +88,12 @@ pub fn all_tools() -> ToolSetWithPrompt {
     }
 }
 
-/// Combined schema with shared, deduplicated `$defs`.
-pub fn all_tool_combined_schema() -> CombinedToolSchemas {
-    CombinedToolSchemas::builder()
+/// Frontend typegen schemas with shared, deduplicated `$defs`.
+///
+/// These feed `gen_tool_schemas` / `generate-dcs-tools.ts` and are never
+/// sent to AI providers.
+pub fn all_tool_frontend_schemas() -> FrontendSchemas {
+    frontend_schemas_builder()
         .merge(&all_tools())
         .merge(&read::read_thread())
         .build()

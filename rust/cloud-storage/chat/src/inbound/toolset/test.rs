@@ -1,21 +1,18 @@
 use super::read_chat::ReadChat;
-use ai_toolset::generate_tool_input_schema;
-use ai_toolset::tool_object::validate_tool_schema;
+use ai_toolset::schema::generate_validated_input_schema;
 
 #[test]
 fn test_read_chat_schema_validation() {
-    let schema = generate_tool_input_schema!(ReadChat);
-
-    let result = validate_tool_schema(&schema);
+    let result = generate_validated_input_schema::<ReadChat>();
     assert!(result.is_ok(), "{:?}", result);
 
-    let (name, description) = result.unwrap();
+    let validated = result.unwrap();
     assert_eq!(
-        name, "ReadChat",
+        validated.name, "ReadChat",
         "Tool name should match the schemars title"
     );
     assert!(
-        description.contains("chat"),
+        validated.description.contains("chat"),
         "Description should contain expected text"
     );
 }

@@ -1,8 +1,7 @@
 use super::list_entities::build_summary;
 #[allow(unused_imports)]
 use super::*;
-use ai_toolset::generate_tool_input_schema;
-use ai_toolset::tool_object::validate_tool_schema;
+use ai_toolset::schema::generate_validated_input_schema;
 use chrono::Utc;
 use models_soup::{foreign_entity::SoupForeignEntity, item::SoupItem};
 use non_empty::IsEmpty;
@@ -10,26 +9,26 @@ use uuid::Uuid;
 
 #[test]
 fn test_list_entities_schema_validation() {
-    let schema = generate_tool_input_schema!(ListEntities);
-
-    let result = validate_tool_schema(&schema);
+    let result = generate_validated_input_schema::<ListEntities>();
     assert!(result.is_ok(), "{:?}", result);
 
-    let (name, description) = result.unwrap();
+    let validated = result.unwrap();
     assert_eq!(
-        name, "ListEntities",
+        validated.name, "ListEntities",
         "Tool name should match the schemars title"
     );
     assert!(
-        description.contains("Browse the user's Macro workspace"),
+        validated
+            .description
+            .contains("Browse the user's Macro workspace"),
         "Description should contain expected text"
     );
 }
 
 #[test]
 fn test_list_entities_schema_guides_macro_task_queries() {
-    let schema = generate_tool_input_schema!(ListEntities);
-    let schema_json = serde_json::to_string(&schema).unwrap();
+    let validated = generate_validated_input_schema::<ListEntities>().unwrap();
+    let schema_json = serde_json::to_string(&validated.schema).unwrap();
 
     assert!(
         schema_json.contains("prefer this tool over external task trackers such as Linear"),
@@ -264,7 +263,9 @@ fn test_converts_foreign_entity_soup_item() {
 #[test]
 #[ignore = "prints the input schema"]
 fn print_input_schema() {
-    let schema = generate_tool_input_schema!(ListEntities);
+    let schema = generate_validated_input_schema::<ListEntities>()
+        .unwrap()
+        .schema;
     println!("{}", serde_json::to_string_pretty(&schema).unwrap());
 }
 
@@ -272,7 +273,6 @@ fn print_input_schema() {
 #[test]
 #[ignore = "prints the output schema"]
 fn print_output_schema() {
-    let generator = ai_toolset::tool_object::minimized_output_schema_generator();
-    let schema = generator.into_root_schema_for::<ListEntitiesResponse>();
+    let schema = schemars::schema_for!(ListEntitiesResponse);
     println!("{}", serde_json::to_string_pretty(&schema).unwrap());
 }
