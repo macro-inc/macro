@@ -42,6 +42,7 @@
           "product/docs",
           "product/canvas",
           "product/tasks",
+          "product/snippets",
           "product/channels",
           "product/calls",
           "product/folders",
