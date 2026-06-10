@@ -5,12 +5,12 @@ import {
   createDragInsertStore,
   INSERT_DOCUMENT_MENTION_COMMAND,
 } from '@core/component/LexicalMarkdown/plugins';
+import { singleLineMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
 import {
   clearDragInsertPreview,
   insertDocumentMentionAtDragCoordinates,
   updateDragInsertPreviewFromCoordinates,
 } from '@core/component/LexicalMarkdown/utils/dragInsertUtils';
-import { singleLineMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';
 import type { IUser } from '@core/user/types';
