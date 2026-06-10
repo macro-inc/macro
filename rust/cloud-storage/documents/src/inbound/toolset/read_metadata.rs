@@ -99,6 +99,7 @@ where
 
                     Some(task_branch_name.branch_name)
                 }
+                document_sub_type::DocumentSubType::Snippet => None,
             }
         } else {
             None

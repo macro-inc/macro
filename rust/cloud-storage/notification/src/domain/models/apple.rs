@@ -187,6 +187,11 @@ pub struct VoipPushPayload {
     /// Recipient-specific LiveKit JWT for native lock-screen answers.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub livekit_token: Option<String>,
+    /// Absolute URL the native client polls while ringing to learn whether
+    /// the call was answered elsewhere or ended. Authenticated with
+    /// `livekit_token` as the bearer credential.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ring_status_url: Option<String>,
 }
 
 /// the value we send as the payload in the ios notification

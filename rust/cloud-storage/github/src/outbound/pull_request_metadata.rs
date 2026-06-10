@@ -1,5 +1,6 @@
 //! Shared GitHub pull request metadata fetcher.
 
+use std::collections::BTreeSet;
 use std::time::Duration;
 
 use serde::de::DeserializeOwned;
@@ -23,7 +24,7 @@ pub(crate) async fn fetch_pull_request_metadata(
     number: u64,
 ) -> Result<GithubPullRequestDetails, anyhow::Error> {
     let pull_request = fetch_pull_request(client, access_token, owner, repo, number).await?;
-    let comments = fetch_comments(client, access_token, owner, repo, number).await;
+    let discussion = fetch_comments(client, access_token, owner, repo, number).await;
     let checks = fetch_check_runs(
         client,
         access_token,
@@ -33,6 +34,16 @@ pub(crate) async fn fetch_pull_request_metadata(
     )
     .await;
 
+    let mut participant_ids = pull_request.participant_ids();
+    let comments = discussion.map(|discussion| {
+        participant_ids.extend(discussion.participant_ids);
+        discussion.comments
+    });
+    // A failed comments fetch still yields the partial author/reviewer/assignee set; stored
+    // metadata merges participants as a union, so partial sets are safe.
+    let participant_github_user_ids =
+        (!participant_ids.is_empty()).then(|| participant_ids.iter().map(u64::to_string).collect());
+
     Ok(GithubPullRequestDetails {
         title: pull_request.title,
         state: pull_request.state,
@@ -41,6 +52,7 @@ pub(crate) async fn fetch_pull_request_metadata(
         deletions: pull_request.deletions,
         comments,
         checks,
+        participant_github_user_ids,
     })
 }
 
@@ -134,6 +146,11 @@ struct GithubOpenPullRequestResponse {
     number: u64,
     title: String,
     html_url: String,
+    user: Option<GithubUserResponse>,
+    #[serde(default)]
+    requested_reviewers: Vec<GithubUserResponse>,
+    #[serde(default)]
+    assignees: Vec<GithubUserResponse>,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -144,6 +161,35 @@ struct GithubPullRequestResponse {
     additions: u64,
     deletions: u64,
     head: GithubPullRequestHeadResponse,
+    user: Option<GithubUserResponse>,
+    #[serde(default)]
+    requested_reviewers: Vec<GithubUserResponse>,
+    #[serde(default)]
+    assignees: Vec<GithubUserResponse>,
+}
+
+impl GithubPullRequestResponse {
+    fn participant_ids(&self) -> BTreeSet<u64> {
+        structural_participant_ids(
+            self.user.as_ref(),
+            &self.requested_reviewers,
+            &self.assignees,
+        )
+    }
+}
+
+/// Collect the stable numeric ids of a pull request's author, requested reviewers, and assignees.
+fn structural_participant_ids(
+    user: Option<&GithubUserResponse>,
+    requested_reviewers: &[GithubUserResponse],
+    assignees: &[GithubUserResponse],
+) -> BTreeSet<u64> {
+    user.iter()
+        .copied()
+        .chain(requested_reviewers)
+        .chain(assignees)
+        .filter_map(|user| user.id)
+        .collect()
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -154,6 +200,7 @@ struct GithubPullRequestHeadResponse {
 #[derive(Debug, serde::Deserialize)]
 struct GithubUserResponse {
     login: Option<String>,
+    id: Option<u64>,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -221,19 +268,35 @@ async fn fetch_pull_request(
     response.json().await.map_err(Into::into)
 }
 
+/// The comments collected for a pull request plus every discussion author's stable numeric id.
+///
+/// The ids are collected separately because comment conversion drops some authors (reviews with
+/// an empty body, such as a plain approval, never become comments).
+struct FetchedDiscussion {
+    comments: Vec<GithubPullRequestComment>,
+    participant_ids: BTreeSet<u64>,
+}
+
 async fn fetch_comments(
     client: &reqwest::Client,
     access_token: &str,
     owner: &str,
     repo: &str,
     number: u64,
-) -> Option<Vec<GithubPullRequestComment>> {
-    let mut comments = fetch_issue_comments(client, access_token, owner, repo, number).await?;
+) -> Option<FetchedDiscussion> {
+    let mut discussion = fetch_issue_comments(client, access_token, owner, repo, number).await?;
 
-    comments.extend(fetch_review_comments(client, access_token, owner, repo, number).await?);
-    comments.extend(fetch_reviews(client, access_token, owner, repo, number).await?);
+    let review_comments = fetch_review_comments(client, access_token, owner, repo, number).await?;
+    discussion.comments.extend(review_comments.comments);
+    discussion
+        .participant_ids
+        .extend(review_comments.participant_ids);
 
-    Some(comments)
+    let reviews = fetch_reviews(client, access_token, owner, repo, number).await?;
+    discussion.comments.extend(reviews.comments);
+    discussion.participant_ids.extend(reviews.participant_ids);
+
+    Some(discussion)
 }
 
 async fn fetch_issue_comments(
@@ -242,7 +305,7 @@ async fn fetch_issue_comments(
     owner: &str,
     repo: &str,
     number: u64,
-) -> Option<Vec<GithubPullRequestComment>> {
+) -> Option<FetchedDiscussion> {
     match fetch_paginated_github_items(
         client,
         access_token,
@@ -256,12 +319,13 @@ async fn fetch_issue_comments(
     )
     .await
     {
-        Ok(comments) => Some(
-            comments
+        Ok(comments) => Some(FetchedDiscussion {
+            participant_ids: author_ids(&comments, |comment| comment.user.as_ref()),
+            comments: comments
                 .into_iter()
                 .map(|comment| comment.into_pull_request_comment("issue_comment"))
                 .collect(),
-        ),
+        }),
         Err(error) => {
             tracing::warn!(
                 error=?error,
@@ -281,7 +345,7 @@ async fn fetch_review_comments(
     owner: &str,
     repo: &str,
     number: u64,
-) -> Option<Vec<GithubPullRequestComment>> {
+) -> Option<FetchedDiscussion> {
     match fetch_paginated_github_items(
         client,
         access_token,
@@ -295,12 +359,13 @@ async fn fetch_review_comments(
     )
     .await
     {
-        Ok(comments) => Some(
-            comments
+        Ok(comments) => Some(FetchedDiscussion {
+            participant_ids: author_ids(&comments, |comment| comment.user.as_ref()),
+            comments: comments
                 .into_iter()
                 .map(|comment| comment.into_pull_request_comment("review_comment"))
                 .collect(),
-        ),
+        }),
         Err(error) => {
             tracing::warn!(
                 error=?error,
@@ -320,7 +385,7 @@ async fn fetch_reviews(
     owner: &str,
     repo: &str,
     number: u64,
-) -> Option<Vec<GithubPullRequestComment>> {
+) -> Option<FetchedDiscussion> {
     match fetch_paginated_github_items(
         client,
         access_token,
@@ -334,12 +399,15 @@ async fn fetch_reviews(
     )
     .await
     {
-        Ok(reviews) => Some(
-            reviews
+        // Ids are collected before conversion: empty-body reviews (plain approvals) are dropped
+        // from the comment list but their reviewers still count as participants.
+        Ok(reviews) => Some(FetchedDiscussion {
+            participant_ids: author_ids(&reviews, |review| review.user.as_ref()),
+            comments: reviews
                 .into_iter()
                 .filter_map(GithubReviewResponse::into_pull_request_comment)
                 .collect(),
-        ),
+        }),
         Err(error) => {
             tracing::warn!(
                 error=?error,
@@ -351,6 +419,13 @@ async fn fetch_reviews(
             None
         }
     }
+}
+
+fn author_ids<T>(
+    items: &[T],
+    user_of: impl Fn(&T) -> Option<&GithubUserResponse>,
+) -> BTreeSet<u64> {
+    items.iter().filter_map(|item| user_of(item)?.id).collect()
 }
 
 async fn fetch_check_runs(
@@ -465,6 +540,14 @@ fn github_get(
 
 impl GithubOpenPullRequestResponse {
     fn into_enriched_pull_request(self, owner: &str, repo: &str) -> EnrichedGithubPullRequest {
+        // The list endpoint does not include comments, so this is the partial structural
+        // participant set; stored metadata merges participants as a union.
+        let participant_ids = structural_participant_ids(
+            self.user.as_ref(),
+            &self.requested_reviewers,
+            &self.assignees,
+        );
+
         EnrichedGithubPullRequest {
             github_key: GithubKey::new(owner, repo, self.number).to_string(),
             owner: owner.to_string(),
@@ -478,6 +561,8 @@ impl GithubOpenPullRequestResponse {
             deletions: None,
             comments: None,
             checks: None,
+            participant_github_user_ids: (!participant_ids.is_empty())
+                .then(|| participant_ids.iter().map(u64::to_string).collect()),
         }
     }
 }
@@ -487,6 +572,7 @@ impl GithubCommentResponse {
         GithubPullRequestComment {
             id: self.id,
             body: self.body.unwrap_or_default(),
+            author_id: self.user.as_ref().and_then(|user| user.id),
             author_login: self.user.and_then(|user| user.login),
             author_association: self.author_association,
             url: self.html_url,
@@ -508,6 +594,7 @@ impl GithubReviewResponse {
         Some(GithubPullRequestComment {
             id: self.id,
             body,
+            author_id: self.user.as_ref().and_then(|user| user.id),
             author_login: self.user.and_then(|user| user.login),
             author_association: self.author_association,
             url: self.html_url,

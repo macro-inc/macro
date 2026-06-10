@@ -996,6 +996,62 @@ fn foreign_entity_sources_expand_as_or_tree() {
 }
 
 #[test]
+fn foreign_entity_includes_me_expands_as_me_literal() {
+    let f = EntityFilters {
+        foreign_entity_filters: ForeignEntityFilters {
+            includes_me: true,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let ast = Arc::into_inner(
+        EntityFilterAst::new_from_filters(f)
+            .unwrap()
+            .unwrap()
+            .foreign_entity_filter
+            .unwrap(),
+    )
+    .unwrap();
+
+    let json = serde_json::to_value(ast).unwrap();
+    let exp = json!({ "l": "me" });
+
+    assert_eq!(json, exp);
+}
+
+#[test]
+fn foreign_entity_includes_me_ands_with_sources() {
+    let f = EntityFilters {
+        foreign_entity_filters: ForeignEntityFilters {
+            foreign_entity_sources: vec!["github_pull_request".to_string()],
+            includes_me: true,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let ast = Arc::into_inner(
+        EntityFilterAst::new_from_filters(f)
+            .unwrap()
+            .unwrap()
+            .foreign_entity_filter
+            .unwrap(),
+    )
+    .unwrap();
+
+    let json = serde_json::to_value(ast).unwrap();
+    let exp = json!({
+        "&": [
+            { "l": { "fes": "github_pull_request" } },
+            { "l": "me" }
+        ]
+    });
+
+    assert_eq!(json, exp);
+}
+
+#[test]
 fn foreign_entity_invalid_id_returns_uuid_error() {
     let f = EntityFilters {
         foreign_entity_filters: ForeignEntityFilters {

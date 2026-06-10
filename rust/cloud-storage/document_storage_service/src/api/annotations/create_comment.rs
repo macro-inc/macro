@@ -139,9 +139,14 @@ pub async fn create_comment_handler(
                     document_id: document_id.to_string(),
                     owner: document_context.owner.clone(),
                     file_type: document_context.file_type.clone(),
-                    sub_type: document_context
-                        .sub_type
-                        .map(|_| NotificationDocumentSubType::Task),
+                    sub_type: document_context.sub_type.map(|sub_type| match sub_type {
+                        document_sub_type::DocumentSubType::Task => {
+                            NotificationDocumentSubType::Task
+                        }
+                        document_sub_type::DocumentSubType::Snippet => {
+                            NotificationDocumentSubType::Snippet
+                        }
+                    }),
                     sender_id: sender_id.clone(),
                     sender_profile_picture_url,
                 };

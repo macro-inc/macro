@@ -81,6 +81,13 @@ INSERT INTO public."User" ("id", "email", "stripeCustomerId", "organizationId", 
 INSERT INTO public."User" ("id", "email", "stripeCustomerId", "organizationId", "macro_user_id")
     (SELECT 'macro|teammate2@user.com', 'teammate2@user.com', 'stripe_id_t2', 1, 'a3333333-3333-3333-3333-333333333333');
 
+-- A user that belongs to no team (team-share edge case tests)
+INSERT INTO public."macro_user" ("id", "username", "email", "stripe_customer_id") VALUES
+    ('a4444444-4444-4444-4444-444444444444', 'noteam', 'no-team@user.com', 'stripe_id_nt');
+
+INSERT INTO public."User" ("id", "email", "stripeCustomerId", "organizationId", "macro_user_id")
+    (SELECT 'macro|no-team@user.com', 'no-team@user.com', 'stripe_id_nt', 1, 'a4444444-4444-4444-4444-444444444444');
+
 -- Team and team_user for sharing tests
 INSERT INTO public."team" ("id", "name", "owner_id")
     VALUES ('a0000000-0000-0000-0000-000000000001', 'test-team', 'macro|user@user.com');

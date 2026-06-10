@@ -4,8 +4,10 @@ use lazy_static::lazy_static;
 use regex::Regex;
 
 lazy_static! {
+    // Note: the single quote (') is RFC 5322 atext and thus valid in the local part,
+    // but we deliberately reject it as a policy choice (matching macro_user_id) — do not add it back.
     static ref EMAIL_REGEX: Regex = Regex::new(
-        r"^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$"
+        r"^[a-zA-Z0-9.!#$%&*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$"
     )
     .unwrap();
 }
@@ -58,6 +60,12 @@ mod tests {
             ("test@\\test.com", false),
             ("test@test.test.test", true),
             ("test-123test.test@test.test", true),
+            // single quotes are not allowed
+            ("o'brien@test.com", false),
+            ("'test@test.com", false),
+            ("test'@test.com", false),
+            ("test+ta'g@test.com", false),
+            ("test@te'st.com", false),
         ];
 
         for email in emails {

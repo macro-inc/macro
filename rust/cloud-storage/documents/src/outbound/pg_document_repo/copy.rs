@@ -1,4 +1,3 @@
-use document_sub_type::DocumentSubType;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::{
     BomPart, DocumentMetadata, IDWithTimeStamps, SaveBomPart, VersionIDWithTimeStamps,
@@ -173,15 +172,15 @@ pub async fn copy_non_docx_document(
         None
     };
 
-    // Copy sub_type if the original is a task
-    if original_document.sub_type == Some(DocumentSubType::Task) {
+    // Copy sub_type if the original has one (task, snippet, ...)
+    if let Some(sub_type) = original_document.sub_type {
         sqlx::query!(
             r#"
             INSERT INTO document_sub_type (document_id, sub_type)
             VALUES ($1, $2)
             "#,
             document.id,
-            DocumentSubType::Task as _,
+            sub_type as _,
         )
         .execute(transaction.as_mut())
         .await?;

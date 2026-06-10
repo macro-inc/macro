@@ -90,7 +90,9 @@ pub async fn create_document_handler<T: DocumentService, Svc: EntityAccessServic
         team_id,
         email_attachment_id: req.email_attachment_id,
         created_at: req.created_at,
-        is_task: req.is_task,
+        sub_type: req
+            .is_task
+            .then_some(document_sub_type::DocumentSubType::Task),
         skip_history: req.skip_history,
     };
 

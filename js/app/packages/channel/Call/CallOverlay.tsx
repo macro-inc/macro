@@ -1,6 +1,7 @@
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { UserIcon } from '@core/component/UserIcon';
 import { useAuthor, useUserId } from '@core/context/user';
+import { useProfilePictureUrl } from '@core/signal/profilePicture';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { cn, InlineCheckbox, Tooltip } from '@ui';
 import { type RemoteParticipant, Track } from 'livekit-client';
@@ -52,7 +53,7 @@ function ParticipantTileWrapper(props: {
   );
 }
 
-function LocalParticipantAvatar(props: {
+function ParticipantAvatar(props: {
   userId: string | undefined;
   fallbackName: string | undefined;
   avatarSize?: 'sm' | 'md';
@@ -118,7 +119,7 @@ function LocalParticipantTile(props: {
       <Show
         when={!props.isConnecting && !props.isVideoMuted}
         fallback={
-          <LocalParticipantAvatar
+          <ParticipantAvatar
             userId={props.userId}
             fallbackName={props.fallbackName}
             avatarSize={props.avatarSize}
@@ -141,6 +142,7 @@ function ParticipantTile(props: { participant: RemoteParticipant }) {
   const callCtx = useCallContext();
   const macroId = () => tryMacroId(props.participant.identity);
   const [displayName] = useDisplayName(macroId());
+  const [profilePicUrl] = useProfilePictureUrl(macroId());
 
   const cameraTrack = () => {
     callCtx.trackVersion();
@@ -155,11 +157,21 @@ function ParticipantTile(props: { participant: RemoteParticipant }) {
       <Show
         when={cameraTrack()}
         fallback={
-          <div class="flex items-center justify-center size-full p-4">
-            <div class="size-12 rounded-full bg-hover flex items-center justify-center text-ink-muted text-lg font-medium">
-              {displayName().charAt(0).toUpperCase()}
-            </div>
-          </div>
+          <Show
+            when={profilePicUrl()}
+            fallback={
+              <div class="flex items-center justify-center size-full p-4">
+                <div class="size-12 rounded-full bg-hover flex items-center justify-center text-ink-muted text-lg font-medium">
+                  {displayName().charAt(0).toUpperCase()}
+                </div>
+              </div>
+            }
+          >
+            <ParticipantAvatar
+              userId={macroId()}
+              fallbackName={displayName()}
+            />
+          </Show>
         }
       >
         <TrackView track={cameraTrack()} />

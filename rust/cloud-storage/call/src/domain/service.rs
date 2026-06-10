@@ -29,10 +29,11 @@ use crate::domain::models::{
 };
 
 use super::models::{
-    AddParticipantError, CallActiveResponse, CallError, CallRecord, CallRecordTranscriptSegment,
-    CallTokenResponse, CallTranscriptCustomSpeakerResult, EgressS3Config, EnrichedCallTranscript,
-    GetBatchCallRecordPreviewRequest, GetBatchCallRecordPreviewResponse, GetCallRecordsRequest,
-    LeaveCallResponse, TranscriptSegmentRequest,
+    AddParticipantError, Call, CallActiveResponse, CallError, CallRecord,
+    CallRecordTranscriptSegment, CallTokenResponse, CallTranscriptCustomSpeakerResult,
+    EgressS3Config, EnrichedCallTranscript, GetBatchCallRecordPreviewRequest,
+    GetBatchCallRecordPreviewResponse, GetCallRecordsRequest, LeaveCallResponse, RingStatus,
+    RingStatusResponse, TranscriptSegmentRequest,
 };
 use super::ports::{
     CallRecordQueryService, CallRepository, CallRtcClient, CallSearchIndexer, CallService,
@@ -65,6 +66,7 @@ pub struct CallServiceImpl<
     summarizer: Option<Sm>,
     voip_push_sender: V,
     voice_repo: Vr,
+    ring_status_base_url: Option<String>,
 }
 
 impl<
@@ -101,6 +103,7 @@ impl<
             summarizer: None,
             voip_push_sender: (),
             voice_repo: NoOpVoiceRepository,
+            ring_status_base_url: None,
         }
     }
 }
@@ -127,6 +130,14 @@ impl<
     /// Set the shared secret used to validate internal call requests.
     pub fn with_internal_call_secret(mut self, secret: String) -> Self {
         self.internal_call_secret = Some(secret);
+        self
+    }
+
+    /// Set the public base URL used to build the per-call ring-status URL
+    /// included in VoIP push payloads. When unset, payloads omit the URL and
+    /// native clients skip ring-status polling.
+    pub fn with_ring_status_base_url(mut self, base_url: String) -> Self {
+        self.ring_status_base_url = Some(base_url);
         self
     }
 
@@ -157,6 +168,7 @@ impl<
             summarizer: self.summarizer,
             voip_push_sender: sender,
             voice_repo: self.voice_repo,
+            ring_status_base_url: self.ring_status_base_url,
         }
     }
 
@@ -179,6 +191,7 @@ impl<
             summarizer: self.summarizer,
             voip_push_sender: self.voip_push_sender,
             voice_repo: self.voice_repo,
+            ring_status_base_url: self.ring_status_base_url,
         }
     }
 
@@ -201,6 +214,7 @@ impl<
             summarizer: self.summarizer,
             voip_push_sender: self.voip_push_sender,
             voice_repo,
+            ring_status_base_url: self.ring_status_base_url,
         }
     }
 
@@ -279,6 +293,25 @@ impl<
             .send_channel_message(&users, message_type, message.clone())
             .await
             .inspect_err(|e| tracing::error!(error=?e, message_type, "failed to send call participant event"));
+    }
+}
+
+/// Decide the per-user ring status from the room's active call (if any),
+/// the call id the client is polling for, and whether the user is an
+/// active participant of that call.
+///
+/// A room whose active call differs from the polled one means the polled
+/// call is over and a newer call replaced it — the stale ring is dead.
+fn resolve_ring_status(
+    active_call: Option<&Call>,
+    requested_call_id: &Uuid,
+    is_participant: bool,
+) -> RingStatus {
+    match active_call {
+        None => RingStatus::Ended,
+        Some(call) if call.id != *requested_call_id => RingStatus::Ended,
+        Some(_) if is_participant => RingStatus::Answered,
+        Some(_) => RingStatus::Ringing,
     }
 }
 
@@ -523,6 +556,14 @@ impl<
                                     .collect();
 
                             let voip_channel_name = channel_name.clone().unwrap_or_default();
+                            let ring_status_url =
+                                self.ring_status_base_url.as_deref().map(|base| {
+                                    format!(
+                                        "{}/call/ring-status/{}",
+                                        base.trim_end_matches('/'),
+                                        call.id
+                                    )
+                                });
                             let payloads = self
                                 .rtc_client
                                 .build_voip_push_payloads(VoipPushPayloadRequest {
@@ -533,6 +574,7 @@ impl<
                                     channel_name: &voip_channel_name,
                                     caller_name: &caller_name,
                                     livekit_server_url: &self.server_url,
+                                    ring_status_url: ring_status_url.as_deref(),
                                 })
                                 .await;
 
@@ -686,6 +728,45 @@ impl<
 
         Ok(LeaveCallResponse {
             call_ended: remaining == 0,
+        })
+    }
+
+    #[tracing::instrument(err, skip(self, bearer_token))]
+    async fn get_ring_status(
+        &self,
+        call_id: &Uuid,
+        bearer_token: &str,
+    ) -> Result<RingStatusResponse, CallError> {
+        let verified = self
+            .rtc_client
+            .verify_access_token(bearer_token)
+            .map_err(|e| {
+                tracing::warn!(error=?e, "ring-status token verification failed");
+                CallError::Auth
+            })?;
+        let room = verified.room.ok_or(CallError::Auth)?;
+        let identity =
+            MacroUserIdStr::parse_from_str(&verified.identity).map_err(|_| CallError::Auth)?;
+
+        let active_call = self
+            .repo
+            .get_call_by_room_name(&room)
+            .await
+            .map_err(|e| CallError::Internal(e.into()))?;
+
+        // Only consult participation when the room's active call is the one
+        // being polled — otherwise the answer is Ended regardless.
+        let is_participant = match &active_call {
+            Some(call) if call.id == *call_id => self
+                .repo
+                .is_participant(&call.id, identity.as_ref())
+                .await
+                .map_err(|e| CallError::Internal(e.into()))?,
+            _ => false,
+        };
+
+        Ok(RingStatusResponse {
+            status: resolve_ring_status(active_call.as_ref(), call_id, is_participant),
         })
     }
 

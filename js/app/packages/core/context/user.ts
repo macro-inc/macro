@@ -1,3 +1,4 @@
+import type { PermissionId } from '@core/constant/permissions';
 import { type UserInfoData, useUserInfoQuery } from '@queries/auth/user-info';
 import { queryReadyGate } from '@queries/gate';
 import { type Accessor, createMemo } from 'solid-js';
@@ -84,6 +85,12 @@ export function useEmail() {
 
 export function usePermissions() {
   return useUserContext().permissions;
+}
+
+/** Reactive check for whether the current user has a specific permission. */
+export function useHasPermission(id: PermissionId): Accessor<boolean> {
+  const permissions = usePermissions();
+  return () => permissions().includes(id);
 }
 
 export function useAuthor() {

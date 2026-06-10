@@ -8,7 +8,7 @@ use utoipa_swagger_ui::SwaggerUi;
 
 pub mod context;
 mod health;
-mod proxy;
+pub(crate) mod proxy;
 pub(crate) mod swagger;
 
 pub async fn setup_and_serve(state: ApiContext, port: usize) -> anyhow::Result<()> {

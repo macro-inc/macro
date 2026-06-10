@@ -3,6 +3,7 @@ import { ENABLE_CALLKIT } from '@core/constant/featureFlags';
 import { useChannelsContext } from '@core/context/channels';
 import { isPlatform, isTauri } from '@core/util/platform';
 import { useUserNamesQuery } from '@queries/auth';
+import { invalidateActiveCallQueries } from '@queries/call/call';
 import type { UserName } from '@service-auth/generated/schemas/userName';
 import { notificationServiceClient } from '@service-notification/client';
 import type { DeviceType } from '@service-notification/generated/schemas/deviceType';
@@ -338,7 +339,15 @@ export function useCallKitSetup() {
         nativeCall.setBootstrapChannelId(null);
         nativeCall.setParticipantIdentities([]);
         const handler = getActiveCallEndedHandler();
-        if (!handler) return;
+        if (!handler) {
+          // No channel call UI is mounted to run the full leave flow; refetch
+          // active-call state so the channel still reflects the ongoing call.
+          console.warn(
+            '[callkit] no call-ended handler registered; invalidating active call queries'
+          );
+          void invalidateActiveCallQueries();
+          return;
+        }
         Promise.resolve(handler(payload)).catch((err) =>
           console.error('[callkit] failed to handle ended call', err)
         );

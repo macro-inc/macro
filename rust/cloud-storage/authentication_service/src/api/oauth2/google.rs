@@ -62,7 +62,26 @@ async fn link_user(
             )
         })?;
 
-    // Attempt to create the FA IdP link for the calling user. Three terminal cases:
+    // The IdP link doubles as the linked email's LOGIN identity: a Google identity binds to
+    // exactly one FusionAuth user, and sign-in resolves through that link. When the linked
+    // email belongs to an existing macro user, the link must therefore live on THAT user's FA
+    // account — attaching it to the requester would capture the owner's sign-in. Only
+    // mailboxes with no macro user of their own link under the requester.
+    let idp_link_owner =
+        match macro_db_client::user::get::get_macro_user_id_by_email(&ctx.db, &user_info_email)
+            .await
+        {
+            Ok(Some(mailbox_owner_fa)) => mailbox_owner_fa.to_string(),
+            Ok(None) => macro_user_id.to_string(),
+            Err(e) => {
+                return Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("unable to look up mailbox owner for linked email {e}"),
+                ));
+            }
+        };
+
+    // Attempt to create the FA IdP link. Three terminal cases:
     //   Ok                                  → fresh link created; data-source path downstream.
     //   Err(alreadyLinked, owned by self)  → idempotent relink; data-source path no-ops downstream.
     //   Err(alreadyLinked, owned by other) → cross-account add; init promotes to graph edge.
@@ -75,7 +94,7 @@ async fn link_user(
                 display_name: user_info_email.clone(),
                 identity_provider_id: Cow::Borrowed(identity_provider_id),
                 identity_provider_user_id: Cow::Borrowed(&user_info.sub),
-                user_id: Cow::Borrowed(&macro_user_id.to_string()),
+                user_id: Cow::Borrowed(&idp_link_owner),
                 token: Cow::Borrowed(&token_response.refresh_token),
             },
         })
@@ -84,7 +103,7 @@ async fn link_user(
         Ok(()) => {}
         Err(FusionAuthClientError::IdentityProviderLinkAlreadyExists) => {
             tracing::info!(
-                fusion_user_id = %macro_user_id,
+                fusion_user_id = %idp_link_owner,
                 linked_email = %user_info_email,
                 "idp link already exists, skipping creation"
             );

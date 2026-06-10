@@ -31,6 +31,8 @@ bucket_name = "document-snapshot-bucket-dev"
 [vars]
 INTERNAL_API_SECRET_KEY = "LOCAL_API_KEY"
 SPS_URL = "https://search-processing-dev.macro.com"
+DSS_URL = "http://document_storage_service:8080"
+DSS_INTERNAL_AUTH_KEY = "local"
 
 [[kv_namespaces]]
 binding = "DOCUMENT_VERSIONING_KV"

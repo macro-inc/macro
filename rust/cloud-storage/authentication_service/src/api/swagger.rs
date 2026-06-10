@@ -297,5 +297,10 @@ mod tests {
         let response_properties = &schemas["EnrichedGithubPullRequest"]["properties"];
         assert!(response_properties.get("comments").is_some());
         assert!(response_properties.get("checks").is_some());
+        assert!(
+            response_properties
+                .get("participantGithubUserIds")
+                .is_some()
+        );
     }
 }

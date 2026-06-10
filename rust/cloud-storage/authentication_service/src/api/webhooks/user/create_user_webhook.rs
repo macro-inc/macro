@@ -10,6 +10,7 @@ use rand::Rng;
 use crate::{api::context::ApiContext, rate_limit_config::RATE_LIMIT_CONFIG};
 use authentication_service::service::user::create_user::create_user;
 use fusionauth::error::FusionAuthClientError;
+use macro_user_id::email::Email;
 use model::authentication::webhooks::FusionAuthUserWebhook;
 
 /// FusionAuth create user webhook
@@ -92,6 +93,13 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
     let email = req.event.user.email.to_lowercase();
     let username = req.event.user.username.unwrap_or(email.clone());
     let fusionauth_user_id = req.event.user.id;
+
+    // FusionAuth's own email validation is more permissive than ours (e.g. it allows
+    // single quotes). The user.create event is transactional (AbsoluteMajority), so
+    // returning an error here aborts the FusionAuth user creation entirely.
+    if let Err(e) = Email::parse_from_str(&email) {
+        anyhow::bail!("email is not a valid macro email: {e}");
+    }
 
     // rate limit check for user creation
     let rate_limit = ctx

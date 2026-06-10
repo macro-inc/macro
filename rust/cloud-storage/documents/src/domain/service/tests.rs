@@ -106,6 +106,14 @@ impl PresignedUploadUrlPort for TestUploadUrlPort {
     async fn copy_object(&self, _source_key: &str, _destination_key: &str) -> anyhow::Result<()> {
         Ok(())
     }
+
+    async fn get_snapshot(&self, _document_id: &str) -> anyhow::Result<Option<Vec<u8>>> {
+        Ok(None)
+    }
+
+    async fn upload_snapshot(&self, _document_id: &str, _bytes: Vec<u8>) -> anyhow::Result<()> {
+        Ok(())
+    }
 }
 
 struct TestTaskPropertiesPort;
@@ -257,6 +265,7 @@ impl ForeignEntityService for TestForeignEntityService {
 
     async fn get_foreign_entities_for_user(
         &self,
+        _requesting_user: Option<String>,
         _source_ids: Vec<SourceId>,
         _limit: u32,
         _query: ForeignEntityListQuery,

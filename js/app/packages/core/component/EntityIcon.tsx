@@ -30,6 +30,7 @@ import WideFileMd from '@icon/wide-file-md.svg';
 import WideFiles from '@icon/wide-files.svg';
 import WideFolder from '@icon/wide-folder.svg';
 import WideGlobe from '@icon/wide-globe.svg';
+import WideSnippet from '@icon/wide-snippet.svg';
 import WideStar from '@icon/wide-star.svg';
 import WideTask from '@icon/wide-task.svg';
 import WideUnknown from '@icon/wide-unknown.svg';
@@ -267,6 +268,12 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     background: 'bg-task/20',
     prettyName: 'Task',
   },
+  snippet: {
+    icon: WideSnippet,
+    foreground: 'text-snippet',
+    background: 'bg-snippet/20',
+    prettyName: 'Snippet',
+  },
   automation: {
     icon: Robot,
     foreground: 'text-default',
@@ -345,6 +352,7 @@ const WIDE_ICONS: Record<
   emailInvite: WideCalendar,
   githubPullRequest: GithubIcon,
   task: WideTask,
+  snippet: WideSnippet,
   automation: Robot,
   crm_company: AnimatedCompanyIcon,
   company: AnimatedCompanyIcon,

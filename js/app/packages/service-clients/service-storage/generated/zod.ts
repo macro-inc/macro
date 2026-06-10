@@ -85,17 +85,25 @@ export const getRecentActivityHandlerResponse = zod.object({
                     .union([
                       zod.null(),
                       zod
-                        .object({
-                          is_completed: zod
-                            .boolean()
+                        .union([
+                          zod
+                            .object({
+                              is_completed: zod
+                                .boolean()
+                                .describe(
+                                  'Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'
+                                ),
+                              type: zod.enum(['task']),
+                            })
                             .describe(
-                              'Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'
+                              'A task document with its associated properties'
                             ),
-                          type: zod.enum(['task']),
-                        })
-                        .describe(
-                          'A task document with its associated properties'
-                        )
+                          zod
+                            .object({
+                              type: zod.enum(['snippet']),
+                            })
+                            .describe('A snippet document — reusable markdown'),
+                        ])
                         .describe(
                           'Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.'
                         ),
@@ -568,7 +576,7 @@ export const editCommentResponse = zod
         .union([
           zod.null(),
           zod
-            .enum(['task'])
+            .enum(['task', 'snippet'])
             .describe(
               'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.'
             ),
@@ -1154,6 +1162,30 @@ export const editCallTranscriptBody = zod
   .describe(
     'Body of `PATCH \/call\/record\/{call_id}\/transcript`.\n\nEach entry in `assignments` sets (or clears, when `custom_speaker` is\n`None`) the `custom_speaker` override for every transcript row in the\ncall whose `diarized_speaker_id` matches. Diarized speakers not listed\nare left untouched. Empty `assignments` is a 204 no-op.'
   );
+
+/**
+ * Reports whether the authenticated user should keep ringing for the call.
+Polled by native clients while the CallKit incoming-call UI is showing, so
+a ring can be cancelled when the user answers on another device
+(`answered`) or the call ends before anyone answers (`ended`).
+
+Outside the user-auth layer: the bearer credential is the recipient's
+LiveKit JWT from the VoIP push payload, verified with the LiveKit secret.
+ * @summary Handler for `GET /call/ring-status/{call_id}`.
+ */
+export const getRingStatusParams = zod.object({
+  call_id: zod.uuid().describe('Call ID'),
+});
+
+export const getRingStatusResponse = zod
+  .object({
+    status: zod
+      .enum(['ringing', 'answered', 'ended'])
+      .describe(
+        'Per-user status of an incoming-call ring, as reported by the\nring-status endpoint while a native client is ringing.'
+      ),
+  })
+  .describe('Response body for `GET \/call\/ring-status\/{call_id}`.');
 
 /**
  * Gets or creates a call for the channel. If a call already exists, joins it;
@@ -3387,7 +3419,7 @@ export const getUserDocumentsHandlerResponse = zod.object({
               .union([
                 zod.null(),
                 zod
-                  .enum(['task'])
+                  .enum(['task', 'snippet'])
                   .describe(
                     'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.'
                   ),
@@ -3556,7 +3588,7 @@ export const createDocumentResponse = zod.object({
             .union([
               zod.null(),
               zod
-                .enum(['task'])
+                .enum(['task', 'snippet'])
                 .describe(
                   'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.'
                 ),
@@ -3669,6 +3701,35 @@ export const createMarkdownHandlerResponse = zod
       .describe('The document ID of the created markdown document.'),
   })
   .describe('Response for creating a markdown document.');
+
+/**
+ * @summary Creates a snippet document with initialized markdown content in one
+backend-owned lifecycle. Snippets are created personal; team sharing is
+toggled separately via `PUT /documents/{document_id}/team_share`.
+ */
+export const createSnippetHandlerBody = zod
+  .object({
+    markdown: zod
+      .string()
+      .nullish()
+      .describe('Markdown source text. Defaults to an empty snippet document.'),
+    projectId: zod
+      .uuid()
+      .nullish()
+      .describe('Optional project ID to associate the snippet with.'),
+    snippetName: zod.string().describe('The name of the snippet.'),
+  })
+  .describe(
+    'Request body for creating a snippet — a reusable markdown document that can\nbe inserted into any markdown area.'
+  );
+
+export const createSnippetHandlerResponse = zod
+  .object({
+    documentId: zod
+      .string()
+      .describe('The document ID of the created snippet.'),
+  })
+  .describe('Response for creating a snippet.');
 
 /**
  * @summary Creates a task document with properties and initialized markdown content in
@@ -3997,15 +4058,23 @@ export const getBatchPreviewHandlerResponse = zod.object({
             .union([
               zod.null(),
               zod
-                .object({
-                  is_completed: zod
-                    .boolean()
-                    .describe(
-                      'Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'
-                    ),
-                  type: zod.enum(['task']),
-                })
-                .describe('A task document with completion status')
+                .union([
+                  zod
+                    .object({
+                      is_completed: zod
+                        .boolean()
+                        .describe(
+                          'Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'
+                        ),
+                      type: zod.enum(['task']),
+                    })
+                    .describe('A task document with completion status'),
+                  zod
+                    .object({
+                      type: zod.enum(['snippet']),
+                    })
+                    .describe('A snippet document — reusable markdown'),
+                ])
                 .describe(
                   'The sub type of a document preview with associated properties.\nTask-related properties are encoded within the variant to ensure valid states.'
                 ),
@@ -4110,15 +4179,25 @@ export const getDocumentResponse = zod.object({
                 .union([
                   zod.null(),
                   zod
-                    .object({
-                      is_completed: zod
-                        .boolean()
+                    .union([
+                      zod
+                        .object({
+                          is_completed: zod
+                            .boolean()
+                            .describe(
+                              'Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'
+                            ),
+                          type: zod.enum(['task']),
+                        })
                         .describe(
-                          'Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'
+                          'A task document with its associated properties'
                         ),
-                      type: zod.enum(['task']),
-                    })
-                    .describe('A task document with its associated properties')
+                      zod
+                        .object({
+                          type: zod.enum(['snippet']),
+                        })
+                        .describe('A snippet document — reusable markdown'),
+                    ])
                     .describe(
                       'Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.'
                     ),
@@ -4293,7 +4372,7 @@ export const saveDocumentHandlerResponse = zod.object({
         .union([
           zod.null(),
           zod
-            .enum(['task'])
+            .enum(['task', 'snippet'])
             .describe(
               'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.'
             ),
@@ -4966,7 +5045,7 @@ export const copyDocumentResponse = zod
               .union([
                 zod.null(),
                 zod
-                  .enum(['task'])
+                  .enum(['task', 'snippet'])
                   .describe(
                     'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.'
                   ),
@@ -5349,7 +5428,7 @@ export const getDocumentLocationV3Response = zod
               .union([
                 zod.null(),
                 zod
-                  .enum(['task'])
+                  .enum(['task', 'snippet'])
                   .describe(
                     'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.'
                   ),
@@ -5405,7 +5484,7 @@ export const getDocumentLocationV3Response = zod
               .union([
                 zod.null(),
                 zod
-                  .enum(['task'])
+                  .enum(['task', 'snippet'])
                   .describe(
                     'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.'
                   ),
@@ -5472,7 +5551,7 @@ export const getDocumentLocationV3Response = zod
               .union([
                 zod.null(),
                 zod
-                  .enum(['task'])
+                  .enum(['task', 'snippet'])
                   .describe(
                     'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.'
                   ),
@@ -5641,7 +5720,7 @@ export const simpleSaveResponse = zod.object({
         .union([
           zod.null(),
           zod
-            .enum(['task'])
+            .enum(['task', 'snippet'])
             .describe(
               'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.'
             ),
@@ -5661,6 +5740,68 @@ export const simpleSaveResponse = zod.object({
   }),
   error: zod.boolean().describe('Indicates if an error occurred'),
 });
+
+/**
+ * @summary Gets the team-share state of a document. The team is resolved from the
+document owner's team membership; `teamId` is omitted when the owner does
+not belong to a team.
+ */
+export const getDocumentTeamShareParams = zod.object({
+  document_id: zod.string().describe('Document ID'),
+});
+
+export const getDocumentTeamShareResponse = zod
+  .object({
+    sharedWithTeam: zod
+      .boolean()
+      .describe(
+        "Whether the document is currently shared with the owner's team."
+      ),
+    teamId: zod
+      .uuid()
+      .nullish()
+      .describe(
+        "The owner's team the document is (or would be) shared with. `None` when\nthe owner does not belong to a team."
+      ),
+  })
+  .describe(
+    "The team-share state of a document. The team is resolved from the document\nowner's team membership."
+  );
+
+/**
+ * @summary Sets the team-share state of a document. Sharing grants the document
+owner's team Edit access; unsharing removes the team's access. Requires
+Edit access on the document.
+ */
+export const setDocumentTeamShareParams = zod.object({
+  document_id: zod.string().describe('Document ID'),
+});
+
+export const setDocumentTeamShareBody = zod
+  .object({
+    shareWithTeam: zod
+      .boolean()
+      .describe("Whether the document should be shared with the owner's team."),
+  })
+  .describe("Request body for setting a document's team-share state.");
+
+export const setDocumentTeamShareResponse = zod
+  .object({
+    sharedWithTeam: zod
+      .boolean()
+      .describe(
+        "Whether the document is currently shared with the owner's team."
+      ),
+    teamId: zod
+      .uuid()
+      .nullish()
+      .describe(
+        "The owner's team the document is (or would be) shared with. `None` when\nthe owner does not belong to a team."
+      ),
+  })
+  .describe(
+    "The team-share state of a document. The team is resolved from the document\nowner's team membership."
+  );
 
 /**
  * @summary Gets the list of users who have viewed a given document
@@ -5763,7 +5904,7 @@ export const getDocumentVersionResponse = zod.object({
         .union([
           zod.null(),
           zod
-            .enum(['task'])
+            .enum(['task', 'snippet'])
             .describe(
               'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.'
             ),
@@ -5938,15 +6079,23 @@ export const getHistoryHandlerResponse = zod.object({
             .union([
               zod.null(),
               zod
-                .object({
-                  is_completed: zod
-                    .boolean()
-                    .describe(
-                      'Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'
-                    ),
-                  type: zod.enum(['task']),
-                })
-                .describe('A task document with its associated properties')
+                .union([
+                  zod
+                    .object({
+                      is_completed: zod
+                        .boolean()
+                        .describe(
+                          'Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'
+                        ),
+                      type: zod.enum(['task']),
+                    })
+                    .describe('A task document with its associated properties'),
+                  zod
+                    .object({
+                      type: zod.enum(['snippet']),
+                    })
+                    .describe('A snippet document — reusable markdown'),
+                ])
                 .describe(
                   'Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.'
                 ),
@@ -6362,15 +6511,25 @@ export const getItemsSoupResponse = zod.object({
               .union([
                 zod.null(),
                 zod
-                  .object({
-                    is_completed: zod
-                      .boolean()
+                  .union([
+                    zod
+                      .object({
+                        is_completed: zod
+                          .boolean()
+                          .describe(
+                            'Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'
+                          ),
+                        type: zod.enum(['task']),
+                      })
                       .describe(
-                        'Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'
+                        'A task document with its associated properties'
                       ),
-                    type: zod.enum(['task']),
-                  })
-                  .describe('A task document with its associated properties')
+                    zod
+                      .object({
+                        type: zod.enum(['snippet']),
+                      })
+                      .describe('A snippet document — reusable markdown'),
+                  ])
                   .describe(
                     'Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.'
                   ),
@@ -7833,6 +7992,12 @@ export const postItemsSoupBody = zod
           .describe(
             'Internal foreign entity record IDs to filter by. Empty to include all records.'
           ),
+        includes_me: zod
+          .boolean()
+          .optional()
+          .describe(
+            'When true, only return foreign entities whose metadata lists the requesting user as a\nparticipant (GitHub `involves:me` semantics for `github_pull_request` records). False or\nabsent applies no filter. Serialized in filter ASTs as the `\"me\"` literal.'
+          ),
       })
       .optional()
       .describe('Filters for foreign entity records.'),
@@ -8230,15 +8395,25 @@ export const postItemsSoupResponse = zod.object({
               .union([
                 zod.null(),
                 zod
-                  .object({
-                    is_completed: zod
-                      .boolean()
+                  .union([
+                    zod
+                      .object({
+                        is_completed: zod
+                          .boolean()
+                          .describe(
+                            'Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'
+                          ),
+                        type: zod.enum(['task']),
+                      })
                       .describe(
-                        'Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'
+                        'A task document with its associated properties'
                       ),
-                    type: zod.enum(['task']),
-                  })
-                  .describe('A task document with its associated properties')
+                    zod
+                      .object({
+                        type: zod.enum(['snippet']),
+                      })
+                      .describe('A snippet document — reusable markdown'),
+                  ])
                   .describe(
                     'Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.'
                   ),
@@ -9681,15 +9856,25 @@ export const postItemsSoupAstResponse = zod.object({
               .union([
                 zod.null(),
                 zod
-                  .object({
-                    is_completed: zod
-                      .boolean()
+                  .union([
+                    zod
+                      .object({
+                        is_completed: zod
+                          .boolean()
+                          .describe(
+                            'Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'
+                          ),
+                        type: zod.enum(['task']),
+                      })
                       .describe(
-                        'Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'
+                        'A task document with its associated properties'
                       ),
-                    type: zod.enum(['task']),
-                  })
-                  .describe('A task document with its associated properties')
+                    zod
+                      .object({
+                        type: zod.enum(['snippet']),
+                      })
+                      .describe('A snippet document — reusable markdown'),
+                  ])
                   .describe(
                     'Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.'
                   ),
@@ -11395,17 +11580,27 @@ export const postItemsSoupAstGroupedResponse = zod
                       .union([
                         zod.null(),
                         zod
-                          .object({
-                            is_completed: zod
-                              .boolean()
+                          .union([
+                            zod
+                              .object({
+                                is_completed: zod
+                                  .boolean()
+                                  .describe(
+                                    'Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'
+                                  ),
+                                type: zod.enum(['task']),
+                              })
                               .describe(
-                                'Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'
+                                'A task document with its associated properties'
                               ),
-                            type: zod.enum(['task']),
-                          })
-                          .describe(
-                            'A task document with its associated properties'
-                          )
+                            zod
+                              .object({
+                                type: zod.enum(['snippet']),
+                              })
+                              .describe(
+                                'A snippet document — reusable markdown'
+                              ),
+                          ])
                           .describe(
                             'Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.'
                           ),
@@ -12840,17 +13035,27 @@ export const postItemsSoupAstGroupedResponse = zod
                       .union([
                         zod.null(),
                         zod
-                          .object({
-                            is_completed: zod
-                              .boolean()
+                          .union([
+                            zod
+                              .object({
+                                is_completed: zod
+                                  .boolean()
+                                  .describe(
+                                    'Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'
+                                  ),
+                                type: zod.enum(['task']),
+                              })
                               .describe(
-                                'Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'
+                                'A task document with its associated properties'
                               ),
-                            type: zod.enum(['task']),
-                          })
-                          .describe(
-                            'A task document with its associated properties'
-                          )
+                            zod
+                              .object({
+                                type: zod.enum(['snippet']),
+                              })
+                              .describe(
+                                'A snippet document — reusable markdown'
+                              ),
+                          ])
                           .describe(
                             'Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.'
                           ),
@@ -14035,17 +14240,25 @@ export const getPinsHandlerResponse = zod.object({
                     .union([
                       zod.null(),
                       zod
-                        .object({
-                          is_completed: zod
-                            .boolean()
+                        .union([
+                          zod
+                            .object({
+                              is_completed: zod
+                                .boolean()
+                                .describe(
+                                  'Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'
+                                ),
+                              type: zod.enum(['task']),
+                            })
                             .describe(
-                              'Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'
+                              'A task document with its associated properties'
                             ),
-                          type: zod.enum(['task']),
-                        })
-                        .describe(
-                          'A task document with its associated properties'
-                        )
+                          zod
+                            .object({
+                              type: zod.enum(['snippet']),
+                            })
+                            .describe('A snippet document — reusable markdown'),
+                        ])
                         .describe(
                           'Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.'
                         ),
@@ -14165,17 +14378,25 @@ export const getPinsHandlerResponse = zod.object({
                     .union([
                       zod.null(),
                       zod
-                        .object({
-                          is_completed: zod
-                            .boolean()
+                        .union([
+                          zod
+                            .object({
+                              is_completed: zod
+                                .boolean()
+                                .describe(
+                                  'Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'
+                                ),
+                              type: zod.enum(['task']),
+                            })
                             .describe(
-                              'Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'
+                              'A task document with its associated properties'
                             ),
-                          type: zod.enum(['task']),
-                        })
-                        .describe(
-                          'A task document with its associated properties'
-                        )
+                          zod
+                            .object({
+                              type: zod.enum(['snippet']),
+                            })
+                            .describe('A snippet document — reusable markdown'),
+                        ])
                         .describe(
                           'Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.'
                         ),
@@ -15557,15 +15778,25 @@ export const getProjectContentHandlerResponse = zod.object({
               .union([
                 zod.null(),
                 zod
-                  .object({
-                    is_completed: zod
-                      .boolean()
+                  .union([
+                    zod
+                      .object({
+                        is_completed: zod
+                          .boolean()
+                          .describe(
+                            'Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'
+                          ),
+                        type: zod.enum(['task']),
+                      })
                       .describe(
-                        'Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'
+                        'A task document with its associated properties'
                       ),
-                    type: zod.enum(['task']),
-                  })
-                  .describe('A task document with its associated properties')
+                    zod
+                      .object({
+                        type: zod.enum(['snippet']),
+                      })
+                      .describe('A snippet document — reusable markdown'),
+                  ])
                   .describe(
                     'Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.'
                   ),
@@ -15762,15 +15993,25 @@ export const recentlyDeletedResponse = zod.object({
                 .union([
                   zod.null(),
                   zod
-                    .object({
-                      is_completed: zod
-                        .boolean()
+                    .union([
+                      zod
+                        .object({
+                          is_completed: zod
+                            .boolean()
+                            .describe(
+                              'Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'
+                            ),
+                          type: zod.enum(['task']),
+                        })
                         .describe(
-                          'Whether the task is completed.\nTrue if the Status property is set to \"Completed\".'
+                          'A task document with its associated properties'
                         ),
-                      type: zod.enum(['task']),
-                    })
-                    .describe('A task document with its associated properties')
+                      zod
+                        .object({
+                          type: zod.enum(['snippet']),
+                        })
+                        .describe('A snippet document — reusable markdown'),
+                    ])
                     .describe(
                       'Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task.'
                     ),

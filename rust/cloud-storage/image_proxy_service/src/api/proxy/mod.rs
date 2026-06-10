@@ -1,3 +1,5 @@
+mod resolver;
+
 use axum::Router;
 use axum::body::Body;
 use axum::extract::{Query, State};
@@ -10,11 +12,50 @@ use serde::Deserialize;
 use std::error::Error;
 use std::fmt;
 use std::net::IpAddr;
+use std::sync::Arc;
 use url::Url;
 use utoipa::ToSchema;
 
+use resolver::PrivateIpFilteringResolver;
+
 /// 10 MB max image size
 const MAX_IMAGE_SIZE: u64 = 10 * 1024 * 1024;
+
+/// Maximum number of redirects to follow per proxied fetch. Matches the
+/// previous reqwest-managed `Policy::limited(5)` behaviour.
+const MAX_REDIRECTS: u8 = 5;
+
+/// Default request timeout for a proxied fetch.
+const REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
+
+/// Default connect timeout for a proxied fetch.
+const CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// Build the HTTP client used to fetch upstream images.
+///
+/// SSRF mitigations baked into the client:
+///
+/// 1. **Redirects disabled** at the reqwest level so the manual loop in
+///    [`proxy_request_handler`] can run [`assert_not_internal`] on every hop
+///    and follows up to [`MAX_REDIRECTS`] redirects itself.
+/// 2. **Private-IP-filtering DNS resolver** ([`PrivateIpFilteringResolver`])
+///    enforces the same private-IP check at the moment reqwest actually
+///    connects, closing the DNS-rebinding TOCTOU window where the preflight
+///    and the connect attempt could see different answers from the
+///    authoritative DNS server.
+///
+/// Owning the client construction here keeps the mitigation inseparable from
+/// the handler that relies on it — callers can't accidentally hand in a
+/// redirect-following or unfiltered client.
+pub(crate) fn build_http_client() -> anyhow::Result<reqwest::Client> {
+    let client = reqwest::Client::builder()
+        .timeout(REQUEST_TIMEOUT)
+        .connect_timeout(CONNECT_TIMEOUT)
+        .redirect(reqwest::redirect::Policy::none())
+        .dns_resolver(Arc::new(PrivateIpFilteringResolver))
+        .build()?;
+    Ok(client)
+}
 
 #[derive(Debug)]
 pub enum ProxyError {
@@ -101,10 +142,33 @@ pub async fn proxy_request_handler(
     State(http_client): State<reqwest::Client>,
     _ip: ClientIp,
 ) -> Result<Response, ProxyError> {
-    let validated_url = validate_url(&params.url)?;
-    assert_not_internal(&validated_url).await?;
+    let mut url = validate_url(&params.url)?;
+    let mut redirects_remaining = MAX_REDIRECTS;
 
-    let response = send_request(&http_client, &validated_url).await?;
+    let response = loop {
+        assert_not_internal(&url).await?;
+        let response = send_request(&http_client, &url).await?;
+        let status = response.status();
+
+        if status.is_redirection() {
+            if redirects_remaining == 0 {
+                return Err(ProxyError::UpstreamRedirect(format!(
+                    "exceeded maximum of {MAX_REDIRECTS} redirects"
+                )));
+            }
+            let next = redirect_target(&url, &response)?;
+            tracing::debug!(from = %url, to = %next, "following redirect");
+            redirects_remaining -= 1;
+            url = next;
+            continue;
+        }
+
+        if !status.is_success() {
+            return Err(ProxyError::UpstreamStatus(status));
+        }
+
+        break response;
+    };
 
     let content_type = extract_content_type(&response)?;
 
@@ -165,17 +229,28 @@ fn is_private_ip(ip: &IpAddr) -> bool {
             if let Some(mapped_v4) = v6.to_ipv4_mapped() {
                 return is_private_ip(&IpAddr::V4(mapped_v4));
             }
-            v6.is_loopback() || v6.is_unspecified()
+            v6.is_loopback()
+                || v6.is_unspecified()
+                // fc00::/7 — Unique Local Addresses (IPv6 equivalent of RFC1918).
+                || v6.is_unique_local()
+                // fe80::/10 — Link-local; reachable on the local segment only.
+                || v6.is_unicast_link_local()
         }
     }
 }
 
+/// Issue a GET against `url`. The response is returned without inspecting its
+/// status — the caller decides how to handle 3xx (redirect-follow) vs 4xx /
+/// 5xx (error). This is intentional: the redirect loop in
+/// [`proxy_request_handler`] needs to see 3xx responses so it can run
+/// [`assert_not_internal`] against each hop before following.
 async fn send_request(
     http_client: &reqwest::Client,
     url: &Url,
 ) -> Result<reqwest::Response, ProxyError> {
-    let response = http_client.get(url.as_str()).send().await.map_err(|e| {
+    http_client.get(url.as_str()).send().await.map_err(|e| {
         let error_chain = build_error_chain(&e);
+        tracing::warn!(url = %url, error = %error_chain, "upstream request failed");
         if e.is_timeout() {
             ProxyError::UpstreamTimeout(error_chain)
         } else if e.is_connect() {
@@ -185,13 +260,35 @@ async fn send_request(
         } else {
             ProxyError::UpstreamNetwork(error_chain)
         }
+    })
+}
+
+/// Resolve the `Location` header of a 3xx response into the next URL to
+/// fetch, applying the same scheme / fragment hygiene as [`validate_url`].
+///
+/// Does **not** check the target's IPs — the caller must run
+/// [`assert_not_internal`] on the returned URL before issuing the next
+/// request, so a 302 → internal-IP cannot bypass the preflight.
+fn redirect_target(current: &Url, response: &reqwest::Response) -> Result<Url, ProxyError> {
+    let location = response
+        .headers()
+        .get(reqwest::header::LOCATION)
+        .ok_or_else(|| {
+            ProxyError::UpstreamRedirect("redirect response missing Location header".into())
+        })?
+        .to_str()
+        .map_err(|e| ProxyError::UpstreamRedirect(format!("invalid Location header: {e}")))?;
+
+    let mut next = current.join(location).map_err(|e| {
+        ProxyError::UpstreamRedirect(format!("could not parse redirect target {location}: {e}"))
     })?;
 
-    if !response.status().is_success() {
-        return Err(ProxyError::UpstreamStatus(response.status()));
+    if next.scheme() != "http" && next.scheme() != "https" {
+        return Err(ProxyError::InvalidScheme);
     }
+    next.set_fragment(None);
 
-    Ok(response)
+    Ok(next)
 }
 
 fn extract_content_type(response: &reqwest::Response) -> Result<String, ProxyError> {

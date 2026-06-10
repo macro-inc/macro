@@ -19,6 +19,8 @@ pub enum SoupDocumentSubType {
         /// True if the Status property is set to "Completed".
         is_completed: bool,
     },
+    /// A snippet document — reusable markdown
+    Snippet {},
 }
 
 impl SoupDocumentSubType {
@@ -29,6 +31,7 @@ impl SoupDocumentSubType {
             DocumentSubType::Task => Some(Self::Task {
                 is_completed: is_completed.unwrap_or_default(),
             }),
+            DocumentSubType::Snippet => Some(Self::Snippet {}),
         }
     }
 
@@ -36,6 +39,7 @@ impl SoupDocumentSubType {
     pub fn is_task_completed(&self) -> Option<bool> {
         match self {
             Self::Task { is_completed } => Some(*is_completed),
+            Self::Snippet {} => None,
         }
     }
 }
@@ -109,11 +113,13 @@ impl SoupDocument {
     /// Returns the entity type for this document.
     ///
     /// Documents with a `sub_type` of `Task` return `EntityType::Task`,
-    /// otherwise they return `EntityType::Document`.
+    /// otherwise they return `EntityType::Document`. Snippets are documents
+    /// as far as the entity system is concerned — their snippet-ness only
+    /// lives in `sub_type`.
     pub fn entity_type(&self) -> EntityType {
         match &self.sub_type {
             Some(SoupDocumentSubType::Task { .. }) => EntityType::Task,
-            None => EntityType::Document,
+            Some(SoupDocumentSubType::Snippet {}) | None => EntityType::Document,
         }
     }
 }

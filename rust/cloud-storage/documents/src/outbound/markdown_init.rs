@@ -80,9 +80,12 @@ where
             // initialized eventually," in both cases, but just for now we just
             // do it for the blank document case only.
             tokio::spawn(async move {
-                let _ = sync_service_client
+                if let Err(e) = sync_service_client
                     .initialize_from_snapshot(&document_id, MARKDOWN_GOLDEN_SNAPSHOT)
-                    .await;
+                    .await
+                {
+                    tracing::error!(error=?e, "failed to initialize document from snapshot");
+                }
             });
 
             Ok(())

@@ -30,6 +30,7 @@ fn pull_request_details(
         deletions: 12,
         comments: None,
         checks: None,
+        participant_github_user_ids: None,
     }
 }
 
@@ -43,6 +44,7 @@ fn pull_request_comment() -> GithubPullRequestComment {
     GithubPullRequestComment {
         id: 101,
         body: "Looks good to me".to_string(),
+        author_id: None,
         author_login: Some("octocat".to_string()),
         author_association: Some("MEMBER".to_string()),
         url: Some("https://github.com/macro/app/pull/7#issuecomment-101".to_string()),
@@ -151,6 +153,7 @@ fn pull_request_response_serializes_with_camel_case_fields() {
             deletions: Some(12),
             comments: Some(vec![pull_request_comment()]),
             checks: Some(vec![pull_request_check_run()]),
+            participant_github_user_ids: None,
         }],
     };
 
@@ -267,6 +270,7 @@ fn pull_request_enrichment_copies_details_fields() {
         deletions: 12,
         comments: Some(comments.clone()),
         checks: Some(checks.clone()),
+        participant_github_user_ids: Some(vec!["42".to_string(), "583231".to_string()]),
     };
 
     let enriched = EnrichedGithubPullRequest::from_details(reference.clone(), details);
@@ -286,6 +290,10 @@ fn pull_request_enrichment_copies_details_fields() {
     assert_eq!(enriched.deletions, Some(12));
     assert_eq!(enriched.comments, Some(comments));
     assert_eq!(enriched.checks, Some(checks));
+    assert_eq!(
+        enriched.participant_github_user_ids,
+        Some(vec!["42".to_string(), "583231".to_string()])
+    );
 }
 
 #[test]
@@ -304,6 +312,7 @@ fn pull_request_foreign_entity_metadata_serializes_enriched_pull_request() {
         deletions: 12,
         comments: Some(vec![pull_request_comment()]),
         checks: Some(vec![pull_request_check_run()]),
+        participant_github_user_ids: None,
     };
     let enriched = EnrichedGithubPullRequest::from_details(reference, details);
 
@@ -415,6 +424,7 @@ fn pull_request_foreign_entity_metadata_keeps_fresh_arrays() {
         deletions: 12,
         comments: Some(comments.clone()),
         checks: Some(checks.clone()),
+        participant_github_user_ids: None,
     };
     let enriched = EnrichedGithubPullRequest::from_details(pull_request_reference(), details);
     let existing_metadata = serde_json::json!({
@@ -430,6 +440,45 @@ fn pull_request_foreign_entity_metadata_keeps_fresh_arrays() {
 
     assert_eq!(metadata.get("comments"), Some(&fresh_comments));
     assert_eq!(metadata.get("checks"), Some(&fresh_checks));
+}
+
+#[test]
+fn pull_request_foreign_entity_metadata_unions_participants_with_existing() {
+    let mut details = pull_request_details("open", None);
+    details.participant_github_user_ids = Some(vec!["42".to_string(), "99".to_string()]);
+    let enriched = EnrichedGithubPullRequest::from_details(pull_request_reference(), details);
+    let existing_metadata = serde_json::json!({
+        "participantGithubUserIds": ["7", "42"]
+    });
+
+    let metadata = enriched
+        .foreign_entity_metadata(Some(&existing_metadata))
+        .unwrap();
+
+    assert_eq!(
+        metadata.get("participantGithubUserIds"),
+        Some(&serde_json::json!(["42", "7", "99"]))
+    );
+}
+
+#[test]
+fn pull_request_foreign_entity_metadata_carries_existing_participants_forward() {
+    let enriched = EnrichedGithubPullRequest::from_details(
+        pull_request_reference(),
+        pull_request_details("open", None),
+    );
+    let existing_metadata = serde_json::json!({
+        "participantGithubUserIds": ["7"]
+    });
+
+    let metadata = enriched
+        .foreign_entity_metadata(Some(&existing_metadata))
+        .unwrap();
+
+    assert_eq!(
+        metadata.get("participantGithubUserIds"),
+        Some(&serde_json::json!(["7"]))
+    );
 }
 
 // ---------------------------------------------------------------------------

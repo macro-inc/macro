@@ -382,6 +382,11 @@ pub struct ForeignEntityFilters {
     /// External source names to filter by. Empty to include all sources.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub foreign_entity_sources: Vec<String>,
+    /// When true, only return foreign entities whose metadata lists the requesting user as a
+    /// participant (GitHub `involves:me` semantics for `github_pull_request` records). False or
+    /// absent applies no filter. Serialized in filter ASTs as the `"me"` literal.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub includes_me: bool,
 }
 
 impl IsEmpty for ForeignEntityFilters {
@@ -390,8 +395,12 @@ impl IsEmpty for ForeignEntityFilters {
             ids,
             foreign_entity_ids,
             foreign_entity_sources,
+            includes_me,
         } = self;
-        ids.is_empty() && foreign_entity_ids.is_empty() && foreign_entity_sources.is_empty()
+        ids.is_empty()
+            && foreign_entity_ids.is_empty()
+            && foreign_entity_sources.is_empty()
+            && !*includes_me
     }
 }
 

@@ -9,6 +9,7 @@ import type {
   EmailEntity,
   EntityData,
   ProjectEntity,
+  SnippetEntity,
   TaskEntity,
 } from '../types/entity';
 
@@ -63,6 +64,16 @@ export function buildEntityData(
           type: 'document',
           fileType: 'md',
           subType: { type: 'task', is_completed: args.isCompleted ?? false },
+          projectId: args.projectId,
+        })
+      )
+      .with(
+        'snippet',
+        (): SnippetEntity => ({
+          ...base,
+          type: 'document',
+          fileType: 'md',
+          subType: { type: 'snippet' },
           projectId: args.projectId,
         })
       )
