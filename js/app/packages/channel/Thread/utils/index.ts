@@ -1,10 +1,12 @@
 export {
   type ActionableMessage,
   buildMessageLink,
-  canEditOrDeleteMessage,
+  canDeleteMessage,
+  canEditMessage,
   canReplyToMessage,
   DEFAULT_REACTION_EMOJI,
   hasReactionFromUser,
+  isBotMessage,
   isOwnMessage,
 } from './message-actions';
 
