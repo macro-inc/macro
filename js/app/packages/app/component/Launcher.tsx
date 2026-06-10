@@ -510,8 +510,6 @@ export const LauncherInner = (props: LauncherInnerProps) => {
     (props.blocks ?? CREATABLE_BLOCKS).filter(
       (block) => block.blockName !== 'snippet' || snippetsFlag().enabled
     );
-  const topRowBlocks = () => blocks().slice(0, 5);
-  const bottomRowBlocks = () => blocks().slice(5);
   const [attachHotkeys, launcherScope] = useHotkeyDOMScope('create-menu', true);
 
   let ref!: HTMLDivElement;
@@ -523,12 +521,12 @@ export const LauncherInner = (props: LauncherInnerProps) => {
 
   const focusMenuItem = (label: string) => {
     const menuItem = document.querySelector<HTMLElement>(
-      `.create-menu-${label}`
+      `.create-menu-${label.toLowerCase()}`
     );
 
-    if (menuItem) {
-      menuItem.focus();
-    }
+    if (!menuItem) return false;
+
+    menuItem.focus();
 
     return true;
   };
@@ -551,6 +549,26 @@ export const LauncherInner = (props: LauncherInnerProps) => {
 
     nextEl.focus();
 
+    setFocusedIndex(nextIndex);
+
+    return true;
+  };
+
+  const getGridColumnCount = () => {
+    const columns = window.getComputedStyle(ref).gridTemplateColumns;
+    return Math.max(columns.split(' ').filter(Boolean).length, 1);
+  };
+
+  const moveFocusRow = (direction: -1 | 1) => {
+    const columnCount = getGridColumnCount();
+    const nextIndex = focusedIndex() + columnCount * direction;
+
+    if (nextIndex < 0 || nextIndex >= blocks().length) return false;
+
+    const nextEl = tabbable(ref)[nextIndex];
+    if (!nextEl) return false;
+
+    nextEl.focus();
     setFocusedIndex(nextIndex);
 
     return true;
@@ -615,7 +633,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
     description: 'Navigate Up',
     keyDownHandler: (e) => {
       e?.preventDefault();
-      return true;
+      return moveFocusRow(-1);
     },
   }).withGroup(hkGroup);
 
@@ -625,7 +643,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
     description: 'Navigate Down',
     keyDownHandler: (e) => {
       e?.preventDefault();
-      return true;
+      return moveFocusRow(1);
     },
   }).withGroup(hkGroup);
 
@@ -691,8 +709,8 @@ export const LauncherInner = (props: LauncherInnerProps) => {
   onCleanup(hkGroup.dispose);
 
   return (
-    <div class="bg-surface ring-1 ring-edge-muted rounded-xl">
-      <div class="flex items-center justify-between p-2 px-6 border-b border-edge-muted">
+    <div class="bg-surface ring-1 ring-edge-muted rounded-xl max-w-[calc(100vw-2rem)]">
+      <div class="flex items-center justify-between p-2 px-4 sm:px-6 border-b border-edge-muted">
         <h1 class="font-bold text-ink-muted">Create New</h1>
         <p class="gap-2 text-ink-extra-muted text-xs items-center hidden touch:hidden md:flex">
           <style>{`
@@ -725,33 +743,19 @@ export const LauncherInner = (props: LauncherInnerProps) => {
         </p>
       </div>
       <div
-        class="relative flex flex-col gap-3 p-6 isolate brackets-never"
+        class="relative grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 justify-items-center gap-3 p-4 sm:p-6 isolate brackets-never"
         ref={ref}
       >
-        <div class="grid grid-cols-5 gap-3">
-          <For each={topRowBlocks()}>
-            {(item, index) => (
-              <LauncherMenuItem
-                creatableBlock={item}
-                onMouseEnter={() => setFocusedIndex(index())}
-                onFocus={() => setFocusedIndex(index())}
-                focused={focusedIndex() === index()}
-              />
-            )}
-          </For>
-        </div>
-        <div class="flex justify-center gap-3">
-          <For each={bottomRowBlocks()}>
-            {(item, index) => (
-              <LauncherMenuItem
-                creatableBlock={item}
-                onMouseEnter={() => setFocusedIndex(index() + 5)}
-                onFocus={() => setFocusedIndex(index() + 5)}
-                focused={focusedIndex() === index() + 5}
-              />
-            )}
-          </For>
-        </div>
+        <For each={blocks()}>
+          {(item, index) => (
+            <LauncherMenuItem
+              creatableBlock={item}
+              onMouseEnter={() => setFocusedIndex(index())}
+              onFocus={() => setFocusedIndex(index())}
+              focused={focusedIndex() === index()}
+            />
+          )}
+        </For>
       </div>
     </div>
   );
