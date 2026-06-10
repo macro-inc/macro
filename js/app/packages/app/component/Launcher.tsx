@@ -1,4 +1,3 @@
-import { DOCS_BASE } from '@app/constants/docs-links';
 import { analytics } from '@app/lib/analytics';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { setAutomationComposerOpen } from '@block-automation/component';
@@ -29,7 +28,6 @@ import {
   createSnippet,
 } from '@core/util/create';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
-import { openExternalUrl } from '@core/util/url';
 import { AnimatedChatIcon } from '@icon/wide-chat';
 import WideChat from '@icon/wide-chat.svg';
 import { AnimatedDiagramIcon } from '@icon/wide-diagram';
@@ -51,7 +49,6 @@ import WideTask from '@icon/wide-task.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import { getMarkdownGoldenBytes } from '@lexical-core/markdown-golden';
 import ArrowRight from '@phosphor/arrow-right.svg';
-import EyeIcon from '@phosphor/eye.svg';
 import { createProject } from '@queries/storage/projects';
 import { cn, Hotkey, Layer } from '@ui';
 import { getNormalizedKeyString } from '@ui/components/Hotkey';
@@ -269,8 +266,6 @@ export type CreatableBlock = Omit<HotkeyRegistrationOptions, 'scopeId'> & {
   blockName: BlockName | BlockAlias;
   altHotkeyToken?: HotkeyToken;
   animatedIcon?: Component<{ triggerAnimation?: boolean }>;
-  /** Public documentation page for this block type, if one exists. */
-  documentationUrl?: string;
 };
 
 export const CREATABLE_BLOCKS: CreatableBlock[] = [
@@ -280,7 +275,6 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     animatedIcon: AnimatedFileMdIcon,
     description: 'Create doc',
     blockName: 'md',
-    documentationUrl: `${DOCS_BASE}/product/docs`,
     hotkeyToken: TOKENS.create.note,
     altHotkeyToken: TOKENS.create.noteNewSplit,
     hotkey: 'd',
@@ -295,7 +289,6 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     animatedIcon: AnimatedTaskIcon,
     description: 'Create task',
     blockName: 'task',
-    documentationUrl: `${DOCS_BASE}/product/tasks`,
     hotkeyToken: TOKENS.create.task,
     altHotkeyToken: TOKENS.create.taskNewSplit,
     hotkey: 't' as const,
@@ -310,7 +303,6 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     animatedIcon: AnimatedSnippetIcon,
     description: 'Create snippet',
     blockName: 'snippet',
-    documentationUrl: `${DOCS_BASE}/product/snippets`,
     hotkeyToken: TOKENS.create.snippet,
     altHotkeyToken: TOKENS.create.snippetNewSplit,
     hotkey: 's' as const,
@@ -325,7 +317,6 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     animatedIcon: AnimatedEmailIcon,
     description: 'Create email',
     blockName: 'email',
-    documentationUrl: `${DOCS_BASE}/product/email`,
     hotkeyToken: TOKENS.create.email,
     altHotkeyToken: TOKENS.create.emailNewSplit,
     hotkey: 'e',
@@ -340,7 +331,6 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     animatedIcon: AnimatedChatIcon,
     description: 'Create message',
     blockName: 'channel',
-    documentationUrl: `${DOCS_BASE}/product/channels`,
     hotkeyToken: TOKENS.create.message,
     altHotkeyToken: TOKENS.create.messageNewSplit,
     hotkey: 'm',
@@ -355,7 +345,6 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     animatedIcon: AnimatedStarIcon,
     description: 'Create AI chat',
     blockName: 'chat',
-    documentationUrl: `${DOCS_BASE}/product/agents`,
     hotkeyToken: TOKENS.create.chat,
     altHotkeyToken: TOKENS.create.chatNewSplit,
     hotkey: 'a',
@@ -370,7 +359,6 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     animatedIcon: AnimatedDiagramIcon,
     description: 'Create canvas',
     blockName: 'canvas',
-    documentationUrl: `${DOCS_BASE}/product/canvas`,
     hotkeyToken: TOKENS.create.canvas,
     altHotkeyToken: TOKENS.create.canvasNewSplit,
     hotkey: 'n',
@@ -387,7 +375,6 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     animatedIcon: AnimatedFolderIcon,
     description: 'Create folder',
     blockName: 'project',
-    documentationUrl: `${DOCS_BASE}/product/folders`,
     hotkeyToken: TOKENS.create.project,
     altHotkeyToken: TOKENS.create.projectNewSplit,
     hotkey: 'f',
@@ -471,26 +458,7 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
         />
 
         <div class="w-full py-1 px-2 absolute bottom-0 flex flex-row justify-between items-center z-user-highlight">
-          <div class="flex items-center gap-1.5">
-            <div class="text-sm font-medium">{props.creatableBlock.label}</div>
-            {/* span, not button: this whole card is already a <button> */}
-            <Show when={props.creatableBlock.documentationUrl}>
-              {(url) => (
-                <span
-                  role="link"
-                  title={`Learn more about ${props.creatableBlock.label}`}
-                  class="flex items-center text-ink-extra-muted hover:text-ink transition-colors"
-                  onMouseDown={(e) => e.stopPropagation()}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    openExternalUrl(url());
-                  }}
-                >
-                  <EyeIcon class="size-3" />
-                </span>
-              )}
-            </Show>
-          </div>
+          <div class="text-sm font-medium">{props.creatableBlock.label}</div>
           <div
             class={cn(
               'size-3 transition-[transform,opacity] ease duration-200',
