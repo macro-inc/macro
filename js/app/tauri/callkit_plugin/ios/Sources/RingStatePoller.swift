@@ -144,6 +144,7 @@ final class RingStatePoller {
     private func resolve(_ status: ResolvedStatus) {
         guard !isCancelled, !isResolved else { return }
         isResolved = true
+        pendingTick?.cancel()
         pendingTick = nil
         onResolved(uuid, status)
     }

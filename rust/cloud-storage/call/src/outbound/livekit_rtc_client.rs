@@ -66,9 +66,8 @@ impl LivekitRtcClient {
         let egress_client = EgressClient::with_api_key(&http_url, &api_key, &api_secret);
         let agent_dispatch_client =
             AgentDispatchClient::with_api_key(&http_url, &api_key, &api_secret);
-        let verifier = TokenVerifier::with_api_key(&api_key, &api_secret);
-        let webhook_receiver = WebhookReceiver::new(verifier);
         let token_verifier = TokenVerifier::with_api_key(&api_key, &api_secret);
+        let webhook_receiver = WebhookReceiver::new(token_verifier.clone());
         Self {
             room_client,
             egress_client,

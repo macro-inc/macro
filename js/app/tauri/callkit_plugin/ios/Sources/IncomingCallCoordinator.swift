@@ -485,7 +485,7 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
     }
 
     private func stopAllRingStatePolling() {
-        let pollers = ringPollers.values
+        let pollers = Array(ringPollers.values)
         ringPollers.removeAll()
         for poller in pollers {
             poller.cancel()
