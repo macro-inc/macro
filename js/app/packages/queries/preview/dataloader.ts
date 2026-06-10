@@ -34,13 +34,15 @@ class PreviewDataLoader {
           const requests = this.pendingRequests.get(key);
 
           if (requests) {
+            // A missing batch entry means no fetcher handled this item, not
+            // that it was deleted — only fetchers may report 'does_not_exist'.
             const preview =
               results.get(item.id) ??
               ({
                 id: item.id,
                 type: item.type ?? DEFAULT_ITEM_TYPE,
                 loading: false,
-                access: 'does_not_exist',
+                access: 'no_access',
               } as PreviewItem);
 
             for (const request of requests) {

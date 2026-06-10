@@ -279,7 +279,8 @@ export function blockNameToItemType(
 export function stringToItemType(str: string): ItemType | undefined {
   switch (str) {
     case 'email':
-    case 'thread': {
+    case 'thread':
+    case 'email_thread': {
       return 'email';
     }
     case 'call':
@@ -287,6 +288,7 @@ export function stringToItemType(str: string): ItemType | undefined {
     case 'document':
     case 'project':
     case 'channel':
+    case 'crm_company':
       return str;
     default:
       return undefined;
