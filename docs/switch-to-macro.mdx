@@ -1,24 +1,53 @@
 ---
 title: "Switch to Macro"
 icon: "arrow-right-arrow-left"
-description: "Migration guides for moving from Notion, Slack, Superhuman, and Linear to Macro."
+description: "Migration guides for moving from Superhuman, Notion, Slack, and Linear to Macro — what maps to what, and what changes."
 ---
 
 Macro replaces several tools at once, but you don't have to cut over in one weekend. The pattern that works: connect your old tools first so nothing is lost, move your daily workflow into Macro, and let the old tools wind down to read-only. This page covers the most common starting points.
 
+At a glance, here's what maps to what:
+
+| Coming from | The Macro equivalent |
+| :---------- | :------------------- |
+| Superhuman  | [Email](/product/email) and the [inbox](/product/inbox) — same Gmail underneath |
+| Notion      | [Docs](/product/docs), plus purpose-built [tasks](/product/tasks) and [CRM](/product/crm) |
+| Slack       | [Channels](/product/channels) |
+| Linear      | [Tasks](/product/tasks) |
+| Google Drive / Dropbox | [File storage](/product/folders) |
+| Zoom / Meet | [Calls](/product/calls) |
+
 ## From Superhuman
 
-This is the easiest switch, because Superhuman — like Macro — is a client on top of Gmail. There's no migration at all:
+<Frame>
+  <img
+    src="/images/switch-from-superhuman.svg"
+    alt="The Superhuman app icon with an arrow pointing to the Macro app icon"
+  />
+</Frame>
+
+Superhuman and Macro are both clients on top of Gmail, so there's no migration in either direction — your mail stays in Gmail either way. The differences are in scope: Macro puts multiple accounts in [one inbox](/product/email#multi-account-inbox), splits [Signal from Noise](/product/email#signal-vs-noise) so cold outreach and notifications never interrupt you, and folds messages, tasks, and @mentions into the same inbox as your email — one thing to check instead of four. [Agents](/product/agents) can also draft, triage, and send mail for you.
+
+The <kbd>j</kbd> / <kbd>k</kbd> / <kbd>e</kbd> triage shortcuts you already know work unchanged.
+
+To switch:
 
 1. Connect your Gmail or Google Workspace account (ideally at signup, or later in **Settings**).
 2. Your mail, labels, and history are already there — Macro syncs with Gmail directly.
-3. Keep your muscle memory: the same <kbd>j</kbd> / <kbd>k</kbd> / <kbd>e</kbd> triage shortcuts work in Macro.
-
-What you gain: [multiple accounts in one inbox](/product/email#multi-account-inbox), [Signal/Noise filtering](/product/email#signal-vs-noise), an inbox that also carries your messages, tasks, and @mentions — and an [agent](/product/agents) that can draft and send email. There's no reason you can't run both during the transition, but most people stop opening Superhuman within a week.
+3. That's it. There's no reason you can't run both during the transition, but most people stop opening Superhuman within a week.
 
 ## From Notion
 
-Macro can import your Notion content with an agent:
+<Frame>
+  <img
+    src="/images/switch-from-notion.svg"
+    alt="The Notion app icon with an arrow pointing to the Macro app icon"
+  />
+</Frame>
+
+The structural difference: Notion gives you markdown pages and databases and asks you to assemble your own tools out of them — your CRM, your task tracker, your wiki are all databases with different views. Macro ships those as purpose-built blocks ([tasks](/product/tasks), [CRM](/product/crm), [email](/product/email), [channels](/product/channels), [files](/product/folders)) that share one data model and one search index. You give up some of Notion's freeform database flexibility; in exchange, each tool behaves like a dedicated product, and your agents can query all of it as unified context instead of paging through a rate-limited API. The longer version of this argument is in the [FAQ](/faq) and our [comparison video](https://youtu.be/hyU1XYmxkYM).
+
+For the docs themselves, the import is clean — Macro docs are markdown-native, so Notion pages translate directly:
 
 1. Go to **Settings → Connectors** and connect Notion.
 2. Open an agent chat (<kbd>c</kbd> + <kbd>a</kbd>) and ask it to import — for example:
@@ -28,26 +57,43 @@ Import my Notion docs from the "Engineering" workspace as Macro docs.
 Keep the folder structure and skip anything archived.
 ```
 
-The agent reads pages through the Notion connector and recreates them as [Macro documents](/product/docs). Macro docs are markdown-native, so Notion pages translate cleanly. For structured Notion databases, consider whether each one is really [tasks](/product/tasks), [CRM records](/product/crm), or a doc with [properties](/concepts/properties) — Macro has purpose-built blocks for the things people usually force into Notion databases.
+The agent reads pages through the Notion connector and recreates them as [Macro documents](/product/docs). For structured Notion databases, consider whether each one is really tasks, CRM records, or a doc with [properties](/concepts/properties) — Macro has purpose-built blocks for the things people usually force into Notion databases.
 
-You can also keep Notion connected indefinitely so agents can reference legacy content without migrating it. For the full philosophical argument, see the [FAQ](/faq) or our [comparison video](https://youtu.be/hyU1XYmxkYM).
+You can also keep Notion connected indefinitely so agents can reference legacy content without migrating it.
 
 ## From Slack
 
-[Channels](/product/channels) in Macro are deliberately quieter than Slack — inline replies, less notification noise — and deeply linked to the rest of your workspace.
+<Frame>
+  <img
+    src="/images/switch-from-slack.svg"
+    alt="The Slack app icon with an arrow pointing to the Macro app icon"
+  />
+</Frame>
+
+The chat itself is deliberately familiar — channels, threads, emoji. What changes is the noise level and what a channel can do. Replies show inline for the first few, so you're not clicking into threads to follow a conversation, and the result reads more like a forum than a firehose. Channels also share an inbox with your email, so there's one place to catch up instead of two.
+
+The bigger difference is [channel-based sharing](/permissions): [@mention](/concepts/mentions) a doc or task in a channel and every member gets access to it automatically — no "request access" dance between your chat tool and your docs tool, because they're the same tool.
+
+To switch:
 
 1. Create a channel per team or project (<kbd>c</kbd> + <kbd>m</kbd>).
 2. Add people by email — they don't need a Macro account yet to be included.
-3. Lean on [@mentions](/concepts/mentions): mentioning a doc or task in a channel automatically shares it with every member, which replaces the Slack-and-Notion permission-request dance entirely.
+3. Lean on @mentions to share docs and tasks as you discuss them.
 
 If you're not ready to leave Slack — archives, Slack Connect with customers — connect it under **Settings → Connectors** as an MCP connector so agents in Macro can still search it. Many teams run Macro for internal communication and keep Slack only for external channels during the transition.
 
 ## From Linear
 
-Macro's tasks are openly Linear-inspired, minus the ceremony: status, priority, assignee, and not much else by default (more is there [if you really want it](/concepts/properties)).
+<Frame>
+  <img
+    src="/images/switch-from-linear.svg"
+    alt="The Linear app icon with an arrow pointing to the Macro app icon"
+  />
+</Frame>
 
-- The [GitHub integration](/integrations/github) covers the workflow you're used to — copy a branch name from a task, and the task moves to In Progress → In Review → Done as you branch, open the PR, and merge.
-- Tasks are visible to your whole team by default, and you can create them from any email or channel message in one click.
+Macro's tasks are openly Linear-inspired: status, priority, assignee, keyboard-first, and a [GitHub integration](/integrations/github) that covers the workflow you're used to — copy a branch name from a task, and it moves through In Progress → In Review → Done as you branch, open the PR, and merge.
+
+The difference is adjacency. Tasks live next to your email, channels, and docs, so you can turn an email or a channel message into a task in one click, and non-engineers see engineering work without needing a seat in a separate tool. Fields are minimal by default, with more available [if you want it](/concepts/properties) — less workflow configuration to maintain.
 
 For migration, most teams simply recreate their open work — finished issues rarely justify carrying over. If you do want history, connect Linear under **Settings → Connectors** and have an agent bring open issues across.
 
