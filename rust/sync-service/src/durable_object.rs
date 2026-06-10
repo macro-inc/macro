@@ -904,25 +904,15 @@ impl DurableObject for DocumentSyncSession {
             state.mark_exported();
         }
 
-        let sockets = self.state.get_websockets();
-
-        // on a schedule we should broadcast the current snapshot of the document
-        // to all connected clients
-        if !sockets.is_empty() {
+        // Re-arm the alarm while clients are connected so the in-memory state
+        // stays warm and pending updates keep getting persisted. Updates reach
+        // peers when they happen (PeerUpdate broadcast); pushing a full
+        // snapshot to every client on every alarm tick only burned bandwidth
+        // and stalled clients on large documents.
+        if !self.state.get_websockets().is_empty() {
             bump_alarm(&self.state)
                 .await
                 .context("failed to keep document alive")?;
-
-            let snapshot = state
-                .export_shallow_snapshot()
-                .context("failed to export snapshot")?;
-
-            websocket::broadcast_snapshot(
-                sockets.as_slice(),
-                snapshot.as_slice(),
-                self.msg_buffer.clone(),
-            )
-            .context("failed to broadcast snapshot")?;
         } else {
             info!("durable object has reached 0 connections")
         }

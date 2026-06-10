@@ -4,11 +4,12 @@ import { staticFileSizedUrl } from '@core/constant/servers';
 import { internalDrag } from '@core/directive/internalDragState';
 import { useProfilePictureUrl } from '@core/signal/profilePicture';
 import {
+  getInitials,
   macroIdToEmail,
   tryMacroId,
   useDisplayName,
   useDisplayNameParts,
-  useIsInboxOnlyLinkedChild,
+  useIsConnectedSecondaryInbox,
 } from '@core/user';
 import MacroLogo from '@icon/macro-logo.svg';
 import Trash from '@phosphor-icons/core/regular/trash.svg?component-solid';
@@ -37,23 +38,6 @@ export type UserIconProps = {
   /** Fallback image (e.g. an email contact photo) shown when the user has no Macro profile picture. */
   photoUrl?: string;
 } & ({ id: string; email?: never } | { email: string; id?: never });
-
-function getInitials(
-  firstName: string,
-  lastName: string,
-  email: string
-): string {
-  const first = firstName.trim();
-  const last = lastName.trim();
-
-  if (first && last) {
-    return (first[0] + last[0]).toUpperCase();
-  }
-  if (first) {
-    return first[0].toUpperCase();
-  }
-  return email.substring(0, 1).toUpperCase();
-}
 
 /**
  * Internal render. Image or fallback.
@@ -100,6 +84,9 @@ function ProfileImage(props: {
     >
       {(url) => (
         <Avatar.Image
+          // Solid surface circle behind the picture so a transparent profile
+          // picture shows surface color rather than what's rendered behind the avatar.
+          class="bg-surface"
           src={staticFileSizedUrl(url, 'small')}
           onError={(e) => {
             if (e.currentTarget.src !== url) {
@@ -161,10 +148,10 @@ export function UserIcon(props: UserIconProps) {
 
   const { replaceOrInsertSplit } = useSplitLayout();
   const getOrCreateDmMutation = useGetOrCreateDirectMessageMutation();
-  const isInboxOnlyLinkedChild = useIsInboxOnlyLinkedChild();
+  const isConnectedSecondaryInbox = useIsConnectedSecondaryInbox();
 
   const getOrCreateDm = () => {
-    if (!props.id || isInboxOnlyLinkedChild(props.id)) return;
+    if (!props.id || isConnectedSecondaryInbox(props.id)) return;
     getOrCreateDmMutation.mutate(
       { recipient_id: props.id },
       {

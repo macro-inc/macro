@@ -228,6 +228,7 @@ export * from './sendMessageRequest';
 export * from './sendMessageResponse';
 export * from './settings';
 export * from './settingsSignatureOnRepliesForwards';
+export * from './sharedInboxConflictResponse';
 export * from './syncStatus';
 export * from './thread';
 export * from './threadLatestInboundMessageTs';

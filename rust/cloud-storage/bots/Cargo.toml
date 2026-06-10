@@ -8,11 +8,13 @@ version = "0.1.0"
 default = ["inbound", "outbound", "ports"]
 inbound = [
   "dep:axum",
+  "dep:channels",
   "dep:entity_access",
   "entity_access/inbound",
   "entity_access/ports",
   "dep:model-error-response",
   "dep:model_user",
+  "dep:serde_json",
   "dep:utoipa",
   "ports",
 ]
@@ -23,6 +25,7 @@ ports = ["dep:tokio"]
 anyhow = { workspace = true }
 axum = { workspace = true, optional = true }
 bot_id = { path = "../bot_id", features = ["schema"] }
+channels = { path = "../channels", optional = true, default-features = false, features = ["ports"] }
 chrono = { workspace = true }
 entity_access = { path = "../entity_access", optional = true, default-features = false }
 hex = { workspace = true }
@@ -32,6 +35,7 @@ model-error-response = { path = "../model-error-response", optional = true }
 model_user = { path = "../model_user", optional = true, features = ["axum"] }
 rand = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true, optional = true }
 sha2 = { workspace = true }
 sqlx = { workspace = true, optional = true }
 thiserror = { workspace = true }

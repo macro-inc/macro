@@ -1,7 +1,7 @@
 import { useMaybeSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { cn } from '@ui';
 import { Match, Show, Switch } from 'solid-js';
-import { AttendanceBadge, SharedBadge } from '../../components/Badges';
+import { CallStatusBadge, SharedBadge } from '../../components/Badges';
 import { MultiSelectCheckbox } from '../../components/MultiSelectCheckbox';
 import { ProjectBreadCrumb } from '../../components/ProjectBreadCrumb';
 import { UnreadIndicator } from '../../components/UnreadIndicator';
@@ -145,7 +145,7 @@ export function WideLayout(props: LayoutProps) {
           {(entity) => (
             <>
               <Show when={(soupView?.activeTab() ?? 'all') === 'all'}>
-                <AttendanceBadge attended={entity().attended} />
+                <CallStatusBadge status={entity().status} />
               </Show>
               <span class="flex w-10 shrink-0 justify-end">
                 <CallParticipants participantIds={entity().participantIds} />

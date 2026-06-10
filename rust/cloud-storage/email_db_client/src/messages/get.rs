@@ -18,7 +18,7 @@ use sqlx::types::Uuid;
 #[tracing::instrument(skip(pool), err)]
 pub async fn get_message_sender_and_pretty_sender(
     pool: &PgPool,
-    link_id: Uuid,
+    link_ids: &[Uuid],
     message_ids: &[Uuid],
 ) -> anyhow::Result<HashMap<Uuid, MessageSenderInfo>> {
     // TODO: use NonEmpty
@@ -35,10 +35,10 @@ pub async fn get_message_sender_and_pretty_sender(
         FROM email_messages m
         LEFT JOIN email_contacts c ON c.id = m.from_contact_id
         WHERE m.id = ANY($1)
-        AND m.link_id = $2
+        AND m.link_id = ANY($2)
         "#,
         message_ids,
-        link_id
+        link_ids
     )
     .fetch_all(pool)
     .await?;

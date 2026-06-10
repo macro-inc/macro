@@ -115,6 +115,7 @@ fn to_channel_mention_metadata(mention: ChannelMentionNotification) -> ChannelMe
         message_id: mention.message_id.to_string(),
         has_attachments: mention.has_attachments,
         thread_id: mention.thread_id.map(|thread_id| thread_id.to_string()),
+        sender_display_name: mention.sender.display_name().map(ToOwned::to_owned),
         common: to_common_metadata(mention.metadata),
         sender_profile_picture_url: mention.sender_profile_picture_url,
     }
@@ -133,14 +134,14 @@ where
                 recipient_ids,
             } => {
                 let channel_id = mention.channel_id;
-                let sender_id = mention.sender_id.clone();
+                let sender_id = mention.sender.as_user().cloned();
                 self.ingress
                     .send_notification(
                         SendNotificationRequestBuilder {
                             notification_entity: model_entity::EntityType::Channel
                                 .with_entity_string(channel_id.to_string()),
                             notification: to_channel_mention_metadata(mention),
-                            sender_id: Some(sender_id),
+                            sender_id,
                             recipient_ids,
                         }
                         .into_request()
@@ -156,7 +157,7 @@ where
                 recipient_ids,
             } => {
                 let channel_id = mention.channel_id;
-                let sender_id = mention.sender_id.clone();
+                let sender_id = mention.sender.as_user().cloned();
                 self.ingress
                     .send_notification(
                         SendNotificationRequestBuilder {
@@ -172,7 +173,7 @@ where
                                 },
                                 channel: to_channel_mention_metadata(mention),
                             },
-                            sender_id: Some(sender_id),
+                            sender_id,
                             recipient_ids,
                         }
                         .into_request()
@@ -186,7 +187,7 @@ where
                 channel_id,
                 thread_id,
                 message_id,
-                sender_id,
+                sender,
                 message_content,
                 has_attachments,
                 thread_parent_sender_id,
@@ -202,14 +203,15 @@ where
                             notification: ChannelReplyMetadata {
                                 thread_id: thread_id.to_string(),
                                 message_id: message_id.to_string(),
-                                user_id: sender_id.clone(),
+                                user_id: sender.as_user().cloned(),
+                                sender_display_name: sender.display_name().map(ToOwned::to_owned),
                                 message_content,
                                 has_attachments,
                                 thread_parent_sender_id,
                                 common: to_common_metadata(metadata),
                                 sender_profile_picture_url,
                             },
-                            sender_id: Some(sender_id),
+                            sender_id: sender.as_user().cloned(),
                             recipient_ids,
                         }
                         .into_request()
@@ -222,7 +224,7 @@ where
             ChannelNotificationEffect::ChannelMessage {
                 channel_id,
                 message_id,
-                sender_id,
+                sender,
                 message_content,
                 has_attachments,
                 metadata,
@@ -236,13 +238,14 @@ where
                                 .with_entity_string(channel_id.to_string()),
                             notification: ChannelMessageSendMetadata {
                                 message_id: message_id.to_string(),
-                                sender: sender_id.clone(),
+                                sender: sender.as_user().cloned(),
+                                sender_display_name: sender.display_name().map(ToOwned::to_owned),
                                 message_content,
                                 has_attachments,
                                 common: to_common_metadata(metadata),
                                 sender_profile_picture_url,
                             },
-                            sender_id: Some(sender_id),
+                            sender_id: sender.as_user().cloned(),
                             recipient_ids,
                         }
                         .into_request()

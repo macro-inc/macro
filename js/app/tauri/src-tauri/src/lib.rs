@@ -1,7 +1,8 @@
 use logger::Logger;
+use macro_bundle_updater_plugin::inbound::plugin::retry_waiting_for_wifi;
+#[cfg(feature = "auto_apply_update")]
 use macro_bundle_updater_plugin::inbound::plugin::{
-    allow_update_reload_retry, apply_completed_update_from, retry_waiting_for_wifi,
-    start_update_check,
+    allow_update_reload_retry, apply_completed_update_from, start_update_check,
 };
 use navigation_plugin::MacroNavigationPlugin;
 use navigation_plugin::scheme::MacroScheme;
@@ -178,7 +179,11 @@ pub fn run() {
                     .parse()
                     .expect("valid url"),
                 embedded_bundle_build(),
-            ),
+            )
+            // Builds without this feature (just ios-dev, ios-build-no-update)
+            // must never check for or apply OTA bundles on their own; manual
+            // checks from settings still work.
+            .with_auto_update(cfg!(feature = "auto_apply_update")),
         );
 
     #[cfg(mobile)]
@@ -293,15 +298,6 @@ pub fn run() {
                             Err(e) => {
                                 tracing::error!("Failed to auto-apply bundle update: {e}");
                             }
-                        }
-                    });
-                }
-                #[cfg(not(feature = "auto_apply_update"))]
-                {
-                    let app = app_handle.clone();
-                    tauri::async_runtime::spawn(async move {
-                        if let Err(e) = start_update_check(&app).await {
-                            tracing::error!("Failed to start bundle update check on resume: {e}");
                         }
                     });
                 }

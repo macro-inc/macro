@@ -290,7 +290,7 @@ async fn send_chat_message_inner(
         .flatten();
 
     // Build the chat messages
-    let tools_prompt = choose_tools_prompt(&payload, ctx.all_tools_prompt);
+    let tools_prompt = choose_tools_prompt(&payload, &*ctx.all_tools_prompt);
     let ai_request = build_chat_messages(&chat, &payload, all_resolved_parts).map_err(|err| {
         tracing::error!(error=?err, "failed to build chat messages");
         ChatMessageError {

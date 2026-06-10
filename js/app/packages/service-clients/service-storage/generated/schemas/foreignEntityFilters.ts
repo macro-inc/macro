@@ -15,4 +15,8 @@ export interface ForeignEntityFilters {
   foreign_entity_sources?: string[];
   /** Internal foreign entity record IDs to filter by. Empty to include all records. */
   ids?: string[];
+  /** When true, only return foreign entities whose metadata lists the requesting user as a
+participant (GitHub `involves:me` semantics for `github_pull_request` records). False or
+absent applies no filter. Serialized in filter ASTs as the `"me"` literal. */
+  includes_me?: boolean;
 }

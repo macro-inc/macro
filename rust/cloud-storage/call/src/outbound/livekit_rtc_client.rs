@@ -6,11 +6,12 @@
 use futures::future;
 use livekit_api::access_token::{AccessToken, TokenVerifier, VideoGrants};
 use livekit_api::services::agent_dispatch::AgentDispatchClient;
-use livekit_api::services::egress::{EgressClient, EgressOutput, RoomCompositeOptions};
+use livekit_api::services::egress::{EgressClient, EgressOutput, RoomCompositeOptions, encoding};
 use livekit_api::services::room::{CreateRoomOptions, RoomClient};
 use livekit_api::webhooks::WebhookReceiver;
 use livekit_protocol::{
-    CreateAgentDispatchRequest, EncodedFileOutput, S3Upload, encoded_file_output,
+    AudioCodec, CreateAgentDispatchRequest, EncodedFileOutput, EncodedFileType, S3Upload,
+    VideoCodec, encoded_file_output,
 };
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -70,6 +71,45 @@ impl LivekitRtcClient {
             api_secret,
             transcription_agent_name,
         }
+    }
+}
+
+struct RoomCompositeEgressRequest {
+    room_name: String,
+    outputs: Vec<EgressOutput>,
+    options: RoomCompositeOptions,
+}
+
+fn build_room_composite_egress_request(
+    room_name: &str,
+    s3_config: &EgressS3Config,
+) -> RoomCompositeEgressRequest {
+    let output = EgressOutput::File(EncodedFileOutput {
+        file_type: EncodedFileType::Mp4 as i32,
+        filepath: format!("calls/{room_name}/{{time}}"),
+        output: Some(encoded_file_output::Output::S3(S3Upload {
+            bucket: s3_config.bucket.clone(),
+            region: s3_config.region.clone(),
+            access_key: s3_config.access_key.clone(),
+            secret: s3_config.secret.clone(),
+            ..Default::default()
+        })),
+        ..Default::default()
+    });
+
+    let options = RoomCompositeOptions {
+        encoding: encoding::EncodingOptions {
+            audio_codec: AudioCodec::Aac,
+            video_codec: VideoCodec::H264Main,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    RoomCompositeEgressRequest {
+        room_name: room_name.to_owned(),
+        outputs: vec![output],
+        options,
     }
 }
 
@@ -190,21 +230,11 @@ impl CallRtcClient for LivekitRtcClient {
         room_name: &str,
         s3_config: &EgressS3Config,
     ) -> anyhow::Result<String> {
-        let output = EgressOutput::File(EncodedFileOutput {
-            filepath: format!("calls/{room_name}/{{time}}"),
-            output: Some(encoded_file_output::Output::S3(S3Upload {
-                bucket: s3_config.bucket.clone(),
-                region: s3_config.region.clone(),
-                access_key: s3_config.access_key.clone(),
-                secret: s3_config.secret.clone(),
-                ..Default::default()
-            })),
-            ..Default::default()
-        });
+        let request = build_room_composite_egress_request(room_name, s3_config);
 
         let info = self
             .egress_client
-            .start_room_composite_egress(room_name, vec![output], RoomCompositeOptions::default())
+            .start_room_composite_egress(&request.room_name, request.outputs, request.options)
             .await?;
 
         Ok(info.egress_id)

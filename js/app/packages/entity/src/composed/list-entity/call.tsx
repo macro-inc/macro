@@ -8,7 +8,7 @@ import type { EntityReference } from '@property/types';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import { HoverCard } from '@ui';
 import { For, Show } from 'solid-js';
-import { AttendanceBadge } from '../../components/Badges';
+import { CallStatusBadge } from '../../components/Badges';
 import { CallRecordName } from '../../components/CallRecordName';
 import { Entity } from '../../entity';
 import { HitSnippet } from '../../extractors-search/HitSnippet';
@@ -112,7 +112,7 @@ export function CallNarrowBody(props: {
           {(ms) => formatCallDuration(ms())}
         </Show>
         <Show when={props.showAttendanceBadge}>
-          <AttendanceBadge attended={props.entity.attended} />
+          <CallStatusBadge status={props.entity.status} />
         </Show>
       </span>
       <Show when={!hit() && props.entity.summary}>

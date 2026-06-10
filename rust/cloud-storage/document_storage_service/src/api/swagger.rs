@@ -122,7 +122,12 @@ use models_soup::email_thread::{
 use models_soup::foreign_entity::SoupForeignEntity;
 use models_soup::item::SoupItem;
 use models_soup::project::SoupProject;
-use soup::inbound::axum_router::{PostSoupRequest, SoupApiItem, SoupApiSort, SoupPage};
+use soup::inbound::axum_router::{
+    ApiGroupByField, ApiGroupMeta, GroupedSoupGroupPage, GroupedSoupInitialPage, GroupedSoupPage,
+    PostGroupedSoupAstGroupPageRequest, PostGroupedSoupAstInitialRequest,
+    PostGroupedSoupAstRequest, PostSoupAstRequest, PostSoupRequest, SoupApiItem, SoupApiSort,
+    SoupPage,
+};
 use utoipa::OpenApi;
 
 #[derive(OpenApi)]
@@ -197,6 +202,7 @@ use utoipa::OpenApi;
         soup::inbound::axum_router::get_soup_handler,
         soup::inbound::axum_router::post_soup_handler,
         soup::inbound::axum_router::post_soup_ast_handler,
+        soup::inbound::axum_router::post_grouped_soup_ast_handler,
 
         // channels
         channels::inbound::axum_router::create_channel_handler,
@@ -227,6 +233,10 @@ use utoipa::OpenApi;
         channels::inbound::axum_router::get_attachment_references_handler,
         channels::inbound::axum_router::get_activity_handler,
         channels::inbound::axum_router::post_activity_handler,
+
+        // bots
+        bots::inbound::channel_webhook_router::create_channel_scoped_bot_handler,
+        bots::inbound::channel_webhook_router::post_channel_webhook_handler,
 
         // calls
         call::inbound::axum_router::get_or_create_call_handler,
@@ -387,6 +397,15 @@ use utoipa::OpenApi;
             SoupMessageListVisibility,
             SoupLabelType,
             PostSoupRequest,
+            PostSoupAstRequest,
+            PostGroupedSoupAstInitialRequest,
+            PostGroupedSoupAstGroupPageRequest,
+            PostGroupedSoupAstRequest,
+            ApiGroupByField,
+            ApiGroupMeta,
+            GroupedSoupInitialPage,
+            GroupedSoupGroupPage,
+            GroupedSoupPage,
 
             // Channels
             ApiChannelMessagesPage,
@@ -440,6 +459,16 @@ use utoipa::OpenApi;
             channels::domain::models::ActivityType,
             ApiActivity,
             PostActivityRequest,
+
+            // Bots
+            bots::domain::models::Bot,
+            bots::domain::models::BotKind,
+            bots::domain::models::BotOwner,
+            bots::domain::models::BotToken,
+            bots::domain::models::ChannelWebhookRequest,
+            bots::domain::models::ChannelWebhookResponse,
+            bots::domain::models::CreateChannelScopedBotRequest,
+            bots::domain::models::CreateChannelScopedBotResponse,
 
             // Calls
             call::domain::models::CallTokenResponse,

@@ -13,6 +13,7 @@ inbound = [
   "dep:model_user",
   "dep:utoipa",
   "entity_access/inbound",
+  "item_filters/schema",
   "ports",
 ]
 outbound = [

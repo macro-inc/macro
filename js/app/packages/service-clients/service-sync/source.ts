@@ -15,8 +15,9 @@ import { storageServiceClient } from '@service-storage/client';
 import { createEventBus } from '@solid-primitives/event-bus';
 import { raceTimeout, until } from '@solid-primitives/promise';
 import {
+  ArrayQueue,
   BebopSerializer,
-  ConstantBackoff,
+  ExponentialBackoff,
   type UrlResolver,
   untilMessage,
   WebsocketBuilder,
@@ -28,7 +29,7 @@ import {
 } from '@websocket/solid/socket-effect';
 import { createWebsocketStateSignal } from '@websocket/solid/state-signal';
 import { encodeFrontiers, type Frontiers } from 'loro-crdt';
-import { okAsync, type Result, ResultAsync } from 'neverthrow';
+import { errAsync, okAsync, type Result, ResultAsync } from 'neverthrow';
 import { createStore } from 'solid-js/store';
 import {
   FromPeer,
@@ -83,27 +84,55 @@ function createSyncServiceSocket(documentId: string, initialToken: string) {
     return refreshedUrl;
   };
 
-  return new WebsocketBuilder(getUrl)
-    .withSerializer(new BebopSerializer(FromPeer, FromRemote))
-    .withBackoff(new ConstantBackoff(500))
-    .withMaxRetries(20)
-    .withHeartbeat({
-      interval: 10_000,
-      timeout: 5_000,
-      pingMessage: 'ping',
-      pongMessage: 'pong',
-      maxMissedHeartbeats: 2,
-      autoStart: false, // Start heartbeat manually after initial sync completes
-    })
-    .build();
+  return (
+    new WebsocketBuilder(getUrl)
+      .withSerializer(new BebopSerializer(FromPeer, FromRemote))
+      // Capped exponential backoff. The scheduler calls next() before the first
+      // retry, so the delays are 250*2^1 = 500ms doubling to a 250*2^5 = 8s
+      // cap; 20 retries ≈ 2 minutes of automatic attempts, after which
+      // something is very wrong and we stop hammering. A given-up socket is
+      // revived by 'online' / 'visibilitychange' signals or by the user editing
+      // (see pushUpdate) — unlike before, exhausting the budget no longer
+      // strands the socket permanently.
+      .withBackoff(new ExponentialBackoff(250, 5))
+      .withMaxRetries(20)
+      // Queue messages sent while disconnected; they are flushed in order once
+      // the connection is re-established, so edits made during a reconnect
+      // aren't dropped. Unbounded on purpose: dropping the oldest updates would
+      // leave dependency gaps the server can never fill, and CRDT updates are
+      // tiny relative to a session's lifetime.
+      .withBuffer(new ArrayQueue())
+      .withHeartbeat({
+        interval: 10_000,
+        timeout: 5_000,
+        pingMessage: 'ping',
+        pongMessage: 'pong',
+        maxMissedHeartbeats: 2,
+        autoStart: false, // Start heartbeat manually after initial sync completes
+      })
+      .build()
+  );
 }
 
 const TIMEOUTS = {
   INITIAL_SYNC: 10_000,
-  ACK: 3_000,
+  // The server only acks after durably storing the update, and its internal
+  // budget for a storage operation is 4.5s — so a busy-but-healthy server can
+  // legitimately ack late. Waiting 5s keeps "server is busy" from being
+  // misread as "update was lost".
+  ACK: 5_000,
   SNAPSHOT: 10_000,
   REQUEST_UPDATES_SINCE: 10_000,
 } as const;
+
+/**
+ * Times an un-acked update is re-sent before pushUpdate reports missing_ack.
+ * The ACK timeout above covers the busy-server case; the single resend covers
+ * a genuinely lost message (sent into a dying socket, or the server handler
+ * aborted before acking). Updates are idempotent CRDT ops, so a duplicate
+ * delivery is harmless.
+ */
+const ACK_RESENDS = 1;
 
 type WithCleanup<T> = T & { cleanup: () => void };
 
@@ -245,6 +274,14 @@ export const createSyncServiceSource = (
     ws.send(message);
   };
 
+  /**
+   * True once the automatic retry budget is used up (mirrors the scheduling
+   * condition in the websocket's retry logic: a retry is only scheduled while
+   * retries <= maxRetries). The counter resets on every successful open.
+   */
+  const retriesExhausted = () =>
+    ws.maxRetries !== undefined && (ws.backoff?.retries ?? 0) > ws.maxRetries;
+
   const pushUpdate = (
     update: RawUpdate
   ): ResultAsync<void, MissingAckError> => {
@@ -255,28 +292,67 @@ export const createSyncServiceSource = (
     }
 
     const message = FromPeer.fromPeerUpdate({ update });
-    ws.send(message);
-
     const ack = () => awaitingAckStore[rawUpdateToString(update)];
 
-    return ResultAsync.fromPromise(
-      raceTimeout(
-        until(ack),
-        TIMEOUTS.ACK,
-        /** make sure until throws **/
-        true
-      ),
-      () =>
-        ({
-          type: 'missing_ack',
-          update: update,
-        }) as const
-    ).map(() => {
-      stopAwaitingAck(update);
-    });
+    const attempt = (
+      resendsLeft: number
+    ): ResultAsync<void, MissingAckError> => {
+      const sent = ws.send(message);
+      if (!sent) {
+        // Not connected: the update sits in the websocket's send buffer and is
+        // flushed (and acked) once the connection is re-established, so don't
+        // report a missing ack while the transport is down.
+        //
+        // If automatic retries gave up (maxRetries exhausted, so no retry is
+        // scheduled anymore), this edit is the revival signal. The exhausted
+        // check means this never preempts a pending backoff timer, and
+        // reconnectIfDisconnected() is additionally a no-op while a
+        // connection is open or being established.
+        if (retriesExhausted()) {
+          ws.reconnectIfDisconnected();
+        }
+        return okAsync(undefined);
+      }
+
+      return ResultAsync.fromPromise(
+        raceTimeout(
+          until(ack),
+          TIMEOUTS.ACK,
+          /** make sure until throws **/
+          true
+        ),
+        () =>
+          ({
+            type: 'missing_ack',
+            update: update,
+          }) as const
+      )
+        .map(() => {
+          stopAwaitingAck(update);
+        })
+        .orElse((err) => {
+          // Updates are idempotent CRDT ops, so re-sending is safe. Retry
+          // before reporting missing_ack: a late ack (slow storage write on
+          // the server) shouldn't tear anything down.
+          if (resendsLeft > 0) {
+            return attempt(resendsLeft - 1);
+          }
+          return errAsync(err);
+        });
+    };
+
+    return attempt(ACK_RESENDS);
   };
 
   const pushAwareness = (awareness: RawUpdate) => {
+    // Awareness is ephemeral (cursor positions with a short server-side TTL),
+    // so never let it sit in the send buffer: replaying a backlog of stale
+    // cursor moves after a reconnect would flood the room for no benefit.
+    // Drop it unless the socket is open right now — the next local cursor
+    // move re-publishes fresh state anyway.
+    if (ws.underlyingWebsocket?.readyState !== WebSocket.OPEN) {
+      return;
+    }
     const message = FromPeer.fromPeerAwareness({ awareness });
     ws.send(message);
   };
@@ -306,10 +382,33 @@ export const createSyncServiceSource = (
   };
 
   const reconnect = () => {
-    ws.reconnect();
+    // Only force a new connection when the socket is actually down. Tearing
+    // down an OPEN socket (e.g. on a missed ack) caused reconnect storms, and
+    // tearing down a CONNECTING one aborts an attempt that may be about to
+    // succeed. Liveness of open sockets is owned by the heartbeat.
+    ws.reconnectIfDisconnected();
   };
 
+  // When the browser regains connectivity or the tab becomes visible again,
+  // kick the connection immediately instead of waiting out the current
+  // backoff timer (which may also have been throttled in background tabs).
+  const handleOnline = reconnect;
+  const handleVisibilityChange = () => {
+    if (document.visibilityState === 'visible') {
+      reconnect();
+    }
+  };
+
+  if (typeof window !== 'undefined') {
+    window.addEventListener('online', handleOnline);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+  }
+
   const cleanup = () => {
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('online', handleOnline);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    }
     ws.close();
   };
 

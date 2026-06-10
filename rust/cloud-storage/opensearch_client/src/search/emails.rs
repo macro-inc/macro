@@ -136,6 +136,7 @@ impl EmailQueryBuilder {
         fn page(page: u32) -> Self;
         fn page_size(page_size: u32) -> Self;
         fn user_id(user_id: &str) -> Self;
+        fn user_ids(user_ids: Vec<String>) -> Self;
         fn collapse(collapse: bool) -> Self;
         fn ids(ids: Vec<String>) -> Self;
         fn ids_only(ids_only: bool) -> Self;
@@ -346,6 +347,7 @@ pub(crate) struct EmailIndex {
 pub struct EmailSearchArgs {
     pub terms: Vec<String>,
     pub user_id: String,
+    pub user_ids: Vec<String>,
     pub thread_ids: Vec<String>,
     pub link_ids: Vec<String>,
     pub sender: Vec<String>,
@@ -370,6 +372,7 @@ impl From<EmailSearchArgs> for EmailQueryBuilder {
             .page_size(args.page_size)
             .page(args.page)
             .user_id(&args.user_id)
+            .user_ids(args.user_ids)
             .ids(args.thread_ids)
             .link_ids(args.link_ids)
             .sender(args.sender)

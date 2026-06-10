@@ -4,7 +4,8 @@ use contacts::outbound::ingress::SqsContactsQueue;
 use crate::{config::Config, service::s3::S3};
 use axum::extract::FromRef;
 use bots::{
-    domain::service::BotServiceImpl, inbound::axum_router::BotsRouterState,
+    domain::service::BotServiceImpl,
+    inbound::{axum_router::BotsRouterState, channel_webhook_router::ChannelBotWebhookRouterState},
     outbound::pg_bots_repo::PgBotsRepo,
 };
 use cal::{
@@ -238,6 +239,10 @@ pub(crate) type DssBotService = BotServiceImpl<PgBotsRepo>;
 /// Type alias for the bots router state.
 pub(crate) type DssBotsState = BotsRouterState<DssBotService, EntityAccessService>;
 
+/// Type alias for the channel bot webhook router state.
+pub(crate) type DssChannelBotWebhookState =
+    ChannelBotWebhookRouterState<DssBotService, Arc<DssChannelService>, EntityAccessService>;
+
 /// Type alias for the call connection service.
 pub(crate) type CallConnectionService =
     ConnectionServiceImpl<EntityAccessService, ConnectionGatewayImpl>;
@@ -324,6 +329,7 @@ pub(crate) struct ApiContext {
     pub documents_state: DocumentsState,
     pub channels_state: DssChannelsState,
     pub bots_state: DssBotsState,
+    pub channel_bot_webhook_state: DssChannelBotWebhookState,
     pub call_state: DssCallState,
     pub call_webhook_state: DssCallWebhookState,
     pub call_internal_state: DssCallInternalState,

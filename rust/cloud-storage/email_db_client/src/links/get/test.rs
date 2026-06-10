@@ -1,5 +1,8 @@
-use crate::links::get::{fetch_owned_link_for_message, fetch_owned_link_for_thread};
+use crate::links::get::{
+    fetch_link_by_email, fetch_owned_link_for_message, fetch_owned_link_for_thread,
+};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
+use models_email::service::link::UserProvider;
 use sqlx::types::Uuid;
 use sqlx::{Pool, Postgres};
 
@@ -154,6 +157,37 @@ async fn resolves_nothing_for_unrelated_caller(pool: Pool<Postgres>) -> anyhow::
             .await?
             .is_none()
     );
+
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn fetch_link_by_email_finds_link_owned_by_another_macro_user(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    // A shared external mailbox connected by one macro user as a data-source link
+    // (owner's macro_id, mailbox email). A second user connecting the same mailbox
+    // discovers it across all macro_ids — the trigger for the 409 / shared-inbox promote.
+    insert_user(&pool, CHILD, "support@external.test").await;
+    let (link_id, _, _) =
+        insert_inbox_with_thread_and_message(&pool, CHILD, "support@external.test").await;
+
+    let found = fetch_link_by_email(&pool, "support@external.test", UserProvider::Gmail).await?;
+    assert_eq!(
+        found.map(|l| (l.id, l.macro_id.as_ref().to_string())),
+        Some((link_id, CHILD.to_string()))
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn fetch_link_by_email_none_when_mailbox_unconnected(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    // No link for this mailbox → connect takes the plain data-source path, no dedup.
+    let found = fetch_link_by_email(&pool, "nobody@external.test", UserProvider::Gmail).await?;
+    assert!(found.is_none());
 
     Ok(())
 }

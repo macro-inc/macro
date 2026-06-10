@@ -3,7 +3,7 @@ import {
   type CombinedRecipientItem,
   recipientEntityMapper,
   useContacts,
-  useIsInboxOnlyLinkedChild,
+  useIsConnectedSecondaryInbox,
 } from '@core/user';
 import { type Accessor, createMemo } from 'solid-js';
 
@@ -36,11 +36,11 @@ type UseCombinedRecipients<K extends 'user' | 'channel'> = {
 const useCombinedRecipientsRoot = () => {
   const contacts = useContacts();
   const channelsContext = useChannelsContext();
-  const isInboxOnlyLinkedChild = useIsInboxOnlyLinkedChild();
+  const isConnectedSecondaryInbox = useIsConnectedSecondaryInbox();
 
   const userContactEntities = createMemo<CombinedRecipientItem<'user'>[]>(() =>
     contacts()
-      .filter((contact) => !isInboxOnlyLinkedChild(contact.id))
+      .filter((contact) => !isConnectedSecondaryInbox(contact.id))
       .map(recipientEntityMapper('user'))
   );
 

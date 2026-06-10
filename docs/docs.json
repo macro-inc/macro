@@ -1,9 +1,10 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
+  "theme": "maple",
   "name": "Macro",
   "appearance": {
-    "default": "dark"
+    "default": "dark",
+    "strict": true
   },
   "colors": {
     "primary": "#ff8f05",
@@ -23,42 +24,31 @@
     "tabs": [
       {
         "tab": "Documentation",
-        "groups": [
+        "pages": [
+          "index",
+          "getting-started",
+          "switch-to-macro",
+          "apps",
           {
-            "group": "Getting Started",
+            "group": "Features",
             "pages": [
-              "index",
-              "permissions",
-              "keyboard-shortcuts",
-              "faq",
-              {
-                "group": "AI",
-                "pages": [
-                  "AI/mcp/overview",
-                  {
-                    "group": "Tool Reference",
-                    "pages": [
-                      "AI/mcp/tools/index",
-                      "AI/mcp/tools/bash-code-execution",
-                      "AI/mcp/tools/content-search",
-                      "AI/mcp/tools/create-document",
-                      "AI/mcp/tools/get-entity-properties",
-                      "AI/mcp/tools/get-thread",
-                      "AI/mcp/tools/list-entities",
-                      "AI/mcp/tools/name-search",
-                      "AI/mcp/tools/read-content",
-                      "AI/mcp/tools/read-metadata",
-                      "AI/mcp/tools/read-thread",
-                      "AI/mcp/tools/send-email",
-                      "AI/mcp/tools/set-entity-property",
-                      "AI/mcp/tools/text-editor-code-execution",
-                      "AI/mcp/tools/update-thread-labels",
-                      "AI/mcp/tools/web-fetch",
-                      "AI/mcp/tools/web-search"
-                    ]
-                  }
-                ]
-              }
+              "product/inbox",
+              "product/search",
+              "product/unified-memory"
+            ]
+          },
+          {
+            "group": "Blocks",
+            "pages": [
+              "product/agents",
+              "product/email",
+              "product/docs",
+              "product/canvas",
+              "product/tasks",
+              "product/channels",
+              "product/calls",
+              "product/folders",
+              "product/crm"
             ]
           },
           {
@@ -66,22 +56,56 @@
             "pages": [
               "concepts/blocks",
               "concepts/mentions",
-              "concepts/properties"
+              "concepts/properties",
+              "permissions"
             ]
           },
           {
-            "group": "Sidebar",
+            "group": "Agents",
             "pages": [
-              "product/inbox",
-              "product/search",
-              "product/agents",
-              "product/email",
-              "product/docs",
-              "product/tasks",
-              "product/channels",
-              "product/calls"
+              "AI/recipes",
+              "AI/mcp/overview",
+              {
+                "group": "Tool Reference",
+                "icon": "wrench",
+                "pages": [
+                  "AI/mcp/tools/index",
+                  "AI/mcp/tools/bash-code-execution",
+                  "AI/mcp/tools/content-search",
+                  "AI/mcp/tools/create-document",
+                  "AI/mcp/tools/get-entity-properties",
+                  "AI/mcp/tools/get-thread",
+                  "AI/mcp/tools/list-entities",
+                  "AI/mcp/tools/name-search",
+                  "AI/mcp/tools/read-content",
+                  "AI/mcp/tools/read-metadata",
+                  "AI/mcp/tools/read-thread",
+                  "AI/mcp/tools/send-email",
+                  "AI/mcp/tools/set-entity-property",
+                  "AI/mcp/tools/text-editor-code-execution",
+                  "AI/mcp/tools/update-thread-labels",
+                  "AI/mcp/tools/web-fetch",
+                  "AI/mcp/tools/web-search"
+                ]
+              }
             ]
-          }
+          },
+          {
+            "group": "Integrations",
+            "pages": [
+              "integrations/github"
+            ]
+          },
+          {
+            "group": "Account",
+            "pages": [
+              "account/teams",
+              "account/billing"
+            ]
+          },
+          "support",
+          "faq",
+          "keyboard-shortcuts"
         ]
       },
       {
@@ -91,6 +115,22 @@
             "group": "Releases",
             "pages": [
               "changelog/introduction"
+            ]
+          },
+          {
+            "group": "2026",
+            "pages": [
+              "changelog/2026-05",
+              "changelog/2026-04",
+              "changelog/2026-03",
+              "changelog/2026-02",
+              "changelog/2026-01"
+            ]
+          },
+          {
+            "group": "2025",
+            "pages": [
+              "changelog/2025-12"
             ]
           }
         ]
@@ -103,5 +143,10 @@
       "label": "Get Macro",
       "href": "https://macro.com"
     }
+  },
+  "description": "Product and technical documentation for Macro, the unified interface for email, messages, tasks, calls, agents, pull requests, docs, CRM — linked together with shared AI memory.",
+  "logo": {
+    "light": "/logo/light.svg",
+    "dark": "/logo/dark.svg"
   }
 }

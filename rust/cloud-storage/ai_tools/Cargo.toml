@@ -50,6 +50,7 @@ models_email = { path = "../models_email" }
 models_pagination = { path = "../models_pagination" }
 models_permissions = { path = "../models_permissions" }
 notification = { path = "../notification", features = ["ai_tool"] }
+prompt = { path = "../prompt" }
 models_properties = { path = "../models_properties" }
 models_search = { path = "../models_search" }
 rand.workspace = true

@@ -28,7 +28,7 @@ const SIDEBAR_LIST_VIEWS = [
   },
   { id: 'tasks', label: 'Tasks', tabs: ['Assigned', 'Created', 'All'] },
   { id: 'channels', label: 'Channels', tabs: ['Recent', 'People', 'Teams'] },
-  { id: 'calls', label: 'Calls', tabs: ['All', 'Unattended'] },
+  { id: 'calls', label: 'Calls', tabs: ['All', 'Missed', 'Unattended'] },
   { id: 'folders', label: 'Folders', tabs: ['Owned', 'All'] },
 ] as const;
 

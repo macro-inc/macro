@@ -6,7 +6,7 @@ version = "0.1.0"
 
 [features]
 mock = []
-schema = ["dep:utoipa"]
+schema = ["dep:utoipa", "item_filters/schema"]
 
 [dependencies]
 anyhow = { workspace = true }
@@ -17,6 +17,7 @@ crm = { path = "../crm", default-features = false }
 document_sub_type = { path = "../document_sub_type" }
 doppleganger = { workspace = true, features = ["chrono", "uuid"] }
 email = { path = "../email" }
+item_filters = { path = "../item_filters" }
 macro_user_id = { path = "../macro_user_id" }
 model-entity = { path = "../model-entity" }
 models_pagination = { path = "../models_pagination" }

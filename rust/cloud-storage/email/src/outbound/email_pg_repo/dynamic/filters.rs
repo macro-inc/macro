@@ -58,6 +58,15 @@ pub(super) fn has_message_literals(ast: &Expr<EmailLiteral>) -> bool {
     })
 }
 
+pub(super) fn has_importance_literal(ast: &Expr<EmailLiteral>) -> bool {
+    ast.collapse_frames(|frame| match frame {
+        filter_ast::ExprFrame::And(a, b) | filter_ast::ExprFrame::Or(a, b) => a || b,
+        filter_ast::ExprFrame::Not(a) => a,
+        filter_ast::ExprFrame::Literal(EmailLiteral::Importance(_)) => true,
+        filter_ast::ExprFrame::Literal(_) => false,
+    })
+}
+
 #[derive(Clone, Copy)]
 enum AddressKind {
     Sender,
@@ -454,6 +463,44 @@ pub(super) fn build_thread_address_filter(ast: &Expr<EmailLiteral>) -> SqlFragme
         return SqlFragment::empty();
     }
     SqlFragment::raw(" AND t.id IN (SELECT thread_id FROM matching_threads)")
+}
+
+/// True when the candidate WHERE must mirror the CROSS JOIN LATERAL's
+/// message match via a correlated EXISTS rather than the address-only
+/// `matching_threads` CTE. That's the case when the lateral applies a
+/// per-message filter the address CTE doesn't model — an `Importance`
+/// literal, or a non-empty view-level message filter (Starred / Drafts /
+/// Important / …). Without this, the candidate `LIMIT` counts threads that
+/// the lateral later drops, so the page under-fills while still emitting a
+/// cursor.
+pub(super) fn wants_message_exists_pushdown(ast: &Expr<EmailLiteral>, view: &PreviewView) -> bool {
+    has_importance_literal(ast) || !build_view_message_filter(view).is_empty()
+}
+
+/// Builds the candidate-stage mirror of the lateral message match:
+/// `AND EXISTS (SELECT 1 FROM email_messages m WHERE m.thread_id = t.id AND <lateral predicate>)`.
+/// The predicate is the same trash exclusion + view message filter +
+/// message-level email filter the lateral applies, so a thread enters the
+/// candidate set iff it has a message the lateral will surface — making the
+/// `LIMIT` count real results.
+pub(super) fn build_thread_message_exists_filter(
+    ast: &Expr<EmailLiteral>,
+    view: &PreviewView,
+    resolved: &ResolvedFilters,
+) -> SqlFragment {
+    let mut f = SqlFragment::raw(
+        " AND EXISTS (SELECT 1 FROM email_messages m WHERE m.thread_id = t.id AND ",
+    );
+    f.extend(build_lateral_trash_exclusion(resolved));
+    let view_message_filter = build_view_message_filter(view);
+    if !view_message_filter.is_empty() {
+        f.extend(view_message_filter);
+    }
+    if has_message_literals(ast) {
+        f.extend(build_message_email_filter(ast, resolved));
+    }
+    f.push_raw(")");
+    f
 }
 
 /// If `expr` is a flat OR-tree (no AND, no NOT) of single positive

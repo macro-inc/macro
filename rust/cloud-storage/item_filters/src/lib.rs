@@ -314,6 +314,20 @@ impl IsEmpty for EmailFilters {
     }
 }
 
+/// Viewer-relative attendance status for a call record.
+/// Serializes as `ATTENDED`, `MISSED`, or `UNATTENDED`.
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Copy)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
+pub enum CallStatus {
+    /// The viewer is a call participant.
+    Attended,
+    /// The viewer is not a call participant and is in the call's channel.
+    Missed,
+    /// The viewer is not a call participant and is not in the call's channel.
+    Unattended,
+}
+
 /// Filters for call records.
 #[derive(Debug, Serialize, Deserialize, Default, PartialEq, Clone)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
@@ -327,7 +341,11 @@ pub struct CallFilters {
     /// Speaker macro user ids. Empty to include all.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub speaker_ids: Vec<String>,
-    /// Filter by whether the requesting user attended the call.
+    /// Filter by the requesting user's viewer-relative call status.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status: Option<CallStatus>,
+    /// Legacy filter by whether the requesting user attended the call.
+    /// Prefer [`CallFilters::status`] for new callers.
     /// `None` = no filter, `Some(true)` = only calls the user joined,
     /// `Some(false)` = only calls the user did not join.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -340,11 +358,13 @@ impl IsEmpty for CallFilters {
             call_ids,
             channel_ids,
             speaker_ids,
+            status,
             attended,
         } = self;
         call_ids.is_empty()
             && channel_ids.is_empty()
             && speaker_ids.is_empty()
+            && status.is_none()
             && attended.is_none()
     }
 }
@@ -362,6 +382,11 @@ pub struct ForeignEntityFilters {
     /// External source names to filter by. Empty to include all sources.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub foreign_entity_sources: Vec<String>,
+    /// When true, only return foreign entities whose metadata lists the requesting user as a
+    /// participant (GitHub `involves:me` semantics for `github_pull_request` records). False or
+    /// absent applies no filter. Serialized in filter ASTs as the `"me"` literal.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub includes_me: bool,
 }
 
 impl IsEmpty for ForeignEntityFilters {
@@ -370,8 +395,12 @@ impl IsEmpty for ForeignEntityFilters {
             ids,
             foreign_entity_ids,
             foreign_entity_sources,
+            includes_me,
         } = self;
-        ids.is_empty() && foreign_entity_ids.is_empty() && foreign_entity_sources.is_empty()
+        ids.is_empty()
+            && foreign_entity_ids.is_empty()
+            && foreign_entity_sources.is_empty()
+            && !*includes_me
     }
 }
 

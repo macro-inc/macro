@@ -6,9 +6,18 @@ import {
   parseGroupMeta,
   serializeGroupByField,
 } from '@queries/soup/grouped/api';
-import type { GroupByField, GroupMeta } from '@queries/soup/grouped/types';
+import {
+  type GroupByField,
+  type GroupMeta,
+  NOT_SET_GROUP_KEY,
+} from '@queries/soup/grouped/types';
 import { soupKeys } from '@queries/soup/keys';
-import { mapSoupPageToEntityList } from '@queries/soup/transform-utils';
+import {
+  isDisplayableSoupItem,
+  isInstructionsMdDoc,
+  mapApiSoupItemToEntity,
+  mapSoupPageToEntityList,
+} from '@queries/soup/transform-utils';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
 import { storageServiceClient } from '@service-storage/client';
 import type { SoupApiItem } from '@service-storage/generated/schemas';
@@ -39,7 +48,6 @@ export type SoupAstItemsQueryArgs = {
   params: SoupAstParams;
   body: SoupAstBody;
   groupBy?: GroupByField;
-  groupKey?: string;
 };
 
 export type SoupApiItemFilter = (item: SoupApiItem) => boolean;
@@ -47,19 +55,40 @@ export type SoupApiItemFilter = (item: SoupApiItem) => boolean;
 interface SoupItemsQueryOptions {
   enabled?: boolean;
   staleTime?: StaleTime;
+  meta?: {
+    groupBy?: GroupByField;
+    groupKey?: string;
+    itemFilter?: (item: SoupApiItem) => boolean;
+  };
   showSupportedForeignEntities?: boolean;
 }
 
-type SoupAstItemsPage = {
-  items: SoupApiItem[];
-  nextCursor: string | null;
-  groups?: GroupMeta[];
+/**
+ * Cached page for `useSoupAstItemsQuery`. Discriminated by `kind`:
+ * - `grouped`: items pool keyed by id, `groups[].itemIds` describes order.
+ *   Parent never paginates when grouped — per-group queries handle load-more.
+ * - `flat`: items array; standard infinite-query pagination.
+ */
+export type SoupAstItemsPage = SoupAstItemsGroupedPage | SoupAstItemsFlatPage;
+
+export type SoupAstItemsGroupedPage = {
+  kind: 'grouped';
+  items: Record<string, SoupApiItem>;
+  groups: GroupMeta[];
+  nextCursor: null;
 };
 
-type SoupAstItemsData = {
+export type SoupAstItemsFlatPage = {
+  kind: 'flat';
+  items: SoupApiItem[];
+  nextCursor: string | null;
+};
+
+export type SoupAstItemsData = {
   entities: EntityData[];
   groups: GroupMeta[] | undefined;
-  items: SoupApiItem[];
+  /** Raw API item pool. Only present when query is grouped. */
+  itemsById?: SoupAstItemsGroupedPage['items'];
 };
 
 export const useSoupItemsQuery = (
@@ -117,37 +146,28 @@ export const useSoupAstItemsQuery = (
   const instructionsIdQuery = useInstructionsMdIdQuery();
 
   return useInfiniteQuery(() => {
-    const { params, body, groupBy, groupKey } = args();
+    const { params, body, groupBy } = args();
 
     return {
-      queryKey: soupKeys.astItems({ params, body, groupBy, groupKey }).queryKey,
+      queryKey: soupKeys.astItems({ params, body, groupBy }).queryKey,
       queryFn: async (ctx): Promise<SoupAstItemsPage> => {
         if (groupBy) {
           const response = await throwOnErr(
             async () =>
               await storageServiceClient.getGroupedSoupAstItems({
                 params: {
-                  cursor: ctx.pageParam,
                   group_by: serializeGroupByField(groupBy),
-                  group_key: groupKey,
+                  per_group_limit: params.limit,
                 },
-                body: {
-                  ...body,
-                  ...params,
-                },
+                body,
               })
           );
 
-          const groups = response.groups
-            ? (response.groups as Array<Record<string, unknown>>).map(
-                parseGroupMeta
-              )
-            : undefined;
-
           return {
+            kind: 'grouped',
             items: response.items,
-            nextCursor: response.next_cursor ?? null,
-            groups,
+            groups: response.groups.map(parseGroupMeta),
+            nextCursor: null,
           };
         }
 
@@ -165,41 +185,73 @@ export const useSoupAstItemsQuery = (
         );
 
         return {
+          kind: 'flat',
           items: response.items,
           nextCursor: response.next_cursor ?? null,
-          groups: [],
         };
       },
       initialPageParam: null as string | null,
       getNextPageParam: (lastPage): string | null => {
-        if (groupBy) return null;
+        if (lastPage.kind === 'grouped') return null;
         return lastPage.nextCursor;
       },
       select: (data): SoupAstItemsData => {
-        const items = data.pages.flatMap((page) => page.items);
-        const entities = data.pages.flatMap((page) => {
-          return mapSoupPageToEntityList(page, {
-            instructionsIdQuery,
-            showSupportedForeignEntities:
-              options?.().showSupportedForeignEntities,
-          });
-        });
-        const rawGroups = data.pages[0]?.groups;
-        const groups = rawGroups?.slice().sort(makeGroupComparator(groupBy));
+        const firstPage = data.pages[0];
 
-        return { entities, groups, items };
+        if (firstPage?.kind === 'grouped') {
+          const groups = firstPage.groups
+            .slice()
+            .sort(makeGroupComparator(groupBy));
+
+          const itemsById = firstPage.items;
+          const entities: EntityData[] = [];
+
+          for (const g of groups) {
+            for (const id of g.itemIds) {
+              const item = itemsById[id];
+
+              let displayable = false;
+
+              if (item.tag === 'foreignEntity') {
+                displayable =
+                  options?.().showSupportedForeignEntities === true &&
+                  item.data.foreignEntitySource === 'github_pull_request';
+              } else {
+                displayable =
+                  item && !isInstructionsMdDoc(item, instructionsIdQuery);
+              }
+              if (displayable && isDisplayableSoupItem(item)) {
+                const mapped = mapApiSoupItemToEntity(item);
+                entities.push(mapped);
+              }
+            }
+          }
+
+          return { entities, groups, itemsById };
+        }
+
+        const entities = data.pages.flatMap((page) => {
+          if (page.kind !== 'flat') return [];
+
+          return mapSoupPageToEntityList(
+            { items: page.items, next_cursor: null },
+            { instructionsIdQuery }
+          );
+        });
+
+        return { entities, groups: undefined };
       },
       enabled: options?.().enabled,
       staleTime: options?.().staleTime,
       placeholderData: (p) => p,
-      meta: { normalize: true },
+      meta: {
+        ...options?.().meta,
+        groupBy,
+        normalize: true,
+      },
     };
   });
 };
-
-// Empty group key from backend (rust/cloud-storage/soup/src/domain/models/grouping.rs)
-// for items missing a value for the grouped property.
-const NOT_SET_GROUP_KEY = '';
 
 // Stable UUIDs from migrations/20251128000001_seed_system_properties.sql.
 // Custom (user-created) options fall through to displayOrder.

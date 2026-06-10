@@ -1,4 +1,6 @@
+use call::domain::models::{CallRecord, CallRecordParticipant};
 use chrono::{DateTime, Utc};
+use item_filters::CallStatus;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -43,19 +45,32 @@ pub struct SoupCallRecord {
     pub summary: Option<String>,
     /// Whether the call is currently active.
     pub is_active: bool,
-    /// Whether the requesting user attended this call (i.e. appears in the
-    /// `call_participants` / `call_record_participants` table).
+    /// Viewer-relative call status for the requesting user.
+    pub status: CallStatus,
+    /// Whether the requesting user attended this call. Kept for compatibility
+    /// and derived from `status == ATTENDED`.
     pub attended: bool,
     /// Participants in the call.
     pub participants: Vec<SoupCallRecordParticipant>,
 }
 
+fn participant_derived_status(participants: &[CallRecordParticipant], user_id: &str) -> CallStatus {
+    if participants.iter().any(|p| p.user_id == user_id) {
+        return CallStatus::Attended;
+    }
+
+    CallStatus::Unattended
+}
+
 impl SoupCallRecord {
     /// Build a `SoupCallRecord` from a domain `CallRecord` in the context of a
-    /// specific viewer: `attended` is set by checking whether `user_id` appears
-    /// in `record.participants`.
-    pub fn from_record_for_user(record: call::domain::models::CallRecord, user_id: &str) -> Self {
-        let attended = record.participants.iter().any(|p| p.user_id == user_id);
+    /// specific viewer.
+    pub fn from_record_for_user(record: CallRecord, user_id: &str) -> Self {
+        let status = record
+            .status
+            .unwrap_or_else(|| participant_derived_status(&record.participants, user_id));
+        let attended = status == CallStatus::Attended;
+
         SoupCallRecord {
             call_id: record.call_id,
             channel_id: record.channel_id,
@@ -67,6 +82,7 @@ impl SoupCallRecord {
             custom_name: record.custom_name,
             summary: record.summary,
             is_active: record.is_active,
+            status,
             attended,
             participants: record
                 .participants
