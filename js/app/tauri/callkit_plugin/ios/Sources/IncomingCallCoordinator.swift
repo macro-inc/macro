@@ -420,6 +420,15 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
         clearCallState(uuid: action.callUUID)
     }
 
+    func provider(_ provider: CXProvider, perform action: CXSetMutedCallAction) {
+        print("[CallKit] CXSetMutedCallAction received uuid=\(action.callUUID.uuidString) muted=\(action.isMuted)")
+        if activeNativeMediaUUID == action.callUUID {
+            mediaSessionProvider().setAudioMuted(action.isMuted)
+        }
+        action.fulfill()
+        print("[CallKit] Fulfilled CXSetMutedCallAction uuid=\(action.callUUID.uuidString) muted=\(action.isMuted)")
+    }
+
     func provider(_ provider: CXProvider, didActivate audioSession: AVAudioSession) {
         isCallKitAudioSessionActive = true
         guard activeNativeMediaUUID != nil else {

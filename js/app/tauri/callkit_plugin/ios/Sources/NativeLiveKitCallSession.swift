@@ -6,6 +6,10 @@ import LiveKitWebRTC
 import UIKit
 
 /// Native LiveKit Room plus CallKit-owned audio-session integration.
+///
+/// Mutable call state (room, snapshot, pinned/speaking participants, display names) is
+/// confined to the main thread. RoomDelegate callbacks arrive on LiveKit's background
+/// queue and must hop to main before touching that state.
 final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendable {
     private let onSnapshotChanged: (ActiveCallSnapshot?) -> Void
     private let requestSystemEndCall: (UUID) -> Void
@@ -240,19 +244,23 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
             do {
                 print("[CallKit] Connecting LiveKit room uuid=\(uuid.uuidString)")
                 try await newRoom.connect(url: serverUrl, token: token)
-                guard self.activeCallUUID == uuid, self.room === newRoom else {
+                let isCurrentRoom = await MainActor.run { () -> Bool in
+                    guard self.activeCallUUID == uuid, self.room === newRoom else { return false }
+                    print("[CallKit] LiveKit room connected uuid=\(uuid.uuidString) roomSid=\(self.describeOptional(newRoom.sid)) remoteCount=\(newRoom.remoteParticipants.count)")
+                    print("[CallKit] LiveKit local participant \(self.describeParticipant(newRoom.localParticipant))")
+                    for participant in newRoom.remoteParticipants.values {
+                        print("[CallKit] LiveKit existing remote participant \(self.describeParticipant(participant))")
+                    }
+                    self.emitParticipantIdentities(from: newRoom)
+                    self.videoOverlay.setLocalParticipantTitle(self.displayTitle(newRoom.localParticipant))
+                    self.videoOverlay.presentForActiveCallIfNeeded()
+                    self.rebuildRemoteVideoLayout(from: newRoom)
+                    return true
+                }
+                guard isCurrentRoom else {
                     print("[CallKit] Ignoring LiveKit connect completion for stale room uuid=\(uuid.uuidString)")
                     return
                 }
-                print("[CallKit] LiveKit room connected uuid=\(uuid.uuidString) roomSid=\(self.describeOptional(newRoom.sid)) remoteCount=\(newRoom.remoteParticipants.count)")
-                print("[CallKit] LiveKit local participant \(self.describeParticipant(newRoom.localParticipant))")
-                for participant in newRoom.remoteParticipants.values {
-                    print("[CallKit] LiveKit existing remote participant \(self.describeParticipant(participant))")
-                }
-                self.emitParticipantIdentities(from: newRoom)
-                await self.videoOverlay.setLocalParticipantTitle(self.displayTitle(newRoom.localParticipant))
-                await self.videoOverlay.presentForActiveCallIfNeeded()
-                self.rebuildRemoteVideoLayout(from: newRoom)
             } catch is CancellationError {
                 print("[CallKit] LiveKit connect task cancelled uuid=\(uuid.uuidString)")
                 return
@@ -422,12 +430,16 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
                 try await room.localParticipant.setCamera(enabled: enabled)
                 if enabled {
                     self.enableMultitaskingCameraAccessIfSupported(room: room, uuid: uuid)
-                    await self.videoOverlay.setLocalVideoTrack(room.localParticipant.firstCameraVideoTrack)
-                    self.rebuildRemoteVideoLayout(from: room)
+                    await MainActor.run {
+                        self.videoOverlay.setLocalVideoTrack(room.localParticipant.firstCameraVideoTrack)
+                        self.rebuildRemoteVideoLayout(from: room)
+                    }
                     self.setVideoOverlayMode(.expanded)
                 } else {
-                    await self.videoOverlay.setLocalVideoTrack(nil)
-                    self.rebuildRemoteVideoLayout(from: room)
+                    await MainActor.run {
+                        self.videoOverlay.setLocalVideoTrack(nil)
+                        self.rebuildRemoteVideoLayout(from: room)
+                    }
                 }
                 self.updateVideoMuted(!enabled, overlayMode: enabled ? "expanded" : self.activeCall?.videoOverlayMode)
                 print("[CallKit] Native LiveKit camera set enabled=\(enabled) uuid=\(uuid.uuidString)")
@@ -546,93 +558,129 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
     }
 
     func room(_ room: Room, participantDidConnect participant: RemoteParticipant) {
-        print("[CallKit] LiveKit remote participant connected \(describeParticipant(participant)) remoteCount=\(room.remoteParticipants.count)")
-        emitParticipantIdentities(from: room)
-        rebuildRemoteVideoLayout(from: room)
+        DispatchQueue.main.async { [weak self, weak room] in
+            guard let self, let room, self.room === room else { return }
+            print("[CallKit] LiveKit remote participant connected \(self.describeParticipant(participant)) remoteCount=\(room.remoteParticipants.count)")
+            self.emitParticipantIdentities(from: room)
+            self.rebuildRemoteVideoLayout(from: room)
+        }
     }
 
     func room(_ room: Room, participantDidDisconnect participant: RemoteParticipant) {
-        print("[CallKit] LiveKit remote participant disconnected \(describeParticipant(participant)) remoteCount=\(room.remoteParticipants.count)")
-        let id = participantId(participant)
-        if pinnedRemoteVideoParticipantId == id {
-            pinnedRemoteVideoParticipantId = nil
+        DispatchQueue.main.async { [weak self, weak room] in
+            guard let self, let room, self.room === room else { return }
+            print("[CallKit] LiveKit remote participant disconnected \(self.describeParticipant(participant)) remoteCount=\(room.remoteParticipants.count)")
+            let id = self.participantId(participant)
+            if self.pinnedRemoteVideoParticipantId == id {
+                self.pinnedRemoteVideoParticipantId = nil
+            }
+            self.speakingRemoteParticipantIds.removeAll { $0 == id }
+            self.emitParticipantIdentities(from: room)
+            self.rebuildRemoteVideoLayout(from: room)
         }
-        speakingRemoteParticipantIds.removeAll { $0 == id }
-        emitParticipantIdentities(from: room)
-        rebuildRemoteVideoLayout(from: room)
     }
 
     func room(_ room: Room, didUpdateSpeakingParticipants participants: [Participant]) {
-        speakingRemoteParticipantIds = participants
-            .filter { $0 is RemoteParticipant && !isAgentParticipant($0) }
-            .map { participantId($0) }
-        print("[CallKit] LiveKit speaking participants updated participants=\(participants.map { describeParticipant($0) })")
-        rebuildRemoteVideoLayout(from: room)
+        DispatchQueue.main.async { [weak self, weak room] in
+            guard let self, let room, self.room === room else { return }
+            self.speakingRemoteParticipantIds = participants
+                .filter { $0 is RemoteParticipant && !self.isAgentParticipant($0) }
+                .map { self.participantId($0) }
+            print("[CallKit] LiveKit speaking participants updated participants=\(participants.map { self.describeParticipant($0) })")
+            self.rebuildRemoteVideoLayout(from: room)
+        }
     }
 
     func room(_ room: Room, participant: Participant, didUpdateState state: ParticipantState) {
-        print("[CallKit] LiveKit participant state updated \(describeParticipant(participant)) state=\(state)")
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            print("[CallKit] LiveKit participant state updated \(self.describeParticipant(participant)) state=\(state)")
+        }
     }
 
     func room(_ room: Room, participant: Participant, didUpdateConnectionQuality quality: ConnectionQuality) {
-        print("[CallKit] LiveKit participant quality updated \(describeParticipant(participant)) quality=\(quality)")
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            print("[CallKit] LiveKit participant quality updated \(self.describeParticipant(participant)) quality=\(quality)")
+        }
     }
 
     func room(_ room: Room, participant: LocalParticipant, didPublishTrack publication: LocalTrackPublication) {
-        print("[CallKit] LiveKit local track published \(describeParticipant(participant)) \(describe(publication))")
-        guard isCurrentRoom(room) else {
-            print("[CallKit] Ignoring local track publish from stale room")
-            return
-        }
-        if let track = publication.track as? VideoTrack, publication.source == .camera {
-            enableMultitaskingCameraAccessIfSupported(room: room, uuid: activeCallUUID)
-            videoOverlay.setLocalVideoTrack(track)
-            rebuildRemoteVideoLayout(from: room)
-            updateVideoMuted(false, overlayMode: "expanded")
+        DispatchQueue.main.async { [weak self, weak room] in
+            guard let self, let room else { return }
+            print("[CallKit] LiveKit local track published \(self.describeParticipant(participant)) \(self.describe(publication))")
+            guard self.isCurrentRoom(room) else {
+                print("[CallKit] Ignoring local track publish from stale room")
+                return
+            }
+            if let track = publication.track as? VideoTrack, publication.source == .camera {
+                self.enableMultitaskingCameraAccessIfSupported(room: room, uuid: self.activeCallUUID)
+                self.videoOverlay.setLocalVideoTrack(track)
+                self.rebuildRemoteVideoLayout(from: room)
+                self.updateVideoMuted(false, overlayMode: "expanded")
+            }
         }
     }
 
     func room(_ room: Room, participant: LocalParticipant, didUnpublishTrack publication: LocalTrackPublication) {
-        print("[CallKit] LiveKit local track unpublished \(describeParticipant(participant)) \(describe(publication))")
-        guard isCurrentRoom(room) else {
-            print("[CallKit] Ignoring local track unpublish from stale room")
-            return
-        }
-        if publication.source == .camera {
-            videoOverlay.setLocalVideoTrack(nil)
-            rebuildRemoteVideoLayout(from: room)
-            updateVideoMuted(true, overlayMode: activeCall?.videoOverlayMode)
+        DispatchQueue.main.async { [weak self, weak room] in
+            guard let self, let room else { return }
+            print("[CallKit] LiveKit local track unpublished \(self.describeParticipant(participant)) \(self.describe(publication))")
+            guard self.isCurrentRoom(room) else {
+                print("[CallKit] Ignoring local track unpublish from stale room")
+                return
+            }
+            if publication.source == .camera {
+                self.videoOverlay.setLocalVideoTrack(nil)
+                self.rebuildRemoteVideoLayout(from: room)
+                self.updateVideoMuted(true, overlayMode: self.activeCall?.videoOverlayMode)
+            }
         }
     }
 
     func room(_ room: Room, participant: LocalParticipant, remoteDidSubscribeTrack publication: LocalTrackPublication) {
-        print("[CallKit] LiveKit remote subscribed to local track \(describeParticipant(participant)) \(describe(publication))")
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            print("[CallKit] LiveKit remote subscribed to local track \(self.describeParticipant(participant)) \(self.describe(publication))")
+        }
     }
 
     func room(_ room: Room, participant: RemoteParticipant, didPublishTrack publication: RemoteTrackPublication) {
-        print("[CallKit] LiveKit remote track published \(describeParticipant(participant)) \(describe(publication))")
-        if publication.kind == .video {
-            rebuildRemoteVideoLayout(from: room)
+        DispatchQueue.main.async { [weak self, weak room] in
+            guard let self, let room else { return }
+            print("[CallKit] LiveKit remote track published \(self.describeParticipant(participant)) \(self.describe(publication))")
+            if publication.kind == .video {
+                self.rebuildRemoteVideoLayout(from: room)
+            }
         }
     }
 
     func room(_ room: Room, participant: RemoteParticipant, didSubscribeTrack publication: RemoteTrackPublication) {
-        print("[CallKit] LiveKit remote track subscribed \(describeParticipant(participant)) \(describe(publication))")
-        if publication.track is VideoTrack, isRemoteVideoSource(publication.source) {
-            rebuildRemoteVideoLayout(from: room)
-            setVideoOverlayMode(.expanded)
+        DispatchQueue.main.async { [weak self, weak room] in
+            guard let self, let room else { return }
+            print("[CallKit] LiveKit remote track subscribed \(self.describeParticipant(participant)) \(self.describe(publication))")
+            if publication.track is VideoTrack, self.isRemoteVideoSource(publication.source) {
+                self.rebuildRemoteVideoLayout(from: room)
+                self.setVideoOverlayMode(.expanded)
+            }
         }
     }
 
     func room(_ room: Room, participant: RemoteParticipant, didUnsubscribeTrack publication: RemoteTrackPublication) {
-        print("[CallKit] LiveKit remote track unsubscribed \(describeParticipant(participant)) \(describe(publication))")
-        if isRemoteVideoSource(publication.source) {
-            rebuildRemoteVideoLayout(from: room)
+        DispatchQueue.main.async { [weak self, weak room] in
+            guard let self, let room else { return }
+            print("[CallKit] LiveKit remote track unsubscribed \(self.describeParticipant(participant)) \(self.describe(publication))")
+            if self.isRemoteVideoSource(publication.source) {
+                self.rebuildRemoteVideoLayout(from: room)
+            }
         }
     }
 
     func room(_ room: Room, participant: RemoteParticipant, didFailToSubscribeTrackWithSid trackSid: Track.Sid, error: LiveKitError) {
-        print("[CallKit] LiveKit remote track subscribe failed \(describeParticipant(participant)) trackSid=\(trackSid) error=\(error)")
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            print("[CallKit] LiveKit remote track subscribe failed \(self.describeParticipant(participant)) trackSid=\(trackSid) error=\(error)")
+        }
     }
 
     func room(
@@ -641,9 +689,12 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
         trackPublication: TrackPublication,
         didUpdateIsMuted isMuted: Bool
     ) {
-        print("[CallKit] LiveKit track mute updated \(describeParticipant(participant)) \(describe(trackPublication)) muted=\(isMuted)")
-        if participant is RemoteParticipant, trackPublication.kind == .video {
-            rebuildRemoteVideoLayout(from: room)
+        DispatchQueue.main.async { [weak self, weak room] in
+            guard let self, let room else { return }
+            print("[CallKit] LiveKit track mute updated \(self.describeParticipant(participant)) \(self.describe(trackPublication)) muted=\(isMuted)")
+            if participant is RemoteParticipant, trackPublication.kind == .video {
+                self.rebuildRemoteVideoLayout(from: room)
+            }
         }
     }
 
