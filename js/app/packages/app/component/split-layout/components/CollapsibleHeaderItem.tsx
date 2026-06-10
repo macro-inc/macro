@@ -17,7 +17,7 @@ export function CollapsibleHeaderItem(props: CollapsibleHeaderItemProps) {
     null
   );
 
-  const [isCollapsed] = useRegisterCollapsibleHeaderItem({
+  const isCollapsed = useRegisterCollapsibleHeaderItem({
     id: props.id,
     priority: props.priority,
     ref: expandedRef,

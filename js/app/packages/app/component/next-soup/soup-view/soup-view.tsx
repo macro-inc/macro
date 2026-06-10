@@ -542,25 +542,25 @@ export const SoupView = (props: SoupViewProps) => {
                   </Layer>
                 }
               >
-                <CollapsibleHeaderItem
-                  id="search"
-                  priority={0}
-                  onCollapsedChange={(isCollapsed) => {
-                    setSearchIsCollapsed(isCollapsed);
-                    if (!isCollapsed) setNarrowSearchExpanded(false);
-                  }}
-                  expanded={() => (
-                    <Layer depth={2}>
-                      <div class="w-60 ml-2">
-                        <SoupSearchbar
-                          variant="secondary"
-                          initialValue={props.initialSearchText}
-                        />
-                      </div>
-                    </Layer>
-                  )}
-                  collapsed={() => (
-                    <Show when={!narrowSearchExpanded()}>
+                <Show when={!narrowSearchExpanded()}>
+                  <CollapsibleHeaderItem
+                    id="search"
+                    priority={0}
+                    onCollapsedChange={(isCollapsed) => {
+                      setSearchIsCollapsed(isCollapsed);
+                      if (!isCollapsed) setNarrowSearchExpanded(false);
+                    }}
+                    expanded={() => (
+                      <Layer depth={2}>
+                        <div class="w-60 ml-2">
+                          <SoupSearchbar
+                            variant="secondary"
+                            initialValue={props.initialSearchText}
+                          />
+                        </div>
+                      </Layer>
+                    )}
+                    collapsed={() => (
                       <Tooltip label="Search" hotkey={TOKENS.soup.openSearch}>
                         <Button
                           variant="base"
@@ -571,9 +571,9 @@ export const SoupView = (props: SoupViewProps) => {
                           <SearchIcon class="size-4 touch:size-6" />
                         </Button>
                       </Tooltip>
-                    </Show>
-                  )}
-                />
+                    )}
+                  />
+                </Show>
               </Show>
             </SplitHeaderRight>
           </Show>
