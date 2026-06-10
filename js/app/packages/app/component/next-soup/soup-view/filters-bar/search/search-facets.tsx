@@ -234,6 +234,46 @@ function multiFacet(args: {
 }
 
 /**
+ * Multi facet over a small closed set where the default state shows every
+ * option checked, so a checked box always means "included". `undefined` =
+ * all (default), `[]` = explicitly none, a subset = those. Re-checking every
+ * option collapses back to the default.
+ */
+function allCheckedMultiFacet(args: {
+  id: string;
+  label: string;
+  allLabel: string;
+  noneLabel: string;
+  placeholder: string;
+  options: Accessor<SearchableOption[]>;
+  selectedIds: Accessor<string[] | undefined>;
+  onChange: (ids: string[] | undefined) => void;
+}): SearchFacetVM {
+  return {
+    kind: 'multi',
+    id: args.id,
+    label: args.label,
+    options: args.options,
+    activeIds: () => args.selectedIds() ?? args.options().map((o) => o.id),
+    onChange: (ids) =>
+      args.onChange(ids.length === args.options().length ? undefined : ids),
+    placeholder: args.placeholder,
+    isDefault: () => args.selectedIds() === undefined,
+    reset: () => args.onChange(undefined),
+    values: () => {
+      const ids = args.selectedIds();
+      if (ids === undefined) return [{ id: 'all', label: args.allLabel }];
+      if (ids.length === 0) return [{ id: 'none', label: args.noneLabel }];
+      const options = args.options();
+      return ids.map((id) => {
+        const option = options.find((o) => o.id === id);
+        return { id, label: option?.label ?? id, icon: option?.icon };
+      });
+    },
+  };
+}
+
+/**
  * Materializes the facet registry against the controller. Each facet is
  * defined once; which ones render follows the active type. Adding a facet =
  * one definition here + its compile line in `compileSearchQuery`.
@@ -280,13 +320,14 @@ export function useSearchFacets(
       controller.setEmailImportance(id === 'all' ? undefined : id === 'signal'),
   });
 
-  const inbox = multiFacet({
+  const inbox = allCheckedMultiFacet({
     id: 'email-inbox',
     label: 'Inbox',
-    neutralLabel: 'All inboxes',
+    allLabel: 'All inboxes',
+    noneLabel: 'No inboxes',
     placeholder: 'Search inboxes...',
     options: inboxOptions,
-    activeIds: controller.emailInbox,
+    selectedIds: controller.emailInbox,
     onChange: controller.setEmailInbox,
   });
 
