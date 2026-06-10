@@ -130,17 +130,28 @@ pub async fn process_message(
                 .append_pending_operation(&update, document_state)
                 .await?;
 
-            // Record "last edited by" for each Lexical node touched.
+            // Record "last edited by" for each Lexical node touched. Runs
+            // in the background via `wait_until` so the ACK + peer broadcast
+            // below don't block on D1, and the write still completes even
+            // after we return from this handler.
             if !touched_nodes.is_empty() {
                 let peer_ids = Wsm::new(dss, ws).get_peer_ids().await.unwrap_or_default();
                 if let Some(&peer_id) = peer_ids.first() {
-                    let _ = crate::d1::record_blame(
-                        dss.env(),
-                        document_id,
-                        peer_id,
-                        &touched_nodes,
-                    )
-                    .await;
+                    let env = dss.env().clone();
+                    let document_id = document_id.to_string();
+                    dss.wait_until(async move {
+                        if let Err(e) =
+                            crate::d1::record_blame(&env, &document_id, peer_id, &touched_nodes)
+                                .await
+                        {
+                            tracing::warn!(
+                                error = ?e,
+                                document_id = document_id,
+                                peer_id = peer_id,
+                                "record_blame failed"
+                            );
+                        }
+                    });
                 }
             }
 

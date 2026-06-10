@@ -92,28 +92,36 @@ impl DocumentState {
             .context("failed to import update")?;
         let after = self.loro_doc.oplog_frontiers();
 
-        let mut touched: Vec<String> = Vec::new();
-        if let Ok(diff) = self.loro_doc.diff(&before, &after) {
-            for (container_id, _) in diff.iter() {
-                if let Some(node_id) = self.find_lexical_id(container_id) {
-                    touched.push(node_id);
-                }
-            }
-        }
-        touched.sort();
-        touched.dedup();
-
         *self
             .last_update
             .lock()
             .unwrap_context("last_update mutex poisoned") = Some(Instant::now());
 
-        Ok(touched)
+        Ok(self.touched_lexical_ids(&before, &after))
+    }
+
+    /// Diff the two frontiers and return the Lexical node IDs whose backing
+    /// containers were modified, deduplicated. Empty `Vec` on diff failure.
+    fn touched_lexical_ids(&self, before: &Frontiers, after: &Frontiers) -> Vec<String> {
+        let Ok(diff) = self.loro_doc.diff(before, after) else {
+            return Vec::new();
+        };
+        let mut touched: Vec<String> = diff
+            .iter()
+            .filter_map(|(cid, _)| self.find_lexical_id(cid))
+            .collect();
+        touched.sort();
+        touched.dedup();
+        touched
     }
 
     /// Walk from a changed container up to the nearest ancestor LoroMap whose
     /// `$` submap has an `id` — that string is the Lexical node ID.
     fn find_lexical_id(&self, container_id: &ContainerID) -> Option<String> {
+        // Real Lexical docs never nest this deep; cap as a safety net against
+        // unexpectedly large paths from Loro.
+        const MAX_DEPTH: usize = 100;
+
         // Start with the container itself, then walk its ancestors.
         let mut candidates: Vec<ContainerID> = vec![container_id.clone()];
         if let Some(path) = self.loro_doc.get_path_to_container(container_id) {
@@ -122,7 +130,7 @@ impl DocumentState {
             }
         }
 
-        for cid in candidates {
+        for cid in candidates.into_iter().take(MAX_DEPTH) {
             let Some(container) = self.loro_doc.get_container(cid) else {
                 continue;
             };

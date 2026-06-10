@@ -285,6 +285,17 @@ impl DocumentSyncSession {
         &self.env
     }
 
+    /// Spawn a fire-and-forget task that the DO will keep alive past the
+    /// current request, but won't block subsequent requests on. Use for
+    /// background writes (e.g. blame, snapshot push) that mustn't be cancelled
+    /// when the handler returns.
+    pub fn wait_until<F>(&self, future: F)
+    where
+        F: std::future::Future<Output = ()> + 'static,
+    {
+        self.state.wait_until(future);
+    }
+
     pub fn get_websockets(&self) -> Vec<WebSocket> {
         self.state.get_websockets()
     }
