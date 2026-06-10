@@ -37,6 +37,7 @@ export { Scroll } from './components/Scroll';
 export { SegmentedControl } from './components/SegmentedControl';
 export type { SendButtonProps } from './components/SendButton';
 export { SendButton } from './components/SendButton';
+export { SideNav } from './components/SideNav';
 export { Surface } from './components/Surface';
 export { TabbedControl } from './components/TabbedControl';
 export type { ToggleSwitchProps } from './components/ToggleSwitch';

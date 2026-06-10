@@ -34,26 +34,25 @@ import { useHasPaidAccess } from '@core/auth';
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
 import { UserIcon } from '@core/component/UserIcon';
 import {
-  DEV_MODE_ENV,
-  ENABLE_APP_STORE_QR_CODE,
   ENABLE_CALLS,
   ENABLE_CRM,
   ENABLE_HOME_OVERRIDE,
   ENABLE_NEW_PRICING_OVERRIDE,
-  ENABLE_TEAMS_OVERRIDE,
 } from '@core/constant/featureFlags';
 import {
   type SettingsTab,
   useSettingsState,
 } from '@core/constant/SettingsState';
+import {
+  useSettingsTabAvailable,
+  useSettingsTabs,
+} from '@core/constant/settingsTabsConfig';
 import { useUserId } from '@core/context/user';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { clearPressedKeys } from '@core/hotkey/state';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { activateClosestDOMScope } from '@core/hotkey/utils';
-import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import LogoIcon from '@icon/macro-logo.svg';
 import { AnimatedSquareCommandKIcon } from '@icon/square-command-k';
 import { AnimatedSquareSidebarIcon } from '@icon/square-sidebar';
@@ -74,11 +73,8 @@ import BellIcon from '@phosphor/bell.svg';
 import CaretUpIcon from '@phosphor/caret-up.svg';
 import DeviceMobileIcon from '@phosphor/device-mobile-speaker.svg';
 import HomeIcon from '@phosphor/house.svg';
-import KeyboardIcon from '@phosphor/keyboard.svg';
-import PaintBucketIcon from '@phosphor/paint-bucket.svg';
 import PlayIcon from '@phosphor/play.svg';
 import PlugIcon from '@phosphor/plug.svg';
-import UserIconPhosphor from '@phosphor/user.svg';
 import UsersThreeIcon from '@phosphor/users-three.svg';
 import { debounce } from '@solid-primitives/scheduled';
 import { makePersisted } from '@solid-primitives/storage';
@@ -504,79 +500,6 @@ const SidebarShortcutLink = (props: SidebarShortcutLinkProps) => {
   );
 };
 
-type SettingsMenuItem = {
-  tab: SettingsTab;
-  label: string;
-  icon: Component<{ class?: string }>;
-};
-
-const SETTINGS_MENU_TOP_ITEMS: SettingsMenuItem[] = [
-  {
-    tab: 'Mobile App',
-    label: 'App',
-    icon: DeviceMobileIcon,
-  },
-  {
-    tab: 'Agent',
-    label: 'MCPs',
-    icon: PlugIcon,
-  },
-  {
-    tab: 'Team',
-    label: 'Team',
-    icon: UsersThreeIcon,
-  },
-];
-
-const SETTINGS_MENU_BOTTOM_ITEMS: SettingsMenuItem[] = [
-  {
-    tab: 'Shortcuts',
-    label: 'Shortcuts',
-    icon: KeyboardIcon,
-  },
-  {
-    tab: 'Appearance',
-    label: 'Appearance',
-    icon: PaintBucketIcon,
-  },
-  {
-    tab: 'Account',
-    label: 'Account',
-    icon: UserIconPhosphor,
-  },
-];
-
-/**
- * Mirrors the gating in `Settings.tsx`'s `settingsTabs()`. Use to filter the
- * sidebar menu/shortcuts and to guard `setActiveTabId` callers so we never
- * activate a tab that the settings panel won't render.
- */
-const useIsSettingsTabAvailable = () => {
-  const teamsFlag = useFeatureFlag('enable-teams-settings', {
-    enabledOverride: ENABLE_TEAMS_OVERRIDE,
-  });
-
-  return (tab: SettingsTab): boolean => {
-    switch (tab) {
-      case 'Appearance':
-      case 'Account':
-        return true;
-      case 'Team':
-        return teamsFlag().enabled;
-      case 'Shortcuts':
-        return !isTouchDevice();
-      case 'Mobile App':
-        return ENABLE_APP_STORE_QR_CODE && !isNativeMobilePlatform();
-      case 'Agent':
-        return !isNativeMobilePlatform();
-      case 'Mobile':
-        return isNativeMobilePlatform() && DEV_MODE_ENV;
-      default:
-        return false;
-    }
-  };
-};
-
 /**
  * A normalised action button for the sidebar footer area.
  *
@@ -660,19 +583,12 @@ const SidebarHeaderIconButton = (props: {
 type SidebarSettingsWidgetProps = {
   isSlim: () => boolean;
   onSelect: (tab: SettingsTab) => void;
-  isTabAvailable: (tab: SettingsTab) => boolean;
 };
 
 const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
   const userId = useUserId();
   const [onboardingModalOpen, setOnboardingModalOpen] = createSignal(false);
-
-  const topItems = createMemo(() =>
-    SETTINGS_MENU_TOP_ITEMS.filter((item) => props.isTabAvailable(item.tab))
-  );
-  const bottomItems = createMemo(() =>
-    SETTINGS_MENU_BOTTOM_ITEMS.filter((item) => props.isTabAvailable(item.tab))
-  );
+  const { groups } = useSettingsTabs();
 
   return (
     <Dropdown placement="top-start" gutter={6}>
@@ -723,42 +639,29 @@ const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
             <span class="text-ink">Play tutorial</span>
           </Dropdown.Item>
         </Dropdown.Group>
-        <Dropdown.Group>
-          <For each={topItems()}>
-            {(item) => (
-              <Dropdown.Item
-                class="flex items-center gap-2 px-2.5 py-2 text-sm cursor-default outline-none text-ink-muted"
-                onSelect={() => props.onSelect(item.tab)}
-              >
-                <span class="size-5 flex items-center justify-center">
-                  <Dynamic
-                    component={item.icon}
-                    class="size-4 shrink-0 text-ink-extra-muted"
-                  />
-                </span>
-                <span class="text-ink">{item.label}</span>
-              </Dropdown.Item>
-            )}
-          </For>
-        </Dropdown.Group>
-        <Dropdown.Group>
-          <For each={bottomItems()}>
-            {(item) => (
-              <Dropdown.Item
-                class="flex items-center gap-2 px-2.5 py-2 text-sm cursor-default outline-none text-ink-muted"
-                onSelect={() => props.onSelect(item.tab)}
-              >
-                <span class="size-5 flex items-center justify-center">
-                  <Dynamic
-                    component={item.icon}
-                    class="size-4 shrink-0 text-ink-extra-muted"
-                  />
-                </span>
-                <span class="text-ink">{item.label}</span>
-              </Dropdown.Item>
-            )}
-          </For>
-        </Dropdown.Group>
+        <For each={groups()}>
+          {(group) => (
+            <Dropdown.Group>
+              <Dropdown.GroupLabel>{group.label}</Dropdown.GroupLabel>
+              <For each={group.items}>
+                {(item) => (
+                  <Dropdown.Item
+                    class="flex items-center gap-2 px-2.5 py-2 text-sm cursor-default outline-none text-ink-muted"
+                    onSelect={() => props.onSelect(item.tab)}
+                  >
+                    <span class="size-5 flex items-center justify-center">
+                      <Dynamic
+                        component={item.icon}
+                        class="size-4 shrink-0 text-ink-extra-muted"
+                      />
+                    </span>
+                    <span class="text-ink">{item.label}</span>
+                  </Dropdown.Item>
+                )}
+              </For>
+            </Dropdown.Group>
+          )}
+        </For>
       </Dropdown.Content>
       <InteractiveOnboardingModal
         open={onboardingModalOpen()}
@@ -790,7 +693,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const analytics = useAnalytics();
   const layout = useSplitLayout();
   const { openSettings, setActiveTabId, settingsOpen } = useSettingsState();
-  const isTabAvailable = useIsSettingsTabAvailable();
+  const isTabAvailable = useSettingsTabAvailable();
   const notificationSettings = useNotificationSettings();
   const callCtx = useCallContextOptional();
 
@@ -1134,11 +1037,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
       </div>
 
       <div class="w-full px-2">
-        <SidebarSettingsWidget
-          isSlim={isSlim}
-          onSelect={openSettingsTab}
-          isTabAvailable={isTabAvailable}
-        />
+        <SidebarSettingsWidget isSlim={isSlim} onSelect={openSettingsTab} />
       </div>
       <InviteModal />
     </div>
