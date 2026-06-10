@@ -28,20 +28,26 @@ export function BotIcon(props: BotIconProps) {
         }
         keyed
       >
-        {(url) => (
-          <Avatar.Image
-            // Solid surface circle behind the picture so a transparent avatar
-            // shows surface color rather than what's behind it.
-            class="bg-surface"
-            src={staticFileSizedUrl(url, 'small')}
-            alt={props.name ?? 'Bot'}
-            onError={(e) => {
-              if (e.currentTarget.src !== url) {
-                e.currentTarget.src = url;
-              }
-            }}
-          />
-        )}
+        {(url) => {
+          // Fall back from the sized URL to the original at most once, so a
+          // broken original doesn't retrigger onError in a loop.
+          let triedFallback = false;
+          return (
+            <Avatar.Image
+              // Solid surface circle behind the picture so a transparent avatar
+              // shows surface color rather than what's behind it.
+              class="bg-surface"
+              src={staticFileSizedUrl(url, 'small')}
+              alt={props.name ?? 'Bot'}
+              onError={(e) => {
+                if (!triedFallback) {
+                  triedFallback = true;
+                  e.currentTarget.src = url;
+                }
+              }}
+            />
+          );
+        }}
       </Show>
     </Avatar>
   );
