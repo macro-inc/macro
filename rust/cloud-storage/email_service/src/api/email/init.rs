@@ -259,12 +259,15 @@ pub async fn handler(
             // Access for the primary comes from the macro_user_links edge alone.
             let child_macro_id_owned = MacroUserIdStr::try_from(child_macro_id.to_string())?;
 
+            // `existing_owner` proved a User row exists for this email, so a miss here means
+            // the child account vanished mid-flight. Abort rather than fall back to the
+            // requester's fusion id, which would provision the link under the wrong identity.
             let child_fusion_id =
                 macro_db_client::user::get::get_macro_user_id_by_email(&ctx.db, &linked_email)
                     .await
                     .context("Failed to look up child's fusion id for self-link bootstrap")?
-                    .map(|id| id.to_string())
-                    .unwrap_or_else(|| user_context.fusion_user_id.clone());
+                    .context("child macro user disappeared before self-link bootstrap")?
+                    .to_string();
 
             let gmail_token =
                 fetch_gmail_token_for_email(&ctx, &child_fusion_id, &linked_email).await?;
