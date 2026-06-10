@@ -317,6 +317,7 @@ fn api_user_notification_and_conn_gateway_inner_notif_metadata_serialize_identic
         message_content: "Hello @user".to_string(),
         has_attachments: false,
         thread_id: None,
+        sender_display_name: None,
         common: model_notifications::CommonChannelMetadata {
             channel_type: model_notifications::ChannelType::Public,
             channel_name: "general".to_string(),
@@ -396,6 +397,7 @@ fn conn_gateway_inner_val_has_identical_serialization() {
         message_content: "some data".to_string(),
         has_attachments: false,
         thread_id: Some("threadid".to_string()),
+        sender_display_name: None,
         common: model_notifications::CommonChannelMetadata {
             channel_type: model_notifications::ChannelType::Public,
             channel_name: "my channel".to_string(),

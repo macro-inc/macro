@@ -1143,6 +1143,10 @@
                 "type": "string",
                 "description": "The message you were mentioned in"
               },
+              "senderDisplayName": {
+                "type": ["string", "null"],
+                "description": "Display name for non-user senders such as bots"
+              },
               "senderProfilePictureUrl": {
                 "type": ["string", "null"]
               },
@@ -1161,7 +1165,7 @@
           },
           {
             "type": "object",
-            "required": ["sender", "messageId"],
+            "required": ["messageId"],
             "properties": {
               "messageContent": {
                 "type": "string",
@@ -1172,8 +1176,12 @@
                 "description": "The message id"
               },
               "sender": {
-                "type": "string",
-                "description": "The user who sent the message"
+                "type": ["string", "null"],
+                "description": "The user who sent the message, when sent by a user"
+              },
+              "senderDisplayName": {
+                "type": ["string", "null"],
+                "description": "Display name for non-user senders such as bots"
               },
               "senderProfilePictureUrl": {
                 "type": ["string", "null"]
@@ -1189,7 +1197,7 @@
           },
           {
             "type": "object",
-            "required": ["threadId", "messageId", "userId", "messageContent"],
+            "required": ["threadId", "messageId", "messageContent"],
             "properties": {
               "messageContent": {
                 "type": "string",
@@ -1198,6 +1206,10 @@
               "messageId": {
                 "type": "string",
                 "description": "The id of the new message"
+              },
+              "senderDisplayName": {
+                "type": ["string", "null"],
+                "description": "Display name for non-user senders such as bots"
               },
               "senderProfilePictureUrl": {
                 "type": ["string", "null"]
@@ -1211,8 +1223,8 @@
                 "description": "The user who sent the root message of the thread"
               },
               "userId": {
-                "type": "string",
-                "description": "The sender id of the reply"
+                "type": ["string", "null"],
+                "description": "The sender id of the reply, when sent by a user"
               }
             }
           }

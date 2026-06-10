@@ -190,11 +190,15 @@ pub struct CommonChannelMetadata {
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ChannelMessageSendMetadata {
-    /// The user who sent the message
+    /// The user who sent the message, when sent by a user
+    #[serde(default)]
     #[serde(alias = "invited_by")]
     #[serde(alias = "invitedBy")]
-    #[schema(value_type = String)]
-    pub sender: MacroUserIdStr<'static>,
+    #[schema(value_type = Option<String>)]
+    pub sender: Option<MacroUserIdStr<'static>>,
+    /// Display name for non-user senders such as bots
+    #[serde(default)]
+    pub sender_display_name: Option<String>,
     /// The content of the message
     #[serde(default)]
     #[serde(alias = "message_content")]
@@ -251,6 +255,9 @@ pub struct ChannelMentionMetadata {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(alias = "thread_id")]
     pub thread_id: Option<String>,
+    /// Display name for non-user senders such as bots
+    #[serde(default)]
+    pub sender_display_name: Option<String>,
     #[serde(flatten)]
     pub common: CommonChannelMetadata,
     #[serde(default)]
@@ -266,10 +273,14 @@ pub struct ChannelReplyMetadata {
     /// The id of the new message
     #[serde(alias = "message_id")]
     pub message_id: String,
-    /// The sender id of the reply
+    /// The sender id of the reply, when sent by a user
+    #[serde(default)]
     #[serde(alias = "user_id")]
-    #[schema(value_type = String)]
-    pub user_id: MacroUserIdStr<'static>,
+    #[schema(value_type = Option<String>)]
+    pub user_id: Option<MacroUserIdStr<'static>>,
+    /// Display name for non-user senders such as bots
+    #[serde(default)]
+    pub sender_display_name: Option<String>,
     /// The message content
     #[serde(alias = "message_content")]
     pub message_content: String,
@@ -379,17 +390,15 @@ impl NotificationTitle for ChannelMentionMetadata {
         &self,
         sender_id: Option<MacroUserIdStr<'_>>,
     ) -> Result<String, rootcause::Report> {
-        let sender =
-            sender_id.ok_or_else(|| report!("Expected sender id to exist for {:?}", &self))?;
+        let sender = sender_id
+            .map(|sender| sender.email_part().local_part().to_string())
+            .or_else(|| self.sender_display_name.clone())
+            .ok_or_else(|| report!("Expected sender id to exist for {:?}", &self))?;
         Ok(match self.common.channel_type {
             ChannelType::DirectMessage => {
-                format!("{} mentioned you", sender.email_part().local_part())
+                format!("{sender} mentioned you")
             }
-            _ => format!(
-                "{} mentioned you in #{}",
-                sender.email_part().local_part(),
-                self.common.channel_name
-            ),
+            _ => format!("{sender} mentioned you in #{}", self.common.channel_name),
         })
     }
 
@@ -406,9 +415,10 @@ impl NotificationTitle for DocumentMentionMetadata {
         &self,
         sender_id: Option<MacroUserIdStr<'_>>,
     ) -> Result<String, rootcause::Report> {
-        let sender =
-            sender_id.ok_or_else(|| report!("Expected sender id to exist for {:?}", &self))?;
-        let sender = sender.0.email_part().email_str().to_string();
+        let sender = sender_id
+            .map(|sender| sender.0.email_part().email_str().to_string())
+            .or_else(|| self.channel.sender_display_name.clone())
+            .ok_or_else(|| report!("Expected sender id to exist for {:?}", &self))?;
         Ok(format!("{sender} sent a document",))
     }
 
@@ -426,13 +436,15 @@ impl NotificationTitle for ChannelMessageSendMetadata {
         &self,
         _sender_id: Option<MacroUserIdStr<'_>>,
     ) -> Result<String, rootcause::Report> {
+        let sender = self
+            .sender
+            .as_ref()
+            .map(|sender| sender.email_part().local_part().to_string())
+            .or_else(|| self.sender_display_name.clone())
+            .ok_or_else(|| report!("Expected sender to exist for {:?}", &self))?;
         let title = match self.common.channel_type {
-            ChannelType::DirectMessage => self.sender.email_part().local_part().to_string(),
-            _ => format!(
-                "{} <{}>",
-                self.sender.email_part().local_part(),
-                self.common.channel_name
-            ),
+            ChannelType::DirectMessage => sender,
+            _ => format!("{sender} <{}>", self.common.channel_name),
         };
         Ok(title)
     }
@@ -474,10 +486,13 @@ impl NotificationTitle for ChannelReplyMetadata {
         &self,
         _sender_id: Option<MacroUserIdStr<'_>>,
     ) -> Result<String, rootcause::Report> {
-        Ok(format!(
-            "Reply from {}",
-            self.user_id.email_part().local_part()
-        ))
+        let sender = self
+            .user_id
+            .as_ref()
+            .map(|sender| sender.email_part().local_part().to_string())
+            .or_else(|| self.sender_display_name.clone())
+            .ok_or_else(|| report!("Expected sender to exist for {:?}", &self))?;
+        Ok(format!("Reply from {sender}"))
     }
 
     fn format_body(
