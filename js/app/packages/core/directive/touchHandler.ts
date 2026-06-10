@@ -142,6 +142,17 @@ export function touchHandler(
       setValidShortTouch(false);
       return;
     }
+
+    // Block our long-press behavior when the touch originates on an image so it
+    // doesn't compete with the native image callout (e.g. iOS image preview).
+    if ((e.target as Element)?.closest('img')) {
+      clearState();
+      cancelTouchClassEnter();
+      endTouchClass();
+      setValidShortTouch(false);
+      return;
+    }
+
     initStateForNewTouch();
 
     const touch = e.touches[0];
