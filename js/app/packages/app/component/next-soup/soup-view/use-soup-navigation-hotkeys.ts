@@ -15,6 +15,7 @@ type UseSoupNavigationHotkeysOptions = {
   splitHandle: SplitHandle;
   virtualizerHandle: Accessor<VirtualizerHandle | undefined>;
   hasNextPage?: Accessor<boolean>;
+  isFetching?: Accessor<boolean>;
   isFetchingNextPage?: Accessor<boolean>;
   fetchNextPage?: () => void;
 };
@@ -111,12 +112,13 @@ export const useSoupNavigationHotkeys = (
 
   const group = createHotkeyGroup();
 
-  const { fetchNextPage, isFetchingNextPage, hasNextPage } = options;
+  const { fetchNextPage, isFetching, isFetchingNextPage, hasNextPage } =
+    options;
 
   const LOAD_MORE_DISTANCE_FROM_END = 3;
 
   const fetchNextPageIfNeeded = () => {
-    if (!hasNextPage?.() || isFetchingNextPage?.()) return;
+    if (!hasNextPage?.() || isFetching?.() || isFetchingNextPage?.()) return;
     fetchNextPage?.();
   };
 

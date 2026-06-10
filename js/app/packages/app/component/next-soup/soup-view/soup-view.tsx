@@ -708,6 +708,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
     splitHandle: panel.handle,
     virtualizerHandle,
     hasNextPage: source.hasNextPage,
+    isFetching: source.isFetching,
     isFetchingNextPage: source.isFetchingNextPage,
     fetchNextPage: source.fetchNextPage,
   });

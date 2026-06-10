@@ -98,7 +98,11 @@ export const useEntityActionHotkeys = (
     if (!splitHandle) return;
     const handleContent = splitHandle.content().type;
     if (handleContent === 'component' || handleContent === 'project') return;
-    openEntityInSplitFromUnifiedList(entity, { splitHandle });
+    openEntityInSplitFromUnifiedList(entity, {
+      splitHandle,
+      mergeHistory: true,
+      referredFrom: splitHandle.referredFrom(),
+    });
   };
 
   // Property editor setup
