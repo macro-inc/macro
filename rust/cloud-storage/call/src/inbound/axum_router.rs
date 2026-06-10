@@ -34,7 +34,7 @@ use uuid::Uuid;
 use crate::domain::models::{
     CallActiveResponse, CallError, CallRecord, CallTokenResponse, EditCallRecordRequest,
     EditCallTranscriptRequest, GetBatchCallRecordPreviewRequest, GetBatchCallRecordPreviewResponse,
-    LeaveCallResponse, MAX_BATCH_CALL_IDS, TranscriptSegmentRequest,
+    LeaveCallResponse, MAX_BATCH_CALL_IDS, RingStatusResponse, TranscriptSegmentRequest,
 };
 use crate::domain::ports::CallService;
 
@@ -145,10 +145,13 @@ impl<S: CallService> WebhookRouterState<S> {
     }
 }
 
-/// Webhook router for RTC provider event ingestion.
+/// Webhook router for endpoints outside the user-auth layer; each handler
+/// validates its own credentials.
 ///
 /// Routes:
-/// - `POST /webhook` — ingest a webhook event from LiveKit
+/// - `POST /webhook` — ingest a webhook event from LiveKit (signed by LiveKit)
+/// - `GET /ring-status/{call_id}` — per-user ring status, authenticated with
+///   the LiveKit JWT delivered in the VoIP push payload
 pub fn webhook_router<S, T>(state: WebhookRouterState<S>) -> Router<T>
 where
     S: CallService,
@@ -156,6 +159,7 @@ where
 {
     Router::new()
         .route("/webhook", post(webhook_handler::<S>))
+        .route("/ring-status/{call_id}", get(ring_status_handler::<S>))
         .with_state(state)
 }
 
@@ -566,6 +570,45 @@ pub async fn webhook_handler<S: CallService>(
         .await?;
 
     Ok(StatusCode::OK)
+}
+
+/// Handler for `GET /call/ring-status/{call_id}`.
+///
+/// Reports whether the authenticated user should keep ringing for the call.
+/// Polled by native clients while the CallKit incoming-call UI is showing, so
+/// a ring can be cancelled when the user answers on another device
+/// (`answered`) or the call ends before anyone answers (`ended`).
+///
+/// Outside the user-auth layer: the bearer credential is the recipient's
+/// LiveKit JWT from the VoIP push payload, verified with the LiveKit secret.
+#[utoipa::path(
+    get,
+    operation_id = "get_ring_status",
+    path = "/call/ring-status/{call_id}",
+    params(
+        ("call_id" = Uuid, Path, description = "Call ID"),
+    ),
+    responses(
+        (status = 200, body = RingStatusResponse),
+        (status = 401, body = ErrorResponse, description = "Missing or invalid bearer token"),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(err, skip_all)]
+pub async fn ring_status_handler<S: CallService>(
+    State(state): State<WebhookRouterState<S>>,
+    axum::extract::Path(call_id): axum::extract::Path<Uuid>,
+    headers: axum::http::HeaderMap,
+) -> Result<Json<RingStatusResponse>, CallError> {
+    let bearer = headers
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "))
+        .ok_or(CallError::Auth)?;
+
+    let response = state.service.get_ring_status(&call_id, bearer).await?;
+
+    Ok(Json(response))
 }
 
 /// Handler for `POST /call/{channel_id}/transcript`.
