@@ -58,8 +58,8 @@ targets:
           - UIInterfaceOrientationPortraitUpsideDown
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
-        CFBundleShortVersionString: 2.0.2
-        CFBundleVersion: "142"
+        CFBundleShortVersionString: 2.0.4
+        CFBundleVersion: "170"
         CFBundleURLTypes:
           - CFBundleURLSchemes:
               - macro
@@ -96,7 +96,7 @@ targets:
         ENABLE_BITCODE: false
         ENABLE_DEBUG_DYLIB: false
         ARCHS: [arm64]
-        VALID_ARCHS: arm64 
+        VALID_ARCHS: arm64
         FRAMEWORK_SEARCH_PATHS[arch=x86_64]: $(inherited) $(PROJECT_DIR)/Externals/x86_64/$(CONFIGURATION)
         FRAMEWORK_SEARCH_PATHS[arch=arm64]: $(inherited) $(PROJECT_DIR)/Externals/arm64/$(CONFIGURATION)
         LIBRARY_SEARCH_PATHS[arch=x86_64]: $(inherited) $(PROJECT_DIR)/Externals/x86_64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME) $(TOOLCHAIN_DIR)/usr/lib/swift-5.0/$(PLATFORM_NAME)
@@ -136,8 +136,8 @@ targets:
       path: ShareExtension/Info.plist
       properties:
         CFBundleDisplayName: Share to Macro
-        CFBundleShortVersionString: 2.0.2
-        CFBundleVersion: "142"
+        CFBundleShortVersionString: 2.0.4
+        CFBundleVersion: "170"
         LSApplicationQueriesSchemes:
           - macro
         NSExtension:
@@ -172,7 +172,7 @@ targets:
       properties:
         CFBundleDisplayName: NotificationServiceExtension
         CFBundleShortVersionString: $(MARKETING_VERSION)
-        CFBundleVersion: "142"
+        CFBundleVersion: "170"
         NSExtension:
           NSExtensionPointIdentifier: com.apple.usernotifications.service
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService
