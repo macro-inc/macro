@@ -145,7 +145,7 @@
   },
   "description": "Product and technical documentation for Macro, the unified interface for email, messages, tasks, calls, agents, pull requests, docs, CRM — linked together with shared AI memory.",
   "logo": {
-    "light": "/docs/images/Mark_june.png",
-    "dark": "/docs/images/Markdark.png"
+    "light": "/logo/light.svg",
+    "dark": "/logo/dark.svg"
   }
 }
