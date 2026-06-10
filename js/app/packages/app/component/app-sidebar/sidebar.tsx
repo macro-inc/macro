@@ -590,7 +590,7 @@ type SidebarSettingsWidgetProps = {
 const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
   const userId = useUserId();
   const [onboardingModalOpen, setOnboardingModalOpen] = createSignal(false);
-  const { groups } = useSettingsTabs();
+  const { groups: settingGroups } = useSettingsTabs();
 
   return (
     <Dropdown placement="top-start" gutter={6}>
@@ -641,10 +641,9 @@ const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
             <span class="text-ink">Play tutorial</span>
           </Dropdown.Item>
         </Dropdown.Group>
-        <For each={groups()}>
+        <For each={settingGroups()}>
           {(group) => (
             <Dropdown.Group>
-              <Dropdown.GroupLabel>{group.label}</Dropdown.GroupLabel>
               <For each={group.items}>
                 {(item) => (
                   <Dropdown.Item
