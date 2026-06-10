@@ -31,6 +31,13 @@ export const AnimatedChannelIcon = (props: {
         .animated-channel-icon .channel-h {
           transition: transform 0.35s ease-in-out;
         }
+        /* Browser support for the .channel-v / .channel-v-* path morph below
+           (via 'transition: d'): Chrome/Edge >=52/79 and Firefox >=97, but NOT
+           Safari/WebKit — including the macOS Tauri WKWebView — where the 'd'
+           property parses but has no effect, so the verticals won't straighten
+           there (the translateX horizontals still animate). A WebKit fallback
+           (SMIL or JS morph) is TODO in a separate PR covering the other
+           animating icons too. */
         .animated-channel-icon .channel-v {
           transition: d 0.35s ease-in-out;
         }
