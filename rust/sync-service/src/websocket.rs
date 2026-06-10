@@ -126,9 +126,23 @@ pub async fn process_message(
                 tracing::warn!("received update from peer without edit permission");
                 return Ok(());
             }
-            session_storage
+            let touched_nodes = session_storage
                 .append_pending_operation(&update, document_state)
                 .await?;
+
+            // Record "last edited by" for each Lexical node touched.
+            if !touched_nodes.is_empty() {
+                let peer_ids = Wsm::new(dss, ws).get_peer_ids().await.unwrap_or_default();
+                if let Some(&peer_id) = peer_ids.first() {
+                    let _ = crate::d1::record_blame(
+                        dss.env(),
+                        document_id,
+                        peer_id,
+                        &touched_nodes,
+                    )
+                    .await;
+                }
+            }
 
             {
                 // ACK the sender first: the update is durably stored at this

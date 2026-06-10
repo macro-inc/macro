@@ -15,6 +15,7 @@ export * from './file-paste';
 export * from './find-and-replace';
 export * from './generate';
 export * from './horizontal-rules';
+export * from './hover-tooltip';
 export * from './insert-text';
 export * from './ios-cursor-scroll';
 export * from './katex';

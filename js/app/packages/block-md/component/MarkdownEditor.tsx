@@ -77,6 +77,11 @@ import {
 import { codePlugin } from '@core/component/LexicalMarkdown/plugins/code/codePlugin';
 import { emojisPlugin } from '@core/component/LexicalMarkdown/plugins/emojis/emojisPlugin';
 import {
+  createHoverTooltipStore,
+  HoverTooltip,
+  hoverTooltipPlugin,
+} from '@core/component/LexicalMarkdown/plugins/hover-tooltip';
+import {
   DO_SEARCH_COMMAND,
   FloatingSearchHighlight,
   findAndReplacePlugin,
@@ -909,6 +914,9 @@ export function MarkdownEditor(props: {
     },
   });
 
+  const [hoverTooltipStore, setHoverTooltipStore] = createHoverTooltipStore();
+  plugins.use(hoverTooltipPlugin({ setState: (s) => setHoverTooltipStore(s) }));
+
   const [wordcountStats, setWordcountStats] = createWordcountStatsStore();
   plugins.use(
     wordcountPlugin({ setStore: setWordcountStats, debounceTime: 200 })
@@ -984,6 +992,7 @@ export function MarkdownEditor(props: {
               : `This document is blank...`}
           </div>
         </Show>
+        <HoverTooltip state={hoverTooltipStore} documentId={blockId} />
         <DecoratorRenderer editor={editor} />
         <NodeAccessoryRenderer editor={editor} store={accessoryStore} />
 

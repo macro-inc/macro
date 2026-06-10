@@ -54,6 +54,7 @@ mod path {
     pub const ACTIVE_PEERS_MARKER: &str = "active_peers";
     pub const PEER: &str = "peer";
     pub const METADATA: &str = "metadata";
+    pub const BLAME: &str = "blame";
     pub const DEBUG_DUMP_OPERATIONS: &str = "debug_dump_operations";
     pub const DEBUG_DO_KV_GET: &str = "debug_do_kv_get";
     pub const DEBUG_DO_KV_LIST: &str = "debug_do_kv_list";
@@ -203,7 +204,7 @@ impl<'a> Wsm<'a> {
         }
         Ok(())
     }
-    async fn get_peer_ids(&mut self) -> Result<Vec<u64>> {
+    pub async fn get_peer_ids(&mut self) -> Result<Vec<u64>> {
         self.maybe_update_ws_meta_map().await?;
         let ws_id = self.get_ws_id()?.to_string();
         Ok(self
@@ -280,6 +281,10 @@ async fn bump_alarm(state: &State) -> Result<()> {
 }
 
 impl DocumentSyncSession {
+    pub fn env(&self) -> &Env {
+        &self.env
+    }
+
     pub fn get_websockets(&self) -> Vec<WebSocket> {
         self.state.get_websockets()
     }
@@ -315,6 +320,9 @@ impl DocumentSyncSession {
                     or_unauth!(claims.has_document_id_access(document_id).then_some(()));
                     match rest {
                         path::METADATA => return self.metadata_handler(document_id).await,
+                        path::BLAME => {
+                            return self.blame_handler(matched.params.get("node_id")).await;
+                        }
                         path::RAW => return self.raw_handler(document_id).await,
                         path::SNAPSHOT => return self.snapshot_handler(req, document_id).await,
                         path::ACTIVE_PEERS_MARKER => return self.active_peer_ids_handler().await,
@@ -544,6 +552,19 @@ impl DocumentSyncSession {
         })
     }
 
+    /// Return who last edited the given Lexical node and when. Joins blame
+    /// with peer_user_map in D1 so user_id (MacroId) comes back resolved.
+    /// Returns 404 if the node has no recorded edits.
+    async fn blame_handler(&self, node_id: Option<&str>) -> Result<Response> {
+        let node_id = node_id.ok_or_else(|| Error::from("missing node_id"))?;
+        let document_id = self.document_id().await?.to_string();
+        let db = self.env.d1(USER_PEER_D1_BINDING)?;
+        match crate::d1::get_blame_for_node(db, &document_id, node_id).await? {
+            Some(row) => ResponseBuilder::new().from_json(&row),
+            None => Ok(response(status_codes::NOT_FOUND)),
+        }
+    }
+
     async fn connect_handler(&self, req: Request, document_id: &str) -> Result<Response> {
         let (res, elap) = timeit!({
             let claims = or_unauth!(decode_jwt(&req, &self.env, TokenFrom::QueryParams).ok());
@@ -759,6 +780,9 @@ pub static ROUTER: LazyLock<Router<&str>> = LazyLock::new(|| {
         .unwrap();
     router
         .insert("/document/{document_id}/metadata", path::METADATA)
+        .unwrap();
+    router
+        .insert("/document/{document_id}/blame/{node_id}", path::BLAME)
         .unwrap();
     router
         .insert(
