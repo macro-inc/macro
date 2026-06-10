@@ -5,6 +5,7 @@ import { DecoratorRenderer } from '@core/component/LexicalMarkdown/component/cor
 import { NodeAccessoryRenderer } from '@core/component/LexicalMarkdown/component/core/NodeAccessoryRenderer';
 import { EmojiMenu } from '@core/component/LexicalMarkdown/component/menu/EmojiMenu';
 import { MentionsMenu } from '@core/component/LexicalMarkdown/component/menu/MentionsMenu';
+import { SnippetsMenu } from '@core/component/LexicalMarkdown/component/menu/SnippetsMenu';
 import { LexicalWrapperContext } from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
 import {
   DefaultShortcuts,
@@ -216,6 +217,15 @@ function TextBoxEditor(props: {
           menu={state.emojisMenuOps!}
           useBlockBoundary={true}
         />
+        <Show when={state.snippetsMenuOps}>
+          {(menu) => (
+            <SnippetsMenu
+              editor={editor}
+              menu={menu()}
+              useBlockBoundary={true}
+            />
+          )}
+        </Show>
       </ScopedPortal>
       <DecoratorRenderer editor={editor} />
       <NodeAccessoryRenderer editor={editor} store={state.accessoryStore!} />

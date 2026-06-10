@@ -64,7 +64,9 @@ import {
 } from '@app/component/split-layout/components/SplitHeader';
 import { SplitPanelContext } from '@app/component/split-layout/context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
+import { LIST_VIEW_DOCS_URL } from '@app/constants/docs-links';
 import { isListViewID, type ListView } from '@app/constants/list-views';
+import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { usePreference } from '@app/preferences/use-preference';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
@@ -82,6 +84,7 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import { useDisplayName } from '@core/user/displayName';
 import { type MacroId, tryMacroId } from '@core/user/macroId';
+import { openExternalUrl } from '@core/util/url';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import {
   type EntityData,
@@ -95,6 +98,7 @@ import { createEffectOnEntityTypeNotification } from '@notifications';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import ChevronRightIcon from '@phosphor/caret-right.svg';
 import CheckIcon from '@phosphor/check.svg';
+import InfoIcon from '@phosphor/info.svg';
 import Spinner from '@phosphor/spinner.svg';
 import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
@@ -364,6 +368,11 @@ export const SoupView = (props: SoupViewProps) => {
     return id && isListViewID(id) ? id : undefined;
   });
 
+  const docsUrl = createMemo(() => {
+    const view = activeListView();
+    return view ? LIST_VIEW_DOCS_URL[view] : undefined;
+  });
+
   const [narrowSearchExpanded, setNarrowSearchExpanded] = createSignal(false);
   const [mobileSearchOpen, setMobileSearchOpen] = createSignal(false);
   const [searchIsCollapsed, setSearchIsCollapsed] = createSignal(false);
@@ -442,7 +451,21 @@ export const SoupView = (props: SoupViewProps) => {
                 })}
               >
                 <Show when={!isMobile() && !narrowSearchExpanded()}>
-                  <span class="text-base font-bold">{props.viewName}</span>
+                  <div class="flex items-center gap-1">
+                    <span class="text-base font-bold">{props.viewName}</span>
+                    <Show when={docsUrl()}>
+                      {(url) => (
+                        <Button
+                          variant="ghost"
+                          class="p-0.5 rounded-sm text-ink-extra-muted hover:text-ink-muted"
+                          label="View documentation"
+                          onClick={() => openExternalUrl(url())}
+                        >
+                          <InfoIcon class="size-3.5" />
+                        </Button>
+                      )}
+                    </Show>
+                  </div>
                 </Show>
                 <Show
                   when={
@@ -611,6 +634,11 @@ export const SoupViewList = (props: SoupViewListProps) => {
   } = useSoupView();
   const { hasActiveRefinements, hasHiddenItems, resetToTabDefaults } =
     useFilterRefinements();
+
+  // Debug: force nav views to render their empty state regardless of content.
+  const forceEmptyState = useDebugSetting(
+    DEBUG_SETTING_KEYS.FORCE_EMPTY_STATES
+  );
 
   const { isKeypressActive } = useIsKeyPressActive();
 
@@ -1086,7 +1114,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                       Searching...
                     </div>
                   </Match>
-                  <Match when={!rows().length}>
+                  <Match when={!rows().length || forceEmptyState()}>
                     <EmptyState
                       listView={currentView()}
                       search={!!searchText()}

@@ -16,6 +16,9 @@ pub enum ForeignEntityLiteral {
     /// Filter by the external source name.
     #[serde(rename = "fes")]
     ForeignEntitySource(String),
+    /// Filter to entities whose metadata participant list contains the requesting user.
+    #[serde(rename = "me")]
+    IncludesMe,
 }
 
 impl ExpandFrame<ForeignEntityLiteral> for ForeignEntityFilters {
@@ -28,6 +31,7 @@ impl ExpandFrame<ForeignEntityLiteral> for ForeignEntityFilters {
             ids,
             foreign_entity_ids,
             foreign_entity_sources,
+            includes_me,
         } = filter_request;
 
         let ids = ids
@@ -43,8 +47,12 @@ impl ExpandFrame<ForeignEntityLiteral> for ForeignEntityFilters {
             .into_iter()
             .expand(ForeignEntityLiteral::ForeignEntitySource, Expr::or);
 
-        Ok([ids, foreign_entity_ids, foreign_entity_sources]
-            .into_iter()
-            .fold_with(Expr::and))
+        let includes_me = includes_me.then_some(Expr::Literal(ForeignEntityLiteral::IncludesMe));
+
+        Ok(
+            [ids, foreign_entity_ids, foreign_entity_sources, includes_me]
+                .into_iter()
+                .fold_with(Expr::and),
+        )
     }
 }

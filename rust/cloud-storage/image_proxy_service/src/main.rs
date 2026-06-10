@@ -23,12 +23,7 @@ async fn main() -> anyhow::Result<()> {
         JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)
             .await?;
 
-    let http_client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(15))
-        .connect_timeout(std::time::Duration::from_secs(5))
-        .redirect(reqwest::redirect::Policy::limited(5))
-        .build()
-        .context("failed to build http client")?;
+    let http_client = api::proxy::build_http_client().context("failed to build http client")?;
 
     let state = api::context::ApiContext {
         jwt_args,

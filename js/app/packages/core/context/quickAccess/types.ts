@@ -8,6 +8,7 @@ import type {
   EmailEntity,
   EntityData,
   ProjectEntity,
+  SnippetEntity,
   TaskEntity,
 } from '@entity';
 import type { Accessor } from 'solid-js';
@@ -22,6 +23,7 @@ export type Bucket =
   | 'person'
   | 'document'
   | 'task'
+  | 'snippet'
   | 'note'
   | 'chat'
   | 'project'
@@ -36,6 +38,7 @@ const ALL_BUCKETS: Bucket[] = [
   'person',
   'document',
   'task',
+  'snippet',
   'note',
   'chat',
   'project',
@@ -48,7 +51,7 @@ export type BucketCombination = 'all' | 'channels' | 'documents';
 export const BUCKET_COMBINATIONS: Record<BucketCombination, Bucket[]> = {
   all: ALL_BUCKETS,
   channels: ['dm', 'channel'],
-  documents: ['document', 'note', 'task', 'chat', 'project'],
+  documents: ['document', 'note', 'task', 'snippet', 'chat', 'project'],
 };
 
 type ItemTimestamps = {
@@ -110,6 +113,7 @@ export type BucketItemMap = {
   dm: EntityItem<ChannelEntity>;
   document: EntityItem<DocumentEntity>;
   task: EntityItem<TaskEntity>;
+  snippet: EntityItem<SnippetEntity>;
   note: EntityItem<DocumentEntity>;
   chat: EntityItem<ChatEntity>;
   project: EntityItem<ProjectEntity>;

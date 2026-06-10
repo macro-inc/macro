@@ -4,6 +4,7 @@ import { useSettingsTabs } from '@core/constant/settingsTabsConfig';
 import { isMobile } from '@core/mobile/isMobile';
 import { MobileApp } from './MobileApp';
 import { Agent } from './Agent';
+import { Admin } from './Admin';
 import { Appearance } from './Appearance';
 import { TabsInset } from '@core/component/TabsInset';
 import { Account } from './Account';
@@ -210,6 +211,9 @@ function SettingsPanel(props: SettingsPanelProps) {
           </Show>
           <Show when={isCurrentTab('Agent')}>
             <Agent />
+          </Show>
+          <Show when={isCurrentTab('Admin')}>
+            <Admin />
           </Show>
         </div>
       </div>

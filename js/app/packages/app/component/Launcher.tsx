@@ -1,8 +1,13 @@
 import { analytics } from '@app/lib/analytics';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { setAutomationComposerOpen } from '@block-automation/component';
 import type { BlockAlias, BlockName } from '@core/block';
 import { getIconConfig } from '@core/component/EntityIcon';
-import { ENABLE_ANIMATED_ICONS } from '@core/constant/featureFlags';
+import {
+  ENABLE_ANIMATED_ICONS,
+  ENABLE_SNIPPETS_FLAG,
+  ENABLE_SNIPPETS_OVERRIDE,
+} from '@core/constant/featureFlags';
 import {
   createHotkeyGroup,
   registerHotkey,
@@ -20,6 +25,7 @@ import {
   createChat,
   createCodeFileFromText,
   createMarkdownFile,
+  createSnippet,
 } from '@core/util/create';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import { AnimatedChatIcon } from '@icon/wide-chat';
@@ -34,6 +40,8 @@ import { AnimatedFileCodeIcon } from '@icon/wide-fileCode';
 import { AnimatedFileMdIcon } from '@icon/wide-fileMd';
 import { AnimatedFolderIcon } from '@icon/wide-folder';
 import WideFolder from '@icon/wide-folder.svg';
+import { AnimatedSnippetIcon } from '@icon/wide-snippet';
+import WideSnippet from '@icon/wide-snippet.svg';
 import { AnimatedStarIcon } from '@icon/wide-star';
 import WideStar from '@icon/wide-star.svg';
 import { AnimatedTaskIcon } from '@icon/wide-task';
@@ -98,7 +106,7 @@ const createBlock = async (spec: {
   // If we are creating a new markdown document "from scratch" then we can let
   // them instantly start editing
   const createMdParams =
-    blockName === 'md'
+    blockName === 'md' || blockName === 'snippet'
       ? { optimisticSnapshot: await getMarkdownGoldenBytes() }
       : undefined;
 
@@ -184,6 +192,18 @@ export function runCreateAction(
       createComponent({
         componentId: 'task-compose',
         asPopover: true,
+      });
+      return;
+    case 'snippet':
+      createBlock({
+        blockName: 'snippet',
+        loading: true,
+        createFn: () =>
+          createSnippet({
+            title: '',
+            content: '',
+          }),
+        shouldInsert,
       });
       return;
     case 'email':
@@ -274,6 +294,20 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     hotkey: 't' as const,
     keyDownHandler: () => {
       runCreateAction('task');
+      return true;
+    },
+  },
+  {
+    label: 'Snippet',
+    icon: WideSnippet,
+    animatedIcon: AnimatedSnippetIcon,
+    description: 'Create snippet',
+    blockName: 'snippet',
+    hotkeyToken: TOKENS.create.snippet,
+    altHotkeyToken: TOKENS.create.snippetNewSplit,
+    hotkey: 's' as const,
+    keyDownHandler: () => {
+      runCreateAction('snippet', { shouldInsert: pressedKeys().has('shift') });
       return true;
     },
   },
@@ -469,7 +503,13 @@ type LauncherInnerProps = {
 
 export const LauncherInner = (props: LauncherInnerProps) => {
   const hkGroup = createHotkeyGroup();
-  const blocks = () => props.blocks ?? CREATABLE_BLOCKS;
+  const snippetsFlag = useFeatureFlag(ENABLE_SNIPPETS_FLAG, {
+    enabledOverride: ENABLE_SNIPPETS_OVERRIDE,
+  });
+  const blocks = () =>
+    (props.blocks ?? CREATABLE_BLOCKS).filter(
+      (block) => block.blockName !== 'snippet' || snippetsFlag().enabled
+    );
   const [attachHotkeys, launcherScope] = useHotkeyDOMScope('create-menu', true);
 
   let ref!: HTMLDivElement;

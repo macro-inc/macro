@@ -470,6 +470,7 @@ where
     #[tracing::instrument(err, skip(self, source_ids, query))]
     async fn handle_foreign_entity_request(
         &self,
+        requesting_user: Option<String>,
         source_ids: Vec<SourceId>,
         limit: u32,
         query: Option<ForeignEntityListQuery>,
@@ -480,7 +481,7 @@ where
 
         Ok(Either::Right(
             self.foreign_entity_service
-                .get_foreign_entities_for_user(source_ids, limit, query)
+                .get_foreign_entities_for_user(requesting_user, source_ids, limit, query)
                 .await?
                 .into_iter()
                 .map(|entity| FrecencySoupItem {
@@ -546,6 +547,7 @@ where
                 let crm_company_soup_fut = self.handle_crm_company_request(crm_company_request);
 
                 let foreign_entity_soup_fut = self.handle_foreign_entity_request(
+                    Some(req.user.to_string()),
                     foreign_entity_source_ids,
                     limit as u32,
                     foreign_entity_query,

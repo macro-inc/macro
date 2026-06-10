@@ -153,7 +153,7 @@ export type TextResponse = { contentType: 'text/plain'; body: string };
  * }
  */
 export async function safeFetch<
-  T extends ObjectLike & (TextResponse | {}),
+  T extends (ObjectLike & (TextResponse | {})) | Uint8Array,
   CustomErrorCode extends string = never,
 >(
   input: RequestInfo,
@@ -230,6 +230,10 @@ export async function safeFetch<
         if (contentType.includes('text/plain')) {
           const text = await response.text();
           return ok({ contentType, body: text } as T);
+        }
+
+        if (contentType.includes('application/octet-stream')) {
+          return ok(new Uint8Array(await response.arrayBuffer()) as T);
         }
 
         const data = await response.json();

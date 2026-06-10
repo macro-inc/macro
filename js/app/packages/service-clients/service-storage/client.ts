@@ -69,6 +69,8 @@ import type { CreateInstructionsDocumentResponse } from './generated/schemas/cre
 import type { CreateMarkdownDocumentRequest } from './generated/schemas/createMarkdownDocumentRequest';
 import type { CreateMarkdownHandler200 } from './generated/schemas/createMarkdownHandler200';
 import type { CreateProjectResponse } from './generated/schemas/createProjectResponse';
+import type { CreateSnippetHandler200 } from './generated/schemas/createSnippetHandler200';
+import type { CreateSnippetRequest } from './generated/schemas/createSnippetRequest';
 import type { CreateTaskHandler200 } from './generated/schemas/createTaskHandler200';
 import type { CreateTaskRequest } from './generated/schemas/createTaskRequest';
 import type { CreateUnthreadedAnchorResponse } from './generated/schemas/createUnthreadedAnchorResponse';
@@ -84,6 +86,7 @@ import type { DeleteUnthreadedAnchorResponse } from './generated/schemas/deleteU
 import type { DocumentMetadata } from './generated/schemas/documentMetadata';
 import type { DocumentPreview } from './generated/schemas/documentPreview';
 import type { DocumentResponseMetadataWithContent } from './generated/schemas/documentResponseMetadataWithContent';
+import type { DocumentTeamShareResponse } from './generated/schemas/documentTeamShareResponse';
 import type { EditAnchorResponse } from './generated/schemas/editAnchorResponse';
 import type { EditCommentResponse } from './generated/schemas/editCommentResponse';
 import type { EditCrmCommentRequest } from './generated/schemas/editCrmCommentRequest';
@@ -279,7 +282,8 @@ export function blockNameToItemType(
 export function stringToItemType(str: string): ItemType | undefined {
   switch (str) {
     case 'email':
-    case 'thread': {
+    case 'thread':
+    case 'email_thread': {
       return 'email';
     }
     case 'call':
@@ -287,6 +291,7 @@ export function stringToItemType(str: string): ItemType | undefined {
     case 'document':
     case 'project':
     case 'channel':
+    case 'crm_company':
       return str;
     default:
       return undefined;
@@ -1032,6 +1037,58 @@ export const storageServiceClient = {
     return ok(response);
   },
 
+  /**
+   * Creates a snippet and initializes its sync-service content on the backend.
+   * Snippets are created personal; team sharing is toggled separately via
+   * setDocumentTeamShare.
+   */
+  async createSnippet(request: CreateSnippetRequest) {
+    const result = await dssFetch<CreateSnippetHandler200>(
+      `/documents/create_snippet`,
+      {
+        method: 'POST',
+        body: JSON.stringify(request),
+      }
+    );
+
+    if (!result.isOk()) {
+      const errors = result.error;
+      if (errors[0].message.includes('403')) {
+        showPaywall(PaywallKey.FILE_LIMIT);
+      }
+      return err(result.error);
+    }
+
+    const response = result.value;
+    return ok(response);
+  },
+
+  /**
+   * Gets the team-share state of a document (resolved against the owner's team).
+   */
+  async getDocumentTeamShare(args: { documentId: string }) {
+    return await dssFetch<DocumentTeamShareResponse>(
+      `/documents/${args.documentId}/team_share`
+    );
+  },
+
+  /**
+   * Shares or unshares a document with the owner's team. Sharing grants the
+   * team Edit access.
+   */
+  async setDocumentTeamShare(args: {
+    documentId: string;
+    shareWithTeam: boolean;
+  }) {
+    return await dssFetch<DocumentTeamShareResponse>(
+      `/documents/${args.documentId}/team_share`,
+      {
+        method: 'PUT',
+        body: JSON.stringify({ shareWithTeam: args.shareWithTeam }),
+      }
+    );
+  },
+
   async getTaskDuplicates(params: { documentId: string }) {
     return (
       await dssFetch<TaskDuplicatesResponse>(
@@ -1143,6 +1200,12 @@ export const storageServiceClient = {
         }
       )
     ).map((result) => result.data);
+  },
+
+  async fetchCachedSnapshot(
+    documentId: string
+  ): Promise<Result<Uint8Array, ResultError<FetchWithTokenErrorCode>[]>> {
+    return dssFetch<Uint8Array>(`/documents/${documentId}/cached_snapshot_url`);
   },
 
   async getDocumentShortId({

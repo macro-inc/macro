@@ -15,4 +15,5 @@ export type DocumentSubType =
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const DocumentSubType = {
   task: 'task',
+  snippet: 'snippet',
 } as const;

@@ -14,7 +14,8 @@ export type SettingsTab =
   | 'Shortcuts'
   | 'Mobile App'
   | 'Agent'
-  | 'Team';
+  | 'Team'
+  | 'Admin';
 
 const [activeTabId, setActiveTabId] = createSignal<SettingsTab>('Appearance');
 

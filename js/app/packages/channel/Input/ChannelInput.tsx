@@ -1,9 +1,11 @@
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
+import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { DragInsertIndicator } from '@core/component/LexicalMarkdown/component/misc/DragInsertIndicator';
 import {
   createDragInsertStore,
   INSERT_DOCUMENT_MENTION_COMMAND,
 } from '@core/component/LexicalMarkdown/plugins';
+import { singleLineMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
 import {
   clearDragInsertPreview,
   insertDocumentMentionAtDragCoordinates,
@@ -20,7 +22,7 @@ import {
 } from '@core/util/upload';
 import type { EntityData } from '@entity';
 import { isIOS } from '@solid-primitives/platform';
-import { Surface } from '@ui';
+import { CollapsedInput, cn, Surface } from '@ui';
 import { $getRoot } from 'lexical';
 import {
   type Accessor,
@@ -31,8 +33,10 @@ import {
   Switch,
 } from 'solid-js';
 import { MACRO_AI_BOT_ID, macroAiMentionUser } from '../macroAi';
+import { CHANNEL_FILE_PICKER_ACCEPT } from './accepted-file-types';
 import { createInputAttachmentTracker } from './attachment-tracker';
 import { createConfiguredChannelMarkdownEditor } from './configured-markdown-editor';
+import { createCollapsedInputState } from './create-collapsed-input-state';
 import { createInputState } from './create-input-state';
 import { createTypingTracker } from './create-typing-tracker';
 import { FormatButtons } from './FormatButtons';
@@ -50,6 +54,7 @@ import { isReplyInput } from './types';
 import { uploadInputAttachments } from './upload-attachments';
 import { entityToDocumentMentionInfo } from './utils/entity-mention';
 import { applyInlineFormat, applyNodeFormat } from './utils/formatting';
+import { hasSendableInputContent } from './utils/sendable-content';
 
 export type ChannelInputProps = InputCallbacks & {
   input: InputData;
@@ -61,6 +66,11 @@ export type ChannelInputProps = InputCallbacks & {
   children?: JSX.Element;
   /** Whether to auto-focus the input on mount. Defaults to `!isMobile()`. */
   autofocus?: boolean;
+  /**
+   * Render a one-line `CollapsedInput` stand-in until the user clicks it.
+   * Defaults to `false`.
+   */
+  collapsible?: boolean;
 };
 
 function WebDefaultActions(props: { input: InputData }) {
@@ -117,6 +127,9 @@ export function ChannelInput(props: ChannelInputProps) {
       initialAttachments: props.input.attachments,
     });
   let clearComposer = () => {};
+  // Suppresses focus-out handling during clearComposer's iOS blur/refocus
+  // cycle, which is not a user-intended blur.
+  let isInternalRefocus = false;
 
   const typingTracker = createTypingTracker({
     onStartTyping: () => props.onStartTyping?.(),
@@ -155,6 +168,12 @@ export function ChannelInput(props: ChannelInputProps) {
     },
     persistenceKey: props.persistenceKey,
   });
+
+  const collapsedInput = createCollapsedInputState({
+    inputId: () => props.input.id,
+    attachFiles: (files) => inputState.commands.attachFiles(files),
+  });
+  const isCollapsed = () => !!props.collapsible && collapsedInput.isCollapsed();
 
   let isEditorConnected = false;
   let pendingRestoreSnapshot:
@@ -239,9 +258,13 @@ export function ChannelInput(props: ChannelInputProps) {
   // avoiding a conflict where clear()'s $setSelection(null) undoes the focus.
   clearComposer = () => {
     if (isIOS) {
+      isInternalRefocus = true;
       markdownEditor.controls.blur();
       markdownEditor.controls.clear();
-      requestAnimationFrame(() => markdownEditor.controls.focus());
+      requestAnimationFrame(() => {
+        markdownEditor.controls.focus();
+        isInternalRefocus = false;
+      });
     } else {
       markdownEditor.controls.clear();
     }
@@ -293,6 +316,7 @@ export function ChannelInput(props: ChannelInputProps) {
   props.onReady?.({
     clear: () => markdownEditor.controls.clear(),
     focus: () => markdownEditor.controls.focus(),
+    send: () => inputState.commands.send(),
     attachFiles: (files) => inputState.commands.attachFiles(files),
     insertEntityMention,
     previewEntityMentionInsertion,
@@ -323,15 +347,47 @@ export function ChannelInput(props: ChannelInputProps) {
 
   return (
     <Input.Root input={inputState.view()} commands={inputState.commands}>
+      <Show when={isCollapsed()}>
+        {/* File picker opened from the CollapsedInput attach button. */}
+        <input
+          ref={collapsedInput.setFilePickerRef}
+          type="file"
+          class="hidden"
+          multiple
+          accept={CHANNEL_FILE_PICKER_ACCEPT}
+          onChange={collapsedInput.onFilePickerChange}
+          data-collapsed-input-file-picker
+        />
+        <CollapsedInput
+          draft={inputState.view().value}
+          renderDraft={(draft) => (
+            <StaticMarkdown
+              markdown={draft()}
+              theme={singleLineMarkdownTheme}
+              singleLine
+            />
+          )}
+          placeholder={inputState.view().placeholder}
+          attachmentCount={inputState.view().attachments?.length ?? 0}
+          pending={inputState.view().hasPendingAttachments}
+          disabled={!hasSendableInputContent(inputState.view())}
+          getFocusTarget={() => lexicalEditor().getRootElement()}
+          onAttach={collapsedInput.attach}
+          onOpen={collapsedInput.expand}
+          onSend={() => void inputState.commands.send()}
+        />
+      </Show>
       <Surface
         onFocusOut={(e) => {
           const next = e.relatedTarget as Node | null;
           if (next && e.currentTarget.contains(next)) return;
+          if (isInternalRefocus) return;
           setIsFocused(false);
+          collapsedInput.collapse();
         }}
         onFocusIn={() => setIsFocused(true)}
         active={isFocused()}
-        class="rounded-xl"
+        class={cn('rounded-xl', isCollapsed() && 'hidden')}
         depth={2}
         solid
       >

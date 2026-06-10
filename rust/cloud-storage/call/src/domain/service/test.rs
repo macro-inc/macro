@@ -6,12 +6,15 @@ use macro_user_id::user_id::MacroUserIdStr;
 use notification::domain::models::apple::VoipPushPayload;
 use uuid::Uuid;
 
-use crate::domain::models::{CallError, CallWebhookEvent, EgressS3Config, VoipPushPayloadRequest};
+use crate::domain::models::{
+    Call, CallError, CallWebhookEvent, EgressS3Config, RingStatus, VerifiedRingToken,
+    VoipPushPayloadRequest,
+};
 use crate::domain::ports::CallRtcClient;
 
 use super::{
     derive_preview_key_from_recording_key, derive_preview_keys_from_recording_key,
-    exclude_voip_recipients, extract_recording_key,
+    exclude_voip_recipients, extract_recording_key, resolve_ring_status,
 };
 
 #[cfg(feature = "outbound")]
@@ -94,6 +97,7 @@ impl CallRtcClient for MockRtcClient {
                     caller_name: request.caller_name.to_string(),
                     livekit_server_url: Some(request.livekit_server_url.to_string()),
                     livekit_token: Some(livekit_token),
+                    ring_status_url: request.ring_status_url.map(str::to_string),
                 },
             ));
         }
@@ -127,6 +131,10 @@ impl CallRtcClient for MockRtcClient {
         _auth_token: &str,
     ) -> Result<CallWebhookEvent, CallError> {
         unreachable!("receive_webhook not exercised by these tests")
+    }
+
+    fn verify_access_token(&self, _token: &str) -> anyhow::Result<VerifiedRingToken> {
+        unreachable!("verify_access_token not exercised by these tests")
     }
 
     async fn dispatch_transcription_agent(&self, _room_name: &str) -> anyhow::Result<()> {
@@ -302,10 +310,18 @@ async fn build_voip_push_payloads_mints_a_distinct_token_per_recipient() {
             channel_name: "general",
             caller_name: "Carla",
             livekit_server_url: "wss://lk.example",
+            ring_status_url: Some("https://api.example/call/ring-status/0"),
         })
         .await;
 
     assert_eq!(payloads.len(), 2);
+    for (_, payload) in &payloads {
+        assert_eq!(
+            payload.ring_status_url.as_deref(),
+            Some("https://api.example/call/ring-status/0"),
+            "ring_status_url should propagate into every recipient's payload"
+        );
+    }
     let by_id: HashMap<String, String> = payloads
         .into_iter()
         .map(|(id, p)| {
@@ -341,6 +357,7 @@ async fn build_voip_push_payloads_drops_recipients_whose_token_mint_fails() {
             channel_name: "general",
             caller_name: "Carla",
             livekit_server_url: "wss://lk.example",
+            ring_status_url: None,
         })
         .await;
 
@@ -352,6 +369,10 @@ async fn build_voip_push_payloads_drops_recipients_whose_token_mint_fails() {
     let (id, payload) = &payloads[0];
     assert_eq!(id.as_ref(), alice.as_ref());
     assert_eq!(payload.livekit_token.as_deref(), Some("token-alice"));
+    assert_eq!(
+        payload.ring_status_url, None,
+        "payload omits ring_status_url when the service has no base URL configured"
+    );
 }
 
 #[tokio::test]
@@ -368,11 +389,63 @@ async fn build_voip_push_payloads_returns_empty_for_no_recipients() {
             channel_name: "general",
             caller_name: "Carla",
             livekit_server_url: "wss://lk.example",
+            ring_status_url: None,
         })
         .await;
 
     assert!(payloads.is_empty());
     assert!(mock.calls().is_empty());
+}
+
+fn active_call(call_id: Uuid) -> Call {
+    Call {
+        id: call_id,
+        channel_id: Uuid::nil(),
+        room_name: Uuid::nil().to_string(),
+        created_by: "macro|carla@example.com".to_string(),
+        created_at: chrono::Utc::now(),
+        egress_id: None,
+    }
+}
+
+#[test]
+fn resolve_ring_status_reports_ended_when_no_active_call() {
+    let call_id = Uuid::from_u128(1);
+    assert_eq!(
+        resolve_ring_status(None, &call_id, false),
+        RingStatus::Ended
+    );
+}
+
+#[test]
+fn resolve_ring_status_reports_ended_when_a_newer_call_replaced_the_polled_one() {
+    let polled = Uuid::from_u128(1);
+    let newer = active_call(Uuid::from_u128(2));
+    assert_eq!(
+        resolve_ring_status(Some(&newer), &polled, true),
+        RingStatus::Ended,
+        "a different active call in the room means the polled ring is dead"
+    );
+}
+
+#[test]
+fn resolve_ring_status_reports_answered_when_user_is_a_participant() {
+    let call_id = Uuid::from_u128(1);
+    let call = active_call(call_id);
+    assert_eq!(
+        resolve_ring_status(Some(&call), &call_id, true),
+        RingStatus::Answered
+    );
+}
+
+#[test]
+fn resolve_ring_status_reports_ringing_when_user_has_not_joined() {
+    let call_id = Uuid::from_u128(1);
+    let call = active_call(call_id);
+    assert_eq!(
+        resolve_ring_status(Some(&call), &call_id, false),
+        RingStatus::Ringing
+    );
 }
 
 #[cfg(feature = "outbound")]

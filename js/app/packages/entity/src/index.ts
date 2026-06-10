@@ -16,7 +16,7 @@ export { SearchSender } from './extractors-search/search-sender';
 export { SearchTimestamp } from './extractors-search/search-timestamp';
 export {
   getSnippetHit,
-  isSnippetEntity,
+  isHitSnippetEntity,
 } from './extractors-search/snippet-entity';
 export * from './types/drag';
 export * from './types/entity';

@@ -1208,7 +1208,7 @@
       "DocumentSubType": {
         "type": "string",
         "description": "The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.",
-        "enum": ["task"]
+        "enum": ["task", "snippet"]
       },
       "EmailFilters": {
         "type": "object",
@@ -2101,6 +2101,10 @@
               "type": "string"
             },
             "description": "Internal foreign entity record IDs to filter by. Empty to include all records."
+          },
+          "includes_me": {
+            "type": "boolean",
+            "description": "When true, only return foreign entities whose metadata lists the requesting user as a\nparticipant (GitHub `involves:me` semantics for `github_pull_request` records). False or\nabsent applies no filter. Serialized in filter ASTs as the `\"me\"` literal."
           }
         }
       },

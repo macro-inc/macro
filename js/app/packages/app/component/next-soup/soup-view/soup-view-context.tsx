@@ -20,6 +20,10 @@ import {
 } from '@app/component/next-soup/filters/filter-store/query-store';
 import { createGroupedSoupQueries } from '@app/component/next-soup/soup-view/create-grouped-soup-queries';
 import { createSearchState } from '@app/component/next-soup/soup-view/create-search-state';
+import {
+  INBOX_FILTER_ENTRY_KEY,
+  registerInboxFilterSplit,
+} from '@app/component/next-soup/soup-view/inbox-filter-controllers';
 import { deduplicateEntities } from '@app/component/next-soup/utils';
 import { useEntryState } from '@app/component/split-layout/entry-state';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
@@ -243,9 +247,22 @@ export const SoupViewContextProvider: FlowComponent<
     { default: [] }
   );
   const [inboxFilter, setInboxFilter] = useEntryState<string[] | undefined>(
-    'soup.inboxFilter',
+    INBOX_FILTER_ENTRY_KEY,
     { default: undefined }
   );
+
+  // Expose the mail view's inbox filter to consumers outside the split tree
+  // (the sidebar's nested account rows read and set it by split id).
+  {
+    const content = panel.handle.content();
+    if (content.type === 'component' && content.id === 'mail') {
+      const dispose = registerInboxFilterSplit(panel.handle.id, {
+        inboxFilter,
+        setInboxFilter,
+      });
+      onCleanup(dispose);
+    }
+  }
   const [activeTab, setActiveTab] = useEntryState<string | undefined>(
     'soup.tab',
     { default: undefined }

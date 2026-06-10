@@ -6,6 +6,10 @@ pub const CONVERTED_DOCUMENT_FILE_NAME: &str = "converted";
 /// The prefix used for temporary files in S3.
 pub const TEMP_FILE_PREFIX: &str = "temp_files";
 
+/// The prefix used for sync-service CRDT snapshot cache objects in the document
+/// storage bucket. Snapshot keys are `{SYNC_SERVICE_SNAPSHOT_PREFIX}/{document_id}`.
+pub const SYNC_SERVICE_SNAPSHOT_PREFIX: &str = "sync_service_snapshot";
+
 /// The file extension for PDF files.
 pub const PDF_EXTENSION: &str = "pdf";
 

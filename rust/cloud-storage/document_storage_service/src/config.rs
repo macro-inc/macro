@@ -88,6 +88,13 @@ maybe_env_var! {
 }
 
 maybe_env_var! {
+    /// Public base URL of this service (e.g. `https://cloud-storage.macro.com`),
+    /// used to build the ring-status URL included in VoIP push payloads.
+    /// When unset, payloads omit the URL and native ring-status polling is off.
+    pub struct CallRingStatusBaseUrl;
+}
+
+maybe_env_var! {
     /// S3 bucket for call recording egress.
     pub struct CallRecordingS3Bucket;
 }

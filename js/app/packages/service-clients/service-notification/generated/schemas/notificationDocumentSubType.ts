@@ -5,9 +5,12 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { NotificationDocumentSubTypeOneOf } from './notificationDocumentSubTypeOneOf';
+import type { NotificationDocumentSubTypeOneOfThree } from './notificationDocumentSubTypeOneOfThree';
 
 /**
  * The sub type of a document in a notification.
 Serializes as `{ "type": "task" }` matching the storage service pattern.
  */
-export type NotificationDocumentSubType = NotificationDocumentSubTypeOneOf;
+export type NotificationDocumentSubType =
+  | NotificationDocumentSubTypeOneOf
+  | NotificationDocumentSubTypeOneOfThree;

@@ -1,7 +1,12 @@
+import { createUniqueId } from 'solid-js';
+
 export const AnimatedChannelIcon = (props: {
   triggerAnimation?: boolean;
   class?: string;
 }) => {
+  // Unique clipPath id so multiple instances on a page don't collide.
+  const clipId = `channel-clip-${createUniqueId()}`;
+
   return (
     <svg
       width="100%"
@@ -13,51 +18,53 @@ export const AnimatedChannelIcon = (props: {
       stroke-linecap="round"
       stroke-linejoin="round"
       xmlns="http://www.w3.org/2000/svg"
-      overflow="visible"
+      overflow="hidden"
       class={`animated-channel-icon ${props.triggerAnimation ? 'animating' : ''} ${props.class ?? ''}`}
     >
       {/*<title>Channel icon</title>*/}
       <style>{`
-        /* The .animating class is toggled by the triggerAnimation prop; callers
-           drive it differently — held for the duration of hover in the desktop
-           sidebar (SidebarActionButton etc.), and pulsed for a fixed duration on
-           onPointerDown/tap in the mobile dock (MobileDockButton). While
-           .animating is set, the offset/leaning hash resolves into a regular hash
-           and stays there: horizontals slide to horizontally-centered
-           (translateX), verticals straighten to fully vertical by morphing their
-           path 'd'. It eases back when .animating clears. Morphing 'd' (rather
-           than skewX) avoids shearing the round caps and keeps the stroke scaling
-           normally with icon size. */
-        .animated-channel-icon .channel-h {
-          transition: transform 0.35s ease-in-out;
+        @keyframes channel-zip-h-top {
+          0%, 15% { transform: translate(-26px, 0); }
+          100%    { transform: translate(0, 0); }
         }
-        /* Browser support for the .channel-v / .channel-v-* path morph below
-           (via 'transition: d'): Chrome/Edge >=52/79 and Firefox >=97, but NOT
-           Safari/WebKit — including the macOS Tauri WKWebView — where the 'd'
-           property parses but has no effect, so the verticals won't straighten
-           there (the translateX horizontals still animate). A WebKit fallback
-           (SMIL or JS morph) is TODO in a separate PR covering the other
-           animating icons too. */
-        .animated-channel-icon .channel-v {
-          transition: d 0.35s ease-in-out;
+        @keyframes channel-zip-h-bottom {
+          0%, 15% { transform: translate(26px, 0); }
+          100%    { transform: translate(0, 0); }
         }
+        @keyframes channel-zip-v-left {
+          0%, 15% { transform: translate(-8px, 24px); }
+          100%    { transform: translate(0, 0); }
+        }
+        @keyframes channel-zip-v-right {
+          0%, 15% { transform: translate(8px, -24px); }
+          100%    { transform: translate(0, 0); }
+        }
+        /* easeOutBack: the 15% -> 100% segment zips in then overshoots past rest and
+           settles. The 0% -> 15% segment holds (both keyframes share the start offset). */
         .animated-channel-icon.animating .channel-h-top {
-          transform: translateX(-1px);
+          animation: channel-zip-h-top 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
         }
         .animated-channel-icon.animating .channel-h-bottom {
-          transform: translateX(1px);
+          animation: channel-zip-h-bottom 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
         }
         .animated-channel-icon.animating .channel-v-left {
-          d: path("M9 15.5L9 0.5");
+          animation: channel-zip-v-left 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
         }
         .animated-channel-icon.animating .channel-v-right {
-          d: path("M15 15.5L15 0.5");
+          animation: channel-zip-v-right 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
         }
       `}</style>
-      <path class="channel-h channel-h-top" d="M2 5H24" />
-      <path class="channel-h channel-h-bottom" d="M0 11H22" />
-      <path class="channel-v channel-v-left" d="M6.5 15.5L11.5 0.5" />
-      <path class="channel-v channel-v-right" d="M12.5 15.5L17.5 0.5" />
+      <clipPath id={clipId}>
+        <rect x="0" y="-4" width="24" height="24" />
+      </clipPath>
+      <g clip-path={`url(#${clipId})`}>
+        {/* Horizontals shortened ~1u on the edge-touching end so the round caps stay
+            inside the clip box at rest (M2 5H24 -> H23, M0 11H22 -> M1). */}
+        <path class="channel-h channel-h-top" d="M2 5H23" />
+        <path class="channel-h channel-h-bottom" d="M1 11H22" />
+        <path class="channel-v channel-v-left" d="M6.5 15.5L11.5 0.5" />
+        <path class="channel-v channel-v-right" d="M12.5 15.5L17.5 0.5" />
+      </g>
     </svg>
   );
 };

@@ -3,7 +3,7 @@ import { itemToResolvedBlockName } from '@core/constant/allBlocks';
 import type { EntityType } from '@core/types';
 import { macroIdToEmail, tryMacroId, useDisplayName } from '@core/user';
 import { getItemPreview, isAccessiblePreviewItem } from '@queries/preview';
-import type { ItemType } from '@service-storage/client';
+import { stringToItemType } from '@service-storage/client';
 import { raceTimeout, until } from '@solid-primitives/promise';
 
 export type UserNameResolver = (id: string) => Promise<string | undefined>;
@@ -30,8 +30,10 @@ export const DefaultUserNameResolver: UserNameResolver = async (id: string) => {
 };
 
 const getPreview = async (id: string, type: EntityType) => {
+  const itemType = stringToItemType(type);
+  if (!itemType) return undefined;
   return await raceTimeout(
-    getItemPreview({ id, type: type as ItemType }),
+    getItemPreview({ id, type: itemType }),
     RESOLVER_TIMEOUT
   );
 };
