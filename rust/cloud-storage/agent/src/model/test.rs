@@ -46,6 +46,35 @@ fn retired_uses_default_api_id() {
 }
 
 #[test]
+fn gpt5_5_deserializes() {
+    let m: AgentModel = serde_json::from_str(r#""gpt5_5""#).unwrap();
+    assert_eq!(m, AgentModel::Gpt5_5);
+}
+
+#[test]
+fn gpt5_mini_deserializes() {
+    let m: AgentModel = serde_json::from_str(r#""gpt5Mini""#).unwrap();
+    assert_eq!(m, AgentModel::Gpt5Mini);
+}
+
+#[test]
+fn gpt_models_route_to_openai() {
+    assert_eq!(AgentModel::Gpt5_5.provider(), ModelProvider::OpenAi);
+    assert_eq!(AgentModel::Gpt5Mini.provider(), ModelProvider::OpenAi);
+    assert_eq!(AgentModel::Smart.provider(), ModelProvider::Anthropic);
+    assert_eq!(AgentModel::Retired.provider(), ModelProvider::Anthropic);
+}
+
+#[test]
+fn gpt_round_trip_serialization() {
+    for m in [AgentModel::Gpt5_5, AgentModel::Gpt5Mini] {
+        let json = serde_json::to_string(&m).unwrap();
+        let back: AgentModel = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, m);
+    }
+}
+
+#[test]
 fn round_trip_serialization() {
     let m = AgentModel::Sonnet4_6;
     let json = serde_json::to_string(&m).unwrap();

@@ -1413,7 +1413,16 @@
       "AgentModel": {
         "type": "string",
         "description": "Model to use for completions.\n\nUnrecognized model strings (including retired Google/OpenAI variants\nfrom older data) deserialize to `Retired` via the manual\n`Deserialize` impl.",
-        "enum": ["smart", "fast", "opus4_7", "sonnet4_6", "haiku4_5", "retired"]
+        "enum": [
+          "smart",
+          "fast",
+          "opus4_7",
+          "sonnet4_6",
+          "haiku4_5",
+          "gpt5_5",
+          "gpt5Mini",
+          "retired"
+        ]
       },
       "AssistantMessagePart": {
         "oneOf": [

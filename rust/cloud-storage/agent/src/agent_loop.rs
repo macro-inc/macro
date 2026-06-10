@@ -1,8 +1,7 @@
 /// The main entry point: [`AgentLoop`] and [`Session`].
-use crate::anthropic_model::AnthropicModel;
 use crate::error::AgentError;
 use crate::hook::{StreamBridge, ToolRouter};
-use crate::model::AgentModel;
+use crate::model::{AgentModel, ModelProvider};
 use crate::stream::{ChatCompletionStream, StreamPart};
 use crate::tool_adapter::DynToolSetAdapter;
 use ai_toolset::{RequestContext, ToolSet as AiToolSet};
@@ -10,10 +9,11 @@ use futures::StreamExt;
 use macro_user_id::user_id::MacroUserIdStr;
 use rig_core::agent::{Agent, MultiTurnStreamItem};
 use rig_core::client::{CompletionClient, ProviderClient};
+use rig_core::completion::{CompletionModel, GetTokenUsage};
 use rig_core::message::Message;
-use rig_core::providers::anthropic;
+use rig_core::providers::{anthropic, openai};
 use rig_core::streaming::{StreamedAssistantContent, StreamingPrompt};
-use rig_core::tool::server::ToolServer;
+use rig_core::tool::server::{ToolServer, ToolServerHandle};
 use std::sync::{Arc, RwLock};
 
 const DEFAULT_MAX_TURNS: usize = 16;
@@ -21,11 +21,13 @@ const DEFAULT_MAX_TOKENS: u64 = 16_000;
 
 /// Factory for creating per-request agent sessions.
 ///
-/// Holds the Anthropic client. Tools and system prompt are provided
-/// per-session since they vary by request (MCP tools are per-user,
-/// system prompt depends on toolset selection).
+/// Holds one client per provider and routes each session to the provider
+/// serving the selected model (see [`AgentModel::provider`]). Tools and
+/// system prompt are provided per-session since they vary by request
+/// (MCP tools are per-user, system prompt depends on toolset selection).
 pub struct AgentLoop {
-    client: anthropic::Client,
+    anthropic: anthropic::Client,
+    openai: Option<openai::Client>,
     model: AgentModel,
     max_turns: usize,
     max_tokens: u64,
@@ -38,12 +40,18 @@ impl Default for AgentLoop {
 }
 
 impl AgentLoop {
-    /// Create an `AgentLoop` with the Anthropic client from the environment
-    /// and the default model (Opus 4.7).
+    /// Create an `AgentLoop` with provider clients from the environment and
+    /// the default model (Opus 4.7).
+    ///
+    /// `ANTHROPIC_API_KEY` is required. `OPENAI_API_KEY` is optional at
+    /// construction; selecting an OpenAI model without it panics at
+    /// session creation.
     pub fn new() -> Self {
-        let client = anthropic::Client::from_env().expect("ANTHROPIC_API_KEY must be set");
+        let anthropic = anthropic::Client::from_env().expect("ANTHROPIC_API_KEY must be set");
+        let openai = openai::Client::from_env().ok();
         Self {
-            client,
+            anthropic,
+            openai,
             model: AgentModel::default(),
             max_turns: DEFAULT_MAX_TURNS,
             max_tokens: DEFAULT_MAX_TOKENS,
@@ -66,6 +74,21 @@ impl AgentLoop {
     pub fn with_max_tokens(mut self, n: u64) -> Self {
         self.max_tokens = n;
         self
+    }
+
+    fn build_agent<M: CompletionModel>(
+        &self,
+        model: M,
+        handle: ToolServerHandle,
+        system_prompt: &str,
+    ) -> Agent<M> {
+        rig_core::agent::AgentBuilder::new(model)
+            .tool_server_handle(handle)
+            .default_max_turns(self.max_turns)
+            .max_tokens(self.max_tokens)
+            .additional_params(self.model.thinking_params())
+            .preamble(system_prompt)
+            .build()
     }
 
     /// Start a new streaming session.
@@ -103,16 +126,26 @@ impl AgentLoop {
                 .expect("failed to register tool");
         }
 
-        let raw_model = self.client.completion_model(self.model.api_id());
-        let model = AnthropicModel::new(raw_model);
-
-        let agent = rig_core::agent::AgentBuilder::new(model)
-            .tool_server_handle(handle)
-            .default_max_turns(self.max_turns)
-            .max_tokens(self.max_tokens)
-            .additional_params(self.model.thinking_params())
-            .preamble(system_prompt)
-            .build();
+        let agent = match self.model.provider() {
+            ModelProvider::Anthropic => {
+                let model = self.anthropic.completion_model(self.model.api_id());
+                ProviderAgent::Anthropic(self.build_agent(model, handle, system_prompt))
+            }
+            ModelProvider::OpenAi => {
+                let client = self
+                    .openai
+                    .as_ref()
+                    .expect("OPENAI_API_KEY must be set to use OpenAI models");
+                // Non-strict tools: send tool schemas verbatim instead of
+                // letting rig sanitize them into OpenAI's strict subset,
+                // which silently forces every optional parameter into
+                // `required`.
+                let model = client
+                    .completion_model(self.model.api_id())
+                    .with_non_strict_tools();
+                ProviderAgent::OpenAi(self.build_agent(model, handle, system_prompt))
+            }
+        };
 
         Session {
             agent,
@@ -123,9 +156,15 @@ impl AgentLoop {
     }
 }
 
+/// A rig agent bound to the provider that serves the session's model.
+enum ProviderAgent {
+    Anthropic(Agent<anthropic::completion::CompletionModel>),
+    OpenAi(Agent<openai::responses_api::ResponsesCompletionModel>),
+}
+
 /// A single streaming conversation session.
 pub struct Session {
-    agent: Agent<AnthropicModel>,
+    agent: ProviderAgent,
     history: Vec<Message>,
     max_turns: usize,
     routing: ToolRouter,
@@ -149,62 +188,100 @@ impl Session {
             )));
         };
 
-        let (bridge, mut rx) = StreamBridge::channel(self.routing.clone());
-
-        let mut rig_stream = self
-            .agent
-            .stream_prompt(prompt.clone())
-            .with_history(history.to_vec())
-            .multi_turn(self.max_turns)
-            .with_hook(bridge)
-            .await;
-
-        let stream = async_stream::stream! {
-            let mut thinking_buf = String::new();
-
-            while let Some(item) = rig_stream.next().await {
-                while let Ok(part) = rx.try_recv() {
-                    yield part;
-                }
-                match item {
-                    Ok(MultiTurnStreamItem::StreamAssistantItem(
-                        StreamedAssistantContent::ReasoningDelta { reasoning, .. },
-                    )) => {
-                        thinking_buf.push_str(&reasoning);
-                    }
-                    other => {
-                        if !thinking_buf.is_empty() {
-                            yield Ok(StreamPart::Thinking(std::mem::take(&mut thinking_buf)));
-                        }
-                        match other {
-                            Ok(MultiTurnStreamItem::FinalResponse(final_resp)) => {
-                                let usage = final_resp.usage();
-                                yield Ok(StreamPart::Usage(crate::stream::Usage {
-                                    input_tokens: usage.input_tokens,
-                                    output_tokens: usage.output_tokens,
-                                }));
-                            }
-                            Err(e) => {
-                                yield Err(AgentError::Streaming(e));
-                            }
-                            _ => {}
-                        }
-                    }
-                }
+        let stream = match &self.agent {
+            ProviderAgent::Anthropic(agent) => {
+                run_stream(
+                    agent,
+                    prompt.clone(),
+                    history.to_vec(),
+                    self.max_turns,
+                    self.routing.clone(),
+                )
+                .await
             }
-            if !thinking_buf.is_empty() {
-                yield Ok(StreamPart::Thinking(std::mem::take(&mut thinking_buf)));
-            }
-            while let Ok(part) = rx.try_recv() {
-                yield part;
+            ProviderAgent::OpenAi(agent) => {
+                run_stream(
+                    agent,
+                    prompt.clone(),
+                    history.to_vec(),
+                    self.max_turns,
+                    self.routing.clone(),
+                )
+                .await
             }
         };
 
-        Ok(Box::pin(stream))
+        Ok(stream)
     }
 
     /// Get the conversation messages accumulated during this session.
     pub fn get_history(&self) -> &[Message] {
         &self.history
     }
+}
+
+/// Run the agentic loop on `agent` and adapt rig's stream into the
+/// provider-agnostic [`StreamPart`] stream consumed by DCS.
+async fn run_stream<M>(
+    agent: &Agent<M>,
+    prompt: Message,
+    history: Vec<Message>,
+    max_turns: usize,
+    routing: ToolRouter,
+) -> ChatCompletionStream<'static>
+where
+    M: CompletionModel + 'static,
+    M::StreamingResponse: GetTokenUsage + Send + Sync,
+{
+    let (bridge, mut rx) = StreamBridge::channel(routing);
+
+    let mut rig_stream = agent
+        .stream_prompt(prompt)
+        .with_history(history)
+        .multi_turn(max_turns)
+        .with_hook(bridge)
+        .await;
+
+    let stream = async_stream::stream! {
+        let mut thinking_buf = String::new();
+
+        while let Some(item) = rig_stream.next().await {
+            while let Ok(part) = rx.try_recv() {
+                yield part;
+            }
+            match item {
+                Ok(MultiTurnStreamItem::StreamAssistantItem(
+                    StreamedAssistantContent::ReasoningDelta { reasoning, .. },
+                )) => {
+                    thinking_buf.push_str(&reasoning);
+                }
+                other => {
+                    if !thinking_buf.is_empty() {
+                        yield Ok(StreamPart::Thinking(std::mem::take(&mut thinking_buf)));
+                    }
+                    match other {
+                        Ok(MultiTurnStreamItem::FinalResponse(final_resp)) => {
+                            let usage = final_resp.usage();
+                            yield Ok(StreamPart::Usage(crate::stream::Usage {
+                                input_tokens: usage.input_tokens,
+                                output_tokens: usage.output_tokens,
+                            }));
+                        }
+                        Err(e) => {
+                            yield Err(AgentError::Streaming(e));
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+        if !thinking_buf.is_empty() {
+            yield Ok(StreamPart::Thinking(std::mem::take(&mut thinking_buf)));
+        }
+        while let Ok(part) = rx.try_recv() {
+            yield part;
+        }
+    };
+
+    Box::pin(stream)
 }

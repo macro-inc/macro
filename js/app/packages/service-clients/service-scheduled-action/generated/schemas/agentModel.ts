@@ -22,5 +22,7 @@ export const AgentModel = {
   opus4_7: 'opus4_7',
   sonnet4_6: 'sonnet4_6',
   haiku4_5: 'haiku4_5',
+  gpt5_5: 'gpt5_5',
+  gpt5Mini: 'gpt5Mini',
   retired: 'retired',
 } as const;
