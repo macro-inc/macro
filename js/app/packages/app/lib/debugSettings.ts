@@ -1,4 +1,4 @@
-import { type Accessor, createMemo, createSignal } from 'solid-js';
+import { type Accessor, createSignal } from 'solid-js';
 
 /**
  * Local, client-only debug settings for internal staff.
@@ -88,5 +88,5 @@ export function clearAllDebugSettings(): void {
 
 /** Reactive accessor hook for a single debug setting. */
 export function useDebugSetting(key: DebugSettingKey): Accessor<boolean> {
-  return createMemo(() => getDebugSetting(key));
+  return () => getDebugSetting(key);
 }

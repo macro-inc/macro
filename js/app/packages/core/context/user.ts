@@ -90,7 +90,7 @@ export function usePermissions() {
 /** Reactive check for whether the current user has a specific permission. */
 export function useHasPermission(id: PermissionId): Accessor<boolean> {
   const permissions = usePermissions();
-  return createMemo(() => permissions().includes(id));
+  return () => permissions().includes(id);
 }
 
 export function useAuthor() {

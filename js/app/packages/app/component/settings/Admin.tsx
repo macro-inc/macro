@@ -1,4 +1,4 @@
-import { For, createMemo } from 'solid-js';
+import { For } from 'solid-js';
 import { Button, Panel, ToggleSwitch } from '@ui';
 import {
   type DebugSettingDef,
@@ -10,7 +10,7 @@ import {
 } from '@app/lib/debugSettings';
 
 function DebugSettingRow(props: { setting: DebugSettingDef }) {
-  const checked = createMemo(() => getDebugSetting(props.setting.key));
+  const checked = () => getDebugSetting(props.setting.key);
 
   return (
     <div class="flex items-center justify-between gap-4 py-2 px-6">
@@ -29,9 +29,7 @@ function DebugSettingRow(props: { setting: DebugSettingDef }) {
 }
 
 export function Admin() {
-  const hasActiveSettings = createMemo(
-    () => Object.keys(debugSettings()).length > 0
-  );
+  const hasActiveSettings = () => Object.keys(debugSettings()).length > 0;
 
   return (
     <div class="h-full overflow-hidden flex justify-center p-2">
