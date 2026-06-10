@@ -95,7 +95,6 @@ export const useBlockEntityCommands = () => {
         if (!markDone.canExecute(entity)) return false;
 
         const selectedRow = soup?.items.get(entity.id);
-        console.log(splitPanel?.handle.referredFrom());
         if (soup && selectedRow) {
           markDone.executeWithSoup(
             [selectedRow.original],
