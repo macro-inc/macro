@@ -11,6 +11,11 @@ type DragState = {
   sourceField: RecipientFieldId;
 };
 
+type RowFocusHandlers = {
+  onRowFocusIn?: () => void;
+  onRowFocusOut?: (e: FocusEvent) => void;
+};
+
 function ComposeFieldRow(props: {
   label: string;
   children: JSX.Element;
@@ -21,6 +26,7 @@ function ComposeFieldRow(props: {
     sourceField: RecipientFieldId
   ) => void;
   onRowFocusIn?: () => void;
+  onRowFocusOut?: (e: FocusEvent) => void;
 }) {
   const [isDragOver, setIsDragOver] = createSignal(false);
 
@@ -55,6 +61,7 @@ function ComposeFieldRow(props: {
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
       onFocusIn={() => props.onRowFocusIn?.()}
+      onFocusOut={(e) => props.onRowFocusOut?.(e)}
     >
       <div
         class={cn(
@@ -67,6 +74,16 @@ function ComposeFieldRow(props: {
       <div class="flex-1 min-w-0">{props.children}</div>
     </div>
   );
+}
+
+function recipientName(recipient: EmailRecipient) {
+  switch (recipient.kind) {
+    case 'user':
+    case 'contact':
+      return recipient.data.name || recipient.data.email;
+    case 'custom':
+      return recipient.data.email;
+  }
 }
 
 export function ComposeRecipients(props: {
@@ -120,13 +137,53 @@ export function ComposeRecipients(props: {
     if (targetField === 'bcc') props.setShowBcc(true);
   };
 
+  // On mobile an unfocused row with recipients collapses to a "Name, Name &
+  // N more…" summary; tapping it brings the chips and input back (iOS Mail).
+  const [activeField, setActiveField] = createSignal<RecipientFieldId | null>(
+    null
+  );
+  const inputEls: Partial<Record<RecipientFieldId, HTMLElement>> = {};
+
+  const showSummary = (field: RecipientFieldId) =>
+    isMobile() && activeField() !== field && ctx.recipients()[field].length > 0;
+
+  const summaryText = (field: RecipientFieldId) => {
+    const names = ctx.recipients()[field].map(recipientName).filter(Boolean);
+    if (names.length <= 2) return names.join(', ');
+    return `${names[0]}, ${names[1]} & ${names.length - 2} more…`;
+  };
+
+  const activate = (field: RecipientFieldId) => {
+    setActiveField(field);
+    requestAnimationFrame(() => inputEls[field]?.focus());
+  };
+
+  const rowFocusHandlers = (
+    field: RecipientFieldId,
+    extraFocusIn?: () => void
+  ): RowFocusHandlers => ({
+    onRowFocusIn: () => {
+      setActiveField(field);
+      extraFocusIn?.();
+    },
+    onRowFocusOut: (e) => {
+      const row = e.currentTarget as HTMLElement;
+      if (e.relatedTarget instanceof Node && row.contains(e.relatedTarget))
+        return;
+      setActiveField((active) => (active === field ? null : active));
+    },
+  });
+
   const recipientSelector = (
     field: RecipientFieldId,
     inputRef?: (el: HTMLElement) => void,
     opts?: { focusOnMount?: boolean; includeSelf?: boolean }
   ) => (
     <RecipientSelector
-      inputRef={inputRef}
+      inputRef={(el) => {
+        inputEls[field] = el;
+        inputRef?.(el);
+      }}
       options={ctx.recipientOptions}
       selfEmail={ctx.fromAddress?.()}
       selectedOptions={ctx.recipients()[field]}
@@ -146,11 +203,28 @@ export function ComposeRecipients(props: {
     />
   );
 
+  const summarizable = (field: RecipientFieldId, selector: JSX.Element) => (
+    <Show
+      when={!showSummary(field)}
+      fallback={
+        <button
+          type="button"
+          class="ph-no-capture w-full min-h-9 flex items-center text-sm text-ink text-left"
+          onClick={() => activate(field)}
+        >
+          <span class="truncate">{summaryText(field)}</span>
+        </button>
+      }
+    >
+      {selector}
+    </Show>
+  );
+
   const fieldRow = (
     field: RecipientFieldId,
     label: string,
     children: JSX.Element,
-    onRowFocusIn?: () => void
+    handlers?: RowFocusHandlers
   ) => (
     <ComposeFieldRow
       label={label}
@@ -159,7 +233,8 @@ export function ComposeRecipients(props: {
       onRecipientDrop={(recipient, sourceField) =>
         handleRecipientDrop(field, recipient, sourceField)
       }
-      onRowFocusIn={onRowFocusIn}
+      onRowFocusIn={handlers?.onRowFocusIn}
+      onRowFocusOut={handlers?.onRowFocusOut}
     >
       {children}
     </ComposeFieldRow>
@@ -172,28 +247,41 @@ export function ComposeRecipients(props: {
 
   const fieldLabel = (text: string) => (isMobile() ? `${text}:` : text);
 
-  const toRow = (onRowFocusIn?: () => void) =>
+  const toRow = (handlers?: RowFocusHandlers) =>
     fieldRow(
       'to',
       fieldLabel('To'),
       <>
-        {recipientSelector('to', props.toRef, {
-          focusOnMount: ctx.focusRecipientsOnMount,
-          includeSelf: ctx.includeSelf,
-        })}
+        {summarizable(
+          'to',
+          recipientSelector('to', props.toRef, {
+            focusOnMount: ctx.focusRecipientsOnMount,
+            includeSelf: ctx.includeSelf,
+          })
+        )}
         <Show when={ctx.validationError('no_recipient')}>
           {(err) => (
             <div class="text-failure-ink text-sm mt-1">{err().message}</div>
           )}
         </Show>
       </>,
-      onRowFocusIn
+      handlers
     );
 
-  const ccRow = () =>
-    fieldRow('cc', fieldLabel('Cc'), recipientSelector('cc', props.ccRef));
-  const bccRow = () =>
-    fieldRow('bcc', fieldLabel('Bcc'), recipientSelector('bcc', props.bccRef));
+  const ccRow = (handlers?: RowFocusHandlers) =>
+    fieldRow(
+      'cc',
+      fieldLabel('Cc'),
+      summarizable('cc', recipientSelector('cc', props.ccRef)),
+      handlers
+    );
+  const bccRow = (handlers?: RowFocusHandlers) =>
+    fieldRow(
+      'bcc',
+      fieldLabel('Bcc'),
+      summarizable('bcc', recipientSelector('bcc', props.bccRef)),
+      handlers
+    );
 
   return (
     <Show
@@ -207,7 +295,7 @@ export function ComposeRecipients(props: {
       }
     >
       <div class="flex flex-col gap-2">
-        {toRow(props.onToRowFocusIn)}
+        {toRow(rowFocusHandlers('to', props.onToRowFocusIn))}
         <Show
           when={isCcVisible() || isBccVisible()}
           fallback={
@@ -225,8 +313,8 @@ export function ComposeRecipients(props: {
             </button>
           }
         >
-          {ccRow()}
-          {bccRow()}
+          {ccRow(rowFocusHandlers('cc'))}
+          {bccRow(rowFocusHandlers('bcc'))}
           <div class="flex items-center gap-2 py-1 border-b border-edge-muted">
             <div class="text-sm shrink-0 text-ink-placeholder">From:</div>
             <div class="flex-1 min-w-0 min-h-9 flex items-center">
