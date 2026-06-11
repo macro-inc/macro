@@ -385,6 +385,51 @@ pub async fn handler(
                     .await
                     .context("Failed to commit shared-inbox promotion transaction")?;
 
+                // Relocate the mailbox's Google grant onto a dedicated FusionAuth user so the
+                // inbox keeps syncing regardless of which connector stays. Done after the
+                // commit: if relocation fails the inbox keeps working under the original
+                // owner's grant (prior behavior) and the relocation can be retried. Once the
+                // grant has moved, the link row must point at the shared user or token
+                // fetches for this inbox fail, so the update is retried before giving up.
+                match ctx
+                    .auth_service_client
+                    .relocate_inbox_grant(&linked_email, &existing_link.fusionauth_user_id)
+                    .await
+                {
+                    Ok(shared_fusionauth_user_id) => {
+                        const MAX_LINK_UPDATE_ATTEMPTS: u32 = 3;
+                        for attempt in 1..=MAX_LINK_UPDATE_ATTEMPTS {
+                            match email_db_client::links::update::update_link_fusionauth_user_id(
+                                &ctx.db,
+                                promoted.link_id,
+                                &shared_fusionauth_user_id,
+                            )
+                            .await
+                            {
+                                Ok(()) => break,
+                                Err(e) if attempt < MAX_LINK_UPDATE_ATTEMPTS => {
+                                    tracing::warn!(error=?e, attempt, "Retrying link fusionauth_user_id update after grant relocation");
+                                    tokio::time::sleep(std::time::Duration::from_millis(
+                                        200 * u64::from(attempt),
+                                    ))
+                                    .await;
+                                }
+                                Err(e) => {
+                                    tracing::error!(
+                                        error=?e,
+                                        link_id=%promoted.link_id,
+                                        shared_fusionauth_user_id=%shared_fusionauth_user_id,
+                                        "Failed to re-home link fusionauth_user_id after grant relocation; inbox token fetches will fail until the link is re-homed to the shared user"
+                                    );
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        tracing::error!(error=?e, "Failed to relocate shared-inbox grant; inbox keeps syncing under the original owner's grant");
+                    }
+                }
+
                 return Ok((
                     StatusCode::OK,
                     Json(InitResponse {
