@@ -147,10 +147,12 @@ export function ComposeRecipients(props: {
   const showSummary = (field: RecipientFieldId) =>
     isMobile() && activeField() !== field && ctx.recipients()[field].length > 0;
 
-  const summaryText = (field: RecipientFieldId) => {
+  const summaryParts = (field: RecipientFieldId) => {
     const names = ctx.recipients()[field].map(recipientName).filter(Boolean);
-    if (names.length <= 2) return names.join(', ');
-    return `${names[0]}, ${names[1]} & ${names.length - 2} more…`;
+    return {
+      names: names.slice(0, 2).join(', '),
+      extra: Math.max(0, names.length - 2),
+    };
   };
 
   const activate = (field: RecipientFieldId) => {
@@ -229,7 +231,12 @@ export function ComposeRecipients(props: {
           class="ph-no-capture w-full min-h-9 flex items-center text-sm text-ink text-left"
           onClick={() => activate(field)}
         >
-          <span class="truncate">{summaryText(field)}</span>
+          <span class="truncate">{summaryParts(field).names}</span>
+          <Show when={summaryParts(field).extra > 0}>
+            <span class="shrink-0 whitespace-pre">
+              {` & ${summaryParts(field).extra} more…`}
+            </span>
+          </Show>
         </button>
       }
     >
