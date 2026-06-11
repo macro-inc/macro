@@ -118,7 +118,20 @@ pub async fn process_message(
                 session_storage
                     .append_pending_operation(update, document_state)
                     .await?;
+            }
 
+            {
+                // ACK the sender before broadcasting: the batch is durably
+                // stored at this point, and a failed broadcast to some other
+                // peer must not block the ack.
+                let message = FromRemote::RemoteUpdateAck { id };
+                let mut buf = buf.lock("serialize RemoteUpdateAck in PeerUpdate handler");
+                let serialized =
+                    serialize(message, &mut buf).context("Failed serializing update")?;
+                ws.send_with_bytes(serialized).context("failed to send")?;
+            }
+
+            for update in &updates {
                 // broadcast each update to other peers
                 let message = FromRemote::RemoteUpdate {
                     update: SliceWrapper::Raw(update),
@@ -133,15 +146,6 @@ pub async fn process_message(
                         tracing::warn!(error = ?e, "failed to send update to a peer; continuing");
                     }
                 }
-            }
-
-            {
-                // send a single ACK for the whole batch
-                let message = FromRemote::RemoteUpdateAck { id };
-                let mut buf = buf.lock("serialize RemoteUpdateAck in PeerUpdate handler");
-                let serialized =
-                    serialize(message, &mut buf).context("Failed serializing update")?;
-                ws.send_with_bytes(serialized).context("failed to send")?;
             }
         }
         // Handle an incoming awareness update from a peer
