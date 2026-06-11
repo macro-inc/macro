@@ -166,17 +166,20 @@ pub async fn process_message(
         // — e.g. a peer that made offline edits the server hasn't seen yet —
         // don't cause a panic in `frontiersToVV` lookup.
         FromPeer::PeerRequestSince { vv } => {
-            let vv = VersionVector::decode(*vv).context("failed to decode version vector")?;
+            let decoded = VersionVector::decode(*vv).context("failed to decode version vector")?;
 
             let update = document_state
-                .export_updates_since(&vv)
+                .export_updates_since(&decoded)
                 .context("failed to export updates")?;
 
-            let encoded_vv = vv.encode();
-
+            // Echo the client's *original* vv bytes back, not a re-encoded copy.
+            // The client correlates the response by byte-exact match on the vv it
+            // sent; `decode(vv).encode()` is not guaranteed to reproduce the same
+            // bytes for a multi-peer version vector, which would make the client
+            // discard a perfectly good response and time out.
             let message = FromRemote::RemoteUpdateSince {
                 update: SliceWrapper::Raw(&update),
-                vv: SliceWrapper::Raw(&encoded_vv),
+                vv,
             };
 
             let mut buf = buf.lock("serialize RemoteUpdate in PeerRequestSince handler");

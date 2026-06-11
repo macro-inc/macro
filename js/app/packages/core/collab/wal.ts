@@ -212,6 +212,7 @@ export class WALSyncer<T> {
    *  to re-run after completing so those entries aren't stranded. */
   private hasNewPending = false;
   public pendingFlush: Promise<void> = Promise.resolve();
+  private cleanupFns: Array<() => void> = [];
 
   /**
    * Exists so that we can not "do stuff" until we have pruned expired entries
@@ -253,6 +254,15 @@ export class WALSyncer<T> {
 
   public pruneDelivered(): Promise<void> {
     return this.store.pruneDelivered();
+  }
+
+  public destroy(): void {
+    for (const fn of this.cleanupFns) fn();
+    this.cleanupFns = [];
+  }
+
+  public addCleanup(fn: () => void): void {
+    this.cleanupFns.push(fn);
   }
 
   private async doFlush(): Promise<void> {

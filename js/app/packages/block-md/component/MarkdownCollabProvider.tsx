@@ -113,10 +113,11 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
 
   const readOnly = () => !(canEdit() || canComment());
 
+  const walSyncer = createWALSyncSource(syncSource()!);
   const syncEngine = createSyncEngine({
     loroManager,
     awareness,
-    syncs: { wal: createWALSyncSource(syncSource()!), live: syncSource()! },
+    syncs: { wal: walSyncer, live: syncSource()! },
     bindings: {
       onRemoteState: (state) =>
         syncStateToLexical(state as unknown as SerializedEditorState),
@@ -482,6 +483,7 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
 
   onCleanup(() => {
     syncEngine.stop();
+    walSyncer.destroy();
   });
 
   return (

@@ -615,16 +615,13 @@ export function createLoroManager<S extends GenericRootSchema>(
     const applied = await applySnapshot(input.snapshot, input.kind);
     if (!applied) return;
 
-    if (input.kind === 'local' && input.walUpdates) {
-      for (const walEntry of input.walUpdates) {
-        const replayResult = importUpdate(walEntry);
-        if (replayResult.isErr()) {
-          console.error(
-            `LoroManager.ingest(${input.kind}): WAL replay failed`,
-            replayResult.error
-          );
-          break;
-        }
+    if (input.kind === 'local' && input.walUpdates?.length) {
+      const replayResult = importBatchUpdates(input.walUpdates);
+      if (replayResult.isErr()) {
+        console.error(
+          `LoroManager.ingest(${input.kind}): WAL replay failed`,
+          replayResult.error
+        );
       }
     }
 

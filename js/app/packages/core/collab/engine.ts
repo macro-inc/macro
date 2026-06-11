@@ -1,4 +1,5 @@
 import { type InferType, SyncDirection } from '@loro-mirror/packages/core/src';
+import { match } from 'ts-pattern';
 import { logger } from '@observability/logger';
 import { Mutex } from 'async-mutex';
 import type { VersionVector } from 'loro-crdt';
@@ -13,10 +14,12 @@ import type { SnapshotStore } from './snapshot-store';
 type LoroSnapshotStore = SnapshotStore<RawUpdate>;
 
 import type { LiveSyncSource, SyncSourceEvent, TimeoutError } from './source';
-import { compareLoroDocVersions, loroDocFromSnapshot } from './utils';
 import type { WALSyncer } from './wal';
 
 const SNAPSHOT_INTERVAL_MS = 5_000;
+
+const REQUEST_UPDATES_MAX_ATTEMPTS = 3;
+const REQUEST_UPDATES_RETRY_DELAY_MS = 2_000;
 
 export type EngineBindings<S extends GenericRootSchema> = {
   onRemoteState: (state: InferType<S>) => void;
@@ -39,6 +42,12 @@ export type SyncEngineParams<S extends GenericRootSchema, D> = {
 
 type SnapshotThunk = () => ResultAsync<Uint8Array, TimeoutError>;
 
+const CROSS_TAB_CHANNEL_PREFIX = 'macro-loro-';
+
+type CrossTabMessage =
+  | { type: 'update'; data: RawUpdate }
+  | { type: 'awareness'; data: RawUpdate };
+
 export class SyncEngine<S extends GenericRootSchema, D> {
   private _isRunning = false;
 
@@ -57,6 +66,7 @@ export class SyncEngine<S extends GenericRootSchema, D> {
   private readonly snapshotStore?: LoroSnapshotStore;
   private readonly defaultSnapshotThunk: SnapshotThunk;
   private readonly onRunningChange: (v: boolean) => void;
+  private crossTabChannel?: BroadcastChannel;
 
   constructor({
     loroManager,
@@ -94,6 +104,16 @@ export class SyncEngine<S extends GenericRootSchema, D> {
         this.handleLocalUpdates(update);
       });
 
+    this.crossTabChannel = new BroadcastChannel(
+      `${CROSS_TAB_CHANNEL_PREFIX}${this.syncs.live.documentId}`
+    );
+    this.crossTabChannel.onmessage = (e: MessageEvent<CrossTabMessage>) => {
+      match(e.data)
+        .with({ type: 'update' }, (msg) => void this.handleRemoteUpdate(msg.data))
+        .with({ type: 'awareness' }, (msg) => this.awareness.importRemoteAwareness(msg.data))
+        .exhaustive();
+    };
+
     this.syncs.live.listen((event) => this.handleSourceEvent(event));
     this.syncs.live.registerPeerId(this.loroManager.getPeerId());
 
@@ -112,6 +132,9 @@ export class SyncEngine<S extends GenericRootSchema, D> {
   public stop() {
     this.unsubscribe?.();
     this.unsubscribe = undefined;
+
+    this.crossTabChannel?.close();
+    this.crossTabChannel = undefined;
 
     if (this.snapshotInterval !== undefined) {
       clearInterval(this.snapshotInterval);
@@ -201,11 +224,13 @@ export class SyncEngine<S extends GenericRootSchema, D> {
     const awarenessUpdate = this.awareness.getEncodedLocalAwareness();
     if (!awarenessUpdate) return;
     this.syncs.live.pushAwareness(awarenessUpdate);
+    this.crossTabChannel?.postMessage({ type: 'awareness', data: awarenessUpdate });
   }
 
   private async handleLocalUpdates(update: LoroRawUpdate) {
     if (this.readonly()) return;
     void this.syncs.wal.append(update);
+    this.crossTabChannel?.postMessage({ type: 'update', data: update });
   }
 
   private async persistSnapshot() {
@@ -266,26 +291,31 @@ export class SyncEngine<S extends GenericRootSchema, D> {
         this.handleRemoteUpdate(event.snapshot);
         break;
       case 'reconnect': {
-        const doc = this.loroManager.getDoc();
-        const tempDoc = loroDocFromSnapshot(event.snapshot);
-        const cmp = compareLoroDocVersions(doc, tempDoc);
-        if (cmp >= 0) return;
-        logger.log('reconnecting and fast forwarding new updates', {
+        logger.log('reconnecting, requesting updates since current version', {
           documentId: this.syncs.live.documentId,
         });
-        this.requestAndHandleUpdatesSince(doc.version());
+        this.requestAndHandleUpdatesSince(this.loroManager.getDoc().version());
         break;
       }
     }
   }
 
-  private async requestAndHandleUpdatesSince(since: VersionVector) {
+  private async requestAndHandleUpdatesSince(
+    since: VersionVector,
+    attempt = 1
+  ) {
     const updates = await this.syncs.live.requestUpdatesSince(since);
     if (updates.isErr() || !updates.value) {
       console.error(
         'failed to request updates since',
         'error' in updates ? updates.error : 'update is undefined'
       );
+      if (updates.isErr() && attempt < REQUEST_UPDATES_MAX_ATTEMPTS) {
+        await new Promise((resolve) =>
+          setTimeout(resolve, REQUEST_UPDATES_RETRY_DELAY_MS)
+        );
+        void this.requestAndHandleUpdatesSince(since, attempt + 1);
+      }
       return;
     }
 
