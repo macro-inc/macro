@@ -3698,7 +3698,7 @@ export const createMarkdownHandlerResponse = zod
   .object({
     documentId: zod
       .string()
-      .describe('The document ID of the created markdown document.'),
+      .describe('The document ID of the created markdown document'),
     documentMetadata: zod.object({
       branchedFromId: zod
         .string()
@@ -3764,7 +3764,7 @@ export const createMarkdownHandlerResponse = zod
         .union([
           zod.null(),
           zod
-            .enum(['task'])
+            .enum(['task', 'snippet'])
             .describe(
               'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.'
             ),
@@ -3777,9 +3777,7 @@ export const createMarkdownHandlerResponse = zod
     }),
     token: zod
       .string()
-      .describe(
-        'Permission token for the sync service, so callers can skip a round-trip fetch.'
-      ),
+      .describe('A pre-generated permission token that you can use for SS'),
   })
   .describe('Response for creating a markdown document.');
 
@@ -4046,7 +4044,7 @@ export const createTaskHandlerResponse = zod
         .union([
           zod.null(),
           zod
-            .enum(['task'])
+            .enum(['task', 'snippet'])
             .describe(
               'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.'
             ),
@@ -4067,9 +4065,7 @@ export const createTaskHandlerResponse = zod
       .describe('The task number assigned within the team.'),
     token: zod
       .string()
-      .describe(
-        'Permission token for the sync service, so callers can skip a round-trip fetch.'
-      ),
+      .describe('A pre-generated permission token that you can use for SS'),
   })
   .describe('Response for creating a task.');
 

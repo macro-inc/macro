@@ -15,12 +15,12 @@ import type { DocumentResponseMetadata } from './documentResponseMetadata';
 export interface CreateTaskResponse {
   /** The document ID of the created task. */
   documentId: string;
-  /** Metadata for the created document, so callers can skip a round-trip fetch. */
+  /** Metadata for the created document */
   documentMetadata: DocumentResponseMetadata;
   /** The team this task number is scoped to. */
   teamId?: CreateTaskResponseTeamId;
   /** The task number assigned within the team. */
   teamTaskId?: CreateTaskResponseTeamTaskId;
-  /** Permission token for the sync service, so callers can skip a round-trip fetch. */
+  /** A pre-generated permission token that you can use for SS */
   token: string;
 }

@@ -4554,15 +4554,15 @@
                   "properties": {
                     "documentId": {
                       "type": "string",
-                      "description": "The document ID of the created markdown document."
+                      "description": "The document ID of the created markdown document"
                     },
                     "documentMetadata": {
                       "$ref": "#/components/schemas/DocumentResponseMetadata",
-                      "description": "Metadata for the created document, so callers can skip a round-trip fetch."
+                      "description": "Metadata for the created document"
                     },
                     "token": {
                       "type": "string",
-                      "description": "Permission token for the sync service, so callers can skip a round-trip fetch."
+                      "description": "A pre-generated permission token that you can use for SS"
                     }
                   }
                 }
@@ -4710,7 +4710,7 @@
                     },
                     "documentMetadata": {
                       "$ref": "#/components/schemas/DocumentResponseMetadata",
-                      "description": "Metadata for the created document, so callers can skip a round-trip fetch."
+                      "description": "Metadata for the created document"
                     },
                     "teamId": {
                       "type": ["string", "null"],
@@ -4724,7 +4724,7 @@
                     },
                     "token": {
                       "type": "string",
-                      "description": "Permission token for the sync service, so callers can skip a round-trip fetch."
+                      "description": "A pre-generated permission token that you can use for SS"
                     }
                   }
                 }
@@ -11625,15 +11625,15 @@
         "properties": {
           "documentId": {
             "type": "string",
-            "description": "The document ID of the created markdown document."
+            "description": "The document ID of the created markdown document"
           },
           "documentMetadata": {
             "$ref": "#/components/schemas/DocumentResponseMetadata",
-            "description": "Metadata for the created document, so callers can skip a round-trip fetch."
+            "description": "Metadata for the created document"
           },
           "token": {
             "type": "string",
-            "description": "Permission token for the sync service, so callers can skip a round-trip fetch."
+            "description": "A pre-generated permission token that you can use for SS"
           }
         }
       },
@@ -11744,7 +11744,7 @@
           },
           "documentMetadata": {
             "$ref": "#/components/schemas/DocumentResponseMetadata",
-            "description": "Metadata for the created document, so callers can skip a round-trip fetch."
+            "description": "Metadata for the created document"
           },
           "teamId": {
             "type": ["string", "null"],
@@ -11758,7 +11758,7 @@
           },
           "token": {
             "type": "string",
-            "description": "Permission token for the sync service, so callers can skip a round-trip fetch."
+            "description": "A pre-generated permission token that you can use for SS"
           }
         }
       },

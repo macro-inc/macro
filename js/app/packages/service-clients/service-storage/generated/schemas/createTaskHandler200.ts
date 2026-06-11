@@ -15,12 +15,12 @@ import type { DocumentResponseMetadata } from './documentResponseMetadata';
 export type CreateTaskHandler200 = {
   /** The document ID of the created task. */
   documentId: string;
-  /** Metadata for the created document, so callers can skip a round-trip fetch. */
+  /** Metadata for the created document */
   documentMetadata: DocumentResponseMetadata;
   /** The team this task number is scoped to. */
   teamId?: CreateTaskHandler200TeamId;
   /** The task number assigned within the team. */
   teamTaskId?: CreateTaskHandler200TeamTaskId;
-  /** Permission token for the sync service, so callers can skip a round-trip fetch. */
+  /** A pre-generated permission token that you can use for SS */
   token: string;
 };

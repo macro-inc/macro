@@ -10,10 +10,10 @@ import type { DocumentResponseMetadata } from './documentResponseMetadata';
  * Response for creating a markdown document.
  */
 export interface CreateMarkdownDocumentResponse {
-  /** The document ID of the created markdown document. */
+  /** The document ID of the created markdown document */
   documentId: string;
-  /** Metadata for the created document, so callers can skip a round-trip fetch. */
+  /** Metadata for the created document */
   documentMetadata: DocumentResponseMetadata;
-  /** Permission token for the sync service, so callers can skip a round-trip fetch. */
+  /** A pre-generated permission token that you can use for SS */
   token: string;
 }
