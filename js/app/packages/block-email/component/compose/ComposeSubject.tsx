@@ -9,7 +9,12 @@ export function ComposeSubject(props: {
 
   return (
     <div class="w-full flex items-center gap-2 border-b border-edge-muted focus-within:border-accent py-2">
-      <div class="text-sm w-14 shrink-0 text-ink-placeholder">Subject</div>
+      <div
+        class="text-sm shrink-0 text-ink-placeholder"
+        classList={{ 'w-14': !isMobile() }}
+      >
+        {isMobile() ? 'Subject:' : 'Subject'}
+      </div>
       <div class="flex-1">
         <input
           ref={props.inputRef}

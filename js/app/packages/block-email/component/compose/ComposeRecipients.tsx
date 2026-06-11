@@ -1,6 +1,8 @@
 import type { EmailRecipient } from '@block-email/component/EmailContext';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { isMobile } from '@core/mobile/isMobile';
+import PlusIcon from '@phosphor/plus.svg';
+import { Button, cn } from '@ui';
 import { createSignal, type JSX, Show } from 'solid-js';
 import { FromInboxSelector } from '../FromInboxSelector';
 import { type RecipientFieldId, useCompose } from './ComposeContext';
@@ -20,6 +22,7 @@ function ComposeFieldRow(props: {
     sourceField: RecipientFieldId
   ) => void;
   onRowFocusIn?: () => void;
+  trailing?: JSX.Element;
 }) {
   const [isDragOver, setIsDragOver] = createSignal(false);
 
@@ -45,17 +48,28 @@ function ComposeFieldRow(props: {
 
   return (
     <div
-      class="flex items-center gap-2 py-1 border-b border-edge-muted focus-within:border-accent"
+      class={cn(
+        'flex gap-2 py-1 border-b border-edge-muted focus-within:border-accent',
+        isMobile() ? 'items-start' : 'items-center'
+      )}
       classList={{ 'border-accent bg-accent/10': isDragOver() }}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
       onFocusIn={() => props.onRowFocusIn?.()}
     >
-      <div class="text-sm w-14 shrink-0 text-ink-placeholder">
+      <div
+        class={cn(
+          'text-sm shrink-0 text-ink-placeholder',
+          isMobile() ? 'min-h-9 flex items-center' : 'w-14'
+        )}
+      >
         {props.label}
       </div>
       <div class="flex-1 min-w-0">{props.children}</div>
+      <Show when={props.trailing}>
+        <div class="shrink-0 min-h-9 flex items-center">{props.trailing}</div>
+      </Show>
     </div>
   );
 }
@@ -110,13 +124,18 @@ export function ComposeRecipients(props: {
     if (targetField === 'bcc') props.setShowBcc(true);
   };
 
+  const inputEls: Partial<Record<RecipientFieldId, HTMLElement>> = {};
+
   const recipientSelector = (
     field: RecipientFieldId,
-    inputRef?: (el: HTMLElement) => void,
+    forwardRef?: (el: HTMLElement) => void,
     opts?: { focusOnMount?: boolean; includeSelf?: boolean }
   ) => (
     <RecipientSelector
-      inputRef={inputRef}
+      inputRef={(el) => {
+        inputEls[field] = el;
+        forwardRef?.(el);
+      }}
       options={ctx.recipientOptions}
       selfEmail={ctx.fromAddress?.()}
       selectedOptions={ctx.recipients()[field]}
@@ -124,7 +143,10 @@ export function ComposeRecipients(props: {
       placeholder={isMobile() ? '' : 'Macro users or email addresses'}
       focusOnMount={opts?.focusOnMount}
       hideBorder
-      class="bg-transparent [&_input]:ml-0!"
+      class={cn(
+        'bg-transparent [&_input]:ml-0!',
+        isMobile() && '[&_input]:min-w-16!'
+      )}
       noPadding
       disabled={ctx.disabled()}
       includeSelf={opts?.includeSelf}
@@ -133,11 +155,23 @@ export function ComposeRecipients(props: {
     />
   );
 
+  const addRecipientButton = (field: RecipientFieldId) => (
+    <Button
+      size="icon-sm"
+      aria-label={`Add ${field} recipient`}
+      disabled={ctx.disabled()}
+      onClick={() => inputEls[field]?.focus()}
+    >
+      <PlusIcon />
+    </Button>
+  );
+
   const fieldRow = (
     field: RecipientFieldId,
     label: string,
     children: JSX.Element,
-    onRowFocusIn?: () => void
+    onRowFocusIn?: () => void,
+    trailing?: JSX.Element
   ) => (
     <ComposeFieldRow
       label={label}
@@ -147,6 +181,7 @@ export function ComposeRecipients(props: {
         handleRecipientDrop(field, recipient, sourceField)
       }
       onRowFocusIn={onRowFocusIn}
+      trailing={trailing}
     >
       {children}
     </ComposeFieldRow>
@@ -166,10 +201,10 @@ export function ComposeRecipients(props: {
     props.setShowBcc(true);
   };
 
-  const toRow = (onRowFocusIn?: () => void) =>
+  const toRow = (onRowFocusIn?: () => void, trailing?: JSX.Element) =>
     fieldRow(
       'to',
-      'To',
+      isMobile() ? 'To:' : 'To',
       <>
         {recipientSelector('to', props.toRef, {
           focusOnMount: ctx.focusRecipientsOnMount,
@@ -181,13 +216,26 @@ export function ComposeRecipients(props: {
           )}
         </Show>
       </>,
-      onRowFocusIn
+      onRowFocusIn,
+      trailing
     );
 
-  const ccRow = () =>
-    fieldRow('cc', 'Cc', recipientSelector('cc', props.ccRef));
-  const bccRow = () =>
-    fieldRow('bcc', 'Bcc', recipientSelector('bcc', props.bccRef));
+  const ccRow = (trailing?: JSX.Element) =>
+    fieldRow(
+      'cc',
+      isMobile() ? 'Cc:' : 'Cc',
+      recipientSelector('cc', props.ccRef),
+      undefined,
+      trailing
+    );
+  const bccRow = (trailing?: JSX.Element) =>
+    fieldRow(
+      'bcc',
+      isMobile() ? 'Bcc:' : 'Bcc',
+      recipientSelector('bcc', props.bccRef),
+      undefined,
+      trailing
+    );
 
   return (
     <Show
@@ -201,7 +249,7 @@ export function ComposeRecipients(props: {
       }
     >
       <div class="flex flex-col gap-2">
-        {toRow(collapseIfEmpty)}
+        {toRow(collapseIfEmpty, addRecipientButton('to'))}
         <Show
           when={isCcVisible() || isBccVisible()}
           fallback={
@@ -211,7 +259,7 @@ export function ComposeRecipients(props: {
               onClick={expand}
             >
               <span class="text-sm shrink-0 text-ink-placeholder min-h-9 flex items-center">
-                Cc/Bcc, From
+                Cc/Bcc, From:
               </span>
               <span class="ph-no-capture text-sm text-ink-muted truncate min-h-9 flex items-center">
                 {ctx.fromAddress?.()}
@@ -219,10 +267,10 @@ export function ComposeRecipients(props: {
             </button>
           }
         >
-          {ccRow()}
-          {bccRow()}
+          {ccRow(addRecipientButton('cc'))}
+          {bccRow(addRecipientButton('bcc'))}
           <div class="flex items-center gap-2 py-1 border-b border-edge-muted">
-            <div class="text-sm w-14 shrink-0 text-ink-placeholder">From</div>
+            <div class="text-sm shrink-0 text-ink-placeholder">From:</div>
             <div class="flex-1 min-w-0 min-h-9 flex items-center">
               <FromInboxSelector
                 links={ctx.fromInboxes?.() ?? []}
