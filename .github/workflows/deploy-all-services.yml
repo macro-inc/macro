@@ -30,9 +30,13 @@ on:
       CACHIX_AUTH_TOKEN:
         required: true
 
-# Only run 1 deploy-all workflow at a time per environment
+# Only run 1 deploy-all workflow at a time per environment. Literal prefix:
+# for workflow_call runs `github.workflow` expands to the *caller's* name,
+# which would split dispatches and callers into separate groups and let them
+# race the same Pulumi stacks. Groups are repo-global strings, so the on-push
+# caller shares this group by using the same literal.
 concurrency:
-  group: ${{ github.workflow }}-all-services-${{ inputs.environment }}
+  group: deploy-all-services-${{ inputs.environment }}
   cancel-in-progress: false
 
 jobs:
