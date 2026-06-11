@@ -25,7 +25,6 @@ import { SoupFiltersBar } from '@app/component/next-soup/soup-view/filters-bar/s
 import { SoupSearchbar } from '@app/component/next-soup/soup-view/filters-bar/soup-view-search-bar';
 import { useFilterRefinements } from '@app/component/next-soup/soup-view/filters-bar/use-filter-refinements';
 import { MaybeSoupEntityActionDrawerManager } from '@app/component/next-soup/soup-view/SoupEntityActionDrawerManager';
-import type { SystemSortOption } from '@app/component/next-soup/soup-view/sort-options';
 import { SoupEntityContextMenu } from '@app/component/next-soup/soup-view/soup-entity-context-menu';
 import {
   persistSoupNavigationTouchHighlight,
@@ -378,11 +377,29 @@ export const SoupView = (props: SoupViewProps) => {
   const soupView = useSoupView();
 
   const entryState = panel.handle.currentEntryState();
+  const contentId = panel.handle.content().id;
 
   const persistedFilters = entryState?.['search.filters'] as Query | undefined;
+
   const persistedPredicates = entryState?.['search.predicates'] as
     | SetPredicatesInput<string>
     | undefined;
+
+  const persistedGroupBy = entryState?.['soup.groupBy'] as
+    | string
+    | null
+    | undefined;
+
+  const persistedActiveTab = entryState?.['soup.tab'] as string | undefined;
+
+  const persistedCollapsedGroups = entryState?.['soup.collapsedGroups'] as
+    | string[]
+    | undefined;
+
+  const [sortPref, setSortPref] = usePreference<string[]>(
+    `macro:pref:soup:${contentId}:sort`,
+    { default: [] }
+  );
 
   // We handle the restore of the persistence here instead of within the context
   // because the context is no longer recreated for each soup view because we
@@ -392,18 +409,52 @@ export const SoupView = (props: SoupViewProps) => {
   // context or are used within the context to produce the output (like the
   // client filters, local search state, and additionalEntities)
   onMount(() => {
-    soupView.initialize({
-      initialQuery: persistedFilters ?? props.initialFilters,
-      initialClientFilters: persistedPredicates ?? props.initialClientFilters,
-      initialSearchText: props.initialSearchText,
-      disableLocalSearch: props.disableLocalSearch,
-      additionalEntities: props.additionalEntities,
+    batch(() => {
+      soupView.initialize({
+        initialQuery: persistedFilters ?? props.initialFilters,
+        initialClientFilters: persistedPredicates ?? props.initialClientFilters,
+        initialSearchText: props.initialSearchText,
+        disableLocalSearch: props.disableLocalSearch,
+        additionalEntities: props.additionalEntities,
+      });
+
+      const initialGroupBy = persistedGroupBy ?? props.initialGroupBy;
+
+      let initialSortIds = sortPref();
+      if (initialSortIds.length === 0) {
+        initialSortIds = ['updated_at'];
+      }
+
+      let initialActiveTab = persistedActiveTab;
+
+      if (initialActiveTab === undefined && isListViewID(contentId)) {
+        initialActiveTab = VIEW_TAB_PRESETS[contentId].default;
+      }
+
+      soup.grouping.setActiveGroupId(initialGroupBy);
+      soup.grouping.collapseAll(persistedCollapsedGroups ?? []);
+
+      soup.sort.setAll(
+        initialSortIds as Parameters<typeof soup.sort.setAll>[0]
+      );
+
+      soupView.setActiveTab(initialActiveTab);
     });
   });
 
   createEffect(() => {
     panel.handle.setDisplayName(props.viewName);
   });
+
+  // Bridge live soup sort state back to preferences. `defer: true` skips the
+  // initial run on mount, so we only write when the user actually changes it.
+  createEffect(
+    on(
+      () => soup.sort.active().map((s) => s.id),
+      (ids) => setSortPref(ids),
+      { defer: true }
+    )
+  );
 
   useSoupNotificationInvalidators();
 
@@ -614,7 +665,6 @@ export const SoupView = (props: SoupViewProps) => {
           <Suspense>
             <SoupViewFileDropzone>
               <SoupViewList
-                initialGroupBy={props.initialGroupBy}
                 onScrollOffsetBaseline={resetFloatingButtonScrollTracking}
                 onScrollOffsetChange={handleSoupScrollOffsetChange}
               />
@@ -653,7 +703,6 @@ export const SoupView = (props: SoupViewProps) => {
 interface SoupViewListProps {
   customScrollbarHidden?: boolean;
   scopeId?: string;
-  initialGroupBy?: string;
   onScrollOffsetBaseline?: (offset: number) => void;
   onScrollOffsetChange?: (offset: number) => void;
 }
@@ -670,7 +719,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
     isSearchServiceLoading,
     isLocalSearchSettling,
     activeTab,
-    setActiveTab,
     fetchNextGroupPage,
     isFetchingGroupPage,
   } = useSoupView();
@@ -965,13 +1013,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
   const cacheKey = `soup-view-${panel.handle.id}-${contentId}${previewPanel ? '-preview' : ''}`;
 
-  // Cross-session, view-kind-scoped user preferences. Each has its own
-  // localStorage key under `macro:pref:soup:{contentId}:*`.
-  const [sortPref, setSortPref] = usePreference<string[]>(
-    `macro:pref:soup:${contentId}:sort`,
-    { default: [] }
-  );
-
   // Preview-pane open state is transient per history entry: captured into
   // per-entry state on nav-away and restored on back/forward. Read
   // synchronously in the body so the first render sees the correct value
@@ -988,9 +1029,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
   // Which groups are collapsed is also per-entry state: captured on nav-away
   // and restored on back/forward.
-  const persistedCollapsedGroups = panel.handle.currentEntryState()?.[
-    'soup.collapsedGroups'
-  ] as string[] | undefined;
   const collapsedCaptorTeardown = panel.handle.registerEntryStateCaptor(
     'soup.collapsedGroups',
     () => [...soup.grouping.collapsedGroups()]
@@ -1001,55 +1039,11 @@ export const SoupViewList = (props: SoupViewListProps) => {
   // grouping the user left each entry with. `null` (vs. key absent) records
   // an explicit "no grouping" choice, which would otherwise be
   // indistinguishable from a fresh entry.
-  const persistedGroupBy = panel.handle.currentEntryState()?.['soup.groupBy'] as
-    | string
-    | null
-    | undefined;
   const groupByCaptorTeardown = panel.handle.registerEntryStateCaptor(
     'soup.groupBy',
     () => soup.grouping.activeGroupId() ?? null
   );
   onCleanup(groupByCaptorTeardown);
-
-  onMount(() => {
-    batch(() => {
-      const savedSort = sortPref();
-
-      if (savedSort.length > 0) {
-        soup.sort.setAll(savedSort as SystemSortOption[]);
-      } else {
-        soup.sort.setAll(['updated_at']);
-      }
-      // soup state is shared at the SplitPanel level, so a prior view in the
-      // same split (e.g. tasks) may have left grouping state behind. Always
-      // reset to this entry's captured or initial grouping, even when
-      // undefined.
-      soup.grouping.setActiveGroupId(
-        persistedGroupBy !== undefined
-          ? (persistedGroupBy ?? undefined)
-          : props.initialGroupBy
-      );
-      soup.grouping.collapseAll(persistedCollapsedGroups ?? []);
-
-      // Default tab for list views; entry state already restored it via
-      // `useEntryState` in SoupViewContextProvider when applicable.
-      if (isListViewID(contentId) && activeTab() === undefined) {
-        const defaultTab = VIEW_TAB_PRESETS[contentId].default;
-        if (defaultTab) setActiveTab(defaultTab);
-      }
-    });
-  });
-
-  // Bridge live soup state back to preferences. `defer: true` skips the
-  // initial run on mount, so we only write when the user actually changes
-  // something.
-  createEffect(
-    on(
-      () => soup.sort.active().map((s) => s.id),
-      (ids) => setSortPref(ids),
-      { defer: true }
-    )
-  );
 
   onCleanup(() => {
     if (isProjectList) return;
