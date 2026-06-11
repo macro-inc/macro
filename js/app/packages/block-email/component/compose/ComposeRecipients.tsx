@@ -1,6 +1,8 @@
 import type { EmailRecipient } from '@block-email/component/EmailContext';
 import { RecipientSelector } from '@core/component/RecipientSelector';
-import { createSignal, Show } from 'solid-js';
+import { isMobile } from '@core/mobile/isMobile';
+import { createSignal, type JSX, Show } from 'solid-js';
+import { FromInboxSelector } from '../FromInboxSelector';
 import { type RecipientFieldId, useCompose } from './ComposeContext';
 
 type DragState = {
@@ -10,13 +12,14 @@ type DragState = {
 
 function ComposeFieldRow(props: {
   label: string;
-  children: import('solid-js').JSX.Element;
+  children: JSX.Element;
   fieldId?: RecipientFieldId;
   dragState?: () => DragState | null;
   onRecipientDrop?: (
     recipient: EmailRecipient,
     sourceField: RecipientFieldId
   ) => void;
+  onRowFocusIn?: () => void;
 }) {
   const [isDragOver, setIsDragOver] = createSignal(false);
 
@@ -47,11 +50,12 @@ function ComposeFieldRow(props: {
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
+      onFocusIn={() => props.onRowFocusIn?.()}
     >
       <div class="text-sm w-14 shrink-0 text-ink-placeholder">
         {props.label}
       </div>
-      <div class="flex-1">{props.children}</div>
+      <div class="flex-1 min-w-0">{props.children}</div>
     </div>
   );
 }
@@ -106,94 +110,129 @@ export function ComposeRecipients(props: {
     if (targetField === 'bcc') props.setShowBcc(true);
   };
 
-  return (
-    <div class="flex flex-col gap-2">
-      <ComposeFieldRow
-        label="To"
-        fieldId="to"
-        dragState={recipientDragState}
-        onRecipientDrop={(recipient, sourceField) =>
-          handleRecipientDrop('to', recipient, sourceField)
-        }
-      >
-        <RecipientSelector
-          inputRef={props.toRef}
-          options={ctx.recipientOptions}
-          selfEmail={ctx.fromAddress?.()}
-          selectedOptions={ctx.recipients().to}
-          setSelectedOptions={(next) => ctx.setRecipients('to', next)}
-          placeholder="Macro users or email addresses"
-          focusOnMount={ctx.focusRecipientsOnMount}
-          hideBorder
-          class="bg-transparent [&_input]:ml-0!"
-          noPadding
-          disabled={ctx.disabled()}
-          includeSelf={ctx.includeSelf}
-          onChipDragStart={(option, e) => handleChipDragStart('to', option, e)}
-          onChipDragEnd={handleChipDragEnd}
-        />
+  const recipientSelector = (
+    field: RecipientFieldId,
+    inputRef?: (el: HTMLElement) => void,
+    opts?: { focusOnMount?: boolean; includeSelf?: boolean }
+  ) => (
+    <RecipientSelector
+      inputRef={inputRef}
+      options={ctx.recipientOptions}
+      selfEmail={ctx.fromAddress?.()}
+      selectedOptions={ctx.recipients()[field]}
+      setSelectedOptions={(next) => ctx.setRecipients(field, next)}
+      placeholder={isMobile() ? '' : 'Macro users or email addresses'}
+      focusOnMount={opts?.focusOnMount}
+      hideBorder
+      class="bg-transparent [&_input]:ml-0!"
+      noPadding
+      disabled={ctx.disabled()}
+      includeSelf={opts?.includeSelf}
+      onChipDragStart={(option, e) => handleChipDragStart(field, option, e)}
+      onChipDragEnd={handleChipDragEnd}
+    />
+  );
+
+  const fieldRow = (
+    field: RecipientFieldId,
+    label: string,
+    children: JSX.Element,
+    onRowFocusIn?: () => void
+  ) => (
+    <ComposeFieldRow
+      label={label}
+      fieldId={field}
+      dragState={recipientDragState}
+      onRecipientDrop={(recipient, sourceField) =>
+        handleRecipientDrop(field, recipient, sourceField)
+      }
+      onRowFocusIn={onRowFocusIn}
+    >
+      {children}
+    </ComposeFieldRow>
+  );
+
+  // Collapse the expanded Cc/Bcc/From rows back into the combined row when
+  // the user moves on without entering any Cc/Bcc recipients (iOS Mail).
+  const collapseIfEmpty = () => {
+    if (ctx.recipients().cc.length === 0 && ctx.recipients().bcc.length === 0) {
+      props.setShowCc(false);
+      props.setShowBcc(false);
+    }
+  };
+
+  const expand = () => {
+    props.setShowCc(true);
+    props.setShowBcc(true);
+  };
+
+  const toRow = (onRowFocusIn?: () => void) =>
+    fieldRow(
+      'to',
+      'To',
+      <>
+        {recipientSelector('to', props.toRef, {
+          focusOnMount: ctx.focusRecipientsOnMount,
+          includeSelf: ctx.includeSelf,
+        })}
         <Show when={ctx.validationError('no_recipient')}>
           {(err) => (
             <div class="text-failure-ink text-sm mt-1">{err().message}</div>
           )}
         </Show>
-      </ComposeFieldRow>
+      </>,
+      onRowFocusIn
+    );
 
-      <Show when={isCcVisible()}>
-        <ComposeFieldRow
-          label="Cc"
-          fieldId="cc"
-          dragState={recipientDragState}
-          onRecipientDrop={(recipient, sourceField) =>
-            handleRecipientDrop('cc', recipient, sourceField)
+  const ccRow = () =>
+    fieldRow('cc', 'Cc', recipientSelector('cc', props.ccRef));
+  const bccRow = () =>
+    fieldRow('bcc', 'Bcc', recipientSelector('bcc', props.bccRef));
+
+  return (
+    <Show
+      when={isMobile()}
+      fallback={
+        <div class="flex flex-col gap-2">
+          {toRow()}
+          <Show when={isCcVisible()}>{ccRow()}</Show>
+          <Show when={isBccVisible()}>{bccRow()}</Show>
+        </div>
+      }
+    >
+      <div class="flex flex-col gap-2">
+        {toRow(collapseIfEmpty)}
+        <Show
+          when={isCcVisible() || isBccVisible()}
+          fallback={
+            <button
+              type="button"
+              class="w-full flex items-center gap-2 py-1 border-b border-edge-muted text-left"
+              onClick={expand}
+            >
+              <span class="text-sm shrink-0 text-ink-placeholder min-h-9 flex items-center">
+                Cc/Bcc, From
+              </span>
+              <span class="ph-no-capture text-sm text-ink-muted truncate min-h-9 flex items-center">
+                {ctx.fromAddress?.()}
+              </span>
+            </button>
           }
         >
-          <RecipientSelector
-            inputRef={props.ccRef}
-            options={ctx.recipientOptions}
-            selfEmail={ctx.fromAddress?.()}
-            selectedOptions={ctx.recipients().cc}
-            setSelectedOptions={(next) => ctx.setRecipients('cc', next)}
-            placeholder="Macro users or email addresses"
-            hideBorder
-            class="bg-transparent [&_input]:ml-0!"
-            noPadding
-            disabled={ctx.disabled()}
-            onChipDragStart={(option, e) =>
-              handleChipDragStart('cc', option, e)
-            }
-            onChipDragEnd={handleChipDragEnd}
-          />
-        </ComposeFieldRow>
-      </Show>
-
-      <Show when={isBccVisible()}>
-        <ComposeFieldRow
-          label="Bcc"
-          fieldId="bcc"
-          dragState={recipientDragState}
-          onRecipientDrop={(recipient, sourceField) =>
-            handleRecipientDrop('bcc', recipient, sourceField)
-          }
-        >
-          <RecipientSelector
-            inputRef={props.bccRef}
-            options={ctx.recipientOptions}
-            selfEmail={ctx.fromAddress?.()}
-            selectedOptions={ctx.recipients().bcc}
-            setSelectedOptions={(next) => ctx.setRecipients('bcc', next)}
-            placeholder="Macro users or email addresses"
-            hideBorder
-            class="bg-transparent [&_input]:ml-0!"
-            noPadding
-            disabled={ctx.disabled()}
-            onChipDragStart={(option, e) =>
-              handleChipDragStart('bcc', option, e)
-            }
-            onChipDragEnd={handleChipDragEnd}
-          />
-        </ComposeFieldRow>
-      </Show>
-    </div>
+          {ccRow()}
+          {bccRow()}
+          <div class="flex items-center gap-2 py-1 border-b border-edge-muted">
+            <div class="text-sm w-14 shrink-0 text-ink-placeholder">From</div>
+            <div class="flex-1 min-w-0 min-h-9 flex items-center">
+              <FromInboxSelector
+                links={ctx.fromInboxes?.() ?? []}
+                activeLinkId={ctx.selectedFromLinkId?.()}
+                onSelect={(id) => ctx.onSelectFromLink?.(id)}
+              />
+            </div>
+          </div>
+        </Show>
+      </div>
+    </Show>
   );
 }

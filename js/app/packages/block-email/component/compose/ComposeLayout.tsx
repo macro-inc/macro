@@ -1,6 +1,7 @@
 import { CircleSpinner } from '@core/component/CircleSpinner';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
+import { isMobile } from '@core/mobile/isMobile';
 import { createSignal, type JSX, onMount, Show, Suspense } from 'solid-js';
 import { FromInboxSelector } from '../FromInboxSelector';
 import { ComposeBody } from './ComposeBody';
@@ -158,10 +159,23 @@ export function ComposeLayout(props: {
     hotkeyToken: 'email.send',
     displayPriority: 10,
   });
+  // On mobile the Cc/Bcc/From rows fold back into the combined row when the
+  // user moves focus on without having added any Cc/Bcc recipients (iOS Mail).
+  const collapseCcBccIfEmpty = () => {
+    if (!isMobile()) return;
+    if (ctx.recipients().cc.length > 0 || ctx.recipients().bcc.length > 0)
+      return;
+    setShowCc(false);
+    setShowBcc(false);
+  };
+
   return (
     <div ref={registerRef('containerRef')} class={props.class}>
       <div class="pb-1 w-full h-max shrink-0">
-        <div class="mb-4 h-6 flex items-center justify-between gap-3">
+        <div
+          class="mb-4 h-6 flex items-center justify-between gap-3"
+          classList={{ hidden: isMobile() && !props.header }}
+        >
           <Show
             when={props.header}
             fallback={
@@ -190,7 +204,10 @@ export function ComposeLayout(props: {
           >
             {props.header}
           </Show>
-          <div class="flex items-center gap-3 ml-auto shrink-0">
+          <div
+            class="flex items-center gap-3 ml-auto shrink-0"
+            classList={{ hidden: isMobile() }}
+          >
             <Show when={!isCcVisible()}>
               <button
                 type="button"
@@ -224,7 +241,9 @@ export function ComposeLayout(props: {
           setShowBcc={setShowBcc}
         />
 
-        <ComposeSubject inputRef={registerRef('subjectInput')} />
+        <div onFocusIn={collapseCcBccIfEmpty}>
+          <ComposeSubject inputRef={registerRef('subjectInput')} />
+        </div>
       </div>
 
       <div class="size-full flex flex-col min-h-0 mt-4">

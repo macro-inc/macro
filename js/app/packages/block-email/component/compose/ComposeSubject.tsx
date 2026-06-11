@@ -1,3 +1,4 @@
+import { isMobile } from '@core/mobile/isMobile';
 import { Show } from 'solid-js';
 import { useCompose } from './ComposeContext';
 
@@ -14,7 +15,7 @@ export function ComposeSubject(props: {
           ref={props.inputRef}
           type="text"
           value={ctx.subject()}
-          placeholder="Subject"
+          placeholder={isMobile() ? '' : 'Subject'}
           class="w-full resize-none text-sm placeholder:text-ink-placeholder p-1"
           onInput={(e) => ctx.setSubject(e.currentTarget.value)}
           disabled={ctx.disabled()}

@@ -222,16 +222,6 @@ function MobileToolbar(props: {
             tooltip="Send email"
           />
         </Tooltip>
-        <Show when={ctx.hasDraft()}>
-          <Button
-            tooltip="Delete draft"
-            size="icon-sm"
-            disabled={ctx.disabled()}
-            onClick={ctx.onDelete}
-          >
-            <Trash />
-          </Button>
-        </Show>
       </div>
     </SplitHeaderRight>
   );

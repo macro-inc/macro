@@ -1,8 +1,11 @@
+import { MobileDrawer } from '@app/component/mobile/MobileDrawer';
+import { useSplitBackInterceptor } from '@app/component/split-layout/back-interceptor';
 import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
 import {
   SplitHeaderBadge,
   StaticSplitLabel,
 } from '@app/component/split-layout/components/SplitLabel';
+import { SplitPanelContext } from '@app/component/split-layout/context';
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import type { EmailFormRecipients } from '@block-email/component/createEmailFormState';
 import {
@@ -64,7 +67,14 @@ import { debounce } from '@solid-primitives/scheduled';
 import { Surface } from '@ui';
 
 import type { LexicalEditor } from 'lexical';
-import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  on,
+  Show,
+  useContext,
+} from 'solid-js';
 import { unwrap } from 'solid-js/store';
 import {
   type ComposeContextValue,
@@ -672,6 +682,23 @@ export function EmailCompose(props: EmailComposeProps) {
     hasPaidAccess,
   };
 
+  const panel = useContext(SplitPanelContext);
+  const [draftBackMenuOpen, setDraftBackMenuOpen] = createSignal(false);
+
+  if (isMobile()) {
+    // Backing out of a compose that has a draft asks whether to keep it.
+    useSplitBackInterceptor(() => {
+      if (!ctxValue.hasDraft()) return false;
+      setDraftBackMenuOpen(true);
+      return true;
+    });
+  }
+
+  const leaveCompose = () => {
+    setDraftBackMenuOpen(false);
+    panel?.handle.goBack();
+  };
+
   return (
     <ComposeProvider value={ctxValue}>
       <Show when={!isMobile()}>
@@ -705,6 +732,41 @@ export function EmailCompose(props: EmailComposeProps) {
           </WrapUnlessMobile>
         </div>
       </div>
+      <Show when={isMobile()}>
+        <MobileDrawer
+          side="bottom"
+          open={draftBackMenuOpen()}
+          onOpenChange={setDraftBackMenuOpen}
+          preventScroll={false}
+          preventScrollbarShift={false}
+        >
+          <MobileDrawer.Portal>
+            <MobileDrawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted" />
+            <MobileDrawer.Content aria-label="Draft options">
+              <MobileDrawer.Handle />
+              <MobileDrawer.Section class="mb-3">
+                <button
+                  type="button"
+                  class="w-full bg-surface px-3 py-3.5 text-sm font-medium text-failure text-center not-last:mb-px"
+                  onClick={() => {
+                    void deleteDraftAndReset();
+                    leaveCompose();
+                  }}
+                >
+                  Delete Draft
+                </button>
+                <button
+                  type="button"
+                  class="w-full bg-surface px-3 py-3.5 text-sm font-medium text-center"
+                  onClick={leaveCompose}
+                >
+                  Save Draft
+                </button>
+              </MobileDrawer.Section>
+            </MobileDrawer.Content>
+          </MobileDrawer.Portal>
+        </MobileDrawer>
+      </Show>
     </ComposeProvider>
   );
 }
