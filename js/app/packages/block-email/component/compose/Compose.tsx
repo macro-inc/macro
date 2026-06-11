@@ -787,8 +787,15 @@ export function EmailCompose(props: EmailComposeProps) {
                 <button
                   type="button"
                   class="w-full bg-surface px-3 py-3.5 text-sm font-medium text-failure text-center not-last:mb-px"
-                  onClick={() => {
-                    void deleteDraftAndReset();
+                  onClick={async () => {
+                    // Navigate only once the deletion landed; the mutation
+                    // toasts on failure and the composer stays put.
+                    try {
+                      await deleteDraftAndReset();
+                    } catch {
+                      setDraftBackMenuOpen(false);
+                      return;
+                    }
                     leaveCompose();
                   }}
                 >
