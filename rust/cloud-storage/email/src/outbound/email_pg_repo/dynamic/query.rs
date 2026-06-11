@@ -170,10 +170,7 @@ fn push_thread_candidate_select(
                         WHERE tu.team_id = "#,
                 );
                 builder.push_bind(team_id);
-                builder.push(
-                    r#"
-                          AND el.macro_id = 'macro|' || LOWER(el.email_address))"#,
-                );
+                builder.push(" AND el.is_primary)");
             }
         },
         ThreadCandidateSource::Shared => {

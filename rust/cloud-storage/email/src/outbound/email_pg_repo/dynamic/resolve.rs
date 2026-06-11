@@ -202,7 +202,7 @@ pub(super) async fn resolve_filters(
             JOIN email_links el ON el.id = l.link_id
             JOIN team_user tu ON tu.user_id = el.macro_id
             WHERE l.name = 'TRASH' AND tu.team_id = $1
-              AND el.macro_id = 'macro|' || LOWER(el.email_address)
+              AND el.is_primary
             "#,
                 team_id,
             )
@@ -239,7 +239,7 @@ pub(super) async fn resolve_filters(
                 JOIN email_links el ON el.id = c.link_id
                 JOIN team_user tu ON tu.user_id = el.macro_id
                 WHERE tu.team_id = $1
-                  AND el.macro_id = 'macro|' || LOWER(el.email_address)
+                  AND el.is_primary
                   AND LOWER(c.email_address) = ANY($2)
                 "#,
                 team_id,
