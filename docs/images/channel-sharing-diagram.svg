@@ -1,0 +1,68 @@
+<svg viewBox="0 0 760 400" xmlns="http://www.w3.org/2000/svg" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <rect x="0" y="0" width="760" height="400" fill="#090909"/>
+
+  <!-- channel panel -->
+  <rect x="40" y="40" width="290" height="240" rx="14" fill="#121212" stroke="#2e2e2e"/>
+  <text x="64" y="76" fill="#ffffff" font-size="15" font-weight="600">#design</text>
+
+  <!-- members -->
+  <g font-size="11" text-anchor="middle">
+    <circle cx="244" cy="71" r="13" fill="#27272a" stroke="#3f3f46"/>
+    <text x="244" y="75" fill="#e8e8e8">A</text>
+    <circle cx="272" cy="71" r="13" fill="#27272a" stroke="#3f3f46"/>
+    <text x="272" y="75" fill="#e8e8e8">B</text>
+    <circle cx="300" cy="71" r="13" fill="#27272a" stroke="#3f3f46"/>
+    <text x="300" y="75" fill="#e8e8e8">C</text>
+  </g>
+  <line x1="56" y1="94" x2="314" y2="94" stroke="#242424"/>
+
+  <!-- message with mention -->
+  <rect x="64" y="116" width="242" height="64" rx="10" fill="#1a1a1a" stroke="#2e2e2e"/>
+  <text x="80" y="140" fill="#9a9a9a" font-size="12">Ana</text>
+  <text x="80" y="162" fill="#e8e8e8" font-size="13">latest spec is in</text>
+  <rect x="183" y="148" width="106" height="20" rx="6" fill="#241606" stroke="#ff8f05" stroke-width="0.75"/>
+  <text x="236" y="162" fill="#ff8f05" font-size="12" text-anchor="middle">@ Spec v2</text>
+
+  <text x="64" y="216" fill="#6f6f6f" font-size="12">mentioning a doc in the channel</text>
+  <text x="64" y="234" fill="#6f6f6f" font-size="12">shares it with every member</text>
+
+  <!-- arrow channel -> doc -->
+  <path d="M 330 158 C 380 158, 390 158, 438 158" stroke="#ff8f05" stroke-width="1.5" fill="none"/>
+  <path d="M 438 158 l -9 -5 v 10 z" fill="#ff8f05"/>
+  <text x="384" y="144" fill="#9a9a9a" font-size="12" text-anchor="middle">auto-shared</text>
+
+  <!-- doc card -->
+  <rect x="446" y="92" width="274" height="132" rx="14" fill="#121212" stroke="#2e2e2e"/>
+  <rect x="470" y="116" width="30" height="38" rx="4" fill="#1a1a1a" stroke="#3f3f46"/>
+  <line x1="476" y1="127" x2="494" y2="127" stroke="#5a5a5a"/>
+  <line x1="476" y1="135" x2="494" y2="135" stroke="#5a5a5a"/>
+  <line x1="476" y1="143" x2="488" y2="143" stroke="#5a5a5a"/>
+  <text x="514" y="130" fill="#ffffff" font-size="15" font-weight="600">Spec v2</text>
+  <text x="514" y="150" fill="#9a9a9a" font-size="12">document</text>
+  <g font-size="11" text-anchor="middle">
+    <circle cx="483" cy="190" r="13" fill="#27272a" stroke="#3f3f46"/>
+    <text x="483" y="194" fill="#e8e8e8">A</text>
+    <circle cx="511" cy="190" r="13" fill="#27272a" stroke="#3f3f46"/>
+    <text x="511" y="194" fill="#e8e8e8">B</text>
+    <circle cx="539" cy="190" r="13" fill="#27272a" stroke="#3f3f46"/>
+    <text x="539" y="194" fill="#e8e8e8">C</text>
+  </g>
+  <text x="564" y="194" fill="#9a9a9a" font-size="12">can all open it</text>
+
+  <!-- membership flow -->
+  <line x1="40" y1="312" x2="720" y2="312" stroke="#242424"/>
+
+  <g font-size="13">
+    <circle cx="60" cy="348" r="13" fill="#241606" stroke="#ff8f05"/>
+    <text x="60" y="352" fill="#ff8f05" font-size="11" text-anchor="middle">D</text>
+    <text x="84" y="345" fill="#e8e8e8">Dana joins #design</text>
+    <text x="84" y="363" fill="#9a9a9a" font-size="12">instantly gets access to everything shared in it</text>
+  </g>
+
+  <g font-size="13">
+    <circle cx="420" cy="348" r="13" fill="#1a1a1a" stroke="#3f3f46" stroke-dasharray="3 3"/>
+    <text x="420" y="352" fill="#6f6f6f" font-size="11" text-anchor="middle">B</text>
+    <text x="444" y="345" fill="#e8e8e8">Ben leaves</text>
+    <text x="444" y="363" fill="#9a9a9a" font-size="12">access to shared items is removed</text>
+  </g>
+</svg>

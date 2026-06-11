@@ -1,10 +1,14 @@
 import { runCreateAction } from '@app/component/Launcher';
+import { DOCS_BASE } from '@app/constants/docs-links';
 import type { ListView } from '@app/constants/list-views';
 import type { BlockAlias, BlockName } from '@core/block';
 import { McpSetupCards } from '@core/component/AI/component/McpSetupCards';
 import { toast } from '@core/component/Toast/Toast';
 import { useEmailLinks, useEmailLinksStatus } from '@core/email-link';
 import EmptyStateAiIcon from '@design/empty-state-ai.svg';
+import EmptyStateAutomationsIcon from '@design/empty-state-automations.svg';
+import EmptyStateCallsIcon from '@design/empty-state-calls.svg';
+import EmptyStateChannelsIcon from '@design/empty-state-channels.svg';
 import EmptyStateDocIcon from '@design/empty-state-doc.svg';
 import EmptyStateEmailIcon from '@design/empty-state-email.svg';
 import EmptyStateFolderIcon from '@design/empty-state-folder.svg';
@@ -17,9 +21,6 @@ import { EmptyStatePanel, FilteredHiddenBanner } from '@ui';
 import { type Component, type JSXElement, Match, Switch } from 'solid-js';
 import { FolderDropZone } from './FolderDropZone';
 import { useSoupView } from './soup-view-context';
-
-// Base URL for the public documentation site (https://docs.macro.com).
-const DOCS_BASE = 'https://docs.macro.com';
 
 type FallbackContent = {
   plural: string;
@@ -40,6 +41,7 @@ const FALLBACK_CONTENT: Partial<Record<ListView, FallbackContent>> = {
   },
   channels: {
     plural: 'channels',
+    graphic: EmptyStateChannelsIcon,
     description:
       'Channels are shared spaces for team conversations organized by topic, project, or team. Create a channel to start collaborating with your team.',
     create: { label: 'New channel', blockName: 'channel' },
@@ -47,6 +49,7 @@ const FALLBACK_CONTENT: Partial<Record<ListView, FallbackContent>> = {
   },
   calls: {
     plural: 'calls',
+    graphic: EmptyStateCallsIcon,
     description: (
       <>
         See recordings, transcriptions and summaries of your Macro calls.
@@ -99,7 +102,7 @@ export function EmptyState(props: {
               : 'No results'
           }
           description="Search across messages, documents, tasks, and more. Try a different query or broaden your filters."
-          documentationUrl={`${DOCS_BASE}/product/search-1`}
+          documentationUrl={`${DOCS_BASE}/product/search`}
         />
       </Match>
 
@@ -210,7 +213,7 @@ export function EmptyState(props: {
       >
         <EmptyStatePanel
           align="center"
-          graphic={EmptyStateInboxZeroIcon}
+          graphic={EmptyStateAutomationsIcon}
           title="No automations to show"
           description="Automations run in the background to handle repetitive work for you — like triaging messages, updating tasks, or sending follow-ups."
           primaryAction={{
@@ -226,11 +229,25 @@ export function EmptyState(props: {
         <AgentsEmptyState />
       </Match>
 
+      <Match when={props.listView === 'companies'}>
+        <EmptyStatePanel
+          align="center"
+          graphic={EmptyStateInboxZeroIcon}
+          title="No companies"
+          description="Companies you add or sync into your CRM will appear here."
+        />
+      </Match>
+
       <Match when={props.listView === 'folders'}>
         <EmptyStatePanel
           graphic={EmptyStateFolderIcon}
           title="No folders"
           description="Folders let you organize conversations, documents, and tasks into projects. Create a folder or drop files below to get started."
+          primaryAction={{
+            label: 'New folder',
+            icon: PlusIcon,
+            onClick: () => runCreateAction('project'),
+          }}
           documentationUrl={`${DOCS_BASE}/product/folders`}
         >
           <FolderDropZone />

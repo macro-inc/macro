@@ -8,6 +8,19 @@ import { onCleanup, onMount } from 'solid-js';
 const SWIPE_DOWN_THRESHOLD = 5; // px of downward movement to register as a swipe down
 const ZONE_HEIGHT = 20; // px above keyboard that activates blur
 
+// The activation zone overlaps an input's action buttons when the input is
+// docked to the keyboard, and taps commonly drift past the swipe threshold —
+// treat gestures starting on interactive elements as taps, not dismissal
+// swipes.
+const INTERACTIVE_SELECTOR =
+  'button, [role="button"], a[href], input, textarea, select, [contenteditable="true"]';
+
+function isInteractiveTarget(target: EventTarget | null): boolean {
+  return (
+    target instanceof Element && target.closest(INTERACTIVE_SELECTOR) !== null
+  );
+}
+
 function hasTextSelection(active: Element | null): boolean {
   if (
     active instanceof HTMLInputElement ||
@@ -30,16 +43,19 @@ export function SwipeDownDismissKeyboard() {
   if (!isPlatform('ios')) return;
 
   let startY = 0;
+  let startedOnInteractive = false;
 
   function handleTouchStart(e: TouchEvent) {
     if (!virtualKeyboardVisible()) return;
     const touch = e.touches[0];
     if (!touch) return;
     startY = touch.clientY;
+    startedOnInteractive = isInteractiveTarget(e.target);
   }
 
   function handleTouchMove(e: TouchEvent) {
     if (!virtualKeyboardVisible()) return;
+    if (startedOnInteractive) return;
     const touch = e.touches[0];
     if (!touch) return;
     const keyboardTop = window.innerHeight - virtualKeyboardHeight();

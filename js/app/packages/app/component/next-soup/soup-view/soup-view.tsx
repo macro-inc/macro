@@ -28,7 +28,6 @@ import {
   persistSoupNavigationTouchHighlight,
   soupNavigationTouchHighlight,
 } from '@app/component/next-soup/soup-view/soup-navigation-touch-highlight';
-import { activeSoupViewCounts } from '@app/component/next-soup/soup-view/soup-view-cache-key';
 import {
   SoupViewContextProvider,
   useSoupView,
@@ -65,6 +64,7 @@ import {
 } from '@app/component/split-layout/components/SplitHeader';
 import { SplitPanelContext } from '@app/component/split-layout/context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
+import { LIST_VIEW_DOCS_URL } from '@app/constants/docs-links';
 import { isListViewID, type ListView } from '@app/constants/list-views';
 import { usePreference } from '@app/preferences/use-preference';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
@@ -83,6 +83,7 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import { useDisplayName } from '@core/user/displayName';
 import { type MacroId, tryMacroId } from '@core/user/macroId';
+import { openExternalUrl } from '@core/util/url';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import {
   type EntityData,
@@ -96,6 +97,7 @@ import { createEffectOnEntityTypeNotification } from '@notifications';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import ChevronRightIcon from '@phosphor/caret-right.svg';
 import CheckIcon from '@phosphor/check.svg';
+import InfoIcon from '@phosphor/info.svg';
 import Spinner from '@phosphor/spinner.svg';
 import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
@@ -113,7 +115,6 @@ import {
   batch,
   createEffect,
   createMemo,
-  createRenderEffect,
   createSignal,
   type JSX,
   Match,
@@ -124,7 +125,6 @@ import {
   Suspense,
   Switch,
 } from 'solid-js';
-import { createStore, reconcile } from 'solid-js/store';
 import { Dynamic } from 'solid-js/web';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
 import type { CacheSnapshot } from 'virtua/unstable_core';
@@ -367,6 +367,11 @@ export const SoupView = (props: SoupViewProps) => {
     return id && isListViewID(id) ? id : undefined;
   });
 
+  const docsUrl = createMemo(() => {
+    const view = activeListView();
+    return view ? LIST_VIEW_DOCS_URL[view] : undefined;
+  });
+
   const [narrowSearchExpanded, setNarrowSearchExpanded] = createSignal(false);
   const [mobileSearchOpen, setMobileSearchOpen] = createSignal(false);
   const [searchIsCollapsed, setSearchIsCollapsed] = createSignal(false);
@@ -445,7 +450,21 @@ export const SoupView = (props: SoupViewProps) => {
                 })}
               >
                 <Show when={!isMobile() && !narrowSearchExpanded()}>
-                  <span class="text-base font-bold">{props.viewName}</span>
+                  <div class="flex items-center gap-1">
+                    <span class="text-base font-bold">{props.viewName}</span>
+                    <Show when={docsUrl()}>
+                      {(url) => (
+                        <Button
+                          variant="ghost"
+                          class="p-0.5 rounded-sm text-ink-extra-muted hover:text-ink-muted"
+                          label="View documentation"
+                          onClick={() => openExternalUrl(url())}
+                        >
+                          <InfoIcon class="size-3.5" />
+                        </Button>
+                      )}
+                    </Show>
+                  </div>
                 </Show>
                 <Show
                   when={
@@ -609,6 +628,8 @@ export const SoupViewList = (props: SoupViewListProps) => {
     isLocalSearchSettling,
     activeTab,
     setActiveTab,
+    fetchNextGroupPage,
+    isFetchingGroupPage,
   } = useSoupView();
   const { hasActiveRefinements, hasHiddenItems, resetToTabDefaults } =
     useFilterRefinements();
@@ -725,6 +746,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
     currentView,
     activeTab,
     applyTabPreset,
+    fetchNextGroupPage,
   });
 
   // Create markDone action for swipe/click handlers
@@ -888,17 +910,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
   const isProjectList = panel.handle.content().type === 'project';
   const contentId = panel.handle.content().id;
 
-  // Maintained for the channel/email/call sub-filters in
-  // search-filter-controls.tsx, which check duplicate-instance status via
-  // this counter.
-  const prevCount = activeSoupViewCounts.get(contentId) ?? 0;
-  activeSoupViewCounts.set(contentId, prevCount + 1);
-  onCleanup(() => {
-    const count = activeSoupViewCounts.get(contentId) ?? 1;
-    if (count <= 1) activeSoupViewCounts.delete(contentId);
-    else activeSoupViewCounts.set(contentId, count - 1);
-  });
-
   const cacheKey = `soup-view-${panel.handle.id}-${contentId}${previewPanel ? '-preview' : ''}`;
 
   // Cross-session, view-kind-scoped user preferences. Each has its own
@@ -906,10 +917,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
   const [sortPref, setSortPref] = usePreference<string[]>(
     `macro:pref:soup:${contentId}:sort`,
     { default: [] }
-  );
-  const [groupByPref, setGroupByPref] = usePreference<string | undefined>(
-    `macro:pref:soup:${contentId}:groupBy`,
-    { default: undefined }
   );
 
   // Preview-pane open state is transient per history entry: captured into
@@ -937,6 +944,20 @@ export const SoupViewList = (props: SoupViewListProps) => {
   );
   onCleanup(collapsedCaptorTeardown);
 
+  // Active grouping is per-entry state too, so back/forward restores the
+  // grouping the user left each entry with. `null` (vs. key absent) records
+  // an explicit "no grouping" choice, which would otherwise be
+  // indistinguishable from a fresh entry.
+  const persistedGroupBy = panel.handle.currentEntryState()?.['soup.groupBy'] as
+    | string
+    | null
+    | undefined;
+  const groupByCaptorTeardown = panel.handle.registerEntryStateCaptor(
+    'soup.groupBy',
+    () => soup.grouping.activeGroupId() ?? null
+  );
+  onCleanup(groupByCaptorTeardown);
+
   onMount(() => {
     batch(() => {
       const savedSort = sortPref();
@@ -948,8 +969,13 @@ export const SoupViewList = (props: SoupViewListProps) => {
       }
       // soup state is shared at the SplitPanel level, so a prior view in the
       // same split (e.g. tasks) may have left grouping state behind. Always
-      // reset to this view's saved or initial grouping, even when undefined.
-      soup.grouping.setActiveGroupId(groupByPref() ?? props.initialGroupBy);
+      // reset to this entry's captured or initial grouping, even when
+      // undefined.
+      soup.grouping.setActiveGroupId(
+        persistedGroupBy !== undefined
+          ? (persistedGroupBy ?? undefined)
+          : props.initialGroupBy
+      );
       soup.grouping.collapseAll(persistedCollapsedGroups ?? []);
 
       // Apply view-supplied client filters only when per-entry state didn't
@@ -976,13 +1002,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
     on(
       () => soup.sort.active().map((s) => s.id),
       (ids) => setSortPref(ids),
-      { defer: true }
-    )
-  );
-  createEffect(
-    on(
-      () => soup.grouping.activeGroupId(),
-      (id) => setGroupByPref(id),
       { defer: true }
     )
   );
@@ -1221,7 +1240,9 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                           )}
                                         >
                                           <Show
-                                            when={!group().isLoading()}
+                                            when={
+                                              !isFetchingGroupPage(group().key)
+                                            }
                                             fallback={
                                               <Button
                                                 variant="base"
@@ -1248,7 +1269,9 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                                 'border-transparent':
                                                   highlighted(),
                                               })}
-                                              onClick={() => group().loadMore()}
+                                              onClick={() => {
+                                                fetchNextGroupPage(group().key);
+                                              }}
                                             >
                                               <CaretDownIcon class="size-2.5" />
                                               Load More
@@ -1281,6 +1304,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                           soup.focus.setIndex(row.index);
                                         }}
                                         showUnrollNotifications={
+                                          row.original.type !== 'email' &&
                                           soup.predicates.isActive('inbox') &&
                                           !soup.predicates.isActive('noise')
                                         }
@@ -1434,12 +1458,6 @@ const SoupList = (props: SoupListProps) => {
   const itemSize = createMemo(() => props.itemSize ?? DEFAULT_ITEM_SIZE);
   const overscan = createMemo(() => props.overscan ?? DEFAULT_OVERSCAN);
 
-  const [stableRows, setStableRows] = createStore<SoupRow[]>([]);
-
-  createRenderEffect(() => {
-    setStableRows(reconcile(props.rows, { key: 'id' }));
-  });
-
   const handleScroll = (offset: number) => {
     const handle = virtualizerHandle();
 
@@ -1475,7 +1493,7 @@ const SoupList = (props: SoupListProps) => {
         cache={props.cache}
         ref={registerVirtualizerHandler}
         class={cn('overscroll-none', props.virtualizerClass)}
-        data={stableRows}
+        data={props.rows}
         itemSize={itemSize()}
         bufferSize={overscan() * itemSize()}
         onScroll={handleScroll}

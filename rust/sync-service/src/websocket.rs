@@ -43,25 +43,6 @@ pub fn send_initial_sync(
     Ok(())
 }
 
-// Broadcasts a shallow snapshot of the document state to all connected clients
-pub fn broadcast_snapshot(
-    sockets: &[WebSocket],
-    snapshot: &[u8],
-    buf: Arc<Mutex<Vec<u8>>>,
-) -> Result<()> {
-    let message = FromRemote::RemoteSnapshot {
-        snapshot: SliceWrapper::Raw(snapshot),
-    };
-
-    let mut buf = buf.lock("serialize RemoteSnapshot in broadcast_snapshot");
-    let serialized = serialize(message, &mut buf).context("Failed serializing snapshot")?;
-    for ws in sockets {
-        ws.send_with_bytes(serialized)
-            .context("failed to send update message")?;
-    }
-    Ok(())
-}
-
 pub fn broadcast_awareness(
     from_socket: &WebSocket,
     sockets: &[WebSocket],
@@ -73,10 +54,13 @@ pub fn broadcast_awareness(
     };
 
     let mut buf = buf.lock("serialize RemoteAwareness in broadcast_awareness");
-    let serialized = serialize(message, &mut buf).context("TODO")?;
+    let serialized = serialize(message, &mut buf).context("failed serializing RemoteAwareness")?;
 
     for w in sockets.iter().filter(|w| w != &from_socket) {
-        w.send_with_bytes(serialized).context("failed to send")?;
+        // A dead peer socket must not abort delivery to the remaining peers.
+        if let Err(e) = w.send_with_bytes(serialized) {
+            tracing::warn!(error = ?e, "failed to send awareness to a peer; continuing");
+        }
     }
 
     Ok(())
@@ -143,7 +127,11 @@ pub async fn process_message(
                 let serialized =
                     serialize(message, &mut buf).context("Failed serializing update")?;
                 for w in dss.get_websockets().iter().filter(|w| w != &ws) {
-                    w.send_with_bytes(serialized).context("failed to send")?;
+                    // A dead peer socket must not abort delivery to the
+                    // remaining peers.
+                    if let Err(e) = w.send_with_bytes(serialized) {
+                        tracing::warn!(error = ?e, "failed to send update to a peer; continuing");
+                    }
                 }
             }
 
@@ -161,7 +149,10 @@ pub async fn process_message(
         FromPeer::PeerAwareness {
             awareness: awareness_update,
         } => {
-            awareness.apply(*awareness_update);
+            if let Err(e) = awareness.apply(*awareness_update) {
+                tracing::warn!(error = ?e, "failed to apply awareness update; ignoring it");
+                return Ok(());
+            }
             let encodede = awareness.encode_all();
             broadcast_awareness(ws, &dss.get_websockets(), &encodede, buf)
                 .context("failed to broadcast awareness")?;

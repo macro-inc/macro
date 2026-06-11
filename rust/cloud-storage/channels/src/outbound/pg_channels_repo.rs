@@ -4,13 +4,13 @@ mod tests;
 use crate::domain::{
     models::{
         Activity, ActivityType, AttachmentChannelReference, AttachmentEntityReference,
-        AttachmentGenericReference, ChannelAttachment, ChannelAttachmentType,
-        ChannelContextMessage, ChannelInfo, ChannelMessageFilters, ChannelMessageKind,
-        ChannelMetadata, ChannelParticipant, ChannelPreviewRow, ChannelType, CountedReaction,
-        CreateChannelRequest, CreateEntityMentionOptions, EntityMention, MessageAttachment,
-        MessagePageDirection, MutatedAttachment, MutatedMessage, NewChannelAttachment,
-        ParticipantRole, PatchChannelRequest, ResolvedChannelMessage, Sender, SimpleMention,
-        ThreadData, ThreadReplyRow, TopLevelMessageRow,
+        AttachmentGenericReference, BotId, BotSenderProfile, ChannelAttachment,
+        ChannelAttachmentType, ChannelContextMessage, ChannelInfo, ChannelMessageFilters,
+        ChannelMessageKind, ChannelMetadata, ChannelParticipant, ChannelPreviewRow, ChannelType,
+        CountedReaction, CreateChannelRequest, CreateEntityMentionOptions, EntityMention,
+        MessageAttachment, MessagePageDirection, MutatedAttachment, MutatedMessage,
+        NewChannelAttachment, ParticipantRole, PatchChannelRequest, ResolvedChannelMessage, Sender,
+        SimpleMention, ThreadData, ThreadReplyRow, TopLevelMessageRow,
     },
     ports::{ChannelRepo, TopLevelMessagesQueryResult},
 };
@@ -146,6 +146,8 @@ impl From<ContextMessageRow> for ChannelContextMessage {
             channel_id: row.channel_id,
             thread_id: row.thread_id,
             sender_id: row.sender_id,
+            // Bot profiles are joined in the service layer.
+            bot_profile: None,
             content: row.content,
             created_at: row.created_at,
             updated_at: row.updated_at,
@@ -2531,5 +2533,42 @@ impl ChannelRepo for PgChannelsRepo {
         .map(|row| (row.emoji, row.user_id, row.created_at))
         .collect::<Vec<_>>();
         Ok(group_counted_reactions(reactions))
+    }
+
+    async fn get_bot_profiles(
+        &self,
+        bot_ids: &[BotId],
+    ) -> Result<HashMap<BotId, BotSenderProfile>, Self::Err> {
+        if bot_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        let ids: Vec<Uuid> = bot_ids.iter().map(|id| id.as_uuid()).collect();
+        // Soft-deleted bots are included on purpose so historical messages
+        // keep their sender identity.
+        let rows = sqlx::query!(
+            r#"
+            SELECT id, name, avatar_url
+            FROM bots
+            WHERE id = ANY($1)
+            "#,
+            &ids,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .context("unable to fetch bot profiles")?;
+
+        Ok(rows
+            .into_iter()
+            .map(|row| {
+                (
+                    BotId::from_uuid(row.id),
+                    BotSenderProfile {
+                        name: row.name,
+                        avatar_url: row.avatar_url,
+                    },
+                )
+            })
+            .collect())
     }
 }

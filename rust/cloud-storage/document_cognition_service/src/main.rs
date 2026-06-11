@@ -35,6 +35,7 @@ use notification::domain::service::{
 };
 use notification::outbound::queue::SqsQueue;
 use notification::outbound::repository::DbNotificationRepository;
+use notification::outbound::websocket::ConnectionGatewayClient;
 use readonly_pool::ReadOnlyPool;
 use search_service_client::SearchServiceClient;
 use secretsmanager_client::SecretManager;
@@ -165,6 +166,10 @@ async fn main() -> anyhow::Result<()> {
             .context("failed to create connection manager")?;
 
     tracing::info!("initialized connection repo");
+    let connection_gateway_client = Arc::new(ConnectionGatewayClient::new(
+        internal_auth_key.as_ref().to_string(),
+        config.connection_gateway_url.clone(),
+    ));
 
     let ingress_queue = SqsQueue::new(
         aws_sdk_sqs::Client::new(&aws_config),
@@ -383,7 +388,8 @@ async fn main() -> anyhow::Result<()> {
     };
     let all_tools = ai_tools::all_tools();
     let all_tools_toolset = all_tools.toolset.clone();
-    let all_tools_prompt = all_tools.prompt;
+    let all_tools_prompt: Arc<dyn std::fmt::Display + Send + Sync> =
+        Arc::new(all_tools.prompt.to_string());
 
     // Build memory service
     let memory_repo = memory::outbound::pg_memory_repo::PgMemoryRepo::new(db.clone());
@@ -436,6 +442,7 @@ async fn main() -> anyhow::Result<()> {
         internal_auth_key,
         notification_ingress_service,
         connection_repo: connection_manager.persistence,
+        connection_gateway_client,
         soup_service,
         email_service: email_service_for_tools,
         stream_repo,

@@ -13,9 +13,13 @@ import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { ENABLE_MARKDOWN_SIDE_PANEL } from '@core/constant/featureFlags';
 import { blockErrorSignal, blockSyncSourceSignal } from '@core/signal/load';
 import { useCanEdit } from '@core/signal/permissions';
-import { MARKDOWN_LORO_SCHEMA } from '@lexical-core/markdown-loro-schema';
+import {
+  MARKDOWN_LORO_SCHEMA,
+  type MarkdownLoroSchemaType,
+} from '@lexical-core/markdown-loro-schema';
 import { DocumentDebouncedNotificationReadMarker } from '@notifications';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
+import { storageServiceClient } from '@service-storage/client';
 import { Scroll } from '@ui';
 import {
   createEffect,
@@ -74,6 +78,20 @@ async function ingestRemoteSnapshot(
   return true;
 }
 
+async function ingestS3Snapshot(
+  loroManager: MarkdownLoroManager,
+  blockId: string
+) {
+  try {
+    const result = await storageServiceClient.fetchCachedSnapshot(blockId);
+    if (result.isOk()) {
+      await loroManager.ingest({ kind: 's3', snapshot: result.value });
+    }
+  } catch (error) {
+    console.warn('Failed to load cached snapshot', error);
+  }
+}
+
 export default function BlockMarkdown(props: BlockMarkdownProps) {
   return (
     <MarkdownNameProvider>
@@ -120,8 +138,9 @@ function BlockMarkdownContent({ optimisticSnapshot }: BlockMarkdownProps) {
         });
       }
 
-      // unawaited
+      // unawaited — state machine handles precedence
       ingestLocalSnapshot(loroManager, snapshotStore, walStore);
+      ingestS3Snapshot(loroManager, blockId);
       ingestRemoteSnapshot(loroManager, data.doInitialSync).then((ok) => {
         if (!ok) setBlockError('INVALID');
       });

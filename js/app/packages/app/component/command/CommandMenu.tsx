@@ -1,4 +1,5 @@
 import { useAnalytics } from '@app/component/analytics-context';
+import { getViewPreset } from '@app/component/app-sidebar/soup-filter-presets';
 import { getSearchSplit } from '@app/component/next-soup/soup-view/search-controllers';
 import { isListViewID } from '@app/constants/list-views';
 import { globalSplitManager } from '@app/signal/splitLayout';
@@ -131,11 +132,14 @@ export function CommandMenuInner(props: {
     ? undefined
     : useCommandItems(query, CommandState.categoryFilter);
   const filteredItems = props.items ?? defaultFilteredItems!;
+  const [shouldScrollSelectedIntoView, setShouldScrollSelectedIntoView] =
+    createSignal(false);
 
   createEffect(() => {
     const items = filteredItems();
     const current = CommandState.selectedIndex();
     if (current >= items.length && items.length > 0) {
+      setShouldScrollSelectedIntoView(false);
       CommandState.setSelectedIndex(items.length - 1);
     }
   });
@@ -144,6 +148,7 @@ export function CommandMenuInner(props: {
     on([query, CommandState.categoryFilter], () => {
       const items = filteredItems();
       const firstIsSearch = items[0] && isSearchItem(items[0]);
+      setShouldScrollSelectedIntoView(false);
       CommandState.setSelectedIndex(firstIsSearch && items.length > 1 ? 1 : 0);
     })
   );
@@ -236,9 +241,13 @@ export function CommandMenuInner(props: {
     }
 
     if (isSearchItem(item)) {
+      // Fall back to the search preset (not `{}`) so uncategorized searches
+      // keep the search view's baseline exclusions (foreign entities, CRM).
+      const preset = getViewPreset('search');
       const overrides = getCategorySearchFilters(item.category);
-      const filters = overrides?.filters ?? {};
-      const clientFilters = overrides?.clientFilters ?? {};
+      const filters = overrides?.filters ?? preset?.filters ?? {};
+      const clientFilters =
+        overrides?.clientFilters ?? preset?.clientFilters ?? {};
       const splitManager = globalSplitManager();
       const active = splitManager?.activeSplit();
       const activeContent = active?.content();
@@ -292,6 +301,7 @@ export function CommandMenuInner(props: {
     keyDownHandler: () => {
       const items = filteredItems();
       if (items.length === 0) return false;
+      setShouldScrollSelectedIntoView(true);
       CommandState.setSelectedIndex((prev) => (prev + 1) % items.length);
       return true;
     },
@@ -306,6 +316,7 @@ export function CommandMenuInner(props: {
     keyDownHandler: () => {
       const items = filteredItems();
       if (items.length === 0) return false;
+      setShouldScrollSelectedIntoView(true);
       CommandState.setSelectedIndex(
         (prev) => (prev - 1 + items.length) % items.length
       );
@@ -431,6 +442,7 @@ export function CommandMenuInner(props: {
 
   function handleMouseEnter(index: number) {
     if (isKeyboardActive()) return;
+    setShouldScrollSelectedIntoView(false);
     CommandState.setSelectedIndex(index);
   }
 
@@ -558,6 +570,7 @@ export function CommandMenuInner(props: {
                 handleItemAction(item, openInNewSplit)
               }
               onMouseEnter={handleMouseEnter}
+              scrollSelectedIntoView={shouldScrollSelectedIntoView()}
             />
           </Show>
         </div>
@@ -566,10 +579,10 @@ export function CommandMenuInner(props: {
       <Panel.Footer class="gap-4 px-4 bg-surface text-xs text-ink-extra-muted/80">
         <span class="flex items-center gap-1">
           <div class="flex gap-1">
-            <div class="flex border border-edge-muted text-xxs rounded-xs items-center px-1.5 py-px font-normal">
+            <div class="flex border border-edge-muted text-xxs rounded-md items-center px-1.5 py-px font-normal">
               <Hotkey shortcut={navUpHotkey.hotkey()} class="space-x-1" />
             </div>
-            <div class="flex border border-edge-muted text-xxs rounded-xs items-center px-1.5 py-px font-normal">
+            <div class="flex border border-edge-muted text-xxs rounded-md items-center px-1.5 py-px font-normal">
               <Hotkey shortcut={navDownHotkey.hotkey()} class="space-x-1" />
             </div>
           </div>
@@ -656,12 +669,18 @@ function VirtualizedCommandList(props: {
   selectedIndex: number;
   onSelect: (item: CommandMenuItem, openInNewSplit: boolean) => void;
   onMouseEnter: (index: number) => void;
+  scrollSelectedIntoView: boolean;
 }) {
   let virtualizerHandle: VirtualizerHandle | undefined;
 
   createEffect(() => {
     const index = props.selectedIndex;
-    if (index < 0 || index >= props.items.length || !virtualizerHandle) {
+    if (
+      !props.scrollSelectedIntoView ||
+      index < 0 ||
+      index >= props.items.length ||
+      !virtualizerHandle
+    ) {
       return;
     }
     // Skip when all items fit: scrolling would be a no-op at the final
@@ -704,7 +723,7 @@ function VirtualizedCommandList(props: {
 function HotkeyHint(props: { command: RegisterHotkeyReturn; label: string }) {
   return (
     <span class="flex items-center gap-1">
-      <div class="flex border border-edge-muted text-xxs rounded-xs items-center px-1.5 py-px font-normal">
+      <div class="flex border border-edge-muted text-xxs rounded-md items-center px-1.5 py-px font-normal">
         <Hotkey shortcut={props.command.hotkey()} class="space-x-1" />
       </div>
       {props.label}

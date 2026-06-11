@@ -15,6 +15,7 @@ use axum::{
 use macro_user_id::user_id::MacroUserId;
 use model::comms::ChannelHistoryInfo;
 use model::user::UserContext;
+use models_search::MatchType;
 use models_search::channel::{
     ChannelSearchRequest, ChannelSearchResponse, ChannelSearchResponseItem,
     ChannelSearchResponseItemWithMetadata, ChannelSearchResult, ChannelSortTimestamp,
@@ -212,10 +213,14 @@ pub async fn handler(
         (_, Some(t)) if !t.is_empty() => t,
         _ => return Err(SearchError::NoQueryOrTermsProvided),
     };
-    // Whitespace-split outside double quotes so `foo bar` matches messages
-    // containing both words (ANDed inside OpenSearch) while `"foo bar"`
-    // stays an exact-phrase term.
-    let terms = split_search_terms(&raw_terms);
+    // An exact match treats the query as a single phrase (as if double-quoted)
+    // so multi-word input matches the literal phrase. Other match types split on
+    // whitespace and AND the resulting terms.
+    let terms = if req.match_type == MatchType::Exact {
+        raw_terms
+    } else {
+        split_search_terms(&raw_terms)
+    };
     if terms.is_empty() {
         return Err(SearchError::NoQueryOrTermsProvided);
     }

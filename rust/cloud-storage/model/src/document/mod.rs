@@ -48,6 +48,8 @@ pub enum BasicDocumentSubType {
         /// True if the Status property is set to "Completed".
         is_completed: bool,
     },
+    /// A snippet document — reusable markdown
+    Snippet {},
 }
 
 impl BasicDocumentSubType {
@@ -58,6 +60,7 @@ impl BasicDocumentSubType {
             DocumentSubType::Task => Some(Self::Task {
                 is_completed: is_completed.unwrap_or_default(),
             }),
+            DocumentSubType::Snippet => Some(Self::Snippet {}),
         }
     }
 }
@@ -316,6 +319,8 @@ pub enum DocumentPreviewDataSubType {
         /// True if the Status property is set to "Completed".
         is_completed: bool,
     },
+    /// A snippet document — reusable markdown
+    Snippet {},
 }
 
 impl DocumentPreviewDataSubType {
@@ -326,6 +331,7 @@ impl DocumentPreviewDataSubType {
             DocumentSubType::Task => Some(Self::Task {
                 is_completed: is_completed.unwrap_or_default(),
             }),
+            DocumentSubType::Snippet => Some(Self::Snippet {}),
         }
     }
 }

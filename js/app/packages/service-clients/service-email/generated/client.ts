@@ -43,6 +43,7 @@ import type {
   ResyncResponse,
   SendMessageRequest,
   SendMessageResponse,
+  SharedInboxConflictResponse,
   UnblockSenderRequest,
   UpdateLabelBatchRequest,
   UpdateLabelBatchResponse,
@@ -1436,6 +1437,11 @@ export type initUserResponse401 = {
   status: 401;
 };
 
+export type initUserResponse409 = {
+  data: SharedInboxConflictResponse;
+  status: 409;
+};
+
 export type initUserResponse500 = {
   data: ErrorResponse;
   status: 500;
@@ -1447,6 +1453,7 @@ export type initUserResponseSuccess = initUserResponse200 & {
 export type initUserResponseError = (
   | initUserResponse400
   | initUserResponse401
+  | initUserResponse409
   | initUserResponse500
 ) & {
   headers: Headers;

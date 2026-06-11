@@ -221,6 +221,21 @@ impl DocumentService for StubDocumentService {
         Ok(())
     }
 
+    async fn get_team_share(
+        &self,
+        _receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<documents::domain::models::DocumentTeamShareResponse, DocumentError> {
+        unimplemented!()
+    }
+
+    async fn set_team_share(
+        &self,
+        _receipt: EntityAccessReceipt<EditAccessLevel>,
+        _share: bool,
+    ) -> Result<documents::domain::models::DocumentTeamShareResponse, DocumentError> {
+        unimplemented!()
+    }
+
     async fn edit_document(
         &self,
         _entity_access_receipt: EntityAccessReceipt<EditAccessLevel>,
@@ -255,6 +270,14 @@ impl DocumentService for StubDocumentService {
         _document_id: &str,
         _request: &documents::domain::models::CreateTaskRequest,
     ) -> Result<(), DocumentError> {
+        unimplemented!()
+    }
+
+    async fn get_snapshot(&self, _document_id: &str) -> anyhow::Result<Option<Vec<u8>>> {
+        unimplemented!()
+    }
+
+    async fn upload_snapshot(&self, _document_id: &str, _bytes: Vec<u8>) -> anyhow::Result<()> {
         unimplemented!()
     }
 }
@@ -741,6 +764,7 @@ impl ForeignEntityService for StubForeignEntityService {
 
     async fn get_foreign_entities_for_user(
         &self,
+        _requesting_user: Option<String>,
         source_ids: Vec<SourceId>,
         limit: u32,
         _query: ForeignEntityListQuery,
@@ -967,6 +991,7 @@ fn expected_pull_request_metadata(
         deletions,
         comments: None,
         checks: None,
+        participant_github_user_ids: None,
     })
     .unwrap()
 }
@@ -1069,6 +1094,7 @@ fn backfilled_pull_request(title: &str) -> EnrichedGithubPullRequest {
         deletions: None,
         comments: None,
         checks: None,
+        participant_github_user_ids: None,
     }
 }
 
@@ -1088,6 +1114,7 @@ fn expected_pull_request_metadata_from_details(
         deletions: Some(details.deletions),
         comments: details.comments.clone(),
         checks: details.checks.clone(),
+        participant_github_user_ids: details.participant_github_user_ids.clone(),
     })
     .unwrap()
 }
@@ -1096,6 +1123,7 @@ fn pull_request_comment(id: u64, body: &str, source: &str) -> GithubPullRequestC
     GithubPullRequestComment {
         id,
         body: body.to_string(),
+        author_id: None,
         author_login: Some("octocat".to_string()),
         author_association: Some("MEMBER".to_string()),
         url: Some(format!(
@@ -1134,6 +1162,7 @@ fn pull_request_details(
         deletions,
         comments,
         checks,
+        participant_github_user_ids: None,
     }
 }
 
@@ -2347,6 +2376,47 @@ async fn pr_closed_upserts_merged_pull_request_metadata() {
             Some(10),
             Some(2),
         )
+    );
+}
+
+#[tokio::test]
+async fn pr_event_extracts_participants_from_webhook_payload() {
+    let (service, foreign_entity_service) = make_sync_service_with_foreign_entity_service();
+    let event = ValidatedGithubWebhookEvent::new(
+        "pull_request".to_string(),
+        serde_json::json!({
+            "action": "opened",
+            "pull_request": {
+                "number": 42,
+                "title": "fixes MACRO-2BuyvtY3aeEvHx4uG8iD51",
+                "body": null,
+                "head": { "ref": "feature/some-branch" },
+                "state": "open",
+                "merged": false,
+                "additions": 10,
+                "deletions": 2,
+                "user": { "login": "author", "id": 7 },
+                "requested_reviewers": [
+                    { "login": "reviewer", "id": 42 },
+                    { "login": "author", "id": 7 }
+                ],
+                "assignees": [{ "login": "assignee", "id": 99 }]
+            },
+            "repository": {
+                "name": "my-repo",
+                "owner": { "login": "my-org" }
+            },
+            "installation": { "id": 12345 }
+        }),
+    );
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    let foreign_entities = foreign_entity_service.foreign_entities();
+    assert_eq!(foreign_entities.len(), 1);
+    assert_eq!(
+        foreign_entities[0].metadata.get("participantGithubUserIds"),
+        Some(&serde_json::json!(["7", "42", "99"]))
     );
 }
 

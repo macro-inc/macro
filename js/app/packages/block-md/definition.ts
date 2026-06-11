@@ -17,7 +17,10 @@ export const definition = defineBlock({
   name: 'md',
   description: 'write markdown notes',
   defaultFilename: 'New Note',
-  aliases: [{ name: 'task', defaultFileName: 'New Task' }],
+  aliases: [
+    { name: 'task', defaultFileName: 'New Task' },
+    { name: 'snippet', defaultFileName: 'New Snippet' },
+  ],
   component: MarkdownBlock,
   accepted: {
     md: 'text/markdown',

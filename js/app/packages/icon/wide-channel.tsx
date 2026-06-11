@@ -1,7 +1,12 @@
+import { createUniqueId } from 'solid-js';
+
 export const AnimatedChannelIcon = (props: {
   triggerAnimation?: boolean;
   class?: string;
 }) => {
+  // Unique clipPath id so multiple instances on a page don't collide.
+  const clipId = `channel-clip-${createUniqueId()}`;
+
   return (
     <svg
       width="100%"
@@ -13,48 +18,53 @@ export const AnimatedChannelIcon = (props: {
       stroke-linecap="round"
       stroke-linejoin="round"
       xmlns="http://www.w3.org/2000/svg"
-      overflow="visible"
+      overflow="hidden"
       class={`animated-channel-icon ${props.triggerAnimation ? 'animating' : ''} ${props.class ?? ''}`}
     >
-      {/*<title>Animated channel icon</title>*/}
+      {/*<title>Channel icon</title>*/}
       <style>{`
-        @keyframes head-bounce {
-          0% {
-            transform: translateY(0);
-          }
-          50% {
-            transform: translateY(-2px);
-          }
-          80% {
-            transform: translateY(1px);
-          }
-          100% {
-            transform: translateY(0);
-          }
+        @keyframes channel-zip-h-top {
+          0%, 15% { transform: translate(-26px, 0); }
+          100%    { transform: translate(0, 0); }
         }
-        .animated-channel-icon {
-          .head-left, .head-center, .head-right {
-            transition: transform 0.4s ease;
-          }
+        @keyframes channel-zip-h-bottom {
+          0%, 15% { transform: translate(26px, 0); }
+          100%    { transform: translate(0, 0); }
         }
-        .animated-channel-icon.animating {
-          .head-left {
-            animation: head-bounce .2s;
-          }
-          .head-center {
-            animation: head-bounce .2s 0.2s;
-          }
-          .head-right {
-            animation: head-bounce .2s 0.4s;
-          }
+        @keyframes channel-zip-v-left {
+          0%, 15% { transform: translate(-8px, 24px); }
+          100%    { transform: translate(0, 0); }
+        }
+        @keyframes channel-zip-v-right {
+          0%, 15% { transform: translate(8px, -24px); }
+          100%    { transform: translate(0, 0); }
+        }
+        /* easeOutBack: the 15% -> 100% segment zips in then overshoots past rest and
+           settles. The 0% -> 15% segment holds (both keyframes share the start offset). */
+        .animated-channel-icon.animating .channel-h-top {
+          animation: channel-zip-h-top 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        }
+        .animated-channel-icon.animating .channel-h-bottom {
+          animation: channel-zip-h-bottom 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        }
+        .animated-channel-icon.animating .channel-v-left {
+          animation: channel-zip-v-left 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        }
+        .animated-channel-icon.animating .channel-v-right {
+          animation: channel-zip-v-right 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
         }
       `}</style>
-      <circle class="head-center" cx="12" cy="8" r="3.04" />
-      <circle class="head-right" cx="20.333" cy="3.667" r="3.04" />
-      <circle class="head-left" cx="3.667" cy="3.667" r="3.04" />
-      <path d="M0 9.99C0.9 8.99 2.23 8.33 3.693 8.33C5.16 8.33 6.44 8.96 7.333 9.94" />
-      <path d="M16.667 9.99C17.567 8.99 18.894 8.33 20.36 8.33C21.827 8.33 23.107 8.96 24 9.94" />
-      <path d="M7.107 16C7.887 14.06 9.78 12.667 12.007 12.667C14.234 12.667 16.12 14.06 16.907 16" />
+      <clipPath id={clipId}>
+        <rect x="0" y="-4" width="24" height="24" />
+      </clipPath>
+      <g clip-path={`url(#${clipId})`}>
+        {/* Horizontals shortened ~1u on the edge-touching end so the round caps stay
+            inside the clip box at rest (M2 5H24 -> H23, M0 11H22 -> M1). */}
+        <path class="channel-h channel-h-top" d="M2 5H23" />
+        <path class="channel-h channel-h-bottom" d="M1 11H22" />
+        <path class="channel-v channel-v-left" d="M6.5 15.5L11.5 0.5" />
+        <path class="channel-v channel-v-right" d="M12.5 15.5L17.5 0.5" />
+      </g>
     </svg>
   );
 };

@@ -220,6 +220,22 @@ pub(in crate::api::search) async fn perform_unified_search(
     filter_email_response.terms = email_terms.clone();
     filter_call_record_response.terms = split_search_terms(&terms);
 
+    // Widen the email access filter to every inbox the caller can reach (their
+    // own plus delegated). Connected secondary inboxes share the owner's
+    // user_id; delegated inboxes index under their own, so collect the
+    // distinct macro_ids the caller can search.
+    if should_include_emails {
+        let inboxes =
+            email_db_client::links::get::fetch_inboxes_for_macro_id(&ctx.db, user_id.as_ref())
+                .await
+                .map_err(SearchError::InternalError)?;
+        let mut email_user_ids: Vec<String> =
+            inboxes.iter().map(|l| l.macro_id.to_string()).collect();
+        email_user_ids.sort();
+        email_user_ids.dedup();
+        filter_email_response.user_ids = email_user_ids;
+    }
+
     // Clone terms for use in name searches
     let name_search_term = terms[0].clone();
 

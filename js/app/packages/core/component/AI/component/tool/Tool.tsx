@@ -46,7 +46,7 @@ function Root(props: ToolRootProps) {
       class="relative overflow-hidden text-xs leading-5 text-ink-extra-muted"
       classList={{
         'opacity-50': props.muted,
-        'rounded-lg border border-edge-muted bg-surface': !props.grouped,
+        'rounded-lg bg-surface': !props.grouped,
       }}
     >
       {props.children}

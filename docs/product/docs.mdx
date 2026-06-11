@@ -1,5 +1,6 @@
 ---
 title: "Documents"
+icon: "file-lines"
 description: "Markdown native collaborative documents."
 ---
 
@@ -11,15 +12,15 @@ In Macro, the documents container holds many different file types. The default w
 
 > To create a new markdown document use shortcut <kbd>c</kbd> \+ <kbd>d</kbd>
 
-Macro auto-extracts email attachments and adds them to documents module. Canvas and code files will also appear there.
+Macro auto-extracts email attachments and adds them to the documents module. Canvas and code files also appear there.
 
-You can @mention documents in your channels, link to them in your tasks, ask an agent questions about a contract someone emailed you. Documents are always fully searchable inside of Macro.
+You can @mention documents in your channels, link to them in your tasks, or ask an agent questions about a contract someone emailed you. Documents are always fully searchable inside Macro.
 
 ### Editing & formatting
 
 The editor supports the full set of block nodes — paragraphs, Heading 1/2/3, bullet/numbered/checklist lists (with interactive checkboxes), blockquotes, code blocks (Prism syntax highlighting across 15+ languages), tables, dividers, images, videos, and links — plus inline and block math rendered with KaTeX. Inline formatting follows the usual shortcuts: bold (<kbd>cmd</kbd>+<kbd>b</kbd>), italic (<kbd>cmd</kbd>+<kbd>i</kbd>), underline (<kbd>cmd</kbd>+<kbd>u</kbd>), strikethrough (<kbd>shift</kbd>+<kbd>cmd</kbd>+<kbd>x</kbd>), highlight (<kbd>shift</kbd>+<kbd>cmd</kbd>+<kbd>h</kbd>), inline code (<kbd>cmd</kbd>+<kbd>e</kbd>), plus superscript and subscript.
 
-Markdown autoformatting works as you type (`#`/`##`/`###`, `-`, `1.`, `[]`, `>`, `---`, and backticks), `:shortcode:` emoji are supported, blocks can be dragged to reorder, <kbd>tab</kbd>/<kbd>shift</kbd>+<kbd>tab</kbd> indent and outdent, and find & replace (<kbd>cmd</kbd>+<kbd>f</kbd>) supports regex and replace-one/replace-all. The slash menu (`/`, or the command menu) inserts any of these: Normal text, Heading 1/2/3, Blockquote, Code block, Bullet/Numbered/Checklist, **Task** (an inline task with mentions), Image, Video, Link, Equation (`/latex` or `/math`), Table (5×3), and Divider. @mentions render in the body as collapsible inline pills.
+Markdown autoformatting works as you type (`#`/`##`/`###`, `-`, `1.`, `[]`, `>`, `---`, and backticks), `:shortcode:` emoji are supported, blocks can be dragged to reorder, <kbd>tab</kbd>/<kbd>shift</kbd>+<kbd>tab</kbd> indent and outdent, and find & replace (<kbd>cmd</kbd>+<kbd>f</kbd>) supports regex and replace-one/replace-all. The slash menu (`/`, or the command menu) inserts any of these: Normal text, Heading 1/2/3, Blockquote, Code block, Bullet/Numbered/Checklist, **Task** (an inline task with mentions), Image, Video, Link, Equation (`/latex` or `/math`), Table (5×3), and Divider. @mentions render in the body as collapsible inline pills. Typing `;` opens the [snippets](/product/snippets) menu to insert reusable content.
 
 ### Comments & history
 
@@ -27,13 +28,13 @@ Comments are inline and thread-based, anchored to a text selection — you can r
 
 ### Notifications
 
-For a person to receive notifications from a document it must first be shared with them after which they will receive a channel notification. When @mentioning a person inside of a document's body, they will not get a notification in their inbox. However, when @mentioning someone inside of a comment of a document it will be added to their inbox notifications.
+For a person to receive notifications from a document, it must first be shared with them. @mentioning a person in a document's **body** does not notify them, but @mentioning them in a **comment** adds a notification to their inbox.
 
 <Frame>
   <img
     src="/images/Screenshot-2026-06-02-at-6.40.28-PM.png"
-    alt="Screenshot 2026 06 02 At 6 40 28 PM"
-    title="Screenshot 2026 06 02 At 6 40 28 PM"
+    alt="An inline comment thread in a document with an @mention notifying a teammate"
+    title="Document comments"
     className="mx-auto"
     style={{ width:"51%" }}
   />
@@ -41,7 +42,7 @@ For a person to receive notifications from a document it must first be shared wi
 
 ### Properties
 
-On the right hand side of your document or inside the Info panel depending on your split size, you are able to see document details (owner, folder, created and updated) as well as properties. Inside properties you can assign, add to a task, add urgency, etc to your document. You can pin properties so their values render as pills under the title, toggle an optional YAML front-matter display, and see a live word and character count.
+On the right-hand side of your document — or inside the Info panel, depending on your split size — you can see document details (owner, folder, created and updated) as well as properties. Properties let you assign the document, link it to a task, set urgency, and more. You can pin properties so their values render as pills under the title, toggle an optional YAML front-matter display, and see a live word and character count.
 
 <Frame>
   <img
@@ -55,6 +56,6 @@ On the right hand side of your document or inside the Info panel depending on yo
 
 ### Sharing & export
 
-Documents use the standard access levels: owner, editor, commenter, and viewer. Document viewing is not limited exclusively to Macro users — you can share documents to people outside the app by using their email address or by giving them a url link, if the Public Link has been enabled in the Share menu. Users not signed in will see the document preview without having to log on or create an account. Sharing a doc through a Macro message auto-updates its permissions so recipients can open it.
+Documents use the standard access levels: owner, editor, commenter, and viewer. Document viewing is not limited to Macro users — you can share documents with people outside the app by using their email address, or by giving them a URL link if the Public Link has been enabled in the Share menu. Users who aren't signed in see a document preview without having to log in or create an account. Sharing a doc through a Macro message auto-updates its permissions so recipients can open it.
 
 Copy a link with <kbd>shift</kbd>+<kbd>cmd</kbd>+<kbd>c</kbd>, export to markdown text, and upload images or video by paste, drag, or the media picker.

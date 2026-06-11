@@ -512,6 +512,10 @@ async fn main() -> anyhow::Result<()> {
     if let Some(config) = egress_config {
         call_service_builder = call_service_builder.with_egress(config);
     }
+    if let Some(base_url) = config::CallRingStatusBaseUrl::new() {
+        call_service_builder =
+            call_service_builder.with_ring_status_base_url(base_url.as_ref().to_owned());
+    }
 
     // VoIP push is optional: enabled only when both env vars are present.
     // APPLE_BUNDLE_ID:           the app bundle ID (e.g. "com.macro.app.prod")
@@ -632,6 +636,13 @@ async fn main() -> anyhow::Result<()> {
     );
     bot_trigger_router.spawn(bot_trigger_receiver);
 
+    let channel_bot_webhook_state =
+        bots::inbound::channel_webhook_router::ChannelBotWebhookRouterState::new(
+            bots_service.clone(),
+            channels_service.clone(),
+            (*entity_access_service).clone(),
+        );
+
     let api_context = ApiContext {
         contacts_ingress: contacts_ingress.clone(),
         soup_router_state: SoupRouterState::new(
@@ -688,6 +699,7 @@ async fn main() -> anyhow::Result<()> {
             bots_service.clone(),
             (*entity_access_service).clone(),
         ),
+        channel_bot_webhook_state,
         call_state,
         call_webhook_state,
         call_internal_state,

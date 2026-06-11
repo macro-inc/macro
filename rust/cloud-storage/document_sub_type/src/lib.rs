@@ -23,4 +23,7 @@ use schemars::JsonSchema;
 pub enum DocumentSubType {
     /// A task document
     Task,
+    /// A snippet document — a reusable block of markdown that can be inserted
+    /// into any markdown area
+    Snippet,
 }

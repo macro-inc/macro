@@ -9,9 +9,11 @@ import { SearchSender } from '../../extractors-search/search-sender';
 import {
   isChannelEntity,
   isChannelMessageEntity,
+  isEmailEntity,
   isTaskEntity,
 } from '../../types/entity';
 import { isSearchEntity } from '../../types/search';
+import { EmailInboxChip } from './email';
 import type { LayoutProps } from './shared';
 
 export function NarrowLayout(props: LayoutProps) {
@@ -83,6 +85,9 @@ export function NarrowLayout(props: LayoutProps) {
               </span>
             );
           }}
+        </Show>
+        <Show when={isEmailEntity(props.entity) && props.entity}>
+          {(entity) => <EmailInboxChip entity={entity()} class="ml-auto" />}
         </Show>
       </Entity.Slot>
 

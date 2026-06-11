@@ -21,6 +21,9 @@ This may be empty if the search result match was on the email subject only */
 These field names are being aligned across all item types
 for consistency in our data model. */
   id: string;
+  /** The inbox that owns the thread. Drives the multi-inbox indicator
+when the caller has more than one inbox. */
+  link_id: string;
   /** Subject of the email thread */
   name?: EmailSearchResponseItemName;
   owner_id: string;

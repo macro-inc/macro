@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { GithubPullRequestCommentAuthorAssociation } from './githubPullRequestCommentAuthorAssociation';
+import type { GithubPullRequestCommentAuthorId } from './githubPullRequestCommentAuthorId';
 import type { GithubPullRequestCommentAuthorLogin } from './githubPullRequestCommentAuthorLogin';
 import type { GithubPullRequestCommentCreatedAt } from './githubPullRequestCommentCreatedAt';
 import type { GithubPullRequestCommentUpdatedAt } from './githubPullRequestCommentUpdatedAt';
@@ -16,6 +17,11 @@ import type { GithubPullRequestCommentUrl } from './githubPullRequestCommentUrl'
 export interface GithubPullRequestComment {
   /** GitHub's relationship label for the author, when available. */
   authorAssociation?: GithubPullRequestCommentAuthorAssociation;
+  /**
+   * The stable numeric GitHub user id for the comment author, when available.
+   * @minimum 0
+   */
+  authorId?: GithubPullRequestCommentAuthorId;
   /** The GitHub login for the comment author, when available. */
   authorLogin?: GithubPullRequestCommentAuthorLogin;
   /** The comment or review body text. */

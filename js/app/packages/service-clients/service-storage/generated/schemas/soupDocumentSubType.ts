@@ -5,9 +5,12 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { SoupDocumentSubTypeOneOf } from './soupDocumentSubTypeOneOf';
+import type { SoupDocumentSubTypeOneOfThree } from './soupDocumentSubTypeOneOfThree';
 
 /**
  * Sub type of a document with associated properties encoded in each variant.
 This ensures type-safety: task properties only exist when the document is a task.
  */
-export type SoupDocumentSubType = SoupDocumentSubTypeOneOf;
+export type SoupDocumentSubType =
+  | SoupDocumentSubTypeOneOf
+  | SoupDocumentSubTypeOneOfThree;

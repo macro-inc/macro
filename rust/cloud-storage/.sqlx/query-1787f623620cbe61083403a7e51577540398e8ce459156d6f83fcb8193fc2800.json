@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH user_source_ids AS (\n            SELECT cp.channel_id::text AS source_id\n            FROM comms_channel_participants cp\n            WHERE cp.user_id = $1 AND cp.left_at IS NULL\n            UNION ALL\n            SELECT t.team_id::text\n            FROM team_user t\n            WHERE t.user_id = $1\n            UNION ALL\n            SELECT $1\n        ),\n        visible_calls AS (\n            SELECT\n                cr.id,\n                CASE\n                    WHEN EXISTS (\n                        SELECT 1 FROM call_record_participants crp\n                        WHERE crp.call_record_id = cr.id AND crp.user_id = $1\n                    ) THEN 'ATTENDED'\n                    WHEN EXISTS (\n                        SELECT 1 FROM comms_channel_participants ccp\n                        WHERE ccp.channel_id = cr.channel_id\n                          AND ccp.user_id = $1\n                          AND ccp.left_at IS NULL\n                    ) THEN 'MISSED'\n                    ELSE 'UNATTENDED'\n                END AS status\n            FROM call_records cr\n            WHERE (\n                EXISTS (\n                    SELECT 1 FROM entity_access ea\n                    WHERE ea.entity_id = cr.id\n                      AND ea.entity_type = 'call'\n                      AND ea.source_id IN (SELECT source_id FROM user_source_ids)\n                ) OR EXISTS (\n                    SELECT 1 FROM \"SharePermission\" sp\n                    WHERE sp.id = cr.share_permission_id\n                      AND sp.\"isPublic\" = true\n                      AND sp.\"publicAccessLevel\" IS NOT NULL\n                )\n            )\n        )\n        SELECT id AS \"id!\"\n        FROM visible_calls\n        WHERE cardinality($2::text[]) = 0 OR status = ANY($2)\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "1787f623620cbe61083403a7e51577540398e8ce459156d6f83fcb8193fc2800"
+}

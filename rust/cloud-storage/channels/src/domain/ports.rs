@@ -1,15 +1,15 @@
 use crate::domain::events::ChannelEvent;
 use crate::domain::models::{
-    Activity, ActivityType, AddParticipantsRequest, AttachmentEntityReference, ChannelAttachment,
-    ChannelAttachmentType, ChannelContextMessage, ChannelInfo, ChannelMessageFilters,
-    ChannelMetadata, ChannelParticipant, ChannelPreview, ChannelPreviewRow, CountedReaction,
-    CreateChannelRequest, CreateChannelResponse, CreateEntityMentionOptions, DeleteMessageQuery,
-    EntityMention, GetOrCreateChannelResponse, GetOrCreateDmRequest, GetOrCreatePrivateRequest,
-    MessageAttachment, MessagePageDirection, MutatedAttachment, MutatedMessage,
-    NewChannelAttachment, PatchChannelRequest, PatchMessageRequest, PostMessageRequest,
-    PostMessageResponse, PostReactionRequest, PostTypingRequest, ReferencedShareItem,
-    RemoveParticipantsRequest, ResolvedChannelMessage, Sender, SimpleMention, ThreadData,
-    ThreadReply, ThreadReplyRow, TopLevelMessageRow,
+    Activity, ActivityType, AddParticipantsRequest, AttachmentEntityReference, BotId,
+    BotSenderProfile, ChannelAttachment, ChannelAttachmentType, ChannelContextMessage, ChannelInfo,
+    ChannelMessageFilters, ChannelMetadata, ChannelParticipant, ChannelPreview, ChannelPreviewRow,
+    CountedReaction, CreateChannelRequest, CreateChannelResponse, CreateEntityMentionOptions,
+    DeleteMessageQuery, EntityMention, GetOrCreateChannelResponse, GetOrCreateDmRequest,
+    GetOrCreatePrivateRequest, MessageAttachment, MessagePageDirection, MutatedAttachment,
+    MutatedMessage, NewChannelAttachment, PatchChannelRequest, PatchMessageRequest,
+    PostMessageRequest, PostMessageResponse, PostReactionRequest, PostTypingRequest,
+    ReferencedShareItem, RemoveParticipantsRequest, ResolvedChannelMessage, Sender, SimpleMention,
+    ThreadData, ThreadReply, ThreadReplyRow, TopLevelMessageRow,
 };
 use crate::domain::side_effects::{
     ChannelDocumentMention, ChannelNotificationEffect, ChannelRealtimeEffect,
@@ -369,6 +369,13 @@ pub trait ChannelRepo: Send + Sync + 'static {
         channel_id: Uuid,
         message_id: Uuid,
     ) -> impl Future<Output = Result<Vec<CountedReaction>, Self::Err>> + Send;
+
+    /// Batch-fetch public bot profiles by bot id. Includes soft-deleted bots so
+    /// historical messages keep their sender identity.
+    fn get_bot_profiles(
+        &self,
+        bot_ids: &[BotId],
+    ) -> impl Future<Output = Result<HashMap<BotId, BotSenderProfile>, Self::Err>> + Send;
 }
 
 /// Service for channel reads and mutations.
@@ -825,6 +832,12 @@ pub trait ChannelSideEffectContext: Send + Sync + 'static {
         &self,
         sender_id: MacroUserIdStr<'static>,
     ) -> impl Future<Output = Option<String>> + Send;
+
+    /// Load a bot's public profile for realtime payload enrichment.
+    fn get_bot_sender_profile(
+        &self,
+        bot_id: BotId,
+    ) -> impl Future<Output = Option<BotSenderProfile>> + Send;
 }
 
 /// Handler for durable channel events.

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { CallStatus } from '../src/types/entity';
 import { buildEntityData } from '../src/utils/buildEntityData';
 
 const base = { id: 'id-1', name: 'Hello', ownerId: 'user-1' };
@@ -182,8 +183,34 @@ describe('buildEntityData', () => {
         type: 'call',
         channelId: 'c-1',
         isActive: false,
+        status: 'UNATTENDED',
         attended: false,
         participantIds: [],
+      });
+    });
+
+    it.each([
+      { status: 'ATTENDED', attended: true },
+      { status: 'MISSED', attended: false },
+      { status: 'UNATTENDED', attended: false },
+    ] satisfies Array<{
+      status: CallStatus;
+      attended: boolean;
+    }>)('builds a $status call with derived attendance', ({
+      status,
+      attended,
+    }) => {
+      expect(
+        buildEntityData({
+          ...base,
+          blockName: 'call',
+          channelId: 'c-1',
+          status,
+        })
+      ).toMatchObject({
+        type: 'call',
+        status,
+        attended,
       });
     });
   });

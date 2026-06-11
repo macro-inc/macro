@@ -19,7 +19,7 @@ export type FetchWithTokenInit<CustomErrorCode extends string = never> =
   };
 
 function fetchWithCredentials<
-  T extends ObjectLike,
+  T extends ObjectLike | Uint8Array,
   CustomErrorCode extends string = never,
 >(
   input: RequestInfo,
@@ -109,7 +109,7 @@ export async function fetchToken(): Promise<
  * }
  */
 export async function fetchWithToken<
-  T extends ObjectLike,
+  T extends ObjectLike | Uint8Array,
   CustomErrorCode extends string = never,
 >(
   input: RequestInfo,

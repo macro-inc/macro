@@ -28,6 +28,9 @@ fn payload() -> VoipPushPayload {
         caller_name: "Alice".to_string(),
         livekit_server_url: Some("wss://livekit.example".to_string()),
         livekit_token: Some("test-token".to_string()),
+        ring_status_url: Some(
+            "https://api.example/call/ring-status/11111111-1111-1111-1111-111111111111".to_string(),
+        ),
     }
 }
 
