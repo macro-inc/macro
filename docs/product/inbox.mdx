@@ -1,48 +1,42 @@
 ---
 title: "Unified Inbox"
 icon: "inbox"
-description: "The Inbox unifies all your email accounts, messages, and @mentions into a single list."
+description: "All your email accounts, messages, and @mentions in a single inbox."
 ---
 
-The idea behind Macro's unified inbox is that you should only have to check one thing to understand what is going on at your company, instead of 7\+ different apps.
+The idea behind Macro's unified inbox is that you should only have to check one thing to understand what is going on at your company, instead of 7\+ different apps. Inspired by Superhuman/Gmail's shortcuts, but extended to everything in your workspace.
 
-<Frame>
-  ![Inbox Screenshot](/images/inbox_screenshot.png)
-</Frame>
-
-> The shortcut to get to your inbox is <kbd>g</kbd> \+ <kbd>i</kbd>, and pressing <kbd>space</kbd> will show you a preview of the selected notification. Use <kbd>j</kbd> and <kbd>k</kbd> to toggle up and down through different inbox items.
-
-From your inbox, you can filter by Signal or Noise. Signal holds your important notifications. Tasks assigned to you land in the inbox, along with new messages, emails, and agent responses. Select any item to jump to it.
-
-Use the input box at the bottom to ask AI to summarize, explain in more detail, respond, and more.
+- **Emails**, from all connected accounts
+- **Messages** from all channels and DM's
+- **Agents**, when they finish running
+- @mentions in **document** comments
+- **Tasks** assigned to you
+- **Files** shared with you
 
 <Frame>
   ![Inbox Full](/images/inbox_full.png)
 </Frame>
 
+The shortcut to get to your inbox is <kbd>g</kbd> \+ <kbd>i</kbd>.
+
+Use <kbd>j</kbd> and <kbd>k</kbd> or arrow keys to toggle up and down through different inbox items.
+
+Press <kbd>space</kbd> to preview the selected list item in split-screen, <kbd>enter</kbd> to open it fullscreen. You can still use  <kbd>j</kbd> and <kbd>k</kbd>  when in preview or fullscreen.
+
+Use <kbd>shift\+enter</kbd> to open in a new split view. This is useful if you want to multi-task.
+
+Press <kbd>e</kbd> to mark an item as "done" and remove it from your inbox.
+
 ## Signal vs. Noise
 
-The Signal view is your **action list**. It shows the things across Macro that currently need your attention. An item shows up here when **you have an open notification:**
+From your inbox, you can filter by Signal or Noise. Signal holds your important notifications and Noise is for spammy emails and other things you probably don't need to see but should still check from time to time (AI can make mistakes).
 
-- a reply
-- a mention
-- an update
+<Frame>
+  ![Inbox Screenshot](/images/inbox_screenshot.png)
+</Frame>
 
-that you haven't cleared yet **and** it was active recently (within roughly the last two weeks).
+You can think of the Signal view as your _action list_. It's the tab you'll have open most often throughout the day. It shows the things across Macro that currently need your attention.
 
-Once you mark a notification as "done," the item drops out of the view. So the list naturally shrinks as you work through it, like an inbox.
+## How we use it
 
-> Press <kbd>e</kbd> to mark an item as "done" and remove it from your inbox.
-
-### What can appear
-
-The inbox view pulls from across the whole product into one combined, recency-sorted list:
-
-| Type | Shows up when… |
-| --- | --- |
-| **Documents** | You have an open notification on it, and it was updated recently |
-| **Chats** | You have an open notification on it, and it was updated recently |
-| **Folders** | You have an open notification on it, and it was updated recently |
-| **Email Threads** | You have an open notification on it, it was updated recently, and it's flagged important and not a shared thread |
-| **Channels** | You have an open notification on it |
-| **Calls** | _Never_. Calls are intentionally excluded from this view |
+The Superhuman email client popularized the concept of "Inbox Zero", and we stole it here and applied it to your entire workspace. We strongly recommend using <kbd>e</kbd> to mark-done notifications when you've viewed them. If you get a little behind you can use <kbd>shift</kbd> <kbd>↓</kbd> to select multiple notifications then <kbd>e</kbd> to mark all as done.
