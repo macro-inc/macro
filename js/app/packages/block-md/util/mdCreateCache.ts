@@ -13,7 +13,9 @@ export function cacheMdCreate(documentId: string, entry: MdCreateCacheEntry) {
   cache.set(documentId, entry);
 }
 
-export function consumeMdCreate(documentId: string): MdCreateCacheEntry | undefined {
+export function consumeMdCreate(
+  documentId: string
+): MdCreateCacheEntry | undefined {
   const entry = cache.get(documentId);
   cache.delete(documentId);
   return entry;
