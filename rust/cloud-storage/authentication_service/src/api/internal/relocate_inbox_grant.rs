@@ -69,7 +69,7 @@ pub async fn handler(
     // Stripe customer is provisioned.
     let shared_user_id = match auth.get_user_id_by_email(&email).await {
         Ok(id) => id,
-        Err(_) => auth
+        Err(fusionauth::error::FusionAuthClientError::UserDoesNotExist) => auth
             .create_user(
                 fusionauth::user::create::User {
                     email: Cow::Borrowed(&email),
@@ -84,6 +84,10 @@ pub async fn handler(
                 tracing::error!(error=?e, "relocate_inbox_grant: failed to create shared mailbox user");
                 server_error("unable to create shared mailbox user")
             })?,
+        Err(e) => {
+            tracing::error!(error=?e, "relocate_inbox_grant: failed to look up shared mailbox user");
+            return Err(server_error("unable to look up shared mailbox user"));
+        }
     };
 
     // Idempotent: if the grant already lives on the shared user, nothing to do.

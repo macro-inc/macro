@@ -16,7 +16,7 @@ impl AuthServiceClient {
     /// Provisions a dedicated FusionAuth user for a shared mailbox and relocates the
     /// mailbox's Google grant onto it (off `owner_fusionauth_user_id`). Returns the shared
     /// user's id so the caller can re-home the link's `fusionauth_user_id`. Idempotent.
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip(self), err)]
     pub async fn relocate_inbox_grant(
         &self,
         email: &str,
@@ -47,6 +47,7 @@ impl AuthServiceClient {
                     })?;
                 Ok(result.shared_fusionauth_user_id)
             }
+            reqwest::StatusCode::NOT_FOUND => Err(AuthServiceClientError::NotFound),
             _ => {
                 let body = res.text().await.map_err(|e| {
                     AuthServiceClientError::Generic(GenericErrorResponse {

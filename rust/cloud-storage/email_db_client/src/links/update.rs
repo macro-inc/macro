@@ -9,7 +9,7 @@ pub async fn update_link_fusionauth_user_id(
     link_id: Uuid,
     fusionauth_user_id: &str,
 ) -> anyhow::Result<()> {
-    sqlx::query!(
+    let result = sqlx::query!(
         r#"
         UPDATE email_links
         SET fusionauth_user_id = $2, updated_at = NOW()
@@ -20,6 +20,10 @@ pub async fn update_link_fusionauth_user_id(
     )
     .execute(pool)
     .await?;
+
+    if result.rows_affected() == 0 {
+        anyhow::bail!("no email_links row found for link_id {link_id}");
+    }
 
     Ok(())
 }
