@@ -39,18 +39,23 @@ const RING_INTERVAL_MS = 4_000;
 const MAX_RING_DURATION_MS = 30_000;
 
 type WebkitWindow = Window & { webkitAudioContext?: typeof AudioContext };
+type RingSound = { durationMs: number; stop: () => void };
 type Ringer = { stop: () => void };
 
 const activeCallRingers = new Map<string, Ringer>();
 
-function stopCallRinger(callId: string) {
+export function stopCallRinger(callId: string) {
   activeCallRingers.get(callId)?.stop();
   activeCallRingers.delete(callId);
 }
 
-function startCallRinger(callId: string, shouldStop: () => boolean): Ringer {
+function startCallRinger(
+  callId: string,
+  shouldStop: () => boolean,
+  initialSound?: RingSound
+): Ringer {
   stopCallRinger(callId);
-  const ringer = startRingingLoop(shouldStop, () => {
+  const ringer = startRingingLoop(shouldStop, initialSound, () => {
     if (activeCallRingers.get(callId) === ringer) {
       activeCallRingers.delete(callId);
     }
@@ -59,17 +64,17 @@ function startCallRinger(callId: string, shouldStop: () => boolean): Ringer {
   return ringer;
 }
 
-function playRingSound() {
+function playRingSound(): RingSound | undefined {
   const Ctx =
     window.AudioContext ?? (window as WebkitWindow).webkitAudioContext;
-  if (!Ctx) return;
+  if (!Ctx) return undefined;
 
   let ctx: AudioContext;
   try {
     ctx = new Ctx();
   } catch (e) {
     console.warn('Failed to create AudioContext for call ring', e);
-    return;
+    return undefined;
   }
 
   const playNote = (start: number, freq: number, volume: number) => {
@@ -106,21 +111,51 @@ function playRingSound() {
 
   const totalMs =
     (phraseDuration * 2 + RING_PHRASE_GAP_S + RING_FADE_S) * 1000 + 200;
-  setTimeout(() => {
+
+  let stopped = false;
+  const timeoutId = window.setTimeout(() => {
+    stopped = true;
     void ctx.close().catch(() => {});
   }, totalMs);
+
+  return {
+    durationMs: totalMs,
+    stop: () => {
+      if (stopped) return;
+      stopped = true;
+      window.clearTimeout(timeoutId);
+      void ctx.close().catch(() => {});
+    },
+  };
 }
 
 function startRingingLoop(
   shouldStop: () => boolean,
+  initialSound?: RingSound,
   onStop?: () => void
 ): Ringer {
   let stopped = false;
+  const activeSounds = new Set<RingSound>();
+
+  const trackSound = (sound: RingSound | undefined) => {
+    if (!sound) return;
+    activeSounds.add(sound);
+    window.setTimeout(() => {
+      activeSounds.delete(sound);
+    }, sound.durationMs);
+  };
+
+  trackSound(initialSound);
+
   const stop = () => {
     if (stopped) return;
     stopped = true;
     window.clearInterval(intervalId);
     window.clearTimeout(timeoutId);
+    for (const sound of activeSounds) {
+      sound.stop();
+    }
+    activeSounds.clear();
     onStop?.();
   };
 
@@ -129,7 +164,7 @@ function startRingingLoop(
       stop();
       return;
     }
-    playRingSound();
+    trackSound(playRingSound());
   }, RING_INTERVAL_MS);
 
   const timeoutId = window.setTimeout(stop, MAX_RING_DURATION_MS);
@@ -237,8 +272,7 @@ async function emitCallStartedNotification(args: {
   // browser notifications denied still gets an audio cue. Keep re-ringing even
   // when platform notifications are unavailable; in that case the loop stops
   // when the user joins, the call ends, or after MAX_RING_DURATION_MS.
-  playRingSound();
-  const ringer = startCallRinger(callId, isJoined);
+  const ringer = startCallRinger(callId, isJoined, playRingSound());
 
   if (notif === 'not-supported') return;
 
