@@ -244,18 +244,6 @@ jobs:
           sync /handoff-binaries/prebuilt-binaries.tar.gz
           echo "handoff receipt: $(sha256sum /handoff-binaries/prebuilt-binaries.tar.gz | cut -d' ' -f1) ($(stat -c%s /handoff-binaries/prebuilt-binaries.tar.gz) bytes)"
 
-      # Fallback for the sticky-disk handoff: Blacksmith snapshot commits can
-      # take ~1 min to become visible to clones, and a deploy job that mounts
-      # too soon gets an empty disk. The deploy job prefers the disk and only
-      # downloads this artifact when the disk clone is missing the tar.
-      - name: Upload handoff fallback artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: handoff-binaries-${{ matrix.service }}-${{ github.sha }}
-          path: /handoff-binaries/prebuilt-binaries.tar.gz
-          retention-days: 1
-          overwrite: true
-
       - name: Teardown Nix (free sticky disk for commit)
         if: always()
         uses: ./.github/actions/teardown-nix
@@ -326,15 +314,6 @@ jobs:
           sync /handoff-lambdas/lambda-artifacts.tar.gz
           echo "handoff receipt: $(sha256sum /handoff-lambdas/lambda-artifacts.tar.gz | cut -d' ' -f1) ($(stat -c%s /handoff-lambdas/lambda-artifacts.tar.gz) bytes)"
 
-      # Fallback artifact (see the binaries build job for rationale).
-      - name: Upload handoff fallback artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: handoff-lambdas-${{ matrix.service }}-${{ github.sha }}
-          path: /handoff-lambdas/lambda-artifacts.tar.gz
-          retention-days: 1
-          overwrite: true
-
       - name: Teardown Nix (free sticky disk for commit)
         if: always()
         uses: ./.github/actions/teardown-nix
@@ -351,6 +330,25 @@ jobs:
         uses: ./.github/actions/migrate-cloud-storage-db
         with:
           environment: ${{ inputs.environment }}
+
+      # Blacksmith sticky-disk snapshot commits take time to become visible to
+      # clones (measured: invisible 41s after a successful commit, visible at
+      # 75s — same region). The last build jobs commit their handoff disks
+      # moments before this job starts, and the deploy matrix starts the
+      # moment this job ends — so without a buffer, the deploy jobs for
+      # exactly the services that compiled (the changed ones) clone empty
+      # disks. Hold the gate so deploys start >=90s after the last build
+      # commit; checkout + migrations above already count toward it.
+      - name: Hold for sticky-disk snapshot visibility
+        shell: bash
+        run: |
+          remaining=$(( 90 - SECONDS ))
+          if (( remaining > 0 )); then
+            echo "Waiting ${remaining}s so handoff snapshots are clone-visible"
+            sleep "$remaining"
+          else
+            echo "Migrations took ${SECONDS}s; no extra wait needed"
+          fi
 
   deploy-services:
     name: Deploy ${{ matrix.service }}
@@ -446,10 +444,6 @@ jobs:
           pulumi-service-name: ${{ steps.project-name.outputs.project-name }}
           prebuilt-binaries-tar: ${{ steps.check-artifacts.outputs.has_binaries == 'true' && '/handoff-binaries/prebuilt-binaries.tar.gz' || '' }}
           lambda-artifacts-tar: ${{ steps.check-artifacts.outputs.has_lambdas == 'true' && '/handoff-lambdas/lambda-artifacts.tar.gz' || '' }}
-          # Fallback artifacts for the sticky-disk visibility race; only
-          # downloaded when the disk clone is missing the tar.
-          prebuilt-binaries-artifact: ${{ steps.check-artifacts.outputs.has_binaries == 'true' && format('handoff-binaries-{0}-{1}', matrix.service, github.sha) || '' }}
-          lambda-artifacts: ${{ steps.check-artifacts.outputs.has_lambdas == 'true' && format('handoff-lambdas-{0}-{1}', matrix.service, github.sha) || '' }}
           dd-app-key: ${{ secrets.DD_APP_KEY }}
           dd-api-key: ${{ secrets.DD_API_KEY }}
 
