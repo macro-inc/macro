@@ -21,7 +21,7 @@ import {
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
 import { storageServiceClient } from '@service-storage/client';
 import type { SoupApiItem } from '@service-storage/generated/schemas';
-import type { Accessor } from 'solid-js';
+import { type Accessor, createEffect, on } from 'solid-js';
 
 type InitialGroupPage = {
   items: SoupAstItemsGroupedPage['items'];
@@ -76,7 +76,7 @@ export function createGroupedSoupQueries(args: CreateGroupedSoupQueriesArgs) {
     return entities;
   };
 
-  return createInfiniteQueries<GroupQueryPage, EntityData[]>(() => {
+  const queries = createInfiniteQueries<GroupQueryPage, EntityData[]>(() => {
     const field = args.groupByField();
     const initialGroupedPage = args.initialPage();
 
@@ -122,15 +122,11 @@ export function createGroupedSoupQueries(args: CreateGroupedSoupQueriesArgs) {
         getNextPageParam: (lastPage: GroupQueryPage): string | null => {
           return lastPage.group.nextCursor;
         },
-        placeholderData: {
-          pages: [initialPage],
-          pageParams: [null],
-        },
         select: (pages) =>
           pages.flatMap((page) =>
             mapPageToEntities(page, options.meta?.itemFilter)
           ),
-        enabled: options.enabled,
+        enabled: false,
         meta: {
           ...options.meta,
           groupBy: field,
@@ -141,4 +137,18 @@ export function createGroupedSoupQueries(args: CreateGroupedSoupQueriesArgs) {
       };
     });
   });
+
+  createEffect(
+    on(
+      () => args.initialPage(),
+      () => {
+        for (const query of queries.list()) {
+          query.refetch();
+        }
+      },
+      { defer: true }
+    )
+  );
+
+  return queries;
 }
