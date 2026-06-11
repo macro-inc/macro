@@ -262,9 +262,18 @@ export function EmailCompose(props: EmailComposeProps) {
     }
   }
 
+  // Edits since the composer opened; an untouched existing draft can be
+  // left without the keep-or-delete prompt.
+  const [draftDirty, setDraftDirty] = createSignal(false);
+
   const scheduleDraftSave = debounce(() => {
     void executeSaveDraft();
   }, DRAFT_DEBOUNCE_MS);
+
+  const markDirtyAndScheduleSave = () => {
+    setDraftDirty(true);
+    scheduleDraftSave();
+  };
 
   // --- Attachment handling ---
 
@@ -276,10 +285,11 @@ export function EmailCompose(props: EmailComposeProps) {
     for (const attachment of attachments) {
       form.attachments.add(attachment);
     }
-    scheduleDraftSave();
+    markDirtyAndScheduleSave();
   };
 
   const handleRemoveAttachment = (attachment: DraftFormAttachment) => {
+    setDraftDirty(true);
     if (attachment.type === 'local') {
       form.attachments.removeByFile(attachment.file);
     } else if (attachment.type === 'forwarded') {
@@ -315,7 +325,7 @@ export function EmailCompose(props: EmailComposeProps) {
       firstChangeConsumed = true;
       return;
     }
-    scheduleDraftSave();
+    markDirtyAndScheduleSave();
   };
 
   // --- Send ---
@@ -489,6 +499,7 @@ export function EmailCompose(props: EmailComposeProps) {
   });
 
   const handleSendTimeChange = async (date: Date | null) => {
+    setDraftDirty(true);
     const currentSendTime = form.sendTime();
     const currentDraft = currentDraftID();
 
@@ -637,11 +648,11 @@ export function EmailCompose(props: EmailComposeProps) {
     // Form state (write)
     setRecipients: (field, value) => {
       form.setRecipients(field, value);
-      scheduleDraftSave();
+      markDirtyAndScheduleSave();
     },
     setSubject: (value) => {
       form.setSubject(value);
-      scheduleDraftSave();
+      markDirtyAndScheduleSave();
     },
     onContentChange,
     onAddAttachments: handleAddAttachments,
@@ -688,7 +699,7 @@ export function EmailCompose(props: EmailComposeProps) {
   if (isMobile()) {
     // Backing out of a compose that has a draft asks whether to keep it.
     useSplitBackInterceptor(() => {
-      if (!ctxValue.hasDraft()) return false;
+      if (!ctxValue.hasDraft() || !draftDirty()) return false;
       setDraftBackMenuOpen(true);
       return true;
     });
