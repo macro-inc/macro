@@ -101,6 +101,13 @@ runs:
         mkdir -p rust/cloud-storage/prebuilt
         # Prefer an on-disk tar (sticky-disk handoff); fall back to the downloaded artifact.
         src="${TAR_PATH:-rust/cloud-storage/prebuilt-artifact/prebuilt-binaries.tar.gz}"
+        if [[ ! -f "$src" ]]; then
+          echo "::error::prebuilt binaries tar missing at $src — the handoff sticky disk cloned without the build job's snapshot. Re-run this deploy job (a fresh clone usually resolves it); if it persists, re-run the service's build job too."
+          echo "--- $(dirname "$src") contents ---"; ls -la "$(dirname "$src")" || true
+          echo "--- handoff mounts ---"; mount | grep -i handoff || true
+          exit 1
+        fi
+        echo "handoff receipt: $(sha256sum "$src" | cut -d' ' -f1) ($(stat -c%s "$src") bytes)"
         tar -xzf "$src" -C rust/cloud-storage/prebuilt
 
     - name: Download Lambda artifacts
@@ -119,6 +126,13 @@ runs:
         set -euo pipefail
         # Prefer an on-disk tar (sticky-disk handoff); fall back to the downloaded artifact.
         src="${TAR_PATH:-rust/cloud-storage/lambda-artifact/lambda-artifacts.tar.gz}"
+        if [[ ! -f "$src" ]]; then
+          echo "::error::lambda artifacts tar missing at $src — the handoff sticky disk cloned without the build job's snapshot. Re-run this deploy job (a fresh clone usually resolves it); if it persists, re-run the service's build job too."
+          echo "--- $(dirname "$src") contents ---"; ls -la "$(dirname "$src")" || true
+          echo "--- handoff mounts ---"; mount | grep -i handoff || true
+          exit 1
+        fi
+        echo "handoff receipt: $(sha256sum "$src" | cut -d' ' -f1) ($(stat -c%s "$src") bytes)"
         tar -xzf "$src" -C rust/cloud-storage
 
     - name: Check Lambda config for inline build

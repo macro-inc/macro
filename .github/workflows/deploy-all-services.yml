@@ -238,6 +238,11 @@ jobs:
           touch prebuilt/.keep
           # Write straight onto the handoff sticky disk; deploy-services reads it.
           tar -C prebuilt -czf /handoff-binaries/prebuilt-binaries.tar.gz .
+          # Receipt + flush: prove the handoff snapshot's contents in this
+          # job's log (the deploy job logs the same hash on read) and make
+          # sure bytes are on disk before the post-step commits the snapshot.
+          sync /handoff-binaries/prebuilt-binaries.tar.gz
+          echo "handoff receipt: $(sha256sum /handoff-binaries/prebuilt-binaries.tar.gz | cut -d' ' -f1) ($(stat -c%s /handoff-binaries/prebuilt-binaries.tar.gz) bytes)"
 
       - name: Teardown Nix (free sticky disk for commit)
         if: always()
@@ -305,6 +310,9 @@ jobs:
           set -euo pipefail
           # The build script writes lambda-artifacts.tar.gz to the workspace root.
           cp lambda-artifacts.tar.gz /handoff-lambdas/lambda-artifacts.tar.gz
+          # Receipt + flush (see binaries handoff for rationale).
+          sync /handoff-lambdas/lambda-artifacts.tar.gz
+          echo "handoff receipt: $(sha256sum /handoff-lambdas/lambda-artifacts.tar.gz | cut -d' ' -f1) ($(stat -c%s /handoff-lambdas/lambda-artifacts.tar.gz) bytes)"
 
       - name: Teardown Nix (free sticky disk for commit)
         if: always()
