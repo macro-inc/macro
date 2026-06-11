@@ -85,7 +85,7 @@ import { useEmailLinksQuery } from '@queries/email/link';
 import { debounce } from '@solid-primitives/scheduled';
 import { makePersisted } from '@solid-primitives/storage';
 import { useLocation } from '@solidjs/router';
-import { Button, cn, Dropdown, Hotkey, navRowClass } from '@ui';
+import { Button, cn, Dropdown, Hotkey, NavRow } from '@ui';
 import {
   type Component,
   createEffect,
@@ -479,10 +479,8 @@ const SidebarShortcutLink = (props: SidebarShortcutLinkProps) => {
   const [isHovering, setIsHovering] = createSignal(false);
 
   return (
-    <Button
+    <NavRow
       draggable={false}
-      variant="ghost"
-      class={navRowClass()}
       tooltipPlacement="right"
       label={props.isSlim() ? props.label : undefined}
       onMouseEnter={() => setIsHovering(true)}
@@ -500,7 +498,7 @@ const SidebarShortcutLink = (props: SidebarShortcutLinkProps) => {
       <div class="flex items-center gap-1 group-data-[slim=true]/sidebar:hidden">
         <span class="whitespace-nowrap">{props.label}</span>
       </div>
-    </Button>
+    </NavRow>
   );
 };
 
@@ -520,9 +518,8 @@ const SidebarActionButton = (props: SidebarActionButtonProps) => {
       : (props.disabled ?? false);
 
   return (
-    <Button
-      class={cn(navRowClass(), 'group-data-[slim=true]/sidebar:justify-center')}
-      variant="ghost"
+    <NavRow
+      class="group-data-[slim=true]/sidebar:justify-center"
       tooltipPlacement="right"
       label={props.isSlim() ? props.label : undefined}
       hotkey={props.isSlim() ? props.hotkeyToken : undefined}
@@ -548,7 +545,7 @@ const SidebarActionButton = (props: SidebarActionButtonProps) => {
           </div>
         )}
       </Show>
-    </Button>
+    </NavRow>
   );
 };
 
@@ -1124,15 +1121,12 @@ const SidebarLink = (props: SidebarLinkProps) => {
   return (
     <ContextMenu>
       <ContextMenu.Trigger class="w-full">
-        <Button
+        <NavRow
           draggable={false}
-          variant="ghost"
           data-sidebar-link={props.id}
           data-active={isActive() ? '' : undefined}
-          class={cn(
-            navRowClass({ active: isActive() && !props.suppressActiveStyle }),
-            'group-data-[slim=true]/sidebar:justify-center'
-          )}
+          active={isActive() && !props.suppressActiveStyle}
+          class="group-data-[slim=true]/sidebar:justify-center"
           tooltipPlacement="right"
           onMouseEnter={() => setIsHovering(true)}
           label={
@@ -1237,7 +1231,7 @@ const SidebarLink = (props: SidebarLinkProps) => {
               <Hotkey token={props.hotkeyToken} />
             </div>
           </Show>
-        </Button>
+        </NavRow>
       </ContextMenu.Trigger>
 
       <ContextMenu.Portal>
