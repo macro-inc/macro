@@ -1,8 +1,7 @@
 import type { EmailRecipient } from '@block-email/component/EmailContext';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { isMobile } from '@core/mobile/isMobile';
-import PlusIcon from '@phosphor/plus.svg';
-import { Button, cn } from '@ui';
+import { cn } from '@ui';
 import { createSignal, type JSX, Show } from 'solid-js';
 import { FromInboxSelector } from '../FromInboxSelector';
 import { type RecipientFieldId, useCompose } from './ComposeContext';
@@ -22,7 +21,6 @@ function ComposeFieldRow(props: {
     sourceField: RecipientFieldId
   ) => void;
   onRowFocusIn?: () => void;
-  trailing?: JSX.Element;
 }) {
   const [isDragOver, setIsDragOver] = createSignal(false);
 
@@ -67,9 +65,6 @@ function ComposeFieldRow(props: {
         {props.label}
       </div>
       <div class="flex-1 min-w-0">{props.children}</div>
-      <Show when={props.trailing}>
-        <div class="shrink-0 min-h-9 flex items-center">{props.trailing}</div>
-      </Show>
     </div>
   );
 }
@@ -124,18 +119,13 @@ export function ComposeRecipients(props: {
     if (targetField === 'bcc') props.setShowBcc(true);
   };
 
-  const inputEls: Partial<Record<RecipientFieldId, HTMLElement>> = {};
-
   const recipientSelector = (
     field: RecipientFieldId,
-    forwardRef?: (el: HTMLElement) => void,
+    inputRef?: (el: HTMLElement) => void,
     opts?: { focusOnMount?: boolean; includeSelf?: boolean }
   ) => (
     <RecipientSelector
-      inputRef={(el) => {
-        inputEls[field] = el;
-        forwardRef?.(el);
-      }}
+      inputRef={inputRef}
       options={ctx.recipientOptions}
       selfEmail={ctx.fromAddress?.()}
       selectedOptions={ctx.recipients()[field]}
@@ -155,23 +145,11 @@ export function ComposeRecipients(props: {
     />
   );
 
-  const addRecipientButton = (field: RecipientFieldId) => (
-    <Button
-      size="icon-sm"
-      aria-label={`Add ${field} recipient`}
-      disabled={ctx.disabled()}
-      onClick={() => inputEls[field]?.focus()}
-    >
-      <PlusIcon />
-    </Button>
-  );
-
   const fieldRow = (
     field: RecipientFieldId,
     label: string,
     children: JSX.Element,
-    onRowFocusIn?: () => void,
-    trailing?: JSX.Element
+    onRowFocusIn?: () => void
   ) => (
     <ComposeFieldRow
       label={label}
@@ -181,7 +159,6 @@ export function ComposeRecipients(props: {
         handleRecipientDrop(field, recipient, sourceField)
       }
       onRowFocusIn={onRowFocusIn}
-      trailing={trailing}
     >
       {children}
     </ComposeFieldRow>
@@ -201,7 +178,7 @@ export function ComposeRecipients(props: {
     props.setShowBcc(true);
   };
 
-  const toRow = (onRowFocusIn?: () => void, trailing?: JSX.Element) =>
+  const toRow = (onRowFocusIn?: () => void) =>
     fieldRow(
       'to',
       isMobile() ? 'To:' : 'To',
@@ -216,25 +193,20 @@ export function ComposeRecipients(props: {
           )}
         </Show>
       </>,
-      onRowFocusIn,
-      trailing
+      onRowFocusIn
     );
 
-  const ccRow = (trailing?: JSX.Element) =>
+  const ccRow = () =>
     fieldRow(
       'cc',
       isMobile() ? 'Cc:' : 'Cc',
-      recipientSelector('cc', props.ccRef),
-      undefined,
-      trailing
+      recipientSelector('cc', props.ccRef)
     );
-  const bccRow = (trailing?: JSX.Element) =>
+  const bccRow = () =>
     fieldRow(
       'bcc',
       isMobile() ? 'Bcc:' : 'Bcc',
-      recipientSelector('bcc', props.bccRef),
-      undefined,
-      trailing
+      recipientSelector('bcc', props.bccRef)
     );
 
   return (
@@ -249,7 +221,7 @@ export function ComposeRecipients(props: {
       }
     >
       <div class="flex flex-col gap-2">
-        {toRow(collapseIfEmpty, addRecipientButton('to'))}
+        {toRow(collapseIfEmpty)}
         <Show
           when={isCcVisible() || isBccVisible()}
           fallback={
@@ -267,8 +239,8 @@ export function ComposeRecipients(props: {
             </button>
           }
         >
-          {ccRow(addRecipientButton('cc'))}
-          {bccRow(addRecipientButton('bcc'))}
+          {ccRow()}
+          {bccRow()}
           <div class="flex items-center gap-2 py-1 border-b border-edge-muted">
             <div class="text-sm shrink-0 text-ink-placeholder">From:</div>
             <div class="flex-1 min-w-0 min-h-9 flex items-center">
