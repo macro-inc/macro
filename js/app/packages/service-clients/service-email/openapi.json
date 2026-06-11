@@ -3804,6 +3804,11 @@
         "type": "string",
         "enum": ["Init", "InProgress", "Complete", "Cancelled", "Failed"]
       },
+      "BackfillStatus": {
+        "type": "string",
+        "description": "Progress/terminal state of a backfill job for [`RefreshEmailEvent::Backfill`].",
+        "enum": ["progress", "complete", "failed"]
+      },
       "BlockSenderRequest": {
         "type": "object",
         "description": "Request to block a sender.",
@@ -4572,6 +4577,74 @@
           "important",
           "other"
         ]
+      },
+      "RefreshEmailEvent": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Backfill progress for `link_id`; see [`BackfillStatus`].",
+            "required": ["link_id", "status", "event"],
+            "properties": {
+              "event": {
+                "type": "string",
+                "enum": ["backfill"]
+              },
+              "link_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "status": {
+                "$ref": "#/components/schemas/BackfillStatus"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A message was inserted or updated for `link_id`.",
+            "required": ["link_id", "event"],
+            "properties": {
+              "event": {
+                "type": "string",
+                "enum": ["upsert_message"]
+              },
+              "link_id": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Labels changed for `link_id`.",
+            "required": ["link_id", "event"],
+            "properties": {
+              "event": {
+                "type": "string",
+                "enum": ["update_labels"]
+              },
+              "link_id": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A message was deleted for `link_id`.",
+            "required": ["link_id", "event"],
+            "properties": {
+              "event": {
+                "type": "string",
+                "enum": ["delete_message"]
+              },
+              "link_id": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          }
+        ],
+        "description": "Payload for the `refresh_email` connection gateway event: identifies the\ninbox that changed and the kind of change."
       },
       "ResyncResponse": {
         "type": "object",
