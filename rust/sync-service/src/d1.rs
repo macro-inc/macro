@@ -89,66 +89,57 @@ pub async fn get_peers_for_document_id(
     Ok(peers)
 }
 
-/// Record "last edited by" for a batch of Lexical nodes touched by a single
-/// update. Stamps all rows with the current time.
-pub async fn record_blame(
+/// A single pending "last edited by" event, buffered until the
+/// next alarm tick flushes everything
+#[derive(Debug, Clone)]
+pub struct BlameEvent {
+    pub document_id: String,
+    pub node_id: String,
+    pub peer_id: u64,
+    pub timestamp_ms: i64,
+}
+
+/// Maximum statements per D1 `batch()` call. D1 has a per-batch statement
+/// limit; chunking keeps us comfortably under it.
+const BATCH_CHUNK_SIZE: usize = 100;
+
+/// Bulk-upsert a list of buffered blame events. Uses D1's `batch()` so all
+/// events in a chunk commit in a single round-trip.
+pub async fn insert_blame_many(
     env: &worker::Env,
-    document_id: &str,
-    peer_id: u64,
-    node_ids: &[String],
+    events: &[BlameEvent],
 ) -> worker::Result<()> {
-    let now_ms = web_time::SystemTime::now()
-        .duration_since(web_time::UNIX_EPOCH)
-        .map(|d| d.as_millis() as i64)
-        .unwrap_or(0);
-    tracing::info!(
-        document_id = document_id,
-        peer_id = peer_id,
-        count = node_ids.len(),
-        node_ids = ?node_ids,
-        "record_blame"
-    );
-    for node_id in node_ids {
+    if events.is_empty() {
+        return Ok(());
+    }
+    tracing::info!(count = events.len(), "insert_blame_many");
+
+    for chunk in events.chunks(BATCH_CHUNK_SIZE) {
         let db = env.d1(crate::constants::USER_PEER_D1_BINDING)?;
-        if let Err(e) = upsert_blame(db, document_id, node_id, peer_id, now_ms).await {
-            tracing::error!(error = ?e, node_id = node_id, "upsert_blame failed");
-            return Err(e);
-        }
+        let stmts: Vec<_> = chunk
+            .iter()
+            .map(|e| {
+                db.prepare(
+                    "INSERT INTO blame (document_id, node_id, peer_id, timestamp_ms) \
+                     VALUES (?, ?, ?, ?) \
+                     ON CONFLICT(document_id, node_id) DO UPDATE SET \
+                        peer_id = excluded.peer_id, \
+                        timestamp_ms = excluded.timestamp_ms;",
+                )
+                .bind(&[
+                    e.document_id.as_str().into(),
+                    e.node_id.as_str().into(),
+                    e.peer_id.to_string().into(),
+                    // d1 js doesn't support bigint
+                    (e.timestamp_ms as f64).into(),
+                ])
+            })
+            .collect::<worker::Result<Vec<_>>>()?;
+        db.batch(stmts).await?;
     }
     Ok(())
 }
 
-/// Upsert a single (document_id, node_id) -> (peer_id, timestamp_ms) row.
-pub async fn upsert_blame(
-    db: D1Database,
-    document_id: &str,
-    node_id: &str,
-    peer_id: u64,
-    timestamp_ms: i64,
-) -> worker::Result<()> {
-    let result = db
-        .prepare(
-            "INSERT INTO blame (document_id, node_id, peer_id, timestamp_ms) \
-             VALUES (?, ?, ?, ?) \
-             ON CONFLICT(document_id, node_id) DO UPDATE SET \
-                peer_id = excluded.peer_id, \
-                timestamp_ms = excluded.timestamp_ms;",
-        )
-        .bind(&[
-            document_id.into(),
-            node_id.into(),
-            peer_id.to_string().into(),
-            // d1 js doesn't support bigint
-            (timestamp_ms as f64).into(),
-        ])?
-        .run()
-        .await?;
-    if let Some(e) = result.error() {
-        error!(error = e, "upsert_blame D1 error");
-        return Err(worker::Error::from(e));
-    }
-    Ok(())
-}
 
 #[derive(serde::Deserialize, serde::Serialize)]
 pub struct BlameRow {

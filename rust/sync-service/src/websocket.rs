@@ -130,28 +130,27 @@ pub async fn process_message(
                 .append_pending_operation(&update, document_state)
                 .await?;
 
-            // Record "last edited by" for each Lexical node touched. Runs
-            // in the background via `wait_until` so the ACK + peer broadcast
-            // below don't block on D1, and the write still completes even
-            // after we return from this handler.
+            // Buffer "last edited by" events in memory. The DO's alarm flushes
+            // them via a single D1 `batch()` every few seconds, so this stays
+            // off the edit hot path entirely.
             if !touched_nodes.is_empty() {
                 let peer_ids = Wsm::new(dss, ws).get_peer_ids().await.unwrap_or_default();
                 if let Some(&peer_id) = peer_ids.first() {
-                    let env = dss.env().clone();
-                    let document_id = document_id.to_string();
-                    dss.wait_until(async move {
-                        if let Err(e) =
-                            crate::d1::record_blame(&env, &document_id, peer_id, &touched_nodes)
-                                .await
-                        {
-                            tracing::warn!(
-                                error = ?e,
-                                document_id = document_id,
-                                peer_id = peer_id,
-                                "record_blame failed"
-                            );
-                        }
-                    });
+                    let now_ms = web_time::SystemTime::now()
+                        .duration_since(web_time::UNIX_EPOCH)
+                        .map(|d| d.as_millis() as i64)
+                        .unwrap_or(0);
+                    dss.push_blame_events(
+                        touched_nodes
+                            .into_iter()
+                            .map(|node_id| crate::d1::BlameEvent {
+                                document_id: document_id.to_string(),
+                                node_id,
+                                peer_id,
+                                timestamp_ms: now_ms,
+                            })
+                            .collect(),
+                    );
                 }
             }
 

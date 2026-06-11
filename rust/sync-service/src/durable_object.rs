@@ -118,6 +118,8 @@ pub struct DocumentSyncSession {
     /// a map from websocket's ID's to websocket metadata
     ws_meta_map: Arc<Mutex<WsMetaMap>>,
     msg_buffer: Arc<Mutex<Vec<u8>>>,
+    /// Buffered blame events. Flushed via D1 batch on each alarm tick.
+    pending_blame: Arc<Mutex<Vec<crate::d1::BlameEvent>>>,
 }
 
 mod u64_serde_strings {
@@ -298,6 +300,37 @@ impl DocumentSyncSession {
 
     pub fn get_websockets(&self) -> Vec<WebSocket> {
         self.state.get_websockets()
+    }
+
+    /// Buffer blame events in memory. Cheap synchronous push; events are
+    /// flushed to D1 in a single `batch()` from the alarm tick.
+    pub fn push_blame_events(&self, events: Vec<crate::d1::BlameEvent>) {
+        if events.is_empty() {
+            return;
+        }
+        self.pending_blame
+            .lock("DocumentSyncSession::push_blame_events")
+            .extend(events);
+    }
+
+    /// Drain the pending blame buffer and write all events via a single D1
+    /// batch in the background. Returns immediately; the actual write runs
+    /// inside `wait_until` so the alarm handler doesn't block on D1.
+    fn flush_pending_blame(&self) {
+        let pending: Vec<crate::d1::BlameEvent> = std::mem::take(
+            &mut *self
+                .pending_blame
+                .lock("DocumentSyncSession::flush_pending_blame"),
+        );
+        if pending.is_empty() {
+            return;
+        }
+        let env = self.env.clone();
+        self.state.wait_until(async move {
+            if let Err(e) = crate::d1::insert_blame_many(&env, &pending).await {
+                warn!(error = ?e, "failed to flush pending blame");
+            }
+        });
     }
     async fn inner_fetch(&self, req: Request) -> Result<Response> {
         let url = req.url()?;
@@ -830,6 +863,7 @@ impl DurableObject for DocumentSyncSession {
             awareness: EphemeralStore::new(5_000),
             ws_meta_map: Arc::new(Mutex::new(Default::default())),
             msg_buffer: Arc::new(Mutex::new(vec![])),
+            pending_blame: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -955,6 +989,8 @@ impl DurableObject for DocumentSyncSession {
                 }
             });
         }
+
+        self.flush_pending_blame();
 
         // Re-arm the alarm while clients are connected so the in-memory state
         // stays warm and pending updates keep getting persisted. Updates reach
