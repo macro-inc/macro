@@ -23,12 +23,15 @@ type CallEndedPayload = {
   call_id?: string;
 };
 
-const RING_VOLUME = 0.15;
-const RING_PULSE_DURATION_S = 0.4;
-const RING_PULSE_GAP_S = 0.2;
-const RING_FADE_S = 0.02;
-// US dial-tone-style ring: superimposed 440Hz + 480Hz.
-const RING_FREQUENCIES_HZ = [440, 480];
+const RING_VOLUME = 0.11;
+const RING_NOTE_DURATION_S = 0.09;
+const RING_NOTE_GAP_S = 0.075;
+const RING_PHRASE_GAP_S = 0.26;
+const RING_FADE_S = 0.018;
+// Deeper ripple call chime: G4, B4, G4, E4, G4, B4, D5. Played twice per ring.
+const RING_CHIME_FREQUENCIES_HZ = [
+  392.0, 493.88, 392.0, 329.63, 392.0, 493.88, 587.33,
+];
 // Phone-style cadence: re-ring every few seconds while the call is incoming.
 const RING_INTERVAL_MS = 4_000;
 // Stop ringing after this long if the user neither answers nor dismisses, so
@@ -36,6 +39,25 @@ const RING_INTERVAL_MS = 4_000;
 const MAX_RING_DURATION_MS = 30_000;
 
 type WebkitWindow = Window & { webkitAudioContext?: typeof AudioContext };
+type Ringer = { stop: () => void };
+
+const activeCallRingers = new Map<string, Ringer>();
+
+function stopCallRinger(callId: string) {
+  activeCallRingers.get(callId)?.stop();
+  activeCallRingers.delete(callId);
+}
+
+function startCallRinger(callId: string, shouldStop: () => boolean): Ringer {
+  stopCallRinger(callId);
+  const ringer = startRingingLoop(shouldStop, () => {
+    if (activeCallRingers.get(callId) === ringer) {
+      activeCallRingers.delete(callId);
+    }
+  });
+  activeCallRingers.set(callId, ringer);
+  return ringer;
+}
 
 function playRingSound() {
   const Ctx =
@@ -50,40 +72,56 @@ function playRingSound() {
     return;
   }
 
-  const playPulse = (start: number) => {
+  const playNote = (start: number, freq: number, volume: number) => {
     const gain = ctx.createGain();
     gain.connect(ctx.destination);
     gain.gain.setValueAtTime(0, start);
-    gain.gain.linearRampToValueAtTime(RING_VOLUME, start + RING_FADE_S);
-    gain.gain.linearRampToValueAtTime(0, start + RING_PULSE_DURATION_S);
+    gain.gain.linearRampToValueAtTime(volume, start + RING_FADE_S);
+    gain.gain.exponentialRampToValueAtTime(0.001, start + RING_NOTE_DURATION_S);
 
-    for (const freq of RING_FREQUENCIES_HZ) {
-      const osc = ctx.createOscillator();
-      osc.frequency.value = freq;
-      osc.connect(gain);
-      osc.start(start);
-      osc.stop(start + RING_PULSE_DURATION_S + RING_FADE_S);
-    }
+    const osc = ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.value = freq;
+    osc.connect(gain);
+    osc.start(start);
+    osc.stop(start + RING_NOTE_DURATION_S + RING_FADE_S);
   };
 
+  const playPhrase = (start: number, volume: number) => {
+    RING_CHIME_FREQUENCIES_HZ.forEach((freq, i) => {
+      playNote(
+        start + i * (RING_NOTE_DURATION_S + RING_NOTE_GAP_S),
+        freq,
+        volume
+      );
+    });
+  };
+
+  const phraseDuration =
+    RING_CHIME_FREQUENCIES_HZ.length * RING_NOTE_DURATION_S +
+    (RING_CHIME_FREQUENCIES_HZ.length - 1) * RING_NOTE_GAP_S;
   const t0 = ctx.currentTime;
-  playPulse(t0);
-  playPulse(t0 + RING_PULSE_DURATION_S + RING_PULSE_GAP_S);
+  playPhrase(t0, RING_VOLUME);
+  playPhrase(t0 + phraseDuration + RING_PHRASE_GAP_S, RING_VOLUME * 0.75);
 
   const totalMs =
-    (RING_PULSE_DURATION_S * 2 + RING_PULSE_GAP_S + RING_FADE_S) * 1000 + 200;
+    (phraseDuration * 2 + RING_PHRASE_GAP_S + RING_FADE_S) * 1000 + 200;
   setTimeout(() => {
     void ctx.close().catch(() => {});
   }, totalMs);
 }
 
-function startRingingLoop(shouldStop: () => boolean): { stop: () => void } {
+function startRingingLoop(
+  shouldStop: () => boolean,
+  onStop?: () => void
+): Ringer {
   let stopped = false;
   const stop = () => {
     if (stopped) return;
     stopped = true;
     window.clearInterval(intervalId);
     window.clearTimeout(timeoutId);
+    onStop?.();
   };
 
   const intervalId = window.setInterval(() => {
@@ -145,6 +183,7 @@ export function CallStartedNotifier() {
         payload as CallEndedPayload;
       if (!channelId || !callId) return;
 
+      stopCallRinger(callId);
       setActiveCallEndedCache({ channelId, callId });
       void invalidateActiveCallQueries();
       return;
@@ -195,8 +234,11 @@ async function emitCallStartedNotification(args: {
   const { channelId, callId, createdBy, channelName, notif, isJoined } = args;
 
   // Play the sound regardless of notification permission so a user with
-  // browser notifications denied still gets an audio cue.
+  // browser notifications denied still gets an audio cue. Keep re-ringing even
+  // when platform notifications are unavailable; in that case the loop stops
+  // when the user joins, the call ends, or after MAX_RING_DURATION_MS.
   playRingSound();
+  const ringer = startCallRinger(callId, isJoined);
 
   if (notif === 'not-supported') return;
 
@@ -218,10 +260,6 @@ async function emitCallStartedNotification(args: {
   });
 
   if (handle === 'not-granted' || handle === 'disabled-in-ui') return;
-
-  // Only the tab that surfaced the notification keeps re-ringing — non-leader
-  // tabs short-circuit above with 'not-granted', so loops don't stack.
-  const ringer = startRingingLoop(isJoined);
 
   handle.onClick(() => {
     window.focus();
