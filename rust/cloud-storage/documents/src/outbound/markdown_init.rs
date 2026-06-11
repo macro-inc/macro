@@ -76,9 +76,12 @@ where
         let sync_service_client = self.sync_service_client.clone();
         let document_id = document_id.to_owned();
         tokio::spawn(async move {
-            let _ = sync_service_client
+            if let Err(e) = sync_service_client
                 .initialize_from_snapshot(&document_id, loro_snapshot.as_slice())
-                .await;
+                .await
+            {
+                tracing::error!(error=?e, "failed to initialize sync service from snapshot");
+            }
         });
 
         Ok(())
