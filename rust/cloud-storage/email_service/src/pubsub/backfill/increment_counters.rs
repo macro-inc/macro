@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 
 use crate::pubsub::context::PubSubContext;
+use crate::pubsub::util::cg_refresh_email;
 use contacts::domain::ports::ContactsIngress;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_email::db::address::EmailRecipientType;
@@ -15,6 +16,10 @@ use models_email::service::link::Link;
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use uuid::Uuid;
 
+/// Emit a `refresh_email` event once per this many completed threads, plus
+/// once at job completion, rather than per-thread.
+const REFRESH_EMAIL_THREAD_INTERVAL: i32 = 50;
+
 /// called when a thread has completed processing. checks if it is the last thread to be processed
 /// for the job, and if so, performs the necessary actions for job completion.
 #[tracing::instrument(skip(ctx))]
@@ -23,7 +28,7 @@ pub async fn incr_completed_threads(
     link: &Link,
     job_id: Uuid,
 ) -> Result<(), ProcessingError> {
-    let all_threads_processed = ctx
+    let progress = ctx
         .redis_client
         .incr_completed_threads(job_id)
         .await
@@ -34,7 +39,16 @@ pub async fn incr_completed_threads(
             })
         })?;
 
-    if all_threads_processed {
+    if progress.job_complete || progress.completed_threads % REFRESH_EMAIL_THREAD_INTERVAL == 0 {
+        cg_refresh_email(
+            &ctx.connection_gateway_client,
+            link.macro_id.as_ref(),
+            "backfill",
+        )
+        .await;
+    }
+
+    if progress.job_complete {
         tracing::info!(
             job_id = job_id.to_string(),
             "All threads for job have been processed"
