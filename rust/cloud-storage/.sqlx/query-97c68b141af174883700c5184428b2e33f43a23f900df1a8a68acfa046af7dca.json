@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT id, macro_id, fusionauth_user_id, email_address, provider as \"provider: _\",\n               is_sync_active, created_at, updated_at\n        FROM email_links\n        WHERE fusionauth_user_id = $1 AND email_address = $2 AND provider = $3\n        LIMIT 1\n        ",
+  "query": "\n        SELECT l.id, l.macro_id, l.fusionauth_user_id, l.email_address, l.provider as \"provider: _\",\n               l.is_sync_active, l.is_primary, l.created_at, l.updated_at\n        FROM email_messages m\n        JOIN email_links l ON l.id = m.link_id\n        WHERE m.id = $1\n          AND (\n              l.macro_id = $2\n              OR EXISTS (\n                  SELECT 1 FROM macro_user_links mul\n                  WHERE mul.child_macro_id = l.macro_id AND mul.primary_macro_id = $2\n              )\n          )\n        ",
   "describe": {
     "columns": [
       {
@@ -44,29 +44,24 @@
       },
       {
         "ordinal": 6,
+        "name": "is_primary",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 7,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Text",
-        "Text",
-        {
-          "Custom": {
-            "name": "email_user_provider_enum",
-            "kind": {
-              "Enum": [
-                "GMAIL"
-              ]
-            }
-          }
-        }
+        "Uuid",
+        "Text"
       ]
     },
     "nullable": [
@@ -77,8 +72,9 @@
       false,
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "4a8b04d2fa922cd2f007241f83d6ad7e4dbcb5e7f6b0560316ca474878971e63"
+  "hash": "97c68b141af174883700c5184428b2e33f43a23f900df1a8a68acfa046af7dca"
 }

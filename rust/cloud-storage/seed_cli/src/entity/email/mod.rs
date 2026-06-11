@@ -428,6 +428,8 @@ async fn seed(args: SeedArgs, ctx: SeedCliContext) -> anyhow::Result<()> {
         let email_str = macro_user_id::email::EmailStr::try_from(seed_data.email_address.clone())
             .context("failed to parse email address")?;
 
+        let is_primary =
+            models_email::email::service::link::Link::derive_is_primary(&macro_id, &email_str);
         let link = models_email::email::service::link::Link {
             id: Uuid::now_v7(),
             macro_id,
@@ -435,6 +437,7 @@ async fn seed(args: SeedArgs, ctx: SeedCliContext) -> anyhow::Result<()> {
             email_address: email_str,
             provider: seed_data.provider,
             is_sync_active: true,
+            is_primary,
             created_at: now,
             updated_at: now,
         };

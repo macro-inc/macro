@@ -20,7 +20,7 @@ pub(super) async fn link_by_fusionauth_and_macro_id(
         DbLink,
         r#"
         SELECT id, macro_id, fusionauth_user_id, email_address, provider as "provider: _",
-               is_sync_active, created_at, updated_at
+               is_sync_active, is_primary, created_at, updated_at
         FROM email_links
         WHERE fusionauth_user_id = $1 AND macro_id = $2 AND provider = $3
         LIMIT 1
@@ -53,7 +53,7 @@ pub(super) async fn link_by_fusionauth_email_provider(
         DbLink,
         r#"
         SELECT id, macro_id, fusionauth_user_id, email_address, provider as "provider: _",
-               is_sync_active, created_at, updated_at
+               is_sync_active, is_primary, created_at, updated_at
         FROM email_links
         WHERE fusionauth_user_id = $1 AND email_address = $2 AND provider = $3
         LIMIT 1
@@ -81,7 +81,7 @@ pub(super) async fn owned_link_for_thread(
         DbLink,
         r#"
         SELECT l.id, l.macro_id, l.fusionauth_user_id, l.email_address, l.provider as "provider: _",
-               l.is_sync_active, l.created_at, l.updated_at
+               l.is_sync_active, l.is_primary, l.created_at, l.updated_at
         FROM email_threads t
         JOIN email_links l ON l.id = t.link_id
         WHERE t.id = $1
@@ -114,7 +114,7 @@ pub(super) async fn link_by_macro_id(
         DbLink,
         r#"
         SELECT id, macro_id, fusionauth_user_id, email_address, provider as "provider: _",
-               is_sync_active, created_at, updated_at
+               is_sync_active, is_primary, created_at, updated_at
         FROM email_links
         WHERE macro_id = $1
         LIMIT 1
@@ -143,16 +143,17 @@ pub(super) async fn inboxes_for_macro_id(
                email_address as "email_address!",
                provider as "provider!: _",
                is_sync_active as "is_sync_active!",
+               is_primary as "is_primary!",
                created_at as "created_at!",
                updated_at as "updated_at!"
         FROM (
             SELECT el.id, el.macro_id, el.fusionauth_user_id, el.email_address,
-                   el.provider, el.is_sync_active, el.created_at, el.updated_at
+                   el.provider, el.is_sync_active, el.is_primary, el.created_at, el.updated_at
             FROM email_links el
             WHERE el.macro_id = $1
             UNION
             SELECT el.id, el.macro_id, el.fusionauth_user_id, el.email_address,
-                   el.provider, el.is_sync_active, el.created_at, el.updated_at
+                   el.provider, el.is_sync_active, el.is_primary, el.created_at, el.updated_at
             FROM email_links el
             JOIN macro_user_links mul ON el.macro_id = mul.child_macro_id
             WHERE mul.primary_macro_id = $1

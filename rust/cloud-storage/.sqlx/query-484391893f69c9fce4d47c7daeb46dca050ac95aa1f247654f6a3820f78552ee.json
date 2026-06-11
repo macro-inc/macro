@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT l.id, l.macro_id, l.fusionauth_user_id, l.email_address, l.provider as \"provider: _\",\n               l.is_sync_active, l.created_at, l.updated_at\n        FROM email_threads t\n        JOIN email_links l ON l.id = t.link_id\n        WHERE t.id = $1\n          AND (\n              l.macro_id = $2\n              OR EXISTS (\n                  SELECT 1 FROM macro_user_links mul\n                  WHERE mul.child_macro_id = l.macro_id AND mul.primary_macro_id = $2\n              )\n          )\n        ",
+  "query": "\n        SELECT id, fusionauth_user_id, macro_id, email_address, provider as \"provider: _\",\n               is_sync_active, is_primary, created_at, updated_at\n        FROM email_links\n        WHERE fusionauth_user_id = $1\n        ORDER BY created_at DESC\n        ",
   "describe": {
     "columns": [
       {
@@ -10,12 +10,12 @@
       },
       {
         "ordinal": 1,
-        "name": "macro_id",
+        "name": "fusionauth_user_id",
         "type_info": "Text"
       },
       {
         "ordinal": 2,
-        "name": "fusionauth_user_id",
+        "name": "macro_id",
         "type_info": "Text"
       },
       {
@@ -44,18 +44,22 @@
       },
       {
         "ordinal": 6,
+        "name": "is_primary",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 7,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid",
         "Text"
       ]
     },
@@ -67,8 +71,9 @@
       false,
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "2c1df8ba2035cc1f63f9d566e8ac763f4d0b5e28370570971935d29237a0211a"
+  "hash": "484391893f69c9fce4d47c7daeb46dca050ac95aa1f247654f6a3820f78552ee"
 }

@@ -1,4 +1,4 @@
-import { useEmail } from '@core/context/user';
+import { useUserId } from '@core/context/user';
 import { throwOnErr } from '@core/util/result';
 import { invalidateUserInfo } from '@queries/auth/user-info';
 import { queryClient } from '@queries/client';
@@ -32,17 +32,18 @@ export function useEmailLinksQuery() {
 }
 
 /**
- * The link id of the user's primary inbox — the linked inbox whose address
- * matches the account email. `undefined` until links/email load or if none match.
+ * The link id of the user's primary inbox — their own `is_primary` link.
+ * Delegated inboxes are primary for their own account, hence the macro_id
+ * guard. `undefined` until links load or if none match.
  */
 export function usePrimaryEmailLinkId() {
   const linksQuery = useEmailLinksQuery();
-  const email = useEmail();
+  const userId = useUserId();
   return createMemo(() => {
-    const primaryEmail = email()?.toLowerCase();
-    if (!primaryEmail) return undefined;
+    const uid = userId();
+    if (!uid) return undefined;
     return linksQuery.data?.links.find(
-      (link) => link.email_address.toLowerCase() === primaryEmail
+      (link) => link.is_primary && link.macro_id === uid
     )?.id;
   });
 }

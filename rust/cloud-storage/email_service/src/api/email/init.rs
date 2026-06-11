@@ -648,13 +648,16 @@ async fn enable_gmail_sync_for(
     email_address: &str,
     history_id: &str,
 ) -> Result<Link, InitError> {
+    let email_address = EmailStr::try_from(email_address.to_string())?;
+    let is_primary = link::Link::derive_is_primary(&macro_id, &email_address);
     let link = link::Link {
         id: macro_uuid::generate_uuid_v7(),
         macro_id,
         fusionauth_user_id: fusion_user_id.to_string(),
-        email_address: EmailStr::try_from(email_address.to_string())?,
+        email_address,
         provider: link::UserProvider::Gmail,
         is_sync_active: true,
+        is_primary,
         created_at: Default::default(),
         updated_at: Default::default(),
     };

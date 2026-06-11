@@ -72,7 +72,7 @@ async fn promote_dedups_to_single_link_with_two_edges(pool: Pool<Postgres>) -> a
     assert_eq!(links[0].id, link_id);
     assert_eq!(links[0].macro_id, mailbox_macro_id);
 
-    // is_inbox_only is computed as `link.email != macro_id's email`. The minted macro_id
+    // is_primary is generated as `link.email == macro_id's email`. The minted macro_id
     // embeds the mailbox email, so the promoted mailbox is a real shared user, not inbox-only.
     let mailbox_user = sqlx::query!(
         r#"SELECT email FROM "User" WHERE id = $1"#,
