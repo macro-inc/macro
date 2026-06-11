@@ -61,7 +61,7 @@ import {
   useSendMessageMutation,
   useUnscheduleMessageMutation,
 } from '@queries/email/thread';
-import { invalidateSoupEntity } from '@queries/soup/cache';
+import { invalidateSoupEntity, refetchSoupEntity } from '@queries/soup/cache';
 import { emailClient } from '@service-email/client';
 import { debounce } from '@solid-primitives/scheduled';
 import { Surface } from '@ui';
@@ -161,6 +161,19 @@ export function EmailCompose(props: EmailComposeProps) {
     props.draftID
   );
 
+  // Thread the draft currently lives under; switching the sending inbox
+  // re-homes the draft server-side, so the previous thread's soup row must
+  // be dropped after the save.
+  const [currentThreadID, setCurrentThreadID] = createSignal<
+    string | undefined
+  >(
+    props.draftID
+      ? emailContext?.messages
+          .unfiltered()
+          .find((m) => m.db_id === props.draftID)?.thread_db_id
+      : undefined
+  );
+
   // Restore form state from undo-send snapshot if available
   const restoredSnapshot =
     undoComposeSnapshot?.draftId === props.draftID ? undoComposeSnapshot : null;
@@ -225,6 +238,7 @@ export function EmailCompose(props: EmailComposeProps) {
       return;
     }
 
+    const previousThreadID = currentThreadID();
     const draftResponse = await saveDraftMutation.mutateAsync({
       draft: {
         ...draftToSave,
@@ -232,6 +246,13 @@ export function EmailCompose(props: EmailComposeProps) {
       },
       linkId: headerLinkId(),
     });
+
+    const newThreadID = draftResponse.draft.thread_db_id ?? undefined;
+    if (previousThreadID && previousThreadID !== newThreadID) {
+      invalidateSoupEntity(previousThreadID);
+      refetchSoupEntity(previousThreadID, 'emailThread');
+    }
+    setCurrentThreadID(newThreadID);
 
     const draftId = draftResponse.draft.db_id;
     if (draftId) {
@@ -689,7 +710,14 @@ export function EmailCompose(props: EmailComposeProps) {
     fromAddress: () => link()?.email_address,
     fromInboxes: () => emailLinksQuery.data?.links ?? [],
     selectedFromLinkId: () => link()?.id,
-    onSelectFromLink: form.setSelectedFromLink,
+    // Persist immediately on a sender switch so the draft moves to the new
+    // inbox even without a text edit.
+    onSelectFromLink: (linkId) => {
+      form.setSelectedFromLink(linkId);
+      setDraftDirty(true);
+      scheduleDraftSave.clear();
+      void executeSaveDraft();
+    },
     hasPaidAccess,
   };
 
