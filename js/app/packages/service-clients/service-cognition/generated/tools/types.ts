@@ -1476,7 +1476,7 @@ export interface NotificationItem {
   senderId?: string | null;
 }
 /**
- * List the current members and pending invites for the authenticated user's team. Requires the caller to be a team member.
+ * List the current members and pending invites for the authenticated user's team. Requires the caller to be a team member. The returned roles (owner/admin/member) are app permission levels only, not job titles — they say nothing about the org chart. Never infer that someone is a founder, an executive, or the company's owner from their workspace role.
  */
 export type ListTeamMembers = {};
 /**
@@ -1501,7 +1501,8 @@ export interface ToolTeamInvite {
    */
   email: string;
   /**
-   * The role the invited user will receive.
+   * The workspace permission role (owner/admin/member) the invited user
+   * will receive. An app permission level, not a job title.
    */
   role: string;
 }
@@ -1510,7 +1511,8 @@ export interface ToolTeamInvite {
  */
 export interface ToolTeamMember {
   /**
-   * The user's role in the team.
+   * The user's workspace permission role (owner/admin/member). An app
+   * permission level, not a job title or evidence of company ownership.
    */
   role: string;
   /**
