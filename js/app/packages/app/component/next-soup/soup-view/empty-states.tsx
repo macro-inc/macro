@@ -1,4 +1,5 @@
 import { runCreateAction } from '@app/component/Launcher';
+import { DOCS_BASE } from '@app/constants/docs-links';
 import type { ListView } from '@app/constants/list-views';
 import type { BlockAlias, BlockName } from '@core/block';
 import { McpSetupCards } from '@core/component/AI/component/McpSetupCards';
@@ -20,9 +21,6 @@ import { EmptyStatePanel, FilteredHiddenBanner } from '@ui';
 import { type Component, type JSXElement, Match, Switch } from 'solid-js';
 import { FolderDropZone } from './FolderDropZone';
 import { useSoupView } from './soup-view-context';
-
-// Base URL for the public documentation site (https://docs.macro.com).
-const DOCS_BASE = 'https://docs.macro.com';
 
 type FallbackContent = {
   plural: string;
@@ -104,7 +102,7 @@ export function EmptyState(props: {
               : 'No results'
           }
           description="Search across messages, documents, tasks, and more. Try a different query or broaden your filters."
-          documentationUrl={`${DOCS_BASE}/product/search-1`}
+          documentationUrl={`${DOCS_BASE}/product/search`}
         />
       </Match>
 

@@ -779,6 +779,8 @@ export * from './reactionAction';
 export * from './recentlyDeletedResponseData';
 export * from './removeParticipantsRequest';
 export * from './reorderPinRequest';
+export * from './ringStatus';
+export * from './ringStatusResponse';
 export * from './s3ObjectInfo';
 export * from './saveBomPart';
 export * from './saveDocumentRequest';

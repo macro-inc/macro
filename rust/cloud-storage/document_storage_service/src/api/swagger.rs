@@ -252,6 +252,7 @@ use utoipa::OpenApi;
         call::inbound::axum_router::toggle_share_with_team_handler,
         call::inbound::axum_router::get_batch_call_record_preview_handler,
         call::inbound::axum_router::webhook_handler,
+        call::inbound::axum_router::ring_status_handler,
         call::inbound::axum_router::transcript_handler,
 
         // pins
@@ -493,6 +494,8 @@ use utoipa::OpenApi;
             call::domain::models::WithCallId,
             call::domain::models::GetBatchCallRecordPreviewRequest,
             call::domain::models::GetBatchCallRecordPreviewResponse,
+            call::domain::models::RingStatus,
+            call::domain::models::RingStatusResponse,
             SoupCallRecord,
             SoupCallRecordParticipant,
 

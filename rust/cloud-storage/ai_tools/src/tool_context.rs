@@ -273,6 +273,13 @@ impl CallRtcClient for NoOpCallRtcClient {
         Err(CallError::Auth)
     }
 
+    fn verify_access_token(
+        &self,
+        _token: &str,
+    ) -> anyhow::Result<call::domain::models::VerifiedRingToken> {
+        anyhow::bail!("call RTC client not configured")
+    }
+
     async fn dispatch_transcription_agent(&self, _room_name: &str) -> anyhow::Result<()> {
         Ok(())
     }

@@ -969,6 +969,58 @@
         }
       }
     },
+    "/call/ring-status/{call_id}": {
+      "get": {
+        "tags": ["call::inbound::axum_router"],
+        "summary": "Handler for `GET /call/ring-status/{call_id}`.",
+        "description": "Reports whether the authenticated user should keep ringing for the call.\nPolled by native clients while the CallKit incoming-call UI is showing, so\na ring can be cancelled when the user answers on another device\n(`answered`) or the call ends before anyone answers (`ended`).\n\nOutside the user-auth layer: the bearer credential is the recipient's\nLiveKit JWT from the VoIP push payload, verified with the LiveKit secret.",
+        "operationId": "get_ring_status",
+        "parameters": [
+          {
+            "name": "call_id",
+            "in": "path",
+            "description": "Call ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RingStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/call/webhook": {
       "post": {
         "tags": ["call::inbound::axum_router"],
@@ -16555,6 +16607,22 @@
           "pinnedItemType": {
             "type": "string",
             "description": "The type of the pin"
+          }
+        }
+      },
+      "RingStatus": {
+        "type": "string",
+        "description": "Per-user status of an incoming-call ring, as reported by the\nring-status endpoint while a native client is ringing.",
+        "enum": ["ringing", "answered", "ended"]
+      },
+      "RingStatusResponse": {
+        "type": "object",
+        "description": "Response body for `GET /call/ring-status/{call_id}`.",
+        "required": ["status"],
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/RingStatus",
+            "description": "The ring status for the authenticated user."
           }
         }
       },

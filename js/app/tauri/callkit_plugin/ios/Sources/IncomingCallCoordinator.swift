@@ -19,6 +19,7 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
 
     private var pendingCalls: [UUID: PendingCallInfo] = [:]
     private var pendingCallTokens: [UUID: PendingCallToken] = [:]
+    private var ringPollers: [UUID: RingStatePoller] = [:]
     private var activeCallUUID: UUID?
     private var activeNativeMediaUUID: UUID?
     private var isCallKitAudioSessionActive = false
@@ -172,6 +173,7 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
     }
 
     func handleApplicationWillTerminate() {
+        stopAllRingStatePolling()
         guard let uuid = activeCallUUID else {
             print("[CallKit] Application terminating with no active CallKit call")
             return
@@ -226,6 +228,7 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
         let callIdString = dict["callId"] as? String ?? ""
         let livekitServerUrl = dict["livekitServerUrl"] as? String
         let livekitToken = dict["livekitToken"] as? String
+        let ringStatusUrl = dict["ringStatusUrl"] as? String
         let hasNativeCredentials = livekitServerUrl != nil && livekitToken != nil
         print("[CallKit] Received VoIP push callId=\(callIdString) channelId=\(channelId) channelName=\(channelName ?? "nil") hasNativeCredentials=\(hasNativeCredentials)")
 
@@ -251,6 +254,7 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
             provider.reportCall(with: staleUUID, endedAt: nil, reason: .failed)
             pendingCalls.removeValue(forKey: staleUUID)
             pendingCallTokens.removeValue(forKey: staleUUID)
+            stopRingStatePolling(uuid: staleUUID)
         }
 
         pendingCalls[uuid] = PendingCallInfo(
@@ -281,6 +285,9 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
                 if self?.activeCallUUID == uuid { self?.activeCallUUID = nil }
             } else {
                 print("[CallKit] reportNewIncomingCall succeeded uuid=\(uuid.uuidString)")
+                if let ringStatusUrl, let token = livekitToken {
+                    self?.startRingStatePolling(uuid: uuid, ringStatusUrl: ringStatusUrl, bearerToken: token)
+                }
             }
             completion()
         }
@@ -288,6 +295,7 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
 
     func providerDidReset(_ provider: CXProvider) {
         print("[CallKit] CXProvider reset; clearing CallKit and media state")
+        stopAllRingStatePolling()
         pendingCalls.removeAll()
         pendingCallTokens.removeAll()
         activeCallUUID = nil
@@ -343,6 +351,7 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
 
     func provider(_ provider: CXProvider, perform action: CXAnswerCallAction) {
         print("[CallKit] CXAnswerCallAction received uuid=\(action.callUUID.uuidString)")
+        stopRingStatePolling(uuid: action.callUUID)
         guard let pendingCall = pendingCalls[action.callUUID] else {
             print("[CallKit] Answer failed: no pending channel for uuid=\(action.callUUID.uuidString)")
             action.fail()
@@ -456,6 +465,7 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
 
     private func clearCallState(uuid: UUID) {
         print("[CallKit] Clearing call state uuid=\(uuid.uuidString)")
+        stopRingStatePolling(uuid: uuid)
         pendingCalls.removeValue(forKey: uuid)
         pendingCallTokens.removeValue(forKey: uuid)
         if activeCallUUID == uuid { activeCallUUID = nil }
@@ -463,6 +473,49 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
         outgoingCallUUIDs.remove(uuid)
         reportedConnectedOutgoingCallUUIDs.remove(uuid)
         pendingAnsweredCall = nil
+    }
+
+    private func startRingStatePolling(uuid: UUID, ringStatusUrl: String, bearerToken: String) {
+        guard let url = URL(string: ringStatusUrl) else {
+            print("[CallKit] Invalid ringStatusUrl in VoIP payload uuid=\(uuid.uuidString)")
+            return
+        }
+        stopRingStatePolling(uuid: uuid)
+        let poller = RingStatePoller(uuid: uuid, url: url, bearerToken: bearerToken) { [weak self] uuid, status in
+            self?.handleRemoteRingResolution(uuid: uuid, status: status)
+        }
+        ringPollers[uuid] = poller
+        poller.start()
+    }
+
+    private func stopRingStatePolling(uuid: UUID) {
+        guard let poller = ringPollers.removeValue(forKey: uuid) else { return }
+        poller.cancel()
+    }
+
+    private func stopAllRingStatePolling() {
+        let pollers = Array(ringPollers.values)
+        ringPollers.removeAll()
+        for poller in pollers {
+            poller.cancel()
+        }
+    }
+
+    private func handleRemoteRingResolution(uuid: UUID, status: RingStatePoller.ResolvedStatus) {
+        stopRingStatePolling(uuid: uuid)
+        // A late in-flight response can land after the ring resolved locally
+        // (answered/declined/displaced) — pendingCalls is already empty then.
+        guard pendingCalls[uuid] != nil, activeCallUUID == uuid else {
+            print("[CallKit] Ignoring remote ring resolution; call no longer pending uuid=\(uuid.uuidString)")
+            return
+        }
+        let reason: CXCallEndedReason = status == .answered ? .answeredElsewhere : .remoteEnded
+        print("[CallKit] Ending ringing call from remote resolution uuid=\(uuid.uuidString) reason=\(status == .answered ? "answeredElsewhere" : "remoteEnded")")
+        // reportCall(with:endedAt:reason:) does not trigger the
+        // CXEndCallAction delegate, so notify JS and clear state here.
+        provider.reportCall(with: uuid, endedAt: nil, reason: reason)
+        onCallEnded(uuid.uuidString)
+        clearCallState(uuid: uuid)
     }
 
     private func activateNativeMediaAudioIfNeeded(reason: String) {

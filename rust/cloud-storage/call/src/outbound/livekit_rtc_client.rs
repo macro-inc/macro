@@ -3,6 +3,9 @@
 //! Wraps the `livekit-api` crate to provide room management, token generation,
 //! egress recording, and webhook validation.
 
+#[cfg(test)]
+mod test;
+
 use futures::future;
 use livekit_api::access_token::{AccessToken, TokenVerifier, VideoGrants};
 use livekit_api::services::agent_dispatch::AgentDispatchClient;
@@ -17,7 +20,9 @@ use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use notification::domain::models::apple::VoipPushPayload;
 
-use crate::domain::models::{CallError, CallWebhookEvent, EgressS3Config, VoipPushPayloadRequest};
+use crate::domain::models::{
+    CallError, CallWebhookEvent, EgressS3Config, VerifiedRingToken, VoipPushPayloadRequest,
+};
 use crate::domain::ports::CallRtcClient;
 
 const VOIP_TOKEN_MINT_CONCURRENCY: usize = 16;
@@ -28,6 +33,7 @@ pub struct LivekitRtcClient {
     egress_client: EgressClient,
     agent_dispatch_client: AgentDispatchClient,
     webhook_receiver: WebhookReceiver,
+    token_verifier: TokenVerifier,
     api_key: String,
     api_secret: String,
     /// If set, the named agent is dispatched to each new room for transcription.
@@ -60,13 +66,14 @@ impl LivekitRtcClient {
         let egress_client = EgressClient::with_api_key(&http_url, &api_key, &api_secret);
         let agent_dispatch_client =
             AgentDispatchClient::with_api_key(&http_url, &api_key, &api_secret);
-        let verifier = TokenVerifier::with_api_key(&api_key, &api_secret);
-        let webhook_receiver = WebhookReceiver::new(verifier);
+        let token_verifier = TokenVerifier::with_api_key(&api_key, &api_secret);
+        let webhook_receiver = WebhookReceiver::new(token_verifier.clone());
         Self {
             room_client,
             egress_client,
             agent_dispatch_client,
             webhook_receiver,
+            token_verifier,
             api_key,
             api_secret,
             transcription_agent_name,
@@ -176,6 +183,7 @@ impl CallRtcClient for LivekitRtcClient {
         let channel_name = request.channel_name;
         let caller_name = request.caller_name;
         let livekit_server_url = request.livekit_server_url;
+        let ring_status_url = request.ring_status_url;
 
         let mut payloads = Vec::new();
         for batch in request.recipients.chunks(VOIP_TOKEN_MINT_CONCURRENCY) {
@@ -193,6 +201,7 @@ impl CallRtcClient for LivekitRtcClient {
                                 caller_name: caller_name.to_string(),
                                 livekit_server_url: Some(livekit_server_url.to_string()),
                                 livekit_token: Some(livekit_token),
+                                ring_status_url: ring_status_url.map(str::to_string),
                             },
                         )),
                         Err(e) => {
@@ -262,6 +271,18 @@ impl CallRtcClient for LivekitRtcClient {
 
         tracing::info!(room_name, agent_name, "dispatched transcription agent");
         Ok(())
+    }
+
+    fn verify_access_token(&self, token: &str) -> anyhow::Result<VerifiedRingToken> {
+        let claims = self
+            .token_verifier
+            .verify(token)
+            .map_err(|e| anyhow::anyhow!("access token verification failed: {e}"))?;
+
+        Ok(VerifiedRingToken {
+            identity: claims.sub,
+            room: Some(claims.video.room).filter(|r| !r.is_empty()),
+        })
     }
 
     fn receive_webhook(&self, body: &str, auth_token: &str) -> Result<CallWebhookEvent, CallError> {

@@ -1164,6 +1164,30 @@ export const editCallTranscriptBody = zod
   );
 
 /**
+ * Reports whether the authenticated user should keep ringing for the call.
+Polled by native clients while the CallKit incoming-call UI is showing, so
+a ring can be cancelled when the user answers on another device
+(`answered`) or the call ends before anyone answers (`ended`).
+
+Outside the user-auth layer: the bearer credential is the recipient's
+LiveKit JWT from the VoIP push payload, verified with the LiveKit secret.
+ * @summary Handler for `GET /call/ring-status/{call_id}`.
+ */
+export const getRingStatusParams = zod.object({
+  call_id: zod.uuid().describe('Call ID'),
+});
+
+export const getRingStatusResponse = zod
+  .object({
+    status: zod
+      .enum(['ringing', 'answered', 'ended'])
+      .describe(
+        'Per-user status of an incoming-call ring, as reported by the\nring-status endpoint while a native client is ringing.'
+      ),
+  })
+  .describe('Response body for `GET \/call\/ring-status\/{call_id}`.');
+
+/**
  * Gets or creates a call for the channel. If a call already exists, joins it;
 otherwise creates a new one. Always returns a join token.
  * @summary Handler for `GET /call/{channel_id}`.

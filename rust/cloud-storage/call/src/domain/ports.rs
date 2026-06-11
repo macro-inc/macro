@@ -22,7 +22,8 @@ use super::models::{
     CallRecordPreview, CallRecordTranscriptSegment, CallTokenResponse,
     CallTranscriptCustomSpeakerResult, CallWebhookEvent, EgressS3Config, EnrichedCallTranscript,
     GetBatchCallRecordPreviewRequest, GetBatchCallRecordPreviewResponse, GetCallRecordsRequest,
-    LeaveCallResponse, TranscriptSegmentRequest, VoipPushPayloadRequest,
+    LeaveCallResponse, RingStatusResponse, TranscriptSegmentRequest, VerifiedRingToken,
+    VoipPushPayloadRequest,
 };
 
 /// Repository port for persisting call state to the database.
@@ -500,6 +501,12 @@ pub trait CallRtcClient: Send + Sync + 'static {
     /// Validate a webhook signature and parse the event from the raw body.
     fn receive_webhook(&self, body: &str, auth_token: &str) -> Result<CallWebhookEvent, CallError>;
 
+    /// Verify an access token minted by this deployment (see
+    /// [`generate_token`](Self::generate_token)) and return its identity and
+    /// room grant. Used to authenticate ring-status polling from native
+    /// clients, which present the token delivered in their VoIP push payload.
+    fn verify_access_token(&self, token: &str) -> anyhow::Result<VerifiedRingToken>;
+
     /// Dispatch the transcription agent to a room (best-effort).
     ///
     /// Returns `Ok(())` if dispatch succeeded or if no agent is configured.
@@ -535,6 +542,16 @@ pub trait CallService: Send + Sync + 'static {
         channel_id: &Uuid,
         user_id: MacroUserIdStr<'a>,
     ) -> impl Future<Output = Result<LeaveCallResponse, CallError>> + Send;
+
+    /// Report the per-user ring status for a call. The caller authenticates
+    /// with the RTC access token delivered in its VoIP push payload; the
+    /// token's identity determines whose participation is checked. Returns
+    /// [`CallError::Auth`] when the token is invalid or carries no room grant.
+    fn get_ring_status(
+        &self,
+        call_id: &Uuid,
+        bearer_token: &str,
+    ) -> impl Future<Output = Result<RingStatusResponse, CallError>> + Send;
 
     /// Validate and process a raw webhook event from the RTC provider.
     fn process_webhook_event(
