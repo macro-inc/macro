@@ -33,11 +33,6 @@ export type GroupQueryPage = {
   group: GroupMeta;
 };
 
-type GroupQueryData = {
-  group: GroupMeta;
-  entities: EntityData[];
-};
-
 type CreateGroupedSoupQueriesArgs = {
   initialPage: Accessor<InitialGroupPage | undefined>;
   groupByField: Accessor<GroupByField | undefined>;
@@ -63,28 +58,14 @@ export function createGroupedSoupQueries(args: CreateGroupedSoupQueriesArgs) {
     return mapApiSoupItemToEntity(item);
   };
 
-  const combineGroupPages = (
-    pages: GroupQueryPage[],
+  const mapPageToEntities = (
+    page: GroupQueryPage,
     itemFilter: SoupApiItemFilter | undefined
-  ): GroupQueryData | undefined => {
-    let group: GroupMeta | undefined;
-    let items: Record<string, SoupApiItem> = {};
-
-    for (const page of pages) {
-      group = group
-        ? {
-            ...page.group,
-            itemIds: [...group.itemIds, ...page.group.itemIds],
-          }
-        : page.group;
-      items = { ...items, ...page.items };
-    }
-
-    if (!group) return;
-
+  ): EntityData[] => {
     const entities: EntityData[] = [];
-    for (const id of group.itemIds) {
-      const item = items[id];
+
+    for (const id of page.group.itemIds) {
+      const item = page.items[id];
       if (!item) continue;
       if (itemFilter && !itemFilter(item)) continue;
 
@@ -92,71 +73,72 @@ export function createGroupedSoupQueries(args: CreateGroupedSoupQueriesArgs) {
       if (entity) entities.push(entity);
     }
 
-    return { group, entities };
+    return entities;
   };
 
-  return createInfiniteQueries<GroupQueryPage, GroupQueryData | undefined>(
-    () => {
-      const field = args.groupByField();
-      const initialGroupedPage = args.initialPage();
+  return createInfiniteQueries<GroupQueryPage, EntityData[]>(() => {
+    const field = args.groupByField();
+    const initialGroupedPage = args.initialPage();
 
-      if (!field || !initialGroupedPage) {
-        return [];
-      }
-
-      const options = args.queryOptions();
-
-      return initialGroupedPage.groups.map((group) => {
-        const initialPage = { items: initialGroupedPage.items, group };
-
-        return {
-          key: group.key,
-          queryKey: soupKeys.groupedGroup({
-            params: args.soupParams(),
-            body: args.soupBody(),
-            groupBy: field,
-            groupKey: group.key,
-          }).queryKey,
-          queryFn: async (ctx: { pageParam: string | null }) => {
-            if (ctx.pageParam == null) {
-              return initialPage;
-            }
-
-            const response = await throwOnErr(async () =>
-              storageServiceClient.getGroupedSoupAstGroupPage({
-                params: {
-                  cursor: ctx.pageParam ?? undefined,
-                  group_by: serializeGroupByField(field),
-                  group_key: group.key,
-                  limit: args.soupParams().limit,
-                },
-                body: args.soupBody(),
-              })
-            );
-
-            return {
-              items: response.items,
-              group: parseGroupMeta(response.group),
-            };
-          },
-          getNextPageParam: (lastPage: GroupQueryPage): string | null => {
-            return lastPage.group.nextCursor;
-          },
-          placeholderData: {
-            pages: [initialPage],
-            pageParams: [null],
-          },
-          select: (pages) => combineGroupPages(pages, options.meta?.itemFilter),
-          enabled: options.enabled,
-          meta: {
-            ...options.meta,
-            groupBy: field,
-            groupKey: group.key,
-            normalize: true,
-          },
-          staleTime: Infinity,
-        };
-      });
+    if (!field || !initialGroupedPage) {
+      return [];
     }
-  );
+
+    const options = args.queryOptions();
+
+    return initialGroupedPage.groups.map((group) => {
+      const initialPage = { items: initialGroupedPage.items, group };
+
+      return {
+        key: group.key,
+        queryKey: soupKeys.groupedGroup({
+          params: args.soupParams(),
+          body: args.soupBody(),
+          groupBy: field,
+          groupKey: group.key,
+        }).queryKey,
+        queryFn: async (ctx: { pageParam: string | null }) => {
+          if (ctx.pageParam == null) {
+            return initialPage;
+          }
+
+          const response = await throwOnErr(async () =>
+            storageServiceClient.getGroupedSoupAstGroupPage({
+              params: {
+                cursor: ctx.pageParam ?? undefined,
+                group_by: serializeGroupByField(field),
+                group_key: group.key,
+                limit: args.soupParams().limit,
+              },
+              body: args.soupBody(),
+            })
+          );
+
+          return {
+            items: response.items,
+            group: parseGroupMeta(response.group),
+          };
+        },
+        getNextPageParam: (lastPage: GroupQueryPage): string | null => {
+          return lastPage.group.nextCursor;
+        },
+        placeholderData: {
+          pages: [initialPage],
+          pageParams: [null],
+        },
+        select: (pages) =>
+          pages.flatMap((page) =>
+            mapPageToEntities(page, options.meta?.itemFilter)
+          ),
+        enabled: options.enabled,
+        meta: {
+          ...options.meta,
+          groupBy: field,
+          groupKey: group.key,
+          normalize: true,
+        },
+        staleTime: Infinity,
+      };
+    });
+  });
 }

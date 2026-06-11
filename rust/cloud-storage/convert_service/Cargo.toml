@@ -47,3 +47,4 @@ tracing = { workspace = true }
 utoipa = { workspace = true }
 utoipa-swagger-ui = { workspace = true }
 zip = { workspace = true, features = ["bzip2"] }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

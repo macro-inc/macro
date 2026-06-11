@@ -1,12 +1,21 @@
-import { createUniqueId } from 'solid-js';
+// One-shot "expand & reconverge" animation, driven by the .animating class (toggled by
+// the triggerAnimation prop, same as the other animated icons). Each line moves radially
+// outward from the icon's center, then eases back to rest with a slight overshoot — the
+// hash briefly expands and reconverges.
+//
+// Outward directions (radial from center ~(12, 8), so the hash opens up symmetrically):
+//   channel-h-top    up      (top bar separates upward)
+//   channel-h-bottom down    (bottom bar separates downward)
+//   channel-v-left   left    (left bar separates leftward)
+//   channel-v-right  right   (right bar separates rightward)
+//
+// Built on `transform` (not `d` morphing), so unlike the old version it animates in
+// Safari/WebKit too (incl. the macOS Tauri WKWebView).
 
 export const AnimatedChannelIcon = (props: {
   triggerAnimation?: boolean;
   class?: string;
 }) => {
-  // Unique clipPath id so multiple instances on a page don't collide.
-  const clipId = `channel-clip-${createUniqueId()}`;
-
   return (
     <svg
       width="100%"
@@ -18,53 +27,50 @@ export const AnimatedChannelIcon = (props: {
       stroke-linecap="round"
       stroke-linejoin="round"
       xmlns="http://www.w3.org/2000/svg"
-      overflow="hidden"
+      overflow="visible"
       class={`animated-channel-icon ${props.triggerAnimation ? 'animating' : ''} ${props.class ?? ''}`}
     >
       {/*<title>Channel icon</title>*/}
       <style>{`
-        @keyframes channel-zip-h-top {
-          0%, 15% { transform: translate(-26px, 0); }
-          100%    { transform: translate(0, 0); }
+        /* Each line eases out to its peak (ease-out), then reconverges with a slight
+           overshoot past rest before settling (easeOutBack). */
+        @keyframes channel-expand-up {
+          0%   { transform: translate(0, 0); animation-timing-function: ease-out; }
+          45%  { transform: translate(0, -2px); animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1); }
+          100% { transform: translate(0, 0); }
         }
-        @keyframes channel-zip-h-bottom {
-          0%, 15% { transform: translate(26px, 0); }
-          100%    { transform: translate(0, 0); }
+        @keyframes channel-expand-down {
+          0%   { transform: translate(0, 0); animation-timing-function: ease-out; }
+          45%  { transform: translate(0, 2px); animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1); }
+          100% { transform: translate(0, 0); }
         }
-        @keyframes channel-zip-v-left {
-          0%, 15% { transform: translate(-8px, 24px); }
-          100%    { transform: translate(0, 0); }
+        @keyframes channel-expand-left {
+          0%   { transform: translate(0, 0); animation-timing-function: ease-out; }
+          45%  { transform: translate(-2px, 0); animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1); }
+          100% { transform: translate(0, 0); }
         }
-        @keyframes channel-zip-v-right {
-          0%, 15% { transform: translate(8px, -24px); }
-          100%    { transform: translate(0, 0); }
+        @keyframes channel-expand-right {
+          0%   { transform: translate(0, 0); animation-timing-function: ease-out; }
+          45%  { transform: translate(2px, 0); animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1); }
+          100% { transform: translate(0, 0); }
         }
-        /* easeOutBack: the 15% -> 100% segment zips in then overshoots past rest and
-           settles. The 0% -> 15% segment holds (both keyframes share the start offset). */
         .animated-channel-icon.animating .channel-h-top {
-          animation: channel-zip-h-top 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+          animation: channel-expand-up 0.625s forwards;
         }
         .animated-channel-icon.animating .channel-h-bottom {
-          animation: channel-zip-h-bottom 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+          animation: channel-expand-down 0.625s forwards;
         }
         .animated-channel-icon.animating .channel-v-left {
-          animation: channel-zip-v-left 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+          animation: channel-expand-left 0.625s forwards;
         }
         .animated-channel-icon.animating .channel-v-right {
-          animation: channel-zip-v-right 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+          animation: channel-expand-right 0.625s forwards;
         }
       `}</style>
-      <clipPath id={clipId}>
-        <rect x="0" y="-4" width="24" height="24" />
-      </clipPath>
-      <g clip-path={`url(#${clipId})`}>
-        {/* Horizontals shortened ~1u on the edge-touching end so the round caps stay
-            inside the clip box at rest (M2 5H24 -> H23, M0 11H22 -> M1). */}
-        <path class="channel-h channel-h-top" d="M2 5H23" />
-        <path class="channel-h channel-h-bottom" d="M1 11H22" />
-        <path class="channel-v channel-v-left" d="M6.5 15.5L11.5 0.5" />
-        <path class="channel-v channel-v-right" d="M12.5 15.5L17.5 0.5" />
-      </g>
+      <path class="channel-h channel-h-top" d="M2 5H24" />
+      <path class="channel-h channel-h-bottom" d="M0 11H22" />
+      <path class="channel-v channel-v-left" d="M6.5 15.5L11.5 0.5" />
+      <path class="channel-v channel-v-right" d="M12.5 15.5L17.5 0.5" />
     </svg>
   );
 };

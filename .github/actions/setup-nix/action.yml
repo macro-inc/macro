@@ -1,0 +1,86 @@
+name: Setup Nix
+description: >-
+  Ensure a working Nix (flakes enabled, systemd daemon) is available on a
+  runner that does not ship Nix preinstalled (e.g. Blacksmith). Idempotent:
+  when /nix is already populated from a sticky disk it only re-initialises the
+  daemon and config rather than reinstalling the store.
+
+inputs:
+  extra-substituters:
+    description: Space-separated extra binary cache substituters to trust.
+    required: false
+    default: ''
+  extra-trusted-public-keys:
+    description: Space-separated public keys for the extra substituters.
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - name: Install or re-initialise Nix
+      shell: bash
+      env:
+        EXTRA_SUBSTITUTERS: ${{ inputs.extra-substituters }}
+        EXTRA_TRUSTED_PUBLIC_KEYS: ${{ inputs.extra-trusted-public-keys }}
+      run: |
+        set -euo pipefail
+
+        # When /nix is mounted from a warm sticky disk the store + profiles are
+        # already present, but the systemd unit and /etc/nix config live outside
+        # /nix and are gone on a fresh runner. Detect that case and only repair
+        # the bits that don't persist on the disk.
+        nix_bin="/nix/var/nix/profiles/default/bin/nix"
+
+        if [[ -x "$nix_bin" ]]; then
+          echo "Found existing Nix store on sticky disk; re-initialising daemon/config only."
+
+          sudo mkdir -p /etc/nix
+          # Recreate the minimal config the Determinate installer would have written.
+          {
+            echo "experimental-features = nix-command flakes"
+            echo "trusted-users = root runner"
+            echo "build-users-group = nixbld"
+          } | sudo tee /etc/nix/nix.conf >/dev/null
+
+          # The nixbld build group/users do not persist outside /nix; recreate if missing.
+          if ! getent group nixbld >/dev/null; then
+            sudo groupadd -r nixbld || true
+            for i in $(seq 1 10); do
+              sudo useradd -r -g nixbld -G nixbld -d /var/empty -s "$(command -v nologin || echo /sbin/nologin)" \
+                "nixbld$i" 2>/dev/null || true
+            done
+          fi
+
+          # Reinstall the systemd units shipped in the store and start the daemon.
+          if [[ -e /nix/var/nix/profiles/default/lib/systemd/system/nix-daemon.service ]]; then
+            sudo cp /nix/var/nix/profiles/default/lib/systemd/system/nix-daemon.* /etc/systemd/system/ || true
+            sudo systemctl daemon-reload || true
+          fi
+          sudo systemctl enable --now nix-daemon.socket nix-daemon.service 2>/dev/null || true
+        else
+          echo "No Nix store found on sticky disk; performing a full install."
+          curl --http1.1 --retry 5 --retry-delay 5 --retry-all-errors \
+            --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix | \
+            sh -s -- install linux --no-confirm --init systemd \
+            --extra-conf "experimental-features = nix-command flakes" \
+            --extra-conf "trusted-users = root runner"
+        fi
+
+        # Make nix discoverable in subsequent (non-login) steps.
+        echo "/nix/var/nix/profiles/default/bin" >> "$GITHUB_PATH"
+        export PATH="/nix/var/nix/profiles/default/bin:$PATH"
+        export NIX_REMOTE=daemon
+        echo "NIX_REMOTE=daemon" >> "$GITHUB_ENV"
+
+        # Append fallback substituters (e.g. Cachix) so a cold sticky disk pulls
+        # prebuilt artifacts instead of compiling from source.
+        if [[ -n "${EXTRA_SUBSTITUTERS}" ]]; then
+          {
+            echo "extra-substituters = ${EXTRA_SUBSTITUTERS}"
+            echo "extra-trusted-public-keys = ${EXTRA_TRUSTED_PUBLIC_KEYS}"
+          } | sudo tee -a /etc/nix/nix.conf >/dev/null
+          sudo systemctl restart nix-daemon.service 2>/dev/null || true
+        fi
+
+        "$nix_bin" --version || nix --version

@@ -1,7 +1,7 @@
 use axum::{Json, extract::State};
 use entity_access::{
     domain::{models::MemberTeamRole, ports::EntityAccessService},
-    inbound::axum_extractors::MacroUserTeamExtractor,
+    inbound::axum_extractors::OptionalMacroUserTeamExtractor,
 };
 use model_error_response::ErrorResponse;
 
@@ -27,9 +27,12 @@ use super::TeamRouterState;
 )]
 #[tracing::instrument(skip_all, err)]
 pub async fn handler<T: TeamService, Eas: EntityAccessService>(
-    access: MacroUserTeamExtractor<MemberTeamRole, Eas>,
+    access: OptionalMacroUserTeamExtractor<MemberTeamRole, Eas>,
     State(state): State<TeamRouterState<T, Eas>>,
 ) -> Result<Json<TeamWithMembers>, TeamError> {
-    let team = state.service.get_team(access.entity_access_receipt).await?;
+    let receipt = access
+        .entity_access_receipt
+        .ok_or(TeamError::TeamDoesNotExist)?;
+    let team = state.service.get_team(receipt).await?;
     Ok(Json(team))
 }

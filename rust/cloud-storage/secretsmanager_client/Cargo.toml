@@ -14,3 +14,4 @@ mockall = { workspace = true }
 remote_env_var = { path = "../remote_env_var" }
 thiserror = { workspace = true }
 tracing = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

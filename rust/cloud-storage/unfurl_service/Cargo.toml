@@ -37,3 +37,4 @@ unfurl = { path = "../unfurl", features = ["axum", "outbound"] }
 url = { workspace = true }
 utoipa = { workspace = true, features = ["axum_extras", "chrono", "uuid"] }
 utoipa-swagger-ui = { workspace = true, features = ["axum"] }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

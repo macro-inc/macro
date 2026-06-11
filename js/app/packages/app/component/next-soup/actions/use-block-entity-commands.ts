@@ -1,6 +1,9 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
+import { useMaybeSoup } from '@app/component/next-soup/soup-context';
+import { openEntityInSplitFromUnifiedList } from '@app/component/next-soup/utils';
 import { useAllProperties } from '@app/component/property-edit-modal/hooks/useAllProperties';
 import { openPropertyEditor } from '@app/component/property-edit-modal/state/propertyEditor';
+import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { useBlockId } from '@core/block';
 import { useQuickAccess } from '@core/context/quickAccess';
 import { useUserId } from '@core/context/user';
@@ -34,6 +37,8 @@ export const useBlockEntityCommands = () => {
   const quickAccess = useQuickAccess();
   const userId = useUserId();
   const notificationSource = useGlobalNotificationSource();
+  const soup = useMaybeSoup();
+  const splitPanel = useSplitPanel();
 
   const markDone = makeMarkDoneAction({
     userId: () => userId(),
@@ -80,13 +85,34 @@ export const useBlockEntityCommands = () => {
     const group = createHotkeyGroup();
 
     registerHotkey({
+      hotkey: ['e'],
+      hotkeyToken: TOKENS.entity.action.markDone,
       scopeId,
       description: 'Mark done',
       keyDownHandler: () => {
         const entity = getEntity();
         if (!entity) return false;
         if (!markDone.canExecute(entity)) return false;
-        markDone.execute([entity]);
+
+        const selectedRow = soup?.items.get(entity.id);
+        if (soup && selectedRow) {
+          markDone.executeWithSoup(
+            [selectedRow.original],
+            soup,
+            (nextEntity) => {
+              const splitHandle = splitPanel?.handle;
+              if (!splitHandle) return;
+              void openEntityInSplitFromUnifiedList(nextEntity, {
+                splitHandle,
+                mergeHistory: true,
+                referredFrom: splitHandle.referredFrom(),
+              });
+            }
+          );
+        } else {
+          markDone.execute([entity]);
+        }
+
         return true;
       },
       condition: () => {

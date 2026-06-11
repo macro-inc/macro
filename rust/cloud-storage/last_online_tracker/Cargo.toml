@@ -11,3 +11,4 @@ redis = { workspace = true, features = ["aio", "tokio-comp"] }
 rootcause = { workspace = true }
 tokio = { workspace = true, features = ["sync"] }
 tracing = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

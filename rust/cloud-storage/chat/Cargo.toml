@@ -64,6 +64,7 @@ utoipa = { workspace = true }
 sqlx = { workspace = true, optional = true }
 
 macro_uuid = { path = "../macro_uuid", optional = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 http-body-util = { workspace = true }

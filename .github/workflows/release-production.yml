@@ -23,8 +23,6 @@ jobs:
       DD_APP_KEY: ${{ secrets.DD_APP_KEY }}
       DD_API_KEY: ${{ secrets.DD_API_KEY }}
       CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      SCCACHE_BUCKET: ${{ secrets.SCCACHE_BUCKET }}
 
   build:
     name: Build Web App

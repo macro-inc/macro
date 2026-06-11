@@ -1,0 +1,20 @@
+<svg viewBox="0 0 760 270" xmlns="http://www.w3.org/2000/svg" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <rect x="0" y="0" width="760" height="270" fill="#090909"/>
+
+  <!-- ClickUp tile -->
+  <rect x="130" y="50" width="140" height="140" rx="32" fill="#121212" stroke="#2e2e2e"/>
+  <g transform="translate(164 84) scale(3)">
+    <path fill="#e8e8e8" d="M2 18.439l3.69-2.828c1.961 2.56 4.044 3.739 6.363 3.739 2.307 0 4.33-1.166 6.203-3.704L22 18.405c-2.7 3.66-6.054 5.594-9.946 5.594-3.879 0-7.245-1.923-10.054-5.56zM12.04 6.15L5.475 11.81l-3.05-3.539L12.057 0l9.573 8.297-3.058 3.525z"/>
+  </g>
+  <text x="200" y="222" fill="#6f6f6f" font-size="14" text-anchor="middle">ClickUp</text>
+
+  <!-- arrow -->
+  <path d="M325 109h78v-15l34 26-34 26v-15h-78z" fill="#ff8f05"/>
+
+  <!-- Macro tile -->
+  <rect x="490" y="50" width="140" height="140" rx="32" fill="#121212" stroke="#2e2e2e"/>
+  <g transform="translate(524 84) scale(3)">
+    <path fill="#fbefe9" d="m6.25 4.038-2.242 0.8792v5.8184l-1.756-1.6582-2.242 0.8792v6.6766c0 0.2568 0.106 0.502 0.292 0.6784l2.794 2.6422 2.244-0.879v-5.8184l7.084 6.6974 2.244-0.879v-5.8184l7.086 6.6976 2.24-0.8792v-6.6766c0-0.2568-0.104-0.5022-0.292-0.6784l-8.124-7.6816-2.244 0.879v5.8184z"/>
+  </g>
+  <text x="560" y="222" fill="#6f6f6f" font-size="14" text-anchor="middle">Macro</text>
+</svg>

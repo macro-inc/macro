@@ -11,3 +11,4 @@ default = ["db"]
 [dependencies]
 serde = { workspace = true }
 sqlx = { workspace = true, optional = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
