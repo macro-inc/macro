@@ -56,11 +56,11 @@ inputs:
     required: false
     default: ''
   prebuilt-binaries-tar:
-    description: 'Optional path to a prebuilt-binaries.tar.gz already present on disk (e.g. a Blacksmith sticky-disk handoff). When set, takes precedence over prebuilt-binaries-artifact and skips the GitHub artifact download.'
+    description: 'Optional path to a prebuilt-binaries.tar.gz already present on disk (e.g. a Blacksmith sticky-disk handoff). Preferred when present; if the disk clone is missing the tar, prebuilt-binaries-artifact is downloaded as fallback.'
     required: false
     default: ''
   lambda-artifacts-tar:
-    description: 'Optional path to a lambda-artifacts.tar.gz already present on disk (e.g. a Blacksmith sticky-disk handoff). When set, takes precedence over lambda-artifacts and skips the GitHub artifact download.'
+    description: 'Optional path to a lambda-artifacts.tar.gz already present on disk (e.g. a Blacksmith sticky-disk handoff). Preferred when present; if the disk clone is missing the tar, lambda-artifacts is downloaded as fallback.'
     required: false
     default: ''
   cloud-storage-service-name:
@@ -84,8 +84,33 @@ runs:
       with:
         lfs: ${{ inputs.use-lfs }}
 
+    # The sticky-disk handoff is the fast path, but Blacksmith snapshot commits
+    # can take ~1 min to become visible to clones; a deploy job that mounts too
+    # soon sees an empty disk. Detect that here and fall back to the GitHub
+    # artifact the build job uploaded.
+    - name: Check handoff disk tars
+      id: handoff
+      shell: bash
+      env:
+        BIN_TAR: ${{ inputs.prebuilt-binaries-tar }}
+        LAM_TAR: ${{ inputs.lambda-artifacts-tar }}
+      run: |
+        set -euo pipefail
+        bin_ok=false
+        lam_ok=false
+        if [[ -n "$BIN_TAR" && -f "$BIN_TAR" ]]; then bin_ok=true; fi
+        if [[ -n "$LAM_TAR" && -f "$LAM_TAR" ]]; then lam_ok=true; fi
+        echo "binaries_tar_ok=$bin_ok" >> "$GITHUB_OUTPUT"
+        echo "lambdas_tar_ok=$lam_ok" >> "$GITHUB_OUTPUT"
+        if [[ -n "$BIN_TAR" && "$bin_ok" == "false" ]]; then
+          echo "::warning::handoff disk tar missing at $BIN_TAR (snapshot commit->clone visibility race); falling back to the GitHub artifact"
+        fi
+        if [[ -n "$LAM_TAR" && "$lam_ok" == "false" ]]; then
+          echo "::warning::handoff disk tar missing at $LAM_TAR (snapshot commit->clone visibility race); falling back to the GitHub artifact"
+        fi
+
     - name: Download prebuilt service binaries
-      if: ${{ inputs.prebuilt-binaries-artifact != '' }}
+      if: ${{ inputs.prebuilt-binaries-artifact != '' && steps.handoff.outputs.binaries_tar_ok != 'true' }}
       uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
       with:
         name: ${{ inputs.prebuilt-binaries-artifact }}
@@ -99,19 +124,22 @@ runs:
       run: |
         set -euo pipefail
         mkdir -p rust/cloud-storage/prebuilt
-        # Prefer an on-disk tar (sticky-disk handoff); fall back to the downloaded artifact.
-        src="${TAR_PATH:-rust/cloud-storage/prebuilt-artifact/prebuilt-binaries.tar.gz}"
-        if [[ ! -f "$src" ]]; then
-          echo "::error::prebuilt binaries tar missing at $src — the handoff sticky disk cloned without the build job's snapshot. Re-run this deploy job (a fresh clone usually resolves it); if it persists, re-run the service's build job too."
-          echo "--- $(dirname "$src") contents ---"; ls -la "$(dirname "$src")" || true
-          echo "--- handoff mounts ---"; mount | grep -i handoff || true
+        # Prefer the on-disk tar (sticky-disk handoff); fall back to the
+        # downloaded artifact when the disk clone missed the snapshot.
+        if [[ -n "$TAR_PATH" && -f "$TAR_PATH" ]]; then
+          src="$TAR_PATH"
+        elif [[ -f rust/cloud-storage/prebuilt-artifact/prebuilt-binaries.tar.gz ]]; then
+          src=rust/cloud-storage/prebuilt-artifact/prebuilt-binaries.tar.gz
+        else
+          echo "::error::prebuilt binaries tar found neither on the handoff disk ($TAR_PATH) nor as a downloaded artifact. If the disk path is set, its build job's snapshot never became visible; re-run this deploy job."
+          if [[ -n "$TAR_PATH" ]]; then echo "--- $(dirname "$TAR_PATH") contents ---"; ls -la "$(dirname "$TAR_PATH")" || true; fi
           exit 1
         fi
-        echo "handoff receipt: $(sha256sum "$src" | cut -d' ' -f1) ($(stat -c%s "$src") bytes)"
+        echo "handoff source: $src ($(stat -c%s "$src") bytes, sha256 $(sha256sum "$src" | cut -d' ' -f1))"
         tar -xzf "$src" -C rust/cloud-storage/prebuilt
 
     - name: Download Lambda artifacts
-      if: ${{ inputs.lambda-artifacts != '' }}
+      if: ${{ inputs.lambda-artifacts != '' && steps.handoff.outputs.lambdas_tar_ok != 'true' }}
       uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
       with:
         name: ${{ inputs.lambda-artifacts }}
@@ -124,15 +152,18 @@ runs:
         TAR_PATH: ${{ inputs.lambda-artifacts-tar }}
       run: |
         set -euo pipefail
-        # Prefer an on-disk tar (sticky-disk handoff); fall back to the downloaded artifact.
-        src="${TAR_PATH:-rust/cloud-storage/lambda-artifact/lambda-artifacts.tar.gz}"
-        if [[ ! -f "$src" ]]; then
-          echo "::error::lambda artifacts tar missing at $src — the handoff sticky disk cloned without the build job's snapshot. Re-run this deploy job (a fresh clone usually resolves it); if it persists, re-run the service's build job too."
-          echo "--- $(dirname "$src") contents ---"; ls -la "$(dirname "$src")" || true
-          echo "--- handoff mounts ---"; mount | grep -i handoff || true
+        # Prefer the on-disk tar (sticky-disk handoff); fall back to the
+        # downloaded artifact when the disk clone missed the snapshot.
+        if [[ -n "$TAR_PATH" && -f "$TAR_PATH" ]]; then
+          src="$TAR_PATH"
+        elif [[ -f rust/cloud-storage/lambda-artifact/lambda-artifacts.tar.gz ]]; then
+          src=rust/cloud-storage/lambda-artifact/lambda-artifacts.tar.gz
+        else
+          echo "::error::lambda artifacts tar found neither on the handoff disk ($TAR_PATH) nor as a downloaded artifact. If the disk path is set, its build job's snapshot never became visible; re-run this deploy job."
+          if [[ -n "$TAR_PATH" ]]; then echo "--- $(dirname "$TAR_PATH") contents ---"; ls -la "$(dirname "$TAR_PATH")" || true; fi
           exit 1
         fi
-        echo "handoff receipt: $(sha256sum "$src" | cut -d' ' -f1) ($(stat -c%s "$src") bytes)"
+        echo "handoff source: $src ($(stat -c%s "$src") bytes, sha256 $(sha256sum "$src" | cut -d' ' -f1))"
         tar -xzf "$src" -C rust/cloud-storage
 
     - name: Check Lambda config for inline build
