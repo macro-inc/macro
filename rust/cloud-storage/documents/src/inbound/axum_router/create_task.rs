@@ -6,14 +6,13 @@ use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::{
     OptionalMacroUserTeamExtractor, ProjectBodyAccessLevelExtractor,
 };
-use model::document::DocumentPermissionsToken;
 use model_user::axum_extractor::MacroUserExtractor;
 use models_permissions::share_permission::access_level::{AccessLevel, EditAccessLevel};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use super::DocumentRouterState;
 use crate::domain::create::{MarkdownSubtype, NewDocumentMetadata, NewMarkdownTextDocument};
 use crate::domain::models::{CreateTaskRequest, CreateTaskResponse, DocumentError};
+use crate::domain::permission_token::encode_permission_token;
 use crate::domain::ports::DocumentService;
 use crate::domain::ports::create::DocumentCreationService;
 use task_dedup::NewTask;
@@ -91,22 +90,11 @@ pub async fn create_task_handler<
         },
     );
 
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs() as usize;
-    let token = jsonwebtoken::encode(
-        &jsonwebtoken::Header::new(jsonwebtoken::Algorithm::HS256),
-        &DocumentPermissionsToken {
-            user_id: Some(user_context.macro_user_id.as_ref().to_string()),
-            document_id: document_id.clone(),
-            access_level: AccessLevel::Edit,
-            exp: now + 3600,
-            iss: "document_storage_service".to_string(),
-        },
-        &jsonwebtoken::EncodingKey::from_secret(
-            state.document_permission_jwt_secret.as_bytes(),
-        ),
+    let token = encode_permission_token(
+        Some(user_context.macro_user_id.as_ref().to_string()),
+        document_id.clone(),
+        AccessLevel::Edit,
+        &state.document_permission_jwt_secret,
     )
     .map_err(|e| {
         tracing::error!(error=?e, "failed to encode permission token");
