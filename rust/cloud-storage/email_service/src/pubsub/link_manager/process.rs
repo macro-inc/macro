@@ -298,15 +298,24 @@ async fn handle_delete(
             .await
             {
                 Ok(Some(minted_id)) => {
-                    // Grant relocation creates the mailbox's FusionAuth stub with the minted
-                    // id, so a match identifies the stub; a mismatch means the link still ran
-                    // on a human connector's grant (relocation never completed) and there is
-                    // no stub to remove. The endpoint refuses active users as a second guard.
-                    if link.fusionauth_user_id == minted_id.to_string()
-                        && let Err(e) = ctx
-                            .auth_service_client
-                            .delete_inbox_grant_user(&link.fusionauth_user_id)
-                            .await
+                    // The minted id is the authoritative stub id: grant relocation creates the
+                    // mailbox's FusionAuth user with it, so it can never be a human connector's
+                    // account. Deleting by it (rather than the link's fusionauth_user_id, which
+                    // is stale when the post-relocation re-home failed) cleans the stub even in
+                    // partial states; the endpoint no-ops when relocation never created the user
+                    // and refuses active users as a second guard.
+                    let minted_id = minted_id.to_string();
+                    if link.fusionauth_user_id != minted_id {
+                        tracing::warn!(
+                            link_fusionauth_user_id = %link.fusionauth_user_id,
+                            %minted_id,
+                            "Promoted mailbox link did not point at its minted stub; deleting stub by minted id"
+                        );
+                    }
+                    if let Err(e) = ctx
+                        .auth_service_client
+                        .delete_inbox_grant_user(&minted_id)
+                        .await
                     {
                         tracing::error!(error=?e, "Failed to delete FusionAuth stub for promoted shared mailbox");
                     }

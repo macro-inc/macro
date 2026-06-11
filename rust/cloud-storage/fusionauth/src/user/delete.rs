@@ -27,6 +27,7 @@ pub(crate) async fn delete_user(
             tracing::trace!("user deleted");
             Ok(())
         }
+        reqwest::StatusCode::NOT_FOUND => Err(FusionAuthClientError::UserDoesNotExist),
         _ => {
             let body = res.text().await.map_err(|e| {
                 FusionAuthClientError::Generic(GenericErrorResponse {

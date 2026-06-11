@@ -60,19 +60,21 @@ pub async fn handler(
         }
     }
 
-    ctx.auth_client
-        .delete_user(&fusionauth_user_id)
-        .await
-        .map_err(|e| {
+    match ctx.auth_client.delete_user(&fusionauth_user_id).await {
+        // Already gone (possibly deleted between the state check above and here) — the
+        // endpoint is idempotent, so treat as success.
+        Ok(()) | Err(FusionAuthClientError::UserDoesNotExist) => {}
+        Err(e) => {
             tracing::error!(error=?e, "delete_inbox_grant_user: failed to delete user");
-            (
+            return Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
                     message: "unable to delete user".into(),
                 }),
             )
-                .into_response()
-        })?;
+                .into_response());
+        }
+    }
 
     Ok((StatusCode::OK, Json(EmptyResponse::default())).into_response())
 }

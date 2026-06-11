@@ -109,8 +109,11 @@ pub async fn handler(
         }
     };
 
-    // Best-effort: a failure leaves the stub active, which is the prior behavior, so the
-    // relocation itself is not failed over it.
+    // Deliberately best-effort: by the time this runs the grant has already moved to the
+    // stub, and the caller re-homes the link's fusionauth_user_id only on a success
+    // response. Failing the request here would skip that re-home and break token
+    // resolution for the inbox — a hard failure — whereas an active stub merely retains
+    // the pre-deactivation security posture until the next relocation converges it.
     let ensure_deactivated = |user_id: String| async move {
         match auth.get_user_active(&user_id).await {
             Ok(false) => {}
