@@ -35,8 +35,8 @@ import XIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
 import ArrowsClockwiseIcon from '@phosphor-icons/core/regular/arrows-clockwise.svg?component-solid';
 import PlusIcon from '@phosphor-icons/core/regular/plus.svg?component-solid';
 import { authServiceClient } from '@service-auth/client';
-import type {
-  Link as EmailLink,
+import {
+  type Link as EmailLink,
   SyncStatus,
 } from '@service-email/generated/schemas';
 import { useEmail, useLicenseStatus, useUserId } from '@core/context/user';
@@ -900,13 +900,13 @@ function Row(props: { label: string; children?: any }) {
 
 function syncStatusLabel(status: SyncStatus): string {
   switch (status) {
-    case 'SYNCING':
+    case SyncStatus.SYNCING:
       return 'Syncing…';
-    case 'UP_TO_DATE':
+    case SyncStatus.UP_TO_DATE:
       return 'Up to date';
-    case 'ERROR':
+    case SyncStatus.ERROR:
       return 'Error — re-sync';
-    case 'INACTIVE':
+    case SyncStatus.INACTIVE:
       return 'Disabled';
   }
 }
@@ -968,8 +968,8 @@ function InboxRow(props: {
           <span
             class="text-xs"
             classList={{
-              'text-failure': props.link.sync_status === 'ERROR',
-              'text-ink-muted': props.link.sync_status !== 'ERROR',
+              'text-failure': props.link.sync_status === SyncStatus.ERROR,
+              'text-ink-muted': props.link.sync_status !== SyncStatus.ERROR,
             }}
           >
             {syncStatusLabel(props.link.sync_status)}
@@ -986,7 +986,7 @@ function InboxRow(props: {
               disabled={
                 props.resyncing ||
                 (ENABLE_INBOX_SYNC_STATUS &&
-                  props.link.sync_status === 'SYNCING')
+                  props.link.sync_status === SyncStatus.SYNCING)
               }
               onClick={props.onResync}
               aria-label={`Force sync ${props.link.email_address}`}
