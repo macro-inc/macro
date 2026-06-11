@@ -1,6 +1,7 @@
 import type { ListView } from '@app/constants/list-views';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { hapticImpact } from '@core/mobile/haptics';
+import { ICON_ANIMATION_DURATION_MS } from '@icon/animation';
 import { AnimatedCallIcon } from '@icon/wide-call';
 import { AnimatedChannelIcon } from '@icon/wide-channel';
 import { AnimatedEmailIcon } from '@icon/wide-email';
@@ -13,8 +14,6 @@ import { cn, Layer } from '@ui';
 import { type Component, createSignal, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { useSplitLayout } from '../split-layout/layout';
-
-const ICON_ANIMATION_DURATION_MS = 500;
 
 type MobileDockButtonProps = {
   icon: Component<

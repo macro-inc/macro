@@ -139,6 +139,7 @@ sha2 = { workspace = true, optional = true }
 # Attachment
 attachment = { path = "../attachment", optional = true }
 non_empty = { path = "../non_empty" }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 dotenvy = { workspace = true }

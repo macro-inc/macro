@@ -76,6 +76,7 @@ uuid = { workspace = true }
 ai_toolset = { path = "../ai_toolset", optional = true }
 async-trait = { workspace = true, optional = true }
 schemars = { workspace = true, optional = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 http-body-util = { workspace = true }

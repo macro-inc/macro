@@ -25,6 +25,7 @@ tracing = { workspace = true }
 ai_toolset = { path = "../ai_toolset" }
 attachment = { path = "../attachment" }
 macro_user_id = { path = "../macro_user_id" }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 model-entity = { path = "../model-entity" }

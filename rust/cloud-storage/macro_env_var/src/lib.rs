@@ -293,6 +293,74 @@ macro_rules! env_var {
     };
 }
 
+/// A macro for defining multiple environment variable structs in a single invocation.
+///
+/// Each definition expands exactly as if it were passed to [`env_var!`] on its own.
+///
+/// # Example
+///
+/// ```
+/// use macro_env_var::env_vars;
+///
+/// env_vars! {
+///     pub struct BaseUrl;
+///     pub struct DatabaseUrl;
+///     #[derive(Debug, Clone)]
+///     pub struct RedisUri;
+/// }
+///
+/// let _url: Result<BaseUrl, _> = BaseUrl::new();
+/// ```
+#[macro_export]
+macro_rules! env_vars {
+    (
+        $(
+            $(#[$attr:meta])*
+            $v:vis struct $n:ident;
+        )*
+    ) => {
+        $(
+            $crate::env_var! {
+                $(#[$attr])*
+                $v struct $n;
+            }
+        )*
+    };
+}
+
+/// A macro for defining multiple optional environment variable structs in a single invocation.
+///
+/// Each definition expands exactly as if it were passed to [`maybe_env_var!`] on its own.
+///
+/// # Example
+///
+/// ```
+/// use macro_env_var::maybe_env_vars;
+///
+/// maybe_env_vars! {
+///     pub struct OptionalApiKey;
+///     pub struct OptionalFeatureFlag;
+/// }
+///
+/// let _key: Option<OptionalApiKey> = OptionalApiKey::new();
+/// ```
+#[macro_export]
+macro_rules! maybe_env_vars {
+    (
+        $(
+            $(#[$attr:meta])*
+            $v:vis struct $n:ident;
+        )*
+    ) => {
+        $(
+            $crate::maybe_env_var! {
+                $(#[$attr])*
+                $v struct $n;
+            }
+        )*
+    };
+}
+
 /// A macro for defining optional environment variables that return `Option` instead of `Result`.
 ///
 /// Use this when an environment variable is optional and its absence is expected behavior,

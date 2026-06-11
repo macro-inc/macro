@@ -12,3 +12,4 @@ macro_uuid = { path = "../macro_uuid" }
 sqlx = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

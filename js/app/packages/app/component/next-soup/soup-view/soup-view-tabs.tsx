@@ -15,12 +15,13 @@ import { MobileFilterDrawer } from '@app/component/next-soup/soup-view/filters-b
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { isListViewID, type ListView } from '@app/constants/list-views';
-import { type TabItem, Tabs } from '@core/component/Tabs';
+import { MobileTabs } from '@core/component/MobileTabs';
+import type { TabItem } from '@core/component/Tabs';
 import { TabsInset } from '@core/component/TabsInset';
 import { TabsInsetDropdown } from '@core/component/TabsInsetDropdown';
 import { useUserContext } from '@core/context/user';
 import { useIsTeamAdmin } from '@queries/team/teams';
-import { batch, createEffect, createMemo, For, Match, Switch } from 'solid-js';
+import { batch, createMemo, For, Match, Switch } from 'solid-js';
 
 /** Views that have tab definitions. Shared between VIEW_TAB_LISTS and VIEW_TAB_PRESETS. */
 export type TabbedListView = Extract<
@@ -310,42 +311,12 @@ const MobileViewTabs = (props: { view: TabbedListView }) => {
   const list = () =>
     filterTabsForUser(props.view, VIEW_TAB_LISTS[props.view], isTeamAdmin());
 
-  let wrapperRef: HTMLDivElement | undefined;
-
-  createEffect(() => {
-    activeTab();
-    list();
-    if (!wrapperRef) return;
-    queueMicrotask(() => {
-      const scrollEl = wrapperRef?.firstElementChild as HTMLElement | null;
-      const active = scrollEl?.querySelector(
-        '[data-checked]'
-      ) as HTMLElement | null;
-      if (!scrollEl || !active) return;
-      const itemLeft = active.offsetLeft;
-      const itemRight = itemLeft + active.offsetWidth;
-      const viewRight = scrollEl.scrollLeft + scrollEl.clientWidth;
-      if (itemLeft < scrollEl.scrollLeft) {
-        scrollEl.scrollTo({ left: itemLeft, behavior: 'smooth' });
-      } else if (itemRight > viewRight) {
-        scrollEl.scrollTo({
-          left: itemRight - scrollEl.clientWidth,
-          behavior: 'smooth',
-        });
-      }
-    });
-  });
-
   return (
-    <div ref={wrapperRef} class="h-full">
-      <Tabs
-        list={list()}
-        value={activeTab()}
-        defaultValue={VIEW_TAB_PRESETS[props.view].default}
-        onChange={(value) => applyTabPreset(props.view, value)}
-        indicatorPosition="top"
-        class="**:data-indicator:h-0.75 overflow-x-auto scrollbar-hidden [&>div]:w-max"
-      />
-    </div>
+    <MobileTabs
+      list={list()}
+      value={activeTab()}
+      defaultValue={VIEW_TAB_PRESETS[props.view].default}
+      onChange={(value) => applyTabPreset(props.view, value)}
+    />
   );
 };

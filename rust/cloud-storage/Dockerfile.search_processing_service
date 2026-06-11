@@ -30,13 +30,10 @@ RUN : \
   && apt-get clean \
   && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /app/svc /app/svc
-
+COPY --chmod=755 --from=builder /app/svc /app/svc
 
 RUN mkdir -p /app/pdfium-lib/linux
 COPY --from=builder /app/search_processing_service/pdfium-lib/linux/libpdfium.so /app/pdfium-lib/linux/libpdfium.so
-
-RUN chmod +x svc
 
 ENV PORT=8080
 EXPOSE ${PORT}

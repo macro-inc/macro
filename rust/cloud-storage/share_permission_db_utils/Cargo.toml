@@ -11,3 +11,4 @@ macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 models_permissions = { path = "../models_permissions" }
 sqlx = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

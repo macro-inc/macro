@@ -9,6 +9,7 @@ macro_env = { path = "../macro_env" }
 serde = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 macro_env_var = { path = "../macro_env_var" }

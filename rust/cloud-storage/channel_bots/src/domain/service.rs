@@ -1,11 +1,10 @@
 //! Domain service for built-in channel bots.
 
+use std::collections::HashSet;
 use std::fmt::Write as _;
 use std::sync::Arc;
 
-use channels::domain::models::{
-    ChannelContextMessage, ParticipantRole, PatchMessageRequest, PostMessageRequest, Sender,
-};
+use channels::domain::models::{ParticipantRole, PatchMessageRequest, PostMessageRequest, Sender};
 use channels::domain::ports::ChannelService;
 use uuid::Uuid;
 
@@ -18,6 +17,21 @@ use super::ports::AgentResponder;
 /// local context window.
 const CONTEXT_MESSAGES_BEFORE: i64 = 4;
 const CONTEXT_MESSAGES_AFTER: i64 = 4;
+
+/// Inline marker appended to the sender label of the triggering message so the
+/// model can tell it apart from surrounding context.
+const TRIGGER_MARKER: &str = " [this message mentioned you]";
+
+const THREAD_INSTRUCTION: &str = "This is the thread you were mentioned in (oldest to newest). \
+Interpret the mention in the context of this thread: words like \"this\" or \"it\" in the \
+mention refer to this thread unless the mention says otherwise.";
+
+const CHANNEL_BACKGROUND_INSTRUCTION: &str = "Other recent messages in the same channel, outside \
+the thread above (oldest to newest). Background only — do not treat these as the subject of the \
+mention.";
+
+const CHANNEL_CONTEXT_INSTRUCTION: &str = "Recent messages in the channel around the mention \
+(oldest to newest).";
 
 /// Human-readable label for a message sender storage id.
 fn sender_label(sender_id: &str) -> String {
@@ -39,28 +53,35 @@ fn sender_label(sender_id: &str) -> String {
         .to_string()
 }
 
-fn append_messages(
-    prompt: &mut String,
-    heading: &str,
-    messages: &[ChannelContextMessage],
-    skip: Uuid,
-) {
-    let mut wrote_heading = false;
-    for message in messages {
-        if message.id == skip || message.deleted_at.is_some() || message.content.trim().is_empty() {
-            continue;
-        }
-        if !wrote_heading {
-            let _ = write!(prompt, "\n{heading}\n");
-            wrote_heading = true;
-        }
-        let _ = writeln!(
-            prompt,
-            "{}: {}",
-            sender_label(&message.sender_id),
-            message.content
-        );
+/// A single message rendered into the prompt.
+struct PromptLine {
+    sender: String,
+    content: String,
+    is_trigger: bool,
+}
+
+/// The triggering message rendered from the event itself, used when the
+/// trigger is missing from fetched context (e.g. a fetch failed).
+fn trigger_line(event: &BotEvent) -> PromptLine {
+    PromptLine {
+        sender: sender_label(event.requesting_user.as_ref()),
+        content: event.message.content.trim().to_string(),
+        is_trigger: true,
     }
+}
+
+/// Write a tagged context block: an instruction line followed by one message
+/// per line, labeled by sender. Skipped entirely when there are no messages.
+fn append_block(prompt: &mut String, tag: &str, instruction: &str, lines: &[PromptLine]) {
+    if lines.is_empty() {
+        return;
+    }
+    let _ = write!(prompt, "\n<{tag}>\n{instruction}\n\n");
+    for line in lines {
+        let marker = if line.is_trigger { TRIGGER_MARKER } else { "" };
+        let _ = writeln!(prompt, "{}{marker}: {}", line.sender, line.content);
+    }
+    let _ = writeln!(prompt, "</{tag}>");
 }
 
 /// Message Macro posts immediately, then replaces with its answer.
@@ -92,8 +113,67 @@ where
         }
     }
 
-    /// Build the prompt: who mentioned the agent, local channel context around
-    /// the triggering message, and the triggering message itself.
+    /// Load the thread the mention belongs to as prompt lines: the top-level
+    /// parent followed by all replies in order, with the triggering message
+    /// marked inline. Also returns the ids of every message known to belong to
+    /// the thread so they can be excluded from the channel background.
+    async fn thread_lines(
+        &self,
+        event: &BotEvent,
+        parent_id: Uuid,
+    ) -> (Vec<PromptLine>, HashSet<Uuid>) {
+        let mut thread_ids = HashSet::from([parent_id, event.message.id]);
+        let mut lines = Vec::new();
+
+        let parent = self
+            .channels
+            .get_message_context(event.channel_id, parent_id, 0, 0)
+            .await
+            .inspect_err(|err| tracing::warn!(error=?err, "failed to load thread parent"))
+            .unwrap_or_default()
+            .into_iter()
+            .find(|message| message.id == parent_id);
+        if let Some(parent) = parent
+            && parent.deleted_at.is_none()
+            && !parent.content.trim().is_empty()
+        {
+            lines.push(PromptLine {
+                sender: sender_label(&parent.sender_id),
+                content: parent.content.trim().to_string(),
+                is_trigger: false,
+            });
+        }
+
+        let replies = self
+            .channels
+            .get_thread_replies(event.channel_id, parent_id)
+            .await
+            .inspect_err(|err| tracing::warn!(error=?err, "failed to load thread replies"))
+            .unwrap_or_default();
+        for reply in replies {
+            thread_ids.insert(reply.id);
+            if reply.content.trim().is_empty() {
+                continue;
+            }
+            lines.push(PromptLine {
+                sender: sender_label(&reply.sender_id),
+                content: reply.content.trim().to_string(),
+                is_trigger: reply.id == event.message.id,
+            });
+        }
+        if !lines.iter().any(|line| line.is_trigger) {
+            lines.push(trigger_line(event));
+        }
+        (lines, thread_ids)
+    }
+
+    /// Build the prompt for a mention.
+    ///
+    /// When the mention is a thread reply, the thread (parent + replies) is the
+    /// primary context and nearby channel messages are demoted to a clearly
+    /// labeled background block. For a top-level mention, the chronological
+    /// channel slice is the primary context. In both cases the triggering
+    /// message is marked inline rather than repeated at the end.
     async fn build_prompt(&self, event: &BotEvent) -> String {
         let mentioner = sender_label(event.requesting_user.as_ref());
         let trigger_id = event.message.id;
@@ -111,18 +191,59 @@ where
             .unwrap_or_default();
 
         let mut prompt = String::new();
-        let _ = writeln!(prompt, "{mentioner} mentioned you (@macro) in a channel.");
-        append_messages(
-            &mut prompt,
-            "Channel messages around the mention (oldest to newest):",
-            &nearby,
-            trigger_id,
-        );
-        let _ = write!(
-            prompt,
-            "\n{mentioner} said:\n{}\n\nReply to {mentioner}.",
-            event.message.content.trim()
-        );
+        if let Some(parent_id) = event.message.thread_id {
+            let _ = writeln!(
+                prompt,
+                "{mentioner} mentioned you (@macro) in a channel thread."
+            );
+            let (thread, thread_ids) = self.thread_lines(event, parent_id).await;
+            append_block(&mut prompt, "thread", THREAD_INSTRUCTION, &thread);
+
+            let background: Vec<PromptLine> = nearby
+                .iter()
+                .filter(|message| {
+                    message.deleted_at.is_none()
+                        && !message.content.trim().is_empty()
+                        && !thread_ids.contains(&message.id)
+                        && message.thread_id != Some(parent_id)
+                })
+                .map(|message| PromptLine {
+                    sender: sender_label(&message.sender_id),
+                    content: message.content.trim().to_string(),
+                    is_trigger: false,
+                })
+                .collect();
+            append_block(
+                &mut prompt,
+                "channel_background",
+                CHANNEL_BACKGROUND_INSTRUCTION,
+                &background,
+            );
+        } else {
+            let _ = writeln!(prompt, "{mentioner} mentioned you (@macro) in a channel.");
+            let mut lines: Vec<PromptLine> = nearby
+                .iter()
+                .filter(|message| {
+                    message.deleted_at.is_none() && !message.content.trim().is_empty()
+                })
+                .map(|message| PromptLine {
+                    sender: sender_label(&message.sender_id),
+                    content: message.content.trim().to_string(),
+                    is_trigger: message.id == trigger_id,
+                })
+                .collect();
+            if !lines.iter().any(|line| line.is_trigger) {
+                lines.push(trigger_line(event));
+            }
+            append_block(
+                &mut prompt,
+                "channel_context",
+                CHANNEL_CONTEXT_INSTRUCTION,
+                &lines,
+            );
+        }
+
+        let _ = write!(prompt, "\nReply to {mentioner}.");
         prompt
     }
 

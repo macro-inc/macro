@@ -40,4 +40,5 @@ tokio = { workspace = true }
 tracing = { workspace = true }
 urlencoding = { workspace = true }
 zip = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 

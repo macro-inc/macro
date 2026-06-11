@@ -6,7 +6,7 @@ import { MobileApp } from './MobileApp';
 import { Agent } from './Agent';
 import { Admin } from './Admin';
 import { Appearance } from './Appearance';
-import { TabsInset } from '@core/component/TabsInset';
+import { MobileTabs } from '@core/component/MobileTabs';
 import { Account } from './Account';
 import { Shortcuts } from './Shortcuts';
 import { Team } from './Team';
@@ -139,14 +139,16 @@ function SettingsPanel(props: SettingsPanelProps) {
 
   function BottomTabs() {
     return (
-    <div class="bg-surface border-t border-edge-muted h-11 shrink-0 px-1 flex items-center">
-      <TabsInset
-        list={flatTabs().map((tab) => ({ value: tab.tab, label: tab.label }))}
-        value={activeTabId()}
-        defaultValue="Appearance"
-        onChange={handleTabChange}
-      />
-    </div>
+      <div class="bg-surface border-t border-edge-muted h-11 shrink-0 px-1 flex">
+        <div class="flex-1 min-w-0 h-full">
+          <MobileTabs
+            list={flatTabs().map((tab) => ({ value: tab.tab, label: tab.label }))}
+            value={activeTabId()}
+            defaultValue="Appearance"
+            onChange={handleTabChange}
+          />
+        </div>
+      </div>
     );
   }
 

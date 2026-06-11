@@ -11,7 +11,8 @@ export type CollapsibleRegistration = {
   id: string;
   priority: number; // lower = higher priority to collapse first
   collapsed: Accessor<boolean>;
-  setCollapsed: Setter<boolean>;
+  // silent skips onCollapsedChange — used for pre-paint trial measurements
+  setCollapsed: (value: boolean, opts?: { silent?: boolean }) => void;
   ref: Accessor<HTMLElement | null | undefined>; // uncollapsed element — measured before collapse
   collapsedRef?: Accessor<HTMLElement | null | undefined>; // collapsed element — measured while collapsed
 };

@@ -62,10 +62,9 @@ RUN : \
 # Refresh font cache
 RUN fc-cache -f -v
 
-COPY --from=builder /app/svc /app/svc
+COPY --chmod=755 --from=builder /app/svc /app/svc
 COPY --from=lok /instdir /app/lok/instdir
 COPY --from=lok /include /app/lok/include
-RUN chmod +x svc
 ENV PORT=8080
 EXPOSE ${PORT}
 ENTRYPOINT ["dumb-init", "./svc"]

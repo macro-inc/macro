@@ -202,6 +202,19 @@ const EDITOR_PADDING_BOTTOM = 200;
 // For tasks, the click target is a small fixed pad so the activity section stays visible.
 const TASK_EDITOR_PADDING_BOTTOM = 48;
 
+function getBlankMarkdownPlaceholder(canEdit: boolean) {
+  if (!canEdit) return 'This document is blank...';
+
+  const hints = [
+    "'/' for commands",
+    "'@' to reference files",
+    "';' for snippets",
+  ];
+  if (ENABLE_MARKDOWN_AI_GENERATE) hints.push("'space' for AI writing");
+
+  return `Press ${hints.join(', ')}...`;
+}
+
 export function MarkdownEditor(props: {
   autoFocusOnMount?: boolean;
   loroManager: Accessor<LoroManager | undefined>;
@@ -532,6 +545,7 @@ export function MarkdownEditor(props: {
       snippetsPlugin({
         menu: snippetsMenuOperations,
         peerIdValidator: peerIdValidator(),
+        sourceDocumentId: blockId,
       })
     )
     .use(
@@ -979,9 +993,7 @@ export function MarkdownEditor(props: {
         />
         <Show when={isBlankMarkdown()}>
           <div class="pointer-events-none text-ink-placeholder absolute top-0">
-            {canEdit()
-              ? `Press '/' for commands, '@' to reference files${ENABLE_MARKDOWN_AI_GENERATE ? ", 'space' for AI writing..." : '...'}`
-              : `This document is blank...`}
+            {getBlankMarkdownPlaceholder(canEdit())}
           </div>
         </Show>
         <DecoratorRenderer editor={editor} />
@@ -1032,6 +1044,7 @@ export function MarkdownEditor(props: {
           editor={editor}
           menu={snippetsMenuOperations}
           useBlockBoundary={true}
+          sourceDocumentId={blockId}
         />
 
         <ActionMenu editor={editor} menu={actionsMenuOperations} />

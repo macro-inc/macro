@@ -37,6 +37,7 @@ system_properties = { path = "../system_properties" }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 ai_toolset = { path = "../ai_toolset" }

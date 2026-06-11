@@ -359,12 +359,16 @@ const _isMarkdownEntity = (entity: EntityData): entity is MarkdownEntity => {
 const _isPureDocumentEntity = (
   entity: EntityData
 ): entity is DocumentEntity => {
-  return entity.type === 'document' && entity.subType?.type !== 'task';
+  return (
+    entity.type === 'document' &&
+    entity.subType?.type !== 'task' &&
+    entity.subType?.type !== 'snippet'
+  );
 };
 
 export type EntityType = EntityData['type'];
 
-export type ExpandedEntityType = EntityType | 'task';
+export type ExpandedEntityType = EntityType | 'task' | 'snippet';
 
 export type EntityWithProperties<T extends EntityData> = T & {
   properties?: SoupProperty[];

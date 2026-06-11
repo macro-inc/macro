@@ -129,6 +129,7 @@ utoipa = { workspace = true }
 utoipa-swagger-ui = { workspace = true }
 uuid = { workspace = true }
 doppler-config = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 cool_asserts = "2"
