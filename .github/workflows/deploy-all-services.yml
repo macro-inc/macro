@@ -83,7 +83,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
 
       - name: Mount Nix store sticky disk
-        uses: useblacksmith/stickydisk@v1
+        uses: useblacksmith/stickydisk@13af8883542ca949a717e70fef89d15edbb29d88 # v1 before PR #58 (2b7a836c): empty-clone regression suspect
         with:
           key: ${{ github.repository }}-nix-store
           path: /nix
@@ -123,7 +123,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
 
       - name: Mount lambda Nix store sticky disk
-        uses: useblacksmith/stickydisk@v1
+        uses: useblacksmith/stickydisk@13af8883542ca949a717e70fef89d15edbb29d88 # v1 before PR #58 (2b7a836c): empty-clone regression suspect
         with:
           key: ${{ github.repository }}-nix-lambdas
           path: /nix
@@ -172,7 +172,7 @@ jobs:
           clean: false
 
       - name: Mount Nix store sticky disk (clones warmed snapshot)
-        uses: useblacksmith/stickydisk@v1
+        uses: useblacksmith/stickydisk@13af8883542ca949a717e70fef89d15edbb29d88 # v1 before PR #58 (2b7a836c): empty-clone regression suspect
         with:
           key: ${{ github.repository }}-nix-store
           path: /nix
@@ -187,7 +187,7 @@ jobs:
       # different SHAs get distinct keys, and unused snapshots auto-evict after
       # 7 days of inactivity.
       - name: Mount binaries handoff sticky disk
-        uses: useblacksmith/stickydisk@v1
+        uses: useblacksmith/stickydisk@13af8883542ca949a717e70fef89d15edbb29d88 # v1 before PR #58 (2b7a836c): empty-clone regression suspect
         with:
           key: ${{ github.repository }}-handoff-binaries-${{ matrix.service }}-${{ github.sha }}
           path: /handoff-binaries
@@ -269,7 +269,7 @@ jobs:
           clean: false
 
       - name: Mount lambda Nix store sticky disk (clones warmed closure)
-        uses: useblacksmith/stickydisk@v1
+        uses: useblacksmith/stickydisk@13af8883542ca949a717e70fef89d15edbb29d88 # v1 before PR #58 (2b7a836c): empty-clone regression suspect
         with:
           key: ${{ github.repository }}-nix-lambdas
           path: /nix
@@ -277,7 +277,7 @@ jobs:
       # Hand the Lambda bundle to the matching deploy job over a sticky disk
       # instead of GitHub artifacts (see build-service-binaries for rationale).
       - name: Mount lambdas handoff sticky disk
-        uses: useblacksmith/stickydisk@v1
+        uses: useblacksmith/stickydisk@13af8883542ca949a717e70fef89d15edbb29d88 # v1 before PR #58 (2b7a836c): empty-clone regression suspect
         with:
           key: ${{ github.repository }}-handoff-lambdas-${{ matrix.service }}-${{ github.sha }}
           path: /handoff-lambdas
@@ -331,25 +331,6 @@ jobs:
         with:
           environment: ${{ inputs.environment }}
 
-      # Blacksmith sticky-disk snapshot commits take time to become visible to
-      # clones (measured: invisible 41s after a successful commit, visible at
-      # 75s — same region). The last build jobs commit their handoff disks
-      # moments before this job starts, and the deploy matrix starts the
-      # moment this job ends — so without a buffer, the deploy jobs for
-      # exactly the services that compiled (the changed ones) clone empty
-      # disks. Hold the gate so deploys start >=90s after the last build
-      # commit; checkout + migrations above already count toward it.
-      - name: Hold for sticky-disk snapshot visibility
-        shell: bash
-        run: |
-          remaining=$(( 90 - SECONDS ))
-          if (( remaining > 0 )); then
-            echo "Waiting ${remaining}s so handoff snapshots are clone-visible"
-            sleep "$remaining"
-          else
-            echo "Migrations took ${SECONDS}s; no extra wait needed"
-          fi
-
   deploy-services:
     name: Deploy ${{ matrix.service }}
     needs: [setup, build-service-binaries, build-lambda-artifacts, migrate-db]
@@ -394,29 +375,24 @@ jobs:
       # mount an empty disk.
       - name: Mount binaries handoff sticky disk
         if: ${{ steps.check-artifacts.outputs.has_binaries == 'true' }}
-        uses: useblacksmith/stickydisk@v1
+        uses: useblacksmith/stickydisk@13af8883542ca949a717e70fef89d15edbb29d88 # v1 before PR #58 (2b7a836c): empty-clone regression suspect
         with:
           key: ${{ github.repository }}-handoff-binaries-${{ matrix.service }}-${{ github.sha }}
           path: /handoff-binaries
-          # Read-only consumer: never commit the clone back over the build
-          # job's snapshot.
-          commit: 'false'
 
       - name: Mount lambdas handoff sticky disk
         if: ${{ steps.check-artifacts.outputs.has_lambdas == 'true' }}
-        uses: useblacksmith/stickydisk@v1
+        uses: useblacksmith/stickydisk@13af8883542ca949a717e70fef89d15edbb29d88 # v1 before PR #58 (2b7a836c): empty-clone regression suspect
         with:
           key: ${{ github.repository }}-handoff-lambdas-${{ matrix.service }}-${{ github.sha }}
           path: /handoff-lambdas
-          # Read-only consumer (see above).
-          commit: 'false'
 
       # Cache Pulumi's provider plugins ($PULUMI_HOME/plugins) on a sticky disk.
       # Plugins are version-pinned by infra/ and identical across services, so a
       # single stable-keyed disk is shared by every deploy job: the first run
       # downloads + commits, later runs clone it warm and skip the ~45s pull.
       - name: Cache Pulumi plugins (sticky disk)
-        uses: useblacksmith/stickydisk@v1
+        uses: useblacksmith/stickydisk@13af8883542ca949a717e70fef89d15edbb29d88 # v1 before PR #58 (2b7a836c): empty-clone regression suspect
         with:
           key: ${{ github.repository }}-pulumi-plugins
           path: /pulumi/plugins
