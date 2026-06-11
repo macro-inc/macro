@@ -8,6 +8,8 @@ import { Admin } from './Admin';
 import { Appearance } from './Appearance';
 import { MobileTabs } from '@core/component/MobileTabs';
 import { Account } from './Account';
+import { Email } from './Email';
+import { GitHub } from './GitHub';
 import { Shortcuts } from './Shortcuts';
 import { Team } from './Team';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
@@ -144,7 +146,7 @@ function SettingsPanel(props: SettingsPanelProps) {
           <MobileTabs
             list={flatTabs().map((tab) => ({ value: tab.tab, label: tab.label }))}
             value={activeTabId()}
-            defaultValue="Appearance"
+            defaultValue="Account"
             onChange={handleTabChange}
           />
         </div>
@@ -206,6 +208,16 @@ function SettingsPanel(props: SettingsPanelProps) {
           <Show when={isCurrentTab('Team')}>
             <Suspense>
               <Team />
+            </Suspense>
+          </Show>
+          <Show when={isCurrentTab('Email')}>
+            <Suspense>
+              <Email />
+            </Suspense>
+          </Show>
+          <Show when={isCurrentTab('GitHub')}>
+            <Suspense>
+              <GitHub />
             </Suspense>
           </Show>
           <Show when={isCurrentTab('Mobile App')}>

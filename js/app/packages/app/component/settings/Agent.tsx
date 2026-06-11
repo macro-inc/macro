@@ -332,13 +332,14 @@ function Connectors() {
 
   return (
     <div class="px-6 py-4 flex flex-col gap-4">
-      <div class="flex items-center justify-between">
-          <div class="text-sm">
-            Connect the Macro agent to external MCP servers
-          </div>
+      <div class="flex items-center justify-between gap-4">
+        <div class="text-sm">
+          Connect the Macro agent to external MCP servers
+        </div>
         <Button
           variant="active"
           size="sm"
+          class="shrink-0"
           onClick={() => { setShowAddDialog(true) }}
         >
           Add Server
