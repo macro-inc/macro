@@ -101,7 +101,7 @@ import CheckIcon from '@phosphor/check.svg';
 import InfoIcon from '@phosphor/info.svg';
 import Spinner from '@phosphor/spinner.svg';
 import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
-import { SYSTEM_PROPERTY_IDS } from '@property/constants';
+import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { useQueryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
 import { invalidateEntityNotifications } from '@queries/notification/user-notifications';
@@ -137,6 +137,7 @@ export const SoupSectionHeader = (props: {
   children: JSX.Element;
   onClick?: () => void;
   highlighted?: boolean;
+  class?: string;
 }) => {
   return (
     <Layer depth={2}>
@@ -145,9 +146,10 @@ export const SoupSectionHeader = (props: {
         type={props.onClick ? 'button' : undefined}
         onClick={props.onClick}
         class={cn(
-          'group/header w-[calc(100%-0.5rem)] mx-1 mb-1 rounded px-2 py-2 flex items-center gap-2.5 text-xs font-semibold tracking-tight',
+          'group/header relative w-[calc(100%-0.5rem)] mx-1 my-0.5 rounded px-2 py-2 flex items-center gap-2.5 text-xs font-semibold tracking-tight',
           'text-text-muted bg-surface border border-edge-muted relative',
           props.onClick && 'hover:bg-active',
+          props.class,
           props.highlighted && 'ring ring-edge bg-active ring-inset'
         )}
       >
@@ -177,6 +179,19 @@ const AssigneeGroupContent = (props: {
   );
 };
 
+const STATUS_GROUP_HEADER_TINTS: Record<string, string> = {
+  [PROPERTY_OPTION_IDS.STATUS.NOT_STARTED]:
+    'bg-task/5 border-task/10 hover:bg-task/10',
+  [PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS]:
+    'bg-alert/5 border-alert/10 hover:bg-alert/10',
+  [PROPERTY_OPTION_IDS.STATUS.IN_REVIEW]:
+    'bg-note/5 border-note/10 hover:bg-note/10',
+  [PROPERTY_OPTION_IDS.STATUS.COMPLETED]:
+    'bg-accent/5 border-accent/10 hover:bg-accent/10',
+  [PROPERTY_OPTION_IDS.STATUS.CANCELED]:
+    'bg-ink/5 border-ink/10 hover:bg-ink/10',
+};
+
 const DefaultGroupHeader = (
   props: GroupHeaderProps & { highlighted?: boolean }
 ) => {
@@ -193,13 +208,29 @@ const DefaultGroupHeader = (
     return tryMacroId(props.group.key);
   });
 
+  const statusTint = createMemo(() => {
+    const field = groupByField();
+    if (
+      field?.type !== 'property' ||
+      field.propertyDefinitionId !== SYSTEM_PROPERTY_IDS.STATUS
+    ) {
+      return;
+    }
+
+    const optionId = props.group.value ?? props.group.key;
+    if (typeof optionId !== 'string') return;
+
+    return STATUS_GROUP_HEADER_TINTS[optionId];
+  });
+
   return (
     <SoupSectionHeader
       onClick={() => props.group.toggle()}
       highlighted={props.highlighted}
+      class={statusTint()}
     >
       <Layer depth={3}>
-        <div class="flex items-center justify-center size-4.5 rounded-xs bg-surface group-hover/header:bg-active">
+        <div class="flex items-center justify-center size-4.5 rounded-xs group-hover/header:bg-ink/5">
           <ChevronRightIcon
             class={cn('size-2.5', {
               'rotate-90': props.group.isExpanded(),
