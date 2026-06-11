@@ -548,7 +548,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                 <div
                   ref={props.horizontalScroll ? setChipsScrollRef : undefined}
                   class={cn(
-                    'flex gap-1.5 text-ink scrollbar-hidden',
+                    'flex items-center gap-1.5 text-ink scrollbar-hidden',
                     props.horizontalScroll
                       ? 'flex-nowrap overflow-x-auto sm:flex-wrap sm:overflow-x-hidden sm:max-h-37.5 sm:overflow-y-auto pb-0.5 sm:pb-0'
                       : 'flex-wrap max-h-37.5 overflow-y-auto'

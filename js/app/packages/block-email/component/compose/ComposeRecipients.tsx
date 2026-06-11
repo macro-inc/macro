@@ -135,7 +135,7 @@ export function ComposeRecipients(props: {
       hideBorder
       class={cn(
         'bg-transparent [&_input]:ml-0!',
-        isMobile() && '[&_input]:min-w-16!'
+        isMobile() && '[&_input]:min-w-16! [&_input]:min-h-9!'
       )}
       noPadding
       disabled={ctx.disabled()}
