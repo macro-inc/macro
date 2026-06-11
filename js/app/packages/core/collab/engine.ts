@@ -1,10 +1,10 @@
 import { type InferType, SyncDirection } from '@loro-mirror/packages/core/src';
-import { match } from 'ts-pattern';
 import { logger } from '@observability/logger';
 import { Mutex } from 'async-mutex';
 import type { VersionVector } from 'loro-crdt';
 import type { ResultAsync } from 'neverthrow';
 import { type Accessor, createEffect, createSignal, on } from 'solid-js';
+import { match } from 'ts-pattern';
 import type { Awareness } from './awareness';
 import { type LoroManager, LoroStateTag, type StateUpdate } from './manager';
 import type { GenericRootSchema, LoroRawUpdate, RawUpdate } from './shared';
@@ -109,8 +109,13 @@ export class SyncEngine<S extends GenericRootSchema, D> {
     );
     this.crossTabChannel.onmessage = (e: MessageEvent<CrossTabMessage>) => {
       match(e.data)
-        .with({ type: 'update' }, (msg) => void this.handleRemoteUpdate(msg.data))
-        .with({ type: 'awareness' }, (msg) => this.awareness.importRemoteAwareness(msg.data))
+        .with(
+          { type: 'update' },
+          (msg) => void this.handleRemoteUpdate(msg.data)
+        )
+        .with({ type: 'awareness' }, (msg) =>
+          this.awareness.importRemoteAwareness(msg.data)
+        )
         .exhaustive();
     };
 
@@ -224,7 +229,10 @@ export class SyncEngine<S extends GenericRootSchema, D> {
     const awarenessUpdate = this.awareness.getEncodedLocalAwareness();
     if (!awarenessUpdate) return;
     this.syncs.live.pushAwareness(awarenessUpdate);
-    this.crossTabChannel?.postMessage({ type: 'awareness', data: awarenessUpdate });
+    this.crossTabChannel?.postMessage({
+      type: 'awareness',
+      data: awarenessUpdate,
+    });
   }
 
   private async handleLocalUpdates(update: LoroRawUpdate) {

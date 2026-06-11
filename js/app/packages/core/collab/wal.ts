@@ -11,10 +11,7 @@ export type WALEntry<T> = {
   createdAt: number;
 };
 
-export function hasExpired<T>(
-  entry: WALEntry<T>,
-  cutoff: number
-): boolean {
+export function hasExpired<T>(entry: WALEntry<T>, cutoff: number): boolean {
   return !entry.delivered && entry.createdAt < cutoff;
 }
 

@@ -5,12 +5,7 @@ import type { GenericRootSchema, LoroRawUpdate, RawUpdate } from './shared';
 import type { SnapshotStore } from './snapshot-store';
 import type { SyncSourceEvent } from './source';
 import { type LiveSyncSource, SyncSourceStatus } from './source';
-import {
-  type WALEntry,
-  type WALStore,
-  WALSyncer,
-  hasExpired,
-} from './wal';
+import { hasExpired, type WALEntry, type WALStore, WALSyncer } from './wal';
 
 export class MockSnapshotStore<T> implements SnapshotStore<T> {
   private snapshot: T | null = null;
@@ -82,11 +77,7 @@ export class MockWALStore<T> implements WALStore<T> {
   public markClean(): void {}
 
   /** Test helper: seed an entry with an explicit createdAt timestamp. */
-  public seedEntry(
-    update: T,
-    createdAt: number,
-    delivered = false
-  ): number {
+  public seedEntry(update: T, createdAt: number, delivered = false): number {
     const id = this.nextId++;
     this.entries.push({ id, update, delivered, createdAt });
     return id;
