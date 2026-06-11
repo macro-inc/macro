@@ -11,6 +11,13 @@ export type WALEntry<T> = {
   createdAt: number;
 };
 
+export function hasExpired<T>(
+  entry: WALEntry<T>,
+  cutoff: number
+): boolean {
+  return !entry.delivered && entry.createdAt < cutoff;
+}
+
 export interface WALStore<T> {
   append(update: T): Promise<void>;
   getAll(): Promise<WALEntry<T>[]>;
@@ -176,7 +183,7 @@ export class BrowserWALStore<T> implements WALStore<T> {
     const store = tx.objectStore('updates');
     let deleted = 0;
     for (const row of entries) {
-      if (row.id !== undefined && row.createdAt < cutoff) {
+      if (row.id !== undefined && hasExpired(row, cutoff)) {
         await store.delete(row.id);
         deleted++;
       }

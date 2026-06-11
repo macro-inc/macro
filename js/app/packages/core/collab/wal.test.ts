@@ -226,6 +226,22 @@ describe('WALSyncer', () => {
     expect(remaining.map((e) => e.update)).toEqual([new Uint8Array([2])]);
   });
 
+  it('pruneExpired keeps delivered entries even when expired', async () => {
+    const walStore = new MockWALStore<RawUpdate>();
+    const now = Date.now();
+    walStore.seedEntry(new Uint8Array([1]), now - WAL_TTL_MS - 1000, true); // expired + delivered
+    walStore.seedEntry(new Uint8Array([2]), now - WAL_TTL_MS - 1000); // expired, undelivered
+    walStore.seedEntry(new Uint8Array([3]), now - 60_000); // fresh
+
+    const deleted = await walStore.pruneExpired(WAL_TTL_MS);
+
+    expect(deleted).toBe(1); // only the undelivered expired entry
+    const remaining = await walStore.getAll();
+    expect(remaining).toHaveLength(2);
+    expect(remaining.map((e) => e.update)).toContainEqual(new Uint8Array([1])); // delivered survives
+    expect(remaining.map((e) => e.update)).toContainEqual(new Uint8Array([3])); // fresh survives
+  });
+
   it('prunes expired entries on construction so cold-start replay skips them', async () => {
     const live = new MockLiveSyncSource();
     const walStore = new MockWALStore<RawUpdate>();

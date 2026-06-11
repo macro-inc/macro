@@ -5,7 +5,12 @@ import type { GenericRootSchema, LoroRawUpdate, RawUpdate } from './shared';
 import type { SnapshotStore } from './snapshot-store';
 import type { SyncSourceEvent } from './source';
 import { type LiveSyncSource, SyncSourceStatus } from './source';
-import { type WALEntry, type WALStore, WALSyncer } from './wal';
+import {
+  type WALEntry,
+  type WALStore,
+  WALSyncer,
+  hasExpired,
+} from './wal';
 
 export class MockSnapshotStore<T> implements SnapshotStore<T> {
   private snapshot: T | null = null;
@@ -66,7 +71,7 @@ export class MockWALStore<T> implements WALStore<T> {
   public async pruneExpired(ttlMs: number): Promise<number> {
     const cutoff = Date.now() - ttlMs;
     const before = this.entries.length;
-    this.entries = this.entries.filter((e) => e.createdAt >= cutoff);
+    this.entries = this.entries.filter((e) => !hasExpired(e, cutoff));
     return before - this.entries.length;
   }
 
@@ -77,9 +82,13 @@ export class MockWALStore<T> implements WALStore<T> {
   public markClean(): void {}
 
   /** Test helper: seed an entry with an explicit createdAt timestamp. */
-  public seedEntry(update: T, createdAt: number): number {
+  public seedEntry(
+    update: T,
+    createdAt: number,
+    delivered = false
+  ): number {
     const id = this.nextId++;
-    this.entries.push({ id, update, delivered: false, createdAt });
+    this.entries.push({ id, update, delivered, createdAt });
     return id;
   }
 }
