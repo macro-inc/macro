@@ -50,6 +50,11 @@ export function useSaveDraftMutation(
           const threadId = data.draft.thread_db_id;
           if (!threadId) return;
           refetchSoupEntity(threadId, 'emailThread');
+          // Reopening the thread reads the messages cache; drop it so the
+          // saved draft body isn't served stale.
+          queryClient.invalidateQueries({
+            queryKey: emailKeys.threadMessages(threadId).queryKey,
+          });
         },
       },
       callbacks
