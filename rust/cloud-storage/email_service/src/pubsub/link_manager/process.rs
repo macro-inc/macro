@@ -302,14 +302,13 @@ async fn handle_delete(
                     // id, so a match identifies the stub; a mismatch means the link still ran
                     // on a human connector's grant (relocation never completed) and there is
                     // no stub to remove. The endpoint refuses active users as a second guard.
-                    if link.fusionauth_user_id == minted_id.to_string() {
-                        if let Err(e) = ctx
+                    if link.fusionauth_user_id == minted_id.to_string()
+                        && let Err(e) = ctx
                             .auth_service_client
                             .delete_inbox_grant_user(&link.fusionauth_user_id)
                             .await
-                        {
-                            tracing::error!(error=?e, "Failed to delete FusionAuth stub for promoted shared mailbox");
-                        }
+                    {
+                        tracing::error!(error=?e, "Failed to delete FusionAuth stub for promoted shared mailbox");
                     }
                 }
                 Ok(None) => {}
