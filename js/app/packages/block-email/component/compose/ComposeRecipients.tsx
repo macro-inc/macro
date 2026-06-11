@@ -42,13 +42,15 @@ function ComposeFieldRow(props: {
 
   return (
     <div
-      class="flex items-center gap-2 border-b border-edge-muted focus-within:border-accent"
+      class="flex items-center gap-2 py-1 border-b border-edge-muted focus-within:border-accent"
       classList={{ 'border-accent bg-accent/10': isDragOver() }}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      <div class="text-sm w-7 shrink-0 text-ink-placeholder">{props.label}</div>
+      <div class="text-sm w-14 shrink-0 text-ink-placeholder">
+        {props.label}
+      </div>
       <div class="flex-1">{props.children}</div>
     </div>
   );
@@ -123,7 +125,8 @@ export function ComposeRecipients(props: {
           placeholder="Macro users or email addresses"
           focusOnMount={ctx.focusRecipientsOnMount}
           hideBorder
-          class="bg-transparent"
+          class="bg-transparent [&_input]:ml-0!"
+          noPadding
           disabled={ctx.disabled()}
           includeSelf={ctx.includeSelf}
           onChipDragStart={(option, e) => handleChipDragStart('to', option, e)}
@@ -153,7 +156,8 @@ export function ComposeRecipients(props: {
             setSelectedOptions={(next) => ctx.setRecipients('cc', next)}
             placeholder="Macro users or email addresses"
             hideBorder
-            class="bg-transparent"
+            class="bg-transparent [&_input]:ml-0!"
+            noPadding
             disabled={ctx.disabled()}
             onChipDragStart={(option, e) =>
               handleChipDragStart('cc', option, e)
@@ -180,7 +184,8 @@ export function ComposeRecipients(props: {
             setSelectedOptions={(next) => ctx.setRecipients('bcc', next)}
             placeholder="Macro users or email addresses"
             hideBorder
-            class="bg-transparent"
+            class="bg-transparent [&_input]:ml-0!"
+            noPadding
             disabled={ctx.disabled()}
             onChipDragStart={(option, e) =>
               handleChipDragStart('bcc', option, e)

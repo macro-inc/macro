@@ -8,14 +8,14 @@ export function ComposeSubject(props: {
 
   return (
     <div class="w-full flex items-center gap-2 border-b border-edge-muted focus-within:border-accent py-2">
-      <div class="shrink-0 text-ink-placeholder">Subject</div>
+      <div class="text-sm w-14 shrink-0 text-ink-placeholder">Subject</div>
       <div class="flex-1">
         <input
           ref={props.inputRef}
           type="text"
           value={ctx.subject()}
           placeholder="Subject"
-          class="w-full resize-none placeholder:text-ink-placeholder p-1 ml-1"
+          class="w-full resize-none text-sm placeholder:text-ink-placeholder p-1"
           onInput={(e) => ctx.setSubject(e.currentTarget.value)}
           disabled={ctx.disabled()}
         />
