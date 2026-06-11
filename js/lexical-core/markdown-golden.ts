@@ -1,4 +1,5 @@
-import MARKDOWN_GOLDEN_URL from './markdown-golden.1.bin?url';
+// Served from /public so the URL is stable and can be preloaded from index.html.
+const MARKDOWN_GOLDEN_URL = '/markdown-golden.1.bin';
 
 let goldenPromise: Promise<Uint8Array> | null = null;
 

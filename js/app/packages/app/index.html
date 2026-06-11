@@ -25,6 +25,8 @@
       user's mobile device or desktop. See https://developers.google.com/web/fundamentals/web-app-manifest/
     -->
     <link rel="manifest" href="/manifest.json" />
+    <!-- Preload the blank markdown Loro snapshot so create-new-doc is instant. -->
+    <link rel="preload" href="/markdown-golden.1.bin" as="fetch" crossorigin />
   </head>
 
   <body>

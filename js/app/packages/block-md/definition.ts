@@ -7,11 +7,14 @@ import {
 import { ENABLE_MARKDOWN_LIVE_COLLABORATION } from '@core/constant/featureFlags';
 import { waitForDocumentSyncServiceReady } from '@queries/storage/document-location';
 import { storageServiceClient } from '@service-storage/client';
+import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
+import type { DocumentMetadata } from '@service-storage/generated/schemas/documentMetadata';
 import { makeFileFromBlob } from '@service-storage/util/makeFileFromBlob';
 import { createSyncServiceSource } from '@service-sync/source';
 import { err, ok } from 'neverthrow';
 import MarkdownBlock from './component/Block';
 import type { MarkdownRewriteOutput } from './signal/rewriteSignal';
+import { consumeMdCreate } from './util/mdCreateCache';
 
 export const definition = defineBlock({
   name: 'md',
@@ -35,53 +38,62 @@ export const definition = defineBlock({
         });
       }
 
-      const [maybeDocument, maybeLocation, maybeToken] = await Promise.all([
-        loadResult(storageServiceClient.getDocumentMetadata({ documentId })),
-        loadResult(storageServiceClient.getDocumentLocation({ documentId })),
-        storageServiceClient.permissionsTokens.createPermissionToken({
-          document_id: documentId,
-        }),
-      ]);
+      const pre = consumeMdCreate(documentId);
 
-      if (maybeToken.isErr()) {
-        return LoadErrors.UNAUTHORIZED;
-      }
+      let token: string;
+      let documentMetadata: DocumentMetadata;
+      let userAccessLevel: AccessLevel;
 
-      const { token } = maybeToken.value;
+      if (pre) {
+        token = pre.token;
+        documentMetadata = pre.documentMetadata;
+        userAccessLevel = pre.userAccessLevel;
+      } else {
+        const [maybeDocument, maybeLocation, maybeToken] = await Promise.all([
+          loadResult(storageServiceClient.getDocumentMetadata({ documentId })),
+          loadResult(storageServiceClient.getDocumentLocation({ documentId })),
+          storageServiceClient.permissionsTokens.createPermissionToken({
+            document_id: documentId,
+          }),
+        ]);
 
-      if (maybeDocument.isErr()) return err(maybeDocument.error);
-      if (maybeLocation.isErr()) return err(maybeLocation.error);
+        if (maybeToken.isErr()) return LoadErrors.UNAUTHORIZED;
+        if (maybeDocument.isErr()) return err(maybeDocument.error);
+        if (maybeLocation.isErr()) return err(maybeLocation.error);
 
-      const documentResult = maybeDocument.value;
-      const { documentMetadata, userAccessLevel } = documentResult;
-      let { data: location } = maybeLocation.value;
+        token = maybeToken.value.token;
+        const documentResult = maybeDocument.value;
+        documentMetadata = documentResult.documentMetadata;
+        userAccessLevel = documentResult.userAccessLevel;
 
-      if (
-        location.type === 'presignedUrl' &&
-        location.content.state === 'pending'
-      ) {
-        location = await waitForDocumentSyncServiceReady({
-          documentId,
-        }).catch((error) => {
+        let { data: location } = maybeLocation.value;
+        if (
+          location.type === 'presignedUrl' &&
+          location.content.state === 'pending'
+        ) {
+          location = await waitForDocumentSyncServiceReady({
+            documentId,
+          }).catch((error) => {
+            console.error(
+              'Failed waiting for markdown sync-service location',
+              error
+            );
+            return location;
+          });
+        }
+
+        // Markdown initialization and lifecycle persistence are backend-owned.
+        // If a markdown document still resolves to object storage here, opening
+        // it would require a backend repair/backfill path rather than a frontend
+        // sync-service mutation that leaves DB content metadata inconsistent.
+        if (location.type !== 'syncServiceContent') {
           console.error(
-            'Failed waiting for markdown sync-service location',
-            error
+            'Markdown document is not available in sync-service',
+            documentId,
+            location.content
           );
-          return location;
-        });
-      }
-
-      // Markdown initialization and lifecycle persistence are backend-owned.
-      // If a markdown document still resolves to object storage here, opening
-      // it would require a backend repair/backfill path rather than a frontend
-      // sync-service mutation that leaves DB content metadata inconsistent.
-      if (location.type !== 'syncServiceContent') {
-        console.error(
-          'Markdown document is not available in sync-service',
-          documentId,
-          location.content
-        );
-        return LoadErrors.INVALID;
+          return LoadErrors.INVALID;
+        }
       }
 
       const { source: syncSource, doInitialSync } = createSyncServiceSource(

@@ -126,6 +126,8 @@ pub struct DocumentRouterState<T, Svc> {
     /// Backend-owned document creation use case.
     #[cfg(feature = "document_create_adapters")]
     pub creator: DefaultDocumentCreator<T>,
+    /// JWT secret for signing document permission tokens.
+    pub document_permission_jwt_secret: String,
 }
 
 // Manual Clone impl so T and Svc don't need to be Clone (they're behind Arc).
@@ -138,6 +140,7 @@ impl<T, Svc> Clone for DocumentRouterState<T, Svc> {
             task_dedup_service: self.task_dedup_service.clone(),
             #[cfg(feature = "document_create_adapters")]
             creator: self.creator.clone(),
+            document_permission_jwt_secret: self.document_permission_jwt_secret.clone(),
         }
     }
 }

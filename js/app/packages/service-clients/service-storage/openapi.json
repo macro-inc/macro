@@ -4550,11 +4550,19 @@
                 "schema": {
                   "type": "object",
                   "description": "Response for creating a markdown document.",
-                  "required": ["documentId"],
+                  "required": ["documentId", "documentMetadata", "token"],
                   "properties": {
                     "documentId": {
                       "type": "string",
                       "description": "The document ID of the created markdown document."
+                    },
+                    "documentMetadata": {
+                      "$ref": "#/components/schemas/DocumentResponseMetadata",
+                      "description": "Metadata for the created document, so callers can skip a round-trip fetch."
+                    },
+                    "token": {
+                      "type": "string",
+                      "description": "Permission token for the sync service, so callers can skip a round-trip fetch."
                     }
                   }
                 }
@@ -4694,11 +4702,15 @@
                 "schema": {
                   "type": "object",
                   "description": "Response for creating a task.",
-                  "required": ["documentId"],
+                  "required": ["documentId", "documentMetadata", "token"],
                   "properties": {
                     "documentId": {
                       "type": "string",
                       "description": "The document ID of the created task."
+                    },
+                    "documentMetadata": {
+                      "$ref": "#/components/schemas/DocumentResponseMetadata",
+                      "description": "Metadata for the created document, so callers can skip a round-trip fetch."
                     },
                     "teamId": {
                       "type": ["string", "null"],
@@ -4709,6 +4721,10 @@
                       "type": ["integer", "null"],
                       "format": "int32",
                       "description": "The task number assigned within the team."
+                    },
+                    "token": {
+                      "type": "string",
+                      "description": "Permission token for the sync service, so callers can skip a round-trip fetch."
                     }
                   }
                 }
@@ -11605,11 +11621,19 @@
       "CreateMarkdownDocumentResponse": {
         "type": "object",
         "description": "Response for creating a markdown document.",
-        "required": ["documentId"],
+        "required": ["documentId", "documentMetadata", "token"],
         "properties": {
           "documentId": {
             "type": "string",
             "description": "The document ID of the created markdown document."
+          },
+          "documentMetadata": {
+            "$ref": "#/components/schemas/DocumentResponseMetadata",
+            "description": "Metadata for the created document, so callers can skip a round-trip fetch."
+          },
+          "token": {
+            "type": "string",
+            "description": "Permission token for the sync service, so callers can skip a round-trip fetch."
           }
         }
       },
@@ -11712,11 +11736,15 @@
       "CreateTaskResponse": {
         "type": "object",
         "description": "Response for creating a task.",
-        "required": ["documentId"],
+        "required": ["documentId", "documentMetadata", "token"],
         "properties": {
           "documentId": {
             "type": "string",
             "description": "The document ID of the created task."
+          },
+          "documentMetadata": {
+            "$ref": "#/components/schemas/DocumentResponseMetadata",
+            "description": "Metadata for the created document, so callers can skip a round-trip fetch."
           },
           "teamId": {
             "type": ["string", "null"],
@@ -11727,6 +11755,10 @@
             "type": ["integer", "null"],
             "format": "int32",
             "description": "The task number assigned within the team."
+          },
+          "token": {
+            "type": "string",
+            "description": "Permission token for the sync service, so callers can skip a round-trip fetch."
           }
         }
       },

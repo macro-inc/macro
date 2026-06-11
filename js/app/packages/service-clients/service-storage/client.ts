@@ -1034,7 +1034,11 @@ export const storageServiceClient = {
     }
 
     const response = result.value;
-    return ok({ documentId: response.documentId });
+    return ok({
+      documentId: response.documentId,
+      documentMetadata: response.documentMetadata,
+      token: response.token,
+    });
   },
 
   /**

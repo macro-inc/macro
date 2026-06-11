@@ -3,6 +3,7 @@
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::{DocumentMetadata, FileType};
+use model::document::response::DocumentResponseMetadata;
 
 use super::response::DocumentResponse;
 use model::sync_service::SyncServiceVersionID;
@@ -403,8 +404,12 @@ pub struct CreateMarkdownDocumentRequest {
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct CreateMarkdownDocumentResponse {
-    /// The document ID of the created markdown document.
+    /// The document ID of the created markdown document
     pub document_id: String,
+    /// Metadata for the created document
+    pub document_metadata: DocumentResponseMetadata,
+    /// A pre-generated permission token that you can use for SS
+    pub token: String,
 }
 
 /// Request body for creating a task.
@@ -436,6 +441,10 @@ pub struct CreateTaskRequest {
 pub struct CreateTaskResponse {
     /// The document ID of the created task.
     pub document_id: String,
+    /// Metadata for the created document
+    pub document_metadata: DocumentResponseMetadata,
+    /// A pre-generated permission token that you can use for SS
+    pub token: String,
     /// The team this task number is scoped to.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub team_id: Option<uuid::Uuid>,
