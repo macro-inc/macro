@@ -77,6 +77,7 @@ export function ComposeRecipients(props: {
   setShowCc: (v: boolean) => void;
   showBcc: () => boolean;
   setShowBcc: (v: boolean) => void;
+  onToRowFocusIn?: () => void;
 }) {
   const ctx = useCompose();
 
@@ -164,24 +165,17 @@ export function ComposeRecipients(props: {
     </ComposeFieldRow>
   );
 
-  // Collapse the expanded Cc/Bcc/From rows back into the combined row when
-  // the user moves on without entering any Cc/Bcc recipients (iOS Mail).
-  const collapseIfEmpty = () => {
-    if (ctx.recipients().cc.length === 0 && ctx.recipients().bcc.length === 0) {
-      props.setShowCc(false);
-      props.setShowBcc(false);
-    }
-  };
-
   const expand = () => {
     props.setShowCc(true);
     props.setShowBcc(true);
   };
 
+  const fieldLabel = (text: string) => (isMobile() ? `${text}:` : text);
+
   const toRow = (onRowFocusIn?: () => void) =>
     fieldRow(
       'to',
-      isMobile() ? 'To:' : 'To',
+      fieldLabel('To'),
       <>
         {recipientSelector('to', props.toRef, {
           focusOnMount: ctx.focusRecipientsOnMount,
@@ -197,17 +191,9 @@ export function ComposeRecipients(props: {
     );
 
   const ccRow = () =>
-    fieldRow(
-      'cc',
-      isMobile() ? 'Cc:' : 'Cc',
-      recipientSelector('cc', props.ccRef)
-    );
+    fieldRow('cc', fieldLabel('Cc'), recipientSelector('cc', props.ccRef));
   const bccRow = () =>
-    fieldRow(
-      'bcc',
-      isMobile() ? 'Bcc:' : 'Bcc',
-      recipientSelector('bcc', props.bccRef)
-    );
+    fieldRow('bcc', fieldLabel('Bcc'), recipientSelector('bcc', props.bccRef));
 
   return (
     <Show
@@ -221,7 +207,7 @@ export function ComposeRecipients(props: {
       }
     >
       <div class="flex flex-col gap-2">
-        {toRow(collapseIfEmpty)}
+        {toRow(props.onToRowFocusIn)}
         <Show
           when={isCcVisible() || isBccVisible()}
           fallback={
