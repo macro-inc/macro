@@ -2,7 +2,7 @@ import type { EmailRecipient } from '@block-email/component/EmailContext';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { isMobile } from '@core/mobile/isMobile';
 import { cn } from '@ui';
-import { createSignal, type JSX, Show } from 'solid-js';
+import { createSignal, type JSX, onCleanup, Show } from 'solid-js';
 import { FromInboxSelector } from '../FromInboxSelector';
 import { type RecipientFieldId, useCompose } from './ComposeContext';
 
@@ -158,11 +158,19 @@ export function ComposeRecipients(props: {
     requestAnimationFrame(() => inputEls[field]?.focus());
   };
 
+  // Collapsing is deferred so the transient blur of tapping a suggestion
+  // (whose selection lands via a debounced onChange) doesn't fold the row
+  // mid-entry — picking a recipient cancels the pending collapse and
+  // refocuses the input for the next one.
+  let collapseTimer: ReturnType<typeof setTimeout> | undefined;
+  onCleanup(() => clearTimeout(collapseTimer));
+
   const rowFocusHandlers = (
     field: RecipientFieldId,
     extraFocusIn?: () => void
   ): RowFocusHandlers => ({
     onRowFocusIn: () => {
+      clearTimeout(collapseTimer);
       setActiveField(field);
       extraFocusIn?.();
     },
@@ -170,7 +178,10 @@ export function ComposeRecipients(props: {
       const row = e.currentTarget as HTMLElement;
       if (e.relatedTarget instanceof Node && row.contains(e.relatedTarget))
         return;
-      setActiveField((active) => (active === field ? null : active));
+      clearTimeout(collapseTimer);
+      collapseTimer = setTimeout(() => {
+        setActiveField((active) => (active === field ? null : active));
+      }, 250);
     },
   });
 
@@ -187,7 +198,13 @@ export function ComposeRecipients(props: {
       options={ctx.recipientOptions}
       selfEmail={ctx.fromAddress?.()}
       selectedOptions={ctx.recipients()[field]}
-      setSelectedOptions={(next) => ctx.setRecipients(field, next)}
+      setSelectedOptions={(next) => {
+        ctx.setRecipients(field, next);
+        if (isMobile()) {
+          clearTimeout(collapseTimer);
+          activate(field);
+        }
+      }}
       placeholder={isMobile() ? '' : 'Macro users or email addresses'}
       focusOnMount={opts?.focusOnMount}
       hideBorder
