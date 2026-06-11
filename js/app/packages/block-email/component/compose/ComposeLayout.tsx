@@ -161,7 +161,7 @@ export function ComposeLayout(props: {
   return (
     <div ref={registerRef('containerRef')} class={props.class}>
       <div class="pb-1 w-full h-max shrink-0">
-        <div class="mb-4 h-6 flex items-center justify-between">
+        <div class="mb-4 h-6 flex items-center justify-between gap-3">
           <Show
             when={props.header}
             fallback={
@@ -176,8 +176,8 @@ export function ComposeLayout(props: {
                 }
               >
                 <Show when={ctx.fromAddress?.()}>
-                  <div class="text-xs text-ink-extra-muted/50 flex items-center gap-1">
-                    <span>from</span>
+                  <div class="text-xs text-ink-extra-muted/50 flex items-center gap-1 min-w-0">
+                    <span class="shrink-0">from</span>
                     <FromInboxSelector
                       links={ctx.fromInboxes?.() ?? []}
                       activeLinkId={ctx.selectedFromLinkId?.()}
@@ -190,25 +190,25 @@ export function ComposeLayout(props: {
           >
             {props.header}
           </Show>
-          <div class="flex gap-2 ml-auto">
+          <div class="flex items-center gap-3 ml-auto shrink-0">
             <Show when={!isCcVisible()}>
               <button
                 type="button"
-                class="text-ink-muted hover:text-ink hover:bg-hover"
+                class="px-1.5 -mx-1.5 py-1 rounded-md text-sm text-ink-muted hover:text-ink hover:bg-hover"
                 onClick={() => setShowCc(true)}
                 disabled={ctx.disabled()}
               >
-                + Cc
+                Cc
               </button>
             </Show>
             <Show when={!isBccVisible()}>
               <button
                 type="button"
-                class="text-ink-muted hover:text-ink hover:bg-hover"
+                class="px-1.5 -mx-1.5 py-1 rounded-md text-sm text-ink-muted hover:text-ink hover:bg-hover"
                 onClick={() => setShowBcc(true)}
                 disabled={ctx.disabled()}
               >
-                + Bcc
+                Bcc
               </button>
             </Show>
           </div>
