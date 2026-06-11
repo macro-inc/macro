@@ -162,6 +162,10 @@ function SoupNavigationButtons() {
   });
 
   const shouldShow = createMemo(() => {
+    // The mobile swipe layout doesn't handle mergeHistory navigations, so
+    // these controls would silently no-op there.
+    if (isMobile()) return false;
+
     const referredFrom = navigationReferredFrom();
     const isNavigableListView =
       referredFrom === 'inbox' || referredFrom === 'mail';
