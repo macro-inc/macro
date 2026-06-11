@@ -129,7 +129,7 @@ function HomeContent() {
         `
       }</style>
 
-      <div class="@container/home size-full p-2 mobile:pb-20 sm:pb-10 md:p-4">
+      <div class="@container/home size-full p-2 mobile:pb-(--mobile-content-inset-bottom) sm:pb-10 md:p-4">
         <HomeSectionBoundary title="hero">
           <section class="relative flex flex-col size-full">
             <div class="home-hero-stagger mx-auto flex flex-col items-center gap-8 justify-end sm:justify-center sm:-mt-15 max-w-2xl size-full">

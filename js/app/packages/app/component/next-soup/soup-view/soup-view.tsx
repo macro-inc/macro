@@ -4,6 +4,7 @@ import {
   useGlobalNotificationSource,
 } from '@app/component/GlobalAppState';
 import { EntityRowProvider } from '@app/component/mobile/EntityRow';
+import { FloatRegion } from '@app/component/mobile/float-regions/FloatRegion';
 import {
   makeMarkDoneAction,
   useEntityActionHotkeys,
@@ -58,7 +59,10 @@ import {
   SplitHeaderRight,
 } from '@app/component/split-layout/components/SplitHeader';
 import { SplitPanelContext } from '@app/component/split-layout/context';
-import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
+import {
+  useSplitPanel,
+  useSplitPanelOrThrow,
+} from '@app/component/split-layout/layoutUtils';
 import { isListViewID, type ListView } from '@app/constants/list-views';
 import { usePreference } from '@app/preferences/use-preference';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
@@ -118,7 +122,7 @@ import {
   Switch,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { type VirtualizerHandle, VList } from 'virtua/solid';
+import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import type { CacheSnapshot } from 'virtua/unstable_core';
 import { SoupEntitySelectionToolbar } from './soup-entity-selection-toolbar';
 import { useSoupNavigationHotkeys } from './use-soup-navigation-hotkeys';
@@ -236,7 +240,7 @@ const DefaultGroupHeader = (
  * the new soup query is still in flight.
  */
 const MobileTabLoadingBar = () => (
-  <div class="pointer-events-none absolute inset-x-0 top-0 z-10 h-0.5 overflow-hidden bg-accent/10">
+  <div class="pointer-events-none absolute inset-x-0 top-(--safe-top) z-10 h-0.5 overflow-hidden bg-accent/10">
     <div class="h-full w-2/5 rounded-full bg-accent animate-indeterminate-bar" />
   </div>
 );
@@ -522,7 +526,9 @@ export const SoupView = (props: SoupViewProps) => {
                 open={mobileSearchOpen}
                 onClose={() => setMobileSearchOpen(false)}
               />
-              <MobileSoupViewTabs />
+              <FloatRegion region="accessory">
+                <MobileSoupViewTabs />
+              </FloatRegion>
             </Show>
           </div>
         </div>
@@ -1025,7 +1031,12 @@ export const SoupViewList = (props: SoupViewListProps) => {
               <StaticMarkdownContext>
                 <Switch>
                   <Match when={source.isLoading() && !rows().length}>
-                    <LoadingBlock />
+                    {/* Non-list states pad the chrome top themselves — the
+                        panel leaves list views unpadded so rows can
+                        under-scroll the status bar. */}
+                    <div class="flex-1 min-h-0 flex flex-col mobile:pt-(--mobile-content-inset-top) mobile:pb-(--mobile-content-inset-bottom)">
+                      <LoadingBlock />
+                    </div>
                   </Match>
                   <Match
                     when={
@@ -1033,19 +1044,21 @@ export const SoupViewList = (props: SoupViewListProps) => {
                       !rows().length
                     }
                   >
-                    <div class="flex items-center gap-2 p-3 text-xs text-text-muted">
+                    <div class="flex items-center gap-2 p-3 text-xs text-text-muted mobile:mt-(--mobile-content-inset-top) mobile:mb-(--mobile-content-inset-bottom)">
                       <Spinner class="size-3 animate-spin" />
                       Searching...
                     </div>
                   </Match>
                   <Match when={!rows().length}>
-                    <EmptyState
-                      listView={currentView()}
-                      search={!!searchText()}
-                      hasRefinementsFromBase={hasActiveRefinements()}
-                      hasHiddenItems={hasHiddenItems()}
-                      onClearFilters={resetToTabDefaults}
-                    />
+                    <div class="flex-1 min-h-0 flex flex-col mobile:pt-(--mobile-content-inset-top) mobile:pb-(--mobile-content-inset-bottom)">
+                      <EmptyState
+                        listView={currentView()}
+                        search={!!searchText()}
+                        hasRefinementsFromBase={hasActiveRefinements()}
+                        hasHiddenItems={hasHiddenItems()}
+                        onClearFilters={resetToTabDefaults}
+                      />
+                    </div>
                   </Match>
                   <Match when={rows().length}>
                     <ListLayoutProvider ref={localEntityListRef}>
@@ -1306,7 +1319,9 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                   </div>
                                 </Show>
                                 <Show when={i() === rows().length - 1}>
-                                  <div class="h-15" />
+                                  {/* Desktop-only: mobile clearance comes
+                                      from the in-scroll trailing spacer. */}
+                                  <div class="h-15 mobile:hidden" />
                                 </Show>
                               </>
                             );
@@ -1383,9 +1398,15 @@ interface SoupListProps {
 const SoupList = (props: SoupListProps) => {
   const [virtualizerHandle, setVirtualizerHandle] =
     createSignal<VirtualizerHandle>();
+  const splitPanel = useSplitPanel();
 
   const itemSize = createMemo(() => props.itemSize ?? DEFAULT_ITEM_SIZE);
   const overscan = createMemo(() => props.overscan ?? DEFAULT_OVERSCAN);
+
+  // Full-frame mobile: rows under-scroll the status bar; this in-scroll
+  // spacer is their resting inset (safe-top — list views have no header).
+  const topInset = () =>
+    isMobile() ? (splitPanel?.contentOffsetTop() ?? 0) : 0;
 
   const handleScroll = (offset: number) => {
     const handle = virtualizerHandle();
@@ -1418,18 +1439,37 @@ const SoupList = (props: SoupListProps) => {
         props.class
       )}
     >
-      <VList
-        cache={props.cache}
-        ref={registerVirtualizerHandler}
+      {/* Hand-rolled VList (scroller + Virtualizer) so the full-frame mobile
+          insets can live inside the scroller: rows rest clear of the chrome
+          but still slide beneath it. `startMargin` keeps virtua's scroll
+          math correct for the leading spacer. */}
+      <div
         class={cn('overscroll-none', props.virtualizerClass)}
-        data={props.rows}
-        itemSize={itemSize()}
-        bufferSize={overscan() * itemSize()}
-        onScroll={handleScroll}
+        style={{
+          display: 'block',
+          'overflow-y': 'auto',
+          contain: 'strict',
+          width: '100%',
+          height: '100%',
+        }}
         {...soupListContainerAttribute}
       >
-        {(row, i) => props.children(row, i)}
-      </VList>
+        <div aria-hidden style={{ height: `${topInset()}px` }} />
+        <Virtualizer
+          cache={props.cache}
+          ref={registerVirtualizerHandler}
+          startMargin={topInset()}
+          data={props.rows}
+          itemSize={itemSize()}
+          bufferSize={overscan() * itemSize()}
+          onScroll={handleScroll}
+        >
+          {(row, i) => props.children(row, i)}
+        </Virtualizer>
+        <Show when={isMobile()}>
+          <div aria-hidden class="h-(--mobile-content-inset-bottom)" />
+        </Show>
+      </div>
     </div>
   );
 };

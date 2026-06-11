@@ -285,6 +285,9 @@ function useSidePanel() {
  * Pill-style tabs that switch between the main content and the side panel
  * overlay in narrow mode. Renders nothing when the layout is wide or when no
  * sections are registered, so it's safe to mount unconditionally.
+ *
+ * Hidden on mobile, where the header title island doubles as the
+ * Content/Info switcher instead (see BlockItemSplitLabel).
  */
 function NarrowTabs(props: { contentLabel?: string; infoLabel?: string }) {
   const ctx = useContext(SidePanelContext);
@@ -293,7 +296,7 @@ function NarrowTabs(props: { contentLabel?: string; infoLabel?: string }) {
   const value = () => (ctx.isOpen() ? 'info' : 'content');
 
   return (
-    <Show when={ctx.isNarrow() && ctx.hasSections()}>
+    <Show when={ctx.isNarrow() && ctx.hasSections() && !isMobile()}>
       <TabsInset
         list={[
           { value: 'content', label: props.contentLabel ?? 'Content' },

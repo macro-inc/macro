@@ -16,7 +16,7 @@ import { Popover } from '@kobalte/core/popover';
 import CaretUpIcon from '@phosphor/caret-up.svg';
 import HomeIcon from '@phosphor/house.svg';
 import { useLocation } from '@solidjs/router';
-import { cn, Layer } from '@ui';
+import { cn, islandClass } from '@ui';
 import { type Component, createSignal, For, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { setCreateMenuOpen } from '../Launcher';
@@ -63,7 +63,8 @@ function MobileDockButton(props: MobileDockButtonProps) {
       onTouchMove={props.onTouchMove}
       onTouchEnd={props.onTouchEnd}
       class={cn(
-        'pointer-events-auto flex items-center justify-center bg-surface text-ink ring ring-edge shadow-md',
+        'pointer-events-auto flex items-center justify-center',
+        islandClass,
         props.active && 'text-accent',
         props.class
       )}
@@ -100,6 +101,11 @@ function MorePopover(props: {
   const [open, setOpen] = createSignal(false);
   const [anchorRef, setAnchorRef] = createSignal<HTMLElement>();
   const [hoveredId, setHoveredId] = createSignal<string | null>(null);
+  // The menu's natural size, fed to the open/close animation as CSS vars —
+  // the popover container animates its real width/height between the dock
+  // button's size and these (see MobileDock.css).
+  const [menuRef, setMenuRef] = createSignal<HTMLDivElement>();
+  const menuSize = createElementSize(menuRef);
 
   const handleTouchMove = (e: TouchEvent) => {
     if (!open()) return;
@@ -149,8 +155,22 @@ function MorePopover(props: {
         anchorRef={anchorRef}
       >
         <Popover.Portal>
-          <Popover.Content class="more-popover-content z-modal pointer-events-auto flex w-52 flex-col gap-1 rounded-sm bg-surface p-1 shadow-lg ring ring-edge">
-            <For each={MORE_VIEWS}>
+          {/* The content box is what the open/close animation sizes; the
+              inner menu keeps its full size and bottom-right alignment, so
+              the growing container reveals it instead of reflowing it. */}
+          <Popover.Content
+            class="more-popover-content z-modal pointer-events-auto flex flex-col items-end justify-end overflow-hidden rounded-sm bg-surface shadow-lg ring ring-edge"
+            style={{
+              '--more-popover-width': menuSize.width
+                ? `${menuSize.width}px`
+                : undefined,
+              '--more-popover-height': menuSize.height
+                ? `${menuSize.height}px`
+                : undefined,
+            }}
+          >
+            <div class="flex w-52 shrink-0 flex-col gap-1 p-1" ref={setMenuRef}>
+              <For each={MORE_VIEWS}>
               {(item) => (
                 <button
                   type="button"
@@ -209,41 +229,39 @@ export function MobileDock() {
   };
 
   return (
-    <Layer depth={4}>
-      <div class="z-mobile-nav-bar pointer-events-none fixed inset-x-0 bottom-0 flex items-center gap-5 px-4 pb-6">
-        <MobileDockButton
-          icon={HomeIcon}
-          animateIcon={false}
-          class="size-10 rounded-full"
-          active={isActive('home')}
-          onClick={() => navigate('home')}
-        />
-        <MobileDockButton
-          icon={AnimatedInboxIcon}
-          class="size-10 rounded-full"
-          active={isActive('inbox')}
-          onClick={() => navigate('inbox')}
-        />
-        <MobileDockButton
-          icon={AnimatedSearchIcon}
-          label="Search"
-          class="h-10 flex-1 gap-2 rounded-full px-4"
-          onClick={() => {
-            SearchState.maybeResetState();
-            SearchState.open();
-          }}
-        />
-        <MorePopover
-          active={isMoreActive()}
-          isActive={isActive}
-          onNavigate={navigate}
-        />
-        <MobileDockButton
-          icon={AnimatedPlusIcon}
-          class="size-10 rounded-full"
-          onClick={() => setCreateMenuOpen(true)}
-        />
-      </div>
-    </Layer>
+    <div class="flex items-center gap-3 px-3">
+      <MobileDockButton
+        icon={HomeIcon}
+        animateIcon={false}
+        class="size-10 rounded-full"
+        active={isActive('home')}
+        onClick={() => navigate('home')}
+      />
+      <MobileDockButton
+        icon={AnimatedInboxIcon}
+        class="size-10 rounded-full"
+        active={isActive('inbox')}
+        onClick={() => navigate('inbox')}
+      />
+      <MobileDockButton
+        icon={AnimatedSearchIcon}
+        label="Search"
+        class="h-10 flex-1 gap-1 rounded-full px-3"
+        onClick={() => {
+          SearchState.maybeResetState();
+          SearchState.open();
+        }}
+      />
+      <MorePopover
+        active={isMoreActive()}
+        isActive={isActive}
+        onNavigate={navigate}
+      />
+      <MobileDockButton
+        icon={AnimatedPlusIcon}
+        class="size-10 rounded-full"
+        onClick={() => setCreateMenuOpen(true)}
+      />
+    </div>
   );
 }

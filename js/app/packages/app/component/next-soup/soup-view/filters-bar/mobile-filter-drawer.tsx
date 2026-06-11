@@ -30,7 +30,7 @@ import SearchIcon from '@phosphor/magnifying-glass.svg';
 import XIcon from '@phosphor/x.svg';
 import SlidersHorizontalIcon from '@phosphor-icons/core/regular/sliders-horizontal.svg?component-solid';
 import { useContacts } from '@queries/contacts/contacts';
-import { Button, cn } from '@ui';
+import { Button, cn, islandClass } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { ConsolidatedFilterChip } from './consolidated-filter-chip';
 import {
@@ -201,7 +201,10 @@ export const MobileFilterDrawer = () => {
           aria-label="Open filters"
           variant="ghost"
           size="sm"
-          class="pointer-events-auto relative size-10 shrink-0 rounded-full bg-surface shadow-md ring ring-edge [&_svg]:size-5"
+          class={cn(
+            'pointer-events-auto relative size-10 shrink-0 rounded-full [&_svg]:size-5',
+            islandClass
+          )}
         >
           <SlidersHorizontalIcon />
           <Show when={activeCount() > 0}>

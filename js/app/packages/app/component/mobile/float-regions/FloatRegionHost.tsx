@@ -11,7 +11,7 @@ import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
  * Positioned `absolute` (not `fixed`) so the --dvh squish from
  * useAppSquishHandlers lifts the whole stack above the virtual keyboard.
  *
- * Publishes its height as `--mobile-float-bottom` on <html> for content that
+ * Publishes its height as `--mobile-content-inset-bottom` on <html> for content that
  * needs bottom clearance. Empty regions collapse (`empty:hidden`), so the
  * variable tracks what is actually visible.
  */
@@ -23,13 +23,13 @@ export function FloatRegionHost() {
     const height = size.height ?? 0;
     FloatRegions.setHostHeight(height);
     document.documentElement.style.setProperty(
-      '--mobile-float-bottom',
+      '--mobile-content-inset-bottom',
       `${height}px`
     );
   });
   onCleanup(() => {
     FloatRegions.setHostHeight(0);
-    document.documentElement.style.removeProperty('--mobile-float-bottom');
+    document.documentElement.style.removeProperty('--mobile-content-inset-bottom');
   });
 
   return (

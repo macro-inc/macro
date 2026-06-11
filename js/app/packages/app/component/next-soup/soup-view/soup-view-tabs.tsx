@@ -20,7 +20,7 @@ import { TabsInset } from '@core/component/TabsInset';
 import { TabsInsetDropdown } from '@core/component/TabsInsetDropdown';
 import { useUserContext } from '@core/context/user';
 import { hapticImpact } from '@core/mobile/haptics';
-import { cn, Layer } from '@ui';
+import { cn } from '@ui';
 import { useIsTeamAdmin } from '@queries/team/teams';
 import { batch, createEffect, createMemo, For, Match, Switch } from 'solid-js';
 
@@ -284,26 +284,24 @@ export const MobileSoupViewTabs = () => {
   const listView = useCurrentListView();
 
   return (
-    <Layer depth={4}>
-      <div class="pointer-events-none absolute inset-x-0 bottom-[3.5rem] z-mobile-nav-bar flex items-center gap-2 px-4">
-        <MobileFilterDrawer />
-        <div class="pointer-events-auto flex min-w-0 gap-2 overflow-x-auto scrollbar-hidden py-1">
-          <Switch>
-            <For
-              each={
-                Object.keys(VIEW_TAB_LISTS) as (keyof typeof VIEW_TAB_LISTS)[]
-              }
-            >
-              {(v) => (
-                <Match when={listView() === v}>
-                  <MobileViewTabs view={v} />
-                </Match>
-              )}
-            </For>
-          </Switch>
-        </div>
+    <div class="flex items-center gap-2 px-3">
+      <MobileFilterDrawer />
+      <div class="pointer-events-auto flex min-w-0 gap-2 overflow-x-auto scrollbar-hidden py-1">
+        <Switch>
+          <For
+            each={
+              Object.keys(VIEW_TAB_LISTS) as (keyof typeof VIEW_TAB_LISTS)[]
+            }
+          >
+            {(v) => (
+              <Match when={listView() === v}>
+                <MobileViewTabs view={v} />
+              </Match>
+            )}
+          </For>
+        </Switch>
       </div>
-    </Layer>
+    </div>
   );
 };
 

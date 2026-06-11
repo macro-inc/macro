@@ -4,6 +4,7 @@ import type { ItemType } from '@service-storage/client';
 import { Button, cn } from '@ui';
 import { type Component, For, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { HeaderIsland } from './split-layout/components/HeaderIsland';
 import {
   type FileOperation,
   SplitFileMenu,
@@ -66,7 +67,9 @@ export function ResponsivePermissionsBadge() {
       }
     >
       <SplitHeaderLeft>
-        <SplitPermissionsBadge />
+        <HeaderIsland>
+          <SplitPermissionsBadge />
+        </HeaderIsland>
       </SplitHeaderLeft>
     </Show>
   );
