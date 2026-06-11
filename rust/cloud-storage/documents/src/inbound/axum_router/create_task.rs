@@ -80,6 +80,7 @@ pub async fn create_task_handler<
     let document_id = created.document_id().to_string();
     spawn_task_duplicate_detection(
         state.task_dedup_service.clone(),
+        state.lexical_client.clone(),
         NewTask {
             document_id: document_id.clone(),
             owner,

@@ -11,6 +11,7 @@ use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::{
     DocumentAccessExtractor, OptionalMacroUserTeamExtractor,
 };
+use lexical_client::{LexicalClient, parse_markdown::MarkdownTarget};
 use model::document::DocumentBasic;
 use model::response::GenericSuccessResponse;
 use model_user::axum_extractor::MacroUserExtractor;
@@ -50,7 +51,11 @@ pub struct DismissTaskDuplicatesRequest {
 pub struct TaskSimilaritySearchRequest {
     /// Draft task title.
     pub task_name: String,
-    /// Draft task markdown body.
+    /// Draft task body as embedding-format markdown. The composer produces it
+    /// client-side with lexical-core's `markdownToEmbeddingText` (the same
+    /// format lexical-service's `/markdown/{id}?target=embedding` renders), so
+    /// this latency-sensitive endpoint embeds the text as-is without a
+    /// lexical-service round trip.
     pub markdown: Option<String>,
     /// Whether the task will be shared with the user's team, which widens the
     /// search scope to team tasks.
@@ -177,8 +182,28 @@ pub async fn delete_this_duplicate_task_handler<T: DocumentService, Svc: EntityA
 }
 
 /// Spawn duplicate detection for a newly created task.
-pub fn spawn_task_duplicate_detection(task_dedup_service: Arc<PgTaskDedupService>, task: NewTask) {
+///
+/// The created document's body is fetched from lexical-service rendered as
+/// embedding-format markdown so the stored embedding matches the format the
+/// composer's similarity search sends. When that fetch fails, the markdown the
+/// task was created with (internal format) is used as a fallback.
+pub fn spawn_task_duplicate_detection(
+    task_dedup_service: Arc<PgTaskDedupService>,
+    lexical_client: Arc<LexicalClient>,
+    mut task: NewTask,
+) {
     tokio::spawn(async move {
+        match lexical_client
+            .get_markdown(&task.document_id, MarkdownTarget::Embedding)
+            .await
+        {
+            Ok(markdown) => task.markdown = markdown,
+            Err(error) => tracing::warn!(
+                error=?error,
+                document_id=%task.document_id,
+                "failed to fetch embedding markdown for task dedup; using creation markdown"
+            ),
+        }
         let _ = task_dedup_service
             .detect_new_task(task)
             .await

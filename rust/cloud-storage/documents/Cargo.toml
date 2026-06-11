@@ -31,6 +31,7 @@ ai_tools = [
 axum = [
   "dep:axum",
   "dep:axum-extra",
+  "dep:lexical_client",
   "dep:model-error-response",
   "dep:model_user",
   "dep:task_dedup",

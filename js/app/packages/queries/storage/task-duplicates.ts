@@ -1,3 +1,4 @@
+import { markdownToEmbeddingText } from '@lexical-core/utils/parsers';
 import { queryClient } from '@queries/client';
 import {
   storageServiceClient,
@@ -79,7 +80,10 @@ async function searchSimilarTasks(
 ): Promise<TaskSimilarityResult[]> {
   const result = await storageServiceClient.searchSimilarTasks({
     taskName: input.title,
-    markdown: input.markdown,
+    // The backend embeds this text as-is, so reduce mention tags to the
+    // compact embedding format up front rather than round-tripping through
+    // lexical-service on a latency-sensitive as-you-type search.
+    markdown: markdownToEmbeddingText(input.markdown),
     shareWithTeam: input.shareWithTeam,
   });
   if (result.isErr()) {
