@@ -27,7 +27,7 @@ At a glance, here's what maps to what:
   />
 </Frame>
 
-Superhuman and Macro are both clients on top of Gmail, so there's no migration in either direction. Your mail stays in Gmail either way. Macro puts multiple accounts in [one inbox](/product/email#multi-account-inbox), splits [Signal from Noise](/product/email#signal-vs-noise) so cold outreach and notifications don't interrupt you, and puts messages, tasks, and @mentions in the same inbox as your email. [Agents](/product/agents) can also draft, triage, and send mail for you.
+Before Macro, we were Superhuman users ourselves, and we were heavily inspired by them in designing Macro's email. Both are just clients on top of Gmail, so there's no migration in either direction; your mail stays in Gmail. What Macro adds: multiple accounts in [one inbox](/product/email#multi-account-inbox), [Signal vs. Noise](/product/email#signal-vs-noise) so cold outreach and notifications don't interrupt you, and messages, tasks, and @mentions in the same inbox as your email. [Agents](/product/agents) can also draft, triage, and send mail for you.
 
 The <kbd>j</kbd> / <kbd>k</kbd> / <kbd>e</kbd> triage shortcuts you already know work unchanged.
 
@@ -57,7 +57,7 @@ To switch:
   />
 </Frame>
 
-Notion gives you markdown pages and databases and asks you to build your own tools out of them: your CRM, your task tracker, and your wiki are all databases with different views. In Macro, tasks, CRM, email, channels, and files are each their own [block](/concepts/blocks) type, and they all share one data model and one search index. You give up some of Notion's freeform database flexibility, but each tool works like a dedicated product, and agents can read all of it as one context instead of paging through a rate-limited API. There's a longer version of this argument in the [FAQ](/faq) and the video below.
+Notion asks you to build your own tools out of markdown pages and databases: your CRM, your task tracker, and your wiki are all databases with different views. We think databases are the wrong level of abstraction for this. In Macro, tasks, CRM, email, channels, and files are each their own dedicated [block](/concepts/blocks), and they all share one data model and one search index. Yes, you give up some of Notion's freeform database flexibility, but each tool works like a real product, and agents can read all of it as one context vs. paging through a rate-limited API. The longer version of this argument is in the [FAQ](/faq) and the video below.
 
 |                                       | Notion          | Macro |
 | :------------------------------------ | :-------------: | :---: |
@@ -93,9 +93,9 @@ You can also keep Notion connected indefinitely so agents can reference legacy c
   />
 </Frame>
 
-We didn't change too much vs. Slack: channels, threads, and emoji all work the way you expect. The main thing we changed is making channels less noisy and more focused for technical discussions. The first few replies in a thread show inline, so you can follow a conversation without clicking into it, and a busy channel reads more like a forum than a firehose. Channels also share an inbox with your email, so there's one place to catch up.
+We didn't change too much vs. Slack: channels, threads, and emoji all work the way you expect. The main thing we changed is making channels less noisy and more focused for technical discussions. The first few replies in a thread show inline, so you don't have to open a thread every time someone replies, and a busy channel looks more like Reddit: organized, and easy to remember where a conversation happened. Channels also share an inbox with your email, so there's one place to catch up.
 
-Channels also handle [sharing](/permissions): [@mention](/concepts/mentions) a doc or task in a channel and every member gets access to it automatically. There's no "request access" step because chat and docs are the same tool.
+The other big thing is [channel-based sharing](/permissions): [@mention](/concepts/mentions) a doc or task in a channel and every member gets access to it automatically. This avoids the Slack\+Notion footgun where people need to ask "hey can you share \_\_ with me?"
 
 |                                          | Slack | Macro |
 | :--------------------------------------- | :---: | :---: |
@@ -126,7 +126,7 @@ If you're not ready to leave Slack (archives, Slack Connect with customers), con
 
 In building Macro Tasks we were heavily inspired by Linear: status, priority, assignee, keyboard-first, and a [GitHub integration](/integrations/github) that covers the workflow you're used to. Copy a branch name from a task and it moves through In Progress, In Review, and Done as you branch, open the PR, and merge.
 
-The difference is that tasks live in the same app as your email, channels, and docs. You can turn an email or a channel message into a task in one click, and non-engineers can see engineering work without a seat in a separate tool. Fields are minimal by default, with more available [if you want them](/concepts/properties), so there's less workflow configuration to maintain.
+The difference is that tasks live in the same app as your email, channels, and docs. You can turn an email or a channel message into a task in one click, and non-engineers can see engineering work without a seat in a separate tool. Tasks are also less ceremonious: fields are minimal by default, and story points, effort, etc. are there via [properties](/concepts/properties) if you really want them, but we advise keeping it light.
 
 |                                          | Linear | Macro |
 | :--------------------------------------- | :----: | :---: |
@@ -150,7 +150,7 @@ For migration, most teams just recreate their open work; finished issues rarely 
   />
 </Frame>
 
-ClickUp covers tasks, docs, chat, goals, and whiteboards through a deep stack of spaces, folders, lists, and custom statuses that you configure yourself. Macro covers the same ground with dedicated [tasks](/product/tasks), [docs](/product/docs), [channels](/product/channels), and [CRM](/product/crm) that share one data model. There's less setup and fewer knobs because each tool already behaves the way its job needs. Tasks keep the essentials (status, priority, assignee, and [properties](/concepts/properties) when you want them), and [agents](/product/agents) can read across all of it as one context.
+ClickUp covers tasks, docs, chat, goals, and whiteboards through a deep stack of spaces, folders, lists, and custom statuses that you configure yourself. Macro covers the same ground with dedicated [tasks](/product/tasks), [docs](/product/docs), [channels](/product/channels), and [CRM](/product/crm) that share one data model. There's less setup and fewer knobs because each tool is already built for its job. Tasks keep the essentials (status, priority, assignee, and [properties](/concepts/properties) when you want them), and [agents](/product/agents) can read across all of it as one context.
 
 The biggest day-to-day change is that tasks live in the same app as your email, channels, and docs. You can turn a message or an email into a task in one click, and @mentioning a task in a channel shares it automatically.
 
@@ -177,7 +177,7 @@ Any tool with an MCP server can be connected under **Settings → Connectors**, 
 
 ## Macro vs. the world
 
-Here's the full picture side by side. Most of these tools have their own AI assistant; the difference is that Macro's [agents](/product/agents) see everything below as one context instead of one tool at a time.
+Here's the full picture side by side. Most of these tools have their own AI assistant; the difference is that Macro's [agents](/product/agents) see everything below as one context instead of one silo at a time. That's the whole point of Macro: unified context.
 
 |                                   | Macro | Superhuman | Notion | Slack | Linear | ClickUp |
 | :-------------------------------- | :---: | :--------: | :----: | :---: | :----: | :-----: |
