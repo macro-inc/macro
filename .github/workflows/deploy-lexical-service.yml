@@ -1,0 +1,41 @@
+name: Deploy Lexical Service
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        required: true
+        type: choice
+        options:
+          - dev
+          - prod
+        description: The environment to deploy to
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+        description: The environment to deploy to. e.g. (dev, prod)
+    secrets:
+      CLOUDFLARE_API_TOKEN:
+        required: true
+
+concurrency:
+  group: ${{ github.workflow }}-lexical-service-${{ inputs.environment }}
+  # We do not want to cancel a deployment if it's in progress. That could lead to a broken deployment.
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Install dependencies
+        working-directory: js
+        run: bun install --frozen-lockfile
+      - name: Deploy to Cloudflare (${{ inputs.environment }})
+        working-directory: js/lexical-service
+        run: bun run deploy-${{ inputs.environment }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
