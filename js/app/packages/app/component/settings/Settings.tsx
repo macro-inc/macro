@@ -10,6 +10,7 @@ import { Admin } from './Admin';
 import { Appearance } from './Appearance';
 import { useHasPermission } from '@core/context/user';
 import { PERMISSION_IDS } from '@core/constant/permissions';
+import { MobileTabs } from '@core/component/MobileTabs';
 import { TabsInset } from '@core/component/TabsInset';
 import { TabsInsetDropdown } from '@core/component/TabsInsetDropdown';
 import { Account } from './Account';
@@ -156,14 +157,16 @@ function SettingsPanel(props: SettingsPanelProps) {
 
   function BottomTabs() {
     return (
-    <div class="bg-surface border-t border-edge-muted h-11 shrink-0 px-1 flex items-center">
-      <TabsInset
-        list={settingsTabs()}
-        value={activeTabId()}
-        defaultValue="Appearance"
-        onChange={handleTabChange}
-      />
-    </div>
+      <div class="bg-surface border-t border-edge-muted h-11 shrink-0 px-1 flex">
+        <div class="flex-1 min-w-0 h-full">
+          <MobileTabs
+            list={settingsTabs()}
+            value={activeTabId()}
+            defaultValue="Appearance"
+            onChange={handleTabChange}
+          />
+        </div>
+      </div>
     );
   }
 
