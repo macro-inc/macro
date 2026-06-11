@@ -239,7 +239,7 @@ export const createSyncServiceSource = (
   };
 
   const pushUpdate = async (updates: RawUpdate[]): Promise<boolean> => {
-    if (!initialSyncReceived) return true;
+    if (!initialSyncReceived) return false;
     if (updates.length === 0) return true;
 
     const id = crypto.randomUUID();
