@@ -1,14 +1,15 @@
 import { useAnalytics } from '@app/component/analytics-context';
+import { ShareInboxConflictDialog } from '@app/component/ShareInboxConflictDialog';
 import { updateUserAuth } from '@core/auth';
 import { redirectToEmailAuth } from '@core/auth/email';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { toast } from '@core/component/Toast/Toast';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useEmailLinks } from '@core/email-link';
+import { isMobile } from '@core/mobile/isMobile';
 import { whenSettled } from '@core/util/whenSettled';
 import { invalidateAllAfterLogin } from '@queries/auth/user-info';
 import { useNavigate, useSearchParams } from '@solidjs/router';
-import { Button, Dialog, Panel } from '@ui';
 import { createSignal, onMount, Show, Suspense } from 'solid-js';
 
 type EmailAuthParams = {
@@ -111,7 +112,13 @@ function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
     navigate(props.successPath, { replace: true });
   };
 
+  // The desktop settings split doesn't exist on mobile, so the callback
+  // returns mobile users to the list view with the toast as confirmation.
   const navigateToAccountSettings = () => {
+    if (isMobile()) {
+      navigateToSuccess();
+      return;
+    }
     setActiveTabId('Account');
     navigate('/component/mail/component/settings', { replace: true });
   };
@@ -123,7 +130,7 @@ function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
         // callback so the inbox panel shows it immediately on return rather
         // than flashing a stale list until its own refetch lands.
         await query.refetch();
-        toast.success('Inbox connected');
+        toast.success('Inbox connected', { mobile: true });
         navigateToAccountSettings();
       },
       async (err) => {
@@ -142,7 +149,7 @@ function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
           });
           return;
         }
-        toast.failure('Failed to add inbox');
+        toast.failure('Failed to add inbox', { mobile: true });
         navigateToSuccess();
       }
     );
@@ -170,56 +177,20 @@ function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
   return (
     <Show when={conflict()} fallback={<LoadingBlock />}>
       {(c) => (
-        <Dialog
+        <ShareInboxConflictDialog
           open
-          onOpenChange={(open) => {
-            if (!open) {
-              setConflict(null);
-              navigateToSuccess();
-            }
+          emailAddress={c().emailAddress}
+          ownerEmail={c().ownerEmail}
+          onCancel={() => {
+            setConflict(null);
+            navigateToSuccess();
           }}
-          position="center"
-          class="w-120"
-        >
-          <Panel active depth={2} class="rounded-xl">
-            <Panel.Header class="px-6">
-              <Dialog.Title class="text-ink text-sm font-semibold">
-                Share this inbox?
-              </Dialog.Title>
-            </Panel.Header>
-            <Panel.Body class="p-6 font-sans flex flex-col gap-3">
-              <Dialog.Description class="text-ink-muted text-sm/tight font-normal">
-                <span class="text-ink">{c().emailAddress}</span> is already
-                connected by <span class="text-ink">{c().ownerEmail}</span>.
-                Share it so you both manage one inbox instead of syncing a
-                duplicate copy.
-              </Dialog.Description>
-              <div class="pt-3 justify-end items-center gap-3 inline-flex">
-                <Button
-                  variant="base"
-                  depth={3}
-                  onClick={() => {
-                    setConflict(null);
-                    navigateToSuccess();
-                  }}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  variant="active"
-                  depth={3}
-                  onClick={() => {
-                    const linkId = c().linkId;
-                    setConflict(null);
-                    void runInit(linkId, true);
-                  }}
-                >
-                  Share inbox
-                </Button>
-              </div>
-            </Panel.Body>
-          </Panel>
-        </Dialog>
+          onShare={() => {
+            const linkId = c().linkId;
+            setConflict(null);
+            void runInit(linkId, true);
+          }}
+        />
       )}
     </Show>
   );

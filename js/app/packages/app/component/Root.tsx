@@ -2,6 +2,7 @@ import {
   AnalyticsContextProvider,
   useAnalytics,
 } from '@app/component/analytics-context';
+import { GlobalShareInboxConflictDialog } from '@app/component/ShareInboxConflictDialog';
 import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 import { ROUTER_BASE } from '@app/constants/routerBase';
 import { PosthogProvider, usePosthog } from '@app/lib/analytics/posthog';
@@ -517,6 +518,7 @@ export function Root() {
               <UserContextProvider>
                 <BrowserNotificationModal />
                 <IosPushNotificationModal />
+                <GlobalShareInboxConflictDialog />
                 <QuerySyncProviderWithUserId />
                 <UserInfoSideEffects />
                 <ConfiguredGlobalAppStateProvider>

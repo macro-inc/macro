@@ -194,8 +194,11 @@ pub(in crate::api::oauth2) async fn handler(
                         .into_response()
                 })?;
 
+            // `token` mirrors link_id for callback consumers that only
+            // surface a `token` query param from the redirect URL.
             url.query_pairs_mut()
-                .append_pair("link_id", &link_id.to_string());
+                .append_pair("link_id", &link_id.to_string())
+                .append_pair("token", &link_id.to_string());
 
             return Ok(Redirect::to(url.as_str()).into_response());
         }
