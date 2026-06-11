@@ -9,15 +9,6 @@ on:
           - dev
           - prod
         description: The environment to deploy to
-  workflow_call:
-    inputs:
-      environment:
-        required: true
-        type: string
-        description: The environment to deploy to. e.g. (dev, prod)
-    secrets:
-      CLOUDFLARE_API_TOKEN:
-        required: true
 
 concurrency:
   group: ${{ github.workflow }}-lexical-service-${{ inputs.environment }}
@@ -39,3 +30,4 @@ jobs:
         run: bun run deploy-${{ inputs.environment }}
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
