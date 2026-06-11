@@ -243,17 +243,20 @@ export function useAddInboxFlow() {
       return;
     }
 
-    const auth = await invoke<{
-      success: boolean;
-      token?: string;
-      error?: string;
-    }>('plugin:auth|authenticate', {
-      payload: {
-        authUrl: result.value.authorization_url,
-        callbackScheme: 'macro',
-        ephemeralSession: true,
-      },
-    });
+    let auth: { success: boolean; token?: string; error?: string };
+    try {
+      auth = await invoke('plugin:auth|authenticate', {
+        payload: {
+          authUrl: result.value.authorization_url,
+          callbackScheme: 'macro',
+          ephemeralSession: true,
+        },
+      });
+    } catch (error) {
+      console.error('add-inbox authenticate failed', error);
+      toast.failure('Failed to add inbox', { mobile: true });
+      return;
+    }
 
     if (!auth.success || !auth.token) {
       if (auth.error !== 'User canceled login') {

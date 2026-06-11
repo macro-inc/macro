@@ -26,9 +26,12 @@ export function AddInboxDialog() {
     setPending(true);
     // On web this navigates away; on native iOS the OAuth completes in place
     // and resolves, so the dialog dismisses itself.
-    await addInbox();
-    setPending(false);
-    setIsOpen(false);
+    try {
+      await addInbox();
+    } finally {
+      setPending(false);
+      setIsOpen(false);
+    }
   };
 
   return (
