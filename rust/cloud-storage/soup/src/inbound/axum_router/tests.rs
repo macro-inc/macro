@@ -148,6 +148,7 @@ impl EmailService for MockEmail {
             email_address: EmailStr::try_from("example@test.com".to_string()).unwrap(),
             provider: UserProvider::Gmail,
             is_sync_active: true,
+            is_primary: true,
             created_at: Default::default(),
             updated_at: Default::default(),
         }))
