@@ -388,7 +388,7 @@ export const SoupViewContextProvider: FlowComponent<
       if (!searching) {
         const data = itemsQuery.data;
 
-        if (!data) return prev;
+        if (!data || data.groups) return prev;
 
         const base = data.entities.map((e) =>
           isWithNotification(e) ? e : attachNotifications(e)
