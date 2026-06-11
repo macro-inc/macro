@@ -4,6 +4,7 @@ use crate::pubsub::context::PubSubContext;
 use crate::pubsub::util::cg_refresh_email;
 use contacts::domain::ports::ContactsIngress;
 use macro_user_id::user_id::MacroUserIdStr;
+use models_email::api::refresh::{BackfillStatus, RefreshEmailEvent};
 use models_email::db::address::EmailRecipientType;
 use models_email::service::attachment::{
     AttachmentUploadArgs, AttachmentUploadDestination, AttachmentUploadMetadata,
@@ -43,7 +44,14 @@ pub async fn incr_completed_threads(
         cg_refresh_email(
             &ctx.connection_gateway_client,
             link.macro_id.as_ref(),
-            "backfill",
+            RefreshEmailEvent::Backfill {
+                link_id: link.id,
+                status: if progress.job_complete {
+                    BackfillStatus::Complete
+                } else {
+                    BackfillStatus::Progress
+                },
+            },
         )
         .await;
     }

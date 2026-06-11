@@ -19,6 +19,7 @@ use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 use model_notifications::NewEmailMetadata;
+use models_email::api::refresh::RefreshEmailEvent;
 use models_email::db::address::EmailRecipientType;
 use models_email::email::service::link;
 use models_email::email::service::message::SimpleMessage;
@@ -245,7 +246,7 @@ pub async fn upsert_message(
     cg_refresh_email(
         &ctx.connection_gateway_client,
         link.macro_id.as_ref(),
-        "upsert_message",
+        RefreshEmailEvent::UpsertMessage { link_id: link.id },
     )
     .await;
 
