@@ -59,7 +59,7 @@ export const theme: EditorThemeClasses = {
   list: {
     ul: `${VERTICAL_GAP} list-none md-list md-bullet`,
     ol: `${VERTICAL_GAP} list-decimal md-list md-number`,
-    listitem: 'my-[0.25em]',
+    listitem: 'my-[0.25em] [&>ul]:my-0! [&>ol]:my-0!',
     nested: {
       listitem: 'list-none nested',
     },
