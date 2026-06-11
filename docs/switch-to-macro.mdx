@@ -1,7 +1,7 @@
 ---
 title: "Switch to Macro"
 icon: "arrow-right-arrow-left"
-description: "Migration guides for moving from Superhuman, Notion, Slack, and Linear to Macro — what maps to what, and what changes."
+description: "Migration guides for moving from Superhuman, Notion, Slack, Linear, and ClickUp to Macro — what maps to what, and what changes."
 ---
 
 Macro replaces several tools at once, but you don't have to cut over in one weekend. The pattern that works: connect your old tools first so nothing is lost, move your daily workflow into Macro, and let the old tools wind down to read-only. This page covers the most common starting points.
@@ -14,6 +14,7 @@ At a glance, here's what maps to what:
 | Notion      | [Docs](/product/docs), plus purpose-built [tasks](/product/tasks) and [CRM](/product/crm) |
 | Slack       | [Channels](/product/channels) |
 | Linear      | [Tasks](/product/tasks) |
+| ClickUp     | [Tasks](/product/tasks), with [docs](/product/docs), [CRM](/product/crm), and [channels](/product/channels) replacing the rest of the suite |
 | Google Drive / Dropbox | [File storage](/product/folders) |
 | Zoom / Meet | [Calls](/product/calls) |
 
@@ -96,6 +97,25 @@ Macro's tasks are openly Linear-inspired: status, priority, assignee, keyboard-f
 The difference is adjacency. Tasks live next to your email, channels, and docs, so you can turn an email or a channel message into a task in one click, and non-engineers see engineering work without needing a seat in a separate tool. Fields are minimal by default, with more available [if you want it](/concepts/properties) — less workflow configuration to maintain.
 
 For migration, most teams simply recreate their open work — finished issues rarely justify carrying over. If you do want history, connect Linear under **Settings → Connectors** and have an agent bring open issues across.
+
+## From ClickUp
+
+<Frame>
+  <img
+    src="/images/switch-from-clickup.svg"
+    alt="The ClickUp app icon with an arrow pointing to the Macro app icon"
+  />
+</Frame>
+
+ClickUp tries to be everything — tasks, docs, chat, goals, whiteboards — through a deep stack of spaces, folders, lists, and custom statuses you configure yourself. Macro covers the same ground, but as purpose-built [tasks](/product/tasks), [docs](/product/docs), [channels](/product/channels), and [CRM](/product/crm) that share one data model instead of one configurable database. The trade is less setup and fewer knobs for tools that already behave the way each job needs. Tasks keep the essentials — status, priority, assignee, [properties](/concepts/properties) when you want them — and your [agents](/product/agents) can read across all of it as unified context.
+
+The biggest day-to-day change is that work stops living in a silo: tasks sit next to your email, channels, and docs, so you can turn a message or an email into a task in one click, and @mentioning a task in a channel shares it automatically.
+
+To switch:
+
+1. Recreate your active lists as Macro tasks — most teams skip closed work, since finished ClickUp tasks rarely earn their migration.
+2. If you want history or a gradual cutover, connect ClickUp under **Settings → Connectors** as an MCP connector and ask an agent to bring open tasks across.
+3. Move ClickUp Docs over the same way Notion pages come in — they're markdown-native, so an agent can recreate them as [Macro documents](/product/docs).
 
 ## Everything else
 
