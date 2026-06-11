@@ -107,8 +107,15 @@ export const MobileFilterDrawer = () => {
   });
   const addInbox = useAddInboxFlow();
 
+  // Mirrors the desktop InboxSelector's visibility rule so the "Add inbox"
+  // action stays discoverable with zero or one inbox connected. Also stays
+  // visible while a scope is active so it can be reset even if the linked
+  // inboxes drop to one.
   const showInboxSection = () =>
-    currentView() === 'mail' && multiInboxFlag().enabled;
+    currentView() === 'mail' &&
+    (multiInboxFlag().enabled ||
+      picker.hasMultiple() ||
+      inboxFilter() !== undefined);
 
   const toggleInbox = (id: string) => {
     const current = picker.activeIds();
