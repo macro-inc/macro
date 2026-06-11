@@ -150,7 +150,7 @@ export default function EditorTestPage() {
           />
         </Container>
 
-        <Container label="chat editor (no headings) + custom placeholder">
+        <Container label="chat editor + custom placeholder">
           <MarkdownTextarea
             type="chat"
             editable={() => true}
