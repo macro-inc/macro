@@ -3,7 +3,7 @@ import { createStore, produce } from 'solid-js/store';
 import type { CollapsibleRegistration, HeaderCollapser } from '../context';
 
 const OVERFLOW_EPSILON_PX = 2;
-const UNCOLLAPSE_HYSTERESIS_PX = 12;
+const RETRY_PANEL_GROWTH_PX = 12;
 
 function getContentWidth(container: HTMLElement): number {
   let itemTotal = 0;
@@ -36,7 +36,8 @@ export function createHeaderCollapser(
   let observer: ResizeObserver | null = null;
   let rafId: number | null = null;
   let evaluateQueued = false;
-  let requiredPanelWidth: number | null = null;
+  let lastFailedExpand: { contentWidth: number; panelWidth: number } | null =
+    null;
 
   const scheduleEvaluate = () => {
     if (evaluateQueued) return;
@@ -48,11 +49,8 @@ export function createHeaderCollapser(
     });
   };
 
-  const setAllCollapsed = (value: boolean) => {
-    for (const item of items) {
-      if (item.collapsed() !== value) item.setCollapsed(value);
-    }
-  };
+  const overflows = (headerLeft: HTMLElement) =>
+    getContentWidth(headerLeft) - headerLeft.offsetWidth > OVERFLOW_EPSILON_PX;
 
   const evaluate = () => {
     const headerLeft = getContainer();
@@ -67,28 +65,49 @@ export function createHeaderCollapser(
 
     const contentWidth = getContentWidth(headerLeft);
     const availableWidth = headerLeft.offsetWidth;
-    const overflowAmount = contentWidth - availableWidth;
-    const overflow = overflowAmount > OVERFLOW_EPSILON_PX;
     const panelWidth = panelSizeWidth() ?? availableWidth;
 
-    const anyUncollapsed = items.some((i) => !i.collapsed());
-    const anyCollapsed = items.some((i) => i.collapsed());
-
-    if (overflow && anyUncollapsed) {
-      requiredPanelWidth = panelWidth + Math.max(0, overflowAmount);
-      setAllCollapsed(true);
-      scheduleEvaluate();
+    if (contentWidth - availableWidth > OVERFLOW_EPSILON_PX) {
+      const byCollapseOrder = items
+        .filter((i) => !i.collapsed())
+        .sort((a, b) => a.priority - b.priority);
+      for (const item of byCollapseOrder) {
+        item.setCollapsed(true);
+        if (!overflows(headerLeft)) break;
+      }
+      lastFailedExpand = {
+        contentWidth: getContentWidth(headerLeft),
+        panelWidth,
+      };
       return;
     }
 
+    const byExpandOrder = items
+      .filter((i) => i.collapsed())
+      .sort((a, b) => b.priority - a.priority);
+    if (byExpandOrder.length === 0) return;
+
     if (
-      anyCollapsed &&
-      requiredPanelWidth !== null &&
-      panelWidth >= requiredPanelWidth + UNCOLLAPSE_HYSTERESIS_PX
+      lastFailedExpand &&
+      contentWidth === lastFailedExpand.contentWidth &&
+      panelWidth < lastFailedExpand.panelWidth + RETRY_PANEL_GROWTH_PX
     ) {
-      setAllCollapsed(false);
-      requiredPanelWidth = null;
-      scheduleEvaluate();
+      return;
+    }
+
+    // Trial expansion runs between layout and paint, so a reverted attempt is
+    // never visible; silent keeps onCollapsedChange from firing for it.
+    for (const item of byExpandOrder) {
+      item.setCollapsed(false, { silent: true });
+      if (overflows(headerLeft)) {
+        item.setCollapsed(true, { silent: true });
+        lastFailedExpand = {
+          contentWidth: getContentWidth(headerLeft),
+          panelWidth,
+        };
+        break;
+      }
+      item.setCollapsed(false);
     }
   };
 
@@ -112,6 +131,7 @@ export function createHeaderCollapser(
   return {
     register(reg: CollapsibleRegistration) {
       setItems(produce((arr: CollapsibleRegistration[]) => arr.push(reg)));
+      lastFailedExpand = null;
       return () => {
         setItems(
           produce((arr: CollapsibleRegistration[]) => {
@@ -119,6 +139,7 @@ export function createHeaderCollapser(
             if (idx !== -1) arr.splice(idx, 1);
           })
         );
+        lastFailedExpand = null;
       };
     },
   };

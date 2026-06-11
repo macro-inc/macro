@@ -70,7 +70,7 @@ import { NodeAccessoryRenderer } from './NodeAccessoryRenderer';
  *     The current markdown text is passed as an argument.
  * @param initialValue - The initial markdown text to display in the textarea.
  * @param placeholder - The placeholder text to display in the textarea.
- * @param type - The type of editor to use. Defaults to 'markdown'. Could aslo pass chat to turn off headings.
+ * @param type - The type of editor to use. Defaults to 'markdown'.
  * @param onEnter - A callback function that is called when the user presses Enter in the textarea.
  *     If the function returns true, the enter press will not propagate to the lexical editor.
  * @param onEscape - A callback function that is called when the user presses Escape in the textarea. If the function

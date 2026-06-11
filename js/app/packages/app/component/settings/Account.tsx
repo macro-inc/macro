@@ -299,13 +299,13 @@ export function Account() {
     new Set()
   );
 
-  // The primary inbox is the one matching the account email; it sorts to the top
+  // The primary inbox is the user's own is_primary link; it sorts to the top
   // and is labelled. Everything else (other own inboxes + delegated/shared) follows.
   const inboxes = createMemo(() => {
     const links = emailLinksQuery.data?.links ?? [];
-    const primaryEmail = email()?.toLowerCase();
+    const uid = userId();
     const primary = links.find(
-      (link) => link.email_address.toLowerCase() === primaryEmail
+      (link) => link.is_primary && link.macro_id === uid
     );
     const others = links.filter((link) => link !== primary);
     return { primary, others };

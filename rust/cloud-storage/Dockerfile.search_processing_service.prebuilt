@@ -11,11 +11,9 @@ RUN : \
   && rm -rf /var/lib/apt/lists/*
 
 COPY ./prebuilt/nix-store/ /nix/store/
-COPY ./prebuilt/${SERVICE_NAME} /app/svc
+COPY --chmod=755 ./prebuilt/${SERVICE_NAME} /app/svc
 RUN mkdir -p /app/pdfium-lib/linux
 COPY ./search_processing_service/pdfium-lib/linux/libpdfium.so /app/pdfium-lib/linux/libpdfium.so
-
-RUN chmod +x /app/svc
 
 ENV PORT=8080
 EXPOSE ${PORT}

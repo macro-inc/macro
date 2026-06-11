@@ -175,6 +175,38 @@ fn it_should_panic() {
     with_mock_env(mock_no_env, Config::unwrap_new);
 }
 
+env_vars! {
+    #[derive(Debug, Clone)]
+    pub struct BatchVarOne;
+    pub struct BatchVarTwo;
+    #[derive(Debug)]
+    pub struct BatchVarThree;
+}
+
+fn mock_batch_vars(k: &'static str) -> Result<String, std::env::VarError> {
+    match k {
+        "BATCH_VAR_ONE" => Ok("one".to_string()),
+        "BATCH_VAR_TWO" => Ok("two".to_string()),
+        _ => Err(std::env::VarError::NotPresent),
+    }
+}
+
+#[test]
+fn env_vars_defines_multiple_readable_vars() {
+    let (one, two) = with_mock_env(mock_batch_vars, || {
+        (BatchVarOne::unwrap_new(), BatchVarTwo::unwrap_new())
+    });
+
+    assert_eq!(&*one, "one");
+    assert_eq!(&*two, "two");
+}
+
+#[test]
+fn env_vars_definitions_error_when_not_set() {
+    let result = with_mock_env(mock_batch_vars, BatchVarThree::new);
+    assert!(result.is_err());
+}
+
 // Tests for maybe_env_var! macro
 
 maybe_env_var! {

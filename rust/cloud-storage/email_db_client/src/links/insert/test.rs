@@ -24,6 +24,7 @@ async fn upsert_link_in_transaction_persists_divergent_ids(
         email_address: EmailStr::try_from(child_email.to_string())?,
         provider: UserProvider::Gmail,
         is_sync_active: true,
+        is_primary: true,
         created_at: Default::default(),
         updated_at: Default::default(),
     };

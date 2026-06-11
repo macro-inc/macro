@@ -50,6 +50,7 @@ sqs_client = { path = "../sqs_client", default-features = false, features = [
   "gmail",
 ] }
 sync_service_client = { path = "../sync_service_client" }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 
 [dev-dependencies]

@@ -8,8 +8,6 @@ import {
   createMemo,
   createSignal,
   onCleanup,
-  type Setter,
-  type Signal,
   useContext,
 } from 'solid-js';
 import {
@@ -159,17 +157,13 @@ function _createIsActiveSplitContentMemo(
 
 export function useRegisterCollapsibleHeaderItem(
   input: CollapsibleItemInput
-): Signal<boolean> {
+): Accessor<boolean> {
   const [collapsed, setCollapsedInner] = createSignal(false);
-  const setCollapsed: Setter<boolean> = (
-    next?: boolean | ((prev: boolean) => boolean)
-  ) => {
-    const value =
-      typeof next === 'function' ? next(collapsed()) : (next ?? false);
-    setCollapsedInner(value as boolean);
-    input.onCollapsedChange?.(value as boolean);
-    return value as boolean;
+  const setCollapsed = (value: boolean, opts?: { silent?: boolean }) => {
+    setCollapsedInner(value);
+    if (!opts?.silent) input.onCollapsedChange?.(value);
   };
+  input.onCollapsedChange?.(false);
   const ctx = useSplitPanelOrThrow();
   const cleanup = ctx.headerCollapser.register({
     ...input,
@@ -177,5 +171,5 @@ export function useRegisterCollapsibleHeaderItem(
     setCollapsed,
   });
   onCleanup(cleanup);
-  return [collapsed, setCollapsed];
+  return collapsed;
 }

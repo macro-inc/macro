@@ -1,6 +1,7 @@
 import { createInfiniteQueries } from '@app/component/next-soup/soup-view/create-infinite-queries';
 import { throwOnErr } from '@core/util/result';
 import type { EntityData } from '@entity';
+import { useQueryClient } from '@queries/client';
 import {
   parseGroupMeta,
   serializeGroupByField,
@@ -21,7 +22,16 @@ import {
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
 import { storageServiceClient } from '@service-storage/client';
 import type { SoupApiItem } from '@service-storage/generated/schemas';
-import type { Accessor } from 'solid-js';
+import type { InfiniteData } from '@tanstack/solid-query';
+import {
+  type Accessor,
+  batch,
+  createEffect,
+  createMemo,
+  createSignal,
+  on,
+  untrack,
+} from 'solid-js';
 
 type InitialGroupPage = {
   items: SoupAstItemsGroupedPage['items'];
@@ -31,6 +41,10 @@ type InitialGroupPage = {
 export type GroupQueryPage = {
   items: InitialGroupPage['items'];
   group: GroupMeta;
+};
+
+export type GroupQueryData = {
+  entities: EntityData[];
 };
 
 type CreateGroupedSoupQueriesArgs = {
@@ -50,6 +64,7 @@ type CreateGroupedSoupQueriesArgs = {
 
 export function createGroupedSoupQueries(args: CreateGroupedSoupQueriesArgs) {
   const instructionsIdQuery = useInstructionsMdIdQuery();
+  const queryClient = useQueryClient();
 
   const mapItemToEntity = (item: SoupApiItem) => {
     if (!isDisplayableSoupItem(item)) return;
@@ -58,16 +73,12 @@ export function createGroupedSoupQueries(args: CreateGroupedSoupQueriesArgs) {
     return mapApiSoupItemToEntity(item);
   };
 
-  const mapPageToEntities = (
-    page: GroupQueryPage,
-    itemFilter: SoupApiItemFilter | undefined
-  ): EntityData[] => {
+  const mapPageToEntities = (page: GroupQueryPage): EntityData[] => {
     const entities: EntityData[] = [];
 
     for (const id of page.group.itemIds) {
       const item = page.items[id];
       if (!item) continue;
-      if (itemFilter && !itemFilter(item)) continue;
 
       const entity = mapItemToEntity(item);
       if (entity) entities.push(entity);
@@ -76,7 +87,29 @@ export function createGroupedSoupQueries(args: CreateGroupedSoupQueriesArgs) {
     return entities;
   };
 
-  return createInfiniteQueries<GroupQueryPage, EntityData[]>(() => {
+  const combineGroupPages = (
+    pages: GroupQueryPage[]
+  ): GroupQueryData | undefined => {
+    if (pages.length === 0) return;
+
+    return {
+      entities: pages.flatMap(mapPageToEntities),
+    };
+  };
+
+  const makeInitialPage = (
+    initialGroupedPage: InitialGroupPage,
+    group: GroupMeta
+  ): GroupQueryPage => {
+    const groupItems: InitialGroupPage['items'] = {};
+    for (const id of group.itemIds) {
+      const item = initialGroupedPage.items[id];
+      if (item) groupItems[id] = item;
+    }
+    return { items: groupItems, group };
+  };
+
+  const configs = createMemo(() => {
     const field = args.groupByField();
     const initialGroupedPage = args.initialPage();
 
@@ -87,7 +120,7 @@ export function createGroupedSoupQueries(args: CreateGroupedSoupQueriesArgs) {
     const options = args.queryOptions();
 
     return initialGroupedPage.groups.map((group) => {
-      const initialPage = { items: initialGroupedPage.items, group };
+      const initialPage = makeInitialPage(initialGroupedPage, group);
 
       return {
         key: group.key,
@@ -122,23 +155,88 @@ export function createGroupedSoupQueries(args: CreateGroupedSoupQueriesArgs) {
         getNextPageParam: (lastPage: GroupQueryPage): string | null => {
           return lastPage.group.nextCursor;
         },
-        placeholderData: {
+        select: combineGroupPages,
+        initialData: {
           pages: [initialPage],
           pageParams: [null],
         },
-        select: (pages) =>
-          pages.flatMap((page) =>
-            mapPageToEntities(page, options.meta?.itemFilter)
-          ),
-        enabled: options.enabled,
+        enabled: false,
         meta: {
           ...options.meta,
           groupBy: field,
           groupKey: group.key,
-          normalize: true,
+          normalize: false,
         },
         staleTime: Infinity,
       };
     });
   });
+
+  const queries = createInfiniteQueries<
+    GroupQueryPage,
+    GroupQueryData | undefined
+  >(configs);
+
+  const [groupDataVersion, setGroupDataVersion] = createSignal(0);
+
+  const list = createMemo(() =>
+    queries.list().map((query) => ({
+      ...query,
+      data: () => {
+        groupDataVersion();
+        return untrack(query.data);
+      },
+      fetchNextPage: async () => {
+        const result = await query.fetchNextPage();
+        setGroupDataVersion((version) => version + 1);
+        return result;
+      },
+    }))
+  );
+
+  const map = createMemo(() => {
+    const next = new Map<string, ReturnType<typeof list>[number]>();
+    for (const query of list()) {
+      next.set(query.key, query);
+    }
+    return next;
+  });
+
+  createEffect(
+    on(
+      () => args.initialPage(),
+      (initialGroupedPage) => {
+        const field = args.groupByField();
+        if (!field || !initialGroupedPage) return;
+
+        batch(() => {
+          for (const group of initialGroupedPage.groups) {
+            const initialPage = makeInitialPage(initialGroupedPage, group);
+            const queryKey = soupKeys.groupedGroup({
+              params: args.soupParams(),
+              body: args.soupBody(),
+              groupBy: field,
+              groupKey: group.key,
+            }).queryKey;
+
+            queryClient.setQueryData<
+              InfiniteData<GroupQueryPage, string | null>
+            >(queryKey, {
+              pages: [initialPage],
+              pageParams: [null],
+            });
+          }
+
+          setGroupDataVersion((version) => version + 1);
+        });
+      },
+      { defer: true }
+    )
+  );
+
+  return {
+    ...queries,
+    list,
+    map,
+  };
 }

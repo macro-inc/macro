@@ -53,7 +53,11 @@ type SearchableMultiSelectProps = {
   listboxClass?: string;
   /** Keep `options` in their given order instead of pinning selected first. */
   preserveOrder?: boolean;
-  /** Render a per-row "Only" action that narrows the selection to that row. */
+  /**
+   * Render a per-row "Only" action that narrows the selection to that row.
+   * When the row is already the sole active one the label flips to "All" and
+   * the handler is expected to restore the full selection.
+   */
   onOnly?: (id: string) => void;
   /** Non-toggling action row appended after the options. */
   action?: SearchableSelectAction;
@@ -65,6 +69,7 @@ type SearchableMultiSelectProps = {
 const SearchableMultiSelectItem = (itemProps: {
   item: CollectionNode<SearchableOption>;
   onOnly?: (id: string) => void;
+  isSoleActive?: (id: string) => boolean;
 }) => (
   <Combobox.Item
     item={itemProps.item}
@@ -112,7 +117,9 @@ const SearchableMultiSelectItem = (itemProps: {
             onOnly()(itemProps.item.rawValue.id);
           }}
         >
-          Only
+          {itemProps.isSoleActive?.(itemProps.item.rawValue.id)
+            ? 'All'
+            : 'Only'}
         </button>
       )}
     </Show>
@@ -123,6 +130,7 @@ const VirtualizedListbox = (props: {
   options: SearchableOption[];
   class?: string;
   onOnly?: (id: string) => void;
+  isSoleActive?: (id: string) => boolean;
 }) => {
   let handle: VirtualizerHandle | undefined;
   return (
@@ -142,7 +150,11 @@ const VirtualizedListbox = (props: {
           itemSize={ITEM_HEIGHT}
         >
           {(item) => (
-            <SearchableMultiSelectItem item={item} onOnly={props.onOnly} />
+            <SearchableMultiSelectItem
+              item={item}
+              onOnly={props.onOnly}
+              isSoleActive={props.isSoleActive}
+            />
           )}
         </Virtualizer>
       )}
@@ -226,6 +238,11 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
     props.onChange(selected.map((o) => o.id));
   };
 
+  const isSoleActive = (id: string) => {
+    const ids = props.activeIds();
+    return ids.length === 1 && ids[0] === id;
+  };
+
   return (
     <Combobox<SearchableOption>
       multiple
@@ -281,6 +298,7 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
                   options={displayOptions()}
                   class={props.listboxClass}
                   onOnly={props.onOnly}
+                  isSoleActive={isSoleActive}
                 />
               </Show>
             </div>

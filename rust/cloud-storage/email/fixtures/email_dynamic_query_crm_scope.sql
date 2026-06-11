@@ -196,3 +196,59 @@ VALUES
     ('33330002-0000-0000-0000-000000000002', '11110002-0000-0000-0000-000000000002'),
     -- Carol INBOX
     ('33330003-0000-0000-0000-000000000001', '11110003-0000-0000-0000-000000000001');
+
+-- == Alice's connected secondary (non-primary) link ==
+-- Same macro_id as alice's primary link but a different email_address — a
+-- personal mailbox connected as an extra inbox. Team-scoped queries must
+-- never read it: its threads, contacts, and labels stay out of CRM scope.
+INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider, is_sync_active, created_at, updated_at)
+VALUES
+    ('a0000004-0000-0000-0000-000000000004', 'macro|alice@team.com', 'fa_alice_personal', 'alice.personal@gmail.com', 'GMAIL', true, NOW(), NOW());
+
+INSERT INTO email_contacts (id, link_id, email_address, name, created_at, updated_at)
+VALUES
+    -- outsider@acme.com also corresponded with alice's personal mailbox
+    ('c0000012-0000-0000-0000-000000000012', 'a0000004-0000-0000-0000-000000000004', 'outsider@acme.com', 'Outsider', NOW(), NOW()),
+    -- an address known ONLY to the personal mailbox
+    ('c0000013-0000-0000-0000-000000000013', 'a0000004-0000-0000-0000-000000000004', 'secret@personal.com', 'Secret', NOW(), NOW());
+
+INSERT INTO email_labels (id, link_id, provider_label_id, name, message_list_visibility, label_list_visibility, type, created_at)
+VALUES
+    ('11110004-0000-0000-0000-000000000001', 'a0000004-0000-0000-0000-000000000004', 'INBOX', 'INBOX', 'Show', 'LabelShow', 'System', NOW()),
+    ('11110004-0000-0000-0000-000000000002', 'a0000004-0000-0000-0000-000000000004', 'TRASH', 'TRASH', 'Hide', 'LabelHide', 'System', NOW());
+
+-- tp1: personal inbox thread from outsider@acme.com (matches CRM filters,
+--      must NOT appear in team-scoped results)
+-- tp2: personal inbox thread from secret@personal.com (its contact must not
+--      resolve under team scope)
+INSERT INTO email_threads (
+    id, provider_id, link_id, inbox_visible, is_read,
+    latest_inbound_message_ts, latest_outbound_message_ts, latest_non_spam_message_ts,
+    created_at, updated_at
+)
+VALUES
+    ('22220004-0000-0000-0000-000000000001', 'tp1', 'a0000004-0000-0000-0000-000000000004',
+     true,  false, '2026-04-08 10:00:00+00', NULL, '2026-04-08 10:00:00+00', NOW(), NOW()),
+    ('22220004-0000-0000-0000-000000000002', 'tp2', 'a0000004-0000-0000-0000-000000000004',
+     true,  false, '2026-04-09 10:00:00+00', NULL, '2026-04-09 10:00:00+00', NOW(), NOW());
+
+INSERT INTO email_messages (
+    id, thread_id, link_id, provider_id, from_contact_id,
+    subject, snippet, internal_date_ts,
+    is_draft, is_sent, is_starred, is_read,
+    created_at, updated_at
+)
+VALUES
+    ('33330004-0000-0000-0000-000000000001', '22220004-0000-0000-0000-000000000001',
+     'a0000004-0000-0000-0000-000000000004', 'mp1', 'c0000012-0000-0000-0000-000000000012',
+     'Alice personal acme', 'personal from acme', '2026-04-08 10:00:00+00',
+     false, false, false, false, NOW(), NOW()),
+    ('33330004-0000-0000-0000-000000000002', '22220004-0000-0000-0000-000000000002',
+     'a0000004-0000-0000-0000-000000000004', 'mp2', 'c0000013-0000-0000-0000-000000000013',
+     'Alice personal secret', 'personal from secret', '2026-04-09 10:00:00+00',
+     false, false, false, false, NOW(), NOW());
+
+INSERT INTO email_message_labels (message_id, label_id)
+VALUES
+    ('33330004-0000-0000-0000-000000000001', '11110004-0000-0000-0000-000000000001'),
+    ('33330004-0000-0000-0000-000000000002', '11110004-0000-0000-0000-000000000001');

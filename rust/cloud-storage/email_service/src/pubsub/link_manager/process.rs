@@ -262,42 +262,47 @@ async fn handle_delete(
         tracing::error!(error=?e, link_id=?link.id, "Failed to set deleted_at on email link history");
     }
 
-    // If this was the owner's last inbox, prune any delegation edges pointing at
-    // them so grantees don't retain dangling references. A delegation edge grants
-    // access to all of the owner's inboxes, so only clean up once none remain.
-    // Best-effort: leftover edges are harmless (they resolve to nothing).
-    match email_db_client::links::get::fetch_link_by_macro_id(&ctx.db, link.macro_id.as_ref()).await
-    {
-        Ok(None) => {
-            if let Err(e) = macro_db_client::macro_user_links::delete_edges_for_child(
-                &ctx.db,
-                link.macro_id.as_ref(),
-            )
-            .await
-            {
-                tracing::error!(error=?e, "Failed to prune delegation edges after deleting owner's last inbox");
-            }
-        }
-        Ok(Some(_)) => {
-            tracing::debug!("Owner has remaining inboxes; keeping delegation edges");
-        }
-        Err(e) => {
-            tracing::error!(error=?e, "Failed to check remaining inboxes for delegation edge cleanup");
-        }
-    }
+    // Delegation edges scoped to the deleted link were cascaded away by FK; no
+    // manual pruning is needed.
 
     // If the deleted link was a promoted shared mailbox, remove its minted macro user too
     // (this also cascades its delegation edges and the promoted-mailbox marker). No-op for
     // ordinary inboxes; best-effort, since the link and its data are already gone.
     match ctx.db.acquire().await {
         Ok(mut conn) => {
-            if let Err(e) = macro_db_client::shared_inbox::delete_promoted_mailbox_user(
+            match macro_db_client::shared_inbox::delete_promoted_mailbox_user(
                 &mut conn,
                 link.macro_id.as_ref(),
             )
             .await
             {
-                tracing::error!(error=?e, "Failed to delete minted user for promoted shared mailbox");
+                Ok(Some(minted_id)) => {
+                    // The minted id is the authoritative stub id: grant relocation creates the
+                    // mailbox's FusionAuth user with it, so it can never be a human connector's
+                    // account. Deleting by it (rather than the link's fusionauth_user_id, which
+                    // is stale when the post-relocation re-home failed) cleans the stub even in
+                    // partial states; the endpoint no-ops when relocation never created the user
+                    // and refuses active users as a second guard.
+                    let minted_id = minted_id.to_string();
+                    if link.fusionauth_user_id != minted_id {
+                        tracing::warn!(
+                            link_fusionauth_user_id = %link.fusionauth_user_id,
+                            %minted_id,
+                            "Promoted mailbox link did not point at its minted stub; deleting stub by minted id"
+                        );
+                    }
+                    if let Err(e) = ctx
+                        .auth_service_client
+                        .delete_inbox_grant_user(&minted_id)
+                        .await
+                    {
+                        tracing::error!(error=?e, "Failed to delete FusionAuth stub for promoted shared mailbox");
+                    }
+                }
+                Ok(None) => {}
+                Err(e) => {
+                    tracing::error!(error=?e, "Failed to delete minted user for promoted shared mailbox");
+                }
             }
         }
         Err(e) => {

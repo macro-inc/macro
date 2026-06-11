@@ -6,6 +6,7 @@
 #![deny(missing_docs)]
 
 pub mod about_macro;
+pub mod channel_mention;
 pub mod citations;
 pub mod do_not;
 pub mod math;

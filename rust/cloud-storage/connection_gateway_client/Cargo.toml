@@ -12,3 +12,4 @@ reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true, features = ["attributes"] }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

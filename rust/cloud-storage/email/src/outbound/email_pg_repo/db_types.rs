@@ -160,6 +160,7 @@ pub(crate) struct DbLink {
     pub email_address: String,
     pub provider: DbUserProvider,
     pub is_sync_active: bool,
+    pub is_primary: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -475,6 +476,7 @@ impl DbLink {
             email_address,
             provider,
             is_sync_active,
+            is_primary,
             created_at,
             updated_at,
         } = self;
@@ -486,6 +488,7 @@ impl DbLink {
             email_address: EmailStr::try_from(email_address)?,
             provider: DbUserProvider::mirror(provider),
             is_sync_active,
+            is_primary,
             created_at,
             updated_at,
         })

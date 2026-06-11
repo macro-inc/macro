@@ -25,3 +25,4 @@ non_empty = { path = "../non_empty" }
 
 # Outbound
 reqwest = { workspace = true, optional = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

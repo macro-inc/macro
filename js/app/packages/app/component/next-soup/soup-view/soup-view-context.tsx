@@ -388,7 +388,7 @@ export const SoupViewContextProvider: FlowComponent<
       if (!searching) {
         const data = itemsQuery.data;
 
-        if (!data) return prev;
+        if (!data || data.groups) return prev;
 
         const base = data.entities.map((e) =>
           isWithNotification(e) ? e : attachNotifications(e)
@@ -482,12 +482,12 @@ export const SoupViewContextProvider: FlowComponent<
   };
 
   const groupQueries = createGroupedSoupQueries({
-    initialPage: () => {
+    initialPage: createMemo(() => {
       const groups = itemsQuery.data?.groups;
       const items = itemsQuery.data?.itemsById;
       if (!groups || !items) return;
       return { groups, items };
-    },
+    }),
     groupByField,
     soupParams,
     soupBody,
@@ -543,7 +543,7 @@ export const SoupViewContextProvider: FlowComponent<
       const groupMeta = buildGroupMeta(apiGroup);
       const groupData = groupQueryFor(apiGroup.key)?.data();
       const groupEntities =
-        groupData?.map(
+        groupData?.entities?.map(
           (entity) =>
             (isWithNotification(entity)
               ? entity

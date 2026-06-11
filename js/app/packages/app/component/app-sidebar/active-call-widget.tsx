@@ -1,6 +1,7 @@
 import {
   joinChannelCall,
   openChannelCallTab,
+  stopCallRinger,
   useCallContextOptional,
 } from '@channel/Call';
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
@@ -198,6 +199,7 @@ export function SidebarActiveCallWidget(props: { sidebarState: SidebarState }) {
   });
 
   const dismissIncomingCall = (callId: string) => {
+    stopCallRinger(callId);
     const timeoutId = incomingCallTimeouts.get(callId);
     if (timeoutId !== undefined) {
       window.clearTimeout(timeoutId);

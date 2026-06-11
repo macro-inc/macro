@@ -41,6 +41,7 @@ sqs_worker = { path = "../sqs_worker", optional = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 utoipa = { workspace = true, optional = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 macro_db_migrator = { path = "../macro_db_migrator" }

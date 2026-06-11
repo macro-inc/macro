@@ -1,29 +1,23 @@
-import { onMount, Show, Suspense } from 'solid-js';
+import { For, onMount, Show, Suspense } from 'solid-js';
 import { type SettingsTab, useSettingsState } from '@core/constant/SettingsState';
-import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { useSettingsTabs } from '@core/constant/settingsTabsConfig';
 import { isMobile } from '@core/mobile/isMobile';
-import { DEV_MODE_ENV, ENABLE_APP_STORE_QR_CODE, ENABLE_TEAMS_OVERRIDE } from '@core/constant/featureFlags';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { MobileApp } from './MobileApp';
 import { Agent } from './Agent';
 import { Admin } from './Admin';
 import { Appearance } from './Appearance';
-import { useHasPermission } from '@core/context/user';
-import { PERMISSION_IDS } from '@core/constant/permissions';
-import { TabsInset } from '@core/component/TabsInset';
-import { TabsInsetDropdown } from '@core/component/TabsInsetDropdown';
+import { MobileTabs } from '@core/component/MobileTabs';
 import { Account } from './Account';
 import { Shortcuts } from './Shortcuts';
 import { Team } from './Team';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import type { ValidHotkey } from '@core/hotkey/types';
+import { SideNav } from '@ui';
 import {
   SplitHeaderLeft,
   SplitHeaderRight,
 } from '../split-layout/components/SplitHeader';
-import { CollapsibleHeaderItem } from '../split-layout/components/CollapsibleHeaderItem';
 import { SettingsButton } from './SettingsButton';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 
 export function SettingsPanelComponentWrapper() {
   return (
@@ -44,26 +38,16 @@ type SettingsPanelProps = {
 
 function SettingsPanel(props: SettingsPanelProps) {
   const { closeSettings, activeTabId, setActiveTabId } = useSettingsState();
-    const teamsFlag = useFeatureFlag('enable-teams-settings', { enabledOverride: ENABLE_TEAMS_OVERRIDE });
-  const hasAdminPanel = useHasPermission(PERMISSION_IDS.WRITE_ADMIN_PANEL);
+  const { groups, flatTabs, isAvailable } = useSettingsTabs();
+
+  // A tab's content renders only when it's both selected and still available
+  // (gating lives solely in the settings tab config).
+  const isCurrentTab = (tab: SettingsTab) =>
+    activeTabId() === tab && isAvailable(tab);
 
   // Set up hotkey scope for settings panel
   const [attachHotkeys, settingsHotkeyScope] = useHotkeyDOMScope('settings');
   let settingsContainerRef: HTMLDivElement | undefined;
-
-  function settingsTabs() {
-    const tabs: { value: string; label: string }[] = [
-      { value: 'Appearance', label: 'Appearance' },
-      { value: 'Account', label: 'Account' },
-    ];
-    if (teamsFlag().enabled) { tabs.push({ value: 'Team', label: 'Team' }) }
-    if (!isTouchDevice()) { tabs.push({ value: 'Shortcuts', label: 'Shortcuts' }) }
-    if (ENABLE_APP_STORE_QR_CODE && !isNativeMobilePlatform()) { tabs.push({ value: 'Mobile App', label: 'App' }) }
-    if (!isNativeMobilePlatform()) { tabs.push({ value: 'Agent', label: 'MCPs' }) }
-    if (isNativeMobilePlatform() && DEV_MODE_ENV) { tabs.push({ value: 'Mobile', label: 'Mobile Dev Tools' }) }
-    if (hasAdminPanel()) { tabs.push({ value: 'Admin', label: 'Admin' }) }
-    return tabs;
-  }
 
   // Attach hotkeys to the settings container
   onMount(() => {
@@ -87,11 +71,11 @@ function SettingsPanel(props: SettingsPanelProps) {
 
   // Helper to navigate to a tab by index
   function navigateToTabIndex(index: number): boolean {
-    const tabs = settingsTabs();
+    const tabs = flatTabs();
     if (index >= 0 && index < tabs.length) {
       const tab = tabs[index];
       if (tab) {
-        setActiveTabId(tab.value as SettingsTab);
+        setActiveTabId(tab.tab);
         return true;
       }
     }
@@ -99,19 +83,18 @@ function SettingsPanel(props: SettingsPanelProps) {
   }
 
   function getCurrentTabIndex() {
-    const tabs = settingsTabs();
-    return tabs.findIndex(tab => tab.value === activeTabId());
+    return flatTabs().findIndex(tab => tab.tab === activeTabId());
   }
 
   function handleNextTab() {
-    const tabs = settingsTabs();
+    const tabs = flatTabs();
     const nextIndex = getCurrentTabIndex() >= tabs.length - 1 ? 0 : getCurrentTabIndex() + 1;
     navigateToTabIndex(nextIndex);
     return true;
   }
 
   function handlePreviousTab() {
-    const tabs = settingsTabs();
+    const tabs = flatTabs();
     const nextIndex = getCurrentTabIndex() <= 0 ? tabs.length - 1 : getCurrentTabIndex() - 1;
     navigateToTabIndex(nextIndex);
     return true;
@@ -149,21 +132,23 @@ function SettingsPanel(props: SettingsPanelProps) {
   }
 
   const handleTabChange = (value: string) => {
-    if (settingsTabs().some((tab) => tab.value === value)) {
+    if (flatTabs().some((tab) => tab.tab === value)) {
       setActiveTabId(value as SettingsTab);
     }
   }
 
   function BottomTabs() {
     return (
-    <div class="bg-surface border-t border-edge-muted h-11 shrink-0 px-1 flex items-center">
-      <TabsInset
-        list={settingsTabs()}
-        value={activeTabId()}
-        defaultValue="Appearance"
-        onChange={handleTabChange}
-      />
-    </div>
+      <div class="bg-surface border-t border-edge-muted h-11 shrink-0 px-1 flex">
+        <div class="flex-1 min-w-0 h-full">
+          <MobileTabs
+            list={flatTabs().map((tab) => ({ value: tab.tab, label: tab.label }))}
+            value={activeTabId()}
+            defaultValue="Appearance"
+            onChange={handleTabChange}
+          />
+        </div>
+      </div>
     );
   }
 
@@ -180,58 +165,59 @@ function SettingsPanel(props: SettingsPanelProps) {
           <h1 class="font-semibold text-ink select-none text-sm shrink-0">
             Settings
           </h1>
-          <Show when={!isMobile()}>
-            <CollapsibleHeaderItem
-              id="settings-tabs"
-              priority={1}
-              containerClass="h-full"
-              expanded={() => (
-                <TabsInset
-                  list={settingsTabs()}
-                  value={activeTabId()}
-                  defaultValue="Appearance"
-                  onChange={handleTabChange}
-                />
-              )}
-              collapsed={() => (
-                <TabsInsetDropdown
-                  list={settingsTabs()}
-                  value={activeTabId()}
-                  defaultValue="Appearance"
-                  onChange={handleTabChange}
-                />
-              )}
-            />
-          </Show>
         </div>
       </SplitHeaderLeft>
 
-      <div class="relative grow min-h-1 overflow-auto">
-        <Show when={activeTabId() === 'Account'}>
-          <Suspense>
-            <Account />
-          </Suspense>
+      <div class="flex grow min-h-1 overflow-hidden">
+        <Show when={!isMobile()}>
+          <SideNav>
+            <For each={groups()}>
+              {(group) => (
+                <SideNav.Group label={group.label}>
+                  <For each={group.items}>
+                    {(item) => (
+                      <SideNav.Item
+                        icon={item.icon}
+                        active={activeTabId() === item.tab}
+                        onSelect={() => handleTabChange(item.tab)}
+                      >
+                        {item.label}
+                      </SideNav.Item>
+                    )}
+                  </For>
+                </SideNav.Group>
+              )}
+            </For>
+          </SideNav>
         </Show>
-        <Show when={activeTabId() === 'Appearance'}>
-          <Appearance />
-        </Show>
-        <Show when={activeTabId() === 'Shortcuts' && !isTouchDevice()}>
-          <Shortcuts />
-        </Show>
-        <Show when={activeTabId() === 'Team' && teamsFlag().enabled}>
-          <Suspense>
-            <Team />
-          </Suspense>
-        </Show>
-        <Show when={activeTabId() === 'Mobile App' && ENABLE_APP_STORE_QR_CODE && !isNativeMobilePlatform()}>
-          <MobileApp />
-        </Show>
-        <Show when={activeTabId() === 'Agent' && !isNativeMobilePlatform()}>
-          <Agent />
-        </Show>
-        <Show when={activeTabId() === 'Admin' && hasAdminPanel()}>
-          <Admin />
-        </Show>
+
+        <div class="relative grow min-h-1 min-w-0 overflow-auto">
+          <Show when={isCurrentTab('Account')}>
+            <Suspense>
+              <Account />
+            </Suspense>
+          </Show>
+          <Show when={isCurrentTab('Appearance')}>
+            <Appearance />
+          </Show>
+          <Show when={isCurrentTab('Shortcuts')}>
+            <Shortcuts />
+          </Show>
+          <Show when={isCurrentTab('Team')}>
+            <Suspense>
+              <Team />
+            </Suspense>
+          </Show>
+          <Show when={isCurrentTab('Mobile App')}>
+            <MobileApp />
+          </Show>
+          <Show when={isCurrentTab('Agent')}>
+            <Agent />
+          </Show>
+          <Show when={isCurrentTab('Admin')}>
+            <Admin />
+          </Show>
+        </div>
       </div>
 
       <Show when={isMobile()}>

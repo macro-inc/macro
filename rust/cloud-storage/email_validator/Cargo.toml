@@ -7,3 +7,4 @@ version = "0.1.0"
 [dependencies]
 lazy_static = { workspace = true }
 regex = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

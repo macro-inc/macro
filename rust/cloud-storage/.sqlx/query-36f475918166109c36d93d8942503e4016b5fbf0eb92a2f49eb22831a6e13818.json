@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT c.id, LOWER(c.email_address) AS \"email_lower!\"\n                FROM email_contacts c\n                JOIN email_links el ON el.id = c.link_id\n                JOIN team_user tu ON tu.user_id = el.macro_id\n                WHERE tu.team_id = $1\n                  AND el.is_primary\n                  AND LOWER(c.email_address) = ANY($2)\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "email_lower!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "36f475918166109c36d93d8942503e4016b5fbf0eb92a2f49eb22831a6e13818"
+}

@@ -46,11 +46,59 @@ type Props = {
  * Caller is responsible for any container/border/padding.
  */
 export function PropertyText(props: Props) {
+  const userId = () => {
+    if (props.text !== undefined) return undefined;
+    if (!isEntityProperty(props.property)) return undefined;
+    if (props.property.specificEntityType !== 'USER') return undefined;
+
+    const entities = getEntityValues(props.property);
+    return entities.length === 1 ? entities[0].entity_id : undefined;
+  };
+
+  return (
+    <Show
+      when={userId()}
+      fallback={
+        <PrimitivePropertyText
+          property={props.property}
+          fallback={props.fallback}
+          class={props.class}
+          text={props.text}
+        />
+      }
+    >
+      {(id) => (
+        <UserPropertyText
+          id={id()}
+          fallback={props.fallback}
+          class={props.class}
+        />
+      )}
+    </Show>
+  );
+}
+
+function PrimitivePropertyText(props: Props) {
   const text = () => props.text ?? extractText(props.property);
   const empty = () => !text();
 
   return (
     <Show when={!empty()} fallback={props.fallback ?? null}>
+      <span class={cn('truncate', props.class)}>{text()}</span>
+    </Show>
+  );
+}
+
+function UserPropertyText(props: {
+  id: string;
+  fallback?: JSX.Element;
+  class?: string;
+}) {
+  const parts = useDisplayNameParts(tryMacroId(props.id));
+  const text = () => parts.firstName() || parts.fullName();
+
+  return (
+    <Show when={text()} fallback={props.fallback ?? null}>
       <span class={cn('truncate', props.class)}>{text()}</span>
     </Show>
   );
@@ -76,10 +124,6 @@ function extractText(property: Property): string {
     const entities = getEntityValues(property);
     if (entities.length === 0) return '';
     if (property.specificEntityType === 'USER') {
-      if (entities.length === 1) {
-        const parts = useDisplayNameParts(tryMacroId(entities[0].entity_id));
-        return parts.firstName() || 'Unknown';
-      }
       return entities.length === 2 ? '2 people' : `${entities.length} people`;
     }
     return entities.length === 1 ? '1 item' : `${entities.length} items`;

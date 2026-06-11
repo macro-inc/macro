@@ -23,6 +23,7 @@ thiserror = { workspace = true }
 
 tracing = { workspace = true }
 twox-hash = { version = "2" }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

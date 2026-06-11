@@ -194,8 +194,21 @@ pub(in crate::api::oauth2) async fn handler(
                         .into_response()
                 })?;
 
+            // Strip any stale identifiers embedded in the original_url
+            // before appending fresh ones; consumers read the first
+            // occurrence of each param.
+            let filtered: Vec<(String, String)> = url
+                .query_pairs()
+                .filter(|(k, _)| k != "link_id" && k != "token")
+                .map(|(k, v)| (k.into_owned(), v.into_owned()))
+                .collect();
+            url.query_pairs_mut().clear().extend_pairs(filtered);
+
+            // `token` mirrors link_id for callback consumers that only
+            // surface a `token` query param from the redirect URL.
             url.query_pairs_mut()
-                .append_pair("link_id", &link_id.to_string());
+                .append_pair("link_id", &link_id.to_string())
+                .append_pair("token", &link_id.to_string());
 
             return Ok(Redirect::to(url.as_str()).into_response());
         }

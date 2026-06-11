@@ -4,7 +4,7 @@ icon: "book-open"
 description: "Copy-paste prompts for the most useful things agents can do in your Macro workspace."
 ---
 
-Agents in Macro aren't a side feature — they sit on top of [unified memory](/product/unified-memory), so one prompt can reach your email, messages, tasks, docs, calls, and connectors. These recipes are starting points: paste them into an agent chat (<kbd>c</kbd> + <kbd>a</kbd>), an [automation](/product/agents#automations), a channel via **@Macro**, or any [MCP client](/AI/mcp/overview) connected to your workspace.
+Agents in Macro sit on top of [unified memory](/product/unified-memory), so one prompt can reach your email, messages, tasks, docs, calls, and connectors. These recipes are starting points: paste them into an agent chat (<kbd>c</kbd> + <kbd>a</kbd>), an [automation](/product/agents#automations), a channel via **@Macro**, or any [MCP client](/AI/mcp/overview) connected to your workspace.
 
 ## Daily inbox brief
 
@@ -20,7 +20,7 @@ The result lands in your inbox at the scheduled time, every day.
 
 ## Project status on demand
 
-Ask in any agent chat — no need to point it at anything, since memory is refreshed from your team's activity:
+Ask in any agent chat. You don't need to point it at anything, since memory is refreshed from your team's activity:
 
 ```text
 What's the latest status of [project]? Check recent tasks, channel
@@ -28,14 +28,14 @@ discussion, and call transcripts, and tell me what changed this week
 and what's blocking.
 ```
 
-You can @mention a specific channel, doc, or task in the prompt to skip the search and guarantee the right context — see [Mentions in Agents](/concepts/mentions#mentions-in-agents).
+You can @mention a specific channel, doc, or task in the prompt to skip the search and guarantee the right context. See [Mentions in Agents](/concepts/mentions#mentions-in-agents).
 
 ## Weekly team recap
 
 An automation for Friday afternoons:
 
 ```text
-Every Friday at 4pm: write a recap of the week for @#general —
+Every Friday at 4pm: write a recap of the week for @#general:
 tasks completed, tasks started, key decisions from calls, and
 anything that slipped. Link to the relevant items.
 ```
@@ -57,7 +57,7 @@ Draft a reply to @[email thread]. Tone: warm but brief. We can do
 the June 20 date, but ask them to send the revised scope first.
 ```
 
-Review the draft, then tell the agent to send it — or send it yourself from the composer.
+Review the draft, then tell the agent to send it, or send it yourself from the composer.
 
 ## Answer questions inside a channel
 
@@ -81,7 +81,7 @@ See [Switch to Macro](/switch-to-macro) for tool-by-tool migration guides.
 
 ## Use your workspace from Claude Code
 
-Once you've [connected the Macro MCP server](/AI/mcp/overview), your coding agent has the same reach — it can search your workspace, read threads and docs, create documents, send email, and update task properties with the [MCP tools](/AI/mcp/tools/index):
+Once you've [connected the Macro MCP server](/AI/mcp/overview), your coding agent has the same reach. It can search your workspace, read threads and docs, create documents, send email, and update task properties with the [MCP tools](/AI/mcp/tools/index):
 
 ```text
 Find the Macro task for the bug I'm fixing, read the linked channel
@@ -95,5 +95,5 @@ send) a reply explaining the fix that shipped in today's release.
 ```
 
 <Tip>
-  Agents inherit your permissions: they can only see what you can see, and anything they create or send is attributed to you. Start prompts with "draft, don't send" while you calibrate trust.
+  Agents inherit your permissions: they can only see what you can see, and anything they create or send is attributed to you. Start prompts with "draft, don't send" until you're comfortable letting them send.
 </Tip>

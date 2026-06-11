@@ -6,3 +6,4 @@ version = "0.1.0"
 
 [dependencies]
 sqlx = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

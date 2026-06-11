@@ -574,15 +574,18 @@ async fn send_notifications(
         snippet: message.snippet.unwrap_or_default(),
     };
 
-    let primaries =
-        macro_db_client::macro_user_links::get_primaries_for_child(&ctx.db, link.macro_id.as_ref())
-            .await
-            .map_err(|e| {
-                ProcessingError::Retryable(DetailedError {
-                    reason: FailureReason::DatabaseQueryFailed,
-                    source: e.context("Failed to fetch delegated primaries".to_string()),
-                })
-            })?;
+    let primaries = macro_db_client::macro_user_links::get_primaries_for_link(
+        &ctx.db,
+        link.macro_id.as_ref(),
+        link.id,
+    )
+    .await
+    .map_err(|e| {
+        ProcessingError::Retryable(DetailedError {
+            reason: FailureReason::DatabaseQueryFailed,
+            source: e.context("Failed to fetch delegated primaries".to_string()),
+        })
+    })?;
 
     let recipient_ids = build_notification_recipients(&link.macro_id, primaries);
 

@@ -72,3 +72,4 @@ utoipa-swagger-ui = { workspace = true }
 uuid = { workspace = true }
 
 macro_service_urls = { path = "../macro_service_urls" }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
