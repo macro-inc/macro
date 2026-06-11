@@ -470,6 +470,25 @@
             export ZIG_GLOBAL_CACHE_DIR="$TMPDIR/zig-cache"
             export ZIG_LOCAL_CACHE_DIR="$TMPDIR/zig-cache"
             export XDG_CACHE_HOME="$TMPDIR/xdg"
+
+            # Inherited cargoArtifacts can carry CMake configure state
+            # (CMakeCache.txt / CMakeFiles) from the deps-only layer. Its
+            # CMAKE_C_COMPILER points at a cargo-zigbuild wrapper script under
+            # $TMPDIR whose hash-suffixed name need not exist in this sandbox,
+            # and CMake hard-fails validating a cached compiler that is gone
+            # ("is not a full path to an existing compiler tool"). Drop the
+            # configure state so a build-script re-run reconfigures cleanly;
+            # crates whose fingerprints are clean never read it, so this costs
+            # nothing on the cached path. (Today aws-lc-sys is the only cmake
+            # crate in the graph, via AWS_LC_SYS_CMAKE_BUILDER below.)
+            tdir="''${CARGO_TARGET_DIR:-target}"
+            if [ -d "$tdir" ]; then
+              while IFS= read -r -d "" cache; do
+                dir="$(dirname "$cache")"
+                echo "purging stale cmake configure state in $dir"
+                rm -rf "$dir/CMakeFiles" "$cache"
+              done < <(find "$tdir" -name CMakeCache.txt -print0)
+            fi
           '';
         };
 
