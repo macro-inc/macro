@@ -964,14 +964,22 @@ function InboxRow(props: {
             <Chip label="Shared" />
           </Show>
         </div>
-        <Show when={ENABLE_INBOX_SYNC_STATUS}>
+        <Show
+          when={
+            ENABLE_INBOX_SYNC_STATUS &&
+            props.link.sync_status !== SyncStatus.UP_TO_DATE
+          }
+        >
           <span
-            class="text-xs"
+            class="flex items-center gap-1 text-xs"
             classList={{
               'text-failure': props.link.sync_status === SyncStatus.ERROR,
               'text-ink-muted': props.link.sync_status !== SyncStatus.ERROR,
             }}
           >
+            <Show when={props.link.sync_status === SyncStatus.SYNCING}>
+              <ArrowsClockwiseIcon class="size-3 animate-spin" />
+            </Show>
             {syncStatusLabel(props.link.sync_status)}
           </span>
         </Show>

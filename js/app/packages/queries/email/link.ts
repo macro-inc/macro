@@ -2,6 +2,7 @@ import { useUserId } from '@core/context/user';
 import { throwOnErr } from '@core/util/result';
 import { invalidateUserInfo } from '@queries/auth/user-info';
 import { queryClient } from '@queries/client';
+import { invalidateAllSoup } from '@queries/soup/normalized-cache';
 import { emailClient } from '@service-email/client';
 import {
   type ListLinksResponse,
@@ -123,6 +124,12 @@ export function useRemoveInboxMutation(callbacks?: RemoveInboxCallbacks) {
           // here would resurrect the optimistically-removed row; instead leave the
           // optimistic cache in place and let the next focus refetch reconcile once
           // teardown completes.
+          //
+          // Clears a delegated inbox's threads immediately (its removal is a
+          // synchronous edge drop). An owned inbox is torn down asynchronously,
+          // so its threads are dropped when the `refresh_email` `link_removed`
+          // event arrives after teardown — refetching now would race that.
+          invalidateAllSoup();
           await invalidateUserInfo();
         },
 
