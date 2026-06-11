@@ -39,6 +39,7 @@ import {
   For,
   type JSX,
   Match,
+  on,
   onMount,
   Show,
   Switch,
@@ -278,6 +279,20 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
   const [disabled, setDisabled] = createSignal(false);
 
   const [listboxRef, setListboxRef] = createSignal<HTMLElement | undefined>();
+
+  // The chips container caps its height and scrolls; keep the input's line
+  // visible as chips push it down.
+  createEffect(
+    on(
+      () => props.selectedOptions.length,
+      () => {
+        requestAnimationFrame(() => {
+          inputRef()?.scrollIntoView({ block: 'nearest' });
+        });
+      },
+      { defer: true }
+    )
+  );
 
   const debouncedHandleChange = debounce(handleChange, 100);
 
