@@ -74,13 +74,16 @@ async fn promote_dedups_to_single_link_with_two_edges(pool: Pool<Postgres>) -> a
 
     // is_inbox_only is computed as `link.email != macro_id's email`. The minted macro_id
     // embeds the mailbox email, so the promoted mailbox is a real shared user, not inbox-only.
+    // The returned fusion id is the minted macro_user.id, which grant relocation reuses as
+    // the FusionAuth stub's id.
     let mailbox_user = sqlx::query!(
-        r#"SELECT email FROM "User" WHERE id = $1"#,
+        r#"SELECT email, macro_user_id FROM "User" WHERE id = $1"#,
         mailbox_macro_id
     )
     .fetch_one(&pool)
     .await?;
     assert_eq!(mailbox_user.email, MAILBOX_EMAIL);
+    assert_eq!(mailbox_user.macro_user_id, result.mailbox_fusion_id);
 
     // Both the original owner and the new connector hold an edge to the mailbox.
     let mut primaries =
@@ -162,7 +165,8 @@ async fn promote_marks_mailbox_and_teardown_removes_everything(
     let link_id = insert_data_source_link(&pool, OWNER, MAILBOX_EMAIL).await;
 
     let mut conn = pool.acquire().await?;
-    promote_link_to_shared(&mut conn, link_id, OWNER, CONNECTOR, MAILBOX_EMAIL, None).await?;
+    let promoted =
+        promote_link_to_shared(&mut conn, link_id, OWNER, CONNECTOR, MAILBOX_EMAIL, None).await?;
     let mailbox_macro_id = format!("macro|{MAILBOX_EMAIL}");
 
     // Promotion marks the mailbox; a regular macro_id is not marked.
@@ -173,7 +177,10 @@ async fn promote_marks_mailbox_and_teardown_removes_everything(
     sqlx::query!(r#"DELETE FROM email_links WHERE id = $1"#, link_id)
         .execute(&pool)
         .await?;
-    delete_promoted_mailbox_user(&mut conn, &mailbox_macro_id).await?;
+    // Teardown reports the minted id so callers can recognize (and remove) the mailbox's
+    // FusionAuth stub, which relocation created under the same id.
+    let deleted = delete_promoted_mailbox_user(&mut conn, &mailbox_macro_id).await?;
+    assert_eq!(deleted, Some(promoted.mailbox_fusion_id));
 
     // The minted User, its macro_user, the marker, and both edges are gone.
     let user = sqlx::query!(r#"SELECT id FROM "User" WHERE id = $1"#, mailbox_macro_id)
@@ -199,7 +206,8 @@ async fn delete_promoted_mailbox_user_is_noop_for_real_account(
     insert_user(&pool, OWNER, "alice@company.test").await;
 
     let mut conn = pool.acquire().await?;
-    delete_promoted_mailbox_user(&mut conn, OWNER).await?;
+    let deleted = delete_promoted_mailbox_user(&mut conn, OWNER).await?;
+    assert_eq!(deleted, None, "no-op must report that nothing was deleted");
 
     let user = sqlx::query!(r#"SELECT id FROM "User" WHERE id = $1"#, OWNER)
         .fetch_optional(&pool)

@@ -13,6 +13,9 @@ mod test;
 pub struct PromotedSharedInbox {
     /// The macro_id minted for the mailbox. The re-homed link and both edges point at it.
     pub mailbox_macro_id: String,
+    /// The uuid minted as the mailbox's `macro_user.id`. Grant relocation creates the
+    /// mailbox's FusionAuth user with this same id, so the two stay aligned.
+    pub mailbox_fusion_id: Uuid,
     /// The surviving (re-homed) `email_links` row — its id is unchanged, so the one
     /// synced copy and its history are preserved.
     pub link_id: Uuid,
@@ -114,6 +117,7 @@ pub async fn promote_link_to_shared(
 
     Ok(PromotedSharedInbox {
         mailbox_macro_id,
+        mailbox_fusion_id: fusionauth_user_id,
         link_id: existing_link_id,
     })
 }
@@ -142,12 +146,14 @@ pub async fn is_promoted_shared_mailbox(
 /// Deletes the macro user minted for a promoted shared mailbox once its single link has
 /// been torn down. Removing the `User` row cascades its `macro_user_links` edges and the
 /// `promoted_shared_mailboxes` marker; the backing `macro_user` row is removed explicitly.
-/// No-op when `macro_id` is not a promoted mailbox.
+/// No-op (returning `None`) when `macro_id` is not a promoted mailbox; otherwise returns
+/// the deleted `macro_user.id`, which callers can match against a link's
+/// `fusionauth_user_id` to recognize the mailbox's relocated FusionAuth stub.
 #[tracing::instrument(skip(conn), err)]
 pub async fn delete_promoted_mailbox_user(
     conn: &mut sqlx::PgConnection,
     macro_id: &str,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<Option<Uuid>> {
     let row = sqlx::query!(
         r#"
         DELETE FROM "User"
@@ -160,11 +166,13 @@ pub async fn delete_promoted_mailbox_user(
     .fetch_optional(&mut *conn)
     .await?;
 
-    if let Some(row) = row {
-        sqlx::query!(r#"DELETE FROM macro_user WHERE id = $1"#, row.macro_user_id)
-            .execute(&mut *conn)
-            .await?;
-    }
+    let Some(row) = row else {
+        return Ok(None);
+    };
 
-    Ok(())
+    sqlx::query!(r#"DELETE FROM macro_user WHERE id = $1"#, row.macro_user_id)
+        .execute(&mut *conn)
+        .await?;
+
+    Ok(Some(row.macro_user_id))
 }

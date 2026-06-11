@@ -393,7 +393,11 @@ pub async fn handler(
                 // fetches for this inbox fail, so the update is retried before giving up.
                 match ctx
                     .auth_service_client
-                    .relocate_inbox_grant(&linked_email, &existing_link.fusionauth_user_id)
+                    .relocate_inbox_grant(
+                        &linked_email,
+                        &existing_link.fusionauth_user_id,
+                        &promoted.mailbox_fusion_id.to_string(),
+                    )
                     .await
                 {
                     Ok(shared_fusionauth_user_id) => {

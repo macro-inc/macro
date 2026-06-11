@@ -291,13 +291,31 @@ async fn handle_delete(
     // ordinary inboxes; best-effort, since the link and its data are already gone.
     match ctx.db.acquire().await {
         Ok(mut conn) => {
-            if let Err(e) = macro_db_client::shared_inbox::delete_promoted_mailbox_user(
+            match macro_db_client::shared_inbox::delete_promoted_mailbox_user(
                 &mut conn,
                 link.macro_id.as_ref(),
             )
             .await
             {
-                tracing::error!(error=?e, "Failed to delete minted user for promoted shared mailbox");
+                Ok(Some(minted_id)) => {
+                    // Grant relocation creates the mailbox's FusionAuth stub with the minted
+                    // id, so a match identifies the stub; a mismatch means the link still ran
+                    // on a human connector's grant (relocation never completed) and there is
+                    // no stub to remove. The endpoint refuses active users as a second guard.
+                    if link.fusionauth_user_id == minted_id.to_string() {
+                        if let Err(e) = ctx
+                            .auth_service_client
+                            .delete_inbox_grant_user(&link.fusionauth_user_id)
+                            .await
+                        {
+                            tracing::error!(error=?e, "Failed to delete FusionAuth stub for promoted shared mailbox");
+                        }
+                    }
+                }
+                Ok(None) => {}
+                Err(e) => {
+                    tracing::error!(error=?e, "Failed to delete minted user for promoted shared mailbox");
+                }
             }
         }
         Err(e) => {
