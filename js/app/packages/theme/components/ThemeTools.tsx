@@ -1,9 +1,7 @@
-import { currentThemeId, isThemeSaved, themes } from '../signals/themeSignals';
-import IconLightDark from '@icon/macro-light-dark.svg';
-import { invertTheme, saveTheme } from '../utils/themeUtils';
-import { randomizeTheme } from './ThemeEditorBasic';
-import IconDice from '@phosphor-icons/core/regular/dice-five.svg?component-solid';
+import { currentThemeId, isThemeSaved, setThemeMode, themeMode, themes } from '../signals/themeSignals';
+import { saveTheme } from '../utils/themeUtils';
 import IconSave from '@phosphor-icons/core/regular/floppy-disk-back.svg?component-solid';
+import { TabsInset } from '@core/component/TabsInset';
 import { createMemo, Show } from 'solid-js';
 import { Button, cn } from '@ui';
 
@@ -44,23 +42,15 @@ function ThemeTools(props: { class?: string }) {
         </Button>
       </Show>
 
-      <Button
-        label="Randomize Theme"
-        onPointerDown={randomizeTheme}
-        variant="ghost"
-        size="icon-sm"
-      >
-        <IconDice />
-      </Button>
-
-      <Button
-        label="Toggle Light / Dark"
-        onPointerDown={invertTheme}
-        variant="ghost"
-        size="icon-sm"
-      >
-        <IconLightDark />
-      </Button>
+      <TabsInset
+        onChange={(value) => setThemeMode(value as 'light' | 'dark' | 'system')}
+        list={[
+          { value: 'light', label: 'Light' },
+          { value: 'dark', label: 'Dark' },
+          { value: 'system', label: 'System' },
+        ]}
+        value={themeMode()}
+      />
 
       <div
         onKeyDown={(e) => {

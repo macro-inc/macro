@@ -25,12 +25,9 @@ import { debounce } from '@solid-primitives/scheduled';
 import { ThemeChips } from '@theme/components/ThemeChips';
 import type { ThemeV2 } from '@theme/types/themeTypes';
 import { registerHotkey } from 'core/hotkey/hotkeys';
-import { type Component, createMemo, onCleanup } from 'solid-js';
+import { type Component, onCleanup } from 'solid-js';
 import {
-  setDarkModeTheme,
-  setLightModeTheme,
-  setThemeShouldMatchSystem,
-  themeShouldMatchSystem,
+  setThemeMode,
   themes,
 } from '../../theme/signals/themeSignals';
 
@@ -297,62 +294,31 @@ export default function GlobalShortcuts() {
     });
   });
 
-  const setPreferredLightScope = registerHotkey({
+  registerHotkey({
     scopeId: 'global',
-    description: 'Set preferred light mode theme',
+    description: 'Light mode',
     keyDownHandler: () => {
+      setThemeMode('light');
       return true;
     },
-    activateCommandScope: true,
     runWithInputFocused: true,
-  });
-
-  themes().forEach((theme) => {
-    registerHotkey({
-      scopeId: setPreferredLightScope.commandScopeId,
-      description: `${theme.name}`,
-      keyDownHandler: () => {
-        setLightModeTheme(theme.id);
-        analytics.track('theme_changed', { themeId: theme.id });
-        return true;
-      },
-      runWithInputFocused: true,
-      displayComponent: () => <ThemeDisplay theme={theme} />,
-    });
-  });
-
-  const setPreferredDarkScope = registerHotkey({
-    scopeId: 'global',
-    description: 'Set preferred dark mode theme',
-    keyDownHandler: () => {
-      return true;
-    },
-    activateCommandScope: true,
-    runWithInputFocused: true,
-  });
-
-  themes().forEach((theme) => {
-    registerHotkey({
-      scopeId: setPreferredDarkScope.commandScopeId,
-      description: `${theme.name}`,
-      keyDownHandler: () => {
-        setDarkModeTheme(theme.id);
-        analytics.track('theme_changed', { themeId: theme.id });
-        return true;
-      },
-      runWithInputFocused: true,
-      displayComponent: () => <ThemeDisplay theme={theme} />,
-    });
   });
 
   registerHotkey({
     scopeId: 'global',
-    description: createMemo(
-      () =>
-        `${themeShouldMatchSystem() ? 'Turn off a' : 'A'}uto detect color scheme`
-    ),
+    description: 'Dark mode',
     keyDownHandler: () => {
-      setThemeShouldMatchSystem((prev) => !prev);
+      setThemeMode('dark');
+      return true;
+    },
+    runWithInputFocused: true,
+  });
+
+  registerHotkey({
+    scopeId: 'global',
+    description: 'System color scheme',
+    keyDownHandler: () => {
+      setThemeMode('system');
       return true;
     },
     runWithInputFocused: true,

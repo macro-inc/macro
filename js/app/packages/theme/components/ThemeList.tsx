@@ -1,13 +1,20 @@
-import { currentThemeId, isThemeSaved, themes } from '../signals/themeSignals';
+import { currentThemeId, isThemeSaved, showDarkThemes, showLightThemes, themes } from '../signals/themeSignals';
 import { useAnalytics } from 'app/component/analytics-context';
 import { applyTheme } from '../utils/themeUtils';
-import { ColorSwatch } from './ColorSwatch';
+import { ThemeChips } from './ThemeChips';
 import { ThemeCrud } from './ThemeCrud';
 
-import { For } from 'solid-js';
+import { createMemo, For } from 'solid-js';
 
 function ThemeList() {
   const analytics = useAnalytics()
+
+  // A theme is intrinsically dark when its text is lighter than its background.
+  const visibleThemes = createMemo(() =>
+    themes().filter((theme) =>
+      theme.tokens.c0.l > theme.tokens.b0.l ? showDarkThemes() : showLightThemes()
+    )
+  );
 
   return (
       <>
@@ -37,7 +44,7 @@ function ThemeList() {
             gap: 1px 0px;
           "
         >
-          <For each={themes()}>
+          <For each={visibleThemes()}>
             {(theme) => (
               <>
                 <div
@@ -52,18 +59,7 @@ function ThemeList() {
                     gap: 5px;
                   "
                 >
-                  <ColorSwatch
-                    color={`oklch(${theme.tokens.a0.l} ${theme.tokens.a0.c} ${theme.tokens.a0.h}deg)`}
-                    width={'10px'}
-                  />
-                  <ColorSwatch
-                    color={`oklch(${theme.tokens.b0.l} ${theme.tokens.b0.c} ${theme.tokens.b0.h}deg)`}
-                    width={'10px'}
-                  />
-                  <ColorSwatch
-                    color={`oklch(${theme.tokens.c0.l} ${theme.tokens.c0.c} ${theme.tokens.c0.h}deg)`}
-                    width={'10px'}
-                  />
+                  <ThemeChips theme={theme} />
                 </div>
                 <div
                   class={`theme-list-item-name ${theme.id === currentThemeId() && isThemeSaved() ? 'current-theme' : ''}`}

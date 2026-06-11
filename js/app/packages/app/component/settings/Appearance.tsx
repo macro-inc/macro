@@ -1,12 +1,14 @@
 import { monochromeIcons, setMonochromeIcons, setTooltipsEnabled, tooltipsEnabled } from '@ui/signals/signals';
 import { ThemeEditorAdvanced } from '@theme/components/ThemeEditorAdvanced';
-import { ThemeEditorBasic } from '@theme/components/ThemeEditorBasic';
+import { ThemeEditorBasic, randomizeTheme } from '@theme/components/ThemeEditorBasic';
 import ThemeTools from '@theme/components/ThemeTools';
 import ThemeList from '@theme/components/ThemeList';
 import { isMobile } from '@core/mobile/isMobile';
 import { createSignal, Show } from 'solid-js';
 import { TabsInset } from '@core/component/TabsInset';
-import { Panel, ToggleSwitch } from '@ui';
+import IconDice from '@phosphor-icons/core/regular/dice-five.svg?component-solid';
+import { setShowDarkThemes, setShowLightThemes, showDarkThemes, showLightThemes } from '@theme/signals/themeSignals';
+import { Button, InlineCheckbox, Panel, ToggleSwitch } from '@ui';
 
 type PanelA = 'basic' | 'advanced';
 type PanelB ='themes' | 'ui'
@@ -43,7 +45,9 @@ export function Appearance() {
       <div
         class="max-w-200 size-full"
         style={{
-          'grid-template-rows': `${isMobile() ? '322.5px' : '432.5px'} 1fr`,
+          // Basic editor shrinks to fit its content; Advanced needs a fixed,
+          // scrollable height since its per-token list is taller than the panel.
+          'grid-template-rows': `${activeTabA() === 'advanced' ? (isMobile() ? '322.5px' : '432.5px') : 'min-content'} 1fr`,
           'grid-template-columns': '1fr',
           'overflow': 'hidden',
           'display': 'grid',
@@ -72,7 +76,7 @@ export function Appearance() {
             </Panel.Toolbar>
           </Show>
 
-          <Panel.Body scroll>
+          <Panel.Body scroll={activeTabA() === 'advanced'}>
             <Show when={activeTabA() === 'basic'}>
               <ThemeEditorBasic />
             </Show>
@@ -93,7 +97,37 @@ export function Appearance() {
               value={activeTabB()}
               defaultValue="list"
             />
+            <div class="flex-1" />
+            <Button
+              label="Randomize Theme"
+              onPointerDown={randomizeTheme}
+              variant="ghost"
+              size="icon-sm"
+            >
+              <IconDice />
+            </Button>
           </Panel.Header>
+          <Show when={activeTabB() === 'themes'}>
+            <Panel.Toolbar class="gap-4 pl-5">
+              <span class="text-xs text-ink-extra-muted">Filter themes</span>
+              <button
+                type="button"
+                class="inline-flex items-center gap-1.5 text-xs text-ink-muted hover:text-ink"
+                onClick={() => setShowLightThemes((v) => !v)}
+              >
+                <InlineCheckbox checked={showLightThemes()} />
+                Light
+              </button>
+              <button
+                type="button"
+                class="inline-flex items-center gap-1.5 text-xs text-ink-muted hover:text-ink"
+                onClick={() => setShowDarkThemes((v) => !v)}
+              >
+                <InlineCheckbox checked={showDarkThemes()} />
+                Dark
+              </button>
+            </Panel.Toolbar>
+          </Show>
           <Panel.Body scroll>
             <Show when={activeTabB() === 'themes'}>
               <ThemeList />

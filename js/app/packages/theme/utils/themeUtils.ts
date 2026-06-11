@@ -1,4 +1,4 @@
-import { currentThemeId, darkModeTheme, lightModeTheme, setCurrentThemeId, setHtmlColor, setIsThemeSaved, setThemeDepth, setUserThemes, systemMode, themeDepth, themeShouldMatchSystem, themes, userThemes} from '../signals/themeSignals';
+import { currentThemeId, effectiveMode, isThemeSaved, setCurrentThemeId, setHtmlColor, setIsThemeSaved, setThemeDepth, setThemeMode, setUserThemes, systemMode, themeDepth, themeMode, themes, userThemes} from '../signals/themeSignals';
 import type { ThemeV2, ThemeV2Tokens } from '../types/themeTypes';
 import { themeReactive } from '../signals/themeReactive';
 import { toast } from '@core/component/Toast/Toast';
@@ -49,15 +49,14 @@ function isThemeV2(value: unknown): value is ThemeV2 {
   });
 }
 
-export function systemThemeEffect(){
+/** Re-applies the current light/dark mode to the live theme whenever the mode
+ *  (or, in 'system' mode, the OS preference) changes. enforceModeLive is
+ *  idempotent, so firing on an unrelated change is a harmless no-op. */
+export function systemModeEffect(){
   createEffect(
     on(
-      [themeShouldMatchSystem, systemMode, darkModeTheme, lightModeTheme],
-      () => {
-        if(themeShouldMatchSystem()){
-          applyTheme(systemMode() === 'dark' ? darkModeTheme() : lightModeTheme());
-        }
-      },
+      [themeMode, systemMode],
+      () => { enforceModeLive(); },
       { defer: true }
     )
   );
@@ -79,14 +78,24 @@ export function applyTheme(id: string): void{
       }
     );
     setThemeDepth(theme!.depth ?? 0.15);
+    // Each theme is intrinsically light or dark — adopt the theme's natural mode
+    // rather than forcing it into the previously-selected light/dark mode.
+    setThemeMode(isTokensDark(theme!.tokens) ? 'dark' : 'light');
     queueMicrotask(() => {/* scuffed af */
       setIsThemeSaved(true);
-      setHtmlColor({color: `oklch(${themeReactive.b0.l[0]()} ${themeReactive.b0.c[0]()} ${themeReactive.b0.h[0]()}deg)`});
+      syncHtmlColor();
     });
   });
 }
 
-export function invertTheme(): void{
+/** Persists the live background color, used for the pre-hydration first paint. */
+function syncHtmlColor(): void{
+  setHtmlColor({color: `oklch(${themeReactive.b0.l[0]()} ${themeReactive.b0.c[0]()} ${themeReactive.b0.h[0]()}deg)`});
+}
+
+/** Flips the lightness of every background (b*) and text (c*) token, leaving
+ *  chroma and hue untouched. The shared primitive behind light/dark mode. */
+function invertLightness(): void{
   batch(() => {
     themeReactive.b0.l[1](1 - themeReactive.b0.l[0]());
     themeReactive.b2.l[1](1 - themeReactive.b2.l[0]());
@@ -100,6 +109,20 @@ export function invertTheme(): void{
     themeReactive.c4.l[1](1 - themeReactive.c4.l[0]());
   });
 }
+
+/** Inverts the live theme to match the current effective mode, but only if it
+ *  doesn't already match. Idempotent. Preserves the saved/unsaved state so
+ *  toggling mode never renames a preset (or discards unsaved custom edits). */
+export function enforceModeLive(): void{
+  if(isThemeDark() === (effectiveMode() === 'dark')){return}
+  const wasSaved = isThemeSaved();
+  invertLightness();
+  queueMicrotask(() => {
+    setIsThemeSaved(wasSaved); /* preserve saved state across the unsave effect, mirroring applyTheme */
+    syncHtmlColor();
+  });
+}
+
 
 function getCurrentTokens(): ThemeV2Tokens{
   const themeTokens: ThemeV2Tokens = {
@@ -145,9 +168,14 @@ export function deleteTheme(id: string): void{
   }
 }
 
-/** Returns true when the current theme has a dark background (ink lightness > panel lightness). */
-function _isThemeDark(): boolean {
+/** Returns true when the live theme is dark (text lighter than background). */
+function isThemeDark(): boolean {
   return themeReactive.c0.l[0]() > themeReactive.b0.l[0]();
+}
+
+/** Same intrinsic-darkness test, against a stored token set rather than the live signals. */
+function isTokensDark(tokens: ThemeV2Tokens): boolean {
+  return tokens.c0.l > tokens.b0.l;
 }
 
 /** Checks if the theme contrast is too low, and if so, applies a readable theme. This is to prevent malicious actors sending "Theme Viruses" which make a user's theme unusable. */
