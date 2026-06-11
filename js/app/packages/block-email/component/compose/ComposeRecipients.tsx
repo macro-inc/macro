@@ -138,7 +138,7 @@ export function ComposeRecipients(props: {
   };
 
   // On mobile an unfocused row with recipients collapses to a "Name, Name &
-  // N more…" summary; tapping it brings the chips and input back (iOS Mail).
+  // N more…" summary; tapping it brings the chips and input back.
   const [activeField, setActiveField] = createSignal<RecipientFieldId | null>(
     null
   );

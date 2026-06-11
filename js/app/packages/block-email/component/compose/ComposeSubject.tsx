@@ -14,7 +14,7 @@ export function ComposeSubject(props: {
   const ctx = useCompose();
 
   // On mobile the subject wraps and grows while edited, and folds to a single
-  // truncated line on blur so the body starts near the top (iOS Mail).
+  // truncated line on blur so the body starts near the top.
   const [editing, setEditing] = createSignal(false);
   let textareaRef: HTMLTextAreaElement | undefined;
 

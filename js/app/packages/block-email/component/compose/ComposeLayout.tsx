@@ -160,7 +160,7 @@ export function ComposeLayout(props: {
     displayPriority: 10,
   });
   // On mobile the Cc/Bcc/From rows fold back into the combined row when the
-  // user moves focus on without having added any Cc/Bcc recipients (iOS Mail).
+  // user moves focus on without having added any Cc/Bcc recipients.
   // Uncommitted text in either field also blocks the fold so it isn't
   // silently discarded.
   const collapseCcBccIfEmpty = () => {
