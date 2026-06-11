@@ -82,13 +82,9 @@ async function ingestS3Snapshot(
   loroManager: MarkdownLoroManager,
   blockId: string
 ) {
-  try {
-    const result = await storageServiceClient.fetchCachedSnapshot(blockId);
-    if (result.isOk()) {
-      await loroManager.ingest({ kind: 's3', snapshot: result.value });
-    }
-  } catch (error) {
-    console.warn('Failed to load cached snapshot', error);
+  const result = await storageServiceClient.fetchCachedSnapshot(blockId);
+  if (result.isOk()) {
+    await loroManager.ingest({ kind: 's3', snapshot: result.value });
   }
 }
 
@@ -132,7 +128,7 @@ function BlockMarkdownContent({ optimisticSnapshot }: BlockMarkdownProps) {
       // Fan out — the state machine in LoroManager handles precedence
       // and rejects events that don't apply for the current `wasDirty` mode.
       if (optimisticSnapshot) {
-        void loroManager.ingest({
+        loroManager.ingest({
           kind: 'optimistic',
           snapshot: optimisticSnapshot,
         });
@@ -141,9 +137,7 @@ function BlockMarkdownContent({ optimisticSnapshot }: BlockMarkdownProps) {
       // unawaited — state machine handles precedence
       ingestLocalSnapshot(loroManager, snapshotStore, walStore);
       ingestS3Snapshot(loroManager, blockId);
-      ingestRemoteSnapshot(loroManager, data.doInitialSync).then((ok) => {
-        if (!ok) setBlockError('INVALID');
-      });
+      ingestRemoteSnapshot(loroManager, data.doInitialSync);
     })
   );
 
