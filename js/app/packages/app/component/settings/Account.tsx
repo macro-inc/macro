@@ -28,14 +28,9 @@ import {
 import IconUpload from '@phosphor-icons/core/regular/upload-simple.svg?component-solid';
 import SignOutIcon from '@phosphor-icons/core/regular/sign-out.svg?component-solid';
 import XIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
-import CrownIcon from '@phosphor-icons/core/regular/crown.svg?component-solid';
-import HourglassIcon from '@phosphor-icons/core/regular/hourglass-medium.svg?component-solid';
-import WarningCircleIcon from '@phosphor-icons/core/regular/warning-circle.svg?component-solid';
-import ProhibitIcon from '@phosphor-icons/core/regular/prohibit.svg?component-solid';
 import { authServiceClient } from '@service-auth/client';
 import { useEmail, useLicenseStatus, useUserId } from '@core/context/user';
 import {
-  type Component,
   createEffect,
   createMemo,
   createResource,
@@ -45,7 +40,6 @@ import {
   Show,
   Switch,
 } from 'solid-js';
-import { Dynamic } from 'solid-js/web';
 import { usePermissions } from '@core/context/user';
 import { PERMISSION_IDS } from '@core/constant/permissions';
 import { useSettingsState } from '@core/constant/SettingsState';
@@ -65,34 +59,6 @@ false && fileSelector;
 
 // 16 megabytes
 const MAX_PROFILE_PICTURE_SIZE = 16 * 1000 * 1000;
-
-type LicenseStatusIcon = {
-  icon: Component<{ class?: string }>;
-  class: string;
-};
-
-// Maps a (Stripe-style) license status to the glyph shown beside it in the
-// License Status row. Unknown/unset statuses fall through to no icon.
-function licenseStatusIcon(status: string): LicenseStatusIcon | undefined {
-  switch (status.toLowerCase()) {
-    case 'active':
-      return { icon: CrownIcon, class: 'text-accent' };
-    case 'trialing':
-      return { icon: HourglassIcon, class: 'text-accent' };
-    case 'past_due':
-    case 'unpaid':
-    case 'incomplete':
-    case 'incomplete_expired':
-      return { icon: WarningCircleIcon, class: 'text-failure' };
-    case 'canceled':
-    case 'cancelled':
-    case 'paused':
-    case 'inactive':
-      return { icon: ProhibitIcon, class: 'text-ink-muted' };
-    default:
-      return undefined;
-  }
-}
 
 async function uploadProfilePicture(
   file: File
@@ -426,19 +392,9 @@ export function Account() {
 
               <Row label="License Status">
                 <div class="flex items-center gap-3">
-                  <div class="flex items-center gap-1.5">
-                    <Show when={licenseStatusIcon(licenseStatus() ?? '')}>
-                      {(info) => (
-                        <Dynamic
-                          component={info().icon}
-                          class={`size-4 ${info().class}`}
-                        />
-                      )}
-                    </Show>
-                    <span class="text-sm text-ink-muted">
-                      {capitalize(licenseStatus() ?? '')}
-                    </span>
-                  </div>
+                  <span class="text-sm text-ink-muted">
+                    {capitalize(licenseStatus() ?? '')}
+                  </span>
                   <Show when={!hasPaidAccess()}>
                     <Button
                       variant="active"
