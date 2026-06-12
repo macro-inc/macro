@@ -1,65 +1,44 @@
 use anyhow::Context;
 pub use macro_env::Environment;
-use macro_service_urls::ConnectionGatewayUrl;
+use macro_env_var::{env_vars, maybe_env_vars};
 
+env_vars! {
+    pub struct BaseUrl;
+    pub struct DatabaseUrl;
+    pub struct RedisUri;
+    pub struct ContactsQueue;
+}
+
+maybe_env_vars! {
+    pub struct ContactsQueueMaxMessages;
+    pub struct ContactsQueueWaitTimeSeconds;
+}
+
+#[derive(macro_config::MacroConfig)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub struct Config {
     /// port number of service
+    #[macro_config_default(8080)]
     pub port: usize,
     /// The environment we are in
+    #[macro_config_default(Environment::new_or_prod())]
     pub environment: Environment,
     /// The connection URL for the Postgres database this application should use.
-    pub database_url: String,
+    pub database_url: DatabaseUrl,
     /// The Redis URI for rate limiting.
-    pub redis_uri: String,
+    pub redis_uri: RedisUri,
     /// SQS URL
-    pub queue_url: String,
+    pub contacts_queue: ContactsQueue,
     /// The notification queue max messages per poll
-    pub queue_max_messages: i32,
+    pub contacts_queue_max_messages: ContactsQueueMaxMessages,
     /// The notification queue wait time seconds
-    pub queue_wait_time_seconds: i32,
-    /// Connection gateway URL for sending real-time notifications
-    pub connection_gateway_url: Option<String>,
+    pub contacts_queue_wait_time_seconds: ContactsQueueWaitTimeSeconds,
 }
 
 impl Config {
     pub fn from_env() -> anyhow::Result<Self> {
-        let port: usize = std::env::var("PORT")
-            .unwrap_or("8080".to_string())
-            .parse::<usize>()
-            .unwrap();
-
-        let database_url =
-            std::env::var("DATABASE_URL").context("DATABASE_URL must be provided")?;
-
-        let redis_uri = std::env::var("REDIS_URI").context("REDIS_URI must be provided")?;
-
-        let queue_url =
-            std::env::var("CONTACTS_QUEUE").context("CONTACTS_QUEUE must be provided")?;
-
-        let queue_max_messages: i32 = std::env::var("CONTACTS_QUEUE_MAX_MESSAGES")
-            .unwrap_or("10".to_string())
-            .parse::<i32>()
-            .unwrap();
-
-        let queue_wait_time_seconds: i32 = std::env::var("CONTACTS_QUEUE_WAIT_TIME_SECONDS")
-            .unwrap_or("5".to_string())
-            .parse::<i32>()
-            .unwrap();
-
-        let connection_gateway_url = Some(ConnectionGatewayUrl::new()?.to_string());
-
-        let environment = Environment::new_or_prod();
-
-        Ok(Config {
-            port,
-            environment,
-            database_url,
-            redis_uri,
-            queue_url,
-            queue_wait_time_seconds,
-            queue_max_messages,
-            connection_gateway_url,
-        })
+        macro_config::ConfigLoader::load::<Config>()
+            .context("failed to load contacts service config")
     }
 
     #[cfg(test)]
@@ -68,12 +47,11 @@ impl Config {
         Config {
             port: 0,
             environment: Environment::Local,
-            database_url: "".to_string(),
-            redis_uri: "".to_string(),
-            queue_url: "".to_string(),
-            queue_max_messages: 0,
-            queue_wait_time_seconds: 0,
-            connection_gateway_url: None,
+            database_url: DatabaseUrl::new_testing(""),
+            redis_uri: RedisUri::new_testing(""),
+            contacts_queue: ContactsQueue::new_testing(""),
+            contacts_queue_max_messages: ContactsQueueMaxMessages::new_unset(),
+            contacts_queue_wait_time_seconds: ContactsQueueWaitTimeSeconds::new_unset(),
         }
     }
 }
