@@ -85,7 +85,6 @@ import { currentThemeId } from '../../theme/signals/themeSignals';
 import {
   applyTheme,
   ensureMinimalThemeContrast,
-  systemModeEffect,
 } from '../../theme/utils/themeUtils';
 import { Login } from './auth/Login';
 import { setCookie } from './auth/Shared';
@@ -501,7 +500,6 @@ export function Root() {
   });
 
   onMount(() => {
-    systemModeEffect();
     applyTheme(currentThemeId());
     ensureMinimalThemeContrast();
   });

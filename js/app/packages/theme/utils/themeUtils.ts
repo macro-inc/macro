@@ -49,9 +49,9 @@ function isThemeV2(value: unknown): value is ThemeV2 {
   });
 }
 
-/** Re-applies the current light/dark mode to the live theme whenever the mode
- *  (or, in 'system' mode, the OS preference) changes. enforceModeLive is
- *  idempotent, so firing on an unrelated change is a harmless no-op. */
+/** Dormant plumbing: re-applies the current light/dark mode to the live theme
+ *  whenever the mode (or, in 'system' mode, the OS preference) changes. Kept for
+ *  if/when mode switching is re-enabled — nothing calls this today. */
 export function systemModeEffect(){
   createEffect(
     on(
@@ -78,8 +78,8 @@ export function applyTheme(id: string): void{
       }
     );
     setThemeDepth(theme!.depth ?? 0.15);
-    // Each theme is intrinsically light or dark — adopt the theme's natural mode
-    // rather than forcing it into the previously-selected light/dark mode.
+    // Track the theme's intrinsic light/dark polarity (no inversion happens — mode
+    // switching is currently disabled; this just keeps themeMode in sync).
     setThemeMode(isTokensDark(theme!.tokens) ? 'dark' : 'light');
     queueMicrotask(() => {/* scuffed af */
       setIsThemeSaved(true);
@@ -110,9 +110,9 @@ function invertLightness(): void{
   });
 }
 
-/** Inverts the live theme to match the current effective mode, but only if it
- *  doesn't already match. Idempotent. Preserves the saved/unsaved state so
- *  toggling mode never renames a preset (or discards unsaved custom edits). */
+/** Dormant plumbing: inverts the live theme to match the current effective mode,
+ *  only if it doesn't already match. Idempotent and saved-state preserving.
+ *  Nothing calls this today (mode switching disabled). */
 export function enforceModeLive(): void{
   if(isThemeDark() === (effectiveMode() === 'dark')){return}
   const wasSaved = isThemeSaved();
@@ -122,7 +122,6 @@ export function enforceModeLive(): void{
     syncHtmlColor();
   });
 }
-
 
 function getCurrentTokens(): ThemeV2Tokens{
   const themeTokens: ThemeV2Tokens = {
