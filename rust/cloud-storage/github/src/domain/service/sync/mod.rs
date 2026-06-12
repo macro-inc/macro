@@ -7,6 +7,7 @@ mod handle_comment;
 mod handle_installation;
 mod handle_pr;
 mod notify_pr;
+mod notify_pr_activity;
 
 use crate::domain::{
     models::{
@@ -833,6 +834,10 @@ impl<
                 if let Some((pull_request, upserts)) = &upsert_result {
                     self.notify_pr_status_transitions(webhook_event, pull_request, upserts)
                         .await;
+                    if action == Some("review_requested") {
+                        self.notify_review_requested(webhook_event, pull_request, upserts)
+                            .await;
+                    }
                 }
 
                 match action {

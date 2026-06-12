@@ -1049,11 +1049,18 @@ fn notification_request_recipients(request: &serde_json::Value) -> Vec<String> {
 }
 
 fn assert_github_pr_notification_realtime_enabled_apns_disabled(request: &serde_json::Value) {
+    assert_github_notification_realtime_enabled_apns_disabled(request, "github_pr_status_changed");
+}
+
+fn assert_github_notification_realtime_enabled_apns_disabled(
+    request: &serde_json::Value,
+    tag: &str,
+) {
     assert_eq!(
         request
             .pointer("/req/notification/tag")
             .and_then(|value| value.as_str()),
-        Some("github_pr_status_changed")
+        Some(tag)
     );
     assert_eq!(
         request
@@ -3332,4 +3339,192 @@ async fn installation_deleted_is_skipped() {
     service.process_webhook_event(&event).await.unwrap();
 
     assert!(service.repo.installation_sources().is_empty());
+}
+
+// ---------------------------------------------------------------------------
+// notify_review_requested
+// ---------------------------------------------------------------------------
+
+fn notification_review_requested_event(
+    reviewer: Option<(u64, &str)>,
+    sender_id: u64,
+    sender_login: &str,
+) -> ValidatedGithubWebhookEvent {
+    let mut payload = serde_json::json!({
+        "action": "review_requested",
+        "pull_request": {
+            "number": 42,
+            "title": "Add GitHub notifications",
+            "body": null,
+            "head": { "ref": "feature/some-branch" },
+            "base": { "ref": "main" },
+            "state": "open",
+            "merged": false,
+            "merged_at": null,
+            "additions": 10,
+            "deletions": 2
+        },
+        "repository": {
+            "name": "my-repo",
+            "owner": { "login": "my-org" }
+        },
+        "installation": { "id": 12345 },
+        "sender": {
+            "login": sender_login,
+            "id": sender_id,
+            "avatar_url": format!("https://avatars.example/{sender_login}.png")
+        }
+    });
+    match reviewer {
+        Some((reviewer_id, reviewer_login)) => {
+            payload["requested_reviewer"] = serde_json::json!({
+                "id": reviewer_id,
+                "login": reviewer_login,
+            });
+        }
+        None => {
+            payload["requested_team"] = serde_json::json!({
+                "id": 9000,
+                "slug": "platform",
+            });
+        }
+    }
+
+    ValidatedGithubWebhookEvent::new("pull_request".to_string(), payload)
+}
+
+#[tokio::test]
+async fn review_requested_notifies_only_mapped_reviewer_in_team() {
+    let team_id: uuid::Uuid = "dddddddd-dddd-dddd-dddd-dddddddddddd".parse().unwrap();
+    let repo = StubSyncRepo::new()
+        .with_installation_sources("12345", vec![GithubAppInstallationSource::Team(team_id)])
+        .with_team_members(
+            team_id,
+            vec![
+                "macro|alice@user.com",
+                "macro|bob@user.com",
+                "macro|carol@user.com",
+            ],
+        )
+        .with_github_link("222", "macro|alice@user.com")
+        .with_github_link("333", "macro|bob@user.com");
+    let service = make_sync_service_with_repo(repo);
+    let event = notification_review_requested_event(Some((333, "bob-gh")), 222, "octocat");
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    let foreign_entity_id = service.foreign_entity_service.foreign_entities()[0].id;
+    let requests = service.notification_ingress.requests();
+    assert_eq!(
+        requests.len(),
+        1,
+        "expected only the review-requested notification"
+    );
+
+    let request = &requests[0];
+    assert_github_notification_realtime_enabled_apns_disabled(request, "github_review_requested");
+    assert_eq!(
+        notification_request_recipients(request),
+        vec!["macro|bob@user.com".to_string()]
+    );
+    assert_eq!(
+        request
+            .pointer("/req/sender_id")
+            .and_then(|value| value.as_str()),
+        Some("macro|alice@user.com")
+    );
+
+    let content = notification_request_content(request);
+    assert_eq!(
+        content
+            .get("foreignEntityId")
+            .and_then(|value| value.as_str()),
+        Some(foreign_entity_id.to_string().as_str())
+    );
+    assert_eq!(
+        content
+            .get("requestedReviewerGithubLogin")
+            .and_then(|value| value.as_str()),
+        Some("bob-gh")
+    );
+    assert_eq!(
+        content
+            .get("requestedReviewerGithubUserId")
+            .and_then(|value| value.as_str()),
+        Some("333")
+    );
+    assert_eq!(
+        content.get("displayName").and_then(|value| value.as_str()),
+        Some("my-org/my-repo#42")
+    );
+}
+
+#[tokio::test]
+async fn review_requested_unmapped_reviewer_does_not_notify() {
+    let team_id: uuid::Uuid = "dddddddd-dddd-dddd-dddd-dddddddddddd".parse().unwrap();
+    let repo = StubSyncRepo::new()
+        .with_installation_sources("12345", vec![GithubAppInstallationSource::Team(team_id)])
+        .with_team_members(team_id, vec!["macro|alice@user.com"]);
+    let service = make_sync_service_with_repo(repo);
+    let event = notification_review_requested_event(Some((999, "stranger")), 222, "octocat");
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    assert!(service.notification_ingress.requests().is_empty());
+}
+
+#[tokio::test]
+async fn review_requested_reviewer_outside_source_recipients_does_not_notify() {
+    let team_id: uuid::Uuid = "dddddddd-dddd-dddd-dddd-dddddddddddd".parse().unwrap();
+    let repo = StubSyncRepo::new()
+        .with_installation_sources("12345", vec![GithubAppInstallationSource::Team(team_id)])
+        .with_team_members(team_id, vec!["macro|alice@user.com"])
+        .with_github_link("333", "macro|outsider@user.com");
+    let service = make_sync_service_with_repo(repo);
+    let event = notification_review_requested_event(Some((333, "bob-gh")), 222, "octocat");
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    assert!(service.notification_ingress.requests().is_empty());
+}
+
+#[tokio::test]
+async fn review_requested_team_reviewer_does_not_notify() {
+    let team_id: uuid::Uuid = "dddddddd-dddd-dddd-dddd-dddddddddddd".parse().unwrap();
+    let repo = StubSyncRepo::new()
+        .with_installation_sources("12345", vec![GithubAppInstallationSource::Team(team_id)])
+        .with_team_members(team_id, vec!["macro|alice@user.com"]);
+    let service = make_sync_service_with_repo(repo);
+    let event = notification_review_requested_event(None, 222, "octocat");
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    assert!(service.notification_ingress.requests().is_empty());
+}
+
+#[tokio::test]
+async fn review_requested_user_source_notifies_installed_reviewer() {
+    let repo = StubSyncRepo::new()
+        .with_installation_sources(
+            "12345",
+            vec![GithubAppInstallationSource::User(
+                "macro|solo@user.com".to_string(),
+            )],
+        )
+        .with_github_link("333", "macro|solo@user.com");
+    let service = make_sync_service_with_repo(repo);
+    let event = notification_review_requested_event(Some((333, "solo-gh")), 222, "octocat");
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    let requests = service.notification_ingress.requests();
+    assert_eq!(requests.len(), 1);
+    assert_github_notification_realtime_enabled_apns_disabled(
+        &requests[0],
+        "github_review_requested",
+    );
+    assert_eq!(
+        notification_request_recipients(&requests[0]),
+        vec!["macro|solo@user.com".to_string()]
+    );
 }
