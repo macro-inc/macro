@@ -450,6 +450,7 @@ export function ThemeEditorBasic(){
 
         <div
           style="
+            --b4: color-mix(in oklch, oklch(var(--b4l) var(--b4c) var(--b4h)), oklch(var(--c4l) var(--c4c) var(--c4h)) 30%);
             height: min-content;
             display: grid;
             width: 100%;
