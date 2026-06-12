@@ -7,7 +7,7 @@ import { ContactsService } from './service';
 
 const tags = {
   environment: stack,
-  tech_lead: 'paul',
+  tech_lead: 'hutch',
   project: 'contacts',
 };
 

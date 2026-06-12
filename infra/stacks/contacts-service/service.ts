@@ -265,6 +265,7 @@ export class ContactsService extends pulumi.ComponentResource {
                   value: '1',
                 },
               ],
+              secrets: [...containerSecrets],
               logConfiguration: {
                 logDriver: 'awsfirelens',
                 options: {
