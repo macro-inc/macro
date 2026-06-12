@@ -110,9 +110,9 @@ function invertLightness(): void{
   });
 }
 
-/** Dormant plumbing: inverts the live theme to match the current effective mode,
- *  only if it doesn't already match. Idempotent and saved-state preserving.
- *  Nothing calls this today (mode switching disabled). */
+/** Inverts the live theme to match the current effective mode, only if it doesn't
+ *  already match. Idempotent and saved-state preserving (toggling never marks the
+ *  theme as a new/unsaved theme). */
 export function enforceModeLive(): void{
   if(isThemeDark() === (effectiveMode() === 'dark')){return}
   const wasSaved = isThemeSaved();
@@ -121,6 +121,13 @@ export function enforceModeLive(): void{
     setIsThemeSaved(wasSaved); /* preserve saved state across the unsave effect, mirroring applyTheme */
     syncHtmlColor();
   });
+}
+
+/** Switches the displayed theme to light or dark, inverting its lightness when it
+ *  doesn't already match. Backs the Light/Dark toggle. */
+export function setMode(mode: 'light' | 'dark'): void{
+  setThemeMode(mode);
+  enforceModeLive();
 }
 
 function getCurrentTokens(): ThemeV2Tokens{
@@ -167,8 +174,8 @@ export function deleteTheme(id: string): void{
   }
 }
 
-/** Returns true when the live theme is dark (text lighter than background). */
-function isThemeDark(): boolean {
+/** Returns true when the live theme is dark (text lighter than background). Reactive. */
+export function isThemeDark(): boolean {
   return themeReactive.c0.l[0]() > themeReactive.b0.l[0]();
 }
 
