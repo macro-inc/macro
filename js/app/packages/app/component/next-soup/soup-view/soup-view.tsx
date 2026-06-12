@@ -1133,7 +1133,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
               </Show>
               <StaticMarkdownContext>
                 <Switch>
-                  <Match when={source.isLoading() && !rows().length}>
+                  <Match when={source.isFetching() && !rows().length}>
                     <LoadingBlock />
                   </Match>
                   <Match
@@ -1147,7 +1147,12 @@ export const SoupViewList = (props: SoupViewListProps) => {
                       Searching...
                     </div>
                   </Match>
-                  <Match when={!rows().length || forceEmptyState()}>
+                  <Match
+                    when={
+                      (!source.isFetching() && !rows().length) ||
+                      forceEmptyState()
+                    }
+                  >
                     <EmptyState
                       listView={currentView()}
                       search={!!searchText()}
