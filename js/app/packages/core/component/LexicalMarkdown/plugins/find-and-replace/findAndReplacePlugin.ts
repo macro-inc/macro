@@ -62,6 +62,7 @@ interface NoneBreakNode {
 }
 
 type FindAndReplaceProps = {
+  getListOffset: () => NodekeyOffset[];
   setListOffset: (listOffset: NodekeyOffset[]) => void;
 };
 
@@ -456,11 +457,30 @@ function selectNextKey(key: NodeKey) {
   $setSelection(nodeSelection);
 }
 
+function areListOffsetsEqual(left: NodekeyOffset[], right: NodekeyOffset[]) {
+  if (left.length !== right.length) return false;
+  for (let i = 0; i < left.length; i += 1) {
+    const leftItem = left[i];
+    const rightItem = right[i];
+    if (leftItem.key !== rightItem.key) return false;
+    if (leftItem.pairKey !== rightItem.pairKey) return false;
+    if (leftItem.offset.start !== rightItem.offset.start) return false;
+    if (leftItem.offset.end !== rightItem.offset.end) return false;
+    if (leftItem.offset.isReplace !== rightItem.offset.isReplace) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function registerFindAndReplacePlugin(
   editor: LexicalEditor,
   props: FindAndReplaceProps
 ) {
   const updateListOffset = (nodeKeyOffsetList: NodekeyOffset[]) => {
+    if (areListOffsetsEqual(props.getListOffset(), nodeKeyOffsetList)) {
+      return;
+    }
     props.setListOffset(nodeKeyOffsetList);
   };
 

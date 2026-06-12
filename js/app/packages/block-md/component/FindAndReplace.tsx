@@ -17,7 +17,7 @@ import CaretUp from '@phosphor/caret-up.svg';
 import MagnifyingGlass from '@phosphor/magnifying-glass.svg';
 import X from '@phosphor/x.svg';
 import { createCallback } from '@solid-primitives/rootless';
-import { cn, Tooltip } from '@ui';
+import { cn, Panel, Tooltip } from '@ui';
 import type { JSX } from 'solid-js';
 import { createEffect, createSignal, on, onCleanup, Show } from 'solid-js';
 
@@ -283,7 +283,10 @@ export function FindAndReplace() {
 
   return (
     <Show when={findAndReplaceStore.searchIsOpen}>
-      <div class="flex items-center justify-start rounded-md border border-edge bg-surface p-1 shadow w-fit">
+      <Panel
+        depth={3}
+        class="flex items-center justify-start rounded-xl bg-surface p-2 shadow-lg shadow-drop-shadow w-fit"
+      >
         <div class="flex items-center px-1">
           <Tooltip
             label={`${findAndReplaceStore.replaceInputOpen ? 'Collapse' : 'Expand'} Search Bar`}
@@ -411,7 +414,7 @@ export function FindAndReplace() {
             </div>
           </Show>
         </div>
-      </div>
+      </Panel>
     </Show>
   );
 }

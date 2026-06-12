@@ -205,7 +205,7 @@ function BlockMarkdownContent({ optimisticSnapshot }: BlockMarkdownProps) {
                 </Suspense>
                 <Suspense>
                   <Show when={!isInstructionsMd()}>
-                    <div class="absolute right-4 bottom-[-12] translate-y-full z-action-menu flex justify-end">
+                    <div class="absolute right-4 top-1.5 z-action-menu flex justify-end">
                       <FindAndReplace />
                     </div>
                   </Show>

@@ -421,34 +421,9 @@ export function MarkdownEditor(props: {
     dndDragMove(event);
   });
 
-  // handler for the find and replace directive
-  const areListOffsetsEqual = (
-    left: NodekeyOffset[],
-    right: NodekeyOffset[]
-  ) => {
-    if (left.length !== right.length) return false;
-    for (let i = 0; i < left.length; i += 1) {
-      const leftItem = left[i];
-      const rightItem = right[i];
-      if (leftItem.key !== rightItem.key) return false;
-      if (leftItem.pairKey !== rightItem.pairKey) return false;
-      if (leftItem.offset.start !== rightItem.offset.start) return false;
-      if (leftItem.offset.end !== rightItem.offset.end) return false;
-      if (leftItem.offset.isReplace !== rightItem.offset.isReplace) {
-        return false;
-      }
-    }
-    return true;
-  };
-
   const onSetListOffset = (listOffset: NodekeyOffset[]) => {
-    if (areListOffsetsEqual(findAndReplaceStore.listOffset, listOffset)) {
-      return;
-    }
     setFindAndReplaceStore('listOffset', listOffset);
-    if (
-      findAndReplaceStore.currentMatch >= listOffset.length
-    ) {
+    if (findAndReplaceStore.currentMatch >= listOffset.length) {
       setFindAndReplaceStore('currentMatch', 0);
     }
   };
@@ -599,6 +574,7 @@ export function MarkdownEditor(props: {
     )
     .use(
       findAndReplacePlugin({
+        getListOffset: () => findAndReplaceStore.listOffset,
         setListOffset: onSetListOffset,
       })
     )
