@@ -1,4 +1,5 @@
 import { toast } from '@core/component/Toast/Toast';
+import { match } from 'ts-pattern';
 import { Button, Dialog, Panel, Tooltip } from '@ui';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
@@ -350,16 +351,12 @@ export function Email() {
 }
 
 function syncStatusLabel(status: SyncStatus): string {
-  switch (status) {
-    case 'SYNCING':
-      return 'Syncing…';
-    case 'UP_TO_DATE':
-      return 'Up to date';
-    case 'ERROR':
-      return 'Error — re-sync';
-    case 'INACTIVE':
-      return 'Disabled';
-  }
+  return match(status)
+    .with('SYNCING', () => 'Syncing…')
+    .with('UP_TO_DATE', () => 'Up to date')
+    .with('ERROR', () => 'Error — re-sync')
+    .with('INACTIVE', () => 'Disabled')
+    .exhaustive();
 }
 
 function Chip(props: { label: string }) {

@@ -2,6 +2,7 @@ import { toast } from '@core/component/Toast/Toast';
 import GithubIcon from '@icon/mcp-github.svg';
 import { authServiceClient } from '@service-auth/client';
 import { createResource, Show } from 'solid-js';
+import { match } from 'ts-pattern';
 import { Button } from '@ui';
 import {
   ConnectionHero,
@@ -76,16 +77,16 @@ export function GitHub() {
     }
   };
 
-  const pill = (): { state: ConnectionState; label: string } => {
-    switch (status()) {
-      case 'linked':
-        return { state: 'connected', label: 'Connected' };
-      case 'reauthentication_required':
-        return { state: 'attention', label: 'Reconnect required' };
-      default:
-        return { state: 'disconnected', label: 'Not connected' };
-    }
-  };
+  const pill = (): { state: ConnectionState; label: string } =>
+    match(status())
+      .with('linked', () => ({ state: 'connected', label: 'Connected' }) as const)
+      .with(
+        'reauthentication_required',
+        () => ({ state: 'attention', label: 'Reconnect required' }) as const
+      )
+      .otherwise(
+        () => ({ state: 'disconnected', label: 'Not connected' }) as const
+      );
 
   return (
     <IntegrationPanelShell title="GitHub">
