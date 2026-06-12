@@ -76,4 +76,5 @@ const _fileTypeColors: Record<BlockName | BlockAlias | 'default', string> = {
   unknown: defaultFileColor,
   task: defaultFileColor,
   automation: defaultFileColor,
+  pr: defaultFileColor,
 };

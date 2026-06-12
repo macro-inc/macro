@@ -153,6 +153,9 @@
       "@block-email/*": [
         "./packages/block-email/*"
       ],
+      "@block-pr/*": [
+        "./packages/block-pr/*"
+      ],
       "@block-md/*": [
         "./packages/block-md/*"
       ],

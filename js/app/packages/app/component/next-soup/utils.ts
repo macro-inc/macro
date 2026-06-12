@@ -6,6 +6,8 @@ import { getChannelParams } from '@block-channel/utils/link';
 import { URL_PARAMS as EMAIL_PARAMS } from '@block-email/constants';
 import { URL_PARAMS as MD_PARAMS } from '@block-md/constants';
 import { URL_PARAMS as PDF_PARAMS } from '@block-pdf/signal/location';
+import { seedPrBlockData } from '@block-pr/data/queries';
+import { encodePrKey } from '@block-pr/util/prKey';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import {
   ENTITY_ID_DATA_ATTRIBUTE,
@@ -15,7 +17,6 @@ import type { BlockOrchestrator } from '@core/orchestrator';
 import type { DateValue } from '@core/util/date';
 import { throwOnErr } from '@core/util/result';
 import { waitForFrames } from '@core/util/sleep';
-import { openExternalUrl } from '@core/util/url';
 import {
   type EntityData,
   getSnippetHit,
@@ -335,9 +336,20 @@ export const openEntityInSplitFromUnifiedList = async (
     return;
   }
 
-  // TODO(dev-rb/github): Route GitHub PRs to /pr.
   if (isGithubPrEntity(entity)) {
-    openExternalUrl(entity.metadata.url);
+    // Seed the PR block with the entity's stored metadata so it renders
+    // without needing a personal GitHub link.
+    const prRef = seedPrBlockData(entity);
+    splitManager.openWithSplit(
+      { type: 'pr', id: encodePrKey(prRef) },
+      {
+        referredFrom: 'list-view',
+        activate: true,
+        preferNewSplit: openInNewSplit,
+        handle: splitHandle,
+        mergeHistory,
+      }
+    );
     return;
   }
   if (entity.type === 'foreign') return;

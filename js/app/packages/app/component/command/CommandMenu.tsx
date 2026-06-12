@@ -2,13 +2,14 @@ import { useAnalytics } from '@app/component/analytics-context';
 import { getSearchSplit } from '@app/component/next-soup/soup-view/search-controllers';
 import { isListViewID } from '@app/constants/list-views';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { seedPrBlockData } from '@block-pr/data/queries';
+import { encodePrKey } from '@block-pr/util/prKey';
 import { TabsInset } from '@core/component/TabsInset';
 import { itemToBlockName } from '@core/constant/allBlocks';
 import { getActiveCommandsFromScope } from '@core/hotkey/getCommands';
 import type { RegisterHotkeyReturn } from '@core/hotkey/types';
 import { runCommand } from '@core/hotkey/utils';
 import { debouncedDependent } from '@core/util/debounce';
-import { openExternalUrl } from '@core/util/url';
 import { type EntityData, InlineEntity, isGithubPrEntity } from '@entity';
 import Macro from '@icon/macro-logo.svg';
 import ArrowLeft from '@phosphor/arrow-left.svg';
@@ -210,9 +211,14 @@ export function CommandMenuInner(props: {
 
     // Handle entity items (documents, channels, chats, etc.)
     if (isEntityItem(item)) {
-      // TODO(dev-rb/github): Route GitHub PRs to /pr.
       if (isGithubPrEntity(item.data)) {
-        openExternalUrl(item.data.metadata.url);
+        // Seed the PR block with the entity's stored metadata so it renders
+        // without needing a personal GitHub link.
+        const prRef = seedPrBlockData(item.data);
+        openWithSplit(
+          { type: 'pr', id: encodePrKey(prRef) },
+          { referredFrom: 'kommand-menu', preferNewSplit: openInNewSplit }
+        );
         CommandState.close();
         CommandState.setQuery('');
         return;

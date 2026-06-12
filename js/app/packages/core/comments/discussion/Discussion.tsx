@@ -92,7 +92,7 @@ export function Discussion() {
   );
 }
 
-function DiscussionThreadView(props: { thread: ViewThread }) {
+export function DiscussionThreadView(props: { thread: ViewThread }) {
   const source = useDiscussion();
   const canEdit = source.canEdit;
 

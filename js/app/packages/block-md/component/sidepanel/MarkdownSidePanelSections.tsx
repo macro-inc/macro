@@ -1,6 +1,9 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { SidePanel } from '@app/component/side-panel';
 import { EntityPropertiesSection } from '@app/component/side-panel/properties';
+import { useSplitLayout } from '@app/component/split-layout/layout';
+import { URL_PARAMS as PR_URL_PARAMS } from '@block-pr/constants';
+import { encodePrKey } from '@block-pr/util/prKey';
 import { useBlockAliasedName, useBlockId, useBlockName } from '@core/block';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
@@ -19,6 +22,7 @@ import { type DateValue, formatDate } from '@core/util/date';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import GithubIcon from '@icon/mcp-github.svg';
 import { useNotificationsForEntity } from '@notifications';
+import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
 import ClockIcon from '@phosphor/clock.svg';
 import {
   getDefaultPinnedProperties,
@@ -392,6 +396,7 @@ function GithubSectionConditional(props: {
     props.documentId,
     props.isTask
   );
+  const { openWithSplit } = useSplitLayout();
 
   const pullRequests = createMemo((): GithubPullRequest[] => {
     if (!props.isTask || query.isLoading || query.isError) return [];
@@ -415,15 +420,27 @@ function GithubSectionConditional(props: {
                     <Show when={i() > 0}>
                       <span class="text-ink-extra-muted">,</span>
                     </Show>
-                    <a
-                      href={pr.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                    <button
+                      type="button"
                       class="inline-flex min-w-0 items-center gap-1 text-ink hover:text-ink"
                       title={
                         pr.name?.trim()
                           ? `${pr.name.trim()} ${pr.displayName}`
                           : pr.displayName
+                      }
+                      onClick={() =>
+                        openWithSplit(
+                          {
+                            type: 'pr',
+                            id: encodePrKey({
+                              owner: pr.owner,
+                              repo: pr.repo,
+                              number: pr.number,
+                            }),
+                            params: { [PR_URL_PARAMS.task]: props.documentId },
+                          },
+                          { referredFrom: null }
+                        )
                       }
                     >
                       <GithubIcon
@@ -433,6 +450,15 @@ function GithubSectionConditional(props: {
                       <span class="truncate underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2 hover:decoration-current">
                         {pr.displayName}
                       </span>
+                    </button>
+                    <a
+                      href={pr.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={`Open ${pr.displayName} on GitHub`}
+                      class="shrink-0 text-ink-extra-muted hover:text-ink"
+                    >
+                      <ArrowSquareOutIcon class="size-3" aria-hidden="true" />
                     </a>
                   </>
                 )}

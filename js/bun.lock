@@ -201,6 +201,9 @@
         "zod-validation-error": "^5.0.0",
       },
     },
+    "app/packages/block-pr": {
+      "name": "block-pr",
+    },
     "app/packages/block-project": {
       "name": "block-project",
     },
@@ -1671,6 +1674,8 @@
     "block-markdown": ["block-markdown@workspace:app/packages/block-md"],
 
     "block-pdf": ["block-pdf@workspace:app/packages/block-pdf"],
+
+    "block-pr": ["block-pr@workspace:app/packages/block-pr"],
 
     "block-project": ["block-project@workspace:app/packages/block-project"],
 

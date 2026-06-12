@@ -261,6 +261,12 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     background: 'bg-default/20',
     prettyName: 'GitHub Pull Request',
   },
+  pr: {
+    icon: GithubIcon,
+    foreground: 'text-default',
+    background: 'bg-default/20',
+    prettyName: 'Pull Request',
+  },
   task: {
     icon: Check,
     foreground: 'text-task',
@@ -344,6 +350,7 @@ const WIDE_ICONS: Record<
   emailRead: WideEmail,
   emailInvite: WideCalendar,
   githubPullRequest: GithubIcon,
+  pr: GithubIcon,
   task: WideTask,
   automation: Robot,
   crm_company: AnimatedCompanyIcon,

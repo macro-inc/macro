@@ -1,4 +1,5 @@
 import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
+import { encodePrKey, parseGithubPrUrl } from '@block-pr/util/prKey';
 import {
   type EntityItem,
   exclude,
@@ -89,6 +90,47 @@ function makeSearchItem(query: string, category: CategoryFilter): SearchItem {
     timestamps: { viewedAt: undefined, updatedAt: undefined },
     query,
     category,
+  };
+}
+
+/**
+ * When the query is a pasted github.com PR URL, surface an item that opens it
+ * as a PR block. Synthesized as a GithubPullRequestEntity so it renders and
+ * activates through the existing entity paths.
+ */
+function makePastedPrUrlItem(query: string): EntityItem | null {
+  const ref = parseGithubPrUrl(query);
+  if (!ref) return null;
+  const displayName = `${ref.owner}/${ref.repo}#${ref.number}`;
+  return {
+    id: `github-pr-url:${encodePrKey(ref)}`,
+    kind: 'entity',
+    bucket: 'document',
+    searchText: query,
+    sortTimestamp: 0,
+    timestamps: { viewedAt: undefined, updatedAt: undefined },
+    data: {
+      id: `github-pr-url:${encodePrKey(ref)}`,
+      name: displayName,
+      ownerId: '',
+      type: 'foreign',
+      foreignId: `${ref.owner}/${ref.repo}/pull/${ref.number}`,
+      storedForId: '',
+      storedForAuthEntity: 'team',
+      foreignSource: 'github_pull_request',
+      metadata: {
+        number: ref.number,
+        name: displayName,
+        owner: ref.owner,
+        repo: ref.repo,
+        url: query.trim(),
+        status: 'open',
+        additions: 0,
+        deletions: 0,
+        comments: [],
+        checks: [],
+      },
+    },
   };
 }
 
@@ -283,6 +325,11 @@ export function useCommandItems(
   const filteredItems = createMemo(() => {
     const q = query();
     const items = categoryItems();
+
+    const pastedPrItem = makePastedPrUrlItem(q);
+    if (pastedPrItem) {
+      return [pastedPrItem];
+    }
 
     const ranked = q ? search()(items, q).map((result) => result.item) : items;
 
