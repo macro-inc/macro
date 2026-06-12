@@ -34,7 +34,11 @@ export function getActionVerb(type: NotificationType): string {
     .with('channel_invite', () => 'invited you')
     .with('invite_to_team', () => 'invited you')
     .with('task_assigned', () => 'assigned you')
-    .with('github_pr_event', () => 'updated a pull request')
+    .with('github_pr_status_changed', () => 'updated a pull request')
+    .with('github_review_requested', () => 'requested your review')
+    .with('github_pr_comment', () => 'commented on a pull request')
+    .with('github_pr_mention', () => 'mentioned you on a pull request')
+    .with('github_pr_review', () => 'reviewed your pull request')
     .with('call-started', () => 'started a call')
     .exhaustive();
 }
@@ -63,9 +67,15 @@ export function getTypeNoun(type: NotificationType, count: number): string {
     .with('channel_invite', () => (count === 1 ? 'invite' : 'invites'))
     .with('invite_to_team', () => (count === 1 ? 'invite' : 'invites'))
     .with('task_assigned', () => (count === 1 ? 'task' : 'tasks'))
-    .with('github_pr_event', () =>
+    .with('github_pr_status_changed', () =>
       count === 1 ? 'pull request' : 'pull requests'
     )
+    .with('github_review_requested', () =>
+      count === 1 ? 'review request' : 'review requests'
+    )
+    .with('github_pr_comment', () => (count === 1 ? 'comment' : 'comments'))
+    .with('github_pr_mention', () => (count === 1 ? 'mention' : 'mentions'))
+    .with('github_pr_review', () => (count === 1 ? 'review' : 'reviews'))
     .with('call-started', () => (count === 1 ? 'call' : 'calls'))
     .exhaustive();
 }
