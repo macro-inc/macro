@@ -5,9 +5,12 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { EnrichedGithubPullRequestAdditions } from './enrichedGithubPullRequestAdditions';
+import type { EnrichedGithubPullRequestAuthorId } from './enrichedGithubPullRequestAuthorId';
+import type { EnrichedGithubPullRequestAuthorLogin } from './enrichedGithubPullRequestAuthorLogin';
 import type { EnrichedGithubPullRequestChecks } from './enrichedGithubPullRequestChecks';
 import type { EnrichedGithubPullRequestComments } from './enrichedGithubPullRequestComments';
 import type { EnrichedGithubPullRequestDeletions } from './enrichedGithubPullRequestDeletions';
+import type { EnrichedGithubPullRequestDescription } from './enrichedGithubPullRequestDescription';
 import type { EnrichedGithubPullRequestName } from './enrichedGithubPullRequestName';
 import type { EnrichedGithubPullRequestParticipantGithubUserIds } from './enrichedGithubPullRequestParticipantGithubUserIds';
 import type { EnrichedGithubPullRequestStatus } from './enrichedGithubPullRequestStatus';
@@ -21,6 +24,13 @@ export interface EnrichedGithubPullRequest {
    * @minimum 0
    */
   additions?: EnrichedGithubPullRequestAdditions;
+  /**
+   * The stable numeric GitHub user id for the pull request author, when available.
+   * @minimum 0
+   */
+  authorId?: EnrichedGithubPullRequestAuthorId;
+  /** The GitHub login for the pull request author, when available. */
+  authorLogin?: EnrichedGithubPullRequestAuthorLogin;
   /** Check runs collected from the pull request head commit, when enrichment includes them. */
   checks?: EnrichedGithubPullRequestChecks;
   /** Comments collected from the pull request, when enrichment includes them. */
@@ -30,6 +40,8 @@ export interface EnrichedGithubPullRequest {
    * @minimum 0
    */
   deletions?: EnrichedGithubPullRequestDeletions;
+  /** The pull request description (body), when available. */
+  description?: EnrichedGithubPullRequestDescription;
   /** A compact label suitable for display in the UI. */
   displayName: string;
   /** The stored GitHub association key, in `owner/repo/pull/number` format. */

@@ -3460,6 +3460,16 @@
             "description": "The number of added lines reported by GitHub, when enrichment succeeds.",
             "minimum": 0
           },
+          "authorId": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "The stable numeric GitHub user id for the pull request author, when available.",
+            "minimum": 0
+          },
+          "authorLogin": {
+            "type": ["string", "null"],
+            "description": "The GitHub login for the pull request author, when available."
+          },
           "checks": {
             "type": ["array", "null"],
             "items": {
@@ -3479,6 +3489,10 @@
             "format": "int64",
             "description": "The number of deleted lines reported by GitHub, when enrichment succeeds.",
             "minimum": 0
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "The pull request description (body), when available."
           },
           "displayName": {
             "type": "string",
