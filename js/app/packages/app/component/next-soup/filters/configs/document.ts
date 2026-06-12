@@ -9,8 +9,7 @@ import {
 
 const docMarkdownFilter = config({
   id: 'doc-markdown',
-  predicate: (e) =>
-    isDocumentEntity(e) && e.fileType === 'md' && !e.subType,
+  predicate: (e) => isDocumentEntity(e) && e.fileType === 'md' && !e.subType,
   query: { include: { fileAssoc: ['assoc:md'] } },
 });
 
