@@ -655,6 +655,12 @@ const cloudStorageService = new CloudStorageService(
         name: 'SNS_APNS_VOIP_PLATFORM_ARN',
         value: pulumi.interpolate`${snsApnsVoipPlatformArn}`,
       },
+      {
+        // Public base URL native clients use to poll call ring status
+        // while the CallKit incoming-call UI is showing.
+        name: 'CALL_RING_STATUS_BASE_URL',
+        value: getServiceUrl(ServiceUrl.DOCUMENT_STORAGE_SERVICE_URL),
+      },
       // OpenTelemetry / Datadog tracing configuration
       {
         name: 'DD_SERVICE',

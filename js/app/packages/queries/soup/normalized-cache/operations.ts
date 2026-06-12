@@ -14,59 +14,90 @@ import {
 import { isAfter } from 'date-fns';
 import { match } from 'ts-pattern';
 import { queryClient } from '../../client';
-import type { SoupApiItemFilter } from '../items';
+import type { SoupApiItemFilter, SoupAstItemsPage } from '../items';
 import { soupKeys } from '../keys';
+import {
+  insertGroupedPage,
+  insertGroupQueries,
+  removeGroupedPage,
+  removeGroupQueries,
+  syncGroupedParents,
+  syncGroupQueries,
+} from './grouped-operations';
 import {
   getNormalizationObjectKey,
   getSoupNormalizer,
   type NormalizerData,
+  soupNormKey,
+  stripSoupNormPrefix,
 } from './normalizer';
 import type {
   SoupEntityPartial,
   SoupEntityTag,
   SoupTransaction,
 } from './types';
+import { getSoupQueryMeta } from './utils';
+
+type SoupItemsInfiniteData = InfiniteData<SoupPage, unknown>;
+type SoupAstItemsInfiniteData = InfiniteData<SoupAstItemsPage, unknown>;
+type SoupSearchInfiniteData = InfiniteData<
+  { results: UnifiedSearchResponseItem[] },
+  unknown
+>;
 
 /**
- * Optimistically update a single soup entity across all queries that reference it.
- * Returns a transaction whose `rollback()` restores only the affected queries
- * Channels: `{ tag: 'channel', data: { channel: { id, ...fields } }, frecency_score }`
- * Everything else: `{ tag, data: { id, ...fields }, frecency_score }`
+ * Optimistically update a single soup entity across all queries that
+ * reference it. After normy's field merge, reconciles group membership in
+ * every grouped cache containing this entity (`itemIds`-only mutations;
+ * the items pool itself isn't moved between groups). Date and
+ * non-categorical groupings fall back to invalidation.
+ *
+ * Partial shape:
+ * - Channels: `{ tag: 'channel', data: { channel: { id, ...fields } }, frecency_score }`
+ * - Everything else: `{ tag, data: { id, ...fields }, frecency_score }`
  */
 export function optimisticUpdateSoupEntity<T extends SoupEntityTag>(
   partial: SoupEntityPartial<T>
 ): SoupTransaction {
+  queryClient.cancelQueries({ queryKey: soupKeys.items._def });
+  queryClient.cancelQueries({ queryKey: soupKeys.astItems._def });
+
   const normalizer = getSoupNormalizer();
   const normKey = getNormalizationObjectKey(partial);
 
   const dependentKeys = normKey
     ? normalizer.getDependentQueriesByIds([normKey])
     : [];
-
-  const previous = dependentKeys.map(
+  const previousDependents = dependentKeys.map(
     (key: QueryKey) =>
-      [
-        key,
-        queryClient.getQueryData<InfiniteData<SoupPage, unknown>>(key),
-      ] as const
+      [key, queryClient.getQueryData<SoupItemsInfiniteData>(key)] as const
   );
+  const previousAllSoup = snapshotSoup();
 
   normalizer.setNormalizedData(partial as NormalizerData);
 
+  if (normKey) {
+    const entityId = stripSoupNormPrefix(normKey);
+    const entity = getSoupEntityById(entityId);
+    if (entity) {
+      syncGroupedParents(entityId, entity);
+      syncGroupQueries(entityId, entity);
+    }
+  }
+
   return {
     rollback: () => {
-      for (const [key, data] of previous) {
+      for (const [key, data] of previousDependents) {
         queryClient.setQueryData(key, data);
       }
+      restoreSnapshot(previousAllSoup);
     },
   };
 }
 
-/** Read an entity from normy's normalized store by ID. Returns `undefined` if not cached. */
 export function getSoupEntityById(entityId: string): SoupApiItem | undefined {
-  return (getSoupNormalizer().getObjectById(`soup:${entityId}`) ?? undefined) as
-    | SoupApiItem
-    | undefined;
+  return (getSoupNormalizer().getObjectById(soupNormKey(entityId)) ??
+    undefined) as SoupApiItem | undefined;
 }
 
 /**
@@ -75,7 +106,7 @@ export function getSoupEntityById(entityId: string): SoupApiItem | undefined {
  */
 export function invalidateSoupEntity(entityId: string): void {
   const normalizer = getSoupNormalizer();
-  const keys = normalizer.getDependentQueriesByIds([`soup:${entityId}`]);
+  const keys = normalizer.getDependentQueriesByIds([soupNormKey(entityId)]);
   for (const queryKey of keys) {
     queryClient.invalidateQueries({ queryKey });
   }
@@ -91,12 +122,11 @@ export function invalidateAllSoup(): void {
   });
 }
 
-/** O(1) check whether an entity exists in normy's normalized store. */
 export function hasSoupEntity(entityId: string): boolean {
-  return getSoupNormalizer().getObjectById(`soup:${entityId}`) != null;
+  return getSoupNormalizer().getObjectById(soupNormKey(entityId)) != null;
 }
 
-/** Extract the canonical entity ID from a SoupApiItem (handles channel's nested `data.channel.id` and callRecord's `data.callId`). */
+/** Channels nest the id under `data.channel.id`; call records under `data.callId`. */
 export function getSoupItemId(item: SoupApiItem): string {
   switch (item.tag) {
     case 'channel':
@@ -110,106 +140,173 @@ export function getSoupItemId(item: SoupApiItem): string {
 
 /**
  * Insert a new entity into the first page of every active soup list query.
- * Normy auto-normalizes the entry on insertion, making it available via `getSoupEntityById`.
- * Use for entities that don't yet exist in the cache. For existing entities use
- * `optimisticUpdateSoupEntity` (deep-merge) instead.
+ * Grouped pages: derive the item's target groups via `computeGroupKeysForItem`
+ * and upsert into each resolvable group. Date / unresolved labels invalidate.
  */
 export function insertSoupEntity(item: SoupApiItem): SoupTransaction {
-  const previous = snapshotSoup();
+  queryClient.cancelQueries({ queryKey: soupKeys.items._def });
+  queryClient.cancelQueries({ queryKey: soupKeys.astItems._def });
 
-  queryClient.setQueriesData<InfiniteData<SoupPage, unknown>>(
+  const previous = snapshotSoup();
+  queryClient.setQueriesData<SoupItemsInfiniteData>(
     {
       predicate: (query) => {
-        const matchingKey =
-          partialMatchKey(query.queryKey, soupKeys.astItems._def) ||
-          partialMatchKey(query.queryKey, soupKeys.items._def);
-
+        if (!partialMatchKey(query.queryKey, soupKeys.items._def)) return false;
         const filter = query.meta?.itemFilter as SoupApiItemFilter | undefined;
-        if (!filter) return matchingKey;
-        return filter(item) && matchingKey;
+        return filter ? filter(item) : true;
       },
     },
     (prev) => {
-      if (!prev || !prev.pages) return prev;
+      if (!prev?.pages) return prev;
       return {
         ...prev,
-        pages: prev.pages.map((p, i) => {
-          if (i !== 0) return p;
-          return { ...p, items: [item, ...p.items] };
-        }),
+        pages: prev.pages.map((p, i) =>
+          i === 0 ? { ...p, items: [item, ...p.items] } : p
+        ),
       };
     }
   );
 
+  const parents = queryClient.getQueriesData<SoupAstItemsInfiniteData>({
+    queryKey: soupKeys.astItems._def,
+  });
+
+  for (const [key, prev] of parents) {
+    if (!prev?.pages?.length) continue;
+
+    const meta = getSoupQueryMeta(
+      queryClient.getQueryCache().find({ queryKey: key })?.meta
+    );
+    const filter = meta.itemFilter;
+    if (filter && !filter(item)) continue;
+
+    const firstPage = prev.pages[0];
+
+    if (firstPage.kind === 'flat') {
+      queryClient.setQueryData<SoupAstItemsInfiniteData>(key, {
+        ...prev,
+        pages: prev.pages.map((p, i) =>
+          i === 0 && p.kind === 'flat' ? { ...p, items: [item, ...p.items] } : p
+        ),
+      });
+
+      continue;
+    }
+
+    const nextPage = insertGroupedPage(
+      firstPage,
+      item,
+      getSoupItemId(item),
+      meta.groupBy
+    );
+
+    if (!nextPage) {
+      queryClient.invalidateQueries({ queryKey: key });
+      continue;
+    }
+
+    queryClient.setQueryData<SoupAstItemsInfiniteData>(key, {
+      ...prev,
+      pages: [nextPage, ...prev.pages.slice(1)],
+    });
+  }
+
+  insertGroupQueries(item, getSoupItemId(item));
+
   return { rollback: () => restoreSnapshot(previous) };
 }
 
-/**
- * Optimistically remove entities from all soup list queries.
- * Cancels in-flight fetches first to prevent them from re-adding removed items.
- * Snapshots the full soup cache before mutating — rollback restores everything.
- */
 export function removeSoupEntities(entityIds: Set<string>): SoupTransaction {
   queryClient.cancelQueries({ queryKey: soupKeys.items._def });
   queryClient.cancelQueries({ queryKey: soupKeys.astItems._def });
 
   const previous = snapshotSoup();
 
-  queryClient.setQueriesData<InfiniteData<SoupPage, unknown>>(
+  queryClient.setQueriesData<SoupItemsInfiniteData>(
     {
-      predicate(query) {
-        return (
-          partialMatchKey(query.queryKey, soupKeys.astItems._def) ||
-          partialMatchKey(query.queryKey, soupKeys.items._def)
-        );
-      },
+      predicate: (q) => partialMatchKey(q.queryKey, soupKeys.items._def),
     },
     (prev) => {
-      if (!prev || !prev.pages) return prev;
+      if (!prev?.pages) return prev;
       return {
         ...prev,
         pages: prev.pages.map((page) => {
           const items = page.items.filter(
             (item) => !entityIds.has(getSoupItemId(item))
           );
-          return items.length === page.items.length ? page : { ...page, items };
+          if (items.length === page.items.length) return page;
+          return { ...page, items };
         }),
       };
     }
   );
 
+  queryClient.setQueriesData<SoupAstItemsInfiniteData>(
+    { queryKey: soupKeys.astItems._def },
+    (prev) => {
+      if (!prev?.pages?.length) return prev;
+
+      const firstPage = prev.pages[0];
+
+      if (firstPage.kind === 'flat') {
+        // Flat AST queries can have multiple pages; remove the ids from every
+        // page and preserve page references that were not affected.
+        let changed = false;
+        const pages = prev.pages.map((page) => {
+          if (page.kind !== 'flat') return page;
+
+          const items = page.items.filter(
+            (item) => !entityIds.has(getSoupItemId(item))
+          );
+
+          if (items.length === page.items.length) return page;
+
+          changed = true;
+          return { ...page, items };
+        });
+
+        return changed ? { ...prev, pages } : prev;
+      }
+
+      // Grouped AST queries only use the first parent page. Group membership is
+      // fully represented there by `groups[].itemIds`, so update that page once.
+      const nextPage = removeGroupedPage(firstPage, entityIds);
+
+      return nextPage === firstPage
+        ? prev
+        : { ...prev, pages: [nextPage, ...prev.pages.slice(1)] };
+    }
+  );
+
+  removeGroupQueries(entityIds);
+
   return { rollback: () => restoreSnapshot(previous) };
 }
 
-/**
- * Optimistically remove entities from all search result queries.
- * Same cancel-snapshot-mutate pattern as `removeSoupEntities` but targets search queries.
- */
 export function removeSearchEntities(entityIds: Set<string>): SoupTransaction {
   queryClient.cancelQueries({ queryKey: soupKeys.search._def });
 
-  const previous = queryClient.getQueriesData<
-    InfiniteData<{ results: UnifiedSearchResponseItem[] }, unknown>
-  >({
+  const previous = queryClient.getQueriesData<SoupSearchInfiniteData>({
     queryKey: soupKeys.search._def,
   });
 
-  queryClient.setQueriesData<
-    InfiniteData<{ results: UnifiedSearchResponseItem[] }, unknown>
-  >({ queryKey: soupKeys.search._def }, (prev) => {
-    if (!prev) return prev;
-    return {
-      ...prev,
-      pages: prev.pages.map((page) => {
-        const results = page.results.filter(
-          (result) => !entityIds.has(getSearchResultId(result))
-        );
-        return results.length === page.results.length
-          ? page
-          : { ...page, results };
-      }),
-    };
-  });
+  queryClient.setQueriesData<SoupSearchInfiniteData>(
+    { queryKey: soupKeys.search._def },
+    (prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        pages: prev.pages.map((page) => {
+          const results = page.results.filter(
+            (result) => !entityIds.has(getSearchResultId(result))
+          );
+          return results.length === page.results.length
+            ? page
+            : { ...page, results };
+        }),
+      };
+    }
+  );
 
   return {
     rollback: () => {
@@ -256,6 +353,7 @@ export async function refetchSoupEntity(
       optimisticUpdateSoupEntity(item);
     } else {
       insertSoupEntity(item);
+      invalidateAllSoup();
     }
   }
 }
@@ -403,20 +501,22 @@ function getSearchResultId(result: UnifiedSearchResponseItem): string {
     .exhaustive();
 }
 
-/** @private */
-function snapshotSoup(): [
-  QueryKey,
-  InfiniteData<SoupPage, unknown> | undefined,
-][] {
-  return queryClient.getQueriesData<InfiniteData<SoupPage, unknown>>({
-    queryKey: soupKeys.astItems._def,
-  });
+/** @private Captures every soup-list-shaped query (legacy items, parent
+ * astItems, per-group caches) for full-range rollback. */
+function snapshotSoup(): [QueryKey, unknown][] {
+  return [
+    ...queryClient.getQueriesData<unknown>({ queryKey: soupKeys.items._def }),
+    ...queryClient.getQueriesData<unknown>({
+      queryKey: soupKeys.astItems._def,
+    }),
+    ...queryClient.getQueriesData<unknown>({
+      queryKey: soupKeys.groupedGroup._def,
+    }),
+  ];
 }
 
 /** @private */
-function restoreSnapshot(
-  snapshot: [QueryKey, InfiniteData<SoupPage, unknown> | undefined][]
-): void {
+function restoreSnapshot(snapshot: [QueryKey, unknown][]): void {
   for (const [key, data] of snapshot) {
     queryClient.setQueryData(key, data);
   }

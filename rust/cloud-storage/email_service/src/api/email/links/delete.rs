@@ -56,6 +56,7 @@ pub async fn delete_link_handler(
                 &ctx.db,
                 &user_context.user_id,
                 link.macro_id.as_ref(),
+                link.id,
             )
             .await
             .context("failed to delete delegation edge")?;

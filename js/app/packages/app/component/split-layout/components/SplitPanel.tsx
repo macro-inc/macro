@@ -1,5 +1,6 @@
 import { createSoupState } from '@app/component/next-soup/create-soup-state';
 import { SoupContextProvider } from '@app/component/next-soup/soup-context';
+import { SoupViewContextProvider } from '@app/component/next-soup/soup-view/soup-view-context';
 import { isListViewID, LIST_VIEW_ID } from '@app/constants/list-views';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { splitContainerAttribute } from '@core/dom-selectors';
@@ -202,7 +203,9 @@ export function SplitPanel(props: SplitPanelProps) {
               <Panel.Body>
                 <div class="@container/split size-full overflow-hidden relative">
                   <Suspense>
-                    <Dynamic component={props.split.mount.element} />
+                    <SoupViewContextProvider soup={nextSoup}>
+                      <Dynamic component={props.split.mount.element} />
+                    </SoupViewContextProvider>
                   </Suspense>
                 </div>
               </Panel.Body>

@@ -130,6 +130,7 @@ utoipa-swagger-ui = { workspace = true, features = ["axum"] }
 uuid = { workspace = true }
 
 macro_service_urls = { path = "../macro_service_urls" }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 ai_tools = { path = "../ai_tools", features = ["test-support"] }

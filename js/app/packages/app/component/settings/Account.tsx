@@ -35,8 +35,8 @@ import XIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
 import ArrowsClockwiseIcon from '@phosphor-icons/core/regular/arrows-clockwise.svg?component-solid';
 import PlusIcon from '@phosphor-icons/core/regular/plus.svg?component-solid';
 import { authServiceClient } from '@service-auth/client';
-import type {
-  Link as EmailLink,
+import {
+  type Link as EmailLink,
   SyncStatus,
 } from '@service-email/generated/schemas';
 import { useEmail, useLicenseStatus, useUserId } from '@core/context/user';
@@ -52,13 +52,13 @@ import {
   Switch,
 } from 'solid-js';
 import { usePermissions } from '@core/context/user';
+import { PERMISSION_IDS } from '@core/constant/permissions';
 import { useSettingsState } from '@core/constant/SettingsState';
 import PaywallComponent from '../paywall/PaywallComponent';
 import PaywallTeamMemberView from '../paywall/PaywallTeamMemberView';
 import PaywallTeamOwnerView from '../paywall/PaywallTeamOwnerView';
-import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
 import { useEmailLinks, useEmailLinksStatus } from '@core/email-link';
-import { useInitGmailLink } from '@queries/auth';
+import { AddInboxDialog, openAddInboxDialog } from '../AddInboxDialog';
 import { useRemoveInboxMutation } from '@queries/email/link';
 import {
   type SupportedNotificationSettings,
@@ -299,13 +299,13 @@ export function Account() {
     new Set()
   );
 
-  // The primary inbox is the one matching the account email; it sorts to the top
+  // The primary inbox is the user's own is_primary link; it sorts to the top
   // and is labelled. Everything else (other own inboxes + delegated/shared) follows.
   const inboxes = createMemo(() => {
     const links = emailLinksQuery.data?.links ?? [];
-    const primaryEmail = email()?.toLowerCase();
+    const uid = userId();
     const primary = links.find(
-      (link) => link.email_address.toLowerCase() === primaryEmail
+      (link) => link.is_primary && link.macro_id === uid
     );
     const others = links.filter((link) => link !== primary);
     return { primary, others };
@@ -347,16 +347,6 @@ export function Account() {
     setIsEmailActionPending(false);
   };
 
-  const initGmailLink = useInitGmailLink();
-  const handleAddInbox = async () => {
-    const callbackUrl = `${window.location.origin}${ROUTER_BASE_CONCAT}inbox-link-callback`;
-    const result = await initGmailLink.mutateAsync(callbackUrl);
-    if (result.isOk()) {
-      window.location.href = result.value.authorization_url;
-    } else {
-      toast.failure('Failed to start Gmail link flow');
-    }
-  };
 
   const handleResyncInbox = async (linkId: string) => {
     setResyncingIds((prev) => new Set(prev).add(linkId));
@@ -459,7 +449,7 @@ export function Account() {
           </Panel.Header>
 
           <Panel.Toolbar class="h-full w-full">
-            <Show when={permissions()?.includes('write:stripe_subscription') && !isNativeMobilePlatform()}>
+            <Show when={permissions()?.includes(PERMISSION_IDS.WRITE_STRIPE_SUBSCRIPTION) && !isNativeMobilePlatform()}>
               <div class="px-4 py-2 w-full">
                 <ShowFeatureFlag
                   key="enable-new-pricing"
@@ -658,7 +648,7 @@ export function Account() {
                             variant="base"
                             size="sm"
                             depth={3}
-                            onClick={handleAddInbox}
+                            onClick={openAddInboxDialog}
                             aria-label="Add inbox"
                           >
                             <PlusIcon class="size-4" />
@@ -824,6 +814,8 @@ export function Account() {
               </Panel>
             </Dialog>
 
+            <AddInboxDialog />
+
             <Show when={isNativeMobilePlatform()}>
               <div class="border-t border-edge pt-4">
                 <Button variant="danger" depth={3} onClick={() => setShowDeleteModal(true)}>
@@ -908,13 +900,13 @@ function Row(props: { label: string; children?: any }) {
 
 function syncStatusLabel(status: SyncStatus): string {
   switch (status) {
-    case 'SYNCING':
+    case SyncStatus.SYNCING:
       return 'Syncing…';
-    case 'UP_TO_DATE':
+    case SyncStatus.UP_TO_DATE:
       return 'Up to date';
-    case 'ERROR':
+    case SyncStatus.ERROR:
       return 'Error — re-sync';
-    case 'INACTIVE':
+    case SyncStatus.INACTIVE:
       return 'Disabled';
   }
 }
@@ -972,14 +964,22 @@ function InboxRow(props: {
             <Chip label="Shared" />
           </Show>
         </div>
-        <Show when={ENABLE_INBOX_SYNC_STATUS}>
+        <Show
+          when={
+            ENABLE_INBOX_SYNC_STATUS &&
+            props.link.sync_status !== SyncStatus.UP_TO_DATE
+          }
+        >
           <span
-            class="text-xs"
+            class="flex items-center gap-1 text-xs"
             classList={{
-              'text-failure': props.link.sync_status === 'ERROR',
-              'text-ink-muted': props.link.sync_status !== 'ERROR',
+              'text-failure': props.link.sync_status === SyncStatus.ERROR,
+              'text-ink-muted': props.link.sync_status !== SyncStatus.ERROR,
             }}
           >
+            <Show when={props.link.sync_status === SyncStatus.SYNCING}>
+              <ArrowsClockwiseIcon class="size-3 animate-spin" />
+            </Show>
             {syncStatusLabel(props.link.sync_status)}
           </span>
         </Show>
@@ -994,7 +994,7 @@ function InboxRow(props: {
               disabled={
                 props.resyncing ||
                 (ENABLE_INBOX_SYNC_STATUS &&
-                  props.link.sync_status === 'SYNCING')
+                  props.link.sync_status === SyncStatus.SYNCING)
               }
               onClick={props.onResync}
               aria-label={`Force sync ${props.link.email_address}`}

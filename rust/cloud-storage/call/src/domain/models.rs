@@ -72,6 +72,42 @@ pub struct VoipPushPayloadRequest<'a> {
     pub caller_name: &'a str,
     /// RTC server URL the native client should connect to.
     pub livekit_server_url: &'a str,
+    /// Absolute URL the native client polls while ringing to learn whether
+    /// the call was answered elsewhere or ended. `None` when the service has
+    /// no public base URL configured.
+    pub ring_status_url: Option<&'a str>,
+}
+
+/// Per-user status of an incoming-call ring, as reported by the
+/// ring-status endpoint while a native client is ringing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "lowercase")]
+pub enum RingStatus {
+    /// The call is active and this user has not joined yet — keep ringing.
+    Ringing,
+    /// This user joined the call on some device — stop ringing (answered elsewhere).
+    Answered,
+    /// The call is over (or was replaced by a newer call) — stop ringing (remote ended).
+    Ended,
+}
+
+/// Response body for `GET /call/ring-status/{call_id}`.
+#[derive(Debug, serde::Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct RingStatusResponse {
+    /// The ring status for the authenticated user.
+    pub status: RingStatus,
+}
+
+/// Identity and room grant extracted from a verified RTC access token.
+#[derive(Debug, Clone)]
+pub struct VerifiedRingToken {
+    /// The participant identity the token was minted for (a Macro user id string).
+    pub identity: String,
+    /// The room the token grants access to, if any.
+    pub room: Option<String>,
 }
 
 /// Response for the leave/end call operation.

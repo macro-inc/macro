@@ -7,6 +7,7 @@ mod delete;
 mod exists;
 mod get;
 mod get_folder;
+mod internal_presigned_helpers;
 mod put_presigned_url;
 mod upload_document;
 
@@ -65,6 +66,24 @@ impl S3Client {
         let stream = ByteStream::from(content);
         upload_document::upload_document(&self.inner, &self.document_storage_bucket, key, stream)
             .await
+    }
+
+    pub async fn get_snapshot_presigned_url(&self, key: &str) -> anyhow::Result<String> {
+        internal_presigned_helpers::get_presigned_url(
+            &self.inner,
+            &self.document_storage_bucket,
+            key,
+        )
+        .await
+    }
+
+    pub async fn put_snapshot_presigned_url(&self, key: &str) -> anyhow::Result<String> {
+        internal_presigned_helpers::put_internal_presigned_url(
+            &self.inner,
+            &self.document_storage_bucket,
+            key,
+        )
+        .await
     }
 
     pub async fn put_document_storage_presigned_url(

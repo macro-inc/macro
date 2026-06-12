@@ -31,3 +31,4 @@ tracing = { workspace = true }
 utoipa = { workspace = true, features = ["axum_extras", "chrono"] }
 uuid = { workspace = true }
 model-entity = { path = "../model-entity"}
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

@@ -7,6 +7,8 @@ import { getEntityValues, isEntityProperty } from '../utils';
 type Props = {
   property: Property;
   maxUsers?: number;
+  /** Extra classes applied to each avatar (e.g. responsive sizing). */
+  avatarClass?: string;
 };
 
 /**
@@ -33,6 +35,7 @@ export function PropertyUserStack(props: Props) {
               size="sm"
               suppressClick
               showTooltip={false}
+              class={props.avatarClass}
             />
           )}
         </For>

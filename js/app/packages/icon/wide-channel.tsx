@@ -1,3 +1,17 @@
+// One-shot "expand & reconverge" animation, driven by the .animating class (toggled by
+// the triggerAnimation prop, same as the other animated icons). Each line moves radially
+// outward from the icon's center, then eases back to rest with a slight overshoot — the
+// hash briefly expands and reconverges.
+//
+// Outward directions (radial from center ~(12, 8), so the hash opens up symmetrically):
+//   channel-h-top    up      (top bar separates upward)
+//   channel-h-bottom down    (bottom bar separates downward)
+//   channel-v-left   left    (left bar separates leftward)
+//   channel-v-right  right   (right bar separates rightward)
+//
+// Built on `transform` (not `d` morphing), so unlike the old version it animates in
+// Safari/WebKit too (incl. the macOS Tauri WKWebView).
+
 export const AnimatedChannelIcon = (props: {
   triggerAnimation?: boolean;
   class?: string;
@@ -18,40 +32,39 @@ export const AnimatedChannelIcon = (props: {
     >
       {/*<title>Channel icon</title>*/}
       <style>{`
-        /* The .animating class is toggled by the triggerAnimation prop; callers
-           drive it differently — held for the duration of hover in the desktop
-           sidebar (SidebarActionButton etc.), and pulsed for a fixed duration on
-           onPointerDown/tap in the mobile dock (MobileDockButton). While
-           .animating is set, the offset/leaning hash resolves into a regular hash
-           and stays there: horizontals slide to horizontally-centered
-           (translateX), verticals straighten to fully vertical by morphing their
-           path 'd'. It eases back when .animating clears. Morphing 'd' (rather
-           than skewX) avoids shearing the round caps and keeps the stroke scaling
-           normally with icon size. */
-        .animated-channel-icon .channel-h {
-          transition: transform 0.35s ease-in-out;
+        /* Each line eases out to its peak (ease-out), then reconverges with a slight
+           overshoot past rest before settling (easeOutBack). */
+        @keyframes channel-expand-up {
+          0%   { transform: translate(0, 0); animation-timing-function: ease-out; }
+          45%  { transform: translate(0, -2px); animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1); }
+          100% { transform: translate(0, 0); }
         }
-        /* Browser support for the .channel-v / .channel-v-* path morph below
-           (via 'transition: d'): Chrome/Edge >=52/79 and Firefox >=97, but NOT
-           Safari/WebKit — including the macOS Tauri WKWebView — where the 'd'
-           property parses but has no effect, so the verticals won't straighten
-           there (the translateX horizontals still animate). A WebKit fallback
-           (SMIL or JS morph) is TODO in a separate PR covering the other
-           animating icons too. */
-        .animated-channel-icon .channel-v {
-          transition: d 0.35s ease-in-out;
+        @keyframes channel-expand-down {
+          0%   { transform: translate(0, 0); animation-timing-function: ease-out; }
+          45%  { transform: translate(0, 2px); animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1); }
+          100% { transform: translate(0, 0); }
+        }
+        @keyframes channel-expand-left {
+          0%   { transform: translate(0, 0); animation-timing-function: ease-out; }
+          45%  { transform: translate(-2px, 0); animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1); }
+          100% { transform: translate(0, 0); }
+        }
+        @keyframes channel-expand-right {
+          0%   { transform: translate(0, 0); animation-timing-function: ease-out; }
+          45%  { transform: translate(2px, 0); animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1); }
+          100% { transform: translate(0, 0); }
         }
         .animated-channel-icon.animating .channel-h-top {
-          transform: translateX(-1px);
+          animation: channel-expand-up 0.625s forwards;
         }
         .animated-channel-icon.animating .channel-h-bottom {
-          transform: translateX(1px);
+          animation: channel-expand-down 0.625s forwards;
         }
         .animated-channel-icon.animating .channel-v-left {
-          d: path("M9 15.5L9 0.5");
+          animation: channel-expand-left 0.625s forwards;
         }
         .animated-channel-icon.animating .channel-v-right {
-          d: path("M15 15.5L15 0.5");
+          animation: channel-expand-right 0.625s forwards;
         }
       `}</style>
       <path class="channel-h channel-h-top" d="M2 5H24" />

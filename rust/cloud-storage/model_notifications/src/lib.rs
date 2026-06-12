@@ -12,7 +12,9 @@ pub use device::DeviceType;
 pub use metadata::{
     AiResponseMetadata, ChannelInviteMetadata, ChannelMentionMetadata, ChannelMessageSendMetadata,
     ChannelReplyMetadata, ChannelType, CommentedOnDocumentMetadata, CommonChannelMetadata,
-    DocumentMentionMetadata, GithubPrEvent, GithubPrEventAction, GithubPrEventStatus,
+    DocumentMentionMetadata, GithubPrComment, GithubPrCommentKind, GithubPrEventAction,
+    GithubPrEventStatus, GithubPrMention, GithubPrMentionLocation, GithubPrNotificationCommon,
+    GithubPrReview, GithubPrReviewState, GithubPrStatusChanged, GithubReviewRequested,
     InviteToTeamMetadata, ItemSharedMetadata, MentionedInDocumentCommentMetadata, NewEmailMetadata,
     NotificationDocumentSubType, NotificationTitle, RepliedToDocumentCommentThreadMetadata,
     TaskAssignedMetadata,
@@ -203,7 +205,23 @@ define_notif_event!(
         AiResponse(AiResponseMetadata),
 
         /// A GitHub pull request changed lifecycle state.
-        GithubPrEvent(GithubPrEvent),
+        ///
+        /// The `github_pr_event` alias keeps rows and queue messages persisted
+        /// before the rename deserializable.
+        #[serde(alias = "github_pr_event")]
+        GithubPrStatusChanged(GithubPrStatusChanged),
+
+        /// The user's review was requested on a GitHub pull request.
+        GithubReviewRequested(GithubReviewRequested),
+
+        /// A GitHub pull request was commented on.
+        GithubPrComment(GithubPrComment),
+
+        /// The user was mentioned on a GitHub pull request.
+        GithubPrMention(GithubPrMention),
+
+        /// A review was submitted on the user's GitHub pull request.
+        GithubPrReview(GithubPrReview),
     }
 );
 
@@ -239,7 +257,21 @@ impl NotificationTitle for NotifEvent {
             NotifEvent::AiResponse(ai_response_metadata) => {
                 ai_response_metadata.format_title(sender_id)
             }
-            NotifEvent::GithubPrEvent(github_pr_event) => github_pr_event.format_title(sender_id),
+            NotifEvent::GithubPrStatusChanged(github_pr_status_changed) => {
+                github_pr_status_changed.format_title(sender_id)
+            }
+            NotifEvent::GithubReviewRequested(github_review_requested) => {
+                github_review_requested.format_title(sender_id)
+            }
+            NotifEvent::GithubPrComment(github_pr_comment) => {
+                github_pr_comment.format_title(sender_id)
+            }
+            NotifEvent::GithubPrMention(github_pr_mention) => {
+                github_pr_mention.format_title(sender_id)
+            }
+            NotifEvent::GithubPrReview(github_pr_review) => {
+                github_pr_review.format_title(sender_id)
+            }
         }
     }
 
@@ -274,7 +306,19 @@ impl NotificationTitle for NotifEvent {
             NotifEvent::AiResponse(ai_response_metadata) => {
                 ai_response_metadata.format_body(sender_id)
             }
-            NotifEvent::GithubPrEvent(github_pr_event) => github_pr_event.format_body(sender_id),
+            NotifEvent::GithubPrStatusChanged(github_pr_status_changed) => {
+                github_pr_status_changed.format_body(sender_id)
+            }
+            NotifEvent::GithubReviewRequested(github_review_requested) => {
+                github_review_requested.format_body(sender_id)
+            }
+            NotifEvent::GithubPrComment(github_pr_comment) => {
+                github_pr_comment.format_body(sender_id)
+            }
+            NotifEvent::GithubPrMention(github_pr_mention) => {
+                github_pr_mention.format_body(sender_id)
+            }
+            NotifEvent::GithubPrReview(github_pr_review) => github_pr_review.format_body(sender_id),
         }
     }
 }

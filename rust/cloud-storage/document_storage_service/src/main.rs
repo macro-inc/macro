@@ -512,6 +512,10 @@ async fn main() -> anyhow::Result<()> {
     if let Some(config) = egress_config {
         call_service_builder = call_service_builder.with_egress(config);
     }
+    if let Some(base_url) = config::CallRingStatusBaseUrl::new() {
+        call_service_builder =
+            call_service_builder.with_ring_status_base_url(base_url.as_ref().to_owned());
+    }
 
     // VoIP push is optional: enabled only when both env vars are present.
     // APPLE_BUNDLE_ID:           the app bundle ID (e.g. "com.macro.app.prod")
@@ -681,6 +685,7 @@ async fn main() -> anyhow::Result<()> {
             access_service: entity_access_service.clone(),
             pool: db.clone(),
             task_dedup_service,
+            lexical_client: lexical_client.clone(),
             creator: documents_hex::domain::create::DocumentCreator::new(
                 document_service,
                 markdown_initializer,

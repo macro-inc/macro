@@ -19,7 +19,10 @@ export class MarkdownEndpoint extends OpenAPIRoute {
     request: {
       params: docIdParam,
       query: z.object({
-        target: z.enum(['internal', 'external']).optional().default('internal'),
+        target: z
+          .enum(['internal', 'external', 'embedding'])
+          .optional()
+          .default('internal'),
       }),
     },
     responses: {

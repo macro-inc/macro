@@ -137,7 +137,7 @@ interface CreateSearchStateArgs {
   soup: SoupState;
   filters: Accessor<QueryState>;
   assignees: Accessor<string[]>;
-  disableLocalSearch?: boolean;
+  disableLocalSearch?: Accessor<boolean>;
   searchPaused?: Accessor<boolean>;
   /**
    * Reactive search text. Owned by the caller so it can be wired to
@@ -195,8 +195,8 @@ export const createSearchState = ({
 
       // CRM is opt-in on the backend. A view includes CRM in search unless it
       // NIL-excludes the CRM target (the same sentinel pattern other entity
-      // types use) — so the Companies view (CRM-scoped) and the global Search
-      // view (no exclusions) search CRM, while every other view excludes it.
+      // types use) — so the Companies view (CRM-scoped) searches CRM, while
+      // every other view (including the global Search view) excludes it.
       const includeCrm = !(state.include.crmCompanyId ?? []).includes(NIL_UUID);
 
       if (!includeCrm) {
@@ -210,8 +210,8 @@ export const createSearchState = ({
 
       // CRM is opt-in on the backend. Search surfaces visible companies
       // everywhere except the admin Companies → Hidden tab, which sets
-      // `crmCompanyHidden: true` to search the hidden set. Elsewhere (global
-      // Search, Companies → Active) `crmCompanyHidden` is false/undefined →
+      // `crmCompanyHidden: true` to search the hidden set. Elsewhere
+      // (Companies → Active) `crmCompanyHidden` is false/undefined →
       // visible only. Non-CRM targets are already NIL-excluded by the
       // Companies preset.
       return {
@@ -248,7 +248,7 @@ export const createSearchState = ({
 
   const localFuzzyResults = createMemo(
     on(debouncedSearchForLocal, (query) => {
-      if (disableLocalSearch) return [];
+      if (disableLocalSearch?.()) return [];
       if (!query || query.length === 0) return [];
       const pool = entityPool();
       // TODO: we can optimize fresh search for small feature counts since we

@@ -19,3 +19,4 @@ image = { workspace = true }
 model_file_type = { path = "../model_file_type" }
 model-entity = { path = "../model-entity" }
 webp = "0.3.1"
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

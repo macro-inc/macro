@@ -84,10 +84,10 @@ export type ChatEntity = EntityBase & {
   projectId?: string;
 };
 
-/** Named sub types - currently only 'task' */
-export type NamedSubType = 'task';
+/** Named sub types - 'task' and 'snippet' */
+export type NamedSubType = 'task' | 'snippet';
 
-/** SubType for documents - currently only tasks */
+/** SubType for documents - tasks and snippets */
 export type SubType = {
   type: NamedSubType;
   is_completed?: boolean;
@@ -105,6 +105,13 @@ export type TaskEntity = EntityBase & {
   type: 'document';
   fileType: 'md';
   subType: { type: 'task'; is_completed?: boolean };
+  projectId?: string;
+};
+
+export type SnippetEntity = EntityBase & {
+  type: 'document';
+  fileType: 'md';
+  subType: { type: 'snippet' };
   projectId?: string;
 };
 
@@ -224,6 +231,7 @@ export type EntityData =
   | ChatEntity
   | DocumentEntity
   | TaskEntity
+  | SnippetEntity
   | EmailEntity
   | ProjectEntity
   | CallEntity
@@ -263,6 +271,16 @@ export const isTaskEntity = (entity: EntityData): entity is TaskEntity => {
     entity.type === 'document' &&
     entity.fileType === 'md' &&
     entity.subType?.type === 'task'
+  );
+};
+
+export const isSnippetEntity = (
+  entity: EntityData
+): entity is SnippetEntity => {
+  return (
+    entity.type === 'document' &&
+    entity.fileType === 'md' &&
+    entity.subType?.type === 'snippet'
   );
 };
 
@@ -341,12 +359,16 @@ const _isMarkdownEntity = (entity: EntityData): entity is MarkdownEntity => {
 const _isPureDocumentEntity = (
   entity: EntityData
 ): entity is DocumentEntity => {
-  return entity.type === 'document' && entity.subType?.type !== 'task';
+  return (
+    entity.type === 'document' &&
+    entity.subType?.type !== 'task' &&
+    entity.subType?.type !== 'snippet'
+  );
 };
 
 export type EntityType = EntityData['type'];
 
-export type ExpandedEntityType = EntityType | 'task';
+export type ExpandedEntityType = EntityType | 'task' | 'snippet';
 
 export type EntityWithProperties<T extends EntityData> = T & {
   properties?: SoupProperty[];

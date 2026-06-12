@@ -1,13 +1,18 @@
-//! S3 adapter for generating presigned upload URLs.
+//! S3 adapter for generating presigned upload URLs and direct S3 storage operations.
 
 use std::time::Duration;
 
 use anyhow::Context;
-use aws_sdk_s3::presigning::PresigningConfig;
+use aws_sdk_s3::{presigning::PresigningConfig, primitives::ByteStream};
 use base64::Engine;
 use model::document::ContentType;
+use s3_key::SYNC_SERVICE_SNAPSHOT_PREFIX;
 
 use crate::domain::ports::PresignedUploadUrlPort;
+
+fn snapshot_key(document_id: &str) -> String {
+    format!("{SYNC_SERVICE_SNAPSHOT_PREFIX}/{document_id}")
+}
 
 /// Adapter implementing [`PresignedUploadUrlPort`] backed by an `aws_sdk_s3::Client`.
 pub struct S3UploadUrlAdapter {
@@ -79,6 +84,53 @@ impl PresignedUploadUrlPort for S3UploadUrlAdapter {
             .key(destination_key)
             .send()
             .await?;
+
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_snapshot(&self, document_id: &str) -> anyhow::Result<Option<Vec<u8>>> {
+        let key = snapshot_key(document_id);
+
+        let resp = self
+            .client
+            .get_object()
+            .bucket(&self.document_storage_bucket)
+            .key(&key)
+            .send()
+            .await;
+
+        match resp {
+            Err(e) if e.as_service_error().map(|e| e.is_no_such_key()) == Some(true) => Ok(None),
+            Err(e) => Err(e).context("failed get_object for snapshot"),
+            Ok(output) => {
+                let bytes = output
+                    .body
+                    .collect()
+                    .await
+                    .context("failed to read snapshot body")?
+                    .into_bytes()
+                    .to_vec();
+                Ok(Some(bytes))
+            }
+        }
+    }
+
+    #[tracing::instrument(skip(self, bytes), err)]
+    async fn upload_snapshot(&self, document_id: &str, bytes: Vec<u8>) -> anyhow::Result<()> {
+        if macro_aws_config::is_local_aws() {
+            return Ok(());
+        }
+
+        let key = snapshot_key(document_id);
+        self.client
+            .put_object()
+            .bucket(&self.document_storage_bucket)
+            .key(&key)
+            .body(ByteStream::from(bytes))
+            .send()
+            .await
+            .context("failed to upload snapshot")?;
 
         Ok(())
     }

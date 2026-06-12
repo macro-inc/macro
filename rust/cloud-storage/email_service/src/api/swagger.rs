@@ -41,6 +41,7 @@ use ::email::inbound::axum::thread_project_router::{
 };
 use model::response::EmptyResponse;
 use models_email::api::link::SyncStatus;
+use models_email::api::refresh::{BackfillStatus, RefreshEmailEvent};
 use models_email::api::settings::Settings;
 use models_email::email::service;
 use models_email::email::service::address::ContactInfoWithInteraction;
@@ -154,6 +155,8 @@ use utoipa::OpenApi;
             ListLinksResponse,
             Link,
             SyncStatus,
+            RefreshEmailEvent,
+            BackfillStatus,
             ResyncResponse,
             Settings,
             // Contact types

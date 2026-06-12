@@ -12,3 +12,4 @@ inbound = ["dep:axum", "dep:utoipa"]
 axum = { workspace = true, optional = true }
 serde = { workspace = true }
 utoipa = { workspace = true, optional = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

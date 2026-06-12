@@ -20,6 +20,7 @@ class UnavailablePhotoLibraryPlugin: Plugin {
 @available(iOS 14.0, *)
 class PhotoLibraryPlugin: Plugin {
     private var pickerDelegate: PhotoLibraryPickerDelegate?
+    private weak var presentedPicker: PHPickerViewController?
 
     @objc public func pickPhotoLibraryImages(_ invoke: Invoke) throws {
         let payload = try invoke.parseArgs(PickPhotoLibraryImagesPayload.self)
@@ -29,12 +30,25 @@ class PhotoLibraryPlugin: Plugin {
         )
 
         DispatchQueue.main.async {
-            guard self.pickerDelegate == nil else {
+            if let activePicker = self.presentedPicker,
+                activePicker.isBeingPresented || activePicker.presentingViewController != nil
+            {
                 invoke.reject("Photo library picker is already open")
                 return
             }
+            // A lingering delegate whose picker is no longer on screen means
+            // the previous session ended without a delegate callback (the
+            // sheet can be dismissed without one); drop it so the picker can
+            // open again instead of being stuck "already open".
+            self.pickerDelegate = nil
 
-            guard let rootViewController = self.manager.viewController else {
+            // `manager.viewController` is a singleton set through an FFI
+            // callback and has been observed nil in archive builds; fall back
+            // to the key window so the picker can still present.
+            guard
+                let rootViewController = self.manager.viewController
+                    ?? keyWindowRootViewController()
+            else {
                 invoke.reject("No view controller available to present photo library")
                 return
             }
@@ -55,12 +69,17 @@ class PhotoLibraryPlugin: Plugin {
                 invoke: invoke,
                 stagingDirectory: stagingDirectory,
                 tokenPrefix: payload.tokenPrefix,
-                onComplete: { [weak self] in
-                    self?.pickerDelegate = nil
+                onComplete: { [weak self] finishedDelegate in
+                    // A stale session may complete after a newer picker was
+                    // opened; only clear the delegate it still owns.
+                    if self?.pickerDelegate === finishedDelegate {
+                        self?.pickerDelegate = nil
+                    }
                 }
             )
             self.pickerDelegate = delegate
             picker.delegate = delegate
+            self.presentedPicker = picker
 
             viewController.present(picker, animated: true)
         }
@@ -176,14 +195,14 @@ private class PhotoLibraryPickerDelegate: NSObject, PHPickerViewControllerDelega
     private let invoke: Invoke
     private let stagingDirectory: URL
     private let tokenPrefix: String
-    private let onComplete: () -> Void
+    private let onComplete: (PhotoLibraryPickerDelegate) -> Void
 
     init(
         plugin: PhotoLibraryPlugin,
         invoke: Invoke,
         stagingDirectory: URL,
         tokenPrefix: String,
-        onComplete: @escaping () -> Void
+        onComplete: @escaping (PhotoLibraryPickerDelegate) -> Void
     ) {
         self.plugin = plugin
         self.invoke = invoke
@@ -197,13 +216,13 @@ private class PhotoLibraryPickerDelegate: NSObject, PHPickerViewControllerDelega
 
         guard !results.isEmpty else {
             invoke.resolve([StagedPhotoLibraryMedia]())
-            onComplete()
+            onComplete(self)
             return
         }
 
         guard let plugin = plugin else {
             invoke.reject("Photo library plugin was released")
-            onComplete()
+            onComplete(self)
             return
         }
 
@@ -271,10 +290,19 @@ private class PhotoLibraryPickerDelegate: NSObject, PHPickerViewControllerDelega
                 } else {
                     self.invoke.resolve([StagedPhotoLibraryMedia]())
                 }
-                self.onComplete()
+                self.onComplete(self)
             }
         }
     }
+}
+
+@available(iOS 14.0, *)
+private func keyWindowRootViewController() -> UIViewController? {
+    let windows = UIApplication.shared.connectedScenes
+        .compactMap { $0 as? UIWindowScene }
+        .filter { $0.activationState == .foregroundActive }
+        .flatMap(\.windows)
+    return (windows.first { $0.isKeyWindow } ?? windows.first)?.rootViewController
 }
 
 @available(iOS 14.0, *)

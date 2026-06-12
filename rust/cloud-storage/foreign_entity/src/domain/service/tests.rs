@@ -80,6 +80,7 @@ impl ForeignEntityRepository for FakeForeignEntityRepository {
 
     async fn get_foreign_entities_for_user(
         &self,
+        _requesting_user: Option<String>,
         source_ids: Vec<SourceId>,
         limit: u32,
         query: ForeignEntityListQuery,
@@ -364,6 +365,7 @@ async fn get_foreign_entities_for_user_returns_matching_sources() {
     let service = ForeignEntityServiceImpl::new(repo);
     let entities = service
         .get_foreign_entities_for_user(
+            None,
             vec![
                 SourceId::user("macro|user@example.com"),
                 SourceId::new("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", "team"),
@@ -388,7 +390,12 @@ async fn get_foreign_entities_for_user_empty_sources_returns_empty_without_repo_
     let service = ForeignEntityServiceImpl::new(repo.clone());
 
     let entities = service
-        .get_foreign_entities_for_user(Vec::new(), 10, listing_query(SimpleSortMethod::UpdatedAt))
+        .get_foreign_entities_for_user(
+            None,
+            Vec::new(),
+            10,
+            listing_query(SimpleSortMethod::UpdatedAt),
+        )
         .await
         .expect("empty source list should return an empty listing");
 
@@ -405,6 +412,7 @@ async fn get_foreign_entities_for_user_forwards_limit_and_query() {
 
     service
         .get_foreign_entities_for_user(
+            None,
             vec![SourceId::user("macro|user@example.com")],
             37,
             Query::Cursor(models_pagination::Cursor {
@@ -440,6 +448,7 @@ async fn get_foreign_entities_for_user_maps_repo_errors_to_internal() {
 
     let error = service
         .get_foreign_entities_for_user(
+            None,
             vec![SourceId::user("macro|user@example.com")],
             10,
             listing_query(SimpleSortMethod::UpdatedAt),

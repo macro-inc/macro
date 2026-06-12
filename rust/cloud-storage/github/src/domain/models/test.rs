@@ -28,8 +28,12 @@ fn pull_request_details(
         merged_at,
         additions: 42,
         deletions: 12,
+        author_login: Some("octocat".to_string()),
+        author_id: Some(583231),
+        description: Some("Enrich pull requests with GitHub data".to_string()),
         comments: None,
         checks: None,
+        participant_github_user_ids: None,
     }
 }
 
@@ -43,6 +47,7 @@ fn pull_request_comment() -> GithubPullRequestComment {
     GithubPullRequestComment {
         id: 101,
         body: "Looks good to me".to_string(),
+        author_id: None,
         author_login: Some("octocat".to_string()),
         author_association: Some("MEMBER".to_string()),
         url: Some("https://github.com/macro/app/pull/7#issuecomment-101".to_string()),
@@ -149,8 +154,12 @@ fn pull_request_response_serializes_with_camel_case_fields() {
             status: Some(GithubPullRequestStatus::Merged),
             additions: Some(42),
             deletions: Some(12),
+            author_login: Some("octocat".to_string()),
+            author_id: Some(583231),
+            description: Some("Enrich pull requests with GitHub data".to_string()),
             comments: Some(vec![pull_request_comment()]),
             checks: Some(vec![pull_request_check_run()]),
+            participant_github_user_ids: None,
         }],
     };
 
@@ -171,6 +180,9 @@ fn pull_request_response_serializes_with_camel_case_fields() {
                     "status": "merged",
                     "additions": 42,
                     "deletions": 12,
+                    "authorLogin": "octocat",
+                    "authorId": 583231,
+                    "description": "Enrich pull requests with GitHub data",
                     "comments": [
                         {
                             "id": 101,
@@ -246,12 +258,18 @@ fn pull_request_enrichment_preserves_reference_fields() {
     assert_eq!(enriched.status, None);
     assert_eq!(enriched.additions, None);
     assert_eq!(enriched.deletions, None);
+    assert_eq!(enriched.author_login, None);
+    assert_eq!(enriched.author_id, None);
+    assert_eq!(enriched.description, None);
     assert_eq!(enriched.comments, None);
     assert_eq!(enriched.checks, None);
 
     let enriched_json = serde_json::to_value(&enriched).unwrap();
     assert!(enriched_json.get("comments").is_none());
     assert!(enriched_json.get("checks").is_none());
+    assert!(enriched_json.get("authorLogin").is_none());
+    assert!(enriched_json.get("authorId").is_none());
+    assert!(enriched_json.get("description").is_none());
 }
 
 #[test]
@@ -265,8 +283,12 @@ fn pull_request_enrichment_copies_details_fields() {
         merged_at: Some(utc_datetime("2026-05-25T18:54:21Z")),
         additions: 42,
         deletions: 12,
+        author_login: Some("octocat".to_string()),
+        author_id: Some(583231),
+        description: Some("Enrich pull requests with GitHub data".to_string()),
         comments: Some(comments.clone()),
         checks: Some(checks.clone()),
+        participant_github_user_ids: Some(vec!["42".to_string(), "583231".to_string()]),
     };
 
     let enriched = EnrichedGithubPullRequest::from_details(reference.clone(), details);
@@ -284,8 +306,18 @@ fn pull_request_enrichment_copies_details_fields() {
     assert_eq!(enriched.status, Some(GithubPullRequestStatus::Merged));
     assert_eq!(enriched.additions, Some(42));
     assert_eq!(enriched.deletions, Some(12));
+    assert_eq!(enriched.author_login, Some("octocat".to_string()));
+    assert_eq!(enriched.author_id, Some(583231));
+    assert_eq!(
+        enriched.description,
+        Some("Enrich pull requests with GitHub data".to_string())
+    );
     assert_eq!(enriched.comments, Some(comments));
     assert_eq!(enriched.checks, Some(checks));
+    assert_eq!(
+        enriched.participant_github_user_ids,
+        Some(vec!["42".to_string(), "583231".to_string()])
+    );
 }
 
 #[test]
@@ -302,8 +334,12 @@ fn pull_request_foreign_entity_metadata_serializes_enriched_pull_request() {
         merged_at: Some(utc_datetime("2026-05-25T18:54:21Z")),
         additions: 42,
         deletions: 12,
+        author_login: Some("octocat".to_string()),
+        author_id: Some(583231),
+        description: Some("Enrich pull requests with GitHub data".to_string()),
         comments: Some(vec![pull_request_comment()]),
         checks: Some(vec![pull_request_check_run()]),
+        participant_github_user_ids: None,
     };
     let enriched = EnrichedGithubPullRequest::from_details(reference, details);
 
@@ -322,6 +358,9 @@ fn pull_request_foreign_entity_metadata_serializes_enriched_pull_request() {
             "status": "merged",
             "additions": 42,
             "deletions": 12,
+            "authorLogin": "octocat",
+            "authorId": 583231,
+            "description": "Enrich pull requests with GitHub data",
             "comments": [
                 {
                     "id": 101,
@@ -387,6 +426,9 @@ fn pull_request_foreign_entity_metadata_preserves_existing_arrays_when_refresh_o
             "status": "open",
             "additions": 42,
             "deletions": 12,
+            "authorLogin": "octocat",
+            "authorId": 583231,
+            "description": "Enrich pull requests with GitHub data",
             "comments": [
                 {
                     "id": 303,
@@ -413,8 +455,12 @@ fn pull_request_foreign_entity_metadata_keeps_fresh_arrays() {
         merged_at: None,
         additions: 42,
         deletions: 12,
+        author_login: None,
+        author_id: None,
+        description: None,
         comments: Some(comments.clone()),
         checks: Some(checks.clone()),
+        participant_github_user_ids: None,
     };
     let enriched = EnrichedGithubPullRequest::from_details(pull_request_reference(), details);
     let existing_metadata = serde_json::json!({
@@ -430,6 +476,100 @@ fn pull_request_foreign_entity_metadata_keeps_fresh_arrays() {
 
     assert_eq!(metadata.get("comments"), Some(&fresh_comments));
     assert_eq!(metadata.get("checks"), Some(&fresh_checks));
+}
+
+#[test]
+fn pull_request_foreign_entity_metadata_carries_existing_author_and_description_forward() {
+    let mut details = pull_request_details("open", None);
+    details.author_login = None;
+    details.author_id = None;
+    details.description = None;
+    let enriched = EnrichedGithubPullRequest::from_details(pull_request_reference(), details);
+    let existing_metadata = serde_json::json!({
+        "authorLogin": "octocat",
+        "authorId": 583231,
+        "description": "Existing description"
+    });
+
+    let metadata = enriched
+        .foreign_entity_metadata(Some(&existing_metadata))
+        .unwrap();
+
+    assert_eq!(
+        metadata.get("authorLogin"),
+        Some(&serde_json::json!("octocat"))
+    );
+    assert_eq!(metadata.get("authorId"), Some(&serde_json::json!(583231)));
+    assert_eq!(
+        metadata.get("description"),
+        Some(&serde_json::json!("Existing description"))
+    );
+}
+
+#[test]
+fn pull_request_foreign_entity_metadata_keeps_fresh_author_and_description() {
+    let enriched = EnrichedGithubPullRequest::from_details(
+        pull_request_reference(),
+        pull_request_details("open", None),
+    );
+    let existing_metadata = serde_json::json!({
+        "authorLogin": "stale-login",
+        "authorId": 1,
+        "description": "Stale description"
+    });
+
+    let metadata = enriched
+        .foreign_entity_metadata(Some(&existing_metadata))
+        .unwrap();
+
+    assert_eq!(
+        metadata.get("authorLogin"),
+        Some(&serde_json::json!("octocat"))
+    );
+    assert_eq!(metadata.get("authorId"), Some(&serde_json::json!(583231)));
+    assert_eq!(
+        metadata.get("description"),
+        Some(&serde_json::json!("Enrich pull requests with GitHub data"))
+    );
+}
+
+#[test]
+fn pull_request_foreign_entity_metadata_unions_participants_with_existing() {
+    let mut details = pull_request_details("open", None);
+    details.participant_github_user_ids = Some(vec!["42".to_string(), "99".to_string()]);
+    let enriched = EnrichedGithubPullRequest::from_details(pull_request_reference(), details);
+    let existing_metadata = serde_json::json!({
+        "participantGithubUserIds": ["7", "42"]
+    });
+
+    let metadata = enriched
+        .foreign_entity_metadata(Some(&existing_metadata))
+        .unwrap();
+
+    assert_eq!(
+        metadata.get("participantGithubUserIds"),
+        Some(&serde_json::json!(["42", "7", "99"]))
+    );
+}
+
+#[test]
+fn pull_request_foreign_entity_metadata_carries_existing_participants_forward() {
+    let enriched = EnrichedGithubPullRequest::from_details(
+        pull_request_reference(),
+        pull_request_details("open", None),
+    );
+    let existing_metadata = serde_json::json!({
+        "participantGithubUserIds": ["7"]
+    });
+
+    let metadata = enriched
+        .foreign_entity_metadata(Some(&existing_metadata))
+        .unwrap();
+
+    assert_eq!(
+        metadata.get("participantGithubUserIds"),
+        Some(&serde_json::json!(["7"]))
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -881,4 +1021,34 @@ fn pr_context_empty_for_unknown_event() {
     let payload = serde_json::json!({"zen": "Keep it logically awesome."});
     let event = ValidatedGithubWebhookEvent::new("ping".to_string(), payload);
     assert!(event.extract_pr_context_text().is_empty());
+}
+
+// ---------------------------------------------------------------------------
+// extract_github_mentions
+// ---------------------------------------------------------------------------
+
+#[test]
+fn github_mentions_extracts_unique_lowercased_logins() {
+    let mentions = extract_github_mentions(
+        "@Alice please review, cc @bob-smith and @alice again.\n@carol99: thoughts?",
+    );
+    assert_eq!(mentions, vec!["alice", "bob-smith", "carol99"]);
+}
+
+#[test]
+fn github_mentions_ignores_emails_and_bare_at_signs() {
+    let mentions = extract_github_mentions("contact me at alice@example.com or @ (nothing)");
+    assert!(mentions.is_empty());
+}
+
+#[test]
+fn github_mentions_matches_at_start_and_after_punctuation() {
+    let mentions = extract_github_mentions("@lead-dev: see (@helper) and [@docs-team]");
+    assert_eq!(mentions, vec!["docs-team", "helper", "lead-dev"]);
+}
+
+#[test]
+fn github_mentions_does_not_capture_trailing_hyphen() {
+    let mentions = extract_github_mentions("ping @user- and @-nobody");
+    assert_eq!(mentions, vec!["user"]);
 }

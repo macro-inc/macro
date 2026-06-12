@@ -12,6 +12,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use axum_extra::extract::Cached;
+use macro_user_id::user_id::MacroUserIdStr;
 use model_user::axum_extractor::{MacroUserExtractor, UserExtractorErr};
 use std::sync::Arc;
 use std::{marker::PhantomData, str::FromStr};
@@ -117,14 +118,15 @@ impl IntoResponse for EmailLinkErr {
 
 /// Resolve the single inbox a mutating request targets from the caller's owned
 /// `links`. With an `X-Email-Link-Id` value, the matching owned link is used
-/// (404 when it isn't one of theirs). Without a header, the primary inbox is
-/// used — the link whose address matches the caller's account email,
-/// case-insensitively, mirroring the client's primary-inbox rule. A caller with
-/// no primary inbox (e.g. it was removed) must name an inbox explicitly.
+/// (404 when it isn't one of theirs). Without a header, the caller's primary
+/// inbox is used — their own `is_primary` link. The `macro_id` guard matters:
+/// the links list includes delegated inboxes, which are primary for *their*
+/// account. A caller with no primary inbox (e.g. it was removed) must name an
+/// inbox explicitly.
 fn resolve_target_link(
     links: Vec<Link>,
     header_link_id: Option<Uuid>,
-    account_email: &str,
+    caller: &MacroUserIdStr<'_>,
 ) -> Result<Link, EmailLinkErr> {
     match header_link_id {
         Some(id) => links
@@ -133,12 +135,7 @@ fn resolve_target_link(
             .ok_or(EmailLinkErr::NotFound),
         None => links
             .into_iter()
-            .find(|link| {
-                link.email_address
-                    .0
-                    .as_ref()
-                    .eq_ignore_ascii_case(account_email)
-            })
+            .find(|link| link.is_primary && &link.macro_id == caller)
             .ok_or(EmailLinkErr::NoInboxSelected),
     }
 }
@@ -169,12 +166,12 @@ where
         let header_link_id = parse_link_id_header(parts)?;
         let Cached(MacroUserExtractor { macro_user_id, .. }) =
             parts.extract_with_state(state).await?;
-        let account_email = macro_user_id.0.email_str().to_string();
+        let caller = macro_user_id.clone();
         let links = <EmailRouterState<U>>::from_ref(state)
             .inner
             .get_inboxes_for_macro_id(macro_user_id)
             .await?;
-        let link = resolve_target_link(links, header_link_id, &account_email)?;
+        let link = resolve_target_link(links, header_link_id, &caller)?;
         Ok(Self(link, PhantomData))
     }
 }

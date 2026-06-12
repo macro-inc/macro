@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  markdownToEmbeddingText,
   markdownToPlainText,
   parseContactMentions,
   parseDateMentions,
@@ -188,5 +189,129 @@ describe('markdownToPlainText', () => {
 
   it('handles empty string', () => {
     expect(markdownToPlainText('')).toBe('');
+  });
+});
+
+describe('markdownToEmbeddingText', () => {
+  it('keeps document and channel ids from document mentions', () => {
+    const input =
+      'Crash reported in <m-document-mention>{"documentId":"0195ceb6-ec2e-7023-80e4-6e084fa6cccd","blockName":"channel","documentName":"bug-reports","blockParams":{"channel_message_id":"019eb797-0ac1-7062-88ff-5202d1c81724"},"collapsed":false}</m-document-mention>';
+    expect(markdownToEmbeddingText(input)).toBe(
+      'Crash reported in [bug-reports](channel:0195ceb6-ec2e-7023-80e4-6e084fa6cccd#019eb797-0ac1-7062-88ff-5202d1c81724)'
+    );
+  });
+
+  it('omits the fragment when there is no channel message id', () => {
+    const input =
+      '<m-document-mention>{"documentId":"doc-1","blockName":"md","documentName":"Report","blockParams":{}}</m-document-mention>';
+    expect(markdownToEmbeddingText(input)).toBe('[Report](md:doc-1)');
+  });
+
+  it('falls back to the document name without a document id', () => {
+    const input =
+      '<m-document-mention>{"documentName":"Report"}</m-document-mention>';
+    expect(markdownToEmbeddingText(input)).toBe('Report');
+  });
+
+  it('keeps ids from document cards', () => {
+    const input =
+      '<m-document-card>{"documentId":"doc-2","blockName":"md","documentName":"Spec","blockParams":{}}</m-document-card>';
+    expect(markdownToEmbeddingText(input)).toBe('[Spec](md:doc-2)');
+  });
+
+  it('keeps link urls', () => {
+    const input =
+      'See <m-link>{"url":"https://example.com","text":"this link"}</m-link>.';
+    expect(markdownToEmbeddingText(input)).toBe(
+      'See [this link](https://example.com).'
+    );
+  });
+
+  it('reduces other mentions like markdownToPlainText', () => {
+    const input =
+      'Hello <m-user-mention>{"email":"john@example.com"}</m-user-mention> and ' +
+      '<m-group-mention>{"groupAlias":"here"}</m-group-mention>, due ' +
+      '<m-date-mention>{"displayFormat":"Friday"}</m-date-mention>.';
+    expect(markdownToEmbeddingText(input)).toBe(
+      'Hello john@example.com and @here, due Friday.'
+    );
+  });
+
+  it('reduces contact and theme mentions to their names', () => {
+    const input =
+      'Ping <m-contact-mention>{"contactId":"c1","name":"Ness Chu","emailOrDomain":"ness@macro.com","isCompany":false}</m-contact-mention> re ' +
+      '<m-theme-mention>{"name":"onboarding","data":{}}</m-theme-mention>';
+    expect(markdownToEmbeddingText(input)).toBe('Ping Ness Chu re onboarding');
+  });
+
+  it('keeps ids from snapshots', () => {
+    const input =
+      '<m-snapshot>{"documentId":"doc-3","documentName":"Spec","blockName":"md","content":"ignored","snapshotDate":"2025-01-01"}</m-snapshot>';
+    expect(markdownToEmbeddingText(input)).toBe('[Spec](md:doc-3)');
+  });
+
+  it('decodes base64 snapshots', () => {
+    const payload = btoa(
+      '{"documentId":"doc-3","documentName":"Spec","blockName":"md"}'
+    );
+    expect(
+      markdownToEmbeddingText(`<m-snapshot>${payload}</m-snapshot>`)
+    ).toBe('[Spec](md:doc-3)');
+  });
+
+  it('keeps stable ids for dss images and urls for videos', () => {
+    const input =
+      '<m-image>{"url":"https://signed.example.com/x?sig=abc","alt":"crash screenshot","srcType":"dss","id":"img-1"}</m-image> ' +
+      '<m-video>{"url":"https://videos.example.com/v1","srcType":"embed"}</m-video>';
+    expect(markdownToEmbeddingText(input)).toBe(
+      '[crash screenshot](dss:img-1) [video](https://videos.example.com/v1)'
+    );
+  });
+
+  it('keeps equation sources and await placeholder text', () => {
+    const input =
+      '<m-katex-equation>{"equation":"E = mc^2","inline":true}</m-katex-equation> ' +
+      '<m-await>{"awaitId":"a1","text":"generating...","inline":true}</m-await>';
+    expect(markdownToEmbeddingText(input)).toBe('E = mc^2 generating...');
+  });
+
+  it('flattens tables and resolves mentions inside cells', () => {
+    const input =
+      '<m-table>' +
+      '<m-table-row><m-table-cell>Owner</m-table-cell><m-table-cell>Task</m-table-cell></m-table-row>' +
+      '<m-table-row><m-table-cell><m-user-mention>{"email":"a@b.com"}</m-user-mention></m-table-cell><m-table-cell>fix\\nbug</m-table-cell></m-table-row>' +
+      '</m-table>';
+    expect(markdownToEmbeddingText(input)).toBe(
+      'Owner | Task\na@b.com | fix bug'
+    );
+  });
+
+  it('unwraps email thread embeds and resolves mentions inside them', () => {
+    const input =
+      '<m-email-thread-embed>{"tag":"div","classes":["macro_quote"]}From <m-contact-mention>{"name":"Ness Chu"}</m-contact-mention>:\\nplease fix</m-email-thread-embed>';
+    expect(markdownToEmbeddingText(input)).toBe(
+      'From Ness Chu:\nplease fix'
+    );
+  });
+
+  it('drops watermarks and unrecognized m-* tags entirely', () => {
+    const input =
+      'before <m-watermark>{"content":"made with macro"}</m-watermark>' +
+      '<m-future-thing>{"some":"payload"}</m-future-thing> after';
+    expect(markdownToEmbeddingText(input)).toBe('before  after');
+  });
+
+  it('drops tags with unparseable payloads', () => {
+    expect(
+      markdownToEmbeddingText(
+        'x <m-document-mention>not json</m-document-mention> y'
+      )
+    ).toBe('x  y');
+  });
+
+  it('returns original text when no mentions present', () => {
+    expect(markdownToEmbeddingText('Just plain text.')).toBe(
+      'Just plain text.'
+    );
   });
 });

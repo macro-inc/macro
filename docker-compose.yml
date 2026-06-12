@@ -133,10 +133,13 @@ services:
     command: ["/app/out/document_storage_service"]
     ports:
       - "8086:8080"
+    environment:
+      - OVERRIDE_SYNC_SERVICE_URL=http://sync-service:8787
     depends_on:
       - redis
       - connection_gateway
       - authentication-service
+      - sync_service
     networks:
       databases:
       services:
@@ -366,6 +369,7 @@ services:
       services:
         aliases:
           - sync-service
+      databases:
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8787/health"]
       interval: 30s

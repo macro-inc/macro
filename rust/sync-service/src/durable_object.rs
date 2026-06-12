@@ -11,7 +11,7 @@ use matchit::Router;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error, info, instrument, trace, warn};
 use worker::{
-    Cors, Date, DurableObject, Env, Error, Method, Request, Response, ResponseBody,
+    Context, Cors, Date, DurableObject, Env, Error, Method, Request, Response, ResponseBody,
     ResponseBuilder, Result, ScheduledTime, State, WebSocket, WebSocketIncomingMessage,
     WebSocketPair, durable_object,
 };
@@ -20,6 +20,7 @@ use crate::{
     auth::{AccessLevel, TokenFrom, decode_jwt},
     constants::USER_PEER_D1_BINDING,
     d1::{PeerWithUserId, get_user_id_from_peer_id, insert_user_mapping},
+    dss_internal::{DssInternal, DssInternalClient},
     error::ResultExt,
     generated::schema::InitializeFromSnapshotRequest,
     keepalive::{DEFAULT_TIME_TO_LIVE, keepalive},
@@ -902,6 +903,22 @@ impl DurableObject for DocumentSyncSession {
                 .context("failed deleting applied ops")?;
 
             state.mark_exported();
+
+            let document_id = self.document_id().await.ok();
+            let env = self.env.clone();
+            self.state.wait_until(async move {
+                if let Some(document_id) = document_id
+                    && let Ok(snapshot) = doc_state.export_shallow_snapshot()
+                {
+                    // best effort
+                    if let Err(err) = DssInternalClient::new(&env)
+                        .publish_shallow_snapshot(&document_id, &snapshot)
+                        .await
+                    {
+                        warn!(error =? err, "failed to push snapshot to DSS");
+                    }
+                }
+            });
         }
 
         // Re-arm the alarm while clients are connected so the in-memory state

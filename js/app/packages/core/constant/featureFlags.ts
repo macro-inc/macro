@@ -251,7 +251,7 @@ export const ENABLE_INBOX_RESYNC = resolveFeatureFlag(
 
 export const ENABLE_INBOX_SYNC_STATUS = resolveFeatureFlag(
   'ENABLE_INBOX_SYNC_STATUS',
-  false
+  true
 );
 
 const _ENABLE_TASKS_TABS = resolveFeatureFlag('ENABLE_TASKS_TABS', true);
@@ -364,6 +364,22 @@ export const ENABLE_SOUP_GROUP_BY_OVERRIDE = DEV_MODE_ENV ? true : undefined;
 
 export const ENABLE_TASK_DUPLICATES_FLAG = 'enable-task-duplicates';
 export const ENABLE_TASK_DUPLICATES_OVERRIDE = DEV_MODE_ENV ? true : undefined;
+
+// Snippets: reusable markdown documents, the `c` launcher entry, and the `;`
+// insert menu. PostHog-gated (currently targeted at the Macro team) with a
+// dev-mode default; override with VITE_ENABLE_SNIPPETS.
+export const ENABLE_SNIPPETS_FLAG = 'enable-snippets';
+export const ENABLE_SNIPPETS_OVERRIDE =
+  resolveFeatureFlag('ENABLE_SNIPPETS', DEV_MODE_ENV) || undefined;
+
+/** Non-reactive check for imperative call sites (e.g. editor key handlers). */
+export function ENABLE_SNIPPETS(): boolean {
+  if (ENABLE_SNIPPETS_OVERRIDE !== undefined) {
+    return ENABLE_SNIPPETS_OVERRIDE;
+  }
+
+  return analytics.posthog.isFeatureEnabled(ENABLE_SNIPPETS_FLAG) ?? false;
+}
 
 export const ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_FLAG =
   'enable-supported-soup-foreign-entities';

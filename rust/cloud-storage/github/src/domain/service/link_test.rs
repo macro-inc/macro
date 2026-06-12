@@ -130,8 +130,12 @@ fn default_pull_request_details() -> GithubPullRequestDetails {
         merged_at: None,
         additions: 12,
         deletions: 3,
+        author_login: None,
+        author_id: None,
+        description: None,
         comments: None,
         checks: None,
+        participant_github_user_ids: None,
     }
 }
 
@@ -360,6 +364,7 @@ impl ForeignEntityService for StubForeignEntityService {
 
     async fn get_foreign_entities_for_user(
         &self,
+        _requesting_user: Option<String>,
         _source_ids: Vec<SourceId>,
         _limit: u32,
         _query: ForeignEntityListQuery,

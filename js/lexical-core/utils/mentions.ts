@@ -82,6 +82,7 @@ export function buildMentionMarkdownString(info: MentionInfo): string {
 }
 
 export {
+  markdownToEmbeddingText,
   markdownToPlainText,
   parseContactMentions,
   parseDateMentions,

@@ -419,7 +419,7 @@ async fn get_message_owner(
         r#"
         SELECT sender_id
         FROM comms_messages
-        WHERE id = $1 AND channel_id = $2
+        WHERE id = $1 AND channel_id = $2 AND deleted_at IS NULL
         ORDER BY created_at ASC
         "#,
         message_id,

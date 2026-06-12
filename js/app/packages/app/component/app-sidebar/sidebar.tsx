@@ -12,6 +12,11 @@ import {
 import { CommandState } from '@app/component/command';
 import { InteractiveOnboardingModal } from '@app/component/interactive-onboarding/InteractiveOnboardingModal';
 import { createMenuOpen, setCreateMenuOpen } from '@app/component/Launcher';
+import {
+  getInboxFilterSplit,
+  INBOX_FILTER_ENTRY_KEY,
+  requestInboxFilter,
+} from '@app/component/next-soup/soup-view/inbox-filter-controllers';
 import { requestSearchFocus } from '@app/component/next-soup/soup-view/search-controllers';
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import type {
@@ -32,28 +37,29 @@ import { InCallPanel } from '@channel/Call';
 import { useCallContextOptional } from '@channel/Call/CallContext';
 import { useHasPaidAccess } from '@core/auth';
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
+import { inboxIconProps } from '@core/component/inboxIcon';
 import { UserIcon } from '@core/component/UserIcon';
 import {
-  DEV_MODE_ENV,
-  ENABLE_APP_STORE_QR_CODE,
   ENABLE_CALLS,
   ENABLE_CRM,
   ENABLE_HOME_OVERRIDE,
   ENABLE_NEW_PRICING_OVERRIDE,
-  ENABLE_TEAMS_OVERRIDE,
 } from '@core/constant/featureFlags';
 import {
   type SettingsTab,
   useSettingsState,
 } from '@core/constant/SettingsState';
+import {
+  getSettingsTabItem,
+  useSettingsTabAvailable,
+  useSettingsTabs,
+} from '@core/constant/settingsTabsConfig';
 import { useUserId } from '@core/context/user';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { clearPressedKeys } from '@core/hotkey/state';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { activateClosestDOMScope } from '@core/hotkey/utils';
-import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import LogoIcon from '@icon/macro-logo.svg';
 import { AnimatedSquareCommandKIcon } from '@icon/square-command-k';
 import { AnimatedSquareSidebarIcon } from '@icon/square-sidebar';
@@ -71,19 +77,15 @@ import { AnimatedTaskIcon } from '@icon/wide-task';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { useNotificationSettings } from '@notifications';
 import BellIcon from '@phosphor/bell.svg';
+import CaretDownIcon from '@phosphor/caret-down.svg';
 import CaretUpIcon from '@phosphor/caret-up.svg';
-import DeviceMobileIcon from '@phosphor/device-mobile-speaker.svg';
 import HomeIcon from '@phosphor/house.svg';
-import KeyboardIcon from '@phosphor/keyboard.svg';
-import PaintBucketIcon from '@phosphor/paint-bucket.svg';
 import PlayIcon from '@phosphor/play.svg';
-import PlugIcon from '@phosphor/plug.svg';
-import UserIconPhosphor from '@phosphor/user.svg';
-import UsersThreeIcon from '@phosphor/users-three.svg';
+import { useEmailLinksQuery } from '@queries/email/link';
 import { debounce } from '@solid-primitives/scheduled';
 import { makePersisted } from '@solid-primitives/storage';
 import { useLocation } from '@solidjs/router';
-import { Button, cn, Dropdown, Hotkey } from '@ui';
+import { Button, cn, Dropdown, Hotkey, NavRow } from '@ui';
 import {
   type Component,
   createEffect,
@@ -477,12 +479,8 @@ const SidebarShortcutLink = (props: SidebarShortcutLinkProps) => {
   const [isHovering, setIsHovering] = createSignal(false);
 
   return (
-    <Button
+    <NavRow
       draggable={false}
-      variant="ghost"
-      class={cn(
-        'flex items-center justify-start text-sm gap-2 cursor-default w-full rounded-md py-1 text-ink-extra-muted not-disabled:hover:bg-ink/3'
-      )}
       tooltipPlacement="right"
       label={props.isSlim() ? props.label : undefined}
       onMouseEnter={() => setIsHovering(true)}
@@ -500,81 +498,8 @@ const SidebarShortcutLink = (props: SidebarShortcutLinkProps) => {
       <div class="flex items-center gap-1 group-data-[slim=true]/sidebar:hidden">
         <span class="whitespace-nowrap">{props.label}</span>
       </div>
-    </Button>
+    </NavRow>
   );
-};
-
-type SettingsMenuItem = {
-  tab: SettingsTab;
-  label: string;
-  icon: Component<{ class?: string }>;
-};
-
-const SETTINGS_MENU_TOP_ITEMS: SettingsMenuItem[] = [
-  {
-    tab: 'Mobile App',
-    label: 'App',
-    icon: DeviceMobileIcon,
-  },
-  {
-    tab: 'Agent',
-    label: 'MCPs',
-    icon: PlugIcon,
-  },
-  {
-    tab: 'Team',
-    label: 'Team',
-    icon: UsersThreeIcon,
-  },
-];
-
-const SETTINGS_MENU_BOTTOM_ITEMS: SettingsMenuItem[] = [
-  {
-    tab: 'Shortcuts',
-    label: 'Shortcuts',
-    icon: KeyboardIcon,
-  },
-  {
-    tab: 'Appearance',
-    label: 'Appearance',
-    icon: PaintBucketIcon,
-  },
-  {
-    tab: 'Account',
-    label: 'Account',
-    icon: UserIconPhosphor,
-  },
-];
-
-/**
- * Mirrors the gating in `Settings.tsx`'s `settingsTabs()`. Use to filter the
- * sidebar menu/shortcuts and to guard `setActiveTabId` callers so we never
- * activate a tab that the settings panel won't render.
- */
-const useIsSettingsTabAvailable = () => {
-  const teamsFlag = useFeatureFlag('enable-teams-settings', {
-    enabledOverride: ENABLE_TEAMS_OVERRIDE,
-  });
-
-  return (tab: SettingsTab): boolean => {
-    switch (tab) {
-      case 'Appearance':
-      case 'Account':
-        return true;
-      case 'Team':
-        return teamsFlag().enabled;
-      case 'Shortcuts':
-        return !isTouchDevice();
-      case 'Mobile App':
-        return ENABLE_APP_STORE_QR_CODE && !isNativeMobilePlatform();
-      case 'Agent':
-        return !isNativeMobilePlatform();
-      case 'Mobile':
-        return isNativeMobilePlatform() && DEV_MODE_ENV;
-      default:
-        return false;
-    }
-  };
 };
 
 /**
@@ -593,11 +518,8 @@ const SidebarActionButton = (props: SidebarActionButtonProps) => {
       : (props.disabled ?? false);
 
   return (
-    <Button
-      class={cn(
-        'flex items-center justify-start group-data-[slim=true]/sidebar:justify-center text-sm gap-2 cursor-default w-full rounded-md py-1 text-ink-extra-muted not-disabled:hover:bg-ink/3'
-      )}
-      variant="ghost"
+    <NavRow
+      class="group-data-[slim=true]/sidebar:justify-center"
       tooltipPlacement="right"
       label={props.isSlim() ? props.label : undefined}
       hotkey={props.isSlim() ? props.hotkeyToken : undefined}
@@ -623,7 +545,7 @@ const SidebarActionButton = (props: SidebarActionButtonProps) => {
           </div>
         )}
       </Show>
-    </Button>
+    </NavRow>
   );
 };
 
@@ -660,19 +582,12 @@ const SidebarHeaderIconButton = (props: {
 type SidebarSettingsWidgetProps = {
   isSlim: () => boolean;
   onSelect: (tab: SettingsTab) => void;
-  isTabAvailable: (tab: SettingsTab) => boolean;
 };
 
 const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
   const userId = useUserId();
   const [onboardingModalOpen, setOnboardingModalOpen] = createSignal(false);
-
-  const topItems = createMemo(() =>
-    SETTINGS_MENU_TOP_ITEMS.filter((item) => props.isTabAvailable(item.tab))
-  );
-  const bottomItems = createMemo(() =>
-    SETTINGS_MENU_BOTTOM_ITEMS.filter((item) => props.isTabAvailable(item.tab))
-  );
+  const { groups: settingGroups } = useSettingsTabs();
 
   return (
     <Dropdown placement="top-start" gutter={6}>
@@ -723,42 +638,28 @@ const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
             <span class="text-ink">Play tutorial</span>
           </Dropdown.Item>
         </Dropdown.Group>
-        <Dropdown.Group>
-          <For each={topItems()}>
-            {(item) => (
-              <Dropdown.Item
-                class="flex items-center gap-2 px-2.5 py-2 text-sm cursor-default outline-none text-ink-muted"
-                onSelect={() => props.onSelect(item.tab)}
-              >
-                <span class="size-5 flex items-center justify-center">
-                  <Dynamic
-                    component={item.icon}
-                    class="size-4 shrink-0 text-ink-extra-muted"
-                  />
-                </span>
-                <span class="text-ink">{item.label}</span>
-              </Dropdown.Item>
-            )}
-          </For>
-        </Dropdown.Group>
-        <Dropdown.Group>
-          <For each={bottomItems()}>
-            {(item) => (
-              <Dropdown.Item
-                class="flex items-center gap-2 px-2.5 py-2 text-sm cursor-default outline-none text-ink-muted"
-                onSelect={() => props.onSelect(item.tab)}
-              >
-                <span class="size-5 flex items-center justify-center">
-                  <Dynamic
-                    component={item.icon}
-                    class="size-4 shrink-0 text-ink-extra-muted"
-                  />
-                </span>
-                <span class="text-ink">{item.label}</span>
-              </Dropdown.Item>
-            )}
-          </For>
-        </Dropdown.Group>
+        <For each={settingGroups()}>
+          {(group) => (
+            <Dropdown.Group>
+              <For each={group.items}>
+                {(item) => (
+                  <Dropdown.Item
+                    class="flex items-center gap-2 px-2.5 py-2 text-sm cursor-default outline-none text-ink-muted"
+                    onSelect={() => props.onSelect(item.tab)}
+                  >
+                    <span class="size-5 flex items-center justify-center">
+                      <Dynamic
+                        component={item.icon}
+                        class="size-4 shrink-0 text-ink-extra-muted"
+                      />
+                    </span>
+                    <span class="text-ink">{item.label}</span>
+                  </Dropdown.Item>
+                )}
+              </For>
+            </Dropdown.Group>
+          )}
+        </For>
       </Dropdown.Content>
       <InteractiveOnboardingModal
         open={onboardingModalOpen()}
@@ -786,11 +687,18 @@ const DASHBOARD_LINK: SidebarItem = {
   hotkeyToken: TOKENS.sidebar.goTo.home,
 };
 
+/**
+ * Settings tabs surfaced as always-visible quick links above the settings
+ * widget. Label/icon come from the settings tab config (see
+ * `getSettingsTabItem`); this list only decides which tabs to promote.
+ */
+const PROMOTED_SETTINGS_TABS: SettingsTab[] = ['Mobile App', 'Agent', 'Team'];
+
 export const AppSidebar = (props: AppSidebarProps) => {
   const analytics = useAnalytics();
   const layout = useSplitLayout();
   const { openSettings, setActiveTabId, settingsOpen } = useSettingsState();
-  const isTabAvailable = useIsSettingsTabAvailable();
+  const isTabAvailable = useSettingsTabAvailable();
   const notificationSettings = useNotificationSettings();
   const callCtx = useCallContextOptional();
 
@@ -1014,8 +922,9 @@ export const AppSidebar = (props: AppSidebarProps) => {
         <ul class="size-full px-2 flex flex-col gap-1">
           <For each={visibleLinks()}>
             {(link) => (
-              <li class="flex items-center justify-center">
-                <SidebarLink
+              <li class="flex flex-col items-center justify-center">
+                <Dynamic
+                  component={link.id === 'mail' ? SidebarMailLink : SidebarLink}
                   {...link}
                   sidebarState={props.sidebarState ?? 'expanded'}
                   hotkeyVisible={hotkeyVisible()}
@@ -1107,38 +1016,26 @@ export const AppSidebar = (props: AppSidebarProps) => {
       </Show>
 
       <div class="w-full px-2 flex flex-col gap-1 mb-1">
-        <Show when={isTabAvailable('Mobile App')}>
-          <SidebarShortcutLink
-            label="App"
-            isSlim={isSlim}
-            onClick={() => openSettingsTab('Mobile App')}
-            icon={() => <DeviceMobileIcon class="size-4" />}
-          />
-        </Show>
-        <Show when={isTabAvailable('Agent')}>
-          <SidebarShortcutLink
-            label="MCPs"
-            isSlim={isSlim}
-            onClick={() => openSettingsTab('Agent')}
-            icon={() => <PlugIcon class="size-4" />}
-          />
-        </Show>
-        <Show when={isTabAvailable('Team')}>
-          <SidebarShortcutLink
-            label="Team"
-            isSlim={isSlim}
-            onClick={() => openSettingsTab('Team')}
-            icon={() => <UsersThreeIcon class="size-4" />}
-          />
-        </Show>
+        <For each={PROMOTED_SETTINGS_TABS}>
+          {(tab) => (
+            <Show
+              when={isTabAvailable(tab) ? getSettingsTabItem(tab) : undefined}
+            >
+              {(item) => (
+                <SidebarShortcutLink
+                  label={item().label}
+                  isSlim={isSlim}
+                  onClick={() => openSettingsTab(tab)}
+                  icon={item().icon}
+                />
+              )}
+            </Show>
+          )}
+        </For>
       </div>
 
       <div class="w-full px-2">
-        <SidebarSettingsWidget
-          isSlim={isSlim}
-          onSelect={openSettingsTab}
-          isTabAvailable={isTabAvailable}
-        />
+        <SidebarSettingsWidget isSlim={isSlim} onSelect={openSettingsTab} />
       </div>
       <InviteModal />
     </div>
@@ -1148,6 +1045,19 @@ export const AppSidebar = (props: AppSidebarProps) => {
 interface SidebarLinkProps extends SidebarItem {
   sidebarState: SidebarState;
   hotkeyVisible: boolean;
+  /**
+   * Skip the active background/text even when the view is active — used when
+   * a nested row (e.g. a single selected inbox) carries the highlight instead.
+   */
+  suppressActiveStyle?: boolean;
+  /** Called when the link is clicked while its view is already active. */
+  onActiveClick?: () => void;
+  /**
+   * Rendered at the link's right edge while the view is active, in place of
+   * the hover hotkey hints (the shortcut is redundant once active) — e.g. the
+   * Email link's expand chevron.
+   */
+  trailingWhenActive?: JSX.Element;
 }
 
 const SidebarLink = (props: SidebarLinkProps) => {
@@ -1155,12 +1065,13 @@ const SidebarLink = (props: SidebarLinkProps) => {
 
   const analytics = useAnalytics();
   const layout = useSplitLayout();
-  const layoutManager = globalSplitManager();
 
   const location = useLocation();
 
+  // Always read the manager signal live: it is undefined until the split
+  // layout mounts, which happens after the sidebar.
   const isActive = () => {
-    const activeContent = layoutManager?.activeSplit()?.content();
+    const activeContent = globalSplitManager()?.activeSplit()?.content();
 
     // In case we can't match on the active split, use the url path to determine
     // if this link is active
@@ -1210,15 +1121,12 @@ const SidebarLink = (props: SidebarLinkProps) => {
   return (
     <ContextMenu>
       <ContextMenu.Trigger class="w-full">
-        <Button
+        <NavRow
           draggable={false}
-          variant="ghost"
           data-sidebar-link={props.id}
           data-active={isActive() ? '' : undefined}
-          class={cn(
-            'flex items-center justify-start group-data-[slim=true]/sidebar:justify-center text-sm gap-2 cursor-default w-full rounded-md py-1 text-ink-extra-muted not-disabled:hover:bg-ink/3',
-            isActive() && 'bg-ink/6 not-disabled:hover:bg-ink/6 text-ink'
-          )}
+          active={isActive() && !props.suppressActiveStyle}
+          class="group-data-[slim=true]/sidebar:justify-center"
           tooltipPlacement="right"
           onMouseEnter={() => setIsHovering(true)}
           label={
@@ -1239,7 +1147,7 @@ const SidebarLink = (props: SidebarLinkProps) => {
             });
 
             e.preventDefault();
-            let currentContentHandle = layoutManager?.activeSplit();
+            let currentContentHandle = globalSplitManager()?.activeSplit();
 
             const currentContent = currentContentHandle?.content();
             const isSameContent =
@@ -1254,13 +1162,15 @@ const SidebarLink = (props: SidebarLinkProps) => {
                 openWithSplit: layout.openWithSplit,
                 referredFrom: 'sidebar',
               });
+            } else {
+              props.onActiveClick?.();
             }
 
             if (props.id === 'search' && currentContentHandle) {
               requestSearchFocus(currentContentHandle.id);
             }
 
-            layoutManager?.returnFocus();
+            globalSplitManager()?.returnFocus();
           }}
         >
           <Show when={props.icon}>
@@ -1273,7 +1183,25 @@ const SidebarLink = (props: SidebarLinkProps) => {
             <span class="whitespace-nowrap">{props.label}</span>
           </div>
 
-          <Show when={isHovering() && !props.hotkeyVisible}>
+          <Show
+            when={
+              isActive() &&
+              props.trailingWhenActive !== undefined &&
+              !props.hotkeyVisible
+            }
+          >
+            <div class="group-data-[slim=true]/sidebar:hidden ml-auto flex items-center text-ink-muted">
+              {props.trailingWhenActive}
+            </div>
+          </Show>
+
+          <Show
+            when={
+              isHovering() &&
+              !props.hotkeyVisible &&
+              !(isActive() && props.trailingWhenActive !== undefined)
+            }
+          >
             <div class="group-data-[slim=true]/sidebar:hidden ml-auto">
               <div class="flex gap-1 items-center text-ink-extra-muted font-normal text-xxs">
                 <Show when={!props.standaloneHotkey}>
@@ -1303,7 +1231,7 @@ const SidebarLink = (props: SidebarLinkProps) => {
               <Hotkey token={props.hotkeyToken} />
             </div>
           </Show>
-        </Button>
+        </NavRow>
       </ContextMenu.Trigger>
 
       <ContextMenu.Portal>
@@ -1318,5 +1246,172 @@ const SidebarLink = (props: SidebarLinkProps) => {
         </ContextMenuContent>
       </ContextMenu.Portal>
     </ContextMenu>
+  );
+};
+
+/**
+ * The Email sidebar link, acting as a dropdown for the user's linked inboxes.
+ * With multiple inboxes linked, the active link swaps its hotkey hint for a
+ * chevron; clicking the already-active link fans out a nested row per inbox,
+ * and clicking it again collapses the rows and returns to the unified inbox
+ * (all inboxes).
+ *
+ * The open/closed state is a plain user toggle, persisted across reloads —
+ * navigating to other views or into an email block never collapses the rows.
+ *
+ * Clicking an inbox row scopes the email list to only that inbox (the same
+ * `inboxFilter` the topbar inbox dropdown drives), navigating back to the
+ * list first if some other view is active. A row carries the active highlight
+ * only when it is the single selected inbox (read from the live mail view, or
+ * from the filter its history entry captured when something else is on top),
+ * in which case the parent link yields its own.
+ */
+const SidebarMailLink = (props: SidebarLinkProps) => {
+  const layout = useSplitLayout();
+  const linksQuery = useEmailLinksQuery();
+  const [expanded, setExpanded] = makePersisted(createSignal(false), {
+    name: 'sidebar-mail-accounts-expanded',
+  });
+
+  const links = createMemo(() =>
+    [...(linksQuery.data?.links ?? [])].sort((a, b) =>
+      a.email_address.localeCompare(b.email_address)
+    )
+  );
+
+  const isMailList = (content: SplitContent | undefined) =>
+    content?.type === 'component' && content.id === 'mail';
+
+  const canShow = () => props.sidebarState === 'expanded' && links().length > 1;
+
+  const showAccounts = () => canShow() && expanded();
+
+  const selectedIds = () => {
+    // Read the manager signal live: it is undefined until the split layout
+    // mounts, which can be after the sidebar.
+    const split = globalSplitManager()?.activeSplit();
+    if (!split) return undefined;
+    // Registered only while the split's mail list view is mounted.
+    const controller = getInboxFilterSplit(split.id);
+    if (controller) return controller.inboxFilter();
+    // Something else is on top (an email block, another view) — read the
+    // filter the mail list captured into its history entry on nav-away.
+    const entries = split.history();
+    for (let i = entries.length - 1; i >= 0; i--) {
+      const entry = entries[i];
+      if (isMailList(entry)) {
+        return entry.state?.[INBOX_FILTER_ENTRY_KEY] as string[] | undefined;
+      }
+    }
+    return undefined;
+  };
+
+  const onlySelectedId = () => {
+    const ids = selectedIds();
+    return ids?.length === 1 ? ids[0] : undefined;
+  };
+
+  // Scope the list to one inbox, first returning to the mail list (restoring
+  // the history entry if there is one) when some other view is active. The
+  // filter request is queued and applied as the list mounts.
+  const selectOnly = (linkId: string) => {
+    const manager = globalSplitManager();
+    let split = manager?.activeSplit();
+    if (!isMailList(split?.content())) {
+      split = navigateToSidebarView({
+        viewId: 'mail',
+        shiftKey: false,
+        activeSplit: split,
+        openWithSplit: layout.openWithSplit,
+        referredFrom: 'sidebar',
+      });
+    }
+    if (!split) return;
+    requestInboxFilter(split.id, [linkId]);
+    manager?.returnFocus();
+  };
+
+  return (
+    <>
+      <SidebarLink
+        {...props}
+        suppressActiveStyle={showAccounts() && onlySelectedId() !== undefined}
+        onActiveClick={() => {
+          if (!canShow()) return;
+          if (!expanded()) {
+            setExpanded(true);
+            return;
+          }
+          // Collapsing also returns to the unified inbox. Only fired while
+          // the mail list is the active content, so target the active split.
+          setExpanded(false);
+          const split = globalSplitManager()?.activeSplit();
+          if (split) requestInboxFilter(split.id, undefined);
+        }}
+        trailingWhenActive={
+          canShow() ? (
+            <CaretDownIcon
+              class={cn(
+                'size-3 transition-transform duration-200',
+                expanded() && 'rotate-180'
+              )}
+            />
+          ) : undefined
+        }
+      />
+      <Show when={canShow()}>
+        <div
+          class="grid w-full transition-[grid-template-rows] duration-200 ease-out"
+          style={{ 'grid-template-rows': expanded() ? '1fr' : '0fr' }}
+        >
+          <ul class="min-h-0 overflow-hidden flex flex-col gap-1">
+            <For each={links()}>
+              {(link, index) => (
+                <li
+                  class={cn(
+                    'flex items-center justify-center first:mt-1 transition-[opacity,transform] duration-200 ease-out',
+                    expanded()
+                      ? 'opacity-100 translate-y-0'
+                      : 'opacity-0 -translate-y-2'
+                  )}
+                  style={{
+                    'transition-delay': expanded()
+                      ? `${index() * 30}ms`
+                      : '0ms',
+                  }}
+                >
+                  <Button
+                    draggable={false}
+                    variant="ghost"
+                    disabled={!expanded()}
+                    data-sidebar-mail-account={link.email_address}
+                    data-active={onlySelectedId() === link.id ? '' : undefined}
+                    class={cn(
+                      'flex items-center justify-start text-sm gap-2 cursor-default w-full rounded-md py-1 pl-6 text-ink-extra-muted not-disabled:hover:bg-ink/3',
+                      onlySelectedId() === link.id &&
+                        'bg-ink/6 not-disabled:hover:bg-ink/6 text-ink'
+                    )}
+                    onMouseDown={(e) => {
+                      if (e.button !== 0) return;
+                      e.preventDefault();
+                      selectOnly(link.id);
+                    }}
+                  >
+                    <UserIcon
+                      {...inboxIconProps(link.email_address)}
+                      photoUrl={link.photo_url ?? undefined}
+                      size="sm"
+                      suppressClick
+                      showTooltip={false}
+                    />
+                    <span class="truncate">{link.email_address}</span>
+                  </Button>
+                </li>
+              )}
+            </For>
+          </ul>
+        </div>
+      </Show>
+    </>
   );
 };

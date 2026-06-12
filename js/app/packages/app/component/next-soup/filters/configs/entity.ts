@@ -9,6 +9,7 @@ import {
   crmCompanyFilter as crmCompanyPredicate,
   filesAndFolderFilter as filesAndFolderPredicate,
   projectFilter as projectPredicate,
+  searchSupportedFilter as searchSupportedPredicate,
   taskFilter as taskPredicate,
 } from '../predicates';
 import { config, isAgent, isNotTask, NIL_UUID } from './base';
@@ -85,4 +86,15 @@ export const crmCompanyHiddenFilter = config({
     { include: { crmCompanyHidden: true } },
     { skipTargets: ['ccf'] }
   ),
+});
+
+export const searchSupportedFilter = config({
+  id: 'search-supported',
+  predicate: searchSupportedPredicate,
+  query: {
+    include: {
+      foreignEntityRecordId: [NIL_UUID],
+      crmCompanyId: [NIL_UUID],
+    },
+  },
 });

@@ -62,3 +62,4 @@ tokio = { workspace = true }
 tracing = { workspace = true }
 
 macro_service_urls = { path = "../macro_service_urls" }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

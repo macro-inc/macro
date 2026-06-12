@@ -294,8 +294,8 @@ pub struct CreateDocumentRepoArgs {
     pub email_attachment_id: Option<uuid::Uuid>,
     /// Custom creation timestamp.
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
-    /// Whether the document is a task (MD files only).
-    pub is_task: bool,
+    /// Sub type of the document — task or snippet (MD files only).
+    pub sub_type: Option<document_sub_type::DocumentSubType>,
     /// Whether to skip adding to user history.
     pub skip_history: bool,
 }
@@ -442,6 +442,70 @@ pub struct CreateTaskResponse {
     /// The task number assigned within the team.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub team_task_id: Option<i32>,
+}
+
+/// Request body for creating a snippet — a reusable markdown document that can
+/// be inserted into any markdown area.
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CreateSnippetRequest {
+    /// The name of the snippet.
+    pub snippet_name: String,
+    /// Markdown source text. Defaults to an empty snippet document.
+    pub markdown: Option<String>,
+    /// Optional project ID to associate the snippet with.
+    pub project_id: Option<uuid::Uuid>,
+}
+
+/// Response for creating a snippet.
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CreateSnippetResponse {
+    /// The document ID of the created snippet.
+    pub document_id: String,
+}
+
+/// The team-share state of a document. The team is resolved from the document
+/// owner's team membership.
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct DocumentTeamShareResponse {
+    /// Whether the document is currently shared with the owner's team.
+    pub shared_with_team: bool,
+    /// The owner's team the document is (or would be) shared with. `None` when
+    /// the owner does not belong to a team.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub team_id: Option<uuid::Uuid>,
+}
+
+/// Request body for setting a document's team-share state.
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct SetDocumentTeamShareRequest {
+    /// Whether the document should be shared with the owner's team.
+    pub share_with_team: bool,
+}
+
+/// Internal team-share state for a document, resolved against the owner's team.
+#[derive(Debug, Clone, Copy)]
+pub struct DocumentTeamShare {
+    /// The owner's team, when the owner belongs to one.
+    pub team_id: Option<uuid::Uuid>,
+    /// Whether a team-source access row exists for the document.
+    pub shared_with_team: bool,
+}
+
+impl From<DocumentTeamShare> for DocumentTeamShareResponse {
+    fn from(value: DocumentTeamShare) -> Self {
+        Self {
+            shared_with_team: value.shared_with_team,
+            team_id: value.team_id,
+        }
+    }
 }
 
 /// A comment thread attached to a document.

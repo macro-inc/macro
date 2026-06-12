@@ -40,10 +40,9 @@ pub struct GroupMeta {
     pub display_order: Option<i32>,
     /// Total count of items in this group across all pages
     pub total_count: u32,
-    /// Number of items from this group in the current page
-    pub page_count: u32,
-    /// Index in the items array where this group starts (current page)
-    pub start_index: u32,
+    /// Ordered ids of items in this group for the current page.
+    /// Each id keys into `GroupedResponse::items`.
+    pub item_ids: Vec<Uuid>,
     /// Cursor to load more items specifically from this group
     #[serde(skip_serializing_if = "Option::is_none")]
     pub next_cursor: Option<String>,
@@ -52,8 +51,8 @@ pub struct GroupMeta {
 /// Result of building a grouped response.
 #[derive(Debug)]
 pub struct GroupedResponse {
-    /// Items in this page with frecency scores.
-    pub items: Vec<FrecencySoupItem>,
+    /// Items pool keyed by id. Ordering is described by `groups[].item_ids`.
+    pub items: HashMap<Uuid, FrecencySoupItem>,
     /// Group metadata for each group.
     pub groups: Vec<GroupMeta>,
     /// Page-level cursor for loading more items.
@@ -70,8 +69,7 @@ pub fn build_grouped_response(
 ) -> GroupedResponse {
     struct GroupData {
         total_count: u32,
-        page_count: u32,
-        start_index: u32,
+        item_ids: Vec<Uuid>,
         last_item_id: Option<Uuid>,
         last_cursor_val: Option<CursorVal<SimpleSortMethod>>,
         label: Option<String>,
@@ -79,10 +77,10 @@ pub fn build_grouped_response(
     }
 
     let mut group_stats: HashMap<String, GroupData> = HashMap::new();
-    let mut result_items = Vec::with_capacity(items.len());
+    let mut items_pool: HashMap<Uuid, FrecencySoupItem> = HashMap::with_capacity(items.len());
     let mut get_cursor_val = SoupItem::sort_on(sort_method);
 
-    for (idx, grouped_item) in items.into_iter().enumerate() {
+    for grouped_item in items.into_iter() {
         let key = grouped_item.group_key.clone();
         let item_id = grouped_item.item.id();
         let cursor_val = get_cursor_val(&grouped_item.item);
@@ -95,28 +93,31 @@ pub fn build_grouped_response(
                 };
             GroupData {
                 total_count: grouped_item.group_total_count,
-                page_count: 0,
-                start_index: idx as u32,
+                item_ids: Vec::new(),
                 last_item_id: None,
                 last_cursor_val: None,
                 label: Some(label),
                 display_order,
             }
         });
-        entry.page_count += 1;
+        entry.item_ids.push(item_id);
         entry.last_item_id = Some(item_id);
         entry.last_cursor_val = Some(cursor_val);
 
-        result_items.push(FrecencySoupItem {
-            item: grouped_item.item,
-            frecency_score: grouped_item.frecency_score,
-        });
+        // First occurrence wins; later duplicates are dropped instead of
+        // overwriting an already-populated entry.
+        items_pool
+            .entry(item_id)
+            .or_insert_with(|| FrecencySoupItem {
+                item: grouped_item.item,
+                frecency_score: grouped_item.frecency_score,
+            });
     }
 
     let mut groups: Vec<GroupMeta> = group_stats
         .into_iter()
         .map(|(key, data)| {
-            let has_more = data.page_count < data.total_count;
+            let has_more = (data.item_ids.len() as u32) < data.total_count;
             let next_cursor = if has_more {
                 data.last_item_id
                     .zip(data.last_cursor_val)
@@ -127,7 +128,7 @@ pub fn build_grouped_response(
                             EntityFilterAst,
                         > = CursorWithValAndFilter {
                             id,
-                            limit: data.page_count as usize,
+                            limit: data.item_ids.len(),
                             val,
                             filter: filters.clone(),
                         };
@@ -142,8 +143,7 @@ pub fn build_grouped_response(
                 label: data.label.unwrap_or_default(),
                 display_order: data.display_order,
                 total_count: data.total_count,
-                page_count: data.page_count,
-                start_index: data.start_index,
+                item_ids: data.item_ids,
                 next_cursor,
             }
         })
@@ -162,7 +162,7 @@ pub fn build_grouped_response(
     };
 
     GroupedResponse {
-        items: result_items,
+        items: items_pool,
         groups,
         page_cursor,
     }

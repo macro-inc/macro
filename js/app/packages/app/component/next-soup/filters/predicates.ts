@@ -113,6 +113,20 @@ export function crmCompanyFilter(entity: EntityData): boolean {
   return entity.type === 'crm_company';
 }
 
+/**
+ * Entity types the search view supports. Mirrors the search preset's
+ * server-side exclusions (foreign entities + CRM) so entities that enter
+ * the soup cache outside the query — e.g. websocket-driven optimistic
+ * inserts — don't surface in the search feed.
+ */
+export function searchSupportedFilter(entity: EntityData): boolean {
+  return (
+    entity.type !== 'foreign' &&
+    entity.type !== 'crm_company' &&
+    entity.type !== 'crm_contact'
+  );
+}
+
 export function crmCompanyActiveFilter(entity: EntityData): boolean {
   return entity.type === 'crm_company' && !entity.hidden;
 }

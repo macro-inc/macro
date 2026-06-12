@@ -1,6 +1,7 @@
 import { useAnalytics } from '@app/component/analytics-context';
 import type { ListView } from '@app/constants/list-views';
 import { hapticImpact } from '@core/mobile/haptics';
+import { ICON_ANIMATION_DURATION_MS } from '@icon/animation';
 import { AnimatedChannelIcon } from '@icon/wide-channel';
 import { AnimatedEmailIcon } from '@icon/wide-email';
 import { AnimatedPlusIcon } from '@icon/wide-plus';
@@ -21,8 +22,6 @@ import {
   MOBILE_FLOATING_BUTTON_TRANSITION,
   MOBILE_FLOATING_BUTTON_VISIBLE,
 } from './soup-view-mobile-floating-motion';
-
-const ICON_ANIMATION_DURATION_MS = 500;
 
 type IconComponent = Component<
   JSX.SvgSVGAttributes<SVGSVGElement> | { triggerAnimation?: boolean }

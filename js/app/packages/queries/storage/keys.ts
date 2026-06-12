@@ -31,6 +31,12 @@ export const binaryDocumentKeys = createQueryKeys('binaryDocument', {
   }),
 });
 
+export const snippetRawKeys = createQueryKeys('snippetRaw', {
+  document: (documentId: string) => ({
+    queryKey: [documentId],
+  }),
+});
+
 export const documentGithubPullRequestsKeys = createQueryKeys(
   'documentGithubPullRequests',
   {
@@ -60,6 +66,9 @@ export const entityKeys = createQueryKeys('entity', {
   }),
   taskDuplicates: (documentId: string) => ({
     queryKey: [documentId, 'duplicates'],
+  }),
+  documentTeamShare: (documentId: string) => ({
+    queryKey: [documentId, 'teamShare'],
   }),
 });
 

@@ -2,6 +2,8 @@ use crate::pubsub::backfill::increment_counters::{
     incr_completed_messages, incr_completed_threads,
 };
 use crate::pubsub::context::PubSubContext;
+use crate::pubsub::util::cg_refresh_email;
+use models_email::api::refresh::{BackfillStatus, RefreshEmailEvent};
 use models_email::email::service::backfill::{
     BackfillJobStatus, BackfillMessagePayload, BackfillOperation, BackfillPubsubMessage,
     JobScopedPayload,
@@ -60,6 +62,35 @@ async fn mark_job_failed(ctx: &PubSubContext, job_id: Uuid) {
             job_id = %job_id,
             "Failed to update backfill job status to Failed"
         );
+        return;
+    }
+
+    notify_job_failed(ctx, job_id).await;
+}
+
+/// Resolves the failed job's link and signals the failure over the connection
+/// gateway so an active client stops waiting on the job.
+#[tracing::instrument(skip(ctx))]
+async fn notify_job_failed(ctx: &PubSubContext, job_id: Uuid) {
+    let Ok(Some(job)) =
+        email_db_client::backfill::job::get::get_backfill_job(&ctx.db, job_id).await
+    else {
+        return;
+    };
+    let Some(link_id) = job.link_id else {
+        return;
+    };
+
+    if let Ok(Some(link)) = email_db_client::links::get::fetch_link_by_id(&ctx.db, link_id).await {
+        cg_refresh_email(
+            &ctx.connection_gateway_client,
+            link.macro_id.as_ref(),
+            RefreshEmailEvent::Backfill {
+                link_id,
+                status: BackfillStatus::Failed,
+            },
+        )
+        .await;
     }
 }
 

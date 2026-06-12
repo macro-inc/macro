@@ -31,6 +31,7 @@ ai_tools = [
 axum = [
   "dep:axum",
   "dep:axum-extra",
+  "dep:lexical_client",
   "dep:model-error-response",
   "dep:model_user",
   "dep:task_dedup",
@@ -139,6 +140,7 @@ sha2 = { workspace = true, optional = true }
 # Attachment
 attachment = { path = "../attachment", optional = true }
 non_empty = { path = "../non_empty" }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 dotenvy = { workspace = true }

@@ -27,6 +27,7 @@ pub struct DbLink {
     pub email_address: String,
     pub provider: DbUserProvider,
     pub is_sync_active: bool,
+    pub is_primary: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -47,6 +48,7 @@ impl From<models_email::email::service::link::Link> for DbLink {
                 models_email::service::link::UserProvider::Gmail => DbUserProvider::Gmail,
             },
             is_sync_active: service_link.is_sync_active,
+            is_primary: service_link.is_primary,
             created_at: service_link.created_at,
             updated_at: service_link.updated_at,
         }
@@ -64,6 +66,7 @@ impl TryFrom<DbLink> for models_email::email::service::link::Link {
             email_address,
             provider,
             is_sync_active,
+            is_primary,
             created_at,
             updated_at,
         } = value;
@@ -76,6 +79,7 @@ impl TryFrom<DbLink> for models_email::email::service::link::Link {
                 DbUserProvider::Gmail => UserProvider::Gmail,
             },
             is_sync_active,
+            is_primary,
             created_at,
             updated_at,
         })

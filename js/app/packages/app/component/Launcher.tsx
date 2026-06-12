@@ -1,8 +1,13 @@
 import { analytics } from '@app/lib/analytics';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { setAutomationComposerOpen } from '@block-automation/component';
 import type { BlockAlias, BlockName } from '@core/block';
 import { getIconConfig } from '@core/component/EntityIcon';
-import { ENABLE_ANIMATED_ICONS } from '@core/constant/featureFlags';
+import {
+  ENABLE_ANIMATED_ICONS,
+  ENABLE_SNIPPETS_FLAG,
+  ENABLE_SNIPPETS_OVERRIDE,
+} from '@core/constant/featureFlags';
 import {
   createHotkeyGroup,
   registerHotkey,
@@ -20,6 +25,7 @@ import {
   createChat,
   createCodeFileFromText,
   createMarkdownFile,
+  createSnippet,
 } from '@core/util/create';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import { AnimatedChatIcon } from '@icon/wide-chat';
@@ -34,6 +40,8 @@ import { AnimatedFileCodeIcon } from '@icon/wide-fileCode';
 import { AnimatedFileMdIcon } from '@icon/wide-fileMd';
 import { AnimatedFolderIcon } from '@icon/wide-folder';
 import WideFolder from '@icon/wide-folder.svg';
+import { AnimatedSnippetIcon } from '@icon/wide-snippet';
+import WideSnippet from '@icon/wide-snippet.svg';
 import { AnimatedStarIcon } from '@icon/wide-star';
 import WideStar from '@icon/wide-star.svg';
 import { AnimatedTaskIcon } from '@icon/wide-task';
@@ -98,7 +106,7 @@ const createBlock = async (spec: {
   // If we are creating a new markdown document "from scratch" then we can let
   // them instantly start editing
   const createMdParams =
-    blockName === 'md'
+    blockName === 'md' || blockName === 'snippet'
       ? { optimisticSnapshot: await getMarkdownGoldenBytes() }
       : undefined;
 
@@ -184,6 +192,18 @@ export function runCreateAction(
       createComponent({
         componentId: 'task-compose',
         asPopover: true,
+      });
+      return;
+    case 'snippet':
+      createBlock({
+        blockName: 'snippet',
+        loading: true,
+        createFn: () =>
+          createSnippet({
+            title: '',
+            content: '',
+          }),
+        shouldInsert,
       });
       return;
     case 'email':
@@ -274,6 +294,20 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     hotkey: 't' as const,
     keyDownHandler: () => {
       runCreateAction('task');
+      return true;
+    },
+  },
+  {
+    label: 'Snippet',
+    icon: WideSnippet,
+    animatedIcon: AnimatedSnippetIcon,
+    description: 'Create snippet',
+    blockName: 'snippet',
+    hotkeyToken: TOKENS.create.snippet,
+    altHotkeyToken: TOKENS.create.snippetNewSplit,
+    hotkey: 's' as const,
+    keyDownHandler: () => {
+      runCreateAction('snippet', { shouldInsert: pressedKeys().has('shift') });
       return true;
     },
   },
@@ -469,7 +503,13 @@ type LauncherInnerProps = {
 
 export const LauncherInner = (props: LauncherInnerProps) => {
   const hkGroup = createHotkeyGroup();
-  const blocks = () => props.blocks ?? CREATABLE_BLOCKS;
+  const snippetsFlag = useFeatureFlag(ENABLE_SNIPPETS_FLAG, {
+    enabledOverride: ENABLE_SNIPPETS_OVERRIDE,
+  });
+  const blocks = () =>
+    (props.blocks ?? CREATABLE_BLOCKS).filter(
+      (block) => block.blockName !== 'snippet' || snippetsFlag().enabled
+    );
   const [attachHotkeys, launcherScope] = useHotkeyDOMScope('create-menu', true);
 
   let ref!: HTMLDivElement;
@@ -481,29 +521,14 @@ export const LauncherInner = (props: LauncherInnerProps) => {
 
   const focusMenuItem = (label: string) => {
     const menuItem = document.querySelector<HTMLElement>(
-      `.create-menu-${label}`
+      `.create-menu-${label.toLowerCase()}`
     );
 
-    if (menuItem) {
-      menuItem.focus();
-    }
+    if (!menuItem) return false;
+
+    menuItem.focus();
 
     return true;
-  };
-
-  // Mirrors the grid-cols-2 / sm:grid-cols-4 / xl:grid-cols-N classes in the JSX
-  const getColumnCount = () => {
-    const width = window.innerWidth;
-    const length = blocks().length;
-    if (width >= 1280) {
-      if (length >= 8) return 8;
-      if (length >= 7) return 7;
-      if (length >= 6) return 6;
-      if (length >= 5) return 5;
-      return 4;
-    }
-    if (width >= 640) return 4;
-    return 2;
   };
 
   const moveFocus = (delta: number) => {
@@ -524,6 +549,26 @@ export const LauncherInner = (props: LauncherInnerProps) => {
 
     nextEl.focus();
 
+    setFocusedIndex(nextIndex);
+
+    return true;
+  };
+
+  const getGridColumnCount = () => {
+    const columns = window.getComputedStyle(ref).gridTemplateColumns;
+    return Math.max(columns.split(' ').filter(Boolean).length, 1);
+  };
+
+  const moveFocusRow = (direction: -1 | 1) => {
+    const columnCount = getGridColumnCount();
+    const nextIndex = focusedIndex() + columnCount * direction;
+
+    if (nextIndex < 0 || nextIndex >= blocks().length) return false;
+
+    const nextEl = tabbable(ref)[nextIndex];
+    if (!nextEl) return false;
+
+    nextEl.focus();
     setFocusedIndex(nextIndex);
 
     return true;
@@ -588,7 +633,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
     description: 'Navigate Up',
     keyDownHandler: (e) => {
       e?.preventDefault();
-      return moveFocus(-getColumnCount());
+      return moveFocusRow(-1);
     },
   }).withGroup(hkGroup);
 
@@ -598,7 +643,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
     description: 'Navigate Down',
     keyDownHandler: (e) => {
       e?.preventDefault();
-      return moveFocus(getColumnCount());
+      return moveFocusRow(1);
     },
   }).withGroup(hkGroup);
 
@@ -663,19 +708,9 @@ export const LauncherInner = (props: LauncherInnerProps) => {
 
   onCleanup(hkGroup.dispose);
 
-  // horrible but tailwind requires the full strings
-  const gridColsClass = () => {
-    const length = blocks().length;
-    if (length >= 8) return 'xl:grid-cols-8';
-    if (length >= 7) return 'xl:grid-cols-7';
-    if (length >= 6) return 'xl:grid-cols-6';
-    if (length >= 5) return 'xl:grid-cols-5';
-    return '';
-  };
-
   return (
-    <div class="bg-surface ring-1 ring-edge-muted rounded-xl">
-      <div class="flex items-center justify-between p-2 px-6 border-b border-edge-muted">
+    <div class="bg-surface ring-1 ring-edge-muted rounded-xl max-w-[calc(100vw-2rem)]">
+      <div class="flex items-center justify-between p-2 px-4 sm:px-6 border-b border-edge-muted">
         <h1 class="font-bold text-ink-muted">Create New</h1>
         <p class="gap-2 text-ink-extra-muted text-xs items-center hidden touch:hidden md:flex">
           <style>{`
@@ -708,10 +743,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
         </p>
       </div>
       <div
-        class={cn(
-          'relative grid grid-cols-2 sm:grid-cols-4 gap-3 p-6 isolate brackets-never',
-          gridColsClass()
-        )}
+        class="relative grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 justify-items-center gap-3 p-4 sm:p-6 isolate brackets-never"
         ref={ref}
       >
         <For each={blocks()}>

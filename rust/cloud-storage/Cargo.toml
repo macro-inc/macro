@@ -55,8 +55,11 @@ members = [
   "upload_extractor_lambda_trigger",
   "user_link_cleanup_handler",
   "worker_trigger",
-  "macro_config"
-, "prompt"]
+  "macro_config",
+  "prompt",
+  "workspace-hack",
+  "tools/xtask",
+]
 
 [workspace.dependencies]
 anyhow = "1.0.100"

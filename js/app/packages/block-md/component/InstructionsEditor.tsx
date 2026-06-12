@@ -7,6 +7,7 @@ import { FocusClickTarget } from '@core/component/LexicalMarkdown/component/core
 import { LexicalStateDebugger } from '@core/component/LexicalMarkdown/component/debug/LexicalStateDebugger';
 import { EmojiMenu } from '@core/component/LexicalMarkdown/component/menu/EmojiMenu';
 import { MentionsMenu } from '@core/component/LexicalMarkdown/component/menu/MentionsMenu';
+import { SnippetsMenu } from '@core/component/LexicalMarkdown/component/menu/SnippetsMenu';
 import {
   getErrorDescription,
   MarkdownEditorErrors,
@@ -16,6 +17,7 @@ import {
   LexicalWrapperContext,
 } from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
 import {
+  awaitPlugin,
   CLOSE_INLINE_SEARCH_COMMAND,
   DefaultShortcuts,
   documentMetadataPlugin,
@@ -25,6 +27,7 @@ import {
   textPastePlugin,
 } from '@core/component/LexicalMarkdown/plugins';
 import { emojisPlugin } from '@core/component/LexicalMarkdown/plugins/emojis/emojisPlugin';
+import { snippetsPlugin } from '@core/component/LexicalMarkdown/plugins/snippets';
 import { useUserPromptPlugin } from '@core/component/LexicalMarkdown/plugins/userPrompt';
 import { createMenuOperations } from '@core/component/LexicalMarkdown/shared/inlineMenu';
 import {
@@ -149,6 +152,7 @@ export function InstructionsEditor(props: {
 
   const mentionsMenuOperations = createMenuOperations();
   const emojiMenuOperations = createMenuOperations();
+  const snippetsMenuOperations = createMenuOperations();
 
   const peerIdValidator: Accessor<PeerIdValidator> = () => {
     if (!IS_SYNC()) {
@@ -185,8 +189,16 @@ export function InstructionsEditor(props: {
         disableMentionTracking: true,
       })
     )
+    .use(
+      snippetsPlugin({
+        menu: snippetsMenuOperations,
+        peerIdValidator: peerIdValidator(),
+        sourceDocumentId: blockId,
+      })
+    )
     .use(textPastePlugin())
     .use(markdownPastePlugin())
+    .use(awaitPlugin())
     .use(
       keyboardShortcutsPlugin({
         shortcuts: DefaultShortcuts,
@@ -421,6 +433,13 @@ export function InstructionsEditor(props: {
           menu={mentionsMenuOperations}
           useBlockBoundary={true}
           disableMentionTracking={true}
+        />
+
+        <SnippetsMenu
+          editor={editor}
+          menu={snippetsMenuOperations}
+          useBlockBoundary={true}
+          sourceDocumentId={blockId}
         />
 
         <Show when={DEBUG}>

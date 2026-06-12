@@ -3460,6 +3460,16 @@
             "description": "The number of added lines reported by GitHub, when enrichment succeeds.",
             "minimum": 0
           },
+          "authorId": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "The stable numeric GitHub user id for the pull request author, when available.",
+            "minimum": 0
+          },
+          "authorLogin": {
+            "type": ["string", "null"],
+            "description": "The GitHub login for the pull request author, when available."
+          },
           "checks": {
             "type": ["array", "null"],
             "items": {
@@ -3479,6 +3489,10 @@
             "format": "int64",
             "description": "The number of deleted lines reported by GitHub, when enrichment succeeds.",
             "minimum": 0
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "The pull request description (body), when available."
           },
           "displayName": {
             "type": "string",
@@ -3501,6 +3515,13 @@
           "owner": {
             "type": "string",
             "description": "The GitHub repository owner or organization."
+          },
+          "participantGithubUserIds": {
+            "type": ["array", "null"],
+            "items": {
+              "type": "string"
+            },
+            "description": "Stable numeric GitHub user ids (as strings) for everyone involved in the pull request.\nQueried by the foreign entity `includes_me` filter, so stored metadata merges this as a\nunion rather than replacing it (partial write paths must not drop known participants)."
           },
           "repo": {
             "type": "string",
@@ -3727,6 +3748,12 @@
           "authorAssociation": {
             "type": ["string", "null"],
             "description": "GitHub's relationship label for the author, when available."
+          },
+          "authorId": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "The stable numeric GitHub user id for the comment author, when available.",
+            "minimum": 0
           },
           "authorLogin": {
             "type": ["string", "null"],

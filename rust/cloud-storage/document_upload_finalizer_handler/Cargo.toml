@@ -28,6 +28,7 @@ sync_service_client = { path = "../sync_service_client" }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tracing = { workspace = true }
 urlencoding = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [[bin]]
 name = "document_upload_finalizer_local_worker"

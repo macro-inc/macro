@@ -25,6 +25,7 @@ import { FloatingEquationMenu } from '@core/component/LexicalMarkdown/component/
 import { FloatingLinkMenu } from '@core/component/LexicalMarkdown/component/menu/FloatingLinkMenu';
 import { GenerateMenu } from '@core/component/LexicalMarkdown/component/menu/GenerateMenu';
 import { MentionsMenu } from '@core/component/LexicalMarkdown/component/menu/MentionsMenu/MentionsMenu';
+import { SnippetsMenu } from '@core/component/LexicalMarkdown/component/menu/SnippetsMenu';
 import TableActionMenu, {
   anchorElemRefSignal,
   menuButtonRefSignal,
@@ -96,6 +97,7 @@ import {
 } from '@core/component/LexicalMarkdown/plugins/media';
 import { createAccessoryStore } from '@core/component/LexicalMarkdown/plugins/node-accessory';
 import { restoreFocusPlugin } from '@core/component/LexicalMarkdown/plugins/restore-focus';
+import { snippetsPlugin } from '@core/component/LexicalMarkdown/plugins/snippets';
 import { createMenuOperations } from '@core/component/LexicalMarkdown/shared/inlineMenu';
 import {
   editorFocusSignal,
@@ -200,6 +202,19 @@ const EDITOR_PADDING_BOTTOM = 200;
 // For tasks, the click target is a small fixed pad so the activity section stays visible.
 const TASK_EDITOR_PADDING_BOTTOM = 48;
 
+function getBlankMarkdownPlaceholder(canEdit: boolean) {
+  if (!canEdit) return 'This document is blank...';
+
+  const hints = [
+    "'/' for commands",
+    "'@' to reference files",
+    "';' for snippets",
+  ];
+  if (ENABLE_MARKDOWN_AI_GENERATE) hints.push("'space' for AI writing");
+
+  return `Press ${hints.join(', ')}...`;
+}
+
 export function MarkdownEditor(props: {
   autoFocusOnMount?: boolean;
   loroManager: Accessor<LoroManager | undefined>;
@@ -293,6 +308,7 @@ export function MarkdownEditor(props: {
   const mentionsMenuOperations = createMenuOperations();
   const emojiMenuOperations = createMenuOperations();
   const actionsMenuOperations = createMenuOperations();
+  const snippetsMenuOperations = createMenuOperations();
 
   // store for the drag insert pluign.
   const [dragInsertStore, setDragInsertStore] = createDragInsertStore();
@@ -526,6 +542,13 @@ export function MarkdownEditor(props: {
       })
     )
     .use(
+      snippetsPlugin({
+        menu: snippetsMenuOperations,
+        peerIdValidator: peerIdValidator(),
+        sourceDocumentId: blockId,
+      })
+    )
+    .use(
       actionsPlugin({
         menu: actionsMenuOperations,
         peerIdValidator: peerIdValidator(),
@@ -727,6 +750,7 @@ export function MarkdownEditor(props: {
       mentionsMenuOperations.isOpen() ||
       emojiMenuOperations.isOpen() ||
       actionsMenuOperations.isOpen() ||
+      snippetsMenuOperations.isOpen() ||
       titleEditorMenuOpen()
     );
   });
@@ -969,9 +993,7 @@ export function MarkdownEditor(props: {
         />
         <Show when={isBlankMarkdown()}>
           <div class="pointer-events-none text-ink-placeholder absolute top-0">
-            {canEdit()
-              ? `Press '/' for commands, '@' to reference files${ENABLE_MARKDOWN_AI_GENERATE ? ", 'space' for AI writing..." : '...'}`
-              : `This document is blank...`}
+            {getBlankMarkdownPlaceholder(canEdit())}
           </div>
         </Show>
         <DecoratorRenderer editor={editor} />
@@ -1016,6 +1038,13 @@ export function MarkdownEditor(props: {
           menu={mentionsMenuOperations}
           useBlockBoundary={true}
           showOpenTabs
+        />
+
+        <SnippetsMenu
+          editor={editor}
+          menu={snippetsMenuOperations}
+          useBlockBoundary={true}
+          sourceDocumentId={blockId}
         />
 
         <ActionMenu editor={editor} menu={actionsMenuOperations} />

@@ -5,9 +5,12 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { BasicDocumentSubTypeOneOf } from './basicDocumentSubTypeOneOf';
+import type { BasicDocumentSubTypeOneOfThree } from './basicDocumentSubTypeOneOfThree';
 
 /**
  * Sub type of a document with associated properties encoded in each variant.
 This ensures type-safety: task properties only exist when the document is a task.
  */
-export type BasicDocumentSubType = BasicDocumentSubTypeOneOf;
+export type BasicDocumentSubType =
+  | BasicDocumentSubTypeOneOf
+  | BasicDocumentSubTypeOneOfThree;

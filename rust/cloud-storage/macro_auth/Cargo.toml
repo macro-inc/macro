@@ -24,3 +24,4 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros"] }
 tracing = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

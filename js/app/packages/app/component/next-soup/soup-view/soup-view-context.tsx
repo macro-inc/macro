@@ -18,11 +18,20 @@ import {
   type Query,
   type QueryStore,
 } from '@app/component/next-soup/filters/filter-store/query-store';
-import { createInfiniteQueries } from '@app/component/next-soup/soup-view/create-infinite-queries';
+import { createGroupedSoupQueries } from '@app/component/next-soup/soup-view/create-grouped-soup-queries';
 import { createSearchState } from '@app/component/next-soup/soup-view/create-search-state';
+import {
+  INBOX_FILTER_ENTRY_KEY,
+  registerInboxFilterSplit,
+} from '@app/component/next-soup/soup-view/inbox-filter-controllers';
 import { deduplicateEntities } from '@app/component/next-soup/utils';
 import { useEntryState } from '@app/component/split-layout/entry-state';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
+import {
+  isListViewID,
+  type ListView,
+  soupItemMatchesListView,
+} from '@app/constants/list-views';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
   ENABLE_FEATURED_SEARCH_RESULTS,
@@ -30,7 +39,6 @@ import {
   ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE,
 } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
-import { throwOnErr } from '@core/util/result';
 import {
   type EntityData,
   getPropertyOptionLabel,
@@ -39,24 +47,18 @@ import {
 } from '@entity';
 import { useNotificationsForEntity } from '@notifications';
 import { useQueryClient } from '@queries/client';
-import {
-  parseGroupedSoupPage,
-  serializeGroupByField,
-} from '@queries/soup/grouped/api';
 import type {
   GroupMeta as ApiGroupMeta,
   GroupByField,
-  GroupedSoupPage,
 } from '@queries/soup/grouped/types';
-import { type SoupParams, useSoupAstItemsQuery } from '@queries/soup/items';
+import type { SoupParams } from '@queries/soup/items';
+import { useSoupAstItemsQuery } from '@queries/soup/items';
 import { soupKeys } from '@queries/soup/keys';
-import { mapSoupPageToEntityList } from '@queries/soup/transform-utils';
-import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
-import { storageServiceClient } from '@service-storage/client';
 import type { SoupPage } from '@service-storage/generated/schemas';
 import type { InfiniteData } from '@tanstack/solid-query';
 import {
   type Accessor,
+  batch,
   createContext,
   createEffect,
   createMemo,
@@ -86,8 +88,17 @@ type DataSource<T> = {
   fetchNextPage: VoidFunction;
 };
 
+type SoupViewInitializeOptions = {
+  initialQuery?: Query;
+  initialClientFilters?: SetPredicatesInput<string>;
+  initialSearchText?: string;
+  disableLocalSearch?: boolean;
+  additionalEntities?: Accessor<EntityData[]>;
+};
+
 interface SoupViewContextValues {
   soup: SoupState;
+  initialize: (options?: SoupViewInitializeOptions) => void;
   source: DataSource<EntityData>;
   searchText: Accessor<string>;
   setSearchText: (value: string) => void;
@@ -106,6 +117,9 @@ interface SoupViewContextValues {
   activeTab: Accessor<string | undefined>;
   setActiveTab: Setter<string | undefined>;
   groupByField: Accessor<GroupByField | undefined>;
+  fetchNextGroupPage: (groupKey: string) => Promise<void>;
+  isFetchingGroupPage: (groupKey: string) => boolean;
+  hasNextGroupPage: (groupKey: string) => boolean;
 }
 
 const SoupViewContext = createContext<SoupViewContextValues>();
@@ -124,16 +138,9 @@ export const useSoupView = () => {
 
 export const useMaybeSoupView = () => useContext(SoupViewContext);
 
-interface SoupViewContextProviderProps {
+interface SoupViewContextProviderProps extends SoupViewInitializeOptions {
   soup?: SoupState;
-  initialQuery?: Query;
-  initialSearchText?: string;
-  disableLocalSearch?: boolean;
-  /**
-   * Additional client-side entities to merge into the soup item stream.
-   * Visibility is still controlled by the active client filters.
-   */
-  additionalEntities?: Accessor<EntityData[]>;
+  initialEnabled?: boolean;
 }
 
 type ApiSortMethod = NonNullable<SoupParams['sort_method']>;
@@ -148,6 +155,14 @@ export const SoupViewContextProvider: FlowComponent<
   SoupViewContextProviderProps
 > = (props) => {
   const soup = props.soup ?? createSoupState();
+  const [enabled, setEnabled] = createSignal(props.initialEnabled ?? false);
+  const [config, setConfig] = createSignal<SoupViewInitializeOptions>({
+    initialQuery: props.initialQuery,
+    initialClientFilters: props.initialClientFilters,
+    initialSearchText: props.initialSearchText,
+    disableLocalSearch: props.disableLocalSearch,
+    additionalEntities: props.additionalEntities,
+  });
 
   const queryClient = useQueryClient();
 
@@ -167,13 +182,8 @@ export const SoupViewContextProvider: FlowComponent<
 
   const panel = useSplitPanelOrThrow();
 
-  // Restore filter state from this history entry if it was captured during a
-  // previous nav-away; otherwise fall back to the caller-provided initial.
-  const persistedFilters = panel.handle.currentEntryState()?.[
-    'search.filters'
-  ] as Query | undefined;
   const store = createQueryStore({
-    initial: persistedFilters ?? props.initialQuery,
+    initial: props.initialQuery,
   });
 
   const filterCaptorTeardown = panel.handle.registerEntryStateCaptor(
@@ -185,12 +195,6 @@ export const SoupViewContextProvider: FlowComponent<
   // Client-side predicate state (drives the "Type: X" chips and other
   // toggleable filters) also needs to round-trip per entry, since the chip UI
   // reads predicates directly and would otherwise show empty after back-nav.
-  const persistedPredicates = panel.handle.currentEntryState()?.[
-    'search.predicates'
-  ] as SetPredicatesInput<string> | undefined;
-  if (persistedPredicates) {
-    soup.predicates.set(persistedPredicates);
-  }
   const predicatesCaptorTeardown = panel.handle.registerEntryStateCaptor(
     'search.predicates',
     (): SetPredicatesInput<string> => ({
@@ -238,14 +242,28 @@ export const SoupViewContextProvider: FlowComponent<
   };
 
   const [searchPaused, setSearchPaused] = createSignal(false);
+  const sourceSearchPaused = createMemo(() => searchPaused() || !enabled());
   const [assigneeFilter, setAssigneeFilter] = useEntryState<string[]>(
     'soup.assigneeFilter',
     { default: [] }
   );
   const [inboxFilter, setInboxFilter] = useEntryState<string[] | undefined>(
-    'soup.inboxFilter',
+    INBOX_FILTER_ENTRY_KEY,
     { default: undefined }
   );
+
+  // Expose the mail view's inbox filter to consumers outside the split tree
+  // (the sidebar's nested account rows read and set it by split id).
+  {
+    const content = panel.handle.content();
+    if (content.type === 'component' && content.id === 'mail') {
+      const dispose = registerInboxFilterSplit(panel.handle.id, {
+        inboxFilter,
+        setInboxFilter,
+      });
+      onCleanup(dispose);
+    }
+  }
   const [activeTab, setActiveTab] = useEntryState<string | undefined>(
     'soup.tab',
     { default: undefined }
@@ -297,11 +315,21 @@ export const SoupViewContextProvider: FlowComponent<
     soup,
     filters: () => applyInboxFilter(queryFilters.state),
     assignees: assigneeFilter,
-    disableLocalSearch: props.disableLocalSearch,
-    searchPaused,
+    disableLocalSearch: () => config().disableLocalSearch ?? false,
+    searchPaused: sourceSearchPaused,
     searchText,
     setSearchText,
   });
+
+  const initialize = (options: SoupViewInitializeOptions = {}) => {
+    batch(() => {
+      setConfig(options);
+      queryFilters.replace(options.initialQuery ?? null);
+      soup.predicates.set(options.initialClientFilters ?? {});
+      setSearchText(options.initialSearchText ?? '');
+      setEnabled(true);
+    });
+  };
 
   const notificationSource = useGlobalNotificationSource();
   const userId = useUserId();
@@ -329,16 +357,28 @@ export const SoupViewContextProvider: FlowComponent<
     };
   };
 
+  const activeListView = createMemo<ListView | undefined>(() => {
+    const content = panel.handle.content();
+    if (content.type !== 'component') return;
+    return isListViewID(content.id) ? content.id : undefined;
+  });
+
   const itemsQuery = useSoupAstItemsQuery(
     () => ({
       params: soupParams(),
       body: soupBody(),
       groupBy: groupByField(),
     }),
-    () => ({
-      enabled: !search.isSearching(),
-      showSupportedForeignEntities: showSupportedForeignEntitiesFF().enabled,
-    })
+    () => {
+      const view = activeListView();
+      return {
+        enabled: !search.isSearching(),
+        showSupportedForeignEntities: showSupportedForeignEntitiesFF().enabled,
+        meta: {
+          itemFilter: (item) => soupItemMatchesListView(item, view),
+        },
+      };
+    }
   );
 
   const items = createMemo<SoupEntity[]>(
@@ -348,13 +388,13 @@ export const SoupViewContextProvider: FlowComponent<
       if (!searching) {
         const data = itemsQuery.data;
 
-        if (!data) return prev;
+        if (!data || data.groups) return prev;
 
         const base = data.entities.map((e) =>
           isWithNotification(e) ? e : attachNotifications(e)
         ) as SoupEntity[];
 
-        const extras = props.additionalEntities?.() ?? [];
+        const extras = config().additionalEntities?.() ?? [];
 
         if (extras.length === 0) return base;
 
@@ -441,98 +481,38 @@ export const SoupViewContextProvider: FlowComponent<
     return [...featured, ...rest];
   };
 
-  const instructionsIdQuery = useInstructionsMdIdQuery();
-
-  const groupQueries = createInfiniteQueries<GroupedSoupPage, SoupEntity[]>(
-    () => {
-      const field = groupByField();
+  const groupQueries = createGroupedSoupQueries({
+    initialPage: createMemo(() => {
       const groups = itemsQuery.data?.groups;
-      const items = itemsQuery.data?.items;
-      const dataVersion = itemsQuery.dataUpdatedAt;
+      const items = itemsQuery.data?.itemsById;
+      if (!groups || !items) return;
+      return { groups, items };
+    }),
+    groupByField,
+    soupParams,
+    soupBody,
+    queryOptions: () => {
+      const view = activeListView();
+      return {
+        enabled: !search.isSearching(),
+        meta: {
+          itemFilter: (item) => soupItemMatchesListView(item, view),
+        },
+      };
+    },
+  });
 
-      if (!field || !groups || !items) {
-        return [];
-      }
+  const groupQueryFor = (groupKey: string) => groupQueries.map().get(groupKey);
 
-      return groups.map((group) => {
-        const initialGroupItems = items.slice(
-          group.startIndex,
-          group.startIndex + group.pageCount
-        );
-
-        return {
-          key: group.key,
-          queryKey: [
-            ...soupKeys.groupedGroup({
-              params: soupParams(),
-              body: soupBody(),
-              groupBy: field,
-              groupKey: group.key,
-            }).queryKey,
-            dataVersion,
-          ] as readonly unknown[],
-          queryFn: async (ctx: { pageParam: string | null }) => {
-            const response = await throwOnErr(async () =>
-              storageServiceClient.getGroupedSoupAstItems({
-                params: {
-                  cursor: ctx.pageParam ?? undefined,
-                  group_by: serializeGroupByField(field),
-                  group_key: group.key,
-                },
-                body: {
-                  ...soupBody(),
-                  ...soupParams(),
-                },
-              })
-            );
-            return parseGroupedSoupPage(response);
-          },
-          getNextPageParam: (lastPage: GroupedSoupPage): string | null => {
-            const meta = lastPage.groups.find((g) => g.key === group.key);
-            return meta?.nextCursor ?? null;
-          },
-          initialData: {
-            pages: [
-              {
-                items: initialGroupItems,
-                nextCursor: group.nextCursor,
-                groups: [group],
-              },
-            ],
-            pageParams: [null],
-          },
-          select: (pages: GroupedSoupPage[]): SoupEntity[] => {
-            const allItems = pages.flatMap((p) => p.items);
-            return mapSoupPageToEntityList(
-              { items: allItems, next_cursor: null },
-              {
-                instructionsIdQuery,
-                showSupportedForeignEntities:
-                  showSupportedForeignEntitiesFF().enabled,
-              }
-            ).map((e) => attachNotifications(e)) as SoupEntity[];
-          },
-          enabled: true,
-          staleTime: Infinity,
-        };
-      });
-    }
-  );
-
-  const loadMoreForGroup = async (groupKey: string): Promise<void> => {
-    const query = groupQueries().find((q) => q.key === groupKey);
-    await query?.fetchNextPage();
+  const fetchNextGroupPage = async (groupKey: string) => {
+    await groupQueryFor(groupKey)?.fetchNextPage();
   };
 
-  const isGroupLoadingMore = (groupKey: string) => {
-    const query = groupQueries().find((q) => q.key === groupKey);
-    return query?.isFetchingNextPage() ?? false;
-  };
+  const isFetchingGroupPage = (groupKey: string) =>
+    groupQueryFor(groupKey)?.isFetchingNextPage() ?? false;
 
-  const hasMoreForGroup = (groupKey: string) => {
-    const query = groupQueries().find((q) => q.key === groupKey);
-    return query?.hasNextPage() ?? false;
-  };
+  const hasNextGroupPage = (groupKey: string) =>
+    groupQueryFor(groupKey)?.hasNextPage() ?? false;
 
   const buildGroupMeta = (group: ApiGroupMeta): GroupMeta => {
     const resolvedLabel = getPropertyOptionLabel(group.key) ?? group.label;
@@ -543,9 +523,6 @@ export const SoupViewContextProvider: FlowComponent<
       count: group.totalCount,
       isExpanded: () => soup.grouping.isExpanded(group.key),
       toggle: () => soup.grouping.toggle(group.key),
-      hasMore: () => hasMoreForGroup(group.key),
-      loadMore: () => loadMoreForGroup(group.key),
-      isLoading: () => isGroupLoadingMore(group.key),
     };
   };
 
@@ -553,29 +530,29 @@ export const SoupViewContextProvider: FlowComponent<
     const field = groupByField();
     const groups = itemsQuery.data?.groups;
 
-    // Not grouped - build simple entity rows
-    if (!field || !groups || search.isSearching()) {
+    if (!enabled() || !field || !groups || search.isSearching()) {
       return entities().map((entity, index) =>
         soup.buildRow({ id: entity.id, index, original: entity })
       );
     }
 
-    // Grouped - build header + entity + loadMore rows for each group
     const result: SoupRow[] = [];
     let globalIndex = 0;
 
     for (const apiGroup of groups) {
       const groupMeta = buildGroupMeta(apiGroup);
-      const query = groupQueries().find((q) => q.key === apiGroup.key);
-      const groupEntities = query?.data() ?? [];
+      const groupData = groupQueryFor(apiGroup.key)?.data();
+      const groupEntities =
+        groupData?.entities?.map(
+          (entity) =>
+            (isWithNotification(entity)
+              ? entity
+              : attachNotifications(entity)) as SoupEntity
+        ) ?? [];
 
-      // Get first entity to use for header original
-      // If the group has no entities, we can skip it
       const firstEntity = groupEntities[0];
-
       if (!firstEntity) continue;
 
-      // Header row
       result.push(
         soup.buildRow({
           id: `header:${apiGroup.key}`,
@@ -586,7 +563,6 @@ export const SoupViewContextProvider: FlowComponent<
         })
       );
 
-      // Entity rows
       for (const entity of groupEntities) {
         result.push(
           soup.buildRow({
@@ -598,12 +574,9 @@ export const SoupViewContextProvider: FlowComponent<
         );
       }
 
-      // We can stop here if the group has no more data
-      // that needs to be fetched
-      if (!groupMeta.hasMore()) continue;
+      if (!hasNextGroupPage(apiGroup.key)) continue;
 
       const lastEntity = groupEntities[groupEntities.length - 1];
-
       result.push(
         soup.buildRow({
           id: `loadmore:${apiGroup.key}`,
@@ -622,6 +595,7 @@ export const SoupViewContextProvider: FlowComponent<
 
   const context = {
     soup,
+    initialize,
     source: {
       data: entities,
       isLoading: () => itemsQuery.isLoading,
@@ -631,12 +605,16 @@ export const SoupViewContextProvider: FlowComponent<
       isFetchingNextPage: () =>
         itemsQuery.isFetchingNextPage || searchQuery.isFetchingNextPage,
       hasNextPage: () => {
+        if (!enabled()) return false;
+
         return (
           (itemsQuery.isEnabled && itemsQuery.hasNextPage) ||
           (searchQuery.isEnabled && searchQuery.hasNextPage)
         );
       },
       fetchNextPage: () => {
+        if (!enabled()) return;
+
         if (itemsQuery.isEnabled) {
           itemsQuery.fetchNextPage();
         }
@@ -649,7 +627,7 @@ export const SoupViewContextProvider: FlowComponent<
     rows,
     searchText: search.searchText,
     setSearchText: search.setSearchText,
-    searchPaused,
+    searchPaused: sourceSearchPaused,
     setSearchPaused,
     featuredIds: search.featuredIds,
     isSearchServiceLoading: search.isSearchServiceLoading,
@@ -662,6 +640,9 @@ export const SoupViewContextProvider: FlowComponent<
     activeTab,
     setActiveTab,
     groupByField,
+    fetchNextGroupPage,
+    isFetchingGroupPage,
+    hasNextGroupPage,
   };
 
   return (

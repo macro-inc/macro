@@ -179,6 +179,39 @@ impl GithubSyncRepo for PgGithubSyncRepo {
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn get_macro_ids_by_github_logins(
+        &self,
+        github_logins: &[String],
+    ) -> Result<std::collections::HashMap<String, Vec<String>>, Self::Err> {
+        if github_logins.is_empty() {
+            return Ok(std::collections::HashMap::new());
+        }
+
+        let lowercased: Vec<String> = github_logins
+            .iter()
+            .map(|login| login.to_lowercase())
+            .collect();
+        let rows = sqlx::query!(
+            r#"
+            SELECT LOWER(github_username) AS "login!", macro_id
+            FROM github_links
+            WHERE LOWER(github_username) = ANY($1::text[])
+            "#,
+            &lowercased,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut links: std::collections::HashMap<String, Vec<String>> =
+            std::collections::HashMap::new();
+        for row in rows {
+            links.entry(row.login).or_default().push(row.macro_id);
+        }
+
+        Ok(links)
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn get_user_team_ids(&self, macro_id: &str) -> Result<Vec<uuid::Uuid>, Self::Err> {
         let team_ids = sqlx::query_scalar!(
             r#"

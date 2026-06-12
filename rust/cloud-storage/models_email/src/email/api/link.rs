@@ -82,7 +82,7 @@ pub struct Link {
     pub sync_status: SyncStatus,
     pub signature: Option<String>,
     pub settings: Settings,
-    pub is_inbox_only: bool,
+    pub is_primary: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -94,7 +94,6 @@ impl Link {
         settings: Settings,
         sync_status: SyncStatus,
         photo_url: Option<String>,
-        is_inbox_only: bool,
     ) -> Self {
         Link {
             id: source.id,
@@ -107,7 +106,7 @@ impl Link {
             sync_status,
             signature,
             settings,
-            is_inbox_only,
+            is_primary: source.is_primary,
             created_at: source.created_at,
             updated_at: source.updated_at,
         }
