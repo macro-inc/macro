@@ -931,3 +931,33 @@ fn pr_context_empty_for_unknown_event() {
     let event = ValidatedGithubWebhookEvent::new("ping".to_string(), payload);
     assert!(event.extract_pr_context_text().is_empty());
 }
+
+// ---------------------------------------------------------------------------
+// extract_github_mentions
+// ---------------------------------------------------------------------------
+
+#[test]
+fn github_mentions_extracts_unique_lowercased_logins() {
+    let mentions = extract_github_mentions(
+        "@Alice please review, cc @bob-smith and @alice again.\n@carol99: thoughts?",
+    );
+    assert_eq!(mentions, vec!["alice", "bob-smith", "carol99"]);
+}
+
+#[test]
+fn github_mentions_ignores_emails_and_bare_at_signs() {
+    let mentions = extract_github_mentions("contact me at alice@example.com or @ (nothing)");
+    assert!(mentions.is_empty());
+}
+
+#[test]
+fn github_mentions_matches_at_start_and_after_punctuation() {
+    let mentions = extract_github_mentions("@lead-dev: see (@helper) and [@docs-team]");
+    assert_eq!(mentions, vec!["docs-team", "helper", "lead-dev"]);
+}
+
+#[test]
+fn github_mentions_does_not_capture_trailing_hyphen() {
+    let mentions = extract_github_mentions("ping @user- and @-nobody");
+    assert_eq!(mentions, vec!["user"]);
+}

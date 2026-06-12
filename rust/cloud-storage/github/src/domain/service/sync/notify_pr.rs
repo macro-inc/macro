@@ -10,7 +10,10 @@ use model_entity::EntityType;
 use model_notifications::{
     GithubPrEventAction, GithubPrEventStatus, GithubPrNotificationCommon, GithubPrStatusChanged,
 };
-use notification::domain::{models::SendNotificationRequestBuilder, service::NotificationIngress};
+use notification::domain::{
+    models::{Notification, SendNotificationRequestBuilder},
+    service::NotificationIngress,
+};
 
 use crate::domain::{
     models::{
@@ -75,27 +78,51 @@ impl<
                 action,
                 transition,
             );
-            let notification_entity =
-                EntityType::ForeignEntity.with_entity_string(upsert.foreign_entity_id.to_string());
-            let request = SendNotificationRequestBuilder {
-                notification_entity,
+            self.send_github_notification(
                 notification,
-                sender_id: sender_id.clone(),
+                upsert.foreign_entity_id,
+                sender_id.clone(),
                 recipient_ids,
-            }
-            .into_request()
-            .with_conn_gateway();
-
-            if let Err(error) = self.notification_ingress.send_notification(request).await {
-                tracing::error!(
-                    error=?error,
-                    source_id=%upsert.source.source_id(),
-                    source_type=%upsert.source.source_type(),
-                    foreign_entity_id=%upsert.foreign_entity_id,
-                    "failed to send GitHub PR notification"
-                );
-            }
+            )
+            .await;
         }
+    }
+
+    /// Send a GitHub pull request notification over the connection gateway,
+    /// logging (rather than propagating) delivery failures.
+    pub(super) async fn send_github_notification<T: Notification + Clone + 'static>(
+        &self,
+        notification: T,
+        foreign_entity_id: uuid::Uuid,
+        sender_id: Option<MacroUserIdStr<'static>>,
+        recipient_ids: HashSet<MacroUserIdStr<'static>>,
+    ) {
+        let notification_entity =
+            EntityType::ForeignEntity.with_entity_string(foreign_entity_id.to_string());
+        let request = SendNotificationRequestBuilder {
+            notification_entity,
+            notification,
+            sender_id,
+            recipient_ids,
+        }
+        .into_request()
+        .with_conn_gateway();
+
+        if let Err(error) = self.notification_ingress.send_notification(request).await {
+            tracing::error!(
+                error=?error,
+                notification_type=%T::TYPE_NAME,
+                foreign_entity_id=%foreign_entity_id,
+                "failed to send GitHub PR notification"
+            );
+        }
+    }
+
+    /// Whether the webhook event was triggered by a bot account (including the
+    /// Macro GitHub App itself, whose task-link comments echo back as
+    /// `issue_comment` webhooks).
+    pub(super) fn is_bot_sender(event: &ValidatedGithubWebhookEvent) -> bool {
+        Self::payload_string(&event.payload, &["sender", "type"]).as_deref() == Some("Bot")
     }
 
     fn status_transition(
@@ -112,7 +139,7 @@ impl<
         })
     }
 
-    async fn notification_recipient_ids(
+    pub(super) async fn notification_recipient_ids(
         &self,
         source: &GithubAppInstallationSource,
     ) -> HashSet<MacroUserIdStr<'static>> {
@@ -148,7 +175,7 @@ impl<
         }
     }
 
-    async fn notification_sender_id(
+    pub(super) async fn notification_sender_id(
         &self,
         event: &ValidatedGithubWebhookEvent,
     ) -> Option<MacroUserIdStr<'static>> {
@@ -185,7 +212,7 @@ impl<
     }
 
     /// Build the metadata fields shared by every GitHub pull request notification type.
-    fn github_pr_common(
+    pub(super) fn github_pr_common(
         event: &ValidatedGithubWebhookEvent,
         pull_request: &EnrichedGithubPullRequest,
         foreign_entity_id: uuid::Uuid,
@@ -246,7 +273,7 @@ impl<
         }
     }
 
-    fn payload_string(payload: &serde_json::Value, path: &[&str]) -> Option<String> {
+    pub(super) fn payload_string(payload: &serde_json::Value, path: &[&str]) -> Option<String> {
         let mut value = payload;
         for key in path {
             value = value.get(*key)?;
