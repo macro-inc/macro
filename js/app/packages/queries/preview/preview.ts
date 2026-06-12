@@ -216,7 +216,11 @@ export function setPreviewName({
  * before the backend has fully propagated the new item.
  *
  * Call this immediately after creating an item to ensure the preview cache
- * has valid data before any components try to fetch it.
+ * has valid data before any components try to fetch it. The seed is stored
+ * as fresh data: it carries exactly what was sent to the backend
+ * (name/fileType/subType), so there is nothing to refetch, and an immediate
+ * revalidation could race propagation and clobber the seed with
+ * 'does_not_exist'. Server truth reconciles through normal staleness.
  *
  * @param itemId - The unique identifier of the newly created item
  * @param itemType - The type of item ('document', 'chat', 'project', etc.)
@@ -271,14 +275,5 @@ export function setPreviewOnCreate({
     updatedAt: new Date().toISOString(),
   };
 
-  // Optimistically set the preview data
   setPreviewData(itemId, (_prev) => defaultPreviewItem);
-
-  // Schedule a background refetch to get the real data from the server
-  // Use a small delay to give the backend time to propagate
-  setTimeout(() => {
-    queryClient.invalidateQueries({
-      queryKey: previewKeys.item(itemId).queryKey,
-    });
-  }, 100);
 }
