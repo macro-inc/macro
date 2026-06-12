@@ -47,6 +47,10 @@ import { type VirtualizerHandle, VList } from 'virtua/solid';
 
 export const HISTORY_DRAWER_ID = 'history';
 
+export function historyDrawerId(documentId: string): string {
+  return `${HISTORY_DRAWER_ID}:${documentId}`;
+}
+
 async function forkDocumentAtVersion(
   documentId: string,
   documentName: string,

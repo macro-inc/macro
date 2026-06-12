@@ -1,3 +1,4 @@
+import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
 import { useNavigatedFromJK } from '@app/component/useNavigatedFromJK';
 import { CommentMargin } from '@block-md/comments/CommentMargin';
 import {
@@ -33,6 +34,7 @@ import {
   Show,
   untrack,
 } from 'solid-js';
+import { historyDrawerId } from './History';
 import { HistoryOverlay } from './HistoryOverlay';
 import { InlineTaskGithubPullRequests } from './InlineTaskGithubPullRequests';
 import { InlineTaskProperties } from './InlineTaskProperties';
@@ -85,8 +87,9 @@ export function Notebook(props: {
   const md = mdStore.get;
   const { navigatedFromJK } = useNavigatedFromJK();
 
-  // TEMP (history slider piece 1): toggle an in-place read-only overlay of the doc.
-  const [showHistory, setShowHistory] = createSignal(false);
+  // History overlay reuses the existing top-bar History toggle (drawer control).
+  const historyBlockId = useBlockId();
+  const historyControl = useDrawerControl(historyDrawerId(historyBlockId));
 
   let notebookRef!: HTMLDivElement;
   let commentMarginRef: HTMLDivElement | undefined;
@@ -278,14 +281,6 @@ export function Notebook(props: {
         ref={contentRef}
         classList={{ relative: true }}
       >
-        {/* TEMP (history slider piece 1): floated so it takes no layout space */}
-        <button
-          type="button"
-          class="absolute right-1 top-1 z-10 text-ink-placeholder underline"
-          onClick={() => setShowHistory(true)}
-        >
-          History (temp)
-        </button>
         <TitleEditor
           autoFocusOnMount={!navigatedFromJK()}
           mustBeConnected={props.mustBeConnected}
@@ -304,11 +299,8 @@ export function Notebook(props: {
               loroManager={props.loroManager}
               mustBeConnected={props.mustBeConnected}
             />
-            <Show when={showHistory()}>
-              <HistoryOverlay
-                loroManager={props.loroManager}
-                onClose={() => setShowHistory(false)}
-              />
+            <Show when={historyControl.isOpen() && historyBlockId}>
+              <HistoryOverlay documentId={historyBlockId!} />
             </Show>
           </div>
           <Show when={ENABLE_RAIL_CHAT_TASK_COMMENTS && isTask}>

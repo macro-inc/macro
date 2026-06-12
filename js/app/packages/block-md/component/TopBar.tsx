@@ -62,7 +62,7 @@ import {
   Show,
 } from 'solid-js';
 import { DispatchAgentButton } from './DispatchAgentMenu';
-import { HISTORY_DRAWER_ID } from './History';
+import { HISTORY_DRAWER_ID, historyDrawerId } from './History';
 
 export function TopBar(props: { name?: Accessor<string | undefined> } = {}) {
   const canEdit = useCanEdit();
@@ -77,7 +77,7 @@ export function TopBar(props: { name?: Accessor<string | undefined> } = {}) {
 
   const downloadAsMarkdownText = useDownloadDocumentAsMarkdownText();
 
-  const historyControl = useDrawerControl(HISTORY_DRAWER_ID);
+  const historyControl = useDrawerControl(historyDrawerId(blockId));
   const shareCtx = useShareDialogContext();
   const blockAliasedName = useBlockAliasedName();
   const isTask = blockAliasedName === 'task';
