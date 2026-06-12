@@ -33,6 +33,7 @@ import {
   Show,
   untrack,
 } from 'solid-js';
+import { HistoryOverlay } from './HistoryOverlay';
 import { InlineTaskGithubPullRequests } from './InlineTaskGithubPullRequests';
 import { InlineTaskProperties } from './InlineTaskProperties';
 import { InstructionsEditor } from './InstructionsEditor';
@@ -83,6 +84,9 @@ export function Notebook(props: {
   const isTask = useBlockAliasedName() === 'task';
   const md = mdStore.get;
   const { navigatedFromJK } = useNavigatedFromJK();
+
+  // TEMP (history slider piece 1): toggle an in-place read-only overlay of the doc.
+  const [showHistory, setShowHistory] = createSignal(false);
 
   let notebookRef!: HTMLDivElement;
   let commentMarginRef: HTMLDivElement | undefined;
@@ -269,7 +273,19 @@ export function Notebook(props: {
 
   return (
     <div class={containerClasses()} ref={notebookRef}>
-      <div class={contentDivClasses()} ref={contentRef}>
+      <div
+        class={contentDivClasses()}
+        ref={contentRef}
+        classList={{ relative: true }}
+      >
+        {/* TEMP (history slider piece 1): floated so it takes no layout space */}
+        <button
+          type="button"
+          class="absolute right-1 top-1 z-10 text-ink-placeholder underline"
+          onClick={() => setShowHistory(true)}
+        >
+          History (temp)
+        </button>
         <TitleEditor
           autoFocusOnMount={!navigatedFromJK()}
           mustBeConnected={props.mustBeConnected}
@@ -281,10 +297,20 @@ export function Notebook(props: {
           <TaskDuplicateMatchPill />
         </div>
         <ParamsProvider>
-          <MarkdownEditor
-            loroManager={props.loroManager}
-            mustBeConnected={props.mustBeConnected}
-          />
+          {/* Relative wrapper so the history overlay covers only the body region,
+              leaving the title + properties above it untouched and aligned. */}
+          <div class="relative">
+            <MarkdownEditor
+              loroManager={props.loroManager}
+              mustBeConnected={props.mustBeConnected}
+            />
+            <Show when={showHistory()}>
+              <HistoryOverlay
+                loroManager={props.loroManager}
+                onClose={() => setShowHistory(false)}
+              />
+            </Show>
+          </div>
           <Show when={ENABLE_RAIL_CHAT_TASK_COMMENTS && isTask}>
             <TaskDiscussion />
           </Show>
