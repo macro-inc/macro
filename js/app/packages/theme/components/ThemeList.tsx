@@ -23,15 +23,26 @@ function ThemeList() {
           <For each={visibleThemes()}>
             {(theme) => {
               const selected = () => theme.id === currentThemeId() && isThemeSaved();
+              const select = () => {
+                analytics.track('theme_changed', { themeId: theme.id })
+                applyTheme(theme.id)
+              };
               return (
+                // role="button" (not <button>) because the card contains ThemeCrud's
+                // own buttons, and nesting native buttons is invalid HTML.
                 <div
+                  role="button"
+                  tabIndex={0}
                   class={cn(
                     'flex min-w-0 cursor-pointer items-center gap-2 rounded-lg border bg-surface p-2 transition-colors',
                     selected() ? 'border-accent' : 'border-edge-muted hover:border-ink-muted'
                   )}
-                  onClick={() => {
-                    analytics.track('theme_changed', { themeId: theme.id })
-                    applyTheme(theme.id)
+                  onClick={select}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      select()
+                    }
                   }}
                 >
                   <ThemeChips theme={theme} />
