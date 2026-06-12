@@ -1,5 +1,6 @@
 import { createSignal, For, Show, Suspense } from 'solid-js';
 import { TabsInset } from '@core/component/TabsInset';
+import PlusIcon from '@phosphor-icons/core/regular/plus.svg?component-solid';
 import { Button, Layer, Panel } from '@ui';
 import { McpSetupCards } from '@core/component/AI/component/McpSetupCards';
 import { toast } from '@core/component/Toast/Toast';
@@ -339,9 +340,11 @@ function Connectors() {
         <Button
           variant="active"
           size="sm"
+          depth={3}
           class="shrink-0"
           onClick={() => { setShowAddDialog(true) }}
         >
+          <PlusIcon class="size-4" />
           Add Server
         </Button>
       </div>

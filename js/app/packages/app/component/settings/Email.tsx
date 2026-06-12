@@ -200,7 +200,7 @@ export function Email() {
               }
             >
               <Button
-                variant="base"
+                variant="active"
                 size="sm"
                 depth={3}
                 class="ml-auto shrink-0"
