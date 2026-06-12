@@ -5,14 +5,13 @@
  * OpenAPI spec version: 1.0.0
  */
 
-import type { AgentModel } from './agentModel';
 import type { DynamicSchema } from './dynamicSchema';
 import type { StructuredCompletionRequestAdditionalInstructions } from './structuredCompletionRequestAdditionalInstructions';
 import type { ToolSet } from './toolSet';
 
 export interface StructuredCompletionRequest {
   additional_instructions?: StructuredCompletionRequestAdditionalInstructions;
-  model: AgentModel;
+  model: string;
   output_schema: DynamicSchema;
   prompt: string;
   toolset?: ToolSet;

@@ -1,14 +1,16 @@
 /// The main entry point: [`AgentLoop`] and [`Session`].
 use crate::error::AgentError;
 use crate::hook::{StreamBridge, ToolRouter};
-use crate::model::{AgentModel, ModelProvider};
+use crate::model::AgentModel;
+use crate::model::router::{AllModelsRouter, RoutedModel};
+use crate::model::types::Model;
 use crate::stream::{ChatCompletionStream, StreamPart};
 use crate::tool_adapter::DynToolSetAdapter;
 use ai_toolset::{RequestContext, ToolSet as AiToolSet};
 use futures::StreamExt;
 use macro_user_id::user_id::MacroUserIdStr;
 use rig_core::agent::{Agent, MultiTurnStreamItem};
-use rig_core::client::{CompletionClient, ProviderClient};
+use rig_core::client::ProviderClient;
 use rig_core::completion::{CompletionModel, GetTokenUsage};
 use rig_core::message::Message;
 use rig_core::providers::{anthropic, openai};
@@ -22,13 +24,15 @@ const DEFAULT_MAX_TOKENS: u64 = 16_000;
 /// Factory for creating per-request agent sessions.
 ///
 /// Holds one client per provider and routes each session to the provider
-/// serving the selected model (see [`AgentModel::provider`]). Tools and
-/// system prompt are provided per-session since they vary by request
+/// serving the selected model id (see [`AllModelsRouter`]). The model is a
+/// plain api-id string so the frontend can select it directly; backend
+/// callers pass an [`AgentModel`] via `with_model` (it is `ToString`). Tools
+/// and system prompt are provided per-session since they vary by request
 /// (MCP tools are per-user, system prompt depends on toolset selection).
 pub struct AgentLoop {
-    anthropic: anthropic::Client,
-    openai: Option<openai::Client>,
-    model: AgentModel,
+    anthropic: Arc<anthropic::Client>,
+    openai: Arc<openai::Client>,
+    model: String,
     max_turns: usize,
     max_tokens: u64,
 }
@@ -43,24 +47,26 @@ impl AgentLoop {
     /// Create an `AgentLoop` with provider clients from the environment and
     /// the default model (Opus 4.7).
     ///
-    /// `ANTHROPIC_API_KEY` is required. `OPENAI_API_KEY` is optional at
-    /// construction; selecting an OpenAI model without it panics at
-    /// session creation.
+    /// `ANTHROPIC_API_KEY` and `OPENAI_API_KEY` are required.
     pub fn new() -> Self {
-        let anthropic = anthropic::Client::from_env().expect("ANTHROPIC_API_KEY must be set");
-        let openai = openai::Client::from_env().ok();
+        let anthropic =
+            Arc::new(anthropic::Client::from_env().expect("ANTHROPIC_API_KEY must be set"));
+        let openai = Arc::new(openai::Client::from_env().expect("OPENAI_API_KEY must be set"));
         Self {
             anthropic,
             openai,
-            model: AgentModel::default(),
+            model: AgentModel::default().to_string(),
             max_turns: DEFAULT_MAX_TURNS,
             max_tokens: DEFAULT_MAX_TOKENS,
         }
     }
 
     /// Override the model.
-    pub fn with_model(mut self, model: AgentModel) -> Self {
-        self.model = model;
+    ///
+    /// Accepts any stringifiable id — an [`AgentModel`] (backend) or a raw
+    /// api-id string (frontend).
+    pub fn with_model<M: ToString>(mut self, model: M) -> Self {
+        self.model = model.to_string();
         self
     }
 
@@ -79,16 +85,19 @@ impl AgentLoop {
     fn build_agent<M: CompletionModel>(
         &self,
         model: M,
+        thinking: Option<serde_json::Value>,
         handle: ToolServerHandle,
         system_prompt: &str,
     ) -> Agent<M> {
-        rig_core::agent::AgentBuilder::new(model)
+        let mut builder = rig_core::agent::AgentBuilder::new(model)
             .tool_server_handle(handle)
             .default_max_turns(self.max_turns)
             .max_tokens(self.max_tokens)
-            .additional_params(self.model.thinking_params())
-            .preamble(system_prompt)
-            .build()
+            .preamble(system_prompt);
+        if let Some(params) = thinking {
+            builder = builder.additional_params(params);
+        }
+        builder.build()
     }
 
     /// Start a new streaming session.
@@ -126,24 +135,34 @@ impl AgentLoop {
                 .expect("failed to register tool");
         }
 
-        let agent = match self.model.provider() {
-            ModelProvider::Anthropic => {
-                let model = self.anthropic.completion_model(self.model.api_id());
-                ProviderAgent::Anthropic(self.build_agent(model, handle, system_prompt))
+        // Tell the model which model it is. Done here (not on the frontend)
+        // so the system prompt always reflects the model actually serving the
+        // request.
+        let system_prompt = format!("{system_prompt}\n\nYou are the {} model.", self.model);
+
+        // The frontend selects the model by api id; route it to the provider
+        // that serves it (falling back to the default on unknown / unavailable
+        // ids). Each `RoutedModel` arm yields a concrete completion model that
+        // feeds the provider-specific `ProviderAgent`.
+        let router = AllModelsRouter::new(self.anthropic.clone(), self.openai.clone());
+        let agent = match router.route_or_default(&self.model) {
+            RoutedModel::Anthropic(m) => {
+                let thinking = m.thinking_params();
+                ProviderAgent::Anthropic(self.build_agent(
+                    m.completion(),
+                    thinking,
+                    handle,
+                    &system_prompt,
+                ))
             }
-            ModelProvider::OpenAi => {
-                let client = self
-                    .openai
-                    .as_ref()
-                    .expect("OPENAI_API_KEY must be set to use OpenAI models");
-                // Non-strict tools: send tool schemas verbatim instead of
-                // letting rig sanitize them into OpenAI's strict subset,
-                // which silently forces every optional parameter into
-                // `required`.
-                let model = client
-                    .completion_model(self.model.api_id())
-                    .with_non_strict_tools();
-                ProviderAgent::OpenAi(self.build_agent(model, handle, system_prompt))
+            RoutedModel::OpenAi(m) => {
+                let thinking = m.thinking_params();
+                ProviderAgent::OpenAi(self.build_agent(
+                    m.completion(),
+                    thinking,
+                    handle,
+                    &system_prompt,
+                ))
             }
         };
 

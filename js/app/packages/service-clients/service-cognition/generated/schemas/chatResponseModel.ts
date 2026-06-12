@@ -4,6 +4,8 @@
  * Document Cognition Service
  * OpenAPI spec version: 1.0.0
  */
-import type { AgentModel } from './agentModel';
 
-export type ChatResponseModel = null | AgentModel;
+/**
+ * The model used to generate the chat (provider api id).
+ */
+export type ChatResponseModel = string | null;

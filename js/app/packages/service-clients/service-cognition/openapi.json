@@ -365,6 +365,35 @@
         }
       }
     },
+    "/chats/models": {
+      "get": {
+        "tags": ["chats"],
+        "summary": "List all chat models, each flagged with whether the requesting user has\naccess (free users get Haiku; professional users get everything).",
+        "operationId": "list_models",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelsResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/chats/{chat_id}": {
       "get": {
         "tags": ["chats"],
@@ -1410,20 +1439,6 @@
           }
         }
       },
-      "AgentModel": {
-        "type": "string",
-        "description": "Model to use for completions.\n\nUnrecognized model strings (including retired Google/OpenAI variants\nfrom older data) deserialize to `Retired` via the manual\n`Deserialize` impl.",
-        "enum": [
-          "smart",
-          "fast",
-          "opus4_7",
-          "sonnet4_6",
-          "haiku4_5",
-          "gpt5_5",
-          "gpt5Mini",
-          "retired"
-        ]
-      },
       "AssistantMessagePart": {
         "oneOf": [
           {
@@ -1960,15 +1975,8 @@
             "description": "The messages in the chat."
           },
           "model": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/AgentModel",
-                "description": "The model used to generate the chat."
-              }
-            ]
+            "type": ["string", "null"],
+            "description": "The model used to generate the chat (provider api id)."
           },
           "name": {
             "type": "string",
@@ -2763,8 +2771,8 @@
             "description": "The content of the message"
           },
           "model": {
-            "$ref": "#/components/schemas/AgentModel",
-            "description": "The model to respond with"
+            "type": "string",
+            "description": "The model to respond with (provider api id)"
           },
           "toolset": {
             "$ref": "#/components/schemas/ToolSet",
@@ -2821,6 +2829,45 @@
           }
         }
       },
+      "ModelAccess": {
+        "type": "object",
+        "description": "A chat model paired with whether the requesting user may use it.",
+        "required": ["id", "provider", "contextWindow", "available"],
+        "properties": {
+          "available": {
+            "type": "boolean",
+            "description": "Whether the requesting user has access to this model."
+          },
+          "contextWindow": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Context window size in tokens.",
+            "minimum": 0
+          },
+          "id": {
+            "type": "string",
+            "description": "Provider api id — the string sent when this model is selected."
+          },
+          "provider": {
+            "type": "string",
+            "description": "Provider serving the model (e.g. `anthropic`, `openai`)."
+          }
+        }
+      },
+      "ModelsResponse": {
+        "type": "object",
+        "description": "Response body for the models-access endpoint: every chat model, each\nflagged with the requesting user's access.",
+        "required": ["models"],
+        "properties": {
+          "models": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ModelAccess"
+            },
+            "description": "All chat models, in display order."
+          }
+        }
+      },
       "NewAttachment": {
         "type": "object",
         "required": ["attachment_type", "attachment_id"],
@@ -2857,8 +2904,8 @@
             "description": "Optional pre-generated ID. If None, the database generates one."
           },
           "model": {
-            "$ref": "#/components/schemas/AgentModel",
-            "description": "The model used to generate the chat"
+            "type": "string",
+            "description": "The model used to generate the chat (provider api id)"
           },
           "role": {
             "$ref": "#/components/schemas/Role",
@@ -2959,8 +3006,8 @@
                 "description": "The content of the message"
               },
               "model": {
-                "$ref": "#/components/schemas/AgentModel",
-                "description": "the chate model to respond with"
+                "type": "string",
+                "description": "the chat model to respond with (provider api id)"
               },
               "stream_id": {
                 "type": "string",
@@ -3122,7 +3169,7 @@
             "required": ["stream_id", "model", "stream_error"],
             "properties": {
               "model": {
-                "$ref": "#/components/schemas/AgentModel"
+                "type": "string"
               },
               "stream_error": {
                 "type": "string",
@@ -3187,7 +3234,7 @@
             "type": ["string", "null"]
           },
           "model": {
-            "$ref": "#/components/schemas/AgentModel"
+            "type": "string"
           },
           "output_schema": {
             "$ref": "#/components/schemas/DynamicSchema"

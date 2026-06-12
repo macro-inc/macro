@@ -1,19 +1,26 @@
-/// Supported models for the agent loop.
-use rig_core::providers::{anthropic, openai};
-use serde::{Deserialize, Serialize};
-use strum::{Display, EnumIter, EnumString};
+use rig_core::providers::anthropic::completion::{
+    CLAUDE_HAIKU_4_5, CLAUDE_OPUS_4_7, CLAUDE_OPUS_4_8, CLAUDE_SONNET_4_6,
+};
+use rig_core::providers::openai::{GPT_5_5, GPT_5_MINI};
+use serde::Serialize;
 use utoipa::ToSchema;
+
+pub mod types;
+pub use types::*;
+mod anthropic;
+mod openai;
+pub mod router;
 
 /// API provider serving a model.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ModelProvider {
+pub enum Provider {
     /// Anthropic (Claude models)
     Anthropic,
     /// OpenAI (GPT models)
     OpenAi,
 }
 
-impl ModelProvider {
+impl Provider {
     /// Lowercase provider name as exposed in the models schema.
     pub fn as_str(&self) -> &'static str {
         match self {
@@ -25,59 +32,48 @@ impl ModelProvider {
 
 /// Model to use for completions.
 ///
-/// Unrecognized model strings (including retired Google/OpenAI variants
-/// from older data) deserialize to `Retired` via the manual
-/// `Deserialize` impl.
-#[derive(
-    Serialize, Debug, Clone, Copy, PartialEq, Eq, Display, EnumString, EnumIter, ToSchema, Default,
-)]
-#[serde(rename_all = "camelCase")]
+/// This type is **serialize-only**: every variant's wire form is the
+/// provider's **api id** — the exact string the API (and the model router)
+/// expects. The two semantic tiers (`Smart` / `Fast`) are server-side
+/// concepts that resolve to a concrete model, so they serialize to that
+/// model's api id too — the router never sees a semantic name, only an id it
+/// can dispatch. `Smart` and `Haiku4_5`/`Fast` may share a wire id; that's
+/// fine because we never deserialize this enum.
+#[derive(Serialize, Debug, Clone, Copy, PartialEq, Eq, ToSchema, Default)]
 pub enum AgentModel {
-    /// Best available model
+    /// Best available model (currently Claude Opus 4.8)
     #[default]
+    #[serde(rename = "claude-opus-4-8")]
     Smart,
-    /// Fastest available model
+    /// Fastest available model (currently Claude Haiku 4.5)
+    #[serde(rename = "claude-haiku-4-5")]
     Fast,
     /// Claude Opus 4.7
+    #[serde(rename = "claude-opus-4-7")]
     Opus4_7,
     /// Claude Sonnet 4.6
+    #[serde(rename = "claude-sonnet-4-6")]
     Sonnet4_6,
     /// Claude Haiku 4.5
+    #[serde(rename = "claude-haiku-4-5")]
     Haiku4_5,
     /// OpenAI GPT-5.5
+    #[serde(rename = "gpt-5.5")]
     Gpt5_5,
     /// OpenAI GPT-5 mini
+    #[serde(rename = "gpt-5-mini")]
     Gpt5Mini,
     /// Retired or unrecognized model, routes to the default
+    #[serde(rename = "claude-opus-4-8")]
     Retired,
 }
 
-impl<'de> Deserialize<'de> for AgentModel {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let s = String::deserialize(deserializer)?;
-        #[derive(Deserialize)]
-        #[serde(rename_all = "camelCase")]
-        enum Known {
-            Smart,
-            Fast,
-            Opus4_7,
-            Sonnet4_6,
-            Haiku4_5,
-            Gpt5_5,
-            Gpt5Mini,
-            Retired,
-        }
-        match serde_json::from_value::<Known>(serde_json::Value::String(s)) {
-            Ok(Known::Smart) => Ok(Self::Smart),
-            Ok(Known::Fast) => Ok(Self::Fast),
-            Ok(Known::Opus4_7) => Ok(Self::Opus4_7),
-            Ok(Known::Sonnet4_6) => Ok(Self::Sonnet4_6),
-            Ok(Known::Haiku4_5) => Ok(Self::Haiku4_5),
-            Ok(Known::Gpt5_5) => Ok(Self::Gpt5_5),
-            Ok(Known::Gpt5Mini) => Ok(Self::Gpt5Mini),
-            Ok(Known::Retired) => Ok(Self::Retired),
-            Err(_) => Ok(Self::Retired),
-        }
+/// `to_string()` yields the api id, so backend callers can pass an
+/// `AgentModel` anywhere a `T: ToString` model is expected and get the exact
+/// string the API/router needs.
+impl std::fmt::Display for AgentModel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.api_id())
     }
 }
 
@@ -85,17 +81,18 @@ impl AgentModel {
     /// Returns the provider API model identifier.
     pub fn api_id(&self) -> &'static str {
         match self {
-            Self::Smart | Self::Opus4_7 | Self::Retired => anthropic::completion::CLAUDE_OPUS_4_7,
-            Self::Fast | Self::Haiku4_5 => anthropic::completion::CLAUDE_HAIKU_4_5,
-            Self::Sonnet4_6 => anthropic::completion::CLAUDE_SONNET_4_6,
-            Self::Gpt5_5 => openai::GPT_5_5,
-            Self::Gpt5Mini => openai::GPT_5_MINI,
+            Self::Smart | Self::Retired => CLAUDE_OPUS_4_8,
+            Self::Opus4_7 => CLAUDE_OPUS_4_7,
+            Self::Sonnet4_6 => CLAUDE_SONNET_4_6,
+            Self::Fast | Self::Haiku4_5 => CLAUDE_HAIKU_4_5,
+            Self::Gpt5_5 => GPT_5_5,
+            Self::Gpt5Mini => GPT_5_MINI,
         }
     }
 
     /// Returns `additional_params` JSON to enable extended thinking / reasoning.
     ///
-    /// - Opus 4.7: `adaptive` (model chooses when to think)
+    /// - Opus 4.8 / 4.7: `adaptive` (model chooses when to think)
     /// - Sonnet 4.6 / Haiku 4.5: `enabled` with `budget_tokens`
     /// - GPT-5.5 / GPT-5 mini: Responses API `reasoning` with effort
     ///   (no `temperature`; reasoning models reject it)
@@ -132,21 +129,16 @@ impl AgentModel {
     }
 
     /// API provider serving this model.
-    pub fn provider(&self) -> ModelProvider {
+    pub fn provider(&self) -> Provider {
         match self {
             Self::Smart
             | Self::Fast
             | Self::Opus4_7
             | Self::Sonnet4_6
             | Self::Haiku4_5
-            | Self::Retired => ModelProvider::Anthropic,
-            Self::Gpt5_5 | Self::Gpt5Mini => ModelProvider::OpenAi,
+            | Self::Retired => Provider::Anthropic,
+            Self::Gpt5_5 | Self::Gpt5Mini => Provider::OpenAi,
         }
-    }
-
-    /// from json or Retired
-    pub fn from_json_or_default(json: &str) -> Self {
-        serde_json::from_str(json).unwrap_or(Self::Retired)
     }
 }
 
