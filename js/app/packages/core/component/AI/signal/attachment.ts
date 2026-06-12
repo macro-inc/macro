@@ -61,7 +61,9 @@ export const useGetChatAttachmentInfo = () => {
     id: string,
     fileType?: string | null
   ): Attachment | undefined => {
-    const knownFileType = fileType ?? cachedDocumentFileType(id);
+    // mention nodes use '' when the block name has no file type mapping,
+    // so empty string falls back to the cache too
+    const knownFileType = fileType || cachedDocumentFileType(id);
     const validFileType = asFileType(knownFileType);
 
     if (!validFileType) {

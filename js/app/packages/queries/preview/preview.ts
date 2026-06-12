@@ -201,10 +201,12 @@ export function setPreviewName({
   // if the item isn't in the cache, we can optimistically create a new item
   const res = setPreviewData(itemId, (_prev) => defaultPreviewItem);
 
-  // invalidate the item so that we can refetch on next render
-  // note that we cannot directly call the fetch here because the item name is not necessarily updated on the backend
+  // mark stale for the next natural refetch (mount/focus) without refetching
+  // active observers now: the backend may not have processed the rename yet,
+  // so an immediate refetch could clobber the optimistic name with the old one
   queryClient.invalidateQueries({
     queryKey: previewKeys.item(itemId).queryKey,
+    refetchType: 'none',
   });
 
   return res;
