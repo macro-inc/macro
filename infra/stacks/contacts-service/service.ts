@@ -38,10 +38,15 @@ type CreateContactsServiceArgs = {
   ecsClusterArn: pulumi.Output<string> | string;
   cloudStorageClusterName: pulumi.Output<string> | string;
   secretKeyArns: (pulumi.Output<string> | string)[];
+  containerSecrets: {
+    name: string;
+    valueFrom: pulumi.Output<string> | string;
+  }[];
 };
 
 export class ContactsService extends pulumi.ComponentResource {
   public role: aws.iam.Role;
+  public executionRole: aws.iam.Role;
   public ecr: awsx.ecr.Repository;
   public serviceAlbSg: aws.ec2.SecurityGroup;
   public serviceSg: aws.ec2.SecurityGroup;
@@ -67,6 +72,7 @@ export class ContactsService extends pulumi.ComponentResource {
       containerEnvVars,
       cloudStorageClusterName,
       secretKeyArns,
+      containerSecrets,
     }: CreateContactsServiceArgs,
     opts?: pulumi.ComponentResourceOptions
   ) {
@@ -140,6 +146,42 @@ export class ContactsService extends pulumi.ComponentResource {
       { parent: this }
     );
 
+    const executionSecretsPolicy = new aws.iam.Policy(
+      `${BASE_NAME}-execution-secrets-policy`,
+      {
+        policy: {
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Action: ['secretsmanager:GetSecretValue'],
+              Resource: containerSecrets.map((s) => s.valueFrom),
+              Effect: 'Allow',
+            },
+          ],
+        },
+        tags: this.tags,
+      },
+      { parent: this }
+    );
+
+    const ecsTaskAssumeRolePolicy = aws.iam.assumeRolePolicyForPrincipal({
+      Service: 'ecs-tasks.amazonaws.com',
+    });
+
+    this.executionRole = new aws.iam.Role(
+      `${BASE_NAME}-execution-role`,
+      {
+        name: `${BASE_NAME}-execution-role-${stack}`,
+        assumeRolePolicy: ecsTaskAssumeRolePolicy,
+        tags: this.tags,
+        managedPolicyArns: [
+          'arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy',
+          executionSecretsPolicy.arn,
+        ],
+      },
+      { parent: this }
+    );
+
     // ecr image
     const image = new EcrImage(
       `${BASE_NAME}-ecr-image-${stack}`,
@@ -199,6 +241,9 @@ export class ContactsService extends pulumi.ComponentResource {
         taskDefinitionArgs: {
           taskRole: {
             roleArn: this.role.arn,
+          },
+          executionRole: {
+            roleArn: this.executionRole.arn,
           },
           containers: {
             log_router: fargateLogRouterSidecarContainer,
