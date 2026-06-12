@@ -871,6 +871,10 @@ impl<
                             )
                             .await;
                         }
+                        (GithubWebhookEventType::PullRequestReview, Some("submitted")) => {
+                            self.notify_pr_review(webhook_event, &pull_request, &upserts)
+                                .await;
+                        }
                         _ => {}
                     }
                 }

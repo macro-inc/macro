@@ -3831,3 +3831,216 @@ async fn mention_login_linked_to_multiple_users_notifies_all_in_team() {
         vec!["macro|alice@user.com".to_string()]
     );
 }
+
+// ---------------------------------------------------------------------------
+// notify_pr_review
+// ---------------------------------------------------------------------------
+
+fn notification_review_event(
+    action: &str,
+    state: &str,
+    body: Option<&str>,
+    author_github_id: u64,
+    sender_login: &str,
+    sender_type: &str,
+) -> ValidatedGithubWebhookEvent {
+    ValidatedGithubWebhookEvent::new(
+        "pull_request_review".to_string(),
+        serde_json::json!({
+            "action": action,
+            "review": {
+                "id": 888,
+                "state": state,
+                "body": body,
+                "html_url": "https://github.com/my-org/my-repo/pull/42#pullrequestreview-888"
+            },
+            "pull_request": {
+                "number": 42,
+                "title": "Add GitHub notifications",
+                "state": "open",
+                "merged": false,
+                "user": { "id": author_github_id, "login": "pr-author" }
+            },
+            "repository": {
+                "name": "my-repo",
+                "owner": { "login": "my-org" }
+            },
+            "installation": { "id": 12345 },
+            "sender": {
+                "login": sender_login,
+                "id": 222,
+                "type": sender_type,
+                "avatar_url": format!("https://avatars.example/{sender_login}.png")
+            }
+        }),
+    )
+}
+
+#[tokio::test]
+async fn approved_review_notifies_author_only() {
+    let team_id: uuid::Uuid = "dddddddd-dddd-dddd-dddd-dddddddddddd".parse().unwrap();
+    let repo = comment_team_repo(team_id).with_github_link("444", "macro|bob@user.com");
+    let service = make_sync_service_with_repo(repo);
+    let event = notification_review_event("submitted", "approved", None, 444, "octocat", "User");
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    let requests = service.notification_ingress.requests();
+    assert_eq!(requests.len(), 1);
+
+    let request = &requests[0];
+    assert_github_notification_realtime_enabled_apns_disabled(request, "github_pr_review");
+    assert_eq!(
+        notification_request_recipients(request),
+        vec!["macro|bob@user.com".to_string()]
+    );
+    assert_eq!(
+        request
+            .pointer("/req/sender_id")
+            .and_then(|value| value.as_str()),
+        Some("macro|alice@user.com")
+    );
+
+    let content = notification_request_content(request);
+    assert_eq!(
+        content.get("state").and_then(|value| value.as_str()),
+        Some("approved")
+    );
+    assert_eq!(
+        content
+            .get("reviewGithubId")
+            .and_then(|value| value.as_u64()),
+        Some(888)
+    );
+    assert_eq!(
+        content.get("reviewUrl").and_then(|value| value.as_str()),
+        Some("https://github.com/my-org/my-repo/pull/42#pullrequestreview-888")
+    );
+    assert!(content.get("reviewSnippet").unwrap().is_null());
+}
+
+#[tokio::test]
+async fn changes_requested_review_carries_snippet() {
+    let team_id: uuid::Uuid = "dddddddd-dddd-dddd-dddd-dddddddddddd".parse().unwrap();
+    let repo = comment_team_repo(team_id).with_github_link("444", "macro|bob@user.com");
+    let service = make_sync_service_with_repo(repo);
+    let event = notification_review_event(
+        "submitted",
+        "changes_requested",
+        Some("Please add tests"),
+        444,
+        "octocat",
+        "User",
+    );
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    let requests = service.notification_ingress.requests();
+    assert_eq!(requests.len(), 1);
+    let content = notification_request_content(&requests[0]);
+    assert_eq!(
+        content.get("state").and_then(|value| value.as_str()),
+        Some("changes_requested")
+    );
+    assert_eq!(
+        content
+            .get("reviewSnippet")
+            .and_then(|value| value.as_str()),
+        Some("Please add tests")
+    );
+}
+
+#[tokio::test]
+async fn unmapped_author_review_still_notifies_mentions() {
+    let team_id: uuid::Uuid = "dddddddd-dddd-dddd-dddd-dddddddddddd".parse().unwrap();
+    let repo =
+        comment_team_repo(team_id).with_github_login_link("carol-gh", "macro|carol@user.com");
+    let service = make_sync_service_with_repo(repo);
+    let event = notification_review_event(
+        "submitted",
+        "approved",
+        Some("@carol-gh should double-check the migration"),
+        999,
+        "octocat",
+        "User",
+    );
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    let requests = service.notification_ingress.requests();
+    assert_eq!(requests.len(), 1);
+    assert_github_notification_realtime_enabled_apns_disabled(&requests[0], "github_pr_mention");
+    assert_eq!(
+        notification_request_recipients(&requests[0]),
+        vec!["macro|carol@user.com".to_string()]
+    );
+    let content = notification_request_content(&requests[0]);
+    assert_eq!(
+        content.get("location").and_then(|value| value.as_str()),
+        Some("review")
+    );
+}
+
+#[tokio::test]
+async fn empty_commented_review_does_not_notify() {
+    let team_id: uuid::Uuid = "dddddddd-dddd-dddd-dddd-dddddddddddd".parse().unwrap();
+    let repo = comment_team_repo(team_id).with_github_link("444", "macro|bob@user.com");
+    let service = make_sync_service_with_repo(repo);
+    let event = notification_review_event("submitted", "commented", None, 444, "octocat", "User");
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    assert!(service.notification_ingress.requests().is_empty());
+}
+
+#[tokio::test]
+async fn author_mentioned_in_review_gets_review_only() {
+    let team_id: uuid::Uuid = "dddddddd-dddd-dddd-dddd-dddddddddddd".parse().unwrap();
+    let repo = comment_team_repo(team_id)
+        .with_github_link("444", "macro|bob@user.com")
+        .with_github_login_link("bob-gh", "macro|bob@user.com");
+    let service = make_sync_service_with_repo(repo);
+    let event = notification_review_event(
+        "submitted",
+        "commented",
+        Some("@bob-gh nice work overall"),
+        444,
+        "octocat",
+        "User",
+    );
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    let requests = service.notification_ingress.requests();
+    assert_eq!(requests.len(), 1);
+    assert_github_notification_realtime_enabled_apns_disabled(&requests[0], "github_pr_review");
+    assert_eq!(
+        notification_request_recipients(&requests[0]),
+        vec!["macro|bob@user.com".to_string()]
+    );
+}
+
+#[tokio::test]
+async fn bot_review_does_not_notify() {
+    let team_id: uuid::Uuid = "dddddddd-dddd-dddd-dddd-dddddddddddd".parse().unwrap();
+    let repo = comment_team_repo(team_id).with_github_link("444", "macro|bob@user.com");
+    let service = make_sync_service_with_repo(repo);
+    let event =
+        notification_review_event("submitted", "approved", None, 444, "review-bot[bot]", "Bot");
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    assert!(service.notification_ingress.requests().is_empty());
+}
+
+#[tokio::test]
+async fn dismissed_review_action_does_not_notify() {
+    let team_id: uuid::Uuid = "dddddddd-dddd-dddd-dddd-dddddddddddd".parse().unwrap();
+    let repo = comment_team_repo(team_id).with_github_link("444", "macro|bob@user.com");
+    let service = make_sync_service_with_repo(repo);
+    let event = notification_review_event("dismissed", "dismissed", None, 444, "octocat", "User");
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    assert!(service.notification_ingress.requests().is_empty());
+}

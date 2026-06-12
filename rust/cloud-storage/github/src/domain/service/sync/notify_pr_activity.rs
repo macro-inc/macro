@@ -14,7 +14,7 @@ use foreign_entity::domain::ports::ForeignEntityService;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_notifications::{
     GithubPrComment, GithubPrCommentKind, GithubPrMention, GithubPrMentionLocation,
-    GithubPrNotificationCommon, GithubReviewRequested,
+    GithubPrNotificationCommon, GithubPrReview, GithubPrReviewState, GithubReviewRequested,
 };
 use notification::domain::service::NotificationIngress;
 
@@ -206,6 +206,155 @@ impl<
                     comment_recipients,
                 )
                 .await;
+            }
+        }
+    }
+
+    /// Notify the pull request author that a review was submitted, and notify
+    /// users @mentioned in the review body.
+    ///
+    /// Fires for `pull_request_review` events with action `submitted`. The
+    /// `github_pr_review` notification goes only to the PR author; mentioned
+    /// users receive `github_pr_mention` (the author gets only the review
+    /// notification when both apply). Bot reviews are skipped, as are empty
+    /// `commented` reviews, which GitHub also fires alongside every
+    /// `pull_request_review_comment` event.
+    pub(super) async fn notify_pr_review(
+        &self,
+        event: &ValidatedGithubWebhookEvent,
+        pull_request: &EnrichedGithubPullRequest,
+        upserts: &[PullRequestForeignEntityUpsert],
+    ) {
+        if Self::is_bot_sender(event) {
+            tracing::trace!("skipping review notification from bot sender");
+            return;
+        }
+
+        let state = Self::payload_string(&event.payload, &["review", "state"]).unwrap_or_default();
+        let body = Self::payload_string(&event.payload, &["review", "body"]).unwrap_or_default();
+        let state = match state.as_str() {
+            "approved" => GithubPrReviewState::Approved,
+            "changes_requested" => GithubPrReviewState::ChangesRequested,
+            "commented" if body.trim().is_empty() => {
+                // GitHub submits an empty "commented" review with every inline
+                // review comment; the comment itself already notifies.
+                tracing::trace!("skipping empty commented review");
+                return;
+            }
+            "commented" => GithubPrReviewState::Commented,
+            other => {
+                tracing::trace!(state=%other, "skipping review with unhandled state");
+                return;
+            }
+        };
+
+        let author = self.pull_request_author_macro_user(event).await;
+        let review_github_id = event
+            .payload
+            .get("review")
+            .and_then(|review| review.get("id"))
+            .and_then(|id| id.as_u64());
+        let review_url = Self::payload_string(&event.payload, &["review", "html_url"]);
+        let review_snippet =
+            (!body.trim().is_empty()).then(|| GithubPrNotificationCommon::snippet(&body));
+
+        let mentioned_users = self.mentioned_macro_users(&body).await;
+        let sender_id = self.notification_sender_id(event).await;
+        for upsert in upserts {
+            let recipients = self.notification_recipient_ids(&upsert.source).await;
+
+            let review_recipient = author
+                .as_ref()
+                .filter(|author| recipients.contains(*author))
+                .cloned();
+            if let Some(review_recipient) = &review_recipient {
+                let notification = GithubPrReview {
+                    common: Self::github_pr_common(event, pull_request, upsert.foreign_entity_id),
+                    review_github_id,
+                    review_url: review_url.clone(),
+                    state,
+                    review_snippet: review_snippet.clone(),
+                };
+                self.send_github_notification(
+                    notification,
+                    upsert.foreign_entity_id,
+                    sender_id.clone(),
+                    HashSet::from([review_recipient.clone()]),
+                )
+                .await;
+            }
+
+            // Review wins for the author: drop them from the mention fan-out.
+            let mut mention_recipients: HashSet<_> =
+                recipients.intersection(&mentioned_users).cloned().collect();
+            if let Some(review_recipient) = &review_recipient {
+                mention_recipients.remove(review_recipient);
+            }
+            if !mention_recipients.is_empty() {
+                let notification = GithubPrMention {
+                    common: Self::github_pr_common(event, pull_request, upsert.foreign_entity_id),
+                    location: GithubPrMentionLocation::Review,
+                    comment_github_id: review_github_id,
+                    comment_url: review_url.clone(),
+                    text_snippet: GithubPrNotificationCommon::snippet(&body),
+                };
+                self.send_github_notification(
+                    notification,
+                    upsert.foreign_entity_id,
+                    sender_id.clone(),
+                    mention_recipients,
+                )
+                .await;
+            }
+        }
+    }
+
+    /// Resolve the pull request author from `pull_request.user.id` to a Macro
+    /// user via `github_links`. Returns `None` (with a trace) when unmapped.
+    async fn pull_request_author_macro_user(
+        &self,
+        event: &ValidatedGithubWebhookEvent,
+    ) -> Option<MacroUserIdStr<'static>> {
+        let author_github_user_id = event
+            .payload
+            .get("pull_request")
+            .and_then(|pull_request| pull_request.get("user"))
+            .and_then(|user| user.get("id"))
+            .and_then(|id| id.as_u64())
+            .map(|id| id.to_string())?;
+
+        let macro_id = match self
+            .repo
+            .get_macro_id_by_github_user_id(&author_github_user_id)
+            .await
+        {
+            Ok(Some(macro_id)) => macro_id,
+            Ok(None) => {
+                tracing::trace!(
+                    author_github_user_id=%author_github_user_id,
+                    "pull request author has no Macro mapping"
+                );
+                return None;
+            }
+            Err(error) => {
+                tracing::warn!(
+                    error=?error,
+                    author_github_user_id=%author_github_user_id,
+                    "failed to map pull request author"
+                );
+                return None;
+            }
+        };
+
+        match MacroUserIdStr::try_from(macro_id.clone()) {
+            Ok(author) => Some(author),
+            Err(error) => {
+                tracing::warn!(
+                    error=?error,
+                    macro_id=%macro_id,
+                    "pull request author mapping is not a valid Macro user ID"
+                );
+                None
             }
         }
     }
