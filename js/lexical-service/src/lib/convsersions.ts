@@ -6,6 +6,7 @@ import {
   EXTERNAL_TRANSFORMERS,
   type ImageNode,
   INTERNAL_TRANSFORMERS,
+  markdownToEmbeddingText,
 } from '@macro-inc/lexical-core';
 import { $getRoot, $isElementNode, type SerializedEditorState } from 'lexical';
 import type { CognitionNode, NewMdNode, SearchableNode } from '../types';
@@ -143,18 +144,25 @@ export function toCognitionV2(raw: SerializedEditorState): NewMdNode[] {
   }
 }
 
+export type MarkdownTarget = 'internal' | 'external' | 'embedding';
+
 export function toMarkdownText(
   raw: SerializedEditorState,
-  target: 'internal' | 'external' = 'internal'
+  target: MarkdownTarget = 'internal'
 ) {
   const editor = createEditor();
   try {
     const parsed = editor.parseEditorState(raw);
     editor.setEditorState(parsed);
     return editor.read(() => {
-      return $convertToMarkdownString(
-        target === 'internal' ? INTERNAL_TRANSFORMERS : EXTERNAL_TRANSFORMERS
+      const markdown = $convertToMarkdownString(
+        target === 'external' ? EXTERNAL_TRANSFORMERS : INTERNAL_TRANSFORMERS
       );
+      // The embedding target is the internal format with mentions reduced to
+      // the compact representation task dedup embeds.
+      return target === 'embedding'
+        ? markdownToEmbeddingText(markdown)
+        : markdown;
     });
   } catch (error) {
     if (error instanceof Error) {

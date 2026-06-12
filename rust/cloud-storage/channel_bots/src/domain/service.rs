@@ -5,7 +5,7 @@ use std::fmt::Write as _;
 use std::sync::Arc;
 
 use channels::domain::models::{ParticipantRole, PatchMessageRequest, PostMessageRequest, Sender};
-use channels::domain::ports::ChannelService;
+use channels::domain::ports::{ChannelMutationErr, ChannelService};
 use uuid::Uuid;
 
 use super::models::BotEvent;
@@ -287,8 +287,11 @@ where
             }
         };
 
-        // 4. Replace the "thinking" message with the answer.
-        self.channels
+        // 4. Replace the "thinking" message with the answer. A NotFound here
+        //    means a participant deleted the thinking message while the agent
+        //    ran — treat that as the user not wanting a response.
+        match self
+            .channels
             .patch_message(
                 actor,
                 ParticipantRole::Member,
@@ -302,9 +305,15 @@ where
                     nonce: None,
                 },
             )
-            .await?;
-
-        Ok(())
+            .await
+        {
+            Ok(()) => Ok(()),
+            Err(ChannelMutationErr::NotFound(_)) => {
+                tracing::info!(%message_id, "thinking message was deleted; dropping bot response");
+                Ok(())
+            }
+            Err(err) => Err(err.into()),
+        }
     }
 }
 

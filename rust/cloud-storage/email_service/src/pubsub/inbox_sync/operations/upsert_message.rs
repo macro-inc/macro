@@ -19,6 +19,7 @@ use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 use model_notifications::NewEmailMetadata;
+use models_email::api::refresh::RefreshEmailEvent;
 use models_email::db::address::EmailRecipientType;
 use models_email::email::service::link;
 use models_email::email::service::message::SimpleMessage;
@@ -245,7 +246,7 @@ pub async fn upsert_message(
     cg_refresh_email(
         &ctx.connection_gateway_client,
         link.macro_id.as_ref(),
-        "upsert_message",
+        RefreshEmailEvent::UpsertMessage { link_id: link.id },
     )
     .await;
 
@@ -574,15 +575,18 @@ async fn send_notifications(
         snippet: message.snippet.unwrap_or_default(),
     };
 
-    let primaries =
-        macro_db_client::macro_user_links::get_primaries_for_child(&ctx.db, link.macro_id.as_ref())
-            .await
-            .map_err(|e| {
-                ProcessingError::Retryable(DetailedError {
-                    reason: FailureReason::DatabaseQueryFailed,
-                    source: e.context("Failed to fetch delegated primaries".to_string()),
-                })
-            })?;
+    let primaries = macro_db_client::macro_user_links::get_primaries_for_link(
+        &ctx.db,
+        link.macro_id.as_ref(),
+        link.id,
+    )
+    .await
+    .map_err(|e| {
+        ProcessingError::Retryable(DetailedError {
+            reason: FailureReason::DatabaseQueryFailed,
+            source: e.context("Failed to fetch delegated primaries".to_string()),
+        })
+    })?;
 
     let recipient_ids = build_notification_recipients(&link.macro_id, primaries);
 

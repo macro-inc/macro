@@ -89,7 +89,7 @@ pub(super) async fn owned_link_for_thread(
               l.macro_id = $2
               OR EXISTS (
                   SELECT 1 FROM macro_user_links mul
-                  WHERE mul.child_macro_id = l.macro_id AND mul.primary_macro_id = $2
+                  WHERE mul.link_id = l.id AND mul.primary_macro_id = $2
               )
           )
         "#,
@@ -155,7 +155,7 @@ pub(super) async fn inboxes_for_macro_id(
             SELECT el.id, el.macro_id, el.fusionauth_user_id, el.email_address,
                    el.provider, el.is_sync_active, el.is_primary, el.created_at, el.updated_at
             FROM email_links el
-            JOIN macro_user_links mul ON el.macro_id = mul.child_macro_id
+            JOIN macro_user_links mul ON el.id = mul.link_id
             WHERE mul.primary_macro_id = $1
         ) AS combined
         ORDER BY created_at DESC

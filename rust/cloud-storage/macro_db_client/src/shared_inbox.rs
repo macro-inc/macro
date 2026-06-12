@@ -110,10 +110,20 @@ pub async fn promote_link_to_shared(
         anyhow::bail!("no email_links row {existing_link_id} to re-home; aborting promotion");
     }
 
-    crate::macro_user_links::insert_edge(&mut *conn, original_owner_macro_id, &mailbox_macro_id)
-        .await?;
-    crate::macro_user_links::insert_edge(&mut *conn, new_connector_macro_id, &mailbox_macro_id)
-        .await?;
+    crate::macro_user_links::insert_edge(
+        &mut *conn,
+        original_owner_macro_id,
+        &mailbox_macro_id,
+        existing_link_id,
+    )
+    .await?;
+    crate::macro_user_links::insert_edge(
+        &mut *conn,
+        new_connector_macro_id,
+        &mailbox_macro_id,
+        existing_link_id,
+    )
+    .await?;
 
     Ok(PromotedSharedInbox {
         mailbox_macro_id,

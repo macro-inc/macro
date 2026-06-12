@@ -167,7 +167,8 @@ where
     ///
     /// Runs vector retrieval + rerank only (no judge) and persists nothing: the
     /// embedding is computed in memory and discarded. Results are ordered by the
-    /// reranker's relevance score.
+    /// reranker's relevance score. `markdown` is embedded as-is and should be
+    /// embedding-format markdown, matching how stored tasks are embedded.
     pub async fn similarity_search(
         &self,
         owner: &str,

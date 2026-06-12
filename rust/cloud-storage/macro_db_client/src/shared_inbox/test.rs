@@ -91,6 +91,17 @@ async fn promote_dedups_to_single_link_with_two_edges(pool: Pool<Postgres>) -> a
     primaries.sort();
     assert_eq!(primaries, vec![OWNER.to_string(), CONNECTOR.to_string()]);
 
+    // The minted edges are scoped to the re-homed link, not account-wide.
+    let scoped_count = sqlx::query_scalar!(
+        r#"SELECT COUNT(*) AS "count!" FROM macro_user_links
+           WHERE child_macro_id = $1 AND link_id = $2"#,
+        mailbox_macro_id,
+        link_id,
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(scoped_count, 2);
+
     Ok(())
 }
 

@@ -227,6 +227,7 @@ pub async fn handler(
                     &mut *tx,
                     &user_context.user_id,
                     child_macro_id,
+                    child_link.id,
                 )
                 .await
                 .context("Failed to insert macro_user_links edge")?;
@@ -294,6 +295,7 @@ pub async fn handler(
                 &mut *tx,
                 &user_context.user_id,
                 child_macro_id,
+                link.id,
             )
             .await
             .context("Failed to insert macro_user_links edge")?;

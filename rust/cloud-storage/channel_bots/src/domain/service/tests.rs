@@ -3,8 +3,8 @@ use std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use channels::domain::models::{
     AttachmentEntityReference, ChannelAttachmentType, ChannelContextMessage, ChannelMessageFilters,
-    ChannelParticipant, MessagePageDirection, MutatedMessage, ResolvedChannelMessage, Sender,
-    ThreadReply,
+    ChannelParticipant, MessagePageDirection, MutatedMessage, PostMessageResponse,
+    ResolvedChannelMessage, Sender, ThreadReply,
 };
 use channels::domain::ports::{
     ChannelAttachmentsPage, ChannelMessagesErr, ChannelMessagesQueryResult, ChannelService,
@@ -118,6 +118,147 @@ impl AgentResponder for TestResponder {
     }
 }
 
+/// Channel service fake for the post-thinking-then-patch flow. Posting always
+/// succeeds; patching either records the content or reports the message as
+/// missing (deleted while the agent ran).
+struct MutationChannelService {
+    thinking_deleted: bool,
+    patched: Mutex<Vec<String>>,
+}
+
+impl MutationChannelService {
+    fn new(thinking_deleted: bool) -> Self {
+        Self {
+            thinking_deleted,
+            patched: Mutex::new(Vec::new()),
+        }
+    }
+}
+
+impl ChannelService for MutationChannelService {
+    fn get_channel_messages(
+        &self,
+        _channel_id: Uuid,
+        _query: Query<Uuid, CreatedAt, ()>,
+        _direction: MessagePageDirection,
+        _limit: u16,
+        _filters: &ChannelMessageFilters,
+        _notification_user_id: Option<MacroUserIdStr<'static>>,
+    ) -> impl Future<Output = Result<ChannelMessagesQueryResult, ChannelMessagesErr>> + Send {
+        async move { unimplemented!("not needed for mutation tests") }
+    }
+
+    fn get_channel_attachments(
+        &self,
+        _channel_id: Uuid,
+        _query: Query<Uuid, CreatedAt, ()>,
+        _limit: u16,
+        _attachment_type: Option<ChannelAttachmentType>,
+    ) -> impl Future<Output = Result<ChannelAttachmentsPage, ChannelMessagesErr>> + Send {
+        async move { unimplemented!("not needed for mutation tests") }
+    }
+
+    fn get_channel_participants(
+        &self,
+        _channel_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<ChannelParticipant>, ChannelMessagesErr>> + Send {
+        async move { unimplemented!("not needed for mutation tests") }
+    }
+
+    fn get_message_context(
+        &self,
+        _channel_id: Uuid,
+        _message_id: Uuid,
+        _before: i64,
+        _after: i64,
+    ) -> impl Future<Output = Result<Vec<ChannelContextMessage>, ChannelMessagesErr>> + Send {
+        async move { Ok(Vec::new()) }
+    }
+
+    fn get_attachment_references(
+        &self,
+        _entity_type: String,
+        _entity_id: String,
+        _user_id: String,
+    ) -> impl Future<Output = Result<Vec<AttachmentEntityReference>, ChannelMessagesErr>> + Send
+    {
+        async move { unimplemented!("not needed for mutation tests") }
+    }
+
+    fn get_channel_messages_around(
+        &self,
+        _channel_id: Uuid,
+        _message_id: Uuid,
+        _limit: u16,
+    ) -> impl Future<Output = Result<ChannelMessagesQueryResult, ChannelMessagesErr>> + Send {
+        async move { unimplemented!("not needed for mutation tests") }
+    }
+
+    fn get_thread_replies(
+        &self,
+        _channel_id: Uuid,
+        _message_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<ThreadReply>, ChannelMessagesErr>> + Send {
+        async move { unimplemented!("not needed for mutation tests") }
+    }
+
+    fn resolve_message(
+        &self,
+        _channel_id: Uuid,
+        _message_id: Uuid,
+    ) -> impl Future<Output = Result<ResolvedChannelMessage, ChannelMessagesErr>> + Send {
+        async move { unimplemented!("not needed for mutation tests") }
+    }
+
+    fn post_message(
+        &self,
+        _actor: Sender,
+        _channel_id: Uuid,
+        _req: PostMessageRequest,
+    ) -> impl Future<Output = Result<PostMessageResponse, ChannelMutationErr>> + Send {
+        async move {
+            Ok(PostMessageResponse {
+                id: Uuid::new_v4().to_string(),
+                nonce: None,
+            })
+        }
+    }
+
+    fn patch_message(
+        &self,
+        _actor: Sender,
+        _actor_role: ParticipantRole,
+        _channel_id: Uuid,
+        _message_id: Uuid,
+        req: PatchMessageRequest,
+    ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send {
+        if !self.thinking_deleted {
+            self.patched
+                .lock()
+                .unwrap()
+                .extend(req.content.clone().into_iter());
+        }
+        let thinking_deleted = self.thinking_deleted;
+        async move {
+            if thinking_deleted {
+                return Err(ChannelMutationErr::NotFound(
+                    "message not found".to_string(),
+                ));
+            }
+            Ok(())
+        }
+    }
+}
+
+struct FixedResponder(&'static str);
+
+#[async_trait]
+impl AgentResponder for FixedResponder {
+    async fn respond(&self, _user_id: &str, _prompt: String) -> anyhow::Result<String> {
+        Ok(self.0.to_string())
+    }
+}
+
 fn user_id(email: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(format!("macro|{email}")).unwrap()
 }
@@ -182,6 +323,49 @@ fn mention_event(
         reply_thread_id: thread_id.unwrap_or(trigger_id),
         requesting_user: user_id(sender_email),
     }
+}
+
+#[tokio::test]
+async fn handle_patches_thinking_message_with_reply() {
+    let channel_id = Uuid::new_v4();
+    let channels = Arc::new(MutationChannelService::new(false));
+    let handler = MacroAiHandler::new(channels.clone(), Arc::new(FixedResponder("the answer")));
+
+    handler
+        .handle(&mention_event(
+            channel_id,
+            Uuid::new_v4(),
+            None,
+            "teo@example.com",
+            "@macro help",
+        ))
+        .await
+        .unwrap();
+
+    assert_eq!(
+        channels.patched.lock().unwrap().clone(),
+        vec!["the answer".to_string()]
+    );
+}
+
+#[tokio::test]
+async fn handle_drops_reply_when_thinking_message_was_deleted() {
+    let channel_id = Uuid::new_v4();
+    let channels = Arc::new(MutationChannelService::new(true));
+    let handler = MacroAiHandler::new(channels.clone(), Arc::new(FixedResponder("the answer")));
+
+    handler
+        .handle(&mention_event(
+            channel_id,
+            Uuid::new_v4(),
+            None,
+            "teo@example.com",
+            "@macro help",
+        ))
+        .await
+        .unwrap();
+
+    assert!(channels.patched.lock().unwrap().is_empty());
 }
 
 #[tokio::test]

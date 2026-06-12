@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT sender_id\n        FROM comms_messages\n        WHERE id = $1 AND channel_id = $2\n        ORDER BY created_at ASC\n        ",
+  "query": "\n        SELECT sender_id\n        FROM comms_messages\n        WHERE id = $1 AND channel_id = $2 AND deleted_at IS NULL\n        ORDER BY created_at ASC\n        ",
   "describe": {
     "columns": [
       {
@@ -19,5 +19,5 @@
       false
     ]
   },
-  "hash": "cb43982dff09d09997be524b6e1034ed73a87e8599f27986495b62ce42e86384"
+  "hash": "1d06080a159da4e120eefc7c7579fdcf0a2d85ec3fcd3365aabf71a439ad218f"
 }

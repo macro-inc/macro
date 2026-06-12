@@ -5,11 +5,11 @@ use crate::domain::{
         Activity, ActivityType, BotId, BotSenderProfile, ChannelAttachment, ChannelAttachmentType,
         ChannelContextMessage, ChannelInfo, ChannelMessageFilters, ChannelMetadata,
         ChannelParticipant, ChannelType, CountedReaction, CreateEntityMentionOptions,
-        EntityMention, MessageAttachment, MessagePageDirection, MutatedAttachment, MutatedMessage,
-        NewChannelAttachment, ParticipantRole, PatchChannelRequest, PatchMessageRequest,
-        PostMessageRequest, PostReactionRequest, ReactionAction, ReferencedShareItem,
-        ReferencedShareItemType, ResolvedChannelMessage, Sender, SimpleMention, ThreadData,
-        ThreadReplyRow, TopLevelMessageRow,
+        DeleteMessageQuery, EntityMention, MessageAttachment, MessagePageDirection,
+        MutatedAttachment, MutatedMessage, NewChannelAttachment, ParticipantRole,
+        PatchChannelRequest, PatchMessageRequest, PostMessageRequest, PostReactionRequest,
+        ReactionAction, ReferencedShareItem, ReferencedShareItemType, ResolvedChannelMessage,
+        Sender, SimpleMention, ThreadData, ThreadReplyRow, TopLevelMessageRow,
     },
     ports::{
         ChannelEventDispatcher, ChannelReferenceSharePermissions, ChannelRepo, MockChannelRepo,
@@ -667,7 +667,11 @@ impl ChannelRepo for FakeMutationRepo {
         _channel_id: Uuid,
         _message_id: Uuid,
     ) -> Result<Option<String>, Self::Err> {
-        Ok(Some(self.state.lock().unwrap().owner.clone()))
+        let state = self.state.lock().unwrap();
+        if state.message.deleted_at.is_some() {
+            return Ok(None);
+        }
+        Ok(Some(state.owner.clone()))
     }
 
     async fn get_participants(
@@ -958,6 +962,96 @@ async fn patch_message_content_emits_message_changed_event_to_thread_participant
     assert_eq!(nonce.as_deref(), Some("edit-nonce"));
     assert_eq!(recipients.len(), 1);
     assert_eq!(recipients[0].as_ref(), "macro|thread@test.com");
+}
+
+#[tokio::test]
+async fn patch_of_deleted_message_is_not_found() {
+    let channel_id = Uuid::new_v4();
+    let bot_sender = BotId::from_uuid(Uuid::new_v4()).to_storage_string();
+    let repo = FakeMutationRepo::new(channel_id, &bot_sender);
+    let message_id = repo.state.lock().unwrap().message.id;
+    repo.state.lock().unwrap().message.deleted_at = Some(Utc::now());
+    let events = FakeEvents::default();
+    let svc = mutation_service(
+        repo.clone(),
+        events.clone(),
+        FakeReferenceSharing::default(),
+    );
+
+    let err = svc
+        .patch_message(
+            Sender::parse_storage_str(&bot_sender).unwrap(),
+            ParticipantRole::Member,
+            channel_id,
+            message_id,
+            PatchMessageRequest {
+                content: Some("late reply".to_string()),
+                mentions: None,
+                attachment_ids_to_delete: None,
+                attachments_to_add: None,
+                nonce: None,
+            },
+        )
+        .await
+        .unwrap_err();
+
+    assert!(matches!(err, ChannelMutationErr::NotFound(_)));
+    assert!(events.events.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn member_can_delete_bot_authored_message() {
+    let channel_id = Uuid::new_v4();
+    let bot_sender = BotId::from_uuid(Uuid::new_v4()).to_storage_string();
+    let repo = FakeMutationRepo::new(channel_id, &bot_sender);
+    let message_id = repo.state.lock().unwrap().message.id;
+    let events = FakeEvents::default();
+    let svc = mutation_service(
+        repo.clone(),
+        events.clone(),
+        FakeReferenceSharing::default(),
+    );
+
+    svc.delete_message(
+        sender("macro|member@test.com"),
+        ParticipantRole::Member,
+        channel_id,
+        message_id,
+        DeleteMessageQuery { nonce: None },
+    )
+    .await
+    .unwrap();
+
+    let emitted = events.events.lock().unwrap();
+    assert_eq!(emitted.len(), 1);
+    assert!(matches!(&emitted[0], ChannelEvent::MessageDeleted { .. }));
+}
+
+#[tokio::test]
+async fn member_cannot_delete_other_users_message() {
+    let channel_id = Uuid::new_v4();
+    let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");
+    let message_id = repo.state.lock().unwrap().message.id;
+    let events = FakeEvents::default();
+    let svc = mutation_service(
+        repo.clone(),
+        events.clone(),
+        FakeReferenceSharing::default(),
+    );
+
+    let err = svc
+        .delete_message(
+            sender("macro|member@test.com"),
+            ParticipantRole::Member,
+            channel_id,
+            message_id,
+            DeleteMessageQuery { nonce: None },
+        )
+        .await
+        .unwrap_err();
+
+    assert!(matches!(err, ChannelMutationErr::Unauthorized(_)));
+    assert!(events.events.lock().unwrap().is_empty());
 }
 
 #[tokio::test]

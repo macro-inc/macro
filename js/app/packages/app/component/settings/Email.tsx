@@ -11,8 +11,8 @@ import WideEmailIcon from '@icon/wide-email.svg';
 import XIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
 import ArrowsClockwiseIcon from '@phosphor-icons/core/regular/arrows-clockwise.svg?component-solid';
 import PlusIcon from '@phosphor-icons/core/regular/plus.svg?component-solid';
-import type {
-  Link as EmailLink,
+import {
+  type Link as EmailLink,
   SyncStatus,
 } from '@service-email/generated/schemas';
 import { useEmail, useUserId } from '@core/context/user';
@@ -352,10 +352,10 @@ export function Email() {
 
 function syncStatusLabel(status: SyncStatus): string {
   return match(status)
-    .with('SYNCING', () => 'Syncing…')
-    .with('UP_TO_DATE', () => 'Up to date')
-    .with('ERROR', () => 'Error — re-sync')
-    .with('INACTIVE', () => 'Disabled')
+    .with(SyncStatus.SYNCING, () => 'Syncing…')
+    .with(SyncStatus.UP_TO_DATE, () => 'Up to date')
+    .with(SyncStatus.ERROR, () => 'Error — re-sync')
+    .with(SyncStatus.INACTIVE, () => 'Disabled')
     .exhaustive();
 }
 
@@ -412,14 +412,22 @@ function InboxRow(props: {
             <Chip label="Shared" />
           </Show>
         </div>
-        <Show when={ENABLE_INBOX_SYNC_STATUS}>
+        <Show
+          when={
+            ENABLE_INBOX_SYNC_STATUS &&
+            props.link.sync_status !== SyncStatus.UP_TO_DATE
+          }
+        >
           <span
-            class="text-xs"
+            class="flex items-center gap-1 text-xs"
             classList={{
-              'text-failure': props.link.sync_status === 'ERROR',
-              'text-ink-muted': props.link.sync_status !== 'ERROR',
+              'text-failure': props.link.sync_status === SyncStatus.ERROR,
+              'text-ink-muted': props.link.sync_status !== SyncStatus.ERROR,
             }}
           >
+            <Show when={props.link.sync_status === SyncStatus.SYNCING}>
+              <ArrowsClockwiseIcon class="size-3 animate-spin" />
+            </Show>
             {syncStatusLabel(props.link.sync_status)}
           </span>
         </Show>
@@ -434,7 +442,7 @@ function InboxRow(props: {
               disabled={
                 props.resyncing ||
                 (ENABLE_INBOX_SYNC_STATUS &&
-                  props.link.sync_status === 'SYNCING')
+                  props.link.sync_status === SyncStatus.SYNCING)
               }
               onClick={props.onResync}
               aria-label={`Force sync ${props.link.email_address}`}

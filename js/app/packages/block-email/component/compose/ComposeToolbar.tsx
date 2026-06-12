@@ -10,9 +10,7 @@ import { plural } from '@core/util/string';
 import PaperclipIcon from '@phosphor/paperclip.svg?component-solid';
 import TextAa from '@phosphor/text-aa.svg';
 import Trash from '@phosphor/trash.svg';
-import DotsThreeIcon from '@phosphor-icons/core/bold/dots-three-bold.svg?component-solid';
-import PaperclipHorizontalIcon from '@phosphor-icons/core/regular/paperclip-horizontal.svg?component-solid';
-import { Button, Dropdown, SendButton, Tooltip } from '@ui';
+import { Button, SendButton, Tooltip } from '@ui';
 import { defaultSelectionData } from 'core/component/LexicalMarkdown/plugins';
 import {
   NODE_TRANSFORM,
@@ -175,7 +173,7 @@ function MobileToolbar(props: {
 
   return (
     <SplitHeaderRight>
-      <div class="flex items-center pl-2">
+      <div class="flex items-center gap-1 pl-2">
         <div class="relative" ref={props.attachButtonRef}>
           <Button
             ref={(el) =>
@@ -185,10 +183,10 @@ function MobileToolbar(props: {
               }))
             }
             tooltip="Attach"
-            class="aspect-square p-1"
+            size="icon-sm"
             disabled={ctx.disabled()}
           >
-            <PaperclipHorizontalIcon class="h-5" />
+            <PaperclipIcon />
           </Button>
         </div>
         <Show when={ENABLE_EMAIL_SCHEDULED_SEND && ctx.onSendTimeChange}>
@@ -224,18 +222,6 @@ function MobileToolbar(props: {
             tooltip="Send email"
           />
         </Tooltip>
-        <Dropdown placement="bottom-end">
-          <Dropdown.Trigger class="aspect-square p-1">
-            <DotsThreeIcon class="h-4.5" />
-          </Dropdown.Trigger>
-          <Dropdown.Content>
-            <Dropdown.Group>
-              <Dropdown.Item disabled={!ctx.hasDraft()} onSelect={ctx.onDelete}>
-                <span class="flex-1 truncate">Delete Draft</span>
-              </Dropdown.Item>
-            </Dropdown.Group>
-          </Dropdown.Content>
-        </Dropdown>
       </div>
     </SplitHeaderRight>
   );

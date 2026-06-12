@@ -2,8 +2,12 @@ import { useUserId } from '@core/context/user';
 import { throwOnErr } from '@core/util/result';
 import { invalidateUserInfo } from '@queries/auth/user-info';
 import { queryClient } from '@queries/client';
+import { invalidateAllSoup } from '@queries/soup/normalized-cache';
 import { emailClient } from '@service-email/client';
-import type { ListLinksResponse } from '@service-email/generated/schemas';
+import {
+  type ListLinksResponse,
+  SyncStatus,
+} from '@service-email/generated/schemas';
 import { useMutation, useQuery } from '@tanstack/solid-query';
 import { createMemo } from 'solid-js';
 import { type MutationCallbacks, withCallbacks } from '../utils';
@@ -17,7 +21,9 @@ const LINK_STALE_TIME = 5 * 60 * 1000;
 const LINK_SYNC_POLL_INTERVAL = 2_000;
 
 function isAnyInboxSyncing(data: ListLinksResponse | undefined): boolean {
-  return data?.links.some((link) => link.sync_status === 'SYNCING') ?? false;
+  return (
+    data?.links.some((link) => link.sync_status === SyncStatus.SYNCING) ?? false
+  );
 }
 
 export function useEmailLinksQuery() {
@@ -118,6 +124,12 @@ export function useRemoveInboxMutation(callbacks?: RemoveInboxCallbacks) {
           // here would resurrect the optimistically-removed row; instead leave the
           // optimistic cache in place and let the next focus refetch reconcile once
           // teardown completes.
+          //
+          // Clears a delegated inbox's threads immediately (its removal is a
+          // synchronous edge drop). An owned inbox is torn down asynchronously,
+          // so its threads are dropped when the `refresh_email` `link_removed`
+          // event arrives after teardown — refetching now would race that.
+          invalidateAllSoup();
           await invalidateUserInfo();
         },
 

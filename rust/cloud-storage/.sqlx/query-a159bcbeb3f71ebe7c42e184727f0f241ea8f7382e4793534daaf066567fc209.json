@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT id as \"id!\", macro_id as \"macro_id!\",\n               fusionauth_user_id as \"fusionauth_user_id!\",\n               email_address as \"email_address!\",\n               provider as \"provider!: _\",\n               is_sync_active as \"is_sync_active!\",\n               is_primary as \"is_primary!\",\n               created_at as \"created_at!\",\n               updated_at as \"updated_at!\"\n        FROM (\n            SELECT el.id, el.macro_id, el.fusionauth_user_id, el.email_address,\n                   el.provider, el.is_sync_active, el.is_primary, el.created_at, el.updated_at\n            FROM email_links el\n            WHERE el.macro_id = $1\n            UNION\n            SELECT el.id, el.macro_id, el.fusionauth_user_id, el.email_address,\n                   el.provider, el.is_sync_active, el.is_primary, el.created_at, el.updated_at\n            FROM email_links el\n            JOIN macro_user_links mul ON el.macro_id = mul.child_macro_id\n            WHERE mul.primary_macro_id = $1\n        ) AS combined\n        ORDER BY created_at DESC\n        ",
+  "query": "\n        SELECT id as \"id!\", macro_id as \"macro_id!\",\n               fusionauth_user_id as \"fusionauth_user_id!\",\n               email_address as \"email_address!\",\n               provider as \"provider!: _\",\n               is_sync_active as \"is_sync_active!\",\n               is_primary as \"is_primary!\",\n               created_at as \"created_at!\",\n               updated_at as \"updated_at!\"\n        FROM (\n            SELECT el.id, el.macro_id, el.fusionauth_user_id, el.email_address,\n                   el.provider, el.is_sync_active, el.is_primary, el.created_at, el.updated_at\n            FROM email_links el\n            WHERE el.macro_id = $1\n            UNION\n            SELECT el.id, el.macro_id, el.fusionauth_user_id, el.email_address,\n                   el.provider, el.is_sync_active, el.is_primary, el.created_at, el.updated_at\n            FROM email_links el\n            JOIN macro_user_links mul ON el.id = mul.link_id\n            WHERE mul.primary_macro_id = $1\n        ) AS combined\n        ORDER BY created_at DESC\n        ",
   "describe": {
     "columns": [
       {
@@ -75,5 +75,5 @@
       null
     ]
   },
-  "hash": "70915b2ac501f2362bb6e7feeb3db3562eb6314f08ba61d5353ae13589db230b"
+  "hash": "a159bcbeb3f71ebe7c42e184727f0f241ea8f7382e4793534daaf066567fc209"
 }
