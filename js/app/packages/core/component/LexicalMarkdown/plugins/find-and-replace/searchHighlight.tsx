@@ -4,6 +4,7 @@ import { createCallback } from '@solid-primitives/rootless';
 import { cn } from '@ui';
 import { createEffect, For, onCleanup, onMount } from 'solid-js';
 import { Portal } from 'solid-js/web';
+import { registerInternalLayoutShiftListener } from '../shared/utils';
 import type { NodekeyOffset } from './findAndReplacePlugin';
 import {
   type FloatingStyle,
@@ -25,6 +26,7 @@ export function SearchHighlight({
   const mdData = mdStore.get;
   const editor = () => mdData.editor;
   let stateListOffsetRef: NodekeyOffset[] = [];
+  let animationFrame: number | undefined;
 
   const updateTextFormatFloatingToolbar = createCallback(
     (listOffset: NodekeyOffset[]) => {
@@ -67,24 +69,38 @@ export function SearchHighlight({
     }
   );
 
+  const update = createCallback(() => {
+    if (animationFrame !== undefined) {
+      cancelAnimationFrame(animationFrame);
+    }
+
+    animationFrame = requestAnimationFrame(() => {
+      animationFrame = undefined;
+      const editorInstance = editor();
+      if (!editorInstance) return;
+
+      editorInstance.getEditorState().read(() => {
+        updateTextFormatFloatingToolbar(stateListOffsetRef);
+      });
+    });
+  });
+
   createEffect(() => {
     stateListOffsetRef = FindAndReplaceStore.get.listOffset;
-    updateTextFormatFloatingToolbar(stateListOffsetRef);
+    update();
   });
 
   onMount(() => {
     const scrollerElem = anchorElem.parentElement;
-
-    const update = () => {
-      if (stateListOffsetRef) {
-        const editorInstance = editor();
-        if (!editorInstance) return;
-
-        editorInstance.getEditorState().read(() => {
-          updateTextFormatFloatingToolbar(stateListOffsetRef);
-        });
+    const unregisterLayoutShift = editor()
+      ? registerInternalLayoutShiftListener(editor()!, update)
+      : undefined;
+    const unregisterEditorUpdate = editor()?.registerUpdateListener(
+      ({ dirtyElements, dirtyLeaves }) => {
+        if (dirtyElements.size === 0 && dirtyLeaves.size === 0) return;
+        update();
       }
-    };
+    );
 
     window.addEventListener('resize', update);
     if (scrollerElem) {
@@ -95,6 +111,11 @@ export function SearchHighlight({
       window.removeEventListener('resize', update);
       if (scrollerElem) {
         scrollerElem.removeEventListener('scroll', update);
+      }
+      unregisterLayoutShift?.();
+      unregisterEditorUpdate?.();
+      if (animationFrame !== undefined) {
+        cancelAnimationFrame(animationFrame);
       }
     });
   });

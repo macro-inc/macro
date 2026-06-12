@@ -422,10 +422,32 @@ export function MarkdownEditor(props: {
   });
 
   // handler for the find and replace directive
+  const areListOffsetsEqual = (
+    left: NodekeyOffset[],
+    right: NodekeyOffset[]
+  ) => {
+    if (left.length !== right.length) return false;
+    for (let i = 0; i < left.length; i += 1) {
+      const leftItem = left[i];
+      const rightItem = right[i];
+      if (leftItem.key !== rightItem.key) return false;
+      if (leftItem.pairKey !== rightItem.pairKey) return false;
+      if (leftItem.offset.start !== rightItem.offset.start) return false;
+      if (leftItem.offset.end !== rightItem.offset.end) return false;
+      if (leftItem.offset.isReplace !== rightItem.offset.isReplace) {
+        return false;
+      }
+    }
+    return true;
+  };
+
   const onSetListOffset = (listOffset: NodekeyOffset[]) => {
+    if (areListOffsetsEqual(findAndReplaceStore.listOffset, listOffset)) {
+      return;
+    }
     setFindAndReplaceStore('listOffset', listOffset);
     if (
-      findAndReplaceStore.currentMatch >= findAndReplaceStore.listOffset.length
+      findAndReplaceStore.currentMatch >= listOffset.length
     ) {
       setFindAndReplaceStore('currentMatch', 0);
     }
@@ -806,9 +828,12 @@ export function MarkdownEditor(props: {
     );
   };
 
-  // handle updates to the highlights if the document is modified
-  additionalCleanups.push(
-    editor.registerUpdateListener(() => {
+  let searchRefreshQueued = false;
+  const queueSearchRefresh = () => {
+    if (searchRefreshQueued) return;
+    searchRefreshQueued = true;
+    queueMicrotask(() => {
+      searchRefreshQueued = false;
       if (
         findAndReplaceStore.searchIsOpen &&
         findAndReplaceStore.searchInputText
@@ -818,6 +843,18 @@ export function MarkdownEditor(props: {
           findAndReplaceStore.searchInputText
         );
       }
+    });
+  };
+
+  // Refresh highlights only after content mutations. Selection-only updates
+  // still fire Lexical update listeners and must not synchronously dispatch
+  // another command from inside the commit.
+  additionalCleanups.push(
+    editor.registerUpdateListener(({ dirtyElements, dirtyLeaves }) => {
+      if (dirtyElements.size === 0 && dirtyLeaves.size === 0) return;
+      if (!findAndReplaceStore.searchIsOpen) return;
+      if (!findAndReplaceStore.searchInputText) return;
+      queueSearchRefresh();
     })
   );
 

@@ -450,6 +450,7 @@ function buildNodeKeyOffsetList(
 }
 
 function selectNextKey(key: NodeKey) {
+  if (!key) return;
   const nodeSelection = $createNodeSelection();
   nodeSelection.add(key);
   $setSelection(nodeSelection);
