@@ -332,15 +332,21 @@ impl<
             Self::payload_string(&event.payload, &["pull_request", "body"]).unwrap_or_default();
         let mut logins = extract_github_mentions(&body);
         if event.action() == Some("edited") {
-            let Some(previous_body) =
-                Self::payload_string(&event.payload, &["changes", "body", "from"])
+            // Key presence matters: an absent `changes.body.from` means the body
+            // was not part of this edit, while a present-but-empty (or null) one
+            // means the description was previously blank and every current
+            // mention is new.
+            let Some(previous_body) = event
+                .payload
+                .get("changes")
+                .and_then(|changes| changes.get("body"))
+                .and_then(|body| body.get("from"))
+                .map(|from| from.as_str().unwrap_or_default())
             else {
-                // The body was not part of this edit.
                 return;
             };
-            let previous_logins: HashSet<String> = extract_github_mentions(&previous_body)
-                .into_iter()
-                .collect();
+            let previous_logins: HashSet<String> =
+                extract_github_mentions(previous_body).into_iter().collect();
             logins.retain(|login| !previous_logins.contains(login));
         }
         if logins.is_empty() {

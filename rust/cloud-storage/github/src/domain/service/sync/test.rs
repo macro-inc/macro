@@ -4181,6 +4181,25 @@ async fn edited_pr_without_body_change_does_not_notify() {
 }
 
 #[tokio::test]
+async fn edited_pr_with_previously_blank_body_notifies_new_mentions() {
+    let team_id: uuid::Uuid = "dddddddd-dddd-dddd-dddd-dddddddddddd".parse().unwrap();
+    let repo = comment_team_repo(team_id).with_github_login_link("bob-gh", "macro|bob@user.com");
+    let service = make_sync_service_with_repo(repo);
+    // The PR had no description; the edit adds one containing a mention.
+    let event = notification_pr_body_event("edited", Some("cc @bob-gh"), Some(""), "User");
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    let requests = service.notification_ingress.requests();
+    assert_eq!(requests.len(), 1);
+    assert_github_notification_realtime_enabled_apns_disabled(&requests[0], "github_pr_mention");
+    assert_eq!(
+        notification_request_recipients(&requests[0]),
+        vec!["macro|bob@user.com".to_string()]
+    );
+}
+
+#[tokio::test]
 async fn bot_opened_pr_body_mention_does_not_notify_mention() {
     let team_id: uuid::Uuid = "dddddddd-dddd-dddd-dddd-dddddddddddd".parse().unwrap();
     let repo = comment_team_repo(team_id).with_github_login_link("bob-gh", "macro|bob@user.com");
