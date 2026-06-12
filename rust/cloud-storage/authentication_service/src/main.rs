@@ -205,34 +205,35 @@ async fn main() -> anyhow::Result<()> {
     let analytics_client = AnalyticsClient::new(AnalyticsClientConfig {
         google_analytics: config
             .ga_measurement_id
-            .as_ref()
-            .zip(config.ga_api_secret.as_ref())
+            .value()
+            .zip(config.ga_api_secret.value())
             .map(|(measurement_id, api_secret)| {
                 tracing::info!("configuring Google Analytics");
                 GoogleAnalyticsConfig {
-                    measurement_id: measurement_id.to_string().clone(),
-                    api_secret: api_secret.to_string().clone(),
+                    measurement_id: measurement_id.to_string(),
+                    api_secret: api_secret.to_string(),
                 }
             }),
         meta: config
             .meta_pixel_id
-            .as_ref()
-            .zip(config.meta_access_token.as_ref())
+            .value()
+            .zip(config.meta_access_token.value())
             .map(|(pixel_id, access_token)| {
                 tracing::info!("configuring Meta Conversions API");
                 MetaConfig {
-                    pixel_id: pixel_id.to_string().clone(),
-                    access_token: access_token.to_string().clone(),
-                    test_event_code: config.meta_test_event_code.map(|t| t.to_string()),
+                    pixel_id: pixel_id.to_string(),
+                    access_token: access_token.to_string(),
+                    test_event_code: config.meta_test_event_code.value().map(str::to_string),
                 }
             }),
-        posthog: config.posthog_api_key.as_ref().map(|api_key| {
+        posthog: config.posthog_api_key.value().map(|api_key| {
             tracing::info!("configuring PostHog");
             PostHogConfig {
-                api_key: api_key.to_string().clone(),
+                api_key: api_key.to_string(),
                 host: config
                     .posthog_host
-                    .map(|p| p.to_string())
+                    .value()
+                    .map(str::to_string)
                     .unwrap_or_else(|| "https://us.i.posthog.com".to_string()),
             }
         }),

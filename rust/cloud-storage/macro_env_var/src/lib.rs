@@ -378,6 +378,25 @@ macro_rules! maybe_env_vars {
 /// // Returns None if OPTIONAL_API_KEY is not set
 /// let _key: Option<OptionalApiKey> = OptionalApiKey::new();
 /// ```
+///
+/// # Deserialization
+///
+/// When deserialized (for example as a field of a `macro_config::MacroConfig` struct), a missing
+/// or `null` value produces the `Unset` variant instead of an error, so the generated type can be
+/// used directly as a config field without wrapping it in `Option`. Use `value()` to read it:
+///
+/// ```
+/// use macro_env_var::maybe_env_var;
+///
+/// maybe_env_var! {
+///     pub struct OptionalToken;
+/// }
+///
+/// let set: OptionalToken = serde_json::from_str(r#""abc""#).unwrap();
+/// let unset: OptionalToken = serde_json::from_str("null").unwrap();
+/// assert_eq!(set.value(), Some("abc"));
+/// assert_eq!(unset.value(), None);
+/// ```
 #[macro_export]
 macro_rules! maybe_env_var {
     (
@@ -387,13 +406,18 @@ macro_rules! maybe_env_var {
         $crate::paste::paste! {
             #[doc = "struct which represents the optional `" $n:snake:upper "` environment variable.
             This returns `Option<Self>` when the variable may or may not be present.
+            When deserialized (e.g. by `macro_config`), a missing variable produces [`" $n "`::Unset]
+            instead of an error, so this type can be used as a bare config field without wrapping it
+            in `Option`. Use [`" $n "`::value] to access the value.
             See [`" $n "`::new] for usage methods"]
             $(#[$attr])*
             $v enum $n {
                 #[doc = "This environment var is allocated and read at runtime"]
                 Runtime(std::sync::Arc<str>),
                 #[doc = "This environment var was present at compile time. It may or may not currently exist at runtime."]
-                Comptime(&'static str)
+                Comptime(&'static str),
+                #[doc = "This environment var was not set. Produced by deserialization when the variable is absent or `null`."]
+                Unset
             }
 
             impl $n {
@@ -421,12 +445,34 @@ macro_rules! maybe_env_var {
                     Self::Comptime(s)
                 }
 
+                #[doc = "Create an instance representing an unset `" $n:snake:upper "` variable"]
+                #[allow(dead_code)]
+                $v const fn new_unset() -> Self {
+                    Self::Unset
+                }
+
+                #[doc = "Get the value as a string slice, or `None` if the variable was not set"]
+                #[allow(dead_code)]
+                $v fn value(&self) -> Option<&str> {
+                    match self {
+                        Self::Runtime(i) => Some(i),
+                        Self::Comptime(i) => Some(i),
+                        Self::Unset => None
+                    }
+                }
+
+                #[doc = "Whether the variable was set"]
+                #[allow(dead_code)]
+                $v fn is_set(&self) -> bool {
+                    !matches!(self, Self::Unset)
+                }
+
                 #[allow(dead_code)]
                 #[doc = "Get a reference to the internal [std::sync::Arc] if this is a runtime allocated env var"]
                 $v fn runtime_inner(&self) -> Option<&std::sync::Arc<str>> {
                     match self {
                         Self::Runtime(i) => Some(i),
-                        Self::Comptime(_) => None
+                        Self::Comptime(_) | Self::Unset => None
                     }
                 }
 
@@ -435,36 +481,51 @@ macro_rules! maybe_env_var {
                 $v fn comptime_inner(&self) -> Option<&'static str> {
                     match self {
                         Self::Comptime(i) => Some(i),
-                        Self::Runtime(_) => None
+                        Self::Runtime(_) | Self::Unset => None
                     }
                 }
 
                 #[allow(dead_code)]
-                #[doc = "Returns an Arc<str> of the contained value"]
-                $v fn as_arc(&self) -> std::sync::Arc<str> {
+                #[doc = "Returns an Arc<str> of the contained value, or `None` if the variable was not set"]
+                $v fn as_arc(&self) -> Option<std::sync::Arc<str>> {
                     match self {
-                        Self::Comptime(i) => std::sync::Arc::from(*i),
-                        Self::Runtime(i) => i.clone()
+                        Self::Comptime(i) => Some(std::sync::Arc::from(*i)),
+                        Self::Runtime(i) => Some(i.clone()),
+                        Self::Unset => None
                     }
                 }
             }
 
+            #[doc = "Panics when the variable is [`" $n "`::Unset]; use [`" $n "`::value] when the
+            value may be unset (e.g. when loaded through `macro_config`)."]
             impl std::ops::Deref for $n {
                 type Target = str;
 
                 fn deref(&self) -> &Self::Target {
                     match self {
                         Self::Runtime(i) => &*i,
-                        Self::Comptime(i) => i
+                        Self::Comptime(i) => i,
+                        Self::Unset => panic!(concat!(
+                            "dereferenced unset env var `",
+                            stringify!([<$n:snake:upper>]),
+                            "`; use `.value()` to handle the unset case"
+                        ))
                     }
                 }
             }
 
+            #[doc = "Panics when the variable is [`" $n "`::Unset]; use [`" $n "`::value] when the
+            value may be unset (e.g. when loaded through `macro_config`)."]
             impl std::convert::AsRef<str> for $n {
                 fn as_ref(&self) -> &str {
                     match self {
                         Self::Runtime(i) => &*i,
-                        Self::Comptime(i) => i
+                        Self::Comptime(i) => i,
+                        Self::Unset => panic!(concat!(
+                            "read unset env var `",
+                            stringify!([<$n:snake:upper>]),
+                            "` as a str; use `.value()` to handle the unset case"
+                        ))
                     }
                 }
             }
@@ -474,8 +535,53 @@ macro_rules! maybe_env_var {
                 where
                     D: $crate::serde::Deserializer<'de>,
                 {
-                    let value = <String as $crate::serde::Deserialize>::deserialize(deserializer)?;
-                    Ok(Self::Runtime(std::sync::Arc::from(value)))
+                    struct __MaybeEnvVarVisitor;
+
+                    impl<'de> $crate::serde::de::Visitor<'de> for __MaybeEnvVarVisitor {
+                        type Value = $n;
+
+                        fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                            formatter.write_str("an optional string")
+                        }
+
+                        fn visit_none<E>(self) -> Result<Self::Value, E>
+                        where
+                            E: $crate::serde::de::Error,
+                        {
+                            Ok($n::Unset)
+                        }
+
+                        fn visit_unit<E>(self) -> Result<Self::Value, E>
+                        where
+                            E: $crate::serde::de::Error,
+                        {
+                            Ok($n::Unset)
+                        }
+
+                        fn visit_some<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+                        where
+                            D: $crate::serde::Deserializer<'de>,
+                        {
+                            let value = <String as $crate::serde::Deserialize>::deserialize(deserializer)?;
+                            Ok($n::Runtime(std::sync::Arc::from(value)))
+                        }
+
+                        fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+                        where
+                            E: $crate::serde::de::Error,
+                        {
+                            Ok($n::Runtime(std::sync::Arc::from(value)))
+                        }
+
+                        fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
+                        where
+                            E: $crate::serde::de::Error,
+                        {
+                            Ok($n::Runtime(std::sync::Arc::from(value)))
+                        }
+                    }
+
+                    deserializer.deserialize_option(__MaybeEnvVarVisitor)
                 }
             }
         }
