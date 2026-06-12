@@ -4,6 +4,9 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
+/// Foreign entity source used for GitHub pull request metadata rows.
+pub const GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE: &str = "github_pull_request";
+
 /// A pull request reference that can be enriched with live GitHub data.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
@@ -97,6 +100,9 @@ pub struct GithubPullRequestComment {
     pub body: String,
     /// The GitHub login for the comment author, when available.
     pub author_login: Option<String>,
+    /// The stable numeric GitHub user id for the comment author, when available.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub author_id: Option<u64>,
     /// GitHub's relationship label for the author, when available.
     pub author_association: Option<String>,
     /// The public GitHub URL for the comment or review, when available.
@@ -144,6 +150,15 @@ pub struct GithubPullRequestDetails {
     pub additions: u64,
     /// The number of deleted lines reported by GitHub.
     pub deletions: u64,
+    /// The GitHub login for the pull request author, when available.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub author_login: Option<String>,
+    /// The stable numeric GitHub user id for the pull request author, when available.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub author_id: Option<u64>,
+    /// The pull request description (body), when available.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
     /// Comments collected from the pull request, when enrichment includes them.
     #[serde(
         default,
@@ -158,6 +173,14 @@ pub struct GithubPullRequestDetails {
         deserialize_with = "deserialize_optional_array"
     )]
     pub checks: Option<Vec<GithubPullRequestCheckRun>>,
+    /// Stable numeric GitHub user ids (as strings) for everyone involved in the pull request:
+    /// author, requested reviewers, reviewers, assignees, and commenters.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_optional_array"
+    )]
+    pub participant_github_user_ids: Option<Vec<String>>,
 }
 
 impl GithubPullRequestDetails {
@@ -192,12 +215,26 @@ pub struct EnrichedGithubPullRequest {
     pub additions: Option<u64>,
     /// The number of deleted lines reported by GitHub, when enrichment succeeds.
     pub deletions: Option<u64>,
+    /// The GitHub login for the pull request author, when available.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub author_login: Option<String>,
+    /// The stable numeric GitHub user id for the pull request author, when available.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub author_id: Option<u64>,
+    /// The pull request description (body), when available.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
     /// Comments collected from the pull request, when enrichment includes them.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub comments: Option<Vec<GithubPullRequestComment>>,
     /// Check runs collected from the pull request head commit, when enrichment includes them.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub checks: Option<Vec<GithubPullRequestCheckRun>>,
+    /// Stable numeric GitHub user ids (as strings) for everyone involved in the pull request.
+    /// Queried by the foreign entity `includes_me` filter, so stored metadata merges this as a
+    /// union rather than replacing it (partial write paths must not drop known participants).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub participant_github_user_ids: Option<Vec<String>>,
 }
 
 impl EnrichedGithubPullRequest {
@@ -214,8 +251,12 @@ impl EnrichedGithubPullRequest {
             status: None,
             additions: None,
             deletions: None,
+            author_login: None,
+            author_id: None,
+            description: None,
             comments: None,
             checks: None,
+            participant_github_user_ids: None,
         }
     }
 
@@ -237,9 +278,85 @@ impl EnrichedGithubPullRequest {
             status: Some(status),
             additions: Some(details.additions),
             deletions: Some(details.deletions),
+            author_login: details.author_login,
+            author_id: details.author_id,
+            description: details.description,
             comments: details.comments,
             checks: details.checks,
+            participant_github_user_ids: details.participant_github_user_ids,
         }
+    }
+
+    /// Serialize this pull request into the metadata shape stored on GitHub pull request foreign entities.
+    ///
+    /// Partial refreshes may omit `comments` or `checks`. When an omitted field exists as an array in
+    /// `existing_metadata`, the existing array is copied forward so richer metadata is not discarded.
+    /// The same applies to the scalar `authorLogin`, `authorId`, and `description` fields, which
+    /// fallback write paths (such as comment webhooks without a `pull_request` payload) omit.
+    pub fn foreign_entity_metadata(
+        &self,
+        existing_metadata: Option<&serde_json::Value>,
+    ) -> serde_json::Result<serde_json::Value> {
+        let mut metadata = serde_json::to_value(self)?;
+        let Some(existing_object) = existing_metadata.and_then(|value| value.as_object()) else {
+            return Ok(metadata);
+        };
+        let Some(metadata_object) = metadata.as_object_mut() else {
+            return Ok(metadata);
+        };
+
+        for field in ["comments", "checks"] {
+            if metadata_object.contains_key(field) {
+                continue;
+            }
+
+            if let Some(existing_value) = existing_object.get(field)
+                && existing_value.is_array()
+            {
+                metadata_object.insert(field.to_string(), existing_value.clone());
+            }
+        }
+
+        for field in ["authorLogin", "authorId", "description"] {
+            if metadata_object.contains_key(field) {
+                continue;
+            }
+
+            if let Some(existing_value) = existing_object.get(field)
+                && !existing_value.is_null()
+            {
+                metadata_object.insert(field.to_string(), existing_value.clone());
+            }
+        }
+
+        // Participants are unioned rather than carried forward or replaced: write paths produce
+        // partial sets (a webhook fallback knows the author/reviewers/assignees but not the
+        // commenters), so replacing would drop participants a richer earlier write discovered.
+        const PARTICIPANTS_FIELD: &str = "participantGithubUserIds";
+        let mut participants: std::collections::BTreeSet<String> = [
+            existing_object.get(PARTICIPANTS_FIELD),
+            metadata_object.get(PARTICIPANTS_FIELD),
+        ]
+        .into_iter()
+        .flatten()
+        .filter_map(|value| value.as_array())
+        .flatten()
+        .filter_map(|value| value.as_str().map(str::to_string))
+        .collect();
+
+        if !participants.is_empty() {
+            metadata_object.insert(
+                PARTICIPANTS_FIELD.to_string(),
+                serde_json::Value::Array(
+                    std::mem::take(&mut participants)
+                        .into_iter()
+                        .map(serde_json::Value::String)
+                        .collect(),
+                ),
+            );
+        }
+
+        Ok(metadata)
     }
 }
 

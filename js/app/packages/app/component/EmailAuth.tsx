@@ -1,13 +1,16 @@
 import { useAnalytics } from '@app/component/analytics-context';
+import { ShareInboxConflictDialog } from '@app/component/ShareInboxConflictDialog';
 import { updateUserAuth } from '@core/auth';
 import { redirectToEmailAuth } from '@core/auth/email';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { toast } from '@core/component/Toast/Toast';
+import { useSettingsState } from '@core/constant/SettingsState';
 import { useEmailLinks } from '@core/email-link';
+import { isMobile } from '@core/mobile/isMobile';
 import { whenSettled } from '@core/util/whenSettled';
 import { invalidateAllAfterLogin } from '@queries/auth/user-info';
 import { useNavigate, useSearchParams } from '@solidjs/router';
-import { onMount, Suspense } from 'solid-js';
+import { createSignal, onMount, Show, Suspense } from 'solid-js';
 
 type EmailAuthParams = {
   callbackPath: string;
@@ -98,9 +101,58 @@ function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { query, initEmailLink } = useEmailLinks();
+  const { setActiveTabId } = useSettingsState();
+  const [conflict, setConflict] = createSignal<{
+    linkId: string;
+    emailAddress: string;
+    ownerEmail: string;
+  } | null>(null);
 
   const navigateToSuccess = () => {
     navigate(props.successPath, { replace: true });
+  };
+
+  // The desktop settings split doesn't exist on mobile, so the callback
+  // returns mobile users to the list view with the toast as confirmation.
+  const navigateToAccountSettings = () => {
+    if (isMobile()) {
+      navigateToSuccess();
+      return;
+    }
+    setActiveTabId('Account');
+    navigate('/component/mail/component/settings', { replace: true });
+  };
+
+  const runInit = async (linkId: string, forceShare: boolean) => {
+    await initEmailLink({ linkId, forceShare }).match(
+      async () => {
+        // Pull the newly-provisioned link into the cache before leaving the
+        // callback so the inbox panel shows it immediately on return rather
+        // than flashing a stale list until its own refetch lands.
+        await query.refetch();
+        toast.success('Inbox connected', { mobile: true });
+        navigateToAccountSettings();
+      },
+      async (err) => {
+        if (err.tag === 'AlreadyInitialized') {
+          await query.refetch();
+          navigateToAccountSettings();
+          return;
+        }
+        // The mailbox is already connected by someone else. Hold the callback open
+        // and let the user confirm sharing it before retrying with forceShare.
+        if (err.tag === 'SharedInboxConflict' && !forceShare) {
+          setConflict({
+            linkId,
+            emailAddress: err.emailAddress,
+            ownerEmail: err.ownerEmail,
+          });
+          return;
+        }
+        toast.failure('Failed to add inbox', { mobile: true });
+        navigateToSuccess();
+      }
+    );
   };
 
   whenSettled(
@@ -114,20 +166,7 @@ function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
         return;
       }
 
-      await initEmailLink({ linkId }).match(
-        () => {
-          toast.success('Inbox connected');
-          navigateToSuccess();
-        },
-        (err) => {
-          if (err.tag === 'AlreadyInitialized') {
-            navigateToSuccess();
-            return;
-          }
-          toast.failure('Failed to add inbox');
-          navigateToSuccess();
-        }
-      );
+      await runInit(linkId, false);
     },
     (error) => {
       toast.failure(error.message);
@@ -135,7 +174,26 @@ function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
     }
   );
 
-  return <LoadingBlock />;
+  return (
+    <Show when={conflict()} fallback={<LoadingBlock />}>
+      {(c) => (
+        <ShareInboxConflictDialog
+          open
+          emailAddress={c().emailAddress}
+          ownerEmail={c().ownerEmail}
+          onCancel={() => {
+            setConflict(null);
+            navigateToSuccess();
+          }}
+          onShare={() => {
+            const linkId = c().linkId;
+            setConflict(null);
+            void runInit(linkId, true);
+          }}
+        />
+      )}
+    </Show>
+  );
 }
 
 function EmailSignUp(

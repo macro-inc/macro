@@ -56,7 +56,7 @@ where
             return Ok(None);
         };
 
-        let message_rows = self
+        let mut message_rows = self
             .email_repo
             .messages_by_thread_id_paginated(thread_id, offset, limit)
             .await
@@ -69,7 +69,7 @@ where
             }
         );
 
-        let message_ids: Vec<Uuid> = message_rows.iter().map(|m| m.db_id).collect();
+        let mut message_ids: Vec<Uuid> = message_rows.iter().map(|m| m.db_id).collect();
 
         if message_ids.is_empty() {
             return Ok(Some(ThreadFetchResult {
@@ -81,6 +81,27 @@ where
                 labels: HashMap::new(),
                 is_owner,
             }));
+        }
+
+        // Surface a reply draft the caller moved to another of their inboxes by
+        // switching the sender: it lives in a different thread, so pull it in here
+        // (matched by the message it replies to) and let the reply reopen with it.
+        if let Ok(macro_id) = receipt.get_authenticated_user() {
+            let accessible = self
+                .email_repo
+                .inboxes_for_macro_id(macro_id.clone())
+                .await
+                .map_err(anyhow::Error::from)?;
+            let link_ids: Vec<Uuid> = accessible.iter().map(|l| l.id).collect();
+            let moved_drafts = self
+                .email_repo
+                .cross_inbox_reply_drafts(&message_ids, &link_ids, thread_id)
+                .await
+                .map_err(anyhow::Error::from)?;
+            for draft in moved_drafts {
+                message_ids.push(draft.db_id);
+                message_rows.push(draft);
+            }
         }
 
         let (senders, recipients, labels) = tokio::try_join!(

@@ -12,6 +12,7 @@ import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import {
   SERVER_HOSTS,
   SYNC_PERMISSION_TOKEN_DSS_HOST,
+  SYNC_SERVICE_HOSTS,
 } from '@core/constant/servers';
 import type { FetchError } from '@core/service';
 import { cache } from '@core/util/cache';
@@ -20,17 +21,24 @@ import {
   fetchWithToken,
 } from '@core/util/fetchWithToken';
 import { registerClient } from '@core/util/mockClient';
+import { isTauri } from '@core/util/platform';
 import type { ResultError } from '@core/util/result';
 
 import type { SafeFetchInit } from '@core/util/safeFetch';
 import type { IDocumentStorageServiceFile } from '@filesystem/file';
 import { platformFetch } from 'core/util/platformFetch';
+import type { SerializedEditorState } from 'lexical';
 import { err, ok, type Result } from 'neverthrow';
 import type { ApiChannelWithLatest } from './channel-list-types';
 import type {
   AccessLevel,
   CallRecordPreview,
   GithubPullRequestsResponse,
+  GroupedSoupGroupPage,
+  GroupedSoupInitialPage,
+  PostGroupedSoupAstGroupPageRequest,
+  PostGroupedSoupAstInitialRequest,
+  PostGroupedSoupAstRequest,
   PostSoupAstRequest,
   PostSoupRequest,
   SoupPage,
@@ -55,6 +63,7 @@ import {
 import type { CreateChannelRequest } from './generated/schemas/createChannelRequest';
 import type { CreateChannelResponse } from './generated/schemas/createChannelResponse';
 import type { CreateCommentResponse } from './generated/schemas/createCommentResponse';
+import type { CreateCrmCommentRequest } from './generated/schemas/createCrmCommentRequest';
 import type { CreateDocument200 as CreateDocumentResponse } from './generated/schemas/createDocument200';
 import type { CreateDocumentRequest } from './generated/schemas/createDocumentRequest';
 import type { CreateEntityMentionRequest } from './generated/schemas/createEntityMentionRequest';
@@ -63,17 +72,27 @@ import type { CreateInstructionsDocumentResponse } from './generated/schemas/cre
 import type { CreateMarkdownDocumentRequest } from './generated/schemas/createMarkdownDocumentRequest';
 import type { CreateMarkdownHandler200 } from './generated/schemas/createMarkdownHandler200';
 import type { CreateProjectResponse } from './generated/schemas/createProjectResponse';
+import type { CreateSnippetHandler200 } from './generated/schemas/createSnippetHandler200';
+import type { CreateSnippetRequest } from './generated/schemas/createSnippetRequest';
 import type { CreateTaskHandler200 } from './generated/schemas/createTaskHandler200';
 import type { CreateTaskRequest } from './generated/schemas/createTaskRequest';
 import type { CreateUnthreadedAnchorResponse } from './generated/schemas/createUnthreadedAnchorResponse';
+import type { CrmComment } from './generated/schemas/crmComment';
+import type { CrmCommentEntityType } from './generated/schemas/crmCommentEntityType';
+import type { CrmCommentThread } from './generated/schemas/crmCommentThread';
+import type { CrmCompanyResponse } from './generated/schemas/crmCompanyResponse';
+import type { CrmContactResponse } from './generated/schemas/crmContactResponse';
 import type { DeleteCommentResponse } from './generated/schemas/deleteCommentResponse';
+import type { DeleteCrmCommentResult } from './generated/schemas/deleteCrmCommentResult';
 import type { DeleteEntityMentionResponse } from './generated/schemas/deleteEntityMentionResponse';
 import type { DeleteUnthreadedAnchorResponse } from './generated/schemas/deleteUnthreadedAnchorResponse';
 import type { DocumentMetadata } from './generated/schemas/documentMetadata';
 import type { DocumentPreview } from './generated/schemas/documentPreview';
 import type { DocumentResponseMetadataWithContent } from './generated/schemas/documentResponseMetadataWithContent';
+import type { DocumentTeamShareResponse } from './generated/schemas/documentTeamShareResponse';
 import type { EditAnchorResponse } from './generated/schemas/editAnchorResponse';
 import type { EditCommentResponse } from './generated/schemas/editCommentResponse';
+import type { EditCrmCommentRequest } from './generated/schemas/editCrmCommentRequest';
 import type { ExportDocumentResponse } from './generated/schemas/exportDocumentResponse';
 import type { GetAttachmentReferencesResponse } from './generated/schemas/getAttachmentReferencesResponse';
 import type { GetBatchChannelPreviewRequest } from './generated/schemas/getBatchChannelPreviewRequest';
@@ -133,6 +152,11 @@ function normalizeLocationResponseV3(response: LocationResponseV3) {
 const MINUTES_BEFORE_PRESIGNED_EXPIRES = 14;
 
 const dssHost = SERVER_HOSTS['document-storage-service'];
+const syncServiceWorkerHost = SYNC_SERVICE_HOSTS.worker;
+const syncOrigin =
+  import.meta.env.MODE === 'development'
+    ? 'https://dev.macro.com'
+    : 'https://macro.com';
 
 export function dssFetch(
   url: string,
@@ -151,6 +175,22 @@ export function dssFetch<T extends Record<string, any> = never>(
   return fetchWithToken<T>(`${dssHost}${url}`, init);
 }
 
+async function getDocumentPermissionToken(documentId: string): Promise<string> {
+  const token = await fetchWithToken<GetDocumentPermissionsTokenResponse>(
+    `${SYNC_PERMISSION_TOKEN_DSS_HOST}/documents/permissions_token/${documentId}`,
+    {
+      method: 'POST',
+    }
+  );
+
+  if (token.isErr()) {
+    console.error('Failed to create permission token:', token.error);
+    throw new Error('Failed to create permission token');
+  }
+
+  return token.value.token;
+}
+
 type Success = {
   id: string | null | undefined;
   success: boolean;
@@ -163,7 +203,10 @@ export type ItemType =
   | 'email'
   | 'channel_message'
   | 'call'
-  | 'automation';
+  | 'automation'
+  | 'foreign'
+  | 'crm_company'
+  | 'crm_contact';
 
 export const DEFAULT_ITEM_TYPE: ItemType = 'document';
 
@@ -227,6 +270,8 @@ const itemTypeSet = new Set([
   'call',
   'automation',
   'thread',
+  'crm_company',
+  'crm_contact',
 ]);
 
 function _isItemType(str: string): str is ItemType {
@@ -249,6 +294,10 @@ export function blockNameToItemType(
       return 'email';
     case 'automation':
       return 'automation';
+    case 'company':
+      return 'crm_company';
+    case 'contact':
+      return 'crm_contact';
     default:
       return DEFAULT_ITEM_TYPE;
   }
@@ -257,7 +306,8 @@ export function blockNameToItemType(
 export function stringToItemType(str: string): ItemType | undefined {
   switch (str) {
     case 'email':
-    case 'thread': {
+    case 'thread':
+    case 'email_thread': {
       return 'email';
     }
     case 'call':
@@ -265,6 +315,7 @@ export function stringToItemType(str: string): ItemType | undefined {
     case 'document':
     case 'project':
     case 'channel':
+    case 'crm_company':
       return str;
     default:
       return undefined;
@@ -344,9 +395,33 @@ export const storageServiceClient = {
 
   async getGroupedSoupAstItems(args: {
     params: {
+      group_by: PostGroupedSoupAstInitialRequest['group_by'];
+      per_group_limit?: number | null;
+    };
+    body: PostSoupAstRequest;
+  }) {
+    const { limit: _limit, sort_method: _sortMethod, ...filters } = args.body;
+    const body = {
+      ...filters,
+      mode: 'initial',
+      group_by: args.params.group_by,
+      ...(args.params.per_group_limit != null && {
+        per_group_limit: args.params.per_group_limit,
+      }),
+    } satisfies PostGroupedSoupAstRequest;
+
+    return await dssFetch<GroupedSoupInitialPage>(`/items/soup/ast/grouped`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  },
+
+  async getGroupedSoupAstGroupPage(args: {
+    params: {
       cursor?: string | null;
-      group_by: unknown;
-      group_key?: string | null;
+      group_by: PostGroupedSoupAstGroupPageRequest['group_by'];
+      group_key: string;
+      limit?: number | null;
     };
     body: PostSoupAstRequest;
   }) {
@@ -354,26 +429,22 @@ export const storageServiceClient = {
     if (args.params.cursor) params.set('cursor', args.params.cursor);
     const searchParams = params.toString() ? `?${params.toString()}` : '';
 
-    const body: Record<string, unknown> = { ...args.body };
-    if (args.params.group_by) body.group_by = args.params.group_by;
-    if (args.params.group_key != null) body.group_key = args.params.group_key;
+    const { limit: _limit, sort_method: _sortMethod, ...filters } = args.body;
+    const body = {
+      ...filters,
+      mode: 'group_page',
+      group_by: args.params.group_by,
+      group_key: args.params.group_key,
+      ...(args.params.limit != null && { limit: args.params.limit }),
+    } satisfies PostGroupedSoupAstRequest;
 
-    return await dssFetch<
-      SoupPage & {
-        groups?: {
-          key: string;
-          label: string;
-          display_order: number | null;
-          total_count: number;
-          page_count: number;
-          start_index: number;
-          next_cursor: string | null;
-        }[];
+    return await dssFetch<GroupedSoupGroupPage>(
+      `/items/soup/ast/grouped${searchParams}`,
+      {
+        method: 'POST',
+        body: JSON.stringify(body),
       }
-    >(`/items/soup/ast/grouped${searchParams}`, {
-      method: 'POST',
-      body: JSON.stringify(body),
-    });
+    );
   },
 
   async createChannel(args: CreateChannelRequest) {
@@ -990,6 +1061,86 @@ export const storageServiceClient = {
     return ok(response);
   },
 
+  /**
+   * Creates a snippet and initializes its sync-service content on the backend.
+   * Snippets are created personal; team sharing is toggled separately via
+   * setDocumentTeamShare.
+   */
+  async createSnippet(request: CreateSnippetRequest) {
+    const result = await dssFetch<CreateSnippetHandler200>(
+      `/documents/create_snippet`,
+      {
+        method: 'POST',
+        body: JSON.stringify(request),
+      }
+    );
+
+    if (!result.isOk()) {
+      const errors = result.error;
+      if (errors[0].message.includes('403')) {
+        showPaywall(PaywallKey.FILE_LIMIT);
+      }
+      return err(result.error);
+    }
+
+    const response = result.value;
+    return ok(response);
+  },
+
+  async getSnippetRaw(args: {
+    documentId: string;
+  }): Promise<SerializedEditorState> {
+    const token = await getDocumentPermissionToken(args.documentId);
+    const response = await platformFetch(
+      `${syncServiceWorkerHost}/document/${args.documentId}/raw`,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          ...(isTauri() && { Origin: syncOrigin }),
+        },
+        method: 'GET',
+      }
+    );
+
+    if (!response.ok) {
+      try {
+        console.error('Failed to fetch raw snippet', await response.text());
+      } catch (_e) {
+        console.error('Failed to fetch raw snippet');
+      }
+      throw new Error('Failed to fetch raw snippet');
+    }
+
+    return await response.json();
+  },
+
+  /**
+   * Gets the team-share state of a document (resolved against the owner's team).
+   */
+  async getDocumentTeamShare(args: { documentId: string }) {
+    return await dssFetch<DocumentTeamShareResponse>(
+      `/documents/${args.documentId}/team_share`
+    );
+  },
+
+  /**
+   * Shares or unshares a document with the owner's team. Sharing grants the
+   * team Edit access.
+   */
+  async setDocumentTeamShare(args: {
+    documentId: string;
+    shareWithTeam: boolean;
+  }) {
+    return await dssFetch<DocumentTeamShareResponse>(
+      `/documents/${args.documentId}/team_share`,
+      {
+        method: 'PUT',
+        body: JSON.stringify({ shareWithTeam: args.shareWithTeam }),
+      }
+    );
+  },
+
   async getTaskDuplicates(params: { documentId: string }) {
     return (
       await dssFetch<TaskDuplicatesResponse>(
@@ -1101,6 +1252,12 @@ export const storageServiceClient = {
         }
       )
     ).map((result) => result.data);
+  },
+
+  async fetchCachedSnapshot(
+    documentId: string
+  ): Promise<Result<Uint8Array, ResultError<FetchWithTokenErrorCode>[]>> {
+    return dssFetch<Uint8Array>(`/documents/${documentId}/cached_snapshot_url`);
   },
 
   async getDocumentShortId({
@@ -1879,6 +2036,104 @@ export const storageServiceClient = {
         body: JSON.stringify(body),
       })
     ).map((result) => result.data);
+  },
+  async getCompany({ companyId }: { companyId: string }) {
+    return await dssFetch<CrmCompanyResponse>(`/crm/companies/${companyId}`, {
+      method: 'GET',
+    });
+  },
+  async getCompanyContacts({ companyId }: { companyId: string }) {
+    return await dssFetch<CrmContactResponse[]>(
+      `/crm/companies/${companyId}/contacts`,
+      { method: 'GET' }
+    );
+  },
+  async getContact({ contactId }: { contactId: string }) {
+    return await dssFetch<CrmContactResponse>(`/crm/contacts/${contactId}`, {
+      method: 'GET',
+    });
+  },
+  async setContactHidden({
+    contactId,
+    hidden,
+  }: {
+    contactId: string;
+    hidden: boolean;
+  }) {
+    return await dssFetch(`/crm/contacts/${contactId}/hidden`, {
+      method: 'PUT',
+      body: JSON.stringify({ hidden }),
+    });
+  },
+  async setCompanyHidden({
+    companyId,
+    hidden,
+  }: {
+    companyId: string;
+    hidden: boolean;
+  }) {
+    return await dssFetch(`/crm/companies/${companyId}/hidden`, {
+      method: 'PUT',
+      body: JSON.stringify({ hidden }),
+    });
+  },
+  async setEmailSync({
+    companyId,
+    emailSync,
+  }: {
+    companyId: string;
+    emailSync: boolean;
+  }) {
+    return await dssFetch(`/crm/companies/${companyId}/email-sync`, {
+      method: 'PUT',
+      body: JSON.stringify({ email_sync: emailSync }),
+    });
+  },
+  crmComments: {
+    async list({
+      entityType,
+      entityId,
+    }: {
+      entityType: CrmCommentEntityType;
+      entityId: string;
+    }) {
+      return await dssFetch<CrmCommentThread[]>(
+        `/crm/comments/${entityType}/${entityId}`,
+        { method: 'GET' }
+      );
+    },
+    async create({
+      entityType,
+      entityId,
+      body,
+    }: {
+      entityType: CrmCommentEntityType;
+      entityId: string;
+      body: CreateCrmCommentRequest;
+    }) {
+      return await dssFetch<CrmCommentThread>(
+        `/crm/comments/${entityType}/${entityId}`,
+        { method: 'POST', body: JSON.stringify(body) }
+      );
+    },
+    async edit({
+      commentId,
+      body,
+    }: {
+      commentId: string;
+      body: EditCrmCommentRequest;
+    }) {
+      return await dssFetch<CrmComment>(`/crm/comment/${commentId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      });
+    },
+    async delete({ commentId }: { commentId: string }) {
+      return await dssFetch<DeleteCrmCommentResult>(
+        `/crm/comment/${commentId}`,
+        { method: 'DELETE' }
+      );
+    },
   },
 } satisfies StorageServiceClient &
   typeof enhancements &

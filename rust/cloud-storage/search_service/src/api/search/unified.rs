@@ -2,6 +2,7 @@ use super::SearchPaginationParams;
 use crate::api::{
     context::SearchHandlerState,
     search::{
+        crm_company::{enrich_crm_companies, resolve_crm_team_receipt},
         enrich::enrich_search_response,
         simple::{SearchError, simple_unified::perform_unified_search},
     },
@@ -46,8 +47,14 @@ pub async fn handler(
         user_id = user_context.user_id,
         query = ?req.query,
         search_on = ?req.search_on,
+        include_crm = req.include_crm,
         "unified_search"
     );
+
+    // CRM is opt-in: only when the caller asks for it does this resolve a
+    // team membership and mint a capability receipt. No membership → empty
+    // CRM slice, not a failed search. See `resolve_crm_team_receipt`.
+    let crm_access = resolve_crm_team_receipt(&ctx, &user_context, req.include_crm).await?;
 
     let document_name_term = match req.search_on {
         models_search::SearchOn::Name | models_search::SearchOn::NameContent => {
@@ -58,7 +65,7 @@ pub async fn handler(
     };
 
     let (results, next_cursor) =
-        perform_unified_search(&ctx, &user_context, query_params, req).await?;
+        perform_unified_search(&ctx, &user_context, crm_access.as_ref(), query_params, req).await?;
 
     // Split the results by entity type
     let SplitUnifiedSearchResponseValues {
@@ -68,6 +75,7 @@ pub async fn handler(
         email,
         project,
         call_record,
+        crm_company,
     } = {
         let _span = tracing::info_span!("split_search_response_by_type").entered();
         results.into_iter().split_search_response()
@@ -80,6 +88,7 @@ pub async fn handler(
         enriched_project_results,
         enriched_email_results,
         enriched_call_record_results,
+        enriched_crm_results,
     ) = tokio::try_join!(
         enrich_search_response(
             &ctx,
@@ -123,6 +132,7 @@ pub async fn handler(
             models_opensearch::SearchEntityType::CallRecords,
             None,
         ),
+        enrich_crm_companies(&ctx, crm_access.as_ref(), crm_company),
     )
     .map_err(|e| SearchError::InternalError(anyhow::anyhow!("tokio error: {:?}", e)))?;
 
@@ -137,6 +147,7 @@ pub async fn handler(
         results.extend(enriched_project_results);
         results.extend(enriched_email_results);
         results.extend(enriched_call_record_results);
+        results.extend(enriched_crm_results);
 
         sort_unified_search_results(results)
     };

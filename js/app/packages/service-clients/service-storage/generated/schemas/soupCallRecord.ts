@@ -4,6 +4,8 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+
+import type { CallStatus } from './callStatus';
 import type { SoupCallRecordChannelName } from './soupCallRecordChannelName';
 import type { SoupCallRecordCustomName } from './soupCallRecordCustomName';
 import type { SoupCallRecordDurationMs } from './soupCallRecordDurationMs';
@@ -16,8 +18,8 @@ import type { SoupCallRecordSummary } from './soupCallRecordSummary';
 and transcript — fields that are irrelevant for the soup feed.
  */
 export interface SoupCallRecord {
-  /** Whether the requesting user attended this call (i.e. appears in the
-`call_participants` / `call_record_participants` table). */
+  /** Whether the requesting user attended this call. Kept for compatibility
+and derived from `status == ATTENDED`. */
   attended: boolean;
   /** The call identifier. */
   callId: string;
@@ -39,6 +41,8 @@ export interface SoupCallRecord {
   participants: SoupCallRecordParticipant[];
   /** When the call started. */
   startedAt: string;
+  /** Viewer-relative call status for the requesting user. */
+  status: CallStatus;
   /** AI-generated summary of the call. Only set on archived
 `call_records` once summarization has run; active calls always
 return `None`. */

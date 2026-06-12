@@ -1,12 +1,8 @@
 import type { Client } from '@opensearch-project/opensearch';
 import { client } from '../client';
 import {
-  CALL_RECORDS_ALIAS,
-  CALL_RECORDS_INDEX,
   CHANNELS_ALIAS,
   CHANNELS_INDEX,
-  CHATS_ALIAS,
-  CHATS_INDEX,
   DOCUMENTS_ALIAS,
   DOCUMENTS_INDEX,
   EMAILS_ALIAS,
@@ -302,55 +298,6 @@ const DOCUMENT_BODY = {
   },
 };
 
-const CHAT_BODY = {
-  settings: {
-    ...SHARD_SETTINGS,
-    refresh_interval: '1s',
-  },
-  mappings: {
-    dynamic: 'false',
-    properties: {
-      entity_id: {
-        type: 'keyword',
-      },
-      chat_message_id: {
-        type: 'keyword',
-        index: false,
-        doc_values: true,
-      },
-      user_id: {
-        type: 'keyword',
-        index: true,
-        doc_values: true,
-      },
-      role: {
-        type: 'keyword',
-        index: false,
-        doc_values: true,
-      },
-      updated_at_seconds: {
-        type: 'date',
-        format: 'epoch_second',
-        index: false,
-        doc_values: true,
-      },
-      title: {
-        type: 'text',
-        fields: {
-          keyword: {
-            type: 'keyword',
-            ignore_above: 50,
-          },
-        },
-      },
-      content: {
-        type: 'text',
-        analyzer: 'standard',
-      },
-    },
-  },
-};
-
 const EMAIL_BODY = {
   settings: {
     ...SHARD_SETTINGS,
@@ -452,80 +399,6 @@ const EMAIL_BODY = {
   },
 };
 
-const CALL_RECORDS_BODY = {
-  settings: {
-    ...SHARD_SETTINGS,
-    refresh_interval: '2s',
-  },
-  // One doc per transcript segment; `_id` is the `transcript_id`.
-  mappings: {
-    dynamic: 'false',
-    properties: {
-      entity_id: {
-        type: 'keyword',
-      },
-      transcript_id: {
-        type: 'keyword',
-        index: false,
-        doc_values: true,
-      },
-      channel_id: {
-        type: 'keyword',
-        index: true,
-        doc_values: true,
-      },
-      participant_ids: {
-        type: 'keyword',
-        index: true,
-        doc_values: true,
-      },
-      channel_name: {
-        type: 'text',
-        fields: {
-          keyword: {
-            type: 'keyword',
-            ignore_above: 128,
-          },
-        },
-      },
-      speaker_id: {
-        type: 'keyword',
-        index: true,
-        doc_values: true,
-      },
-      sequence_num: {
-        type: 'integer',
-        index: false,
-        doc_values: true,
-      },
-      content: {
-        type: 'text',
-        analyzer: 'standard',
-      },
-      started_at_seconds: {
-        type: 'date',
-        format: 'epoch_second',
-        index: false,
-        doc_values: true,
-      },
-      ended_at_seconds: {
-        type: 'date',
-        format: 'epoch_second',
-        index: false,
-        doc_values: true,
-      },
-      created_at_seconds: {
-        type: 'alias',
-        path: 'started_at_seconds',
-      },
-      updated_at_seconds: {
-        type: 'alias',
-        path: 'started_at_seconds',
-      },
-    },
-  },
-};
-
 async function createIndices() {
   const opensearchClient = client();
   console.log('Creating indices...');
@@ -536,11 +409,8 @@ async function createIndices() {
       aliasName: DOCUMENTS_ALIAS,
       body: DOCUMENT_BODY,
     });
-    await createIndexWithAlias(opensearchClient, {
-      indexName: CHATS_INDEX,
-      aliasName: CHATS_ALIAS,
-      body: CHAT_BODY,
-    });
+    // chats and call_records use parent/child join mappings and are
+    // created by create_chats_v2.ts / create_call_records_v2.ts.
     await createIndexWithAlias(opensearchClient, {
       indexName: EMAILS_INDEX,
       aliasName: EMAILS_ALIAS,
@@ -550,11 +420,6 @@ async function createIndices() {
       indexName: CHANNELS_INDEX,
       aliasName: CHANNELS_ALIAS,
       body: CHANNEL_BODY,
-    });
-    await createIndexWithAlias(opensearchClient, {
-      indexName: CALL_RECORDS_INDEX,
-      aliasName: CALL_RECORDS_ALIAS,
-      body: CALL_RECORDS_BODY,
     });
     console.log('done');
   } catch (error) {

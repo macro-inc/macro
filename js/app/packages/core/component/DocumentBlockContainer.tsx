@@ -20,7 +20,7 @@ export function DocumentBlockContainer(
 
   return (
     <Show
-      when={hasBlockData()}
+      when={hasBlockData() && !blockError()}
       fallback={
         <ContainerWithTopBar {...local}>
           <Switch

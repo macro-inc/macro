@@ -499,7 +499,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                         }}
                       >
                         <Show when={props.config.isMultiSelect}>
-                          <div class="shrink-0">
+                          <div class="shrink-0 flex">
                             <OptionCheckBox
                               checked={isSelected()}
                               multiselect

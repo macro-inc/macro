@@ -21,9 +21,75 @@ fn test_list_entities_schema_validation() {
         "Tool name should match the schemars title"
     );
     assert!(
-        description.contains("Browse the user's workspace"),
+        description.contains("Browse the user's Macro workspace"),
         "Description should contain expected text"
     );
+}
+
+#[test]
+fn test_list_entities_schema_guides_macro_task_queries() {
+    let schema = generate_tool_input_schema!(ListEntities);
+    let schema_json = serde_json::to_string(&schema).unwrap();
+
+    assert!(
+        schema_json.contains("prefer this tool over external task trackers such as Linear"),
+        "schema should prefer Macro tasks over Linear for unqualified task requests"
+    );
+    assert!(
+        schema_json.contains("00000001-0000-0000-0000-000000000001"),
+        "schema should document the Assignees property id"
+    );
+    assert!(
+        schema_json.contains("00000001-0000-0000-0002-000000000004"),
+        "schema should document the Completed status option id"
+    );
+}
+
+#[test]
+fn test_macro_task_completed_assigned_to_me_filter_deserializes() {
+    let input = serde_json::json!({
+        "includeTypes": ["document"],
+        "df": {
+            "&": [
+                { "l": { "dst": "task" } },
+                {
+                    "&": [
+                        { "l": { "ua": { "gte": "2026-06-11T04:00:00Z" } } },
+                        { "l": { "ua": { "lt": "2026-06-12T04:00:00Z" } } }
+                    ]
+                }
+            ]
+        },
+        "propf": {
+            "&": [
+                {
+                    "l": {
+                        "pd": "00000001-0000-0000-0000-000000000002",
+                        "et": "TASK",
+                        "v": { "so": "00000001-0000-0000-0002-000000000004" }
+                    }
+                },
+                {
+                    "l": {
+                        "pd": "00000001-0000-0000-0000-000000000001",
+                        "et": "TASK",
+                        "v": { "er": "macro|eric@example.com" }
+                    }
+                }
+            ]
+        },
+        "sortBy": "recently_updated"
+    });
+
+    let list: ListEntities = serde_json::from_value(input).unwrap();
+    let ast = list.entity_filter_ast();
+
+    assert_eq!(
+        list.effective_include_types(),
+        Some(vec![ItemType::Document])
+    );
+    assert!(ast.document_filter.is_some());
+    assert!(ast.properties_filter.is_some());
 }
 
 #[test]

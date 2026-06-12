@@ -446,6 +446,7 @@ struct MockCustomerRepository {
     decrement_calls: Arc<Mutex<Vec<(String, u64)>>>,
     fail_increment: bool,
     fail_decrement: bool,
+    no_active_subscription: bool,
 }
 
 impl Default for MockCustomerRepository {
@@ -456,6 +457,7 @@ impl Default for MockCustomerRepository {
             decrement_calls: Arc::new(Mutex::new(Vec::new())),
             fail_increment: false,
             fail_decrement: false,
+            no_active_subscription: false,
         }
     }
 }
@@ -474,8 +476,15 @@ impl CustomerRepository for MockCustomerRepository {
         &self,
         _: &stripe::CustomerId,
     ) -> impl Future<Output = Result<stripe::SubscriptionId, CustomerError>> + Send {
+        let no_active_subscription = self.no_active_subscription;
         let subscription_id = self.subscription_id.clone();
-        async move { Ok(subscription_id) }
+        async move {
+            if no_active_subscription {
+                Err(CustomerError::SubscriptionNotActive)
+            } else {
+                Ok(subscription_id)
+            }
+        }
     }
 
     fn increment_seat_count(
@@ -837,6 +846,51 @@ async fn test_create_team_propagates_github_installation_move_failure() {
         *move_calls.lock().unwrap(),
         vec![(user_id.as_ref().to_string(), *team.id())]
     );
+}
+
+fn build_service_for_premium_check(
+    stripe_customer_id: Option<stripe::CustomerId>,
+    no_active_subscription: bool,
+) -> impl TeamService {
+    let mark_sent_calls: Arc<Mutex<Vec<Vec<uuid::Uuid>>>> = Arc::new(Mutex::new(Vec::new()));
+    let mut team_repo = MockTeamRepository::new(Vec::new(), "Test Team", mark_sent_calls);
+    team_repo.stripe_customer_id = stripe_customer_id;
+    TeamServiceImpl::new(
+        team_repo,
+        MockCustomerRepository {
+            no_active_subscription,
+            ..Default::default()
+        },
+        MockTeamChannelsRepository::default(),
+        MockUserRolesAndPermissionsService::default(),
+        Arc::new(MockNotificationIngress::new(HashSet::new())),
+        NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
+    )
+}
+
+#[tokio::test]
+async fn test_is_user_premium_with_active_subscription() {
+    let user_id = MacroUserIdStr::parse_from_str("macro|premium@example.com").unwrap();
+    let service = build_service_for_premium_check(Some("cus_test".parse().unwrap()), false);
+
+    assert!(service.is_user_premium(&user_id).await.unwrap());
+}
+
+#[tokio::test]
+async fn test_is_user_premium_without_stripe_customer() {
+    let user_id = MacroUserIdStr::parse_from_str("macro|free@example.com").unwrap();
+    let service = build_service_for_premium_check(None, false);
+
+    assert!(!service.is_user_premium(&user_id).await.unwrap());
+}
+
+#[tokio::test]
+async fn test_is_user_premium_without_active_subscription() {
+    let user_id = MacroUserIdStr::parse_from_str("macro|lapsed@example.com").unwrap();
+    let service = build_service_for_premium_check(Some("cus_test".parse().unwrap()), true);
+
+    assert!(!service.is_user_premium(&user_id).await.unwrap());
 }
 
 /// When one notification fails, only the successful invite IDs are passed to

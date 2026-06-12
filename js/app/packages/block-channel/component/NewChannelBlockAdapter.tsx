@@ -1,6 +1,7 @@
 import { useBlockEntityCommands } from '@app/component/next-soup/actions';
 import { useMaybePreviewPanel } from '@app/component/PreviewPanel';
 import { SplitHeaderRight } from '@app/component/split-layout/components/SplitHeader';
+import { useNavigatedFromJK } from '@app/component/useNavigatedFromJK';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { URL_PARAMS } from '@block-channel/constants';
 import { ChannelAttachmentsTab } from '@channel/Attachments/ChannelAttachmentsTab';
@@ -9,6 +10,8 @@ import {
   ChannelCallAutoJoin,
   ChannelCallButton,
   ChannelCallTab,
+  getCallJoinTab,
+  isNativeIosCallKitEnabled,
   useCall,
   useCallContextOptional,
 } from '@channel/Call';
@@ -77,6 +80,27 @@ function CallTabLabel() {
   );
 }
 
+const canUseInlineCallTab = () => {
+  return !isNativeIosCallKitEnabled();
+};
+
+// Native iOS CallKit owns the call surface, so the embedded Call tab should
+// never become the active channel tab on that platform.
+const normalizeChannelTab = (tab: ChannelTabId) => {
+  return tab === 'call' && !canUseInlineCallTab() ? DEFAULT_CHANNEL_TAB : tab;
+};
+
+const initialChannelTab = (options: {
+  wantsJoinCall: boolean;
+  hasActiveCallHere: boolean;
+}) => {
+  return normalizeChannelTab(
+    options.wantsJoinCall || options.hasActiveCallHere
+      ? 'call'
+      : DEFAULT_CHANNEL_TAB
+  );
+};
+
 function NewTop(props: { channelId: string }) {
   const { activeTab, setActiveTab } = useChannelTab();
   const channelName = useChannelName(props.channelId);
@@ -91,6 +115,7 @@ function NewTop(props: { channelId: string }) {
   // `activeTab` to `call` before the join request resolves).
   const showCallTab = () =>
     ENABLE_CALLS() &&
+    canUseInlineCallTab() &&
     (call.isInThisChannel() ||
       call.isJoining() ||
       activeTab() === 'call' ||
@@ -133,6 +158,7 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
   useBlockEntityCommands();
 
   const isPreview = !!useMaybePreviewPanel();
+  const { navigatedFromJK } = useNavigatedFromJK();
   const channelId = useBlockId();
   const blockHandle = blockHandleSignal.get;
   const [searchParams, setSearchParams] = useSearchParams();
@@ -147,11 +173,12 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
       isJoinCallRequested(searchParams[CHANNEL_URL_PARAMS.joinCall]));
 
   const callCtx = useCallContextOptional();
-  const hasActiveCallHere =
-    callCtx?.isInCall() && callCtx.activeChannelId() === channelId;
+  const hasActiveCallHere = !!(
+    callCtx?.isInCall() && callCtx.activeChannelId() === channelId
+  );
 
   const [activeTab, setActiveTabInternal] = createSignal<ChannelTabId>(
-    wantsJoinCall || hasActiveCallHere ? 'call' : DEFAULT_CHANNEL_TAB
+    initialChannelTab({ wantsJoinCall, hasActiveCallHere })
   );
   const [pendingJoinCall, setPendingJoinCall] = createSignal(wantsJoinCall);
 
@@ -159,6 +186,7 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
   const messagesChannelHandle: { current?: ChannelHandle } = {};
 
   const setActiveTab = (tab: ChannelTabId) => {
+    tab = normalizeChannelTab(tab);
     if (tab !== 'messages') {
       messagesChannelHandle.current = undefined;
     }
@@ -217,7 +245,7 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
   createMethodRegistration(blockHandle, {
     goToLocationFromParams: async (params: ChannelTargetMessageParams) => {
       if (isOpenCallTabRequested(params[CHANNEL_URL_PARAMS.openCallTab])) {
-        setActiveTab('call');
+        setActiveTab(getCallJoinTab());
         return;
       }
 
@@ -233,7 +261,7 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
       }
 
       if (isJoinCallRequested(params[CHANNEL_URL_PARAMS.joinCall])) {
-        setActiveTab('call');
+        setActiveTab(getCallJoinTab());
         setPendingJoinCall(true);
       }
     },
@@ -280,7 +308,7 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
               <NewChannel
                 channelId={channelId}
                 onHandleReady={onChannelReady}
-                autofocus={!isPreview}
+                autofocus={!isPreview && !navigatedFromJK()}
                 {...convertTargetMessage(initialTargetMessageParams())}
               />
             </Match>
@@ -290,7 +318,7 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
             <Match when={activeTab() === 'participants'}>
               <ChannelParticipantsTab channelId={channelId} />
             </Match>
-            <Match when={activeTab() === 'call'}>
+            <Match when={activeTab() === 'call' && canUseInlineCallTab()}>
               <ChannelCallTab
                 channelId={channelId}
                 pendingJoin={pendingJoinCall}

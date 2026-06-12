@@ -1,4 +1,4 @@
-import { InlineItemPreview } from '@core/component/ItemPreview';
+import { ItemPreview } from '@core/component/ItemPreview';
 import FilePlus from '@phosphor-icons/core/regular/file-plus.svg';
 import { Show, Suspense } from 'solid-js';
 import { BaseTool } from './BaseTool';
@@ -19,7 +19,8 @@ const handler = createToolRenderer({
               {' '}
               <span class="text-ink-placeholder">·</span>{' '}
               <Suspense>
-                <InlineItemPreview
+                <ItemPreview
+                  class="inline-flex align-middle ring-0"
                   id={response().data.documentId}
                   type="document"
                 />

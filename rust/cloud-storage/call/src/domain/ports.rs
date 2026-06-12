@@ -13,7 +13,8 @@ use item_filters::ast::{LiteralTree, call::CallLiteral};
 use notification::domain::models::apple::VoipPushPayload;
 
 use crate::domain::models::{
-    CustomSpeakerAssignment, EditCallRecordRequest, EditCallTranscriptRequest,
+    CustomSpeakerAssignment, DeletedCallRecordStorageKeys, EditCallRecordRequest,
+    EditCallTranscriptRequest,
 };
 
 use super::models::{
@@ -21,7 +22,8 @@ use super::models::{
     CallRecordPreview, CallRecordTranscriptSegment, CallTokenResponse,
     CallTranscriptCustomSpeakerResult, CallWebhookEvent, EgressS3Config, EnrichedCallTranscript,
     GetBatchCallRecordPreviewRequest, GetBatchCallRecordPreviewResponse, GetCallRecordsRequest,
-    LeaveCallResponse, TranscriptSegmentRequest, VoipPushPayloadRequest,
+    LeaveCallResponse, RingStatusResponse, TranscriptSegmentRequest, VerifiedRingToken,
+    VoipPushPayloadRequest,
 };
 
 /// Repository port for persisting call state to the database.
@@ -229,12 +231,12 @@ pub trait CallRepository: Send + Sync + 'static {
         user_id: MacroUserIdStr<'a>,
     ) -> impl Future<Output = Result<Vec<CallRecordPreview>, Self::Err>> + Send;
 
-    /// Fetch the most recent call records where the given user was a
-    /// participant, spanning both active (`calls` + `call_participants`)
-    /// and archived (`call_records` + `call_record_participants`) tables.
-    /// Transcript data is intentionally omitted. Results are ordered by
-    /// start time descending and capped at `limit`.
-    /// An optional filter tree can narrow results (e.g. by channel_id).
+    /// Fetch the most recent call records visible to the given user, spanning
+    /// both active (`calls`) and archived (`call_records`) tables. Each record
+    /// includes viewer-specific status derived from call participation and
+    /// current channel membership. Transcript data is intentionally omitted.
+    /// Results are ordered by start time descending and capped at `limit`.
+    /// An optional filter tree can narrow results (e.g. by channel_id or status).
     fn get_call_records_by_user<'a>(
         &self,
         user_id: MacroUserIdStr<'a>,
@@ -251,12 +253,12 @@ pub trait CallRepository: Send + Sync + 'static {
 
     /// Delete a row from `call_records` by id. Participants and transcript
     /// segments are removed via `ON DELETE CASCADE`. No-op if no row matches.
-    /// Returns the deleted row's `recording_key` (if any) so the caller can
-    /// clean up the associated recording object in storage.
+    /// Returns the deleted row's storage object keys so the caller can clean
+    /// up the associated recording and preview objects.
     fn delete_call_record(
         &self,
         call_record_id: &Uuid,
-    ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Option<DeletedCallRecordStorageKeys>, Self::Err>> + Send;
 
     /// Patches a call record.
     fn patch_call_record(
@@ -344,6 +346,15 @@ pub trait RecordingStorage: Send + Sync + 'static {
         recording_key: &str,
     ) -> impl Future<Output = anyhow::Result<String>> + Send;
 
+    /// Generate a presigned GET URL for a stored preview image key/path.
+    ///
+    /// The preview key/path is stored as a full S3 object key, for example
+    /// `calls/{room}/{recording_stem}/PREVIEW.jpg`.
+    fn presign_recording_preview_url(
+        &self,
+        preview_key: &str,
+    ) -> impl Future<Output = anyhow::Result<String>> + Send;
+
     /// Delete the recording object identified by `recording_key`.
     ///
     /// Implementations must apply the same prefix as
@@ -352,6 +363,15 @@ pub trait RecordingStorage: Send + Sync + 'static {
     fn delete_recording(
         &self,
         recording_key: &str,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
+
+    /// Delete the stored preview image object identified by `preview_key`.
+    ///
+    /// The preview key/path is stored as a full S3 object key. This operation
+    /// should be idempotent — succeed if the key no longer exists.
+    fn delete_recording_preview(
+        &self,
+        preview_key: &str,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 }
 
@@ -363,9 +383,23 @@ impl<T: RecordingStorage> RecordingStorage for Option<T> {
         }
     }
 
+    async fn presign_recording_preview_url(&self, preview_key: &str) -> anyhow::Result<String> {
+        match self {
+            Some(inner) => inner.presign_recording_preview_url(preview_key).await,
+            None => anyhow::bail!("recording storage not configured"),
+        }
+    }
+
     async fn delete_recording(&self, recording_key: &str) -> anyhow::Result<()> {
         match self {
             Some(inner) => inner.delete_recording(recording_key).await,
+            None => anyhow::bail!("recording storage not configured"),
+        }
+    }
+
+    async fn delete_recording_preview(&self, preview_key: &str) -> anyhow::Result<()> {
+        match self {
+            Some(inner) => inner.delete_recording_preview(preview_key).await,
             None => anyhow::bail!("recording storage not configured"),
         }
     }
@@ -467,6 +501,12 @@ pub trait CallRtcClient: Send + Sync + 'static {
     /// Validate a webhook signature and parse the event from the raw body.
     fn receive_webhook(&self, body: &str, auth_token: &str) -> Result<CallWebhookEvent, CallError>;
 
+    /// Verify an access token minted by this deployment (see
+    /// [`generate_token`](Self::generate_token)) and return its identity and
+    /// room grant. Used to authenticate ring-status polling from native
+    /// clients, which present the token delivered in their VoIP push payload.
+    fn verify_access_token(&self, token: &str) -> anyhow::Result<VerifiedRingToken>;
+
     /// Dispatch the transcription agent to a room (best-effort).
     ///
     /// Returns `Ok(())` if dispatch succeeded or if no agent is configured.
@@ -502,6 +542,16 @@ pub trait CallService: Send + Sync + 'static {
         channel_id: &Uuid,
         user_id: MacroUserIdStr<'a>,
     ) -> impl Future<Output = Result<LeaveCallResponse, CallError>> + Send;
+
+    /// Report the per-user ring status for a call. The caller authenticates
+    /// with the RTC access token delivered in its VoIP push payload; the
+    /// token's identity determines whose participation is checked. Returns
+    /// [`CallError::Auth`] when the token is invalid or carries no room grant.
+    fn get_ring_status(
+        &self,
+        call_id: &Uuid,
+        bearer_token: &str,
+    ) -> impl Future<Output = Result<RingStatusResponse, CallError>> + Send;
 
     /// Validate and process a raw webhook event from the RTC provider.
     fn process_webhook_event(
@@ -612,8 +662,9 @@ pub trait CallService: Send + Sync + 'static {
 /// needs a read-only list of recent call records, not the full call
 /// management API.
 pub trait CallRecordQueryService: Send + Sync + 'static {
-    /// Fetch the most recent call records the user participated in,
-    /// ordered by `started_at` descending. Transcript data is excluded.
+    /// Fetch the most recent call records visible to the user, ordered by
+    /// `started_at` descending. Transcript data is excluded, and status is
+    /// computed relative to the requesting user.
     fn get_user_call_records(
         &self,
         req: GetCallRecordsRequest,

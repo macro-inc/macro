@@ -111,6 +111,7 @@ impl ForeignEntityService for StubForeignEntityService {
 
     async fn get_foreign_entities_for_user(
         &self,
+        _requesting_user: Option<String>,
         _source_ids: Vec<SourceId>,
         _limit: u32,
         _query: ForeignEntityListQuery,
@@ -187,6 +188,15 @@ impl EntityAccessService for NoopEntityAccessService {
         _entity_type: EntityType,
         _user_org_id: Option<i64>,
     ) -> Result<EntityPermission, AccessError> {
+        unreachable!("InternalUser extension should bypass real access checks")
+    }
+
+    async fn get_crm_entity_permission_with_team(
+        &self,
+        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+        _entity_id: &str,
+        _entity_type: EntityType,
+    ) -> Result<(EntityPermission, uuid::Uuid), AccessError> {
         unreachable!("InternalUser extension should bypass real access checks")
     }
 

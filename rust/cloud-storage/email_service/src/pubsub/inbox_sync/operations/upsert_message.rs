@@ -19,6 +19,7 @@ use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 use model_notifications::NewEmailMetadata;
+use models_email::api::refresh::RefreshEmailEvent;
 use models_email::db::address::EmailRecipientType;
 use models_email::email::service::link;
 use models_email::email::service::message::SimpleMessage;
@@ -33,6 +34,9 @@ use std::collections::HashSet;
 use std::result;
 use std::sync::Arc;
 use uuid::Uuid;
+
+#[cfg(test)]
+mod test;
 
 // upsert a message into the db. could be a new message or an existing one that had changes
 #[tracing::instrument(skip(ctx))]
@@ -242,7 +246,7 @@ pub async fn upsert_message(
     cg_refresh_email(
         &ctx.connection_gateway_client,
         link.macro_id.as_ref(),
-        "upsert_message",
+        RefreshEmailEvent::UpsertMessage { link_id: link.id },
     )
     .await;
 
@@ -571,20 +575,27 @@ async fn send_notifications(
         snippet: message.snippet.unwrap_or_default(),
     };
 
-    let macro_id_str = link.macro_id.to_string();
-    let recipient = MacroUserIdStr::parse_from_str(&macro_id_str).map_err(|e| {
-        ProcessingError::NonRetryable(DetailedError {
-            reason: FailureReason::InvalidData,
-            source: anyhow::anyhow!("failed to parse macro user id: {}", e),
+    let primaries = macro_db_client::macro_user_links::get_primaries_for_link(
+        &ctx.db,
+        link.macro_id.as_ref(),
+        link.id,
+    )
+    .await
+    .map_err(|e| {
+        ProcessingError::Retryable(DetailedError {
+            reason: FailureReason::DatabaseQueryFailed,
+            source: e.context("Failed to fetch delegated primaries".to_string()),
         })
     })?;
+
+    let recipient_ids = build_notification_recipients(&link.macro_id, primaries);
 
     let request = SendNotificationRequestBuilder {
         notification_entity: EntityType::EmailThread
             .with_entity_string(message.thread_db_id.to_string()),
         notification,
         sender_id,
-        recipient_ids: HashSet::from([recipient]),
+        recipient_ids,
     }
     .into_request()
     .with_conn_gateway();
@@ -598,6 +609,30 @@ async fn send_notifications(
     }
 
     Ok(())
+}
+
+fn build_notification_recipients(
+    owner: &MacroUserIdStr<'static>,
+    primaries: Vec<String>,
+) -> HashSet<MacroUserIdStr<'static>> {
+    let mut recipient_ids = HashSet::from([owner.clone()]);
+
+    for primary in primaries {
+        match MacroUserIdStr::try_from(primary) {
+            Ok(id) => {
+                recipient_ids.insert(id);
+            }
+            Err(e) => {
+                tracing::warn!(
+                    error=?e,
+                    inbox_owner=%owner,
+                    "skipping delegated primary that failed to parse as a macro user id"
+                );
+            }
+        }
+    }
+
+    recipient_ids
 }
 
 // filter out messages we don't want to send notifications for

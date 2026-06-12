@@ -345,6 +345,8 @@ pub struct ThreadHistoryInfo {
     pub viewed_at: Option<DateTime<Utc>>,
     pub snippet: Option<String>,
     pub user_id: String,
+    /// The inbox that owns this thread.
+    pub link_id: Uuid,
     pub subject: Option<String>,
     /// The sender of the latest email in the thread.
     pub sender: String,

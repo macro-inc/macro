@@ -41,10 +41,10 @@ pub type ToolFrecencyService = frecency::domain::services::FrecencyQueryServiceI
 
 /// Type alias for the CRM service implementation used by tools.
 ///
-/// Tools only read CRM rows (e.g. `get_company_by_domain`); the populate
-/// path runs in the email-service pubsub worker. The no-op resolver
-/// keeps reqwest/scraper out of the tool binary at the cost of a silent
-/// negative cache if populate is ever invoked here.
+/// Tools only read CRM rows; the populate path runs in the email-service
+/// pubsub worker. The no-op resolver keeps reqwest/scraper out of the
+/// tool binary at the cost of a silent negative cache if populate is
+/// ever invoked here.
 pub type ToolCrmService = crm::domain::service::CrmServiceImpl<
     crm::outbound::companies_repo::CompaniesRepositoryImpl,
     crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
@@ -271,6 +271,13 @@ impl CallRtcClient for NoOpCallRtcClient {
         _auth_token: &str,
     ) -> Result<CallWebhookEvent, CallError> {
         Err(CallError::Auth)
+    }
+
+    fn verify_access_token(
+        &self,
+        _token: &str,
+    ) -> anyhow::Result<call::domain::models::VerifiedRingToken> {
+        anyhow::bail!("call RTC client not configured")
     }
 
     async fn dispatch_transcription_agent(&self, _room_name: &str) -> anyhow::Result<()> {

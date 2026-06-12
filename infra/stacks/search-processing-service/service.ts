@@ -3,6 +3,8 @@ import * as awsx from '@pulumi/awsx';
 import * as pulumi from '@pulumi/pulumi';
 import {
   DATADOG_API_KEY,
+  DEFAULT_CONTINUE_BEFORE_STEADY_STATE,
+  EcsDeploymentFailureAlarm,
   datadogAgentContainer,
   fargateLogRouterSidecarContainer,
   serviceLoadBalancer,
@@ -217,6 +219,7 @@ export class SearchProcessingService extends pulumi.ComponentResource {
           subnets: vpc.privateSubnetIds,
           securityGroups: [this.serviceSg.id],
         },
+        continueBeforeSteadyState: DEFAULT_CONTINUE_BEFORE_STEADY_STATE,
         deploymentCircuitBreaker: {
           enable: true,
           rollback: true,
@@ -496,6 +499,16 @@ export class SearchProcessingService extends pulumi.ComponentResource {
   }
 
   setupServiceAlarms() {
+    new EcsDeploymentFailureAlarm(
+      `${BASE_NAME}-deployment-failure-alarm`,
+      {
+        serviceName: BASE_NAME,
+        serviceArn: this.service.service.arn,
+        tags: this.tags,
+      },
+      { parent: this }
+    );
+
     new aws.cloudwatch.MetricAlarm(
       `${BASE_NAME}-high-cpu-alarm`,
       {

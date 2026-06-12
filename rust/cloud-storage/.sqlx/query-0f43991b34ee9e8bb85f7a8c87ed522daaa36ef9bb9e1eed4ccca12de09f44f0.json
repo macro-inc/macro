@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE email_links\n        SET macro_id = $1, updated_at = NOW()\n        WHERE id = $2\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0f43991b34ee9e8bb85f7a8c87ed522daaa36ef9bb9e1eed4ccca12de09f44f0"
+}

@@ -28,7 +28,7 @@ use frecency::domain::{
 use item_filters::ast::EntityFilterAst;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{
-    Cursor, CursorVal, Frecency, FrecencyValue, PaginateOn, Query, SimpleSortMethod, SortOn,
+    Cursor, CursorVal, Frecency, FrecencyValue, PaginateOn, Query, SimpleSortMethod,
 };
 use models_soup::{
     call_record::SoupCallRecord,
@@ -409,7 +409,8 @@ where
         };
 
         let GetCrmCompaniesRequest {
-            team_id,
+            access,
+            user_id,
             company_ids,
             hidden,
             sort,
@@ -419,7 +420,15 @@ where
 
         Ok(Either::Right(
             self.crm_service
-                .list_companies_for_soup(&team_id, &company_ids, hidden, sort, cursor, limit)
+                .list_companies_for_soup(
+                    &access,
+                    user_id.as_ref(),
+                    &company_ids,
+                    hidden,
+                    sort,
+                    cursor,
+                    limit,
+                )
                 .await
                 .map_err(|_| SoupErr::CrmErr)?
                 .into_iter()
@@ -461,6 +470,7 @@ where
     #[tracing::instrument(err, skip(self, source_ids, query))]
     async fn handle_foreign_entity_request(
         &self,
+        requesting_user: Option<String>,
         source_ids: Vec<SourceId>,
         limit: u32,
         query: Option<ForeignEntityListQuery>,
@@ -471,7 +481,7 @@ where
 
         Ok(Either::Right(
             self.foreign_entity_service
-                .get_foreign_entities_for_user(source_ids, limit, query)
+                .get_foreign_entities_for_user(requesting_user, source_ids, limit, query)
                 .await?
                 .into_iter()
                 .map(|entity| FrecencySoupItem {
@@ -537,6 +547,7 @@ where
                 let crm_company_soup_fut = self.handle_crm_company_request(crm_company_request);
 
                 let foreign_entity_soup_fut = self.handle_foreign_entity_request(
+                    Some(req.user.to_string()),
                     foreign_entity_source_ids,
                     limit as u32,
                     foreign_entity_query,
@@ -565,27 +576,9 @@ where
                     .chain(crm_company_soup?)
                     .chain(foreign_entity_soup?)
                     .paginate_on(limit.into(), sort_method)
-                    .filter_on(entity_filter.clone())
+                    .filter_on(entity_filter)
                     .sort_desc()
                     .into_page();
-
-                // Email queries use CROSS JOIN LATERAL which can filter out
-                // threads after the initial LIMIT, making the standard
-                // "len < limit means last page" heuristic unreliable.
-                // Force a cursor when emails are in the response.
-                let has_emails = page
-                    .items
-                    .iter()
-                    .any(|item| matches!(&item.item, SoupItem::EmailThread(_)));
-                let page = if has_emails {
-                    page.ensure_cursor(
-                        limit.into(),
-                        FrecencySoupItem::sort_on(sort_method),
-                        entity_filter,
-                    )
-                } else {
-                    page
-                };
 
                 Ok(Either::Left(page))
             }

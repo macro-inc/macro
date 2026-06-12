@@ -345,3 +345,99 @@ fn test_cursor_logic_source_exhausted_scenario() {
 
     assert!(new_doc_cursor.is_done());
 }
+
+// ==================== CRM source cursor scenarios ====================
+
+#[test]
+fn test_cursor_logic_crm_starved_preserves_cursor() {
+    // The regression-prone case for the newly-added CRM source: CRM returned
+    // a page of hits and reported more available, but the global merge/sort
+    // put only newer non-CRM hits on this page. The CRM cursor must be carried
+    // forward unchanged — advancing it (or marking it Done) would skip the CRM
+    // hits that never made it onto a page. This mirrors the exact arguments
+    // `perform_unified_search` passes for the CRM source.
+    let incoming_crm_id = Uuid::new_v4();
+    let incoming_crm_ts = ts(500);
+    let incoming_crm_cursor = SearchCursorOption::NotDone(Some(SearchMethodCursor::UpdatedAt {
+        entity_id: incoming_crm_id,
+        updated_at: incoming_crm_ts,
+    }));
+
+    // Final page: all non-CRM (CRM starved out by newer doc/chat hits).
+    let final_tagged: Vec<TaggedSearchHit> = vec![
+        make_tagged_hit(Uuid::new_v4(), Some(ts(9000)), SearchSource::DocumentName),
+        make_tagged_hit(Uuid::new_v4(), Some(ts(8000)), SearchSource::ChatName),
+    ];
+
+    // CRM returned hits this round and reported more available.
+    let crm_next_cursor = SearchCursorOption::NotDone(Some(SearchMethodCursor::UpdatedAt {
+        entity_id: Uuid::new_v4(),
+        updated_at: ts(100),
+    }));
+    let included_crm = final_tagged
+        .iter()
+        .filter(|h| h.source == SearchSource::CrmCompany)
+        .count();
+    assert_eq!(included_crm, 0, "precondition: no CRM hit made the page");
+
+    let new_crm_cursor = compute_next_cursor(
+        &crm_next_cursor,
+        included_crm,
+        5, // CRM originally returned a full page of hits
+        find_last_of_source(&final_tagged, SearchSource::CrmCompany),
+        &incoming_crm_cursor,
+    );
+
+    match new_crm_cursor {
+        SearchCursorOption::NotDone(Some(cursor)) => {
+            let (id, t) = cursor.as_updated_at().expect("expected UpdatedAt cursor");
+            assert_eq!(id, incoming_crm_id, "CRM cursor must not advance");
+            assert_eq!(t, incoming_crm_ts, "CRM cursor must not advance");
+        }
+        other => panic!(
+            "expected the incoming CRM cursor preserved, got {:?}",
+            other
+        ),
+    }
+}
+
+#[test]
+fn test_cursor_logic_crm_included_advances_cursor() {
+    // The companion case: when a CRM hit does make the page, the CRM cursor
+    // advances to the last included CRM hit (keyset position for the next page).
+    let crm_id = Uuid::new_v4();
+    let crm_ts = ts(7000);
+    let final_tagged: Vec<TaggedSearchHit> = vec![
+        make_tagged_hit(Uuid::new_v4(), Some(ts(9000)), SearchSource::DocumentName),
+        make_tagged_hit(crm_id, Some(crm_ts), SearchSource::CrmCompany),
+    ];
+
+    let crm_next_cursor = SearchCursorOption::NotDone(Some(SearchMethodCursor::UpdatedAt {
+        entity_id: Uuid::new_v4(),
+        updated_at: ts(100),
+    }));
+    let included_crm = final_tagged
+        .iter()
+        .filter(|h| h.source == SearchSource::CrmCompany)
+        .count();
+
+    let new_crm_cursor = compute_next_cursor(
+        &crm_next_cursor,
+        included_crm,
+        5,
+        find_last_of_source(&final_tagged, SearchSource::CrmCompany),
+        &SearchCursorOption::NotDone(None),
+    );
+
+    match new_crm_cursor {
+        SearchCursorOption::NotDone(Some(cursor)) => {
+            let (id, t) = cursor.as_updated_at().expect("expected UpdatedAt cursor");
+            assert_eq!(id, crm_id);
+            assert_eq!(t, crm_ts);
+        }
+        other => panic!(
+            "expected cursor at the last included CRM hit, got {:?}",
+            other
+        ),
+    }
+}

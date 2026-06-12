@@ -47,7 +47,8 @@ where
         let link_id = link.id;
         let accessible_link_ids: Vec<Uuid> = accessible_inboxes.iter().map(|l| l.id).collect();
 
-        self.validate_existing_message(link_id, &mut input).await?;
+        self.validate_existing_message(link_id, &accessible_link_ids, &mut input)
+            .await?;
 
         self.validate_replying_to(link_id, &accessible_link_ids, &mut input)
             .await?;
@@ -121,6 +122,7 @@ where
     async fn validate_existing_message(
         &self,
         link_id: Uuid,
+        accessible_link_ids: &[Uuid],
         input: &mut CreateDraftInput,
     ) -> Result<(), EmailErr> {
         let Some(db_id) = input.db_id else {
@@ -129,13 +131,29 @@ where
 
         let msg = self
             .email_repo
-            .get_simple_message(db_id, &[link_id])
+            .get_simple_message(db_id, accessible_link_ids)
             .await
             .map_err(anyhow::Error::from)?
             .ok_or(EmailErr::MessageNotFound(db_id))?;
 
         if msg.is_sent || !msg.is_draft {
             return Err(EmailErr::MessageAlreadySent(db_id));
+        }
+
+        if msg.link_id != link_id {
+            // The sender was switched to a different inbox. A draft belongs to a
+            // single inbox, so discard it (and its now-empty thread) and create a
+            // fresh draft in the sending inbox; validate_replying_to re-derives
+            // the thread from the reply target.
+            self.email_repo
+                .delete_draft_message(msg.db_id, msg.thread_db_id)
+                .await
+                .map_err(anyhow::Error::from)?;
+            input.db_id = None;
+            input.provider_id = None;
+            input.thread_db_id = None;
+            input.provider_thread_id = None;
+            return Ok(());
         }
 
         input.thread_db_id = Some(msg.thread_db_id);

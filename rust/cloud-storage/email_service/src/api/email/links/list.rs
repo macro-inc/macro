@@ -93,6 +93,16 @@ pub async fn list_links_handler(
                 latest_job.map(|job| job.status),
             );
 
+            // The inbox's own photo comes from its self-contact (synced from people/me).
+            let photo_url = email_db_client::contacts::get::fetch_contact_by_email(
+                &ctx.db,
+                link.id,
+                link.email_address.0.as_ref(),
+            )
+            .await
+            .map_err(ListLinksError::DatabaseError)?
+            .and_then(|contact| contact.photo_url);
+
             let signature = if query_params.include_signature {
                 let access_token = fetch_gmail_access_token_from_link(
                     &link,
@@ -115,6 +125,7 @@ pub async fn list_links_handler(
                 signature,
                 api::settings::Settings::from(settings),
                 sync_status,
+                photo_url,
             ))
         }
     });

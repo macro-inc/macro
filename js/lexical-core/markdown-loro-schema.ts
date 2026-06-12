@@ -30,3 +30,5 @@ markdownNodeSchema.definition.children.itemSchema = markdownNodeSchema;
 export const MARKDOWN_LORO_SCHEMA = schema({
   root: markdownNodeSchema,
 });
+
+export type MarkdownLoroSchemaType = typeof MARKDOWN_LORO_SCHEMA;

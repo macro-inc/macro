@@ -5,6 +5,10 @@ import {
   type Query,
 } from '@app/component/next-soup/filters/filter-store';
 import type { ListView } from '@app/constants/list-views';
+import {
+  ENABLE_SNIPPETS,
+  ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE,
+} from '@core/constant/featureFlags';
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { startOfDay, subWeeks } from 'date-fns';
 
@@ -25,6 +29,9 @@ type SoupFiltersPreset = {
 export type PresetContext = {
   userId: string | undefined;
   email: string | undefined;
+  /** True iff the current user has admin/owner team role. Drives
+   * visibility of admin-only tabs (e.g. companies → hidden). */
+  isTeamAdmin: boolean;
 };
 
 type TabPresetResolver = (ctx: PresetContext) => SoupFiltersPreset | undefined;
@@ -35,6 +42,12 @@ type ViewTabConfig = {
   default: string;
   tabs: TabConfig;
 };
+
+const getExcludedDocumentSubTypes = (...subTypes: string[]) =>
+  ENABLE_SNIPPETS() ? subTypes : [...subTypes, 'snippet'];
+
+const getDisabledSnippetSubtypeExclude = (): Query['exclude'] =>
+  ENABLE_SNIPPETS() ? {} : { subType: ['snippet'] };
 
 /** Filters for inbox/signal: not done, importance=true for emails, 2-week window */
 const getInboxSignalFilters = () => {
@@ -53,23 +66,26 @@ const getInboxSignalFilters = () => {
       folderUpdatedAt: { gte: twoWeeksAgo },
       emailShared: 'exclude',
     },
+    exclude: getDisabledSnippetSubtypeExclude(),
     emailView: 'inbox',
   });
 };
 
 /** Filters for inbox/noise: not done, importance=false for emails */
-const INBOX_NOISE_FILTERS = defineQueryFilters({
-  include: {
-    documentDone: false,
-    emailDone: false,
-    emailImportance: false,
-    channelDone: false,
-    chatDone: false,
-    folderDone: false,
-    emailShared: 'exclude',
-  },
-  emailView: 'inbox',
-});
+const getInboxNoiseFilters = () =>
+  defineQueryFilters({
+    include: {
+      documentDone: false,
+      emailDone: false,
+      emailImportance: false,
+      channelDone: false,
+      chatDone: false,
+      folderDone: false,
+      emailShared: 'exclude',
+    },
+    exclude: getDisabledSnippetSubtypeExclude(),
+    emailView: 'inbox',
+  });
 
 export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
   inbox: {
@@ -80,17 +96,22 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         clientFilters: { and: ['inbox'] },
       }),
       noise: () => ({
-        filters: INBOX_NOISE_FILTERS,
+        filters: getInboxNoiseFilters(),
         clientFilters: { and: ['noise'] },
       }),
       all: () => ({
         filters: {
+          // crm companies aren't surfaced outside the Companies view.
+          include: { crmCompanyId: [NIL_UUID] },
           exclude: {
             documentId: [NIL_UUID],
             threadId: [NIL_UUID],
             channelId: [NIL_UUID],
             chatId: [NIL_UUID],
             folderId: [NIL_UUID],
+            foreignEntityRecordId:
+              ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE ? [NIL_UUID] : [],
+            ...getDisabledSnippetSubtypeExclude(),
           },
           emailView: 'all',
         },
@@ -212,8 +233,11 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         if (!ctx.userId) return undefined;
         return {
           filters: defineQueryFilters({
-            include: { documentOwnerId: [ctx.userId] },
-            exclude: { subType: ['task'] },
+            include: {
+              documentOwnerId: [ctx.userId],
+              isEmailAttachment: false,
+            },
+            exclude: { subType: getExcludedDocumentSubTypes('task') },
           }),
           clientFilters: { and: ['document-or-file', 'owned-entity'] },
         };
@@ -222,7 +246,13 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         if (!ctx.userId) return undefined;
         return {
           filters: defineQueryFilters({
-            exclude: { subType: ['task'], documentOwnerId: [ctx.userId] },
+            include: {
+              isEmailAttachment: false,
+            },
+            exclude: {
+              subType: getExcludedDocumentSubTypes('task'),
+              documentOwnerId: [ctx.userId],
+            },
           }),
           clientFilters: { and: ['document-or-file', 'shared-entity'] },
         };
@@ -233,9 +263,15 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         }),
         clientFilters: { and: ['document-or-file'] },
       }),
+      folders: () => ({
+        filters: defineQueryFilters({
+          exclude: { folderId: [NIL_UUID] },
+        }),
+        clientFilters: { and: ['folders'] },
+      }),
       all: () => ({
         filters: defineQueryFilters({
-          exclude: { subType: ['task'] },
+          exclude: { subType: getExcludedDocumentSubTypes('task') },
         }),
         clientFilters: { and: ['document-or-file'] },
       }),
@@ -326,15 +362,49 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         filters: defineQueryFilters({}, { skipTargets: ['callf'] }),
         clientFilters: { and: ['calls'] },
       }),
-      unattended: () => ({
+      missed: () => ({
         filters: defineQueryFilters(
           {
-            include: { callAttended: false },
+            include: { callStatus: 'MISSED' },
           },
           { skipTargets: ['callf'] }
         ),
         clientFilters: { and: ['calls'] },
       }),
+      unattended: () => ({
+        filters: defineQueryFilters(
+          {
+            include: { callStatus: 'UNATTENDED' },
+          },
+          { skipTargets: ['callf'] }
+        ),
+        clientFilters: { and: ['calls'] },
+      }),
+    },
+  },
+  companies: {
+    default: 'active',
+    tabs: {
+      active: () => ({
+        filters: defineQueryFilters(
+          { include: { crmCompanyHidden: false } },
+          { skipTargets: ['ccf'] }
+        ),
+        clientFilters: { and: ['crm-company-active'] },
+      }),
+      // Admin/owner only — the BE rejects `hidden: true` requests from
+      // non-admins with 403. Returning `undefined` hides the tab for
+      // non-admins via the same pattern context-required views use.
+      hidden: (ctx) => {
+        if (!ctx.isTeamAdmin) return undefined;
+        return {
+          filters: defineQueryFilters(
+            { include: { crmCompanyHidden: true } },
+            { skipTargets: ['ccf'] }
+          ),
+          clientFilters: { and: ['crm-company-hidden'] },
+        };
+      },
     },
   },
   folders: {
@@ -361,8 +431,20 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
     default: 'all',
     tabs: {
       all: () => ({
-        filters: {},
-        clientFilters: {},
+        // Temporary: search has no full-text index over foreign entities yet,
+        // so always exclude them (matching no record id) until search supports
+        // them. CRM rows are NIL-excluded the same way. `search-supported`
+        // mirrors these exclusions client-side so entities that enter the
+        // soup cache outside this query (e.g. websocket-driven inserts)
+        // don't surface in the search feed.
+        filters: {
+          include: {
+            foreignEntityRecordId: [NIL_UUID],
+            crmCompanyId: [NIL_UUID],
+          },
+          exclude: getDisabledSnippetSubtypeExclude(),
+        },
+        clientFilters: { and: ['search-supported'] },
       }),
     },
   },
@@ -409,6 +491,7 @@ export function getViewPreset(
   const presetCtx: PresetContext = ctx ?? {
     userId: undefined,
     email: undefined,
+    isTeamAdmin: false,
   };
   const resolved = resolver(presetCtx);
   if (resolved) return resolved;

@@ -472,28 +472,6 @@ const cloudStorageService = new CloudStorageService(
         value: OPENSEARCH_PASSWORD,
       },
       {
-        // Flips the documents alias dispatch in opensearch_client between
-        // the flat-chunk shape (`documents_v1`) and the parent/child join
-        // shape (`documents_v2`). Set via Pulumi config and flipped at
-        // cutover; defaults to `false` so the existing flat-shape paths
-        // stay active until the alias is swapped.
-        name: 'DOCUMENTS_INDEX_USES_JOIN',
-        value: config.get('documents_index_uses_join') ?? 'false',
-      },
-      {
-        // Same as DOCUMENTS_INDEX_USES_JOIN, but for the chats alias
-        // (`chats_v1` flat -> `chats_v2` parent/child).
-        name: 'CHATS_INDEX_USES_JOIN',
-        value: config.get('chats_index_uses_join') ?? 'false',
-      },
-      {
-        // Same as DOCUMENTS_INDEX_USES_JOIN, but for the call_records
-        // alias (`call_records_v1` flat -> `call_records_v2`
-        // parent/child).
-        name: 'CALL_RECORDS_INDEX_USES_JOIN',
-        value: config.get('call_records_index_uses_join') ?? 'false',
-      },
-      {
         name: 'DATABASE_URL',
         value: pulumi.interpolate`${DATABASE_URL}`,
       },
@@ -676,6 +654,12 @@ const cloudStorageService = new CloudStorageService(
       {
         name: 'SNS_APNS_VOIP_PLATFORM_ARN',
         value: pulumi.interpolate`${snsApnsVoipPlatformArn}`,
+      },
+      {
+        // Public base URL native clients use to poll call ring status
+        // while the CallKit incoming-call UI is showing.
+        name: 'CALL_RING_STATUS_BASE_URL',
+        value: getServiceUrl(ServiceUrl.DOCUMENT_STORAGE_SERVICE_URL),
       },
       // OpenTelemetry / Datadog tracing configuration
       {

@@ -7,6 +7,7 @@ members = [
   "backfill_entity_access",
   "bot_id",
   "bots",
+  "call_recording_preview_handler",
   "channel_bots",
   "connection_gateway",
   "contacts_service",
@@ -27,6 +28,7 @@ members = [
   "email_service",
   "email_sfs_delete_handler",
   "email_suppression_handler",
+  "embedding",
   "foreign_entity",
   "image_optimizer",
   "image_proxy_service",
@@ -53,6 +55,10 @@ members = [
   "upload_extractor_lambda_trigger",
   "user_link_cleanup_handler",
   "worker_trigger",
+  "macro_config",
+  "prompt",
+  "workspace-hack",
+  "tools/xtask",
 ]
 
 [workspace.dependencies]
@@ -206,3 +212,4 @@ strum_macros = "0.27.1"
 unicode-segmentation = "1.9.0"
 url = "2.5.0"
 zip = "=2.4.2"
+doppler-config = "0.1.1"

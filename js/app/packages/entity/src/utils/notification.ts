@@ -1,8 +1,9 @@
 import { ENABLE_DOCUMENT_MENTION_NOTIFICATIONS } from '@core/constant/featureFlags';
-import type { NotificationType } from '@core/types';
+import type { Entity, NotificationType } from '@core/types';
 import { notificationIsRead, type UnifiedNotification } from '@notifications';
 import type { NotificationStack } from '@notifications/notification-stacking';
-import { match } from 'ts-pattern';
+import { match, P } from 'ts-pattern';
+import type { EntityData } from '../types/entity';
 import type { Notification } from '../types/notification';
 
 type CallStartedNotificationMetadata = {
@@ -15,6 +16,22 @@ type CallStartedNotificationMetadata = {
 type KnownNotificationMetadata =
   | UnifiedNotification['notification_metadata']
   | CallStartedNotificationMetadata;
+
+export function toNotificationEntity(entity: EntityData): Entity {
+  if (entity.type === 'email') {
+    return { type: 'email_thread', id: entity.id };
+  }
+
+  if (entity.type === 'foreign') {
+    return { type: 'foreign_entity', id: entity.id };
+  }
+
+  if (entity.type === 'channel_message') {
+    return { type: 'channel', id: entity.channelId };
+  }
+
+  return entity;
+}
 
 /**
  * Filters out invalid notification types that shouldn't be displayed
@@ -80,7 +97,11 @@ export function getNotificationActionText(n: Notification): string {
     .with('invite_to_team', () => 'invited')
     .with('task_assigned', () => 'assigned')
     .with('ai_response', () => 'responded')
-    .with('github_pr_event', () => 'updated')
+    .with('github_pr_status_changed', () => 'updated')
+    .with('github_review_requested', () => 'requested')
+    .with('github_pr_comment', () => 'commented')
+    .with('github_pr_mention', () => 'mentioned')
+    .with('github_pr_review', () => 'reviewed')
     .with('call-started', () => 'called')
     .exhaustive();
 }
@@ -110,8 +131,29 @@ export function extractMessageContent(notification: Notification): string {
     .with({ tag: 'task_assigned' }, (m) => m.content.taskName ?? '')
     .with({ tag: 'ai_response' }, (m) => m.content.summary || '')
     .with(
-      { tag: 'github_pr_event' },
+      { tag: P.union('github_pr_status_changed', 'github_review_requested') },
       (m) => m.content.title || m.content.displayName || ''
+    )
+    .with(
+      { tag: 'github_pr_comment' },
+      (m) =>
+        m.content.commentSnippet ||
+        m.content.title ||
+        m.content.displayName ||
+        ''
+    )
+    .with(
+      { tag: 'github_pr_mention' },
+      (m) =>
+        m.content.textSnippet || m.content.title || m.content.displayName || ''
+    )
+    .with(
+      { tag: 'github_pr_review' },
+      (m) =>
+        m.content.reviewSnippet ||
+        m.content.title ||
+        m.content.displayName ||
+        ''
     )
     .with({ tag: 'channel_invite' }, () => '')
     .with({ tag: 'invite_to_team' }, () => '')

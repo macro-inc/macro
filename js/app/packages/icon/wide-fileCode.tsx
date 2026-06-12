@@ -7,8 +7,11 @@ export const AnimatedFileCodeIcon = (props: {
       width="100%"
       height="100%"
       viewBox="0 -3 18 18"
-      fill="currentColor"
-      stroke="none"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.125"
+      stroke-linecap="round"
+      stroke-linejoin="round"
       xmlns="http://www.w3.org/2000/svg"
       overflow="visible"
       class={`animated-file-code-icon ${props.triggerAnimation ? 'animating' : ''} ${props.class ?? ''}`}
@@ -52,12 +55,19 @@ export const AnimatedFileCodeIcon = (props: {
           }
         }
       `}</style>
-      <path d="M17.25 0H1.5V1.5H16.5V10.5H18V0.75C18 0.34 17.66 0 17.25 0Z" />
-      <path d="M1.5 1.5H0V11.25C0 11.66 0.34 12 0.75 12H16.5V10.5H1.5V1.5Z" />
-      <rect class="underline-1" x="6.75" y="7.75" width="4.5" height="1.25" />
-      <path d="M3 3.02002V4.52002L5.24 6.00002L3 7.49002V8.98002L7.5 6.00002L3 3.02002Z" />
-      <rect class="underline-2" x="6.75" y="7.75" width="4.5" height="1.25" />
-      <rect class="place-rectangle" x="9.5" y="3" width="4.5" height="6" />
+      <rect x="0.47" y="0.47" width="17.06" height="11.06" rx="1.5" />
+      <path d="M3.375 3.75L6.75 6L3.375 8.25" />
+      <line class="underline-1" x1="7.3125" y1="8.25" x2="10.6875" y2="8.25" />
+      <line class="underline-2" x1="7.3125" y1="8.25" x2="10.6875" y2="8.25" />
+      <rect
+        class="place-rectangle"
+        x="9.5"
+        y="3"
+        width="4.5"
+        height="6"
+        fill="currentColor"
+        stroke="none"
+      />
     </svg>
   );
 };

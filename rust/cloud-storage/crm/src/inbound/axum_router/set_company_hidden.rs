@@ -3,16 +3,16 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
 };
-use entity_access::{
-    domain::{models::EditAccessLevel, ports::EntityAccessService},
-    inbound::axum_extractors::CrmCompanyAccessLevelExtractor,
-};
+use entity_access::domain::{models::EditAccessLevel, ports::EntityAccessService};
 use model_error_response::ErrorResponse;
 use serde::Deserialize;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::domain::{model::CrmError, service::CrmService};
+use crate::{
+    domain::{model::CrmError, service::CrmService},
+    inbound::axum_extractors::CrmCompanyAccessLevelExtractor,
+};
 
 use super::CrmRouterState;
 
@@ -59,7 +59,7 @@ pub async fn handler<C: CrmService, Eas: EntityAccessService>(
 ) -> Result<StatusCode, CrmError> {
     state
         .service
-        .set_company_hidden(&access.team_id, &company_id, req.hidden)
+        .set_company_hidden(&access.receipt, req.hidden)
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }

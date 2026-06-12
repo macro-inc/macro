@@ -24,13 +24,26 @@ future prompts to provide personalized answers. Focus on:
 - Domain knowledge and expertise
 - Communication style and preferences
 
+If a previous memory is provided in the system prompt, use it as the baseline \
+for the new memory. Preserve still-accurate durable facts, verify and update it \
+with fresh tool research, add important new context, and remove obsolete or \
+unsupported details.
+
 Don't include things that would make sense to find via tool search at runtime. \
 Focus on context that is useful as permanent background knowledge.
 
-CRITICAL: Your response must contain ONLY the memory text. \
-No preamble, no postscript, no commentary, no \"Let me...\", no \"Here is...\". \
-Do not narrate your research process. Do not address the user. \
-Just output the raw memory text starting with the first substantive line.";
+Only state a corporate title or founder status when content written by people \
+(documents, emails, bios, announcements) states it explicitly; otherwise \
+describe what the person works on and skip the title. This applies to titles \
+inherited from the previous memory too — a title you can't re-confirm from \
+content gets dropped, not preserved.
+
+Output format: wrap the finished memory in <memory></memory> tags. Everything \
+outside the tags is discarded, and a response without the tags is rejected \
+entirely. Inside the tags, write only the memory itself — no preamble, no \
+postscript, no commentary, no narration of your research process (\"I have \
+enough context\", \"Let me write the memory\", \"Now I have a comprehensive \
+picture\"), and no text addressed to the user.";
 
 static JUDGE_PROMPT: &str = "\
 You are a strict quality judge for AI-generated user memory profiles.
@@ -50,7 +63,9 @@ REJECT if ANY of the following are true:
 - It lacks specific details about the user's actual work, codebase, projects, or role.
 - It reads like a personality quiz rather than a professional profile grounded in \
   real workspace activity.
-- It contains narration about the research process (\"I found...\", \"The workspace has...\").
+- It contains the generator's narration or self-talk anywhere in the text \
+  (\"I have enough context\", \"Let me write the memory\", \"I need to research\", \
+  \"Now I have a comprehensive picture\", \"I found...\", \"The workspace has...\").
 
 ACCEPT only if the memory contains concrete, specific, actionable context derived \
 from substantial workspace data (documents, code, projects, emails, messages) that \
@@ -85,8 +100,8 @@ impl<Rpo> MemoryServiceImpl<Rpo> {
     }
 }
 
-/// Default max age for memory freshness (7 days).
-const MAX_AGE: std::time::Duration = std::time::Duration::from_hours(24 * 7);
+/// Default max age for memory freshness (1 day).
+const MAX_AGE: std::time::Duration = std::time::Duration::from_hours(24);
 
 impl<Rpo> MemoryService for MemoryServiceImpl<Rpo>
 where
@@ -109,15 +124,17 @@ where
 
         let env = Environment::new_or_prod();
         if needs_generation && !matches!(env, Environment::Local) {
+            let previous_memory = record.as_ref().map(|r| r.memory.clone());
             let pool = self.db.clone();
             let tool_context = self.tool_context.clone();
             let toolset = self.tools.toolset.clone();
-            let prompt = self.tools.prompt;
+            let prompt: Box<dyn std::fmt::Display + Send + Sync> =
+                Box::new(self.tools.prompt.to_string());
             tokio::spawn(async move {
                 let repo = crate::outbound::pg_memory_repo::PgMemoryRepo::new(pool.clone());
                 let tools = ToolSetWithPrompt { toolset, prompt };
                 let svc = MemoryServiceImpl::new(pool, repo, tool_context, tools);
-                match svc.generate_memory(user.clone()).await {
+                match svc.generate_memory(user.clone(), previous_memory).await {
                     Ok(_) => tracing::info!(%user, "memory generated"),
                     Err(MemoryError::Rejected(reason)) => {
                         tracing::warn!(%user, %reason, "memory rejected by judge")
@@ -139,13 +156,14 @@ where
     async fn generate_memory(
         &self,
         user: macro_user_id::user_id::MacroUserIdStr<'static>,
+        previous_memory: Option<Memory>,
     ) -> super::Result<Memory> {
         // append user data + datetime to prompt
-        let system_prompt = format!(
-            "{}\n<user_id>{:?}</user_id>\n<datetime>{}</datetime>",
-            self.tools.prompt,
-            user,
-            Utc::now().to_rfc2822()
+        let system_prompt = build_generation_system_prompt(
+            &self.tools.prompt,
+            &user,
+            &Utc::now().to_rfc2822(),
+            previous_memory.as_deref(),
         );
 
         let agent_loop = AgentLoop::new().with_model(GENERATION_MODEL);
@@ -179,7 +197,13 @@ where
             }
         }
 
-        let memory = content.trim().to_string();
+        let Some(memory) = extract_memory_body(&content).map(str::to_string) else {
+            tracing::warn!(
+                content_len = content.len(),
+                "generation output missing <memory> tags"
+            );
+            return Err(MemoryError::NoGeneration);
+        };
         if memory.is_empty() {
             return Err(MemoryError::NoGeneration);
         }
@@ -190,6 +214,35 @@ where
         self.memory_repo.save_memory(&memory, user).await?;
         Ok(memory)
     }
+}
+
+/// Extract the memory body from the agent's final message.
+///
+/// The generation prompt requires the memory to be wrapped in <memory> tags so
+/// that any narration the model emits around it is discarded deterministically
+/// rather than trusting the model to suppress it.
+fn extract_memory_body(content: &str) -> Option<&str> {
+    let start = content.find("<memory>")? + "<memory>".len();
+    let end = content.rfind("</memory>")?;
+    content.get(start..end).map(str::trim)
+}
+
+fn build_generation_system_prompt(
+    base_prompt: impl std::fmt::Display,
+    user: &macro_user_id::user_id::MacroUserIdStr<'_>,
+    datetime: &str,
+    previous_memory: Option<&str>,
+) -> String {
+    let mut prompt =
+        format!("{base_prompt}\n<user_id>{user:?}</user_id>\n<datetime>{datetime}</datetime>");
+
+    if let Some(memory) = previous_memory {
+        prompt.push_str("\n<previous_memory>\n");
+        prompt.push_str(memory);
+        prompt.push_str("\n</previous_memory>");
+    }
+
+    prompt
 }
 
 #[tracing::instrument(skip(memory), err)]
@@ -215,4 +268,69 @@ async fn judge_memory(memory: &str) -> super::Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use macro_user_id::user_id::MacroUserIdStr;
+
+    fn user_id(value: &str) -> MacroUserIdStr<'static> {
+        MacroUserIdStr::try_from(value.to_string()).expect("valid macro user id")
+    }
+
+    #[test]
+    fn generation_system_prompt_includes_previous_memory_when_present() {
+        let user = user_id("macro|memory-test@example.com");
+        let prompt = build_generation_system_prompt(
+            "base tools prompt",
+            &user,
+            "Mon, 08 Jun 2026 12:00:00 +0000",
+            Some("previous durable facts"),
+        );
+
+        assert!(prompt.contains("base tools prompt"));
+        assert!(prompt.contains("<user_id>macro|memory-test@example.com</user_id>"));
+        assert!(prompt.contains("<datetime>Mon, 08 Jun 2026 12:00:00 +0000</datetime>"));
+        assert!(prompt.contains("<previous_memory>\nprevious durable facts\n</previous_memory>"));
+    }
+
+    #[test]
+    fn extract_memory_body_strips_surrounding_narration() {
+        let content = "I have enough context. Let me write the memory.\n\
+            <memory>\nEric is an engineer at Macro.\n</memory>\nDone!";
+        assert_eq!(
+            extract_memory_body(content),
+            Some("Eric is an engineer at Macro.")
+        );
+    }
+
+    #[test]
+    fn extract_memory_body_rejects_missing_tags() {
+        assert_eq!(extract_memory_body("Eric is an engineer at Macro."), None);
+        assert_eq!(extract_memory_body("<memory>unterminated"), None);
+        assert_eq!(extract_memory_body("</memory>backwards<memory>"), None);
+    }
+
+    #[test]
+    fn extract_memory_body_uses_last_closing_tag() {
+        let content = "<memory>uses </memory> in prose</memory>";
+        assert_eq!(
+            extract_memory_body(content),
+            Some("uses </memory> in prose")
+        );
+    }
+
+    #[test]
+    fn generation_system_prompt_omits_previous_memory_when_absent() {
+        let user = user_id("macro|memory-test@example.com");
+        let prompt = build_generation_system_prompt(
+            "base tools prompt",
+            &user,
+            "Mon, 08 Jun 2026 12:00:00 +0000",
+            None,
+        );
+
+        assert!(!prompt.contains("<previous_memory>"));
+    }
 }

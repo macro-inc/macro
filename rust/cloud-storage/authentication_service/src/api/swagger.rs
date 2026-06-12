@@ -21,7 +21,7 @@ use crate::api::email::resend_fusionauth_verify_user_email::ResendFusionauthVeri
 use crate::api::jwt::macro_api_token::MacroApiTokenResponse;
 use crate::api::link::create_in_progress_link::CreateInProgressLinkResponse;
 use crate::api::link::github::{GithubLinkStatusResponse, InitGithubLinkResponse};
-use crate::api::link::gmail::InitGmailLinkResponse;
+use crate::api::link::gmail::{GmailLinkStatusResponse, InitGmailLinkResponse};
 use crate::api::merge::create_merge_request::CreateAccountMergeRequest;
 use crate::api::user::create_user::CreateUserRequest;
 use crate::api::user::get_legacy_user_permissions::GetLegacyUserPermissionsResponse;
@@ -32,11 +32,9 @@ use crate::api::user::patch_user_group::PatchUserGroupRequest;
 use crate::api::user::patch_user_onboarding::PatchUserOnboardingRequest;
 use crate::api::user::post_get_names::PostGetNamesRequestBody;
 use crate::api::user::post_get_names_with_email::GetNamesWithEmailRequestBody;
-use crate::api::user::stripe::create_checkout_session::CreateCheckoutSessionRequest;
+use crate::api::user::stripe::StripeSessionResponse;
 use crate::api::user::stripe::create_checkout_session_v2::CreateCheckoutSessionV2Request;
 use crate::api::user::stripe::create_portal_session::CreatePortalSessionRequest;
-use crate::api::user::stripe::patch_subscription_tier::PatchSubscriptionTierRequest;
-use crate::api::user::stripe::{StripeProductTier, StripeSessionResponse};
 use crate::api::{
     email, github_pull_requests, health, jwt, link, login, logout, merge, mobile_welcome_email,
     oauth, oauth2, permissions, session, user,
@@ -79,6 +77,7 @@ use model::user::{
                 link::github::delete_github_link_handler,
                 link::github::check_github_link_status_handler,
                 link::gmail::init_gmail_link_handler,
+                link::gmail::check_gmail_link_status_handler,
 
                 /// /github_pull_requests
                 github_pull_requests::handler,
@@ -110,10 +109,8 @@ use model::user::{
                 user::get_user_quota::handler,
                 user::get_legacy_user_permissions::handler,
                 user::patch_tutorial::handler,
-                user::stripe::create_checkout_session::create_checkout_session,
                 user::stripe::create_checkout_session_v2::create_checkout_session,
                 user::stripe::create_portal_session::create_portal_session,
-                user::stripe::patch_subscription_tier::patch_subscription_tier,
 
                 /// /session
                 session::session_login::handler,
@@ -179,6 +176,7 @@ use model::user::{
                         InitGithubLinkResponse,
                         GithubLinkStatusResponse,
                         InitGmailLinkResponse,
+                        GmailLinkStatusResponse,
 
                         // GitHub pull requests
                         EnrichGithubPullRequestsProxyRequest,
@@ -195,11 +193,8 @@ use model::user::{
                         PatchUserTutorialRequest,
 
                         // Stripe
-                        StripeProductTier,
-                        CreateCheckoutSessionRequest,
                         CreateCheckoutSessionV2Request,
                         CreatePortalSessionRequest,
-                        PatchSubscriptionTierRequest,
                         StripeSessionResponse,
 
                         // User onboarding
@@ -302,5 +297,10 @@ mod tests {
         let response_properties = &schemas["EnrichedGithubPullRequest"]["properties"];
         assert!(response_properties.get("comments").is_some());
         assert!(response_properties.get("checks").is_some());
+        assert!(
+            response_properties
+                .get("participantGithubUserIds")
+                .is_some()
+        );
     }
 }

@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-watch-drawer-opened"
+description = "Enables the watch_drawer_opened command without any pre-configured scope."
+commands.allow = ["watch_drawer_opened"]
+
+[[permission]]
+identifier = "deny-watch-drawer-opened"
+description = "Denies the watch_drawer_opened command without any pre-configured scope."
+commands.deny = ["watch_drawer_opened"]

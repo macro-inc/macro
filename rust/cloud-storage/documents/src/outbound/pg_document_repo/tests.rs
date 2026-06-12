@@ -39,7 +39,7 @@ fn create_document_args(
         team_id,
         email_attachment_id: None,
         created_at: None,
-        is_task,
+        sub_type: is_task.then_some(document_sub_type::DocumentSubType::Task),
         skip_history: false,
     }
 }
@@ -615,6 +615,120 @@ async fn test_share_with_team_idempotent(pool: Pool<Postgres>) {
     .unwrap();
 
     assert_eq!(count, 2); // owner + 1 team, no duplicates
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_team_share_roundtrip(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+    let document_id = "d0000000-0000-0000-0000-000000000001";
+
+    // Unshared by default, but the owner's team resolves
+    let state = repo.get_team_share(document_id).await.unwrap();
+    assert_eq!(state.team_id, Some(TEST_TEAM_ID));
+    assert!(!state.shared_with_team);
+
+    // Share grants the team Edit access
+    let state = repo.set_team_share(document_id, true).await.unwrap();
+    assert_eq!(state.team_id, Some(TEST_TEAM_ID));
+    assert!(state.shared_with_team);
+
+    let doc_uuid = macro_uuid::string_to_uuid(document_id).unwrap();
+    let team_row = sqlx::query!(
+        r#"
+        SELECT access_level::text as "access_level"
+        FROM entity_access
+        WHERE entity_id = $1 AND entity_type = 'document'
+          AND source_type = 'team'
+        "#,
+        doc_uuid,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(team_row.access_level, Some("edit".to_string()));
+
+    let state = repo.get_team_share(document_id).await.unwrap();
+    assert!(state.shared_with_team);
+
+    // Unshare removes the team row
+    let state = repo.set_team_share(document_id, false).await.unwrap();
+    assert!(!state.shared_with_team);
+
+    let count = sqlx::query_scalar!(
+        r#"
+        SELECT COUNT(*) as "count!"
+        FROM entity_access
+        WHERE entity_id = $1 AND entity_type = 'document'
+          AND source_type = 'team'
+        "#,
+        doc_uuid,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(count, 0);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_set_team_share_upgrades_existing_team_grant(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+    let document_id = "d0000000-0000-0000-0000-000000000001";
+
+    // Existing Comment-level team grant (e.g. from task creation)
+    repo.share_with_team(&TEST_TEAM_ID, document_id)
+        .await
+        .unwrap();
+
+    // Toggling share on upgrades the team row to Edit
+    repo.set_team_share(document_id, true).await.unwrap();
+
+    let doc_uuid = macro_uuid::string_to_uuid(document_id).unwrap();
+    let rows = sqlx::query!(
+        r#"
+        SELECT access_level::text as "access_level"
+        FROM entity_access
+        WHERE entity_id = $1 AND entity_type = 'document'
+          AND source_type = 'team'
+        "#,
+        doc_uuid,
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].access_level, Some("edit".to_string()));
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_team_share_no_team_owner(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+
+    // Create a document owned by a user without a team
+    let metadata = repo
+        .create_document(create_document_args("macro|no-team@user.com", false, None))
+        .await
+        .unwrap();
+
+    let state = repo.get_team_share(&metadata.document_id).await.unwrap();
+    assert_eq!(state.team_id, None);
+    assert!(!state.shared_with_team);
+
+    // Sharing is a no-op when the owner has no team
+    let state = repo
+        .set_team_share(&metadata.document_id, true)
+        .await
+        .unwrap();
+    assert_eq!(state.team_id, None);
+    assert!(!state.shared_with_team);
 }
 
 #[sqlx::test(

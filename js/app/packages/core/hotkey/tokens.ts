@@ -96,6 +96,7 @@ export const TOKENS = {
       tasks: 'sidebar.goTo.tasks',
       channels: 'sidebar.goTo.channels',
       calls: 'sidebar.goTo.calls',
+      companies: 'sidebar.goTo.companies',
       folders: 'sidebar.goTo.folders',
     },
   },
@@ -244,6 +245,8 @@ export const TOKENS = {
     codeNewSplit: 'create.codeNewSplit',
     task: 'create.task',
     taskNewSplit: 'create.taskNewSplit',
+    snippet: 'create.snippet',
+    snippetNewSplit: 'create.snippetNewSplit',
     close_menu: 'create.close_menu',
   },
 

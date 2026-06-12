@@ -27,11 +27,15 @@ import {
   activeAgentFilter,
   callsFilter,
   channelsFilter,
+  crmCompanyActiveFilter,
+  crmCompanyFilter,
+  crmCompanyHiddenFilter,
   documentOrFileFilter,
   filesAndFolderFilter,
   foldersFilter,
   inFolderFilter,
   notTaskFilter,
+  searchSupportedFilter,
 } from './entity';
 import { ENTITY_TYPE_FILTERS } from './entity-type';
 import {
@@ -80,8 +84,12 @@ export const SOUP_FILTERS = [
   documentOrFileFilter,
   activeTaskFilter,
   callsFilter,
+  crmCompanyFilter,
+  crmCompanyActiveFilter,
+  crmCompanyHiddenFilter,
   emailAttachmentsFilter,
   inFolderFilter,
+  searchSupportedFilter,
   ...ENTITY_TYPE_FILTERS,
   ...TASK_STATUS_FILTERS,
   ...TASK_PRIORITY_FILTERS,

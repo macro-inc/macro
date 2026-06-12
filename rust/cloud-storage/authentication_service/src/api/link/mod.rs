@@ -19,4 +19,5 @@ pub fn router(_state: ApiContext) -> Router<ApiContext> {
             get(github::check_github_link_status_handler),
         )
         .route("/gmail", post(gmail::init_gmail_link_handler))
+        .route("/gmail/status", get(gmail::check_gmail_link_status_handler))
 }

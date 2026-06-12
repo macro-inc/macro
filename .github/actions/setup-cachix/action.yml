@@ -61,8 +61,16 @@ runs:
         }
 
         if ! command -v cachix >/dev/null 2>&1; then
-          if ! retry 3 nix profile add nixpkgs#cachix; then
-            echo "::warning::Failed to install Cachix; continuing without the Cachix binary cache."
+          # Install cachix from the repo flake's pinned nixpkgs (already on the
+          # /nix sticky disk) via --inputs-from, instead of the default registry
+          # `nixpkgs`, which Determinate resolves to an unpinned nixpkgs-weekly
+          # and re-fetches/re-evaluates (~20s) on every run.
+          flake_dir="${GITHUB_WORKSPACE:-$PWD}"
+          if ! retry 3 nix profile add --inputs-from "$flake_dir" nixpkgs#cachix; then
+            echo "::warning::Failed to install Cachix from the pinned flake; falling back to registry nixpkgs."
+            if ! retry 3 nix profile add nixpkgs#cachix; then
+              echo "::warning::Failed to install Cachix; continuing without the Cachix binary cache."
+            fi
           fi
         fi
 

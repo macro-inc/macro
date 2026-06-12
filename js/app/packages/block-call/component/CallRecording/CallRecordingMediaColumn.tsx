@@ -30,6 +30,7 @@ export function CallRecordingMediaColumn(props: {
           <div class="min-h-0 flex-1 overflow-hidden">
             <CallRecordingVideo
               url={url()}
+              posterUrl={props.record().recordingPreviewUrl ?? undefined}
               onTimeUpdate={props.onTimeUpdate}
               setVideoRef={props.setVideoRef}
             />

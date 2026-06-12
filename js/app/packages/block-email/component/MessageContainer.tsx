@@ -212,6 +212,7 @@ export function MessageContainer(props: MessageContainerProps) {
               isFirstMessage={true}
               isLastMessage={props.isLastMessage}
               senderId={senderMacroId()}
+              senderPhotoUrl={props.message.from?.photo_url ?? undefined}
               isNewMessage={isNewMessage()}
               isTarget={props.isTarget}
               hasReplyInputBelow={true}

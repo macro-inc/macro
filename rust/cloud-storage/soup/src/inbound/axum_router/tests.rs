@@ -148,6 +148,7 @@ impl EmailService for MockEmail {
             email_address: EmailStr::try_from("example@test.com".to_string()).unwrap(),
             provider: UserProvider::Gmail,
             is_sync_active: true,
+            is_primary: true,
             created_at: Default::default(),
             updated_at: Default::default(),
         }))
@@ -333,6 +334,20 @@ impl entity_access::domain::ports::EntityAccessService for MockEntityAccess {
         _user_org_id: Option<i64>,
     ) -> Result<
         entity_access::domain::models::EntityPermission,
+        entity_access::domain::models::AccessError,
+    > {
+        unimplemented!()
+    }
+
+    async fn get_crm_entity_permission_with_team(
+        &self,
+        _user_id: Option<
+            &macro_user_id::user_id::MacroUserId<macro_user_id::lowercased::Lowercase<'_>>,
+        >,
+        _entity_id: &str,
+        _entity_type: entity_access::domain::models::EntityType,
+    ) -> Result<
+        (entity_access::domain::models::EntityPermission, uuid::Uuid),
         entity_access::domain::models::AccessError,
     > {
         unimplemented!()

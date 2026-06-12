@@ -1,5 +1,6 @@
 use crate::api::context::ApiContext;
 use fusionauth::error::FusionAuthClientError;
+use fusionauth::identity_provider::Link;
 
 use axum::{
     Json,
@@ -10,11 +11,23 @@ use axum::{
 use macro_middleware::auth::internal_access::ValidInternalKey;
 use model::response::{EmptyResponse, ErrorResponse};
 
+#[cfg(test)]
+mod test;
+
 #[derive(serde::Deserialize, Debug)]
 pub struct RemoveLinkQueryParams {
     pub fusionauth_user_id: String,
-    pub macro_id: String,
+    pub linked_email: String,
     pub idp_name: String,
+}
+
+/// Selects the IdP link to remove by matching its display name against the linked email.
+///
+/// A FusionAuth user can hold several links to the same identity provider, one per email
+/// address (e.g. a primary inbox plus delegated/secondary inboxes), so the link must be
+/// selected by the linked email rather than derived from the owner's macro_id.
+fn find_idp_link(links: Vec<Link>, linked_email: &str) -> Option<Link> {
+    links.into_iter().find(|l| l.display_name == linked_email)
 }
 
 /// Removes a link for a user by the idp name
@@ -34,7 +47,7 @@ pub async fn handler(
     _valid_access: ValidInternalKey,
     extract::Query(RemoveLinkQueryParams {
         fusionauth_user_id,
-        macro_id,
+        linked_email,
         idp_name,
     }): extract::Query<RemoveLinkQueryParams>,
 ) -> Result<Response, Response> {
@@ -83,27 +96,18 @@ pub async fn handler(
                 .into_response()
         })?;
 
-    let email = macro_id.replace("macro|", "");
-
     // a fusionauth user can have multiple links to the same identity provider with different email
     // addresses, but can only have one link with a given email
-    let link = links
-        .into_iter()
-        .find(|l| l.display_name == email)
-        .ok_or_else(|| {
-            tracing::error!(
-                "link not found for user id {} and idp id {}",
-                fusionauth_user_id,
-                idp_id.as_str()
-            );
-            (
-                StatusCode::NOT_FOUND,
-                Json(ErrorResponse {
-                    message: format!("No {} link found for this user", idp_name).into(),
-                }),
-            )
-                .into_response()
-        })?;
+    let Some(link) = find_idp_link(links, &linked_email) else {
+        // the link is already gone; treat removal as an idempotent no-op so retries don't wedge
+        tracing::warn!(
+            "no {} link found for user id {} and email {}; treating remove as no-op",
+            idp_name,
+            fusionauth_user_id,
+            linked_email
+        );
+        return Ok((StatusCode::OK, Json(EmptyResponse::default())).into_response());
+    };
 
     ctx.auth_client
         .unlink_user(

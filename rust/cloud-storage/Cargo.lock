@@ -66,6 +66,7 @@ dependencies = [
  "tokio",
  "tracing",
  "utoipa",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -127,6 +128,7 @@ dependencies = [
  "macro_db_client",
  "macro_env",
  "macro_env_var",
+ "macro_service_urls",
  "macro_user_id",
  "model",
  "model-entity",
@@ -139,6 +141,7 @@ dependencies = [
  "models_search",
  "non_empty",
  "notification",
+ "prompt",
  "properties",
  "rand 0.9.4",
  "readonly_pool",
@@ -160,6 +163,7 @@ dependencies = [
  "tracing",
  "utoipa",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -177,6 +181,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tracing",
  "utoipa",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -222,11 +227,12 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "hex",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "serde",
  "serde_json",
  "sha2 0.10.9",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -302,7 +308,7 @@ dependencies = [
  "lazy_static",
  "rand 0.9.4",
  "regex",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "schemars 1.2.1",
  "serde",
  "serde_json",
@@ -311,6 +317,7 @@ dependencies = [
  "tokio-stream",
  "tokio-util",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -358,6 +365,12 @@ dependencies = [
  "quote",
  "syn 2.0.117",
 ]
+
+[[package]]
+name = "arrayvec"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "23b62fc65de8e4e7f52534fb52b0f3ed04746ae267519eef2a83941e8085068b"
 
 [[package]]
 name = "arrayvec"
@@ -471,7 +484,7 @@ dependencies = [
  "futures",
  "getrandom 0.3.4",
  "rand 0.9.4",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "secrecy",
  "serde",
  "serde_json",
@@ -617,6 +630,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 
 [[package]]
+name = "atomicwrites"
+version = "0.4.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3ef1bb8d1b645fe38d51dfc331d720fb5fc2c94b440c76cc79c80ff265ca33e3"
+dependencies = [
+ "rustix 0.38.44",
+ "tempfile",
+ "windows-sys 0.52.0",
+]
+
+[[package]]
 name = "attachment"
 version = "0.1.0"
 dependencies = [
@@ -631,6 +655,7 @@ dependencies = [
  "serde",
  "thiserror 2.0.18",
  "webp",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -652,8 +677,10 @@ dependencies = [
  "cool_asserts",
  "document_storage_service_client",
  "doppleganger",
+ "doppler-config",
  "email_validator",
  "entity_access",
+ "foreign_entity",
  "fusionauth",
  "futures",
  "github",
@@ -663,6 +690,7 @@ dependencies = [
  "macro_auth",
  "macro_aws_config",
  "macro_cache_client",
+ "macro_config",
  "macro_cors",
  "macro_db_client",
  "macro_entrypoint",
@@ -690,7 +718,7 @@ dependencies = [
  "redis",
  "referral",
  "remote_env_var",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "roles_and_permissions",
  "rsa",
  "secretsmanager_client",
@@ -716,6 +744,7 @@ dependencies = [
  "utoipa",
  "utoipa-swagger-ui",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -724,10 +753,11 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "model",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "serde",
  "thiserror 2.0.18",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -745,7 +775,7 @@ dependencies = [
  "aligned",
  "anyhow",
  "arg_enum_proc_macro",
- "arrayvec",
+ "arrayvec 0.7.6",
  "log",
  "num-rational",
  "num-traits",
@@ -763,7 +793,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8cfddb07216410377231960af4fcab838eaa12e013417781b78bd95ee22077f8"
 dependencies = [
  "anyhow",
- "arrayvec",
+ "arrayvec 0.7.6",
  "log",
  "nom 8.0.0",
  "num-rational",
@@ -776,7 +806,7 @@ version = "0.8.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e7178fe5f7d460b13895ebb9dcb28a3a6216d2df2574a0806cb51b555d297f38"
 dependencies = [
- "arrayvec",
+ "arrayvec 0.7.6",
 ]
 
 [[package]]
@@ -1538,6 +1568,7 @@ dependencies = [
  "sqlx",
  "tokio",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1714,6 +1745,7 @@ dependencies = [
  "thiserror 2.0.18",
  "utoipa",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1723,6 +1755,7 @@ dependencies = [
  "anyhow",
  "axum",
  "bot_id",
+ "channels",
  "chrono",
  "entity_access",
  "hex",
@@ -1742,6 +1775,7 @@ dependencies = [
  "tracing",
  "utoipa",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1886,6 +1920,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tracing",
  "utoipa",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1929,6 +1964,59 @@ dependencies = [
  "tracing",
  "utoipa",
  "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "call_recording_preview_handler"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "aws-sdk-s3",
+ "aws_lambda_events",
+ "lambda_runtime",
+ "macro_aws_config",
+ "macro_db_migrator",
+ "macro_entrypoint",
+ "sqlx",
+ "tokio",
+ "tracing",
+ "urlencoding",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "camino"
+version = "1.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e629a66d692cb9ff1a1c664e41771b3dcaf961985a9774c0eb0bd1b51cf60a48"
+dependencies = [
+ "serde_core",
+]
+
+[[package]]
+name = "cargo-platform"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dd0061da739915fae12ea00e16397555ed4371a6bb285431aab930f61b0aa4ba"
+dependencies = [
+ "serde",
+ "serde_core",
+]
+
+[[package]]
+name = "cargo_metadata"
+version = "0.23.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ef987d17b0a113becdd19d3d0022d04d7ef41f9efe4f3fb63ac44ba61df3ade9"
+dependencies = [
+ "camino",
+ "cargo-platform",
+ "semver",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -1970,6 +2058,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "cfg-expr"
+version = "0.20.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fb693542bcafa528e198be0ebd9d3632ca5b7c93dbe7237460e199910835997c"
+dependencies = [
+ "smallvec",
+ "target-lexicon",
+]
+
+[[package]]
 name = "cfg-if"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2007,9 +2105,11 @@ dependencies = [
  "futures",
  "macro_user_id",
  "models_pagination",
+ "prompt",
  "tokio",
  "tracing",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -2050,6 +2150,7 @@ dependencies = [
  "tracing",
  "utoipa",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -2099,6 +2200,7 @@ dependencies = [
  "unicode-segmentation",
  "utoipa",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -2272,6 +2374,7 @@ dependencies = [
  "tracing",
  "utoipa",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -2295,6 +2398,7 @@ dependencies = [
  "tracing",
  "utoipa",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -2338,6 +2442,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tracing",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -2390,6 +2495,7 @@ dependencies = [
  "utoipa",
  "utoipa-swagger-ui",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -2399,10 +2505,11 @@ dependencies = [
  "anyhow",
  "connection_gateway_models",
  "model-entity",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "serde",
  "serde_json",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -2413,6 +2520,7 @@ dependencies = [
  "serde",
  "serde_json",
  "utoipa",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -2468,7 +2576,7 @@ dependencies = [
  "model_user",
  "rate_limit",
  "redis",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "rootcause",
  "serde",
  "serde_json",
@@ -2478,6 +2586,7 @@ dependencies = [
  "tower 0.5.3",
  "tracing",
  "utoipa",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -2496,6 +2605,7 @@ dependencies = [
  "macro_entrypoint",
  "macro_env",
  "macro_middleware",
+ "macro_service_urls",
  "macro_user_id",
  "model",
  "rate_limit",
@@ -2510,6 +2620,7 @@ dependencies = [
  "tracing",
  "utoipa",
  "utoipa-swagger-ui",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -2559,6 +2670,7 @@ dependencies = [
  "tracing",
  "utoipa",
  "utoipa-swagger-ui",
+ "workspace-hack",
  "zip 2.4.2",
 ]
 
@@ -2611,6 +2723,9 @@ checksum = "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b"
 [[package]]
 name = "cowlike"
 version = "0.1.0"
+dependencies = [
+ "workspace-hack",
+]
 
 [[package]]
 name = "cpufeatures"
@@ -2688,7 +2803,7 @@ dependencies = [
  "macro_uuid",
  "model-error-response",
  "model_user",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "serde",
  "serde_json",
  "sqlx",
@@ -2698,6 +2813,7 @@ dependencies = [
  "unfurl",
  "utoipa",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -3016,6 +3132,7 @@ dependencies = [
  "sns_client",
  "tokio",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -3029,6 +3146,12 @@ dependencies = [
  "lazy_static",
  "regex",
 ]
+
+[[package]]
+name = "debug-ignore"
+version = "1.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ffe7ed1d93f4553003e20b629abe9085e1e81b1429520f897f8f8860bc6dfc21"
 
 [[package]]
 name = "decode_jwt"
@@ -3051,6 +3174,7 @@ dependencies = [
  "tracing",
  "url",
  "urlencoding",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -3071,6 +3195,7 @@ dependencies = [
  "sqlx",
  "tokio",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -3097,6 +3222,7 @@ dependencies = [
  "tokio",
  "tracing",
  "urlencoding",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -3118,7 +3244,7 @@ version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eddada51c8576df9d6a8450c351ff63042b092c9458b8ac7d20f89cbd0ffd313"
 dependencies = [
- "arrayvec",
+ "arrayvec 0.7.6",
  "proc-macro2",
  "quote",
  "strsim 0.10.0",
@@ -3251,6 +3377,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "diffus"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3c0ff24a73b51d9009c40897faf87d31b77345c90ffbf4dc3a1d2957032c5653"
+dependencies = [
+ "itertools 0.10.5",
+]
+
+[[package]]
+name = "diffy"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b545b8c50194bdd008283985ab0b31dba153cfd5b3066a92770634fbc0d7d291"
+dependencies = [
+ "nu-ansi-term",
+]
+
+[[package]]
 name = "digest"
 version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3345,6 +3489,7 @@ dependencies = [
  "macro_env",
  "macro_env_var",
  "macro_middleware",
+ "macro_service_urls",
  "macro_user_id",
  "macro_uuid",
  "mcp_client",
@@ -3358,11 +3503,12 @@ dependencies = [
  "models_permissions",
  "non_empty",
  "notification",
+ "prompt",
  "properties",
  "readonly_pool",
  "redis",
  "regex",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "roles_and_permissions",
  "schemars 1.2.1",
  "search_service_client",
@@ -3388,6 +3534,7 @@ dependencies = [
  "utoipa",
  "utoipa-swagger-ui",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -3427,6 +3574,7 @@ dependencies = [
  "documents",
  "dynamodb_client",
  "email",
+ "embedding",
  "entity_access",
  "entity_access_management",
  "foreign_entity",
@@ -3475,7 +3623,7 @@ dependencies = [
  "readonly_pool",
  "redis",
  "regex",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "s3_key",
  "saved_views",
  "schemars 1.2.1",
@@ -3501,6 +3649,7 @@ dependencies = [
  "utoipa",
  "utoipa-swagger-ui",
  "uuid",
+ "workspace-hack",
  "zip 2.4.2",
 ]
 
@@ -3512,11 +3661,12 @@ dependencies = [
  "model",
  "models_bulk_upload",
  "models_permissions",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -3529,6 +3679,7 @@ dependencies = [
  "strum",
  "thiserror 2.0.18",
  "utoipa",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -3556,6 +3707,7 @@ dependencies = [
  "tracing",
  "urlencoding",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -3571,6 +3723,7 @@ dependencies = [
  "lexical_client",
  "macro_aws_config",
  "macro_entrypoint",
+ "macro_service_urls",
  "model",
  "s3_key",
  "serde",
@@ -3580,6 +3733,7 @@ dependencies = [
  "tokio",
  "tracing",
  "urlencoding",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -3611,6 +3765,7 @@ dependencies = [
  "macro_aws_config",
  "macro_db_migrator",
  "macro_entrypoint",
+ "macro_service_urls",
  "macro_user_id",
  "macro_uuid",
  "mockall",
@@ -3622,7 +3777,7 @@ dependencies = [
  "models_permissions",
  "models_properties",
  "non_empty",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "s3_key",
  "schemars 1.2.1",
  "serde",
@@ -3639,6 +3794,7 @@ dependencies = [
  "urlencoding",
  "utoipa",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -3673,6 +3829,7 @@ dependencies = [
  "tokio",
  "tracing",
  "urlencoding",
+ "workspace-hack",
  "zip 2.4.2",
 ]
 
@@ -3717,6 +3874,19 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unsynn",
+]
+
+[[package]]
+name = "doppler-config"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a033f09243efd65cf904770c51a0a4c3d45fd6e4cfa71b915e2f948692fb831d"
+dependencies = [
+ "reqwest 0.13.4",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tracing",
 ]
 
 [[package]]
@@ -3772,6 +3942,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -3892,6 +4063,7 @@ dependencies = [
  "tracing-subscriber",
  "utoipa",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -3914,6 +4086,7 @@ dependencies = [
  "sqlx",
  "tokio",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -3932,6 +4105,7 @@ dependencies = [
  "serde",
  "sha2 0.10.9",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -3954,6 +4128,7 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -3974,6 +4149,7 @@ dependencies = [
  "sqs_client",
  "tokio",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -4020,6 +4196,7 @@ dependencies = [
  "macro_env",
  "macro_env_var",
  "macro_middleware",
+ "macro_service_urls",
  "macro_user_id",
  "macro_uuid",
  "mailparse",
@@ -4037,7 +4214,7 @@ dependencies = [
  "once_cell",
  "redis",
  "regex",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "s3_client",
  "schemars 1.2.1",
  "scraper",
@@ -4063,6 +4240,7 @@ dependencies = [
  "utoipa",
  "utoipa-swagger-ui",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -4073,11 +4251,12 @@ dependencies = [
  "email",
  "model",
  "models_email",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "serde",
  "serde_json",
  "tokio",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -4095,6 +4274,7 @@ dependencies = [
  "sqs_client",
  "tokio",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -4113,6 +4293,7 @@ dependencies = [
  "strum",
  "tokio",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -4124,6 +4305,7 @@ dependencies = [
  "lazy_static",
  "regex",
  "scraper",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -4132,6 +4314,16 @@ version = "0.1.0"
 dependencies = [
  "lazy_static",
  "regex",
+ "workspace-hack",
+]
+
+[[package]]
+name = "embedding"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-openai",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -4152,6 +4344,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -4178,6 +4371,7 @@ dependencies = [
  "tracing",
  "utoipa",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -4195,6 +4389,7 @@ dependencies = [
  "sqlx",
  "tokio",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -4217,18 +4412,7 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
-]
-
-[[package]]
-name = "enum-as-inner"
-version = "0.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1e6a265c649f3f5979b601d26f1d05ada116434c87741c9493cb56218f76cbc"
-dependencies = [
- "heck 0.5.0",
- "proc-macro2",
- "quote",
- "syn 2.0.117",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -4399,6 +4583,7 @@ version = "0.1.0"
 dependencies = [
  "recursion",
  "serde",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -4412,6 +4597,12 @@ name = "fixedbitset"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ce7134b9999ecaf8bcd65542e436736ef32ddca1b3e06094cb6ec5755203b80"
+
+[[package]]
+name = "fixedbitset"
+version = "0.5.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1d674e81391d1e1ab681a28d99df07927c6d4aa5b027d7da16ba32d1d21ecd99"
 
 [[package]]
 name = "flate2"
@@ -4478,6 +4669,7 @@ dependencies = [
  "tracing",
  "utoipa",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -4524,6 +4716,7 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -4539,7 +4732,7 @@ dependencies = [
  "anyhow",
  "base64 0.22.1",
  "macro_env",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "serde",
  "serde_json",
  "serde_urlencoded",
@@ -4547,6 +4740,7 @@ dependencies = [
  "tokio",
  "tracing",
  "urlencoding",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -4714,7 +4908,7 @@ version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1bd49230192a3797a9a4d6abe9b3eed6f7fa4c8a8a4947977c6f80025f92cbd8"
 dependencies = [
- "rustix",
+ "rustix 1.1.4",
  "windows-link",
 ]
 
@@ -4830,7 +5024,7 @@ dependencies = [
  "notification",
  "redis",
  "regex",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "rootcause",
  "serde",
  "serde_json",
@@ -4844,6 +5038,7 @@ dependencies = [
  "urlencoding",
  "utoipa",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -4864,12 +5059,13 @@ dependencies = [
  "mockall",
  "models_email",
  "regex",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "serde",
  "serde_json",
  "tokio",
  "tracing",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -4882,6 +5078,57 @@ dependencies = [
  "rand_core 0.6.4",
  "subtle",
 ]
+
+[[package]]
+name = "guppy"
+version = "0.17.26"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eb611f63088c20f3f7252d896f0beaa176a9628da8c21cdf258fe9ae179bebda"
+dependencies = [
+ "ahash",
+ "camino",
+ "cargo_metadata",
+ "cfg-if",
+ "debug-ignore",
+ "fixedbitset 0.5.7",
+ "guppy-summaries",
+ "guppy-workspace-hack",
+ "indexmap 2.14.0",
+ "itertools 0.14.0",
+ "nested",
+ "once_cell",
+ "pathdiff",
+ "petgraph 0.8.3",
+ "rayon",
+ "semver",
+ "serde",
+ "serde_json",
+ "smallvec",
+ "static_assertions",
+ "target-spec",
+ "toml",
+]
+
+[[package]]
+name = "guppy-summaries"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8bd039b8f587513b48754811cfa37c2ba079df537b490b602fa641ce18f6e72a"
+dependencies = [
+ "camino",
+ "cfg-if",
+ "diffus",
+ "guppy-workspace-hack",
+ "semver",
+ "serde",
+ "toml",
+]
+
+[[package]]
+name = "guppy-workspace-hack"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "92620684d99f750bae383ecb3be3748142d6095760afd5cbcf2261e9a279d780"
 
 [[package]]
 name = "h2"
@@ -4919,6 +5166,35 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+]
+
+[[package]]
+name = "hakari"
+version = "0.17.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f1b385a9bb3b4d4c6680913a458187c6e29c0dc51ba69d3347a3a112ebf21c1a"
+dependencies = [
+ "ahash",
+ "atomicwrites",
+ "camino",
+ "cfg-if",
+ "debug-ignore",
+ "diffy",
+ "guppy",
+ "guppy-workspace-hack",
+ "iddqd",
+ "include_dir",
+ "indenter",
+ "itertools 0.14.0",
+ "owo-colors",
+ "pathdiff",
+ "rayon",
+ "serde",
+ "tabular",
+ "target-spec",
+ "toml",
+ "toml_edit 0.22.27",
+ "twox-hash",
 ]
 
 [[package]]
@@ -5033,23 +5309,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
-name = "hickory-proto"
-version = "0.25.2"
+name = "hickory-net"
+version = "0.26.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f8a6fe56c0038198998a6f217ca4e7ef3a5e51f46163bd6dd60b5c71ca6c6502"
+checksum = "e2295ed2f9c31e471e1428a8f88a3f0e1f4b27c15049592138d1eebe9c35b183"
 dependencies = [
  "async-trait",
  "cfg-if",
  "data-encoding",
- "enum-as-inner",
  "futures-channel",
  "futures-io",
  "futures-util",
+ "hickory-proto",
  "idna",
  "ipnet",
- "once_cell",
- "rand 0.9.4",
- "ring",
+ "jni 0.22.4",
+ "rand 0.10.1",
  "thiserror 2.0.18",
  "tinyvec",
  "tokio",
@@ -5058,21 +5333,46 @@ dependencies = [
 ]
 
 [[package]]
-name = "hickory-resolver"
-version = "0.25.2"
+name = "hickory-proto"
+version = "0.26.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dc62a9a99b0bfb44d2ab95a7208ac952d31060efc16241c87eaf36406fecf87a"
+checksum = "0bab31817bfb44672a252e97fe81cd0c18d1b2cf892108922f6818820df8c643"
+dependencies = [
+ "data-encoding",
+ "idna",
+ "ipnet",
+ "jni 0.22.4",
+ "once_cell",
+ "prefix-trie",
+ "rand 0.10.1",
+ "ring",
+ "thiserror 2.0.18",
+ "tinyvec",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "hickory-resolver"
+version = "0.26.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f0d58d28879ceecde6607729660c2667a081ccdc082e082675042793960f178c"
 dependencies = [
  "cfg-if",
  "futures-util",
+ "hickory-net",
  "hickory-proto",
  "ipconfig",
+ "ipnet",
+ "jni 0.22.4",
  "moka",
+ "ndk-context",
  "once_cell",
  "parking_lot",
- "rand 0.9.4",
+ "rand 0.10.1",
  "resolv-conf",
  "smallvec",
+ "system-configuration",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
@@ -5503,6 +5803,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3d3067d79b975e8844ca9eb072e16b31c3c1c36928edf9c6789548c524d0d954"
 
 [[package]]
+name = "iddqd"
+version = "0.3.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "616230c7d641ef971a3a5bfcc654c6b7524ab9c9fb665693c6a397dba9a14aca"
+dependencies = [
+ "allocator-api2",
+ "equivalent",
+ "foldhash 0.2.0",
+ "hashbrown 0.16.1",
+ "rustc-hash 2.1.2",
+]
+
+[[package]]
 name = "ident_case"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5587,6 +5900,7 @@ dependencies = [
  "serde_urlencoded",
  "tokio",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -5606,7 +5920,7 @@ dependencies = [
  "macro_env",
  "macro_middleware",
  "model",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "secretsmanager_client",
  "serde",
  "serde_json",
@@ -5617,6 +5931,7 @@ dependencies = [
  "url",
  "utoipa",
  "utoipa-swagger-ui",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -5631,6 +5946,7 @@ version = "0.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "923d117408f1e49d914f1a379a309cffe4f18c05cf4e3d12e613a15fc81bd0dd"
 dependencies = [
+ "glob",
  "include_dir_macros",
 ]
 
@@ -5649,6 +5965,12 @@ name = "indent_write"
 version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0cfe9645a18782869361d9c8732246be7b410ad4e919d3609ebabdac00ba12c3"
+
+[[package]]
+name = "indenter"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "964de6e86d545b246d84badc0fef527924ace5134f30641c203ef52ba83f58d5"
 
 [[package]]
 name = "indexmap"
@@ -5758,6 +6080,7 @@ dependencies = [
  "url",
  "utoipa",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -5767,6 +6090,7 @@ dependencies = [
  "axum",
  "thiserror 2.0.18",
  "tokio",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -5787,6 +6111,9 @@ name = "ipnet"
 version = "2.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d98f6fed1fde3f8c21bc40a1abb88dd75e67924f9cffc3ef95607bad8017f8e2"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "is_terminal_polyfill"
@@ -5815,6 +6142,7 @@ dependencies = [
  "thiserror 2.0.18",
  "utoipa",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6018,6 +6346,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6079,6 +6408,7 @@ dependencies = [
  "rootcause",
  "tokio",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6108,11 +6438,12 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "models_search",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "serde",
  "serde_json",
  "tokio",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6187,6 +6518,12 @@ dependencies = [
 
 [[package]]
 name = "linux-raw-sys"
+version = "0.4.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d26c52dbd32dccf2d10cac7725f8eae5296885fb5703b261f7d0a0739ec807ab"
+
+[[package]]
+name = "linux-raw-sys"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32a66949e030da00e8c7d4434b251670a91556f4144941d37452769c25d58a53"
@@ -6243,12 +6580,13 @@ dependencies = [
  "anyhow",
  "futures",
  "http 1.4.0",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "serde",
  "serde_json",
  "tokio",
  "tokio-tungstenite 0.28.0",
  "tungstenite 0.28.0",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6258,13 +6596,14 @@ dependencies = [
  "anyhow",
  "futures",
  "local_e2e_test_support",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "serde",
  "serde_json",
  "sqlx",
  "tokio",
  "tokio-tungstenite 0.28.0",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6277,6 +6616,7 @@ dependencies = [
  "serde",
  "serde_json",
  "url",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6383,6 +6723,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6396,11 +6737,15 @@ dependencies = [
  "thiserror 2.0.18",
  "tracing",
  "url",
+ "workspace-hack",
 ]
 
 [[package]]
 name = "macro_axum_utils"
 version = "0.1.0"
+dependencies = [
+ "workspace-hack",
+]
 
 [[package]]
 name = "macro_cache_client"
@@ -6410,6 +6755,31 @@ dependencies = [
  "email_validator",
  "macro_redis",
  "redis",
+ "workspace-hack",
+]
+
+[[package]]
+name = "macro_config"
+version = "0.1.0"
+dependencies = [
+ "macro_config_derive",
+ "macro_env_var",
+ "remote_env_var",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
+name = "macro_config_derive"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6418,6 +6788,7 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "tower-http",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6455,6 +6826,7 @@ dependencies = [
  "tracing",
  "user_quota",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6462,6 +6834,7 @@ name = "macro_db_migrator"
 version = "0.1.0"
 dependencies = [
  "sqlx",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6479,6 +6852,7 @@ dependencies = [
  "tracing-panic",
  "tracing-subscriber",
  "tracing-tree",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6490,6 +6864,7 @@ dependencies = [
  "strum",
  "thiserror 2.0.18",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6497,8 +6872,11 @@ name = "macro_env_var"
 version = "0.1.0"
 dependencies = [
  "paste",
+ "serde",
+ "serde_json",
  "thiserror 2.0.18",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6535,6 +6913,7 @@ dependencies = [
  "urlencoding",
  "user_quota",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6545,6 +6924,7 @@ dependencies = [
  "sqlx",
  "tokio",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6554,6 +6934,7 @@ dependencies = [
  "anyhow",
  "redis",
  "tokio",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6561,7 +6942,10 @@ name = "macro_service_urls"
 version = "0.1.0"
 dependencies = [
  "macro_env",
+ "paste",
+ "thiserror 2.0.18",
  "url",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6573,6 +6957,7 @@ dependencies = [
  "redis",
  "tokio",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6584,6 +6969,7 @@ dependencies = [
  "tower 0.5.3",
  "tower-http",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6598,6 +6984,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tracing",
  "utoipa",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6606,6 +6993,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6744,6 +7132,7 @@ dependencies = [
  "url",
  "urlencoding",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6764,7 +7153,7 @@ dependencies = [
  "model_user",
  "oauth2",
  "redis",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "rmcp",
  "schemars 1.2.1",
  "serde",
@@ -6773,6 +7162,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tracing",
  "utoipa",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6806,6 +7196,7 @@ dependencies = [
  "macro_env",
  "macro_env_var",
  "macro_middleware",
+ "macro_service_urls",
  "macro_user_id",
  "mcp_auth_proxy",
  "notification",
@@ -6823,6 +7214,7 @@ dependencies = [
  "sync_service_client",
  "tokio",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6895,6 +7287,7 @@ dependencies = [
  "tokio",
  "tracing",
  "utoipa",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6907,6 +7300,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.18",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6994,6 +7388,7 @@ dependencies = [
  "macro_db_migrator",
  "sqlx",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -7052,6 +7447,7 @@ dependencies = [
  "tracing",
  "utoipa",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -7064,6 +7460,7 @@ dependencies = [
  "serde_json",
  "strum",
  "utoipa",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -7072,6 +7469,7 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "utoipa",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -7083,6 +7481,7 @@ dependencies = [
  "strum",
  "thiserror 2.0.18",
  "utoipa",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -7108,6 +7507,7 @@ dependencies = [
  "tracing",
  "utoipa",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -7120,6 +7520,7 @@ dependencies = [
  "thiserror 2.0.18",
  "utoipa",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -7129,6 +7530,7 @@ dependencies = [
  "serde",
  "strum",
  "utoipa",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -7144,6 +7546,7 @@ dependencies = [
  "strum",
  "thiserror 2.0.18",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -7153,6 +7556,7 @@ dependencies = [
  "serde",
  "serde_json",
  "utoipa",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -7174,6 +7578,7 @@ dependencies = [
  "thiserror 2.0.18",
  "utoipa",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -7182,6 +7587,7 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "sqlx",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -7191,6 +7597,7 @@ dependencies = [
  "chrono",
  "serde",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -7199,6 +7606,7 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "strum",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -7215,6 +7623,7 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.18",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -7228,6 +7637,7 @@ dependencies = [
  "sqlx",
  "strum",
  "utoipa",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -7243,6 +7653,7 @@ dependencies = [
  "tracing",
  "utoipa",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -7262,6 +7673,7 @@ dependencies = [
  "strum",
  "utoipa",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -7273,6 +7685,7 @@ dependencies = [
  "serde",
  "serde_json",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -7282,6 +7695,7 @@ dependencies = [
  "serde",
  "serde_json",
  "utoipa",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -7296,6 +7710,7 @@ dependencies = [
  "document_sub_type",
  "doppleganger",
  "email",
+ "item_filters",
  "macro_user_id",
  "model-entity",
  "models_pagination",
@@ -7305,6 +7720,7 @@ dependencies = [
  "strum",
  "utoipa",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -7318,6 +7734,7 @@ dependencies = [
  "strum",
  "utoipa",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -7394,6 +7811,7 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -7419,6 +7837,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -7428,7 +7847,7 @@ dependencies = [
  "axum",
  "cool_asserts",
  "futures",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "rootcause",
  "semver",
  "serde",
@@ -7440,7 +7859,20 @@ dependencies = [
  "tower 0.5.3",
  "tracing",
  "url",
+ "workspace-hack",
 ]
+
+[[package]]
+name = "ndk-context"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "27b02d87554356db9e9a873add8782d4ea6e3e58ea071a9adb9a2e8ddb884a8b"
+
+[[package]]
+name = "nested"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ca2b420f638f07fe83056b55ea190bb815f609ec5a35e7017884a10f78839c9e"
 
 [[package]]
 name = "new_debug_unreachable"
@@ -7515,6 +7947,7 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -7557,7 +7990,7 @@ dependencies = [
  "models_pagination",
  "rate_limit",
  "redis",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "rootcause",
  "schemars 1.2.1",
  "serde",
@@ -7572,6 +8005,7 @@ dependencies = [
  "url",
  "utoipa",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -7591,6 +8025,7 @@ dependencies = [
  "sqlx",
  "tracing",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -7622,6 +8057,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -7648,6 +8084,7 @@ dependencies = [
  "macro_env",
  "macro_env_var",
  "macro_middleware",
+ "macro_service_urls",
  "macro_tower_layers",
  "macro_user_id",
  "macro_uuid",
@@ -7681,6 +8118,7 @@ dependencies = [
  "utoipa",
  "utoipa-swagger-ui",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -7987,7 +8425,7 @@ dependencies = [
  "dyn-clone",
  "lazy_static",
  "percent-encoding",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "rustc_version",
  "serde",
  "serde_json",
@@ -8014,6 +8452,7 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -8022,6 +8461,7 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -8127,6 +8567,7 @@ dependencies = [
  "sqs_client",
  "tokio",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -8144,6 +8585,7 @@ dependencies = [
  "sqs_client",
  "tokio",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -8167,6 +8609,12 @@ name = "outref"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1a80800c0488c3a21695ea981a54918fbb37abf04f4d0720c453632255e2ff0e"
+
+[[package]]
+name = "owo-colors"
+version = "3.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c1b04fb49957986fdce4d6ee7a65027d55d4b6d2265e5848bbb507b58ccfdb6f"
 
 [[package]]
 name = "p256"
@@ -8240,6 +8688,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2ee67f1008b1ba2321834326597b8e186293b049a023cdef258527550b9935b4"
 
 [[package]]
+name = "pathdiff"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "df94ce210e5bc13cb6651479fa48d14f601d9858cfe0467f43ae157023b938d3"
+dependencies = [
+ "camino",
+]
+
+[[package]]
 name = "pbjson"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8298,7 +8755,7 @@ dependencies = [
  "chrono",
  "console_error_panic_hook",
  "console_log",
- "itertools 0.11.0",
+ "itertools 0.14.0",
  "js-sys",
  "libloading",
  "log",
@@ -8342,7 +8799,18 @@ version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b4c5cc86750666a3ed20bdaf5ca2a0344f9c67674cae0515bec2da16fbaa47db"
 dependencies = [
- "fixedbitset",
+ "fixedbitset 0.4.2",
+ "indexmap 2.14.0",
+]
+
+[[package]]
+name = "petgraph"
+version = "0.8.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8701b58ea97060d5e5b155d383a69952a60943f0e6dfe30b04c287beb0b27455"
+dependencies = [
+ "fixedbitset 0.5.7",
+ "hashbrown 0.15.5",
  "indexmap 2.14.0",
 ]
 
@@ -8706,6 +9174,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "prefix-trie"
+version = "0.8.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4cf6e3177f0684016a5c209b00882e15f8bdd3f3bb48f0491df10cd102d0c6e7"
+dependencies = [
+ "either",
+ "ipnet",
+ "num-traits",
+]
+
+[[package]]
 name = "prettyplease"
 version = "0.2.37"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8805,6 +9284,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "prompt"
+version = "0.1.0"
+dependencies = [
+ "workspace-hack",
+]
+
+[[package]]
 name = "properties"
 version = "0.1.0"
 dependencies = [
@@ -8835,6 +9321,7 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -8852,6 +9339,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tracing",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -8891,6 +9379,7 @@ dependencies = [
  "tracing",
  "utoipa",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -8925,7 +9414,7 @@ dependencies = [
  "log",
  "multimap",
  "once_cell",
- "petgraph",
+ "petgraph 0.6.5",
  "prettyplease",
  "prost 0.12.6",
  "prost-types",
@@ -8954,7 +9443,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "27c6023962132f4b30eb4c172c91ce92d933da334c59c23cddee82358ddafb0b"
 dependencies = [
  "anyhow",
- "itertools 0.11.0",
+ "itertools 0.14.0",
  "proc-macro2",
  "quote",
  "syn 2.0.117",
@@ -9205,6 +9694,7 @@ dependencies = [
  "tracing",
  "twox-hash",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -9216,7 +9706,7 @@ dependencies = [
  "aligned-vec",
  "arbitrary",
  "arg_enum_proc_macro",
- "arrayvec",
+ "arrayvec 0.7.6",
  "av-scenechange",
  "av1-grain",
  "bitstream-io",
@@ -9282,6 +9772,7 @@ name = "readonly_pool"
 version = "0.1.0"
 dependencies = [
  "sqlx",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -9392,6 +9883,7 @@ dependencies = [
  "urlencoding",
  "utoipa",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -9434,8 +9926,12 @@ name = "remote_env_var"
 version = "0.1.0"
 dependencies = [
  "macro_env",
+ "macro_env_var",
+ "serde",
+ "serde_json",
  "thiserror 2.0.18",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -9478,9 +9974,9 @@ dependencies = [
 
 [[package]]
 name = "reqwest"
-version = "0.13.3"
+version = "0.13.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "62e0021ea2c22aed41653bc7e1419abb2c97e038ff2c33d0e1309e49a97deec0"
+checksum = "219c5811de6525e5416c7d5d53bb656d3afdbc6c5af816e0802bcfa42dbdc1c3"
 dependencies = [
  "base64 0.22.1",
  "bytes",
@@ -9566,7 +10062,7 @@ dependencies = [
  "nanoid",
  "ordered-float",
  "pin-project-lite",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "rig-derive",
  "schemars 1.2.1",
  "serde",
@@ -9627,7 +10123,7 @@ dependencies = [
  "pastey 0.2.3",
  "pin-project-lite",
  "rand 0.10.1",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "rmcp-macros",
  "schemars 1.2.1",
  "serde",
@@ -9668,6 +10164,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -9779,6 +10276,19 @@ dependencies = [
 
 [[package]]
 name = "rustix"
+version = "0.38.44"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fdb5bc1ae2baa591800df16c9ca78619bf65c0488b41b96ccec5d11220d8c154"
+dependencies = [
+ "bitflags 2.11.1",
+ "errno",
+ "libc",
+ "linux-raw-sys 0.4.15",
+ "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "rustix"
 version = "1.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6fe4565b9518b83ef4f91bb47ce29620ca828bd32cb7e408f0062e9930ba190"
@@ -9786,7 +10296,7 @@ dependencies = [
  "bitflags 2.11.1",
  "errno",
  "libc",
- "linux-raw-sys",
+ "linux-raw-sys 0.12.1",
  "windows-sys 0.61.2",
 ]
 
@@ -9909,6 +10419,7 @@ dependencies = [
  "base64 0.22.1",
  "hex",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -9917,6 +10428,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "urlencoding",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -9940,6 +10452,7 @@ dependencies = [
  "tracing",
  "utoipa",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -9985,6 +10498,7 @@ dependencies = [
  "macro_env",
  "macro_env_var",
  "macro_middleware",
+ "macro_service_urls",
  "macro_user_id",
  "macro_uuid",
  "memory",
@@ -10001,6 +10515,7 @@ dependencies = [
  "tracing",
  "utoipa",
  "utoipa-swagger-ui",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -10104,6 +10619,7 @@ dependencies = [
  "macro_entrypoint",
  "macro_env",
  "macro_middleware",
+ "macro_service_urls",
  "macro_user_id",
  "macro_uuid",
  "mention_utils",
@@ -10134,6 +10650,7 @@ dependencies = [
  "utoipa",
  "utoipa-swagger-ui",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -10146,8 +10663,10 @@ dependencies = [
  "chrono",
  "comms",
  "comms_db_client",
+ "crm",
  "document_sub_type",
  "email_db_client",
+ "entity_access",
  "futures",
  "http-body-util",
  "indexmap 2.14.0",
@@ -10180,6 +10699,8 @@ dependencies = [
  "tower-http",
  "tracing",
  "utoipa",
+ "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -10188,8 +10709,9 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "models_search",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -10203,10 +10725,12 @@ dependencies = [
  "lambda_runtime",
  "macro_aws_config",
  "macro_entrypoint",
+ "macro_service_urls",
  "s3_key",
  "sqs_client",
  "tokio",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -10243,6 +10767,7 @@ dependencies = [
  "remote_env_var",
  "thiserror 2.0.18",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -10294,7 +10819,7 @@ dependencies = [
  "models_email",
  "models_permissions",
  "rand 0.9.4",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "serde",
  "serde_json",
  "sqlx",
@@ -10303,6 +10828,7 @@ dependencies = [
  "tracing",
  "url",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -10485,6 +11011,7 @@ dependencies = [
  "serde_urlencoded",
  "url",
  "urlencoding",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -10571,6 +11098,7 @@ dependencies = [
  "aws-sdk-sesv2",
  "mockall",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -10638,6 +11166,7 @@ dependencies = [
  "sqlx",
  "tokio",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -10659,6 +11188,7 @@ dependencies = [
  "macro_uuid",
  "models_permissions",
  "sqlx",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -10817,6 +11347,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -10892,6 +11423,7 @@ dependencies = [
  "tracing",
  "utoipa",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -11134,6 +11666,7 @@ dependencies = [
  "strum",
  "tracing",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -11143,6 +11676,7 @@ dependencies = [
  "anyhow",
  "aws-sdk-sqs",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -11165,6 +11699,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596"
 
 [[package]]
+name = "static_assertions"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
+
+[[package]]
 name = "static_file"
 version = "0.1.0"
 dependencies = [
@@ -11175,8 +11715,9 @@ dependencies = [
  "mime",
  "model-entity",
  "non_empty",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -11196,6 +11737,7 @@ dependencies = [
  "macro_entrypoint",
  "macro_env",
  "macro_middleware",
+ "macro_service_urls",
  "model",
  "models_sfs",
  "s3_key",
@@ -11213,6 +11755,7 @@ dependencies = [
  "utoipa",
  "utoipa-swagger-ui",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -11221,12 +11764,14 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bytes",
+ "macro_service_urls",
  "models_sfs",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "serde",
  "serde_json",
  "tokio",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -11249,6 +11794,7 @@ dependencies = [
  "tokio-test",
  "tracing",
  "utoipa",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -11285,6 +11831,15 @@ dependencies = [
  "unicode-bidi",
  "unicode-normalization",
  "unicode-properties",
+]
+
+[[package]]
+name = "strip-ansi-escapes"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "011cbb39cf7c1f62871aea3cc46e5817b0937b49e9447370c93cacbe93a766d8"
+dependencies = [
+ "vte",
 ]
 
 [[package]]
@@ -11355,6 +11910,7 @@ dependencies = [
  "axum",
  "serde",
  "utoipa",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -11363,11 +11919,12 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "model",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "serde",
  "sync_service",
  "tokio",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -11426,6 +11983,17 @@ dependencies = [
  "thiserror 2.0.18",
  "tracing",
  "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "tabular"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d9a2882c514780a1973df90de9d68adcd8871bacc9a6331c3f28e6d2ff91a3d1"
+dependencies = [
+ "strip-ansi-escapes",
+ "unicode-width 0.1.14",
 ]
 
 [[package]]
@@ -11435,16 +12003,45 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7b2093cf4c8eb1e67749a6762251bc9cd836b6fc171623bd0a9d324d37af2417"
 
 [[package]]
+name = "target-lexicon"
+version = "0.13.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "adb6935a6f5c20170eeceb1a3835a49e12e19d792f6dd344ccc76a985ca5a6ca"
+
+[[package]]
+name = "target-spec"
+version = "3.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b00e973676af5497c2a69cc9787e2205c00f3b6f4f70e7d7b0112e28aa84b501"
+dependencies = [
+ "cfg-expr",
+ "guppy-workspace-hack",
+ "serde",
+ "target-lexicon",
+]
+
+[[package]]
 name = "task_dedup"
 version = "0.1.0"
 dependencies = [
  "agent",
  "anyhow",
- "async-openai",
  "async-trait",
+ "aws-sdk-secretsmanager",
+ "clap",
  "connection_gateway_client",
+ "embedding",
+ "futures",
+ "lexical_client",
+ "macro_aws_config",
  "macro_db_migrator",
+ "macro_entrypoint",
+ "macro_env",
+ "macro_env_var",
+ "macro_middleware",
+ "macro_service_urls",
  "model-entity",
+ "secretsmanager_client",
  "serde",
  "serde_json",
  "sqlx",
@@ -11453,6 +12050,7 @@ dependencies = [
  "tracing",
  "utoipa",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -11489,6 +12087,7 @@ dependencies = [
  "url",
  "utoipa",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -11500,7 +12099,7 @@ dependencies = [
  "fastrand 2.4.1",
  "getrandom 0.4.2",
  "once_cell",
- "rustix",
+ "rustix 1.1.4",
  "windows-sys 0.61.2",
 ]
 
@@ -11787,6 +12386,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "toml"
+version = "0.5.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f4f7f0dd8d50a853a531c426359045b1998f04219d88799810762cd4ad314234"
+dependencies = [
+ "indexmap 1.9.3",
+ "serde",
+]
+
+[[package]]
 name = "toml_datetime"
 version = "0.6.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11814,6 +12423,18 @@ dependencies = [
 
 [[package]]
 name = "toml_edit"
+version = "0.22.27"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "41fe8c660ae4257887cf66394862d21dbca4a6ddd26f04a3560410406a2f819a"
+dependencies = [
+ "indexmap 2.14.0",
+ "toml_datetime 0.6.11",
+ "toml_write",
+ "winnow 0.7.15",
+]
+
+[[package]]
+name = "toml_edit"
 version = "0.25.11+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b59c4d22ed448339746c59b905d24568fcbb3ab65a500494f7b8c3e97739f2b"
@@ -11832,6 +12453,12 @@ checksum = "a2abe9b86193656635d2411dc43050282ca48aa31c2451210f4202550afb7526"
 dependencies = [
  "winnow 1.0.3",
 ]
+
+[[package]]
+name = "toml_write"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5d99f8c9a7727884afe522e9bd5edbfc91a3312b36a77b5fb8926e4c31a41801"
 
 [[package]]
 name = "tonic"
@@ -12182,7 +12809,7 @@ dependencies = [
  "bytes",
  "futures",
  "mockall",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "scraper",
  "serde",
  "thiserror 2.0.18",
@@ -12190,6 +12817,7 @@ dependencies = [
  "tracing",
  "url",
  "utoipa",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -12205,7 +12833,7 @@ dependencies = [
  "macro_cors",
  "macro_entrypoint",
  "macro_env",
- "reqwest 0.13.3",
+ "reqwest 0.13.4",
  "scraper",
  "serde",
  "serde_json",
@@ -12217,6 +12845,7 @@ dependencies = [
  "url",
  "utoipa",
  "utoipa-swagger-ui",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -12319,6 +12948,7 @@ dependencies = [
  "lambda_runtime",
  "macro_aws_config",
  "macro_entrypoint",
+ "macro_service_urls",
  "model",
  "model-entity",
  "models_bulk_upload",
@@ -12332,6 +12962,7 @@ dependencies = [
  "tokio-util",
  "tracing",
  "walkdir",
+ "workspace-hack",
  "zip 2.4.2",
 ]
 
@@ -12353,6 +12984,7 @@ dependencies = [
  "sqs_client",
  "tokio",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -12389,6 +13021,7 @@ dependencies = [
  "serde_json",
  "sqlx",
  "tokio",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -12398,6 +13031,7 @@ dependencies = [
  "serde",
  "serde_json",
  "utoipa",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -12545,6 +13179,27 @@ name = "vsimd"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5c3082ca00d5a5ef149bb8b555a72ae84c9c59f7250f013ac822ac2e49b19c64"
+
+[[package]]
+name = "vte"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6cbce692ab4ca2f1f3047fcf732430249c0e971bfdd2b234cf2c47ad93af5983"
+dependencies = [
+ "arrayvec 0.5.2",
+ "utf8parse",
+ "vte_generate_state_changes",
+]
+
+[[package]]
+name = "vte_generate_state_changes"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2e369bee1b05d510a7b4ed645f5faa90619e05437111783ea5848f28d97d3c2e"
+dependencies = [
+ "proc-macro2",
+ "quote",
+]
 
 [[package]]
 name = "waker-fn"
@@ -13340,6 +13995,145 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
+ "workspace-hack",
+]
+
+[[package]]
+name = "workspace-hack"
+version = "0.1.0"
+dependencies = [
+ "ahash",
+ "aho-corasick",
+ "aws-credential-types",
+ "aws-runtime",
+ "aws-sigv4",
+ "aws-smithy-async",
+ "aws-smithy-http",
+ "aws-smithy-http-client",
+ "aws-smithy-runtime",
+ "aws-smithy-runtime-api",
+ "aws-smithy-types",
+ "aws_lambda_events",
+ "axum",
+ "axum-extra",
+ "base64 0.22.1",
+ "bitflags 2.11.1",
+ "byteorder",
+ "bytes",
+ "bzip2",
+ "bzip2-sys",
+ "cc",
+ "chrono",
+ "concurrent-queue",
+ "crossbeam-epoch",
+ "crossbeam-utils",
+ "crypto-bigint",
+ "crypto-common 0.1.6",
+ "data-encoding",
+ "digest 0.10.7",
+ "doppleganger",
+ "doppleganger-core",
+ "either",
+ "elliptic-curve",
+ "errno",
+ "event-listener 5.4.1",
+ "fastrand 2.4.1",
+ "flate2",
+ "foldhash 0.2.0",
+ "form_urlencoded",
+ "futures",
+ "futures-channel",
+ "futures-core",
+ "futures-executor",
+ "futures-io",
+ "futures-sink",
+ "futures-task",
+ "futures-util",
+ "generic-array",
+ "getrandom 0.2.17",
+ "getrandom 0.3.4",
+ "getrandom 0.4.2",
+ "hashbrown 0.14.5",
+ "hashbrown 0.16.1",
+ "hashbrown 0.17.1",
+ "hmac 0.12.1",
+ "hyper 0.14.32",
+ "hyper 1.9.0",
+ "hyper-rustls 0.24.2",
+ "hyper-rustls 0.27.9",
+ "hyper-util",
+ "indexmap 2.14.0",
+ "ipnet",
+ "lazy_static",
+ "libc",
+ "linux-raw-sys 0.12.1",
+ "log",
+ "memchr",
+ "mime_guess",
+ "miniz_oxide",
+ "num-bigint",
+ "num-integer",
+ "num-traits",
+ "once_cell",
+ "percent-encoding",
+ "phf_shared 0.10.0",
+ "phf_shared 0.13.1",
+ "prettyplease",
+ "proc-macro2",
+ "prost 0.12.6",
+ "quote",
+ "rand 0.10.1",
+ "rand 0.8.6",
+ "rand 0.9.4",
+ "redis",
+ "regex",
+ "regex-automata",
+ "regex-syntax",
+ "reqwest 0.13.4",
+ "rmcp",
+ "rsa",
+ "rustc-hash 2.1.2",
+ "rustix 1.1.4",
+ "rustls 0.21.12",
+ "rustls 0.23.40",
+ "rustls-webpki 0.103.13",
+ "schemars 1.2.1",
+ "scopeguard",
+ "security-framework-sys",
+ "semver",
+ "serde",
+ "serde_core",
+ "serde_json",
+ "serde_with",
+ "sha1 0.10.6",
+ "sha2 0.10.9",
+ "simd-adler32",
+ "slab",
+ "smallvec",
+ "spin 0.9.8",
+ "sqlx-core",
+ "sqlx-postgres",
+ "stable_deref_trait",
+ "subtle",
+ "syn 1.0.109",
+ "syn 2.0.117",
+ "sync_wrapper",
+ "thiserror 2.0.18",
+ "time",
+ "tokio",
+ "tokio-rustls 0.26.4",
+ "tokio-stream",
+ "tokio-util",
+ "tower 0.5.3",
+ "tower-http",
+ "tracing",
+ "tracing-core",
+ "tungstenite 0.28.0",
+ "typenum",
+ "url",
+ "uuid",
+ "zerocopy",
+ "zeroize",
 ]
 
 [[package]]
@@ -13353,6 +14147,16 @@ name = "xmlparser"
 version = "0.13.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "66fee0b777b0f5ac1c69bb06d361268faafa61cd4682ae064a171c16c433e9e4"
+
+[[package]]
+name = "xtask"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "guppy",
+ "hakari",
+ "serde_json",
+]
 
 [[package]]
 name = "xxhash-rust"

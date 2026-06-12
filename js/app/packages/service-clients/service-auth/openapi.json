@@ -680,6 +680,65 @@
         }
       }
     },
+    "/link/gmail/status": {
+      "get": {
+        "tags": ["link::gmail"],
+        "summary": "Checks whether the authenticated user's gmail link is valid.",
+        "operationId": "check_gmail_link_status",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GmailLinkStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/login/apple": {
       "post": {
         "tags": ["login::apple"],
@@ -1679,6 +1738,16 @@
             }
           },
           "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
             "description": "",
             "content": {
               "application/json": {
@@ -3053,75 +3122,6 @@
         }
       }
     },
-    "/user/stripe/checkout": {
-      "post": {
-        "tags": ["user::stripe::create_checkout_session"],
-        "summary": "**LEGACY DO NOT USE** Creates a Stripe checkout session for the user to subscribe.",
-        "operationId": "create_checkout_session",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateCheckoutSessionRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/StripeSessionResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/user/stripe/checkoutv2": {
       "post": {
         "tags": ["user::stripe::create_checkout_session_v2"],
@@ -3218,78 +3218,6 @@
             }
           },
           "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/user/stripe/subscription": {
-      "patch": {
-        "tags": ["user::stripe::patch_subscription_tier"],
-        "summary": "Updates the user's subscription tier, swapping both their RBAC role and Stripe subscription line item.",
-        "operationId": "patch_subscription_tier",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PatchSubscriptionTierRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": ""
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "409": {
             "description": "",
             "content": {
               "application/json": {
@@ -3418,33 +3346,6 @@
           }
         }
       },
-      "CreateCheckoutSessionRequest": {
-        "type": "object",
-        "description": "Request body for creating a Stripe checkout session",
-        "required": ["successUrl", "cancelUrl"],
-        "properties": {
-          "cancelUrl": {
-            "type": "string",
-            "description": "The URL to redirect to if checkout is cancelled"
-          },
-          "discount": {
-            "type": ["string", "null"],
-            "description": "Optional discount/promo code to apply"
-          },
-          "metadata": {
-            "$ref": "#/components/schemas/CheckoutSessionMetadata",
-            "description": "Tracking metadata for conversion attribution"
-          },
-          "successUrl": {
-            "type": "string",
-            "description": "The URL to redirect to on successful checkout"
-          },
-          "tier": {
-            "$ref": "#/components/schemas/StripeProductTier",
-            "description": "The tier, defaults to haiku"
-          }
-        }
-      },
       "CreateCheckoutSessionV2Request": {
         "type": "object",
         "description": "Request body for creating a Stripe checkout session",
@@ -3569,6 +3470,16 @@
             "description": "The number of added lines reported by GitHub, when enrichment succeeds.",
             "minimum": 0
           },
+          "authorId": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "The stable numeric GitHub user id for the pull request author, when available.",
+            "minimum": 0
+          },
+          "authorLogin": {
+            "type": ["string", "null"],
+            "description": "The GitHub login for the pull request author, when available."
+          },
           "checks": {
             "type": ["array", "null"],
             "items": {
@@ -3588,6 +3499,10 @@
             "format": "int64",
             "description": "The number of deleted lines reported by GitHub, when enrichment succeeds.",
             "minimum": 0
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "The pull request description (body), when available."
           },
           "displayName": {
             "type": "string",
@@ -3610,6 +3525,13 @@
           "owner": {
             "type": "string",
             "description": "The GitHub repository owner or organization."
+          },
+          "participantGithubUserIds": {
+            "type": ["array", "null"],
+            "items": {
+              "type": "string"
+            },
+            "description": "Stable numeric GitHub user ids (as strings) for everyone involved in the pull request.\nQueried by the foreign entity `includes_me` filter, so stored metadata merges this as a\nunion rather than replacing it (partial write paths must not drop known participants)."
           },
           "repo": {
             "type": "string",
@@ -3837,6 +3759,12 @@
             "type": ["string", "null"],
             "description": "GitHub's relationship label for the author, when available."
           },
+          "authorId": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "The stable numeric GitHub user id for the comment author, when available.",
+            "minimum": 0
+          },
           "authorLogin": {
             "type": ["string", "null"],
             "description": "The GitHub login for the comment author, when available."
@@ -3915,6 +3843,16 @@
         "type": "string",
         "description": "The normalized lifecycle status for a GitHub pull request.",
         "enum": ["open", "closed", "merged"]
+      },
+      "GmailLinkStatusResponse": {
+        "type": "object",
+        "required": ["reauthentication_required"],
+        "properties": {
+          "reauthentication_required": {
+            "type": "boolean",
+            "description": "Whether the user must reauthenticate their Gmail link."
+          }
+        }
       },
       "InitGithubLinkResponse": {
         "type": "object",
@@ -4009,17 +3947,6 @@
           "referral_code": {
             "type": ["string", "null"],
             "description": "The referral code"
-          }
-        }
-      },
-      "PatchSubscriptionTierRequest": {
-        "type": "object",
-        "description": "Request body for changing the user's subscription tier",
-        "required": ["newTier"],
-        "properties": {
-          "newTier": {
-            "$ref": "#/components/schemas/StripeProductTier",
-            "description": "The new tier to move the user to"
           }
         }
       },
@@ -4252,10 +4179,6 @@
             "description": "The idp_id you need to perform sso login with."
           }
         }
-      },
-      "StripeProductTier": {
-        "type": "string",
-        "enum": ["haiku", "sonnet", "opus"]
       },
       "StripeSessionResponse": {
         "type": "object",

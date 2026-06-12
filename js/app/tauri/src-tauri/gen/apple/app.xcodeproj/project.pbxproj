@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		1292DFBC353451F01E5A0900 /* tauri-plugin-call-kit in Frameworks */ = {isa = PBXBuildFile; productRef = 31216FAD4580C9A0B4F070BF /* tauri-plugin-call-kit */; };
 		299814393FFBF154FAD94CA8 /* QuartzCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F3673D372C5ABDD1AD6E7067 /* QuartzCore.framework */; };
 		2FBDFDC47F5358109C23AF80 /* ShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = F2F6B23901C11426024E1D4E /* ShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		3036F7131E55779ABF15BD58 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 02B7F8347F94B067E6B27396 /* LaunchScreen.storyboard */; };
@@ -64,6 +65,7 @@
 		0534025E6A6DC9BF45F0EC3E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		07B9FBE7A5B295FC80DD38FD /* tests.rs */ = {isa = PBXFileReference; path = tests.rs; sourceTree = "<group>"; };
 		0E2B15F176E4B041AE33EEEA /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = System/Library/Frameworks/UIKit.framework; sourceTree = SDKROOT; };
+		0E388DBA934229FAE3222596 /* ios */ = {isa = PBXFileReference; lastKnownFileType = folder; name = ios; path = ../../../callkit_plugin/ios; sourceTree = SOURCE_ROOT; };
 		0EAE3E64C98FE3472A9133C6 /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
 		1631E4CFBB715FFDBF919C8C /* main.rs */ = {isa = PBXFileReference; path = main.rs; sourceTree = "<group>"; };
 		17B52554D60D361AFE791C3E /* lib.rs */ = {isa = PBXFileReference; path = lib.rs; sourceTree = "<group>"; };
@@ -75,14 +77,17 @@
 		5116F21CDEA54A9508733EFB /* NotificationServiceExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = NotificationServiceExtension.entitlements; sourceTree = "<group>"; };
 		682535EEFE1DA20BE07B123C /* main.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = main.mm; sourceTree = "<group>"; };
 		81E326B61ED92E1D1EECF952 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		857275BDA611F410D652DC52 /* noop.rs */ = {isa = PBXFileReference; path = noop.rs; sourceTree = "<group>"; };
 		9625271C5AAE7E545027267A /* debug.rs */ = {isa = PBXFileReference; path = debug.rs; sourceTree = "<group>"; };
 		9D39399531526740F7E44FFB /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		9FACFFCB6E3743955F72464C /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = System/Library/Frameworks/Security.framework; sourceTree = SDKROOT; };
 		AF1DE57E7D9CF13BB2E0E038 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		C99D2FD70E50E61F99B50E65 /* shared.rs */ = {isa = PBXFileReference; path = shared.rs; sourceTree = "<group>"; };
 		CE1209BFDECB28E00189B168 /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
 		D8F57162F5CC7AEDD55F173D /* WebKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WebKit.framework; path = System/Library/Frameworks/WebKit.framework; sourceTree = SDKROOT; };
 		DCE4B06F002B1CDA6E6F3C2A /* tauri_protocol.rs */ = {isa = PBXFileReference; path = tauri_protocol.rs; sourceTree = "<group>"; };
 		DE016BCDACB745FDB90321AF /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
+		DF0AB432F5C778F3F2D20F2A /* ios.rs */ = {isa = PBXFileReference; path = ios.rs; sourceTree = "<group>"; };
 		E008C8DABBF95A4BBAE08B15 /* share_target.rs */ = {isa = PBXFileReference; path = share_target.rs; sourceTree = "<group>"; };
 		F2F6B23901C11426024E1D4E /* ShareExtension.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = ShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		F3673D372C5ABDD1AD6E7067 /* QuartzCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuartzCore.framework; path = System/Library/Frameworks/QuartzCore.framework; sourceTree = SDKROOT; };
@@ -96,6 +101,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				C869023DDFE275D42F3FBF29 /* libapp.a in Frameworks */,
+				1292DFBC353451F01E5A0900 /* tauri-plugin-call-kit in Frameworks */,
 				31585529C029A01BE249A285 /* CoreGraphics.framework in Frameworks */,
 				E68F6CFDAED6503ABB4044A5 /* Metal.framework in Frameworks */,
 				9D59FB167BB4E699DA17D1E9 /* MetalKit.framework in Frameworks */,
@@ -154,6 +160,9 @@
 		75535DC8237A09A15D793259 /* share_target */ = {
 			isa = PBXGroup;
 			children = (
+				DF0AB432F5C778F3F2D20F2A /* ios.rs */,
+				857275BDA611F410D652DC52 /* noop.rs */,
+				C99D2FD70E50E61F99B50E65 /* shared.rs */,
 				07B9FBE7A5B295FC80DD38FD /* tests.rs */,
 			);
 			path = share_target;
@@ -165,6 +174,14 @@
 				FB1C68C0357A1866B3D27465 /* app */,
 			);
 			path = Sources;
+			sourceTree = "<group>";
+		};
+		7C491BBB7C8D3D6FD3965CCB /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				0E388DBA934229FAE3222596 /* ios */,
+			);
+			name = Packages;
 			sourceTree = "<group>";
 		};
 		83291B4320BCCBF029F53A03 /* NotificationServiceExtension */ = {
@@ -200,6 +217,7 @@
 				2867E55E70187711EE923EBD /* app_iOS */,
 				BAFB695BB8415511FEC74542 /* Externals */,
 				83291B4320BCCBF029F53A03 /* NotificationServiceExtension */,
+				7C491BBB7C8D3D6FD3965CCB /* Packages */,
 				1C4105EF6E39BF7F1E4019F3 /* ShareExtension */,
 				78CBE3E5873199C0066F12DF /* Sources */,
 				855775165ACE55D883F89EB3 /* src */,
@@ -234,18 +252,25 @@
 			path = app;
 			sourceTree = "<group>";
 		};
-		"TEMP_E7B71914-BE81-4A93-AD09-CC8988C6EBE3" /* arm64 */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			path = arm64;
-			sourceTree = "<group>";
-		};
-		"TEMP_FDEDC763-2672-41E7-B94A-E03693807B94" /* x86_64 */ = {
+		"TEMP_3A50DCA4-FDEA-4D4D-904A-20A8215EAE45" /* x86_64 */ = {
 			isa = PBXGroup;
 			children = (
 			);
 			path = x86_64;
+			sourceTree = "<group>";
+		};
+		"TEMP_8A5DE614-AE5B-4A39-AD6F-31B049BCE93C" /* debug */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = debug;
+			sourceTree = "<group>";
+		};
+		"TEMP_D5C20B7B-2E8D-4541-AD80-5A0585916C0A" /* arm64 */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = arm64;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -303,6 +328,7 @@
 			);
 			name = app_iOS;
 			packageProductDependencies = (
+				31216FAD4580C9A0B4F070BF /* tauri-plugin-call-kit */,
 			);
 			productName = app_iOS;
 			productReference = FBC720DFA1D01F55B0A32344 /* app_iOS.app */;
@@ -341,6 +367,9 @@
 			);
 			mainGroup = 87648061424F20D5D4871E9E;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				CD7161A5D818C2B0EEDFFB0A /* XCLocalSwiftPackageReference "../../../callkit_plugin/ios" */,
+			);
 			preferredProjectObjectVersion = 77;
 			projectDirPath = "";
 			projectRoot = "";
@@ -467,11 +496,14 @@
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = TY74Q77JBD;
 				ENABLE_BITCODE = NO;
+				ENABLE_DEBUG_DYLIB = NO;
 				"EXCLUDED_ARCHS[sdk=iphoneos*]" = x86_64;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
 					"\".\"",
 				);
+				"FRAMEWORK_SEARCH_PATHS[arch=arm64]" = "$(inherited) $(PROJECT_DIR)/Externals/arm64/$(CONFIGURATION)";
+				"FRAMEWORK_SEARCH_PATHS[arch=x86_64]" = "$(inherited) $(PROJECT_DIR)/Externals/x86_64/$(CONFIGURATION)";
 				INFOPLIST_FILE = app_iOS/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -581,11 +613,14 @@
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = TY74Q77JBD;
 				ENABLE_BITCODE = NO;
+				ENABLE_DEBUG_DYLIB = NO;
 				"EXCLUDED_ARCHS[sdk=iphoneos*]" = x86_64;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
 					"\".\"",
 				);
+				"FRAMEWORK_SEARCH_PATHS[arch=arm64]" = "$(inherited) $(PROJECT_DIR)/Externals/arm64/$(CONFIGURATION)";
+				"FRAMEWORK_SEARCH_PATHS[arch=x86_64]" = "$(inherited) $(PROJECT_DIR)/Externals/x86_64/$(CONFIGURATION)";
 				INFOPLIST_FILE = app_iOS/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -751,6 +786,20 @@
 			defaultConfigurationName = debug;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		CD7161A5D818C2B0EEDFFB0A /* XCLocalSwiftPackageReference "../../../callkit_plugin/ios" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../../../callkit_plugin/ios;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		31216FAD4580C9A0B4F070BF /* tauri-plugin-call-kit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = "tauri-plugin-call-kit";
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = A9B1B09F1872768368ACECE2 /* Project object */;
 }

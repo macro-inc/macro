@@ -1,5 +1,9 @@
-use crate::links::get::{fetch_owned_link_for_message, fetch_owned_link_for_thread};
+use crate::links::get::{
+    fetch_inboxes_for_macro_id, fetch_link_by_email, fetch_owned_link_for_message,
+    fetch_owned_link_for_thread,
+};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
+use models_email::service::link::UserProvider;
 use sqlx::types::Uuid;
 use sqlx::{Pool, Postgres};
 
@@ -90,11 +94,13 @@ async fn insert_inbox_with_thread_and_message(
     (link_id, thread_id, message_id)
 }
 
-async fn insert_delegation(pool: &Pool<Postgres>, primary: &str, child: &str) {
+async fn insert_delegation(pool: &Pool<Postgres>, primary: &str, child: &str, link_id: Uuid) {
     sqlx::query!(
-        r#"INSERT INTO macro_user_links (primary_macro_id, child_macro_id) VALUES ($1, $2)"#,
+        r#"INSERT INTO macro_user_links (primary_macro_id, child_macro_id, link_id)
+           VALUES ($1, $2, $3)"#,
         primary,
         child,
+        link_id,
     )
     .execute(pool)
     .await
@@ -107,7 +113,7 @@ async fn resolves_inbox_for_owner_and_delegate(pool: Pool<Postgres>) -> anyhow::
     insert_user(&pool, PRIMARY, "primary@corp.test").await;
     let (link_id, thread_id, message_id) =
         insert_inbox_with_thread_and_message(&pool, CHILD, "sharedbox@corp.test").await;
-    insert_delegation(&pool, PRIMARY, CHILD).await;
+    insert_delegation(&pool, PRIMARY, CHILD, link_id).await;
 
     // Delegate resolves the shared inbox from both thread and message.
     assert_eq!(
@@ -139,9 +145,9 @@ async fn resolves_nothing_for_unrelated_caller(pool: Pool<Postgres>) -> anyhow::
     insert_user(&pool, CHILD, "sharedbox@corp.test").await;
     insert_user(&pool, PRIMARY, "primary@corp.test").await;
     insert_user(&pool, STRANGER, "stranger@corp.test").await;
-    let (_link_id, thread_id, message_id) =
+    let (link_id, thread_id, message_id) =
         insert_inbox_with_thread_and_message(&pool, CHILD, "sharedbox@corp.test").await;
-    insert_delegation(&pool, PRIMARY, CHILD).await;
+    insert_delegation(&pool, PRIMARY, CHILD, link_id).await;
 
     // STRANGER is a real user who neither owns nor is delegated the inbox.
     assert!(
@@ -154,6 +160,82 @@ async fn resolves_nothing_for_unrelated_caller(pool: Pool<Postgres>) -> anyhow::
             .await?
             .is_none()
     );
+
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn scoped_delegation_sees_only_its_link(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    insert_user(&pool, CHILD, "sharedbox@corp.test").await;
+    insert_user(&pool, PRIMARY, "primary@corp.test").await;
+    let (link_a, _, _) =
+        insert_inbox_with_thread_and_message(&pool, CHILD, "sharedbox@corp.test").await;
+    insert_delegation(&pool, PRIMARY, CHILD, link_a).await;
+
+    // The child connects a second inbox after the grant; the scoped delegate
+    // must not see it.
+    let (link_b, thread_b, message_b) =
+        insert_inbox_with_thread_and_message(&pool, CHILD, "second@corp.test").await;
+
+    let inbox_ids: Vec<Uuid> = fetch_inboxes_for_macro_id(&pool, PRIMARY)
+        .await?
+        .into_iter()
+        .map(|l| l.id)
+        .collect();
+    assert_eq!(inbox_ids, vec![link_a]);
+
+    assert!(
+        fetch_owned_link_for_thread(&pool, PRIMARY, thread_b)
+            .await?
+            .is_none()
+    );
+    assert!(
+        fetch_owned_link_for_message(&pool, PRIMARY, message_b)
+            .await?
+            .is_none()
+    );
+
+    // The child still owns both inboxes.
+    let mut child_inboxes: Vec<Uuid> = fetch_inboxes_for_macro_id(&pool, CHILD)
+        .await?
+        .into_iter()
+        .map(|l| l.id)
+        .collect();
+    child_inboxes.sort();
+    let mut expected = vec![link_a, link_b];
+    expected.sort();
+    assert_eq!(child_inboxes, expected);
+
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn fetch_link_by_email_finds_link_owned_by_another_macro_user(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    // A shared external mailbox connected by one macro user as a data-source link
+    // (owner's macro_id, mailbox email). A second user connecting the same mailbox
+    // discovers it across all macro_ids — the trigger for the 409 / shared-inbox promote.
+    insert_user(&pool, CHILD, "support@external.test").await;
+    let (link_id, _, _) =
+        insert_inbox_with_thread_and_message(&pool, CHILD, "support@external.test").await;
+
+    let found = fetch_link_by_email(&pool, "support@external.test", UserProvider::Gmail).await?;
+    assert_eq!(
+        found.map(|l| (l.id, l.macro_id.as_ref().to_string())),
+        Some((link_id, CHILD.to_string()))
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn fetch_link_by_email_none_when_mailbox_unconnected(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    // No link for this mailbox → connect takes the plain data-source path, no dedup.
+    let found = fetch_link_by_email(&pool, "nobody@external.test", UserProvider::Gmail).await?;
+    assert!(found.is_none());
 
     Ok(())
 }

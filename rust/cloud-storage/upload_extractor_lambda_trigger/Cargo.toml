@@ -19,4 +19,5 @@ serde_json = { workspace = true }
 sqs_client = { path = "../sqs_client" }
 tokio = { workspace = true }
 tracing = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 

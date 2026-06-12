@@ -5,6 +5,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { UserIcon } from '@core/component/UserIcon';
 import { UserTooltip } from '@core/component/UserTooltip';
 import { useEmail, useUserId } from '@core/context/user';
+import { isMobile } from '@core/mobile/isMobile';
 import {
   type CombinedRecipientItem,
   type CombinedRecipientKind,
@@ -38,6 +39,7 @@ import {
   For,
   type JSX,
   Match,
+  on,
   onMount,
   Show,
   Switch,
@@ -278,6 +280,20 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
 
   const [listboxRef, setListboxRef] = createSignal<HTMLElement | undefined>();
 
+  // The chips container caps its height and scrolls; keep the input's line
+  // visible as chips push it down.
+  createEffect(
+    on(
+      () => props.selectedOptions.length,
+      () => {
+        requestAnimationFrame(() => {
+          inputRef()?.scrollIntoView({ block: 'nearest' });
+        });
+      },
+      { defer: true }
+    )
+  );
+
   const debouncedHandleChange = debounce(handleChange, 100);
 
   const [isOpen, setIsOpen] = createSignal<boolean>();
@@ -511,7 +527,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
         onInputChange={onInputChange}
         shouldFocusWrap
         placeholder={
-          props.selectedOptions?.length === 0
+          props.selectedOptions?.length === 0 || isMobile()
             ? (props.placeholder ?? placeholderText())
             : undefined
         }
@@ -532,7 +548,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                 <div
                   ref={props.horizontalScroll ? setChipsScrollRef : undefined}
                   class={cn(
-                    'flex gap-1.5 text-ink scrollbar-hidden',
+                    'flex items-center gap-1.5 text-ink scrollbar-hidden',
                     props.horizontalScroll
                       ? 'flex-nowrap overflow-x-auto sm:flex-wrap sm:overflow-x-hidden sm:max-h-37.5 sm:overflow-y-auto pb-0.5 sm:pb-0'
                       : 'flex-wrap max-h-37.5 overflow-y-auto'

@@ -12,6 +12,7 @@ import MagnifyingGlass from '@phosphor-icons/core/regular/magnifying-glass.svg';
 import { useSearchResponseItemMapper } from '@queries/soup/transform-utils';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import { useSplitLayout } from 'app/component/split-layout/layout';
+import { globalSplitManager } from 'app/signal/splitLayout';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { BaseTool } from './BaseTool';
 import { Tool } from './Tool';
@@ -72,13 +73,25 @@ const UnifiedSearchToolResponse = (props: {
   query: string;
 }) => {
   const mapResponseItem = useSearchResponseItemMapper();
-  const { replaceOrInsertSplit } = useSplitLayout();
+  const { insertSplit } = useSplitLayout();
 
   const entities = createMemo(() =>
     props.results.flatMap(
       (result) => mapResponseItem(result, props.query) ?? []
     )
   );
+
+  const openEntity = async (entity: SearchEntity) => {
+    const content = getEntityClickContent(entity);
+    insertSplit(content);
+
+    if (content.params) {
+      const blockHandle = await globalSplitManager()
+        ?.getOrchestrator()
+        .getBlockHandle(content.id);
+      await blockHandle?.goToLocationFromParams(content.params);
+    }
+  };
 
   return (
     <div class="max-h-120 overflow-y-auto">
@@ -89,9 +102,7 @@ const UnifiedSearchToolResponse = (props: {
             return (
               <SearchResultRow
                 entity={entity}
-                onClick={() =>
-                  replaceOrInsertSplit(getEntityClickContent(entity))
-                }
+                onClick={() => openEntity(entity)}
               />
             );
           }}

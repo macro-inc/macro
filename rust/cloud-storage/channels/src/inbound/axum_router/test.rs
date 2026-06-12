@@ -151,6 +151,15 @@ impl EntityAccessService for TestAccessService {
         }
     }
 
+    async fn get_crm_entity_permission_with_team(
+        &self,
+        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+        _entity_id: &str,
+        _entity_type: EntityType,
+    ) -> Result<(EntityPermission, uuid::Uuid), AccessError> {
+        unimplemented!("channels test mock does not support CRM entity access")
+    }
+
     async fn get_call_channel(
         &self,
         _call_id: &Uuid,
@@ -255,6 +264,7 @@ impl ChannelService for MockService {
             channel_id,
             thread_id: None,
             sender_id: "macro|user@example.com".to_string(),
+            bot_profile: None,
             content: "message context".to_string(),
             created_at: now,
             updated_at: now,
@@ -1045,6 +1055,7 @@ impl ChannelService for AroundHasItemsService {
             id: Uuid::new_v4(),
             channel_id,
             sender_id: "macro|user@example.com".to_string(),
+            bot_profile: None,
             content: "hello".to_string(),
             created_at: now,
             updated_at: now,

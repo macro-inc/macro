@@ -1,0 +1,48 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH matched AS (\n                SELECT c.id, c.last_interaction AS updated_at\n                FROM crm_companies c\n                WHERE c.team_id = $1\n                  AND (\n                      (c.hidden = FALSE AND ($2::bool IS NULL OR $2 = FALSE))\n                      OR (c.hidden = TRUE AND $2 = TRUE AND $9)\n                  )\n                  AND (cardinality($3::uuid[]) = 0 OR c.id = ANY($3))\n                  AND EXISTS (\n                      SELECT 1\n                      FROM crm_domains d\n                      LEFT JOIN crm_domain_directory dd\n                          ON LOWER(dd.domain) = LOWER(d.domain)\n                      WHERE d.company_id = c.id\n                        AND (d.domain ILIKE $4 OR dd.name ILIKE $4)\n                  )\n                  AND ($7::timestamptz IS NULL OR (c.last_interaction, c.id) < ($7, $8))\n                ORDER BY c.last_interaction DESC, c.id DESC\n                LIMIT $5\n            ),\n            primary_domain AS (\n                SELECT DISTINCT ON (d.company_id)\n                    d.company_id,\n                    COALESCE(dd.name, d.domain) AS display_name\n                FROM crm_domains d\n                LEFT JOIN crm_domain_directory dd\n                    ON LOWER(dd.domain) = LOWER(d.domain)\n                WHERE d.company_id IN (SELECT id FROM matched)\n                ORDER BY d.company_id, d.created_at ASC NULLS LAST\n            )\n            SELECT\n                m.id                                  AS \"id!\",\n                COALESCE(pd.display_name, '')         AS \"name!\",\n                regexp_replace(\n                    COALESCE(pd.display_name, ''),\n                    $6, '<macro_em>\\1</macro_em>', 'gi'\n                )                                     AS \"name_highlighted!\",\n                m.updated_at                          AS \"updated_at!\"\n            FROM matched m\n            LEFT JOIN primary_domain pd ON pd.company_id = m.id\n            ORDER BY m.updated_at DESC, m.id DESC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "name_highlighted!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "updated_at!",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool",
+        "UuidArray",
+        "Text",
+        "Int8",
+        "Text",
+        "Timestamptz",
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      null,
+      false
+    ]
+  },
+  "hash": "e63fd5c15b6e5327aecb2524ee304fcd25df705766b08c6fd8d39d10cacfb33e"
+}

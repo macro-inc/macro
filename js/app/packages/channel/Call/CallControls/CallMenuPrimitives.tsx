@@ -1,5 +1,4 @@
-import Check from '@phosphor/check.svg';
-import { cn, Dropdown } from '@ui';
+import { Dropdown } from '@ui';
 import type { Component, JSX } from 'solid-js';
 
 /**
@@ -18,23 +17,4 @@ export const MenuLabel: Component<{ children: JSX.Element }> = (props) => (
  */
 export const MenuDivider: Component = () => (
   <Dropdown.Separator class="my-1 h-px border-0 bg-edge-muted -mx-1.5" />
-);
-
-/**
- * Inline checkbox affordance — a small square that fills accent when checked
- * and shows an outlined empty box when not. Matches the soup-menu checkbox
- * pattern. Visual-only; pair with a clickable parent for the actual toggle.
- */
-export const InlineCheckbox: Component<{ checked: boolean }> = (props) => (
-  <span
-    aria-hidden
-    class={cn(
-      'inline-flex items-center justify-center size-3.5 shrink-0 rounded-sm',
-      props.checked
-        ? 'bg-accent text-surface'
-        : 'bg-transparent border border-edge-muted text-transparent'
-    )}
-  >
-    <Check class="size-2.5" />
-  </span>
 );

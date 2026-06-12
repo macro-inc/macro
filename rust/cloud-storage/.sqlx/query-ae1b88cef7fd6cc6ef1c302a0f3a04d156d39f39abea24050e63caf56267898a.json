@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH query AS (\n                SELECT key, vec::vector AS vec\n                FROM unnest($1::text[], $2::text[]) AS t(key, vec)\n            ),\n            scored AS (\n                SELECT\n                    e.document_id,\n                    e.search_key,\n                    e.content,\n                    e.embedding::text AS embedding_text,\n                    MAX(1 - (e.embedding <=> q.vec))::real AS score\n                FROM task_duplicate_embedding e\n                JOIN \"Document\" d ON d.id = e.document_id\n                JOIN document_sub_type dst ON dst.document_id = d.id AND dst.sub_type = 'task'\n                LEFT JOIN team_task tt ON tt.document_id = d.id\n                CROSS JOIN query q\n                WHERE d.\"deletedAt\" IS NULL\n                  AND (\n                    d.owner = $3\n                    OR ($4::uuid IS NOT NULL AND tt.team_id = $4)\n                  )\n                  AND ($5::text IS NULL OR e.document_id <> $5)\n                  AND (\n                    NOT $6\n                    OR NOT EXISTS (\n                        SELECT 1\n                        FROM task_duplicate_match m\n                        WHERE m.task_id = LEAST($5, e.document_id)\n                          AND m.duplicate_task_id = GREATEST($5, e.document_id)\n                          AND m.status = 'dismissed'\n                    )\n                  )\n                GROUP BY e.document_id, e.search_key, e.content, e.embedding\n            ),\n            ranked AS (\n                SELECT document_id, MAX(score) AS best\n                FROM scored\n                GROUP BY document_id\n                ORDER BY best DESC\n                LIMIT $7\n            )\n            SELECT\n                s.document_id AS \"document_id!\",\n                s.search_key AS \"search_key!\",\n                s.content AS \"content!\",\n                s.embedding_text AS \"embedding_text!\",\n                s.score AS \"score!\"\n            FROM scored s\n            JOIN ranked r ON r.document_id = s.document_id\n            ORDER BY r.best DESC, s.document_id, s.score DESC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "document_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "search_key!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "content!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "embedding_text!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "score!",
+        "type_info": "Float4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "TextArray",
+        "Text",
+        "Uuid",
+        "Text",
+        "Bool",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "ae1b88cef7fd6cc6ef1c302a0f3a04d156d39f39abea24050e63caf56267898a"
+}

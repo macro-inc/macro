@@ -130,12 +130,14 @@ function titleNavigationPlugin(
 
 export const TitlePlaceholderSignal = createBlockSignal<string | undefined>();
 
-export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
+export function TitleEditor(
+  props: { autoFocusOnMount?: boolean; mustBeConnected?: boolean } = {}
+) {
   const mdData = mdStore.get;
   const setMdData = mdStore.set;
   const blockData = blockDataSignal.get;
 
-  const canEdit = useCanEdit();
+  const canEdit = useCanEdit(props.mustBeConnected);
   const renameMarkdownDocument = useRenameMarkdownDocument();
   const {
     persistedName: persistedDocumentName,
@@ -170,7 +172,7 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
     debouncedFlushRename();
   };
 
-  const debouncedFlushRename = debounce(flushPendingRename, 2000);
+  const debouncedFlushRename = debounce(flushPendingRename, 400);
 
   const [state, setState] = createSignal('');
   const [initialized, setInitialized] = createSignal(false);

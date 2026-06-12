@@ -1,24 +1,15 @@
-import type { Entity } from '@core/types';
 import {
   type EntityData,
   getTaskAssigneeIds,
   getTaskStatusOptionId,
   isTaskEntity,
   type TaskEntityWithProperties,
+  toNotificationEntity,
   type WithNotification,
 } from '@entity';
 import { getTaskPriorityOptionId } from '@entity/utils/task-properties';
 import { compositeEntity, type NotificationSource } from '@notifications';
 import { PROPERTY_OPTION_IDS } from '@property/constants';
-
-// Channel messages don't have their own notifications — they share the parent
-// channel's. Resolve to the channel entity for notification lookups.
-function notificationLookupEntity(entity: EntityData): Entity {
-  if (entity.type === 'channel_message') {
-    return { type: 'channel', id: entity.channelId };
-  }
-  return entity;
-}
 
 /**
  * Unread filter - entity has unread content.
@@ -32,9 +23,10 @@ export function unreadFilter(notificationSource: NotificationSource) {
     if (entity.type === 'email') {
       return !entity.isRead;
     }
+
     const notifications =
       notificationSource.notificationsByEntity()[
-        compositeEntity(notificationLookupEntity(entity))
+        compositeEntity(toNotificationEntity(entity))
       ];
 
     return notifications?.some((n) => !n.viewed_at) ?? false;
@@ -54,7 +46,7 @@ export function notDoneFilter(notificationSource: NotificationSource) {
 
     const notifications =
       notificationSource.notificationsByEntity()[
-        compositeEntity(notificationLookupEntity(entity))
+        compositeEntity(toNotificationEntity(entity))
       ];
 
     return notifications?.some(({ done }) => !done);
@@ -115,6 +107,32 @@ export function channelsFilter(entity: EntityData): boolean {
 
 export function callsFilter(entity: EntityData): boolean {
   return entity.type === 'call';
+}
+
+export function crmCompanyFilter(entity: EntityData): boolean {
+  return entity.type === 'crm_company';
+}
+
+/**
+ * Entity types the search view supports. Mirrors the search preset's
+ * server-side exclusions (foreign entities + CRM) so entities that enter
+ * the soup cache outside the query — e.g. websocket-driven optimistic
+ * inserts — don't surface in the search feed.
+ */
+export function searchSupportedFilter(entity: EntityData): boolean {
+  return (
+    entity.type !== 'foreign' &&
+    entity.type !== 'crm_company' &&
+    entity.type !== 'crm_contact'
+  );
+}
+
+export function crmCompanyActiveFilter(entity: EntityData): boolean {
+  return entity.type === 'crm_company' && !entity.hidden;
+}
+
+export function crmCompanyHiddenFilter(entity: EntityData): boolean {
+  return entity.type === 'crm_company' && entity.hidden;
 }
 
 export function filesAndFolderFilter(entity: EntityData): boolean {

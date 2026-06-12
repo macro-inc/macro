@@ -19,6 +19,7 @@ use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_env::Environment;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
+use macro_service_urls::ConnectionGatewayUrl;
 use secretsmanager_client::SecretManager;
 use sha2::Sha256;
 use sqlx::postgres::PgPoolOptions;
@@ -73,6 +74,7 @@ pub async fn main() -> anyhow::Result<()> {
         .await?;
 
     let vars = config::Vars::new()?;
+    let connection_gateway_url = ConnectionGatewayUrl::new()?.to_string();
 
     let hmac_key = Hmac::<Sha256>::new_from_slice(unsubscribe_hmac_secret.as_ref().as_bytes())
         .expect("HMAC accepts any key size");
@@ -152,12 +154,12 @@ pub async fn main() -> anyhow::Result<()> {
     };
     let reader_realtime_adapter = WebSocketGatewayAdapter::new(ConnectionGatewayClient::new(
         internal_secret_key.as_ref().to_string(),
-        vars.connection_gateway_url.as_ref().to_string(),
+        connection_gateway_url.clone(),
     ));
     let notification_events_realtime_adapter =
         WebSocketGatewayAdapter::new(ConnectionGatewayClient::new(
             internal_secret_key.as_ref().to_string(),
-            vars.connection_gateway_url.as_ref().to_string(),
+            connection_gateway_url.clone(),
         ));
     let notification_events_receiver = PgNotificationEventsReceiver::new(db.clone());
     let mut notification_events_listener = NotificationEventsListener::new(
@@ -189,7 +191,7 @@ pub async fn main() -> anyhow::Result<()> {
 
     let websocket_adapter = WebSocketGatewayAdapter::new(ConnectionGatewayClient::new(
         internal_secret_key.as_ref().to_string(),
-        vars.connection_gateway_url.as_ref().to_string(),
+        connection_gateway_url,
     ));
 
     let mobile_adapter = MobilePushAdapter {

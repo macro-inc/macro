@@ -156,9 +156,15 @@ export function PropertiesProvider(props: PropertiesProviderProps) {
   });
 
   const value: PropertiesContextValue = {
-    entityType: props.entityType,
-    canEdit: props.canEdit,
-    documentName: props.documentName,
+    get entityType() {
+      return props.entityType;
+    },
+    get canEdit() {
+      return props.canEdit;
+    },
+    get documentName() {
+      return props.documentName;
+    },
     properties: props.properties,
     onRefresh: props.onRefresh,
     onPropertyAdded: props.onPropertyAdded,

@@ -31,6 +31,7 @@ ai_tools = [
 axum = [
   "dep:axum",
   "dep:axum-extra",
+  "dep:lexical_client",
   "dep:model-error-response",
   "dep:model_user",
   "dep:task_dedup",
@@ -48,7 +49,14 @@ document_create_adapters = [
   "document_create",
   "markdown_init",
 ]
-backfill_binary = ["dep:clap", "dep:macro_entrypoint", "markdown_init", "outbound", "ports"]
+backfill_binary = [
+  "dep:clap",
+  "dep:macro_entrypoint",
+  "dep:macro_service_urls",
+  "markdown_init",
+  "outbound",
+  "ports",
+]
 inbound = ["axum", "document_create_adapters", "ports"]
 markdown_init = ["dep:lexical_client"]
 outbound = [
@@ -96,6 +104,7 @@ model-entity = { path = "../model-entity" }
 models_permissions = { path = "../models_permissions" }
 models_properties = { path = "../models_properties" }
 s3_key = { path = "../s3_key" }
+macro_service_urls = { path = "../macro_service_urls", optional = true }
 
 # Async runtime (for ports)
 tokio = { workspace = true, optional = true }
@@ -131,6 +140,7 @@ sha2 = { workspace = true, optional = true }
 # Attachment
 attachment = { path = "../attachment", optional = true }
 non_empty = { path = "../non_empty" }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 dotenvy = { workspace = true }

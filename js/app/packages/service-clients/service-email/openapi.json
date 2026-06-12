@@ -1293,6 +1293,15 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "force_share",
+            "in": "query",
+            "description": "**OPTIONAL**. Confirms promoting a mailbox already connected by another user into a shared inbox.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
@@ -1322,6 +1331,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SharedInboxConflictResponse"
                 }
               }
             }
@@ -3785,6 +3804,11 @@
         "type": "string",
         "enum": ["Init", "InProgress", "Complete", "Cancelled", "Failed"]
       },
+      "BackfillStatus": {
+        "type": "string",
+        "description": "Progress/terminal state of a backfill job for [`RefreshEmailEvent::Backfill`].",
+        "enum": ["progress", "complete", "failed"]
+      },
       "BlockSenderRequest": {
         "type": "object",
         "description": "Request to block a sender.",
@@ -4040,12 +4064,12 @@
           "backfill_job_id": {
             "type": ["string", "null"],
             "format": "uuid",
-            "description": "Present when init enqueued a backfill job. Absent for the graph path,\nwhere the child link's backfill already ran under its own macro_id."
+            "description": "Present when init enqueued a backfill job. Absent for cross-user delegation,\nwhere the child link's backfill already ran under its own macro_id; present for\nthe self-link bootstrap, where a fresh link is provisioned and backfilled."
           },
           "link_id": {
             "type": "string",
             "format": "uuid",
-            "description": "The email_links row id for the now-accessible inbox. For the graph path\n(cross-account add) this is the *existing* child link the caller now\ndelegates over; for the data-source path it's a freshly upserted row."
+            "description": "The email_links row id for the now-accessible inbox. For cross-user delegation\nthis is the *existing* child link the caller now delegates over; for the\nself-link bootstrap and the data-source path it's a freshly upserted row."
           }
         }
       },
@@ -4134,6 +4158,7 @@
           "is_sync_active",
           "sync_status",
           "settings",
+          "is_primary",
           "created_at",
           "updated_at"
         ],
@@ -4152,11 +4177,18 @@
             "type": "string",
             "format": "uuid"
           },
+          "is_primary": {
+            "type": "boolean"
+          },
           "is_sync_active": {
             "type": "boolean"
           },
           "macro_id": {
             "type": "string"
+          },
+          "photo_url": {
+            "type": ["string", "null"],
+            "description": "The inbox's own profile photo (its self-contact's SFS photo), if synced."
           },
           "provider": {
             "$ref": "#/components/schemas/UserProvider"
@@ -4546,6 +4578,89 @@
           "other"
         ]
       },
+      "RefreshEmailEvent": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Backfill progress for `link_id`; see [`BackfillStatus`].",
+            "required": ["link_id", "status", "event"],
+            "properties": {
+              "event": {
+                "type": "string",
+                "enum": ["backfill"]
+              },
+              "link_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "status": {
+                "$ref": "#/components/schemas/BackfillStatus"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A message was inserted or updated for `link_id`.",
+            "required": ["link_id", "event"],
+            "properties": {
+              "event": {
+                "type": "string",
+                "enum": ["upsert_message"]
+              },
+              "link_id": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Labels changed for `link_id`.",
+            "required": ["link_id", "event"],
+            "properties": {
+              "event": {
+                "type": "string",
+                "enum": ["update_labels"]
+              },
+              "link_id": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A message was deleted for `link_id`.",
+            "required": ["link_id", "event"],
+            "properties": {
+              "event": {
+                "type": "string",
+                "enum": ["delete_message"]
+              },
+              "link_id": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The inbox `link_id` was removed and its data torn down.",
+            "required": ["link_id", "event"],
+            "properties": {
+              "event": {
+                "type": "string",
+                "enum": ["link_removed"]
+              },
+              "link_id": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          }
+        ],
+        "description": "Payload for the `refresh_email` connection gateway event: identifies the\ninbox that changed and the kind of change."
+      },
       "ResyncResponse": {
         "type": "object",
         "description": "The response returned from the resync endpoint.",
@@ -4589,6 +4704,30 @@
         "properties": {
           "signature_on_replies_forwards": {
             "type": ["boolean", "null"]
+          }
+        }
+      },
+      "SharedInboxConflictResponse": {
+        "type": "object",
+        "description": "Returned with a `409 Conflict` when a connect targets an external mailbox another\nmacro user has already connected. The client surfaces a confirmation; on confirm it\nretries `/email/init` with `force_share=true` to promote the mailbox to a shared inbox.",
+        "required": [
+          "email_address",
+          "existing_owner_email",
+          "existing_link_id"
+        ],
+        "properties": {
+          "email_address": {
+            "type": "string",
+            "description": "The mailbox address that is already connected."
+          },
+          "existing_link_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The existing link that would be shared if the caller confirms."
+          },
+          "existing_owner_email": {
+            "type": "string",
+            "description": "The email of the macro user who first connected the mailbox."
           }
         }
       },

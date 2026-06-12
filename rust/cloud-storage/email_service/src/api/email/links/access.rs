@@ -74,6 +74,7 @@ pub async fn authorize_inbox_access(
         &ctx.db,
         caller_macro_id,
         link.macro_id.as_ref(),
+        link.id,
     )
     .await?;
 

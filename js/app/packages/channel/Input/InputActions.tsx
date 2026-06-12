@@ -1,7 +1,6 @@
 import { pickNativePhotoLibraryMedia } from '@core/mobile/nativePhotoLibrary';
 import FormatIcon from '@phosphor/text-aa.svg';
 import TrashIcon from '@phosphor/trash.svg';
-import ImageIcon from '@phosphor-icons/core/regular/image.svg?component-solid';
 import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
 import type { JSX } from 'solid-js';
 import { InputActionButton } from './ActionButton';
@@ -46,21 +45,49 @@ export function AttachFilesAction() {
 
 export function AttachNativeMediaAction() {
   const commands = useInputCommands();
+  let fileInputRef: HTMLInputElement | undefined;
+
+  const onAttachFiles: JSX.EventHandlerUnion<HTMLInputElement, Event> = (
+    event
+  ) => {
+    const files = Array.from(event.currentTarget.files ?? []);
+    event.currentTarget.value = '';
+    if (files.length === 0) return;
+    void commands.attachFiles(files);
+  };
 
   const onAttachMedia = async () => {
     const files = await pickNativePhotoLibraryMedia();
+    if (files === null) {
+      fileInputRef?.click();
+      return;
+    }
     if (files.length > 0) {
       await commands.attachFiles(files);
     }
   };
 
   return (
-    <InputActionButton
-      label="Attach photos or videos"
-      onClick={() => void onAttachMedia()}
-    >
-      <ImageIcon />
-    </InputActionButton>
+    <>
+      {/* File Input backup in case native photo picker fails */}
+      <input
+        ref={(element) => {
+          fileInputRef = element;
+        }}
+        type="file"
+        class="hidden"
+        multiple
+        accept={CHANNEL_FILE_PICKER_ACCEPT}
+        onChange={onAttachFiles}
+        data-input-attach-media-picker
+      />
+      <InputActionButton
+        label="Attach photos or videos"
+        onClick={() => void onAttachMedia()}
+      >
+        <PaperclipIcon />
+      </InputActionButton>
+    </>
   );
 }
 

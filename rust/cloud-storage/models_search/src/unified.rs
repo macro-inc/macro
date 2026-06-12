@@ -86,6 +86,13 @@ pub struct UnifiedSearchRequest {
     #[serde(default)]
     pub search_on: SearchOn,
 
+    /// Opt in to searching the caller's team CRM companies (name/domain).
+    /// Off by default: CRM results are only included when this is true and
+    /// the caller has a qualifying team membership. CRM has no content
+    /// index, so it is searched only under Name / NameContent.
+    #[serde(default)]
+    pub include_crm: bool,
+
     #[schemars(skip)]
     pub collapse: Option<bool>,
 }
@@ -205,6 +212,7 @@ pub enum UnifiedSearchResponseItem {
     Channel(ChannelSearchResponseItemWithMetadata),
     Project(ProjectSearchResponseItemWithMetadata),
     Call(CallRecordSearchResponseItemWithMetadata),
+    Company(crate::crm_company::CrmCompanySearchResponseItem),
 }
 
 impl UnifiedSearchResponseItem {
@@ -216,6 +224,7 @@ impl UnifiedSearchResponseItem {
             Self::Channel(item) => item.extra.id,
             Self::Project(item) => item.extra.id,
             Self::Call(item) => item.extra.id,
+            Self::Company(item) => item.id,
         }
     }
     /// Get the updated_at timestamp for each item
@@ -238,6 +247,7 @@ impl UnifiedSearchResponseItem {
             }
             Self::Project(item) => item.metadata.as_ref().map(|m| m.updated_at),
             Self::Call(item) => item.metadata.as_ref().map(|m| m.updated_at),
+            Self::Company(item) => Some(item.updated_at),
         }
     }
 }

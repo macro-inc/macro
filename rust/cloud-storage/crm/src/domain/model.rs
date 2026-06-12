@@ -15,6 +15,29 @@ pub struct CrmCompanyForSoup {
     pub name: Option<String>,
     /// Display description from the primary domain's directory entry.
     pub description: Option<String>,
+    /// When the requesting user last viewed this company
+    /// (`UserHistory.updatedAt`), or `None` if never viewed. Drives the
+    /// soup `viewed_at` / `viewed_updated` sorts and the recently-viewed
+    /// feed. `None` for sources that don't resolve view history (search).
+    pub viewed_at: Option<DateTime<Utc>>,
+}
+
+/// A [`CrmCompany`] bundled with its directory display metadata
+/// (same as [`CrmCompanyForSoup`]) plus its full contact list — the
+/// shape returned by `GET /crm/companies/{company_id}`. Lets the FE
+/// hydrate the company panel in a single round trip instead of
+/// composing a soup call with a follow-up contacts call.
+#[derive(Debug, Clone)]
+pub struct CrmCompanyWithContacts {
+    /// The underlying company record (with domains pre-populated).
+    pub company: CrmCompany,
+    /// Display name from the primary domain's directory entry.
+    pub name: Option<String>,
+    /// Display description from the primary domain's directory entry.
+    pub description: Option<String>,
+    /// Contacts attached to this company, subject to the caller's
+    /// `include_hidden` flag (non-admins get only visible contacts).
+    pub contacts: Vec<CrmContact>,
 }
 
 /// A known external company tracked by a team (CRM-style record). A company
@@ -232,6 +255,10 @@ pub enum CrmError {
     /// Comment id does not exist or does not belong to the team.
     #[error("crm comment not found for team")]
     CommentNotFound,
+    /// Comment exists and is visible to the caller, but they are not its
+    /// author — only the comment owner may edit or delete it.
+    #[error("crm comment not owned by caller")]
+    CommentNotOwned,
     /// Request rejected for a client-side reason (e.g. blank comment text).
     #[error("{0}")]
     InvalidRequest(String),

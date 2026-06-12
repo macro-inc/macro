@@ -6,6 +6,7 @@ use utoipa::ToSchema;
 pub mod call_record;
 pub mod channel;
 pub mod chat;
+pub mod crm_company;
 pub mod document;
 pub mod email;
 pub mod project;

@@ -44,3 +44,4 @@ strum = { workspace = true, features = ["derive"] }
 tracing = { workspace = true }
 uuid = { workspace = true, optional = true }
 futures = { workspace = true, optional = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

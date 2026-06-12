@@ -133,10 +133,13 @@ services:
     command: ["/app/out/document_storage_service"]
     ports:
       - "8086:8080"
+    environment:
+      - OVERRIDE_SYNC_SERVICE_URL=http://sync-service:8787
     depends_on:
       - redis
       - connection_gateway
       - authentication-service
+      - sync_service
     networks:
       databases:
       services:
@@ -357,6 +360,8 @@ services:
       dockerfile: Dockerfile
     ports:
       - "8787:8787"
+    volumes:
+      - ./rust/sync-service/src:/app/src
     environment:
       - INTERNAL_API_SECRET_KEY=${INTERNAL_API_SECRET_KEY}
       - DOCUMENT_PERMISSIONS_SECRET=${DOCUMENT_PERMISSION_JWT_SECRET_KEY}
@@ -364,6 +369,7 @@ services:
       services:
         aliases:
           - sync-service
+      databases:
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8787/health"]
       interval: 30s

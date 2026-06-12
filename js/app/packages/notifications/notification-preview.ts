@@ -13,6 +13,10 @@ export const NOTIFICATION_LABEL_BY_TYPE: Record<NotificationType, string> = {
   invite_to_team: 'INVITE',
   task_assigned: 'ASSIGNED',
   ai_response: 'AI',
-  github_pr_event: 'GITHUB',
+  github_pr_status_changed: 'GITHUB',
+  github_review_requested: 'REVIEW',
+  github_pr_comment: 'COMMENT',
+  github_pr_mention: 'MENTION',
+  github_pr_review: 'REVIEW',
   'call-started': 'CALL',
 } as const;

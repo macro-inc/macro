@@ -1,5 +1,5 @@
 import { useMessageActionDrawer } from '@channel/Mobile/message-action-drawer-context';
-import { longPressHighlight } from '@core/directive/longPressHighlight';
+import { touchHandler } from '@core/directive/touchHandler';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import TrashIcon from '@icon/square-trash.svg';
 import { cn } from '@ui';
@@ -189,8 +189,10 @@ export function ChannelMessage(props: ChannelMessageProps) {
       selected={props.selectionState?.isSelected}
       onClick={props.onClick}
       ref={(el) =>
-        longPressHighlight(el, () => ({
-          className: 'channel-message-long-press-highlight',
+        touchHandler(el, () => ({
+          touchClassName: 'channel-message-long-press-highlight',
+          // Yield to the native image callout when long-pressing an image.
+          skipSelectors: ['img'],
           onLongPress: () => drawerManager?.open(props.message, props.actions),
         }))
       }

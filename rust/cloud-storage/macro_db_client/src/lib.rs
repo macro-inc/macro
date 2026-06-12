@@ -12,6 +12,7 @@ pub mod dcs;
 pub mod document;
 pub mod document_text;
 pub mod docx_unzip;
+pub mod email;
 pub mod entity_name;
 pub mod experiment;
 pub mod experiment_log;
@@ -31,7 +32,9 @@ pub mod organization;
 pub mod pins;
 pub mod projects;
 pub mod recents;
+pub mod share_on_mention;
 pub mod share_permission;
+pub mod shared_inbox;
 #[cfg(feature = "team")]
 pub mod team;
 pub mod user;

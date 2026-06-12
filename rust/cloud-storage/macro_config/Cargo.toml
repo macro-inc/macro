@@ -1,0 +1,17 @@
+[package]
+edition = "2024"
+name = "macro_config"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+macro_config_derive = { path = "../macro_config_derive" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+macro_env_var = { path = "../macro_env_var" }
+remote_env_var = { path = "../remote_env_var" }

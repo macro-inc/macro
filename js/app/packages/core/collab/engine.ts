@@ -68,10 +68,12 @@ export function createSyncEngine<
     await source.pushUpdate(update, peerId).mapErr((err) => {
       logger.error('failed to push local update to remote', {
         scope: 'sync_engine',
-        resolution: 'try to reconnect',
+        resolution: 'reconnect if the socket is down',
         err: err,
         documentId: source.documentId,
       });
+      // The source only force-reconnects when the socket is not open;
+      // liveness of open connections is handled by the heartbeat.
       source.reconnect();
       return;
     });

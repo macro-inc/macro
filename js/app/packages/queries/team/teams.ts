@@ -1,14 +1,17 @@
 import { toast } from '@core/component/Toast/Toast';
+import { useUserId } from '@core/context/user';
 import { throwOnErr } from '@core/util/result';
 import { authServiceClient } from '@service-auth/client';
 import type { CreateTeamRequest } from '@service-auth/generated/schemas/createTeamRequest';
 import type { PatchTeamRequest } from '@service-auth/generated/schemas/patchTeamRequest';
 import type { Team } from '@service-auth/generated/schemas/team';
+import { TeamRole } from '@service-auth/generated/schemas/teamRole';
 import { useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 
 import { authKeys } from '../auth';
 import { queryClient } from '../client';
+import { queryReadyGate } from '../gate';
 import { type MutationCallbacks, withCallbacks } from '../utils';
 
 import { teamKeys } from './keys';
@@ -27,6 +30,31 @@ export function useTeamQuery(teamId: Accessor<string>) {
     queryFn: async () => await throwOnErr(() => authServiceClient.getTeam()),
     enabled: !!teamId(),
   }));
+}
+
+/** The current user's team (`getTeam()` always returns it). */
+export function useCurrentTeamQuery() {
+  return useQuery(() => ({
+    queryKey: teamKeys.currentTeam.queryKey,
+    queryFn: async () => await throwOnErr(() => authServiceClient.getTeam()),
+  }));
+}
+
+/**
+ * Reactive boolean: true iff the current user has admin or owner team
+ * role. Drives admin-gated UI (e.g. the companies → hidden tab and the
+ * detail-page Hide button).
+ */
+export function useIsTeamAdmin(): Accessor<boolean> {
+  const userId = useUserId();
+  const teamQuery = useCurrentTeamQuery();
+  return () => {
+    const uid = userId();
+    if (!uid) return false;
+    if (!queryReadyGate(teamQuery)) return false;
+    const member = teamQuery.data.members.find((m) => m.user_id === uid);
+    return member?.role === TeamRole.admin || member?.role === TeamRole.owner;
+  };
 }
 
 export function invalidateUserTeams() {

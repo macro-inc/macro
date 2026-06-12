@@ -243,7 +243,7 @@ export class EditorConfigBuilder implements EditorBuilder {
  * `selection` after the component has mounted.
  *
  * @param type - Lexical editor mode. Defaults to `'markdown'` (full rich-text).
- *   Use `'chat'` for a mode that supports mention nodes but omits heading
+ *   Use `'chat'` for a mode that supports mention nodes without media nodes.
  *   shortcuts, or `'plain-text'` for a plain-text-only editor.
  *
  * @example

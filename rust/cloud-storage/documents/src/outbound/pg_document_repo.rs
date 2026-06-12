@@ -22,7 +22,7 @@ use sqlx::Row;
 use crate::domain::content::{DocumentContent, DocumentContentState};
 use crate::domain::models::{
     BranchNameContext, Comment, CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs,
-    EditDocumentRepoArgs, TeamTaskMetadata, Thread,
+    DocumentTeamShare, EditDocumentRepoArgs, TeamTaskMetadata, Thread,
 };
 use crate::domain::ports::DocumentRepo;
 
@@ -403,7 +403,7 @@ impl DocumentRepo for PgDocumentRepo {
             team_id,
             email_attachment_id,
             created_at: provided_created_at,
-            is_task,
+            sub_type: requested_sub_type,
             skip_history,
         } = args;
 
@@ -437,9 +437,12 @@ impl DocumentRepo for PgDocumentRepo {
 
         // Insert document sub-type
         let sub_type: Option<DocumentSubType> =
-            create::set_document_sub_type(&mut transaction, &document_id, is_task).await?;
+            create::set_document_sub_type(&mut transaction, &document_id, requested_sub_type)
+                .await?;
 
-        if is_task && let Some(team_id) = team_id.as_ref() {
+        if sub_type == Some(DocumentSubType::Task)
+            && let Some(team_id) = team_id.as_ref()
+        {
             create::allocate_team_task_number(&mut transaction, team_id, &document_id).await?;
         }
 
@@ -526,8 +529,33 @@ impl DocumentRepo for PgDocumentRepo {
         .await?;
 
         if let Some(ref share_permission) = args.share_permission {
+            let mut document_now_private = false;
+
+            if let Some(is_public) = share_permission.is_public
+                && !is_public
+            {
+                document_now_private = true;
+            }
+
             edit::update_share_permission(&mut transaction, &args.document_id, share_permission)
                 .await?;
+
+            // The share permission changed, if the document became private we need to update
+            // entity_access
+            if document_now_private {
+                let owner = edit::get_document_owner(&mut transaction, &args.document_id).await?;
+
+                // SAFETY: this will not fail
+                let entity_id = macro_uuid::string_to_uuid(&args.document_id).unwrap();
+
+                entity_access_db_utils::remove_non_owner_user_entity_access(
+                    &mut transaction,
+                    &entity_id,
+                    EntityType::Document,
+                    &owner,
+                )
+                .await?;
+            }
         }
 
         transaction.commit().await?;
@@ -771,6 +799,20 @@ impl DocumentRepo for PgDocumentRepo {
         document_id: &str,
     ) -> Result<(), Self::Err> {
         share::share_with_team(&self.pool, team_id, document_id).await
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_team_share(&self, document_id: &str) -> Result<DocumentTeamShare, Self::Err> {
+        share::get_team_share(&self.pool, document_id).await
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn set_team_share(
+        &self,
+        document_id: &str,
+        share: bool,
+    ) -> Result<DocumentTeamShare, Self::Err> {
+        share::set_team_share(&self.pool, document_id, share).await
     }
 
     #[tracing::instrument(err, skip(self))]

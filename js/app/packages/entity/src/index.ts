@@ -16,7 +16,7 @@ export { SearchSender } from './extractors-search/search-sender';
 export { SearchTimestamp } from './extractors-search/search-timestamp';
 export {
   getSnippetHit,
-  isSnippetEntity,
+  isHitSnippetEntity,
 } from './extractors-search/snippet-entity';
 export * from './types/drag';
 export * from './types/entity';
@@ -32,6 +32,7 @@ export { unreadFilterFn } from './utils/filter';
 export {
   filterNotDoneNotifications,
   filterValidNotifications,
+  toNotificationEntity,
 } from './utils/notification';
 export { useIsShared } from './utils/shared';
 export {

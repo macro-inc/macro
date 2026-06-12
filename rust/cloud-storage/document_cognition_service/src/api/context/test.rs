@@ -331,7 +331,8 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     };
     let all_tools = ai_tools::all_tools();
     let all_tools_toolset = all_tools.toolset.clone();
-    let all_tools_prompt = all_tools.prompt;
+    let all_tools_prompt: Arc<dyn std::fmt::Display + Send + Sync> =
+        Arc::new(all_tools.prompt.to_string());
 
     let memory_repo = memory::outbound::pg_memory_repo::PgMemoryRepo::new(pool.clone());
     let memory_service = Arc::new(memory::domain::service::MemoryServiceImpl::new(
@@ -352,6 +353,12 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         internal_auth_key: LocalOrRemoteSecret::Local(InternalApiSecretKey::Comptime("testing")),
         notification_ingress_service,
         connection_repo: MockConnectionRepo::new(),
+        connection_gateway_client: Arc::new(
+            notification::outbound::websocket::ConnectionGatewayClient::new(
+                "testing".to_string(),
+                "http://localhost".to_string(),
+            ),
+        ),
         soup_service,
         email_service: email_service_for_tools.clone(),
         stream_repo: MockStreamRepo::new(),
@@ -407,7 +414,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
                 mcp_repo.clone(),
                 mcp_state_store,
                 "http://localhost/mcp/servers/auth/callback".to_string(),
-                mcp_client::domain::provider_registry::PreRegisteredProviders::from_env(),
+                mcp_client::domain::provider_registry::PreRegisteredProviders::empty(),
             );
             mcp_client::inbound::McpRouterState::new(mcp_repo, mcp_oauth)
         },

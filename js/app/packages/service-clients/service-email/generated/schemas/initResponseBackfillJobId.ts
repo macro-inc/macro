@@ -6,7 +6,8 @@
  */
 
 /**
- * Present when init enqueued a backfill job. Absent for the graph path,
-where the child link's backfill already ran under its own macro_id.
+ * Present when init enqueued a backfill job. Absent for cross-user delegation,
+where the child link's backfill already ran under its own macro_id; present for
+the self-link bootstrap, where a fresh link is provisioned and backfilled.
  */
 export type InitResponseBackfillJobId = string | null;

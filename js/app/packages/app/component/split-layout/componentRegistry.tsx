@@ -9,7 +9,11 @@ import { ChannelCompose } from '@block-channel/component/Compose';
 import { ComposeTask } from '@block-md/component/ComposeTask';
 import { useIsAuthenticated } from '@core/auth';
 import { LoadingBlock } from '@core/component/LoadingBlock';
-import { DEV_MODE_ENV, LOCAL_ONLY } from '@core/constant/featureFlags';
+import {
+  DEV_MODE_ENV,
+  ENABLE_CRM,
+  LOCAL_ONLY,
+} from '@core/constant/featureFlags';
 import { useUserContext } from '@core/context/user';
 import type { ViewId } from '@core/types/view';
 import { useAutomationEntities } from '@queries/agent-schedule/entities';
@@ -144,6 +148,7 @@ registerComponent(
     const preset = getViewPreset('agents', undefined, {
       userId: user.userId(),
       email: user.email(),
+      isTeamAdmin: false,
     });
     const automationEntities = useAutomationEntities();
     return (
@@ -182,10 +187,11 @@ registerComponent(
     const preset = getViewPreset('documents', undefined, {
       userId: user.userId(),
       email: user.email(),
+      isTeamAdmin: false,
     });
     return (
       <SoupView
-        viewName="Documents"
+        viewName="Files"
         initialFilters={preset?.filters}
         initialClientFilters={preset?.clientFilters}
         initialGroupBy={preset?.groupBy}
@@ -202,6 +208,7 @@ registerComponent(
     const preset = getViewPreset('tasks', undefined, {
       userId: user.userId(),
       email: user.email(),
+      isTeamAdmin: false,
     });
     return (
       <SoupView
@@ -247,6 +254,27 @@ registerComponent(
 );
 
 registerComponent(
+  'companies',
+  withAuth(() => {
+    // Registered even when the CRM feature is off so direct navigation /
+    // restored splits redirect instead of throwing in resolveComponent.
+    if (!ENABLE_CRM) {
+      return <RedirectSplit to={{ type: 'component', id: 'inbox' }} />;
+    }
+    usePageViewTracking('companies');
+    const preset = getViewPreset('companies');
+    return (
+      <SoupView
+        viewName="Companies"
+        initialFilters={preset?.filters}
+        initialClientFilters={preset?.clientFilters}
+        initialGroupBy={preset?.groupBy}
+      />
+    );
+  })
+);
+
+registerComponent(
   'folders',
   withAuth(() => {
     usePageViewTracking('folders');
@@ -254,6 +282,7 @@ registerComponent(
     const preset = getViewPreset('folders', undefined, {
       userId: user.userId(),
       email: user.email(),
+      isTeamAdmin: false,
     });
     return (
       <SoupView

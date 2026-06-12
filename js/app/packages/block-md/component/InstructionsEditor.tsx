@@ -1,11 +1,13 @@
 import { markdownBlockErrorSignal } from '@block-md/signal/error';
 import { revisionsSignal, rewriteSignal } from '@block-md/signal/rewriteSignal';
 import { useBlockId } from '@core/block';
+import type { LoroManager } from '@core/collab/manager';
 import { DecoratorRenderer } from '@core/component/LexicalMarkdown/component/core/DecoratorRenderer';
 import { FocusClickTarget } from '@core/component/LexicalMarkdown/component/core/FocusClickTarget';
 import { LexicalStateDebugger } from '@core/component/LexicalMarkdown/component/debug/LexicalStateDebugger';
 import { EmojiMenu } from '@core/component/LexicalMarkdown/component/menu/EmojiMenu';
 import { MentionsMenu } from '@core/component/LexicalMarkdown/component/menu/MentionsMenu';
+import { SnippetsMenu } from '@core/component/LexicalMarkdown/component/menu/SnippetsMenu';
 import {
   getErrorDescription,
   MarkdownEditorErrors,
@@ -15,6 +17,7 @@ import {
   LexicalWrapperContext,
 } from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
 import {
+  awaitPlugin,
   CLOSE_INLINE_SEARCH_COMMAND,
   DefaultShortcuts,
   documentMetadataPlugin,
@@ -24,6 +27,7 @@ import {
   textPastePlugin,
 } from '@core/component/LexicalMarkdown/plugins';
 import { emojisPlugin } from '@core/component/LexicalMarkdown/plugins/emojis/emojisPlugin';
+import { snippetsPlugin } from '@core/component/LexicalMarkdown/plugins/snippets';
 import { useUserPromptPlugin } from '@core/component/LexicalMarkdown/plugins/userPrompt';
 import { createMenuOperations } from '@core/component/LexicalMarkdown/shared/inlineMenu';
 import {
@@ -39,7 +43,6 @@ import { blockElementSignal } from '@core/signal/blockElement';
 import {
   blockFileSignal,
   blockHandleSignal,
-  blockLoroManagerSignal,
   blockSourceSignal,
 } from '@core/signal/load';
 import { useCanEdit } from '@core/signal/permissions';
@@ -74,7 +77,9 @@ import { MarkdownCollabProvider } from './MarkdownCollabProvider';
 const DEBUG = false;
 const EDITOR_PADDING_BOTTOM = 120;
 
-export function InstructionsEditor() {
+export function InstructionsEditor(props: {
+  loroManager: Accessor<LoroManager | undefined>;
+}) {
   const blockData = blockDataSignal.get;
   const blockId = useBlockId();
 
@@ -147,13 +152,13 @@ export function InstructionsEditor() {
 
   const mentionsMenuOperations = createMenuOperations();
   const emojiMenuOperations = createMenuOperations();
+  const snippetsMenuOperations = createMenuOperations();
 
   const peerIdValidator: Accessor<PeerIdValidator> = () => {
     if (!IS_SYNC()) {
       return createPeerIdValidator(() => undefined, false);
     }
-    const loroManager = blockLoroManagerSignal.get;
-    const peerId = () => loroManager()?.getPeerIdStr();
+    const peerId = () => props.loroManager()?.getPeerIdStr();
     return createPeerIdValidator(peerId, true);
   };
 
@@ -168,7 +173,7 @@ export function InstructionsEditor() {
     .markdownShortcuts()
     .delete()
     .state<EditorState>(setState, 'json')
-    .history(400)
+    .history(400, props.loroManager())
     .use(userPromptPlugin)
     .use(
       emojisPlugin({
@@ -184,8 +189,16 @@ export function InstructionsEditor() {
         disableMentionTracking: true,
       })
     )
+    .use(
+      snippetsPlugin({
+        menu: snippetsMenuOperations,
+        peerIdValidator: peerIdValidator(),
+        sourceDocumentId: blockId,
+      })
+    )
     .use(textPastePlugin())
     .use(markdownPastePlugin())
+    .use(awaitPlugin())
     .use(
       keyboardShortcutsPlugin({
         shortcuts: DefaultShortcuts,
@@ -198,8 +211,7 @@ export function InstructionsEditor() {
     );
 
   if (ENABLE_MARKDOWN_LIVE_COLLABORATION) {
-    const getBlockLoroManager = blockLoroManagerSignal.get;
-    const peerId = () => getBlockLoroManager()?.getPeerIdStr();
+    const peerId = () => props.loroManager()?.getPeerIdStr();
     plugins.use(
       peerIdPlugin({
         peerId,
@@ -391,6 +403,7 @@ export function InstructionsEditor() {
             editorFocus={editorFocus}
             setEditorReady={setEditorReady}
             setEditorError={setEditorError}
+            loroManager={props.loroManager}
           />
         </Show>
 
@@ -420,6 +433,13 @@ export function InstructionsEditor() {
           menu={mentionsMenuOperations}
           useBlockBoundary={true}
           disableMentionTracking={true}
+        />
+
+        <SnippetsMenu
+          editor={editor}
+          menu={snippetsMenuOperations}
+          useBlockBoundary={true}
+          sourceDocumentId={blockId}
         />
 
         <Show when={DEBUG}>

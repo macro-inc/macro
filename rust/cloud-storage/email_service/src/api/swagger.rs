@@ -12,7 +12,7 @@ use crate::api::email::drafts::add_attachment::{
 use crate::api::email::drafts::add_forwarded_attachment::{
     AddForwardedAttachmentRequest, AddForwardedAttachmentResponse,
 };
-use crate::api::email::init::InitResponse;
+use crate::api::email::init::{InitResponse, SharedInboxConflictResponse};
 use crate::api::email::labels::create::CreateLabelRequest;
 use crate::api::email::labels::create::CreateLabelResponse;
 use crate::api::email::links::list::ListLinksResponse;
@@ -41,6 +41,7 @@ use ::email::inbound::axum::thread_project_router::{
 };
 use model::response::EmptyResponse;
 use models_email::api::link::SyncStatus;
+use models_email::api::refresh::{BackfillStatus, RefreshEmailEvent};
 use models_email::api::settings::Settings;
 use models_email::email::service;
 use models_email::email::service::address::ContactInfoWithInteraction;
@@ -121,6 +122,7 @@ use utoipa::OpenApi;
             AddForwardedAttachmentResponse,
             // Init types
             InitResponse,
+            SharedInboxConflictResponse,
             // Label types
             CreateLabelRequest,
             CreateLabelResponse,
@@ -153,6 +155,8 @@ use utoipa::OpenApi;
             ListLinksResponse,
             Link,
             SyncStatus,
+            RefreshEmailEvent,
+            BackfillStatus,
             ResyncResponse,
             Settings,
             // Contact types

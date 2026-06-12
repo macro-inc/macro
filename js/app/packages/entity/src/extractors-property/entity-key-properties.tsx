@@ -42,8 +42,16 @@ function getEntityType(entity: EntityData): EntityType {
     .with({ type: 'document' }, () => EntityType.DOCUMENT)
     .with({ type: 'channel_message' }, () => EntityType.CHANNEL)
     .with({ type: 'call' }, () => EntityType.CHANNEL)
+    .with({ type: 'crm_company' }, () => EntityType.COMPANY)
+    .with({ type: 'crm_contact' }, () => {
+      // No CONTACT in the properties-service EntityType yet.
+      throw new Error('crm contacts do not support properties');
+    })
     .with({ type: 'automation' }, () => {
       throw new Error('automation entities do not support properties');
+    })
+    .with({ type: 'foreign' }, () => {
+      throw new Error('foreign entities do not support properties');
     })
     .exhaustive();
 }
@@ -155,6 +163,7 @@ function KeyPropertiesRow(props: {
                     class={cn(
                       'flex items-center gap-1 min-w-0 ring ring-edge-muted/50 ring-inset',
                       'px-1.5 py-1 leading-tight text-left rounded-full',
+                      '@max-2xl/u-list:ring-0 @max-2xl/u-list:gap-0 @max-2xl/u-list:px-1 @max-2xl/u-list:justify-center',
                       {
                         'hover:bg-hover': ctx.canEdit,
                         'text-ink-extra-muted/50': isEmpty(),
@@ -166,7 +175,7 @@ function KeyPropertiesRow(props: {
                       fallback={
                         <Property.Icon
                           property={property}
-                          class="size-3 shrink-0"
+                          class="size-3 shrink-0 @max-2xl/u-list:size-4"
                         />
                       }
                     >
@@ -174,10 +183,14 @@ function KeyPropertiesRow(props: {
                         <Property.UserStack
                           property={property}
                           maxUsers={props.maxUserStackUsers ?? 2}
+                          avatarClass="@max-2xl/u-list:size-5"
                         />
                       </Match>
                       <Match when={isUserEntity()}>
-                        <Property.Icon property={property} />
+                        <Property.Icon
+                          property={property}
+                          class="@max-2xl/u-list:size-5"
+                        />
                       </Match>
                     </Switch>
                     <Property.Text
@@ -194,7 +207,7 @@ function KeyPropertiesRow(props: {
                       }
                     />
                     <Show when={props.showCaret ?? true}>
-                      <Property.Caret />
+                      <Property.Caret class="@max-2xl/u-list:hidden" />
                     </Show>
                   </Property.EditTrigger>
                 </Layer>

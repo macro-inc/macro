@@ -122,7 +122,12 @@ use models_soup::email_thread::{
 use models_soup::foreign_entity::SoupForeignEntity;
 use models_soup::item::SoupItem;
 use models_soup::project::SoupProject;
-use soup::inbound::axum_router::{PostSoupRequest, SoupApiItem, SoupApiSort, SoupPage};
+use soup::inbound::axum_router::{
+    ApiGroupByField, ApiGroupMeta, GroupedSoupGroupPage, GroupedSoupInitialPage, GroupedSoupPage,
+    PostGroupedSoupAstGroupPageRequest, PostGroupedSoupAstInitialRequest,
+    PostGroupedSoupAstRequest, PostSoupAstRequest, PostSoupRequest, SoupApiItem, SoupApiSort,
+    SoupPage,
+};
 use utoipa::OpenApi;
 
 #[derive(OpenApi)]
@@ -174,6 +179,9 @@ use utoipa::OpenApi;
         documents::revert_delete_document::handler,
         documents::export_document::handler,
         documents_hex::inbound::axum_router::create_task::create_task_handler,
+        documents_hex::inbound::axum_router::create_snippet::create_snippet_handler,
+        documents_hex::inbound::axum_router::team_share::get_team_share_handler,
+        documents_hex::inbound::axum_router::team_share::set_team_share_handler,
 
         // instructions
         instructions::create_instructions::create_instructions_handler,
@@ -197,6 +205,7 @@ use utoipa::OpenApi;
         soup::inbound::axum_router::get_soup_handler,
         soup::inbound::axum_router::post_soup_handler,
         soup::inbound::axum_router::post_soup_ast_handler,
+        soup::inbound::axum_router::post_grouped_soup_ast_handler,
 
         // channels
         channels::inbound::axum_router::create_channel_handler,
@@ -228,6 +237,10 @@ use utoipa::OpenApi;
         channels::inbound::axum_router::get_activity_handler,
         channels::inbound::axum_router::post_activity_handler,
 
+        // bots
+        bots::inbound::channel_webhook_router::create_channel_scoped_bot_handler,
+        bots::inbound::channel_webhook_router::post_channel_webhook_handler,
+
         // calls
         call::inbound::axum_router::get_or_create_call_handler,
         call::inbound::axum_router::check_active_call_handler,
@@ -239,6 +252,7 @@ use utoipa::OpenApi;
         call::inbound::axum_router::toggle_share_with_team_handler,
         call::inbound::axum_router::get_batch_call_record_preview_handler,
         call::inbound::axum_router::webhook_handler,
+        call::inbound::axum_router::ring_status_handler,
         call::inbound::axum_router::transcript_handler,
 
         // pins
@@ -291,6 +305,7 @@ use utoipa::OpenApi;
         crm::inbound::axum_router::set_contact_hidden::handler,
         crm::inbound::axum_router::list_company_contacts::handler,
         crm::inbound::axum_router::get_contact::handler,
+        crm::inbound::axum_router::get_company::handler,
         crm::inbound::axum_router::comments::list_handler,
         crm::inbound::axum_router::comments::create_handler,
         crm::inbound::axum_router::comments::edit_handler,
@@ -321,6 +336,10 @@ use utoipa::OpenApi;
             documents_hex::domain::models::CreateMarkdownDocumentResponse,
             documents_hex::domain::models::CreateTaskRequest,
             documents_hex::domain::models::CreateTaskResponse,
+            documents_hex::domain::models::CreateSnippetRequest,
+            documents_hex::domain::models::CreateSnippetResponse,
+            documents_hex::domain::models::DocumentTeamShareResponse,
+            documents_hex::domain::models::SetDocumentTeamShareRequest,
             documents_hex::domain::models::PropertyInput,
             models_properties::api::requests::SetPropertyValue,
             models_properties::shared::EntityReference,
@@ -386,6 +405,15 @@ use utoipa::OpenApi;
             SoupMessageListVisibility,
             SoupLabelType,
             PostSoupRequest,
+            PostSoupAstRequest,
+            PostGroupedSoupAstInitialRequest,
+            PostGroupedSoupAstGroupPageRequest,
+            PostGroupedSoupAstRequest,
+            ApiGroupByField,
+            ApiGroupMeta,
+            GroupedSoupInitialPage,
+            GroupedSoupGroupPage,
+            GroupedSoupPage,
 
             // Channels
             ApiChannelMessagesPage,
@@ -440,6 +468,16 @@ use utoipa::OpenApi;
             ApiActivity,
             PostActivityRequest,
 
+            // Bots
+            bots::domain::models::Bot,
+            bots::domain::models::BotKind,
+            bots::domain::models::BotOwner,
+            bots::domain::models::BotToken,
+            bots::domain::models::ChannelWebhookRequest,
+            bots::domain::models::ChannelWebhookResponse,
+            bots::domain::models::CreateChannelScopedBotRequest,
+            bots::domain::models::CreateChannelScopedBotResponse,
+
             // Calls
             call::domain::models::CallTokenResponse,
             call::domain::models::CallActiveResponse,
@@ -456,6 +494,8 @@ use utoipa::OpenApi;
             call::domain::models::WithCallId,
             call::domain::models::GetBatchCallRecordPreviewRequest,
             call::domain::models::GetBatchCallRecordPreviewResponse,
+            call::domain::models::RingStatus,
+            call::domain::models::RingStatusResponse,
             SoupCallRecord,
             SoupCallRecordParticipant,
 
@@ -526,6 +566,8 @@ use utoipa::OpenApi;
             crm::inbound::axum_router::set_company_hidden::SetCompanyHiddenRequest,
             crm::inbound::axum_router::set_contact_hidden::SetContactHiddenRequest,
             crm::inbound::axum_router::list_company_contacts::CrmContactResponse,
+            crm::inbound::axum_router::get_company::CrmCompanyResponse,
+            crm::inbound::axum_router::get_company::CrmDomainResponse,
             crm::inbound::axum_router::comments::CreateCrmCommentRequest,
             crm::inbound::axum_router::comments::EditCrmCommentRequest,
             crm::domain::comment::CrmCommentEntityType,

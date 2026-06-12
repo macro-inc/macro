@@ -1,10 +1,17 @@
 import type { BlockCanvasProps } from '@block-canvas/component/Block';
 import type { BlockChannelProps } from '@block-channel/component/NewChannelBlockAdapter';
+import type { BlockMarkdownProps } from '@block-md/component/Block';
+import type {
+  InitialSync,
+  SyncSource,
+  TimeoutError,
+} from '@core/collab/source';
 import type { IDocumentStorageServiceFile } from '@filesystem/file';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { DocumentMetadata } from '@service-storage/generated/schemas/documentMetadata';
 import type { GetDocumentResponseData } from '@service-storage/generated/schemas/getDocumentResponseData';
 import type { Project } from '@service-storage/generated/schemas/project';
+import type { ResultAsync } from 'neverthrow';
 import { err, ok, type Result } from 'neverthrow';
 import type {
   Accessor,
@@ -55,6 +62,7 @@ export const BlockRegistry = [
   'video',
   'email',
   'contact',
+  'company',
   'automation',
 ] as const;
 
@@ -69,7 +77,7 @@ export type BlockName = (typeof BlockRegistry)[BlockNameKeys];
  * List of strongly-typed, valid aliases that can be used as pseudo-differentiated
  * block types.
  */
-export const BlockAliasRegistry = ['csv', 'task'] as const;
+export const BlockAliasRegistry = ['csv', 'task', 'snippet'] as const;
 
 type BlockAliasKeys = keyof typeof BlockAliasRegistry & number;
 
@@ -89,6 +97,7 @@ export const NonDocumentBlockTypes = [
   'project',
   'email',
   'contact',
+  'company',
   'automation',
 ] as const as (BlockName | BlockAlias)[];
 
@@ -139,7 +148,9 @@ const _ValidBlockCombinations: BlockCombinationRules = {
   unknown: allBlockNames,
   video: allBlockNames,
   contact: allBlockNames,
+  company: allBlockNames,
   task: allBlockNames,
+  snippet: allBlockNames,
   automation: allBlockNames,
   csv: allBlockNames,
 } as const;
@@ -160,7 +171,9 @@ export const ValidNestingCombinations: BlockCombinationRules = {
   unknown: new Set([]),
   video: new Set([]),
   contact: new Set([]),
+  company: new Set([]),
   task: new Set([]),
+  snippet: new Set([]),
   automation: new Set([]),
   csv: new Set([]),
 };
@@ -304,13 +317,18 @@ export type ExtractLoadType<T extends LoadFunction<any, any>> =
 export interface BlockComponentProps extends Record<BlockName, ObjectLike> {
   canvas: BlockCanvasProps;
   channel: BlockChannelProps;
+  md: BlockMarkdownProps;
 }
 
 interface BlockComponentLoadData extends Record<BlockName, ObjectLike> {
   canvas: DocumentBlockData & DssFileData;
   pdf: DocumentBlockData;
   video: DocumentBlockData;
-  md: DocumentBlockData & DssFileData;
+  md: DocumentBlockData &
+    DssFileData & {
+      syncSource: SyncSource;
+      doInitialSync: () => ResultAsync<InitialSync, TimeoutError>;
+    };
   code: DocumentBlockData;
   project: ProjectBlockData;
   // TODO: uncomment when email block is ready, it is currently using unknown

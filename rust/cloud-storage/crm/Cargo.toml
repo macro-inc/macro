@@ -19,6 +19,9 @@ default = ["inbound", "outbound", "ports"]
 inbound = ["axum", "ports"]
 outbound = ["dep:reqwest", "dep:sqlx", "dep:unfurl", "ports"]
 ports = []
+# Read-only CRM search (name/domain). Pulls only sqlx + ports — no
+# reqwest/unfurl/axum — so search consumers stay lightweight.
+search = ["dep:sqlx", "ports"]
 
 [dependencies]
 anyhow = { workspace = true }
@@ -42,6 +45,7 @@ utoipa = { workspace = true, optional = true }
 reqwest = { workspace = true, optional = true }
 sqlx = { workspace = true, optional = true }
 unfurl = { path = "../unfurl", features = ["ports"], optional = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 macro_db_migrator = { path = "../macro_db_migrator" }

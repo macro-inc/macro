@@ -34,7 +34,15 @@ clean:
 deploy-dev:
   npx wrangler deploy --env dev
 
-  
+migrate-d1-playground:
+  CI=true npx wrangler d1 migrations apply USER_PEER_MAPPING --env playground --remote
+
+deploy-playground: migrate-d1-playground
+  npx wrangler deploy --env playground
+
+deploy-playground-dry:
+  npx wrangler deploy --env playground --dry-run
+
 deploy-dev-dry:
   npx wrangler deploy --env dev --dry-run
 

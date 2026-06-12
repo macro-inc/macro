@@ -1,5 +1,6 @@
 use comms::outbound::postgres::channel_name::batch_resolve_channel_names;
 use indexmap::IndexMap;
+use item_filters::CallStatus;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_search::call_record::{
     CallRecordMetadata, CallRecordSearchResponseItem, CallRecordSearchResponseItemWithMetadata,
@@ -57,9 +58,10 @@ pub(in crate::api::search) async fn enrich_call_records(
     let metadata_by_id: std::collections::HashMap<Uuid, CallRecordMetadata> = metadata_rows
         .into_iter()
         .map(|row| {
+            let status = parse_call_status(&row.status)?;
             custom_name_by_id.insert(row.call_id, row.custom_name);
             let channel_name = channel_names_by_id.get(&row.channel_id).cloned();
-            (
+            Ok((
                 row.call_id,
                 CallRecordMetadata {
                     created_by: row.created_by,
@@ -68,11 +70,12 @@ pub(in crate::api::search) async fn enrich_call_records(
                     duration_ms: row.duration_ms,
                     updated_at: row.ended_at,
                     channel_name,
+                    status,
                     attended: row.attended,
                 },
-            )
+            ))
         })
-        .collect();
+        .collect::<Result<_, SearchError>>()?;
 
     let mut hits_by_call_id: IndexMap<Uuid, Vec<CallRecordSearchResult>> = IndexMap::new();
     let mut call_context: std::collections::HashMap<Uuid, (Uuid, Vec<String>)> =
@@ -134,4 +137,15 @@ pub(in crate::api::search) async fn enrich_call_records(
         .collect();
 
     Ok(result)
+}
+
+fn parse_call_status(status: &str) -> Result<CallStatus, SearchError> {
+    match status {
+        "ATTENDED" => Ok(CallStatus::Attended),
+        "MISSED" => Ok(CallStatus::Missed),
+        "UNATTENDED" => Ok(CallStatus::Unattended),
+        _ => Err(SearchError::InternalError(anyhow::anyhow!(
+            "unexpected call status: {status}"
+        ))),
+    }
 }

@@ -34,8 +34,45 @@ const rawPullRequest: GithubPullRequest = {
 
 const rawResponse = { pullRequests: [rawPullRequest] };
 
+const storageMetadataPullRequest: GithubPullRequest = {
+  ...rawPullRequest,
+  additions: 12,
+  checks: [
+    {
+      conclusion: 'success',
+      id: 1001,
+      name: 'build',
+      status: 'completed',
+    },
+  ],
+  comments: [
+    {
+      body: 'Stored review comment',
+      id: 2001,
+      source: 'review_comment',
+    },
+  ],
+  deletions: 3,
+  foreignEntityId: 'foreign-entity-1',
+  name: 'Stored GitHub metadata',
+  status: 'open',
+};
+
 function createError(code: string): ResultError<string> {
   return { code, message: code };
+}
+
+function createShallowAuthPullRequest(
+  pullRequest: GithubPullRequest
+): EnrichedGithubPullRequest {
+  return {
+    displayName: pullRequest.displayName,
+    githubKey: pullRequest.githubKey,
+    number: pullRequest.number,
+    owner: pullRequest.owner,
+    repo: pullRequest.repo,
+    url: pullRequest.url,
+  };
 }
 
 beforeEach(() => {
@@ -93,5 +130,103 @@ describe('fetchDocumentGithubPullRequests', () => {
     const response = await fetchDocumentGithubPullRequests('document-1');
 
     expect(response).toEqual({ pullRequests: [enrichedPullRequest] });
+  });
+
+  it('preserves storage metadata when auth enrichment succeeds with a shallow PR', async () => {
+    const shallowAuthPullRequest = createShallowAuthPullRequest(rawPullRequest);
+    mocks.getDocumentGithubPullRequests.mockResolvedValue(
+      resultOk({ pullRequests: [storageMetadataPullRequest] })
+    );
+    mocks.enrichGithubPullRequests.mockResolvedValue(
+      resultOk({ pullRequests: [shallowAuthPullRequest] })
+    );
+
+    const response = await fetchDocumentGithubPullRequests('document-1');
+
+    expect(response).toEqual({
+      pullRequests: [storageMetadataPullRequest],
+    });
+  });
+
+  it('emits storage-enriched PRs before auth enrichment resolves', async () => {
+    const shallowAuthPullRequest = createShallowAuthPullRequest(rawPullRequest);
+    const onInitialResponse = vi.fn();
+    let resolveEnrichment!: (response: unknown) => void;
+    const enrichmentPromise = new Promise((resolve) => {
+      resolveEnrichment = resolve;
+    });
+
+    mocks.getDocumentGithubPullRequests.mockResolvedValue(
+      resultOk({ pullRequests: [storageMetadataPullRequest] })
+    );
+    mocks.enrichGithubPullRequests.mockReturnValue(enrichmentPromise);
+
+    const responsePromise = fetchDocumentGithubPullRequests('document-1', {
+      onInitialResponse,
+    });
+
+    await vi.waitFor(() => {
+      expect(onInitialResponse).toHaveBeenCalledWith({
+        pullRequests: [storageMetadataPullRequest],
+      });
+    });
+
+    resolveEnrichment(resultOk({ pullRequests: [shallowAuthPullRequest] }));
+    await expect(responsePromise).resolves.toEqual({
+      pullRequests: [storageMetadataPullRequest],
+    });
+  });
+
+  it('does not emit shallow storage PRs as an initial enriched response', async () => {
+    const onInitialResponse = vi.fn();
+    mocks.enrichGithubPullRequests.mockResolvedValue(
+      resultOk({ pullRequests: [createShallowAuthPullRequest(rawPullRequest)] })
+    );
+
+    await fetchDocumentGithubPullRequests('document-1', { onInitialResponse });
+
+    expect(onInitialResponse).not.toHaveBeenCalled();
+  });
+
+  it('uses auth enrichment metadata when present while preserving the foreign entity id', async () => {
+    const enrichedPullRequest: EnrichedGithubPullRequest = {
+      ...rawPullRequest,
+      additions: 20,
+      checks: [
+        {
+          conclusion: 'failure',
+          id: 1002,
+          name: 'build',
+          status: 'completed',
+        },
+      ],
+      comments: [
+        {
+          body: 'Fresh review comment',
+          id: 2002,
+          source: 'review_comment',
+        },
+      ],
+      deletions: 5,
+      name: 'Fresh GitHub metadata',
+      status: 'closed',
+    };
+    mocks.getDocumentGithubPullRequests.mockResolvedValue(
+      resultOk({ pullRequests: [storageMetadataPullRequest] })
+    );
+    mocks.enrichGithubPullRequests.mockResolvedValue(
+      resultOk({ pullRequests: [enrichedPullRequest] })
+    );
+
+    const response = await fetchDocumentGithubPullRequests('document-1');
+
+    expect(response).toEqual({
+      pullRequests: [
+        {
+          ...enrichedPullRequest,
+          foreignEntityId: storageMetadataPullRequest.foreignEntityId,
+        },
+      ],
+    });
   });
 });

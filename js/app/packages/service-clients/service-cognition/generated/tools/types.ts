@@ -34,6 +34,16 @@ export type CodeExecutionErrorCode =
   | 'file_not_found'
   | 'string_not_found';
 /**
+ * Viewer-relative attendance status for a call record.
+ * Serializes as `ATTENDED`, `MISSED`, or `UNATTENDED`.
+ */
+export type CallStatus = 'ATTENDED' | 'MISSED' | 'UNATTENDED';
+/**
+ * Schema-only mirror of [`CallStatus`] without variant docs, keeping AI tool
+ * schemas as a simple enum instead of `oneOf`.
+ */
+export type ToolCallStatus = 'ATTENDED' | 'MISSED' | 'UNATTENDED';
+/**
  * Type of channel timeline window to read.
  */
 export type ChannelMessagesWindowType =
@@ -86,7 +96,7 @@ export type DocumentContentState = 'unknown' | 'pending' | 'ready';
  * The document sub type enum represents all values of document sub types.
  * These values should match the `document_sub_type_value` table in macrodb.
  */
-export type DocumentSubType = 'task';
+export type DocumentSubType = 'task' | 'snippet';
 export type EmailPreset = 'signal';
 export type EntityItem =
   | {
@@ -218,6 +228,9 @@ export type UnifiedSearchResponseItem =
     })
   | (CallRecordSearchResponseItemWithMetadata & {
       type: 'call';
+    })
+  | (CrmCompanySearchResponseItem & {
+      type: 'company';
     });
 /**
  * Response from the SendEmail tool.
@@ -366,6 +379,7 @@ export interface CallRecordMetadata {
   duration_ms: number;
   ended_at: string;
   started_at: string;
+  status: CallStatus;
   updated_at: string;
 }
 export interface CallRecordSearchResponseItemWithMetadata {
@@ -461,6 +475,10 @@ export interface CallRecordSummary {
    * When the call started.
    */
   startedAt: string;
+  /**
+   * The caller's viewer-relative status for this call.
+   */
+  status?: ToolCallStatus | null;
 }
 /**
  * Metadata for a channel fetched from the database
@@ -746,7 +764,7 @@ export interface MarkdownNode {
   type: string;
 }
 /**
- * Search items by their content: document body text; email subject/body/sender/recipient/cc/bcc and the display names on those addresses; chat messages; call transcripts. Whitespace-separated terms are ANDed. For documents and emails, every term must match somewhere in the document — different terms can appear in different chunks/pages or different fields. For documents and emails specifically, each single-word term is matched as a prefix (so `scri` matches `script`); for emails the prefix expansion also runs against the local-part of address fields. For chats, channels, and call transcripts the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the content, not the user's natural-language description; long phrases will not match. Wrap a term in double quotes (e.g. `"deal review"` or `"alice@example.com"`) to force exact-token / exact-phrase matching instead of prefix. If the user's request combines a person with a topic, run separate searches rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type.
+ * Search items by their content: document body text; email subject/body/sender/recipient/cc/bcc and the display names on those addresses; chat messages; call transcripts. This is keyword search, not semantic search: queries only match literal words/tokens, prefixes, or exact quoted terms that appear in the indexed content. Use this for targeted keyword/content lookup, not for activity-summary questions like "what happened today", "what's going on", "catch me up", or "what happened in standup today"; those should start with ListEntities using time/type/channel filters. Whitespace-separated terms are ANDed. For documents and emails, every term must match somewhere in the document — different terms can appear in different chunks/pages or different fields. For documents and emails specifically, each single-word term is matched as a prefix (so `scri` matches `script`); for emails the prefix expansion also runs against the local-part of address fields. For chats, channels, and call transcripts the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the content, not the user's natural-language description; long phrases will not match. Wrap a term in double quotes (e.g. `"deal review"` or `"alice@example.com"`) to force exact-token / exact-phrase matching instead of prefix. If the user's request combines a person with a topic, run separate searches rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type.
  */
 export interface ContentSearch {
   /**
@@ -797,6 +815,69 @@ export interface CreateDocumentResponse {
    * The id of the document
    */
   documentId: string;
+}
+/**
+ * A CRM domain attached to a company in search results.
+ */
+export interface CrmCompanySearchDomain {
+  /**
+   * The id of the company the domain belongs to.
+   */
+  companyId: string;
+  /**
+   * When the domain record was created.
+   */
+  createdAt: string;
+  /**
+   * The domain (lowercased, e.g. "acme.com").
+   */
+  domain: string;
+  /**
+   * The id of the domain record.
+   */
+  id: string;
+}
+/**
+ * A CRM company match in unified search results. Carries the display
+ * metadata resolved from the primary domain plus the highlighted name.
+ */
+export interface CrmCompanySearchResponseItem {
+  /**
+   * When the company was created.
+   */
+  createdAt: string;
+  /**
+   * Display description from the primary domain's directory entry.
+   */
+  description?: string | null;
+  /**
+   * Domains associated with this company, primary first.
+   */
+  domains: CrmCompanySearchDomain[];
+  /**
+   * Whether the company is hidden from CRM listings.
+   */
+  hidden: boolean;
+  /**
+   * The id of the company.
+   */
+  id: string;
+  /**
+   * Display name from the primary domain's directory entry.
+   */
+  name?: string | null;
+  /**
+   * `name` with matched spans wrapped in `<macro_em>…</macro_em>`.
+   */
+  nameHighlighted?: string | null;
+  /**
+   * The id of the team that owns this company record.
+   */
+  teamId: string;
+  /**
+   * When the company was last updated (the sort key).
+   */
+  updatedAt: string;
 }
 /**
  * API-visible content lifecycle and location metadata.
@@ -921,6 +1002,11 @@ export interface EmailSearchResponseItemWithMetadata {
   is_draft: boolean;
   is_important: boolean;
   is_read: boolean;
+  /**
+   * The inbox that owns the thread. Drives the multi-inbox indicator
+   * when the caller has more than one inbox.
+   */
+  link_id: string;
   /**
    * Subject of the email thread
    */
@@ -1150,17 +1236,21 @@ export interface ToolContact {
   name?: string | null;
 }
 /**
- * List recent call records the user can access, ordered by start time descending. Results are scoped to channels the user is a member of. Transcripts are NOT included — call ReadCallRecord with a specific callId to fetch a transcript.
+ * List recent call records the user can access, ordered by start time descending. Status is relative to the caller. Transcripts are NOT included — call ReadCallRecord with a specific callId to fetch a transcript.
  */
 export interface ListCallRecords {
   /**
-   * Optional filter on whether the caller joined the call. true = only calls the user attended; false = only calls the user did not attend; omit to include both.
+   * Deprecated compatibility filter. true = only calls the user attended; false = only calls the user did not attend; omit to include both. Ignored when status is provided.
    */
   attended?: boolean | null;
   /**
    * Optional channel id. When provided, only calls from that channel are returned.
    */
   channelId?: string | null;
+  /**
+   * Optional viewer-relative status filter. ATTENDED = calls the user joined; MISSED = calls the user did not join while they are in the channel; UNATTENDED = calls the user did not join while they are not in the channel. Prefer this over the deprecated attended filter.
+   */
+  status?: ToolCallStatus | null;
 }
 /**
  * Response for [`ListCallRecords`].
@@ -1172,7 +1262,7 @@ export interface ListCallRecordsResponse {
   records: CallRecordSummary[];
 }
 /**
- * Browse the user's workspace to see recent items they have access to. Returns documents, AI conversations, projects, emails, chat channels, call records, and foreign entities. Use this to get an overview of what the user has been working on or to find items by type. For finding specific items by name or content, use the search tool instead.
+ * Browse the user's Macro workspace to see recent items they have access to. Returns Macro documents, AI conversations, projects, emails, chat channels, call records, and foreign entities. Use this to get an overview of what the user has been working on or to find items by type. Start here for activity-summary questions such as "what happened today", "what's going on", "catch me up", or "what happened in standup today"; apply precise time, type, channel, or mailbox filters when the user gives that scope. For Macro task requests such as "list my tasks", "tasks assigned to me", or "tasks I completed yesterday", prefer this tool over external task trackers such as Linear unless the user explicitly asks for Linear. Macro tasks are document items with df subtype {"l":{"dst":"task"}} and includeTypes ["document"]. Filter task Status and Assignees through propf using entity_type TASK: Status property 00000001-0000-0000-0000-000000000002, Completed option 00000001-0000-0000-0002-000000000004, Assignees property 00000001-0000-0000-0000-000000000001. The current user's assignee entity id is their Macro user id, usually macro|<their email address from context>. For "completed yesterday", combine status Completed, assigned-to-me, and a df updatedAt yesterday window with ua gte/lt ISO timestamps. For finding specific items by name or content, use the search tool instead.
  */
 export interface ListEntities {
   /**
@@ -1194,7 +1284,7 @@ export interface ListEntities {
     [k: string]: unknown;
   };
   /**
-   * Full soup AST document filter (df). Use the same shape as /items/soup/ast, e.g. {"l":{"id":"..."}}.
+   * Full soup AST document filter (df). Use the same shape as /items/soup/ast, e.g. {"l":{"id":"..."}}. For Macro tasks, use {"l":{"dst":"task"}}. For "completed yesterday", AND the task subtype with updatedAt bounds, e.g. {"&":[{"l":{"dst":"task"}},{"&":[{"l":{"ua":{"gte":"<start>"}}},{"l":{"ua":{"lt":"<end>"}}}]}]} using ISO timestamps.
    */
   df?: {
     [k: string]: unknown;
@@ -1222,7 +1312,7 @@ export interface ListEntities {
     [k: string]: unknown;
   };
   /**
-   * Filter returned items to specific item types. If not provided, returns all types. Example: ["document", "email"] returns only documents and emails. This is folded into the AST and applied as part of cursor-level filtering.
+   * Filter returned items to specific item types. If not provided, returns all types. Example: ["document", "email"] returns only documents and emails. Macro tasks are returned as document items, so use includeTypes=["document"] with df subtype task for task requests. This is folded into the AST and applied as part of cursor-level filtering.
    */
   includeTypes?: ItemType[] | null;
   /**
@@ -1236,7 +1326,7 @@ export interface ListEntities {
     [k: string]: unknown;
   };
   /**
-   * Full soup AST property filter (propf).
+   * Full soup AST property filter (propf). Use this for Macro task Status, Assignees, Priority, and other entity properties. For task Status Completed: {"l":{"pd":"00000001-0000-0000-0000-000000000002","et":"TASK","v":{"so":"00000001-0000-0000-0002-000000000004"}}}. For tasks assigned to the current user: {"l":{"pd":"00000001-0000-0000-0000-000000000001","et":"TASK","v":{"er":"macro|user@example.com"}}}. Combine both with &: {"&":[statusCompleted, assignedToMe]}. Prefer this over Linear tools for unqualified task requests.
    */
   propf?: {
     [k: string]: unknown;
@@ -1386,7 +1476,7 @@ export interface NotificationItem {
   senderId?: string | null;
 }
 /**
- * List the current members and pending invites for the authenticated user's team. Requires the caller to be a team member.
+ * List the current members and pending invites for the authenticated user's team. Requires the caller to be a team member. The returned roles (owner/admin/member) are app permission levels only, not job titles — they say nothing about the org chart. Never infer that someone is a founder, an executive, or the company's owner from their workspace role.
  */
 export type ListTeamMembers = {};
 /**
@@ -1411,7 +1501,8 @@ export interface ToolTeamInvite {
    */
   email: string;
   /**
-   * The role the invited user will receive.
+   * The workspace permission role (owner/admin/member) the invited user
+   * will receive. An app permission level, not a job title.
    */
   role: string;
 }
@@ -1420,7 +1511,8 @@ export interface ToolTeamInvite {
  */
 export interface ToolTeamMember {
   /**
-   * The user's role in the team.
+   * The user's workspace permission role (owner/admin/member). An app
+   * permission level, not a job title or evidence of company ownership.
    */
   role: string;
   /**
@@ -1464,7 +1556,7 @@ export interface MarkNotificationsSeen {
   notificationIds: string[];
 }
 /**
- * Search items by their name or title: document name, email subject, chat title, project name, the channel name a call belongs to. For emails, whitespace-separated terms are ANDed and each is a prefix match against the subject. For all other types the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the title, not the user's natural-language description; long phrases will not match. Wrap a term in double quotes (e.g. `"deal review"`) to force exact-token matching instead of prefix. If the user's request combines a person with a topic, run separate searches (NameSearch for the person, ContentSearch for the topic) rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type.
+ * Search items by their name or title: document name, email subject, chat title, project name, the channel name a call belongs to. This is keyword search, not semantic search: queries only match literal words/tokens, prefixes, or exact quoted terms that appear in the indexed title/name. Use this for targeted name/title lookup, not for activity-summary questions like "what happened today", "what's going on", "catch me up", or "what happened in standup today"; those should start with ListEntities using time/type/channel filters. For emails, whitespace-separated terms are ANDed and each is a prefix match against the subject. For all other types the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the title, not the user's natural-language description; long phrases will not match. Wrap a term in double quotes (e.g. `"deal review"`) to force exact-token matching instead of prefix. If the user's request combines a person with a topic, run separate searches (NameSearch for the person, ContentSearch for the topic) rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type.
  */
 export interface NameSearch {
   /**

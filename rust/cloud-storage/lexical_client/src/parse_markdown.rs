@@ -23,6 +23,34 @@ struct MarkdownSnapshotRequest<'a> {
     markdown: &'a str,
 }
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct MarkdownResponse {
+    data: String,
+}
+
+/// Rendering target supported by the lexical service `/markdown` endpoint.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MarkdownTarget {
+    /// Internal XML-tagged markdown (lossless round-trip format).
+    Internal,
+    /// GitHub-flavored markdown for external consumption.
+    External,
+    /// Compact embedding-friendly text: internal markdown with mentions
+    /// reduced to display names plus the ids they reference. Used for task
+    /// duplicate detection.
+    Embedding,
+}
+
+impl MarkdownTarget {
+    fn as_str(self) -> &'static str {
+        match self {
+            MarkdownTarget::Internal => "internal",
+            MarkdownTarget::External => "external",
+            MarkdownTarget::Embedding => "embedding",
+        }
+    }
+}
+
 impl From<LexicalResponseItem> for MarkdownParseResult {
     fn from(result: LexicalResponseItem) -> MarkdownParseResult {
         MarkdownParseResult {
@@ -50,6 +78,20 @@ impl LexicalClient {
         let response = check_response(self.client.get(&url).send().await?).await?;
         let data: LexicalResponse = response.json().await?;
         Ok(data.data.into_iter().map(Into::into).collect())
+    }
+
+    /// Fetches the full document rendered as a single markdown string in the
+    /// requested target format.
+    #[tracing::instrument(skip(self), err)]
+    pub async fn get_markdown(&self, document_id: &str, target: MarkdownTarget) -> Result<String> {
+        let url = format!(
+            "{}/markdown/{}?target={}",
+            self.url,
+            document_id,
+            target.as_str()
+        );
+        let response: MarkdownResponse = self.get_json(&url).await?;
+        Ok(response.data)
     }
 
     #[tracing::instrument(skip(self), err)]

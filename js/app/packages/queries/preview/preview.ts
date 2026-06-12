@@ -110,6 +110,10 @@ function getPreviewData(itemId: string): PreviewItem | undefined {
   );
 }
 
+export function getCachedItemPreview(itemId: string): PreviewItem | undefined {
+  return getPreviewData(itemId);
+}
+
 /** Directly update preview data in the cache without refetching */
 function setPreviewData(itemId: string, updater: Setter<PreviewItem>) {
   return queryClient.setQueryData<PreviewItem>(
@@ -214,7 +218,7 @@ export function setPreviewOnCreate({
   itemType: ItemType;
   name?: string;
   fileType?: string;
-  subType?: { type: 'task'; is_completed?: boolean };
+  subType?: { type: 'task' | 'snippet'; is_completed?: boolean };
 }) {
   const defaultPreviewItem: AccessiblePreviewItem = {
     id: itemId,

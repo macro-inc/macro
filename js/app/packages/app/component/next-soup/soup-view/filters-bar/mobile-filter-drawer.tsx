@@ -19,20 +19,25 @@ import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-contex
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import type { ListView } from '@app/constants/list-views';
 import { isListViewID } from '@app/constants/list-views';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { UserIcon } from '@core/component/UserIcon';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
+import { ENABLE_MULTI_INBOX_OVERRIDE } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
+import { useAddInboxFlow } from '@core/email-link';
 import { Accordion } from '@kobalte/core/accordion';
 import ChevronDownIcon from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
 import CircleDashedIcon from '@phosphor/circle-dashed.svg';
 import SearchIcon from '@phosphor/magnifying-glass.svg';
+import PlusIcon from '@phosphor/plus.svg';
 import XIcon from '@phosphor/x.svg';
 import SlidersHorizontalIcon from '@phosphor-icons/core/regular/sliders-horizontal.svg?component-solid';
 import { useContacts } from '@queries/contacts/contacts';
 import { Button, cn } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { ConsolidatedFilterChip } from './consolidated-filter-chip';
+import { useInboxPicker } from './inbox-picker';
 import {
   buildContactLabel,
   type FilterOption,
@@ -64,8 +69,14 @@ export const MobileFilterDrawer = () => {
   const { consolidatedFiltersList, resetToTabDefaults } =
     useFilterRefinements();
 
-  const { soup, queryFilters, assigneeFilter, setAssigneeFilter } =
-    useSoupView();
+  const {
+    soup,
+    queryFilters,
+    assigneeFilter,
+    setAssigneeFilter,
+    inboxFilter,
+    setInboxFilter,
+  } = useSoupView();
   const panel = useSplitPanelOrThrow();
   const contacts = useContacts();
   const userId = useUserId();
@@ -86,6 +97,34 @@ export const MobileFilterDrawer = () => {
   });
 
   const isTasksView = () => currentView() === 'tasks';
+
+  const picker = useInboxPicker({
+    selectedIds: inboxFilter,
+    setSelectedIds: setInboxFilter,
+  });
+  const multiInboxFlag = useFeatureFlag('enable-multi-inbox', {
+    enabledOverride: ENABLE_MULTI_INBOX_OVERRIDE,
+  });
+  const addInbox = useAddInboxFlow();
+
+  // Mirrors the desktop InboxSelector's visibility rule so the "Add inbox"
+  // action stays discoverable with zero or one inbox connected. Also stays
+  // visible while a scope is active so it can be reset even if the linked
+  // inboxes drop to one.
+  const showInboxSection = () =>
+    currentView() === 'mail' &&
+    (multiInboxFlag().enabled ||
+      picker.hasMultiple() ||
+      inboxFilter() !== undefined);
+
+  const toggleInbox = (id: string) => {
+    const current = picker.activeIds();
+    picker.onChange(
+      current.includes(id)
+        ? current.filter((activeId) => activeId !== id)
+        : [...current, id]
+    );
+  };
 
   const VIEW_SORT_OPTIONS: Partial<Record<ListView, SortOption[]>> = {
     inbox: DEFAULT_SORT_OPTIONS,
@@ -109,7 +148,10 @@ export const MobileFilterDrawer = () => {
   const setSort = (value: SystemSortOption) => soup.sort.setAll([value]);
 
   const hasFiltersOrCategories = () =>
-    categories().length > 0 || isTasksView() || sortOptions().length > 0;
+    categories().length > 0 ||
+    isTasksView() ||
+    sortOptions().length > 0 ||
+    showInboxSection();
 
   const toggleFilter = (optionId: FilterOption['id']) => {
     const wasActive = soup.predicates.isActive(optionId);
@@ -272,10 +314,120 @@ export const MobileFilterDrawer = () => {
                   defaultValue={[categories()[0]?.id ?? 'assignee']}
                 >
                   {/* Filter section */}
-                  <Show when={categories().length > 0 || isTasksView()}>
+                  <Show
+                    when={
+                      categories().length > 0 ||
+                      isTasksView() ||
+                      showInboxSection()
+                    }
+                  >
                     <MobileDrawer.Label class="pt-4">
                       Filters
                     </MobileDrawer.Label>
+                  </Show>
+
+                  <Show when={showInboxSection()}>
+                    <MobileDrawer.Section
+                      as={Accordion.Item}
+                      value="inboxes"
+                      class="mb-3"
+                    >
+                      <Accordion.Header>
+                        <Accordion.Trigger
+                          class="w-full flex bg-surface items-center justify-between p-3 text-sm text-ink hover:bg-hover transition-colors outline-none group mb-px"
+                          onClick={(e) =>
+                            scrollAccordionItemToTop(e, scrollRef())
+                          }
+                        >
+                          <span class="font-medium">Inboxes</span>
+                          <div class="flex items-center gap-2">
+                            <Show when={inboxFilter() !== undefined}>
+                              <span class="group-data-expanded:hidden size-4 flex items-center justify-center rounded-full bg-accent text-surface text-xxs font-medium leading-none">
+                                {picker.activeIds().length}
+                              </span>
+                            </Show>
+                            <ChevronDownIcon class="size-3.5 text-ink-muted transition-transform duration-200 group-data-expanded:rotate-180" />
+                          </div>
+                        </Accordion.Trigger>
+                      </Accordion.Header>
+                      <Accordion.Content>
+                        <For each={picker.options()}>
+                          {(option) => {
+                            const active = () =>
+                              picker.activeIds().includes(option.id);
+                            const isSole = () => {
+                              const ids = picker.activeIds();
+                              return ids.length === 1 && ids[0] === option.id;
+                            };
+                            return (
+                              <div class="w-full flex items-stretch bg-surface not-last:mb-px">
+                                <button
+                                  type="button"
+                                  role="checkbox"
+                                  aria-checked={active()}
+                                  class="flex-1 min-w-0 flex items-center gap-3 px-3 py-2.5 text-sm hover:bg-hover transition-colors text-left"
+                                  onClick={() => toggleInbox(option.id)}
+                                >
+                                  <span
+                                    class={cn(
+                                      'size-4 flex items-center justify-center shrink-0 rounded border transition-colors',
+                                      active()
+                                        ? 'bg-accent border-accent'
+                                        : 'border-edge'
+                                    )}
+                                  >
+                                    <Show when={active()}>
+                                      <CheckIcon class="size-2.5 text-surface" />
+                                    </Show>
+                                  </span>
+                                  <Show when={option.icon}>
+                                    {(icon) => (
+                                      <span class="size-4 flex items-center justify-center shrink-0">
+                                        {icon()()}
+                                      </span>
+                                    )}
+                                  </Show>
+                                  <span
+                                    class={cn(
+                                      'flex-1 truncate',
+                                      active() ? 'text-ink' : 'text-ink-muted'
+                                    )}
+                                  >
+                                    {option.label}
+                                  </span>
+                                </button>
+                                <Show when={picker.hasMultiple()}>
+                                  <button
+                                    type="button"
+                                    class="shrink-0 px-3 text-xs text-ink-muted hover:text-ink hover:bg-hover transition-colors"
+                                    aria-label={
+                                      isSole()
+                                        ? 'Show all inboxes'
+                                        : `Show only ${option.label}`
+                                    }
+                                    onClick={() => picker.selectOnly(option.id)}
+                                  >
+                                    {isSole() ? 'All' : 'Only'}
+                                  </button>
+                                </Show>
+                              </div>
+                            );
+                          }}
+                        </For>
+                        <Show when={multiInboxFlag().enabled}>
+                          <button
+                            type="button"
+                            class="w-full flex items-center gap-3 px-3 py-2.5 text-sm hover:bg-hover transition-colors text-left bg-surface not-last:mb-px"
+                            onClick={() => void addInbox()}
+                          >
+                            <span class="size-4 flex items-center justify-center shrink-0">
+                              <PlusIcon class="size-4 text-ink-muted" />
+                            </span>
+                            <span class="flex-1 truncate">Add inbox</span>
+                          </button>
+                        </Show>
+                      </Accordion.Content>
+                    </MobileDrawer.Section>
                   </Show>
 
                   <div class="flex flex-col">

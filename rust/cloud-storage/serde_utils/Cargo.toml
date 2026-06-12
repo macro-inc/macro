@@ -11,6 +11,7 @@ urlencode = ["dep:urlencoding"]
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 urlencoding = { version = "2", optional = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 cool_asserts = "2"

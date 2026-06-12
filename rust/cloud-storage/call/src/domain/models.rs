@@ -3,7 +3,10 @@
 use std::fmt;
 
 use chrono::{DateTime, Utc};
-use item_filters::ast::{LiteralTree, call::CallLiteral};
+use item_filters::{
+    CallStatus,
+    ast::{LiteralTree, call::CallLiteral},
+};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{Query, SimpleSortMethod};
 use uuid::Uuid;
@@ -69,6 +72,42 @@ pub struct VoipPushPayloadRequest<'a> {
     pub caller_name: &'a str,
     /// RTC server URL the native client should connect to.
     pub livekit_server_url: &'a str,
+    /// Absolute URL the native client polls while ringing to learn whether
+    /// the call was answered elsewhere or ended. `None` when the service has
+    /// no public base URL configured.
+    pub ring_status_url: Option<&'a str>,
+}
+
+/// Per-user status of an incoming-call ring, as reported by the
+/// ring-status endpoint while a native client is ringing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "lowercase")]
+pub enum RingStatus {
+    /// The call is active and this user has not joined yet — keep ringing.
+    Ringing,
+    /// This user joined the call on some device — stop ringing (answered elsewhere).
+    Answered,
+    /// The call is over (or was replaced by a newer call) — stop ringing (remote ended).
+    Ended,
+}
+
+/// Response body for `GET /call/ring-status/{call_id}`.
+#[derive(Debug, serde::Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct RingStatusResponse {
+    /// The ring status for the authenticated user.
+    pub status: RingStatus,
+}
+
+/// Identity and room grant extracted from a verified RTC access token.
+#[derive(Debug, Clone)]
+pub struct VerifiedRingToken {
+    /// The participant identity the token was minted for (a Macro user id string).
+    pub identity: String,
+    /// The room the token grants access to, if any.
+    pub room: Option<String>,
 }
 
 /// Response for the leave/end call operation.
@@ -341,8 +380,13 @@ pub struct CallRecord {
     /// S3 object key for the call recording (internal, not serialized).
     #[serde(skip_serializing)]
     pub recording_key: Option<String>,
+    /// Stored S3 object key/path for the preview image (internal, not serialized).
+    #[serde(skip_serializing)]
+    pub preview_key: Option<String>,
     /// Presigned URL for the call recording, if available.
     pub recording_url: Option<String>,
+    /// Presigned URL for the call recording preview image, if available.
+    pub recording_preview_url: Option<String>,
     /// Resolved display name for the channel.
     pub channel_name: Option<String>,
     /// User-supplied or AI-generated display name for the call. Only set on
@@ -355,10 +399,22 @@ pub struct CallRecord {
     pub share_with_team: bool,
     /// Whether the call is currently active (from `calls` table).
     pub is_active: bool,
+    /// Viewer-relative call status when fetched in the context of a specific user.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<CallStatus>,
     /// Participants (both active and historic).
     pub participants: Vec<CallRecordParticipant>,
     /// Transcript segments ordered by `sequence_num`.
     pub transcript: Vec<CallRecordTranscriptSegment>,
+}
+
+/// Storage object keys associated with a deleted archived call record.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct DeletedCallRecordStorageKeys {
+    /// S3 object key for the MP4 recording, without the `calls/` prefix.
+    pub recording_key: Option<String>,
+    /// Stored S3 object key/path for the preview image.
+    pub preview_key: Option<String>,
 }
 
 /// Lightweight preview of a call record, returned by the batch preview endpoint.

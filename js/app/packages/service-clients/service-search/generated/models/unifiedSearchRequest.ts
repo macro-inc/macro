@@ -14,6 +14,11 @@ export interface UnifiedSearchRequest {
   collapse?: UnifiedSearchRequestCollapse;
   /** Entity filters in the same shape as soup. Entity types with a NIL UUID in their primary ID field are excluded from search. */
   filters?: EntityFilters;
+  /** Opt in to searching the caller's team CRM companies (name/domain).
+Off by default: CRM results are only included when this is true and
+the caller has a qualifying team membership. CRM has no content
+index, so it is searched only under Name / NameContent. */
+  include_crm?: boolean;
   /** How to match the search terms. 'exact' for precise case-sensitive phrase matches, 'partial' for prefix/partial matches. REQUIRED field. */
   match_type: MatchType;
   /** The search query string. Must be at least 3 characters. */

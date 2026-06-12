@@ -70,9 +70,9 @@ function createGithubPrNotification(): UnifiedNotification {
   return baseNotification({
     entity_id: '123e4567-e89b-12d3-a456-426614174000',
     entity_type: 'foreign_entity',
-    notification_event_type: 'github_pr_event',
+    notification_event_type: 'github_pr_status_changed',
     notification_metadata: {
-      tag: 'github_pr_event',
+      tag: 'github_pr_status_changed',
       content: {
         action: 'opened',
         displayName: 'macro/macro#42',

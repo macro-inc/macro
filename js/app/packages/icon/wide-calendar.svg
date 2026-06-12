@@ -1,13 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 -2 18 18" fill="currentColor" stroke="none">
-  <rect x="3.64" width="1.5" height="3.5"/>
-  <rect x="12.89" width="1.5" height="3.5"/>
-  <rect x="3.14" y="8" width="2" height="2"/>
-  <rect x="3.14" y="5" width="2" height="2"/>
-  <rect x="6.39" y="5" width="2" height="2"/>
-  <rect x="6.39" y="8" width="2" height="2"/>
-  <rect x="9.64" y="8" width="2" height="2"/>
-  <rect x="9.64" y="5" width="2" height="2"/>
-  <rect x="12.89" y="5" width="2" height="2"/>
-  <path d="M0,12.15c0,.47.38.85.85.85h15.66v-1.5H1.5V2.5H0v9.65Z"/>
-  <path d="M17.18,1H1.5v1.5h15.03v9h1.49v1.5h.01V1.85c0-.47-.38-.85-.85-.85Z"/>
+<svg width="100%" height="100%" viewBox="0 -4 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg" overflow="visible">
+<rect x="0.625" y="0.625" width="22.75" height="14.75" rx="2"/>
+<line x1="6.3125" y1="-2" x2="6.3125" y2="1"/>
+<line x1="17.6875" y1="-2" x2="17.6875" y2="1"/>
+<line x1="0.625" y1="4" x2="23.375" y2="4"/>
+<line x1="0.625" y1="9.6875" x2="23.375" y2="9.6875"/>
+<line x1="6.3125" y1="4" x2="6.3125" y2="15.375"/>
+<line x1="12" y1="4" x2="12" y2="15.375"/>
+<line x1="17.6875" y1="4" x2="17.6875" y2="15.375"/>
 </svg>

@@ -29,6 +29,32 @@ impl FusionAuthClient {
         create::create_user(
             &self.auth_client,
             &self.fusion_auth_base_url,
+            None,
+            create::CreateUserRequest {
+                application_id: Cow::Borrowed(&self.client_id),
+                skip_verification,
+                user,
+            },
+            client_ip,
+        )
+        .await
+    }
+
+    /// Creates a new user in FusionAuth with a caller-specified id, so the FusionAuth id
+    /// can match an externally minted identifier. Triggers the create-user webhook like
+    /// [`Self::create_user`].
+    #[tracing::instrument(skip(self), fields(application_id=%self.client_id, fusion_auth_base_url=%self.fusion_auth_base_url))]
+    pub async fn create_user_with_id(
+        &self,
+        user_id: &str,
+        user: create::User<'_>,
+        skip_verification: bool,
+        client_ip: IpAddr,
+    ) -> Result<String> {
+        create::create_user(
+            &self.auth_client,
+            &self.fusion_auth_base_url,
+            Some(user_id),
             create::CreateUserRequest {
                 application_id: Cow::Borrowed(&self.client_id),
                 skip_verification,
@@ -43,6 +69,25 @@ impl FusionAuthClient {
     #[tracing::instrument(skip(self), fields(application_id=%self.client_id, fusion_auth_base_url=%self.fusion_auth_base_url))]
     pub async fn delete_user(&self, user_id: &str) -> Result<()> {
         delete::delete_user(&self.auth_client, &self.fusion_auth_base_url, user_id).await
+    }
+
+    /// Deactivates (soft-deletes) a user. The user can no longer authenticate, but their
+    /// identity provider links remain readable, so stored grants keep working.
+    #[tracing::instrument(skip(self), fields(application_id=%self.client_id, fusion_auth_base_url=%self.fusion_auth_base_url))]
+    pub async fn deactivate_user(&self, user_id: &str) -> Result<()> {
+        delete::deactivate_user(&self.auth_client, &self.fusion_auth_base_url, user_id).await
+    }
+
+    /// Reactivates a previously deactivated user.
+    #[tracing::instrument(skip(self), fields(application_id=%self.client_id, fusion_auth_base_url=%self.fusion_auth_base_url))]
+    pub async fn reactivate_user(&self, user_id: &str) -> Result<()> {
+        delete::reactivate_user(&self.auth_client, &self.fusion_auth_base_url, user_id).await
+    }
+
+    /// Returns whether a user is active (deactivated users cannot authenticate).
+    #[tracing::instrument(skip(self), fields(application_id=%self.client_id, fusion_auth_base_url=%self.fusion_auth_base_url))]
+    pub async fn get_user_active(&self, user_id: &str) -> Result<bool> {
+        get::get_user_active(&self.auth_client, &self.fusion_auth_base_url, user_id).await
     }
 
     /// Registers a user to the application by looking up their email first.

@@ -1,20 +1,38 @@
 //! Reranker adapters for task duplicate detection.
 
-use async_trait::async_trait;
+use embedding::{Content, RerankModel, Reranked, SearchResults};
 
-use crate::domain::ports::TaskReranker;
-
-/// No-op reranker: assigns every document the same score, leaving the upstream
-/// vector-similarity ordering untouched (the service sorts stably).
+/// No-op reranker: preserves the upstream vector-similarity ordering by handing
+/// every candidate back in input order, carrying its existing vector-similarity
+/// score through unchanged.
 ///
 /// This is the default until a real cross-encoder is wired up. A production
 /// implementation — e.g. a Cohere rerank connection — implements the same
-/// [`TaskReranker`] port and can be swapped in without touching the service.
-pub struct NoOpTaskReranker;
+/// [`RerankModel`] and can be swapped in without touching the service.
+#[derive(Clone, Copy, Default)]
+pub struct NoOpReranker;
 
-#[async_trait]
-impl TaskReranker for NoOpTaskReranker {
-    async fn rerank(&self, _query: &str, documents: &[String]) -> anyhow::Result<Vec<f64>> {
-        Ok(vec![0.0; documents.len()])
+impl<const DIMS: usize> RerankModel<DIMS> for NoOpReranker {
+    async fn rerank<'a, T: Send>(
+        &self,
+        _query: Content<'a>,
+        candidates: Vec<SearchResults<T, DIMS>>,
+    ) -> anyhow::Result<Vec<Reranked<T>>> {
+        Ok(candidates
+            .into_iter()
+            .map(|result| {
+                // Pass the best vector-similarity score through unchanged rather
+                // than imposing a rerank score of our own.
+                let score = result
+                    .matches
+                    .iter()
+                    .map(|matched| matched.score)
+                    .fold(f32::NEG_INFINITY, f32::max);
+                Reranked {
+                    item: result.metadata,
+                    score,
+                }
+            })
+            .collect())
     }
 }

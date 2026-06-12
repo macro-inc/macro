@@ -9,3 +9,4 @@ anyhow = { workspace = true }
 sqlx = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

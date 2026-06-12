@@ -26,7 +26,7 @@ struct TestGithubNotification {
 }
 
 impl Notification for TestGithubNotification {
-    const TYPE_NAME: &'static str = "github_pr_event";
+    const TYPE_NAME: &'static str = "github_pr_status_changed";
 }
 
 fn test_user(email: &str) -> MacroUserIdStr<'static> {
@@ -537,7 +537,7 @@ async fn test_get_user_notifications_filters_github_type_and_entity(pool: Pool<P
     );
     assert_eq!(
         github_type_results[0].notification_event_type,
-        "github_pr_event"
+        "github_pr_status_changed"
     );
     assert_eq!(
         github_type_results[0].entity.entity_type,

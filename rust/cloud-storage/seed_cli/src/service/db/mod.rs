@@ -194,7 +194,8 @@ impl SeedDb {
         &self,
         link: service::link::Link,
     ) -> anyhow::Result<service::link::Link> {
-        let result = email_db_client::links::insert::upsert_link(&self.inner, link).await?;
+        let mut conn = self.inner.acquire().await?;
+        let result = email_db_client::links::insert::upsert_link(&mut conn, link).await?;
         Ok(result)
     }
 

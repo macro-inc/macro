@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-watch-call-ended"
+description = "Enables the watch_call_ended command without any pre-configured scope."
+commands.allow = ["watch_call_ended"]
+
+[[permission]]
+identifier = "deny-watch-call-ended"
+description = "Denies the watch_call_ended command without any pre-configured scope."
+commands.deny = ["watch_call_ended"]
