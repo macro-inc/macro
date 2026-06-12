@@ -59,7 +59,7 @@ const getStandaloneChannelMessageSenderFallback = (
 ): string | undefined => {
   const metadata = notification.notification_metadata;
   return metadata.tag === 'channel_message_send'
-    ? metadata.content.sender
+    ? (metadata.content.sender ?? undefined)
     : (notification.sender_id ?? undefined);
 };
 
@@ -786,9 +786,36 @@ function GithubHeaderCell(props: {
   );
 }
 
+type GithubNotificationMetadata = Extract<
+  UnifiedNotification['notification_metadata'],
+  {
+    tag:
+      | 'github_pr_status_changed'
+      | 'github_review_requested'
+      | 'github_pr_comment'
+      | 'github_pr_mention'
+      | 'github_pr_review';
+  }
+>;
+
+const isGithubNotificationMetadata = (
+  metadata: UnifiedNotification['notification_metadata']
+): metadata is GithubNotificationMetadata => {
+  switch (metadata.tag) {
+    case 'github_pr_status_changed':
+    case 'github_review_requested':
+    case 'github_pr_comment':
+    case 'github_pr_mention':
+    case 'github_pr_review':
+      return true;
+    default:
+      return false;
+  }
+};
+
 const getGithubContent = (notification: UnifiedNotification) => {
   const metadata = notification.notification_metadata;
-  return metadata.tag === 'github_pr_event' ? metadata.content : undefined;
+  return isGithubNotificationMetadata(metadata) ? metadata.content : undefined;
 };
 
 const getGithubStatusIcon = (status: GithubPrEventStatus) => {
@@ -826,8 +853,19 @@ export function GithubNotificationListEntity(props: {
   const github = () => getGithubContent(props.notification);
   const unread = () =>
     !props.notification.viewed_at && !props.notification.done;
-  const title = () => props.title ?? github()?.action ?? '';
-  const status = () => props.status ?? github()?.status;
+  const title = () => {
+    const content = github();
+    if (!content) return props.title ?? '';
+    if (props.title) return props.title;
+    return 'action' in content ? content.action : content.title;
+  };
+  const status = () => {
+    const content = github();
+    return (
+      props.status ??
+      (content && 'status' in content ? content.status : undefined)
+    );
+  };
   const url = () => props.url ?? github()?.url;
   const prNumber = () => {
     const number = github()?.number;
@@ -845,9 +883,11 @@ export function GithubNotificationListEntity(props: {
   const githubActionLabel = () => {
     const content = github();
     if (!content) return 'updated';
+    if (!('action' in content)) return 'updated';
     if (content.status === 'merged') return 'merged';
-    if (content.action === 'closed' || content.status === 'closed')
+    if (content.action === 'closed' || content.status === 'closed') {
       return 'closed';
+    }
     if (content.action === 'opened' || content.action === 'reopened') {
       return 'opened';
     }
@@ -866,7 +906,7 @@ export function GithubNotificationListEntity(props: {
     if (!content) return undefined;
 
     const date = new Date(
-      content.status === 'merged' && content.mergedAt
+      'status' in content && content.status === 'merged' && content.mergedAt
         ? content.mergedAt
         : (props.notification.created_at ?? props.notification.updated_at ?? 0)
     );

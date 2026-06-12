@@ -195,10 +195,40 @@ const getNotificationPreviewEntity = (
   }
 };
 
+type GithubNotificationMetadata = Extract<
+  UnifiedNotification['notification_metadata'],
+  {
+    tag:
+      | 'github_pr_status_changed'
+      | 'github_review_requested'
+      | 'github_pr_comment'
+      | 'github_pr_mention'
+      | 'github_pr_review';
+  }
+>;
+
+const isGithubNotificationMetadata = (
+  metadata: UnifiedNotification['notification_metadata']
+): metadata is GithubNotificationMetadata => {
+  switch (metadata.tag) {
+    case 'github_pr_status_changed':
+    case 'github_review_requested':
+    case 'github_pr_comment':
+    case 'github_pr_mention':
+    case 'github_pr_review':
+      return true;
+    default:
+      return false;
+  }
+};
+
+const isGithubNotification = (notification: UnifiedNotification): boolean =>
+  isGithubNotificationMetadata(notification.notification_metadata);
+
 const getNotificationPreviewSelection = (
   notification: UnifiedNotification
 ): NotificationPreviewSelection | undefined => {
-  if (notification.notification_metadata.tag === 'github_pr_event') {
+  if (isGithubNotification(notification)) {
     return { type: 'coming-soon', label: 'GitHub preview is coming soon' };
   }
 
@@ -238,22 +268,12 @@ const getDateGroupLabel = (time: number): string => {
 
 const isGithubStatusNotification = (
   notification: UnifiedNotification
-): boolean => {
-  const metadata = notification.notification_metadata;
-  if (metadata.tag !== 'github_pr_event') return false;
-
-  return (
-    metadata.content.action === 'opened' ||
-    metadata.content.action === 'reopened' ||
-    metadata.content.action === 'closed' ||
-    (!!metadata.content.previousStatus &&
-      metadata.content.previousStatus !== metadata.content.status)
-  );
-};
+): boolean =>
+  notification.notification_metadata.tag === 'github_pr_status_changed';
 
 const getGithubGroupKey = (notification: UnifiedNotification): string => {
   const metadata = notification.notification_metadata;
-  if (metadata.tag !== 'github_pr_event') return notification.id;
+  if (!isGithubNotificationMetadata(metadata)) return notification.id;
   return metadata.content.foreignEntityId || metadata.content.githubKey;
 };
 
@@ -305,9 +325,9 @@ const getChannelSenderKey = (notification: UnifiedNotification): string => {
 
   switch (metadata.tag) {
     case 'channel_message_send':
-      return metadata.content.sender;
+      return metadata.content.sender ?? notification.id;
     case 'channel_message_reply':
-      return metadata.content.userId;
+      return metadata.content.userId ?? notification.id;
     default:
       return notification.id;
   }
@@ -318,9 +338,9 @@ const getChannelSenderLabel = (notification: UnifiedNotification): string => {
 
   switch (metadata.tag) {
     case 'channel_message_send':
-      return metadata.content.sender;
+      return metadata.content.sender ?? 'Unknown';
     case 'channel_message_reply':
-      return metadata.content.userId;
+      return metadata.content.userId ?? 'Unknown';
     default:
       return notification.sender_id ?? 'Unknown';
   }
@@ -518,7 +538,7 @@ const groupNotifications = (
   const items: NotificationInboxItem[] = [];
 
   for (const notification of sorted) {
-    if (notification.notification_metadata.tag === 'github_pr_event') {
+    if (isGithubNotification(notification)) {
       const key = getGithubGroupKey(notification);
       githubGroups.set(key, [...(githubGroups.get(key) ?? []), notification]);
       continue;
@@ -540,19 +560,20 @@ const groupNotifications = (
     const notifications = sortNotifications(groupNotifications);
     const first = notifications[0];
     const metadata = first.notification_metadata;
-    if (metadata.tag !== 'github_pr_event') continue;
+    if (!isGithubNotificationMetadata(metadata)) continue;
+    const content = metadata.content;
 
     items.push({
       id: `github:${key}`,
       type: 'github',
       group: {
         id: key,
-        title: metadata.content.title || metadata.content.displayName,
-        subtitle: `${metadata.content.owner}/${metadata.content.repo}#${metadata.content.number}`,
-        status: metadata.content.status,
-        url: metadata.content.url,
+        title: content.title || content.displayName,
+        subtitle: `${content.owner}/${content.repo}#${content.number}`,
+        status: 'status' in content ? content.status : undefined,
+        url: content.url,
         authorId: first.sender_id ?? undefined,
-        authorFallback: metadata.content.senderGithubLogin ?? undefined,
+        authorFallback: content.senderGithubLogin ?? undefined,
         notifications,
         subItems: notifications.filter(
           (notification) => !isGithubStatusNotification(notification)

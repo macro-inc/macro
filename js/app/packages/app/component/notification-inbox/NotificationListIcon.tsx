@@ -39,7 +39,7 @@ const getChannelMessageSenderId = (
 ): string | undefined => {
   const metadata = notification.notification_metadata;
   if (metadata.tag !== 'channel_message_send') return undefined;
-  return notification.sender_id ?? metadata.content.sender;
+  return notification.sender_id ?? metadata.content.sender ?? undefined;
 };
 
 function getNotificationIcon(
@@ -58,7 +58,11 @@ function getNotificationIcon(
     .with('invite_to_team', () => UserPlusIcon)
     .with('task_assigned', () => entityIcon('task'))
     .with('ai_response', () => entityIcon('chat'))
-    .with('github_pr_event', () => GithubIcon)
+    .with('github_pr_status_changed', () => GithubIcon)
+    .with('github_review_requested', () => GithubIcon)
+    .with('github_pr_comment', () => GithubIcon)
+    .with('github_pr_mention', () => GithubIcon)
+    .with('github_pr_review', () => GithubIcon)
     .with('call-started', () => PhoneIcon)
     .exhaustive();
 }

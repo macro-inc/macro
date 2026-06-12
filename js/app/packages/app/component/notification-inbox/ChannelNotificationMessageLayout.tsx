@@ -20,7 +20,7 @@ const getChannelContent = (notification: UnifiedNotification) => {
 const getSenderFallback = (notification: UnifiedNotification): string => {
   const metadata = notification.notification_metadata;
   return metadata.tag === 'channel_message_send'
-    ? metadata.content.sender
+    ? (metadata.content.sender ?? 'Unknown')
     : (notification.sender_id ?? 'Unknown');
 };
 

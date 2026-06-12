@@ -7,7 +7,10 @@ import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 import { ROUTER_BASE } from '@app/constants/routerBase';
 import { PosthogProvider, usePosthog } from '@app/lib/analytics/posthog';
 import { setHotkeyRoot } from '@app/signal/hotkeyRoot';
-import { globalSplitManager } from '@app/signal/splitLayout';
+import {
+  globalSplitManager,
+  setGlobalSplitManager,
+} from '@app/signal/splitLayout';
 import { CallKitSync } from '@channel/Call';
 import { CallProvider } from '@channel/Call/CallContext';
 import { CallStartedNotifier } from '@channel/Call/CallStartedNotifier';
