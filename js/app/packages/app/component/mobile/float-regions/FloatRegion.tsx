@@ -21,9 +21,9 @@ export type FloatRegionProps = ParentProps<{
  * are ignored automatically. Among active contributors to the same region the
  * highest priority wins; ties go to the most recently mounted.
  *
- * Contributions own their horizontal padding (`px-3` to align with the dock)
- * and must re-enable `pointer-events-auto` on interactive content — the host
- * is pointer-transparent.
+ * Contributions own their horizontal padding (`px-(--mobile-chrome-gutter)`
+ * to align with the dock) and must re-enable `pointer-events-auto` on
+ * interactive content — the host is pointer-transparent.
  */
 export function FloatRegion(props: FloatRegionProps) {
   const panel = useSplitPanel();

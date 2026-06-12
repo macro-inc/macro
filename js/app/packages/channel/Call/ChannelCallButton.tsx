@@ -1,4 +1,5 @@
 import { useChannelTab } from '@channel/Channel/ChannelTabContext';
+import { isMobile } from '@core/mobile/isMobile';
 import PhoneIcon from '@icon/wide-call.svg';
 import { useActiveCallQuery } from '@queries/call/call';
 import { Button, cn } from '@ui';
@@ -33,10 +34,10 @@ export function ChannelCallButton(props: { channelId: string }) {
       <Button
         onClick={handleClick}
         tooltip={tooltip()}
-        variant={isCallInProgress() ? 'success' : 'base'}
+        variant={isMobile() ? 'ghost' : isCallInProgress() ? 'success' : 'base'}
         size="sm"
         depth={2}
-        class={cn(!isCallInProgress() && 'bg-surface')}
+        class={cn(!isCallInProgress() && !isMobile() && 'bg-surface', isMobile() && 'active:bg-transparent')}
       >
         <PhoneIcon />
         <span>{label()}</span>

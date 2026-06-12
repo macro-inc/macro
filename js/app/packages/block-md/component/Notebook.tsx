@@ -218,7 +218,7 @@ export function Notebook(props: {
 
   const contentDivClasses = createMemo(() => {
     const mode = layoutMode();
-    const shared = 'grow max-w-3xl pt-12 min-w-0';
+    const shared = 'grow max-w-3xl pt-12 mobile:pt-6 min-w-0';
     switch (mode) {
       case CommentLayoutMode.lg:
         return `${shared} mx-auto`;
