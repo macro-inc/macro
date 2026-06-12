@@ -4642,6 +4642,21 @@
                 "format": "uuid"
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "The inbox `link_id` was removed and its data torn down.",
+            "required": ["link_id", "event"],
+            "properties": {
+              "event": {
+                "type": "string",
+                "enum": ["link_removed"]
+              },
+              "link_id": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
           }
         ],
         "description": "Payload for the `refresh_email` connection gateway event: identifies the\ninbox that changed and the kind of change."

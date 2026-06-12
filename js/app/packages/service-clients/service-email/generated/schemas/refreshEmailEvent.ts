@@ -6,6 +6,7 @@
  */
 import type { RefreshEmailEventOneOf } from './refreshEmailEventOneOf';
 import type { RefreshEmailEventOneOfFive } from './refreshEmailEventOneOfFive';
+import type { RefreshEmailEventOneOfNine } from './refreshEmailEventOneOfNine';
 import type { RefreshEmailEventOneOfSeven } from './refreshEmailEventOneOfSeven';
 import type { RefreshEmailEventOneOfThree } from './refreshEmailEventOneOfThree';
 
@@ -17,4 +18,5 @@ export type RefreshEmailEvent =
   | RefreshEmailEventOneOf
   | RefreshEmailEventOneOfThree
   | RefreshEmailEventOneOfFive
-  | RefreshEmailEventOneOfSeven;
+  | RefreshEmailEventOneOfSeven
+  | RefreshEmailEventOneOfNine;

@@ -30,4 +30,6 @@ pub enum RefreshEmailEvent {
     UpdateLabels { link_id: Uuid },
     /// A message was deleted for `link_id`.
     DeleteMessage { link_id: Uuid },
+    /// The inbox `link_id` was removed and its data torn down.
+    LinkRemoved { link_id: Uuid },
 }

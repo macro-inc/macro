@@ -229,6 +229,8 @@ export * from './refreshEmailEventOneOf';
 export * from './refreshEmailEventOneOfEvent';
 export * from './refreshEmailEventOneOfFive';
 export * from './refreshEmailEventOneOfFiveEvent';
+export * from './refreshEmailEventOneOfNine';
+export * from './refreshEmailEventOneOfNineEvent';
 export * from './refreshEmailEventOneOfSeven';
 export * from './refreshEmailEventOneOfSevenEvent';
 export * from './refreshEmailEventOneOfThree';
