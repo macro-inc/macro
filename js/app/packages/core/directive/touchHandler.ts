@@ -154,7 +154,10 @@ export function touchHandler(
     // so it doesn't compete with native behavior (e.g. `['img']` yields to the
     // native image callout).
     const skipSelectors = options().skipSelectors;
-    if (skipSelectors?.length && (e.target as Element)?.closest(skipSelectors.join(','))) {
+    if (
+      skipSelectors?.length &&
+      (e.target as Element)?.closest(skipSelectors.join(','))
+    ) {
       clearState();
       cancelTouchClassEnter();
       endTouchClass();
