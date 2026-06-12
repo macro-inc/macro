@@ -1,6 +1,6 @@
 import { currentThemeId, isThemeSaved, showDarkThemes, showLightThemes, themes } from '../signals/themeSignals';
 import { useAnalytics } from 'app/component/analytics-context';
-import { applyTheme } from '../utils/themeUtils';
+import { applyTheme, isTokensDark } from '../utils/themeUtils';
 import { ThemeChips } from './ThemeChips';
 import { ThemeCrud } from './ThemeCrud';
 import { cn } from '@ui';
@@ -10,10 +10,9 @@ import { createMemo, For } from 'solid-js';
 function ThemeList() {
   const analytics = useAnalytics()
 
-  // A theme is intrinsically dark when its text is lighter than its background.
   const visibleThemes = createMemo(() =>
     themes().filter((theme) =>
-      theme.tokens.c0.l > theme.tokens.b0.l ? showDarkThemes() : showLightThemes()
+      isTokensDark(theme.tokens) ? showDarkThemes() : showLightThemes()
     )
   );
 

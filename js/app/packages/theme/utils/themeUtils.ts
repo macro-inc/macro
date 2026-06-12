@@ -78,8 +78,8 @@ export function applyTheme(id: string): void{
       }
     );
     setThemeDepth(theme!.depth ?? 0.15);
-    // Track the theme's intrinsic light/dark polarity (no inversion happens — mode
-    // switching is currently disabled; this just keeps themeMode in sync).
+    // Selecting a theme adopts its intrinsic light/dark as the active mode. Tokens
+    // load as-is (no inversion here); the Light/Dark toggle flips via enforceModeLive.
     setThemeMode(isTokensDark(theme!.tokens) ? 'dark' : 'light');
     queueMicrotask(() => {/* scuffed af */
       setIsThemeSaved(true);
@@ -98,8 +98,8 @@ function syncHtmlColor(): void{
 function invertLightness(): void{
   batch(() => {
     themeReactive.b0.l[1](1 - themeReactive.b0.l[0]());
-    themeReactive.b2.l[1](1 - themeReactive.b2.l[0]());
     themeReactive.b1.l[1](1 - themeReactive.b1.l[0]());
+    themeReactive.b2.l[1](1 - themeReactive.b2.l[0]());
     themeReactive.b3.l[1](1 - themeReactive.b3.l[0]());
     themeReactive.b4.l[1](1 - themeReactive.b4.l[0]());
     themeReactive.c0.l[1](1 - themeReactive.c0.l[0]());
@@ -179,8 +179,8 @@ export function isThemeDark(): boolean {
   return themeReactive.c0.l[0]() > themeReactive.b0.l[0]();
 }
 
-/** Same intrinsic-darkness test, against a stored token set rather than the live signals. */
-function isTokensDark(tokens: ThemeV2Tokens): boolean {
+/** Intrinsic darkness of a stored theme: dark when text is lighter than background. */
+export function isTokensDark(tokens: ThemeV2Tokens): boolean {
   return tokens.c0.l > tokens.b0.l;
 }
 

@@ -19,6 +19,7 @@ export function ThemeCrud(props: ThemeCrudProps) {
       class="flex shrink-0 items-center gap-0.5"
       onClick={stop}
       onPointerDown={stop}
+      onKeyDown={stop}
     >
       <Button
         label="Copy To Clipboard"
