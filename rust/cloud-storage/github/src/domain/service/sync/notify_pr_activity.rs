@@ -12,11 +12,17 @@ use std::collections::HashSet;
 use documents::domain::ports::DocumentService;
 use foreign_entity::domain::ports::ForeignEntityService;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_notifications::GithubReviewRequested;
+use model_notifications::{
+    GithubPrComment, GithubPrCommentKind, GithubPrMention, GithubPrMentionLocation,
+    GithubPrNotificationCommon, GithubReviewRequested,
+};
 use notification::domain::service::NotificationIngress;
 
 use crate::domain::{
-    models::{EnrichedGithubPullRequest, ValidatedGithubWebhookEvent},
+    models::{
+        EnrichedGithubPullRequest, GithubWebhookEventType, ValidatedGithubWebhookEvent,
+        extract_github_mentions,
+    },
     ports::{GithubSyncClient, GithubSyncRepo},
 };
 
@@ -118,5 +124,127 @@ impl<
             )
             .await;
         }
+    }
+
+    /// Notify recipients that a pull request was commented on, and notify
+    /// @mentioned users separately.
+    ///
+    /// Fires for `issue_comment` and `pull_request_review_comment` events with
+    /// action `created`. Mentioned users receive only the more specific
+    /// `github_pr_mention` notification; everyone else in the source receives
+    /// `github_pr_comment`. Bot-authored comments (including the Macro app's
+    /// own task-link comments) are skipped entirely.
+    pub(super) async fn notify_pr_comment_and_mentions(
+        &self,
+        event: &ValidatedGithubWebhookEvent,
+        pull_request: &EnrichedGithubPullRequest,
+        upserts: &[PullRequestForeignEntityUpsert],
+    ) {
+        if Self::is_bot_sender(event) {
+            tracing::trace!("skipping comment notification from bot sender");
+            return;
+        }
+
+        let body = Self::payload_string(&event.payload, &["comment", "body"]).unwrap_or_default();
+        let comment_github_id = event
+            .payload
+            .get("comment")
+            .and_then(|comment| comment.get("id"))
+            .and_then(|id| id.as_u64());
+        let comment_url = Self::payload_string(&event.payload, &["comment", "html_url"]);
+        let (comment_kind, mention_location) = match event.parsed_event_type() {
+            GithubWebhookEventType::PullRequestReviewComment => (
+                GithubPrCommentKind::ReviewComment,
+                GithubPrMentionLocation::ReviewComment,
+            ),
+            _ => (GithubPrCommentKind::Issue, GithubPrMentionLocation::Comment),
+        };
+
+        let mentioned_users = self.mentioned_macro_users(&body).await;
+        let snippet = GithubPrNotificationCommon::snippet(&body);
+        let sender_id = self.notification_sender_id(event).await;
+        for upsert in upserts {
+            let recipients = self.notification_recipient_ids(&upsert.source).await;
+
+            // Mention wins: mentioned users get only github_pr_mention.
+            let mention_recipients: HashSet<_> =
+                recipients.intersection(&mentioned_users).cloned().collect();
+            let comment_recipients: HashSet<_> = recipients
+                .difference(&mention_recipients)
+                .cloned()
+                .collect();
+
+            if !mention_recipients.is_empty() {
+                let notification = GithubPrMention {
+                    common: Self::github_pr_common(event, pull_request, upsert.foreign_entity_id),
+                    location: mention_location,
+                    comment_github_id,
+                    comment_url: comment_url.clone(),
+                    text_snippet: snippet.clone(),
+                };
+                self.send_github_notification(
+                    notification,
+                    upsert.foreign_entity_id,
+                    sender_id.clone(),
+                    mention_recipients,
+                )
+                .await;
+            }
+
+            if !comment_recipients.is_empty() {
+                let notification = GithubPrComment {
+                    common: Self::github_pr_common(event, pull_request, upsert.foreign_entity_id),
+                    comment_kind,
+                    comment_github_id,
+                    comment_url: comment_url.clone(),
+                    comment_snippet: snippet.clone(),
+                };
+                self.send_github_notification(
+                    notification,
+                    upsert.foreign_entity_id,
+                    sender_id.clone(),
+                    comment_recipients,
+                )
+                .await;
+            }
+        }
+    }
+
+    /// Resolve the Macro users @mentioned in `text` via their `github_links`
+    /// login mappings. Unmapped logins and invalid Macro IDs are skipped.
+    async fn mentioned_macro_users(&self, text: &str) -> HashSet<MacroUserIdStr<'static>> {
+        let logins = extract_github_mentions(text);
+        if logins.is_empty() {
+            return HashSet::new();
+        }
+
+        let links = match self.repo.get_macro_ids_by_github_logins(&logins).await {
+            Ok(links) => links,
+            Err(error) => {
+                tracing::warn!(
+                    error=?error,
+                    "failed to map GitHub mention logins to Macro users"
+                );
+                return HashSet::new();
+            }
+        };
+
+        links
+            .into_values()
+            .flatten()
+            .filter_map(
+                |macro_id| match MacroUserIdStr::try_from(macro_id.clone()) {
+                    Ok(user_id) => Some(user_id),
+                    Err(error) => {
+                        tracing::warn!(
+                            error=?error,
+                            macro_id=%macro_id,
+                            "GitHub mention mapping is not a valid Macro user ID"
+                        );
+                        None
+                    }
+                },
+            )
+            .collect()
     }
 }

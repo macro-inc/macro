@@ -3528,3 +3528,306 @@ async fn review_requested_user_source_notifies_installed_reviewer() {
         vec!["macro|solo@user.com".to_string()]
     );
 }
+
+// ---------------------------------------------------------------------------
+// notify_pr_comment_and_mentions
+// ---------------------------------------------------------------------------
+
+fn notification_comment_event(
+    event_type: &str,
+    action: &str,
+    comment_body: &str,
+    sender_login: &str,
+    sender_type: &str,
+) -> ValidatedGithubWebhookEvent {
+    let mut payload = serde_json::json!({
+        "action": action,
+        "comment": {
+            "id": 555,
+            "body": comment_body,
+            "html_url": "https://github.com/my-org/my-repo/pull/42#issuecomment-555"
+        },
+        "repository": {
+            "name": "my-repo",
+            "owner": { "login": "my-org" }
+        },
+        "installation": { "id": 12345 },
+        "sender": {
+            "login": sender_login,
+            "id": 222,
+            "type": sender_type,
+            "avatar_url": format!("https://avatars.example/{sender_login}.png")
+        }
+    });
+    if event_type == "issue_comment" {
+        payload["issue"] = serde_json::json!({
+            "number": 42,
+            "state": "open",
+            "pull_request": { "url": "https://api.github.com/repos/my-org/my-repo/pulls/42" }
+        });
+    } else {
+        payload["pull_request"] = serde_json::json!({
+            "number": 42,
+            "title": "Add GitHub notifications",
+            "state": "open",
+            "merged": false
+        });
+    }
+
+    ValidatedGithubWebhookEvent::new(event_type.to_string(), payload)
+}
+
+fn comment_team_repo(team_id: uuid::Uuid) -> StubSyncRepo {
+    StubSyncRepo::new()
+        .with_installation_sources("12345", vec![GithubAppInstallationSource::Team(team_id)])
+        .with_team_members(
+            team_id,
+            vec![
+                "macro|alice@user.com",
+                "macro|bob@user.com",
+                "macro|carol@user.com",
+            ],
+        )
+        .with_github_link("222", "macro|alice@user.com")
+}
+
+fn requests_with_tag(requests: &[serde_json::Value], tag: &str) -> Vec<serde_json::Value> {
+    requests
+        .iter()
+        .filter(|request| {
+            request
+                .pointer("/req/notification/tag")
+                .and_then(|value| value.as_str())
+                == Some(tag)
+        })
+        .cloned()
+        .collect()
+}
+
+#[tokio::test]
+async fn issue_comment_notifies_team_without_mentions() {
+    let team_id: uuid::Uuid = "dddddddd-dddd-dddd-dddd-dddddddddddd".parse().unwrap();
+    let service = make_sync_service_with_repo(comment_team_repo(team_id));
+    let event = notification_comment_event(
+        "issue_comment",
+        "created",
+        "Looks good overall",
+        "octocat",
+        "User",
+    );
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    let requests = service.notification_ingress.requests();
+    assert_eq!(requests.len(), 1);
+
+    let request = &requests[0];
+    assert_github_notification_realtime_enabled_apns_disabled(request, "github_pr_comment");
+    assert_eq!(
+        notification_request_recipients(request),
+        vec![
+            "macro|alice@user.com".to_string(),
+            "macro|bob@user.com".to_string(),
+            "macro|carol@user.com".to_string(),
+        ]
+    );
+
+    let content = notification_request_content(request);
+    assert_eq!(
+        content.get("commentKind").and_then(|value| value.as_str()),
+        Some("issue")
+    );
+    assert_eq!(
+        content
+            .get("commentSnippet")
+            .and_then(|value| value.as_str()),
+        Some("Looks good overall")
+    );
+    assert_eq!(
+        content
+            .get("commentGithubId")
+            .and_then(|value| value.as_u64()),
+        Some(555)
+    );
+    assert_eq!(
+        content.get("commentUrl").and_then(|value| value.as_str()),
+        Some("https://github.com/my-org/my-repo/pull/42#issuecomment-555")
+    );
+    assert_eq!(
+        content.get("displayName").and_then(|value| value.as_str()),
+        Some("my-org/my-repo#42")
+    );
+}
+
+#[tokio::test]
+async fn issue_comment_mentioned_member_gets_mention_not_comment() {
+    let team_id: uuid::Uuid = "dddddddd-dddd-dddd-dddd-dddddddddddd".parse().unwrap();
+    let repo = comment_team_repo(team_id).with_github_login_link("bob-gh", "macro|bob@user.com");
+    let service = make_sync_service_with_repo(repo);
+    let event = notification_comment_event(
+        "issue_comment",
+        "created",
+        "@bob-gh can you take a look?",
+        "octocat",
+        "User",
+    );
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    let requests = service.notification_ingress.requests();
+    assert_eq!(requests.len(), 2);
+
+    let mentions = requests_with_tag(&requests, "github_pr_mention");
+    assert_eq!(mentions.len(), 1);
+    assert_eq!(
+        notification_request_recipients(&mentions[0]),
+        vec!["macro|bob@user.com".to_string()]
+    );
+    let mention_content = notification_request_content(&mentions[0]);
+    assert_eq!(
+        mention_content
+            .get("location")
+            .and_then(|value| value.as_str()),
+        Some("comment")
+    );
+    assert_eq!(
+        mention_content
+            .get("textSnippet")
+            .and_then(|value| value.as_str()),
+        Some("@bob-gh can you take a look?")
+    );
+
+    let comments = requests_with_tag(&requests, "github_pr_comment");
+    assert_eq!(comments.len(), 1);
+    assert_eq!(
+        notification_request_recipients(&comments[0]),
+        vec![
+            "macro|alice@user.com".to_string(),
+            "macro|carol@user.com".to_string(),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn review_comment_uses_review_comment_kind_and_location() {
+    let team_id: uuid::Uuid = "dddddddd-dddd-dddd-dddd-dddddddddddd".parse().unwrap();
+    let repo = comment_team_repo(team_id).with_github_login_link("bob-gh", "macro|bob@user.com");
+    let service = make_sync_service_with_repo(repo);
+    let event = notification_comment_event(
+        "pull_request_review_comment",
+        "created",
+        "@bob-gh this line is wrong",
+        "octocat",
+        "User",
+    );
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    let requests = service.notification_ingress.requests();
+    let mentions = requests_with_tag(&requests, "github_pr_mention");
+    let comments = requests_with_tag(&requests, "github_pr_comment");
+    assert_eq!(mentions.len(), 1);
+    assert_eq!(comments.len(), 1);
+    assert_eq!(
+        notification_request_content(&mentions[0])
+            .get("location")
+            .and_then(|value| value.as_str()),
+        Some("review_comment")
+    );
+    assert_eq!(
+        notification_request_content(&comments[0])
+            .get("commentKind")
+            .and_then(|value| value.as_str()),
+        Some("review_comment")
+    );
+}
+
+#[tokio::test]
+async fn bot_comment_does_not_notify() {
+    let team_id: uuid::Uuid = "dddddddd-dddd-dddd-dddd-dddddddddddd".parse().unwrap();
+    let service = make_sync_service_with_repo(comment_team_repo(team_id));
+    let event = notification_comment_event(
+        "issue_comment",
+        "created",
+        "Linked task: MACRO-abc123",
+        "macro-app[bot]",
+        "Bot",
+    );
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    assert!(service.notification_ingress.requests().is_empty());
+}
+
+#[tokio::test]
+async fn edited_comment_does_not_notify() {
+    let team_id: uuid::Uuid = "dddddddd-dddd-dddd-dddd-dddddddddddd".parse().unwrap();
+    let service = make_sync_service_with_repo(comment_team_repo(team_id));
+    let event = notification_comment_event(
+        "issue_comment",
+        "edited",
+        "Looks good overall (edited)",
+        "octocat",
+        "User",
+    );
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    assert!(service.notification_ingress.requests().is_empty());
+}
+
+#[tokio::test]
+async fn mention_of_unlinked_login_falls_back_to_comment_for_all() {
+    let team_id: uuid::Uuid = "dddddddd-dddd-dddd-dddd-dddddddddddd".parse().unwrap();
+    let service = make_sync_service_with_repo(comment_team_repo(team_id));
+    let event = notification_comment_event(
+        "issue_comment",
+        "created",
+        "@stranger can you take a look?",
+        "octocat",
+        "User",
+    );
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    let requests = service.notification_ingress.requests();
+    assert_eq!(requests.len(), 1);
+    assert_github_notification_realtime_enabled_apns_disabled(&requests[0], "github_pr_comment");
+    assert_eq!(notification_request_recipients(&requests[0]).len(), 3);
+}
+
+#[tokio::test]
+async fn mention_login_linked_to_multiple_users_notifies_all_in_team() {
+    let team_id: uuid::Uuid = "dddddddd-dddd-dddd-dddd-dddddddddddd".parse().unwrap();
+    let repo = comment_team_repo(team_id)
+        .with_github_login_link("shared-gh", "macro|bob@user.com")
+        .with_github_login_link("shared-gh", "macro|carol@user.com")
+        .with_github_login_link("shared-gh", "macro|outsider@user.com");
+    let service = make_sync_service_with_repo(repo);
+    let event = notification_comment_event(
+        "issue_comment",
+        "created",
+        "@Shared-GH ping",
+        "octocat",
+        "User",
+    );
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    let requests = service.notification_ingress.requests();
+    let mentions = requests_with_tag(&requests, "github_pr_mention");
+    let comments = requests_with_tag(&requests, "github_pr_comment");
+    assert_eq!(mentions.len(), 1);
+    assert_eq!(
+        notification_request_recipients(&mentions[0]),
+        vec![
+            "macro|bob@user.com".to_string(),
+            "macro|carol@user.com".to_string(),
+        ]
+    );
+    assert_eq!(comments.len(), 1);
+    assert_eq!(
+        notification_request_recipients(&comments[0]),
+        vec!["macro|alice@user.com".to_string()]
+    );
+}

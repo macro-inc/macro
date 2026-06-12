@@ -853,10 +853,26 @@ impl<
             GithubWebhookEventType::IssueComment
             | GithubWebhookEventType::PullRequestReview
             | GithubWebhookEventType::PullRequestReviewComment => {
-                if webhook_event.is_associated_with_pull_request() {
-                    let _ = self
+                if webhook_event.is_associated_with_pull_request()
+                    && let Some((pull_request, upserts)) = self
                         .upsert_pull_request_foreign_entities(webhook_event)
-                        .await;
+                        .await
+                {
+                    match (webhook_event.parsed_event_type(), action) {
+                        (
+                            GithubWebhookEventType::IssueComment
+                            | GithubWebhookEventType::PullRequestReviewComment,
+                            Some("created"),
+                        ) => {
+                            self.notify_pr_comment_and_mentions(
+                                webhook_event,
+                                &pull_request,
+                                &upserts,
+                            )
+                            .await;
+                        }
+                        _ => {}
+                    }
                 }
 
                 self.handle_comment_event(webhook_event).await
