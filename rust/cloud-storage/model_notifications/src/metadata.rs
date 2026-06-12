@@ -54,7 +54,7 @@ pub enum GithubPrEventAction {
 /// Metadata for a GitHub pull request lifecycle notification.
 #[derive(Debug, Clone, PartialEq, Eq, ToSchema, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct GithubPrEvent {
+pub struct GithubPrStatusChanged {
     /// The source-specific internal foreign entity row id for this pull request.
     pub foreign_entity_id: Uuid,
     /// The external GitHub key, in `owner/repo/pull/number` format.
@@ -91,7 +91,7 @@ pub struct GithubPrEvent {
     pub merged_at: Option<DateTime<Utc>>,
 }
 
-impl GithubPrEvent {
+impl GithubPrStatusChanged {
     /// Build a required title value, falling back to the display name when GitHub has no title.
     pub fn title_or_display_name(title: Option<String>, display_name: &str) -> String {
         match title {
@@ -119,11 +119,11 @@ impl GithubPrEvent {
     }
 }
 
-impl Notification for GithubPrEvent {
-    const TYPE_NAME: &'static str = "github_pr_event";
+impl Notification for GithubPrStatusChanged {
+    const TYPE_NAME: &'static str = "github_pr_status_changed";
 }
 
-impl NotificationTitle for GithubPrEvent {
+impl NotificationTitle for GithubPrStatusChanged {
     fn format_title(
         &self,
         sender_id: Option<MacroUserIdStr<'_>>,

@@ -1025,7 +1025,7 @@ fn assert_github_pr_notification_realtime_enabled_apns_disabled(request: &serde_
         request
             .pointer("/req/notification/tag")
             .and_then(|value| value.as_str()),
-        Some("github_pr_event")
+        Some("github_pr_status_changed")
     );
     assert_eq!(
         request
@@ -1964,7 +1964,7 @@ async fn pr_opened_upserts_foreign_entity_for_user_installation_source() {
 }
 
 #[tokio::test]
-async fn github_pr_event_opened_team_source_notifies_team_members() {
+async fn github_pr_status_changed_opened_team_source_notifies_team_members() {
     let team_id: uuid::Uuid = "dddddddd-dddd-dddd-dddd-dddddddddddd".parse().unwrap();
     let repo = StubSyncRepo::new()
         .with_installation_sources("12345", vec![GithubAppInstallationSource::Team(team_id)])
@@ -2089,7 +2089,7 @@ async fn github_pr_event_opened_team_source_notifies_team_members() {
 }
 
 #[tokio::test]
-async fn github_pr_event_merged_user_source_notifies_user() {
+async fn github_pr_status_changed_merged_user_source_notifies_user() {
     let repo = StubSyncRepo::new()
         .with_installation_sources(
             "12345",
@@ -2179,7 +2179,7 @@ async fn github_pr_event_merged_user_source_notifies_user() {
 }
 
 #[tokio::test]
-async fn github_pr_event_edited_does_not_notify() {
+async fn github_pr_status_changed_edited_does_not_notify() {
     let team_id: uuid::Uuid = "dddddddd-dddd-dddd-dddd-dddddddddddd".parse().unwrap();
     let repo = StubSyncRepo::new()
         .with_installation_sources("12345", vec![GithubAppInstallationSource::Team(team_id)])
@@ -2202,7 +2202,7 @@ async fn github_pr_event_edited_does_not_notify() {
 }
 
 #[tokio::test]
-async fn github_pr_event_installation_backfill_does_not_notify() {
+async fn github_pr_status_changed_installation_backfill_does_not_notify() {
     let repo = StubSyncRepo::new().with_github_link("12345", "macro|user@user.com");
     let service = make_sync_service_with_repo(repo);
     service
@@ -2217,7 +2217,7 @@ async fn github_pr_event_installation_backfill_does_not_notify() {
 }
 
 #[tokio::test]
-async fn github_pr_event_unchanged_status_does_not_notify() {
+async fn github_pr_status_changed_unchanged_status_does_not_notify() {
     let team_id: uuid::Uuid = "dddddddd-dddd-dddd-dddd-dddddddddddd".parse().unwrap();
     let repo = StubSyncRepo::new()
         .with_installation_sources("12345", vec![GithubAppInstallationSource::Team(team_id)])
@@ -2242,7 +2242,7 @@ async fn github_pr_event_unchanged_status_does_not_notify() {
 }
 
 #[tokio::test]
-async fn github_pr_event_send_failure_does_not_fail_webhook_processing() {
+async fn github_pr_status_changed_send_failure_does_not_fail_webhook_processing() {
     let repo = StubSyncRepo::new().with_installation_sources(
         "12345",
         vec![GithubAppInstallationSource::User(

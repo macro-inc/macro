@@ -10,8 +10,8 @@ fn utc_datetime(value: &str) -> DateTime<Utc> {
         .with_timezone(&Utc)
 }
 
-fn github_pr_event() -> GithubPrEvent {
-    GithubPrEvent {
+fn github_pr_status_changed() -> GithubPrStatusChanged {
+    GithubPrStatusChanged {
         foreign_entity_id: Uuid::parse_str("11111111-1111-4111-8111-111111111111").unwrap(),
         github_key: "macro/app/pull/42".to_string(),
         owner: "macro".to_string(),
@@ -35,8 +35,8 @@ fn github_pr_event() -> GithubPrEvent {
 }
 
 #[test]
-fn github_pr_event_serializes_with_camel_case_fields_and_lowercase_enums() {
-    let event = github_pr_event();
+fn github_pr_status_changed_serializes_with_camel_case_fields_and_lowercase_enums() {
+    let event = github_pr_status_changed();
 
     let value = serde_json::to_value(&event).unwrap();
 
@@ -65,14 +65,14 @@ fn github_pr_event_serializes_with_camel_case_fields_and_lowercase_enums() {
 }
 
 #[test]
-fn github_pr_event_tagged_content_serializes_with_type_name() {
-    let event = github_pr_event();
+fn github_pr_status_changed_tagged_content_serializes_with_type_name() {
+    let event = github_pr_status_changed();
     let foreign_entity_id = event.foreign_entity_id.to_string();
 
     let value =
         serde_json::to_value(notification::domain::models::TaggedContent::new(event)).unwrap();
 
-    assert_eq!(value["tag"], "github_pr_event");
+    assert_eq!(value["tag"], "github_pr_status_changed");
     assert_eq!(
         value["content"]["foreignEntityId"],
         serde_json::json!(foreign_entity_id)
@@ -80,8 +80,8 @@ fn github_pr_event_tagged_content_serializes_with_type_name() {
 }
 
 #[test]
-fn github_pr_event_formats_title_and_body() {
-    let event = github_pr_event();
+fn github_pr_status_changed_formats_title_and_body() {
+    let event = github_pr_status_changed();
 
     let title = event
         .format_title(Some(uid("macro|pr.sender@macro.com")))
@@ -93,34 +93,34 @@ fn github_pr_event_formats_title_and_body() {
 }
 
 #[test]
-fn github_pr_event_title_falls_back_to_display_name() {
+fn github_pr_status_changed_title_falls_back_to_display_name() {
     assert_eq!(
-        GithubPrEvent::title_or_display_name(None, "macro/app#42"),
+        GithubPrStatusChanged::title_or_display_name(None, "macro/app#42"),
         "macro/app#42"
     );
     assert_eq!(
-        GithubPrEvent::title_or_display_name(Some(String::new()), "macro/app#42"),
+        GithubPrStatusChanged::title_or_display_name(Some(String::new()), "macro/app#42"),
         "macro/app#42"
     );
     assert_eq!(
-        GithubPrEvent::title_or_display_name(
+        GithubPrStatusChanged::title_or_display_name(
             Some("Add GitHub PR notifications".to_string()),
             "macro/app#42"
         ),
         "Add GitHub PR notifications"
     );
 
-    let mut event = github_pr_event();
-    event.title = GithubPrEvent::title_or_display_name(None, &event.display_name);
+    let mut event = github_pr_status_changed();
+    event.title = GithubPrStatusChanged::title_or_display_name(None, &event.display_name);
 
     assert_eq!(event.format_body(None).unwrap(), "macro/app#42");
 }
 
 #[test]
-fn github_pr_event_notif_event_deserializes_and_renders_in_app() {
-    let expected = github_pr_event();
+fn github_pr_status_changed_notif_event_deserializes_and_renders_in_app() {
+    let expected = github_pr_status_changed();
     let value = serde_json::json!({
-        "tag": "github_pr_event",
+        "tag": "github_pr_status_changed",
         "content": serde_json::to_value(&expected).unwrap(),
     });
 
@@ -137,8 +137,24 @@ fn github_pr_event_notif_event_deserializes_and_renders_in_app() {
         "macro/app#42: Add GitHub PR notifications"
     );
 
-    let crate::NotifEvent::GithubPrEvent(actual) = event else {
-        panic!("expected github_pr_event variant");
+    let crate::NotifEvent::GithubPrStatusChanged(actual) = event else {
+        panic!("expected github_pr_status_changed variant");
+    };
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn github_pr_status_changed_deserializes_from_legacy_github_pr_event_tag() {
+    let expected = github_pr_status_changed();
+    let value = serde_json::json!({
+        "tag": "github_pr_event",
+        "content": serde_json::to_value(&expected).unwrap(),
+    });
+
+    let event: crate::NotifEvent = serde_json::from_value(value).unwrap();
+
+    let crate::NotifEvent::GithubPrStatusChanged(actual) = event else {
+        panic!("expected github_pr_status_changed variant");
     };
     assert_eq!(actual, expected);
 }

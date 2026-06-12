@@ -12,7 +12,7 @@ pub use device::DeviceType;
 pub use metadata::{
     AiResponseMetadata, ChannelInviteMetadata, ChannelMentionMetadata, ChannelMessageSendMetadata,
     ChannelReplyMetadata, ChannelType, CommentedOnDocumentMetadata, CommonChannelMetadata,
-    DocumentMentionMetadata, GithubPrEvent, GithubPrEventAction, GithubPrEventStatus,
+    DocumentMentionMetadata, GithubPrEventAction, GithubPrEventStatus, GithubPrStatusChanged,
     InviteToTeamMetadata, ItemSharedMetadata, MentionedInDocumentCommentMetadata, NewEmailMetadata,
     NotificationDocumentSubType, NotificationTitle, RepliedToDocumentCommentThreadMetadata,
     TaskAssignedMetadata,
@@ -203,7 +203,11 @@ define_notif_event!(
         AiResponse(AiResponseMetadata),
 
         /// A GitHub pull request changed lifecycle state.
-        GithubPrEvent(GithubPrEvent),
+        ///
+        /// The `github_pr_event` alias keeps rows and queue messages persisted
+        /// before the rename deserializable.
+        #[serde(alias = "github_pr_event")]
+        GithubPrStatusChanged(GithubPrStatusChanged),
     }
 );
 
@@ -239,7 +243,9 @@ impl NotificationTitle for NotifEvent {
             NotifEvent::AiResponse(ai_response_metadata) => {
                 ai_response_metadata.format_title(sender_id)
             }
-            NotifEvent::GithubPrEvent(github_pr_event) => github_pr_event.format_title(sender_id),
+            NotifEvent::GithubPrStatusChanged(github_pr_status_changed) => {
+                github_pr_status_changed.format_title(sender_id)
+            }
         }
     }
 
@@ -274,7 +280,9 @@ impl NotificationTitle for NotifEvent {
             NotifEvent::AiResponse(ai_response_metadata) => {
                 ai_response_metadata.format_body(sender_id)
             }
-            NotifEvent::GithubPrEvent(github_pr_event) => github_pr_event.format_body(sender_id),
+            NotifEvent::GithubPrStatusChanged(github_pr_status_changed) => {
+                github_pr_status_changed.format_body(sender_id)
+            }
         }
     }
 }

@@ -7,7 +7,7 @@ use documents::domain::ports::DocumentService;
 use foreign_entity::domain::ports::ForeignEntityService;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
-use model_notifications::{GithubPrEvent, GithubPrEventAction, GithubPrEventStatus};
+use model_notifications::{GithubPrEventAction, GithubPrEventStatus, GithubPrStatusChanged};
 use notification::domain::{models::SendNotificationRequestBuilder, service::NotificationIngress};
 
 use crate::domain::{
@@ -66,7 +66,7 @@ impl<
                 continue;
             }
 
-            let notification = Self::github_pr_event(
+            let notification = Self::github_pr_status_changed(
                 event,
                 pull_request,
                 upsert.foreign_entity_id,
@@ -182,14 +182,14 @@ impl<
         }
     }
 
-    fn github_pr_event(
+    fn github_pr_status_changed(
         event: &ValidatedGithubWebhookEvent,
         pull_request: &EnrichedGithubPullRequest,
         foreign_entity_id: uuid::Uuid,
         action: GithubPrEventAction,
         transition: PullRequestStatusTransition,
-    ) -> GithubPrEvent {
-        GithubPrEvent {
+    ) -> GithubPrStatusChanged {
+        GithubPrStatusChanged {
             foreign_entity_id,
             github_key: pull_request.github_key.clone(),
             owner: pull_request.owner.clone(),
@@ -197,7 +197,7 @@ impl<
             number: pull_request.number,
             url: pull_request.url.clone(),
             display_name: pull_request.display_name.clone(),
-            title: GithubPrEvent::title_or_display_name(
+            title: GithubPrStatusChanged::title_or_display_name(
                 pull_request.name.clone(),
                 &pull_request.display_name,
             ),

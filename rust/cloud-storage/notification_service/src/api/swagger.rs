@@ -8,7 +8,7 @@ use model::{
 use model_notifications::{
     ChannelInviteMetadata, ChannelMentionMetadata, ChannelMessageSendMetadata,
     ChannelReplyMetadata, CommentedOnDocumentMetadata, CommonChannelMetadata, DeviceType,
-    DocumentMentionMetadata, GithubPrEvent, GithubPrEventAction, GithubPrEventStatus,
+    DocumentMentionMetadata, GithubPrEventAction, GithubPrEventStatus, GithubPrStatusChanged,
     InviteToTeamMetadata, ItemSharedMetadata, NewEmailMetadata,
     RepliedToDocumentCommentThreadMetadata, UserUnsubscribe,
 };
@@ -82,7 +82,7 @@ use crate::{
                         DocumentMentionMetadata,
                         RepliedToDocumentCommentThreadMetadata,
                         CommentedOnDocumentMetadata,
-                        GithubPrEvent,
+                        GithubPrStatusChanged,
                         GithubPrEventStatus,
                         GithubPrEventAction,
 
