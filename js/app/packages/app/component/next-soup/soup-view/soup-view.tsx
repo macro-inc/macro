@@ -116,12 +116,12 @@ import {
   batch,
   createEffect,
   createMemo,
+  createRenderEffect,
   createSignal,
   type JSX,
   Match,
   on,
   onCleanup,
-  onMount,
   Show,
   Suspense,
   Switch,
@@ -418,7 +418,12 @@ export const SoupView = (props: SoupViewProps) => {
   // We only restore the following because they either live as state in the
   // context or are used within the context to produce the output (like the
   // client filters, local search state, and additionalEntities)
-  onMount(() => {
+  //
+  // We use `createRenderEffect` to initialize before the elements mount
+  let init = false;
+  createRenderEffect(() => {
+    if (init) return;
+    init = true;
     batch(() => {
       soupView.initialize({
         initialQuery: persistedFilters ?? props.initialFilters,
