@@ -7,6 +7,7 @@ import { isMobile } from '@core/mobile/isMobile';
 import { createSignal, Show } from 'solid-js';
 import { TabsInset } from '@core/component/TabsInset';
 import IconDice from '@phosphor-icons/core/regular/dice-five.svg?component-solid';
+import IconFunnel from '@phosphor-icons/core/regular/funnel-simple.svg?component-solid';
 import { setShowDarkThemes, setShowLightThemes, showDarkThemes, showLightThemes } from '@theme/signals/themeSignals';
 import { Button, InlineCheckbox, Panel, ToggleSwitch } from '@ui';
 
@@ -39,6 +40,7 @@ function UserInterface() {
 export function Appearance() {
   const [activeTabA, setActiveTabA] = createSignal<PanelA>('basic');
   const [activeTabB, setActiveTabB] = createSignal<PanelB>('themes');
+  const [showFilters, setShowFilters] = createSignal(false);
 
   return (
     <div class="h-full overflow-hidden flex justify-center p-2">
@@ -98,16 +100,27 @@ export function Appearance() {
               defaultValue="list"
             />
             <div class="flex-1" />
+            <Show when={activeTabB() === 'themes'}>
+              <Button
+                label="Filter Themes"
+                onPointerDown={() => setShowFilters((v) => !v)}
+                variant={showFilters() ? 'cta' : 'ghost'}
+                size="icon-sm"
+              >
+                <IconFunnel />
+              </Button>
+            </Show>
             <Button
               label="Randomize Theme"
               onPointerDown={randomizeTheme}
               variant="ghost"
               size="icon-sm"
+              class="ml-1.5"
             >
               <IconDice />
             </Button>
           </Panel.Header>
-          <Show when={activeTabB() === 'themes'}>
+          <Show when={activeTabB() === 'themes' && showFilters()}>
             <Panel.Toolbar class="gap-4 pl-5">
               <span class="text-xs text-ink-extra-muted">Filter themes</span>
               <button

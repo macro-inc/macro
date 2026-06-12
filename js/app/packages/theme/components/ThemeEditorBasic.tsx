@@ -449,17 +449,14 @@ export function ThemeEditorBasic(){
         </div>
 
         <div
+          class="grid h-min w-full gap-3 @2xl:gap-5"
           style="
             --b4: color-mix(in oklch, oklch(var(--b4l) var(--b4c) var(--b4h)), oklch(var(--c4l) var(--c4c) var(--c4h)) 30%);
-            height: min-content;
-            display: grid;
-            width: 100%;
-            gap: 20px;
           "
         >
-          <div style="display: grid; gap: 3px;">
-          <div>Chroma</div>
-          <div style="display: flex; align-items: center; gap: 12px;">
+          <div class="flex items-center gap-3 @2xl:flex-col @2xl:items-stretch @2xl:gap-[3px]">
+          <div class="w-[9ch] shrink-0 @2xl:w-auto">Chroma</div>
+          <div class="flex flex-1 items-center gap-3 min-w-0 @2xl:flex-none">
           <div
             style="
               box-sizing: border-box;
@@ -494,7 +491,7 @@ export function ThemeEditorBasic(){
                 'border-radius': '2px',
                 'position': 'absolute',
                 'height': '18px',
-                'width': '18px',
+                'width': '9px',
                 'top': '50%',
               }}
             />
@@ -532,9 +529,9 @@ export function ThemeEditorBasic(){
           </div>
           </div>
 
-          <div style="display: grid; gap: 3px;">
-          <div>Tint</div>
-          <div style="display: flex; align-items: center; gap: 12px;">
+          <div class="flex items-center gap-3 @2xl:flex-col @2xl:items-stretch @2xl:gap-[3px]">
+          <div class="w-[9ch] shrink-0 @2xl:w-auto">Tint</div>
+          <div class="flex flex-1 items-center gap-3 min-w-0 @2xl:flex-none">
           <div
             style="
               box-sizing: border-box;
@@ -584,7 +581,7 @@ export function ThemeEditorBasic(){
                 'border-radius': '2px',
                 'position': 'absolute',
                 'height': '18px',
-                'width': '18px',
+                'width': '9px',
                 'top': '50%',
               }}
             />
@@ -626,9 +623,9 @@ export function ThemeEditorBasic(){
           </div>
           </div>
 
-          <div style="display: grid; gap: 3px;">
-          <div>Contrast</div>
-          <div style="display: flex; align-items: center; gap: 12px;">
+          <div class="flex items-center gap-3 @2xl:flex-col @2xl:items-stretch @2xl:gap-[3px]">
+          <div class="w-[9ch] shrink-0 @2xl:w-auto">Contrast</div>
+          <div class="flex flex-1 items-center gap-3 min-w-0 @2xl:flex-none">
           <div
             style="
               box-sizing: border-box;
@@ -682,7 +679,7 @@ export function ThemeEditorBasic(){
                 'border-radius': '2px',
                 'position': 'absolute',
                 'height': '18px',
-                'width': '18px',
+                'width': '9px',
                 'top': '50%',
               }}
             />
@@ -725,9 +722,9 @@ export function ThemeEditorBasic(){
           </div>
           </div>
 
-          <div style="display: grid; gap: 3px;">
-          <div>Depth</div>
-          <div style="display: flex; align-items: center; gap: 12px;">
+          <div class="flex items-center gap-3 @2xl:flex-col @2xl:items-stretch @2xl:gap-[3px]">
+          <div class="w-[9ch] shrink-0 @2xl:w-auto">Depth</div>
+          <div class="flex flex-1 items-center gap-3 min-w-0 @2xl:flex-none">
           <div
             style="
               box-sizing: border-box;
@@ -777,7 +774,7 @@ export function ThemeEditorBasic(){
                 'border-radius': '2px',
                 'position': 'absolute',
                 'height': '18px',
-                'width': '18px',
+                'width': '9px',
                 'top': '50%',
               }}
             />
