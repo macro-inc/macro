@@ -85,6 +85,8 @@ ignore = [
   { id = "RUSTSEC-2026-0105", reason = "core2 yanked/unmaintained, transitive via pdfium-render deps" },
   { id = "RUSTSEC-2026-0173", reason = "proc-macro-error2 is unmaintained; transitive dependency pending upstream migration" },
   { id = "RUSTSEC-2026-0174", reason = "http-types unmaintained, transitive via async-stripe; no safe upgrade available" },
+  { id = "RUSTSEC-2026-0179", reason = "postgres-protocol 0.6.11 is transitive via pgvector; database connections are to trusted infrastructure" },
+  { id = "RUSTSEC-2026-0180", reason = "postgres-protocol 0.6.11 is transitive via pgvector; database connections are to trusted infrastructure" },
   #{ id = "RUSTSEC-0000-0000", reason = "you can specify a reason the advisory is ignored" },
   #"a-crate-that-is-yanked@0.1.1", # you can also ignore yanked crate versions if you wish
   #{ crate = "a-crate-that-is-yanked@0.1.1", reason = "you can specify why you are ignoring the yanked crate" },
