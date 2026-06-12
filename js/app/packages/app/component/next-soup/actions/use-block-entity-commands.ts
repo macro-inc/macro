@@ -95,20 +95,24 @@ export const useBlockEntityCommands = () => {
     if (!entity) return false;
     if (!markDone.canExecute(entity)) return false;
 
+    // Plain mark done, no advance: the command-menu registration outside the
+    // triage flow, or the entity is no longer in the surviving soup list.
     const selectedRow = soup?.items.get(entity.id);
-    if (canUseMarkDoneHotkey() && soup && selectedRow) {
-      markDone.executeWithSoup([selectedRow.original], soup, (nextEntity) => {
-        const splitHandle = splitPanel?.handle;
-        if (!splitHandle) return;
-        void openEntityInSplitFromUnifiedList(nextEntity, {
-          splitHandle,
-          mergeHistory: true,
-          referredFrom: splitHandle.referredFrom(),
-        });
-      });
-    } else {
+    if (!canUseMarkDoneHotkey() || !soup || !selectedRow) {
       markDone.execute([entity]);
+      return true;
     }
+
+    // Triage flow: mark done and advance to the next item in the list.
+    markDone.executeWithSoup([selectedRow.original], soup, (nextEntity) => {
+      const splitHandle = splitPanel?.handle;
+      if (!splitHandle) return;
+      void openEntityInSplitFromUnifiedList(nextEntity, {
+        splitHandle,
+        mergeHistory: true,
+        referredFrom: splitHandle.referredFrom(),
+      });
+    });
 
     return true;
   };
