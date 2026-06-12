@@ -4044,3 +4044,151 @@ async fn dismissed_review_action_does_not_notify() {
 
     assert!(service.notification_ingress.requests().is_empty());
 }
+
+// ---------------------------------------------------------------------------
+// notify_pr_body_mentions
+// ---------------------------------------------------------------------------
+
+fn notification_pr_body_event(
+    action: &str,
+    body: Option<&str>,
+    previous_body: Option<&str>,
+    sender_type: &str,
+) -> ValidatedGithubWebhookEvent {
+    let mut payload = serde_json::json!({
+        "action": action,
+        "pull_request": {
+            "number": 42,
+            "title": "Add GitHub notifications",
+            "body": body,
+            "html_url": "https://github.com/my-org/my-repo/pull/42",
+            "head": { "ref": "feature/some-branch" },
+            "base": { "ref": "main" },
+            "state": "open",
+            "merged": false
+        },
+        "repository": {
+            "name": "my-repo",
+            "owner": { "login": "my-org" }
+        },
+        "installation": { "id": 12345 },
+        "sender": {
+            "login": "octocat",
+            "id": 222,
+            "type": sender_type,
+            "avatar_url": "https://avatars.example/octocat.png"
+        }
+    });
+    if let Some(previous_body) = previous_body {
+        payload["changes"] = serde_json::json!({ "body": { "from": previous_body } });
+    }
+
+    ValidatedGithubWebhookEvent::new("pull_request".to_string(), payload)
+}
+
+#[tokio::test]
+async fn opened_pr_body_mention_notifies_mentioned_member() {
+    let team_id: uuid::Uuid = "dddddddd-dddd-dddd-dddd-dddddddddddd".parse().unwrap();
+    let repo = comment_team_repo(team_id).with_github_login_link("bob-gh", "macro|bob@user.com");
+    let service = make_sync_service_with_repo(repo);
+    let event = notification_pr_body_event(
+        "opened",
+        Some("Implements the thing. @bob-gh please review the approach."),
+        None,
+        "User",
+    );
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    let requests = service.notification_ingress.requests();
+    assert_eq!(requests.len(), 2, "expected status-changed and mention");
+    assert_eq!(
+        requests_with_tag(&requests, "github_pr_status_changed").len(),
+        1
+    );
+
+    let mentions = requests_with_tag(&requests, "github_pr_mention");
+    assert_eq!(mentions.len(), 1);
+    assert_eq!(
+        notification_request_recipients(&mentions[0]),
+        vec!["macro|bob@user.com".to_string()]
+    );
+    let content = notification_request_content(&mentions[0]);
+    assert_eq!(
+        content.get("location").and_then(|value| value.as_str()),
+        Some("pr_body")
+    );
+    assert!(content.get("commentGithubId").unwrap().is_null());
+    assert_eq!(
+        content.get("commentUrl").and_then(|value| value.as_str()),
+        Some("https://github.com/my-org/my-repo/pull/42")
+    );
+}
+
+#[tokio::test]
+async fn edited_pr_body_notifies_only_newly_added_mentions() {
+    let team_id: uuid::Uuid = "dddddddd-dddd-dddd-dddd-dddddddddddd".parse().unwrap();
+    let repo = comment_team_repo(team_id)
+        .with_github_login_link("bob-gh", "macro|bob@user.com")
+        .with_github_login_link("carol-gh", "macro|carol@user.com");
+    let service = make_sync_service_with_repo(repo);
+    let event = notification_pr_body_event(
+        "edited",
+        Some("cc @bob-gh and now also @carol-gh"),
+        Some("cc @bob-gh"),
+        "User",
+    );
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    let requests = service.notification_ingress.requests();
+    assert_eq!(requests.len(), 1);
+    assert_github_notification_realtime_enabled_apns_disabled(&requests[0], "github_pr_mention");
+    assert_eq!(
+        notification_request_recipients(&requests[0]),
+        vec!["macro|carol@user.com".to_string()]
+    );
+}
+
+#[tokio::test]
+async fn edited_pr_body_with_unchanged_mentions_does_not_notify() {
+    let team_id: uuid::Uuid = "dddddddd-dddd-dddd-dddd-dddddddddddd".parse().unwrap();
+    let repo = comment_team_repo(team_id).with_github_login_link("bob-gh", "macro|bob@user.com");
+    let service = make_sync_service_with_repo(repo);
+    let event = notification_pr_body_event(
+        "edited",
+        Some("cc @bob-gh (reworded description)"),
+        Some("cc @bob-gh"),
+        "User",
+    );
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    assert!(service.notification_ingress.requests().is_empty());
+}
+
+#[tokio::test]
+async fn edited_pr_without_body_change_does_not_notify() {
+    let team_id: uuid::Uuid = "dddddddd-dddd-dddd-dddd-dddddddddddd".parse().unwrap();
+    let repo = comment_team_repo(team_id).with_github_login_link("bob-gh", "macro|bob@user.com");
+    let service = make_sync_service_with_repo(repo);
+    // Title-only edit: no changes.body.from in the payload.
+    let event = notification_pr_body_event("edited", Some("cc @bob-gh"), None, "User");
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    assert!(service.notification_ingress.requests().is_empty());
+}
+
+#[tokio::test]
+async fn bot_opened_pr_body_mention_does_not_notify_mention() {
+    let team_id: uuid::Uuid = "dddddddd-dddd-dddd-dddd-dddddddddddd".parse().unwrap();
+    let repo = comment_team_repo(team_id).with_github_login_link("bob-gh", "macro|bob@user.com");
+    let service = make_sync_service_with_repo(repo);
+    let event = notification_pr_body_event("opened", Some("automated PR cc @bob-gh"), None, "Bot");
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    let requests = service.notification_ingress.requests();
+    assert!(requests_with_tag(&requests, "github_pr_mention").is_empty());
+}

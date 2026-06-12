@@ -834,9 +834,16 @@ impl<
                 if let Some((pull_request, upserts)) = &upsert_result {
                     self.notify_pr_status_transitions(webhook_event, pull_request, upserts)
                         .await;
-                    if action == Some("review_requested") {
-                        self.notify_review_requested(webhook_event, pull_request, upserts)
-                            .await;
+                    match action {
+                        Some("review_requested") => {
+                            self.notify_review_requested(webhook_event, pull_request, upserts)
+                                .await;
+                        }
+                        Some("opened" | "edited") => {
+                            self.notify_pr_body_mentions(webhook_event, pull_request, upserts)
+                                .await;
+                        }
+                        _ => {}
                     }
                 }
 

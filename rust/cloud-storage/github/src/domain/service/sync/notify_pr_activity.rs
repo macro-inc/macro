@@ -309,6 +309,77 @@ impl<
         }
     }
 
+    /// Notify users @mentioned in a pull request description.
+    ///
+    /// Fires for `pull_request` events with actions `opened` and `edited`.
+    /// On `edited`, only mentions added relative to the previous body
+    /// (`changes.body.from`) are notified, so re-editing a description does
+    /// not re-notify existing mentions; an edit without a body change carries
+    /// no `changes.body.from` and notifies nobody. Bot-authored bodies are
+    /// skipped.
+    pub(super) async fn notify_pr_body_mentions(
+        &self,
+        event: &ValidatedGithubWebhookEvent,
+        pull_request: &EnrichedGithubPullRequest,
+        upserts: &[PullRequestForeignEntityUpsert],
+    ) {
+        if Self::is_bot_sender(event) {
+            tracing::trace!("skipping PR body mention notification from bot sender");
+            return;
+        }
+
+        let body =
+            Self::payload_string(&event.payload, &["pull_request", "body"]).unwrap_or_default();
+        let mut logins = extract_github_mentions(&body);
+        if event.action() == Some("edited") {
+            let Some(previous_body) =
+                Self::payload_string(&event.payload, &["changes", "body", "from"])
+            else {
+                // The body was not part of this edit.
+                return;
+            };
+            let previous_logins: HashSet<String> = extract_github_mentions(&previous_body)
+                .into_iter()
+                .collect();
+            logins.retain(|login| !previous_logins.contains(login));
+        }
+        if logins.is_empty() {
+            return;
+        }
+
+        let mentioned_users = self.macro_users_for_logins(&logins).await;
+        if mentioned_users.is_empty() {
+            return;
+        }
+
+        let comment_url = Self::payload_string(&event.payload, &["pull_request", "html_url"]);
+        let snippet = GithubPrNotificationCommon::snippet(&body);
+        let sender_id = self.notification_sender_id(event).await;
+        for upsert in upserts {
+            let recipients = self.notification_recipient_ids(&upsert.source).await;
+            let mention_recipients: HashSet<_> =
+                recipients.intersection(&mentioned_users).cloned().collect();
+            if mention_recipients.is_empty() {
+                continue;
+            }
+
+            let notification = GithubPrMention {
+                common: Self::github_pr_common(event, pull_request, upsert.foreign_entity_id),
+                location: GithubPrMentionLocation::PrBody,
+                comment_github_id: None,
+                comment_url: comment_url.clone(),
+                text_snippet: snippet.clone(),
+            };
+            self.send_github_notification(
+                notification,
+                upsert.foreign_entity_id,
+                sender_id.clone(),
+                mention_recipients,
+            )
+            .await;
+        }
+    }
+
     /// Resolve the pull request author from `pull_request.user.id` to a Macro
     /// user via `github_links`. Returns `None` (with a trace) when unmapped.
     async fn pull_request_author_macro_user(
@@ -362,12 +433,18 @@ impl<
     /// Resolve the Macro users @mentioned in `text` via their `github_links`
     /// login mappings. Unmapped logins and invalid Macro IDs are skipped.
     async fn mentioned_macro_users(&self, text: &str) -> HashSet<MacroUserIdStr<'static>> {
-        let logins = extract_github_mentions(text);
+        self.macro_users_for_logins(&extract_github_mentions(text))
+            .await
+    }
+
+    /// Resolve GitHub logins to Macro users via their `github_links` login
+    /// mappings. Unmapped logins and invalid Macro IDs are skipped.
+    async fn macro_users_for_logins(&self, logins: &[String]) -> HashSet<MacroUserIdStr<'static>> {
         if logins.is_empty() {
             return HashSet::new();
         }
 
-        let links = match self.repo.get_macro_ids_by_github_logins(&logins).await {
+        let links = match self.repo.get_macro_ids_by_github_logins(logins).await {
             Ok(links) => links,
             Err(error) => {
                 tracing::warn!(
