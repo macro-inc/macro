@@ -221,6 +221,19 @@ impl<
             deletions: pull_request
                 .and_then(|pr| pr.get("deletions"))
                 .and_then(|value| value.as_u64()),
+            author_login: pull_request
+                .and_then(|pr| pr.get("user"))
+                .and_then(|user| user.get("login"))
+                .and_then(|value| value.as_str())
+                .map(str::to_string),
+            author_id: pull_request
+                .and_then(|pr| pr.get("user"))
+                .and_then(|user| user.get("id"))
+                .and_then(|value| value.as_u64()),
+            description: pull_request
+                .and_then(|pr| pr.get("body"))
+                .and_then(|value| value.as_str())
+                .map(str::to_string),
             comments: None,
             checks: None,
             participant_github_user_ids: Self::participant_ids_from_payload(pull_request),
@@ -319,6 +332,9 @@ impl<
             status: Some(status),
             additions: Some(details.additions),
             deletions: Some(details.deletions),
+            author_login: details.author_login.or(fallback.author_login),
+            author_id: details.author_id.or(fallback.author_id),
+            description: details.description.or(fallback.description),
             comments: details.comments,
             checks: details.checks,
             participant_github_user_ids: details
