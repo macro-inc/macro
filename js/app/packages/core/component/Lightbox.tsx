@@ -77,15 +77,23 @@ export function Lightbox(props: LightboxProps) {
   const [isPrefetching, setIsPrefetching] = createSignal(false);
   if (isIOS) {
     createEffect(() => {
-      props.src(); // re-fetch when navigating to a new image
+      const currentSrc = props.src(); // re-fetch when navigating to a new image
+      let isStale = false;
+      onCleanup(() => {
+        isStale = true;
+      });
+
       setCachedBlob(undefined);
       setIsPrefetching(true);
       untrack(() => fetchBlob())
         .then((blob) => {
+          if (isStale || props.src() !== currentSrc) return;
           if (blob) setCachedBlob(blob);
         })
         .catch(() => {})
-        .finally(() => setIsPrefetching(false));
+        .finally(() => {
+          if (!isStale && props.src() === currentSrc) setIsPrefetching(false);
+        });
     });
   }
   const fetchBlobCached = (): Promise<Blob | undefined> => {
@@ -300,11 +308,7 @@ export function Lightbox(props: LightboxProps) {
             disabled={isCopying() || isPrefetching()}
             label="Copy image"
           >
-            {isCopying() || isPrefetching() ? (
-              <SpinnerIcon />
-            ) : (
-              <ClipboardIcon />
-            )}
+            {isCopying() ? <SpinnerIcon /> : <ClipboardIcon />}
           </Button>
           <Button
             variant="ghost"
@@ -313,11 +317,7 @@ export function Lightbox(props: LightboxProps) {
             disabled={isDownloading() || isPrefetching()}
             label="Download image"
           >
-            {isDownloading() || isPrefetching() ? (
-              <SpinnerIcon />
-            ) : (
-              <DownloadIcon />
-            )}
+            {isDownloading() ? <SpinnerIcon /> : <DownloadIcon />}
           </Button>
           <Dialog.CloseButton>
             <Button variant="ghost" size="icon-md" label="Close">
