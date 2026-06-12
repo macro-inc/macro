@@ -289,6 +289,8 @@ struct StubSyncRepo {
     team_task_references: Mutex<HashMap<(String, String, i32), MacroTaskId>>,
     /// Maps github_user_id -> macro_id for installation event lookups.
     github_links: Mutex<HashMap<String, String>>,
+    /// Maps lowercase github login -> macro_ids for mention lookups.
+    github_login_links: Mutex<HashMap<String, Vec<String>>>,
     /// Maps macro_id -> team_ids for installation event lookups.
     user_teams: Mutex<HashMap<String, Vec<uuid::Uuid>>>,
     /// Maps team_id -> Macro user IDs for notification recipient lookups.
@@ -305,6 +307,7 @@ impl StubSyncRepo {
             tasks: Mutex::new(HashMap::new()),
             team_task_references: Mutex::new(HashMap::new()),
             github_links: Mutex::new(HashMap::new()),
+            github_login_links: Mutex::new(HashMap::new()),
             user_teams: Mutex::new(HashMap::new()),
             team_members: Mutex::new(HashMap::new()),
             installation_source_rows: Mutex::new(HashMap::new()),
@@ -317,6 +320,16 @@ impl StubSyncRepo {
             .lock()
             .unwrap()
             .insert(github_user_id.to_string(), macro_id.to_string());
+        self
+    }
+
+    fn with_github_login_link(self, github_login: &str, macro_id: &str) -> Self {
+        self.github_login_links
+            .lock()
+            .unwrap()
+            .entry(github_login.to_lowercase())
+            .or_default()
+            .push(macro_id.to_string());
         self
     }
 
@@ -458,6 +471,21 @@ impl GithubSyncRepo for StubSyncRepo {
             .unwrap()
             .get(github_user_id)
             .cloned())
+    }
+
+    async fn get_macro_ids_by_github_logins(
+        &self,
+        github_logins: &[String],
+    ) -> Result<HashMap<String, Vec<String>>, Self::Err> {
+        let links = self.github_login_links.lock().unwrap();
+        Ok(github_logins
+            .iter()
+            .filter_map(|login| {
+                let login = login.to_lowercase();
+                let macro_ids = links.get(&login)?.clone();
+                Some((login, macro_ids))
+            })
+            .collect())
     }
 
     async fn get_user_team_ids(&self, macro_id: &str) -> Result<Vec<uuid::Uuid>, Self::Err> {
