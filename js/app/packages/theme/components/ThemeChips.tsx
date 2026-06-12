@@ -1,10 +1,10 @@
 import type { ThemeV2 } from '@theme/types/themeTypes';
-import IconTextT from '@phosphor-icons/core/regular/text-t.svg?component-solid';
+import IconTextA from '@phosphor-icons/core/regular/text-a-underline.svg?component-solid';
 
 type Token = { l: number; c: number; h: number };
 
 /** A theme swatch: an encompassing square of the theme's panel surface with the
- *  accent and ink (T) inside. Always shows the theme's original intended colors
+ *  accent and ink (A) inside. Always shows the theme's original intended colors
  *  — each theme is intrinsically light or dark. */
 export function ThemeChips(props: { theme: ThemeV2 }) {
   const oklch = (token: Token) => {
@@ -35,7 +35,7 @@ export function ThemeChips(props: { theme: ThemeV2 }) {
         class="inline-block rounded-xs"
         style={{ 'background-color': accent(), width: '13px', height: '13px' }}
       />
-      <IconTextT style={{ color: ink(), width: '18px', height: '18px' }} />
+      <IconTextA style={{ color: ink(), width: '18px', height: '18px' }} />
     </span>
   );
 }

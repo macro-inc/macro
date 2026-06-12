@@ -1,7 +1,6 @@
 import { currentThemeId, isThemeSaved, themes } from '../signals/themeSignals';
-import { isThemeDark, saveTheme, setMode } from '../utils/themeUtils';
+import { saveTheme } from '../utils/themeUtils';
 import IconSave from '@phosphor-icons/core/regular/floppy-disk-back.svg?component-solid';
-import { TabsInset } from '@core/component/TabsInset';
 import { createMemo, Show } from 'solid-js';
 import { Button, cn } from '@ui';
 
@@ -41,15 +40,6 @@ function ThemeTools(props: { class?: string }) {
           <IconSave />
         </Button>
       </Show>
-
-      <TabsInset
-        onChange={(value) => setMode(value as 'light' | 'dark')}
-        list={[
-          { value: 'light', label: 'Light' },
-          { value: 'dark', label: 'Dark' },
-        ]}
-        value={isThemeDark() ? 'dark' : 'light'}
-      />
 
       <div
         onKeyDown={(e) => {

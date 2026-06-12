@@ -123,11 +123,30 @@ export function enforceModeLive(): void{
   });
 }
 
-/** Switches the displayed theme to light or dark, inverting its lightness when it
- *  doesn't already match. Backs the Light/Dark toggle. */
-export function setMode(mode: 'light' | 'dark'): void{
-  setThemeMode(mode);
-  enforceModeLive();
+/** Flips the theme between light and dark by inverting the background/text lightness
+ *  — the same axis as the contrast slider's sign. Treated as an edit: marks the theme
+ *  unsaved, unless the flip lands back on the stored theme (then it's saved again). */
+export function flipLightDark(): void{
+  invertLightness();
+  queueMicrotask(() => {
+    setIsThemeSaved(liveMatchesStoredTheme());
+    syncHtmlColor();
+  });
+}
+
+/** True when the live theme equals the currently-selected stored theme, within a
+ *  float tolerance (1 − (1 − l) from a double flip isn't bit-exact). */
+function liveMatchesStoredTheme(): boolean{
+  const stored = themes().find((t) => t.id === currentThemeId());
+  if(!stored){return false}
+  const live = getCurrentTokens();
+  const close = (a: number, b: number) => Math.abs(a - b) < 1e-6;
+  const tokensMatch = (Object.keys(stored.tokens) as Array<keyof ThemeV2Tokens>).every((k) =>
+    close(live[k].l, stored.tokens[k].l) &&
+    close(live[k].c, stored.tokens[k].c) &&
+    close(live[k].h, stored.tokens[k].h)
+  );
+  return tokensMatch && close(themeDepth(), stored.depth ?? 0.15);
 }
 
 function getCurrentTokens(): ThemeV2Tokens{

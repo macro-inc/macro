@@ -1,7 +1,9 @@
-import { batch, createEffect, createSignal, onCleanup, onMount, untrack } from 'solid-js';
+import { batch, createEffect, createSignal, type JSX, onCleanup, onMount, untrack } from 'solid-js';
 import { setThemeDepth, themeDepth } from '../signals/themeSignals';
 import { themeReactive } from '../signals/themeReactive';
+import { flipLightDark } from '../utils/themeUtils';
 import { isMobile } from '@core/mobile/isMobile';
+import IconFlip from '@phosphor-icons/core/regular/circle-half-tilt.svg?component-solid';
 
 function setLightness(lightness: number) {
   batch(() => {
@@ -124,6 +126,7 @@ function NumberInput(props: {
   max: number;
   displayMin?: number;
   displayMax?: number;
+  action?: JSX.Element;
 }) {
   const dMin = () => props.displayMin ?? 0;
   const dMax = () => props.displayMax ?? 100;
@@ -143,36 +146,50 @@ function NumberInput(props: {
 
   return (
     <div style="display: flex; align-items: center; gap: 4px; flex: none;">
-      <input
-        class="theme-editor-basic-num"
-        type="number"
-        value={text()}
-        min={dMin()}
-        max={dMax()}
-        step={1}
-        onInput={(e) => {
-          const raw = e.currentTarget.value;
-          setIsSetByInput(true);
-          setText(raw);
-          const d = parseFloat(raw);
-          if (!Number.isNaN(d)) { props.set(fromDisplay(Math.max(dMin(), Math.min(dMax(), d)))); }
-        }}
-        onBlur={() => setText(Math.round(toDisplay(props.get())).toString())}
+      <div
         style="
-          font-family: var(--font-mono);
           background-color: var(--b1);
           border: 1px solid var(--b4);
           box-sizing: border-box;
+          align-items: center;
           border-radius: 4px;
-          text-align: right;
-          color: var(--c0);
           padding: 3px 6px;
-          font-size: 12px;
-          flex: none;
-          width: 7ch;
-          outline: none;
+          display: flex;
+          width: 8ch;
+          gap: 3px;
         "
-      />
+      >
+        {props.action}
+        <input
+          class="theme-editor-basic-num"
+          type="number"
+          value={text()}
+          min={dMin()}
+          max={dMax()}
+          step={1}
+          onInput={(e) => {
+            const raw = e.currentTarget.value;
+            setIsSetByInput(true);
+            setText(raw);
+            const d = parseFloat(raw);
+            if (!Number.isNaN(d)) { props.set(fromDisplay(Math.max(dMin(), Math.min(dMax(), d)))); }
+          }}
+          onBlur={() => setText(Math.round(toDisplay(props.get())).toString())}
+          style="
+            font-family: var(--font-mono);
+            background: transparent;
+            box-sizing: border-box;
+            text-align: right;
+            color: var(--c0);
+            font-size: 12px;
+            min-width: 0;
+            outline: none;
+            border: none;
+            padding: 0;
+            flex: 1;
+          "
+        />
+      </div>
       <span style="color: var(--c2); font-size: 12px;">%</span>
     </div>
   );
@@ -409,11 +426,11 @@ export function ThemeEditorBasic(){
           font-size: 12px;
         "
       >
-       <div class="grid gap-5 @2xl:grid-cols-2 @2xl:items-stretch">
+       <div class="grid gap-5 @2xl:grid-cols-2 @2xl:items-start">
         <div
           onPointerDown={handleCanvasPointerDown}
           ref={canvasContainerRef}
-          class={`${isMobile() ? 'h-[140px]' : 'h-[250px]'} @2xl:h-full`}
+          class={isMobile() ? 'h-[140px]' : 'h-[250px]'}
           style={{
             'border': '1px solid var(--b4)',
             'border-radius': '6px',
@@ -718,6 +735,17 @@ export function ThemeEditorBasic(){
             max={0.8}
             displayMin={-100}
             displayMax={100}
+            action={
+              <button
+                type="button"
+                aria-label="Flip light / dark"
+                onPointerDown={flipLightDark}
+                class="flex shrink-0 cursor-pointer items-center justify-center text-ink-muted hover:text-ink"
+                style="width: 14px; height: 14px; padding: 0; border: none; background: none;"
+              >
+                <IconFlip style={{ width: '14px', height: '14px' }} />
+              </button>
+            }
           />
           </div>
           </div>

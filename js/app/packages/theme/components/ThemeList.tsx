@@ -33,7 +33,7 @@ function ThemeList() {
                   role="button"
                   tabIndex={0}
                   class={cn(
-                    'flex min-w-0 cursor-pointer items-center gap-2 rounded-lg border bg-surface p-2 transition-colors',
+                    'flex min-w-0 cursor-pointer items-center gap-2 rounded-lg border bg-surface p-2 transition-colors duration-[var(--transition)]',
                     selected() ? 'border-accent' : 'border-edge-muted hover:border-ink-muted'
                   )}
                   onClick={select}
