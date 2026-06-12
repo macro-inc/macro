@@ -97,6 +97,7 @@ import { createEffectOnEntityTypeNotification } from '@notifications';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import ChevronRightIcon from '@phosphor/caret-right.svg';
 import CheckIcon from '@phosphor/check.svg';
+import CircleDashed from '@phosphor/circle-dashed.svg';
 import InfoIcon from '@phosphor/info.svg';
 import Spinner from '@phosphor/spinner.svg';
 import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
@@ -144,6 +145,7 @@ export const SoupSectionHeader = (props: {
         component={props.onClick ? 'button' : 'div'}
         type={props.onClick ? 'button' : undefined}
         onClick={props.onClick}
+        data-highlighted={props.highlighted || undefined}
         class={cn(
           'group/header relative w-[calc(100%-0.5rem)] mx-1 my-0.5 rounded px-2 py-2 flex items-center gap-2.5 text-xs font-semibold tracking-tight',
           'text-text-muted bg-surface border border-edge-muted relative',
@@ -180,15 +182,15 @@ const AssigneeGroupContent = (props: {
 
 const STATUS_GROUP_HEADER_TINTS: Record<string, string> = {
   [PROPERTY_OPTION_IDS.STATUS.NOT_STARTED]:
-    'bg-task/5 border-task/10 hover:bg-task/10',
+    'bg-task/5 border-task/10 data-highlighted:ring-task/10 data-highlighted:bg-task/10 hover:bg-task/10',
   [PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS]:
-    'bg-alert/5 border-alert/10 hover:bg-alert/10',
+    'bg-alert/5 border-alert/10 data-highlighted:ring-alert/10 data-highlighted:bg-alert/10 hover:bg-alert/10',
   [PROPERTY_OPTION_IDS.STATUS.IN_REVIEW]:
-    'bg-note/5 border-note/10 hover:bg-note/10',
+    'bg-note/5 border-note/10 data-highlighted:ring-note/10 data-highlighted:bg-note/10 hover:bg-note/10',
   [PROPERTY_OPTION_IDS.STATUS.COMPLETED]:
-    'bg-accent/5 border-accent/10 hover:bg-accent/10',
+    'bg-accent/5 border-accent/10 data-highlighted:ring-accent/10 data-highlighted:bg-accent/10 hover:bg-accent/10',
   [PROPERTY_OPTION_IDS.STATUS.CANCELED]:
-    'bg-ink/5 border-ink/10 hover:bg-ink/10',
+    'bg-ink/5 border-ink/10 data-highlighted:ring-ink/10 data-highlighted:bg-ink/10 hover:bg-ink/10',
 };
 
 const DefaultGroupHeader = (
@@ -237,29 +239,37 @@ const DefaultGroupHeader = (
           />
         </div>
       </Layer>
-      <Show
-        when={assigneeId()}
-        fallback={
-          <>
-            <PropertyValueIcon
-              optionId={props.group.value as string}
-              class="size-3.5"
+      <Switch>
+        <Match when={assigneeId()}>
+          {(id) => (
+            <AssigneeGroupContent
+              assigneeId={id()}
+              fallbackLabel={props.group.label}
             />
-            <span class="truncate">{props.group.label}</span>
-          </>
-        }
-      >
-        {(id) => (
-          <AssigneeGroupContent
-            assigneeId={id()}
-            fallbackLabel={props.group.label}
-          />
-        )}
-      </Show>
+          )}
+        </Match>
+        <Match
+          when={typeof props.group.value !== 'string' || !props.group.value}
+        >
+          <CircleDashed class="size-3.5 text-ink-extra-muted" />
+
+          <span class="truncate">{props.group.label}</span>
+        </Match>
+        <Match
+          when={typeof props.group.value === 'string' && props.group.value}
+        >
+          {(value) => (
+            <>
+              <PropertyValueIcon optionId={value()} class="size-3.5" />
+              <span class="truncate">{props.group.label}</span>
+            </>
+          )}
+        </Match>
+      </Switch>
       <span
         class={cn(
           'shrink-0 tabular-nums text-xs font-medium',
-          'px-1.5 py-px rounded-full bg-ink/10 text-text-subtle'
+          'px-1.5 py-px rounded-full bg-ink/10 text-ink-extra-muted'
         )}
       >
         {props.group.count}
