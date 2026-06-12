@@ -60,6 +60,20 @@ async function ingestLocalSnapshot(
     snapshot: localSnapshot,
     walUpdates: walEntries.map((entry) => entry.update),
   });
+
+  // Fold the replayed WAL edits into a fresh local snapshot so they don't have
+  // to be replayed on the next cold load. This is for a race condition where
+  // we recover from a snapshot and replay WAL logs, deleting the WAL logs as
+  // we replay, and then reload, and now we are in a state where we have an old
+  // document until the new one loads in
+  if (walEntries.length >= 1) {
+    const doc = loroManager.getDoc();
+    const snapshot = doc.export({
+      mode: 'shallow-snapshot',
+      frontiers: doc.oplogFrontiers(),
+    });
+    await snapshotStore.save(snapshot);
+  }
 }
 
 async function ingestRemoteSnapshot(
