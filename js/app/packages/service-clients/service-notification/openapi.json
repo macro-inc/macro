@@ -1534,9 +1534,95 @@
           }
         }
       },
-      "GithubPrEvent": {
+      "GithubPrComment": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/GithubPrNotificationCommon",
+            "description": "Fields shared with the other GitHub pull request notifications."
+          },
+          {
+            "type": "object",
+            "required": ["commentKind", "commentSnippet"],
+            "properties": {
+              "commentGithubId": {
+                "type": ["integer", "null"],
+                "format": "int64",
+                "description": "The GitHub numeric id of the comment, when available.",
+                "minimum": 0
+              },
+              "commentKind": {
+                "$ref": "#/components/schemas/GithubPrCommentKind",
+                "description": "The kind of comment that was posted."
+              },
+              "commentSnippet": {
+                "type": "string",
+                "description": "A truncated excerpt of the comment body."
+              },
+              "commentUrl": {
+                "type": ["string", "null"],
+                "description": "The public GitHub URL for the comment, when available."
+              }
+            }
+          }
+        ],
+        "description": "Metadata for a notification that a GitHub pull request was commented on."
+      },
+      "GithubPrCommentKind": {
+        "type": "string",
+        "description": "The kind of GitHub comment that triggered a [`GithubPrComment`] notification.",
+        "enum": ["issue", "review_comment"]
+      },
+      "GithubPrEventAction": {
+        "type": "string",
+        "description": "The GitHub pull request webhook action that triggered the notification.",
+        "enum": ["opened", "reopened", "closed"]
+      },
+      "GithubPrEventStatus": {
+        "type": "string",
+        "description": "The normalized lifecycle status for a GitHub pull request notification.",
+        "enum": ["open", "closed", "merged"]
+      },
+      "GithubPrMention": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/GithubPrNotificationCommon",
+            "description": "Fields shared with the other GitHub pull request notifications."
+          },
+          {
+            "type": "object",
+            "required": ["location", "textSnippet"],
+            "properties": {
+              "commentGithubId": {
+                "type": ["integer", "null"],
+                "format": "int64",
+                "description": "The GitHub numeric id of the comment or review containing the mention, when available.",
+                "minimum": 0
+              },
+              "commentUrl": {
+                "type": ["string", "null"],
+                "description": "The public GitHub URL for the text containing the mention, when available."
+              },
+              "location": {
+                "$ref": "#/components/schemas/GithubPrMentionLocation",
+                "description": "Where the mention appeared."
+              },
+              "textSnippet": {
+                "type": "string",
+                "description": "A truncated excerpt of the text containing the mention."
+              }
+            }
+          }
+        ],
+        "description": "Metadata for a notification that the user was mentioned on a GitHub pull request."
+      },
+      "GithubPrMentionLocation": {
+        "type": "string",
+        "description": "Where in a GitHub pull request the user was mentioned.",
+        "enum": ["pr_body", "comment", "review", "review_comment"]
+      },
+      "GithubPrNotificationCommon": {
         "type": "object",
-        "description": "Metadata for a GitHub pull request lifecycle notification.",
+        "description": "Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.",
         "required": [
           "foreignEntityId",
           "githubKey",
@@ -1545,19 +1631,9 @@
           "number",
           "url",
           "displayName",
-          "title",
-          "status",
-          "action"
+          "title"
         ],
         "properties": {
-          "action": {
-            "$ref": "#/components/schemas/GithubPrEventAction",
-            "description": "The webhook action that triggered this notification."
-          },
-          "baseBranch": {
-            "type": ["string", "null"],
-            "description": "The pull request base branch, when available."
-          },
           "displayName": {
             "type": "string",
             "description": "A compact label suitable for display in the UI."
@@ -1571,15 +1647,6 @@
             "type": "string",
             "description": "The external GitHub key, in `owner/repo/pull/number` format."
           },
-          "headBranch": {
-            "type": ["string", "null"],
-            "description": "The pull request head branch, when available."
-          },
-          "mergedAt": {
-            "type": ["string", "null"],
-            "format": "date-time",
-            "description": "When the pull request was merged, when available."
-          },
           "number": {
             "type": "integer",
             "format": "int64",
@@ -1589,17 +1656,6 @@
           "owner": {
             "type": "string",
             "description": "The GitHub repository owner or organization."
-          },
-          "previousStatus": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/GithubPrEventStatus",
-                "description": "The prior normalized pull request status, when known."
-              }
-            ]
           },
           "repo": {
             "type": "string",
@@ -1617,10 +1673,6 @@
             "type": ["string", "null"],
             "description": "The stable GitHub numeric user id for the sender, serialized as a string."
           },
-          "status": {
-            "$ref": "#/components/schemas/GithubPrEventStatus",
-            "description": "The current normalized pull request status."
-          },
           "title": {
             "type": "string",
             "description": "The GitHub pull request title. Falls back to `display_name` when GitHub has no title."
@@ -1631,15 +1683,112 @@
           }
         }
       },
-      "GithubPrEventAction": {
-        "type": "string",
-        "description": "The GitHub pull request webhook action that triggered the notification.",
-        "enum": ["opened", "reopened", "closed"]
+      "GithubPrReview": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/GithubPrNotificationCommon",
+            "description": "Fields shared with the other GitHub pull request notifications."
+          },
+          {
+            "type": "object",
+            "required": ["state"],
+            "properties": {
+              "reviewGithubId": {
+                "type": ["integer", "null"],
+                "format": "int64",
+                "description": "The GitHub numeric id of the review, when available.",
+                "minimum": 0
+              },
+              "reviewSnippet": {
+                "type": ["string", "null"],
+                "description": "A truncated excerpt of the review body, when any was written."
+              },
+              "reviewUrl": {
+                "type": ["string", "null"],
+                "description": "The public GitHub URL for the review, when available."
+              },
+              "state": {
+                "$ref": "#/components/schemas/GithubPrReviewState",
+                "description": "The review decision state."
+              }
+            }
+          }
+        ],
+        "description": "Metadata for a notification that a review was submitted on the user's GitHub pull request."
       },
-      "GithubPrEventStatus": {
+      "GithubPrReviewState": {
         "type": "string",
-        "description": "The normalized lifecycle status for a GitHub pull request notification.",
-        "enum": ["open", "closed", "merged"]
+        "description": "The state of a submitted GitHub pull request review.",
+        "enum": ["approved", "changes_requested", "commented"]
+      },
+      "GithubPrStatusChanged": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/GithubPrNotificationCommon",
+            "description": "Fields shared with the other GitHub pull request notifications."
+          },
+          {
+            "type": "object",
+            "required": ["status", "action"],
+            "properties": {
+              "action": {
+                "$ref": "#/components/schemas/GithubPrEventAction",
+                "description": "The webhook action that triggered this notification."
+              },
+              "baseBranch": {
+                "type": ["string", "null"],
+                "description": "The pull request base branch, when available."
+              },
+              "headBranch": {
+                "type": ["string", "null"],
+                "description": "The pull request head branch, when available."
+              },
+              "mergedAt": {
+                "type": ["string", "null"],
+                "format": "date-time",
+                "description": "When the pull request was merged, when available."
+              },
+              "previousStatus": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/GithubPrEventStatus",
+                    "description": "The prior normalized pull request status, when known."
+                  }
+                ]
+              },
+              "status": {
+                "$ref": "#/components/schemas/GithubPrEventStatus",
+                "description": "The current normalized pull request status."
+              }
+            }
+          }
+        ],
+        "description": "Metadata for a GitHub pull request lifecycle notification."
+      },
+      "GithubReviewRequested": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/GithubPrNotificationCommon",
+            "description": "Fields shared with the other GitHub pull request notifications."
+          },
+          {
+            "type": "object",
+            "properties": {
+              "requestedReviewerGithubLogin": {
+                "type": ["string", "null"],
+                "description": "The GitHub login of the requested reviewer, when available."
+              },
+              "requestedReviewerGithubUserId": {
+                "type": ["string", "null"],
+                "description": "The stable GitHub numeric user id of the requested reviewer, serialized as a string."
+              }
+            }
+          }
+        ],
+        "description": "Metadata for a notification that the user's review was requested on a GitHub pull request."
       },
       "InviteToTeamMetadata": {
         "type": "object",
@@ -1973,16 +2122,76 @@
           },
           {
             "type": "object",
-            "description": "A GitHub pull request changed lifecycle state.",
+            "description": "A GitHub pull request changed lifecycle state.\n\nThe `github_pr_event` alias keeps rows and queue messages persisted\nbefore the rename deserializable.",
             "required": ["content", "tag"],
             "properties": {
               "content": {
-                "$ref": "#/components/schemas/GithubPrEvent",
-                "description": "A GitHub pull request changed lifecycle state."
+                "$ref": "#/components/schemas/GithubPrStatusChanged",
+                "description": "A GitHub pull request changed lifecycle state.\n\nThe `github_pr_event` alias keeps rows and queue messages persisted\nbefore the rename deserializable."
               },
               "tag": {
                 "type": "string",
-                "enum": ["github_pr_event"]
+                "enum": ["github_pr_status_changed"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The user's review was requested on a GitHub pull request.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/GithubReviewRequested",
+                "description": "The user's review was requested on a GitHub pull request."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["github_review_requested"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A GitHub pull request was commented on.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/GithubPrComment",
+                "description": "A GitHub pull request was commented on."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["github_pr_comment"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The user was mentioned on a GitHub pull request.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/GithubPrMention",
+                "description": "The user was mentioned on a GitHub pull request."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["github_pr_mention"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A review was submitted on the user's GitHub pull request.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/GithubPrReview",
+                "description": "A review was submitted on the user's GitHub pull request."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["github_pr_review"]
               }
             }
           }

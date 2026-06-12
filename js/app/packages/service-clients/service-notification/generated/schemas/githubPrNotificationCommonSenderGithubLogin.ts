@@ -6,6 +6,6 @@
  */
 
 /**
- * When the pull request was merged, when available.
+ * The GitHub login for the sender, when available.
  */
-export type GithubPrEventMergedAt = string | null;
+export type GithubPrNotificationCommonSenderGithubLogin = string | null;

@@ -8,4 +8,4 @@
 /**
  * The pull request base branch, when available.
  */
-export type GithubPrEventBaseBranch = string | null;
+export type GithubPrStatusChangedAllOfBaseBranch = string | null;

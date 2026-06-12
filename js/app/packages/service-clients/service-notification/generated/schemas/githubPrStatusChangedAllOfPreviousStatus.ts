@@ -6,4 +6,5 @@
  */
 import type { GithubPrEventStatus } from './githubPrEventStatus';
 
-export type GithubPrEventPreviousStatus = null | GithubPrEventStatus;
+export type GithubPrStatusChangedAllOfPreviousStatus =
+  null | GithubPrEventStatus;

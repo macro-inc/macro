@@ -8,4 +8,4 @@
 /**
  * The stable GitHub numeric user id for the sender, serialized as a string.
  */
-export type GithubPrEventSenderGithubUserId = string | null;
+export type GithubPrNotificationCommonSenderGithubUserId = string | null;

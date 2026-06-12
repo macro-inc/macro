@@ -6,6 +6,6 @@
  */
 
 /**
- * The pull request head branch, when available.
+ * When the pull request was merged, when available.
  */
-export type GithubPrEventHeadBranch = string | null;
+export type GithubPrStatusChangedAllOfMergedAt = string | null;

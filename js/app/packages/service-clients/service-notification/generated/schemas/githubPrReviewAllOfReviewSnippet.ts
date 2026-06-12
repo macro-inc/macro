@@ -6,6 +6,6 @@
  */
 
 /**
- * The GitHub login for the sender, when available.
+ * A truncated excerpt of the review body, when any was written.
  */
-export type GithubPrEventSenderGithubLogin = string | null;
+export type GithubPrReviewAllOfReviewSnippet = string | null;

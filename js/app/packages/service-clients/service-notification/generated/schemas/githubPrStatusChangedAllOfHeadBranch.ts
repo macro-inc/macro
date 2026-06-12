@@ -6,6 +6,6 @@
  */
 
 /**
- * The GitHub avatar URL for the sender, when available.
+ * The pull request head branch, when available.
  */
-export type GithubPrEventSenderGithubAvatarUrl = string | null;
+export type GithubPrStatusChangedAllOfHeadBranch = string | null;
