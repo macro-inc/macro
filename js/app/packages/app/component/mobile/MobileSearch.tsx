@@ -1,6 +1,6 @@
 /** Mobile Search is based on Command Menu. */
 
-import { openChatWithInput } from '@app/component/ChatWithAgentButton';
+import { openChatWithMessage } from '@app/component/ChatWithAgentButton';
 import { openEntityInSplitFromUnifiedList } from '@app/component/next-soup/utils';
 import { Tabs } from '@core/component/Tabs';
 import { TailSpinner } from '@core/component/TailSpinner';
@@ -143,8 +143,8 @@ function MobileSearchInner() {
     }
 
     if (isAskAiItem(item)) {
-      // Opens a new chat split with the query seeded into the input.
-      openChatWithInput(item.query);
+      // Opens a new chat split and sends the query immediately.
+      openChatWithMessage(item.query);
       SearchState.close();
       SearchState.setQuery('');
       return;

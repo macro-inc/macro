@@ -1,6 +1,6 @@
 import { useAnalytics } from '@app/component/analytics-context';
 import { getViewPreset } from '@app/component/app-sidebar/soup-filter-presets';
-import { openChatWithInput } from '@app/component/ChatWithAgentButton';
+import { openChatWithMessage } from '@app/component/ChatWithAgentButton';
 import { getSearchSplit } from '@app/component/next-soup/soup-view/search-controllers';
 import { isListViewID } from '@app/constants/list-views';
 import { globalSplitManager } from '@app/signal/splitLayout';
@@ -251,8 +251,8 @@ export function CommandMenuInner(props: {
     }
 
     if (isAskAiItem(item)) {
-      // Opens a new chat split with the query seeded into the input.
-      openChatWithInput(item.query);
+      // Opens a new chat split and sends the query immediately.
+      openChatWithMessage(item.query);
       CommandState.close();
       CommandState.setQuery('');
       return;
