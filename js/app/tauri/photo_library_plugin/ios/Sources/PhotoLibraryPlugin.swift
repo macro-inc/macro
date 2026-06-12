@@ -42,7 +42,13 @@ class PhotoLibraryPlugin: Plugin {
             // open again instead of being stuck "already open".
             self.pickerDelegate = nil
 
-            guard let rootViewController = self.manager.viewController else {
+            // `manager.viewController` is a singleton set through an FFI
+            // callback and has been observed nil in archive builds; fall back
+            // to the key window so the picker can still present.
+            guard
+                let rootViewController = self.manager.viewController
+                    ?? keyWindowRootViewController()
+            else {
                 invoke.reject("No view controller available to present photo library")
                 return
             }
@@ -288,6 +294,15 @@ private class PhotoLibraryPickerDelegate: NSObject, PHPickerViewControllerDelega
             }
         }
     }
+}
+
+@available(iOS 14.0, *)
+private func keyWindowRootViewController() -> UIViewController? {
+    let windows = UIApplication.shared.connectedScenes
+        .compactMap { $0 as? UIWindowScene }
+        .filter { $0.activationState == .foregroundActive }
+        .flatMap(\.windows)
+    return (windows.first { $0.isKeyWindow } ?? windows.first)?.rootViewController
 }
 
 @available(iOS 14.0, *)
