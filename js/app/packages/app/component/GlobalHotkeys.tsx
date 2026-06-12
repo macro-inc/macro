@@ -26,10 +26,7 @@ import { ThemeChips } from '@theme/components/ThemeChips';
 import type { ThemeV2 } from '@theme/types/themeTypes';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import { type Component, onCleanup } from 'solid-js';
-import {
-  setThemeMode,
-  themes,
-} from '../../theme/signals/themeSignals';
+import { setThemeMode, themes } from '../../theme/signals/themeSignals';
 
 import { applyTheme } from '../../theme/utils/themeUtils';
 import { globalSplitManager } from '../signal/splitLayout';
