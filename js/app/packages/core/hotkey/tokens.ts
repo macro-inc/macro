@@ -201,6 +201,7 @@ export const TOKENS = {
 
   // markdown editor
   md: {
+    find: 'md.find',
     bold: 'md.bold',
     italic: 'md.italic',
     underline: 'md.underline',
