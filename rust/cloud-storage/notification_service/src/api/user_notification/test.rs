@@ -196,8 +196,8 @@ fn to_typed_row_github_pr_status_changed() {
 
     match typed.notification_metadata {
         NotifEvent::GithubPrStatusChanged(event) => {
-            assert_eq!(event.foreign_entity_id, foreign_entity_id);
-            assert_eq!(event.github_key, "macro/repo/pull/42");
+            assert_eq!(event.common.foreign_entity_id, foreign_entity_id);
+            assert_eq!(event.common.github_key, "macro/repo/pull/42");
             assert_eq!(event.status, GithubPrEventStatus::Merged);
             assert_eq!(event.action, GithubPrEventAction::Closed);
             assert_eq!(event.previous_status, Some(GithubPrEventStatus::Open));

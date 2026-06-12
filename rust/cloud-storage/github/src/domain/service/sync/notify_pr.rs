@@ -7,7 +7,9 @@ use documents::domain::ports::DocumentService;
 use foreign_entity::domain::ports::ForeignEntityService;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
-use model_notifications::{GithubPrEventAction, GithubPrEventStatus, GithubPrStatusChanged};
+use model_notifications::{
+    GithubPrEventAction, GithubPrEventStatus, GithubPrNotificationCommon, GithubPrStatusChanged,
+};
 use notification::domain::{models::SendNotificationRequestBuilder, service::NotificationIngress};
 
 use crate::domain::{
@@ -182,6 +184,33 @@ impl<
         }
     }
 
+    /// Build the metadata fields shared by every GitHub pull request notification type.
+    fn github_pr_common(
+        event: &ValidatedGithubWebhookEvent,
+        pull_request: &EnrichedGithubPullRequest,
+        foreign_entity_id: uuid::Uuid,
+    ) -> GithubPrNotificationCommon {
+        GithubPrNotificationCommon {
+            foreign_entity_id,
+            github_key: pull_request.github_key.clone(),
+            owner: pull_request.owner.clone(),
+            repo: pull_request.repo.clone(),
+            number: pull_request.number,
+            url: pull_request.url.clone(),
+            display_name: pull_request.display_name.clone(),
+            title: GithubPrNotificationCommon::title_or_display_name(
+                pull_request.name.clone(),
+                &pull_request.display_name,
+            ),
+            sender_github_login: Self::payload_string(&event.payload, &["sender", "login"]),
+            sender_github_user_id: event.sender_github_user_id(),
+            sender_github_avatar_url: Self::payload_string(
+                &event.payload,
+                &["sender", "avatar_url"],
+            ),
+        }
+    }
+
     fn github_pr_status_changed(
         event: &ValidatedGithubWebhookEvent,
         pull_request: &EnrichedGithubPullRequest,
@@ -190,26 +219,10 @@ impl<
         transition: PullRequestStatusTransition,
     ) -> GithubPrStatusChanged {
         GithubPrStatusChanged {
-            foreign_entity_id,
-            github_key: pull_request.github_key.clone(),
-            owner: pull_request.owner.clone(),
-            repo: pull_request.repo.clone(),
-            number: pull_request.number,
-            url: pull_request.url.clone(),
-            display_name: pull_request.display_name.clone(),
-            title: GithubPrStatusChanged::title_or_display_name(
-                pull_request.name.clone(),
-                &pull_request.display_name,
-            ),
+            common: Self::github_pr_common(event, pull_request, foreign_entity_id),
             status: Self::github_pr_event_status(transition.status),
             action,
             previous_status: transition.previous_status.map(Self::github_pr_event_status),
-            sender_github_login: Self::payload_string(&event.payload, &["sender", "login"]),
-            sender_github_user_id: event.sender_github_user_id(),
-            sender_github_avatar_url: Self::payload_string(
-                &event.payload,
-                &["sender", "avatar_url"],
-            ),
             head_branch: Self::payload_string(&event.payload, &["pull_request", "head", "ref"]),
             base_branch: Self::payload_string(&event.payload, &["pull_request", "base", "ref"]),
             merged_at: Self::pull_request_merged_at(event),
