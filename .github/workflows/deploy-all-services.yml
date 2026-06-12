@@ -29,14 +29,14 @@ on:
         required: true
       CACHIX_AUTH_TOKEN:
         required: true
-      AWS_ACCESS_KEY_ID:
-        required: false
-      SCCACHE_BUCKET:
-        required: false
 
-# Only run 1 deploy-all workflow at a time per environment
+# Only run 1 deploy-all workflow at a time per environment. Literal prefix:
+# for workflow_call runs `github.workflow` expands to the *caller's* name,
+# which would split dispatches and callers into separate groups and let them
+# race the same Pulumi stacks. Groups are repo-global strings, so the on-push
+# caller shares this group by using the same literal.
 concurrency:
-  group: ${{ github.workflow }}-all-services-${{ inputs.environment }}
+  group: deploy-all-services-${{ inputs.environment }}
   cancel-in-progress: false
 
 jobs:
@@ -45,36 +45,169 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
+      binaries: ${{ steps.set-matrix.outputs.binaries }}
+      lambdas: ${{ steps.set-matrix.outputs.lambdas }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       - name: Set deployment matrix
         id: set-matrix
         run: |
-          # Get all services
-          services=$(jq -r '.services | keys | @json' .github/services-config.json)
-          echo "matrix=${services}" >> $GITHUB_OUTPUT
-          echo "Deploying services: ${services}"
+          set -euo pipefail
+          cfg=.github/services-config.json
+          # Full list drives deploy-services; the filtered lists keep each build
+          # matrix to only the services that actually produce that artifact, so
+          # no Blacksmith job spins up Nix + a sticky disk for nothing.
+          services=$(jq -c '.services | keys' "$cfg")
+          binaries=$(jq -c '[.services | to_entries[] | select((.value.deploy_binaries // []) | length > 0) | .key]' "$cfg")
+          lambdas=$(jq -c '[.services | to_entries[] | select((.value.deploy_lambdas // []) | length > 0) | .key]' "$cfg")
+          echo "matrix=${services}" >> "$GITHUB_OUTPUT"
+          echo "binaries=${binaries}" >> "$GITHUB_OUTPUT"
+          echo "lambdas=${lambdas}" >> "$GITHUB_OUTPUT"
+          echo "All services: ${services}"
+          echo "With binaries: ${binaries}"
+          echo "With lambdas: ${lambdas}"
+
+  # Warm the two shared dep closures in parallel, each onto its OWN sticky disk
+  # so the binary and lambda chains never collide on a last-write-wins commit:
+  #   - warm-binaries -> deployCargoArtifacts        on <repo>-nix-store
+  #   - warm-lambdas  -> lambdaDeployCargoArtifacts   on <repo>-nix-lambdas
+  # Each build matrix depends only on its own warm job, so a slow lambda-closure
+  # warm never blocks binary builds and vice versa.
+  warm-binaries:
+    name: Warm shared binary deps onto sticky disk
+    needs: setup
+    if: ${{ needs.setup.outputs.binaries != '[]' }}
+    # NOTE: adjust to a provisioned Blacksmith runner label for the org.
+    runs-on: blacksmith-32vcpu-ubuntu-2404
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Mount Nix store sticky disk
+        uses: useblacksmith/stickydisk@v1
+        with:
+          key: ${{ github.repository }}-nix-store
+          path: /nix
+
+      - name: Setup Nix
+        uses: ./.github/actions/setup-nix
+
+      - name: Configure Cachix fallback
+        uses: ./.github/actions/setup-cachix
+        with:
+          cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      - name: Warm shared release deps
+        shell: bash
+        run: |
+          set -euo pipefail
+          cachix_pid=
+          if command -v cachix >/dev/null 2>&1 && [ -n "${CACHIX_CACHE_NAME:-}" ]; then
+            cachix watch-store "$CACHIX_CACHE_NAME" >/tmp/cachix-watch-store.log 2>&1 &
+            cachix_pid=$!
+            trap 'if [ -n "${cachix_pid:-}" ]; then kill "$cachix_pid" 2>/dev/null || true; wait "$cachix_pid" 2>/dev/null || true; fi' EXIT
+          fi
+          nix build --print-build-logs ".#deployCargoArtifacts"
+          echo "Shared release deps realised into /nix/store; committed on job exit."
+
+      - name: Teardown Nix (free sticky disk for commit)
+        if: always()
+        uses: ./.github/actions/teardown-nix
+
+  warm-lambdas:
+    name: Warm shared lambda deps onto sticky disk
+    needs: setup
+    if: ${{ needs.setup.outputs.lambdas != '[]' }}
+    # NOTE: adjust to a provisioned Blacksmith runner label for the org.
+    runs-on: blacksmith-32vcpu-ubuntu-2404
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Mount lambda Nix store sticky disk
+        uses: useblacksmith/stickydisk@v1
+        with:
+          key: ${{ github.repository }}-nix-lambdas
+          path: /nix
+
+      - name: Setup Nix
+        uses: ./.github/actions/setup-nix
+
+      - name: Configure Cachix fallback
+        uses: ./.github/actions/setup-cachix
+        with:
+          cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      - name: Warm shared lambda dep closure
+        shell: bash
+        run: |
+          set -euo pipefail
+          cachix_pid=
+          if command -v cachix >/dev/null 2>&1 && [ -n "${CACHIX_CACHE_NAME:-}" ]; then
+            cachix watch-store "$CACHIX_CACHE_NAME" >/tmp/cachix-watch-store.log 2>&1 &
+            cachix_pid=$!
+            trap 'if [ -n "${cachix_pid:-}" ]; then kill "$cachix_pid" 2>/dev/null || true; wait "$cachix_pid" 2>/dev/null || true; fi' EXIT
+          fi
+          nix build --print-build-logs ".#lambdaDeployCargoArtifacts" ".#callRecordingPreviewFfmpegLayer"
+          echo "Shared lambda deps realised into /nix/store; committed on job exit."
+
+      - name: Teardown Nix (free sticky disk for commit)
+        if: always()
+        uses: ./.github/actions/teardown-nix
 
   build-service-binaries:
     name: Build ${{ matrix.service }} binaries
-    needs: setup
-    if: ${{ needs.setup.outputs.matrix != '[]' }}
-    runs-on: linux-extra-beefy
+    needs: [setup, warm-binaries]
+    if: ${{ needs.setup.outputs.binaries != '[]' }}
+    # Runs on Blacksmith, cloning the warm /nix sticky disk committed by
+    # warm-binaries so only each service's own crate compiles.
+    runs-on: blacksmith-32vcpu-ubuntu-2404
     strategy:
       fail-fast: false
-      max-parallel: 8
+      # No max-parallel: all binary services build concurrently (they only clone
+      # the warm /nix disk and compile their own crate), instead of batching 8.
       matrix:
-        service: ${{ fromJson(needs.setup.outputs.matrix) }}
+        service: ${{ fromJson(needs.setup.outputs.binaries) }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           clean: false
 
-      - name: Configure Cachix
+      - name: Mount Nix store sticky disk (clones warmed snapshot)
+        uses: useblacksmith/stickydisk@v1
+        with:
+          key: ${{ github.repository }}-nix-store
+          path: /nix
+
+      # Hand the built artifact straight to the matching deploy job over a
+      # Blacksmith sticky disk instead of GitHub Actions artifacts. The keyed
+      # snapshot is committed on job exit and cloned by deploy-services (which
+      # `needs` this job), so the ~96MB closure rides Blacksmith's co-located
+      # NVMe fabric (seconds) rather than the GitHub artifact API (~70s).
+      # Keyed per service + commit SHA: same SHA builds byte-identical (the Nix
+      # build is deploy-env-independent) so concurrent dev/prod runs are safe,
+      # different SHAs get distinct keys, and unused snapshots auto-evict after
+      # 7 days of inactivity.
+      - name: Mount binaries handoff sticky disk
+        uses: useblacksmith/stickydisk@v1
+        with:
+          key: ${{ github.repository }}-handoff-binaries-${{ matrix.service }}-${{ github.sha }}
+          path: /handoff-binaries
+
+      # A fresh ext4 sticky disk mounts as root:root; make it writable by the
+      # (possibly non-root) runner so the build step can write the tar. No-op
+      # when the runner already runs as root.
+      - name: Ensure binaries handoff is writable
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$(id -u)" -ne 0 ]; then sudo chown -R "$(id -u):$(id -g)" /handoff-binaries; fi
+
+      - name: Setup Nix
+        uses: ./.github/actions/setup-nix
+
+      - name: Configure Cachix fallback
         uses: ./.github/actions/setup-cachix
         with:
           cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
-          sccache-bucket: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
 
       - name: Build prebuilt binaries
         shell: bash
@@ -86,15 +219,13 @@ jobs:
 
           binaries=$(jq -r --arg service "$SERVICE" '.services[$service].deploy_binaries // [] | @tsv' .github/services-config.json)
           if [[ -n "$binaries" ]]; then
-            if command -v cachix >/dev/null 2>&1; then
-              cachix watch-store "$CACHIX_CACHE_NAME" &
+            cachix_pid=
+            if command -v cachix >/dev/null 2>&1 && [ -n "${CACHIX_CACHE_NAME:-}" ]; then
+              cachix watch-store "$CACHIX_CACHE_NAME" >/tmp/cachix-watch-store.log 2>&1 &
               cachix_pid=$!
-              trap 'kill "$cachix_pid" || true' EXIT
-            else
-              echo "::warning::Cachix is unavailable; skipping Cachix store uploads."
+              trap 'if [ -n "${cachix_pid:-}" ]; then kill "$cachix_pid" 2>/dev/null || true; wait "$cachix_pid" 2>/dev/null || true; fi' EXIT
             fi
-
-            nix build ".#deploy-service-binaries-${SERVICE}"
+            nix build --print-build-logs ".#deploy-service-binaries-${SERVICE}"
             cp -r result/bin/* prebuilt/
             mkdir -p prebuilt/nix-store
             while IFS= read -r store_path; do
@@ -105,59 +236,79 @@ jobs:
           fi
 
           touch prebuilt/.keep
-          tar -C prebuilt -czf prebuilt-binaries.tar.gz .
+          # Write straight onto the handoff sticky disk; deploy-services reads it.
+          tar -C prebuilt -czf /handoff-binaries/prebuilt-binaries.tar.gz .
 
-      - name: Upload prebuilt binaries
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: cloud-storage-service-binaries-${{ matrix.service }}-${{ github.sha }}
-          path: prebuilt-binaries.tar.gz
-          retention-days: 7
+      - name: Teardown Nix (free sticky disk for commit)
+        if: always()
+        uses: ./.github/actions/teardown-nix
 
   build-lambda-artifacts:
     name: Build ${{ matrix.service }} Lambda artifacts
-    needs: setup
-    if: ${{ needs.setup.outputs.matrix != '[]' }}
-    runs-on: linux-extra-beefy
+    needs: [setup, warm-lambdas]
+    if: ${{ needs.setup.outputs.lambdas != '[]' }}
+    # Each handler is a crane + cargo-zigbuild nix package. This job builds all
+    # of a service's handlers via `nix build .#deploy-lambda-<name>`, cloning the
+    # warm lambda /nix disk committed by warm-lambdas. Unchanged handlers are
+    # pure cache hits (substituted from the disk/Cachix, no recompile).
+    runs-on: blacksmith-32vcpu-ubuntu-2404
     strategy:
       fail-fast: false
-      max-parallel: 8
+      # No max-parallel: Blacksmith autoscales runners, so all lambda services
+      # build concurrently instead of batching 8.
       matrix:
-        service: ${{ fromJson(needs.setup.outputs.matrix) }}
+        service: ${{ fromJson(needs.setup.outputs.lambdas) }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           clean: false
 
-      - name: Configure Cachix
+      - name: Mount lambda Nix store sticky disk (clones warmed closure)
+        uses: useblacksmith/stickydisk@v1
+        with:
+          key: ${{ github.repository }}-nix-lambdas
+          path: /nix
+
+      # Hand the Lambda bundle to the matching deploy job over a sticky disk
+      # instead of GitHub artifacts (see build-service-binaries for rationale).
+      - name: Mount lambdas handoff sticky disk
+        uses: useblacksmith/stickydisk@v1
+        with:
+          key: ${{ github.repository }}-handoff-lambdas-${{ matrix.service }}-${{ github.sha }}
+          path: /handoff-lambdas
+
+      # A fresh ext4 sticky disk mounts as root:root; make it writable by the
+      # (possibly non-root) runner so the handoff copy can write the tar. No-op
+      # when the runner already runs as root.
+      - name: Ensure lambdas handoff is writable
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$(id -u)" -ne 0 ]; then sudo chown -R "$(id -u):$(id -g)" /handoff-lambdas; fi
+
+      - name: Setup Nix
+        uses: ./.github/actions/setup-nix
+
+      - name: Configure Cachix fallback
         uses: ./.github/actions/setup-cachix
         with:
           cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
-          sccache-bucket: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
-
-      - name: Check Lambda config
-        id: check-lambdas
-        env:
-          SERVICE: ${{ matrix.service }}
-        run: |
-          has_lambdas=$(jq -r --arg service "$SERVICE" '((.services[$service].deploy_lambdas // []) | length) > 0' .github/services-config.json)
-          echo "has_lambdas=$has_lambdas" >> "$GITHUB_OUTPUT"
 
       - name: Build Lambda artifacts
-        if: ${{ steps.check-lambdas.outputs.has_lambdas == 'true' }}
         env:
           SERVICE: ${{ matrix.service }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID || secrets.AWS_ACCESS_KEY }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        run: .github/scripts/build-cloud-storage-lambdas.sh
+        run: .github/scripts/build-cloud-storage-lambdas-nix.sh
 
-      - name: Upload Lambda artifacts
-        if: ${{ steps.check-lambdas.outputs.has_lambdas == 'true' }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: cloud-storage-lambdas-${{ matrix.service }}-${{ github.sha }}
-          path: lambda-artifacts.tar.gz
-          retention-days: 7
+      - name: Hand off Lambda artifacts to deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The build script writes lambda-artifacts.tar.gz to the workspace root.
+          cp lambda-artifacts.tar.gz /handoff-lambdas/lambda-artifacts.tar.gz
+
+      - name: Teardown Nix (free sticky disk for commit)
+        if: always()
+        uses: ./.github/actions/teardown-nix
 
   migrate-db:
     name: Run Database Migrations
@@ -176,18 +327,18 @@ jobs:
     name: Deploy ${{ matrix.service }}
     needs: [setup, build-service-binaries, build-lambda-artifacts, migrate-db]
     if: ${{ needs.setup.outputs.matrix != '[]' }}
-    runs-on:
-      [
-        runs-on,
-        runner=8cpu-linux-x64,
-        hdd=40,
-        spot=false,
-        ssh=false,
-        'run-id=${{github.run_id}}-${{ matrix.service }}',
-      ]
+    # Deploys via Pulumi + Docker; AWS auth is via explicit static keys
+    # (configure-aws-credentials), so no dependency on a RunsOn instance role.
+    # NOTE: adjust to a provisioned Blacksmith runner label for the org.
+    runs-on: blacksmith-8vcpu-ubuntu-2404
+    # Pin PULUMI_HOME to a fixed path (outside the workspace, which the deploy
+    # action's checkout cleans) so the plugins subdir can be backed by a sticky
+    # disk. Propagates into the composite action's pulumi step via the job env.
+    env:
+      PULUMI_HOME: /pulumi
     strategy:
       fail-fast: false
-      max-parallel: 20  # Limit concurrent deployments
+      # No max-parallel: all services deploy concurrently.
       matrix:
         service: ${{ fromJson(needs.setup.outputs.matrix) }}
     steps:
@@ -209,23 +360,65 @@ jobs:
           echo "has_binaries=$has_binaries" >> "$GITHUB_OUTPUT"
           echo "has_lambdas=$has_lambdas" >> "$GITHUB_OUTPUT"
 
+      # Clone the handoff snapshots committed by the build jobs (which this job
+      # `needs`). Mounted outside the workspace at /handoff-* so the composite
+      # action's own checkout (which cleans the workspace) can't touch them.
+      # Gated on the artifact flags so services with no binaries/lambdas don't
+      # mount an empty disk.
+      - name: Mount binaries handoff sticky disk
+        if: ${{ steps.check-artifacts.outputs.has_binaries == 'true' }}
+        uses: useblacksmith/stickydisk@v1
+        with:
+          key: ${{ github.repository }}-handoff-binaries-${{ matrix.service }}-${{ github.sha }}
+          path: /handoff-binaries
+
+      - name: Mount lambdas handoff sticky disk
+        if: ${{ steps.check-artifacts.outputs.has_lambdas == 'true' }}
+        uses: useblacksmith/stickydisk@v1
+        with:
+          key: ${{ github.repository }}-handoff-lambdas-${{ matrix.service }}-${{ github.sha }}
+          path: /handoff-lambdas
+
+      # Cache Pulumi's provider plugins ($PULUMI_HOME/plugins) on a sticky disk.
+      # Plugins are version-pinned by infra/ and identical across services, so a
+      # single stable-keyed disk is shared by every deploy job: the first run
+      # downloads + commits, later runs clone it warm and skip the ~45s pull.
+      - name: Cache Pulumi plugins (sticky disk)
+        uses: useblacksmith/stickydisk@v1
+        with:
+          key: ${{ github.repository }}-pulumi-plugins
+          path: /pulumi/plugins
+
+      # PULUMI_HOME (/pulumi) and its mounted plugins subdir come up root-owned;
+      # make them writable so pulumi can write credentials + plugins as the
+      # runner. No-op when the runner already runs as root.
+      - name: Ensure Pulumi home is writable
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$(id -u)" -ne 0 ]; then sudo chown -R "$(id -u):$(id -g)" /pulumi; fi
+
       - name: Deploy ${{ matrix.service }}
         uses: ./.github/actions/deploy-cloud-storage-pulumi
         with:
           environment: ${{ inputs.environment }}
+          # Blacksmith buildkit builder: keeps the docker layer cache on a
+          # per-Dockerfile sticky disk so heavy bases (LibreOffice/Collabora)
+          # stay warm instead of re-pulling from ECR each deploy.
+          use-blacksmith-builder: 'true'
           aws-access-key: ${{ secrets.AWS_ACCESS_KEY }}
           aws-secret-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           pulumi-access-token: ${{ secrets.PULUMI_ACCESS_TOKEN }}
           pulumi-service-name: ${{ steps.project-name.outputs.project-name }}
-          prebuilt-binaries-artifact: ${{ steps.check-artifacts.outputs.has_binaries == 'true' && format('cloud-storage-service-binaries-{0}-{1}', matrix.service, github.sha) || '' }}
-          lambda-artifacts: ${{ steps.check-artifacts.outputs.has_lambdas == 'true' && format('cloud-storage-lambdas-{0}-{1}', matrix.service, github.sha) || '' }}
+          prebuilt-binaries-tar: ${{ steps.check-artifacts.outputs.has_binaries == 'true' && '/handoff-binaries/prebuilt-binaries.tar.gz' || '' }}
+          lambda-artifacts-tar: ${{ steps.check-artifacts.outputs.has_lambdas == 'true' && '/handoff-lambdas/lambda-artifacts.tar.gz' || '' }}
           dd-app-key: ${{ secrets.DD_APP_KEY }}
           dd-api-key: ${{ secrets.DD_API_KEY }}
 
   deployment-summary:
     name: Deployment Summary
     runs-on: ubuntu-latest
-    needs: [setup, build-service-binaries, build-lambda-artifacts, deploy-services]
+    needs: [setup, warm-binaries, warm-lambdas, build-service-binaries, build-lambda-artifacts, deploy-services]
     if: always()
     steps:
       - name: Check deployment results
@@ -235,6 +428,9 @@ jobs:
             exit 1
           elif [[ "${{ needs.setup.result }}" == "skipped" ]]; then
             echo "⏭️ Deployment setup was skipped"
+          elif [[ "${{ needs.warm-binaries.result }}" == "failure" || "${{ needs.warm-lambdas.result }}" == "failure" ]]; then
+            echo "❌ Warming shared deps onto a sticky disk failed"
+            exit 1
           elif [[ "${{ needs.build-service-binaries.result }}" == "failure" ]]; then
             echo "❌ One or more service binary builds failed"
             exit 1

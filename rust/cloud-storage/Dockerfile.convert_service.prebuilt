@@ -33,8 +33,7 @@ RUN curl --fail --show-error -L -o core-co-25.04-assets.tar.gz https://github.co
   && rm core-co-25.04-assets.tar.gz
 
 COPY ./prebuilt/nix-store/ /nix/store/
-COPY ./prebuilt/${SERVICE_NAME} /app/svc
-RUN chmod +x /app/svc
+COPY --chmod=755 ./prebuilt/${SERVICE_NAME} /app/svc
 
 # The nix-built binary uses the nix dynamic linker, which doesn't search system
 # library paths (/usr/lib, /lib). LibreOfficeKit's libmergedlo.so is loaded via

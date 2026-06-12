@@ -4,14 +4,8 @@ import type { EntityItem } from '@core/context/quickAccess';
 import clickOutside from '@core/directive/clickOutside';
 import { debouncedDependent } from '@core/util/debounce';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
-import { syncServiceClient } from '@service-sync/client';
 import { Surface } from '@ui';
-import {
-  $insertNodes,
-  $parseSerializedNode,
-  createEditor,
-  type LexicalEditor,
-} from 'lexical';
+import type { LexicalEditor } from 'lexical';
 import {
   createEffect,
   createSignal,
@@ -22,18 +16,12 @@ import {
   Suspense,
   untrack,
 } from 'solid-js';
-import { createLexicalWrapper } from '../../../context/LexicalWrapperContext';
 import { floatWithSelection } from '../../../directive/floatWithSelection';
 import {
   CLOSE_SNIPPET_SEARCH_COMMAND,
-  REMOVE_SNIPPET_SEARCH_COMMAND,
+  INSERT_SNIPPET_COMMAND,
 } from '../../../plugins/snippets';
 import type { MenuOperations } from '../../../shared/inlineMenu';
-import {
-  editorStateAsMarkdown,
-  initializeEditorWithState,
-  setEditorStateFromMarkdown,
-} from '../../../utils';
 import { MentionsMenuItem } from '../MentionsMenu/components/MentionsMenuItem';
 import { useEntityMention } from '../MentionsMenu/hooks/useEntityMention';
 import { useMenuKeyboardNavigation } from '../useMenuKeyboardNavigation';
@@ -50,29 +38,8 @@ type SnippetsMenuProps = {
   /** whether the menu checks against block boundary in floating middleware. uses floating-ui default if false. */
   useBlockBoundary?: boolean;
   portalScope?: PortalScope;
+  sourceDocumentId?: string;
 };
-
-/**
- * Fetch a snippet document's content and render it to internal markdown.
- * Content lives in sync-service; a throwaway markdown editor converts the
- * serialized state to a markdown string the target editor can ingest.
- */
-async function fetchSnippetMarkdown(documentId: string): Promise<string> {
-  const rawState = await syncServiceClient.getRaw({ documentId });
-
-  const { editor, cleanup } = createLexicalWrapper({
-    type: 'markdown',
-    namespace: 'snippet-markdown-extractor',
-    isInteractable: () => false,
-  });
-
-  try {
-    initializeEditorWithState(editor, rawState);
-    return editorStateAsMarkdown(editor, 'internal');
-  } finally {
-    cleanup();
-  }
-}
 
 /**
  * Typeahead menu opened by typing `;` in a markdown area. Lists snippet
@@ -96,6 +63,8 @@ function SnippetsMenuInner(props: SnippetsMenuProps) {
     buckets: ['snippet'],
     searchTerm,
   });
+  const filteredSnippets = () =>
+    snippets().filter((snippet) => snippet.id !== props.sourceDocumentId);
 
   const [selectedIndex, setSelectedIndex] = createSignal(0);
   const [mountSelection, setMountSelection] = createSignal<Selection | null>();
@@ -127,7 +96,7 @@ function SnippetsMenuInner(props: SnippetsMenuProps) {
   });
 
   createEffect(() => {
-    const count = snippets().length;
+    const count = filteredSnippets().length;
     if (count > 0 && selectedIndex() >= count) {
       setSelectedIndex(count - 1);
     }
@@ -138,54 +107,27 @@ function SnippetsMenuInner(props: SnippetsMenuProps) {
     setMenuOpen(false);
   };
 
-  const insertSnippet = async (item: EntityItem) => {
+  const insertSnippet = (item: EntityItem) => {
     analytics.track('snippets_menu_use', {});
-    props.editor.dispatchCommand(REMOVE_SNIPPET_SEARCH_COMMAND, undefined);
-    props.menu.setSearchTerm('');
-    setMenuOpen(false);
-
-    let markdown: string;
-    try {
-      markdown = await fetchSnippetMarkdown(item.id);
-    } catch (error) {
-      console.error('failed to load snippet content', error);
-      return;
-    }
-    if (!markdown.trim()) return;
-
-    // Same technique as the markdown paste plugin: parse the markdown with a
-    // throwaway editor restricted to the target editor's nodes, then insert
-    // the resulting nodes at the cursor.
-    props.editor.update(() => {
-      const parseEditor = createEditor({
-        namespace: 'snippet-parser',
-        editable: false,
-        nodes: [
-          ...Array.from(props.editor._nodes.values()).map((node) => node.klass),
-        ],
-      });
-      setEditorStateFromMarkdown(parseEditor, markdown, 'both');
-      const state = parseEditor.getEditorState().toJSON();
-      const nodes = state.root.children.map((node) =>
-        $parseSerializedNode(node)
-      );
-      $insertNodes(nodes);
+    props.editor.dispatchCommand(INSERT_SNIPPET_COMMAND, {
+      documentId: item.id,
+      sourceDocumentId: props.sourceDocumentId,
     });
   };
 
   const itemAction = (item: EntityItem) => {
-    void insertSnippet(item);
+    insertSnippet(item);
   };
 
   useMenuKeyboardNavigation({
     isActive: menuOpen,
     onUp: () => {
-      const items = snippets();
+      const items = filteredSnippets();
       if (items.length === 0) return;
       setSelectedIndex((selectedIndex() - 1 + items.length) % items.length);
     },
     onDown: () => {
-      const items = snippets();
+      const items = filteredSnippets();
       if (items.length === 0) return;
       setSelectedIndex((selectedIndex() + 1) % items.length);
     },
@@ -196,7 +138,7 @@ function SnippetsMenuInner(props: SnippetsMenuProps) {
       // block horizontal arrows
     },
     onSelect: () => {
-      const selectedItem = snippets()[selectedIndex()];
+      const selectedItem = filteredSnippets()[selectedIndex()];
       if (selectedItem) {
         itemAction(selectedItem);
       } else {
@@ -265,7 +207,7 @@ function SnippetsMenuInner(props: SnippetsMenuProps) {
               Snippets
             </div>
             <Show
-              when={snippets().length > 0}
+              when={filteredSnippets().length > 0}
               fallback={
                 <div class="px-3.5 pb-1 text-ink-extra-muted">
                   {searchTerm() ? 'No results' : 'No snippets yet'}
@@ -276,7 +218,7 @@ function SnippetsMenuInner(props: SnippetsMenuProps) {
                 class="overflow-y-auto scrollbar-hidden"
                 style={{ 'max-height': `${contentMaxHeight()}px` }}
               >
-                <For each={snippets()}>
+                <For each={filteredSnippets()}>
                   {(item, index) => (
                     <MentionsMenuItem
                       item={item}

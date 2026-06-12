@@ -18,3 +18,4 @@ utoipa = { workspace = true }
 document_sub_type = { path = "../document_sub_type" }
 models_soup = { path = "../models_soup", features = ["schema"] }
 uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

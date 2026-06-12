@@ -3,7 +3,15 @@ import {
   type InfiniteData,
   type InfiniteQueryObserverResult,
 } from '@tanstack/solid-query';
-import { type Accessor, createMemo, mapArray } from 'solid-js';
+import {
+  type Accessor,
+  createComputed,
+  createMemo,
+  createRoot,
+  createSignal,
+  on,
+  onCleanup,
+} from 'solid-js';
 
 type InfiniteQueryConfig<TData, TSelect = TData[]> = {
   key: string;
@@ -39,9 +47,19 @@ type InfiniteQueriesResult<TData, TSelect> = {
 export function createInfiniteQueries<TData, TSelect = TData[]>(
   getConfigs: Accessor<InfiniteQueryConfig<TData, TSelect>[]>
 ): InfiniteQueriesResult<TData, TSelect> {
-  const queries = mapArray(
-    () => getConfigs().map((c) => c.key),
-    (key): InfiniteQueryResult<TData, TSelect> => {
+  type StoredQuery = InfiniteQueryResult<TData, TSelect> & {
+    dispose: () => void;
+  };
+
+  const queryByKey = new Map<string, StoredQuery>();
+  const [revision, setRevision] = createSignal(0);
+
+  const createQuery = (key: string): StoredQuery => {
+    let dispose: (() => void) | undefined;
+
+    const queryResult = createRoot((rootDispose) => {
+      dispose = rootDispose;
+
       const getConfig = createMemo(() =>
         getConfigs().find((c) => c.key === key)
       );
@@ -97,8 +115,52 @@ export function createInfiniteQueries<TData, TSelect = TData[]>(
         isFetchingNextPage: () => query.isFetchingNextPage,
         fetchNextPage: () => query.fetchNextPage(),
       };
-    }
+    });
+
+    return {
+      ...queryResult,
+      dispose: () => dispose?.(),
+    };
+  };
+
+  createComputed(
+    on(
+      () => getConfigs().map((c) => c.key),
+      (keys) => {
+        const activeKeys = new Set(keys);
+        let changed = false;
+
+        for (const [key, query] of queryByKey) {
+          if (!activeKeys.has(key)) {
+            query.dispose();
+            queryByKey.delete(key);
+            changed = true;
+          }
+        }
+
+        for (const key of keys) {
+          if (!queryByKey.has(key)) {
+            queryByKey.set(key, createQuery(key));
+            changed = true;
+          }
+        }
+
+        if (changed) setRevision((value) => value + 1);
+      }
+    )
   );
+
+  onCleanup(() => {
+    for (const query of queryByKey.values()) query.dispose();
+    queryByKey.clear();
+  });
+
+  const queries = createMemo(() => {
+    revision();
+    return getConfigs()
+      .map((config) => queryByKey.get(config.key))
+      .filter((query): query is StoredQuery => Boolean(query));
+  });
 
   const queriesByKey = createMemo(() => {
     const map = new Map<string, InfiniteQueryResult<TData, TSelect>>();

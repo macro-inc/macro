@@ -304,6 +304,7 @@ export const MarkdownShell: Component<
               menu={menu()}
               useBlockBoundary={false}
               portalScope={props.portalScope}
+              sourceDocumentId={builderConfig.mentions?.sourceDocumentId}
             />
           )}
         </Show>

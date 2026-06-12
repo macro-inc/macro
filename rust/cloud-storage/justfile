@@ -16,6 +16,14 @@ prepare_db:
 format:
     SQLX_OFFLINE=true cargo fmt
 
+# Regenerate dependency-unification metadata after changing any Cargo.toml:
+# the workspace-hack crate (feature unification, see .config/hakari.toml) and
+# the per-artifact dep closure map consumed by the flake's deploy builds.
+# Runs the lock-pinned generator in tools/xtask/, so local runs always match CI.
+# CI fails if either artifact is stale.
+hakari:
+    cargo run -p xtask -- deps
+
 clean:
     cargo clean
     git restore target/lambda

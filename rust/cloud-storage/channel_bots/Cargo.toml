@@ -17,6 +17,7 @@ macro_user_id = { path = "../macro_user_id" }
 tokio = { workspace = true, features = ["rt", "sync"] }
 tracing = { workspace = true }
 uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 chrono = { workspace = true }

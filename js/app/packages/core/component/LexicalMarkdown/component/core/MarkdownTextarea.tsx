@@ -30,6 +30,7 @@ import {
 } from '../../context/LexicalWrapperContext';
 import {
   autoRegister,
+  awaitPlugin,
   codePlugin,
   createAccessoryStore,
   customSelectionDataPlugin,
@@ -211,6 +212,7 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
       })
     )
     .use(emojisPlugin({ menu: emojisMenuOperations }))
+    .use(awaitPlugin())
     .use(snippetsPlugin({ menu: snippetsMenuOperations }));
 
   if (props.onPasteFilesAndDirs) {

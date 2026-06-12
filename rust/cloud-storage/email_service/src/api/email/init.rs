@@ -252,14 +252,25 @@ pub async fn handler(
             }
 
             // Self-link bootstrap: the child macro_user exists but never connected an inbox.
-            // Provision its email_links row with the child's macro_id (inbox ownership) but the
-            // primary's fusionauth_user_id — the OAuth grant lives under the primary's fusion id,
-            // and token resolution, message/thread scoping, and backfill rate-limiting key off it.
+            // Provision its email_links row entirely under the child's identity: the OAuth
+            // grant (FA IdP link) is attached to the child's fusion user at the OAuth
+            // callback — it is also the child's login identity, so it cannot live under the
+            // primary — and token resolution, scoping, and backfill rate-limiting key off it.
+            // Access for the primary comes from the macro_user_links edge alone.
             let child_macro_id_owned = MacroUserIdStr::try_from(child_macro_id.to_string())?;
 
+            // `existing_owner` proved a User row exists for this email, so a miss here means
+            // the child account vanished mid-flight. Abort rather than fall back to the
+            // requester's fusion id, which would provision the link under the wrong identity.
+            let child_fusion_id =
+                macro_db_client::user::get::get_macro_user_id_by_email(&ctx.db, &linked_email)
+                    .await
+                    .context("Failed to look up child's fusion id for self-link bootstrap")?
+                    .context("child macro user disappeared before self-link bootstrap")?
+                    .to_string();
+
             let gmail_token =
-                fetch_gmail_token_for_email(&ctx, &user_context.fusion_user_id, &linked_email)
-                    .await?;
+                fetch_gmail_token_for_email(&ctx, &child_fusion_id, &linked_email).await?;
             let watch_response = ctx.gmail_client.register_watch(&gmail_token).await?;
 
             // All writes commit atomically so a partial failure leaves no dangling link,
@@ -272,7 +283,7 @@ pub async fn handler(
 
             let link = enable_gmail_sync_for(
                 tx.as_mut(),
-                &user_context.fusion_user_id,
+                &child_fusion_id,
                 child_macro_id_owned,
                 &linked_email,
                 &watch_response.history_id,
@@ -373,6 +384,51 @@ pub async fn handler(
                 tx.commit()
                     .await
                     .context("Failed to commit shared-inbox promotion transaction")?;
+
+                // Relocate the mailbox's Google grant onto a dedicated FusionAuth user so the
+                // inbox keeps syncing regardless of which connector stays. Done after the
+                // commit: if relocation fails the inbox keeps working under the original
+                // owner's grant (prior behavior) and the relocation can be retried. Once the
+                // grant has moved, the link row must point at the shared user or token
+                // fetches for this inbox fail, so the update is retried before giving up.
+                match ctx
+                    .auth_service_client
+                    .relocate_inbox_grant(&linked_email, &existing_link.fusionauth_user_id)
+                    .await
+                {
+                    Ok(shared_fusionauth_user_id) => {
+                        const MAX_LINK_UPDATE_ATTEMPTS: u32 = 3;
+                        for attempt in 1..=MAX_LINK_UPDATE_ATTEMPTS {
+                            match email_db_client::links::update::update_link_fusionauth_user_id(
+                                &ctx.db,
+                                promoted.link_id,
+                                &shared_fusionauth_user_id,
+                            )
+                            .await
+                            {
+                                Ok(()) => break,
+                                Err(e) if attempt < MAX_LINK_UPDATE_ATTEMPTS => {
+                                    tracing::warn!(error=?e, attempt, "Retrying link fusionauth_user_id update after grant relocation");
+                                    tokio::time::sleep(std::time::Duration::from_millis(
+                                        200 * u64::from(attempt),
+                                    ))
+                                    .await;
+                                }
+                                Err(e) => {
+                                    tracing::error!(
+                                        error=?e,
+                                        link_id=%promoted.link_id,
+                                        shared_fusionauth_user_id=%shared_fusionauth_user_id,
+                                        "Failed to re-home link fusionauth_user_id after grant relocation; inbox token fetches will fail until the link is re-homed to the shared user"
+                                    );
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        tracing::error!(error=?e, "Failed to relocate shared-inbox grant; inbox keeps syncing under the original owner's grant");
+                    }
+                }
 
                 return Ok((
                     StatusCode::OK,
@@ -582,8 +638,8 @@ async fn fetch_gmail_token_for_email(
 /// Gmail watch. Runs on a caller-provided connection so the writes can join a wider
 /// transaction; callers register the watch (external IO) beforehand and pass its `history_id`.
 /// Caller-provided identifiers let this serve the JWT-driven new-user signup, the
-/// `link_id`-driven add-inbox flow, and the self-link bootstrap (where `macro_id` is the
-/// child's but `fusion_user_id` is the primary's).
+/// `link_id`-driven add-inbox flow, and the self-link bootstrap (where both `macro_id`
+/// and `fusion_user_id` are the child's — the grant lives with the mailbox's own account).
 #[tracing::instrument(skip(conn), err)]
 async fn enable_gmail_sync_for(
     conn: &mut sqlx::PgConnection,

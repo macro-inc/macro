@@ -1,3 +1,4 @@
+import { useNavigatedFromJK } from '@app/component/useNavigatedFromJK';
 import { CommentMargin } from '@block-md/comments/CommentMargin';
 import {
   commentsStore,
@@ -77,6 +78,7 @@ export function Notebook(props: { loroManager: LoroManager }) {
   const scopeId = blockHotkeyScopeSignal.get;
   const isTask = useBlockAliasedName() === 'task';
   const md = mdStore.get;
+  const { navigatedFromJK } = useNavigatedFromJK();
 
   let notebookRef!: HTMLDivElement;
   let commentMarginRef: HTMLDivElement | undefined;
@@ -264,7 +266,7 @@ export function Notebook(props: { loroManager: LoroManager }) {
   return (
     <div class={containerClasses()} ref={notebookRef}>
       <div class={contentDivClasses()} ref={contentRef}>
-        <TitleEditor autoFocusOnMount />
+        <TitleEditor autoFocusOnMount={!navigatedFromJK()} />
         <div class="spacer h-3" />
         <div class="mb-6 flex flex-row flex-wrap items-center gap-2 text-sm empty:hidden">
           <InlineTaskProperties />

@@ -25,6 +25,7 @@ strum = { workspace = true }
 thiserror = { workspace = true }
 utoipa = { workspace = true, optional = true }
 uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 cool_asserts = "2.0.3"

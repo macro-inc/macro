@@ -12,6 +12,7 @@ import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import {
   SERVER_HOSTS,
   SYNC_PERMISSION_TOKEN_DSS_HOST,
+  SYNC_SERVICE_HOSTS,
 } from '@core/constant/servers';
 import type { FetchError } from '@core/service';
 import { cache } from '@core/util/cache';
@@ -20,11 +21,13 @@ import {
   fetchWithToken,
 } from '@core/util/fetchWithToken';
 import { registerClient } from '@core/util/mockClient';
+import { isTauri } from '@core/util/platform';
 import type { ResultError } from '@core/util/result';
 
 import type { SafeFetchInit } from '@core/util/safeFetch';
 import type { IDocumentStorageServiceFile } from '@filesystem/file';
 import { platformFetch } from 'core/util/platformFetch';
+import type { SerializedEditorState } from 'lexical';
 import { err, ok, type Result } from 'neverthrow';
 import type { ApiChannelWithLatest } from './channel-list-types';
 import type {
@@ -149,6 +152,11 @@ function normalizeLocationResponseV3(response: LocationResponseV3) {
 const MINUTES_BEFORE_PRESIGNED_EXPIRES = 14;
 
 const dssHost = SERVER_HOSTS['document-storage-service'];
+const syncServiceWorkerHost = SYNC_SERVICE_HOSTS.worker;
+const syncOrigin =
+  import.meta.env.MODE === 'development'
+    ? 'https://dev.macro.com'
+    : 'https://macro.com';
 
 export function dssFetch(
   url: string,
@@ -165,6 +173,22 @@ export function dssFetch<T extends Record<string, any> = never>(
   | Promise<Result<T, ResultError<FetchWithTokenErrorCode>[]>>
   | Promise<Result<void, ResultError<FetchWithTokenErrorCode>[]>> {
   return fetchWithToken<T>(`${dssHost}${url}`, init);
+}
+
+async function getDocumentPermissionToken(documentId: string): Promise<string> {
+  const token = await fetchWithToken<GetDocumentPermissionsTokenResponse>(
+    `${SYNC_PERMISSION_TOKEN_DSS_HOST}/documents/permissions_token/${documentId}`,
+    {
+      method: 'POST',
+    }
+  );
+
+  if (token.isErr()) {
+    console.error('Failed to create permission token:', token.error);
+    throw new Error('Failed to create permission token');
+  }
+
+  return token.value.token;
 }
 
 type Success = {
@@ -1061,6 +1085,34 @@ export const storageServiceClient = {
 
     const response = result.value;
     return ok(response);
+  },
+
+  async getSnippetRaw(args: {
+    documentId: string;
+  }): Promise<SerializedEditorState> {
+    const token = await getDocumentPermissionToken(args.documentId);
+    const response = await platformFetch(
+      `${syncServiceWorkerHost}/document/${args.documentId}/raw`,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          ...(isTauri() && { Origin: syncOrigin }),
+        },
+        method: 'GET',
+      }
+    );
+
+    if (!response.ok) {
+      try {
+        console.error('Failed to fetch raw snippet', await response.text());
+      } catch (_e) {
+        console.error('Failed to fetch raw snippet');
+      }
+      throw new Error('Failed to fetch raw snippet');
+    }
+
+    return await response.json();
   },
 
   /**
