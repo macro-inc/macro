@@ -42,35 +42,4 @@ export const [showDarkThemes, setShowDarkThemes] = makePersisted(
   {name: 'macro-show-dark-themes'}
 );
 
-// Light/dark mode plumbing. NOTE: user-facing and automatic (system) switching is
-// currently disabled — nothing wires these into the UI or the OS listener effect.
-// Kept intact so we can re-enable mode switching later without rebuilding it.
-export const [themeMode, setThemeMode] = makePersisted(
-  createSignal<'light' | 'dark' | 'system'>('system'),
-  {name: 'macro-theme-mode'}
-);
-
-const supportsMatchMedia =
-  typeof window !== 'undefined' && typeof window.matchMedia === 'function';
-
-export const [systemMode, setSystemMode] = createSignal<'dark' | 'light'>(
-  supportsMatchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
-    ? 'dark'
-    : 'light'
-);
-
-if (supportsMatchMedia) {
-  const darkModeQuery = window.matchMedia('(prefers-color-scheme: dark)');
-  darkModeQuery.addEventListener('change', (e: MediaQueryListEvent) => {
-    setSystemMode(e.matches ? 'dark' : 'light');
-  });
-}
-
-// Resolves 'system' to the live OS preference, so the rest of the theme code
-// only ever deals with a concrete 'light' | 'dark'.
-export const effectiveMode = createMemo<'light' | 'dark'>(() => {
-  const mode = themeMode();
-  return mode === 'system' ? systemMode() : mode;
-});
-
 export const [themeDepth, setThemeDepth] = createSignal<number>(0.15);

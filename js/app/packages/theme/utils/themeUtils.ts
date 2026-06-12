@@ -1,8 +1,8 @@
-import { currentThemeId, effectiveMode, isThemeSaved, setCurrentThemeId, setHtmlColor, setIsThemeSaved, setThemeDepth, setThemeMode, setUserThemes, systemMode, themeDepth, themeMode, themes, userThemes} from '../signals/themeSignals';
+import { currentThemeId, setCurrentThemeId, setHtmlColor, setIsThemeSaved, setThemeDepth, setUserThemes, themeDepth, themes, userThemes} from '../signals/themeSignals';
 import type { ThemeV2, ThemeV2Tokens } from '../types/themeTypes';
 import { themeReactive } from '../signals/themeReactive';
 import { toast } from '@core/component/Toast/Toast';
-import { batch, createEffect, on } from 'solid-js';
+import { batch } from 'solid-js';
 import { DEFAULT_DARK_THEME } from '../constants';
 
 export function exportTheme(themeId?: string){
@@ -49,19 +49,6 @@ function isThemeV2(value: unknown): value is ThemeV2 {
   });
 }
 
-/** Dormant plumbing: re-applies the current light/dark mode to the live theme
- *  whenever the mode (or, in 'system' mode, the OS preference) changes. Kept for
- *  if/when mode switching is re-enabled — nothing calls this today. */
-export function systemModeEffect(){
-  createEffect(
-    on(
-      [themeMode, systemMode],
-      () => { enforceModeLive(); },
-      { defer: true }
-    )
-  );
-}
-
 export function applyTheme(id: string): void{
   let theme = themes().find((t) => t.id === id);
   if(!theme){
@@ -78,9 +65,6 @@ export function applyTheme(id: string): void{
       }
     );
     setThemeDepth(theme!.depth ?? 0.15);
-    // Selecting a theme adopts its intrinsic light/dark as the active mode. Tokens
-    // load as-is (no inversion here); the Light/Dark toggle flips via enforceModeLive.
-    setThemeMode(isTokensDark(theme!.tokens) ? 'dark' : 'light');
     queueMicrotask(() => {/* scuffed af */
       setIsThemeSaved(true);
       syncHtmlColor();
@@ -107,19 +91,6 @@ function invertLightness(): void{
     themeReactive.c2.l[1](1 - themeReactive.c2.l[0]());
     themeReactive.c3.l[1](1 - themeReactive.c3.l[0]());
     themeReactive.c4.l[1](1 - themeReactive.c4.l[0]());
-  });
-}
-
-/** Inverts the live theme to match the current effective mode, only if it doesn't
- *  already match. Idempotent and saved-state preserving (toggling never marks the
- *  theme as a new/unsaved theme). */
-export function enforceModeLive(): void{
-  if(isThemeDark() === (effectiveMode() === 'dark')){return}
-  const wasSaved = isThemeSaved();
-  invertLightness();
-  queueMicrotask(() => {
-    setIsThemeSaved(wasSaved); /* preserve saved state across the unsave effect, mirroring applyTheme */
-    syncHtmlColor();
   });
 }
 
@@ -191,11 +162,6 @@ export function deleteTheme(id: string): void{
     setIsThemeSaved(false);
     setCurrentThemeId('');
   }
-}
-
-/** Returns true when the live theme is dark (text lighter than background). Reactive. */
-export function isThemeDark(): boolean {
-  return themeReactive.c0.l[0]() > themeReactive.b0.l[0]();
 }
 
 /** Intrinsic darkness of a stored theme: dark when text is lighter than background. */
