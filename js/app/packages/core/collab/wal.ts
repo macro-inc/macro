@@ -11,6 +11,12 @@ export type WALEntry<T> = {
   createdAt: number;
 };
 
+function hasId<T>(
+  entry: Omit<WALEntry<T>, 'id'> & { id?: number }
+): entry is WALEntry<T> {
+  return entry.id !== undefined;
+}
+
 export function hasExpired<T>(entry: WALEntry<T>, cutoff: number): boolean {
   return !entry.delivered && entry.createdAt < cutoff;
 }
@@ -180,7 +186,7 @@ export class BrowserWALStore<T> implements WALStore<T> {
     const store = tx.objectStore('updates');
     let deleted = 0;
     for (const row of entries) {
-      if (row.id !== undefined && hasExpired(row, cutoff)) {
+      if (hasId(row) && hasExpired(row, cutoff)) {
         await store.delete(row.id);
         deleted++;
       }
