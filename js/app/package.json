@@ -93,7 +93,7 @@
 		"libheif-js": "^1.19.8",
 		"linkify-it": "^5.0.0",
 		"livekit-client": "^2.18.0",
-		"loro-crdt": "1.5.9",
+		"loro-crdt": "1.13.3",
 		"nanoid": "^3.3.7",
 		"neverthrow": "^8.2.0",
 		"posthog-js": "^1.360.2",

@@ -85,7 +85,7 @@
         "libheif-js": "^1.19.8",
         "linkify-it": "^5.0.0",
         "livekit-client": "^2.18.0",
-        "loro-crdt": "1.5.9",
+        "loro-crdt": "1.13.3",
         "nanoid": "^3.3.7",
         "neverthrow": "^8.2.0",
         "posthog-js": "^1.360.2",
@@ -302,7 +302,7 @@
         "@lexical/table": "0.32.1",
         "@lexical/utils": "0.32.1",
         "lexical": "0.32.1",
-        "loro-crdt": "1.5.9",
+        "loro-crdt": "1.13.3",
         "nanoid": "^5.1.5",
       },
       "devDependencies": {
@@ -330,7 +330,7 @@
         "hono": "^4.6.20",
         "immer": "^10.0.3",
         "lexical": "0.32.1",
-        "loro-crdt": "1.5.9",
+        "loro-crdt": "1.13.3",
         "nanoid": "^5.1.5",
         "zod": "^4.3.6",
       },
@@ -2390,7 +2390,7 @@
 
     "loose-envify": ["loose-envify@1.4.0", "", { "dependencies": { "js-tokens": "^3.0.0 || ^4.0.0" }, "bin": { "loose-envify": "cli.js" } }, "sha512-lyuxPGr/Wfhrlem2CL/UcnUc1zcqKAImBDzukY7Y5F/yQiNdko6+fRLevlw1HgMySw7f611UIY408EtxRSoK3Q=="],
 
-    "loro-crdt": ["loro-crdt@1.5.9", "", {}, "sha512-edkfCYh5W42O7EmNVCx6iPrI0yTAhn0DRbEAk6tmiKaL42IpUoqyDREvtFDmdVVgofxKNgceDBQx8fIIjMdr2Q=="],
+    "loro-crdt": ["loro-crdt@1.13.3", "", {}, "sha512-vh+hYxvsGL9MrsUaquPpawbrL97R4Qb84nc41xTh0zEEz7tJsdioH4mhbsLi0R659LFj3/xII2ML2ScZYJTw9Q=="],
 
     "loro-mirror-monorepo": ["loro-mirror-monorepo@workspace:loro-mirror"],
 
