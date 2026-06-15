@@ -219,6 +219,17 @@ export function registerLoroHistory(
     excludeOriginPrefixes: ['history-'],
   });
 
+  const tryGroupStart = () => {
+    try {
+      undoManager.groupStart();
+    } catch (e) {
+      console.error(
+        'Something went wrong starting a undo group (probably group start called multiple times). Ignoring..',
+        e
+      );
+    }
+  };
+
   // Track if we're currently in a group
   let isGroupActive = false;
   let prevChangeTime = Date.now();
@@ -336,12 +347,12 @@ export function registerLoroHistory(
         isGroupActive = false;
       }
       // Start a new group for the next changes
-      undoManager.groupStart();
+      tryGroupStart();
       isGroupActive = true;
     } else if (mergeAction === HISTORY_MERGE) {
       // If we're merging and no group is active, start one
       if (!isGroupActive) {
-        undoManager.groupStart();
+        tryGroupStart();
         isGroupActive = true;
       }
     }
