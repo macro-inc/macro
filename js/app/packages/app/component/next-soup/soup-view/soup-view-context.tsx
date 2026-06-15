@@ -483,6 +483,8 @@ export const SoupViewContextProvider: FlowComponent<
 
   const groupQueries = createGroupedSoupQueries({
     initialPage: createMemo(() => {
+      if (itemsQuery.isPlaceholderData) return;
+
       const groups = itemsQuery.data?.groups;
       const items = itemsQuery.data?.itemsById;
       if (!groups || !items) return;
