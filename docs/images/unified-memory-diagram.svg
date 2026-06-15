@@ -24,7 +24,6 @@
   <path d="M 380 274 L 380 366" stroke="#ff8f05" stroke-width="1.5" fill="none"/>
   <circle cx="380" cy="274" r="3" fill="#ff8f05"/>
   <circle cx="380" cy="366" r="3" fill="#ff8f05"/>
-  <text x="392" y="326" fill="#9a9a9a" font-size="12">agents read and write everything</text>
 
   <!-- block chips: left -->
   <g>
