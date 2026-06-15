@@ -64,6 +64,11 @@ const getInboxSignalFilters = () => {
       chatUpdatedAt: { gte: twoWeeksAgo },
       folderDone: false,
       folderUpdatedAt: { gte: twoWeeksAgo },
+      // Foreign entities (e.g. GitHub PRs) with a not-done notification.
+      // Referencing `fef` also opts them into the signal query (otherwise
+      // defineQueryFilters excludes unreferenced entity types). Rendering is
+      // still gated on the supported-foreign-entities flag client-side.
+      foreignEntityDone: false,
       emailShared: 'exclude',
     },
     exclude: getDisabledSnippetSubtypeExclude(),
