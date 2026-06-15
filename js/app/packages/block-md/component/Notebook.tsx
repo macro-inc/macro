@@ -300,7 +300,10 @@ export function Notebook(props: {
               mustBeConnected={props.mustBeConnected}
             />
             <Show when={historyControl.isOpen() && historyBlockId}>
-              <HistoryOverlay documentId={historyBlockId!} />
+              <HistoryOverlay
+                documentId={historyBlockId!}
+                onExit={() => historyControl.close()}
+              />
             </Show>
           </div>
           <Show when={ENABLE_RAIL_CHAT_TASK_COMMENTS && isTask}>

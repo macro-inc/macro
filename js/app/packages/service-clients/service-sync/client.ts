@@ -69,6 +69,13 @@ type MetadataResponse = {
   }>;
 };
 
+export type HistorySession = {
+  userId: string;
+  startMs: number;
+  endMs: number;
+  count: number;
+};
+
 export const syncServiceClient = {
   async wakeup(args: { documentId: string }) {
     await syncFetch(`/document/${args.documentId}/wakeup`, {
@@ -198,6 +205,52 @@ export const syncServiceClient = {
     const array = new Uint8Array(data);
 
     return ok(array);
+  },
+  async getHistoryMeta(args: { documentId: string }) {
+    const token = await getPermissionToken('document', args.documentId);
+    const response = await platformFetch(
+      `${SYNC_SERVICE_WORKER_URL}/document/${args.documentId}/history-meta`,
+      {
+        headers: {
+          'Content-Type': 'application/octet-stream',
+          Authorization: `Bearer ${token}`,
+          ...(isTauri() && { Origin: SYNC_ORIGIN }),
+        },
+        method: 'GET',
+      }
+    );
+    if (!response.ok) {
+      return err(`Failed to fetch history meta: ${response.status}`);
+    }
+
+    const data = (await response.json()) as { sessions: HistorySession[] };
+    return ok({ sessions: data.sessions });
+  },
+  async getStateAt(args: { documentId: string; tMs: number }) {
+    const token = await getPermissionToken('document', args.documentId);
+    const url = `${SYNC_SERVICE_WORKER_URL}/document/${args.documentId}/state-at?t=${Math.round(args.tMs)}`;
+    const headers = {
+      'Content-Type': 'application/octet-stream',
+      Authorization: `Bearer ${token}`,
+      ...(isTauri() && { Origin: SYNC_ORIGIN }),
+    };
+    // The server replies 503 while it builds the history-checkpoint ladder in
+    // the background; retry with exponential backoff until it's ready.
+    const MAX_TRIES = 8;
+    for (let attempt = 1; attempt <= MAX_TRIES; attempt++) {
+      const response = await platformFetch(url, { headers, method: 'GET' });
+      if (response.ok) {
+        return ok(new Uint8Array(await response.arrayBuffer()));
+      }
+      if (response.status === 503 && attempt < MAX_TRIES) {
+        await new Promise((r) =>
+          setTimeout(r, Math.min(2000, 250 * 2 ** (attempt - 1)))
+        );
+        continue;
+      }
+      return err(`Failed to fetch state at t: ${response.status}`);
+    }
+    return err('Failed to fetch state at t: retries exhausted');
   },
   async getRaw(args: { documentId: string }): Promise<SerializedEditorState> {
     const token = await getPermissionToken('document', args.documentId);
