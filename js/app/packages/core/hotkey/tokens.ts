@@ -92,6 +92,7 @@ export const TOKENS = {
       agents: 'sidebar.goTo.agents',
       mail: 'sidebar.goTo.mail',
       documents: 'sidebar.goTo.documents',
+      markdownDocuments: 'sidebar.goTo.markdownDocuments',
       tasks: 'sidebar.goTo.tasks',
       channels: 'sidebar.goTo.channels',
       calls: 'sidebar.goTo.calls',
