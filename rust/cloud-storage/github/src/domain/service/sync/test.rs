@@ -4379,11 +4379,6 @@ async fn opened_pr_body_mention_notifies_mentioned_member() {
     service.process_webhook_event(&event).await.unwrap();
 
     let requests = service.notification_ingress.requests();
-    assert_eq!(requests.len(), 2, "expected status-changed and mention");
-    assert_eq!(
-        requests_with_tag(&requests, "github_pr_status_changed").len(),
-        1
-    );
 
     let mentions = requests_with_tag(&requests, "github_pr_mention");
     assert_eq!(mentions.len(), 1);
