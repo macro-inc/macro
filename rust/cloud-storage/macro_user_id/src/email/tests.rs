@@ -26,6 +26,9 @@ fn it_should_fail() {
         "sean..aye@macro.com",
         "sean@@macro.com",
         r#"foo"@macro.com"@example.com"#,
+        // cannot have single quote in domain part
+        "sean@mac'ro.com",
+        "se'an@mac'ro.com",
     ];
     invalid_emails
         .iter()
@@ -34,6 +37,34 @@ fn it_should_fail() {
         .for_each(|res| {
             res.unwrap_err();
         });
+}
+
+#[test]
+fn known_sql_injection_payloads_are_not_valid_email_addresses() {
+    let sql_injection_vectors = [
+        "sean' OR '1'='1@macro.com",
+        "sean' UNION SELECT password FROM users--@macro.com",
+        "sean@macro.com'; DROP TABLE users; --",
+        "sean@macro.com' OR '1'='1",
+        "sean'@macro.com OR 1=1",
+        "sean'\nOR '1'='1@macro.com",
+    ];
+
+    for input in sql_injection_vectors {
+        assert!(
+            Email::parse_from_str(input).is_err(),
+            "parsed Email must not be constructible from SQL injection vector: {input}"
+        );
+    }
+}
+
+#[test]
+fn local_part_may_contain_single_quote_without_being_sql_injection() {
+    let email = Email::parse_from_str("o'connor@macro.com").unwrap();
+
+    assert_eq!(email.email_str(), "o'connor@macro.com");
+    assert_eq!(email.local_part(), "o'connor");
+    assert_eq!(email.domain_part(), "macro.com");
 }
 
 #[test]

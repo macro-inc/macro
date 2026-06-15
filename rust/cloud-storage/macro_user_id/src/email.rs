@@ -18,12 +18,12 @@ use serde::{Deserialize, Serialize};
 #[cfg(test)]
 mod tests;
 
-// Parser for domain labels
+/// Parser for domain labels
 fn domain_label(input: &str) -> IResult<&str, &str> {
     take_while1(|c: char| c.is_ascii_alphanumeric() || c == '-').parse(input)
 }
 
-// Parser for the domain part
+/// Parser for the domain part
 fn domain(input: &str) -> IResult<&str, &str> {
     recognize(verify(
         separated_list1(char('.'), domain_label),
@@ -33,7 +33,7 @@ fn domain(input: &str) -> IResult<&str, &str> {
     .parse(input)
 }
 
-// Parser for local part (before @)
+/// Parser for local part (before @)
 fn atom(input: &str) -> IResult<&str, &str> {
     take_while1(|c: char| c.is_ascii_alphanumeric() || "!#$%&'*+/=?^_`{|}~-".contains(c))
         .parse(input)
