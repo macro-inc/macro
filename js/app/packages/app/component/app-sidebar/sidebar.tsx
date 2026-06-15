@@ -12,12 +12,12 @@ import {
 import { CommandState } from '@app/component/command';
 import { InteractiveOnboardingModal } from '@app/component/interactive-onboarding/InteractiveOnboardingModal';
 import { createMenuOpen, setCreateMenuOpen } from '@app/component/Launcher';
+import { getDocumentsFilterSplit } from '@app/component/next-soup/soup-view/documents-filter-controllers';
 import {
   getInboxFilterSplit,
   INBOX_FILTER_ENTRY_KEY,
   requestInboxFilter,
 } from '@app/component/next-soup/soup-view/inbox-filter-controllers';
-import { getDocumentsFilterSplit } from '@app/component/next-soup/soup-view/documents-filter-controllers';
 import { requestSearchFocus } from '@app/component/next-soup/soup-view/search-controllers';
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import type {
@@ -348,7 +348,11 @@ function navigateToSidebarView(args: {
     }
   }
 
-  if (!params && !shiftKey && activeSplit?.goToEntry(isComponentEntry(viewId))) {
+  if (
+    !params &&
+    !shiftKey &&
+    activeSplit?.goToEntry(isComponentEntry(viewId))
+  ) {
     return activeSplit;
   }
 
