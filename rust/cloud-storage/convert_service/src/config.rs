@@ -7,13 +7,13 @@ use macro_env_var::env_vars;
 
 /// The path to the LibreOffice binary
 pub static LOK_PATH: LazyLock<String> = LazyLock::new(|| {
-    macro_config::required_config_value("LOK_PATH")
+    macro_env_var::read_env("LOK_PATH")
         .expect("LOK_PATH must be provided via APP_SECRETS_JSON or env")
 });
 
 /// The websocket response lambda
 pub static WEB_SOCKET_RESPONSE_LAMBDA: LazyLock<String> = LazyLock::new(|| {
-    macro_config::required_config_value("WEB_SOCKET_RESPONSE_LAMBDA")
+    macro_env_var::read_env("WEB_SOCKET_RESPONSE_LAMBDA")
         .expect("WEB_SOCKET_RESPONSE_LAMBDA must be provided via APP_SECRETS_JSON or env")
 });
 

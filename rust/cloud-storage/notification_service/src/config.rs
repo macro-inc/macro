@@ -8,7 +8,7 @@ use std::sync::LazyLock;
 // We load this through `macro_config` at startup as part of [`Config`]. This lazy is retained for
 // older notification template code paths that do not receive `Config` directly.
 pub static BASE_URL: LazyLock<String> = LazyLock::new(|| {
-    macro_config::required_config_value("BASE_URL")
+    macro_env_var::read_env("BASE_URL")
         .expect("BASE_URL must be provided via APP_SECRETS_JSON or env")
 });
 
