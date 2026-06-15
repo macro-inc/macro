@@ -118,6 +118,8 @@ struct PullRequestForeignEntityUpsert {
     previous_status: Option<GithubPullRequestStatus>,
     /// The newly persisted normalized PR status for this source, when known.
     status: Option<GithubPullRequestStatus>,
+    /// Stable numeric GitHub user IDs for PR participants after metadata merge.
+    participant_github_user_ids: Vec<String>,
 }
 
 impl<
@@ -501,6 +503,8 @@ impl<
                     return Vec::new();
                 }
             };
+            let participant_github_user_ids =
+                Self::participant_github_user_ids_from_metadata(&metadata);
 
             let foreign_entity = if let Some(entity) = existing_entity {
                 self.patch_pull_request_foreign_entity(
@@ -530,6 +534,7 @@ impl<
                 foreign_entity_id: foreign_entity.id,
                 previous_status,
                 status: pull_request.status,
+                participant_github_user_ids,
             });
         }
 
@@ -599,6 +604,19 @@ impl<
         metadata
             .get("status")
             .and_then(|status| serde_json::from_value(status.clone()).ok())
+    }
+
+    fn participant_github_user_ids_from_metadata(metadata: &serde_json::Value) -> Vec<String> {
+        let Some(ids) = metadata
+            .get("participantGithubUserIds")
+            .and_then(|value| value.as_array())
+        else {
+            return Vec::new();
+        };
+
+        ids.iter()
+            .filter_map(|value| value.as_str().map(str::to_string))
+            .collect()
     }
 
     /// Extract both legacy `MACRO-{short_uuid}` IDs and team-scoped
