@@ -5,4 +5,3 @@ config:
   contacts-service:fusionauth_issuer: auth.macro.com
   contacts-service:jwt_secret_key: fusionauth-jwt-secret-prod
   contacts-service:internal_api_key: document-storage-service-auth-key-prod
-  contacts-service:doppler_secret_sync_key: /doppler/contacts-service/prod

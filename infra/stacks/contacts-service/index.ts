@@ -20,12 +20,6 @@ export const contactsQueueName = contactsQueue.queue.name;
 
 export const coparse_api_vpc = get_coparse_api_vpc();
 
-const dopplerSecretSyncArn: pulumi.Output<string> = aws.secretsmanager
-  .getSecretVersionOutput({
-    secretId: config.require('doppler_secret_sync_key'),
-  })
-  .apply((secret) => secret.arn);
-
 const JWT_SECRET_KEY = config.require(`jwt_secret_key`);
 const jwtSecretKeyArn: pulumi.Output<string> = aws.secretsmanager
   .getSecretVersionOutput({ secretId: JWT_SECRET_KEY })
@@ -85,12 +79,6 @@ const contactsService = new ContactsService('contacts-service', {
   ecsClusterArn: cloudStorageClusterArn,
   cloudStorageClusterName,
   secretKeyArns,
-  containerSecrets: [
-    {
-      name: 'APP_SECRETS_JSON',
-      valueFrom: pulumi.interpolate`${dopplerSecretSyncArn}`,
-    },
-  ],
 });
 
 export const contactsServiceUrl = pulumi.interpolate`${contactsService.domain}`;
