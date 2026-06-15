@@ -1,6 +1,7 @@
 use std::sync::LazyLock;
 
 use anyhow::Context;
+use database_env_vars::{DatabaseUrl, RedisUri};
 pub use macro_env::Environment;
 use macro_env_var::{env_vars, maybe_env_vars};
 
@@ -12,8 +13,6 @@ pub static BASE_URL: LazyLock<String> = LazyLock::new(|| {
 
 env_vars! {
     pub struct BaseUrl;
-    pub struct DatabaseUrl;
-    pub struct RedisUri;
     pub struct FusionAuthTenantId;
     pub struct FusionAuthApiSecretKey;
     pub struct FusionAuthClientId;

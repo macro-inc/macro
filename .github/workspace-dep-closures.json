@@ -179,6 +179,7 @@
       "macro_entrypoint",
       "macro_env",
       "macro_env_var",
+      "macro_env_vars/database_env_vars",
       "macro_middleware",
       "macro_redis",
       "macro_service_urls",
@@ -772,6 +773,7 @@
       "macro_entrypoint",
       "macro_env",
       "macro_env_var",
+      "macro_env_vars/database_env_vars",
       "macro_middleware",
       "macro_service_urls",
       "macro_user_id",
@@ -883,6 +885,11 @@
       "models_permissions",
       "non_empty",
       "unfurl",
+      "workspace-hack"
+    ],
+    "database_env_vars": [
+      "macro_env_var",
+      "macro_env_vars/database_env_vars",
       "workspace-hack"
     ],
     "dataloss_prevention_handler": [

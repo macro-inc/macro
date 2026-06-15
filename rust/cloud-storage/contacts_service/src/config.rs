@@ -1,11 +1,10 @@
 use anyhow::Context;
+use database_env_vars::{DatabaseUrl, RedisUri};
 pub use macro_env::Environment;
 use macro_env_var::{env_vars, maybe_env_vars};
 
 env_vars! {
     pub struct BaseUrl;
-    pub struct DatabaseUrl;
-    pub struct RedisUri;
     pub struct ContactsQueue;
 }
 
@@ -47,8 +46,8 @@ impl Config {
         Config {
             port: 0,
             environment: Environment::Local,
-            database_url: DatabaseUrl::new_testing(""),
-            redis_uri: RedisUri::new_testing(""),
+            database_url: DatabaseUrl::Comptime(""),
+            redis_uri: RedisUri::Comptime(""),
             contacts_queue: ContactsQueue::new_testing(""),
             contacts_queue_max_messages: ContactsQueueMaxMessages::new_unset(),
             contacts_queue_wait_time_seconds: ContactsQueueWaitTimeSeconds::new_unset(),

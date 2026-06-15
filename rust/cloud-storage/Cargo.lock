@@ -675,6 +675,7 @@ dependencies = [
  "comms_db_client",
  "cookie",
  "cool_asserts",
+ "database_env_vars",
  "document_storage_service_client",
  "doppleganger",
  "doppler-config",
@@ -2598,6 +2599,7 @@ dependencies = [
  "aws-sdk-sqs",
  "axum",
  "contacts",
+ "database_env_vars",
  "http-body-util",
  "macro_auth",
  "macro_aws_config",
@@ -3118,6 +3120,15 @@ name = "data-encoding"
 version = "2.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a4ae5f15dda3c708c0ade84bfee31ccab44a3da4f88015ed22f63732abe300c8"
+
+[[package]]
+name = "database_env_vars"
+version = "0.1.0"
+dependencies = [
+ "macro_env_var",
+ "tracing",
+ "workspace-hack",
+]
 
 [[package]]
 name = "dataloss_prevention_handler"
