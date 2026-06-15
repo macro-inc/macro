@@ -35,6 +35,9 @@ pub enum SearchError {
     /// Invalid query size
     #[error("query must be at least 3 characters")]
     InvalidQuerySize,
+    /// Query expands into too many search terms
+    #[error("query has too many terms (max 50)")]
+    TooManyTerms,
     /// No query or terms provided
     #[error("query or terms must be provided and at least 3 characters")]
     NoQueryOrTermsProvided,
@@ -64,6 +67,7 @@ impl IntoResponse for SearchError {
             SearchError::NoUserId | SearchError::InvalidUserId(_) => StatusCode::UNAUTHORIZED,
             SearchError::InvalidPageSize
             | SearchError::InvalidQuerySize
+            | SearchError::TooManyTerms
             | SearchError::InvalidCursor
             | SearchError::InvalidCrmCompanyId(_)
             | SearchError::NoQueryOrTermsProvided
