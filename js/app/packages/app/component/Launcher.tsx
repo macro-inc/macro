@@ -1,6 +1,7 @@
 import { analytics } from '@app/lib/analytics';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { setAutomationComposerOpen } from '@block-automation/component';
+import { EMAIL_COMPOSE_TO_INPUT_ID } from '@block-email/constants';
 import type { BlockAlias, BlockName } from '@core/block';
 import { getIconConfig } from '@core/component/EntityIcon';
 import {
@@ -8,6 +9,7 @@ import {
   ENABLE_SNIPPETS_FLAG,
   ENABLE_SNIPPETS_OVERRIDE,
 } from '@core/constant/featureFlags';
+import { triggerFocusInput } from '@core/directive/focusInput';
 import {
   createHotkeyGroup,
   registerHotkey,
@@ -207,6 +209,11 @@ export function runCreateAction(
       });
       return;
     case 'email':
+      // Focus the "To" field within this gesture so the iOS keyboard opens;
+      // the compose mounts asynchronously, so this waits for the input.
+      triggerFocusInput(() =>
+        document.getElementById(EMAIL_COMPOSE_TO_INPUT_ID)
+      );
       createComponent({
         componentId: 'email-compose',
         shouldInsert,
