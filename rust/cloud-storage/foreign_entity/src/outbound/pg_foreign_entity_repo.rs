@@ -52,21 +52,44 @@ struct HoistedForeignEntityFilters {
     notification_done: Option<bool>,
     /// Notification seen filter for the requesting user (`None` ignores).
     notification_seen: Option<bool>,
+    /// True when the AND spine carries contradictory predicates (e.g. done=true AND done=false),
+    /// in which case the whole filter is unsatisfiable and must match nothing.
+    unsatisfiable: bool,
     /// jsonpath for the residual (non-hoisted) filter, if any.
     jsonpath: Option<String>,
 }
 
 impl HoistedForeignEntityFilters {
+    /// Combine two `Option<bool>` predicates taken from the two sides of an `And`. Returns the
+    /// merged value plus whether the two sides contradicted each other (true AND false).
+    fn merge_bool_filter(a: Option<bool>, b: Option<bool>) -> (Option<bool>, bool) {
+        match (a, b) {
+            (Some(x), Some(y)) if x != y => (None, true),
+            (Some(x), Some(_)) => (Some(x), false),
+            (Some(x), None) | (None, Some(x)) => (Some(x), false),
+            (None, None) => (None, false),
+        }
+    }
+
     /// Combine two extracted filter halves taken from the two sides of an `And`.
     fn and(self, other: Self) -> Self {
+        let (notification_done, done_conflict) =
+            Self::merge_bool_filter(self.notification_done, other.notification_done);
+        let (notification_seen, seen_conflict) =
+            Self::merge_bool_filter(self.notification_seen, other.notification_seen);
+
         let jsonpath = match (self.jsonpath, other.jsonpath) {
             (Some(left), Some(right)) => Some(format!("({left} && {right})")),
             (left, right) => left.or(right),
         };
         Self {
             includes_me: self.includes_me || other.includes_me,
-            notification_done: self.notification_done.or(other.notification_done),
-            notification_seen: self.notification_seen.or(other.notification_seen),
+            notification_done,
+            notification_seen,
+            unsatisfiable: self.unsatisfiable
+                || other.unsatisfiable
+                || done_conflict
+                || seen_conflict,
             jsonpath,
         }
     }
@@ -397,6 +420,7 @@ impl ForeignEntityRepository for PgForeignEntityRepo {
             includes_me,
             notification_done,
             notification_seen,
+            unsatisfiable,
             jsonpath: filter_jsonpath,
         } = match query
             .filter()
@@ -412,6 +436,12 @@ impl ForeignEntityRepository for PgForeignEntityRepo {
                 return Ok(Vec::new());
             }
         };
+
+        // Contradictory predicates on the AND spine (e.g. done=true AND done=false) can never
+        // match, so short-circuit before doing any work.
+        if unsatisfiable {
+            return Ok(Vec::new());
+        }
 
         let participant_github_user_id = if includes_me {
             let Some(requesting_user) = requesting_user.as_deref() else {

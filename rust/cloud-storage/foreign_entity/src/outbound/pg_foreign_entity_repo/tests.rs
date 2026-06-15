@@ -980,6 +980,47 @@ async fn get_for_user_notification_filter_without_requesting_user_returns_empty(
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn get_for_user_contradictory_notification_done_matches_nothing(pool: PgPool) {
+    let repo = PgForeignEntityRepo::new(pool.clone());
+    let macro_id = "macro|user@example.com";
+
+    let entity =
+        insert_foreign_entity_for_source(&repo, "done-pr", "github_pull_request", macro_id, "user")
+            .await;
+    insert_foreign_entity_notification(&pool, entity.id, macro_id, true, false).await;
+
+    // Sanity check: done=true alone matches the entity.
+    let one_sided = repo
+        .get_foreign_entities_for_user(
+            Some(macro_id.to_string()),
+            vec![SourceId::user(macro_id)],
+            10,
+            filter_query(notification_done_filter(true)),
+        )
+        .await
+        .expect("done=true filter should be applied");
+    assert_eq!(one_sided, vec![entity.clone()]);
+
+    // done=true AND done=false is contradictory and must match nothing rather than
+    // collapsing to a single-sided predicate.
+    let contradiction = Some(Arc::new(Expr::and(
+        Expr::val(ForeignEntityLiteral::NotificationDone(true)),
+        Expr::val(ForeignEntityLiteral::NotificationDone(false)),
+    )));
+    let matches = repo
+        .get_foreign_entities_for_user(
+            Some(macro_id.to_string()),
+            vec![SourceId::user(macro_id)],
+            10,
+            filter_query(contradiction),
+        )
+        .await
+        .expect("contradictory notification filter should be applied");
+
+    assert!(matches.is_empty());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn patch_updates_selected_fields_preserves_others_and_refreshes_updated_at(pool: PgPool) {
     let repo = PgForeignEntityRepo::new(pool.clone());
     let entity = insert_foreign_entity(&repo, "external-entity-1", "linear").await;
