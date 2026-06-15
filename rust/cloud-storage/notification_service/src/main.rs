@@ -18,7 +18,6 @@ use hmac::{Hmac, Mac};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_env::Environment;
-use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use macro_service_urls::ConnectionGatewayUrl;
 use secretsmanager_client::SecretManager;
 use sha2::Sha256;
@@ -49,7 +48,7 @@ pub async fn main() -> anyhow::Result<()> {
     let db = PgPoolOptions::new()
         .min_connections(min_connections)
         .max_connections(max_connections)
-        .connect(&config.database_url)
+        .connect(config.database_url.as_ref())
         .await
         .context("could not connect to db")?;
 
@@ -66,21 +65,20 @@ pub async fn main() -> anyhow::Result<()> {
     );
 
     let internal_secret_key = secretsmanager_client
-        .get_maybe_secret_value(config.environment, InternalApiSecretKey::new()?)
+        .get_maybe_secret_value(config.environment, config.internal_api_secret_key.clone())
         .await?;
 
     let unsubscribe_hmac_secret = secretsmanager_client
-        .get_maybe_secret_value(config.environment, config::UrlSigningHmac::new()?)
+        .get_maybe_secret_value(config.environment, config.url_signing_hmac.clone())
         .await?;
 
-    let vars = config::Vars::new()?;
     let connection_gateway_url = ConnectionGatewayUrl::new()?.to_string();
 
     let hmac_key = Hmac::<Sha256>::new_from_slice(unsubscribe_hmac_secret.as_ref().as_bytes())
         .expect("HMAC accepts any key size");
 
     let redis_client =
-        redis::Client::open(vars.redis_uri.as_ref()).expect("failed to create redis client");
+        redis::Client::open(config.redis_uri.as_ref()).expect("failed to create redis client");
 
     #[cfg(feature = "push_notification_event_handler")]
     {
@@ -118,7 +116,7 @@ pub async fn main() -> anyhow::Result<()> {
         let event_queue =
             ::notification::outbound::push_notification_event_queue::SqsPushNotificationEventQueue::new(
                 aws_sdk_sqs::Client::new(&aws_config),
-                config.push_notification_event_handler_queue.clone(),
+                config.push_notification_event_handler_queue.as_ref().to_string(),
                 config.notification_queue_max_messages,
                 config.notification_queue_wait_time_seconds,
             );
@@ -141,16 +139,16 @@ pub async fn main() -> anyhow::Result<()> {
 
     let notification_queue = ::notification::outbound::queue::SqsQueue::new(
         aws_sdk_sqs::Client::new(&aws_config),
-        vars.notification_queue.as_ref().to_string(),
+        config.notification_queue.as_ref().to_string(),
     );
     let sns_endpoint_manager =
         ::notification::outbound::sns_endpoint::SnsEndpointManagerAdapter::new(
             aws_sdk_sns::Client::new(&aws_config),
         );
     let platform_config = ::notification::domain::service::PlatformArnConfig {
-        apns_platform_arn: config.sns_apns_platform_arn.clone(),
-        fcm_platform_arn: config.sns_fcm_platform_arn.clone(),
-        apns_voip_platform_arn: config.sns_apns_voip_platform_arn.clone(),
+        apns_platform_arn: config.sns_apns_platform_arn.as_ref().to_string(),
+        fcm_platform_arn: config.sns_fcm_platform_arn.as_ref().to_string(),
+        apns_voip_platform_arn: config.sns_apns_voip_platform_arn().to_string(),
     };
     let reader_realtime_adapter = WebSocketGatewayAdapter::new(ConnectionGatewayClient::new(
         internal_secret_key.as_ref().to_string(),
@@ -196,7 +194,7 @@ pub async fn main() -> anyhow::Result<()> {
 
     let mobile_adapter = MobilePushAdapter {
         push_service: aws_sdk_sns::Client::new(&aws_config),
-        apns_bundle_id: vars.apple_bundle_id.as_ref().to_string(),
+        apns_bundle_id: config.apple_bundle_id.as_ref().to_string(),
         voip_bundle_id: None,
     };
 
@@ -260,15 +258,13 @@ pub async fn main() -> anyhow::Result<()> {
     // Set up ingress worker for processing notification requests from the ingress queue.
     // Keep digest/rate-limit Redis usage on REDIS_URI, but read last-online state from the
     // connection-gateway Redis because that is where websocket presence is recorded.
-    let ingress_redis_conn = redis::Client::open(vars.redis_uri.as_ref())
+    let ingress_redis_conn = redis::Client::open(config.redis_uri.as_ref())
         .expect("failed to create redis client for ingress")
         .get_multiplexed_async_connection()
         .await
         .context("failed to get redis connection for ingress state machine")?;
 
-    let last_online_redis_uri = std::env::var("LAST_ONLINE_REDIS_URI")
-        .unwrap_or_else(|_| vars.redis_uri.as_ref().to_string());
-    let last_online_redis_conn = redis::Client::open(last_online_redis_uri.as_str())
+    let last_online_redis_conn = redis::Client::open(config.last_online_redis_uri())
         .expect("failed to create redis client for last online checker")
         .get_multiplexed_async_connection()
         .await
@@ -298,7 +294,7 @@ pub async fn main() -> anyhow::Result<()> {
         ::notification::outbound::repository::DbNotificationRepository::new(db.clone());
     let ingress_delivery_queue = ::notification::outbound::queue::SqsQueue::new(
         aws_sdk_sqs::Client::new(&aws_config),
-        vars.notification_queue.as_ref().to_string(),
+        config.notification_queue.as_ref().to_string(),
     );
     let ingress_service = ::notification::domain::service::NotificationIngressService::new(
         ingress_repository,
@@ -308,7 +304,7 @@ pub async fn main() -> anyhow::Result<()> {
 
     let ingress_queue = ::notification::outbound::queue::SqsQueue::new(
         aws_sdk_sqs::Client::new(&aws_config),
-        vars.notification_ingress_queue.as_ref().to_string(),
+        config.notification_ingress_queue.as_ref().to_string(),
     );
     let ingress_worker =
         ::notification::inbound::ingress_worker::IngressWorker::new(ingress_service, ingress_queue);

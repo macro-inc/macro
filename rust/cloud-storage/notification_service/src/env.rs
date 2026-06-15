@@ -9,8 +9,9 @@ pub static SENDER_ADDRESS: LazyLock<String> = LazyLock::new(|| {
     };
 
     // The SENDER_BASE_ADDRESS is part of the config so the service will fail without it, we can
-    // safely unwrap here
-    let sender_base_address = std::env::var("SENDER_BASE_ADDRESS").unwrap();
+    // safely expect it here. Use macro_config so APP_SECRETS_JSON is supported too.
+    let sender_base_address = macro_config::required_config_value("SENDER_BASE_ADDRESS")
+        .expect("SENDER_BASE_ADDRESS must be provided via APP_SECRETS_JSON or env");
 
     format!("no-reply{}@{}", prefix, sender_base_address)
 });
