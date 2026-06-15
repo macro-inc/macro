@@ -395,6 +395,8 @@ export const SoupView = (props: SoupViewProps) => {
     | SetPredicatesInput<string>
     | undefined;
 
+  const persistedSearchText = entryState?.['search.text'] as string | undefined;
+
   const persistedGroupBy = entryState?.['soup.groupBy'] as
     | string
     | null
@@ -428,7 +430,7 @@ export const SoupView = (props: SoupViewProps) => {
       soupView.initialize({
         initialQuery: persistedFilters ?? props.initialFilters,
         initialClientFilters: persistedPredicates ?? props.initialClientFilters,
-        initialSearchText: props.initialSearchText,
+        initialSearchText: persistedSearchText ?? props.initialSearchText,
         disableLocalSearch: props.disableLocalSearch,
         additionalEntities: props.additionalEntities,
       });
