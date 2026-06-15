@@ -17,6 +17,7 @@ use model::user::axum_extractor::MacroUserExtractor;
 use models_email::email::service::backfill::{
     BackfillJobStatus, BackfillOperation, BackfillPubsubMessage, InitPayload, JobScopedPayload,
 };
+use models_email::gmail::error::GmailError;
 use models_email::service::link;
 use models_email::service::link::Link;
 use strum_macros::AsRefStr;
@@ -638,7 +639,7 @@ async fn register_watch_recovering(
 ) -> Result<models_email::gmail::history::WatchResponse, InitError> {
     match client.register_watch(access_token).await {
         Ok(response) => Ok(response),
-        Err(e) if e.to_string().contains("push notification client allowed") => {
+        Err(GmailError::Conflict(_)) => {
             tracing::warn!("Stale Gmail watch blocks registration; stopping it and retrying");
             client
                 .stop_watch(access_token)
