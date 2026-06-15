@@ -185,6 +185,11 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
   /** Set when `<NewChannel>` mounts (Messages tab only); used for goToMessage. */
   const messagesChannelHandle: { current?: ChannelHandle } = {};
 
+  // goToLocationFromParams can arrive before the Messages tab has mounted (e.g.
+  // immediately after the split opens). Without a handle the navigation would
+  // be silently dropped; hold the target and flush it once onChannelReady runs.
+  let pendingTargetMessage: { messageId: string; replyId?: string } | undefined;
+
   const setActiveTab = (tab: ChannelTabId) => {
     tab = normalizeChannelTab(tab);
     if (tab !== 'messages') {
@@ -252,12 +257,19 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
       const { targetMessageId, targetMessageReplyId } =
         convertTargetMessage(params);
 
-      if (targetMessageId && messagesChannelHandle.current) {
+      if (targetMessageId) {
         setActiveTab(DEFAULT_CHANNEL_TAB);
-        messagesChannelHandle.current.goToMessage(
-          targetMessageId,
-          targetMessageReplyId
-        );
+        if (messagesChannelHandle.current) {
+          messagesChannelHandle.current.goToMessage(
+            targetMessageId,
+            targetMessageReplyId
+          );
+        } else {
+          pendingTargetMessage = {
+            messageId: targetMessageId,
+            replyId: targetMessageReplyId,
+          };
+        }
       }
 
       if (isJoinCallRequested(params[CHANNEL_URL_PARAMS.joinCall])) {
@@ -291,6 +303,11 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
 
   const onChannelReady = (handle: ChannelHandle) => {
     messagesChannelHandle.current = handle;
+    if (pendingTargetMessage) {
+      const { messageId, replyId } = pendingTargetMessage;
+      pendingTargetMessage = undefined;
+      handle.goToMessage(messageId, replyId);
+    }
   };
 
   return (
