@@ -264,7 +264,7 @@ pub async fn main() -> anyhow::Result<()> {
         .await
         .context("failed to get redis connection for ingress state machine")?;
 
-    let last_online_redis_conn = redis::Client::open(config.last_online_redis_uri())
+    let last_online_redis_conn = redis::Client::open(config.last_online_redis_uri.as_ref())
         .expect("failed to create redis client for last online checker")
         .get_multiplexed_async_connection()
         .await

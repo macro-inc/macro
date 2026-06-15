@@ -31,7 +31,7 @@ env_vars! {
     pub(crate) struct PushNotificationEventHandlerQueue;
 }
 
-maybe_env_var! {
+env_var! {
     #[derive(Debug, Clone)]
     pub(crate) struct LastOnlineRedisUri;
 }
@@ -90,7 +90,7 @@ pub struct Config {
     /// Redis used by notification-service for digest batching, rate limiting, etc.
     pub(crate) redis_uri: RedisUri,
 
-    /// Redis used by connection-gateway for last-online state. Falls back to `redis_uri` when unset.
+    /// Redis used by connection-gateway for last-online state.
     pub(crate) last_online_redis_uri: LastOnlineRedisUri,
 
     /// Apple app bundle id for APNS pushes.
@@ -121,12 +121,6 @@ impl Config {
         }
 
         Ok(config)
-    }
-
-    pub fn last_online_redis_uri(&self) -> &str {
-        self.last_online_redis_uri
-            .value()
-            .unwrap_or_else(|| self.redis_uri.as_ref())
     }
 
     pub fn sns_apns_voip_platform_arn(&self) -> &str {
