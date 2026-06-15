@@ -257,12 +257,22 @@ pub async fn main() -> anyhow::Result<()> {
         worker.run_digests(digest_batch_to_email).await
     });
 
-    // Set up ingress worker for processing notification requests from the ingress queue
+    // Set up ingress worker for processing notification requests from the ingress queue.
+    // Keep digest/rate-limit Redis usage on REDIS_URI, but read last-online state from the
+    // connection-gateway Redis because that is where websocket presence is recorded.
     let ingress_redis_conn = redis::Client::open(vars.redis_uri.as_ref())
         .expect("failed to create redis client for ingress")
         .get_multiplexed_async_connection()
         .await
         .context("failed to get redis connection for ingress state machine")?;
+
+    let last_online_redis_uri = std::env::var("LAST_ONLINE_REDIS_URI")
+        .unwrap_or_else(|_| vars.redis_uri.as_ref().to_string());
+    let last_online_redis_conn = redis::Client::open(last_online_redis_uri.as_str())
+        .expect("failed to create redis client for last online checker")
+        .get_multiplexed_async_connection()
+        .await
+        .context("failed to get redis connection for last online checker")?;
 
     let ingress_state_machine =
         ::notification::domain::models::email_notification_digest::StateMachineDriverA::new_with_defaults(
@@ -276,7 +286,7 @@ pub async fn main() -> anyhow::Result<()> {
                 last_online_tracker::domain::services::LastOnlineService::new(
                     last_online_tracker::outbound::time::DefaultTime,
                     last_online_tracker::outbound::redis::RedisLastOnlineRepo::new(
-                        ingress_redis_conn.clone(),
+                        last_online_redis_conn,
                     ),
                 ),
             ),
