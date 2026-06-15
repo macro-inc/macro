@@ -315,6 +315,7 @@ function getSupportedHandler(
           params,
         });
     })
+    .with('inbox_reauth_required', () => null)
     .exhaustive();
 }
 

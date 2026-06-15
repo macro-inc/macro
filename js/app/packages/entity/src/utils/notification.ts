@@ -137,6 +137,7 @@ export function getNotificationActionText(n: Notification): string {
     .with('github_pr_mention', () => 'mentioned')
     .with('github_pr_review', () => 'reviewed')
     .with('call-started', () => 'called')
+    .with('inbox_reauth_required', () => 'needs reconnection')
     .exhaustive();
 }
 
@@ -197,6 +198,7 @@ export function extractMessageContent(notification: Notification): string {
     .with({ tag: 'channel_invite' }, () => '')
     .with({ tag: 'invite_to_team' }, () => '')
     .with({ tag: 'call-started' }, (m) => m.content.channel_name ?? '')
+    .with({ tag: 'inbox_reauth_required' }, (m) => m.content.emailAddress || '')
     .exhaustive();
 }
 
