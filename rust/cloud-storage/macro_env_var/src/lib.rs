@@ -23,11 +23,6 @@ where
     }
 }
 
-/// Read a value from `APP_SECRETS_JSON` without mutating the process environment.
-pub fn read_from_app_secrets_json(key: &'static str) -> Option<String> {
-    read_from_app_secrets_json_with(key, read_std_env)
-}
-
 fn read_env_with<F>(s: &'static str, read_var: F) -> Result<String, VarNameErr>
 where
     F: Fn(&'static str) -> Result<String, std::env::VarError>,

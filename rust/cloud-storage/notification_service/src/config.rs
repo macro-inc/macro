@@ -29,9 +29,6 @@ env_vars! {
     pub(crate) struct SenderBaseAddress;
     #[derive(Debug, Clone)]
     pub(crate) struct PushNotificationEventHandlerQueue;
-}
-
-env_var! {
     #[derive(Debug, Clone)]
     pub(crate) struct LastOnlineRedisUri;
 }
