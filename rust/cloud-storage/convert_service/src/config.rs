@@ -1,13 +1,28 @@
-use anyhow::Context;
-use macro_env::Environment;
 use std::sync::LazyLock;
 
+use anyhow::Context;
+use database_env_vars::DatabaseUrl;
+pub use macro_env::Environment;
+use macro_env_var::env_vars;
+
 /// The path to the LibreOffice binary
-pub static LOK_PATH: LazyLock<String> = LazyLock::new(|| std::env::var("LOK_PATH").unwrap());
+pub static LOK_PATH: LazyLock<String> = LazyLock::new(|| {
+    macro_config::required_config_value("LOK_PATH")
+        .expect("LOK_PATH must be provided via APP_SECRETS_JSON or env")
+});
 
 /// The websocket response lambda
-pub static WEB_SOCKET_RESPONSE_LAMBDA: LazyLock<String> =
-    LazyLock::new(|| std::env::var("WEB_SOCKET_RESPONSE_LAMBDA").unwrap());
+pub static WEB_SOCKET_RESPONSE_LAMBDA: LazyLock<String> = LazyLock::new(|| {
+    macro_config::required_config_value("WEB_SOCKET_RESPONSE_LAMBDA")
+        .expect("WEB_SOCKET_RESPONSE_LAMBDA must be provided via APP_SECRETS_JSON or env")
+});
+
+env_vars! {
+    pub struct ConvertQueue;
+    pub struct LokPath;
+    pub struct DocumentStorageBucket;
+    pub struct WebSocketResponseLambda;
+}
 
 /// The configuration parameters for the application.
 ///
@@ -16,77 +31,42 @@ pub static WEB_SOCKET_RESPONSE_LAMBDA: LazyLock<String> =
 /// populate the Docker container
 ///
 /// See `.env.sample` in document-storage-service root for details.
+#[derive(macro_config::MacroConfig)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub struct Config {
     /// The SQS queue for convert jobs
-    pub convert_queue: String,
+    pub convert_queue: ConvertQueue,
     /// The queue max messages per poll
+    #[macro_config_default(5)]
     pub queue_max_messages: i32,
     /// The queue wait time seconds
+    #[macro_config_default(5)]
     pub queue_wait_time_seconds: i32,
 
     /// The path to the LibreOffice binary
-    #[allow(dead_code)]
-    pub lok_path: String,
+    pub lok_path: LokPath,
 
     /// The url of macrodb
-    pub database_url: String,
+    pub database_url: DatabaseUrl,
 
     /// The name of the document storage bucket
-    pub document_storage_bucket: String,
+    pub document_storage_bucket: DocumentStorageBucket,
 
     /// The lambda function to send job responses to for conversion
     #[allow(dead_code)]
-    pub web_socket_response_lambda: String,
+    pub web_socket_response_lambda: WebSocketResponseLambda,
 
     /// The port to listen for HTTP requests on.
+    #[macro_config_default(8080)]
     pub port: usize,
     /// The environment we are in
+    #[macro_config_default(Environment::new_or_prod())]
     pub environment: Environment,
 }
 
 impl Config {
     pub fn from_env() -> anyhow::Result<Self> {
-        let port: usize = std::env::var("PORT")
-            .unwrap_or("8080".to_string())
-            .parse::<usize>()
-            .context("should be valid port number")?;
-
-        let convert_queue =
-            std::env::var("CONVERT_QUEUE").context("CONVERT_QUEUE must be provided")?;
-
-        let queue_max_messages: i32 = std::env::var("QUEUE_MAX_MESSAGES")
-            .unwrap_or("5".to_string()) // For the convert queue, we can safely handle ~5 conversions at a time
-            .parse::<i32>()
-            .unwrap();
-
-        let queue_wait_time_seconds: i32 = std::env::var("QUEUE_WAIT_TIME_SECONDS")
-            .unwrap_or("5".to_string())
-            .parse::<i32>()
-            .unwrap();
-
-        let lok_path = std::env::var("LOK_PATH").context("LOK_PATH must be provided")?;
-
-        let database_url =
-            std::env::var("DATABASE_URL").context("DATABASE_URL must be provided")?;
-
-        let document_storage_bucket = std::env::var("DOCUMENT_STORAGE_BUCKET")
-            .context("DOCUMENT_STORAGE_BUCKET must be provided")?;
-
-        let web_socket_response_lambda = std::env::var("WEB_SOCKET_RESPONSE_LAMBDA")
-            .context("WEB_SOCKET_RESPONSE_LAMBDA must be provided")?;
-
-        let environment = Environment::new_or_prod();
-
-        Ok(Config {
-            convert_queue,
-            queue_max_messages,
-            queue_wait_time_seconds,
-            lok_path,
-            database_url,
-            document_storage_bucket,
-            web_socket_response_lambda,
-            port,
-            environment,
-        })
+        macro_config::ConfigLoader::load::<Config>()
+            .context("failed to load convert service config")
     }
 }
