@@ -193,8 +193,9 @@ export function SplitPanel(props: SplitPanelProps) {
                 class={cn(
                   'items-start py-2 overflow-visible',
                   !hasToolbarContent() && 'hidden',
-                  !previewState() &&
-                    'border-b-0' /* scuffed: this is shit, but we are blinded by linear */
+                  (!previewState() ||
+                    isListViewID(props.handle.content().id)) &&
+                    'border-b-0' /* List views draw the preview border below their filter bar instead (see SoupView). */
                 )}
               >
                 <SplitToolbar ref={setToolbarRef} />
