@@ -737,6 +737,8 @@ async fn enable_gmail_sync_for(
         provider: link::UserProvider::Gmail,
         is_sync_active: true,
         is_primary,
+        needs_reauth: false,
+        last_sync_error_at: None,
         created_at: Default::default(),
         updated_at: Default::default(),
     };

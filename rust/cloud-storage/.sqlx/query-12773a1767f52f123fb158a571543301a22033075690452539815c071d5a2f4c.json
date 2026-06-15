@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT id, fusionauth_user_id, macro_id, email_address, provider as \"provider: _\",\n               is_sync_active, is_primary, created_at, updated_at\n        FROM email_links\n        WHERE fusionauth_user_id = $1\n        ORDER BY created_at DESC\n        ",
+  "query": "\n        SELECT id, fusionauth_user_id, macro_id, email_address, provider as \"provider: _\",\n               is_sync_active, is_primary, needs_reauth, last_sync_error_at, created_at, updated_at\n        FROM email_links\n        WHERE fusionauth_user_id = $1\n        ORDER BY created_at DESC\n        ",
   "describe": {
     "columns": [
       {
@@ -49,11 +49,21 @@
       },
       {
         "ordinal": 7,
+        "name": "needs_reauth",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 8,
+        "name": "last_sync_error_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 8,
+        "ordinal": 10,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -72,8 +82,10 @@
       false,
       false,
       false,
+      true,
+      false,
       false
     ]
   },
-  "hash": "484391893f69c9fce4d47c7daeb46dca050ac95aa1f247654f6a3820f78552ee"
+  "hash": "12773a1767f52f123fb158a571543301a22033075690452539815c071d5a2f4c"
 }

@@ -682,6 +682,40 @@ pub struct NewEmailMetadata {
     pub snippet: String,
 }
 
+/// Metadata for a notification that a linked inbox's grant has died and the
+/// inbox must be reconnected. Fanned out to the inbox owner and every delegate,
+/// since any of them holding the Google grant can restore sync.
+#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct InboxReauthRequiredMetadata {
+    /// The address of the inbox that needs to be reconnected.
+    #[serde(alias = "email_address")]
+    pub email_address: String,
+}
+
+impl notification::domain::models::Notification for InboxReauthRequiredMetadata {
+    const TYPE_NAME: &'static str = "inbox_reauth_required";
+}
+
+impl NotificationTitle for InboxReauthRequiredMetadata {
+    fn format_title(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        Ok(format!("Reconnect {}", self.email_address))
+    }
+
+    fn format_body(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        Ok(
+            "Sync stopped because the Google connection expired. Reconnect to restore it."
+                .to_string(),
+        )
+    }
+}
+
 impl notification::domain::models::Notification for NewEmailMetadata {
     const TYPE_NAME: &'static str = "new_email";
 }

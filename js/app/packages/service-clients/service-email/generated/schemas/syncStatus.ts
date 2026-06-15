@@ -17,5 +17,6 @@ export const SyncStatus = {
   SYNCING: 'SYNCING',
   UP_TO_DATE: 'UP_TO_DATE',
   ERROR: 'ERROR',
+  NEEDS_REAUTH: 'NEEDS_REAUTH',
   INACTIVE: 'INACTIVE',
 } as const;

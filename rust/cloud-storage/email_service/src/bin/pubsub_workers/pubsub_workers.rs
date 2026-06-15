@@ -470,6 +470,7 @@ async fn main() -> anyhow::Result<()> {
     let sqs_client_link_manager = sqs_client.clone();
     let crm_service_link_manager = crm_service.clone();
     let connection_gateway_client_link_manager = connection_gateway_client.clone();
+    let notification_ingress_service_link_manager = notification_ingress_service.clone();
     // daily link_manager operations for user contacts and inbox subscriptions
     tokio::spawn(async move {
         email_service::pubsub::link_manager::worker::run_worker(
@@ -481,6 +482,7 @@ async fn main() -> anyhow::Result<()> {
             sqs_client_link_manager,
             crm_service_link_manager,
             connection_gateway_client_link_manager,
+            notification_ingress_service_link_manager,
         )
         .await;
     });

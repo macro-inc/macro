@@ -17,7 +17,11 @@ import {
 } from '@service-email/generated/schemas';
 import { useEmail, useUserId } from '@core/context/user';
 import { createMemo, createSignal, For, Show } from 'solid-js';
-import { useEmailLinks, useEmailLinksStatus } from '@core/email-link';
+import {
+  useAddInboxFlow,
+  useEmailLinks,
+  useEmailLinksStatus,
+} from '@core/email-link';
 import {
   AddInboxDialog,
   openAddInboxDialog,
@@ -45,6 +49,7 @@ export function Email() {
     resyncInbox,
   } = useEmailLinks();
   const emailActive = useEmailLinksStatus();
+  const startAddInbox = useAddInboxFlow();
 
   const removeInboxMutation = useRemoveInboxMutation({
     onSuccess: () => toast.success('Inbox removed'),
@@ -226,6 +231,7 @@ export function Email() {
                   isOwn={primary().macro_id === userId()}
                   resyncing={resyncingIds().has(primary().id)}
                   onResync={() => handleResyncInbox(primary().id)}
+                  onReconnect={() => void startAddInbox()}
                   onRemove={() =>
                     setRemoveTarget({
                       id: primary().id,
@@ -250,6 +256,7 @@ export function Email() {
                   isOwn={link.macro_id === userId()}
                   resyncing={resyncingIds().has(link.id)}
                   onResync={() => handleResyncInbox(link.id)}
+                  onReconnect={() => void startAddInbox()}
                   onRemove={() =>
                     setRemoveTarget({
                       id: link.id,
@@ -360,6 +367,7 @@ function syncStatusLabel(status: SyncStatus): string {
     .with(SyncStatus.SYNCING, () => 'Syncing…')
     .with(SyncStatus.UP_TO_DATE, () => 'Up to date')
     .with(SyncStatus.ERROR, () => 'Error — re-sync')
+    .with(SyncStatus.NEEDS_REAUTH, () => 'Reconnect to resume sync')
     .with(SyncStatus.INACTIVE, () => 'Disabled')
     .exhaustive();
 }
@@ -401,6 +409,7 @@ function InboxRow(props: {
   isOwn: boolean;
   resyncing: boolean;
   onResync: () => void;
+  onReconnect: () => void;
   onRemove: () => void;
 }) {
   return (
@@ -426,8 +435,12 @@ function InboxRow(props: {
           <span
             class="flex items-center gap-1 text-xs"
             classList={{
-              'text-failure': props.link.sync_status === SyncStatus.ERROR,
-              'text-ink-muted': props.link.sync_status !== SyncStatus.ERROR,
+              'text-failure':
+                props.link.sync_status === SyncStatus.ERROR ||
+                props.link.sync_status === SyncStatus.NEEDS_REAUTH,
+              'text-ink-muted':
+                props.link.sync_status !== SyncStatus.ERROR &&
+                props.link.sync_status !== SyncStatus.NEEDS_REAUTH,
             }}
           >
             <Show when={props.link.sync_status === SyncStatus.SYNCING}>
@@ -438,6 +451,22 @@ function InboxRow(props: {
         </Show>
       </div>
       <div class="flex items-center gap-2 shrink-0">
+        <Show
+          when={
+            ENABLE_INBOX_SYNC_STATUS &&
+            props.link.sync_status === SyncStatus.NEEDS_REAUTH
+          }
+        >
+          <Button
+            variant="active"
+            size="sm"
+            depth={3}
+            onClick={props.onReconnect}
+            aria-label={`Reconnect ${props.link.email_address}`}
+          >
+            Reconnect
+          </Button>
+        </Show>
         <Show when={ENABLE_INBOX_RESYNC}>
           <Tooltip label="Force sync">
             <Button

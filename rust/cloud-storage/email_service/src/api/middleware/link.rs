@@ -31,6 +31,10 @@ pub(in crate::api) async fn attach_link_context<U: EmailService>(
             provider,
             is_sync_active: link.is_sync_active,
             is_primary: link.is_primary,
+            // Health fields aren't part of the request-scoped link context the hex
+            // extractor resolves; they're only read from the persisted link.
+            needs_reauth: false,
+            last_sync_error_at: None,
             created_at: link.created_at,
             updated_at: link.updated_at,
         });
