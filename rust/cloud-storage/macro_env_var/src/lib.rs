@@ -73,11 +73,11 @@ mod testing_harness {
         }
     }
 
-    pub fn read_env(s: &'static str) -> Result<String, VarNameErr> {
+    pub(crate) fn read_env(s: &'static str) -> Result<String, VarNameErr> {
         read_env_with(s, get_env)
     }
 
-    pub fn maybe_read_env(s: &'static str) -> Option<String> {
+    pub(crate) fn maybe_read_env(s: &'static str) -> Option<String> {
         maybe_read_env_with(s, get_env)
     }
 
@@ -93,9 +93,9 @@ mod testing_harness {
 }
 
 #[cfg(test)]
-pub use testing_harness::maybe_read_env;
+pub(crate) use testing_harness::maybe_read_env;
 #[cfg(test)]
-pub use testing_harness::read_env;
+pub(crate) use testing_harness::read_env;
 
 #[cfg(not(test))]
 pub fn read_env(s: &'static str) -> Result<String, VarNameErr> {
