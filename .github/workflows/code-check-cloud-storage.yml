@@ -69,62 +69,29 @@ jobs:
             exit 0
           fi
 
+          cargo metadata \
+            --manifest-path rust/cloud-storage/Cargo.toml \
+            --format-version 1 \
+            --no-deps \
+            > /tmp/cloud-storage-cargo-metadata.json
+
           filterset="$(
             python3 <<'PY'
-          import glob
-          import re
+          import json
           from pathlib import Path
 
           repo = Path.cwd().resolve()
           workspace = repo / 'rust' / 'cloud-storage'
           changed_files = [line for line in Path('/tmp/changed-files').read_text().splitlines() if line]
+          metadata = json.loads(Path('/tmp/cloud-storage-cargo-metadata.json').read_text())
 
-          def workspace_members(manifest: Path) -> list[str]:
-              members = []
-              in_workspace = False
-              in_members = False
-
-              for raw_line in manifest.read_text().splitlines():
-                  line = raw_line.split('#', 1)[0].strip()
-                  if not line:
-                      continue
-                  if line.startswith('['):
-                      in_workspace = line == '[workspace]'
-                      continue
-                  if not in_workspace:
-                      continue
-                  if line.startswith('members') and '[' in line:
-                      in_members = True
-                  if in_members:
-                      members.extend(re.findall(r'"([^"\\]*(?:\\.[^"\\]*)*)"', line))
-                      if ']' in line:
-                          in_members = False
-              return members
-
-          def package_name(manifest: Path) -> str | None:
-              in_package = False
-              for raw_line in manifest.read_text().splitlines():
-                  line = raw_line.split('#', 1)[0].strip()
-                  if not line:
-                      continue
-                  if line.startswith('['):
-                      in_package = line == '[package]'
-                      continue
-                  if in_package:
-                      match = re.match(r'name\s*=\s*"([^"]+)"', line)
-                      if match:
-                          return match.group(1)
-              return None
-
+          workspace_member_ids = set(metadata['workspace_members'])
           packages = []
-          for member in workspace_members(workspace / 'Cargo.toml'):
-              for member_dir in glob.glob(str(workspace / member)):
-                  manifest = Path(member_dir) / 'Cargo.toml'
-                  if not manifest.exists():
-                      continue
-                  name = package_name(manifest)
-                  if name:
-                      packages.append((manifest.parent.resolve(), name))
+          for package in metadata['packages']:
+              if package['id'] not in workspace_member_ids:
+                  continue
+              manifest = Path(package['manifest_path']).resolve()
+              packages.append((manifest.parent, package['name']))
 
           changed_packages = set()
           for changed_file in changed_files:
