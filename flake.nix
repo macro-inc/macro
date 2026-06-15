@@ -547,6 +547,14 @@
                 cp "target/${lambdaTarget}/release/${lambdaName}" bootstrap
                 ${pkgs.binutils}/bin/strip bootstrap || true
                 ${pkgs.zip}/bin/zip -j -X "$out/${lambdaName}/bootstrap.zip" bootstrap
+                ${pkgs.lib.optionalString (lambdaName == "document_text_extractor") ''
+                  # Mirror the handler justfile's `cargo lambda build --include
+                  # ./pdfium-lib/linux`: at runtime the binary dlopen's
+                  # ./pdfium-lib/linux/libpdfium.so relative to the Lambda task
+                  # root, so the blob has to ride along in bootstrap.zip at that
+                  # same relative path.
+                  ( cd ${lambdaName} && ${pkgs.zip}/bin/zip -r -X "$out/${lambdaName}/bootstrap.zip" pdfium-lib/linux )
+                ''}
                 ${pkgs.lib.optionalString (lambdaName == "call_recording_preview_handler") ''
                   cp "${callRecordingPreviewFfmpegLayer}/${lambdaName}/ffmpeg-layer.zip" "$out/${lambdaName}/ffmpeg-layer.zip"
                 ''}
