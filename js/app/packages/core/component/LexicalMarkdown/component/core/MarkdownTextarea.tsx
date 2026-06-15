@@ -70,7 +70,7 @@ import { NodeAccessoryRenderer } from './NodeAccessoryRenderer';
  *     The current markdown text is passed as an argument.
  * @param initialValue - The initial markdown text to display in the textarea.
  * @param placeholder - The placeholder text to display in the textarea.
- * @param type - The type of editor to use. Defaults to 'markdown'. Could aslo pass chat to turn off headings.
+ * @param type - The type of editor to use. Defaults to 'markdown'.
  * @param onEnter - A callback function that is called when the user presses Enter in the textarea.
  *     If the function returns true, the enter press will not propagate to the lexical editor.
  * @param onEscape - A callback function that is called when the user presses Escape in the textarea. If the function
@@ -346,7 +346,9 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
         <NodeAccessoryRenderer editor={editor} store={accessoryStore} />
         <Show when={showPlaceholder()}>
           <div class="pointer-events-none text-ink-placeholder absolute top-0">
-            <p class="pointer-events-none">{props.placeholder ?? '...'}</p>
+            <p class="pointer-events-none my-1.5">
+              {props.placeholder ?? '...'}
+            </p>
           </div>
         </Show>
         <Show when={props.watermark}>

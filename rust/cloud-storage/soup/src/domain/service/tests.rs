@@ -210,8 +210,12 @@ fn foreign_entity_matches_literal(entity: &ForeignEntity, literal: &ForeignEntit
         ForeignEntityLiteral::ForeignEntitySource(source) => {
             entity.foreign_entity_source.as_str() == source.as_str()
         }
-        // "me" resolution happens in the repository; the fake cannot resolve it, so fail closed.
-        ForeignEntityLiteral::IncludesMe => false,
+        // "me" and notification done/seen resolution happen in the repository (against the
+        // metadata participant list and the notification tables); the fake cannot resolve them,
+        // so fail closed.
+        ForeignEntityLiteral::IncludesMe
+        | ForeignEntityLiteral::NotificationDone(_)
+        | ForeignEntityLiteral::NotificationSeen(_) => false,
     }
 }
 

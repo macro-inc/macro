@@ -1,3 +1,4 @@
+use super::increment_counters;
 use crate::pubsub::context::PubSubContext;
 use crate::pubsub::util::{CheckGmailRateLimitArgs, check_gmail_rate_limit};
 use crate::util::process_pre_insert::sync_labels::sync_labels;
@@ -90,6 +91,14 @@ pub async fn init_backfill(
             source: e.context("Failed to update total_threads"),
         })
     })?;
+
+    // With no threads to list, no per-thread message is ever enqueued, so the
+    // per-thread completion path that finalizes the job never runs. Complete
+    // the job directly instead.
+    if total_threads == 0 {
+        increment_counters::handle_job_completed(ctx, link, scope.job_id).await?;
+        return Ok(());
+    }
 
     ctx.redis_client
         .init_backfill_job_progress(scope.job_id, total_threads)

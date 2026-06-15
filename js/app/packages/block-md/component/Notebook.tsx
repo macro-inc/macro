@@ -24,7 +24,6 @@ import { tempRedirectLocation } from '@core/signal/location';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { makeResizeObserver } from '@solid-primitives/resize-observer';
 import {
-  type Accessor,
   createEffect,
   createMemo,
   createSignal,
@@ -71,10 +70,7 @@ const widthToMode = (width: number): CommentLayoutMode => {
   return CommentLayoutMode.none;
 };
 
-export function Notebook(props: {
-  loroManager: Accessor<LoroManager | undefined>;
-  mustBeConnected?: boolean;
-}) {
+export function Notebook(props: { loroManager: LoroManager }) {
   const blockElement = blockElementSignal.get;
   const setStore = mdStore.set;
   const setWideEnoughForComments = commentWidthSignal.set;
@@ -270,10 +266,7 @@ export function Notebook(props: {
   return (
     <div class={containerClasses()} ref={notebookRef}>
       <div class={contentDivClasses()} ref={contentRef}>
-        <TitleEditor
-          autoFocusOnMount={!navigatedFromJK()}
-          mustBeConnected={props.mustBeConnected}
-        />
+        <TitleEditor autoFocusOnMount={!navigatedFromJK()} />
         <div class="spacer h-3" />
         <div class="mb-6 flex flex-row flex-wrap items-center gap-2 text-sm empty:hidden">
           <InlineTaskProperties />
@@ -281,10 +274,7 @@ export function Notebook(props: {
           <TaskDuplicateMatchPill />
         </div>
         <ParamsProvider>
-          <MarkdownEditor
-            loroManager={props.loroManager}
-            mustBeConnected={props.mustBeConnected}
-          />
+          <MarkdownEditor loroManager={props.loroManager} />
           <Show when={ENABLE_RAIL_CHAT_TASK_COMMENTS && isTask}>
             <TaskDiscussion />
           </Show>
@@ -305,9 +295,7 @@ export function Notebook(props: {
   );
 }
 
-export function InstructionsNotebook(props: {
-  loroManager: Accessor<LoroManager | undefined>;
-}) {
+export function InstructionsNotebook(props: { loroManager: LoroManager }) {
   const setStore = mdStore.set;
 
   let notebookRef!: HTMLDivElement;

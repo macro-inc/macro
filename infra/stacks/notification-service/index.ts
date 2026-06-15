@@ -94,6 +94,17 @@ const cloudStorageClusterName: pulumi.Output<string> = cloudStorageStack
   .getOutput('cloudStorageClusterName')
   .apply((arn) => arn as string);
 
+const connectionGatewayStack = new pulumi.StackReference(
+  'connection-gateway-stack',
+  {
+    name: `macro-inc/connection-gateway/${stack}`,
+  }
+);
+
+const connectionGatewayRedisUrl: pulumi.Output<string> = connectionGatewayStack
+  .getOutput('connectionGatewayRedisUrl')
+  .apply((url) => url as string);
+
 const DATABASE_URL = aws.secretsmanager
   .getSecretVersionOutput({
     secretId: config.require(`macro_db_secret_key`),
@@ -273,6 +284,10 @@ const notificationService = new NotificationService('notification-service', {
     {
       name: 'REDIS_URI',
       value: pulumi.interpolate`redis://${MACRO_CACHE}`,
+    },
+    {
+      name: 'LAST_ONLINE_REDIS_URI',
+      value: pulumi.interpolate`redis://${connectionGatewayRedisUrl}`,
     },
     {
       name: 'MACRO_API_TOKEN_ISSUER',

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT l.id\n            FROM email_labels l\n            JOIN email_links el ON el.id = l.link_id\n            JOIN team_user tu ON tu.user_id = el.macro_id\n            WHERE l.name = 'TRASH' AND tu.team_id = $1\n              AND el.is_primary\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "c54744aa091017a10ceba8dc5ebc387f9c4e52b7135d491724fad116a773ab56"
+}

@@ -3,11 +3,13 @@ use crate::pubsub::link_manager::context::LinkManagerContext;
 use crate::pubsub::link_manager::process;
 use crate::util::redis::RedisClient;
 use authentication_service_client::AuthServiceClient;
+use connection_gateway_client::client::ConnectionGatewayClient;
 use futures::StreamExt;
 use sqlx::PgPool;
 use sqs_client::SQS;
 
 /// method that ingests sqs messages and calls the process function for each
+#[allow(clippy::too_many_arguments)]
 pub async fn run_worker(
     worker: sqs_worker::SQSWorker,
     db: PgPool,
@@ -16,6 +18,7 @@ pub async fn run_worker(
     redis_client: RedisClient,
     sqs_client: SQS,
     crm_service: CrmServiceType,
+    connection_gateway_client: ConnectionGatewayClient,
 ) {
     let ctx = LinkManagerContext {
         db,
@@ -25,6 +28,7 @@ pub async fn run_worker(
         redis_client,
         sqs_client,
         crm_service,
+        connection_gateway_client,
     };
     loop {
         let worker_result = tokio::spawn({

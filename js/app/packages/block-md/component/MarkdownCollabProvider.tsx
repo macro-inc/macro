@@ -3,6 +3,11 @@ import { createAwareness } from '@core/collab/awareness';
 import { createSyncEngine } from '@core/collab/engine';
 import type { LoroManager } from '@core/collab/manager';
 import {
+  IDBSnapshotStore,
+  LORO_SNAPSHOT_DB_NAME,
+} from '@core/collab/snapshot-store';
+import { createWALSyncSource } from '@core/collab/wal';
+import {
   $convertLexicalSelectionToCursors,
   $createSelectionFromPeerAwareness,
 } from '@core/component/LexicalMarkdown/collaboration/cursor';
@@ -77,7 +82,7 @@ export type MarkdownCollabProviderProps = {
   editorFocus: Accessor<boolean>;
   setEditorReady: Setter<boolean>;
   setEditorError: Setter<MarkdownEditorErrors | null>;
-  loroManager: Accessor<LoroManager | undefined>;
+  loroManager: LoroManager;
 };
 
 export const FROM_LORO_TAG = 'from-loro';
@@ -95,10 +100,10 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
   const canComment = useCanComment();
   const [editorError] = markdownBlockErrorSignal;
 
-  if (!loroManager() || !syncSource()) return null;
+  if (!syncSource()) return null;
 
   const awareness = createAwareness(
-    loroManager()!.getPeerIdStr(),
+    loroManager.getPeerIdStr(),
     userId(),
     lexicalSelectionCodec,
     {
@@ -108,19 +113,24 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
 
   const readOnly = () => !(canEdit() || canComment());
 
-  const syncEngine = createSyncEngine(
-    loroManager()!,
+  const walSyncer = createWALSyncSource(syncSource()!);
+  const syncEngine = createSyncEngine({
+    loroManager,
     awareness,
-    syncSource()!,
-    {
-      syncFromLoro: (state) =>
+    syncs: { wal: walSyncer, live: syncSource()! },
+    bindings: {
+      onRemoteState: (state) =>
         syncStateToLexical(state as unknown as SerializedEditorState),
     },
-    readOnly
-  );
+    readonly: readOnly,
+    snapshotStore: new IDBSnapshotStore(
+      LORO_SNAPSHOT_DB_NAME,
+      syncSource()!.documentId
+    ),
+  });
 
   const { refreshRemoteCursors, RemoteCursorsOverlay } = useRemoteCursors({
-    loroManager: loroManager()!,
+    loroManager: loroManager,
     mapping: props.mappings,
     editor: props.editor,
     awareness: awareness,
@@ -137,7 +147,7 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
       return;
     }
     const hadFocus = props.editorFocus();
-    let manager = loroManager();
+    let manager = loroManager;
     if (!manager) {
       console.error(
         'registering sync state to lexical, but no manager -- this should never happen'
@@ -166,7 +176,7 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
           props.editor.getEditorState().toJSON(),
           state,
           props.mappings,
-          () => loroManager()!.getPeerIdStr()
+          () => loroManager.getPeerIdStr()
         );
 
         // Queue microtask after this `editor.update` to ensure that all the nodeIds are updated
@@ -207,9 +217,7 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
   function localCursorUpdate():
     | { awareness: LexicalSelectionAwareness; format: number }
     | undefined {
-    const loroManager_ = loroManager();
-
-    if (!loroManager_) {
+    if (!loroManager) {
       console.error(
         'tried to convert selection to cursor, but no loro manager'
       );
@@ -225,7 +233,7 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
 
       // Convert the current selection to a set of LoroCursors
       const cursors = $convertLexicalSelectionToCursors(
-        loroManager_,
+        loroManager,
         props.mappings,
         selection
       );
@@ -332,7 +340,7 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
           onUpdate: async () => {
             const stateToSync = loroSyncState(props.editor.getEditorState());
             await syncEngine.syncStateToLoro(stateToSync as any);
-            loroManager() && $afterSyncCursorUpdate(loroManager()!);
+            $afterSyncCursorUpdate(loroManager);
           },
         }
       );
@@ -351,8 +359,7 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
       );
       return;
     }
-    const manager = loroManager();
-    if (!manager) {
+    if (!loroManager) {
       console.error(
         'registering sync state to lexical, but no manager -- this should never happen'
       );
@@ -388,7 +395,7 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
       await syncEngine.syncStateToLoro(stateToSync as any);
     }
 
-    $afterSyncCursorUpdate(manager);
+    $afterSyncCursorUpdate(loroManager);
   }
 
   function lexicalStateSyncPlugin() {
@@ -419,7 +426,7 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
   /** Initializes the loroManager and starts the sync engine */
   createEffect(
     on(
-      () => loroManager()?.isInitialized() ?? false,
+      () => loroManager.isInitialized() ?? false,
       (isInitialized) => {
         if (!isInitialized) {
           console.warn('loro manager not initialized');
@@ -429,17 +436,10 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
         const source = docSource();
         if (!source) return;
         if (isSourceSyncService(source)) {
-          const manager = untrack(loroManager);
-          if (!manager) {
-            console.error(
-              'registering sync state to lexical, but no manager -- this should never happen'
-            );
-            return;
-          }
           // Get the current state from the loroManager
           // At this point, the loroManager should be initialized and should
           // have the initial state from the sync service
-          const state = untrack(manager.state);
+          const state = untrack(loroManager.state);
 
           //TODO: some more descriptive user facing error should be displayed here
           if (!state) {
@@ -457,7 +457,7 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
             const initError = initializeEditorWithVersionedState(
               props.editor,
               state.state as unknown as SerializedEditorState,
-              loroManager()!.getPeerIdStr
+              loroManager.getPeerIdStr
             );
             if (initError !== null) {
               props.setEditorError(initError);
@@ -483,6 +483,7 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
 
   onCleanup(() => {
     syncEngine.stop();
+    walSyncer.destroy();
   });
 
   return (

@@ -78,7 +78,7 @@ function getHighlightThread(
 
 export const CommentsProvider: VoidComponent<{
   activeComment?: Accessor<string | undefined>;
-  loroManager: Accessor<LoroManager | undefined>;
+  loroManager: LoroManager;
 }> = (props) => {
   const wrapper = useContext(LexicalWrapperContext);
   if (!isWrapperWithIds(wrapper)) {
@@ -87,7 +87,7 @@ export const CommentsProvider: VoidComponent<{
   }
   const { plugins, editor } = wrapper;
 
-  const currentPeerId = () => props.loroManager()?.getPeerIdStr();
+  const currentPeerId = () => props.loroManager.getPeerIdStr();
 
   const [marks, setMarks] = markStore;
   const [commentThreadsData] = commentThreadsResource;

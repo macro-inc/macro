@@ -441,3 +441,41 @@ fn test_cursor_logic_crm_included_advances_cursor() {
         ),
     }
 }
+
+#[test]
+fn enforce_term_limits_accepts_at_max() {
+    let terms: Vec<String> = (0..MAX_SEARCH_TERMS).map(|i| format!("t{i}")).collect();
+    let out = enforce_term_limits(terms.clone()).expect("at-limit term count should pass");
+    assert_eq!(out, terms);
+}
+
+#[test]
+fn enforce_term_limits_rejects_over_max() {
+    let terms: Vec<String> = (0..=MAX_SEARCH_TERMS).map(|i| format!("t{i}")).collect();
+    assert_eq!(terms.len(), MAX_SEARCH_TERMS + 1);
+    assert!(matches!(
+        enforce_term_limits(terms),
+        Err(SearchError::TooManyTerms)
+    ));
+}
+
+#[test]
+fn enforce_term_limits_truncates_long_term() {
+    let long = "a".repeat(MAX_TERM_CHARS + 25);
+    let out = enforce_term_limits(vec![long]).expect("single term is under the count cap");
+    assert_eq!(out[0].chars().count(), MAX_TERM_CHARS);
+}
+
+#[test]
+fn enforce_term_limits_leaves_short_terms_untouched() {
+    let terms = vec!["hello".to_string(), "world".to_string()];
+    let out = enforce_term_limits(terms.clone()).expect("short terms pass");
+    assert_eq!(out, terms);
+}
+
+#[test]
+fn enforce_term_limits_truncates_on_char_boundary() {
+    let long = "é".repeat(MAX_TERM_CHARS + 10);
+    let out = enforce_term_limits(vec![long]).expect("single term is under the count cap");
+    assert_eq!(out[0].chars().count(), MAX_TERM_CHARS);
+}

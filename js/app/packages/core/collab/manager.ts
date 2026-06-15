@@ -17,7 +17,9 @@ import {
 } from 'loro-crdt';
 import { err, ok, type Result } from 'neverthrow';
 import { type Accessor, createEffect, createSignal, onCleanup } from 'solid-js';
-import type { GenericRootSchema, LoroRawUpdate } from './shared';
+import { DocInitMachine } from './document-init-machine';
+import type { GenericRootSchema, LoroRawUpdate, RawUpdate } from './shared';
+import type { LiveSyncSource } from './source';
 
 export enum LoroManagerError {
   ImportFailed = 'IMPORT_FAILED',
@@ -204,6 +206,11 @@ export type LoroManager<S extends GenericRootSchema = GenericRootSchema> = {
     id: ContainerID
   ): Result<Container | undefined, ResultError<LoroManagerError>[]>;
 
+  /** Feed a snapshot from any source. The init state machine internally
+   *  decides whether to apply, ignore, or chain a `requestUpdatesSince`
+   *  follow-up against the live sync source. */
+  ingest(input: SnapshotIngest): Promise<void>;
+
   /** Returns the current cursor position for the given LoroCursor within its container */
   getCursorPos(cursor: Cursor): Result<
     {
@@ -220,19 +227,44 @@ export type StateUpdate<S extends GenericRootSchema> = {
   metadata: UpdateMetadata;
 };
 
+export type SnapshotIngest =
+  | { kind: 'optimistic'; snapshot: RawUpdate }
+  | {
+      kind: 'local';
+      snapshot: RawUpdate;
+      /** Optional WAL update entries to replay on top of the snapshot. */
+      walUpdates?: RawUpdate[];
+    }
+  | { kind: 's3'; snapshot: RawUpdate }
+  | { kind: 'dss'; snapshot: RawUpdate };
+
+export type LoroManagerOptions = {
+  /** Accessor returning the live sync source. Required because the init
+   *  state machine may need to call `requestUpdatesSince` on it. */
+  liveSyncSource: () => LiveSyncSource;
+  /** True if the WAL had undelivered entries at the start of this session.
+   *  Read synchronously from `BrowserWALStore.isDirtyHint(documentId)` —
+   *  determines which path the init state machine takes. */
+  wasDirty: boolean;
+};
+
 /** Creates a new [LoroManager] instance
  *
  * @param schema - The schema to use for the manager
+ * @param options - Optional dependencies (e.g. live sync source for catch-up)
  * @returns The new manager [LoroManager]
  * */
 export function createLoroManager<S extends GenericRootSchema>(
-  schema: S
+  schema: S,
+  options: LoroManagerOptions
 ): LoroManager<S> {
   const [initialized, setInitialized] = createSignal<boolean>(false);
   const [loroDoc, setLoroDoc] = createSignal<LoroDoc>(createLoroDoc());
   const [mirror, setMirror] = createSignal<Mirror<S>>();
   const [error, setError] = createSignal<LoroManagerError[]>([]);
   const [state, setState] = createSignal<StateUpdate<S>>();
+
+  const initMachine = DocInitMachine.create(options.wasDirty);
 
   /** Util for awaiting the sync of the mirror to finish */
   const awaitMirrorSync = async () => {
@@ -545,6 +577,80 @@ export function createLoroManager<S extends GenericRootSchema>(
     loroDoc().free();
   });
 
+  /** Apply a snapshot to the loro doc — initialize on first touch, otherwise
+   *  merge as an update. Errors are logged and surfaced via the return. */
+  const applySnapshot = async (
+    snapshot: RawUpdate,
+    context: string
+  ): Promise<boolean> => {
+    if (!initialized()) {
+      const initResult = await initializeFromSnapshot(snapshot);
+      if (initResult.isErr()) {
+        console.error(
+          `LoroManager.ingest(${context}): initializeFromSnapshot failed`,
+          initResult.error
+        );
+        return false;
+      }
+      return true;
+    }
+    const importResult = importUpdate(snapshot);
+    if (importResult.isErr()) {
+      console.error(
+        `LoroManager.ingest(${context}): importUpdate failed`,
+        importResult.error
+      );
+      return false;
+    }
+    return true;
+  };
+
+  /**
+   * Internal helper: drive the init state machine for a given snapshot kind
+   */
+  const ingest = async (input: SnapshotIngest): Promise<void> => {
+    const instruction = initMachine.receive(input.kind);
+    if (instruction === 'ignore') return;
+
+    const applied = await applySnapshot(input.snapshot, input.kind);
+    if (!applied) return;
+
+    if (input.kind === 'local' && input.walUpdates?.length) {
+      const replayResult = importBatchUpdates(input.walUpdates);
+      if (replayResult.isErr()) {
+        console.error(
+          `LoroManager.ingest(${input.kind}): WAL replay failed`,
+          replayResult.error
+        );
+      }
+    }
+
+    if (instruction !== 'applyThenRequestDelta') return;
+
+    // Local was dirty — fetch the precise delta from the live source.
+    const liveSource = options.liveSyncSource();
+    const deltaResult = await liveSource.requestUpdatesSince(
+      loroDoc().version()
+    );
+    if (deltaResult.isErr()) {
+      console.error(
+        `LoroManager.ingest(${input.kind}): requestUpdatesSince failed`,
+        deltaResult.error
+      );
+      return;
+    }
+    const requestedInstruction = initMachine.receive('requested');
+    if (requestedInstruction !== 'apply') return;
+
+    const deltaImport = importUpdate(deltaResult.value);
+    if (deltaImport.isErr()) {
+      console.error(
+        `LoroManager.ingest(${input.kind}): failed to apply requested delta`,
+        deltaImport.error
+      );
+    }
+  };
+
   return {
     getDoc: loroDoc,
     getMirror: mirror,
@@ -559,6 +665,7 @@ export function createLoroManager<S extends GenericRootSchema>(
     importBatchUpdates,
     syncToLoro,
     reset,
+    ingest,
     getVersion: () => loroDoc().version(),
     getPeerId: () => loroDoc().peerId,
     getPeerIdStr: () => loroDoc().peerIdStr,

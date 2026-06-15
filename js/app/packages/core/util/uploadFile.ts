@@ -6,6 +6,7 @@ import {
 import { invalidateUserQuota } from '@queries/auth';
 import { staticFileClient } from '@service-static-files/client';
 import { contentHash } from './hash';
+import { resolveUploadContentType } from './uploadContentType';
 
 /**
  * App-level upload file model.
@@ -64,9 +65,10 @@ export function isNativeStagedUpload(
 export async function createStaticUploadFile(
   file: UploadFile
 ): Promise<string> {
+  const contentType = resolveUploadContentType(file);
   const result = await staticFileClient.makePresignedUrl({
     file_name: file.name,
-    content_type: file.mimeType,
+    content_type: contentType,
   });
   invalidateUserQuota();
   if (result.isErr()) throw new Error('Failed to upload file');
@@ -80,6 +82,7 @@ export async function createStaticUploadFile(
   const uploadResult = await staticFileClient.uploadToPresignedUrl({
     url: upload_url,
     blob: file.file,
+    contentType,
   });
   if (!uploadResult.success) {
     throw new Error('Failed to upload file');

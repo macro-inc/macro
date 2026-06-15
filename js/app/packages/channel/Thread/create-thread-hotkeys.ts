@@ -11,6 +11,7 @@ import { type Accessor, onCleanup } from 'solid-js';
 import type { MessageSelection } from '../Channel/create-message-selection';
 import type { MessageActions, MessageData } from '../Message';
 import { scrollMessageIntoView } from '../scroll-utils';
+import { isBotMessage } from './utils/message-actions';
 
 type CreateThreadHotkeysOptions = {
   messageListScopeId: string;
@@ -37,7 +38,7 @@ export function canReplyToThreadFromHotkey(input: {
   return input.isThreadFocused && !input.isEditing;
 }
 
-export function canEditOrDeleteThreadReplyFromHotkey(input: {
+export function canEditThreadReplyFromHotkey(input: {
   isThreadFocused: boolean;
   isEditing: boolean;
   hasSelectedReply: boolean;
@@ -47,6 +48,20 @@ export function canEditOrDeleteThreadReplyFromHotkey(input: {
     canReplyToThreadFromHotkey(input) &&
     input.hasSelectedReply &&
     input.isOwnReply
+  );
+}
+
+export function canDeleteThreadReplyFromHotkey(input: {
+  isThreadFocused: boolean;
+  isEditing: boolean;
+  hasSelectedReply: boolean;
+  isOwnReply: boolean;
+  isBotReply: boolean;
+}) {
+  return (
+    canReplyToThreadFromHotkey(input) &&
+    input.hasSelectedReply &&
+    (input.isOwnReply || input.isBotReply)
   );
 }
 
@@ -178,7 +193,7 @@ export function createThreadHotkeys(options: CreateThreadHotkeysOptions) {
       const replyId = options.replySelection.selectedId();
       if (!replyId) return false;
       const reply = getReplyById(replyId);
-      return canEditOrDeleteThreadReplyFromHotkey({
+      return canEditThreadReplyFromHotkey({
         isThreadFocused: options.isThreadFocused(),
         isEditing: options.isEditing(),
         hasSelectedReply: !!replyId,
@@ -208,11 +223,12 @@ export function createThreadHotkeys(options: CreateThreadHotkeysOptions) {
       const replyId = options.replySelection.selectedId();
       if (!replyId) return false;
       const reply = getReplyById(replyId);
-      return canEditOrDeleteThreadReplyFromHotkey({
+      return canDeleteThreadReplyFromHotkey({
         isThreadFocused: options.isThreadFocused(),
         isEditing: options.isEditing(),
         hasSelectedReply: !!replyId,
         isOwnReply: !!reply && reply.sender_id === options.userId(),
+        isBotReply: !!reply && isBotMessage(reply),
       });
     },
     keyDownHandler: () => {

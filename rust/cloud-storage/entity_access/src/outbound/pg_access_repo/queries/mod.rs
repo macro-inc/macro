@@ -107,7 +107,7 @@ pub(in crate::outbound::pg_access_repo) async fn get_entity_users(
         SELECT mul.primary_macro_id
         FROM email_threads et
         JOIN email_links l ON et.link_id = l.id
-        JOIN macro_user_links mul ON mul.child_macro_id = l.macro_id
+        JOIN macro_user_links mul ON mul.link_id = l.id
         WHERE et.id = $1
         "#,
             entity_id

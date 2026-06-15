@@ -13,10 +13,11 @@ import { EcrImage } from '../../packages/service';
 import {
   BASE_DOMAIN,
   CLOUD_TRAIL_SNS_TOPIC_ARN,
+  DopplerEcsEnvironment,
   stack,
 } from '../../packages/shared';
 
-const BASE_NAME = 'authentication-service';
+const BASE_NAME = pulumi.getProject();
 const BASE_PATH = '../../../rust/cloud-storage';
 
 export const SERVICE_DOMAIN_NAME = `auth-service${
@@ -36,10 +37,6 @@ type Args = {
   serviceContainerPort: number;
   isPrivate?: boolean;
   containerEnvVars?: { name: string; value: pulumi.Output<string> | string }[];
-  containerSecrets: {
-    name: string;
-    valueFrom: pulumi.Output<string> | string;
-  }[];
   healthCheckPath: string;
   tags: { [key: string]: string };
   queueArns: pulumi.Output<string>[];
@@ -47,7 +44,6 @@ type Args = {
 
 export class AuthenticationService extends pulumi.ComponentResource {
   public role: aws.iam.Role;
-  public executionRole: aws.iam.Role;
   public ecr: awsx.ecr.Repository;
   public serviceAlbSg: aws.ec2.SecurityGroup;
   public serviceSg: aws.ec2.SecurityGroup;
@@ -69,7 +65,6 @@ export class AuthenticationService extends pulumi.ComponentResource {
       healthCheckPath,
       isPrivate,
       containerEnvVars,
-      containerSecrets,
       clusterName,
       tags,
       secretKeyArns,
@@ -111,28 +106,7 @@ export class AuthenticationService extends pulumi.ComponentResource {
           Statement: [
             {
               Action: ['secretsmanager:GetSecretValue'],
-              Resource: [
-                ...secretKeyArns,
-                ...containerSecrets.map((s) => s.valueFrom),
-              ],
-              Effect: 'Allow',
-            },
-          ],
-        },
-        tags: this.tags,
-      },
-      { parent: this }
-    );
-
-    const executionSecretsPolicy = new aws.iam.Policy(
-      `${BASE_NAME}-execution-secrets-policy`,
-      {
-        policy: {
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Action: ['secretsmanager:GetSecretValue'],
-              Resource: containerSecrets.map((s) => s.valueFrom),
+              Resource: [...secretKeyArns],
               Effect: 'Allow',
             },
           ],
@@ -182,20 +156,6 @@ export class AuthenticationService extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    this.executionRole = new aws.iam.Role(
-      `${BASE_NAME}-execution-role`,
-      {
-        name: `${BASE_NAME}-execution-role-${stack}`,
-        assumeRolePolicy: ecsTaskAssumeRolePolicy,
-        tags: this.tags,
-        managedPolicyArns: [
-          'arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy',
-          executionSecretsPolicy.arn,
-        ],
-      },
-      { parent: this }
-    );
-
     // ecr image
     const image = new EcrImage(
       `${BASE_NAME}-ecr-image-${stack}`,
@@ -237,6 +197,12 @@ export class AuthenticationService extends pulumi.ComponentResource {
     this.lb = lb;
     this.listener = listener;
 
+    const dopplerEcsEnvironment = new DopplerEcsEnvironment(
+      BASE_NAME,
+      { tags: this.tags },
+      { parent: this }
+    );
+
     // service
     const service = new awsx.ecs.FargateService(
       `${BASE_NAME}`,
@@ -257,7 +223,7 @@ export class AuthenticationService extends pulumi.ComponentResource {
             roleArn: this.role.arn,
           },
           executionRole: {
-            roleArn: this.executionRole.arn,
+            roleArn: dopplerEcsEnvironment.executionRole.arn,
           },
           containers: {
             log_router: fargateLogRouterSidecarContainer,
@@ -272,7 +238,7 @@ export class AuthenticationService extends pulumi.ComponentResource {
                 { name: 'BASE_URL', value: this.domain },
                 ...(containerEnvVars ?? []),
               ],
-              secrets: [...containerSecrets],
+              secrets: [...dopplerEcsEnvironment.containerSecrets],
               logConfiguration: {
                 logDriver: 'awsfirelens',
                 options: {

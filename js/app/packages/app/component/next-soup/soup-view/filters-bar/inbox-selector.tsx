@@ -54,7 +54,7 @@ export function InboxSelector() {
                 label: 'Add inbox',
                 icon: () => <PlusIcon class="size-4" />,
                 onSelect: () => {
-                  openSettings('Account');
+                  openSettings('Email');
                   openAddInboxDialog();
                 },
               }

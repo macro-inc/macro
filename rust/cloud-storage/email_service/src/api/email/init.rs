@@ -227,6 +227,7 @@ pub async fn handler(
                     &mut *tx,
                     &user_context.user_id,
                     child_macro_id,
+                    child_link.id,
                 )
                 .await
                 .context("Failed to insert macro_user_links edge")?;
@@ -294,6 +295,7 @@ pub async fn handler(
                 &mut *tx,
                 &user_context.user_id,
                 child_macro_id,
+                link.id,
             )
             .await
             .context("Failed to insert macro_user_links edge")?;
@@ -393,7 +395,11 @@ pub async fn handler(
                 // fetches for this inbox fail, so the update is retried before giving up.
                 match ctx
                     .auth_service_client
-                    .relocate_inbox_grant(&linked_email, &existing_link.fusionauth_user_id)
+                    .relocate_inbox_grant(
+                        &linked_email,
+                        &existing_link.fusionauth_user_id,
+                        &promoted.mailbox_fusion_id.to_string(),
+                    )
                     .await
                 {
                     Ok(shared_fusionauth_user_id) => {
@@ -648,13 +654,16 @@ async fn enable_gmail_sync_for(
     email_address: &str,
     history_id: &str,
 ) -> Result<Link, InitError> {
+    let email_address = EmailStr::try_from(email_address.to_string())?;
+    let is_primary = link::Link::derive_is_primary(&macro_id, &email_address);
     let link = link::Link {
         id: macro_uuid::generate_uuid_v7(),
         macro_id,
         fusionauth_user_id: fusion_user_id.to_string(),
-        email_address: EmailStr::try_from(email_address.to_string())?,
+        email_address,
         provider: link::UserProvider::Gmail,
         is_sync_active: true,
+        is_primary,
         created_at: Default::default(),
         updated_at: Default::default(),
     };

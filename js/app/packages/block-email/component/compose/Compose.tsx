@@ -1,8 +1,11 @@
+import { MobileDrawer } from '@app/component/mobile/MobileDrawer';
+import { useSplitBackInterceptor } from '@app/component/split-layout/back-interceptor';
 import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
 import {
   SplitHeaderBadge,
   StaticSplitLabel,
 } from '@app/component/split-layout/components/SplitLabel';
+import { SplitPanelContext } from '@app/component/split-layout/context';
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import type { EmailFormRecipients } from '@block-email/component/createEmailFormState';
 import {
@@ -58,13 +61,20 @@ import {
   useSendMessageMutation,
   useUnscheduleMessageMutation,
 } from '@queries/email/thread';
-import { invalidateSoupEntity } from '@queries/soup/cache';
+import { invalidateSoupEntity, refetchSoupEntity } from '@queries/soup/cache';
 import { emailClient } from '@service-email/client';
 import { debounce } from '@solid-primitives/scheduled';
 import { Surface } from '@ui';
 
 import type { LexicalEditor } from 'lexical';
-import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  on,
+  Show,
+  useContext,
+} from 'solid-js';
 import { unwrap } from 'solid-js/store';
 import {
   type ComposeContextValue,
@@ -151,6 +161,19 @@ export function EmailCompose(props: EmailComposeProps) {
     props.draftID
   );
 
+  // Thread the draft currently lives under; switching the sending inbox
+  // re-homes the draft server-side, so the previous thread's soup row must
+  // be dropped after the save.
+  const [currentThreadID, setCurrentThreadID] = createSignal<
+    string | undefined
+  >(
+    props.draftID
+      ? emailContext?.messages
+          .unfiltered()
+          .find((m) => m.db_id === props.draftID)?.thread_db_id
+      : undefined
+  );
+
   // Restore form state from undo-send snapshot if available
   const restoredSnapshot =
     undoComposeSnapshot?.draftId === props.draftID ? undoComposeSnapshot : null;
@@ -215,6 +238,7 @@ export function EmailCompose(props: EmailComposeProps) {
       return;
     }
 
+    const previousThreadID = currentThreadID();
     const draftResponse = await saveDraftMutation.mutateAsync({
       draft: {
         ...draftToSave,
@@ -222,6 +246,13 @@ export function EmailCompose(props: EmailComposeProps) {
       },
       linkId: headerLinkId(),
     });
+
+    const newThreadID = draftResponse.draft.thread_db_id ?? undefined;
+    if (previousThreadID && previousThreadID !== newThreadID) {
+      invalidateSoupEntity(previousThreadID);
+      refetchSoupEntity(previousThreadID, 'emailThread');
+    }
+    setCurrentThreadID(newThreadID);
 
     const draftId = draftResponse.draft.db_id;
     if (draftId) {
@@ -252,9 +283,18 @@ export function EmailCompose(props: EmailComposeProps) {
     }
   }
 
+  // Edits since the composer opened; an untouched existing draft can be
+  // left without the keep-or-delete prompt.
+  const [draftDirty, setDraftDirty] = createSignal(false);
+
   const scheduleDraftSave = debounce(() => {
     void executeSaveDraft();
   }, DRAFT_DEBOUNCE_MS);
+
+  const markDirtyAndScheduleSave = () => {
+    setDraftDirty(true);
+    scheduleDraftSave();
+  };
 
   // --- Attachment handling ---
 
@@ -266,10 +306,11 @@ export function EmailCompose(props: EmailComposeProps) {
     for (const attachment of attachments) {
       form.attachments.add(attachment);
     }
-    scheduleDraftSave();
+    markDirtyAndScheduleSave();
   };
 
   const handleRemoveAttachment = (attachment: DraftFormAttachment) => {
+    setDraftDirty(true);
     if (attachment.type === 'local') {
       form.attachments.removeByFile(attachment.file);
     } else if (attachment.type === 'forwarded') {
@@ -305,7 +346,7 @@ export function EmailCompose(props: EmailComposeProps) {
       firstChangeConsumed = true;
       return;
     }
-    scheduleDraftSave();
+    markDirtyAndScheduleSave();
   };
 
   // --- Send ---
@@ -479,6 +520,7 @@ export function EmailCompose(props: EmailComposeProps) {
   });
 
   const handleSendTimeChange = async (date: Date | null) => {
+    setDraftDirty(true);
     const currentSendTime = form.sendTime();
     const currentDraft = currentDraftID();
 
@@ -627,11 +669,11 @@ export function EmailCompose(props: EmailComposeProps) {
     // Form state (write)
     setRecipients: (field, value) => {
       form.setRecipients(field, value);
-      scheduleDraftSave();
+      markDirtyAndScheduleSave();
     },
     setSubject: (value) => {
       form.setSubject(value);
-      scheduleDraftSave();
+      markDirtyAndScheduleSave();
     },
     onContentChange,
     onAddAttachments: handleAddAttachments,
@@ -668,8 +710,32 @@ export function EmailCompose(props: EmailComposeProps) {
     fromAddress: () => link()?.email_address,
     fromInboxes: () => emailLinksQuery.data?.links ?? [],
     selectedFromLinkId: () => link()?.id,
-    onSelectFromLink: form.setSelectedFromLink,
+    // Persist immediately on a sender switch so the draft moves to the new
+    // inbox even without a text edit.
+    onSelectFromLink: (linkId) => {
+      form.setSelectedFromLink(linkId);
+      setDraftDirty(true);
+      scheduleDraftSave.clear();
+      void executeSaveDraft();
+    },
     hasPaidAccess,
+  };
+
+  const panel = useContext(SplitPanelContext);
+  const [draftBackMenuOpen, setDraftBackMenuOpen] = createSignal(false);
+
+  if (isMobile()) {
+    // Backing out of a compose that has a draft asks whether to keep it.
+    useSplitBackInterceptor(() => {
+      if (!ctxValue.hasDraft() || !draftDirty()) return false;
+      setDraftBackMenuOpen(true);
+      return true;
+    });
+  }
+
+  const leaveCompose = () => {
+    setDraftBackMenuOpen(false);
+    panel?.handle.goBack();
   };
 
   return (
@@ -705,6 +771,48 @@ export function EmailCompose(props: EmailComposeProps) {
           </WrapUnlessMobile>
         </div>
       </div>
+      <Show when={isMobile()}>
+        <MobileDrawer
+          side="bottom"
+          open={draftBackMenuOpen()}
+          onOpenChange={setDraftBackMenuOpen}
+          preventScroll={false}
+          preventScrollbarShift={false}
+        >
+          <MobileDrawer.Portal>
+            <MobileDrawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted" />
+            <MobileDrawer.Content aria-label="Draft options">
+              <MobileDrawer.Handle />
+              <MobileDrawer.Section class="mb-3">
+                <button
+                  type="button"
+                  class="w-full bg-surface px-3 py-3.5 text-sm font-medium text-failure text-center not-last:mb-px"
+                  onClick={async () => {
+                    // Navigate only once the deletion landed; the mutation
+                    // toasts on failure and the composer stays put.
+                    try {
+                      await deleteDraftAndReset();
+                    } catch {
+                      setDraftBackMenuOpen(false);
+                      return;
+                    }
+                    leaveCompose();
+                  }}
+                >
+                  Delete Draft
+                </button>
+                <button
+                  type="button"
+                  class="w-full bg-surface px-3 py-3.5 text-sm font-medium text-center"
+                  onClick={leaveCompose}
+                >
+                  Save Draft
+                </button>
+              </MobileDrawer.Section>
+            </MobileDrawer.Content>
+          </MobileDrawer.Portal>
+        </MobileDrawer>
+      </Show>
     </ComposeProvider>
   );
 }

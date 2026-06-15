@@ -1,6 +1,7 @@
 //! types
-use super::tool_object::{AsyncToolObject, UserTool, UserToolResponse, ValidationError};
+use super::tool_object::{AsyncToolObject, UserTool, UserToolResponse};
 use crate::RequestContext;
+use crate::schema::ValidationError;
 use crate::{AsyncTool, ToolResult};
 use axum::extract::FromRef;
 use schemars::{JsonSchema, Schema};

@@ -24,8 +24,14 @@ export function AddInboxDialog() {
   const handleConfirm = async () => {
     if (pending()) return;
     setPending(true);
-    await addInbox();
-    setPending(false);
+    // On web this navigates away; on native iOS the OAuth completes in place
+    // and resolves, so the dialog dismisses itself.
+    try {
+      await addInbox();
+    } finally {
+      setPending(false);
+      setIsOpen(false);
+    }
   };
 
   return (

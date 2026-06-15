@@ -2,10 +2,17 @@ import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import {
   setVirtualKeyboardHeight,
   setVirtualKeyboardVisible,
+  virtualKeyboardVisible,
 } from '@core/mobile/virtualKeyboard';
 import { isEditableInput } from '@core/util/isEditableInput';
 import { isIOS } from '@solid-primitives/platform';
 import { onCleanup, onMount } from 'solid-js';
+
+const IOS_ACTIVE_ELEMENT_POLL_INTERVAL_MS = 1000;
+
+function getViewportHeight() {
+  return window.visualViewport?.height ?? window.innerHeight;
+}
 
 function resetVirtualKeyboardState() {
   setVirtualKeyboardVisible(false);
@@ -73,37 +80,109 @@ export function useAppSquishHandlers() {
       });
     });
   } else if (isIOS) {
-    // We are tracking viewport height, and using that to set a CSS variable,
-    // so that we can properly constrain the viewport-height for mobile in response to changes such as
-    // the virtual keyboard appearing.
-    let previousViewportHeight = window.visualViewport?.height || 0;
-    const handleResize = () => {
-      if (window.visualViewport) {
-        const newViewportHeight = window.visualViewport.height;
-        // We can reliably use the visual viewport shrinking in size as a strong signal that the virtual keyboard is visible. This is better than using focusIn as a signal, because with focusIn we have to guess the timing of the virtual keyboard appearing.
-        // We can NOT reliably use the visual viewport growing for the inverse. Recent versions of iOS Safari cause this to fire immediately on virtual keyboard appearance. Instead we need to rely on focusOut.
-        if (newViewportHeight < previousViewportHeight) {
-          setVirtualKeyboardVisible(true);
-          const vh = newViewportHeight * 0.01;
-          document.documentElement.style.setProperty('--dvh', `${vh}px`);
-          setTimeout(() => {
-            window.scrollTo(0, 0);
-          });
+    // iOS Safari visual viewport events are only useful after editable focus.
+    // A later shrink is the keyboard show signal; focusout remains the reset.
+    let viewportHeightBeforeFocus: number | undefined;
+    let activeElementPollIntervalId: number | undefined;
+    let deferredResetTimeoutId: number | undefined;
+
+    const syncViewportHeight = () => {
+      const viewportHeight = getViewportHeight();
+      const vh = viewportHeight * 0.01;
+      document.documentElement.style.setProperty('--dvh', `${vh}px`);
+    };
+
+    const stopActiveElementPolling = () => {
+      if (activeElementPollIntervalId === undefined) return;
+
+      window.clearInterval(activeElementPollIntervalId);
+      activeElementPollIntervalId = undefined;
+    };
+
+    const clearDeferredReset = () => {
+      if (deferredResetTimeoutId === undefined) return;
+
+      window.clearTimeout(deferredResetTimeoutId);
+      deferredResetTimeoutId = undefined;
+    };
+
+    const resetIOSVirtualKeyboardState = () => {
+      clearDeferredReset();
+      viewportHeightBeforeFocus = undefined;
+      stopActiveElementPolling();
+      resetVirtualKeyboardState();
+    };
+
+    const deferIOSVirtualKeyboardReset = () => {
+      clearDeferredReset();
+      deferredResetTimeoutId = window.setTimeout(() => {
+        deferredResetTimeoutId = undefined;
+        if (!isEditableInput(document.activeElement)) {
+          resetIOSVirtualKeyboardState();
         }
-        previousViewportHeight = newViewportHeight;
+      });
+    };
+
+    const startActiveElementPolling = () => {
+      if (activeElementPollIntervalId !== undefined) return;
+
+      activeElementPollIntervalId = window.setInterval(() => {
+        if (!virtualKeyboardVisible()) {
+          stopActiveElementPolling();
+          return;
+        }
+
+        if (!isEditableInput(document.activeElement)) {
+          resetIOSVirtualKeyboardState();
+        }
+      }, IOS_ACTIVE_ELEMENT_POLL_INTERVAL_MS);
+    };
+
+    const handleResize = () => {
+      if (virtualKeyboardVisible()) {
+        syncViewportHeight();
+        startActiveElementPolling();
+        return;
+      }
+
+      if (
+        viewportHeightBeforeFocus === undefined ||
+        !isEditableInput(document.activeElement)
+      ) {
+        return;
+      }
+
+      const viewportHeight = getViewportHeight();
+      if (viewportHeight < viewportHeightBeforeFocus) {
+        setVirtualKeyboardVisible(true);
+        startActiveElementPolling();
+        syncViewportHeight();
+        setTimeout(() => {
+          window.scrollTo(0, 0);
+        });
       }
     };
 
+    const handleFocusIn = (e: FocusEvent) => {
+      if (!(e.target instanceof Element) || !isEditableInput(e.target)) return;
+
+      clearDeferredReset();
+      viewportHeightBeforeFocus = getViewportHeight();
+    };
+
     const handleFocusOut = (e: FocusEvent) => {
+      if (!(e.target instanceof Element) || !isEditableInput(e.target)) return;
+
+      if (!e.relatedTarget) {
+        deferIOSVirtualKeyboardReset();
+        return;
+      }
+
       if (
-        e.target instanceof Element &&
-        isEditableInput(e.target) &&
-        (!e.relatedTarget ||
-          (e.relatedTarget instanceof Element &&
-            !isEditableInput(e.relatedTarget)))
+        e.relatedTarget instanceof Element &&
+        !isEditableInput(e.relatedTarget)
       ) {
-        document.documentElement.style.setProperty('--dvh', '1dvh');
-        setVirtualKeyboardVisible(false);
+        resetIOSVirtualKeyboardState();
       }
     };
 
@@ -115,16 +194,21 @@ export function useAppSquishHandlers() {
       document.documentElement.style.setProperty('--dvh', '1dvh');
       if (window.visualViewport) {
         window.visualViewport.addEventListener('resize', handleResize);
-        handleResize();
         window.visualViewport.addEventListener('scroll', handleResize);
       }
+      document.addEventListener('focusin', handleFocusIn, { capture: true });
       document.addEventListener('focusout', handleFocusOut, { capture: true });
 
       onCleanup(() => {
+        clearDeferredReset();
+        stopActiveElementPolling();
         if (window.visualViewport) {
           window.visualViewport.removeEventListener('resize', handleResize);
           window.visualViewport.removeEventListener('scroll', handleResize);
         }
+        document.removeEventListener('focusin', handleFocusIn, {
+          capture: true,
+        });
         document.removeEventListener('focusout', handleFocusOut, {
           capture: true,
         });

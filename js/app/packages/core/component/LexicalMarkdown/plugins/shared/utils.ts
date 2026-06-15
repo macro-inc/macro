@@ -90,6 +90,9 @@ export function registerEditorWidthObserver(
     () => {
       const editorEntry = observersByEditor.get(editor);
       if (editorEntry) {
+        editorEntry.callbacks.delete(onWidthChange);
+      }
+      if (editorEntry && editorEntry.callbacks.size === 0) {
         editorEntry.observer.disconnect();
         observersByEditor.delete(editor);
       }

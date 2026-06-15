@@ -45,8 +45,9 @@ const JsonObjectValidator: z.ZodType<JsonObject> = z.record(
   z.unknown()
 );
 
-// The combined schema has shared $defs and a tools array
-const CombinedSchemaValidator = z.object({
+// The frontend typegen schema (ai_toolset FrontendSchemas) has shared $defs
+// and a tools array
+const FrontendSchemasValidator = z.object({
   $defs: z.record(z.string(), JsonObjectValidator),
   tools: z.array(
     z.object({
@@ -57,7 +58,7 @@ const CombinedSchemaValidator = z.object({
   ),
 });
 
-type CombinedSchema = z.infer<typeof CombinedSchemaValidator>;
+type FrontendSchemas = z.infer<typeof FrontendSchemasValidator>;
 
 async function buildAndRunSchemaGenerator(): Promise<void> {
   console.log('Building gen_tool_schemas binary...');
@@ -77,17 +78,17 @@ async function buildAndRunSchemaGenerator(): Promise<void> {
   console.log('Schema generation complete.');
 }
 
-async function loadCombinedSchema(): Promise<CombinedSchema> {
+async function loadFrontendSchemas(): Promise<FrontendSchemas> {
   await buildAndRunSchemaGenerator();
   const data = await readFile(schemasJsonPath, 'utf-8');
-  const parsed = CombinedSchemaValidator.parse(JSON.parse(data));
+  const parsed = FrontendSchemasValidator.parse(JSON.parse(data));
   console.log(
     `Loaded ${parsed.tools.length} tools, ${Object.keys(parsed.$defs).length} definitions`
   );
   return parsed;
 }
 
-async function generateSchemasFile(schema: CombinedSchema) {
+async function generateSchemasFile(schema: FrontendSchemas) {
   const resolved = await $RefParser.dereference(structuredClone(schema));
   const defs = (resolved as { $defs: Record<string, JsonObject> }).$defs;
   const seen = new Set<string>();
@@ -118,7 +119,7 @@ async function generateSchemasFile(schema: CombinedSchema) {
   );
 }
 
-async function generateToolTypesFile(schema: CombinedSchema) {
+async function generateToolTypesFile(schema: FrontendSchemas) {
   const properties: Record<string, unknown> = {};
   for (const key of Object.keys(schema.$defs)) {
     properties[key] = { $ref: `#/$defs/${key}` };
@@ -148,7 +149,7 @@ async function generateToolTypesFile(schema: CombinedSchema) {
   await Bun.write(typesFile, `${warning}\n${cleaned}`);
 }
 
-async function generateToolsFile(schema: CombinedSchema) {
+async function generateToolsFile(schema: FrontendSchemas) {
   const entries = schema.tools
     .map((t) => ({
       name: t.name,
@@ -243,7 +244,7 @@ export function deserializeToolResponse(
   await Bun.write(toolFile, contents);
 }
 
-const schema = await loadCombinedSchema();
+const schema = await loadFrontendSchemas();
 
 await generateSchemasFile(schema);
 await generateToolsFile(schema);

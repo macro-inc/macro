@@ -16,10 +16,7 @@ export function CollabStatus() {
         <Match when={status() === SyncSourceStatus.Disconnected}>
           <div class="flex flex-row space-x-1 text-xs text-[oklch(0.47_0.157_37.304)] px-2 py-1 items-center bg-[oklch(0.954_0.038_75.164)]">
             <DisconnectedIcon class="size-4 text-[oklch(0.75_0.183_55.934)]" />
-            <p>
-              You are currently disconnected. Check your connection and refresh
-              the page.
-            </p>
+            <p>You're offline. Changes will sync when you reconnect.</p>
           </div>
         </Match>
         <Match when={status() === SyncSourceStatus.Connecting}>

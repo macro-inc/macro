@@ -1,6 +1,6 @@
 use std::{borrow::Cow, sync::Mutex};
 
-use loro::{ExportMode, Frontiers, LoroDoc, ToJson};
+use loro::{ExportMode, Frontiers, LoroDoc, ToJson, VersionVector};
 use tracing::debug;
 use web_time::Instant;
 use worker::Result;
@@ -120,15 +120,10 @@ impl DocumentState {
             .join(FRONTIERS_ID_SEPERATOR)
     }
 
-    pub fn export_updates_since(&self, frontiers: &Frontiers) -> Result<Vec<u8>> {
-        let version_vector = self
-            .loro_doc
-            .frontiers_to_vv(frontiers)
-            .ok_or_else(|| worker::Error::from("failed to convert frontiers to version vector"))?;
-
+    pub fn export_updates_since(&self, vv: &VersionVector) -> Result<Vec<u8>> {
         self.loro_doc
             .export(ExportMode::Updates {
-                from: std::borrow::Cow::Borrowed(&version_vector),
+                from: std::borrow::Cow::Borrowed(vv),
             })
             .context("failed to export updates")
     }

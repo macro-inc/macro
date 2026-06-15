@@ -331,6 +331,11 @@ const DOCUMENTS_FILTER_CATEGORIES: FilterCategory[] = [
         icon: () => <EntityIcon targetType="video" size="xs" />,
       },
       {
+        id: 'doc-snippet',
+        label: 'Snippets',
+        icon: () => <EntityIcon targetType="snippet" size="xs" />,
+      },
+      {
         id: 'file-other',
         label: 'Other',
         icon: () => <EntityIcon targetType="files" size="xs" />,

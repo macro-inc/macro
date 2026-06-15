@@ -29,6 +29,7 @@ import {
   isCodeEditorExtensionSupported,
   isCodeEditorLanguageSupported,
 } from './languageQuery';
+import { resolveUploadContentType } from './uploadContentType';
 
 type CreateMarkdownFileArgs = {
   title?: string;
@@ -328,9 +329,10 @@ export async function createChat(args?: CreateChatRequest) {
 
 /** Uploads a file to the static file service and returns the id */
 export async function createStaticFile(file: File): Promise<string> {
+  const contentType = resolveUploadContentType(file);
   const result = await staticFileClient.makePresignedUrl({
     file_name: file.name,
-    content_type: file.type,
+    content_type: contentType,
   });
   invalidateUserQuota();
   if (result.isErr()) throw new Error('Failed to upload file');
@@ -339,6 +341,7 @@ export async function createStaticFile(file: File): Promise<string> {
   const uploadResult = await staticFileClient.uploadToPresignedUrl({
     url: upload_url,
     blob: file,
+    contentType,
   });
   if (!uploadResult.success) {
     throw new Error('Failed to upload file');

@@ -174,10 +174,6 @@ use utoipa::OpenApi;
                 StartAuthRequest,
                 StartAuthResponse,
                 model_error_response::ErrorResponse,
-
-                // Tools
-                ai_toolset::schema::ToolSchema,
-                ai_toolset::schema::ToolSchemas,
             ),
         ),
         tags(

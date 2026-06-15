@@ -30,6 +30,7 @@ pub(in crate::api) async fn attach_link_context<U: EmailService>(
             email_address: link.email_address.clone(),
             provider,
             is_sync_active: link.is_sync_active,
+            is_primary: link.is_primary,
             created_at: link.created_at,
             updated_at: link.updated_at,
         });

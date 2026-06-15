@@ -49,18 +49,26 @@ pub(crate) struct CreateUserResponse<'a> {
     pub user: UserResponse<'a>,
 }
 
-/// Creates a user in fusionauth
+/// Creates a user in fusionauth. When `user_id` is provided the user is created with
+/// that id (`POST /api/user/{id}`), letting callers align the FusionAuth id with an
+/// externally minted identifier.
 /// https://fusionauth.io/docs/apis/users#create-a-user
 /// Valid respones: 200, 400, 401, 500, 503, 504
 pub(crate) async fn create_user(
     client: &AuthedClient,
     base_url: &str,
+    user_id: Option<&str>,
     request: CreateUserRequest<'_>,
     client_ip: IpAddr,
 ) -> Result<String> {
+    let url = match user_id {
+        Some(id) => format!("{base_url}/api/user/{id}"),
+        None => format!("{base_url}/api/user"),
+    };
+
     let res = client
         .client()
-        .post(format!("{base_url}/api/user"))
+        .post(url)
         .header("X-Forwarded-For", &client_ip.to_string())
         .json(&request)
         .send()

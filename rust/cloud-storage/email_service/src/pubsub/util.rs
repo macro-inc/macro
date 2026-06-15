@@ -4,6 +4,7 @@ use crate::util::redis::rate_limit::RateLimitArgs;
 use chrono::{DateTime, Utc};
 use connection_gateway_client::client::ConnectionGatewayClient;
 /// shared utils across different pubsub workers
+use models_email::api::refresh::RefreshEmailEvent;
 use models_email::email::service::backfill::{
     BackfillOperation, BackfillPubsubMessage, DepopulateCrmContactPayload, LinkScopedPayload,
     PopulateCrmContactPayload,
@@ -93,10 +94,15 @@ pub async fn complete_transaction_with_processing_error<T>(
 
 /// Send message to connection gateway to trigger email refresh if user is active on FE
 #[tracing::instrument(skip(client), level = "debug")]
-pub async fn cg_refresh_email(client: &ConnectionGatewayClient, macro_id: &str, event_type: &str) {
+pub async fn cg_refresh_email(
+    client: &ConnectionGatewayClient,
+    macro_id: &str,
+    event: RefreshEmailEvent,
+) {
     if cfg!(feature = "connection_gateway") {
+        let payload = serde_json::to_value(&event).unwrap_or_default();
         let _ = client
-            .refresh_email(macro_id, event_type)
+            .refresh_email(macro_id, payload)
             .await
             .inspect_err(|e| tracing::error!(macro_id = %macro_id, "Failed to refresh email: {e}"));
     }

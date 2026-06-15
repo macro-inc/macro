@@ -16,6 +16,7 @@ import { openExternalUrl } from '@core/util/url';
 import { getNotificationById } from '@queries/notification/user-notifications';
 import { errAsync, ResultAsync } from 'neverthrow';
 import { match, P } from 'ts-pattern';
+import { GITHUB_EVENT_TYPES } from './github-event-types';
 import { isChannelNotification } from './notification-helpers';
 import type { NotificationSource } from './notification-source';
 import { CHANNEL_EVENT_TYPES } from './notification-source';
@@ -238,9 +239,17 @@ function getSupportedHandler(
         openSplitIfNotOpen(lm, 'task', meta.content.taskId, { newSplit });
       };
     })
-    .with('github_pr_event', () => {
+    .with(P.union(...GITHUB_EVENT_TYPES), () => {
       const meta = notification.notification_metadata;
-      if (meta.tag !== 'github_pr_event') return null;
+      if (
+        meta.tag !== 'github_pr_status_changed' &&
+        meta.tag !== 'github_review_requested' &&
+        meta.tag !== 'github_pr_comment' &&
+        meta.tag !== 'github_pr_mention' &&
+        meta.tag !== 'github_pr_review'
+      ) {
+        return null;
+      }
       return async () => {
         // TODO(dev-rb/github): Route GitHub PR notifications to /pr.
         openExternalUrl(meta.content.url);

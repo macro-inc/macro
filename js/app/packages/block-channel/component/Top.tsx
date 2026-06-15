@@ -10,8 +10,8 @@ import { useChannelName } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
 import PhoneIcon from '@icon/wide-call.svg';
+import ChannelIcon from '@icon/wide-channel.svg';
 import ChatTextIcon from '@phosphor/chat-text.svg';
-import HashIcon from '@phosphor/hash.svg';
 import PaperclipIcon from '@phosphor/paperclip.svg';
 import UsersIcon from '@phosphor/users.svg';
 import type { ChannelParticipant } from '@queries/channel/types';
@@ -43,7 +43,7 @@ function TopIcon(props: TopIconProps) {
   return (
     <Show
       when={props.channelType === ChannelTypeEnum.DirectMessage && recipient()}
-      fallback={<HashIcon class="size-4 shrink-0" />}
+      fallback={<ChannelIcon class="size-4 shrink-0" />}
     >
       {(recipient) => {
         return (

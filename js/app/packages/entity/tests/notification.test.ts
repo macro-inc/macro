@@ -1,4 +1,4 @@
-import type { GithubPrEvent } from '@service-notification/generated/schemas';
+import type { GithubPrStatusChanged } from '@service-notification/generated/schemas';
 import { describe, expect, it } from 'vitest';
 import type { Notification } from '../src/types/notification';
 import {
@@ -14,12 +14,14 @@ const GITHUB_PR_FOREIGN_ENTITY_ID = '123e4567-e89b-12d3-a456-426614174000';
 
 type GithubPrNotification = Notification & {
   notification_metadata: {
-    content: GithubPrEvent;
-    tag: 'github_pr_event';
+    content: GithubPrStatusChanged;
+    tag: 'github_pr_status_changed';
   };
 };
 
-function githubPrEvent(overrides: Partial<GithubPrEvent> = {}): GithubPrEvent {
+function githubPrStatusChanged(
+  overrides: Partial<GithubPrStatusChanged> = {}
+): GithubPrStatusChanged {
   return {
     action: 'opened',
     displayName: 'macro/macro#42',
@@ -36,12 +38,12 @@ function githubPrEvent(overrides: Partial<GithubPrEvent> = {}): GithubPrEvent {
 }
 
 function githubPrNotification(
-  overrides: Partial<GithubPrEvent> = {}
+  overrides: Partial<GithubPrStatusChanged> = {}
 ): GithubPrNotification {
   return {
     notification_metadata: {
-      content: githubPrEvent(overrides),
-      tag: 'github_pr_event',
+      content: githubPrStatusChanged(overrides),
+      tag: 'github_pr_status_changed',
     },
   } as GithubPrNotification;
 }
@@ -286,7 +288,7 @@ describe('notification utils', () => {
       expect(getNotificationActionText(notification)).toBe('assigned');
     });
 
-    it('returns correct action text for github_pr_event', () => {
+    it('returns correct action text for github_pr_status_changed', () => {
       expect(getNotificationActionText(githubPrNotification())).toBe('updated');
     });
   });

@@ -4,6 +4,7 @@ import type { MessageData } from '../../Message';
 
 export const DEFAULT_REACTION_EMOJI = '👍';
 const EMPTY_REPLY_PARAGRAPH = ' ';
+const BOT_SENDER_PREFIX = 'bot|';
 
 export type ActionableMessage = Pick<
   MessageData,
@@ -20,11 +21,27 @@ export function isOwnMessage(
   return message.sender_id === currentUserId;
 }
 
-export function canEditOrDeleteMessage(
+export function isBotMessage(
+  message: Pick<ActionableMessage, 'sender_id'>
+): boolean {
+  return message.sender_id.startsWith(BOT_SENDER_PREFIX);
+}
+
+export function canEditMessage(
   message: Pick<ActionableMessage, 'sender_id' | 'deleted_at'>,
   currentUserId: string | undefined
 ): boolean {
   return isOwnMessage(message, currentUserId) && !message.deleted_at;
+}
+
+export function canDeleteMessage(
+  message: Pick<ActionableMessage, 'sender_id' | 'deleted_at'>,
+  currentUserId: string | undefined
+): boolean {
+  return (
+    (isOwnMessage(message, currentUserId) || isBotMessage(message)) &&
+    !message.deleted_at
+  );
 }
 
 export function canReplyToMessage(

@@ -24,6 +24,7 @@ pub struct Link {
     pub email_address: EmailStr<'static>,
     pub provider: UserProvider,
     pub is_sync_active: bool,
+    pub is_primary: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }

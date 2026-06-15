@@ -1,21 +1,18 @@
 use super::*;
-use ai_toolset::generate_tool_input_schema;
-use ai_toolset::tool_object::validate_tool_schema;
+use ai_toolset::schema::generate_validated_input_schema;
 
 #[test]
 fn test_list_notifications_schema_validation() {
-    let schema = generate_tool_input_schema!(ListNotifications);
-
-    let result = validate_tool_schema(&schema);
+    let result = generate_validated_input_schema::<ListNotifications>();
     assert!(result.is_ok(), "{:?}", result);
 
-    let (name, description) = result.unwrap();
+    let validated = result.unwrap();
     assert_eq!(
-        name, "ListNotifications",
+        validated.name, "ListNotifications",
         "Tool name should match the schemars title"
     );
     assert!(
-        description.contains("List the current user"),
+        validated.description.contains("List the current user"),
         "Description should contain expected text"
     );
 }
@@ -64,7 +61,9 @@ fn test_list_notifications_deserialization() {
 #[test]
 #[ignore = "prints the input schema"]
 fn print_list_notifications_input_schema() {
-    let schema = generate_tool_input_schema!(ListNotifications);
+    let schema = generate_validated_input_schema::<ListNotifications>()
+        .unwrap()
+        .schema;
     println!("{}", serde_json::to_string_pretty(&schema).unwrap());
 }
 
@@ -72,43 +71,42 @@ fn print_list_notifications_input_schema() {
 #[test]
 #[ignore = "prints the output schema"]
 fn print_list_notifications_output_schema() {
-    let generator = ai_toolset::tool_object::minimized_output_schema_generator();
-    let schema = generator.into_root_schema_for::<ListNotificationsResponse>();
+    let schema = schemars::schema_for!(ListNotificationsResponse);
     println!("{}", serde_json::to_string_pretty(&schema).unwrap());
 }
 
 #[test]
 fn test_mark_notifications_seen_schema_validation() {
-    let schema = generate_tool_input_schema!(MarkNotificationsSeen);
-
-    let result = validate_tool_schema(&schema);
+    let result = generate_validated_input_schema::<MarkNotificationsSeen>();
     assert!(result.is_ok(), "{:?}", result);
 
-    let (name, description) = result.unwrap();
+    let validated = result.unwrap();
     assert_eq!(
-        name, "MarkNotificationsSeen",
+        validated.name, "MarkNotificationsSeen",
         "Tool name should match the schemars title"
     );
     assert!(
-        description.contains("Mark one or more notifications as seen"),
+        validated
+            .description
+            .contains("Mark one or more notifications as seen"),
         "Description should contain expected text"
     );
 }
 
 #[test]
 fn test_mark_notifications_done_schema_validation() {
-    let schema = generate_tool_input_schema!(MarkNotificationsDone);
-
-    let result = validate_tool_schema(&schema);
+    let result = generate_validated_input_schema::<MarkNotificationsDone>();
     assert!(result.is_ok(), "{:?}", result);
 
-    let (name, description) = result.unwrap();
+    let validated = result.unwrap();
     assert_eq!(
-        name, "MarkNotificationsDone",
+        validated.name, "MarkNotificationsDone",
         "Tool name should match the schemars title"
     );
     assert!(
-        description.contains("Mark one or more notifications as done"),
+        validated
+            .description
+            .contains("Mark one or more notifications as done"),
         "Description should contain expected text"
     );
 }
@@ -124,7 +122,9 @@ fn test_mark_notifications_seen_deserialization() {
 #[test]
 #[ignore = "prints the input schema"]
 fn print_mark_seen_input_schema() {
-    let schema = generate_tool_input_schema!(MarkNotificationsSeen);
+    let schema = generate_validated_input_schema::<MarkNotificationsSeen>()
+        .unwrap()
+        .schema;
     println!("{}", serde_json::to_string_pretty(&schema).unwrap());
 }
 
@@ -132,7 +132,9 @@ fn print_mark_seen_input_schema() {
 #[test]
 #[ignore = "prints the input schema"]
 fn print_mark_done_input_schema() {
-    let schema = generate_tool_input_schema!(MarkNotificationsDone);
+    let schema = generate_validated_input_schema::<MarkNotificationsDone>()
+        .unwrap()
+        .schema;
     println!("{}", serde_json::to_string_pretty(&schema).unwrap());
 }
 
@@ -140,7 +142,6 @@ fn print_mark_done_input_schema() {
 #[test]
 #[ignore = "prints the output schema"]
 fn print_output_schema() {
-    let generator = ai_toolset::tool_object::minimized_output_schema_generator();
-    let schema = generator.into_root_schema_for::<MarkNotificationsResponse>();
+    let schema = schemars::schema_for!(MarkNotificationsResponse);
     println!("{}", serde_json::to_string_pretty(&schema).unwrap());
 }

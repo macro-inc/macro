@@ -235,7 +235,11 @@ export const useSoupAstItemsQuery = (
 
           return mapSoupPageToEntityList(
             { items: page.items, next_cursor: null },
-            { instructionsIdQuery }
+            {
+              instructionsIdQuery,
+              showSupportedForeignEntities:
+                options?.().showSupportedForeignEntities,
+            }
           );
         });
 

@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT EXISTS (\n                SELECT 1\n                FROM public.email_threads t\n                JOIN public.email_links l ON l.id = t.link_id\n                WHERE t.id = $1::uuid\n                  AND (\n                      l.macro_id = $2\n                      OR EXISTS (\n                          SELECT 1\n                          FROM public.macro_user_links mul\n                          WHERE mul.link_id = l.id\n                            AND mul.primary_macro_id = $2\n                      )\n                  )\n            ) AS \"exists!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "exists!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "355bb8b76dffeb7dbf8fef2270f49e6502607b652baf2bdca866d5f0ced08774"
+}

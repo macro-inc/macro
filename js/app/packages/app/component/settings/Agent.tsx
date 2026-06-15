@@ -1,5 +1,6 @@
 import { createSignal, For, Show, Suspense } from 'solid-js';
 import { TabsInset } from '@core/component/TabsInset';
+import PlusIcon from '@phosphor-icons/core/regular/plus.svg?component-solid';
 import { Button, Layer, Panel } from '@ui';
 import { McpSetupCards } from '@core/component/AI/component/McpSetupCards';
 import { toast } from '@core/component/Toast/Toast';
@@ -332,15 +333,18 @@ function Connectors() {
 
   return (
     <div class="px-6 py-4 flex flex-col gap-4">
-      <div class="flex items-center justify-between">
-          <div class="text-sm">
-            Connect the Macro agent to external MCP servers
-          </div>
+      <div class="flex items-center justify-between gap-4">
+        <div class="text-sm">
+          Connect the Macro agent to external MCP servers
+        </div>
         <Button
           variant="active"
           size="sm"
+          depth={3}
+          class="shrink-0"
           onClick={() => { setShowAddDialog(true) }}
         >
+          <PlusIcon class="size-4" />
           Add Server
         </Button>
       </div>

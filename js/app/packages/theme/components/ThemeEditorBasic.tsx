@@ -1,7 +1,9 @@
-import { batch, createEffect, createSignal, onCleanup, onMount } from 'solid-js';
+import { batch, createEffect, createSignal, type JSX, onCleanup, onMount, untrack } from 'solid-js';
 import { setThemeDepth, themeDepth } from '../signals/themeSignals';
 import { themeReactive } from '../signals/themeReactive';
+import { flipLightDark } from '../utils/themeUtils';
 import { isMobile } from '@core/mobile/isMobile';
+import IconFlip from '@phosphor-icons/core/regular/circle-half-tilt.svg?component-solid';
 
 function setLightness(lightness: number) {
   batch(() => {
@@ -110,6 +112,87 @@ export function randomizeTheme(){
     setSaturation(randSaturation);
     setThemeDepth(randDepth);
   });
+}
+
+/** Numeric value box shown to the right of each slider. Displays/edits the value
+ *  on a display scale (default 0-100) mapped from the control's internal range.
+ *  Pass displayMin/displayMax for a centered scale, e.g. -100..100 for Contrast.
+ *  Keeps its own text state while typing (mirroring ThemeEditorAdvanced) so
+ *  reactive updates from the slider don't fight the user's input. */
+function NumberInput(props: {
+  get: () => number;
+  set: (n: number) => void;
+  min: number;
+  max: number;
+  displayMin?: number;
+  displayMax?: number;
+  action?: JSX.Element;
+}) {
+  const dMin = () => props.displayMin ?? 0;
+  const dMax = () => props.displayMax ?? 100;
+  const toDisplay = (v: number) =>
+    dMin() + ((v - props.min) / (props.max - props.min)) * (dMax() - dMin());
+  const fromDisplay = (d: number) =>
+    props.min + ((d - dMin()) / (dMax() - dMin())) * (props.max - props.min);
+
+  const [text, setText] = createSignal('');
+  const [isSetByInput, setIsSetByInput] = createSignal(false);
+
+  createEffect(() => {
+    const value = props.get();
+    if (untrack(isSetByInput)) { setIsSetByInput(false); }
+    else { setText(Math.round(toDisplay(value)).toString()); }
+  });
+
+  return (
+    <div style="display: flex; align-items: center; gap: 4px; flex: none;">
+      <div
+        style="
+          background-color: var(--b1);
+          border: 1px solid var(--b4);
+          box-sizing: border-box;
+          align-items: center;
+          border-radius: 4px;
+          padding: 3px 6px;
+          display: flex;
+          width: 8ch;
+          gap: 3px;
+        "
+      >
+        {props.action}
+        <input
+          class="theme-editor-basic-num"
+          type="number"
+          value={text()}
+          min={dMin()}
+          max={dMax()}
+          step={1}
+          onInput={(e) => {
+            const raw = e.currentTarget.value;
+            setIsSetByInput(true);
+            setText(raw);
+            const d = parseFloat(raw);
+            if (!Number.isNaN(d)) { props.set(fromDisplay(Math.max(dMin(), Math.min(dMax(), d)))); }
+          }}
+          onBlur={() => setText(Math.round(toDisplay(props.get())).toString())}
+          style="
+            font-family: var(--font-mono);
+            background: transparent;
+            box-sizing: border-box;
+            text-align: right;
+            color: var(--c0);
+            font-size: 12px;
+            min-width: 0;
+            outline: none;
+            border: none;
+            padding: 0;
+            flex: 1;
+          "
+        />
+      </div>
+      <span style="color: var(--c2); font-size: 12px;">%</span>
+    </div>
+  );
 }
 
 export function ThemeEditorBasic(){
@@ -321,9 +404,18 @@ export function ThemeEditorBasic(){
         .theme-editor-basic-slider::-moz-range-thumb {
           opacity: 0;
         }
+        .theme-editor-basic-num::-webkit-inner-spin-button,
+        .theme-editor-basic-num::-webkit-outer-spin-button {
+          -webkit-appearance: none;
+          margin: 0;
+        }
+        .theme-editor-basic-num {
+          -moz-appearance: textfield;
+        }
       `}</style>
 
       <div
+        class="@container"
         style="
           font-family: var(--font-sans);
           padding: 8px 20px 12px 20px;
@@ -332,15 +424,14 @@ export function ThemeEditorBasic(){
           height: min-content;
           font-weight: 500;
           font-size: 12px;
-          display: grid;
-          gap: 20px;
         "
       >
+       <div class="grid gap-5 @2xl:grid-cols-2 @2xl:items-start">
         <div
           onPointerDown={handleCanvasPointerDown}
           ref={canvasContainerRef}
+          class={isMobile() ? 'h-[140px]' : 'h-[250px]'}
           style={{
-            'height': isMobile() ? '140px' : '250px',
             'border': '1px solid var(--b4)',
             'border-radius': '6px',
             'position': 'relative',
@@ -375,32 +466,21 @@ export function ThemeEditorBasic(){
         </div>
 
         <div
+          class="grid h-min w-full gap-3 @2xl:gap-5"
           style="
-            grid-template-columns: 11ch 1fr;
-            height: min-content;
-            gap: 20px 10px;
-            display: grid;
-            width: 100%;
+            --b4: color-mix(in oklch, oklch(var(--b4l) var(--b4c) var(--b4h)), oklch(var(--c4l) var(--c4c) var(--c4h)) 30%);
           "
         >
-          <div style="position: relative;">
-            <div
-              style="
-                transform: translateY(-50%);
-                position: absolute;
-                top: 50%;
-                left: 0;
-              "
-            >
-              Chroma
-            </div>
-          </div>
+          <div class="flex items-center gap-3 @2xl:flex-col @2xl:items-stretch @2xl:gap-[3px]">
+          <div class="w-[9ch] shrink-0 @2xl:w-auto">Chroma</div>
+          <div class="flex flex-1 items-center gap-3 min-w-0 @2xl:flex-none">
           <div
             style="
               box-sizing: border-box;
               position: relative;
               height: 10px;
-              width: 100%;
+              min-width: 0;
+              flex: 1;
             "
           >
             <div
@@ -428,7 +508,7 @@ export function ThemeEditorBasic(){
                 'border-radius': '2px',
                 'position': 'absolute',
                 'height': '18px',
-                'width': '18px',
+                'width': '9px',
                 'top': '50%',
               }}
             />
@@ -457,25 +537,25 @@ export function ThemeEditorBasic(){
               min="0.0"
             />
           </div>
-
-          <div style="position: relative;">
-            <div
-              style="
-                transform: translateY(-50%);
-                position: absolute;
-                top: 50%;
-                left: 0;
-              "
-            >
-              Saturation
-            </div>
+          <NumberInput
+            get={() => themeReactive.a0.c[0]()}
+            set={(n) => setChroma(n, parseFloat(sliderSaturationRef.value))}
+            min={0}
+            max={0.37}
+          />
           </div>
+          </div>
+
+          <div class="flex items-center gap-3 @2xl:flex-col @2xl:items-stretch @2xl:gap-[3px]">
+          <div class="w-[9ch] shrink-0 @2xl:w-auto">Tint</div>
+          <div class="flex flex-1 items-center gap-3 min-w-0 @2xl:flex-none">
           <div
             style="
               box-sizing: border-box;
               position: relative;
               height: 10px;
-              width: 100%;
+              min-width: 0;
+              flex: 1;
             "
           >
             <div
@@ -518,7 +598,7 @@ export function ThemeEditorBasic(){
                 'border-radius': '2px',
                 'position': 'absolute',
                 'height': '18px',
-                'width': '18px',
+                'width': '9px',
                 'top': '50%',
               }}
             />
@@ -548,25 +628,28 @@ export function ThemeEditorBasic(){
               min="0.0"
             />
           </div>
-
-          <div style="position: relative;">
-            <div
-              style="
-                transform: translateY(-50%);
-                position: absolute;
-                top: 50%;
-                left: 0;
-              "
-            >
-              Contrast
-            </div>
+          <NumberInput
+            get={() => {
+              const denom = themeReactive.a0.c[0]() * 0.37 * 0.6;
+              return denom ? themeReactive.b0.c[0]() / denom : 0;
+            }}
+            set={(n) => setSaturation(n)}
+            min={0}
+            max={1}
+          />
           </div>
+          </div>
+
+          <div class="flex items-center gap-3 @2xl:flex-col @2xl:items-stretch @2xl:gap-[3px]">
+          <div class="w-[9ch] shrink-0 @2xl:w-auto">Contrast</div>
+          <div class="flex flex-1 items-center gap-3 min-w-0 @2xl:flex-none">
           <div
             style="
               box-sizing: border-box;
               position: relative;
               height: 10px;
-              width: 100%;
+              min-width: 0;
+              flex: 1;
             "
           >
             <div
@@ -613,7 +696,7 @@ export function ThemeEditorBasic(){
                 'border-radius': '2px',
                 'position': 'absolute',
                 'height': '18px',
-                'width': '18px',
+                'width': '9px',
                 'top': '50%',
               }}
             />
@@ -645,27 +728,38 @@ export function ThemeEditorBasic(){
               min="0.0"
             />
           </div>
-
-
-
-          <div style="position: relative;">
-            <div
-              style="
-                transform: translateY(-50%);
-                position: absolute;
-                top: 50%;
-                left: 0;
-              "
-            >
-              Depth
-            </div>
+          <NumberInput
+            get={() => getContrastFromY(themeReactive.b0.l[0]())}
+            set={(n) => setContrast(n)}
+            min={0}
+            max={0.8}
+            displayMin={-100}
+            displayMax={100}
+            action={
+              <button
+                type="button"
+                aria-label="Flip light / dark"
+                onPointerDown={flipLightDark}
+                class="flex shrink-0 cursor-pointer items-center justify-center text-ink-muted hover:text-ink"
+                style="width: 14px; height: 14px; padding: 0; border: none; background: none;"
+              >
+                <IconFlip style={{ width: '14px', height: '14px' }} />
+              </button>
+            }
+          />
           </div>
+          </div>
+
+          <div class="flex items-center gap-3 @2xl:flex-col @2xl:items-stretch @2xl:gap-[3px]">
+          <div class="w-[9ch] shrink-0 @2xl:w-auto">Depth</div>
+          <div class="flex flex-1 items-center gap-3 min-w-0 @2xl:flex-none">
           <div
             style="
               box-sizing: border-box;
               position: relative;
               height: 10px;
-              width: 100%;
+              min-width: 0;
+              flex: 1;
             "
           >
             <div
@@ -708,7 +802,7 @@ export function ThemeEditorBasic(){
                 'border-radius': '2px',
                 'position': 'absolute',
                 'height': '18px',
-                'width': '18px',
+                'width': '9px',
                 'top': '50%',
               }}
             />
@@ -740,7 +834,16 @@ export function ThemeEditorBasic(){
               min="0.0"
             />
           </div>
+          <NumberInput
+            get={() => themeDepth()}
+            set={(n) => setThemeDepth(n)}
+            min={0}
+            max={0.4}
+          />
+          </div>
+          </div>
         </div>
+       </div>
       </div>
     </>
   );

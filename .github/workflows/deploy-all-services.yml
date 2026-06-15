@@ -56,7 +56,7 @@ jobs:
           cfg=.github/services-config.json
           # Full list drives deploy-services; the filtered lists keep each build
           # matrix to only the services that actually produce that artifact, so
-          # no Blacksmith job spins up Nix + a sticky disk for nothing.
+          # no build job spins up Nix + a cache volume for nothing.
           services=$(jq -c '.services | keys' "$cfg")
           binaries=$(jq -c '[.services | to_entries[] | select((.value.deploy_binaries // []) | length > 0) | .key]' "$cfg")
           lambdas=$(jq -c '[.services | to_entries[] | select((.value.deploy_lambdas // []) | length > 0) | .key]' "$cfg")
@@ -67,25 +67,26 @@ jobs:
           echo "With binaries: ${binaries}"
           echo "With lambdas: ${lambdas}"
 
-  # Warm the two shared dep closures in parallel, each onto its OWN sticky disk
-  # so the binary and lambda chains never collide on a last-write-wins commit:
-  #   - warm-binaries -> deployCargoArtifacts        on <repo>-nix-store
-  #   - warm-lambdas  -> lambdaDeployCargoArtifacts   on <repo>-nix-lambdas
-  # Each build matrix depends only on its own warm job, so a slow lambda-closure
-  # warm never blocks binary builds and vice versa.
+  # Warm the two shared dep closures in parallel. Each build matrix depends
+  # only on its own warm job, so a slow lambda-closure warm never blocks
+  # binary builds and vice versa. The /nix cache volume is an optimization;
+  # Cachix is the consistency backstop either way.
   warm-binaries:
     name: Warm shared binary deps onto sticky disk
     needs: setup
     if: ${{ needs.setup.outputs.binaries != '[]' }}
-    # NOTE: adjust to a provisioned Blacksmith runner label for the org.
-    runs-on: blacksmith-32vcpu-ubuntu-2404
+    runs-on: namespace-profile-linux-mid
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
 
-      - name: Mount Nix store sticky disk
-        uses: useblacksmith/stickydisk@v1
+      # Namespace cache volume backing /nix. Purely an optimization: if the
+      # profile has no cache volumes (or the mount fails), setup-nix performs
+      # a cold install and Cachix substitutes the warm layers — slower, never
+      # wrong. Hence continue-on-error.
+      - name: Mount /nix cache volume
+        continue-on-error: true
+        uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0 # v1.4.3
         with:
-          key: ${{ github.repository }}-nix-store
           path: /nix
 
       - name: Setup Nix
@@ -109,7 +110,7 @@ jobs:
           nix build --print-build-logs ".#deployCargoArtifacts"
           echo "Shared release deps realised into /nix/store; committed on job exit."
 
-      - name: Teardown Nix (free sticky disk for commit)
+      - name: Teardown Nix (free cache volume for commit)
         if: always()
         uses: ./.github/actions/teardown-nix
 
@@ -117,15 +118,18 @@ jobs:
     name: Warm shared lambda deps onto sticky disk
     needs: setup
     if: ${{ needs.setup.outputs.lambdas != '[]' }}
-    # NOTE: adjust to a provisioned Blacksmith runner label for the org.
-    runs-on: blacksmith-32vcpu-ubuntu-2404
+    runs-on: namespace-profile-linux-mid
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
 
-      - name: Mount lambda Nix store sticky disk
-        uses: useblacksmith/stickydisk@v1
+      # Namespace cache volume backing /nix. Purely an optimization: if the
+      # profile has no cache volumes (or the mount fails), setup-nix performs
+      # a cold install and Cachix substitutes the warm layers — slower, never
+      # wrong. Hence continue-on-error.
+      - name: Mount /nix cache volume
+        continue-on-error: true
+        uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0 # v1.4.3
         with:
-          key: ${{ github.repository }}-nix-lambdas
           path: /nix
 
       - name: Setup Nix
@@ -149,7 +153,7 @@ jobs:
           nix build --print-build-logs ".#lambdaDeployCargoArtifacts" ".#callRecordingPreviewFfmpegLayer"
           echo "Shared lambda deps realised into /nix/store; committed on job exit."
 
-      - name: Teardown Nix (free sticky disk for commit)
+      - name: Teardown Nix (free cache volume for commit)
         if: always()
         uses: ./.github/actions/teardown-nix
 
@@ -157,9 +161,9 @@ jobs:
     name: Build ${{ matrix.service }} binaries
     needs: [setup, warm-binaries]
     if: ${{ needs.setup.outputs.binaries != '[]' }}
-    # Runs on Blacksmith, cloning the warm /nix sticky disk committed by
-    # warm-binaries so only each service's own crate compiles.
-    runs-on: blacksmith-32vcpu-ubuntu-2404
+    # Clones the warm /nix cache volume populated by warm-binaries so only
+    # each service's own crate compiles (cold volume -> Cachix substitution).
+    runs-on: namespace-profile-linux-mid
     strategy:
       fail-fast: false
       # No max-parallel: all binary services build concurrently (they only clone
@@ -171,35 +175,15 @@ jobs:
         with:
           clean: false
 
-      - name: Mount Nix store sticky disk (clones warmed snapshot)
-        uses: useblacksmith/stickydisk@v1
+      # Namespace cache volume backing /nix. Purely an optimization: if the
+      # profile has no cache volumes (or the mount fails), setup-nix performs
+      # a cold install and Cachix substitutes the warm layers — slower, never
+      # wrong. Hence continue-on-error.
+      - name: Mount /nix cache volume
+        continue-on-error: true
+        uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0 # v1.4.3
         with:
-          key: ${{ github.repository }}-nix-store
           path: /nix
-
-      # Hand the built artifact straight to the matching deploy job over a
-      # Blacksmith sticky disk instead of GitHub Actions artifacts. The keyed
-      # snapshot is committed on job exit and cloned by deploy-services (which
-      # `needs` this job), so the ~96MB closure rides Blacksmith's co-located
-      # NVMe fabric (seconds) rather than the GitHub artifact API (~70s).
-      # Keyed per service + commit SHA: same SHA builds byte-identical (the Nix
-      # build is deploy-env-independent) so concurrent dev/prod runs are safe,
-      # different SHAs get distinct keys, and unused snapshots auto-evict after
-      # 7 days of inactivity.
-      - name: Mount binaries handoff sticky disk
-        uses: useblacksmith/stickydisk@v1
-        with:
-          key: ${{ github.repository }}-handoff-binaries-${{ matrix.service }}-${{ github.sha }}
-          path: /handoff-binaries
-
-      # A fresh ext4 sticky disk mounts as root:root; make it writable by the
-      # (possibly non-root) runner so the build step can write the tar. No-op
-      # when the runner already runs as root.
-      - name: Ensure binaries handoff is writable
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ "$(id -u)" -ne 0 ]; then sudo chown -R "$(id -u):$(id -g)" /handoff-binaries; fi
 
       - name: Setup Nix
         uses: ./.github/actions/setup-nix
@@ -236,10 +220,21 @@ jobs:
           fi
 
           touch prebuilt/.keep
-          # Write straight onto the handoff sticky disk; deploy-services reads it.
-          tar -C prebuilt -czf /handoff-binaries/prebuilt-binaries.tar.gz .
+          tar -C prebuilt -czf prebuilt-binaries.tar.gz .
+          # Receipt: the deploy job logs the same hash on read.
+          echo "handoff receipt: $(sha256sum prebuilt-binaries.tar.gz | cut -d' ' -f1) ($(stat -c%s prebuilt-binaries.tar.gz) bytes)"
 
-      - name: Teardown Nix (free sticky disk for commit)
+      # Handoff to the matching deploy job via Namespace artifact storage:
+      # strongly consistent object storage (no snapshot-visibility races),
+      # rides Namespace's network rather than the GitHub artifacts API.
+      # Attempt-scoped path so re-runs never collide with stale uploads.
+      - name: Upload handoff artifact
+        shell: bash
+        env:
+          DEST: handoff/${{ github.run_id }}-${{ github.run_attempt }}/${{ matrix.service }}/prebuilt-binaries.tar.gz
+        run: nsc artifact upload prebuilt-binaries.tar.gz "$DEST" --expires_in=24h
+
+      - name: Teardown Nix (free cache volume for commit)
         if: always()
         uses: ./.github/actions/teardown-nix
 
@@ -251,10 +246,10 @@ jobs:
     # of a service's handlers via `nix build .#deploy-lambda-<name>`, cloning the
     # warm lambda /nix disk committed by warm-lambdas. Unchanged handlers are
     # pure cache hits (substituted from the disk/Cachix, no recompile).
-    runs-on: blacksmith-32vcpu-ubuntu-2404
+    runs-on: namespace-profile-linux-mid
     strategy:
       fail-fast: false
-      # No max-parallel: Blacksmith autoscales runners, so all lambda services
+      # No max-parallel: runners autoscale, so all lambda services
       # build concurrently instead of batching 8.
       matrix:
         service: ${{ fromJson(needs.setup.outputs.lambdas) }}
@@ -263,28 +258,15 @@ jobs:
         with:
           clean: false
 
-      - name: Mount lambda Nix store sticky disk (clones warmed closure)
-        uses: useblacksmith/stickydisk@v1
+      # Namespace cache volume backing /nix. Purely an optimization: if the
+      # profile has no cache volumes (or the mount fails), setup-nix performs
+      # a cold install and Cachix substitutes the warm layers — slower, never
+      # wrong. Hence continue-on-error.
+      - name: Mount /nix cache volume
+        continue-on-error: true
+        uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0 # v1.4.3
         with:
-          key: ${{ github.repository }}-nix-lambdas
           path: /nix
-
-      # Hand the Lambda bundle to the matching deploy job over a sticky disk
-      # instead of GitHub artifacts (see build-service-binaries for rationale).
-      - name: Mount lambdas handoff sticky disk
-        uses: useblacksmith/stickydisk@v1
-        with:
-          key: ${{ github.repository }}-handoff-lambdas-${{ matrix.service }}-${{ github.sha }}
-          path: /handoff-lambdas
-
-      # A fresh ext4 sticky disk mounts as root:root; make it writable by the
-      # (possibly non-root) runner so the handoff copy can write the tar. No-op
-      # when the runner already runs as root.
-      - name: Ensure lambdas handoff is writable
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ "$(id -u)" -ne 0 ]; then sudo chown -R "$(id -u):$(id -g)" /handoff-lambdas; fi
 
       - name: Setup Nix
         uses: ./.github/actions/setup-nix
@@ -299,14 +281,22 @@ jobs:
           SERVICE: ${{ matrix.service }}
         run: .github/scripts/build-cloud-storage-lambdas-nix.sh
 
-      - name: Hand off Lambda artifacts to deploy
+      - name: Log handoff receipt
         shell: bash
         run: |
           set -euo pipefail
-          # The build script writes lambda-artifacts.tar.gz to the workspace root.
-          cp lambda-artifacts.tar.gz /handoff-lambdas/lambda-artifacts.tar.gz
+          # The build script writes lambda-artifacts.tar.gz to the workspace
+          # root; the deploy job logs the same hash on read.
+          echo "handoff receipt: $(sha256sum lambda-artifacts.tar.gz | cut -d' ' -f1) ($(stat -c%s lambda-artifacts.tar.gz) bytes)"
 
-      - name: Teardown Nix (free sticky disk for commit)
+      # Handoff via Namespace artifact storage (see build-service-binaries).
+      - name: Upload handoff artifact
+        shell: bash
+        env:
+          DEST: handoff/${{ github.run_id }}-${{ github.run_attempt }}/${{ matrix.service }}/lambda-artifacts.tar.gz
+        run: nsc artifact upload lambda-artifacts.tar.gz "$DEST" --expires_in=24h
+
+      - name: Teardown Nix (free cache volume for commit)
         if: always()
         uses: ./.github/actions/teardown-nix
 
@@ -328,9 +318,8 @@ jobs:
     needs: [setup, build-service-binaries, build-lambda-artifacts, migrate-db]
     if: ${{ needs.setup.outputs.matrix != '[]' }}
     # Deploys via Pulumi + Docker; AWS auth is via explicit static keys
-    # (configure-aws-credentials), so no dependency on a RunsOn instance role.
-    # NOTE: adjust to a provisioned Blacksmith runner label for the org.
-    runs-on: blacksmith-8vcpu-ubuntu-2404
+    # (configure-aws-credentials).
+    runs-on: namespace-profile-linux-small
     # Pin PULUMI_HOME to a fixed path (outside the workspace, which the deploy
     # action's checkout cleans) so the plugins subdir can be backed by a sticky
     # disk. Propagates into the composite action's pulumi step via the job env.
@@ -360,33 +349,37 @@ jobs:
           echo "has_binaries=$has_binaries" >> "$GITHUB_OUTPUT"
           echo "has_lambdas=$has_lambdas" >> "$GITHUB_OUTPUT"
 
-      # Clone the handoff snapshots committed by the build jobs (which this job
-      # `needs`). Mounted outside the workspace at /handoff-* so the composite
-      # action's own checkout (which cleans the workspace) can't touch them.
-      # Gated on the artifact flags so services with no binaries/lambdas don't
-      # mount an empty disk.
-      - name: Mount binaries handoff sticky disk
-        if: ${{ steps.check-artifacts.outputs.has_binaries == 'true' }}
-        uses: useblacksmith/stickydisk@v1
-        with:
-          key: ${{ github.repository }}-handoff-binaries-${{ matrix.service }}-${{ github.sha }}
-          path: /handoff-binaries
+      # Pull the handoff tars from Namespace artifact storage into runner.temp
+      # (outside the workspace, which the composite action's checkout cleans).
+      # The composite's tar-path branch handles receipts + the extract guard.
+      - name: Download handoff artifacts
+        if: ${{ steps.check-artifacts.outputs.has_binaries == 'true' || steps.check-artifacts.outputs.has_lambdas == 'true' }}
+        shell: bash
+        env:
+          HAS_BINARIES: ${{ steps.check-artifacts.outputs.has_binaries }}
+          HAS_LAMBDAS: ${{ steps.check-artifacts.outputs.has_lambdas }}
+          BASE: handoff/${{ github.run_id }}-${{ github.run_attempt }}/${{ matrix.service }}
+        run: |
+          set -euo pipefail
+          if ! command -v nsc >/dev/null 2>&1; then
+            echo "::error::nsc CLI not found — this job expects a Namespace runner (or add namespacelabs/nscloud-setup)"
+            exit 1
+          fi
+          mkdir -p "$RUNNER_TEMP/handoff"
+          if [[ "$HAS_BINARIES" == "true" ]]; then
+            nsc artifact download "$BASE/prebuilt-binaries.tar.gz" "$RUNNER_TEMP/handoff/prebuilt-binaries.tar.gz"
+          fi
+          if [[ "$HAS_LAMBDAS" == "true" ]]; then
+            nsc artifact download "$BASE/lambda-artifacts.tar.gz" "$RUNNER_TEMP/handoff/lambda-artifacts.tar.gz"
+          fi
 
-      - name: Mount lambdas handoff sticky disk
-        if: ${{ steps.check-artifacts.outputs.has_lambdas == 'true' }}
-        uses: useblacksmith/stickydisk@v1
+      # Cache Pulumi's provider plugins ($PULUMI_HOME/plugins) on a Namespace
+      # cache volume. Plugins are version-pinned by infra/ and identical across
+      # services. Optimization-only: a cold volume just re-downloads (~45s).
+      - name: Cache Pulumi plugins
+        continue-on-error: true
+        uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0 # v1.4.3
         with:
-          key: ${{ github.repository }}-handoff-lambdas-${{ matrix.service }}-${{ github.sha }}
-          path: /handoff-lambdas
-
-      # Cache Pulumi's provider plugins ($PULUMI_HOME/plugins) on a sticky disk.
-      # Plugins are version-pinned by infra/ and identical across services, so a
-      # single stable-keyed disk is shared by every deploy job: the first run
-      # downloads + commits, later runs clone it warm and skip the ~45s pull.
-      - name: Cache Pulumi plugins (sticky disk)
-        uses: useblacksmith/stickydisk@v1
-        with:
-          key: ${{ github.repository }}-pulumi-plugins
           path: /pulumi/plugins
 
       # PULUMI_HOME (/pulumi) and its mounted plugins subdir come up root-owned;
@@ -402,16 +395,13 @@ jobs:
         uses: ./.github/actions/deploy-cloud-storage-pulumi
         with:
           environment: ${{ inputs.environment }}
-          # Blacksmith buildkit builder: keeps the docker layer cache on a
-          # per-Dockerfile sticky disk so heavy bases (LibreOffice/Collabora)
-          # stay warm instead of re-pulling from ECR each deploy.
-          use-blacksmith-builder: 'true'
           aws-access-key: ${{ secrets.AWS_ACCESS_KEY }}
           aws-secret-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           pulumi-access-token: ${{ secrets.PULUMI_ACCESS_TOKEN }}
           pulumi-service-name: ${{ steps.project-name.outputs.project-name }}
-          prebuilt-binaries-tar: ${{ steps.check-artifacts.outputs.has_binaries == 'true' && '/handoff-binaries/prebuilt-binaries.tar.gz' || '' }}
-          lambda-artifacts-tar: ${{ steps.check-artifacts.outputs.has_lambdas == 'true' && '/handoff-lambdas/lambda-artifacts.tar.gz' || '' }}
+          use-namespace-builder: 'true'
+          prebuilt-binaries-tar: ${{ steps.check-artifacts.outputs.has_binaries == 'true' && format('{0}/handoff/prebuilt-binaries.tar.gz', runner.temp) || '' }}
+          lambda-artifacts-tar: ${{ steps.check-artifacts.outputs.has_lambdas == 'true' && format('{0}/handoff/lambda-artifacts.tar.gz', runner.temp) || '' }}
           dd-app-key: ${{ secrets.DD_APP_KEY }}
           dd-api-key: ${{ secrets.DD_API_KEY }}
 

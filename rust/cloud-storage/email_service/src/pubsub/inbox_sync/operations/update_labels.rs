@@ -6,6 +6,7 @@ use crate::pubsub::util::{cg_refresh_email, complete_transaction_with_processing
 use email_db_client::labels::delete::delete_db_message_labels;
 use email_db_client::labels::insert;
 use email_db_client::threads::update::update_thread_metadata;
+use models_email::api::refresh::RefreshEmailEvent;
 use models_email::email::service::link;
 use models_email::gmail::inbox_sync::{
     InboxSyncOperation, InboxSyncPubsubMessage, UpdateLabelsPayload, UpsertMessagePayload,
@@ -163,7 +164,7 @@ pub async fn update_labels(
         cg_refresh_email(
             &ctx.connection_gateway_client,
             link.macro_id.as_ref(),
-            "update_labels",
+            RefreshEmailEvent::UpdateLabels { link_id: link.id },
         )
         .await;
     }

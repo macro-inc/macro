@@ -700,7 +700,12 @@ where
             .await
             .map_err(|e| ChannelMutationErr::Repo(e.into()))?
             .ok_or_else(|| ChannelMutationErr::NotFound("message not found".to_string()))?;
-        if owner.as_str() != actor_storage_id.as_str() && !is_admin_or_owner(actor_role) {
+        // Any participant may delete bot-authored messages.
+        let owner_is_bot = Sender::parse_storage_str(&owner).is_ok_and(|owner| owner.is_bot());
+        if owner.as_str() != actor_storage_id.as_str()
+            && !owner_is_bot
+            && !is_admin_or_owner(actor_role)
+        {
             return Err(ChannelMutationErr::Unauthorized(
                 "user is not authorized to delete this message".to_string(),
             ));

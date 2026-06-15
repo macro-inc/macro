@@ -49,8 +49,19 @@ type SearchItem = {
   category: CategoryFilter;
 };
 
+/** Ask-AI item: opens a new AI chat seeded with the query */
+type AskAiItem = {
+  id: string;
+  kind: 'ask-ai';
+  bucket: 'ask-ai';
+  searchText: string;
+  sortTimestamp: number;
+  timestamps: TimestampedItem;
+  query: string;
+};
+
 /** Combined item type for command menu (quickAccess items + commands) */
-type CommandMenuItem = QuickAccessItem | CommandItem | SearchItem;
+type CommandMenuItem = QuickAccessItem | CommandItem | SearchItem | AskAiItem;
 
 function isCommandItem(item: CommandMenuItem): item is CommandItem {
   return item.kind === 'command';
@@ -66,6 +77,10 @@ function _isUserItem(item: CommandMenuItem): item is UserItem {
 
 function isSearchItem(item: CommandMenuItem): item is SearchItem {
   return item.kind === 'search';
+}
+
+function isAskAiItem(item: CommandMenuItem): item is AskAiItem {
+  return item.kind === 'ask-ai';
 }
 
 /** Categories that surface a "Search for [query]" row in the command menu */
@@ -89,6 +104,18 @@ function makeSearchItem(query: string, category: CategoryFilter): SearchItem {
     timestamps: { viewedAt: undefined, updatedAt: undefined },
     query,
     category,
+  };
+}
+
+function makeAskAiItem(query: string): AskAiItem {
+  return {
+    id: `ask-ai:${query}`,
+    kind: 'ask-ai',
+    bucket: 'ask-ai',
+    searchText: query,
+    sortTimestamp: 0,
+    timestamps: { viewedAt: undefined, updatedAt: undefined },
+    query,
   };
 }
 
@@ -287,6 +314,11 @@ export function useCommandItems(
     const ranked = q ? search()(items, q).map((result) => result.item) : items;
 
     if (shouldShowSearchRow(q)) {
+      // With no direct results the menu would only offer search, so also
+      // offer handing the query to AI.
+      if (ranked.length === 0) {
+        return [makeSearchItem(q, categoryFilter()), makeAskAiItem(q)];
+      }
       return [makeSearchItem(q, categoryFilter()), ...ranked];
     }
 
@@ -296,5 +328,5 @@ export function useCommandItems(
   return filteredItems;
 }
 
-export type { CommandMenuItem, SearchItem };
-export { isCommandItem, isEntityItem, isSearchItem };
+export type { AskAiItem, CommandMenuItem, SearchItem };
+export { isAskAiItem, isCommandItem, isEntityItem, isSearchItem };

@@ -1,5 +1,6 @@
 /** Mobile Search is based on Command Menu. */
 
+import { openChatWithMessage } from '@app/component/ChatWithAgentButton';
 import { openEntityInSplitFromUnifiedList } from '@app/component/next-soup/utils';
 import { Tabs } from '@core/component/Tabs';
 import { TailSpinner } from '@core/component/TailSpinner';
@@ -35,6 +36,7 @@ import { CommandItem } from '../command/CommandItem';
 import type { CategoryFilter } from '../command/types';
 import {
   type CommandMenuItem,
+  isAskAiItem,
   isCommandItem,
   isEntityItem,
   useCommandItems,
@@ -135,6 +137,14 @@ function MobileSearchInner() {
           );
         }
       }
+      SearchState.close();
+      SearchState.setQuery('');
+      return;
+    }
+
+    if (isAskAiItem(item)) {
+      // Opens a new chat split and sends the query immediately.
+      openChatWithMessage(item.query);
       SearchState.close();
       SearchState.setQuery('');
       return;

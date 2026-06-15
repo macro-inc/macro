@@ -248,6 +248,34 @@ fn optional_env_var_deserializes_from_string() {
 
     assert_eq!(&*v, "optional-from-serde");
     assert!(v.runtime_inner().is_some());
+    assert_eq!(v.value(), Some("optional-from-serde"));
+    assert!(v.is_set());
+}
+
+#[test]
+fn optional_env_var_deserializes_null_as_unset() {
+    let v = serde_json::from_str::<MaybeTestVar>("null").expect("null deserializes as unset");
+
+    assert_eq!(v.value(), None);
+    assert!(!v.is_set());
+    assert!(v.runtime_inner().is_none());
+    assert!(v.comptime_inner().is_none());
+    assert!(v.as_arc().is_none());
+}
+
+#[test]
+fn optional_env_var_new_unset_holds_no_value() {
+    let v = MaybeTestVar::new_unset();
+
+    assert_eq!(v.value(), None);
+    assert!(!v.is_set());
+}
+
+#[test]
+#[should_panic(expected = "dereferenced unset env var `MAYBE_TEST_VAR`")]
+fn optional_env_var_deref_panics_when_unset() {
+    let v = MaybeTestVar::new_unset();
+    let _ = &*v;
 }
 
 #[test]

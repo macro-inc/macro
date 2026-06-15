@@ -1,6 +1,7 @@
 import { Mirror, type InferType } from '../loro-mirror/packages/core/src';
 import { LoroDoc } from 'loro-crdt';
 import type { SerializedEditorState } from 'lexical';
+import { MARKDOWN_GOLDEN } from './markdown-golden.1';
 import { MARKDOWN_LORO_SCHEMA } from './markdown-loro-schema';
 import { markdownToSerializedEditorStateWithIds } from './utils/markdown-state';
 
@@ -13,10 +14,15 @@ async function awaitMirrorSync() {
 }
 
 export async function rawMarkdownStateToLoroSnapshot(
-  state: InferType<typeof MARKDOWN_LORO_SCHEMA>
+  state: InferType<typeof MARKDOWN_LORO_SCHEMA>,
+  base?: Uint8Array
 ): Promise<Uint8Array | undefined> {
   const loroDoc = new LoroDoc();
   loroDoc.setRecordTimestamp(true);
+
+  // Seed from the golden base so every document shares a common ancestor — this
+  // is what lets concurrent/optimistic edits converge instead of duplicating.
+  if (base) loroDoc.import(base);
 
   const mirror = new Mirror({
     doc: loroDoc,
@@ -46,6 +52,9 @@ export function markdownToSerializedEditorState(
 export async function markdownToLoroSnapshot(
   markdown: string
 ): Promise<Uint8Array | undefined> {
+  // Blank markdown is exactly the golden — return it verbatim so all empty docs
+  // share identical bytes and skip the mirror round-trip.
+  if (markdown === '') return MARKDOWN_GOLDEN;
   const state = markdownToSerializedEditorState(markdown);
-  return rawMarkdownStateToLoroSnapshot(state as any);
+  return rawMarkdownStateToLoroSnapshot(state as any, MARKDOWN_GOLDEN);
 }

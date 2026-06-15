@@ -44,6 +44,7 @@ export { getMacroNotify } from './macro_notify';
 export { getSearchEventQueue } from './search_event_queue';
 export { getLinkManagerQueue } from './link_manager_queue';
 export { getBackfillQueue } from './backfill_queue';
+export { DopplerEcsEnvironment } from './doppler_environment';
 export {
   getAiToolsInfra,
   getAiToolsServiceRoleArns,

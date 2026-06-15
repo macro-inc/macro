@@ -51,10 +51,16 @@ pub enum GithubPrEventAction {
     Closed,
 }
 
-/// Metadata for a GitHub pull request lifecycle notification.
+/// The maximum number of characters kept by [`GithubPrNotificationCommon::snippet`].
+const GITHUB_SNIPPET_MAX_CHARS: usize = 280;
+
+/// Fields shared by every GitHub pull request notification type.
+///
+/// Embedded with `#[serde(flatten)]` so the wire shape keeps these keys at the
+/// top level of the metadata object.
 #[derive(Debug, Clone, PartialEq, Eq, ToSchema, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct GithubPrEvent {
+pub struct GithubPrNotificationCommon {
     /// The source-specific internal foreign entity row id for this pull request.
     pub foreign_entity_id: Uuid,
     /// The external GitHub key, in `owner/repo/pull/number` format.
@@ -71,27 +77,15 @@ pub struct GithubPrEvent {
     pub display_name: String,
     /// The GitHub pull request title. Falls back to `display_name` when GitHub has no title.
     pub title: String,
-    /// The current normalized pull request status.
-    pub status: GithubPrEventStatus,
-    /// The webhook action that triggered this notification.
-    pub action: GithubPrEventAction,
-    /// The prior normalized pull request status, when known.
-    pub previous_status: Option<GithubPrEventStatus>,
     /// The GitHub login for the sender, when available.
     pub sender_github_login: Option<String>,
     /// The stable GitHub numeric user id for the sender, serialized as a string.
     pub sender_github_user_id: Option<String>,
     /// The GitHub avatar URL for the sender, when available.
     pub sender_github_avatar_url: Option<String>,
-    /// The pull request head branch, when available.
-    pub head_branch: Option<String>,
-    /// The pull request base branch, when available.
-    pub base_branch: Option<String>,
-    /// When the pull request was merged, when available.
-    pub merged_at: Option<DateTime<Utc>>,
 }
 
-impl GithubPrEvent {
+impl GithubPrNotificationCommon {
     /// Build a required title value, falling back to the display name when GitHub has no title.
     pub fn title_or_display_name(title: Option<String>, display_name: &str) -> String {
         match title {
@@ -100,6 +94,68 @@ impl GithubPrEvent {
         }
     }
 
+    /// Trim and truncate free-form GitHub text (comment or review bodies) to a
+    /// display-friendly snippet, keeping character boundaries intact.
+    pub fn snippet(text: &str) -> String {
+        let trimmed = text.trim();
+        if trimmed.chars().count() <= GITHUB_SNIPPET_MAX_CHARS {
+            return trimmed.to_string();
+        }
+
+        let mut snippet: String = trimmed.chars().take(GITHUB_SNIPPET_MAX_CHARS).collect();
+        snippet.push('…');
+        snippet
+    }
+
+    fn actor_name(&self, sender_id: Option<MacroUserIdStr<'_>>) -> Option<String> {
+        sender_id
+            .map(|sender| sender.email_part().local_part().to_string())
+            .or_else(|| self.sender_github_login.clone())
+    }
+
+    /// The shared body format: the compact PR label, plus the PR title when it
+    /// adds information beyond the label.
+    fn format_body(&self) -> String {
+        if self.title == self.display_name {
+            return self.display_name.clone();
+        }
+
+        format!("{}: {}", self.display_name, self.title)
+    }
+
+    /// The shared body format with free-form text (a comment or review
+    /// snippet) in place of the PR title, when any is present.
+    fn format_body_with_text(&self, text: &str) -> String {
+        if text.trim().is_empty() {
+            return self.format_body();
+        }
+
+        format!("{}: {}", self.display_name, text.trim())
+    }
+}
+
+/// Metadata for a GitHub pull request lifecycle notification.
+#[derive(Debug, Clone, PartialEq, Eq, ToSchema, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GithubPrStatusChanged {
+    /// Fields shared with the other GitHub pull request notifications.
+    #[serde(flatten)]
+    pub common: GithubPrNotificationCommon,
+    /// The current normalized pull request status.
+    pub status: GithubPrEventStatus,
+    /// The webhook action that triggered this notification.
+    pub action: GithubPrEventAction,
+    /// The prior normalized pull request status, when known.
+    pub previous_status: Option<GithubPrEventStatus>,
+    /// The pull request head branch, when available.
+    pub head_branch: Option<String>,
+    /// The pull request base branch, when available.
+    pub base_branch: Option<String>,
+    /// When the pull request was merged, when available.
+    pub merged_at: Option<DateTime<Utc>>,
+}
+
+impl GithubPrStatusChanged {
     fn action_verb(&self) -> &'static str {
         if self.status == GithubPrEventStatus::Merged {
             return "merged";
@@ -111,25 +167,19 @@ impl GithubPrEvent {
             GithubPrEventAction::Closed => "closed",
         }
     }
-
-    fn actor_name(&self, sender_id: Option<MacroUserIdStr<'_>>) -> Option<String> {
-        sender_id
-            .map(|sender| sender.email_part().local_part().to_string())
-            .or_else(|| self.sender_github_login.clone())
-    }
 }
 
-impl Notification for GithubPrEvent {
-    const TYPE_NAME: &'static str = "github_pr_event";
+impl Notification for GithubPrStatusChanged {
+    const TYPE_NAME: &'static str = "github_pr_status_changed";
 }
 
-impl NotificationTitle for GithubPrEvent {
+impl NotificationTitle for GithubPrStatusChanged {
     fn format_title(
         &self,
         sender_id: Option<MacroUserIdStr<'_>>,
     ) -> Result<String, rootcause::Report> {
         let verb = self.action_verb();
-        let title = match self.actor_name(sender_id) {
+        let title = match self.common.actor_name(sender_id) {
             Some(actor) => format!("{actor} {verb} a pull request"),
             None => format!("Pull request {verb}"),
         };
@@ -141,11 +191,222 @@ impl NotificationTitle for GithubPrEvent {
         &self,
         _sender_id: Option<MacroUserIdStr<'_>>,
     ) -> Result<String, rootcause::Report> {
-        if self.title == self.display_name {
-            return Ok(self.display_name.clone());
-        }
+        Ok(self.common.format_body())
+    }
+}
 
-        Ok(format!("{}: {}", self.display_name, self.title))
+/// Metadata for a notification that the user's review was requested on a GitHub pull request.
+#[derive(Debug, Clone, PartialEq, Eq, ToSchema, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GithubReviewRequested {
+    /// Fields shared with the other GitHub pull request notifications.
+    #[serde(flatten)]
+    pub common: GithubPrNotificationCommon,
+    /// The GitHub login of the requested reviewer, when available.
+    pub requested_reviewer_github_login: Option<String>,
+    /// The stable GitHub numeric user id of the requested reviewer, serialized as a string.
+    pub requested_reviewer_github_user_id: Option<String>,
+}
+
+impl Notification for GithubReviewRequested {
+    const TYPE_NAME: &'static str = "github_review_requested";
+}
+
+impl NotificationTitle for GithubReviewRequested {
+    fn format_title(
+        &self,
+        sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        let title = match self.common.actor_name(sender_id) {
+            Some(actor) => format!("{actor} requested your review"),
+            None => "Your review was requested".to_string(),
+        };
+
+        Ok(title)
+    }
+
+    fn format_body(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        Ok(self.common.format_body())
+    }
+}
+
+/// The kind of GitHub comment that triggered a [`GithubPrComment`] notification.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ToSchema, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GithubPrCommentKind {
+    /// A top-level conversation comment (GitHub `issue_comment`).
+    Issue,
+    /// An inline code review comment (GitHub `pull_request_review_comment`).
+    ReviewComment,
+}
+
+/// Metadata for a notification that a GitHub pull request was commented on.
+#[derive(Debug, Clone, PartialEq, Eq, ToSchema, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GithubPrComment {
+    /// Fields shared with the other GitHub pull request notifications.
+    #[serde(flatten)]
+    pub common: GithubPrNotificationCommon,
+    /// The kind of comment that was posted.
+    pub comment_kind: GithubPrCommentKind,
+    /// The GitHub numeric id of the comment, when available.
+    pub comment_github_id: Option<u64>,
+    /// The public GitHub URL for the comment, when available.
+    pub comment_url: Option<String>,
+    /// A truncated excerpt of the comment body.
+    pub comment_snippet: String,
+}
+
+impl Notification for GithubPrComment {
+    const TYPE_NAME: &'static str = "github_pr_comment";
+}
+
+impl NotificationTitle for GithubPrComment {
+    fn format_title(
+        &self,
+        sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        let title = match self.common.actor_name(sender_id) {
+            Some(actor) => format!("{actor} commented on a pull request"),
+            None => "New comment on a pull request".to_string(),
+        };
+
+        Ok(title)
+    }
+
+    fn format_body(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        Ok(self.common.format_body_with_text(&self.comment_snippet))
+    }
+}
+
+/// Where in a GitHub pull request the user was mentioned.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ToSchema, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GithubPrMentionLocation {
+    /// The pull request description.
+    PrBody,
+    /// A top-level conversation comment.
+    Comment,
+    /// A review summary body.
+    Review,
+    /// An inline code review comment.
+    ReviewComment,
+}
+
+/// Metadata for a notification that the user was mentioned on a GitHub pull request.
+#[derive(Debug, Clone, PartialEq, Eq, ToSchema, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GithubPrMention {
+    /// Fields shared with the other GitHub pull request notifications.
+    #[serde(flatten)]
+    pub common: GithubPrNotificationCommon,
+    /// Where the mention appeared.
+    pub location: GithubPrMentionLocation,
+    /// The GitHub numeric id of the comment or review containing the mention, when available.
+    pub comment_github_id: Option<u64>,
+    /// The public GitHub URL for the text containing the mention, when available.
+    pub comment_url: Option<String>,
+    /// A truncated excerpt of the text containing the mention.
+    pub text_snippet: String,
+}
+
+impl Notification for GithubPrMention {
+    const TYPE_NAME: &'static str = "github_pr_mention";
+}
+
+impl NotificationTitle for GithubPrMention {
+    fn format_title(
+        &self,
+        sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        let title = match self.common.actor_name(sender_id) {
+            Some(actor) => format!("{actor} mentioned you on a pull request"),
+            None => "You were mentioned on a pull request".to_string(),
+        };
+
+        Ok(title)
+    }
+
+    fn format_body(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        Ok(self.common.format_body_with_text(&self.text_snippet))
+    }
+}
+
+/// The state of a submitted GitHub pull request review.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ToSchema, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GithubPrReviewState {
+    /// The reviewer approved the pull request.
+    Approved,
+    /// The reviewer requested changes.
+    ChangesRequested,
+    /// The reviewer left a comment review without an approval decision.
+    Commented,
+}
+
+/// Metadata for a notification that a review was submitted on the user's GitHub pull request.
+#[derive(Debug, Clone, PartialEq, Eq, ToSchema, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GithubPrReview {
+    /// Fields shared with the other GitHub pull request notifications.
+    #[serde(flatten)]
+    pub common: GithubPrNotificationCommon,
+    /// The GitHub numeric id of the review, when available.
+    pub review_github_id: Option<u64>,
+    /// The public GitHub URL for the review, when available.
+    pub review_url: Option<String>,
+    /// The review decision state.
+    pub state: GithubPrReviewState,
+    /// A truncated excerpt of the review body, when any was written.
+    pub review_snippet: Option<String>,
+}
+
+impl Notification for GithubPrReview {
+    const TYPE_NAME: &'static str = "github_pr_review";
+}
+
+impl NotificationTitle for GithubPrReview {
+    fn format_title(
+        &self,
+        sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        let actor = self.common.actor_name(sender_id);
+        let title = match (self.state, actor) {
+            (GithubPrReviewState::Approved, Some(actor)) => {
+                format!("{actor} approved your pull request")
+            }
+            (GithubPrReviewState::Approved, None) => "Your pull request was approved".to_string(),
+            (GithubPrReviewState::ChangesRequested, Some(actor)) => {
+                format!("{actor} requested changes on your pull request")
+            }
+            (GithubPrReviewState::ChangesRequested, None) => {
+                "Changes were requested on your pull request".to_string()
+            }
+            (GithubPrReviewState::Commented, Some(actor)) => {
+                format!("{actor} reviewed your pull request")
+            }
+            (GithubPrReviewState::Commented, None) => "Your pull request was reviewed".to_string(),
+        };
+
+        Ok(title)
+    }
+
+    fn format_body(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        Ok(self
+            .common
+            .format_body_with_text(self.review_snippet.as_deref().unwrap_or_default()))
     }
 }
 

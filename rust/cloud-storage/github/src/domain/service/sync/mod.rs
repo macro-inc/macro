@@ -7,6 +7,7 @@ mod handle_comment;
 mod handle_installation;
 mod handle_pr;
 mod notify_pr;
+mod notify_pr_activity;
 
 use crate::domain::{
     models::{
@@ -117,6 +118,8 @@ struct PullRequestForeignEntityUpsert {
     previous_status: Option<GithubPullRequestStatus>,
     /// The newly persisted normalized PR status for this source, when known.
     status: Option<GithubPullRequestStatus>,
+    /// Stable numeric GitHub user IDs for PR participants after metadata merge.
+    participant_github_user_ids: Vec<String>,
 }
 
 impl<
@@ -220,6 +223,19 @@ impl<
             deletions: pull_request
                 .and_then(|pr| pr.get("deletions"))
                 .and_then(|value| value.as_u64()),
+            author_login: pull_request
+                .and_then(|pr| pr.get("user"))
+                .and_then(|user| user.get("login"))
+                .and_then(|value| value.as_str())
+                .map(str::to_string),
+            author_id: pull_request
+                .and_then(|pr| pr.get("user"))
+                .and_then(|user| user.get("id"))
+                .and_then(|value| value.as_u64()),
+            description: pull_request
+                .and_then(|pr| pr.get("body"))
+                .and_then(|value| value.as_str())
+                .map(str::to_string),
             comments: None,
             checks: None,
             participant_github_user_ids: Self::participant_ids_from_payload(pull_request),
@@ -318,6 +334,9 @@ impl<
             status: Some(status),
             additions: Some(details.additions),
             deletions: Some(details.deletions),
+            author_login: details.author_login.or(fallback.author_login),
+            author_id: details.author_id.or(fallback.author_id),
+            description: details.description.or(fallback.description),
             comments: details.comments,
             checks: details.checks,
             participant_github_user_ids: details
@@ -484,6 +503,8 @@ impl<
                     return Vec::new();
                 }
             };
+            let participant_github_user_ids =
+                Self::participant_github_user_ids_from_metadata(&metadata);
 
             let foreign_entity = if let Some(entity) = existing_entity {
                 self.patch_pull_request_foreign_entity(
@@ -513,6 +534,7 @@ impl<
                 foreign_entity_id: foreign_entity.id,
                 previous_status,
                 status: pull_request.status,
+                participant_github_user_ids,
             });
         }
 
@@ -582,6 +604,19 @@ impl<
         metadata
             .get("status")
             .and_then(|status| serde_json::from_value(status.clone()).ok())
+    }
+
+    fn participant_github_user_ids_from_metadata(metadata: &serde_json::Value) -> Vec<String> {
+        let Some(ids) = metadata
+            .get("participantGithubUserIds")
+            .and_then(|value| value.as_array())
+        else {
+            return Vec::new();
+        };
+
+        ids.iter()
+            .filter_map(|value| value.as_str().map(str::to_string))
+            .collect()
     }
 
     /// Extract both legacy `MACRO-{short_uuid}` IDs and team-scoped
@@ -833,6 +868,17 @@ impl<
                 if let Some((pull_request, upserts)) = &upsert_result {
                     self.notify_pr_status_transitions(webhook_event, pull_request, upserts)
                         .await;
+                    match action {
+                        Some("review_requested") => {
+                            self.notify_review_requested(webhook_event, pull_request, upserts)
+                                .await;
+                        }
+                        Some("opened" | "edited") => {
+                            self.notify_pr_body_mentions(webhook_event, pull_request, upserts)
+                                .await;
+                        }
+                        _ => {}
+                    }
                 }
 
                 match action {
@@ -848,10 +894,30 @@ impl<
             GithubWebhookEventType::IssueComment
             | GithubWebhookEventType::PullRequestReview
             | GithubWebhookEventType::PullRequestReviewComment => {
-                if webhook_event.is_associated_with_pull_request() {
-                    let _ = self
+                if webhook_event.is_associated_with_pull_request()
+                    && let Some((pull_request, upserts)) = self
                         .upsert_pull_request_foreign_entities(webhook_event)
-                        .await;
+                        .await
+                {
+                    match (webhook_event.parsed_event_type(), action) {
+                        (
+                            GithubWebhookEventType::IssueComment
+                            | GithubWebhookEventType::PullRequestReviewComment,
+                            Some("created"),
+                        ) => {
+                            self.notify_pr_comment_and_mentions(
+                                webhook_event,
+                                &pull_request,
+                                &upserts,
+                            )
+                            .await;
+                        }
+                        (GithubWebhookEventType::PullRequestReview, Some("submitted")) => {
+                            self.notify_pr_review(webhook_event, &pull_request, &upserts)
+                                .await;
+                        }
+                        _ => {}
+                    }
                 }
 
                 self.handle_comment_event(webhook_event).await

@@ -4,6 +4,7 @@ import type { EntityItem } from '@core/context/quickAccess';
 import clickOutside from '@core/directive/clickOutside';
 import { debouncedDependent } from '@core/util/debounce';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
+import { fetchSnippetRaw } from '@queries/storage/snippets';
 import { Surface } from '@ui';
 import type { LexicalEditor } from 'lexical';
 import {
@@ -112,6 +113,7 @@ function SnippetsMenuInner(props: SnippetsMenuProps) {
     props.editor.dispatchCommand(INSERT_SNIPPET_COMMAND, {
       documentId: item.id,
       sourceDocumentId: props.sourceDocumentId,
+      fetchSnippet: () => fetchSnippetRaw({ documentId: item.id }),
     });
   };
 

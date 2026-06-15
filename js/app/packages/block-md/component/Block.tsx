@@ -3,20 +3,21 @@ import { useBlockEntityCommands } from '@app/component/next-soup/actions';
 import { SidePanel } from '@app/component/side-panel';
 import { useBlockId } from '@core/block';
 import { createLoroManager, type LoroManager } from '@core/collab/manager';
-import type { InitialSync, TimeoutError } from '@core/collab/source';
+import type { RawUpdate } from '@core/collab/shared';
+import {
+  IDBSnapshotStore,
+  LORO_SNAPSHOT_DB_NAME,
+} from '@core/collab/snapshot-store';
+import { BrowserWALStore, LORO_WAL_DB_NAME } from '@core/collab/wal';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { ENABLE_MARKDOWN_SIDE_PANEL } from '@core/constant/featureFlags';
-import { blockErrorSignal } from '@core/signal/load';
+import { blockErrorSignal, blockSyncSourceSignal } from '@core/signal/load';
 import { useCanEdit } from '@core/signal/permissions';
-import {
-  MARKDOWN_LORO_SCHEMA,
-  type MarkdownLoroSchemaType,
-} from '@lexical-core/markdown-loro-schema';
+import { MARKDOWN_LORO_SCHEMA } from '@lexical-core/markdown-loro-schema';
 import { DocumentDebouncedNotificationReadMarker } from '@notifications';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
 import { storageServiceClient } from '@service-storage/client';
 import { Scroll } from '@ui';
-import { err, ok, type Result } from 'neverthrow';
 import {
   createEffect,
   createMemo,
@@ -25,6 +26,7 @@ import {
   Show,
   Suspense,
 } from 'solid-js';
+import type { MarkdownData } from '../definition';
 import { blockDataSignal, mdStore } from '../signal/markdownBlockData';
 import { FindAndReplace } from './FindAndReplace';
 import { MarkdownNameProvider, useMarkdownName } from './MarkdownNameProvider';
@@ -35,93 +37,66 @@ import { InstructionsTopBar, TopBar } from './TopBar';
 
 export interface BlockMarkdownProps {
   /**
-   * A loro snapshot to load while we wait for the real one to come through from
-   * the DO. We push our changes after we the DO one comes in.
+   * A loro snapshot to load while we wait for a remote snapshot (from s3, dss, etc.).
    */
   optimisticSnapshot?: Uint8Array<ArrayBufferLike>;
 }
 
-type SyncError = 'UNAUTHORIZED' | 'INVALID' | 'GONE';
+type MarkdownLoroManager = LoroManager<typeof MARKDOWN_LORO_SCHEMA>;
 
-type BlockData = NonNullable<ReturnType<typeof blockDataSignal>>;
+async function ingestLocalSnapshot(
+  loroManager: MarkdownLoroManager,
+  snapshotStore: IDBSnapshotStore<RawUpdate>,
+  walStore: BrowserWALStore<RawUpdate>
+) {
+  const localSnapshot = await snapshotStore.load();
+  if (!localSnapshot) return;
+  const walEntries = await walStore.getAll();
+  await loroManager.ingest({
+    kind: 'local',
+    snapshot: localSnapshot,
+    walUpdates: walEntries.map((entry) => entry.update),
+  });
 
-async function syncFromOptimistic({
-  data,
-  loroManager,
-  optimisticSnapshot,
-}: {
-  data: BlockData;
-  loroManager: LoroManager<MarkdownLoroSchemaType>;
-  optimisticSnapshot: Uint8Array<ArrayBufferLike>;
-}): Promise<Result<void, SyncError>> {
-  await loroManager.initializeFromSnapshot(optimisticSnapshot);
-
-  const syncResult: Result<InitialSync, TimeoutError> =
-    await data.doInitialSync();
-
-  if (syncResult.isErr()) {
-    console.error('Failed to receive initial sync', syncResult.error);
-    return err('INVALID');
+  // Fold the replayed WAL edits into a fresh local snapshot so they don't have
+  // to be replayed on the next cold load. This is for a race condition where
+  // we recover from a snapshot and replay WAL logs, deleting the WAL logs as
+  // we replay, and then reload, and now we are in a state where we have an old
+  // document until the new one loads in
+  if (walEntries.length >= 1) {
+    const doc = loroManager.getDoc();
+    const snapshot = doc.export({
+      mode: 'shallow-snapshot',
+      frontiers: doc.oplogFrontiers(),
+    });
+    await snapshotStore.save(snapshot);
   }
-
-  data.syncSource.pushUpdate(
-    loroManager.getDoc().export({ mode: 'update' }),
-    loroManager.getPeerId()
-  );
-
-  return ok();
 }
 
-async function syncFromDO({
-  data,
-  loroManager,
-  blockId,
-}: {
-  data: BlockData;
-  loroManager: LoroManager<MarkdownLoroSchemaType>;
-  blockId: string;
-}): Promise<Result<void, SyncError>> {
-  let gotDoSnapshot = false;
-
-  // unawaited: only use S3 snapshot if DO hasn't responded first
-  // NOTE: gotDoSnapshot flips to true when DO snapshot is used, and it may
-  // happen WHILE we are fetching a cached snapshot THEORETICALLY
-  (async () => {
-    try {
-      const result = await storageServiceClient.fetchCachedSnapshot(blockId);
-      if (!gotDoSnapshot && result.isOk()) {
-        await loroManager.initializeFromSnapshot(result.value);
-      }
-    } catch (error) {
-      console.warn('Failed to load cached snapshot', error);
-    }
-  })();
-
-  try {
-    const syncResult: Result<InitialSync, TimeoutError> =
-      await data.doInitialSync();
-
-    if (syncResult.isErr()) {
-      console.error('Failed to receive initial sync', syncResult.error);
-      return err('INVALID');
-    }
-
-    const result = await loroManager.initializeFromSnapshot(
-      syncResult.value.snapshot
-    );
-
-    gotDoSnapshot = true;
-
-    if (result.isErr()) {
-      console.error('Failed to initialize loro doc', result.error);
-      return err('INVALID');
-    }
-  } catch (error) {
-    console.error('Failed to sync from DO', error);
-    return err('INVALID');
+async function ingestRemoteSnapshot(
+  loroManager: MarkdownLoroManager,
+  doInitialSync: MarkdownData['doInitialSync']
+): Promise<boolean> {
+  const sync = await doInitialSync();
+  if (sync.isErr()) {
+    console.error('Failed to receive initial sync', sync.error);
+    return loroManager.isInitialized();
   }
+  await loroManager.ingest({
+    kind: 'dss',
+    snapshot: sync.value.snapshot,
+  });
+  return true;
+}
 
-  return ok();
+async function ingestS3Snapshot(
+  loroManager: MarkdownLoroManager,
+  blockId: string
+) {
+  const result = await storageServiceClient.fetchCachedSnapshot(blockId);
+  if (result.isOk()) {
+    await loroManager.ingest({ kind: 's3', snapshot: result.value });
+  }
 }
 
 export default function BlockMarkdown(props: BlockMarkdownProps) {
@@ -136,9 +111,21 @@ function BlockMarkdownContent({ optimisticSnapshot }: BlockMarkdownProps) {
   useBlockEntityCommands();
   const [scrollRef, setScrollRef] = createSignal<HTMLDivElement>();
   const blockId = useBlockId();
-  const loroManager = createLoroManager(MARKDOWN_LORO_SCHEMA);
 
+  const getSyncSource = blockSyncSourceSignal.get;
   const setBlockError = blockErrorSignal.set;
+
+  const wasDirty = BrowserWALStore.isDirtyHint(LORO_WAL_DB_NAME, blockId);
+  const loroManager = createLoroManager(MARKDOWN_LORO_SCHEMA, {
+    liveSyncSource: () => getSyncSource()!,
+    wasDirty,
+  });
+
+  const snapshotStore = new IDBSnapshotStore<RawUpdate>(
+    LORO_SNAPSHOT_DB_NAME,
+    blockId
+  );
+  const walStore = new BrowserWALStore<RawUpdate>(LORO_WAL_DB_NAME, blockId);
 
   createEffect(
     on(blockDataSignal, (data) => {
@@ -146,29 +133,28 @@ function BlockMarkdownContent({ optimisticSnapshot }: BlockMarkdownProps) {
         // TODO: if it's actually missing what do we do?
         // setBlockError('MISSING');
         return;
-      } else {
-        setBlockError(null);
       }
+      setBlockError(null);
+
+      // Fan out — the state machine in LoroManager handles precedence
+      // and rejects events that don't apply for the current `wasDirty` mode.
       if (optimisticSnapshot) {
-        // unawaited
-        syncFromOptimistic({ data, loroManager, optimisticSnapshot }).then(
-          (r) => {
-            if (r.isErr()) setBlockError(r.error);
-          }
-        );
-      } else {
-        // unawaited
-        syncFromDO({ data, loroManager, blockId }).then((r) => {
-          if (r.isErr()) setBlockError(r.error);
+        loroManager.ingest({
+          kind: 'optimistic',
+          snapshot: optimisticSnapshot,
         });
       }
+
+      // unawaited — state machine handles precedence
+      ingestLocalSnapshot(loroManager, snapshotStore, walStore);
+      ingestS3Snapshot(loroManager, blockId);
+      ingestRemoteSnapshot(loroManager, data.doInitialSync);
     })
   );
 
   const instructionsMdId = useInstructionsMdIdQuery();
   const notificationSource = useGlobalNotificationSource();
-  const mustBeConnected = optimisticSnapshot === undefined;
-  const canEdit = useCanEdit(mustBeConnected);
+  const canEdit = useCanEdit();
   const { displayName } = useMarkdownName();
   const isInstructionsMd = createMemo(() => blockId === instructionsMdId.data);
 
@@ -203,10 +189,9 @@ function BlockMarkdownContent({ optimisticSnapshot }: BlockMarkdownProps) {
                     <TopBar name={displayName} />
                   </Show>
                 </Suspense>
-                {/* off until - https://linear.app/macro-eng/issue/M-5203/markdown-unloads-completely-after-find */}
                 <Suspense>
-                  <Show when={!isInstructionsMd() && false}>
-                    <div class="absolute right-4 bottom-[-12] translate-y-full z-action-menu flex justify-end">
+                  <Show when={!isInstructionsMd()}>
+                    <div class="absolute right-4 top-1.5 z-action-menu flex justify-end">
                       <FindAndReplace />
                     </div>
                   </Show>
@@ -226,15 +211,10 @@ function BlockMarkdownContent({ optimisticSnapshot }: BlockMarkdownProps) {
                       <Show
                         when={!isInstructionsMd()}
                         fallback={
-                          <InstructionsNotebook
-                            loroManager={() => loroManager}
-                          />
+                          <InstructionsNotebook loroManager={loroManager} />
                         }
                       >
-                        <Notebook
-                          loroManager={() => loroManager}
-                          mustBeConnected={mustBeConnected}
-                        />
+                        <Notebook loroManager={loroManager} />
                       </Show>
                     </Suspense>
                   </div>
