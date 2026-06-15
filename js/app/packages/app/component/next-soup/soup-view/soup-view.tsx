@@ -629,7 +629,7 @@ export const SoupView = (props: SoupViewProps) => {
                 when={!isComponentListView('search')}
                 fallback={
                   <Layer depth={2}>
-                    <div class="grow ml-2">
+                    <div class="grow ml-2 min-w-0 [contain:inline-size]">
                       <SoupSearchbar
                         variant="secondary"
                         placeholder="Search, @mention contacts"
