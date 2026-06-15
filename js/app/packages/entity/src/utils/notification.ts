@@ -1,7 +1,7 @@
 import { ENABLE_DOCUMENT_MENTION_NOTIFICATIONS } from '@core/constant/featureFlags';
 import type { Entity, NotificationType } from '@core/types';
-import { notificationIsRead, type UnifiedNotification } from '@notifications';
 import type { NotificationStack } from '@notifications/notification-stacking';
+import type { UnifiedNotification } from '@notifications/types';
 import { match, P } from 'ts-pattern';
 import type { EntityData } from '../types/entity';
 import type { Notification } from '../types/notification';
@@ -16,6 +16,29 @@ type CallStartedNotificationMetadata = {
 type KnownNotificationMetadata =
   | UnifiedNotification['notification_metadata']
   | CallStartedNotificationMetadata;
+
+const CHANNEL_NOTIFICATION_TYPES = [
+  'channel_mention',
+  'channel_message_send',
+  'channel_message_reply',
+] as const;
+
+function notificationIsRead(notification: UnifiedNotification): boolean {
+  if (notification.viewed_at || notification.done) return true;
+
+  if (notification.entity_type === 'channel') {
+    const notificationType = notification.notification_metadata?.tag ?? '';
+    if (
+      !(CHANNEL_NOTIFICATION_TYPES as readonly string[]).includes(
+        notificationType
+      )
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
 
 export function toNotificationEntity(entity: EntityData): Entity {
   if (entity.type === 'email') {
@@ -98,6 +121,17 @@ export function getNotificationActionText(n: Notification): string {
     .with('task_assigned', () => 'assigned')
     .with('ai_response', () => 'responded')
     .with('github_pr_status_changed', () => 'updated')
+    .with('github_pr_check_run', () => {
+      const meta = n.notification_metadata;
+      if (
+        meta.tag === 'github_pr_check_run' &&
+        meta.content.state === 'failed'
+      ) {
+        return 'failed';
+      }
+
+      return 'completed';
+    })
     .with('github_review_requested', () => 'requested')
     .with('github_pr_comment', () => 'commented')
     .with('github_pr_mention', () => 'mentioned')
@@ -133,6 +167,11 @@ export function extractMessageContent(notification: Notification): string {
     .with(
       { tag: P.union('github_pr_status_changed', 'github_review_requested') },
       (m) => m.content.title || m.content.displayName || ''
+    )
+    .with(
+      { tag: 'github_pr_check_run' },
+      (m) =>
+        m.content.checkName || m.content.title || m.content.displayName || ''
     )
     .with(
       { tag: 'github_pr_comment' },

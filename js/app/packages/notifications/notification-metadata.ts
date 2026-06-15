@@ -19,6 +19,17 @@ export function getNotificationAction(n: UnifiedNotification): string {
     .with('invite_to_team', () => 'invited you to')
     .with('task_assigned', () => 'assigned you a task')
     .with('github_pr_status_changed', () => 'updated a pull request')
+    .with('github_pr_check_run', () => {
+      const meta = n.notification_metadata;
+      if (
+        meta.tag === 'github_pr_check_run' &&
+        meta.content.state === 'failed'
+      ) {
+        return 'failed a check on';
+      }
+
+      return 'completed a check on';
+    })
     .with('github_review_requested', () => 'requested your review on')
     .with('github_pr_comment', () => 'commented on')
     .with('github_pr_mention', () => 'mentioned you in')
@@ -74,6 +85,10 @@ export function getNotificationContent(
     .with(
       { tag: P.union('github_pr_status_changed', 'github_review_requested') },
       (m) => m.content.title || m.content.displayName
+    )
+    .with(
+      { tag: 'github_pr_check_run' },
+      (m) => m.content.checkName || m.content.title || m.content.displayName
     )
     .with(
       { tag: 'github_pr_comment' },

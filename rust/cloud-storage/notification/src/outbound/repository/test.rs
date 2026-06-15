@@ -29,6 +29,15 @@ impl Notification for TestGithubNotification {
     const TYPE_NAME: &'static str = "github_pr_status_changed";
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct TestGithubCheckRunNotification {
+    message: String,
+}
+
+impl Notification for TestGithubCheckRunNotification {
+    const TYPE_NAME: &'static str = "github_pr_check_run";
+}
+
 fn test_user(email: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from_email(email).unwrap()
 }
@@ -483,7 +492,9 @@ async fn test_get_user_notifications_filters_type_and_entity(pool: Pool<Postgres
 async fn test_get_user_notifications_filters_github_type_and_entity(pool: Pool<Postgres>) {
     let user = test_user("github-recipient@test.com");
     let foreign_entity_id = uuid::Uuid::new_v4().to_string();
+    let check_run_foreign_entity_id = uuid::Uuid::new_v4().to_string();
     let github_notification_id = uuid::Uuid::new_v4();
+    let check_run_notification_id = uuid::Uuid::new_v4();
 
     let github_request = SendNotificationRequestBuilder {
         notification_entity: EntityType::ForeignEntity
@@ -497,6 +508,24 @@ async fn test_get_user_notifications_filters_github_type_and_entity(pool: Pool<P
     pool.create_notification(github_request, github_notification_id, "test_service", None)
         .await
         .unwrap();
+
+    let check_run_request = SendNotificationRequestBuilder {
+        notification_entity: EntityType::ForeignEntity
+            .with_entity_string(check_run_foreign_entity_id.clone()),
+        notification: TaggedContent::new(TestGithubCheckRunNotification {
+            message: "check run".to_string(),
+        }),
+        sender_id: None,
+        recipient_ids: std::collections::HashSet::from([user.clone()]),
+    };
+    pool.create_notification(
+        check_run_request,
+        check_run_notification_id,
+        "test_service",
+        None,
+    )
+    .await
+    .unwrap();
 
     let non_github_request = SendNotificationRequestBuilder {
         notification_entity: EntityType::ForeignEntity
@@ -530,22 +559,41 @@ async fn test_get_user_notifications_filters_github_type_and_entity(pool: Pool<P
         )
         .await
         .unwrap();
-    assert_eq!(github_type_results.len(), 1);
+    assert_eq!(github_type_results.len(), 2);
+
+    let github_type_result_ids: std::collections::HashSet<_> = github_type_results
+        .iter()
+        .map(|row| row.notification_id)
+        .collect();
     assert_eq!(
-        github_type_results[0].notification_id,
-        github_notification_id
+        github_type_result_ids,
+        std::collections::HashSet::from([github_notification_id, check_run_notification_id])
     );
+
+    let github_type_event_types: std::collections::HashSet<_> = github_type_results
+        .iter()
+        .map(|row| row.notification_event_type.as_str())
+        .collect();
     assert_eq!(
-        github_type_results[0].notification_event_type,
-        "github_pr_status_changed"
+        github_type_event_types,
+        std::collections::HashSet::from(["github_pr_status_changed", "github_pr_check_run"])
     );
+
+    let github_type_entity_ids: std::collections::HashSet<_> = github_type_results
+        .iter()
+        .map(|row| row.entity.entity_id.as_ref())
+        .collect();
     assert_eq!(
-        github_type_results[0].entity.entity_type,
-        EntityType::ForeignEntity
+        github_type_entity_ids,
+        std::collections::HashSet::from([
+            foreign_entity_id.as_str(),
+            check_run_foreign_entity_id.as_str(),
+        ])
     );
-    assert_eq!(
-        github_type_results[0].entity.entity_id.as_ref(),
-        foreign_entity_id.as_str()
+    assert!(
+        github_type_results
+            .iter()
+            .all(|row| row.entity.entity_type == EntityType::ForeignEntity)
     );
 
     let github_entity_results: Vec<UserNotificationRow<serde_json::Value>> = pool
@@ -569,6 +617,37 @@ async fn test_get_user_notifications_filters_github_type_and_entity(pool: Pool<P
     assert_eq!(
         github_entity_results[0].notification_id,
         github_notification_id
+    );
+
+    let check_run_entity_results: Vec<UserNotificationRow<serde_json::Value>> = pool
+        .get_user_notifications(
+            user.clone(),
+            10,
+            Query::Sort(CreatedAt, ()),
+            NotificationListFilters {
+                done: Some(false),
+                seen: None,
+                include_types: Vec::new(),
+                entities: vec![NotificationEntityRef {
+                    entity_type: NotificationItemType::Github,
+                    id: check_run_foreign_entity_id.clone(),
+                }],
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(check_run_entity_results.len(), 1);
+    assert_eq!(
+        check_run_entity_results[0].notification_id,
+        check_run_notification_id
+    );
+    assert_eq!(
+        check_run_entity_results[0].notification_event_type,
+        "github_pr_check_run"
+    );
+    assert_eq!(
+        check_run_entity_results[0].entity.entity_id.as_ref(),
+        check_run_foreign_entity_id.as_str()
     );
 
     let wrong_entity_results: Vec<UserNotificationRow<serde_json::Value>> = pool

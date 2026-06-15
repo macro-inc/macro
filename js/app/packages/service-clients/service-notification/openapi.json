@@ -1534,6 +1534,65 @@
           }
         }
       },
+      "GithubPrCheckRun": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/GithubPrNotificationCommon",
+            "description": "Fields shared with the other GitHub pull request notifications."
+          },
+          {
+            "type": "object",
+            "required": [
+              "checkRunGithubId",
+              "checkName",
+              "checkStatus",
+              "conclusion",
+              "state",
+              "checkUrl",
+              "completedAt"
+            ],
+            "properties": {
+              "checkName": {
+                "type": "string",
+                "description": "The display name GitHub reported for the check run."
+              },
+              "checkRunGithubId": {
+                "type": "integer",
+                "format": "int64",
+                "description": "The GitHub numeric id of the check run.",
+                "minimum": 0
+              },
+              "checkStatus": {
+                "type": "string",
+                "description": "The raw GitHub check run status."
+              },
+              "checkUrl": {
+                "type": "string",
+                "description": "The public GitHub URL for the check run."
+              },
+              "completedAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "When GitHub marked the check run as complete."
+              },
+              "conclusion": {
+                "type": "string",
+                "description": "The raw GitHub check run conclusion."
+              },
+              "state": {
+                "$ref": "#/components/schemas/GithubPrCheckRunState",
+                "description": "The normalized notification state for this check run."
+              }
+            }
+          }
+        ],
+        "description": "Metadata for a notification that a GitHub pull request check run completed."
+      },
+      "GithubPrCheckRunState": {
+        "type": "string",
+        "description": "The normalized result state for a GitHub pull request check-run notification.",
+        "enum": ["completed", "failed"]
+      },
       "GithubPrComment": {
         "allOf": [
           {
@@ -2132,6 +2191,21 @@
               "tag": {
                 "type": "string",
                 "enum": ["github_pr_status_changed"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A GitHub pull request check run completed.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/GithubPrCheckRun",
+                "description": "A GitHub pull request check run completed."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["github_pr_check_run"]
               }
             }
           },

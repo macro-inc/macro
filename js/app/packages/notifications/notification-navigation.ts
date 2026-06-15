@@ -246,13 +246,19 @@ function getSupportedHandler(
         meta.tag !== 'github_review_requested' &&
         meta.tag !== 'github_pr_comment' &&
         meta.tag !== 'github_pr_mention' &&
-        meta.tag !== 'github_pr_review'
+        meta.tag !== 'github_pr_review' &&
+        meta.tag !== 'github_pr_check_run'
       ) {
         return null;
       }
       return async () => {
         // TODO(dev-rb/github): Route GitHub PR notifications to /pr.
-        openExternalUrl(meta.content.url);
+        let url = meta.content.url;
+        if (meta.tag === 'github_pr_check_run') {
+          url = meta.content.checkUrl || meta.content.url;
+        }
+
+        openExternalUrl(url);
       };
     })
     .with('mentioned_in_document_comment', () => {

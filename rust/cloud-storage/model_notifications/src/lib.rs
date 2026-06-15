@@ -12,12 +12,12 @@ pub use device::DeviceType;
 pub use metadata::{
     AiResponseMetadata, ChannelInviteMetadata, ChannelMentionMetadata, ChannelMessageSendMetadata,
     ChannelReplyMetadata, ChannelType, CommentedOnDocumentMetadata, CommonChannelMetadata,
-    DocumentMentionMetadata, GithubPrComment, GithubPrCommentKind, GithubPrEventAction,
-    GithubPrEventStatus, GithubPrMention, GithubPrMentionLocation, GithubPrNotificationCommon,
-    GithubPrReview, GithubPrReviewState, GithubPrStatusChanged, GithubReviewRequested,
-    InviteToTeamMetadata, ItemSharedMetadata, MentionedInDocumentCommentMetadata, NewEmailMetadata,
-    NotificationDocumentSubType, NotificationTitle, RepliedToDocumentCommentThreadMetadata,
-    TaskAssignedMetadata,
+    DocumentMentionMetadata, GithubPrCheckRun, GithubPrCheckRunState, GithubPrComment,
+    GithubPrCommentKind, GithubPrEventAction, GithubPrEventStatus, GithubPrMention,
+    GithubPrMentionLocation, GithubPrNotificationCommon, GithubPrReview, GithubPrReviewState,
+    GithubPrStatusChanged, GithubReviewRequested, InviteToTeamMetadata, ItemSharedMetadata,
+    MentionedInDocumentCommentMetadata, NewEmailMetadata, NotificationDocumentSubType,
+    NotificationTitle, RepliedToDocumentCommentThreadMetadata, TaskAssignedMetadata,
 };
 pub use unsubscribe::UserUnsubscribe;
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -211,6 +211,9 @@ define_notif_event!(
         #[serde(alias = "github_pr_event")]
         GithubPrStatusChanged(GithubPrStatusChanged),
 
+        /// A GitHub pull request check run completed.
+        GithubPrCheckRun(GithubPrCheckRun),
+
         /// The user's review was requested on a GitHub pull request.
         GithubReviewRequested(GithubReviewRequested),
 
@@ -260,6 +263,9 @@ impl NotificationTitle for NotifEvent {
             NotifEvent::GithubPrStatusChanged(github_pr_status_changed) => {
                 github_pr_status_changed.format_title(sender_id)
             }
+            NotifEvent::GithubPrCheckRun(github_pr_check_run) => {
+                github_pr_check_run.format_title(sender_id)
+            }
             NotifEvent::GithubReviewRequested(github_review_requested) => {
                 github_review_requested.format_title(sender_id)
             }
@@ -308,6 +314,9 @@ impl NotificationTitle for NotifEvent {
             }
             NotifEvent::GithubPrStatusChanged(github_pr_status_changed) => {
                 github_pr_status_changed.format_body(sender_id)
+            }
+            NotifEvent::GithubPrCheckRun(github_pr_check_run) => {
+                github_pr_check_run.format_body(sender_id)
             }
             NotifEvent::GithubReviewRequested(github_review_requested) => {
                 github_review_requested.format_body(sender_id)

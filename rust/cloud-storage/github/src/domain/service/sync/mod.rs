@@ -8,6 +8,7 @@ mod handle_installation;
 mod handle_pr;
 mod notify_pr;
 mod notify_pr_activity;
+mod notify_pr_checks;
 
 use crate::domain::{
     models::{
@@ -924,9 +925,13 @@ impl<
             }
             GithubWebhookEventType::CheckRun => {
                 if webhook_event.is_associated_with_pull_request() {
-                    let _ = self
+                    if let Some((pull_request, upserts)) = self
                         .upsert_pull_request_foreign_entities(webhook_event)
-                        .await;
+                        .await
+                    {
+                        self.notify_pr_check_run(webhook_event, &pull_request, &upserts)
+                            .await;
+                    }
                 } else {
                     tracing::debug!("skipping check_run event without an associated PR");
                 }

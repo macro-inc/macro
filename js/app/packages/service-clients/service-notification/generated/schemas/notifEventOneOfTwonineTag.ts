@@ -10,5 +10,5 @@ export type NotifEventOneOfTwonineTag =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const NotifEventOneOfTwonineTag = {
-  github_pr_comment: 'github_pr_comment',
+  github_review_requested: 'github_review_requested',
 } as const;

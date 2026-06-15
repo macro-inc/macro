@@ -35,6 +35,7 @@ export function getActionVerb(type: NotificationType): string {
     .with('invite_to_team', () => 'invited you')
     .with('task_assigned', () => 'assigned you')
     .with('github_pr_status_changed', () => 'updated a pull request')
+    .with('github_pr_check_run', () => 'completed a check')
     .with('github_review_requested', () => 'requested your review')
     .with('github_pr_comment', () => 'commented on a pull request')
     .with('github_pr_mention', () => 'mentioned you on a pull request')
@@ -70,6 +71,7 @@ export function getTypeNoun(type: NotificationType, count: number): string {
     .with('github_pr_status_changed', () =>
       count === 1 ? 'pull request' : 'pull requests'
     )
+    .with('github_pr_check_run', () => (count === 1 ? 'check' : 'checks'))
     .with('github_review_requested', () =>
       count === 1 ? 'review request' : 'review requests'
     )

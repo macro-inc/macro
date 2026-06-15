@@ -132,7 +132,16 @@ fn push_notification_status_filters(
 /// SQL fragment matching every GitHub notification event type. Keep in sync with
 /// the `Notification::TYPE_NAME`s of the GitHub metadata types in `model_notifications`
 /// (this crate sits below `model_notifications`, so it cannot reference them directly).
-const GITHUB_EVENT_TYPES_SQL: &str = "n.notification_event_type IN ('github_pr_status_changed', 'github_review_requested', 'github_pr_comment', 'github_pr_mention', 'github_pr_review')";
+const GITHUB_EVENT_TYPES_SQL: &str = concat!(
+    "n.notification_event_type IN (",
+    "'github_pr_status_changed', ",
+    "'github_review_requested', ",
+    "'github_pr_comment', ",
+    "'github_pr_mention', ",
+    "'github_pr_review', ",
+    "'github_pr_check_run'",
+    ")",
+);
 
 fn push_include_types_filter(builder: &mut QueryBuilder<'_, Postgres>, include_types: &[String]) {
     if !include_types.is_empty() {
