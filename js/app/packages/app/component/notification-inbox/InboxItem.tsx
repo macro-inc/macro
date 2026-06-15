@@ -1,9 +1,8 @@
 import { UserIcon } from '@core/component/UserIcon';
-import type { NotificationType } from '@core/types';
 import type { EntityData } from '@entity';
+import type { UnifiedNotification } from '@notifications/types';
 import { Property } from '@property';
 import type { Property as PropertyT } from '@property/types';
-import type { GithubPrEventStatus } from '@service-notification/generated/schemas';
 import { Avatar, Button, type ButtonProps, cn } from '@ui';
 import {
   type Accessor,
@@ -22,11 +21,20 @@ export interface InboxItemStyleProps {
   tone?: InboxItemTone;
 }
 
+type InboxItemNotification =
+  | UnifiedNotification
+  | {
+      notification_metadata: {
+        tag:
+          | UnifiedNotification['notification_metadata']['tag']
+          | 'call-started';
+        content: Record<string, unknown>;
+      };
+    };
+
 export interface InboxItem {
   id: string;
-  notificationId?: string;
-  notificationType?: NotificationType;
-  githubStatus?: GithubPrEventStatus;
+  notification?: InboxItemNotification;
   entityId?: string;
   entityType?: EntityData['type'];
   entityName?: string;
@@ -35,7 +43,6 @@ export interface InboxItem {
   action?: string;
   targetName?: string;
   content?: string;
-  context?: string;
   properties?: PropertyT[];
   breadcrumb?: string[];
   timestamp?: string;
@@ -148,12 +155,9 @@ function Indicator(props: { unread?: boolean; class?: string }) {
       class={cn('grid size-2 place-items-center', props.class)}
       aria-hidden="true"
     >
-      <span
-        class={cn('size-1.5 rounded-full', {
-          'bg-accent': unread(),
-          'bg-transparent': !unread(),
-        })}
-      />
+      <Show when={unread()}>
+        <span class="size-1.5 rounded-full bg-accent" />
+      </Show>
     </span>
   );
 }

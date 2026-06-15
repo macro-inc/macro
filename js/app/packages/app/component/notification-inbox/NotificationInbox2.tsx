@@ -12,6 +12,28 @@ type ExampleGroup = {
 const createdAt = new Date(0).toISOString();
 const systemOwner = { scope: 'system' } as const;
 
+const notification = (
+  tag: NonNullable<
+    InboxItemData['notification']
+  >['notification_metadata']['tag'],
+  content: Record<string, unknown> = {}
+): NonNullable<InboxItemData['notification']> =>
+  ({
+    notification_metadata: {
+      tag,
+      content: {
+        channelName: 'Design System',
+        documentName: 'Project brief',
+        teamName: 'Macro',
+        owner: 'macro',
+        repo: 'app',
+        number: 2842,
+        status: 'open',
+        ...content,
+      },
+    },
+  }) as unknown as NonNullable<InboxItemData['notification']>;
+
 const statusOptions = [
   { id: PROPERTY_OPTION_IDS.STATUS.NOT_STARTED, label: 'Todo' },
   { id: PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS, label: 'In progress' },
@@ -76,8 +98,7 @@ const exampleGroups: ExampleGroup[] = [
     items: [
       {
         id: 'email-unread',
-        notificationId: 'notif-email-unread',
-        notificationType: 'new_email',
+        notification: notification('new_email'),
         entityId: 'thread-planning',
         entityType: 'email',
         entityName: 'Quarterly planning notes and next steps for the launch',
@@ -88,8 +109,7 @@ const exampleGroups: ExampleGroup[] = [
       },
       {
         id: 'email-read-long-snippet',
-        notificationId: 'notif-email-read-long-snippet',
-        notificationType: 'new_email',
+        notification: notification('new_email'),
         entityId: 'thread-customer-feedback',
         entityType: 'email',
         entityName: 'Customer feedback from design partners',
@@ -105,8 +125,7 @@ const exampleGroups: ExampleGroup[] = [
     items: [
       {
         id: 'channel-mention',
-        notificationId: 'notif-channel-mention',
-        notificationType: 'channel_mention',
+        notification: notification('channel_mention'),
         entityId: 'channel-design-system',
         entityType: 'channel',
         entityName: 'Design System',
@@ -119,8 +138,7 @@ const exampleGroups: ExampleGroup[] = [
       },
       {
         id: 'channel-message-send',
-        notificationId: 'notif-channel-message-send',
-        notificationType: 'channel_message_send',
+        notification: notification('channel_message_send'),
         entityId: 'channel-product',
         entityType: 'channel',
         entityName: 'Product',
@@ -131,8 +149,7 @@ const exampleGroups: ExampleGroup[] = [
       },
       {
         id: 'channel-message-reply',
-        notificationId: 'notif-channel-message-reply',
-        notificationType: 'channel_message_reply',
+        notification: notification('channel_message_reply'),
         entityId: 'channel-product',
         entityType: 'channel',
         entityName: 'Product',
@@ -143,14 +160,12 @@ const exampleGroups: ExampleGroup[] = [
       },
       {
         id: 'channel-invite',
-        notificationId: 'notif-channel-invite',
-        notificationType: 'channel_invite',
+        notification: notification('channel_invite'),
         entityId: 'channel-infra',
         entityType: 'channel',
         entityName: 'Infrastructure',
         senderName: 'Casey',
         action: 'invited you to',
-        context: 'Private channel',
         timestamp: '18m',
       },
     ],
@@ -160,20 +175,17 @@ const exampleGroups: ExampleGroup[] = [
     items: [
       {
         id: 'document-mention',
-        notificationId: 'notif-document-mention',
-        notificationType: 'document_mention',
+        notification: notification('document_mention'),
         entityId: 'doc-notification-inbox-proposal',
         entityType: 'document',
         entityName: 'Notification Inbox Proposal',
         senderName: 'Nina',
         action: 'mentioned you',
-        context: 'Projects / Inbox refresh',
         timestamp: '31m',
       },
       {
         id: 'document-comment-mention',
-        notificationId: 'notif-document-comment-mention',
-        notificationType: 'mentioned_in_document_comment',
+        notification: notification('mentioned_in_document_comment'),
         entityId: 'doc-q3-plan',
         entityType: 'document',
         entityName: 'Q3 Launch Plan',
@@ -181,33 +193,28 @@ const exampleGroups: ExampleGroup[] = [
         senderName: 'Morgan',
         action: 'mentioned you in a comment',
         content: 'Can you confirm the dependency list before Friday?',
-        context: 'Project planning',
         timestamp: '42m',
       },
       {
         id: 'document-comment-reply',
-        notificationId: 'notif-document-comment-reply',
-        notificationType: 'replied_to_document_comment_thread',
+        notification: notification('replied_to_document_comment_thread'),
         entityId: 'doc-release-notes',
         entityType: 'document',
         entityName: 'Release Notes',
         senderName: 'Devon',
         action: 'replied',
         content: 'I updated the changelog section with the migration notes.',
-        context: 'Docs / Releases',
         timestamp: '55m',
       },
       {
         id: 'document-commented',
-        notificationId: 'notif-document-commented',
-        notificationType: 'commented_on_document',
+        notification: notification('commented_on_document'),
         entityId: 'doc-roadmap',
         entityType: 'document',
         entityName: 'Roadmap',
         senderName: 'Avery',
         action: 'commented',
         content: 'Should this move into the next milestone?',
-        context: 'Planning / Shared with Product',
         timestamp: '1h',
       },
     ],
@@ -217,8 +224,7 @@ const exampleGroups: ExampleGroup[] = [
     items: [
       {
         id: 'task-high-priority',
-        notificationId: 'notif-task-high-priority',
-        notificationType: 'task_assigned',
+        notification: notification('task_assigned'),
         entityId: 'task-inbox-item',
         entityType: 'document',
         entityName: 'Ship the new inbox item primitive',
@@ -234,8 +240,7 @@ const exampleGroups: ExampleGroup[] = [
       },
       {
         id: 'task-due-today',
-        notificationId: 'notif-task-due-today',
-        notificationType: 'task_assigned',
+        notification: notification('task_assigned'),
         entityId: 'task-preview-selection',
         entityType: 'document',
         entityName: 'Wire row selection into preview panel',
@@ -250,8 +255,7 @@ const exampleGroups: ExampleGroup[] = [
       },
       {
         id: 'task-low-priority',
-        notificationId: 'notif-task-low-priority',
-        notificationType: 'task_assigned',
+        notification: notification('task_assigned'),
         entityId: 'task-copy-polish',
         entityType: 'document',
         entityName: 'Polish empty state copy',
@@ -271,92 +275,84 @@ const exampleGroups: ExampleGroup[] = [
     items: [
       {
         id: 'github-pr-opened',
-        notificationId: 'notif-github-pr-opened',
-        notificationType: 'github_pr_status_changed',
-        githubStatus: 'open',
+        notification: notification('github_pr_status_changed', {
+          number: 2840,
+          status: 'open',
+        }),
         entityId: 'github-pr-2840',
         entityType: 'foreign',
         entityName: 'Add notification inbox primitives',
         senderName: 'Jordan',
         action: 'opened',
-        context: 'macro/app#2840',
         timestamp: '4h',
       },
       {
         id: 'github-pr-merged',
-        notificationId: 'notif-github-pr-merged',
-        notificationType: 'github_pr_status_changed',
-        githubStatus: 'merged',
+        notification: notification('github_pr_status_changed', {
+          number: 2839,
+          status: 'merged',
+        }),
         entityId: 'github-pr-2839',
         entityType: 'foreign',
         entityName: 'Lazy-load notification preview data',
         senderName: 'Iris',
         action: 'merged',
-        context: 'macro/app#2839',
         timestamp: '4h',
       },
       {
         id: 'github-pr-closed',
-        notificationId: 'notif-github-pr-closed',
-        notificationType: 'github_pr_status_changed',
-        githubStatus: 'closed',
+        notification: notification('github_pr_status_changed', {
+          number: 2838,
+          status: 'closed',
+        }),
         entityId: 'github-pr-2838',
         entityType: 'foreign',
         entityName: 'Remove old inbox experiment flag',
         senderName: 'Kai',
         action: 'closed',
-        context: 'macro/app#2838',
         timestamp: '4h',
       },
       {
         id: 'github-review-requested',
-        notificationId: 'notif-github-review-requested',
-        notificationType: 'github_review_requested',
+        notification: notification('github_review_requested', { number: 2841 }),
         entityId: 'github-pr-2841',
         entityType: 'foreign',
         entityName: 'Fix notification inbox layout jitter',
         senderName: 'Jordan',
         action: 'requested your review',
-        context: 'macro/app#2841',
         timestamp: '4h',
       },
       {
         id: 'github-pr-comment',
-        notificationId: 'notif-github-pr-comment',
-        notificationType: 'github_pr_comment',
+        notification: notification('github_pr_comment', { number: 2842 }),
         entityId: 'github-pr-2842',
         entityType: 'foreign',
         entityName: 'Refactor inbox adapters',
         senderName: 'Mina',
         action: 'commented',
         content: 'Could we keep the adapter output flatter here?',
-        context: 'macro/app#2842',
         timestamp: '5h',
       },
       {
         id: 'github-pr-mention',
-        notificationId: 'notif-github-pr-mention',
-        notificationType: 'github_pr_mention',
+        notification: notification('github_pr_mention', { number: 2843 }),
         entityId: 'github-pr-2843',
         entityType: 'foreign',
         entityName: 'Preview panel wiring',
         senderName: 'Noah',
         action: 'mentioned you',
         content: '@you can you take a look at the preview selection state?',
-        context: 'macro/app#2843',
         timestamp: '6h',
       },
       {
         id: 'github-pr-review',
-        notificationId: 'notif-github-pr-review',
-        notificationType: 'github_pr_review',
+        notification: notification('github_pr_review', { number: 2844 }),
         entityId: 'github-pr-2844',
         entityType: 'foreign',
         entityName: 'Notification inbox grouping',
         senderName: 'Iris',
         action: 'approved',
         content: 'Looks good with a few small comments.',
-        context: 'macro/app#2844',
         timestamp: '7h',
       },
     ],
@@ -366,8 +362,7 @@ const exampleGroups: ExampleGroup[] = [
     items: [
       {
         id: 'ai-response',
-        notificationId: 'notif-ai-response',
-        notificationType: 'ai_response',
+        notification: notification('ai_response'),
         entityId: 'chat-ai-response',
         entityType: 'chat',
         entityName: 'AI response ready',
@@ -379,8 +374,7 @@ const exampleGroups: ExampleGroup[] = [
       },
       {
         id: 'call-started',
-        notificationId: 'notif-call-started',
-        notificationType: 'call-started',
+        notification: notification('call-started'),
         entityId: 'call-standup',
         entityType: 'call',
         entityName: 'Engineering Daily',
@@ -390,13 +384,11 @@ const exampleGroups: ExampleGroup[] = [
       },
       {
         id: 'team-invite',
-        notificationId: 'notif-team-invite',
-        notificationType: 'invite_to_team',
+        notification: notification('invite_to_team'),
         entityId: 'team-product-engineering',
         entityName: 'Product Engineering',
         senderName: 'Taylor',
         action: 'invited you to',
-        context: 'Join to see shared channels, docs, and tasks.',
         timestamp: '24m',
       },
     ],
@@ -420,8 +412,10 @@ export function NotificationInbox2() {
                   <InboxItem.Root
                     item={item}
                     density={
-                      item.notificationType === 'task_assigned' ||
-                      item.notificationType === 'call-started'
+                      item.notification?.notification_metadata.tag ===
+                        'task_assigned' ||
+                      item.notification?.notification_metadata.tag ===
+                        'call-started'
                         ? 'compact'
                         : 'default'
                     }
