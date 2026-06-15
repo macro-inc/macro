@@ -1,7 +1,7 @@
 use crate::pubsub::link_manager::context::LinkManagerContext;
 use crate::pubsub::util::cg_refresh_email;
 use crate::util::gmail::auth::{
-    fetch_gmail_access_token_from_link, fetch_token_or_delete_on_revocation,
+    fetch_gmail_access_token_from_link, fetch_token_or_delete_on_revocation, is_forbidden_error,
 };
 use crate::util::sync_contacts::sync_contacts;
 use anyhow::{Context, anyhow};
@@ -42,13 +42,7 @@ pub async fn process_message(
             let link = get_link_or_skip(&ctx, message, link_id).await?;
             let Some(link) = link else { return Ok(()) };
 
-            let gmail_access_token = fetch_gmail_access_token_from_link(
-                &link,
-                &ctx.redis_client,
-                &ctx.auth_service_client,
-            )
-            .await
-            .ok();
+            let gmail_access_token = fetch_teardown_token(&ctx, &link).await;
             handle_delete(&ctx, &link, gmail_access_token.as_deref(), &deletion_reason).await?;
         }
         LinkManagerMessage::DeleteUser { fusionauth_user_id } => {
@@ -72,6 +66,38 @@ async fn get_link_or_skip(
         cleanup_message(&ctx.sqs_worker, message).await?;
     }
     Ok(link)
+}
+
+/// Best-effort token fetch for stopping a Gmail watch during link teardown. A transient
+/// auth-service failure would otherwise drop the stop silently and leave the watch
+/// running, so retry a few times. A revoked grant (Forbidden) can never yield a token,
+/// so don't retry it — the watch then lingers until Gmail expires it or the next connect
+/// stops it.
+async fn fetch_teardown_token(ctx: &LinkManagerContext, link: &Link) -> Option<String> {
+    const MAX_ATTEMPTS: u32 = 3;
+
+    for attempt in 1..=MAX_ATTEMPTS {
+        match fetch_gmail_access_token_from_link(link, &ctx.redis_client, &ctx.auth_service_client)
+            .await
+        {
+            Ok(token) => return Some(token),
+            Err(e) if is_forbidden_error(&e) => {
+                tracing::warn!(error=?e, link_id=%link.id, "Gmail access revoked; cannot stop watch (it will expire on its own)");
+                return None;
+            }
+            Err(e) if attempt < MAX_ATTEMPTS => {
+                tracing::warn!(error=?e, attempt, link_id=%link.id, "Transient failure fetching token to stop Gmail watch; retrying");
+                tokio::time::sleep(std::time::Duration::from_millis(200 * u64::from(attempt)))
+                    .await;
+            }
+            Err(e) => {
+                tracing::warn!(error=?e, link_id=%link.id, "Could not fetch token to stop Gmail watch after retries; watch will linger until it expires or the next connect stops it");
+                return None;
+            }
+        }
+    }
+
+    None
 }
 
 /// Handles the Refresh operation: renews Gmail watch subscription and syncs contacts.
@@ -134,10 +160,7 @@ async fn handle_delete_all_user_links(
     );
 
     for link in &links {
-        let gmail_access_token =
-            fetch_gmail_access_token_from_link(link, &ctx.redis_client, &ctx.auth_service_client)
-                .await
-                .ok();
+        let gmail_access_token = fetch_teardown_token(ctx, link).await;
 
         if let Err(e) = handle_delete(
             ctx,

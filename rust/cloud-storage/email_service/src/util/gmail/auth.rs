@@ -53,7 +53,7 @@ pub async fn fetch_token_or_delete_on_revocation(
 }
 
 /// Checks if an error chain contains a Forbidden error from the auth service
-fn is_forbidden_error(e: &anyhow::Error) -> bool {
+pub(crate) fn is_forbidden_error(e: &anyhow::Error) -> bool {
     e.chain().any(|cause| {
         cause
             .downcast_ref::<AuthServiceClientError>()

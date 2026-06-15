@@ -42,10 +42,10 @@ async fn recent_jobs_excludes_terminal_and_old_and_other_users(
 
     assert_eq!(jobs.len(), 3);
     assert!(jobs.iter().all(|j| j.fusionauth_user_id == FUSION));
-    assert!(
-        jobs.iter()
-            .all(|j| !matches!(j.status, BackfillJobStatus::Cancelled | BackfillJobStatus::Failed))
-    );
+    assert!(jobs.iter().all(|j| !matches!(
+        j.status,
+        BackfillJobStatus::Cancelled | BackfillJobStatus::Failed
+    )));
 
     Ok(())
 }
