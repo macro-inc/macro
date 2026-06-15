@@ -1,4 +1,7 @@
-import { openAddInboxDialog } from '@app/component/AddInboxDialog';
+import {
+  openAddInboxDialog,
+  useAddInboxGate,
+} from '@app/component/AddInboxDialog';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { ENABLE_MULTI_INBOX_OVERRIDE } from '@core/constant/featureFlags';
@@ -29,6 +32,7 @@ export function InboxSelector() {
     enabledOverride: ENABLE_MULTI_INBOX_OVERRIDE,
   });
   const { openSettings } = useSettingsState();
+  const guardAddInbox = useAddInboxGate();
 
   const label = () => {
     const ids = inboxFilter();
@@ -53,10 +57,11 @@ export function InboxSelector() {
             ? {
                 label: 'Add inbox',
                 icon: () => <PlusIcon class="size-4" />,
-                onSelect: () => {
-                  openSettings('Email');
-                  openAddInboxDialog();
-                },
+                onSelect: () =>
+                  guardAddInbox(() => {
+                    openSettings('Email');
+                    openAddInboxDialog();
+                  }),
               }
             : undefined
         }

@@ -18,7 +18,11 @@ import {
 import { useEmail, useUserId } from '@core/context/user';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { useEmailLinks, useEmailLinksStatus } from '@core/email-link';
-import { AddInboxDialog, openAddInboxDialog } from '../AddInboxDialog';
+import {
+  AddInboxDialog,
+  openAddInboxDialog,
+  useAddInboxGate,
+} from '../AddInboxDialog';
 import { useRemoveInboxMutation } from '@queries/email/link';
 import {
   ConnectionHero,
@@ -32,6 +36,7 @@ export function Email() {
   const multiInboxFlag = useFeatureFlag('enable-multi-inbox', {
     enabledOverride: ENABLE_MULTI_INBOX_OVERRIDE,
   });
+  const guardAddInbox = useAddInboxGate();
 
   const {
     query: emailLinksQuery,
@@ -204,7 +209,7 @@ export function Email() {
                 size="sm"
                 depth={3}
                 class="ml-auto shrink-0"
-                onClick={openAddInboxDialog}
+                onClick={() => guardAddInbox(openAddInboxDialog)}
               >
                 <PlusIcon class="size-4" />
                 Add inbox

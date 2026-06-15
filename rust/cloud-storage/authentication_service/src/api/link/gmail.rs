@@ -8,6 +8,7 @@ use axum::{
 use macro_middleware::tracking::ClientIp;
 use model::response::ErrorResponse;
 use model_user::axum_extractor::MacroUserExtractor;
+use roles_and_permissions::domain::model::PermissionId;
 use serde_utils::urlencode::UrlEncoded;
 use url::Url;
 
@@ -33,6 +34,9 @@ pub enum InitGmailLinkError {
     /// Too many in-progress links
     #[error("too many in progress links")]
     TooManyInProgressLinks,
+    /// The user lacks the subscription required to link an additional inbox
+    #[error("a professional subscription is required to link an additional inbox")]
+    PaymentRequired,
     /// Internal error
     #[error("internal error occurred")]
     InternalError(#[from] anyhow::Error),
@@ -46,6 +50,7 @@ impl IntoResponse for InitGmailLinkError {
         let message = self.to_string();
         let status_code: StatusCode = match &self {
             InitGmailLinkError::TooManyInProgressLinks => StatusCode::TOO_MANY_REQUESTS,
+            InitGmailLinkError::PaymentRequired => StatusCode::PAYMENT_REQUIRED,
             InitGmailLinkError::InternalError(_) | InitGmailLinkError::IdentityProviderNotFound => {
                 StatusCode::INTERNAL_SERVER_ERROR
             }
@@ -79,6 +84,7 @@ pub(crate) struct InitGmailLinkQueryParams {
         responses(
             (status = 200, body=InitGmailLinkResponse),
             (status = 400, body=ErrorResponse),
+            (status = 402, body=ErrorResponse),
             (status = 429, body=ErrorResponse),
             (status = 401, body=ErrorResponse),
             (status = 500, body=ErrorResponse),
@@ -92,6 +98,18 @@ pub async fn init_gmail_link_handler(
     user_context: MacroUserExtractor,
 ) -> Result<Json<InitGmailLinkResponse>, InitGmailLinkError> {
     let Query(InitGmailLinkQueryParams { original_url }) = query;
+
+    let has_professional_access =
+        user_context
+            .user_context
+            .permissions
+            .as_ref()
+            .is_some_and(|permissions| {
+                permissions.contains(&PermissionId::ReadProfessionalFeatures.to_string())
+            });
+    if !has_professional_access {
+        return Err(InitGmailLinkError::PaymentRequired);
+    }
 
     let count =
         macro_db_client::in_progress_user_link::count_existing_in_progress_user_links_for_user(
