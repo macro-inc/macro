@@ -184,8 +184,7 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
 
   // Set when `<NewChannel>` mounts (Messages tab only); used for goToMessage.
   // A signal so goToLocationFromParams can await it via the orchestrator's
-  // availability primitive when the tab hasn't mounted yet, rather than
-  // maintaining a separate pending-target queue.
+  // availability primitive when the tab hasn't mounted yet.
   const [messagesHandle, setMessagesHandle] = createSignal<ChannelHandle>();
 
   const setActiveTab = (tab: ChannelTabId) => {
@@ -259,7 +258,7 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
         setActiveTab(DEFAULT_CHANNEL_TAB);
         // The Messages tab may not have mounted yet (e.g. right after the split
         // opens). Wait for its handle via the orchestrator's availability
-        // primitive, then navigate — no separate pending-target queue.
+        // primitive, then navigate.
         await awaitCondition(
           () => messagesHandle() !== undefined,
           10_000
