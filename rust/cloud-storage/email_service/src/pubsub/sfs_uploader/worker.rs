@@ -1,5 +1,6 @@
 use crate::pubsub::sfs_uploader::context::SFSUploaderContext;
 use crate::pubsub::sfs_uploader::process;
+use connection_gateway_client::client::ConnectionGatewayClient;
 use futures::StreamExt;
 use sqlx::PgPool;
 use static_file_service_client::StaticFileServiceClient;
@@ -9,11 +10,13 @@ pub async fn run_worker(
     worker: sqs_worker::SQSWorker,
     db: PgPool,
     sfs_client: StaticFileServiceClient,
+    connection_gateway_client: ConnectionGatewayClient,
 ) {
     let ctx = SFSUploaderContext {
         db,
         sfs_client,
         sqs_worker: worker.clone(),
+        connection_gateway_client,
     };
     loop {
         let worker_result = tokio::spawn({

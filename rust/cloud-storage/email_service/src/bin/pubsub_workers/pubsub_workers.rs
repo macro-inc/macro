@@ -509,12 +509,14 @@ async fn main() -> anyhow::Result<()> {
         for worker in sfs_uploader_workers {
             let db_sfs_uploader = db.clone();
             let sfs_client_sfs_uploader = sfs_client.clone();
+            let connection_gateway_client_sfs_uploader = connection_gateway_client.clone();
             // upload user contact images to sfs from contact sync
             tokio::spawn(async move {
                 email_service::pubsub::sfs_uploader::worker::run_worker(
                     worker,
                     db_sfs_uploader,
                     sfs_client_sfs_uploader,
+                    connection_gateway_client_sfs_uploader,
                 )
                 .await;
             });
