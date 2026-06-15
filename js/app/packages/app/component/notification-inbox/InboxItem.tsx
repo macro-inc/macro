@@ -1,6 +1,10 @@
+import { UserIcon } from '@core/component/UserIcon';
 import type { NotificationType } from '@core/types';
 import type { EntityData } from '@entity';
-import { cn } from '@ui';
+import { Property } from '@property';
+import type { Property as PropertyT } from '@property/types';
+import type { GithubPrEventStatus } from '@service-notification/generated/schemas';
+import { Avatar, Button, type ButtonProps, cn } from '@ui';
 import {
   type Accessor,
   createContext,
@@ -10,16 +14,19 @@ import {
   splitProps,
   useContext,
 } from 'solid-js';
-import type {
-  InboxItemDensity,
-  InboxItemStyleProps,
-  InboxItemTone,
-} from './types';
+export type InboxItemDensity = 'default' | 'compact';
+export type InboxItemTone = 'default' | 'muted';
+
+export interface InboxItemStyleProps {
+  density?: InboxItemDensity;
+  tone?: InboxItemTone;
+}
 
 export interface InboxItem {
   id: string;
   notificationId?: string;
   notificationType?: NotificationType;
+  githubStatus?: GithubPrEventStatus;
   entityId?: string;
   entityType?: EntityData['type'];
   entityName?: string;
@@ -29,6 +36,8 @@ export interface InboxItem {
   targetName?: string;
   content?: string;
   context?: string;
+  properties?: PropertyT[];
+  breadcrumb?: string[];
   timestamp?: string;
   unread?: boolean;
 }
@@ -49,6 +58,11 @@ export const useInboxItem = () => {
   return ctx;
 };
 
+interface SlotProps {
+  children?: JSX.Element;
+  class?: string;
+}
+
 interface RootProps {
   item: InboxItem;
   children: JSX.Element;
@@ -57,41 +71,6 @@ interface RootProps {
   density?: InboxItemDensity;
   tone?: InboxItemTone;
   class?: string;
-  onClick?: (event: MouseEvent) => void;
-}
-
-interface SlotProps {
-  children?: JSX.Element;
-  class?: string;
-}
-
-export interface PillProps extends SlotProps, InboxItemStyleProps {
-  title?: string;
-  variant?: 'default' | 'muted' | 'accent';
-}
-
-export interface PropertyPillProps extends InboxItemStyleProps {
-  name: JSX.Element;
-  value?: JSX.Element;
-  class?: string;
-}
-
-export interface BreadcrumbProps {
-  items: readonly JSX.Element[];
-  class?: string;
-}
-
-interface ContextSlotProps extends SlotProps, InboxItemStyleProps {}
-
-interface HeaderProps extends SlotProps {
-  timestamp?: JSX.Element;
-}
-
-interface SummaryProps {
-  senderName?: JSX.Element;
-  action?: JSX.Element;
-  targetName?: JSX.Element;
-  timestamp?: JSX.Element;
 }
 
 function Root(props: RootProps) {
@@ -100,7 +79,6 @@ function Root(props: RootProps) {
   const tone = () => props.tone ?? 'default';
   const unread = () => props.unread ?? item().unread;
   const selected = () => props.selected;
-  const interactive = () => Boolean(props.onClick);
   const context: InboxItemContextValue = {
     item,
     density,
@@ -113,31 +91,51 @@ function Root(props: RootProps) {
     <InboxItemContext.Provider value={context}>
       <div
         class={cn(
-          'group/inbox-item grid w-full items-center gap-2 rounded-lg text-sm',
-          'grid-cols-[0.75rem_var(--inbox-item-icon-size)_minmax(0,1fr)_auto]',
+          'group/inbox-item grid w-full grid-cols-[0.5rem_var(--inbox-item-icon-size)_minmax(0,1fr)] gap-x-3 text-sm',
           density() === 'compact'
-            ? 'min-h-9 px-2 py-1 [--inbox-item-icon-size:1rem]'
-            : 'min-h-11 px-2 py-1.5 [--inbox-item-icon-size:1.25rem]',
-          tone() === 'muted' ? 'bg-ink-muted/2.5' : 'bg-surface',
-          'hover:bg-ink-muted/6',
-          selected() && 'bg-active/60 ring ring-edge ring-inset',
-          interactive() && 'outline-none focus-visible:bg-active',
+            ? '[--inbox-item-icon-size:2rem]'
+            : '[--inbox-item-icon-size:2rem]',
           props.class
         )}
-        role={interactive() ? 'button' : undefined}
-        tabIndex={interactive() ? 0 : undefined}
-        onClick={props.onClick}
-        onKeyDown={(event) => {
-          if (!interactive()) return;
-          if (event.key !== 'Enter' && event.key !== ' ') return;
-          event.preventDefault();
-          props.onClick?.(event as unknown as MouseEvent);
-        }}
       >
-        <Indicator />
         {props.children}
       </div>
     </InboxItemContext.Provider>
+  );
+}
+
+interface ContentProps extends SlotProps {
+  onClick?: (event: MouseEvent) => void;
+}
+
+function Content(props: ContentProps) {
+  const ctx = useInboxItem();
+  const interactive = () => Boolean(props.onClick);
+
+  return (
+    <div
+      class={cn(
+        'col-span-3 grid w-full grid-cols-[0.5rem_var(--inbox-item-icon-size)_minmax(0,1fr)] items-center gap-x-3 rounded-lg px-2',
+        ctx.density() === 'compact' ? 'min-h-9 py-1' : 'min-h-11 py-1.5',
+        ctx.tone() === 'muted' ? 'bg-ink-muted/2.5' : 'bg-surface',
+        'hover:bg-ink-muted/6',
+        ctx.selected() && 'bg-active/60 ring ring-edge ring-inset',
+        interactive() && 'outline-none focus-visible:bg-active',
+        props.class
+      )}
+      role={interactive() ? 'button' : undefined}
+      tabIndex={interactive() ? 0 : undefined}
+      onClick={props.onClick}
+      onKeyDown={(event) => {
+        if (!interactive()) return;
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        props.onClick?.(event as unknown as MouseEvent);
+      }}
+    >
+      <Indicator />
+      {props.children}
+    </div>
   );
 }
 
@@ -147,18 +145,14 @@ function Indicator(props: { unread?: boolean; class?: string }) {
 
   return (
     <span
-      class={cn('grid size-3 place-items-center', props.class)}
+      class={cn('grid size-2 place-items-center', props.class)}
       aria-hidden="true"
     >
       <span
-        class={cn(
-          'rounded-full',
-          ctx.density() === 'compact' ? 'size-1' : 'size-1.5',
-          {
-            'bg-accent': unread(),
-            'bg-transparent': !unread(),
-          }
-        )}
+        class={cn('size-1.5 rounded-full', {
+          'bg-accent': unread(),
+          'bg-transparent': !unread(),
+        })}
       />
     </span>
   );
@@ -170,8 +164,10 @@ function Icon(props: SlotProps) {
   return (
     <span
       class={cn(
-        'grid place-items-center overflow-visible text-ink-muted',
-        ctx.density() === 'compact' ? 'size-4' : 'size-5',
+        'flex shrink-0 self-start items-center justify-center overflow-visible text-ink-muted',
+        ctx.density() === 'compact'
+          ? 'min-w-4 h-4'
+          : 'min-w-[var(--inbox-item-icon-size)] h-[var(--inbox-item-icon-size)]',
         ctx.tone() === 'muted' && 'text-ink-extra-muted',
         props.class
       )}
@@ -187,7 +183,7 @@ function Body(props: SlotProps) {
   return (
     <div
       class={cn(
-        'min-w-0 flex flex-col',
+        'flex min-w-0 flex-1 flex-col',
         ctx.density() === 'compact' ? 'gap-0' : 'gap-0.5',
         props.class
       )}
@@ -196,6 +192,8 @@ function Body(props: SlotProps) {
     </div>
   );
 }
+
+interface HeaderProps extends SlotProps {}
 
 function Header(props: HeaderProps) {
   const ctx = useInboxItem();
@@ -209,108 +207,141 @@ function Header(props: HeaderProps) {
       )}
     >
       {props.children}
-      {props.timestamp !== undefined && (
-        <Timestamp>{props.timestamp}</Timestamp>
-      )}
     </div>
-  );
-}
-
-function Summary(props: SummaryProps = {}) {
-  const { item } = useInboxItem();
-  const senderName = () => props.senderName ?? item().senderName;
-  const action = () => props.action ?? item().action;
-  const targetName = () =>
-    props.targetName ?? item().targetName ?? item().entityName;
-  const timestamp = () => props.timestamp ?? item().timestamp;
-
-  return (
-    <Header timestamp={timestamp()}>
-      {senderName() !== undefined && <Sender>{senderName()}</Sender>}
-      {action() !== undefined && <Action>{action()}</Action>}
-      {targetName() !== undefined && <TargetName>{targetName()}</TargetName>}
-    </Header>
   );
 }
 
 function Sender(props: SlotProps) {
   const ctx = useInboxItem();
+  const name = () => props.children?.toString() || ctx.item().senderName || '?';
+  const initials = () =>
+    name()
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase())
+      .join('') || '?';
 
   return (
     <span
       class={cn(
-        'min-w-0 truncate font-medium shrink-0',
-        ctx.density() === 'compact' ? 'text-[11px]' : 'text-xs',
+        'min-w-0 shrink-0 inline-flex items-center gap-1',
+        'text-xs',
         ctx.tone() === 'muted' ? 'text-ink-muted' : 'text-ink',
-        ctx.unread() && 'font-semibold',
         props.class
       )}
     >
-      {props.children}
+      <span class="size-3 shrink-0 overflow-hidden rounded-full">
+        <Show
+          when={ctx.item().senderId}
+          fallback={
+            <Avatar size="fill" class="text-[8px]">
+              <Avatar.Fallback>{initials()}</Avatar.Fallback>
+            </Avatar>
+          }
+        >
+          {(senderId) => (
+            <UserIcon
+              id={senderId()}
+              size="fill"
+              suppressClick
+              showTooltip={false}
+            />
+          )}
+        </Show>
+      </span>
+      <span class="min-w-0 truncate">{props.children}</span>
     </span>
   );
-}
-
-function Action(props: SlotProps) {
-  return (
-    <span class={cn('shrink-0 text-xs text-ink-muted', props.class)}>
-      {props.children}
-    </span>
-  );
-}
-
-function TargetName(props: SlotProps) {
-  return <Content class={props.class}>{props.children}</Content>;
 }
 
 function Timestamp(props: SlotProps) {
-  const ctx = useInboxItem();
-
   return (
-    <span
-      class={cn(
-        'shrink-0 text-ink-extra-muted',
-        ctx.density() === 'compact' ? 'text-[11px]' : 'text-xs',
-        props.class
-      )}
-    >
+    <span class={cn('shrink-0 text-xs text-ink-extra-muted/70', props.class)}>
       {props.children}
     </span>
   );
 }
 
-function Content(props: SlotProps) {
+interface LinkProps extends SlotProps {
+  href?: string;
+  title?: string;
+}
+
+function Link(props: LinkProps) {
   const ctx = useInboxItem();
+  const className = () =>
+    cn(
+      'min-w-0 truncate text-xs text-ink-muted/70 underline-offset-2 transition-colors hover:text-accent hover:underline',
+      ctx.tone() === 'muted' && 'text-ink-extra-muted',
+      props.class
+    );
 
   return (
-    <span
-      class={cn(
-        'min-w-0 truncate text-ink-muted/70',
-        ctx.density() === 'compact' ? 'text-[11px]' : 'text-xs',
-        ctx.tone() === 'muted' && 'text-ink-extra-muted',
-        props.class
-      )}
+    <Show
+      when={props.href}
+      fallback={
+        <span class={className()} title={props.title}>
+          {props.children}
+        </span>
+      }
     >
-      {props.children}
-    </span>
+      {(href) => (
+        <a
+          class={className()}
+          href={href()}
+          title={props.title}
+          onClick={(event) => event.stopPropagation()}
+        >
+          {props.children}
+        </a>
+      )}
+    </Show>
   );
 }
 
-function Context(props: SlotProps) {
-  const ctx = useInboxItem();
+interface DescriptionProps extends SlotProps, InboxItemStyleProps {
+  timestamp?: boolean;
+}
+
+function Description(props: DescriptionProps) {
+  const [local, rest] = splitProps(props, [
+    'density',
+    'tone',
+    'timestamp',
+    'class',
+    'children',
+  ]);
+  const parent = useInboxItem();
+  const density = () => local.density ?? parent.density();
+  const tone = () => local.tone ?? parent.tone();
+  const showTimestamp = () => local.timestamp ?? true;
+  const context: InboxItemContextValue = {
+    ...parent,
+    density,
+    tone,
+  };
 
   return (
-    <div
-      class={cn(
-        'flex min-w-0 items-center text-ink-muted/70',
-        ctx.density() === 'compact' ? 'gap-1 text-[11px]' : 'gap-1.5 text-xs',
-        props.class
-      )}
-    >
-      {props.children}
-    </div>
+    <InboxItemContext.Provider value={context}>
+      <div
+        class={cn(
+          'flex min-w-0 items-center text-ink-muted/70',
+          density() === 'compact' ? 'gap-1 text-xs' : 'gap-1.5 text-xs',
+          local.class
+        )}
+        {...rest}
+      >
+        {local.children}
+        <Show when={showTimestamp() && parent.item().timestamp}>
+          {(timestamp) => <Timestamp class="ml-auto">{timestamp()}</Timestamp>}
+        </Show>
+      </div>
+    </InboxItemContext.Provider>
   );
 }
+
+interface ContextSlotProps extends SlotProps, InboxItemStyleProps {}
 
 function Section(props: ContextSlotProps) {
   const [local, rest] = splitProps(props, [
@@ -337,12 +368,35 @@ function Section(props: ContextSlotProps) {
   );
 }
 
-function CompactContext(props: SlotProps) {
+function ActionsRow(props: SlotProps) {
   return (
-    <Section density="compact">
-      <Context class={props.class}>{props.children}</Context>
-    </Section>
+    <div class={cn('col-start-3 flex min-w-0 items-center gap-2', props.class)}>
+      {props.children}
+    </div>
   );
+}
+
+interface ActionButtonProps extends ButtonProps {}
+
+function ActionButton(props: ActionButtonProps) {
+  const [local, rest] = splitProps(props, ['class', 'children', 'type']);
+
+  return (
+    <Button
+      class={cn('text-accent not-disabled:hover:text-accent', local.class)}
+      size="sm"
+      type={local.type ?? 'button'}
+      variant="ghost"
+      {...rest}
+    >
+      {local.children}
+    </Button>
+  );
+}
+
+interface PillProps extends SlotProps, InboxItemStyleProps {
+  title?: string;
+  variant?: 'default' | 'muted' | 'accent';
 }
 
 export function Pill(props: PillProps) {
@@ -354,9 +408,7 @@ export function Pill(props: PillProps) {
     <span
       class={cn(
         'inline-flex max-w-full min-w-0 items-center rounded-full border text-ink-muted',
-        density() === 'compact'
-          ? 'h-4 px-1 text-[10px]'
-          : 'h-5 px-1.5 text-[11px]',
+        density() === 'compact' ? 'h-4 px-1 text-[10px]' : 'h-5 px-1.5 text-xs',
         variant() === 'default' && 'border-edge-muted',
         variant() === 'muted' && 'border-edge-muted/70 text-ink-extra-muted',
         variant() === 'accent' && 'border-accent/20 bg-accent/8 text-accent',
@@ -372,39 +424,19 @@ export function Pill(props: PillProps) {
   );
 }
 
-function Trailing(props: SlotProps) {
-  const ctx = useInboxItem();
-
-  return (
-    <div
-      class={cn(
-        'flex shrink-0 items-center justify-end',
-        ctx.density() === 'compact' ? 'ml-1' : 'ml-2',
-        props.class
-      )}
-    >
-      {props.children}
-    </div>
-  );
+interface PropertyPillProps extends InboxItemStyleProps {
+  property: PropertyT;
+  class?: string;
 }
 
 export function PropertyPill(props: PropertyPillProps) {
   return (
-    <Pill
-      class={cn('gap-1', props.class)}
-      density={props.density}
-      tone={props.tone}
+    <span
+      class={cn('grid size-4 shrink-0 place-items-center', props.class)}
+      title={props.property.displayName}
     >
-      <span class="min-w-0 truncate">{props.name}</span>
-      <Show when={props.value}>
-        {(value) => (
-          <>
-            <span class="shrink-0 text-ink-extra-muted">:</span>
-            <span class="min-w-0 truncate text-ink-muted">{value()}</span>
-          </>
-        )}
-      </Show>
-    </Pill>
+      <Property.Icon property={props.property} class="size-3 shrink-0" />
+    </span>
   );
 }
 
@@ -419,6 +451,11 @@ export function SharedPill(
       {props.label ?? 'Shared'}
     </Pill>
   );
+}
+
+interface BreadcrumbProps {
+  items: readonly JSX.Element[];
+  class?: string;
 }
 
 export function Breadcrumb(props: BreadcrumbProps) {
@@ -450,14 +487,12 @@ export const InboxItem = {
   Icon,
   Body,
   Header,
-  Summary,
   Sender,
-  Action,
-  TargetName,
   Timestamp,
   Content,
-  Context,
-  CompactContext,
+  Link,
+  Description,
   Pill,
-  Trailing,
+  ActionsRow,
+  ActionButton,
 };
