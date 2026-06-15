@@ -347,7 +347,7 @@ where
         &'a self,
         f: &'a F,
     ) -> Result<ClaimResult<()>, Report> {
-        let batch =
+        let mut batch =
             match tokio::time::timeout(DELIVERY_TIMEOUT, self.digest_batcher.claim_ready_digest())
                 .await
                 .context("Dequeing redis batch exceeded timeout")??
@@ -357,6 +357,29 @@ where
             };
 
         let recipient: MacroUserIdStr<'static> = batch.user_id.clone();
+        let notification_ids: Vec<_> = batch
+            .notifications
+            .iter()
+            .map(|notification| notification.notification_id)
+            .collect();
+        let eligible_notification_ids = self
+            .repository
+            .get_digest_eligible_notification_ids(recipient.copied(), &notification_ids)
+            .await?;
+        let original_count = batch.notifications.len();
+        batch.notifications.retain(|notification| {
+            eligible_notification_ids.contains(&notification.notification_id)
+        });
+
+        if batch.notifications.is_empty() {
+            tracing::info!(
+                user_id = %recipient,
+                original_count,
+                "Skipping email digest publish — all queued notifications are now read, deleted, or missing"
+            );
+            return Ok(ClaimResult::Ready(()));
+        }
+
         let email_notif = f(batch)?;
 
         let typename = NotificationTypeName::new_from_notif(&email_notif);
