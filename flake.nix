@@ -573,6 +573,10 @@
             cargo-info
             cargo-udeps
             cargo-lambda
+            cargo-zigbuild
+            zig
+            cmake
+            nasm
             (writeShellScriptBin "rustup" ''
               set -euo pipefail
               rustc_path="$(${coreutils}/bin/readlink -f "$(command -v rustc)")"
@@ -789,6 +793,10 @@
               LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
               SOPS_KMS_ARN = "arn:aws:kms:us-east-1:569036502058:key/mrk-cab29bf948044eb79005a81f48d40e93,arn:aws:kms:us-west-1:569036502058:key/mrk-cab29bf948044eb79005a81f48d40e93";
               RUSTC_WRAPPER = "${pkgs.sccache}/bin/sccache";
+              # Keep local cargo-lambda builds on the same aws-lc-sys path as
+              # the Nix lambda derivations. The default cc builder rejects
+              # cargo-lambda/cargo-zigbuild's Zig cc wrapper.
+              AWS_LC_SYS_CMAKE_BUILDER = "1";
             }
             // pkgs.lib.optionalAttrs isLinux {
               LD_LIBRARY_PATH = "${pkgs.lib.makeLibraryPath libraries}";
