@@ -5,6 +5,7 @@ use thiserror::Error;
 
 const APP_SECRETS_JSON_ENV: &str = "APP_SECRETS_JSON";
 
+#[allow(dead_code)]
 fn read_std_env(s: &'static str) -> Result<String, std::env::VarError> {
     std::env::var(s)
 }
