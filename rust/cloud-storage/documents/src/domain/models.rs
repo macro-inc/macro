@@ -44,6 +44,10 @@ pub enum DocumentError {
     /// An internal error occurred.
     #[error("{0}")]
     Internal(#[from] anyhow::Error),
+    /// JWT encoding failed.
+    #[cfg(feature = "axum")]
+    #[error(transparent)]
+    JwtEncoding(#[from] jsonwebtoken::errors::Error),
 }
 
 /// Response wrapper for the copy document endpoint.

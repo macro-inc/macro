@@ -89,6 +89,7 @@ impl IntoResponse for DocumentError {
             DocumentError::Conflict(_) => StatusCode::CONFLICT,
             DocumentError::BadRequest(_) => StatusCode::BAD_REQUEST,
             DocumentError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            DocumentError::JwtEncoding(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
         if status_code.is_server_error() {

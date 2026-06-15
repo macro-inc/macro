@@ -6,6 +6,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use documents_hex::domain::permission_token::ISSUER;
 use jsonwebtoken::{Algorithm, DecodingKey, Validation};
 use model::{document::DocumentPermissionsToken, response::ErrorResponse, user::UserContext};
 use utoipa::ToSchema;
@@ -42,7 +43,7 @@ pub async fn handler(
     // Verify and decode the JWT
     let mut validation = Validation::new(Algorithm::HS256);
 
-    validation.set_issuer(&["document_storage_service"]);
+    validation.set_issuer(&[ISSUER]);
 
     let user_id = if user_context.user_id.is_empty() {
         None

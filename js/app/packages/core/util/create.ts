@@ -1,6 +1,6 @@
 import { DEFAULT_CHAT_NAME } from '@block-chat/definition';
 import type { CodeFileExtension } from '@block-code/util/languageSupport';
-import { cacheMdCreate } from '@block-md/util/mdCreateCache';
+import { seedDocumentLoadBundle } from '@queries/storage/documentLoad/documentLoadBundle';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
@@ -56,7 +56,7 @@ export async function createMarkdownFile(
 
   const { documentId, documentMetadata, token } = result.value;
 
-  cacheMdCreate(documentId, {
+  seedDocumentLoadBundle(documentId, {
     documentMetadata,
     userAccessLevel: AccessLevel.owner,
     token,
@@ -118,7 +118,7 @@ export async function createTask(
 
   const { documentId, documentMetadata, token } = result.value;
 
-  cacheMdCreate(documentId, {
+  seedDocumentLoadBundle(documentId, {
     documentMetadata,
     userAccessLevel: AccessLevel.owner,
     token,

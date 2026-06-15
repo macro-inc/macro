@@ -14,7 +14,9 @@ import { createSyncServiceSource } from '@service-sync/source';
 import { err, ok } from 'neverthrow';
 import MarkdownBlock from './component/Block';
 import type { MarkdownRewriteOutput } from './signal/rewriteSignal';
-import { consumeMdCreate } from './util/mdCreateCache';
+import { queryClient } from '@queries/client';
+import { documentLoadKeys } from '@queries/storage/documentLoad/keys';
+import type { DocumentLoadBundle } from '@queries/storage/documentLoad/documentLoadBundle';
 
 export const definition = defineBlock({
   name: 'md',
@@ -38,7 +40,9 @@ export const definition = defineBlock({
         });
       }
 
-      const pre = consumeMdCreate(documentId);
+      const pre = queryClient.getQueryData<DocumentLoadBundle>(
+        documentLoadKeys.bundle(documentId).queryKey
+      );
 
       let token: string;
       let documentMetadata: DocumentMetadata;
