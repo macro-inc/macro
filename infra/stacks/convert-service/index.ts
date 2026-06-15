@@ -26,21 +26,11 @@ const internalApiKeyArn: pulumi.Output<string> = aws.secretsmanager
   .getSecretVersionOutput({ secretId: INTERNAL_API_SECRET_KEY })
   .apply((secret) => secret.arn);
 
-const DATABASE_URL = aws.secretsmanager
-  .getSecretVersionOutput({
-    secretId: config.require(`macro_db_secret_key`),
-  })
-  .apply((secret) => secret.secretString);
-
 const secretKeyArns = [pulumi.interpolate`${internalApiKeyArn}`];
 
 const cloudStorageStack = new pulumi.StackReference('cloud-storage-stack', {
   name: `macro-inc/document-storage/${stack}`,
 });
-
-const documentStorageBucketId: pulumi.Output<string> = cloudStorageStack
-  .getOutput('documentStorageBucketId')
-  .apply((id) => id as string);
 
 const cloudStorageClusterArn: pulumi.Output<string> = cloudStorageStack
   .getOutput('cloudStorageClusterArn')
@@ -72,36 +62,8 @@ export const jobUpdateHandlerLambdaName = jobUpdateHandlerLambdaArn.apply(
 
 let containerEnvVars = [
   {
-    name: 'RUST_LOG',
-    value: `convert_service=${stack === 'prod' ? 'info' : 'debug'},tower_http=info`,
-  },
-  {
     name: 'ENVIRONMENT',
     value: stack,
-  },
-  {
-    name: 'INTERNAL_API_SECRET_KEY',
-    value: pulumi.interpolate`${INTERNAL_API_SECRET_KEY}`,
-  },
-  {
-    name: 'CONVERT_QUEUE',
-    value: pulumi.interpolate`${convertQueueName}`,
-  },
-  {
-    name: 'LOK_PATH',
-    value: '/app/lok/instdir/program',
-  },
-  {
-    name: 'DOCUMENT_STORAGE_BUCKET',
-    value: pulumi.interpolate`${documentStorageBucketId}`,
-  },
-  {
-    name: 'DATABASE_URL',
-    value: pulumi.interpolate`${DATABASE_URL}`,
-  },
-  {
-    name: 'WEB_SOCKET_RESPONSE_LAMBDA',
-    value: pulumi.interpolate`${jobUpdateHandlerLambdaName}`,
   },
   // OpenTelemetry / Datadog tracing configuration
   {
