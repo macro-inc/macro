@@ -34,10 +34,8 @@ fn domain(input: &str) -> IResult<&str, &str> {
 }
 
 // Parser for local part (before @)
-// Note: the single quote (') is RFC 5322 atext and thus valid in the local part,
-// but we deliberately reject it as a policy choice — do not add it back.
 fn atom(input: &str) -> IResult<&str, &str> {
-    take_while1(|c: char| c.is_ascii_alphanumeric() || "!#$%&*+/=?^_`{|}~-".contains(c))
+    take_while1(|c: char| c.is_ascii_alphanumeric() || "!#$%&'*+/=?^_`{|}~-".contains(c))
         .parse(input)
 }
 

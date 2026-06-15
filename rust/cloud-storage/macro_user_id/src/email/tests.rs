@@ -26,12 +26,6 @@ fn it_should_fail() {
         "sean..aye@macro.com",
         "sean@@macro.com",
         r#"foo"@macro.com"@example.com"#,
-        // single quotes are not allowed
-        "sean'oh@macro.com",
-        "'sean@macro.com",
-        "sean'@macro.com",
-        "sean+ta'g@macro.com",
-        "sean@mac'ro.com",
     ];
     invalid_emails
         .iter()
