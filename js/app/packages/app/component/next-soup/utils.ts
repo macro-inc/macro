@@ -348,7 +348,7 @@ export const openEntityInSplitFromUnifiedList = async (
     splitManager.openWithSplit(
       { type: 'pr', id: encodePrKey(prRef) },
       {
-        referredFrom: 'list-view',
+        referredFrom: options.referredFrom,
         activate: true,
         preferNewSplit: openInNewSplit,
         handle: splitHandle,

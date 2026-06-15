@@ -1,8 +1,8 @@
 import type { GithubPullRequestEntity } from '@entity';
 import { queryClient } from '@queries/client';
+import type { GithubPullRequestWithDetails } from '@queries/storage/github-pull-requests';
 import { authServiceClient } from '@service-auth/client';
 import type { EnrichedGithubPullRequest } from '@service-auth/generated/schemas';
-import type { GithubPullRequest } from '@service-storage/generated/schemas';
 import { useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 
@@ -27,20 +27,23 @@ export function seedPrBlockData(entity: GithubPullRequestEntity): PrRef {
   // Synthetic entities (e.g. the pasted-URL command item) carry placeholder
   // metadata and no backing row — don't seed those, let the block fetch.
   if (!entity.storedForId) return ref;
-  queryClient.setQueryData<GithubPullRequest>(prEnrichmentQueryKey(ref), {
-    additions: entity.metadata.additions,
-    checks: entity.metadata.checks,
-    comments: entity.metadata.comments,
-    deletions: entity.metadata.deletions,
-    displayName: prDisplayName(ref),
-    githubKey: toGithubKey(ref),
-    name: entity.metadata.name,
-    number,
-    owner,
-    repo,
-    status: entity.metadata.status,
-    url: entity.metadata.url,
-  });
+  queryClient.setQueryData<GithubPullRequestWithDetails>(
+    prEnrichmentQueryKey(ref),
+    {
+      additions: entity.metadata.additions,
+      checks: entity.metadata.checks,
+      comments: entity.metadata.comments,
+      deletions: entity.metadata.deletions,
+      displayName: prDisplayName(ref),
+      githubKey: toGithubKey(ref),
+      name: entity.metadata.name,
+      number,
+      owner,
+      repo,
+      status: entity.metadata.status,
+      url: entity.metadata.url,
+    }
+  );
   return ref;
 }
 
@@ -62,9 +65,11 @@ export function isGithubLinkError(error: unknown): boolean {
 
 function toStorageShape(
   pullRequest: EnrichedGithubPullRequest
-): GithubPullRequest {
+): GithubPullRequestWithDetails {
   return {
     additions: pullRequest.additions,
+    authorLogin: pullRequest.authorLogin,
+    description: pullRequest.description,
     checks: pullRequest.checks,
     comments: pullRequest.comments,
     deletions: pullRequest.deletions,
@@ -93,7 +98,7 @@ export function usePrEnrichmentQuery(
     const current = ref();
     return {
       queryKey: prEnrichmentQueryKey(current),
-      queryFn: async (): Promise<GithubPullRequest> => {
+      queryFn: async (): Promise<GithubPullRequestWithDetails> => {
         const response = await authServiceClient.enrichGithubPullRequests({
           pullRequests: [
             {

@@ -41,6 +41,11 @@ export function PrContentSkeleton(props: { prRef: PrRef }) {
         <SkeletonBar class="h-6 w-36" />
         <SkeletonBar class="h-6 w-24" />
       </div>
+      <div class="flex flex-col gap-2">
+        <SkeletonBar class="h-2 w-full max-w-lg" />
+        <SkeletonBar class="h-2 w-full max-w-md" />
+        <SkeletonBar class="h-2 w-2/3 max-w-sm" />
+      </div>
       <section class="mt-8">
         <div class="flex items-center gap-2 pt-2">
           <div class="w-6 border-t border-edge-muted" />

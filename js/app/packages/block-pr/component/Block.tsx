@@ -1,5 +1,9 @@
 import { SidePanel } from '@app/component/side-panel';
 import { useBlockId } from '@core/block';
+import {
+  StaticMarkdown,
+  StaticMarkdownContext,
+} from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { useUrlParams } from '@core/component/ParamsProvider';
 import { toast } from '@core/component/Toast/Toast';
 import { useDocumentGithubPullRequestsQuery } from '@queries/storage/github-pull-requests';
@@ -10,6 +14,7 @@ import { createMemo, Show, Suspense } from 'solid-js';
 import { URL_PARAMS } from '../constants';
 import { createPrDiscussionSource } from '../data/prDiscussionSource';
 import { isGithubLinkError, usePrEnrichmentQuery } from '../data/queries';
+import { cleanGithubMarkdown } from '../util/githubMarkdown';
 import type { PrRef } from '../util/prKey';
 import { decodePrKey, prDisplayName, toGithubKey } from '../util/prKey';
 import { PrContentSkeleton } from './PrSkeletons';
@@ -79,6 +84,13 @@ function PrBlockContent(props: { prRef: PrRef }) {
       !needsGithubLink()
   );
 
+  const description = createMemo(() => {
+    const raw = pullRequest()?.description;
+    if (!raw) return null;
+    const cleaned = cleanGithubMarkdown(raw);
+    return cleaned || null;
+  });
+
   // Block-lifetime local Macro discussion (prototype-only, lost on reload).
   const discussionSource = createPrDiscussionSource();
 
@@ -142,8 +154,18 @@ function PrBlockContent(props: { prRef: PrRef }) {
                   </Show>
                 </div>
 
-                {/* The PR description body isn't returned by the enrich/storage
-                  endpoints yet — render it here once the backend exposes it. */}
+                <Show when={description()}>
+                  {(markdown) => (
+                    <StaticMarkdownContext>
+                      <div class="ph-no-capture text-sm wrap-break-word max-w-full overflow-x-auto">
+                        <StaticMarkdown
+                          markdown={markdown()}
+                          target="internal"
+                        />
+                      </div>
+                    </StaticMarkdownContext>
+                  )}
+                </Show>
 
                 <Show when={needsGithubLink()}>
                   <ConnectGithubBanner />

@@ -5,12 +5,11 @@ import Circle from '@phosphor/circle.svg';
 import CircleNotch from '@phosphor/circle-notch.svg';
 import MinusCircle from '@phosphor/minus-circle.svg';
 import XCircle from '@phosphor/x-circle.svg';
-import type {
-  GithubPullRequest,
-  GithubPullRequestCheckRun,
-} from '@service-storage/generated/schemas';
+import type { GithubPullRequestWithDetails } from '@queries/storage/github-pull-requests';
+import type { GithubPullRequestCheckRun } from '@service-storage/generated/schemas';
 import { createMemo, For, Match, Show, Switch } from 'solid-js';
 
+import { githubAvatarUrl } from '../../util/githubMarkdown';
 import { PrStatusChip } from '../PrSplitHeader';
 
 function checksPassedCount(checks: GithubPullRequestCheckRun[]): number {
@@ -57,7 +56,7 @@ function CheckStatusIcon(props: { check: GithubPullRequestCheckRun }) {
 }
 
 export function PrSidePanelSections(props: {
-  enrichment: GithubPullRequest | undefined;
+  enrichment: GithubPullRequestWithDetails | undefined;
 }) {
   const checks = createMemo(() => props.enrichment?.checks ?? []);
 
@@ -67,6 +66,21 @@ export function PrSidePanelSections(props: {
         <Show when={props.enrichment} fallback={<SidePanel.Loading />}>
           {(enrichment) => (
             <SidePanel.Grid>
+              <Show when={enrichment().authorLogin}>
+                {(authorLogin) => (
+                  <SidePanel.Row label="Author">
+                    <SidePanel.Pill>
+                      <img
+                        src={githubAvatarUrl(authorLogin())}
+                        alt={authorLogin()}
+                        class="size-3.5 rounded-full shrink-0"
+                        loading="lazy"
+                      />
+                      <span class="truncate">{authorLogin()}</span>
+                    </SidePanel.Pill>
+                  </SidePanel.Row>
+                )}
+              </Show>
               <SidePanel.Row label="Repository">
                 <span class="truncate">
                   {enrichment().owner}/{enrichment().repo}
