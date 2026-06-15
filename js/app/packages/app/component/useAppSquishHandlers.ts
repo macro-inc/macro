@@ -84,6 +84,7 @@ export function useAppSquishHandlers() {
     // A later shrink is the keyboard show signal; focusout remains the reset.
     let viewportHeightBeforeFocus: number | undefined;
     let activeElementPollIntervalId: number | undefined;
+    let deferredResetTimeoutId: number | undefined;
 
     const syncViewportHeight = () => {
       const viewportHeight = getViewportHeight();
@@ -98,10 +99,28 @@ export function useAppSquishHandlers() {
       activeElementPollIntervalId = undefined;
     };
 
+    const clearDeferredReset = () => {
+      if (deferredResetTimeoutId === undefined) return;
+
+      window.clearTimeout(deferredResetTimeoutId);
+      deferredResetTimeoutId = undefined;
+    };
+
     const resetIOSVirtualKeyboardState = () => {
+      clearDeferredReset();
       viewportHeightBeforeFocus = undefined;
       stopActiveElementPolling();
       resetVirtualKeyboardState();
+    };
+
+    const deferIOSVirtualKeyboardReset = () => {
+      clearDeferredReset();
+      deferredResetTimeoutId = window.setTimeout(() => {
+        deferredResetTimeoutId = undefined;
+        if (!isEditableInput(document.activeElement)) {
+          resetIOSVirtualKeyboardState();
+        }
+      });
     };
 
     const startActiveElementPolling = () => {
@@ -147,16 +166,21 @@ export function useAppSquishHandlers() {
     const handleFocusIn = (e: FocusEvent) => {
       if (!(e.target instanceof Element) || !isEditableInput(e.target)) return;
 
+      clearDeferredReset();
       viewportHeightBeforeFocus = getViewportHeight();
     };
 
     const handleFocusOut = (e: FocusEvent) => {
+      if (!(e.target instanceof Element) || !isEditableInput(e.target)) return;
+
+      if (!e.relatedTarget) {
+        deferIOSVirtualKeyboardReset();
+        return;
+      }
+
       if (
-        e.target instanceof Element &&
-        isEditableInput(e.target) &&
-        (!e.relatedTarget ||
-          (e.relatedTarget instanceof Element &&
-            !isEditableInput(e.relatedTarget)))
+        e.relatedTarget instanceof Element &&
+        !isEditableInput(e.relatedTarget)
       ) {
         resetIOSVirtualKeyboardState();
       }
@@ -176,6 +200,7 @@ export function useAppSquishHandlers() {
       document.addEventListener('focusout', handleFocusOut, { capture: true });
 
       onCleanup(() => {
+        clearDeferredReset();
         stopActiveElementPolling();
         if (window.visualViewport) {
           window.visualViewport.removeEventListener('resize', handleResize);
