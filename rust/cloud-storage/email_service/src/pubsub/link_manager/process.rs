@@ -43,11 +43,21 @@ pub async fn process_message(
                 Ok(gmail_access_token) => {
                     handle_refresh(&ctx, &link, &gmail_access_token).await?;
                 }
-                // The grant is gone: the link is now flagged for reauth and its
-                // sharers were notified. There is nothing to refresh until the user
+                // The grant is gone. There is nothing to refresh until the user
                 // reconnects, so drop the message rather than retrying a fetch that
-                // cannot succeed.
-                Err(e) if is_reauth_required_error(&e) => {}
+                // cannot succeed — but only once the reauth flag is actually
+                // persisted, otherwise retry so the health signal isn't lost when the
+                // mark write itself failed.
+                Err(e) if is_reauth_required_error(&e) => {
+                    let persisted = email_db_client::links::get::fetch_link_by_id(&ctx.db, link.id)
+                        .await
+                        .context("Failed to verify needs_reauth state after token fetch failure")?
+                        .is_some_and(|l| l.needs_reauth);
+
+                    if !persisted {
+                        return Err(e.context("reauth required but needs_reauth not persisted"));
+                    }
+                }
                 Err(e) => return Err(e),
             }
         }

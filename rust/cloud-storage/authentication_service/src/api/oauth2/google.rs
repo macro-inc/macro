@@ -110,7 +110,6 @@ async fn link_user(
             if token_response.refresh_token.is_empty() {
                 tracing::info!(
                     fusion_user_id = %idp_link_owner,
-                    linked_email = %user_info_email,
                     "idp link already exists and no fresh refresh token returned, leaving existing grant"
                 );
             } else {
@@ -177,7 +176,6 @@ async fn relink_with_fresh_token(
         // link lives; there is nothing to relink on this user.
         tracing::warn!(
             fusion_user_id = %idp_link_owner,
-            linked_email = %email,
             "relink: no existing grant found for mailbox on resolved owner, skipping"
         );
         return Ok(());
@@ -212,28 +210,34 @@ async fn relink_with_fresh_token(
         },
     };
 
-    auth.unlink_user(idp_link_owner, identity_provider_id, &sub)
-        .await
-        .map_err(|e| server_error(format!("unable to unlink stale grant {e}")))?;
+    // Swap the grant, capturing the outcome so the stub is re-deactivated below on
+    // every path — including an unlink failure — rather than leaking an active stub.
+    let swap_result: Result<(), (StatusCode, String)> = async {
+        auth.unlink_user(idp_link_owner, identity_provider_id, &sub)
+            .await
+            .map_err(|e| server_error(format!("unable to unlink stale grant {e}")))?;
 
-    let link_result = auth.link_user(link_with(fresh_refresh_token)).await;
+        let link_result = auth.link_user(link_with(fresh_refresh_token)).await;
 
-    if let Err(e) = &link_result {
-        tracing::error!(error=?e, "relink: failed to attach fresh grant, rolling back to stale token");
-        if let Err(rollback) = auth.link_user(link_with(&stale_token)).await {
-            tracing::error!(error=?rollback, "relink: rollback re-link also failed, grant is detached");
+        if let Err(e) = &link_result {
+            tracing::error!(error=?e, "relink: failed to attach fresh grant, rolling back to stale token");
+            if let Err(rollback) = auth.link_user(link_with(&stale_token)).await {
+                tracing::error!(error=?rollback, "relink: rollback re-link also failed, grant is detached");
+            }
         }
-    }
 
-    // Restore the stub's deactivated state regardless of outcome; a human's own
-    // account was active and is left as-is.
-    if !was_active
-        && let Err(e) = auth.deactivate_user(idp_link_owner).await
-    {
+        link_result.map_err(|e| server_error(format!("unable to attach fresh grant {e}")))
+    }
+    .await;
+
+    // Restore the stub's deactivated state on every path; a human's own account was
+    // active and is left as-is. Best-effort (logged) so a deactivation blip can't fail
+    // a reconnect whose grant swap already succeeded.
+    if !was_active && let Err(e) = auth.deactivate_user(idp_link_owner).await {
         tracing::error!(error=?e, %idp_link_owner, "relink: failed to re-deactivate stub after relink");
     }
 
-    link_result.map_err(|e| server_error(format!("unable to attach fresh grant {e}")))?;
+    swap_result?;
 
     Ok(())
 }

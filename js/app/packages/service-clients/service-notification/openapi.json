@@ -1849,6 +1849,17 @@
         ],
         "description": "Metadata for a notification that the user's review was requested on a GitHub pull request."
       },
+      "InboxReauthRequiredMetadata": {
+        "type": "object",
+        "description": "Metadata for a notification that a linked inbox's grant has died and the\ninbox must be reconnected. Fanned out to the inbox owner and every delegate,\nsince any of them holding the Google grant can restore sync.",
+        "required": ["emailAddress"],
+        "properties": {
+          "emailAddress": {
+            "type": "string",
+            "description": "The address of the inbox that needs to be reconnected."
+          }
+        }
+      },
       "InviteToTeamMetadata": {
         "type": "object",
         "description": "Metadata for when a user is invited to a team.",
@@ -2131,6 +2142,21 @@
               "tag": {
                 "type": "string",
                 "enum": ["new_email"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A linked inbox's grant died and must be reconnected.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/InboxReauthRequiredMetadata",
+                "description": "A linked inbox's grant died and must be reconnected."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["inbox_reauth_required"]
               }
             }
           },

@@ -95,6 +95,7 @@ export * from './githubReviewRequested';
 export * from './githubReviewRequestedAllOf';
 export * from './githubReviewRequestedAllOfRequestedReviewerGithubLogin';
 export * from './githubReviewRequestedAllOfRequestedReviewerGithubUserId';
+export * from './inboxReauthRequiredMetadata';
 export * from './inviteToTeamMetadata';
 export * from './inviteToTeamMetadataRole';
 export * from './inviteToTeamMetadataSenderProfilePictureUrl';

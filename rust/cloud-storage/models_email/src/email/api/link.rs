@@ -11,8 +11,8 @@ use uuid::Uuid;
 mod test;
 
 /// Coarse sync state for an inbox, used to render a one-line hint in the
-/// multi-inbox settings list. Derived from the link's `is_sync_active` flag and
-/// its most recent backfill job.
+/// multi-inbox settings list. Derived from the link's `is_sync_active` flag, its
+/// reauth health, and its most recent backfill job.
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum SyncStatus {

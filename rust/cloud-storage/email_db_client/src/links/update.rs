@@ -40,7 +40,7 @@ pub async fn set_link_needs_reauth(pool: &PgPool, link_id: Uuid) -> anyhow::Resu
     let row = sqlx::query!(
         r#"
         WITH prev AS (
-            SELECT needs_reauth FROM email_links WHERE id = $1
+            SELECT needs_reauth FROM email_links WHERE id = $1 FOR UPDATE
         )
         UPDATE email_links e
         SET needs_reauth = true,
@@ -48,14 +48,14 @@ pub async fn set_link_needs_reauth(pool: &PgPool, link_id: Uuid) -> anyhow::Resu
             updated_at = NOW()
         FROM prev
         WHERE e.id = $1
-        RETURNING prev.needs_reauth AS "was_already_set!"
+        RETURNING (NOT prev.needs_reauth) AS "did_transition!"
         "#,
         link_id,
     )
     .fetch_optional(pool)
     .await?;
 
-    Ok(matches!(row, Some(r) if !r.was_already_set))
+    Ok(matches!(row, Some(r) if r.did_transition))
 }
 
 /// Clears a link's reauth flag once its token is healthy again. A no-op when the

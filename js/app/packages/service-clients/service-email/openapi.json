@@ -4753,7 +4753,7 @@
       },
       "SyncStatus": {
         "type": "string",
-        "description": "Coarse sync state for an inbox, used to render a one-line hint in the\nmulti-inbox settings list. Derived from the link's `is_sync_active` flag and\nits most recent backfill job.",
+        "description": "Coarse sync state for an inbox, used to render a one-line hint in the\nmulti-inbox settings list. Derived from the link's `is_sync_active` flag, its\nreauth health, and its most recent backfill job.",
         "enum": ["SYNCING", "UP_TO_DATE", "ERROR", "NEEDS_REAUTH", "INACTIVE"]
       },
       "Thread": {
