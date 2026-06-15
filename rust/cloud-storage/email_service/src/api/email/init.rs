@@ -536,6 +536,24 @@ pub async fn handler(
         (link, email)
     };
 
+    // Concurrent /email/init calls for the same inbox upsert the same link (ON CONFLICT)
+    // and would each enqueue a backfill. If one is already in flight for this link, reuse
+    // it instead of starting (and history-logging) a duplicate.
+    if let Some(existing) =
+        email_db_client::backfill::job::get::get_active_backfill_job(&ctx.db, link.id)
+            .await
+            .context("Failed to check for an in-flight backfill job")?
+    {
+        return Ok((
+            StatusCode::OK,
+            Json(InitResponse {
+                link_id: link.id,
+                backfill_job_id: Some(existing.id),
+            }),
+        )
+            .into_response());
+    }
+
     // Record link creation in history table for tracking (best-effort)
     email_db_client::links_history::insert::insert_email_link_history(
         &ctx.db,
