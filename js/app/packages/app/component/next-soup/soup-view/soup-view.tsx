@@ -164,7 +164,9 @@ const AssigneeGroupContent = (props: {
   assigneeId: MacroId;
   fallbackLabel: string;
 }) => {
-  const [assigneeName] = useDisplayName(props.assigneeId);
+  const [assigneeName] = useDisplayName(props.assigneeId, {
+    emailFallback: 'local-part',
+  });
   return (
     <>
       <UserIcon
