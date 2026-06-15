@@ -858,6 +858,8 @@ export function MarkdownEditor(props: {
       initializeEditorEmpty(editor);
 
       registerSaveListener();
+      // Mark ready so the loading skeleton clears and the blank placeholder shows.
+      setEditorReady(true);
       return;
     }
 
@@ -952,8 +954,9 @@ export function MarkdownEditor(props: {
           </div>
         )}
       </Show>
+      {/* Note: the mt-1.5 here is to preserve markdown node margin tops. which means this div should avoid padding and border. */}
       <div
-        class="relative"
+        class="relative mt-1.5"
         ref={editorContainerRef}
         use:fileFolderDrop={{
           onDrop: (fileEntries, folderEntries, e) => {
@@ -1003,7 +1006,17 @@ export function MarkdownEditor(props: {
           editorFocus={editorFocus}
           style={{ height: `${clickTargetHeight()}px` }}
         />
-        <Show when={isBlankMarkdown()}>
+        <Show when={!editorReady()}>
+          <div
+            aria-hidden="true"
+            class="pointer-events-none absolute inset-x-0 top-0 flex flex-col gap-2.5 pt-1"
+          >
+            <div class="skeleton-shimmer h-2.5 w-full rounded-full bg-placeholder/30" />
+            <div class="skeleton-shimmer h-2.5 w-full rounded-full bg-placeholder/30" />
+            <div class="skeleton-shimmer h-2.5 w-2/3 rounded-full bg-placeholder/30" />
+          </div>
+        </Show>
+        <Show when={editorReady() && isBlankMarkdown()}>
           <div class="pointer-events-none text-ink-placeholder absolute top-0">
             {getBlankMarkdownPlaceholder(canEdit())}
           </div>

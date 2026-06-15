@@ -1,7 +1,9 @@
+import { SplitToolbarRight } from '@app/component/split-layout/components/SplitToolbar';
 import { SyncSourceStatus } from '@core/collab/source';
 import { blockSyncSourceSignal } from '@core/signal/load';
-import ReconnectingIcon from '@phosphor/spinner.svg';
-import DisconnectedIcon from '@phosphor/warning.svg';
+import CloudIcon from '@phosphor/cloud.svg';
+import CloudWarningIcon from '@phosphor/cloud-warning.svg';
+import { Button } from '@ui';
 import { Match, Switch } from 'solid-js';
 
 export function CollabStatus() {
@@ -9,23 +11,38 @@ export function CollabStatus() {
 
   const status = () => syncSource()?.status() ?? SyncSourceStatus.Disconnected;
 
-  // SCUFFED STYLING: how do we want to handle these colors?
   return (
-    <div class="flex flex-row items-center">
+    <SplitToolbarRight>
+      {/* `mode="outin"` so a state fully fades out before the next fades in
+          (one toolbar slot). The <Switch> renders nothing when Connected,
+          which the Transition treats as an exit (fade out). */}
       <Switch>
         <Match when={status() === SyncSourceStatus.Disconnected}>
-          <div class="flex flex-row space-x-1 text-xs text-[oklch(0.47_0.157_37.304)] px-2 py-1 items-center bg-[oklch(0.954_0.038_75.164)]">
-            <DisconnectedIcon class="size-4 text-[oklch(0.75_0.183_55.934)]" />
-            <p>You're offline. Changes will sync when you reconnect.</p>
+          <div class="-order-1 flex items-center">
+            <Button
+              variant="base"
+              size="icon-sm"
+              aria-label="Offline"
+              tooltip="You're offline. Changes will sync when you reconnect."
+              class="bg-alert-bg border-alert/20"
+            >
+              <CloudWarningIcon class="text-alert-ink" />
+            </Button>
           </div>
         </Match>
         <Match when={status() === SyncSourceStatus.Connecting}>
-          <div class="flex flex-row space-x-1 bg-[oklch(0.962_0.059_95.617)] text-xs text-[oklch(0.473_0.137_46.201)] px-2 py-1 items-center">
-            <ReconnectingIcon class="size-4 text-[oklch(0.828_0.189_84.429)] animate-spin" />
-            <p>Reconnecting to the document.</p>
+          <div class="-order-1 flex items-center">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Reconnecting"
+              tooltip="Reconnecting to the document…"
+            >
+              <CloudIcon class="ink-text-extra-mutes animate-pulse" />
+            </Button>
           </div>
         </Match>
       </Switch>
-    </div>
+    </SplitToolbarRight>
   );
 }

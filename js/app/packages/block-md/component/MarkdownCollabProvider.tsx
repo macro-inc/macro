@@ -25,7 +25,6 @@ import {
   isStateEmpty,
   loroSyncState,
 } from '@core/component/LexicalMarkdown/utils';
-import { ScopedPortal } from '@core/component/ScopedPortal';
 import { useUserId } from '@core/context/user';
 import { blockSourceSignal, blockSyncSourceSignal } from '@core/signal/load';
 import { useCanComment, useCanEdit } from '@core/signal/permissions';
@@ -492,11 +491,7 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
         anchorElem={props.editorContainerRef}
         highlightLayer={props.highlighLayerRef}
       />
-      <ScopedPortal scope="block">
-        <div class="absolute bottom-4 right-4 size-fit">
-          <CollabStatus />
-        </div>
-      </ScopedPortal>
+      <CollabStatus />
     </>
   );
 }
