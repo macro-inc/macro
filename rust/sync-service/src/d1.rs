@@ -1,4 +1,5 @@
 use crate::timeit;
+use std::collections::HashMap;
 use tracing::{error, trace};
 use worker::D1Database;
 pub async fn insert_user_mapping(
@@ -73,7 +74,7 @@ pub struct PeerWithUserId {
 pub async fn get_peers_for_document_id(
     db: D1Database,
     document_id: &str,
-) -> worker::Result<Vec<PeerWithUserId>> {
+) -> worker::Result<HashMap<String, String>> {
     let statement = db.prepare(
         "
             SELECT peer_id, user_id
@@ -86,5 +87,5 @@ pub async fn get_peers_for_document_id(
 
     let peers = result.results::<PeerWithUserId>()?;
 
-    Ok(peers)
+    Ok(peers.into_iter().map(|p| (p.peer_id, p.user_id)).collect())
 }

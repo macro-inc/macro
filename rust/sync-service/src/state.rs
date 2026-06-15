@@ -1,7 +1,7 @@
 use std::{borrow::Cow, sync::Mutex};
 
-use loro::{ExportMode, Frontiers, LoroDoc, ToJson};
-use tracing::debug;
+use loro::{ExportMode, Frontiers, LoroDoc, ToJson, VersionVector, ID};
+use tracing::{debug, info};
 use web_time::Instant;
 use worker::Result;
 
@@ -140,6 +140,91 @@ impl DocumentState {
             .context("failed to batch import pending updates")?;
 
         Ok(())
+    }
+
+    /// All editing sessions over the whole history, most-recent first. Walks the
+    /// full oplog (via `travel_change_ancestors` from the frontiers), maps each
+    /// change's peer to a user, and groups them with [`crate::sessionize::sessionize`].
+    /// `peer_to_user` maps loro peer ids to user ids; unknown peers fall back to
+    /// "unknown".
+    /// TODO(history): materialize sessions in DO SQLite to avoid walking history per call.
+    pub fn history_sessions(
+        &self,
+        peer_to_user: &std::collections::BTreeMap<u64, String>,
+        gap_ms: i64,
+    ) -> Vec<crate::sessionize::Session> {
+        let mut events: Vec<(String, i64)> = Vec::new();
+        let heads: Vec<ID> = self.loro_doc.oplog_frontiers().iter().collect();
+        let res = self.loro_doc.travel_change_ancestors(&heads, &mut |change| {
+            let user = peer_to_user
+                .get(&change.id.peer)
+                .map(String::as_str)
+                .unwrap_or("unknown");
+            events.push((user.to_string(), change.timestamp * 1000));
+            std::ops::ControlFlow::Continue(())
+        });
+        if let Err(error) = res {
+            debug!(error =? error, "travel_change_ancestors failed during history_sessions");
+        }
+        crate::sessionize::sessionize(events, gap_ms)
+    }
+
+    /// Version vector containing exactly the changes whose record-timestamp (ms) is
+    /// `<= t_ms`. Cheap history walk (no state reconstruction); used to pin the
+    /// target version for `state-at(t)`. Returns `None` if the oplog is empty.
+    pub fn version_vector_at(&self, t_ms: i64) -> Option<VersionVector> {
+        let heads: Vec<ID> = self.loro_doc.oplog_frontiers().iter().collect();
+        if heads.is_empty() {
+            return None;
+        }
+
+        let mut vv = VersionVector::new();
+        let mut changes_visited: u64 = 0;
+        let mut changes_included: u64 = 0;
+        let mut ops_included: u64 = 0;
+        let (res, elapsed) = crate::timeit!(self
+            .loro_doc
+            .travel_change_ancestors(&heads, &mut |change| {
+                changes_visited += 1;
+                if change.timestamp * 1000 <= t_ms {
+                    changes_included += 1;
+                    ops_included += change.len as u64;
+                    vv.extend_to_include_end_id(ID::new(
+                        change.id.peer,
+                        change.id.counter + change.len as i32,
+                    ));
+                }
+                // Progress heartbeat: a single summary line only prints once the
+                // walk returns, so log as we go to localize a hang inside the walk.
+                if changes_visited % 1000 == 0 {
+                    info!(
+                        changes_visited,
+                        changes_included, ops_included, "version_vector_at: walking..."
+                    );
+                }
+                std::ops::ControlFlow::Continue(())
+            }));
+        info!(
+            t_ms,
+            changes_visited,
+            changes_included,
+            ops_included,
+            duration_ms = elapsed.as_millis(),
+            "version_vector_at: walked oplog ancestors"
+        );
+        if let Err(error) = res {
+            debug!(error =? error, "travel_change_ancestors failed during version_vector_at");
+        }
+        Some(vv)
+    }
+
+    /// State-only snapshot bytes at the version pinned by `vv` (read-only; does not
+    /// mutate the live doc).
+    pub fn export_state_at_vv(&self, vv: &VersionVector) -> Result<Vec<u8>> {
+        let frontiers = self.loro_doc.vv_to_frontiers(vv);
+        self.loro_doc
+            .export(ExportMode::StateOnly(Some(Cow::Owned(frontiers))))
+            .context("failed to export state at version vector")
     }
 }
 

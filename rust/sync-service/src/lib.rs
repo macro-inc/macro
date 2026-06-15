@@ -10,6 +10,7 @@ pub mod keepalive;
 mod metrics;
 mod mutex;
 mod secrets;
+mod sessionize;
 #[cfg(feature = "search-service")]
 mod sps;
 mod state;

@@ -54,10 +54,15 @@ mod path {
     pub const ACTIVE_PEERS_MARKER: &str = "active_peers";
     pub const PEER: &str = "peer";
     pub const METADATA: &str = "metadata";
+    pub const HISTORY_META: &str = "history-meta";
+    pub const STATE_AT: &str = "state-at";
     pub const DEBUG_DUMP_OPERATIONS: &str = "debug_dump_operations";
     pub const DEBUG_DO_KV_GET: &str = "debug_do_kv_get";
     pub const DEBUG_DO_KV_LIST: &str = "debug_do_kv_list";
     pub const WAKEUP: &str = "wakeup";
+
+    #[cfg(feature = "dev-endpoints")]
+    pub const SET_MEMORY_STATE: &str = "set_memory_state";
 }
 
 pub fn response(status_code: u16) -> Response {
@@ -117,6 +122,8 @@ pub struct DocumentSyncSession {
     /// a map from websocket's ID's to websocket metadata
     ws_meta_map: Arc<Mutex<WsMetaMap>>,
     msg_buffer: Arc<Mutex<Vec<u8>>>,
+    #[cfg(feature = "dev-endpoints")]
+    peer_user_override: Mutex<Option<BTreeMap<u64, String>>>,
 }
 
 mod u64_serde_strings {
@@ -309,12 +316,25 @@ impl DocumentSyncSession {
                         .await;
                 }
                 path::WAKEUP => return self.wakeup(document_id).await,
+
+                // only for dev, for forced setting the result
+                #[cfg(feature = "dev-endpoints")]
+                path::SET_MEMORY_STATE => {
+                    return self.set_memory_state_handler(req).await;
+                }
+
                 // These need auth
                 rest => {
                     let claims = or_unauth!(decode_jwt(&req, &self.env, TokenFrom::Headers).ok());
                     or_unauth!(claims.has_document_id_access(document_id).then_some(()));
                     match rest {
                         path::METADATA => return self.metadata_handler(document_id).await,
+                        path::HISTORY_META => {
+                            return self.history_meta_handler(document_id).await;
+                        }
+                        path::STATE_AT => {
+                            return self.state_at_handler(req, document_id).await;
+                        }
                         path::RAW => return self.raw_handler(document_id).await,
                         path::SNAPSHOT => return self.snapshot_handler(req, document_id).await,
                         path::ACTIVE_PEERS_MARKER => return self.active_peer_ids_handler().await,
@@ -401,6 +421,43 @@ impl DocumentSyncSession {
                     );
                 }
             }
+        }
+
+        Response::empty()
+    }
+
+    // Added specifically so that we can "transfer" a prod document to dev
+    // This is feature-flagged and ONLY for dev
+    #[cfg(feature = "dev-endpoints")]
+    async fn set_memory_state_handler(&self, mut req: Request) -> Result<Response> {
+        #[derive(serde::Deserialize)]
+        struct SetMemoryStateRequest {
+            snapshot: Vec<u8>,
+            #[serde(default)]
+            peers: Vec<crate::d1::PeerWithUserId>,
+        }
+
+        let raw = req.bytes().await?;
+        let body: SetMemoryStateRequest =
+            serde_json::from_slice(&raw).context("invalid set_memory_state JSON body")?;
+
+        let state = DocumentState::try_from_snapshot(&body.snapshot)
+            .context("failed to build DocumentState from posted snapshot")?;
+        *self
+            .document_state
+            .lock("DocumentSyncSession::document_state set within set_memory_state_handler") =
+            Some(Arc::new(state));
+
+        if !body.peers.is_empty() {
+            let map: BTreeMap<u64, String> = body
+                .peers
+                .into_iter()
+                .filter_map(|p| p.peer_id.parse::<u64>().ok().map(|id| (id, p.user_id)))
+                .collect();
+            *self
+                .peer_user_override
+                .lock("DocumentSyncSession::peer_user_override set within set_memory_state_handler") =
+                Some(map);
         }
 
         Response::empty()
@@ -535,13 +592,124 @@ impl DocumentSyncSession {
             return Ok(response(status_codes::NOT_FOUND));
         }
         let db = self.env.d1(USER_PEER_D1_BINDING)?;
-        let peers = crate::d1::get_peers_for_document_id(db, document_id).await?;
+        let peers = crate::d1::get_peers_for_document_id(db, document_id)
+            .await?
+            .into_iter()
+            .map(|(peer_id, user_id)| PeerWithUserId { peer_id, user_id })
+            .collect();
         let version_id = self.document_state().await?.version_id();
         ResponseBuilder::new().from_json(&DocumentMetadata {
             peers,
             version_id: version_id.to_string(),
             id: document_id.to_string(),
         })
+    }
+
+    /// JSON `{ sessions: [{ userId, startMs, endMs, count }] }` for the history
+    /// timeline: oplog changes grouped per peer into sessions, peers joined to users.
+    async fn history_meta_handler(&self, document_id: &str) -> Result<Response> {
+        if !self.exists(document_id).await? {
+            return Ok(response(status_codes::NOT_FOUND));
+        }
+
+        // Prefer the in-memory override (set via the dev-only set_memory_state),
+        // otherwise resolve peers from D1 as usual.
+        let override_map = self
+            .peer_user_override
+            .lock("DocumentSyncSession::peer_user_override get within history_meta_handler")
+            .clone();
+        let peer_to_user: std::collections::BTreeMap<u64, String> = match override_map {
+            Some(map) => map,
+            None => {
+                let db = self.env.d1(USER_PEER_D1_BINDING)?;
+                crate::d1::get_peers_for_document_id(db, document_id)
+                    .await?
+                    .into_iter()
+                    .filter_map(|(peer_id, user_id)| {
+                        peer_id.parse::<u64>().ok().map(|id| (id, user_id))
+                    })
+                    .collect()
+            }
+        };
+
+        let sessions = self
+            .document_state()
+            .await?
+            .history_sessions(&peer_to_user, crate::sessionize::SESSION_GAP_MS);
+
+        #[derive(serde::Serialize)]
+        struct SessionJson {
+            #[serde(rename = "userId")]
+            user_id: String,
+            #[serde(rename = "startMs")]
+            start_ms: i64,
+            #[serde(rename = "endMs")]
+            end_ms: i64,
+            #[serde(rename = "count")]
+            count: u32,
+        }
+        #[derive(serde::Serialize)]
+        struct HistoryMetaResponse {
+            sessions: Vec<SessionJson>,
+        }
+
+        let out = HistoryMetaResponse {
+            sessions: sessions
+                .into_iter()
+                .map(|s| SessionJson {
+                    user_id: s.user_id,
+                    start_ms: s.start_ms,
+                    end_ms: s.end_ms,
+                    count: s.count,
+                })
+                .collect(),
+        };
+
+        ResponseBuilder::new().from_json(&out)
+    }
+
+    /// Document state at wall-clock time `t` (ms), returned as state-only snapshot
+    /// bytes (binary, same shape as `snapshot_handler`).
+    ///
+    /// NOTE: this is the un-optimized "phase 1" implementation. It pins the target
+    /// version by walking the full oplog history and reconstructs state at that
+    /// version on the live doc, which can be slow on large / deep-history docs. A
+    /// checkpoint ladder (resolve `t` to the nearest rung `<= t`, replay the bounded
+    /// forward segment) is the planned optimization.
+    async fn state_at_handler(&self, req: Request, document_id: &str) -> Result<Response> {
+        if !self.exists(document_id).await? {
+            return Ok(response(status_codes::NOT_FOUND));
+        }
+
+        let t_ms: i64 = req
+            .url()?
+            .query_pairs()
+            .find(|(k, _)| k == "t")
+            .map(|(_, v)| v.into_owned())
+            .context("missing `t` query param")?
+            .parse::<i64>()
+            .context("invalid `t` query param; expected i64 milliseconds")?;
+
+        let doc_state = self.document_state().await?;
+        let vv = doc_state.version_vector_at(t_ms);
+        // The walk has returned; if the request hangs past this line the cost is
+        // the loro state reconstruction (checkout/export), not the oplog walk.
+        tracing::info!(t_ms, has_vv = vv.is_some(), "state_at: walk done, starting export");
+        let (out, export_elapsed) = crate::timeit!(match &vv {
+            None => doc_state
+                .export_snapshot(Some(ExportMode::StateOnly(None)))
+                .context("Couldn't export state-only snapshot")?,
+            Some(vv) => doc_state
+                .export_state_at_vv(vv)
+                .context("Couldn't export state at version")?,
+        });
+        tracing::info!(
+            t_ms,
+            out_bytes = out.len(),
+            export_ms = export_elapsed.as_millis(),
+            "state_at: export done"
+        );
+        Ok(ResponseBuilder::new().body(ResponseBody::Body(out)))
     }
 
     async fn connect_handler(&self, req: Request, document_id: &str) -> Result<Response> {
@@ -761,6 +929,19 @@ pub static ROUTER: LazyLock<Router<&str>> = LazyLock::new(|| {
         .insert("/document/{document_id}/metadata", path::METADATA)
         .unwrap();
     router
+        .insert("/document/{document_id}/history-meta", path::HISTORY_META)
+        .unwrap();
+    router
+        .insert("/document/{document_id}/state-at", path::STATE_AT)
+        .unwrap();
+    #[cfg(feature = "dev-endpoints")]
+    router
+        .insert(
+            "/document/{document_id}/set_memory_state",
+            path::SET_MEMORY_STATE,
+        )
+        .unwrap();
+    router
         .insert(
             "/document/{document_id}/debug_dump_operations",
             path::DEBUG_DUMP_OPERATIONS,
@@ -795,6 +976,7 @@ impl DurableObject for DocumentSyncSession {
             awareness: EphemeralStore::new(5_000),
             ws_meta_map: Arc::new(Mutex::new(Default::default())),
             msg_buffer: Arc::new(Mutex::new(vec![])),
+            peer_user_override: Mutex::new(None),
         }
     }
 

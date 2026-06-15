@@ -40,28 +40,27 @@ export function HistoryOverlay(props: {
     onCleanup(() => document.removeEventListener('keydown', onKeyDown));
   });
 
-  // The scrubber commits a moment on pointer release, so no debounce is needed.
-  const [rawTs, setRawTs] = createSignal<number | null>(null);
+  const [selected, setSelected] = createSignal<Date | null>(null);
 
-  // The moment we resolve state at: the selected cursor, or the latest session
-  // end before the user has scrubbed.
-  const targetMs = createMemo<number | undefined>(() => {
-    const scrubbed = rawTs();
-    if (scrubbed !== null) return scrubbed; // the selected moment, once scrubbed
+  // The moment we resolve state at: the selected cursor, or the latest session end.
+  const targetAt = createMemo<Date | undefined>(() => {
+    const scrubbed = selected();
+    if (scrubbed) return scrubbed;
 
     const sessions = history()?.sessions;
     if (!sessions || sessions.length === 0) return undefined;
 
-    // most recent session by default
-    return sessions.reduce((m, s) => Math.max(m, s.endMs), sessions[0].endMs);
+    const latest = sessions.reduce((m, s) => Math.max(m, s.endMs), sessions[0].endMs);
+    return new Date(latest);
   });
 
   const [committedState] = createResource(
-    targetMs,
-    async (t): Promise<SerializedEditorState | undefined> => {
+    // Key on epoch-ms so equal moments don't refetch (Date identity would).
+    () => targetAt()?.getTime(),
+    async (tMs): Promise<SerializedEditorState | undefined> => {
       const maybe = await syncServiceClient.getStateAt({
         documentId: props.documentId,
-        tMs: t,
+        tMs,
       });
       if (maybe.isErr()) {
         console.error("Couldn't get state at history moment", maybe.error);
@@ -79,7 +78,6 @@ export function HistoryOverlay(props: {
       {/* `.latest` keeps the last rendered state visible while the next loads. */}
       <Show keyed when={committedState.latest}>
         {(state) => {
-          // Fresh builder per moment -> fresh editor + portal tree.
           const config = buildConfig('markdown')
             .withMentions()
             .withMedia()
@@ -98,8 +96,8 @@ export function HistoryOverlay(props: {
       {/* Controls pinned to the viewport so they're reachable on long docs. */}
       <Show when={history()}>
         {(h) => (
-          <div class="fixed inset-x-0 bottom-0 z-30 flex items-center border-edge border-t bg-[color-mix(in_oklch,var(--color-surface)_92%,#5b8cff)] px-3 pt-4 pb-3">
-            <HistoryScrubber sessions={h().sessions} onSelect={setRawTs} />
+          <div class="fixed inset-x-0 bottom-0 z-30 flex items-center border-edge border-t bg-active px-3 pt-4 pb-3">
+            <HistoryScrubber sessions={h().sessions} onSelect={setSelected} />
           </div>
         )}
       </Show>

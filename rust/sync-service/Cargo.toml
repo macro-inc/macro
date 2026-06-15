@@ -15,6 +15,9 @@ search-service = []
 bebop-owned-all = []
 create-default-state = []
 alarm-keep-alive = []
+# TEMP/HACK: no-auth dev-only endpoints (e.g. set_memory_snapshot). NEVER in
+# `default` — only enabled in the local docker build, never in a deploy.
+dev-endpoints = []
 
 [lib]
 crate-type = ["cdylib"]
