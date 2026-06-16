@@ -14,6 +14,13 @@ use crate::{
     storage::SessionStorage,
 };
 
+fn now_ms() -> i64 {
+    web_time::SystemTime::now()
+        .duration_since(web_time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0)
+}
+
 fn serialize<'a, T: bebop::Record<'a>>(
     obj: T,
     msg_buf: &mut Vec<u8>,
@@ -117,16 +124,10 @@ pub async fn process_message(
                 .append_pending_operation(&update, document_state)
                 .await?;
 
-            // Buffer "last edited by" events in memory. The DO's alarm flushes
-            // them via a single D1 `batch()` every few seconds, so this stays
-            // off the edit hot path entirely.
             if !touched_nodes.is_empty() {
                 let peer_ids = Wsm::new(dss, ws).get_peer_ids().await.unwrap_or_default();
                 if let Some(&peer_id) = peer_ids.first() {
-                    let now_ms = web_time::SystemTime::now()
-                        .duration_since(web_time::UNIX_EPOCH)
-                        .map(|d| d.as_millis() as i64)
-                        .unwrap_or(0);
+                    let now_ms = now_ms();
                     dss.push_blame_events(
                         touched_nodes
                             .into_iter()
