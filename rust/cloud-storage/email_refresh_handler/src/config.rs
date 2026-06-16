@@ -18,6 +18,9 @@ pub struct Config {
 
     /// How many days to keep inactive links around
     pub delete_inactive_after_days: u32,
+
+    /// How often (in hours) the background poll probes each link's grant health
+    pub health_poll_interval_hours: u32,
 }
 
 impl Config {
@@ -40,12 +43,18 @@ impl Config {
             .parse()
             .context("DELETE_INACTIVE_AFTER_DAYS must be a valid u32")?;
 
+        let health_poll_interval_hours = std::env::var("INBOX_HEALTH_POLL_INTERVAL_HOURS")
+            .context("INBOX_HEALTH_POLL_INTERVAL_HOURS must be provided")?
+            .parse()
+            .context("INBOX_HEALTH_POLL_INTERVAL_HOURS must be a valid u32")?;
+
         Ok(Config {
             database_url,
             link_manager_queue,
             environment,
             delete_unused_after_days,
             delete_inactive_after_days,
+            health_poll_interval_hours,
         })
     }
 }

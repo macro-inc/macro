@@ -1,7 +1,10 @@
 import { toast } from '@core/component/Toast/Toast';
 import { useAddInboxFlow } from '@core/email-link';
-import { useEmailLinksQuery } from '@queries/email/link';
-import { createEffect, onCleanup } from 'solid-js';
+import {
+  triggerInboxHealthProbe,
+  useEmailLinksQuery,
+} from '@queries/email/link';
+import { createEffect, onCleanup, onMount } from 'solid-js';
 
 /**
  * Surfaces a per-inbox "Reconnect Gmail" prompt for every linked inbox whose grant
@@ -13,6 +16,10 @@ import { createEffect, onCleanup } from 'solid-js';
 export function GmailReauthenticationPrompt() {
   const linksQuery = useEmailLinksQuery();
   const startAddInbox = useAddInboxFlow();
+
+  // Probe inbox grants on app load so a grant that died while the app was closed
+  // surfaces here instead of only after the daily refresh.
+  onMount(() => triggerInboxHealthProbe());
 
   // One persistent toast per broken inbox, keyed by link id.
   const toastIds = new Map<string, number>();

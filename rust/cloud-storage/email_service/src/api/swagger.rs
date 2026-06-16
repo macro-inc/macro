@@ -87,6 +87,7 @@ use utoipa::OpenApi;
         inbound::axum::get_thread_router::get_thread_handler,
         inbound::axum::thread_project_router::update_thread_project_handler,
         email::links::list::list_links_handler,
+        email::links::health_check::health_check_handler,
         email::links::delete::delete_link_handler,
         email::links::resync::resync_link_handler,
         email::labels::create::handler,

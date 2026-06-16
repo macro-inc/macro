@@ -285,6 +285,14 @@ export const emailClient = {
     ).map((result) => result);
   },
 
+  async healthCheckLinks() {
+    return (
+      await emailFetch<EmptyResponse>('/email/links/health-check', {
+        method: 'POST',
+      })
+    ).map((result) => result);
+  },
+
   async listContacts() {
     return (
       await emailFetch<ListContactsResponse>('/email/contacts', {

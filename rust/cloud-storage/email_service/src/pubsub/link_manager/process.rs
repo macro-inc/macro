@@ -1,8 +1,8 @@
 use crate::pubsub::link_manager::context::LinkManagerContext;
 use crate::pubsub::util::{build_notification_recipients, cg_refresh_email};
 use crate::util::gmail::auth::{
-    fetch_gmail_access_token_from_link, fetch_token_or_mark_reauth, is_forbidden_error,
-    is_reauth_required_error,
+    fetch_gmail_access_token_from_link, fetch_token_or_mark_reauth,
+    fetch_token_or_mark_reauth_no_cache, is_forbidden_error, is_reauth_required_error,
 };
 use crate::util::sync_contacts::sync_contacts;
 use anyhow::{Context, anyhow};
@@ -31,35 +31,36 @@ pub async fn process_message(
             let link = get_link_or_skip(&ctx, message, link_id).await?;
             let Some(link) = link else { return Ok(()) };
 
-            match fetch_token_or_mark_reauth(
+            let result = fetch_token_or_mark_reauth(
                 &link,
                 &ctx.db,
                 &ctx.redis_client,
                 &ctx.auth_service_client,
                 &ctx.sqs_client,
             )
-            .await
-            {
-                Ok(gmail_access_token) => {
-                    handle_refresh(&ctx, &link, &gmail_access_token).await?;
-                }
-                // The grant is gone. There is nothing to refresh until the user
-                // reconnects, so drop the message rather than retrying a fetch that
-                // cannot succeed — but only once the reauth flag is actually
-                // persisted, otherwise retry so the health signal isn't lost when the
-                // mark write itself failed.
-                Err(e) if is_reauth_required_error(&e) => {
-                    let persisted = email_db_client::links::get::fetch_link_by_id(&ctx.db, link.id)
-                        .await
-                        .context("Failed to verify needs_reauth state after token fetch failure")?
-                        .is_some_and(|l| l.needs_reauth);
+            .await;
 
-                    if !persisted {
-                        return Err(e.context("reauth required but needs_reauth not persisted"));
-                    }
-                }
-                Err(e) => return Err(e),
+            if let Some(gmail_access_token) = settle_reauth_fetch(&ctx, &link, result).await? {
+                handle_refresh(&ctx, &link, &gmail_access_token).await?;
             }
+        }
+        LinkManagerMessage::HealthCheck { link_id } => {
+            let link = get_link_or_skip(&ctx, message, link_id).await?;
+            let Some(link) = link else { return Ok(()) };
+
+            // Probe-only: the health side effects happen inside the fetch; a live token
+            // needs no follow-up work here. No-cache so a just-revoked grant is observed
+            // now rather than masked by a still-valid cached access token.
+            let result = fetch_token_or_mark_reauth_no_cache(
+                &link,
+                &ctx.db,
+                &ctx.redis_client,
+                &ctx.auth_service_client,
+                &ctx.sqs_client,
+            )
+            .await;
+
+            settle_reauth_fetch(&ctx, &link, result).await?;
         }
         LinkManagerMessage::NotifyReauthRequired { link_id } => {
             let link = get_link_or_skip(&ctx, message, link_id).await?;
@@ -84,6 +85,35 @@ pub async fn process_message(
 
     cleanup_message(&ctx.sqs_worker, message).await?;
     Ok(())
+}
+
+/// Settles the outcome of a token fetch that records reauth health (the `*_or_mark_reauth`
+/// family). Returns the token on success. When the grant is gone the link has already been
+/// marked for reauth as a side effect, so the message is terminal — return `None` to let it
+/// be dropped — but only once that mark is persisted; if the mark write itself failed,
+/// propagate the error so the message retries and the health signal isn't lost. Other,
+/// transient errors propagate to retry.
+async fn settle_reauth_fetch(
+    ctx: &LinkManagerContext,
+    link: &Link,
+    result: anyhow::Result<String>,
+) -> anyhow::Result<Option<String>> {
+    match result {
+        Ok(token) => Ok(Some(token)),
+        Err(e) if is_reauth_required_error(&e) => {
+            let persisted = email_db_client::links::get::fetch_link_by_id(&ctx.db, link.id)
+                .await
+                .context("Failed to verify needs_reauth state after token fetch failure")?
+                .is_some_and(|l| l.needs_reauth);
+
+            if !persisted {
+                return Err(e.context("reauth required but needs_reauth not persisted"));
+            }
+
+            Ok(None)
+        }
+        Err(e) => Err(e),
+    }
 }
 
 /// Fetches a link by ID, cleaning up the message and returning `None` if not found.

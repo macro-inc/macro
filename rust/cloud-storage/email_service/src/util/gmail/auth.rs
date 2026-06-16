@@ -32,7 +32,39 @@ pub async fn fetch_token_or_mark_reauth(
     auth_service_client: &AuthServiceClient,
     sqs_client: &SQS,
 ) -> anyhow::Result<String> {
-    match fetch_gmail_access_token_from_link(link, redis_client, auth_service_client).await {
+    let result = fetch_gmail_access_token_from_link(link, redis_client, auth_service_client).await;
+    record_token_health(link, db, sqs_client, result).await
+}
+
+/// Like [`fetch_token_or_mark_reauth`] but bypasses the Redis token cache and forces a
+/// fresh refresh against the auth service. A cached access token outlives a grant
+/// revocation by up to its TTL — revocation invalidates the refresh token, not an
+/// already-minted access token — so a cache-respecting fetch can miss a just-revoked
+/// grant. Probes that must observe revocation promptly use this path.
+#[tracing::instrument(skip(db, redis_client, auth_service_client, sqs_client))]
+pub async fn fetch_token_or_mark_reauth_no_cache(
+    link: &Link,
+    db: &sqlx::PgPool,
+    redis_client: &RedisClient,
+    auth_service_client: &AuthServiceClient,
+    sqs_client: &SQS,
+) -> anyhow::Result<String> {
+    let result =
+        fetch_gmail_access_token_from_link_no_cache(link, redis_client, auth_service_client).await;
+    record_token_health(link, db, sqs_client, result).await
+}
+
+/// Records a link's sync health from the outcome of a token fetch: clears the reauth
+/// flag on success, marks the link as needing reauth on a revoked or missing grant
+/// (enqueuing a one-time fan-out only on the first false->true transition), and leaves
+/// health state untouched for transient failures. Returns the fetch result unchanged.
+async fn record_token_health(
+    link: &Link,
+    db: &sqlx::PgPool,
+    sqs_client: &SQS,
+    result: anyhow::Result<String>,
+) -> anyhow::Result<String> {
+    match result {
         Ok(token) => {
             email_db_client::links::update::clear_link_needs_reauth(db, link.id)
                 .await
@@ -116,6 +148,27 @@ pub async fn fetch_gmail_access_token_from_link(
     );
 
     fetch_gmail_access_token(&key, redis_client, auth_service_client).await
+}
+
+/// Like [`fetch_gmail_access_token_from_link`] but bypasses the Redis cache and forces a
+/// fresh token from the auth service.
+pub async fn fetch_gmail_access_token_from_link_no_cache(
+    link: &Link,
+    redis_client: &RedisClient,
+    auth_service_client: &AuthServiceClient,
+) -> anyhow::Result<String> {
+    let key = TokenCacheKey::new(
+        &link.fusionauth_user_id,
+        link.email_address.0.as_ref(),
+        link.provider.as_str(),
+    );
+
+    let conn = redis_client
+        .inner
+        .get_multiplexed_async_connection()
+        .await
+        .context("unable to connect to redis")?;
+    email::outbound::fetch_gmail_access_token_no_cache(&key, &conn, auth_service_client).await
 }
 
 /// fetches a user's gmail token using the user_context from the API request.
