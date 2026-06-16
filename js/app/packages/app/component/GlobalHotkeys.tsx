@@ -1,10 +1,15 @@
 import { useAnalytics } from '@app/component/analytics-context';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSubscribeToKeypress } from '@app/signal/hotkeyRoot';
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
 import { useLogout } from '@core/auth/logout';
 import { useOpenInstructionsMd } from '@core/component/AI/util/instructions';
 import { toast } from '@core/component/Toast/Toast';
-import { LOCAL_ONLY } from '@core/constant/featureFlags';
+import {
+  ENABLE_SNIPPETS_FLAG,
+  ENABLE_SNIPPETS_OVERRIDE,
+  LOCAL_ONLY,
+} from '@core/constant/featureFlags';
 import {
   type SettingsTab,
   useSettingsState,
@@ -16,6 +21,7 @@ import {
   openFolderPicker,
 } from '@core/util/upload';
 import IconGear from '@icon/macro-gear.svg';
+import Plus from '@phosphor/plus.svg';
 import LogoutIcon from '@phosphor/sign-out.svg';
 import Upload from '@phosphor/upload.svg';
 import UserIcon from '@phosphor/user.svg';
@@ -31,7 +37,11 @@ import { themes } from '../../theme/signals/themeSignals';
 import { applyTheme } from '../../theme/utils/themeUtils';
 import { globalSplitManager } from '../signal/splitLayout';
 import { CommandState } from './command';
-import { createMenuOpen, setCreateMenuOpen } from './Launcher';
+import {
+  CREATABLE_BLOCKS,
+  createMenuOpen,
+  setCreateMenuOpen,
+} from './Launcher';
 import { openMacroMcpSetupModal } from './macro-mcp-setup-modal/MacroMcpSetupModal';
 import { useSplitLayout } from './split-layout/layout';
 
@@ -97,6 +107,9 @@ export default function GlobalShortcuts() {
   const logout = useLogout();
 
   const handleFileUpload = useHandleFileUpload();
+  const snippetsFlag = useFeatureFlag(ENABLE_SNIPPETS_FLAG, {
+    enabledOverride: ENABLE_SNIPPETS_OVERRIDE,
+  });
 
   const handleCommandMenu = () => {
     if (!CommandState.isOpen()) {
@@ -105,7 +118,7 @@ export default function GlobalShortcuts() {
     CommandState.toggle();
   };
 
-  registerHotkey({
+  const createScope = registerHotkey({
     hotkeyToken: TOKENS.global.createCommand,
     hotkey: 'c',
     scopeId: 'global',
@@ -122,6 +135,28 @@ export default function GlobalShortcuts() {
     },
     displayPriority: 10,
     activateCommandScope: true,
+    surfaceNestedCommands: true,
+    keywords: ['new', 'make', 'add'],
+    icon: Plus,
+  });
+
+  CREATABLE_BLOCKS.forEach((item) => {
+    registerHotkey({
+      hotkeyToken: item.hotkeyToken,
+      hotkey: item.hotkey,
+      scopeId: createScope.commandScopeId,
+      description: item.description,
+      condition: () =>
+        (item.condition?.() ?? true) &&
+        (item.blockName !== 'snippet' || snippetsFlag().enabled),
+      keyDownHandler: item.keyDownHandler,
+      icon: Plus,
+      tags: item.tags,
+      keywords: item.keywords,
+      hide: () => item.blockName === 'snippet' && !snippetsFlag().enabled,
+      runWithInputFocused: true,
+      proxiedHotkey: true,
+    });
   });
 
   registerHotkey({
