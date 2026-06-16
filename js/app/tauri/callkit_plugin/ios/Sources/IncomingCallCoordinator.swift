@@ -188,7 +188,15 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
                     guard let self else { return }
                     guard self.pendingEndCallCompletions[uuid]?.isEmpty == false else { return }
                     print("[CallKit] Timed out waiting for CXEndCallAction provider callback; completing JS endActiveCall uuid=\(uuid.uuidString)")
+                    let shouldDisconnectNativeMedia = self.activeNativeMediaUUID == uuid
                     self.completePendingEndCall(uuid: uuid)
+                    self.clearCallState(uuid: uuid)
+                    if shouldDisconnectNativeMedia {
+                        let mediaSession = self.mediaSessionProvider()
+                        Task {
+                            await mediaSession.disconnect()
+                        }
+                    }
                 }
             }
         }

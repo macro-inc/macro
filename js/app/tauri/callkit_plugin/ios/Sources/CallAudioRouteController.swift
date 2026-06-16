@@ -6,6 +6,7 @@ enum CallAudioOutputRoute: String {
     case speaker
     case bluetooth
     case headphones
+    case external
     case unknown
 }
 
@@ -189,7 +190,12 @@ final class CallAudioRouteController: NSObject, @unchecked Sendable {
     private func currentSnapshotOnMain() -> CallAudioRouteSnapshot {
         let route = AVAudioSession.sharedInstance().currentRoute
         let output = classifyOutput(route.outputs.first)
-        let supportsSpeakerToggle = output == .receiver || output == .speaker || output == .unknown
+        let supportsSpeakerToggle = switch output {
+        case .receiver, .speaker, .unknown:
+            true
+        case .bluetooth, .headphones, .external:
+            false
+        }
         let snapshotSpeakerForced = isSpeakerForced
             && supportsSpeakerToggle
             && (output == .speaker || output == .receiver || output == .unknown)
@@ -256,7 +262,7 @@ final class CallAudioRouteController: NSObject, @unchecked Sendable {
 
     private func isCurrentExternalOutputRoute() -> Bool {
         switch currentSnapshotOnMain().output {
-        case .bluetooth, .headphones:
+        case .bluetooth, .headphones, .external:
             return true
         case .receiver, .speaker, .unknown:
             return false
@@ -334,7 +340,7 @@ final class CallAudioRouteController: NSObject, @unchecked Sendable {
         case .headphones:
             return .headphones
         default:
-            return .unknown
+            return .external
         }
     }
 

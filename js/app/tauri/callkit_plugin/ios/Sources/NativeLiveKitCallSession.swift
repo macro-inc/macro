@@ -105,7 +105,6 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
             self.lastAudioEngineOutputAvailable = outputAvailable
             self.videoOverlay.setAudioRoute(route)
             guard self.activeCallUUID != nil else { return }
-            self.defaultBuiltInSpeakerRouteOnceIfNeeded(reason: "audio route changed")
 
             let routeChanged = previousRoute != route
             let audioAvailabilityChanged = previousInputAvailable != inputAvailable
@@ -114,6 +113,8 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
                 print("[CallKit] Audio route emit did not change route or engine availability; skipping microphone restore")
                 return
             }
+
+            self.defaultBuiltInSpeakerRouteOnceIfNeeded(reason: "audio route changed")
 
             if self.isCallKitAudioActive, !outputAvailable {
                 self.activateAudioEngine(reason: "audio route changed")
@@ -1022,7 +1023,7 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
             } catch {
                 print("[CallKit] Failed to apply native LiveKit microphone muted=\(muted) reason=\(reason) uuid=\(uuid.uuidString) generation=\(generation) desiredMuted=\(self.microphoneCoordinator.desiredMuted): \(error)")
                 guard self.isCurrentMicrophoneOperation(generation, room: room, uuid: uuid, desiredMuted: muted) else { return }
-                self.updateAudioMuted(true, room: room, uuid: uuid, expectedGeneration: generation, applyFailed: true)
+                self.updateAudioMuted(muted, room: room, uuid: uuid, expectedGeneration: generation, applyFailed: true)
             }
         }
     }
