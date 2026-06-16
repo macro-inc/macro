@@ -1,9 +1,9 @@
 import { Mirror, schema } from '@loro-mirror/packages/core/src';
+import { LoroDoc, type VersionVector } from 'loro-crdt';
 import { createRoot } from 'solid-js';
 import { describe, expect, it } from 'vitest';
 import { createLoroManager, type LoroManager } from './manager';
 import { TestServer } from './test-utils/test-server';
-import { LoroDoc, type VersionVector } from "loro-crdt";
 
 // mostly dummy schema that's flat so it's easy for tests
 const TEST_SCHEMA = schema({
