@@ -1,29 +1,27 @@
 import type { ThemeV2 } from '@theme/types/themeTypes';
 import IconTextA from '@phosphor-icons/core/regular/text-a-underline.svg?component-solid';
+import { cn } from '@ui';
 
 type Token = { l: number; c: number; h: number };
-type ThemeChipsSize = 'default' | 'small';
+type ThemeChipsSize = 'sm' | 'md';
 
 const sizeStyles: Record<
   ThemeChipsSize,
   {
-    padding: string;
-    gap: string;
-    accentSize: string;
-    iconSize: string;
+    root: string;
+    accent: string;
+    icon: string;
   }
 > = {
-  default: {
-    padding: '8px',
-    gap: '8px',
-    accentSize: '13px',
-    iconSize: '18px',
+  md: {
+    root: 'gap-2 p-2',
+    accent: 'size-[13px]',
+    icon: 'size-[18px]',
   },
-  small: {
-    padding: '3px',
-    gap: '4px',
-    accentSize: '9px',
-    iconSize: '12px',
+  sm: {
+    root: 'gap-1 p-[3px]',
+    accent: 'size-[9px]',
+    icon: 'size-3',
   },
 };
 
@@ -31,7 +29,7 @@ const sizeStyles: Record<
  *  accent and ink (A) inside. Always shows the theme's original intended colors
  *  — each theme is intrinsically light or dark. */
 export function ThemeChips(props: { theme: ThemeV2; size?: ThemeChipsSize }) {
-  const styles = () => sizeStyles[props.size ?? 'default'];
+  const styles = () => sizeStyles[props.size ?? 'md'];
   const oklch = (token: Token) => {
     if (!token) {
       return 'transparent';
@@ -55,24 +53,21 @@ export function ThemeChips(props: { theme: ThemeV2; size?: ThemeChipsSize }) {
   // Uniform padding around and gap between the items so the spacing reads evenly.
   return (
     <span
-      class="inline-flex items-center rounded-sm border border-edge-muted"
+      class={cn(
+        'inline-flex items-center rounded-sm border border-edge-muted',
+        styles().root
+      )}
       style={{
         'background-color': bg(),
-        padding: styles().padding,
-        gap: styles().gap,
       }}
     >
       <span
-        class="inline-block rounded-xs"
+        class={cn('inline-block rounded-xs', styles().accent)}
         style={{
           'background-color': accent(),
-          width: styles().accentSize,
-          height: styles().accentSize,
         }}
       />
-      <IconTextA
-        style={{ color: ink(), width: styles().iconSize, height: styles().iconSize }}
-      />
+      <IconTextA class={styles().icon} style={{ color: ink() }} />
     </span>
   );
 }
