@@ -368,7 +368,7 @@ function NotificationInboxList(props: {
   onToggleFilter: (filterId: string) => void;
 }) {
   return (
-    <div class="size-full min-h-0 bg-surface p-2">
+    <div class="flex size-full min-h-0 flex-col bg-surface p-2">
       <div class="mb-2 flex shrink-0 flex-wrap gap-1">
         <For each={devNotificationFilters}>
           {(filter) => {
@@ -388,29 +388,31 @@ function NotificationInboxList(props: {
           }}
         </For>
       </div>
-      <div class="size-full flex flex-col gap-3 overflow-y-auto">
-        <For each={props.groups}>
-          {(group) => (
-            <section class="flex w-full flex-col gap-1">
-              <header class="sticky top-0 z-1 bg-active py-2 px-3 rounded-md flex items-center gap-1">
-                <CalendarIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
-                <h1 class="text-sm text-ink">{group.label}</h1>
-              </header>
-              <For each={group.items}>
-                {(item) => (
-                  <InboxItem.Root
-                    density={itemDensity(item)}
-                    item={item}
-                    selected={props.selectedItem?.id === item.id}
-                    tone="default"
-                  >
-                    <InboxItemLayout onClick={() => props.onSelect(item)} />
-                  </InboxItem.Root>
-                )}
-              </For>
-            </section>
-          )}
-        </For>
+      <div class="min-h-0 flex-1 overflow-y-auto">
+        <div class="flex min-h-full flex-col gap-3 pb-2">
+          <For each={props.groups}>
+            {(group) => (
+              <section class="flex w-full flex-col gap-1">
+                <header class="sticky top-0 z-1 bg-active py-2 px-3 rounded-md flex items-center gap-1">
+                  <CalendarIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
+                  <h1 class="text-sm text-ink">{group.label}</h1>
+                </header>
+                <For each={group.items}>
+                  {(item) => (
+                    <InboxItem.Root
+                      density={itemDensity(item)}
+                      item={item}
+                      selected={props.selectedItem?.id === item.id}
+                      tone="default"
+                    >
+                      <InboxItemLayout onClick={() => props.onSelect(item)} />
+                    </InboxItem.Root>
+                  )}
+                </For>
+              </section>
+            )}
+          </For>
+        </div>
       </div>
     </div>
   );
@@ -490,22 +492,24 @@ export function NotificationInbox2() {
           minSize={300}
           target={{ kind: 'percent', percent: 70 }}
         >
-          <Show
-            fallback={
-              <div class="flex size-full items-center justify-center text-sm text-ink-extra-muted">
-                Select a notification to preview it
-              </div>
-            }
-            when={selectedEntity()}
-          >
-            {(entity) => (
-              <PreviewPanel
-                orchestrator={orchestrator}
-                selectedEntity={entity()}
-                splitPanelContext={panel}
-              />
-            )}
-          </Show>
+          <div class="size-full min-h-0 min-w-0">
+            <Show
+              fallback={
+                <div class="flex size-full items-center justify-center text-sm text-ink-extra-muted">
+                  Select a notification to preview it
+                </div>
+              }
+              when={selectedEntity()}
+            >
+              {(entity) => (
+                <PreviewPanel
+                  orchestrator={orchestrator}
+                  selectedEntity={entity()}
+                  splitPanelContext={panel}
+                />
+              )}
+            </Show>
+          </div>
         </Resize.Panel>
       </Resize.Zone>
     </div>

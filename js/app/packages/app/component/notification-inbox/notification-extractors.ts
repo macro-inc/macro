@@ -14,8 +14,12 @@ export const notificationContent = (
     case 'replied_to_document_comment_thread':
     case 'commented_on_document':
       return metadata.content.text;
-    case 'new_email':
-      return metadata.content.snippet ?? metadata.content.subject;
+    case 'new_email': {
+      const subject = metadata.content.subject;
+      const snippet = metadata.content.snippet;
+      if (subject && snippet) return `${subject} — ${snippet}`;
+      return subject || snippet;
+    }
     case 'ai_response':
       return metadata.content.summary;
     case 'github_pr_comment':
@@ -36,7 +40,11 @@ export const notificationTitle = (
 
   switch (metadata.tag) {
     case 'new_email':
-      return metadata.content.subject;
+      return (
+        metadata.content.sender ||
+        metadata.content.subject ||
+        metadata.content.snippet
+      );
     case 'task_assigned':
       return metadata.content.taskName ?? undefined;
     case 'document_mention':
@@ -106,6 +114,8 @@ export const notificationSenderName = (
   const metadata = notification.notification_metadata;
 
   switch (metadata.tag) {
+    case 'new_email':
+      return undefined;
     case 'channel_message_send':
       return metadata.content.sender ?? notification.sender_id ?? undefined;
     case 'github_pr_status_changed':
