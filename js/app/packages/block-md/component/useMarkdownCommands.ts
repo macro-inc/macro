@@ -3,6 +3,7 @@ import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import type { HotkeyToken } from '@core/hotkey/tokens';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
+import BugIcon from '@phosphor/bug.svg';
 import TextCode from '@phosphor/code.svg';
 import TextHighlight from '@phosphor/paint-roller.svg';
 import TextBold from '@phosphor/text-b.svg';
@@ -103,6 +104,41 @@ const ACTION_ID_TO_TOKEN: Record<string, HotkeyToken> = {
   hr: TOKENS.md.divider,
 };
 
+type LexicalStateDebuggerCommandOptions = {
+  canUseStateDebugger?: () => boolean;
+  toggleStateDebugger: () => void;
+};
+
+function registerLexicalStateDebuggerHotkey(
+  scopeId: string,
+  options: LexicalStateDebuggerCommandOptions,
+  group: ReturnType<typeof createHotkeyGroup>
+) {
+  registerHotkey({
+    scopeId,
+    runWithInputFocused: true,
+    hotkeyToken: TOKENS.md.toggleStateDebugger,
+    description: 'Toggle lexical state debugger',
+    icon: BugIcon,
+    hide: () => options.canUseStateDebugger?.() === false,
+    condition: () => options.canUseStateDebugger?.() !== false,
+    keyDownHandler: () => {
+      if (options.canUseStateDebugger?.() === false) return false;
+      options.toggleStateDebugger();
+      return true;
+    },
+  }).withGroup(group);
+}
+
+export function registerLexicalStateDebuggerCommand(
+  scopeId: string,
+  options: LexicalStateDebuggerCommandOptions
+) {
+  const group = createHotkeyGroup();
+  registerLexicalStateDebuggerHotkey(scopeId, options, group);
+  return group;
+}
+
 /**
  * Registers markdown formatting commands on the block hotkey scope so they
  * appear in the command menu (Cmd+K). Inline formats that already have
@@ -116,7 +152,11 @@ const ACTION_ID_TO_TOKEN: Record<string, HotkeyToken> = {
 export function registerMarkdownCommands(
   scopeId: string,
   getEditor: () => LexicalEditor | undefined,
-  condition?: () => boolean
+  condition?: () => boolean,
+  options?: {
+    canUseStateDebugger?: () => boolean;
+    toggleStateDebugger?: () => void;
+  }
 ) {
   const group = createHotkeyGroup();
   const hide = condition ? () => !condition() : undefined;
@@ -169,6 +209,17 @@ export function registerMarkdownCommands(
         return editor.hasNodes(action.dependencies ?? []);
       },
     }).withGroup(group);
+  }
+
+  if (options?.toggleStateDebugger) {
+    registerLexicalStateDebuggerHotkey(
+      scopeId,
+      {
+        canUseStateDebugger: options.canUseStateDebugger,
+        toggleStateDebugger: options.toggleStateDebugger,
+      },
+      group
+    );
   }
 
   return group;

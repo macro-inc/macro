@@ -63,7 +63,6 @@ import {
 } from 'solid-js';
 import { DispatchAgentButton } from './DispatchAgentMenu';
 
-
 export function TopBar(
   props: {
     name?: Accessor<string | undefined>;
