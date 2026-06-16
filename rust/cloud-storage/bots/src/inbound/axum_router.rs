@@ -5,8 +5,8 @@ mod tests;
 
 use crate::domain::{
     models::{
-        AddChannelBotRequest, Bot, BotId, BotToken, CreateBotRequest, CreateBotTokenRequest,
-        CreateBotTokenResponse, PatchBotRequest,
+        AddChannelBotRequest, Bot, BotChannel, BotId, BotToken, CreateBotRequest,
+        CreateBotTokenRequest, CreateBotTokenResponse, PatchBotRequest,
     },
     ports::{BotError, BotService},
 };
@@ -93,6 +93,15 @@ pub struct ChannelBotPath {
     pub bot_id: BotId,
 }
 
+/// Bot channel path.
+#[derive(Debug, serde::Deserialize)]
+pub struct BotChannelPath {
+    /// Bot id.
+    pub bot_id: BotId,
+    /// Channel id.
+    pub channel_id: Uuid,
+}
+
 /// Create a bots router.
 pub fn bots_router<S, Svc, T>(state: BotsRouterState<S, Svc>) -> Router<T>
 where
@@ -106,6 +115,14 @@ where
         .route("/bots/{bot_id}", get(get_bot_handler::<S, Svc>))
         .route("/bots/{bot_id}", patch(patch_bot_handler::<S, Svc>))
         .route("/bots/{bot_id}", delete(delete_bot_handler::<S, Svc>))
+        .route(
+            "/bots/{bot_id}/channels",
+            get(list_bot_channels_handler::<S, Svc>),
+        )
+        .route(
+            "/bots/{bot_id}/channels/{channel_id}",
+            delete(remove_bot_channel_handler::<S, Svc>),
+        )
         .route("/bots/{bot_id}/tokens", get(list_tokens_handler::<S, Svc>))
         .route(
             "/bots/{bot_id}/tokens",
@@ -235,6 +252,31 @@ async fn revoke_token_handler<S: BotService, Svc: EntityAccessService>(
     state
         .service
         .revoke_token(caller_from_user(user), path.bot_id, path.token_id)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn list_bot_channels_handler<S: BotService, Svc: EntityAccessService>(
+    State(state): State<BotsRouterState<S, Svc>>,
+    user: MacroUserExtractor,
+    Path(path): Path<BotPath>,
+) -> Result<Json<Vec<BotChannel>>, BotsHandlerErr> {
+    Ok(Json(
+        state
+            .service
+            .list_bot_channels(caller_from_user(user), path.bot_id)
+            .await?,
+    ))
+}
+
+async fn remove_bot_channel_handler<S: BotService, Svc: EntityAccessService>(
+    State(state): State<BotsRouterState<S, Svc>>,
+    user: MacroUserExtractor,
+    Path(path): Path<BotChannelPath>,
+) -> Result<StatusCode, BotsHandlerErr> {
+    state
+        .service
+        .remove_bot_from_channel(caller_from_user(user), path.channel_id, path.bot_id)
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }
