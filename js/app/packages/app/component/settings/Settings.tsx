@@ -14,12 +14,18 @@ import { Shortcuts } from './Shortcuts';
 import { Team } from './Team';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import type { ValidHotkey } from '@core/hotkey/types';
-import { SideNav } from '@ui';
+import { Button, SideNav } from '@ui';
+import ColumnsPlusRight from '@phosphor/columns-plus-right.svg';
+import ArrowsOut from '@phosphor/arrows-out.svg';
+import CloseIcon from '@phosphor/x.svg';
 import {
   SplitHeaderLeft,
   SplitHeaderRight,
 } from '../split-layout/components/SplitHeader';
 import { SettingsButton } from './SettingsButton';
+
+/** Where the settings panel is mounted, which determines its header chrome. */
+export type SettingsVariant = 'split' | 'modal';
 
 export function SettingsPanelComponentWrapper() {
   return (
@@ -36,11 +42,22 @@ export function SettingsPanelComponentWrapper() {
 
 type SettingsPanelProps = {
   hide?: boolean;
+  /** Defaults to 'split' so the split-layout mount keeps its existing chrome. */
+  variant?: SettingsVariant;
 };
 
-function SettingsPanel(props: SettingsPanelProps) {
-  const { closeSettings, activeTabId, setActiveTabId } = useSettingsState();
+export function SettingsPanel(props: SettingsPanelProps) {
+  const {
+    closeSettings,
+    closeModal,
+    moveSettingsToSplit,
+    moveSettingsToModal,
+    activeTabId,
+    setActiveTabId,
+  } = useSettingsState();
   const { groups, flatTabs, isAvailable } = useSettingsTabs();
+
+  const variant = () => props.variant ?? 'split';
 
   // A tab's content renders only when it's both selected and still available
   // (gating lives solely in the settings tab config).
@@ -162,13 +179,52 @@ function SettingsPanel(props: SettingsPanelProps) {
       data-settings-panel
       ref={settingsContainerRef}
     >
-      <SplitHeaderLeft>
-        <div class="h-full flex gap-3 items-center">
-          <h1 class="font-semibold text-ink select-none text-sm shrink-0">
+      <Show when={variant() === 'split'}>
+        <SplitHeaderLeft>
+          <div class="h-full flex gap-3 items-center">
+            <h1 class="font-semibold text-ink select-none text-sm shrink-0">
+              Settings
+            </h1>
+          </div>
+        </SplitHeaderLeft>
+        {/* Pop the split back out into the modal (desktop only). */}
+        <Show when={!isMobile()}>
+          <SplitHeaderRight>
+            <Button
+              class="p-1 rounded-lg"
+              label="Open in modal"
+              onClick={() => moveSettingsToModal()}
+            >
+              <ArrowsOut class="size-4" />
+            </Button>
+          </SplitHeaderRight>
+        </Show>
+      </Show>
+
+      {/* The modal has no split header to portal into, so it renders its own. */}
+      <Show when={variant() === 'modal'}>
+        <div class="flex items-center justify-between h-11 shrink-0 px-2 border-b border-edge-muted">
+          <h1 class="font-semibold text-ink select-none text-sm pl-1">
             Settings
           </h1>
+          <div class="flex items-center gap-0.5">
+            <Button
+              class="p-1 rounded-lg"
+              label="Open in split"
+              onClick={() => moveSettingsToSplit()}
+            >
+              <ColumnsPlusRight class="size-4" />
+            </Button>
+            <Button
+              class="p-1 rounded-lg"
+              label="Close settings"
+              onClick={() => closeModal()}
+            >
+              <CloseIcon class="size-4" />
+            </Button>
+          </div>
         </div>
-      </SplitHeaderLeft>
+      </Show>
 
       <div class="flex grow min-h-1 overflow-hidden">
         <Show when={!isMobile()}>

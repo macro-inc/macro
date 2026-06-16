@@ -45,6 +45,7 @@ import { MobileSearchOuter } from './mobile/MobileSearch';
 import { SwipeDownDismissKeyboard } from './mobile/SwipeDownDismissKeyboard';
 import { Paywall } from './paywall/Paywall';
 import { PropertyEditorModal } from './property-edit-modal/PropertyEditorModal';
+import { SettingsModal } from './settings/SettingsModal';
 import { useAppSquishHandlers } from './useAppSquishHandlers';
 
 const AUTH_URLS = [
@@ -155,6 +156,7 @@ function LayoutInner(props: RouteSectionProps) {
           <GlobalShareModal />
           <IosShareSheet />
           <MacroMcpSetupModal />
+          <SettingsModal />
         </Show>
         <Show
           when={
