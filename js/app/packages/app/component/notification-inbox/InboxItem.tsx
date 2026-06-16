@@ -144,25 +144,30 @@ function Content(props: ContentProps) {
         props.onClick?.(event as unknown as MouseEvent);
       }}
     >
-      <Indicator />
       {props.children}
     </div>
   );
 }
 
-function Indicator(props: { unread?: boolean; class?: string }) {
+function Leading(props: SlotProps) {
+  return (
+    <span
+      class={cn('grid size-2.5 place-items-center self-center', props.class)}
+      aria-hidden="true"
+    >
+      {props.children}
+    </span>
+  );
+}
+
+function UnreadIndicator(props: { unread?: boolean; class?: string }) {
   const ctx = useInboxItem();
   const unread = () => props.unread ?? ctx.unread();
 
   return (
-    <span
-      class={cn('grid size-2 place-items-center', props.class)}
-      aria-hidden="true"
-    >
-      <Show when={unread()}>
-        <span class="size-1.5 rounded-full bg-accent" />
-      </Show>
-    </span>
+    <Show when={unread()}>
+      <span class={cn('size-2 rounded-full bg-accent', props.class)} />
+    </Show>
   );
 }
 
@@ -172,7 +177,7 @@ function Icon(props: SlotProps) {
   return (
     <span
       class={cn(
-        'flex shrink-0 self-start items-center justify-center overflow-visible text-ink-muted',
+        'flex shrink-0 self-center items-center justify-center overflow-visible text-ink-muted',
         ctx.density() === 'compact'
           ? 'min-w-4 h-4'
           : 'min-w-[var(--inbox-item-icon-size)] h-[var(--inbox-item-icon-size)]',
@@ -524,7 +529,8 @@ export function Breadcrumb(props: BreadcrumbProps) {
 export const InboxItem = {
   Root,
   Section,
-  Indicator,
+  Leading,
+  UnreadIndicator,
   Icon,
   Body,
   Header,

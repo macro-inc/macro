@@ -363,6 +363,9 @@ function StandardLayout(props: StandardLayoutProps) {
   return (
     <>
       <InboxItem.Content onClick={props.onClick}>
+        <InboxItem.Leading>
+          <InboxItem.UnreadIndicator />
+        </InboxItem.Leading>
         <InboxItem.Icon class="size-8">
           {props.icon ?? <NotificationIcon />}
         </InboxItem.Icon>
