@@ -11,6 +11,7 @@ schema = ["dep:utoipa", "item_filters/schema"]
 [dependencies]
 anyhow = { workspace = true }
 call = { path = "../call", default-features = false }
+channels = { path = "../channels", default-features = false }
 chrono = { workspace = true }
 crm = { path = "../crm", default-features = false }
 document_sub_type = { path = "../document_sub_type" }
@@ -19,7 +20,6 @@ email = { path = "../email" }
 item_filters = { path = "../item_filters" }
 macro_user_id = { path = "../macro_user_id" }
 model-entity = { path = "../model-entity" }
-models_comms = { path = "../models_comms" }
 models_pagination = { path = "../models_pagination" }
 models_properties = { path = "../models_properties/" }
 serde = { workspace = true }

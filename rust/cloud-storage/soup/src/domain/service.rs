@@ -90,13 +90,13 @@ fn channel_to_soup_channel(
     Some(SoupChannel {
         channel: models_soup::comms::ChannelWithParticipants {
             channel: models_soup::comms::Channel {
-                id: models_comms::channel::ChannelId(channel_item.id),
+                id: channels::domain::models::ChannelId(channel_item.id),
                 name: channel_item.name,
                 channel_type: channel_type_to_soup(channel_item.channel_type),
                 org_id: channel_item
                     .org_id
                     .and_then(|org_id| u32::try_from(org_id).ok())
-                    .map(models_comms::channel::OrganizationId),
+                    .map(channels::domain::models::OrganizationId),
                 team_id: channel_item.team_id,
                 created_at: channel_item.created_at,
                 updated_at: channel_item.updated_at,
@@ -108,7 +108,7 @@ fn channel_to_soup_channel(
                 .into_iter()
                 .filter_map(|participant| {
                     Some(models_soup::comms::ChannelParticipant {
-                        channel_id: models_comms::channel::ChannelId(participant.channel_id),
+                        channel_id: channels::domain::models::ChannelId(participant.channel_id),
                         user_id: MacroUserIdStr::parse_from_str(&participant.user_id)
                             .ok()?
                             .into_owned(),

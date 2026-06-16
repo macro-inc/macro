@@ -1,6 +1,6 @@
+use channels::domain::models::{ChannelId, OrganizationId};
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
-use models_comms::channel::{ChannelId, OrganizationId};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 

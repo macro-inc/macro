@@ -7742,6 +7742,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "call",
+ "channels",
  "chrono",
  "crm",
  "document_sub_type",
@@ -7750,7 +7751,6 @@ dependencies = [
  "item_filters",
  "macro_user_id",
  "model-entity",
- "models_comms",
  "models_pagination",
  "models_properties",
  "serde",
@@ -11449,7 +11449,6 @@ dependencies = [
  "model-entity",
  "model-error-response",
  "model_user",
- "models_comms",
  "models_grouping",
  "models_pagination",
  "models_properties",
