@@ -43,6 +43,7 @@ import { MacroMcpSetupModal } from './macro-mcp-setup-modal/MacroMcpSetupModal';
 import { FloatRegion } from './mobile/float-regions/FloatRegion';
 import { FloatRegionHost } from './mobile/float-regions/FloatRegionHost';
 import { MobileDock } from './mobile/MobileDock';
+import { MobileBottomEdgeFade } from './mobile/MobileEdgeFade';
 import { MobileSearchOuter } from './mobile/MobileSearch';
 import { SwipeDownDismissKeyboard } from './mobile/SwipeDownDismissKeyboard';
 import { Paywall } from './paywall/Paywall';
@@ -88,7 +89,7 @@ function LayoutInner(props: RouteSectionProps) {
   const isAuthenticated = useIsAuthenticated();
   const { paywallOpen, showPaywall } = usePaywallState();
   const location = useLocation();
-  
+
   useAppSquishHandlers();
 
   // save last_path to cookie
@@ -121,7 +122,7 @@ function LayoutInner(props: RouteSectionProps) {
   return (
     <div
       class={cn(
-        'relative flex flex-col justify-between w-dvw h-[calc(var(--dvh,1dvh)*100)] pl-(--safe-left) pr-(--safe-right)',
+        'relative flex flex-col justify-between w-dvw h-[calc(var(--dvh,1dvh)*100)] pl-(--safe-left) pr-(--safe-right)'
       )}
     >
       <BundleUpdateProgressBar />
@@ -191,6 +192,7 @@ function LayoutInner(props: RouteSectionProps) {
       >
         <FloatRegionHost />
         <FloatRegion region="dock" active={() => !virtualKeyboardVisible()}>
+          <MobileBottomEdgeFade />
           <MobileDock />
         </FloatRegion>
       </Show>

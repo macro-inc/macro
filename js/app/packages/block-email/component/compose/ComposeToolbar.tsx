@@ -11,9 +11,8 @@ import { plural } from '@core/util/string';
 import PaperclipIcon from '@phosphor/paperclip.svg?component-solid';
 import TextAa from '@phosphor/text-aa.svg';
 import Trash from '@phosphor/trash.svg';
-import DotsThreeIcon from '@phosphor-icons/core/bold/dots-three-bold.svg?component-solid';
 import PaperclipHorizontalIcon from '@phosphor-icons/core/regular/paperclip-horizontal.svg?component-solid';
-import { Button, Dropdown, SendButton, Tooltip } from '@ui';
+import { Button, SendButton, Tooltip } from '@ui';
 import { defaultSelectionData } from 'core/component/LexicalMarkdown/plugins';
 import {
   NODE_TRANSFORM,

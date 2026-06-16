@@ -5,7 +5,6 @@ import { TailSpinner } from '@core/component/TailSpinner';
 import { itemToBlockName } from '@core/constant/allBlocks';
 import { getActiveCommandsFromScope } from '@core/hotkey/getCommands';
 import { runCommand } from '@core/hotkey/utils';
-import { hapticImpact } from '@core/mobile/haptics';
 import { debouncedDependent } from '@core/util/debounce';
 import { windowSearchMatch } from '@core/util/searchHighlight';
 import { openExternalUrl } from '@core/util/url';
@@ -19,10 +18,9 @@ import { SearchContent } from '@entity/extractors-search/search-content';
 import ArrowLeft from '@phosphor/arrow-left.svg';
 import SearchIcon from '@phosphor-icons/core/regular/magnifying-glass.svg?component-solid';
 import { useFullTextSearch } from '@queries/soup/useFullTextSearch';
-import { cn, Layer } from '@ui';
+import { Layer } from '@ui';
 import {
   createSignal,
-  For,
   Match,
   onCleanup,
   onMount,
@@ -41,20 +39,17 @@ import {
 import { useSplitLayout } from '../split-layout/layout';
 import { FloatRegion } from './float-regions/FloatRegion';
 import { SearchState } from './mobileSearchState';
-import { pressPulse } from './pressPulse';
+import { type PillTabItem, PillTabs } from './PillTabs';
 
-// Keeps the directive import from being tree-shaken / lint-flagged.
-false && pressPulse;
-
-const CATEGORIES: { id: CategoryFilter; label: string }[] = [
-  { id: 'all', label: 'All' },
-  { id: 'channels', label: 'Channels' },
-  { id: 'dms', label: 'DMs' },
-  { id: 'documents', label: 'Documents' },
-  { id: 'tasks', label: 'Tasks' },
-  { id: 'chats', label: 'Chats' },
-  { id: 'projects', label: 'Folders' },
-  { id: 'commands', label: 'Commands' },
+const CATEGORIES: PillTabItem<CategoryFilter>[] = [
+  { value: 'all', label: 'All' },
+  { value: 'channels', label: 'Channels' },
+  { value: 'dms', label: 'DMs' },
+  { value: 'documents', label: 'Documents' },
+  { value: 'tasks', label: 'Tasks' },
+  { value: 'chats', label: 'Chats' },
+  { value: 'projects', label: 'Folders' },
+  { value: 'commands', label: 'Commands' },
 ];
 
 export function MobileSearchOuter() {
@@ -424,37 +419,13 @@ function FullTextResultItem(props: {
 
 function CategoryFilterTabs() {
   return (
-    <div class="flex items-center gap-2 px-(--mobile-chrome-gutter)">
-      <div class="pointer-events-auto flex min-w-0 gap-2 overflow-x-auto scrollbar-hidden py-1">
-        <For each={CATEGORIES}>
-          {(category) => {
-            const active = () => SearchState.categoryFilter() === category.id;
-            return (
-              <button
-                type="button"
-                use:pressPulse
-                data-checked={active() ? '' : undefined}
-                class={cn(
-                  'h-8 shrink-0 whitespace-nowrap rounded-full px-3.5 text-sm font-medium shadow-md border',
-                  active()
-                    ? 'bg-accent text-surface border-accent'
-                    : 'bg-surface text-ink-extra-muted border-edge'
-                )}
-                // Keep the search input focused (keyboard open): preventing
-                // the pointerdown default stops the button from taking focus,
-                // without blocking the click or the strip's scroll.
-                onPointerDown={(e) => {
-                  e.preventDefault();
-                  hapticImpact('light');
-                }}
-                onClick={() => SearchState.setCategoryFilter(category.id)}
-              >
-                {category.label}
-              </button>
-            );
-          }}
-        </For>
-      </div>
+    <div class="flex items-center px-(--mobile-chrome-gutter)">
+      <PillTabs
+        items={CATEGORIES}
+        value={SearchState.categoryFilter()}
+        onChange={(value) => SearchState.setCategoryFilter(value)}
+        preserveFocus
+      />
     </div>
   );
 }

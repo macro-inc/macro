@@ -3,7 +3,7 @@ import {
   type PresetContext,
   VIEW_TAB_PRESETS,
 } from '@app/component/app-sidebar/soup-filter-presets';
-import { pressPulse } from '@app/component/mobile/pressPulse';
+import { PillTabs } from '@app/component/mobile/PillTabs';
 import type { FilterID } from '@app/component/next-soup/filters';
 import type { FilterContext } from '@app/component/next-soup/filters/configs';
 import {
@@ -20,13 +20,8 @@ import type { TabItem } from '@core/component/Tabs';
 import { TabsInset } from '@core/component/TabsInset';
 import { TabsInsetDropdown } from '@core/component/TabsInsetDropdown';
 import { useUserContext } from '@core/context/user';
-import { hapticImpact } from '@core/mobile/haptics';
 import { useIsTeamAdmin } from '@queries/team/teams';
-import { cn } from '@ui';
-import { batch, createEffect, createMemo, For, Match, Switch } from 'solid-js';
-
-// Keeps the directive import from being tree-shaken / lint-flagged.
-false && pressPulse;
+import { batch, createMemo, For, Match, Switch } from 'solid-js';
 
 /** Views that have tab definitions. Shared between VIEW_TAB_LISTS and VIEW_TAB_PRESETS. */
 export type TabbedListView = Extract<
@@ -290,21 +285,17 @@ export const MobileSoupViewTabs = () => {
   return (
     <div class="flex items-center px-(--mobile-chrome-gutter)">
       <MobileFilterDrawer />
-      <div class="pointer-events-auto flex min-w-0 gap-2 overflow-x-auto scrollbar-hidden pl-2">
-        <Switch>
-          <For
-            each={
-              Object.keys(VIEW_TAB_LISTS) as (keyof typeof VIEW_TAB_LISTS)[]
-            }
-          >
-            {(v) => (
-              <Match when={listView() === v}>
-                <MobileViewTabs view={v} />
-              </Match>
-            )}
-          </For>
-        </Switch>
-      </div>
+      <Switch>
+        <For
+          each={Object.keys(VIEW_TAB_LISTS) as (keyof typeof VIEW_TAB_LISTS)[]}
+        >
+          {(v) => (
+            <Match when={listView() === v}>
+              <MobileViewTabs view={v} />
+            </Match>
+          )}
+        </For>
+      </Switch>
     </div>
   );
 };
@@ -317,62 +308,12 @@ const MobileViewTabs = (props: { view: TabbedListView }) => {
     filterTabsForUser(props.view, VIEW_TAB_LISTS[props.view], isTeamAdmin());
   const activeValue = () => activeTab() ?? VIEW_TAB_PRESETS[props.view].default;
 
-  let wrapperRef: HTMLDivElement | undefined;
-
-  // Keep the active pill scrolled into view within the horizontal strip.
-  createEffect(() => {
-    activeValue();
-    list();
-    const wrapper = wrapperRef;
-    if (!wrapper) return;
-    queueMicrotask(() => {
-      const scrollEl = wrapper.parentElement;
-      const active = wrapper.querySelector(
-        '[data-checked]'
-      ) as HTMLElement | null;
-      if (!scrollEl || !active) return;
-      const scrollRect = scrollEl.getBoundingClientRect();
-      const activeRect = active.getBoundingClientRect();
-      if (activeRect.left < scrollRect.left) {
-        scrollEl.scrollBy({
-          left: activeRect.left - scrollRect.left - 8,
-          behavior: 'smooth',
-        });
-      } else if (activeRect.right > scrollRect.right) {
-        scrollEl.scrollBy({
-          left: activeRect.right - scrollRect.right + 8,
-          behavior: 'smooth',
-        });
-      }
-    });
-  });
-
   return (
-    <div ref={wrapperRef} class="flex gap-2">
-      <For each={list()}>
-        {(item) => {
-          const active = () => activeValue() === item.value;
-          return (
-            <button
-              type="button"
-              use:pressPulse
-              data-checked={active() ? '' : undefined}
-              class={cn(
-                'h-8 shrink-0 whitespace-nowrap rounded-full px-3.5 text-sm font-medium shadow-md border',
-                active()
-                  ? 'bg-accent text-surface border-accent'
-                  : 'bg-surface text-ink-extra-muted border-edge'
-              )}
-              onPointerDown={() => hapticImpact('light')}
-              onClick={() => {
-                applyTabPreset(props.view, item.value);
-              }}
-            >
-              {item.label}
-            </button>
-          );
-        }}
-      </For>
-    </div>
+    <PillTabs
+      class="pl-2"
+      items={list()}
+      value={activeValue()}
+      onChange={(value) => applyTabPreset(props.view, value)}
+    />
   );
 };

@@ -1,9 +1,8 @@
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { cn, Layer } from '@ui';
 import { createEffect, createSignal, For, onCleanup } from 'solid-js';
-import { MobileBottomEdgeFade } from '../MobileEdgeFade';
 import { FLOAT_REGIONS, FloatRegions } from './float-region-state';
-import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 
 /**
  * The mobile bottom-chrome host: an ordered stack of floating regions
@@ -29,7 +28,9 @@ export function FloatRegionHost() {
   });
   onCleanup(() => {
     FloatRegions.setHostHeight(0);
-    document.documentElement.style.removeProperty('--mobile-content-inset-bottom');
+    document.documentElement.style.removeProperty(
+      '--mobile-content-inset-bottom'
+    );
   });
 
   return (
@@ -41,7 +42,6 @@ export function FloatRegionHost() {
           isNativeMobilePlatform() && 'pb-7'
         )}
       >
-        <MobileBottomEdgeFade />
         <For each={FLOAT_REGIONS}>
           {(region) => (
             <div

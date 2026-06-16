@@ -1,3 +1,4 @@
+import { HeaderIsland } from '@app/component/split-layout/components/HeaderIsland';
 import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
@@ -234,19 +235,25 @@ export function Automation() {
       {(d) => (
         <>
           <SplitHeaderLeft>
-            <div class="z-page-overlay relative flex h-full w-screen max-w-full shrink items-center gap-2">
-              <EntityIcon class="shrink-0" targetType="automation" size="xs" />
-              <span
-                class="inline-block min-w-0 flex-1 truncate text-sm"
-                onDblClick={() => setRenameOpen(true)}
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  setRenameOpen(true);
-                }}
-              >
-                {d().name || blockNameToDefaultFile('automation')}
-              </span>
-            </div>
+            <HeaderIsland class="shrink">
+              <div class="z-page-overlay relative flex h-full w-screen max-w-full shrink items-center gap-2">
+                <EntityIcon
+                  class="shrink-0"
+                  targetType="automation"
+                  size="xs"
+                />
+                <span
+                  class="inline-block min-w-0 flex-1 truncate text-sm"
+                  onDblClick={() => setRenameOpen(true)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setRenameOpen(true);
+                  }}
+                >
+                  {d().name || blockNameToDefaultFile('automation')}
+                </span>
+              </div>
+            </HeaderIsland>
           </SplitHeaderLeft>
           <AutomationRenameModal
             isOpen={renameOpen}

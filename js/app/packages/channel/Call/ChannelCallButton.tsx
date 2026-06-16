@@ -37,7 +37,10 @@ export function ChannelCallButton(props: { channelId: string }) {
         variant={isMobile() ? 'ghost' : isCallInProgress() ? 'success' : 'base'}
         size="sm"
         depth={2}
-        class={cn(!isCallInProgress() && !isMobile() && 'bg-surface', isMobile() && 'active:bg-transparent')}
+        class={cn(
+          !isCallInProgress() && !isMobile() && 'bg-surface',
+          isMobile() && 'active:bg-transparent'
+        )}
       >
         <PhoneIcon />
         <span>{label()}</span>

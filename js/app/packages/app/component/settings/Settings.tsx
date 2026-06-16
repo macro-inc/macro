@@ -14,24 +14,18 @@ import { Shortcuts } from './Shortcuts';
 import { Team } from './Team';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import type { ValidHotkey } from '@core/hotkey/types';
+import { FloatRegion } from '../mobile/float-regions/FloatRegion';
+import { PillTabs } from '../mobile/PillTabs';
+import { HeaderIsland } from '../split-layout/components/HeaderIsland';
 import {
   SplitHeaderLeft,
-  SplitHeaderRight,
 } from '../split-layout/components/SplitHeader';
 import { CollapsibleHeaderItem } from '../split-layout/components/CollapsibleHeaderItem';
-import { SettingsButton } from './SettingsButton';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 
 export function SettingsPanelComponentWrapper() {
   return (
-    <>
-      <Show when={isMobile()}>
-        <SplitHeaderRight>
-          <SettingsButton />
-        </SplitHeaderRight>
-      </Show>
       <SettingsPanel />
-    </>
   )
 }
 
@@ -151,14 +145,15 @@ function SettingsPanel(props: SettingsPanelProps) {
 
   function BottomTabs() {
     return (
-    <div class="bg-surface border-t border-edge-muted h-11 shrink-0 px-1 flex items-center">
-      <TabsInset
-        list={settingsTabs()}
-        value={activeTabId()}
-        defaultValue="Appearance"
-        onChange={handleTabChange}
-      />
-    </div>
+      <FloatRegion region="accessory">
+        <div class="flex items-center px-(--mobile-chrome-gutter)">
+          <PillTabs
+            items={settingsTabs()}
+            value={activeTabId()}
+            onChange={handleTabChange}
+          />
+        </div>
+      </FloatRegion>
     );
   }
 
@@ -171,6 +166,7 @@ function SettingsPanel(props: SettingsPanelProps) {
       ref={settingsContainerRef}
     >
       <SplitHeaderLeft>
+        <HeaderIsland>
         <div class="h-full flex gap-3 items-center">
           <h1 class="font-semibold text-ink select-none text-sm shrink-0">
             Settings
@@ -198,10 +194,11 @@ function SettingsPanel(props: SettingsPanelProps) {
               )}
             />
           </Show>
-        </div>
+          </div>
+        </HeaderIsland>
       </SplitHeaderLeft>
 
-      <div class="relative grow min-h-1 overflow-auto">
+      <div class="relative grow min-h-1 overflow-auto mobile:pt-(--mobile-content-inset-top) mobile:pb-(--mobile-content-inset-bottom)">
         <Show when={activeTabId() === 'Account'}>
           <Suspense>
             <Account />
@@ -226,9 +223,7 @@ function SettingsPanel(props: SettingsPanelProps) {
         </Show>
       </div>
 
-      <Show when={isMobile()}>
-        <BottomTabs />
-      </Show>
+      <BottomTabs />
     </div>
   );
 }

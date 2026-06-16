@@ -61,6 +61,11 @@
   --safe-left: max(env(safe-area-inset-left, 0px), var(--tauri-inset-left, 0px));
   --safe-top: max(env(safe-area-inset-top, 0px), var(--tauri-inset-top, 0px));
 
+  /* Horizontal gutter shared by the full-frame mobile chrome: the dock row,
+     header island strip, and accessory-region contributions all pad with
+     this so their edges line up. Use `px-(--mobile-chrome-gutter)`. */
+  --mobile-chrome-gutter: 0.75rem;
+
   /* chat vars */
   --left-of-connector: calc(var(--message-padding-x) + var(--user-icon-width) * 0.5);
   --left-of-user-icon: calc(var(--left-of-connector) - var(--user-icon-width) * 0.5);
@@ -207,6 +212,28 @@
       @slot;
     }
   }
+}
+
+/* Floating "island" chrome shared by the mobile dock buttons, header islands,
+   and other floating mobile controls. Consumers add their own shape classes
+   (e.g. `size-10 rounded-full` or `h-10 rounded-full px-3`). Defined as a
+   utility so it composes with variants — `mobile:island` — instead of
+   hand-prefixing each part. */
+@utility island {
+  @apply bg-surface text-ink ring ring-edge shadow-md;
+}
+
+[data-press-pulse] {
+  transition:
+    transform 100ms cubic-bezier(0.34, 1.56, 0.64, 1);
+    /*background-color 150ms ease-out;*/
+}
+[data-press-pulse][data-pressed] {
+  transform: scale(1.08);
+  /*background-color: var(--color-active);*/
+  transition:
+    transform 100ms ease-out;
+    /*background-color 100ms ease-out;*/
 }
 
 @layer base {
@@ -434,6 +461,19 @@ a {
 @media (min-width: 640px) {
   :root {
     --thread-shift: 40px;
+  }
+}
+
+/* Mobile bottom chrome: accessory contributions animate in when they mount
+   or swap (enter-only; losers unmount immediately). The Portal wrapper div
+   is the region slot's direct child. */
+[data-float-region='accessory'] > * {
+  animation: float-region-in 150ms ease-out;
+}
+@keyframes float-region-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
   }
 }
 
