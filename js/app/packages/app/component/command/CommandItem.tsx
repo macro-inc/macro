@@ -2,6 +2,7 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { hasValidHotkey } from '@core/hotkey/utils';
 import { Entity, type EntityData } from '@entity';
 import SearchIcon from '@icon/macro-magnifying-glass.svg';
+import WideStar from '@icon/wide-star.svg';
 import Terminal from '@phosphor-icons/core/regular/terminal.svg?component-solid';
 import {
   BULK_DOCUMENT_WAKEUP_FEATURE_FLAG,
@@ -13,7 +14,9 @@ import { createEffect, For, Match, Show, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import type { DisplayHotkeyStep } from './types';
 import {
+  type AskAiItem,
   type CommandMenuItem,
+  isAskAiItem,
   isCommandItem,
   isEntityItem,
   isSearchItem,
@@ -104,8 +107,15 @@ function CommandDisplay(props: { item: CommandMenuItem }) {
   return (
     <div class="flex items-center gap-2 flex-1 min-w-0">
       <div class="size-5 flex items-center justify-center text-ink-muted shrink-0">
-        <Show when={command()?.icon} fallback={<Terminal class="size-4" />}>
-          {(icon) => <Dynamic component={icon()} class="size-4" />}
+        <Show
+          when={command()?.commandPaletteIcon}
+          fallback={
+            <Show when={command()?.icon} fallback={<Terminal class="size-4" />}>
+              {(icon) => <Dynamic component={icon()} class="size-4" />}
+            </Show>
+          }
+        >
+          {(Icon) => <Dynamic component={Icon()} class="size-4" />}
         </Show>
       </div>
       <Show
@@ -151,11 +161,27 @@ function SearchDisplay(props: { item: SearchItem }) {
   );
 }
 
+function AskAiDisplay(props: { item: AskAiItem }) {
+  return (
+    <div class="flex items-center gap-2 flex-1 min-w-0">
+      <div class="size-5 flex items-center justify-center text-ink-muted shrink-0">
+        <WideStar class="size-4" />
+      </div>
+      <span class="truncate text-ink">
+        Ask AI about <span class="text-ink">“{props.item.query}”</span>
+      </span>
+    </div>
+  );
+}
+
 function ItemDisplay(props: { item: CommandMenuItem }) {
   return (
     <Switch>
       <Match when={isSearchItem(props.item) && props.item}>
         {(item) => <SearchDisplay item={item()} />}
+      </Match>
+      <Match when={isAskAiItem(props.item) && props.item}>
+        {(item) => <AskAiDisplay item={item()} />}
       </Match>
       <Match when={isCommandItem(props.item) && props.item}>
         {(item) => <CommandDisplay item={item()} />}

@@ -87,23 +87,20 @@ impl AsyncTool<Arc<SearchServiceClient>> for NameSearch {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ai_toolset::generate_tool_input_schema;
-    use ai_toolset::tool_object::validate_tool_schema;
+    use ai_toolset::schema::generate_validated_input_schema;
 
     #[test]
     fn test_name_search_schema_validation() {
-        let schema = generate_tool_input_schema!(NameSearch);
-
-        let result = validate_tool_schema(&schema);
+        let result = generate_validated_input_schema::<NameSearch>();
         assert!(result.is_ok(), "{:?}", result);
 
-        let (name, description) = result.unwrap();
+        let validated = result.unwrap();
         assert_eq!(
-            name, "NameSearch",
+            validated.name, "NameSearch",
             "Tool name should match the schemars title"
         );
         assert!(
-            description.contains("Search items by their name"),
+            validated.description.contains("Search items by their name"),
             "Description should contain expected text"
         );
     }

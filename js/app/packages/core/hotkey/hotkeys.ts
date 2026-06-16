@@ -124,8 +124,11 @@ export function registerHotkey(
     registrationType = 'override',
     hide,
     icon,
+    commandPaletteIcon,
     displayComponent,
     tags,
+    keywords,
+    surfaceNestedCommands,
     shouldReturnFocusOnClose,
     proxiedHotkey,
   } = args;
@@ -229,8 +232,11 @@ export function registerHotkey(
     handlerPriority: handlerPriority ?? HOTKEY_PRIORITY_DEFAULT,
     hide,
     icon,
+    commandPaletteIcon,
     displayComponent,
     tags,
+    keywords,
+    surfaceNestedCommands,
     shouldReturnFocusOnClose,
     proxiedHotkey,
   };

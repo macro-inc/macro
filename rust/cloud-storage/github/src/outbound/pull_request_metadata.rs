@@ -43,6 +43,11 @@ pub(crate) async fn fetch_pull_request_metadata(
     // metadata merges participants as a union, so partial sets are safe.
     let participant_github_user_ids =
         (!participant_ids.is_empty()).then(|| participant_ids.iter().map(u64::to_string).collect());
+    let author_login = pull_request
+        .user
+        .as_ref()
+        .and_then(|user| user.login.clone());
+    let author_id = pull_request.user.as_ref().and_then(|user| user.id);
 
     Ok(GithubPullRequestDetails {
         title: pull_request.title,
@@ -50,6 +55,9 @@ pub(crate) async fn fetch_pull_request_metadata(
         merged_at: pull_request.merged_at,
         additions: pull_request.additions,
         deletions: pull_request.deletions,
+        author_login,
+        author_id,
+        description: pull_request.body,
         comments,
         checks,
         participant_github_user_ids,
@@ -146,6 +154,7 @@ struct GithubOpenPullRequestResponse {
     number: u64,
     title: String,
     html_url: String,
+    body: Option<String>,
     user: Option<GithubUserResponse>,
     #[serde(default)]
     requested_reviewers: Vec<GithubUserResponse>,
@@ -160,6 +169,7 @@ struct GithubPullRequestResponse {
     merged_at: Option<chrono::DateTime<chrono::Utc>>,
     additions: u64,
     deletions: u64,
+    body: Option<String>,
     head: GithubPullRequestHeadResponse,
     user: Option<GithubUserResponse>,
     #[serde(default)]
@@ -559,6 +569,9 @@ impl GithubOpenPullRequestResponse {
             status: Some(GithubPullRequestStatus::Open),
             additions: None,
             deletions: None,
+            author_login: self.user.as_ref().and_then(|user| user.login.clone()),
+            author_id: self.user.as_ref().and_then(|user| user.id),
+            description: self.body,
             comments: None,
             checks: None,
             participant_github_user_ids: (!participant_ids.is_empty())

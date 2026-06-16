@@ -33,7 +33,7 @@ pub async fn get_thread_access(
                       OR EXISTS (
                           SELECT 1
                           FROM public.macro_user_links mul
-                          WHERE mul.child_macro_id = l.macro_id
+                          WHERE mul.link_id = l.id
                             AND mul.primary_macro_id = $2
                       )
                   )

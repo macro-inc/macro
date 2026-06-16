@@ -2,6 +2,7 @@ import {
   createInfiniteQuery,
   type InfiniteData,
   type InfiniteQueryObserverResult,
+  type QueryObserverResult,
 } from '@tanstack/solid-query';
 import {
   type Accessor,
@@ -36,6 +37,9 @@ type InfiniteQueryResult<TData, TSelect> = {
       InfiniteData<TData | null, string | null>,
       Error
     >
+  >;
+  refetch: () => Promise<
+    QueryObserverResult<InfiniteData<TData | null, string | null>, Error>
   >;
 };
 
@@ -114,6 +118,7 @@ export function createInfiniteQueries<TData, TSelect = TData[]>(
         hasNextPage: () => query.hasNextPage ?? false,
         isFetchingNextPage: () => query.isFetchingNextPage,
         fetchNextPage: () => query.fetchNextPage(),
+        refetch: () => query.refetch(),
       };
     });
 

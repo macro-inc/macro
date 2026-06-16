@@ -16,6 +16,16 @@ type ChatRenamedMessage = {
   name: string;
 };
 
+/** The models the current user may use (free → Haiku; professional → all). */
+export function useModelsQuery() {
+  return useQuery(() => ({
+    queryKey: ['chat', 'models'],
+    queryFn: async () =>
+      throwOnErr(async () => await cognitionApiServiceClient.getModels()),
+    staleTime: CHAT_STALE_TIME,
+  }));
+}
+
 export function useChatQuery(chatId: () => string | undefined) {
   return useQuery(() => {
     const id = chatId();

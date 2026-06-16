@@ -39,6 +39,7 @@ import {
   For,
   type JSX,
   Match,
+  on,
   onMount,
   Show,
   Switch,
@@ -253,6 +254,7 @@ type RecipientSelectorProps<K extends CombinedRecipientKind> = {
   triedToSubmit?: Accessor<boolean>;
   placeholder?: string | JSX.Element;
   inputRef?: (ref: HTMLInputElement) => void;
+  inputId?: string;
   focusOnMount?: boolean;
   triggerMode?: ComboboxTriggerMode;
   hideBorder?: boolean;
@@ -278,6 +280,20 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
   const [disabled, setDisabled] = createSignal(false);
 
   const [listboxRef, setListboxRef] = createSignal<HTMLElement | undefined>();
+
+  // The chips container caps its height and scrolls; keep the input's line
+  // visible as chips push it down.
+  createEffect(
+    on(
+      () => props.selectedOptions.length,
+      () => {
+        requestAnimationFrame(() => {
+          inputRef()?.scrollIntoView({ block: 'nearest' });
+        });
+      },
+      { defer: true }
+    )
+  );
 
   const debouncedHandleChange = debounce(handleChange, 100);
 
@@ -533,7 +549,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                 <div
                   ref={props.horizontalScroll ? setChipsScrollRef : undefined}
                   class={cn(
-                    'flex gap-1.5 text-ink scrollbar-hidden',
+                    'flex items-center gap-1.5 text-ink scrollbar-hidden',
                     props.horizontalScroll
                       ? 'flex-nowrap overflow-x-auto sm:flex-wrap sm:overflow-x-hidden sm:max-h-37.5 sm:overflow-y-auto pb-0.5 sm:pb-0'
                       : 'flex-wrap max-h-37.5 overflow-y-auto'
@@ -656,6 +672,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                     }}
                   </For>
                   <Combobox.Input
+                    id={props.inputId}
                     disabled={disabled()}
                     ref={(el) => {
                       setInputRef(el);

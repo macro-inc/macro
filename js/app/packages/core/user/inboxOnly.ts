@@ -4,9 +4,9 @@ import { macroIdToEmail, tryMacroId } from './macroId';
 
 /**
  * Predicate: is this macro id a connected secondary inbox (an extra mailbox the
- * current user attached to their own account, flagged `is_inbox_only`) rather than
- * a real user. Not to be confused with a delegated/shared inbox, which is a separate
- * loggable user (its own macro id) and reports `is_inbox_only = false`.
+ * current user attached to their own account, `!is_primary`) rather than a real
+ * user. Not to be confused with a delegated/shared inbox, which is a separate
+ * loggable user (its own macro id) and reports `is_primary = true`.
  */
 export function useIsConnectedSecondaryInbox() {
   const linksQuery = useEmailLinksQuery();
@@ -14,7 +14,7 @@ export function useIsConnectedSecondaryInbox() {
   const inboxOnlyEmails = createMemo(() => {
     const set = new Set<string>();
     for (const link of linksQuery.data?.links ?? []) {
-      if (link.is_inbox_only) set.add(link.email_address.toLowerCase());
+      if (!link.is_primary) set.add(link.email_address.toLowerCase());
     }
     return set;
   });

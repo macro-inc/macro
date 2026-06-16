@@ -166,8 +166,11 @@ pub(super) fn can_short_circuit(ast: &Expr<EmailLiteral>, resolved: &ResolvedFil
 /// per-mailbox query) and each address resolves to at most one contact_id;
 /// the TRASH lookup returns at most one label id.
 ///
-/// When `team_id` is `Some`, the scope expands to every `link_id` owned by
-/// any user on the team. The same email address may now resolve to multiple
+/// When `team_id` is `Some`, the scope expands to every primary `link_id`
+/// owned by any user on the team — a link is primary when its
+/// `email_address` is the owner's own macro_id email, so connected
+/// secondary mailboxes stay out of scope. The same email address may now
+/// resolve to multiple
 /// contact_ids (one per team member who has corresponded with that address),
 /// and the TRASH lookup returns one label id per team link. The SQL builder
 /// uses `= ANY($ids)` predicates so messages in *any* team mailbox match.
@@ -199,6 +202,7 @@ pub(super) async fn resolve_filters(
             JOIN email_links el ON el.id = l.link_id
             JOIN team_user tu ON tu.user_id = el.macro_id
             WHERE l.name = 'TRASH' AND tu.team_id = $1
+              AND el.is_primary
             "#,
                 team_id,
             )
@@ -235,6 +239,7 @@ pub(super) async fn resolve_filters(
                 JOIN email_links el ON el.id = c.link_id
                 JOIN team_user tu ON tu.user_id = el.macro_id
                 WHERE tu.team_id = $1
+                  AND el.is_primary
                   AND LOWER(c.email_address) = ANY($2)
                 "#,
                 team_id,

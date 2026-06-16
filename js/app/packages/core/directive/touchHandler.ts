@@ -14,6 +14,13 @@ interface TouchHandlerOptions {
   delay?: number;
   moveThreshold?: number;
   stopTouchStartPropagation?: boolean;
+  /**
+   * Selectors for which our touch handling should be skipped entirely when the
+   * touch originates on a matching element (or one of its ancestors). Useful to
+   * avoid competing with native behavior, e.g. `['img']` so a long-press on an
+   * image yields to the native image callout.
+   */
+  skipSelectors?: string[];
   /** CSS class added while the touch highlight is active. */
   touchClassName?: string;
   touchClassEnterDelay?: number;
@@ -142,6 +149,22 @@ export function touchHandler(
       setValidShortTouch(false);
       return;
     }
+
+    // Skip our touch handling when the touch originates on an opted-out element
+    // so it doesn't compete with native behavior (e.g. `['img']` yields to the
+    // native image callout).
+    const skipSelectors = options().skipSelectors;
+    if (
+      skipSelectors?.length &&
+      (e.target as Element)?.closest(skipSelectors.join(','))
+    ) {
+      clearState();
+      cancelTouchClassEnter();
+      endTouchClass();
+      setValidShortTouch(false);
+      return;
+    }
+
     initStateForNewTouch();
 
     const touch = e.touches[0];

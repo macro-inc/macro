@@ -1,5 +1,4 @@
 #![allow(deprecated)]
-use agent::AgentModel;
 use model::chat::ChatMessageWithAttachments;
 use model_entity::Entity;
 use serde::{Deserialize, Serialize};
@@ -19,8 +18,8 @@ pub struct ChatResponse {
     pub name: String,
     /// The messages in the chat
     pub messages: Vec<ChatMessageWithAttachments>,
-    /// The model used to generate the chat
-    pub model: Option<AgentModel>,
+    /// The model used to generate the chat (provider api id)
+    pub model: Option<String>,
     /// The time the chat was created
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
     /// The time the chat was last updated
@@ -31,9 +30,9 @@ pub struct ChatResponse {
     /// Current number of tokens in the chat
     // kill
     pub token_count: Option<i64>,
-    /// Available models for the chat
+    /// Available models for the chat (provider api ids)
     // kill
-    pub available_models: Vec<AgentModel>,
+    pub available_models: Vec<String>,
     /// message_id - web citation list
     // kill
     pub web_citations: Vec<(String, Vec<GetUnfurlResponse>)>,

@@ -5,8 +5,8 @@ mod tests;
 
 use crate::domain::{
     models::{
-        AddChannelBotRequest, Bot, BotId, BotToken, CreateBotRequest, CreateBotTokenRequest,
-        CreateBotTokenResponse, PatchBotRequest,
+        AddChannelBotRequest, Bot, BotChannel, BotId, BotToken, CreateBotRequest,
+        CreateBotTokenRequest, CreateBotTokenResponse, PatchBotRequest,
     },
     ports::{BotError, BotService},
 };
@@ -93,6 +93,15 @@ pub struct ChannelBotPath {
     pub bot_id: BotId,
 }
 
+/// Bot channel path.
+#[derive(Debug, serde::Deserialize)]
+pub struct BotChannelPath {
+    /// Bot id.
+    pub bot_id: BotId,
+    /// Channel id.
+    pub channel_id: Uuid,
+}
+
 /// Create a bots router.
 pub fn bots_router<S, Svc, T>(state: BotsRouterState<S, Svc>) -> Router<T>
 where
@@ -106,6 +115,14 @@ where
         .route("/bots/{bot_id}", get(get_bot_handler::<S, Svc>))
         .route("/bots/{bot_id}", patch(patch_bot_handler::<S, Svc>))
         .route("/bots/{bot_id}", delete(delete_bot_handler::<S, Svc>))
+        .route(
+            "/bots/{bot_id}/channels",
+            get(list_bot_channels_handler::<S, Svc>),
+        )
+        .route(
+            "/bots/{bot_id}/channels/{channel_id}",
+            delete(remove_bot_channel_handler::<S, Svc>),
+        )
         .route("/bots/{bot_id}/tokens", get(list_tokens_handler::<S, Svc>))
         .route(
             "/bots/{bot_id}/tokens",
@@ -235,6 +252,64 @@ async fn revoke_token_handler<S: BotService, Svc: EntityAccessService>(
     state
         .service
         .revoke_token(caller_from_user(user), path.bot_id, path.token_id)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Handler for `GET /bots/{bot_id}/channels`.
+#[utoipa::path(
+    get,
+    tag = "bots",
+    operation_id = "list_bot_channels",
+    path = "/bots/{bot_id}/channels",
+    params(
+        ("bot_id" = BotId, Path, description = "Bot ID")
+    ),
+    responses(
+        (status = 200, body = Vec<BotChannel>),
+        (status = 401, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+pub async fn list_bot_channels_handler<S: BotService, Svc: EntityAccessService>(
+    State(state): State<BotsRouterState<S, Svc>>,
+    user: MacroUserExtractor,
+    Path(path): Path<BotPath>,
+) -> Result<Json<Vec<BotChannel>>, BotsHandlerErr> {
+    Ok(Json(
+        state
+            .service
+            .list_bot_channels(caller_from_user(user), path.bot_id)
+            .await?,
+    ))
+}
+
+/// Handler for `DELETE /bots/{bot_id}/channels/{channel_id}`.
+#[utoipa::path(
+    delete,
+    tag = "bots",
+    operation_id = "remove_bot_from_channel_by_bot",
+    path = "/bots/{bot_id}/channels/{channel_id}",
+    params(
+        ("bot_id" = BotId, Path, description = "Bot ID"),
+        ("channel_id" = Uuid, Path, description = "Channel ID")
+    ),
+    responses(
+        (status = 204),
+        (status = 401, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+pub async fn remove_bot_channel_handler<S: BotService, Svc: EntityAccessService>(
+    State(state): State<BotsRouterState<S, Svc>>,
+    user: MacroUserExtractor,
+    Path(path): Path<BotChannelPath>,
+) -> Result<StatusCode, BotsHandlerErr> {
+    state
+        .service
+        .remove_bot_from_channel(caller_from_user(user), path.channel_id, path.bot_id)
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }

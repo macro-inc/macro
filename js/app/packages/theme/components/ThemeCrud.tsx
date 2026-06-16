@@ -16,20 +16,10 @@ export function ThemeCrud(props: ThemeCrudProps) {
 
   return (
     <div
-      style="
-        grid-auto-columns: min-content;
-        background-color: var(--b0);
-        grid-auto-flow: column;
-        box-sizing: border-box;
-        align-items: center;
-        direction: rtl;
-        padding: 0 12px;
-        display: grid;
-        height: 100%;
-        gap: 4.5px;
-      "
+      class="flex shrink-0 items-center gap-0.5"
       onClick={stop}
       onPointerDown={stop}
+      onKeyDown={stop}
     >
       <Button
         label="Copy To Clipboard"

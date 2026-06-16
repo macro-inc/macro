@@ -104,7 +104,7 @@ async fn store_user_message(db: &PgPool, chat_id: &str, agent_task: &AgentTask) 
         attachments: None,
         created_at: now,
         updated_at: now,
-        model: agent_task.model,
+        model: agent_task.model.clone(),
     };
     create_chat_message(db.clone(), chat_id, message).await
 }
@@ -129,7 +129,7 @@ async fn run_tool_loop(
     };
 
     let toolset: Arc<dyn AiToolSet<_> + Send + Sync> = tools.toolset;
-    let agent_loop = AgentLoop::new().with_model(agent_task.model);
+    let agent_loop = AgentLoop::new().with_model(&agent_task.model);
     let mut session = agent_loop
         .session(
             toolset,
@@ -190,7 +190,7 @@ async fn store_conversation(
         attachments: None,
         created_at: now,
         updated_at: now,
-        model: agent_task.model,
+        model: agent_task.model.clone(),
     };
     create_chat_message(db.clone(), chat_id, message)
         .await

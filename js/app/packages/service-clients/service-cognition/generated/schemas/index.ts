@@ -7,7 +7,6 @@
 
 export * from './accessLevel';
 export * from './addServerRequest';
-export * from './agentModel';
 export * from './assistantMessagePart';
 export * from './assistantMessagePartOneOf';
 export * from './assistantMessagePartOneOfEight';
@@ -116,6 +115,8 @@ export * from './mcpAuthCallbackParams';
 export * from './memoryErrorBody';
 export * from './memoryResponse';
 export * from './messageWithAttachments';
+export * from './modelAccess';
+export * from './modelsResponse';
 export * from './newAttachment';
 export * from './newChatMessage';
 export * from './newChatMessageAttachments';
@@ -153,8 +154,6 @@ export * from './structuredCompletionError';
 export * from './structuredCompletionRequest';
 export * from './structuredCompletionRequestAdditionalInstructions';
 export * from './structuredCompletionResponse';
-export * from './toolSchema';
-export * from './toolSchemas';
 export * from './toolSet';
 export * from './toolSetOneOf';
 export * from './toolSetOneOfThree';

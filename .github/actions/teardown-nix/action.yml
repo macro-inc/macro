@@ -1,9 +1,9 @@
 name: Teardown Nix
 description: >-
-  Stop the Nix daemon(s) so a /nix sticky disk can be unmounted and committed.
+  Stop the Nix daemon(s) so a /nix cache volume can be unmounted and committed.
   The Determinate Nix daemon runs out of /nix, which keeps the mount busy and
-  makes the Blacksmith sticky-disk commit fail with "target is busy". Run this
-  as the final (always()) step of any job that mounts /nix as a sticky disk.
+  can make the cache-volume commit fail with "target is busy". Run this
+  as the final (always()) step of any job that mounts /nix as a cache volume.
 
 runs:
   using: composite
@@ -18,6 +18,10 @@ runs:
           determinate-nixd.service determinate-nixd.socket; do
           sudo systemctl stop "$unit" 2>/dev/null
         done
+        # Non-systemd runners (e.g. Namespace): the daemon was started
+        # directly by setup-nix; stop it the same way.
+        sudo pkill -x nix-daemon 2>/dev/null
+        sudo pkill -x determinate-nixd 2>/dev/null
         # Backstop: free any remaining handles so the umount can succeed.
         sudo fuser -km /nix 2>/dev/null
         sync

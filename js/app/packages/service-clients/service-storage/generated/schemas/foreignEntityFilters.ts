@@ -4,6 +4,7 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { NotificationFilters } from './notificationFilters';
 
 /**
  * Filters for foreign entity records.
@@ -19,4 +20,7 @@ export interface ForeignEntityFilters {
 participant (GitHub `involves:me` semantics for `github_pull_request` records). False or
 absent applies no filter. Serialized in filter ASTs as the `"me"` literal. */
   includes_me?: boolean;
+  /** Filter by the notification state of the foreign entity (e.g. whether the requesting user's
+GitHub PR notification is done/seen). */
+  notification_filters?: NotificationFilters;
 }

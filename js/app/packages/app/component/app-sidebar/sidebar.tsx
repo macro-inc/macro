@@ -12,6 +12,7 @@ import {
 import { CommandState } from '@app/component/command';
 import { InteractiveOnboardingModal } from '@app/component/interactive-onboarding/InteractiveOnboardingModal';
 import { createMenuOpen, setCreateMenuOpen } from '@app/component/Launcher';
+import { getDocumentsFilterSplit } from '@app/component/next-soup/soup-view/documents-filter-controllers';
 import {
   getInboxFilterSplit,
   INBOX_FILTER_ENTRY_KEY,
@@ -40,26 +41,26 @@ import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
 import { inboxIconProps } from '@core/component/inboxIcon';
 import { UserIcon } from '@core/component/UserIcon';
 import {
-  DEV_MODE_ENV,
-  ENABLE_APP_STORE_QR_CODE,
   ENABLE_CALLS,
   ENABLE_CRM,
   ENABLE_HOME_OVERRIDE,
   ENABLE_NEW_PRICING_OVERRIDE,
-  ENABLE_TEAMS_OVERRIDE,
 } from '@core/constant/featureFlags';
 import {
   type SettingsTab,
   useSettingsState,
 } from '@core/constant/SettingsState';
+import {
+  getSettingsTabItem,
+  useSettingsTabAvailable,
+  useSettingsTabs,
+} from '@core/constant/settingsTabsConfig';
 import { useUserId } from '@core/context/user';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { clearPressedKeys } from '@core/hotkey/state';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { activateClosestDOMScope } from '@core/hotkey/utils';
-import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import LogoIcon from '@icon/macro-logo.svg';
 import { AnimatedSquareCommandKIcon } from '@icon/square-command-k';
 import { AnimatedSquareSidebarIcon } from '@icon/square-sidebar';
@@ -79,19 +80,13 @@ import { useNotificationSettings } from '@notifications';
 import BellIcon from '@phosphor/bell.svg';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CaretUpIcon from '@phosphor/caret-up.svg';
-import DeviceMobileIcon from '@phosphor/device-mobile-speaker.svg';
 import HomeIcon from '@phosphor/house.svg';
-import KeyboardIcon from '@phosphor/keyboard.svg';
-import PaintBucketIcon from '@phosphor/paint-bucket.svg';
 import PlayIcon from '@phosphor/play.svg';
-import PlugIcon from '@phosphor/plug.svg';
-import UserIconPhosphor from '@phosphor/user.svg';
-import UsersThreeIcon from '@phosphor/users-three.svg';
 import { useEmailLinksQuery } from '@queries/email/link';
 import { debounce } from '@solid-primitives/scheduled';
 import { makePersisted } from '@solid-primitives/storage';
 import { useLocation } from '@solidjs/router';
-import { Button, cn, Dropdown, Hotkey } from '@ui';
+import { Button, cn, Dropdown, Hotkey, NavRow } from '@ui';
 import {
   type Component,
   createEffect,
@@ -108,12 +103,14 @@ interface SidebarItem {
   id: ListView | (string & {});
   label: string;
   href: string;
+  params?: Record<string, unknown>;
   icon?: Component<
     JSX.SvgSVGAttributes<SVGSVGElement> | { triggerAnimation?: boolean }
   >;
   hotkey: ValidHotkey;
   hotkeyToken: HotkeyToken;
   standaloneHotkey?: boolean;
+  hiddenFromSidebar?: boolean;
 }
 
 const SIDEBAR_LINKS = [
@@ -157,6 +154,22 @@ const SIDEBAR_LINKS = [
     icon: AnimatedFileMdIcon,
     hotkey: 'f',
     hotkeyToken: TOKENS.sidebar.goTo.documents,
+  },
+  {
+    id: 'documents',
+    label: 'Documents',
+    href: LIST_VIEW_PATHS.documents,
+    params: {
+      initialFilters: { include: { fileAssoc: ['assoc:md'] } },
+      initialClientFilters: {
+        and: ['document-or-file'],
+        or: ['doc-markdown'],
+      },
+    },
+    icon: AnimatedFileMdIcon,
+    hotkey: 'd',
+    hotkeyToken: TOKENS.sidebar.goTo.markdownDocuments,
+    hiddenFromSidebar: true,
   },
   {
     id: 'tasks',
@@ -290,6 +303,16 @@ const isComponentEntry =
   (entry: SplitContent): boolean =>
     entry.type === 'component' && entry.id === id;
 
+const isMarkdownDocumentsParams = (
+  params: SidebarItem['params'] | undefined
+): boolean => {
+  const initialClientFilters = params?.initialClientFilters as
+    | { or?: readonly unknown[] }
+    | undefined;
+
+  return initialClientFilters?.or?.includes('doc-markdown') ?? false;
+};
+
 /**
  * Navigate to a sidebar view, preserving prior state when possible.
  *
@@ -300,19 +323,41 @@ const isComponentEntry =
  */
 function navigateToSidebarView(args: {
   viewId: SidebarItem['id'];
+  params?: SidebarItem['params'];
   shiftKey: boolean;
   activeSplit: SplitHandle | undefined;
   openWithSplit: OpenWithSplitFn;
   referredFrom?: ReferredFrom;
 }): SplitHandle | undefined {
-  const { viewId, shiftKey, activeSplit, openWithSplit, referredFrom } = args;
+  const { viewId, params, shiftKey, activeSplit, openWithSplit, referredFrom } =
+    args;
 
-  if (!shiftKey && activeSplit?.goToEntry(isComponentEntry(viewId))) {
+  const activeContent = activeSplit?.content();
+  if (
+    !shiftKey &&
+    isMarkdownDocumentsParams(params) &&
+    activeContent?.type === 'component' &&
+    activeContent.id === 'documents'
+  ) {
+    const controller = activeSplit
+      ? getDocumentsFilterSplit(activeSplit.id)
+      : undefined;
+    if (controller) {
+      controller.toggleMarkdownFilter();
+      return activeSplit;
+    }
+  }
+
+  if (
+    !params &&
+    !shiftKey &&
+    activeSplit?.goToEntry(isComponentEntry(viewId))
+  ) {
     return activeSplit;
   }
 
   return openWithSplit(
-    { type: 'component', id: viewId },
+    { type: 'component', id: viewId, params },
     {
       preferNewSplit: shiftKey,
       mergeHistory: false,
@@ -434,6 +479,7 @@ const registerSidebarHotkeys = ({
 
         const handle = navigateToSidebarView({
           viewId: link.id,
+          params: link.params,
           shiftKey: !!e?.shiftKey,
           activeSplit: globalSplitManager()?.activeSplit(),
           openWithSplit,
@@ -485,12 +531,8 @@ const SidebarShortcutLink = (props: SidebarShortcutLinkProps) => {
   const [isHovering, setIsHovering] = createSignal(false);
 
   return (
-    <Button
+    <NavRow
       draggable={false}
-      variant="ghost"
-      class={cn(
-        'flex items-center justify-start text-sm gap-2 cursor-default w-full rounded-md py-1 text-ink-extra-muted not-disabled:hover:bg-ink/3'
-      )}
       tooltipPlacement="right"
       label={props.isSlim() ? props.label : undefined}
       onMouseEnter={() => setIsHovering(true)}
@@ -508,81 +550,8 @@ const SidebarShortcutLink = (props: SidebarShortcutLinkProps) => {
       <div class="flex items-center gap-1 group-data-[slim=true]/sidebar:hidden">
         <span class="whitespace-nowrap">{props.label}</span>
       </div>
-    </Button>
+    </NavRow>
   );
-};
-
-type SettingsMenuItem = {
-  tab: SettingsTab;
-  label: string;
-  icon: Component<{ class?: string }>;
-};
-
-const SETTINGS_MENU_TOP_ITEMS: SettingsMenuItem[] = [
-  {
-    tab: 'Mobile App',
-    label: 'App',
-    icon: DeviceMobileIcon,
-  },
-  {
-    tab: 'Agent',
-    label: 'MCPs',
-    icon: PlugIcon,
-  },
-  {
-    tab: 'Team',
-    label: 'Team',
-    icon: UsersThreeIcon,
-  },
-];
-
-const SETTINGS_MENU_BOTTOM_ITEMS: SettingsMenuItem[] = [
-  {
-    tab: 'Shortcuts',
-    label: 'Shortcuts',
-    icon: KeyboardIcon,
-  },
-  {
-    tab: 'Appearance',
-    label: 'Appearance',
-    icon: PaintBucketIcon,
-  },
-  {
-    tab: 'Account',
-    label: 'Account',
-    icon: UserIconPhosphor,
-  },
-];
-
-/**
- * Mirrors the gating in `Settings.tsx`'s `settingsTabs()`. Use to filter the
- * sidebar menu/shortcuts and to guard `setActiveTabId` callers so we never
- * activate a tab that the settings panel won't render.
- */
-const useIsSettingsTabAvailable = () => {
-  const teamsFlag = useFeatureFlag('enable-teams-settings', {
-    enabledOverride: ENABLE_TEAMS_OVERRIDE,
-  });
-
-  return (tab: SettingsTab): boolean => {
-    switch (tab) {
-      case 'Appearance':
-      case 'Account':
-        return true;
-      case 'Team':
-        return teamsFlag().enabled;
-      case 'Shortcuts':
-        return !isTouchDevice();
-      case 'Mobile App':
-        return ENABLE_APP_STORE_QR_CODE && !isNativeMobilePlatform();
-      case 'Agent':
-        return !isNativeMobilePlatform();
-      case 'Mobile':
-        return isNativeMobilePlatform() && DEV_MODE_ENV;
-      default:
-        return false;
-    }
-  };
 };
 
 /**
@@ -601,11 +570,8 @@ const SidebarActionButton = (props: SidebarActionButtonProps) => {
       : (props.disabled ?? false);
 
   return (
-    <Button
-      class={cn(
-        'flex items-center justify-start group-data-[slim=true]/sidebar:justify-center text-sm gap-2 cursor-default w-full rounded-md py-1 text-ink-extra-muted not-disabled:hover:bg-ink/3'
-      )}
-      variant="ghost"
+    <NavRow
+      class="group-data-[slim=true]/sidebar:justify-center"
       tooltipPlacement="right"
       label={props.isSlim() ? props.label : undefined}
       hotkey={props.isSlim() ? props.hotkeyToken : undefined}
@@ -631,7 +597,7 @@ const SidebarActionButton = (props: SidebarActionButtonProps) => {
           </div>
         )}
       </Show>
-    </Button>
+    </NavRow>
   );
 };
 
@@ -668,19 +634,12 @@ const SidebarHeaderIconButton = (props: {
 type SidebarSettingsWidgetProps = {
   isSlim: () => boolean;
   onSelect: (tab: SettingsTab) => void;
-  isTabAvailable: (tab: SettingsTab) => boolean;
 };
 
 const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
   const userId = useUserId();
   const [onboardingModalOpen, setOnboardingModalOpen] = createSignal(false);
-
-  const topItems = createMemo(() =>
-    SETTINGS_MENU_TOP_ITEMS.filter((item) => props.isTabAvailable(item.tab))
-  );
-  const bottomItems = createMemo(() =>
-    SETTINGS_MENU_BOTTOM_ITEMS.filter((item) => props.isTabAvailable(item.tab))
-  );
+  const { groups: settingGroups } = useSettingsTabs();
 
   return (
     <Dropdown placement="top-start" gutter={6}>
@@ -731,42 +690,28 @@ const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
             <span class="text-ink">Play tutorial</span>
           </Dropdown.Item>
         </Dropdown.Group>
-        <Dropdown.Group>
-          <For each={topItems()}>
-            {(item) => (
-              <Dropdown.Item
-                class="flex items-center gap-2 px-2.5 py-2 text-sm cursor-default outline-none text-ink-muted"
-                onSelect={() => props.onSelect(item.tab)}
-              >
-                <span class="size-5 flex items-center justify-center">
-                  <Dynamic
-                    component={item.icon}
-                    class="size-4 shrink-0 text-ink-extra-muted"
-                  />
-                </span>
-                <span class="text-ink">{item.label}</span>
-              </Dropdown.Item>
-            )}
-          </For>
-        </Dropdown.Group>
-        <Dropdown.Group>
-          <For each={bottomItems()}>
-            {(item) => (
-              <Dropdown.Item
-                class="flex items-center gap-2 px-2.5 py-2 text-sm cursor-default outline-none text-ink-muted"
-                onSelect={() => props.onSelect(item.tab)}
-              >
-                <span class="size-5 flex items-center justify-center">
-                  <Dynamic
-                    component={item.icon}
-                    class="size-4 shrink-0 text-ink-extra-muted"
-                  />
-                </span>
-                <span class="text-ink">{item.label}</span>
-              </Dropdown.Item>
-            )}
-          </For>
-        </Dropdown.Group>
+        <For each={settingGroups()}>
+          {(group) => (
+            <Dropdown.Group>
+              <For each={group.items}>
+                {(item) => (
+                  <Dropdown.Item
+                    class="flex items-center gap-2 px-2.5 py-2 text-sm cursor-default outline-none text-ink-muted"
+                    onSelect={() => props.onSelect(item.tab)}
+                  >
+                    <span class="size-5 flex items-center justify-center">
+                      <Dynamic
+                        component={item.icon}
+                        class="size-4 shrink-0 text-ink-extra-muted"
+                      />
+                    </span>
+                    <span class="text-ink">{item.label}</span>
+                  </Dropdown.Item>
+                )}
+              </For>
+            </Dropdown.Group>
+          )}
+        </For>
       </Dropdown.Content>
       <InteractiveOnboardingModal
         open={onboardingModalOpen()}
@@ -794,11 +739,18 @@ const DASHBOARD_LINK: SidebarItem = {
   hotkeyToken: TOKENS.sidebar.goTo.home,
 };
 
+/**
+ * Settings tabs surfaced as always-visible quick links above the settings
+ * widget. Label/icon come from the settings tab config (see
+ * `getSettingsTabItem`); this list only decides which tabs to promote.
+ */
+const PROMOTED_SETTINGS_TABS: SettingsTab[] = ['Mobile App', 'Agent', 'Team'];
+
 export const AppSidebar = (props: AppSidebarProps) => {
   const analytics = useAnalytics();
   const layout = useSplitLayout();
   const { openSettings, setActiveTabId, settingsOpen } = useSettingsState();
-  const isTabAvailable = useIsSettingsTabAvailable();
+  const isTabAvailable = useSettingsTabAvailable();
   const notificationSettings = useNotificationSettings();
   const callCtx = useCallContextOptional();
 
@@ -833,6 +785,21 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const [hotkeyVisible, setHotkeyVisible] = createSignal(false);
 
   const visibleLinks = createMemo((): SidebarItem[] => {
+    let links: SidebarItem[] = [...SIDEBAR_LINKS];
+
+    if (homeViewEnabled().enabled) {
+      links = [DASHBOARD_LINK, ...links];
+    }
+
+    if (ENABLE_CALLS()) {
+      const idx = links.findIndex((l) => l.id === 'channels');
+      links = [...links.slice(0, idx + 1), CALLS_LINK, ...links.slice(idx + 1)];
+    }
+
+    return links.filter((link) => !link.hiddenFromSidebar);
+  });
+
+  const hotkeyLinks = createMemo((): SidebarItem[] => {
     let links: SidebarItem[] = [...SIDEBAR_LINKS];
 
     if (homeViewEnabled().enabled) {
@@ -924,7 +891,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
   });
 
   registerSidebarHotkeys({
-    links: visibleLinks,
+    links: hotkeyLinks,
     hotkeyVisible,
     setHotkeyVisible,
     resetHotkeysState,
@@ -1116,38 +1083,26 @@ export const AppSidebar = (props: AppSidebarProps) => {
       </Show>
 
       <div class="w-full px-2 flex flex-col gap-1 mb-1">
-        <Show when={isTabAvailable('Mobile App')}>
-          <SidebarShortcutLink
-            label="App"
-            isSlim={isSlim}
-            onClick={() => openSettingsTab('Mobile App')}
-            icon={() => <DeviceMobileIcon class="size-4" />}
-          />
-        </Show>
-        <Show when={isTabAvailable('Agent')}>
-          <SidebarShortcutLink
-            label="MCPs"
-            isSlim={isSlim}
-            onClick={() => openSettingsTab('Agent')}
-            icon={() => <PlugIcon class="size-4" />}
-          />
-        </Show>
-        <Show when={isTabAvailable('Team')}>
-          <SidebarShortcutLink
-            label="Team"
-            isSlim={isSlim}
-            onClick={() => openSettingsTab('Team')}
-            icon={() => <UsersThreeIcon class="size-4" />}
-          />
-        </Show>
+        <For each={PROMOTED_SETTINGS_TABS}>
+          {(tab) => (
+            <Show
+              when={isTabAvailable(tab) ? getSettingsTabItem(tab) : undefined}
+            >
+              {(item) => (
+                <SidebarShortcutLink
+                  label={item().label}
+                  isSlim={isSlim}
+                  onClick={() => openSettingsTab(tab)}
+                  icon={item().icon}
+                />
+              )}
+            </Show>
+          )}
+        </For>
       </div>
 
       <div class="w-full px-2">
-        <SidebarSettingsWidget
-          isSlim={isSlim}
-          onSelect={openSettingsTab}
-          isTabAvailable={isTabAvailable}
-        />
+        <SidebarSettingsWidget isSlim={isSlim} onSelect={openSettingsTab} />
       </div>
       <InviteModal />
     </div>
@@ -1199,6 +1154,7 @@ const SidebarLink = (props: SidebarLinkProps) => {
     ({
       type: 'component',
       id: props.id,
+      params: props.params,
     }) as const;
 
   const canOpenInNewSplit = () =>
@@ -1233,17 +1189,12 @@ const SidebarLink = (props: SidebarLinkProps) => {
   return (
     <ContextMenu>
       <ContextMenu.Trigger class="w-full">
-        <Button
+        <NavRow
           draggable={false}
-          variant="ghost"
           data-sidebar-link={props.id}
           data-active={isActive() ? '' : undefined}
-          class={cn(
-            'flex items-center justify-start group-data-[slim=true]/sidebar:justify-center text-sm gap-2 cursor-default w-full rounded-md py-1 text-ink-extra-muted not-disabled:hover:bg-ink/3',
-            isActive() &&
-              !props.suppressActiveStyle &&
-              'bg-ink/6 not-disabled:hover:bg-ink/6 text-ink'
-          )}
+          active={isActive() && !props.suppressActiveStyle}
+          class="group-data-[slim=true]/sidebar:justify-center"
           tooltipPlacement="right"
           onMouseEnter={() => setIsHovering(true)}
           label={
@@ -1274,6 +1225,7 @@ const SidebarLink = (props: SidebarLinkProps) => {
             if (!isSameContent || e.shiftKey) {
               currentContentHandle = navigateToSidebarView({
                 viewId: props.id,
+                params: props.params,
                 shiftKey: e.shiftKey,
                 activeSplit: currentContentHandle,
                 openWithSplit: layout.openWithSplit,
@@ -1348,7 +1300,7 @@ const SidebarLink = (props: SidebarLinkProps) => {
               <Hotkey token={props.hotkeyToken} />
             </div>
           </Show>
-        </Button>
+        </NavRow>
       </ContextMenu.Trigger>
 
       <ContextMenu.Portal>

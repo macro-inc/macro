@@ -5,6 +5,7 @@ export {
   setPreviewFileType,
   setPreviewName,
   useItemPreview,
+  useItemRawName,
 } from './preview';
 export type {
   AccessiblePreviewItem,

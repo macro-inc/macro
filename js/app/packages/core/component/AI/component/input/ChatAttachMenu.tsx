@@ -190,14 +190,7 @@ export function ChatAttachMenu(props: ChatAttachMenuProps) {
       return;
     }
 
-    // TODO: add overrides to getDocumentAttachment if we already have the data
-    // const attachment = getDocumentAttachment({
-    //   itemType: 'document',
-    //   itemId: item.id,
-    //   fileType: item.fileType ?? undefined,
-    //   documentName: item.name,
-    // });
-    const attachment = getDocumentAttachment(item.id);
+    const attachment = getDocumentAttachment(item.id, item.fileType);
 
     if (attachment) {
       props.onAttach(attachment);

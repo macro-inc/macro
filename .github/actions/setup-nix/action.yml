@@ -1,9 +1,11 @@
 name: Setup Nix
 description: >-
-  Ensure a working Nix (flakes enabled, systemd daemon) is available on a
-  runner that does not ship Nix preinstalled (e.g. Blacksmith). Idempotent:
-  when /nix is already populated from a sticky disk it only re-initialises the
-  daemon and config rather than reinstalling the store.
+  Ensure a working Nix (flakes enabled, daemon running) is available on a
+  runner that does not ship Nix preinstalled. Idempotent: when /nix is already
+  populated from a cache volume it only re-initialises the daemon and config
+  rather than reinstalling the store. Init-agnostic: uses systemd units when
+  systemd is active (full VMs), otherwise starts nix-daemon directly as a
+  background process (e.g. Namespace runners, where systemd is not active).
 
 inputs:
   extra-substituters:
@@ -26,24 +28,24 @@ runs:
       run: |
         set -euo pipefail
 
-        # When /nix is mounted from a warm sticky disk the store + profiles are
-        # already present, but the systemd unit and /etc/nix config live outside
-        # /nix and are gone on a fresh runner. Detect that case and only repair
-        # the bits that don't persist on the disk.
         nix_bin="/nix/var/nix/profiles/default/bin/nix"
+        daemon_bin="/nix/var/nix/profiles/default/bin/nix-daemon"
 
-        if [[ -x "$nix_bin" ]]; then
-          echo "Found existing Nix store on sticky disk; re-initialising daemon/config only."
+        have_systemd=false
+        if [ -d /run/systemd/system ]; then have_systemd=true; fi
 
+        write_conf() {
           sudo mkdir -p /etc/nix
-          # Recreate the minimal config the Determinate installer would have written.
+          # The minimal config the Determinate installer would have written.
           {
             echo "experimental-features = nix-command flakes"
             echo "trusted-users = root runner"
             echo "build-users-group = nixbld"
           } | sudo tee /etc/nix/nix.conf >/dev/null
+        }
 
-          # The nixbld build group/users do not persist outside /nix; recreate if missing.
+        ensure_nixbld() {
+          # Build group/users do not persist outside /nix; recreate if missing.
           if ! getent group nixbld >/dev/null; then
             sudo groupadd -r nixbld || true
             for i in $(seq 1 10); do
@@ -51,20 +53,54 @@ runs:
                 "nixbld$i" 2>/dev/null || true
             done
           fi
+        }
 
-          # Reinstall the systemd units shipped in the store and start the daemon.
-          if [[ -e /nix/var/nix/profiles/default/lib/systemd/system/nix-daemon.service ]]; then
-            sudo cp /nix/var/nix/profiles/default/lib/systemd/system/nix-daemon.* /etc/systemd/system/ || true
-            sudo systemctl daemon-reload || true
+        start_daemon() {
+          if $have_systemd; then
+            if [[ -e /nix/var/nix/profiles/default/lib/systemd/system/nix-daemon.service ]]; then
+              sudo cp /nix/var/nix/profiles/default/lib/systemd/system/nix-daemon.* /etc/systemd/system/ || true
+              sudo systemctl daemon-reload || true
+            fi
+            sudo systemctl enable --now nix-daemon.socket nix-daemon.service 2>/dev/null || true
           fi
-          sudo systemctl enable --now nix-daemon.socket nix-daemon.service 2>/dev/null || true
+          # Without systemd (or if the unit failed to come up), run the daemon
+          # directly: it is just a process listening on the daemon socket.
+          if ! sudo test -S /nix/var/nix/daemon-socket/socket || ! pgrep -x nix-daemon >/dev/null 2>&1; then
+            sudo mkdir -p /nix/var/nix/daemon-socket
+            sudo rm -f /nix/var/nix/daemon-socket/socket
+            sudo sh -c "nohup '$daemon_bin' >/tmp/nix-daemon.log 2>&1 &"
+            for _ in $(seq 1 30); do
+              if sudo test -S /nix/var/nix/daemon-socket/socket; then break; fi
+              sleep 1
+            done
+            if ! sudo test -S /nix/var/nix/daemon-socket/socket; then
+              echo "nix-daemon failed to come up; log follows:" >&2
+              sudo cat /tmp/nix-daemon.log >&2 || true
+              exit 1
+            fi
+          fi
+        }
+
+        if [[ -x "$nix_bin" ]]; then
+          # Store + profiles persist on the cache volume, but config, build
+          # users, and the daemon live outside /nix and are gone on a fresh
+          # runner. Repair only those.
+          echo "Found existing Nix store on cache volume; re-initialising daemon/config only."
+          write_conf
+          ensure_nixbld
+          start_daemon
         else
-          echo "No Nix store found on sticky disk; performing a full install."
+          echo "No Nix store found on cache volume; performing a full install."
+          init_flag="none"
+          if $have_systemd; then init_flag="systemd"; fi
           curl --http1.1 --retry 5 --retry-delay 5 --retry-all-errors \
             --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix | \
-            sh -s -- install linux --no-confirm --init systemd \
+            sh -s -- install linux --no-confirm --init "$init_flag" \
             --extra-conf "experimental-features = nix-command flakes" \
             --extra-conf "trusted-users = root runner"
+          # With --init none the installer lays out the multi-user store but
+          # starts no service; bring the daemon up ourselves.
+          start_daemon
         fi
 
         # Make nix discoverable in subsequent (non-login) steps.
@@ -73,14 +109,20 @@ runs:
         export NIX_REMOTE=daemon
         echo "NIX_REMOTE=daemon" >> "$GITHUB_ENV"
 
-        # Append fallback substituters (e.g. Cachix) so a cold sticky disk pulls
-        # prebuilt artifacts instead of compiling from source.
+        # Append fallback substituters (e.g. Cachix) so a cold cache volume
+        # pulls prebuilt artifacts instead of compiling from source.
         if [[ -n "${EXTRA_SUBSTITUTERS}" ]]; then
           {
             echo "extra-substituters = ${EXTRA_SUBSTITUTERS}"
             echo "extra-trusted-public-keys = ${EXTRA_TRUSTED_PUBLIC_KEYS}"
           } | sudo tee -a /etc/nix/nix.conf >/dev/null
-          sudo systemctl restart nix-daemon.service 2>/dev/null || true
+          if $have_systemd; then
+            sudo systemctl restart nix-daemon.service 2>/dev/null || true
+          else
+            sudo pkill -x nix-daemon 2>/dev/null || true
+            sleep 1
+            start_daemon
+          fi
         fi
 
         "$nix_bin" --version || nix --version

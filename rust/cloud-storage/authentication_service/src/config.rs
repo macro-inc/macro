@@ -1,19 +1,20 @@
 use std::sync::LazyLock;
 
 use anyhow::Context;
+use database_env_vars::{DatabaseUrl, RedisUri};
 pub use macro_env::Environment;
 use macro_env_var::{env_vars, maybe_env_vars};
 
 // BASE_URL config value. This is validated when creating the config in main.rs
 pub static BASE_URL: LazyLock<String> = LazyLock::new(|| {
-    macro_config::required_config_value("BASE_URL")
+    BaseUrl::new()
         .expect("BASE_URL must be provided via APP_SECRETS_JSON or env")
+        .as_ref()
+        .to_string()
 });
 
 env_vars! {
     pub struct BaseUrl;
-    pub struct DatabaseUrl;
-    pub struct RedisUri;
     pub struct FusionAuthTenantId;
     pub struct FusionAuthApiSecretKey;
     pub struct FusionAuthClientId;
@@ -104,19 +105,19 @@ pub struct Config {
     /// The github idp id
     pub github_idp_id: GithubIdpId,
     /// GA4 Measurement ID (optional, e.g., "G-XXXXXXXXXX")
-    pub ga_measurement_id: Option<GaMeasurementId>,
+    pub ga_measurement_id: GaMeasurementId,
     /// GA4 Measurement Protocol API secret (optional)
-    pub ga_api_secret: Option<GaApiSecret>,
+    pub ga_api_secret: GaApiSecret,
     /// Meta Pixel ID (optional)
-    pub meta_pixel_id: Option<MetaPixelId>,
+    pub meta_pixel_id: MetaPixelId,
     /// Meta Conversions API access token (optional)
-    pub meta_access_token: Option<MetaAccessToken>,
+    pub meta_access_token: MetaAccessToken,
     /// Meta test event code for testing (optional)
-    pub meta_test_event_code: Option<MetaTestEventCode>,
+    pub meta_test_event_code: MetaTestEventCode,
     /// PostHog API key (optional)
-    pub posthog_api_key: Option<PosthogApiKey>,
+    pub posthog_api_key: PosthogApiKey,
     /// PostHog host (optional)
-    pub posthog_host: Option<PosthogHost>,
+    pub posthog_host: PosthogHost,
     /// The stripe price id
     pub stripe_price_id: StripePriceId,
 }

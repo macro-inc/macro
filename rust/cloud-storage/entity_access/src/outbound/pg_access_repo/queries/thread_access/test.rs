@@ -333,12 +333,20 @@ async fn returns_none_when_thread_does_not_exist(pool: PgPool) -> anyhow::Result
 // Delegated / shared inboxes (macro_user_links)
 // ---------------------------------------------------------------------------
 
-/// `primary_macro_id` is delegated `child_macro_id`'s inbox. Both must exist in "User".
-async fn insert_delegation(pool: &PgPool, primary_macro_id: &str, child_macro_id: &str) {
+/// `primary_macro_id` is delegated `child_macro_id`'s `link_id` inbox. Both users
+/// must exist in "User".
+async fn insert_delegation(
+    pool: &PgPool,
+    primary_macro_id: &str,
+    child_macro_id: &str,
+    link_id: Uuid,
+) {
     sqlx::query!(
-        r#"INSERT INTO macro_user_links (primary_macro_id, child_macro_id) VALUES ($1, $2)"#,
+        r#"INSERT INTO macro_user_links (primary_macro_id, child_macro_id, link_id)
+           VALUES ($1, $2, $3)"#,
         primary_macro_id,
         child_macro_id,
+        link_id,
     )
     .execute(pool)
     .await
@@ -351,8 +359,8 @@ async fn delegated_inbox_grants_access(pool: PgPool) -> anyhow::Result<()> {
     // owned by OWNER's inbox, so the delegate gets owner-equivalent access.
     insert_user(&pool, OWNER, "owner@corp.test").await;
     insert_user(&pool, REQUESTER, "requester@corp.test").await;
-    let (_link_id, thread_id) = create_link_and_thread(&pool, OWNER).await;
-    insert_delegation(&pool, REQUESTER, OWNER).await;
+    let (link_id, thread_id) = create_link_and_thread(&pool, OWNER).await;
+    insert_delegation(&pool, REQUESTER, OWNER, link_id).await;
 
     assert_eq!(
         access_as_requester(&pool, &thread_id).await,
@@ -368,10 +376,44 @@ async fn delegation_scoped_to_the_primary(pool: PgPool) -> anyhow::Result<()> {
     insert_user(&pool, OWNER, "owner@corp.test").await;
     insert_user(&pool, REQUESTER, "requester@corp.test").await;
     insert_user(&pool, OTHER, "other@corp.test").await;
-    let (_link_id, thread_id) = create_link_and_thread(&pool, OWNER).await;
-    insert_delegation(&pool, OTHER, OWNER).await;
+    let (link_id, thread_id) = create_link_and_thread(&pool, OWNER).await;
+    insert_delegation(&pool, OTHER, OWNER, link_id).await;
 
     assert_eq!(access_as_requester(&pool, &thread_id).await, None);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn delegation_scoped_to_another_link_denies_access(pool: PgPool) -> anyhow::Result<()> {
+    // REQUESTER holds a grant on one of OWNER's inboxes, but the thread lives in a
+    // different inbox of the same owner — the link-scoped grant must not reach it.
+    insert_user(&pool, OWNER, "owner@corp.test").await;
+    insert_user(&pool, REQUESTER, "requester@corp.test").await;
+    let (granted_link_id, _) = create_link_and_thread(&pool, OWNER).await;
+
+    let other_link_id = Uuid::new_v4();
+    let other_thread_id = Uuid::new_v4();
+    sqlx::query!(
+        r#"INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider)
+           VALUES ($1, $2, $2, 'owner-second@mail.test', 'GMAIL')"#,
+        other_link_id,
+        OWNER,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"INSERT INTO email_threads (id, link_id) VALUES ($1, $2)"#,
+        other_thread_id,
+        other_link_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    insert_delegation(&pool, REQUESTER, OWNER, granted_link_id).await;
+
+    assert_eq!(access_as_requester(&pool, &other_thread_id).await, None);
     Ok(())
 }
 

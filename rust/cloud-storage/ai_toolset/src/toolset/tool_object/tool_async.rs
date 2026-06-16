@@ -1,5 +1,5 @@
-use super::object::{SchemaRegistrar, ToolObject, ValidationError};
-use super::util::validate_tool_schema;
+use super::object::{SchemaRegistrar, ToolObject};
+use crate::schema::{ValidatedSchema, ValidationError, generate_validated_input_schema};
 use crate::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use async_trait::async_trait;
 use axum::extract::FromRef;
@@ -153,8 +153,11 @@ where
             + Sync,
         O: Serialize + JsonSchema + 'static,
     {
-        let input_schema = generate_tool_input_schema!(&T);
-        let (name, description) = validate_tool_schema(&input_schema)?;
+        let ValidatedSchema {
+            name,
+            description,
+            schema: input_schema,
+        } = generate_validated_input_schema::<T>()?;
         let input_schema_json =
             serde_json::to_value(input_schema).map_err(ValidationError::JsonSerialization)?;
         let serde_json::Value::Object(input_schema_json) = input_schema_json else {
@@ -169,10 +172,6 @@ where
             })
         });
 
-        let output_schema = generate_tool_output_schema!(&O);
-        let output_schema_json =
-            serde_json::to_value(&output_schema).map_err(ValidationError::JsonSerialization)?;
-
         let schema_registrar: SchemaRegistrar =
             Box::new(|generator: &mut schemars::SchemaGenerator| {
                 generator.subschema_for::<T>();
@@ -183,7 +182,6 @@ where
         Ok(Self {
             name,
             input_schema: input_schema_json,
-            output_schema: output_schema_json,
             description,
             deserializer,
             schema_registrar,
@@ -265,7 +263,6 @@ where
         ToolObject {
             name: self.name,
             input_schema: self.input_schema,
-            output_schema: self.output_schema,
             description: self.description,
             deserializer: new_deserializer,
             schema_registrar: self.schema_registrar,

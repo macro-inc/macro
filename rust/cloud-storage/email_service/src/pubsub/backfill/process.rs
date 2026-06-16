@@ -4,7 +4,7 @@ use crate::pubsub::backfill::{
     populate_crm_for_user, update_metadata,
 };
 use crate::pubsub::context::PubSubContext;
-use crate::util::gmail::auth::fetch_token_or_delete_on_revocation;
+use crate::util::gmail::auth::fetch_token_or_mark_reauth;
 use anyhow::Context;
 use models_email::email::service::backfill::{
     BackfillJob, BackfillJobStatus, BackfillOperation, BackfillPubsubMessage, JobScopedPayload,
@@ -218,8 +218,9 @@ async fn fetch_job_context<P>(
         return Ok(None);
     };
 
-    let access_token = fetch_token_or_delete_on_revocation(
+    let access_token = fetch_token_or_mark_reauth(
         &link,
+        &ctx.db,
         &ctx.redis_client,
         &ctx.auth_service_client,
         &ctx.sqs_client,

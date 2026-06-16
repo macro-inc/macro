@@ -40,7 +40,7 @@ import { useBlockId } from '@core/block';
 import { EntityPermissionsGate } from '@core/component/EntityPermissionsGate';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import { useChannelName, useChannelType } from '@core/context/channels';
-import { createMethodRegistration } from '@core/orchestrator';
+import { awaitCondition, createMethodRegistration } from '@core/orchestrator';
 import { blockHandleSignal } from '@core/signal/load';
 import { useActiveCallQuery } from '@queries/call/call';
 import { useChannelParticipantsQuery } from '@queries/channel/channel-participants';
@@ -182,13 +182,15 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
   );
   const [pendingJoinCall, setPendingJoinCall] = createSignal(wantsJoinCall);
 
-  /** Set when `<NewChannel>` mounts (Messages tab only); used for goToMessage. */
-  const messagesChannelHandle: { current?: ChannelHandle } = {};
+  // Set when `<NewChannel>` mounts (Messages tab only); used for goToMessage.
+  // A signal so goToLocationFromParams can await it via the orchestrator's
+  // availability primitive when the tab hasn't mounted yet.
+  const [messagesHandle, setMessagesHandle] = createSignal<ChannelHandle>();
 
   const setActiveTab = (tab: ChannelTabId) => {
     tab = normalizeChannelTab(tab);
     if (tab !== 'messages') {
-      messagesChannelHandle.current = undefined;
+      setMessagesHandle(undefined);
     }
     setActiveTabInternal(tab);
   };
@@ -252,12 +254,16 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
       const { targetMessageId, targetMessageReplyId } =
         convertTargetMessage(params);
 
-      if (targetMessageId && messagesChannelHandle.current) {
+      if (targetMessageId) {
         setActiveTab(DEFAULT_CHANNEL_TAB);
-        messagesChannelHandle.current.goToMessage(
-          targetMessageId,
-          targetMessageReplyId
-        );
+        // The Messages tab may not have mounted yet (e.g. right after the split
+        // opens). Wait for its handle via the orchestrator's availability
+        // primitive, then navigate.
+        await awaitCondition(
+          () => messagesHandle() !== undefined,
+          10_000
+        ).catch(() => {});
+        messagesHandle()?.goToMessage(targetMessageId, targetMessageReplyId);
       }
 
       if (isJoinCallRequested(params[CHANNEL_URL_PARAMS.joinCall])) {
@@ -290,7 +296,7 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
   };
 
   const onChannelReady = (handle: ChannelHandle) => {
-    messagesChannelHandle.current = handle;
+    setMessagesHandle(() => handle);
   };
 
   return (

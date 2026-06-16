@@ -1,6 +1,5 @@
 use super::append_attachment_to_chat::append_attachment_to_chat;
 use crate::history::{upsert_item_last_accessed, upsert_user_history};
-use agent::AgentModel;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model::{IDWithTimeStamps, chat::NewChatAttachment};
 use model_entity::EntityType;
@@ -15,7 +14,7 @@ pub async fn create_chat_v2(
     db: &Pool<Postgres>,
     user_id: MacroUserIdStr<'static>,
     name: &str,
-    model: AgentModel,
+    model: &str,
     project_id: Option<&str>,
     share_permission: &SharePermissionV2,
     attachments: Vec<NewChatAttachment>,
@@ -34,7 +33,7 @@ pub async fn create_chat_v2(
             "#,
         user_id.as_ref(),
         &name,
-        model.to_string(),
+        model,
         project_id,
         is_persistent
     )

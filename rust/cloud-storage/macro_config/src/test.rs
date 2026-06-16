@@ -242,6 +242,59 @@ fn load_deserializes_macro_env_var_fields() {
     assert!(config.missing_optional_secret.is_none());
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+struct BareMaybeEnvVarConfig {
+    optional_config_secret: OptionalConfigSecret,
+    missing_optional_secret: OptionalConfigSecret,
+    null_optional_secret: OptionalConfigSecret,
+}
+
+#[test]
+fn load_deserializes_bare_maybe_env_var_fields_without_option_wrapper() {
+    let _lock = ENV_LOCK.lock().expect("env lock poisoned");
+    let env = EnvGuard::new(&[
+        "APP_SECRETS_JSON",
+        "OPTIONAL_CONFIG_SECRET",
+        "MISSING_OPTIONAL_SECRET",
+        "NULL_OPTIONAL_SECRET",
+    ]);
+    env.set("OPTIONAL_CONFIG_SECRET", "optional-secret");
+    env.set("NULL_OPTIONAL_SECRET", "null");
+
+    let config = ConfigLoader::load::<BareMaybeEnvVarConfig>().expect("config should load");
+
+    assert_eq!(
+        config.optional_config_secret.value(),
+        Some("optional-secret")
+    );
+    assert!(config.optional_config_secret.is_set());
+    assert_eq!(config.missing_optional_secret.value(), None);
+    assert!(!config.missing_optional_secret.is_set());
+    assert_eq!(config.null_optional_secret.value(), None);
+}
+
+#[test]
+fn load_deserializes_bare_maybe_env_var_fields_from_app_secrets_json() {
+    let _lock = ENV_LOCK.lock().expect("env lock poisoned");
+    let env = EnvGuard::new(&[
+        "APP_SECRETS_JSON",
+        "OPTIONAL_CONFIG_SECRET",
+        "MISSING_OPTIONAL_SECRET",
+        "NULL_OPTIONAL_SECRET",
+    ]);
+    env.set(
+        "APP_SECRETS_JSON",
+        r#"{"OPTIONAL_CONFIG_SECRET":"from-json","NULL_OPTIONAL_SECRET":null}"#,
+    );
+
+    let config = ConfigLoader::load::<BareMaybeEnvVarConfig>().expect("config should load");
+
+    assert_eq!(config.optional_config_secret.value(), Some("from-json"));
+    assert_eq!(config.missing_optional_secret.value(), None);
+    assert_eq!(config.null_optional_secret.value(), None);
+}
+
 #[test]
 fn load_deserializes_local_or_remote_macro_env_var_fields() {
     let _lock = ENV_LOCK.lock().expect("env lock poisoned");

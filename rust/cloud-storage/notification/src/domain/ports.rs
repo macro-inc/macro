@@ -114,6 +114,15 @@ pub trait NotificationRepository: Send + Sync + 'static {
         notification_ids: &[Uuid],
     ) -> impl Future<Output = Result<Vec<NotificationIdAndCollapseKey>, Report>> + Send;
 
+    /// Return notification IDs that still exist for the user and are eligible for digest email.
+    ///
+    /// Excludes notifications that are missing, soft-deleted, or already seen.
+    fn get_digest_eligible_notification_ids(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        notification_ids: &[Uuid],
+    ) -> impl Future<Output = Result<HashSet<Uuid>, Report>> + Send;
+
     /// Get a user's non-deleted notifications with cursor-based pagination.
     ///
     /// The metadata JSON column is deserialized into `T`. `filters` controls done/seen status.

@@ -1,9 +1,11 @@
-use crate::pubsub::context::CrmServiceType;
+use crate::pubsub::context::{CrmServiceType, NotificationIngressType};
 use crate::util::redis::RedisClient;
 use authentication_service_client::AuthServiceClient;
+use connection_gateway_client::client::ConnectionGatewayClient;
 use gmail_client::GmailClient;
 use sqlx::PgPool;
 use sqs_client::SQS;
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct LinkManagerContext {
@@ -14,4 +16,6 @@ pub struct LinkManagerContext {
     pub redis_client: RedisClient,
     pub sqs_client: SQS,
     pub crm_service: CrmServiceType,
+    pub connection_gateway_client: ConnectionGatewayClient,
+    pub notification_ingress_service: Arc<NotificationIngressType>,
 }

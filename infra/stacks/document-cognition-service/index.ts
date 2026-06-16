@@ -51,25 +51,12 @@ const OPEN_ROUTER_API_KEY = aws.secretsmanager
   })
   .apply((secret) => secret.secretString);
 
-const OPENAI_API_KEY = aws.secretsmanager
-  .getSecretVersionOutput({
-    secretId: config.get('openai_api_key') ?? '',
-  })
-  .apply((secret) => secret.secretString);
-
 const XAI_API_KEY = aws.secretsmanager
   .getSecretVersionOutput({
     secretId: config.get('xai-api-key') ?? '',
   })
   .apply((secret) => secret.secretString);
 
-const ANTHROPIC_API_KEY = aws.secretsmanager
-  .getSecretVersionOutput({
-    secretId: config.get('anthropic_api_key') ?? '',
-  })
-  .apply((secret) => {
-    return secret.secretString;
-  });
 const GCP_SERVICE_ACCOUNT = aws.secretsmanager
   .getSecretVersionOutput({
     secretId: config.get('gcp_service_account') ?? '',
@@ -218,14 +205,6 @@ const documentCognitionService = new DocumentCognitionService(
       {
         name: 'OPEN_ROUTER_API_KEY',
         value: pulumi.interpolate`${OPEN_ROUTER_API_KEY}`,
-      },
-      {
-        name: 'OPENAI_API_KEY',
-        value: pulumi.interpolate`${OPENAI_API_KEY}`,
-      },
-      {
-        name: 'ANTHROPIC_API_KEY',
-        value: pulumi.interpolate`${ANTHROPIC_API_KEY}`,
       },
       {
         name: 'XAI_API_KEY',

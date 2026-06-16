@@ -17,7 +17,9 @@ pub struct NewTask {
     pub team_id: Option<Uuid>,
     /// Task title.
     pub title: String,
-    /// Task markdown body.
+    /// Task body, ideally as embedding-format markdown (lexical-service's
+    /// `embedding` markdown target): the body is embedded as-is, so mention
+    /// tags left in other formats skew similarity toward their serialization.
     pub markdown: String,
 }
 

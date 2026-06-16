@@ -3,6 +3,14 @@ use anyhow::Context;
 use redis::AsyncCommands;
 use uuid::Uuid;
 
+/// Snapshot of a backfill job's thread progress after an increment.
+pub struct BackfillJobProgress {
+    /// Number of threads completed so far, including this increment.
+    pub completed_threads: i32,
+    /// Whether every thread in the job has now been processed.
+    pub job_complete: bool,
+}
+
 impl RedisClient {
     fn job_status_key(job_id: Uuid) -> String {
         format!("bf_job_status:{}", job_id)
@@ -36,8 +44,11 @@ impl RedisClient {
         Ok(())
     }
 
-    /// Increment completed threads count and return true if job is complete, deleting redis entry for job if so
-    pub async fn incr_completed_threads(&self, job_id: Uuid) -> anyhow::Result<bool> {
+    /// Increment completed threads count and return the resulting progress, deleting redis entry for job if complete
+    pub async fn incr_completed_threads(
+        &self,
+        job_id: Uuid,
+    ) -> anyhow::Result<BackfillJobProgress> {
         let key = Self::job_status_key(job_id);
 
         let mut redis_connection = self
@@ -76,7 +87,10 @@ impl RedisClient {
             });
         }
 
-        Ok(job_complete)
+        Ok(BackfillJobProgress {
+            completed_threads,
+            job_complete,
+        })
     }
 
     pub async fn delete_backfill_job_progress(&self, job_id: Uuid) -> anyhow::Result<()> {

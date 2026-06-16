@@ -19,13 +19,13 @@ import type {
 } from '@app/component/next-soup/filters/filter-store';
 import type { SetPredicatesInput } from '@app/component/next-soup/filters/filter-store/predicates-store';
 import { useSoup } from '@app/component/next-soup/soup-context';
+import { registerDocumentsFilterSplit } from '@app/component/next-soup/soup-view/documents-filter-controllers';
 import { EmptyState } from '@app/component/next-soup/soup-view/empty-states';
 import { InboxSelector } from '@app/component/next-soup/soup-view/filters-bar/inbox-selector';
 import { SoupFiltersBar } from '@app/component/next-soup/soup-view/filters-bar/soup-filters-bar';
 import { SoupSearchbar } from '@app/component/next-soup/soup-view/filters-bar/soup-view-search-bar';
 import { useFilterRefinements } from '@app/component/next-soup/soup-view/filters-bar/use-filter-refinements';
 import { MaybeSoupEntityActionDrawerManager } from '@app/component/next-soup/soup-view/SoupEntityActionDrawerManager';
-import type { SystemSortOption } from '@app/component/next-soup/soup-view/sort-options';
 import { SoupEntityContextMenu } from '@app/component/next-soup/soup-view/soup-entity-context-menu';
 import {
   persistSoupNavigationTouchHighlight,
@@ -98,10 +98,11 @@ import { createEffectOnEntityTypeNotification } from '@notifications';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import ChevronRightIcon from '@phosphor/caret-right.svg';
 import CheckIcon from '@phosphor/check.svg';
+import CircleDashed from '@phosphor/circle-dashed.svg';
 import InfoIcon from '@phosphor/info.svg';
 import Spinner from '@phosphor/spinner.svg';
 import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
-import { SYSTEM_PROPERTY_IDS } from '@property/constants';
+import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { useQueryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
 import { invalidateEntityNotifications } from '@queries/notification/user-notifications';
@@ -116,6 +117,7 @@ import {
   batch,
   createEffect,
   createMemo,
+  createRenderEffect,
   createSignal,
   type JSX,
   Match,
@@ -137,6 +139,7 @@ export const SoupSectionHeader = (props: {
   children: JSX.Element;
   onClick?: () => void;
   highlighted?: boolean;
+  class?: string;
 }) => {
   return (
     <Layer depth={2}>
@@ -144,10 +147,12 @@ export const SoupSectionHeader = (props: {
         component={props.onClick ? 'button' : 'div'}
         type={props.onClick ? 'button' : undefined}
         onClick={props.onClick}
+        data-highlighted={props.highlighted || undefined}
         class={cn(
-          'group/header w-[calc(100%-0.5rem)] mx-1 mb-1 rounded px-2 py-2 flex items-center gap-2.5 text-xs font-semibold tracking-tight',
+          'group/header relative w-[calc(100%-0.5rem)] mx-1 my-0.5 rounded px-2 py-2 flex items-center gap-2.5 text-xs font-semibold tracking-tight',
           'text-text-muted bg-surface border border-edge-muted relative',
           props.onClick && 'hover:bg-active',
+          props.class,
           props.highlighted && 'ring ring-edge bg-active ring-inset'
         )}
       >
@@ -161,7 +166,9 @@ const AssigneeGroupContent = (props: {
   assigneeId: MacroId;
   fallbackLabel: string;
 }) => {
-  const [assigneeName] = useDisplayName(props.assigneeId);
+  const [assigneeName] = useDisplayName(props.assigneeId, {
+    emailFallback: 'local-part',
+  });
   return (
     <>
       <UserIcon
@@ -175,6 +182,19 @@ const AssigneeGroupContent = (props: {
       </span>
     </>
   );
+};
+
+const STATUS_GROUP_HEADER_TINTS: Record<string, string> = {
+  [PROPERTY_OPTION_IDS.STATUS.NOT_STARTED]:
+    'bg-task/5 border-task/10 data-highlighted:ring-task/10 data-highlighted:bg-task/10 hover:bg-task/10',
+  [PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS]:
+    'bg-alert/5 border-alert/10 data-highlighted:ring-alert/10 data-highlighted:bg-alert/10 hover:bg-alert/10',
+  [PROPERTY_OPTION_IDS.STATUS.IN_REVIEW]:
+    'bg-note/5 border-note/10 data-highlighted:ring-note/10 data-highlighted:bg-note/10 hover:bg-note/10',
+  [PROPERTY_OPTION_IDS.STATUS.COMPLETED]:
+    'bg-accent/5 border-accent/10 data-highlighted:ring-accent/10 data-highlighted:bg-accent/10 hover:bg-accent/10',
+  [PROPERTY_OPTION_IDS.STATUS.CANCELED]:
+    'bg-ink/5 border-ink/10 data-highlighted:ring-ink/10 data-highlighted:bg-ink/10 hover:bg-ink/10',
 };
 
 const DefaultGroupHeader = (
@@ -193,13 +213,29 @@ const DefaultGroupHeader = (
     return tryMacroId(props.group.key);
   });
 
+  const statusTint = createMemo(() => {
+    const field = groupByField();
+    if (
+      field?.type !== 'property' ||
+      field.propertyDefinitionId !== SYSTEM_PROPERTY_IDS.STATUS
+    ) {
+      return;
+    }
+
+    const optionId = props.group.value ?? props.group.key;
+    if (typeof optionId !== 'string') return;
+
+    return STATUS_GROUP_HEADER_TINTS[optionId];
+  });
+
   return (
     <SoupSectionHeader
       onClick={() => props.group.toggle()}
       highlighted={props.highlighted}
+      class={statusTint()}
     >
       <Layer depth={3}>
-        <div class="flex items-center justify-center size-4.5 rounded-xs bg-surface group-hover/header:bg-active">
+        <div class="flex items-center justify-center size-4.5 rounded-xs group-hover/header:bg-ink/5">
           <ChevronRightIcon
             class={cn('size-2.5', {
               'rotate-90': props.group.isExpanded(),
@@ -207,29 +243,37 @@ const DefaultGroupHeader = (
           />
         </div>
       </Layer>
-      <Show
-        when={assigneeId()}
-        fallback={
-          <>
-            <PropertyValueIcon
-              optionId={props.group.value as string}
-              class="size-3.5"
+      <Switch>
+        <Match when={assigneeId()}>
+          {(id) => (
+            <AssigneeGroupContent
+              assigneeId={id()}
+              fallbackLabel={props.group.label}
             />
-            <span class="truncate">{props.group.label}</span>
-          </>
-        }
-      >
-        {(id) => (
-          <AssigneeGroupContent
-            assigneeId={id()}
-            fallbackLabel={props.group.label}
-          />
-        )}
-      </Show>
+          )}
+        </Match>
+        <Match
+          when={typeof props.group.value !== 'string' || !props.group.value}
+        >
+          <CircleDashed class="size-3.5 text-ink-extra-muted" />
+
+          <span class="truncate">{props.group.label}</span>
+        </Match>
+        <Match
+          when={typeof props.group.value === 'string' && props.group.value}
+        >
+          {(value) => (
+            <>
+              <PropertyValueIcon optionId={value()} class="size-3.5" />
+              <span class="truncate">{props.group.label}</span>
+            </>
+          )}
+        </Match>
+      </Switch>
       <span
         class={cn(
           'shrink-0 tabular-nums text-xs font-medium',
-          'px-1.5 py-px rounded-full bg-ink/10 text-text-subtle'
+          'px-1.5 py-px rounded-full bg-ink/10 text-ink-extra-muted'
         )}
       >
         {props.group.count}
@@ -347,11 +391,31 @@ export const SoupView = (props: SoupViewProps) => {
   const soupView = useSoupView();
 
   const entryState = panel.handle.currentEntryState();
+  const contentId = panel.handle.content().id;
 
   const persistedFilters = entryState?.['search.filters'] as Query | undefined;
+
   const persistedPredicates = entryState?.['search.predicates'] as
     | SetPredicatesInput<string>
     | undefined;
+
+  const persistedSearchText = entryState?.['search.text'] as string | undefined;
+
+  const persistedGroupBy = entryState?.['soup.groupBy'] as
+    | string
+    | null
+    | undefined;
+
+  const persistedActiveTab = entryState?.['soup.tab'] as string | undefined;
+
+  const persistedCollapsedGroups = entryState?.['soup.collapsedGroups'] as
+    | string[]
+    | undefined;
+
+  const [sortPref, setSortPref] = usePreference<string[]>(
+    `macro:pref:soup:${contentId}:sort`,
+    { default: [] }
+  );
 
   // We handle the restore of the persistence here instead of within the context
   // because the context is no longer recreated for each soup view because we
@@ -360,19 +424,84 @@ export const SoupView = (props: SoupViewProps) => {
   // We only restore the following because they either live as state in the
   // context or are used within the context to produce the output (like the
   // client filters, local search state, and additionalEntities)
-  onMount(() => {
-    soupView.initialize({
-      initialQuery: persistedFilters ?? props.initialFilters,
-      initialClientFilters: persistedPredicates ?? props.initialClientFilters,
-      initialSearchText: props.initialSearchText,
-      disableLocalSearch: props.disableLocalSearch,
-      additionalEntities: props.additionalEntities,
+  //
+  // We use `createRenderEffect` to initialize before the elements mount
+  let init = false;
+  createRenderEffect(() => {
+    if (init) return;
+    init = true;
+    batch(() => {
+      soupView.initialize({
+        initialQuery: persistedFilters ?? props.initialFilters,
+        initialClientFilters: persistedPredicates ?? props.initialClientFilters,
+        initialSearchText: persistedSearchText ?? props.initialSearchText,
+        disableLocalSearch: props.disableLocalSearch,
+        additionalEntities: props.additionalEntities,
+      });
+
+      const initialGroupBy = persistedGroupBy ?? props.initialGroupBy;
+
+      let initialSortIds = sortPref();
+      if (initialSortIds.length === 0) {
+        initialSortIds = ['updated_at'];
+      }
+
+      let initialActiveTab = persistedActiveTab;
+
+      if (initialActiveTab === undefined && isListViewID(contentId)) {
+        initialActiveTab = VIEW_TAB_PRESETS[contentId].default;
+      }
+
+      soup.grouping.setActiveGroupId(initialGroupBy);
+      soup.grouping.collapseAll(persistedCollapsedGroups ?? []);
+
+      soup.sort.setAll(
+        initialSortIds as Parameters<typeof soup.sort.setAll>[0]
+      );
+
+      soupView.setActiveTab(initialActiveTab);
     });
+  });
+
+  onMount(() => {
+    if (contentId !== 'documents') return;
+
+    const markdownQuery: Query = { include: { fileAssoc: ['assoc:md'] } };
+    const dispose = registerDocumentsFilterSplit(panel.handle.id, {
+      toggleMarkdownFilter: () => {
+        if (soup.predicates.isActive('doc-markdown')) {
+          soupView.queryFilters.remove(markdownQuery);
+          soup.predicates.set(({ andIds, orIds }) => ({
+            and: andIds,
+            or: orIds.filter((id) => id !== 'doc-markdown'),
+          }));
+          return;
+        }
+
+        soupView.queryFilters.add(markdownQuery);
+        soup.predicates.set(({ andIds, orIds }) => ({
+          and: andIds,
+          or: [...new Set([...orIds, 'doc-markdown'])],
+        }));
+      },
+    });
+
+    onCleanup(dispose);
   });
 
   createEffect(() => {
     panel.handle.setDisplayName(props.viewName);
   });
+
+  // Bridge live soup sort state back to preferences. `defer: true` skips the
+  // initial run on mount, so we only write when the user actually changes it.
+  createEffect(
+    on(
+      () => soup.sort.active().map((s) => s.id),
+      (ids) => setSortPref(ids),
+      { defer: true }
+    )
+  );
 
   useSoupNotificationInvalidators();
 
@@ -460,7 +589,14 @@ export const SoupView = (props: SoupViewProps) => {
       }}
     >
       <div class="size-full flex flex-col" data-list-view={activeListView()}>
-        <div class="flex flex-col w-full">
+        <div
+          class={cn('flex flex-col w-full', {
+            // In preview the separating border sits below this region, so it
+            // ends up under the active-filters bar when shown, otherwise right
+            // under the toolbar (the wrapper collapses to zero height).
+            'border-b border-edge-muted': !isMobile() && !!soup.previewEntity(),
+          })}
+        >
           <SplitHeaderLeft>
             <div
               class={cn('h-full flex gap-3 items-center', {
@@ -532,7 +668,7 @@ export const SoupView = (props: SoupViewProps) => {
                 when={!isComponentListView('search')}
                 fallback={
                   <Layer depth={2}>
-                    <div class="grow ml-2">
+                    <div class="grow ml-2 min-w-0 [contain:inline-size]">
                       <SoupSearchbar
                         variant="secondary"
                         placeholder="Search, @mention contacts"
@@ -583,7 +719,6 @@ export const SoupView = (props: SoupViewProps) => {
           <Suspense>
             <SoupViewFileDropzone>
               <SoupViewList
-                initialGroupBy={props.initialGroupBy}
                 onScrollOffsetBaseline={resetFloatingButtonScrollTracking}
                 onScrollOffsetChange={handleSoupScrollOffsetChange}
               />
@@ -622,7 +757,6 @@ export const SoupView = (props: SoupViewProps) => {
 interface SoupViewListProps {
   customScrollbarHidden?: boolean;
   scopeId?: string;
-  initialGroupBy?: string;
   onScrollOffsetBaseline?: (offset: number) => void;
   onScrollOffsetChange?: (offset: number) => void;
 }
@@ -639,7 +773,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
     isSearchServiceLoading,
     isLocalSearchSettling,
     activeTab,
-    setActiveTab,
     fetchNextGroupPage,
     isFetchingGroupPage,
   } = useSoupView();
@@ -934,13 +1067,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
   const cacheKey = `soup-view-${panel.handle.id}-${contentId}${previewPanel ? '-preview' : ''}`;
 
-  // Cross-session, view-kind-scoped user preferences. Each has its own
-  // localStorage key under `macro:pref:soup:{contentId}:*`.
-  const [sortPref, setSortPref] = usePreference<string[]>(
-    `macro:pref:soup:${contentId}:sort`,
-    { default: [] }
-  );
-
   // Preview-pane open state is transient per history entry: captured into
   // per-entry state on nav-away and restored on back/forward. Read
   // synchronously in the body so the first render sees the correct value
@@ -957,9 +1083,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
   // Which groups are collapsed is also per-entry state: captured on nav-away
   // and restored on back/forward.
-  const persistedCollapsedGroups = panel.handle.currentEntryState()?.[
-    'soup.collapsedGroups'
-  ] as string[] | undefined;
   const collapsedCaptorTeardown = panel.handle.registerEntryStateCaptor(
     'soup.collapsedGroups',
     () => [...soup.grouping.collapsedGroups()]
@@ -970,55 +1093,11 @@ export const SoupViewList = (props: SoupViewListProps) => {
   // grouping the user left each entry with. `null` (vs. key absent) records
   // an explicit "no grouping" choice, which would otherwise be
   // indistinguishable from a fresh entry.
-  const persistedGroupBy = panel.handle.currentEntryState()?.['soup.groupBy'] as
-    | string
-    | null
-    | undefined;
   const groupByCaptorTeardown = panel.handle.registerEntryStateCaptor(
     'soup.groupBy',
     () => soup.grouping.activeGroupId() ?? null
   );
   onCleanup(groupByCaptorTeardown);
-
-  onMount(() => {
-    batch(() => {
-      const savedSort = sortPref();
-
-      if (savedSort.length > 0) {
-        soup.sort.setAll(savedSort as SystemSortOption[]);
-      } else {
-        soup.sort.setAll(['updated_at']);
-      }
-      // soup state is shared at the SplitPanel level, so a prior view in the
-      // same split (e.g. tasks) may have left grouping state behind. Always
-      // reset to this entry's captured or initial grouping, even when
-      // undefined.
-      soup.grouping.setActiveGroupId(
-        persistedGroupBy !== undefined
-          ? (persistedGroupBy ?? undefined)
-          : props.initialGroupBy
-      );
-      soup.grouping.collapseAll(persistedCollapsedGroups ?? []);
-
-      // Default tab for list views; entry state already restored it via
-      // `useEntryState` in SoupViewContextProvider when applicable.
-      if (isListViewID(contentId) && activeTab() === undefined) {
-        const defaultTab = VIEW_TAB_PRESETS[contentId].default;
-        if (defaultTab) setActiveTab(defaultTab);
-      }
-    });
-  });
-
-  // Bridge live soup state back to preferences. `defer: true` skips the
-  // initial run on mount, so we only write when the user actually changes
-  // something.
-  createEffect(
-    on(
-      () => soup.sort.active().map((s) => s.id),
-      (ids) => setSortPref(ids),
-      { defer: true }
-    )
-  );
 
   onCleanup(() => {
     if (isProjectList) return;
@@ -1074,6 +1153,11 @@ export const SoupViewList = (props: SoupViewListProps) => {
     }
   });
 
+  // The preview flag lives on the panel, so clear it when the soup view
+  // unmounts (e.g. pressing enter replaces the split with the full entity);
+  // otherwise it stays stale-true and the entity's toolbar keeps the border.
+  onCleanup(() => panel.previewState[1](false));
+
   return (
     <MaybeSoupEntityActionDrawerManager>
       <div
@@ -1108,7 +1192,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
               </Show>
               <StaticMarkdownContext>
                 <Switch>
-                  <Match when={source.isLoading() && !rows().length}>
+                  <Match when={source.isFetching() && !rows().length}>
                     <LoadingBlock />
                   </Match>
                   <Match
@@ -1122,7 +1206,12 @@ export const SoupViewList = (props: SoupViewListProps) => {
                       Searching...
                     </div>
                   </Match>
-                  <Match when={!rows().length || forceEmptyState()}>
+                  <Match
+                    when={
+                      (!source.isFetching() && !rows().length) ||
+                      forceEmptyState()
+                    }
+                  >
                     <EmptyState
                       listView={currentView()}
                       search={!!searchText()}

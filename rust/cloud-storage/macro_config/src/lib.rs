@@ -115,12 +115,12 @@ fn read_config_value(key: &'static str) -> Option<String> {
 }
 
 /// Get a required value
-pub fn required_config_value(key: &'static str) -> MacroConfigResult<String> {
+fn required_config_value(key: &'static str) -> MacroConfigResult<String> {
     read_config_value(key).ok_or(MacroConfigError::MissingRequiredValue(key))
 }
 
 /// Get an optional value
-pub fn optional_config_value(key: &'static str) -> Option<String> {
+fn optional_config_value(key: &'static str) -> Option<String> {
     read_config_value(key)
 }
 

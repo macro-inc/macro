@@ -1,6 +1,7 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { useMaybeSoup } from '@app/component/next-soup/soup-context';
 import { openEntityInSplitFromUnifiedList } from '@app/component/next-soup/utils';
+import { useMaybePreviewPanel } from '@app/component/PreviewPanel';
 import { useAllProperties } from '@app/component/property-edit-modal/hooks/useAllProperties';
 import { openPropertyEditor } from '@app/component/property-edit-modal/state/propertyEditor';
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
@@ -39,6 +40,7 @@ export const useBlockEntityCommands = () => {
   const notificationSource = useGlobalNotificationSource();
   const soup = useMaybeSoup();
   const splitPanel = useSplitPanel();
+  const previewPanel = useMaybePreviewPanel();
 
   const markDone = makeMarkDoneAction({
     userId: () => userId(),
@@ -78,44 +80,73 @@ export const useBlockEntityCommands = () => {
     }
   };
 
+  // The 'e' hotkey from inside a block is reserved for entities opened full
+  // screen from the inbox/mail lists, mirroring the j/k gating in
+  // use-soup-navigation-hotkeys. Blocks rendered in the preview panel fall
+  // through to the originating list's own 'e' registration.
+  const canUseMarkDoneHotkey = () => {
+    if (previewPanel) return false;
+    const referredFrom = splitPanel?.handle.referredFrom();
+    return referredFrom === 'inbox' || referredFrom === 'mail';
+  };
+
+  const runMarkDone = () => {
+    const entity = getEntity();
+    if (!entity) return false;
+    if (!markDone.canExecute(entity)) return false;
+
+    // Plain mark done, no advance: the command-menu registration outside the
+    // triage flow, or the entity is no longer in the surviving soup list.
+    const selectedRow = soup?.items.get(entity.id);
+    if (!canUseMarkDoneHotkey() || !soup || !selectedRow) {
+      markDone.execute([entity]);
+      return true;
+    }
+
+    // Triage flow: mark done and advance to the next item in the list.
+    markDone.executeWithSoup([selectedRow.original], soup, (nextEntity) => {
+      const splitHandle = splitPanel?.handle;
+      if (!splitHandle) return;
+      void openEntityInSplitFromUnifiedList(nextEntity, {
+        splitHandle,
+        mergeHistory: true,
+        referredFrom: splitHandle.referredFrom(),
+      });
+    });
+
+    return true;
+  };
+
   createEffect(() => {
     const scopeId = blockHotkeyScopeSignal.get();
     if (!scopeId) return;
 
     const group = createHotkeyGroup();
 
+    // Mark done - 'e', only when coming from the inbox or mail views
     registerHotkey({
       hotkey: ['e'],
       hotkeyToken: TOKENS.entity.action.markDone,
       scopeId,
       description: 'Mark done',
-      keyDownHandler: () => {
-        const entity = getEntity();
-        if (!entity) return false;
-        if (!markDone.canExecute(entity)) return false;
-
-        const selectedRow = soup?.items.get(entity.id);
-        if (soup && selectedRow) {
-          markDone.executeWithSoup(
-            [selectedRow.original],
-            soup,
-            (nextEntity) => {
-              const splitHandle = splitPanel?.handle;
-              if (!splitHandle) return;
-              void openEntityInSplitFromUnifiedList(nextEntity, {
-                splitHandle,
-                mergeHistory: true,
-                referredFrom: splitHandle.referredFrom(),
-              });
-            }
-          );
-        } else {
-          markDone.execute([entity]);
-        }
-
-        return true;
-      },
+      keyDownHandler: runMarkDone,
       condition: () => {
+        if (!canUseMarkDoneHotkey()) return false;
+        const entity = getEntity();
+        return entity !== undefined && markDone.canExecute(entity);
+      },
+      displayPriority: 10,
+      tags: [HotkeyTags.SelectionModification],
+    }).withGroup(group);
+
+    // Mark done without a keybinding everywhere else, so it stays reachable
+    // from the command menu
+    registerHotkey({
+      scopeId,
+      description: 'Mark done',
+      keyDownHandler: runMarkDone,
+      condition: () => {
+        if (canUseMarkDoneHotkey()) return false;
         const entity = getEntity();
         return entity !== undefined && markDone.canExecute(entity);
       },

@@ -1,9 +1,8 @@
 import type { RawUpdate } from '@core/collab/shared';
 import {
   type InitialSync,
-  type MissingAckError,
+  type LiveSyncSource,
   SyncError,
-  type SyncSource,
   type SyncSourceEvent,
   SyncSourceStatus,
   type TimeoutError,
@@ -13,7 +12,7 @@ import { arrayEquals } from '@core/util/compareUtils';
 
 import { storageServiceClient } from '@service-storage/client';
 import { createEventBus } from '@solid-primitives/event-bus';
-import { raceTimeout, until } from '@solid-primitives/promise';
+import { raceTimeout } from '@solid-primitives/promise';
 import {
   ArrayQueue,
   BebopSerializer,
@@ -28,9 +27,8 @@ import {
   createSocketEffect,
 } from '@websocket/solid/socket-effect';
 import { createWebsocketStateSignal } from '@websocket/solid/state-signal';
-import { encodeFrontiers, type Frontiers } from 'loro-crdt';
-import { errAsync, okAsync, type Result, ResultAsync } from 'neverthrow';
-import { createStore } from 'solid-js/store';
+import type { VersionVector } from 'loro-crdt';
+import { type Result, ResultAsync } from 'neverthrow';
 import {
   FromPeer,
   FromRemote,
@@ -125,22 +123,11 @@ const TIMEOUTS = {
   REQUEST_UPDATES_SINCE: 10_000,
 } as const;
 
-/**
- * Times an un-acked update is re-sent before pushUpdate reports missing_ack.
- * The ACK timeout above covers the busy-server case; the single resend covers
- * a genuinely lost message (sent into a dying socket, or the server handler
- * aborted before acking). Updates are idempotent CRDT ops, so a duplicate
- * delivery is harmless.
- */
-const ACK_RESENDS = 1;
-
-type WithCleanup<T> = T & { cleanup: () => void };
-
 export const createSyncServiceSource = (
   documentId: string,
   token: string
 ): {
-  source: WithCleanup<SyncSource>;
+  source: LiveSyncSource;
   doInitialSync: () => ResultAsync<InitialSync, TimeoutError>;
 } => {
   const ws = createSyncServiceSocket(documentId, token);
@@ -171,25 +158,6 @@ export const createSyncServiceSource = (
 
   const status = createWebsocketStateSignal(ws);
 
-  const [awaitingAckStore, setAwaitingAck] = createStore<Record<string, true>>(
-    {}
-  );
-
-  const ackUpdate = (update: RawUpdate) => {
-    setAwaitingAck((prev) => ({
-      ...prev,
-      [rawUpdateToString(update)]: true,
-    }));
-  };
-
-  const stopAwaitingAck = (update: RawUpdate) => {
-    setAwaitingAck((prev) => {
-      const newState = { ...prev };
-      delete newState[rawUpdateToString(update)];
-      return newState;
-    });
-  };
-
   const syncEventForMessage = (message: FromRemote): SyncSourceEvent | null => {
     if (message.isRemoteUpdate()) {
       return {
@@ -216,10 +184,6 @@ export const createSyncServiceSource = (
     if (syncEvent) {
       eventBus.emit(syncEvent);
     }
-
-    if (message.isRemoteUpdateAck()) {
-      ackUpdate(message.value.update);
-    }
   });
 
   createReconnectEffect(ws, async () => {
@@ -228,7 +192,7 @@ export const createSyncServiceSource = (
     // startHeartbeat() is safe to call - it will no-op if connection closed.
     ws.startHeartbeat();
 
-    let reconnectSyncResult: Result<InitialSync, TimeoutError> =
+    const reconnectSyncResult: Result<InitialSync, TimeoutError> =
       await ResultAsync.fromPromise(
         raceTimeout(
           untilMessage(ws, (message) => message.isRemoteInitialSync()),
@@ -274,74 +238,31 @@ export const createSyncServiceSource = (
     ws.send(message);
   };
 
-  /**
-   * True once the automatic retry budget is used up (mirrors the scheduling
-   * condition in the websocket's retry logic: a retry is only scheduled while
-   * retries <= maxRetries). The counter resets on every successful open.
-   */
-  const retriesExhausted = () =>
-    ws.maxRetries !== undefined && (ws.backoff?.retries ?? 0) > ws.maxRetries;
+  const pushUpdate = async (updates: RawUpdate[]): Promise<boolean> => {
+    if (!initialSyncReceived) return false;
+    if (updates.length === 0) return true;
 
-  const pushUpdate = (
-    update: RawUpdate
-  ): ResultAsync<void, MissingAckError> => {
-    // no point in sending messages, since we will do our catch-up sync once the
-    // initial sync comes in
-    if (!initialSyncReceived) {
-      return okAsync(undefined);
-    }
+    const id = crypto.randomUUID();
 
-    const message = FromPeer.fromPeerUpdate({ update });
-    const ack = () => awaitingAckStore[rawUpdateToString(update)];
-
-    const attempt = (
-      resendsLeft: number
-    ): ResultAsync<void, MissingAckError> => {
-      const sent = ws.send(message);
-      if (!sent) {
-        // Not connected: the update sits in the websocket's send buffer and is
-        // flushed (and acked) once the connection is re-established, so don't
-        // report a missing ack while the transport is down.
-        //
-        // If automatic retries gave up (maxRetries exhausted, so no retry is
-        // scheduled anymore), this edit is the revival signal. The exhausted
-        // check means this never preempts a pending backoff timer, and
-        // reconnectIfDisconnected() is additionally a no-op while a
-        // connection is open or being established.
-        if (retriesExhausted()) {
-          ws.reconnectIfDisconnected();
-        }
-        return okAsync(undefined);
-      }
-
-      return ResultAsync.fromPromise(
-        raceTimeout(
-          until(ack),
+    const ack = (async () => {
+      try {
+        await raceTimeout(
+          untilMessage(
+            ws,
+            (msg) => msg.isRemoteUpdateAck() && msg.value.id === id
+          ),
           TIMEOUTS.ACK,
-          /** make sure until throws **/
           true
-        ),
-        () =>
-          ({
-            type: 'missing_ack',
-            update: update,
-          }) as const
-      )
-        .map(() => {
-          stopAwaitingAck(update);
-        })
-        .orElse((err) => {
-          // Updates are idempotent CRDT ops, so re-sending is safe. Retry
-          // before reporting missing_ack: a late ack (slow storage write on
-          // the server) shouldn't tear anything down.
-          if (resendsLeft > 0) {
-            return attempt(resendsLeft - 1);
-          }
-          return errAsync(err);
-        });
-    };
+        );
+        return true;
+      } catch {
+        return false;
+      }
+    })();
 
-    return attempt(ACK_RESENDS);
+    ws.send(FromPeer.fromPeerUpdate({ updates, id }));
+
+    return ack;
   };
 
   const pushAwareness = (awareness: RawUpdate) => {
@@ -358,12 +279,10 @@ export const createSyncServiceSource = (
   };
 
   const requestUpdatesSince = (
-    frontiers: Frontiers
+    vv: VersionVector
   ): ResultAsync<RawUpdate, TimeoutError> => {
-    let encodedFrontiers = encodeFrontiers(frontiers);
-    const message = FromPeer.fromPeerRequestSince({
-      frontiers: encodedFrontiers,
-    });
+    const encodedVv = vv.encode();
+    const message = FromPeer.fromPeerRequestSince({ vv: encodedVv });
     ws.send(message);
 
     return ResultAsync.fromPromise(
@@ -371,7 +290,7 @@ export const createSyncServiceSource = (
         untilMessage(ws, (message) => {
           return (
             message.isRemoteUpdateSince() &&
-            arrayEquals(message.value.frontiers, encodedFrontiers)
+            arrayEquals(message.value.vv, encodedVv)
           );
         }),
         TIMEOUTS.REQUEST_UPDATES_SINCE,
@@ -428,6 +347,3 @@ export const createSyncServiceSource = (
     doInitialSync,
   };
 };
-
-const rawUpdateToString = (update: RawUpdate) =>
-  btoa(String.fromCharCode(...update));

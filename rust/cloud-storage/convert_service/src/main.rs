@@ -1,9 +1,8 @@
 #![recursion_limit = "256"]
 use crate::api::context::ApiContext;
 use anyhow::Context;
-use config::Config;
+use config::{Config, Environment};
 use macro_entrypoint::MacroEntrypoint;
-use macro_env::Environment;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use process::runner::run_worker;
 use secretsmanager_client::SecretManager;
@@ -62,8 +61,10 @@ async fn main() -> anyhow::Result<()> {
     let env = Environment::new_or_prod();
     MacroEntrypoint::new(env).init();
 
-    let lok_path = std::env::var("LOK_PATH").context("LOK_PATH must be provided")?;
-    smoke_test_lok(&lok_path)?;
+    // Parse our configuration from the environment.
+    let config = Config::from_env().context("expected to be able to generate config")?;
+
+    smoke_test_lok(&config.lok_path)?;
 
     let aws_config = macro_aws_config::get_macro_aws_config().await;
 
@@ -72,11 +73,8 @@ async fn main() -> anyhow::Result<()> {
     );
 
     let internal_auth_key = secretsmanager_client
-        .get_maybe_secret_value(env, InternalApiSecretKey::new()?)
+        .get_maybe_secret_value(config.environment, InternalApiSecretKey::new()?)
         .await?;
-
-    // Parse our configuration from the environment.
-    let config = Config::from_env().context("expected to be able to generate config")?;
 
     let db = PgPoolOptions::new()
         .min_connections(1)
@@ -100,7 +98,7 @@ async fn main() -> anyhow::Result<()> {
         let sqs_client = aws_sdk_sqs::Client::new(&queue_aws_config);
         let sqs_worker = sqs_worker::SQSWorker::new(
             sqs_client,
-            config.convert_queue.clone(),
+            config.convert_queue.to_string(),
             config.queue_max_messages,
             config.queue_wait_time_seconds,
         );

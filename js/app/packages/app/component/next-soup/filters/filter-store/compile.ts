@@ -114,6 +114,8 @@ const FIELD_CONFIG: Record<
   callStatus: { target: 'callf', field: 'Status' },
   callAttended: { target: 'callf', field: 'Attended' },
   foreignEntityRecordId: { target: 'fef', field: 'id' },
+  foreignEntitySeen: { target: 'fef', field: 'ns' },
+  foreignEntityDone: { target: 'fef', field: 'nd' },
   crmCompanyId: { target: 'ccf', field: 'id' },
   crmCompanyHidden: { target: 'ccf', field: 'hidden' },
 };

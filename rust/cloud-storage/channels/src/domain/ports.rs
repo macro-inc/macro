@@ -305,7 +305,7 @@ pub trait ChannelRepo: Send + Sync + 'static {
         message_id: Uuid,
     ) -> impl Future<Output = Result<MutatedMessage, Self::Err>> + Send;
 
-    /// Fetch the owner of a message within a channel.
+    /// Fetch the owner of an active (non-deleted) message within a channel.
     fn get_message_owner(
         &self,
         channel_id: Uuid,

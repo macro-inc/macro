@@ -6,7 +6,8 @@ use axum::{
     Router,
     routing::{get, post},
 };
-use chat::domain::service::ChatServiceImpl;
+use chat::domain::service::{ChatServiceImpl, ModelAccessServiceImpl};
+use chat::inbound::http::models::models_router;
 use chat::inbound::http::router::{ChatRouterState, chat_create_router, chat_id_router};
 use chat::outbound::postgres::PgChatRepo;
 use entity_access::domain::service::EntityAccessServiceImpl;
@@ -60,6 +61,19 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
                         macro_middleware::auth::ensure_user_exists::handler,
                     ))
                     .layer(ensure_chat_exists.clone()),
+            ),
+        )
+        // Per-user model access list — needs user + permissions populated.
+        .merge(
+            models_router(ModelAccessServiceImpl).layer(
+                ServiceBuilder::new()
+                    .layer(axum::middleware::from_fn(
+                        macro_middleware::auth::ensure_user_exists::handler,
+                    ))
+                    .layer(axum::middleware::from_fn_with_state(
+                        state.clone(),
+                        macro_middleware::user_permissions::attach_user_permissions::handler,
+                    )),
             ),
         )
         // History routes — remain in DCS

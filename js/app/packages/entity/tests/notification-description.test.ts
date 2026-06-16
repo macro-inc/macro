@@ -111,8 +111,14 @@ describe('notification-description helpers', () => {
       expect(getActionVerb('task_assigned')).toBe('assigned you');
     });
 
-    it('returns correct verb for github_pr_event', () => {
-      expect(getActionVerb('github_pr_event')).toBe('updated a pull request');
+    it('returns correct verb for github_pr_status_changed', () => {
+      expect(getActionVerb('github_pr_status_changed')).toBe(
+        'updated a pull request'
+      );
+    });
+
+    it('returns correct verb for github_pr_check_run', () => {
+      expect(getActionVerb('github_pr_check_run')).toBe('completed a check');
     });
   });
 
@@ -211,13 +217,25 @@ describe('notification-description helpers', () => {
       });
     });
 
-    describe('github_pr_event', () => {
+    describe('github_pr_status_changed', () => {
       it('returns singular for count of 1', () => {
-        expect(getTypeNoun('github_pr_event', 1)).toBe('pull request');
+        expect(getTypeNoun('github_pr_status_changed', 1)).toBe('pull request');
       });
 
       it('returns plural for count greater than 1', () => {
-        expect(getTypeNoun('github_pr_event', 2)).toBe('pull requests');
+        expect(getTypeNoun('github_pr_status_changed', 2)).toBe(
+          'pull requests'
+        );
+      });
+    });
+
+    describe('github_pr_check_run', () => {
+      it('returns singular for count of 1', () => {
+        expect(getTypeNoun('github_pr_check_run', 1)).toBe('check');
+      });
+
+      it('returns plural for count greater than 1', () => {
+        expect(getTypeNoun('github_pr_check_run', 2)).toBe('checks');
       });
     });
 

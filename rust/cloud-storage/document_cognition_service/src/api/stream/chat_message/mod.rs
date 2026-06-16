@@ -11,7 +11,6 @@ use crate::service::ai_stream_registry::CancellationSubscription;
 use crate::service::chat_renamer::spawn_initial_chat_rename;
 use crate::service::get_chat::get_chat;
 use crate::service::notification::notify;
-use agent::AgentModel;
 use agent::types::{AssistantMessagePart, ChatMessage, ChatMessageContent};
 use agent::{AgentLoop, StreamAccumulator};
 use async_stream::stream;
@@ -73,8 +72,8 @@ pub struct HttpSendChatMessageRequest {
     pub content: String,
     /// Id of the chat the message belongs to (optional - if not provided, a new chat is created)
     pub chat_id: Option<String>,
-    /// The model to respond with
-    pub model: AgentModel,
+    /// The model to respond with (provider api id)
+    pub model: String,
     /// Additional system instructions appended to the base system prompt
     #[serde(skip_serializing_if = "Option::is_none")]
     pub additional_instructions: Option<String>,
@@ -180,12 +179,21 @@ async fn send_chat_message_inner(
     // Determine chat_id - use provided or we'll create a new chat
     let requested_chat_id = request.chat_id.clone().unwrap_or_default();
 
-    let model = model_access.model();
+    // The frontend selects the model; enforce the user's entitlement here.
+    // Free users get Haiku; professional users get everything.
+    if !model_access.has_access(&request.model) {
+        return Err(ChatMessageError {
+            error: format!("No access to model {}", request.model),
+            stream_id: Some(stream_id.clone()),
+            status: Some(StatusCode::FORBIDDEN),
+        });
+    }
+    let model = request.model.clone();
 
     // Try to get the chat first - if it doesn't exist or no chat_id provided, create it
     let (chat, actual_chat_id, created_new_chat) = if requested_chat_id.is_empty() {
         // No chat_id provided - create a new chat
-        let (chat, chat_id) = create_new_chat(&ctx, &user_id, model, &stream_id).await?;
+        let (chat, chat_id) = create_new_chat(&ctx, &user_id, &model, &stream_id).await?;
         (chat, chat_id, true)
     } else {
         match get_chat(&ctx, &requested_chat_id, user_id.0.as_ref()).await {
@@ -225,7 +233,7 @@ async fn send_chat_message_inner(
                     requested_chat_id = %requested_chat_id,
                     "Chat not found, creating new chat"
                 );
-                let (chat, chat_id) = create_new_chat(&ctx, &user_id, model, &stream_id).await?;
+                let (chat, chat_id) = create_new_chat(&ctx, &user_id, &model, &stream_id).await?;
                 (chat, chat_id, true)
             }
         }
@@ -237,7 +245,7 @@ async fn send_chat_message_inner(
         stream_id: stream_id.clone(),
         content: request.content.clone(),
         chat_id: actual_chat_id.clone(),
-        model,
+        model: model.clone(),
         additional_instructions: request.additional_instructions.clone(),
         attachments: request.attachments.clone(),
         toolset: request.toolset.clone(),
@@ -247,7 +255,7 @@ async fn send_chat_message_inner(
     };
 
     // Store the incoming user message and resolve its attachments
-    let resolved = store_incoming_message(ctx.clone(), user_id.0.as_ref(), &chat, model, &payload)
+    let resolved = store_incoming_message(ctx.clone(), user_id.0.as_ref(), &chat, &model, &payload)
         .await
         .map_err(|err| {
             tracing::error!(error=?err, "failed to store incoming message");
@@ -301,7 +309,7 @@ async fn send_chat_message_inner(
     })?;
 
     // Log time to send request
-    log::log_timing(log::LatencyMetric::TimeToSendRequest, model, now.elapsed());
+    log::log_timing(log::LatencyMetric::TimeToSendRequest, &model, now.elapsed());
 
     // Create stream ID for publishing
     let durable_stream_id = StreamId {
@@ -359,7 +367,7 @@ async fn send_chat_message_inner(
 async fn create_new_chat(
     ctx: &Arc<ApiContext>,
     user_id: &Arc<MacroUserIdStr<'static>>,
-    model: AgentModel,
+    model: &str,
     stream_id: &str,
 ) -> Result<(crate::model::chats::ChatResponse, String), ChatMessageError> {
     let share_permission = SharePermissionV2::new_chat_share_permission();
@@ -462,7 +470,7 @@ fn stream_and_save_message(
     chat_id: String,
     message_id: String,
     stream_id: String,
-    model: AgentModel,
+    model: String,
     now: std::time::Instant,
     user_message_content: String,
     user_message_id: String,
@@ -504,7 +512,7 @@ fn stream_and_save_message(
         let toolset: Arc<dyn ai_toolset::ToolSet<_> + Send + Sync> = Arc::new(
             mcp_client::domain::service::CombinedToolSet::new(static_tools, &mcp_records).await,
         );
-        let agent_loop = AgentLoop::new();
+        let agent_loop = AgentLoop::new().with_model(&model);
         let rig_messages = agent::to_rig_messages(&request);
         let mut session = agent_loop
             .session(toolset, Arc::new(tool_context), &system_prompt, user_id.clone())
@@ -560,7 +568,7 @@ fn stream_and_save_message(
 
             if !is_first_token {
                 is_first_token = true;
-                log::log_timing(log::LatencyMetric::TimeToFirstToken, model, now.elapsed());
+                log::log_timing(log::LatencyMetric::TimeToFirstToken, &model, now.elapsed());
             }
 
             match response {
@@ -632,7 +640,7 @@ fn stream_and_save_message(
             user_id.0.as_ref(),
             &chat_id,
             new_messages,
-            model,
+            &model,
             Some(message_id.clone()),
         )
         .await

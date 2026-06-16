@@ -3804,6 +3804,11 @@
         "type": "string",
         "enum": ["Init", "InProgress", "Complete", "Cancelled", "Failed"]
       },
+      "BackfillStatus": {
+        "type": "string",
+        "description": "Progress/terminal state of a backfill job for [`RefreshEmailEvent::Backfill`].",
+        "enum": ["progress", "complete", "failed"]
+      },
       "BlockSenderRequest": {
         "type": "object",
         "description": "Request to block a sender.",
@@ -4152,8 +4157,9 @@
           "provider",
           "is_sync_active",
           "sync_status",
+          "needs_reauth",
           "settings",
-          "is_inbox_only",
+          "is_primary",
           "created_at",
           "updated_at"
         ],
@@ -4172,7 +4178,7 @@
             "type": "string",
             "format": "uuid"
           },
-          "is_inbox_only": {
+          "is_primary": {
             "type": "boolean"
           },
           "is_sync_active": {
@@ -4180,6 +4186,10 @@
           },
           "macro_id": {
             "type": "string"
+          },
+          "needs_reauth": {
+            "type": "boolean",
+            "description": "Whether the link's Google grant needs to be reconnected. Drives the\nper-inbox reconnect prompt independently of the sync-status badge."
           },
           "photo_url": {
             "type": ["string", "null"],
@@ -4573,6 +4583,104 @@
           "other"
         ]
       },
+      "RefreshEmailEvent": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Backfill progress for `link_id`; see [`BackfillStatus`].",
+            "required": ["link_id", "status", "event"],
+            "properties": {
+              "event": {
+                "type": "string",
+                "enum": ["backfill"]
+              },
+              "link_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "status": {
+                "$ref": "#/components/schemas/BackfillStatus"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A message was inserted or updated for `link_id`.",
+            "required": ["link_id", "event"],
+            "properties": {
+              "event": {
+                "type": "string",
+                "enum": ["upsert_message"]
+              },
+              "link_id": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Labels changed for `link_id`.",
+            "required": ["link_id", "event"],
+            "properties": {
+              "event": {
+                "type": "string",
+                "enum": ["update_labels"]
+              },
+              "link_id": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A message was deleted for `link_id`.",
+            "required": ["link_id", "event"],
+            "properties": {
+              "event": {
+                "type": "string",
+                "enum": ["delete_message"]
+              },
+              "link_id": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The inbox `link_id` was removed and its data torn down.",
+            "required": ["link_id", "event"],
+            "properties": {
+              "event": {
+                "type": "string",
+                "enum": ["link_removed"]
+              },
+              "link_id": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The self-contact photo for `link_id` finished uploading to static\nfile storage, so the inbox's derived `photo_url` is now available.",
+            "required": ["link_id", "event"],
+            "properties": {
+              "event": {
+                "type": "string",
+                "enum": ["photo_synced"]
+              },
+              "link_id": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          }
+        ],
+        "description": "Payload for the `refresh_email` connection gateway event: identifies the\ninbox that changed and the kind of change."
+      },
       "ResyncResponse": {
         "type": "object",
         "description": "The response returned from the resync endpoint.",
@@ -4645,8 +4753,8 @@
       },
       "SyncStatus": {
         "type": "string",
-        "description": "Coarse sync state for an inbox, used to render a one-line hint in the\nmulti-inbox settings list. Derived from the link's `is_sync_active` flag and\nits most recent backfill job.",
-        "enum": ["SYNCING", "UP_TO_DATE", "ERROR", "INACTIVE"]
+        "description": "Coarse sync state for an inbox, used to render a one-line hint in the\nmulti-inbox settings list. Derived from the link's `is_sync_active` flag, its\nreauth health, and its most recent backfill job.",
+        "enum": ["SYNCING", "UP_TO_DATE", "ERROR", "NEEDS_REAUTH", "INACTIVE"]
       },
       "Thread": {
         "type": "object",

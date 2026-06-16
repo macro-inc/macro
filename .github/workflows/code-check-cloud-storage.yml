@@ -27,6 +27,11 @@ jobs:
         with:
           clean: false
           fetch-depth: 0
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          sccache: 'false'
+          rust-cache: 'false'
       - uses: dorny/paths-filter@v3
         id: filter
         with:
@@ -69,90 +74,7 @@ jobs:
             exit 0
           fi
 
-          filterset="$(
-            python3 <<'PY'
-          import glob
-          import re
-          from pathlib import Path
-
-          repo = Path.cwd().resolve()
-          workspace = repo / 'rust' / 'cloud-storage'
-          changed_files = [line for line in Path('/tmp/changed-files').read_text().splitlines() if line]
-
-          def workspace_members(manifest: Path) -> list[str]:
-              members = []
-              in_workspace = False
-              in_members = False
-
-              for raw_line in manifest.read_text().splitlines():
-                  line = raw_line.split('#', 1)[0].strip()
-                  if not line:
-                      continue
-                  if line.startswith('['):
-                      in_workspace = line == '[workspace]'
-                      continue
-                  if not in_workspace:
-                      continue
-                  if line.startswith('members') and '[' in line:
-                      in_members = True
-                  if in_members:
-                      members.extend(re.findall(r'"([^"\\]*(?:\\.[^"\\]*)*)"', line))
-                      if ']' in line:
-                          in_members = False
-              return members
-
-          def package_name(manifest: Path) -> str | None:
-              in_package = False
-              for raw_line in manifest.read_text().splitlines():
-                  line = raw_line.split('#', 1)[0].strip()
-                  if not line:
-                      continue
-                  if line.startswith('['):
-                      in_package = line == '[package]'
-                      continue
-                  if in_package:
-                      match = re.match(r'name\s*=\s*"([^"]+)"', line)
-                      if match:
-                          return match.group(1)
-              return None
-
-          packages = []
-          for member in workspace_members(workspace / 'Cargo.toml'):
-              for member_dir in glob.glob(str(workspace / member)):
-                  manifest = Path(member_dir) / 'Cargo.toml'
-                  if not manifest.exists():
-                      continue
-                  name = package_name(manifest)
-                  if name:
-                      packages.append((manifest.parent.resolve(), name))
-
-          changed_packages = set()
-          for changed_file in changed_files:
-              path = (repo / changed_file).resolve()
-              if path != workspace and workspace not in path.parents:
-                  continue
-
-              matching_packages = [
-                  (manifest_dir, name)
-                  for manifest_dir, name in packages
-                  if path == manifest_dir or manifest_dir in path.parents
-              ]
-              if matching_packages:
-                  _, name = max(matching_packages, key=lambda item: len(item[0].parts))
-                  changed_packages.add(name)
-
-          def escape_nextest_name(name: str) -> str:
-              return (
-                  name
-                  .replace('\\', '\\\\')
-                  .replace(')', '\\)')
-                  .replace(',', '\\,')
-              )
-
-          if changed_packages:
-              print('|'.join(f'rdeps(={escape_nextest_name(name)})' for name in sorted(changed_packages)))
-          PY
-          )"
+          filterset="$(cargo run --manifest-path rust/cloud-storage/tools/xtask/Cargo.toml -- nextest-filter /tmp/changed-files)"
 
           if [ -z "$filterset" ]; then
             echo "No package-specific Rust changes detected; running all tests"

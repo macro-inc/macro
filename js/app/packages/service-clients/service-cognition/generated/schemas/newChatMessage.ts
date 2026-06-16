@@ -5,7 +5,6 @@
  * OpenAPI spec version: 1.0.0
  */
 
-import type { AgentModel } from './agentModel';
 import type { ChatMessageContent } from './chatMessageContent';
 import type { NewChatMessageAttachments } from './newChatMessageAttachments';
 import type { NewChatMessageId } from './newChatMessageId';
@@ -19,8 +18,8 @@ export interface NewChatMessage {
   createdAt: string;
   /** Optional pre-generated ID. If None, the database generates one. */
   id?: NewChatMessageId;
-  /** The model used to generate the chat */
-  model: AgentModel;
+  /** The model used to generate the chat (provider api id) */
+  model: string;
   /** Whether the chat is from the user or system */
   role: Role;
   updatedAt: string;

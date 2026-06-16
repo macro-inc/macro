@@ -1,11 +1,12 @@
 import { useSettingsState } from '@core/constant/SettingsState';
 import type { ThemeMentionDecoratorProps } from '@lexical-core';
+import { ThemeChips } from '@theme/components/ThemeChips';
 import { setUserThemes, themes, userThemes } from '@theme/signals/themeSignals';
 import type { ThemeV2 } from '@theme/types/themeTypes';
 import { applyTheme } from '@theme/utils/themeUtils';
 import { isThemeV2 } from '@theme/utils/themeValidation';
 import { cn } from '@ui';
-import { useContext } from 'solid-js';
+import { Show, useContext } from 'solid-js';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 
 export function ThemeMention(props: ThemeMentionDecoratorProps) {
@@ -24,15 +25,6 @@ export function ThemeMention(props: ThemeMentionDecoratorProps) {
     return null;
   };
 
-  const a0 = () => theme()?.tokens.a0;
-  const b0 = () => theme()?.tokens.b0;
-  const c0 = () => theme()?.tokens.c0;
-
-  const oklch = (token: { l: number; c: number; h: number } | undefined) => {
-    if (!token) return 'transparent';
-    return `oklch(${token.l} ${token.c} ${token.h}deg)`;
-  };
-
   const handleClick = () => {
     const t = theme();
     if (!t) return;
@@ -49,27 +41,20 @@ export function ThemeMention(props: ThemeMentionDecoratorProps) {
   return (
     <button
       class={cn(
-        'pointer-events-auto mx-0.5 inline-flex items-center gap-0.75 align-baseline px-1 py-px rounded-md border border-edge-muted bg-transparent',
+        'pointer-events-auto mx-0.5 inline-flex items-stretch gap-0.75 align-baseline overflow-hidden py-0 pl-0 pr-1 rounded-md border border-edge-muted bg-transparent',
         isSelectedAsNode() && 'bg-active'
       )}
       onClick={handleClick}
       type="button"
     >
-      <span class="inline-flex items-center gap-0.5">
-        <span
-          class="inline-block size-2.5 rounded-xs border border-edge-muted"
-          style={{ 'background-color': oklch(a0()) }}
-        />
-        <span
-          class="inline-block size-2.5 rounded-xs border border-edge-muted"
-          style={{ 'background-color': oklch(b0()) }}
-        />
-        <span
-          class="inline-block size-2.5 rounded-xs border border-edge-muted"
-          style={{ 'background-color': oklch(c0()) }}
-        />
-      </span>
-      <span class="mx-0.5 cursor-default">{props.name}</span>
+      <Show when={theme()}>
+        {(t) => (
+          <span class="rounded-md inline-flex self-stretch [&>span]:h-full [&>span]:border-0 [&>span]:rounded-[5px]">
+            <ThemeChips theme={t()} size="sm" />
+          </span>
+        )}
+      </Show>
+      <span class="mx-0.5 flex items-center cursor-default">{props.name}</span>
     </button>
   );
 }

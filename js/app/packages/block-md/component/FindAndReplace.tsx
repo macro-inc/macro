@@ -5,9 +5,9 @@ import {
   DO_REPLACE_ONCE_COMMAND,
   DO_SEARCH_COMMAND,
 } from '@core/component/LexicalMarkdown/plugins';
-import type { FloatingStyle } from '@core/component/LexicalMarkdown/plugins/find-and-replace';
-import { IS_MAC } from '@core/constant/isMac';
-import { blockElementSignal } from '@core/signal/blockElement';
+import { registerHotkey } from '@core/hotkey/hotkeys';
+import { TOKENS } from '@core/hotkey/tokens';
+import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
 import { useCanEdit } from '@core/signal/permissions';
 import ReplaceAll from '@phosphor/arrow-bend-double-up-right.svg';
 import Replace from '@phosphor/arrow-bend-up-right.svg';
@@ -17,7 +17,7 @@ import CaretUp from '@phosphor/caret-up.svg';
 import MagnifyingGlass from '@phosphor/magnifying-glass.svg';
 import X from '@phosphor/x.svg';
 import { createCallback } from '@solid-primitives/rootless';
-import { cn, Tooltip } from '@ui';
+import { cn, Panel, Tooltip } from '@ui';
 import type { JSX } from 'solid-js';
 import { createEffect, createSignal, on, onCleanup, Show } from 'solid-js';
 
@@ -25,7 +25,7 @@ export function FindAndReplace() {
   const mdData = mdStore.get;
   const canEdit = useCanEdit();
   const editor = () => mdData.editor;
-  const blockElement = blockElementSignal.get;
+  const scopeId = blockHotkeyScopeSignal.get;
 
   let inputRef: HTMLInputElement | undefined;
   let inputReplaceRef: HTMLInputElement | undefined;
@@ -52,22 +52,36 @@ export function FindAndReplace() {
     );
   };
 
-  const scrollToCurrentHighlight = (nextHighlight: boolean = false) => {
-    const scrollContainer = mdData.scrollContainer;
-    if (!scrollContainer) return;
+  const focusSearchInput = (select = false) => {
+    queueMicrotask(() => {
+      inputRef?.focus();
+      if (select) {
+        inputRef?.select();
+      }
+    });
+  };
 
-    let highlightIndex: number = findAndReplaceStore.currentMatch;
-    if (nextHighlight) {
-      highlightIndex = (highlightIndex + 1) % findAndReplaceStore.styles.length;
-    }
+  const getMatchDocumentElement = (matchIndex: number) => {
+    const editorInstance = editor();
+    if (!editorInstance) return;
 
-    const transform =
-      findAndReplaceStore.styles?.[highlightIndex]?.style?.transform;
-    const yPos = transform ? parseFloat(transform.split(',')[1]) : 0;
+    const offset = findAndReplaceStore.listOffset.find(
+      (item) => item.pairKey === matchIndex + 1
+    );
+    if (!offset) return;
 
-    scrollContainer.scrollTo({
-      top: Math.max(0, yPos - 20),
+    const element = editorInstance.getElementByKey(offset.key);
+    return element?.parentElement ?? element ?? undefined;
+  };
+
+  const scrollToCurrentHighlight = (matchIndex: number) => {
+    const matchElement = getMatchDocumentElement(matchIndex);
+    if (!matchElement) return;
+
+    matchElement.scrollIntoView({
       behavior: 'smooth',
+      block: 'center',
+      inline: 'nearest',
     });
   };
 
@@ -76,23 +90,33 @@ export function FindAndReplace() {
   createEffect(
     on(scrollToNext, () => {
       const currentMatch: number = findAndReplaceStore.currentMatch;
-      const styles: { style: FloatingStyle; idx: number | undefined }[] =
-        findAndReplaceStore.styles;
-      if (scrollToNext() && currentMatch === -1 && styles.length > 0) {
+      if (
+        scrollToNext() &&
+        currentMatch === -1 &&
+        findAndReplaceStore.listOffset.length > 0
+      ) {
         let highlightToScrollTo: number = 0;
         const scrollContainer = mdData.scrollContainer;
         if (scrollContainer) {
-          for (let i = 0; i < styles.length; i++) {
-            const transform = styles?.[i]?.style?.transform;
-            const yPos = transform ? parseFloat(transform.split(',')[1]) : 0;
-            if (yPos >= scrollContainer.scrollTop - 100) {
-              highlightToScrollTo = i;
+          const scrollRect = scrollContainer.getBoundingClientRect();
+          const seenMatchIndexes = new Set<number>();
+          for (const offset of findAndReplaceStore.listOffset) {
+            const matchIndex = (offset.pairKey ?? 1) - 1;
+            if (seenMatchIndexes.has(matchIndex)) continue;
+            seenMatchIndexes.add(matchIndex);
+
+            const element = getMatchDocumentElement(matchIndex);
+            if (!element) continue;
+
+            const rect = element.getBoundingClientRect();
+            if (rect.top >= scrollRect.top - 100) {
+              highlightToScrollTo = matchIndex;
               break;
             }
           }
         }
         setFindAndReplaceStore('currentMatch', highlightToScrollTo);
-        scrollToCurrentHighlight();
+        scrollToCurrentHighlight(highlightToScrollTo);
         setScrollToNext(false);
       }
     })
@@ -126,7 +150,7 @@ export function FindAndReplace() {
         }
       }
     }
-    scrollToCurrentHighlight();
+    scrollToCurrentHighlight(highlightToScrollTo);
   });
 
   // Search
@@ -187,7 +211,9 @@ export function FindAndReplace() {
       return;
     }
 
-    scrollToCurrentHighlight(true);
+    scrollToCurrentHighlight(
+      (findAndReplaceStore.currentMatch + 1) % findAndReplaceStore.matches
+    );
     editor()?.dispatchCommand(DO_REPLACE_ONCE_COMMAND, {
       replaceString: replaceString,
       nodeKeyOffsetList: findAndReplaceStore.listOffset.filter(
@@ -233,23 +259,32 @@ export function FindAndReplace() {
       }
     });
 
-  const keyDownHandler = (e: KeyboardEvent) => {
-    if ((IS_MAC ? e.metaKey : e.ctrlKey) && e.key === 'f') {
-      e.stopPropagation();
-      e.preventDefault();
-      if (findAndReplaceStore.searchIsOpen) {
-        if (inputRef === document.activeElement) {
-          closeSearch();
+  createEffect(() => {
+    if (!scopeId()) return;
+
+    const registration = registerHotkey({
+      hotkey: 'cmd+f',
+      scopeId: scopeId(),
+      hotkeyToken: TOKENS.md.find,
+      description: 'Find in Document',
+      runWithInputFocused: true,
+      keyDownHandler: () => {
+        if (findAndReplaceStore.searchIsOpen) {
+          if (inputRef === document.activeElement) {
+            closeSearch();
+          } else {
+            focusSearchInput(true);
+          }
         } else {
-          inputRef?.focus();
-          inputRef?.select();
+          setFindAndReplaceStore('searchIsOpen', true);
+          focusSearchInput();
         }
-      } else {
-        setFindAndReplaceStore('searchIsOpen', true);
-        inputRef?.focus();
-      }
-    }
-  };
+        return true;
+      },
+    });
+
+    onCleanup(() => registration.dispose());
+  });
 
   const replaceKeyDownHandler: JSX.EventHandler<
     HTMLInputElement,
@@ -270,20 +305,12 @@ export function FindAndReplace() {
     }
   });
 
-  createEffect(() => {
-    const element = blockElement();
-    if (!element) return;
-    element.addEventListener('keydown', keyDownHandler);
-    document.addEventListener('keydown', keyDownHandler);
-    onCleanup(() => {
-      element.removeEventListener('keydown', keyDownHandler);
-      document.removeEventListener('keydown', keyDownHandler);
-    });
-  });
-
   return (
     <Show when={findAndReplaceStore.searchIsOpen}>
-      <div class="flex items-center justify-start rounded-md border border-edge bg-surface p-1 shadow w-fit">
+      <Panel
+        depth={3}
+        class="flex items-center justify-start rounded-xl bg-surface p-2 shadow-lg shadow-drop-shadow w-fit"
+      >
         <div class="flex items-center px-1">
           <Tooltip
             label={`${findAndReplaceStore.replaceInputOpen ? 'Collapse' : 'Expand'} Search Bar`}
@@ -411,7 +438,7 @@ export function FindAndReplace() {
             </div>
           </Show>
         </div>
-      </div>
+      </Panel>
     </Show>
   );
 }

@@ -23,8 +23,11 @@ struct QueryParams {
     user_id: String,
     resolved: ResolvedFilters,
     /// When `Some(team_id)`, the "Owned" candidate source expands from
-    /// `t.link_id = ANY($link_ids)` to `t.link_id IN (links of every member
-    /// of $team_id)`. Set only after CRM scope has been validated upstream.
+    /// `t.link_id = ANY($link_ids)` to `t.link_id IN (primary links of every
+    /// member of $team_id)`. A link is primary when its `email_address` is
+    /// the owning member's own macro_id email — connected secondary
+    /// mailboxes never feed team-scoped results. Set only after CRM scope
+    /// has been validated upstream.
     /// Also switches the candidate select into dedupe mode: team-member
     /// copies of the same conversation collapse to one row (see
     /// [`build_query`]).
@@ -153,8 +156,10 @@ fn push_thread_candidate_select(
                 builder.push_bind(params.link_ids.clone());
                 builder.push(")");
             }
-            // CRM-scoped query: expand to every email_link owned by any
-            // member of the team. The receipt has already been validated
+            // CRM-scoped query: expand to every primary email_link owned by
+            // any member of the team. Non-primary links (connected secondary
+            // mailboxes, whose address differs from the owner's macro_id
+            // email) are excluded. The receipt has already been validated
             // upstream, so the team_id is trusted here.
             Some(team_id) => {
                 builder.push(
@@ -165,7 +170,7 @@ fn push_thread_candidate_select(
                         WHERE tu.team_id = "#,
                 );
                 builder.push_bind(team_id);
-                builder.push(")");
+                builder.push(" AND el.is_primary)");
             }
         },
         ThreadCandidateSource::Shared => {

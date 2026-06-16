@@ -43,6 +43,7 @@
             glib
             glib.dev
             libclang
+            xz.out
           ]
           ++ pkgs.lib.optionals isLinux [
             glibc.dev
@@ -470,6 +471,25 @@
             export ZIG_GLOBAL_CACHE_DIR="$TMPDIR/zig-cache"
             export ZIG_LOCAL_CACHE_DIR="$TMPDIR/zig-cache"
             export XDG_CACHE_HOME="$TMPDIR/xdg"
+
+            # Inherited cargoArtifacts can carry CMake configure state
+            # (CMakeCache.txt / CMakeFiles) from the deps-only layer. Its
+            # CMAKE_C_COMPILER points at a cargo-zigbuild wrapper script under
+            # $TMPDIR whose hash-suffixed name need not exist in this sandbox,
+            # and CMake hard-fails validating a cached compiler that is gone
+            # ("is not a full path to an existing compiler tool"). Drop the
+            # configure state so a build-script re-run reconfigures cleanly;
+            # crates whose fingerprints are clean never read it, so this costs
+            # nothing on the cached path. (Today aws-lc-sys is the only cmake
+            # crate in the graph, via AWS_LC_SYS_CMAKE_BUILDER below.)
+            tdir="''${CARGO_TARGET_DIR:-target}"
+            if [ -d "$tdir" ]; then
+              while IFS= read -r -d "" cache; do
+                dir="$(dirname "$cache")"
+                echo "purging stale cmake configure state in $dir"
+                rm -rf "$dir/CMakeFiles" "$cache"
+              done < <(find "$tdir" -name CMakeCache.txt -print0)
+            fi
           '';
         };
 
@@ -528,6 +548,14 @@
                 cp "target/${lambdaTarget}/release/${lambdaName}" bootstrap
                 ${pkgs.binutils}/bin/strip bootstrap || true
                 ${pkgs.zip}/bin/zip -j -X "$out/${lambdaName}/bootstrap.zip" bootstrap
+                ${pkgs.lib.optionalString (lambdaName == "document_text_extractor") ''
+                  # Mirror the handler justfile's `cargo lambda build --include
+                  # ./pdfium-lib/linux`: at runtime the binary dlopen's
+                  # ./pdfium-lib/linux/libpdfium.so relative to the Lambda task
+                  # root, so the blob has to ride along in bootstrap.zip at that
+                  # same relative path.
+                  ( cd ${lambdaName} && ${pkgs.zip}/bin/zip -r -X "$out/${lambdaName}/bootstrap.zip" pdfium-lib/linux )
+                ''}
                 ${pkgs.lib.optionalString (lambdaName == "call_recording_preview_handler") ''
                   cp "${callRecordingPreviewFfmpegLayer}/${lambdaName}/ffmpeg-layer.zip" "$out/${lambdaName}/ffmpeg-layer.zip"
                 ''}
@@ -554,6 +582,10 @@
             cargo-info
             cargo-udeps
             cargo-lambda
+            cargo-zigbuild
+            zig
+            cmake
+            nasm
             (writeShellScriptBin "rustup" ''
               set -euo pipefail
               rustc_path="$(${coreutils}/bin/readlink -f "$(command -v rustc)")"
@@ -770,6 +802,10 @@
               LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
               SOPS_KMS_ARN = "arn:aws:kms:us-east-1:569036502058:key/mrk-cab29bf948044eb79005a81f48d40e93,arn:aws:kms:us-west-1:569036502058:key/mrk-cab29bf948044eb79005a81f48d40e93";
               RUSTC_WRAPPER = "${pkgs.sccache}/bin/sccache";
+              # Keep local cargo-lambda builds on the same aws-lc-sys path as
+              # the Nix lambda derivations. The default cc builder rejects
+              # cargo-lambda/cargo-zigbuild's Zig cc wrapper.
+              AWS_LC_SYS_CMAKE_BUILDER = "1";
             }
             // pkgs.lib.optionalAttrs isLinux {
               LD_LIBRARY_PATH = "${pkgs.lib.makeLibraryPath libraries}";
