@@ -37,13 +37,14 @@ async function fetchHistory(
 export function HistoryOverlay(props: {
   documentId: string;
   documentName: string;
+  visible: boolean;
   onExit: () => void;
 }) {
   const [history] = createResource(() => props.documentId, fetchHistory);
   const { insertSplit } = useSplitLayout();
 
   const onKeyDown = (e: KeyboardEvent) => {
-    if (e.key !== 'Escape' || e.defaultPrevented) return;
+    if (!props.visible || e.key !== 'Escape' || e.defaultPrevented) return;
     e.preventDefault();
     props.onExit();
   };
@@ -116,21 +117,23 @@ export function HistoryOverlay(props: {
   };
 
   return (
-    <div class="absolute inset-0 z-20">
+    <div class="absolute inset-0 z-20" style={{ display: props.visible ? undefined : 'none' }}>
       <div class="absolute inset-y-0 -inset-x-1 -z-10 bg-surface" />
       {/* Fork button portalled into the toolbar left, on top of the hamburger. */}
-       <SplitToolbarLeft>
-        <Button
-          variant="active"
-          size="sm"
-          class="order-first"
-          onClick={handleFork}
-          disabled={forking() || !committed.latest}
-        >
-          <GitFork />
-          {forking() ? 'Forking…' : 'Fork'}
-        </Button>
-      </SplitToolbarLeft>
+      <Show when={props.visible}>
+        <SplitToolbarLeft>
+          <Button
+            variant="active"
+            size="sm"
+            class="order-first"
+            onClick={handleFork}
+            disabled={forking() || !committed.latest}
+          >
+            <GitFork />
+            {forking() ? 'Forking…' : 'Fork'}
+          </Button>
+        </SplitToolbarLeft>
+      </Show>
       {/* `.latest` keeps the last rendered state visible while the next loads. */}
       <Show keyed when={committed.latest?.state}>
         {(state) => {
@@ -144,6 +147,7 @@ export function HistoryOverlay(props: {
               config={config}
               initialState={state}
               disabled
+              noMenus
               class="ph-no-capture w-full max-w-full pb-20 [&>*:first-child>*:first-child]:mt-0"
             />
           );

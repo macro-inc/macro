@@ -292,13 +292,12 @@ export function Notebook(props: {
             <MarkdownEditor
               loroManager={props.loroManager}
             />
-            <Show when={props.viewingHistory()}>
-              <HistoryOverlay
-                documentId={documentId}
-                documentName={documentName()}
-                onExit={() => props.setViewingHistory(false)}
-              />
-            </Show>
+            <HistoryOverlay
+              documentId={documentId}
+              documentName={documentName()}
+              visible={props.viewingHistory()}
+              onExit={() => props.setViewingHistory(false)}
+            />
           </div>
           <Show when={ENABLE_RAIL_CHAT_TASK_COMMENTS && isTask}>
             <TaskDiscussion />
