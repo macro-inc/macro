@@ -364,87 +364,127 @@ function Description() {
   };
   const unreadSubItems = () =>
     item().subItems?.filter((subItem) => subItem.unread) ?? [];
-  const groupedDescription = () => {
-    const unreadItems = unreadSubItems();
-    if (unreadItems.length > 1) {
-      const label = type()?.startsWith('channel_')
-        ? 'messages'
-        : 'notifications';
-      return `${unreadItems.length} new ${label}`;
-    }
-
-    return unreadItems[0]?.content || item().content;
+  const unreadGroupCount = () =>
+    (item().unread ? 1 : 0) + unreadSubItems().length;
+  const groupLabel = unreadGroupLabel(type);
+  const groupedDescription = () =>
+    unreadSubItems()[0]?.content || item().content;
+  const unreadGroupDescription = () => {
+    if (!item().subItems?.length || unreadGroupCount() === 0) return undefined;
+    return `${unreadGroupCount()} new ${groupLabel()}`;
   };
 
   return (
-    <Show when={item().senderName || item().action || item().content}>
-      <Show
-        when={type() === 'new_email'}
-        fallback={
+    <Show
+      when={unreadGroupDescription()}
+      fallback={
+        <Show when={item().senderName || item().action || item().content}>
           <Show
-            when={isGithubNotificationType(type)()}
+            when={type() === 'new_email'}
             fallback={
               <Show
-                when={
-                  item().senderName ||
-                  item().senderId ||
-                  action() ||
-                  groupedDescription() ||
-                  item().properties?.length
-                }
-              >
-                <div class="flex min-w-0 items-center gap-1 truncate text-xs text-ink-muted/70">
+                when={isGithubNotificationType(type)()}
+                fallback={
                   <Show
                     when={
-                      type() === 'ai_response'
-                        ? undefined
-                        : item().senderName || item().senderId
+                      item().senderName ||
+                      item().senderId ||
+                      action() ||
+                      groupedDescription() ||
+                      item().properties?.length
                     }
                   >
-                    <InboxItem.Sender
-                      avatar={false}
-                      class="min-w-0 shrink-0 truncate text-xs text-ink-muted/70"
-                    />
+                    <div class="flex min-w-0 items-center gap-1 truncate text-xs text-ink-muted/70">
+                      <Show
+                        when={
+                          type() === 'ai_response'
+                            ? undefined
+                            : item().senderName || item().senderId
+                        }
+                      >
+                        <InboxItem.Sender
+                          avatar={false}
+                          class="min-w-0 shrink-0 truncate text-xs text-ink-muted/70"
+                        />
+                      </Show>
+                      <Show when={action()}>
+                        {(action) => <span class="shrink-0">{action()}</span>}
+                      </Show>
+                      <For each={item().properties ?? []}>
+                        {(property) => <PropertyPill property={property} />}
+                      </For>
+                      <Show when={groupedDescription()}>
+                        {(content) => <ContentText content={content()} />}
+                      </Show>
+                    </div>
                   </Show>
+                }
+              >
+                <InboxItem.Description timestamp={false}>
+                  <InboxItem.Sender
+                    avatar={false}
+                    class="min-w-0 shrink-0 truncate text-xs text-ink-muted/70"
+                  />
                   <Show when={action()}>
                     {(action) => <span class="shrink-0">{action()}</span>}
                   </Show>
-                  <For each={item().properties ?? []}>
-                    {(property) => <PropertyPill property={property} />}
-                  </For>
-                  <Show when={groupedDescription()}>
-                    {(content) => <ContentText content={content()} />}
+                  <RelativeTimestamp />
+                  <Show when={context()}>
+                    {(value) => <span class="shrink-0">{value()}</span>}
                   </Show>
-                </div>
+                </InboxItem.Description>
               </Show>
             }
           >
-            <InboxItem.Description timestamp={false}>
-              <InboxItem.Sender
-                avatar={false}
-                class="min-w-0 shrink-0 truncate text-xs text-ink-muted/70"
-              />
-              <Show when={action()}>
-                {(action) => <span class="shrink-0">{action()}</span>}
-              </Show>
-              <RelativeTimestamp />
-              <Show when={context()}>
-                {(value) => <span class="shrink-0">{value()}</span>}
-              </Show>
+            <InboxItem.Description class="truncate" timestamp={false}>
+              <span class="min-w-0 truncate text-xs text-ink-muted/70">
+                <Show when={emailSubject()}>{(subject) => subject()}</Show>
+                <Show when={emailSubject() && item().content}> — </Show>
+                <Show when={item().content}>{(content) => content()}</Show>
+              </span>
             </InboxItem.Description>
           </Show>
-        }
-      >
+        </Show>
+      }
+    >
+      {(description) => (
         <InboxItem.Description class="truncate" timestamp={false}>
           <span class="min-w-0 truncate text-xs text-ink-muted/70">
-            <Show when={emailSubject()}>{(subject) => subject()}</Show>
-            <Show when={emailSubject() && item().content}> — </Show>
-            <Show when={item().content}>{(content) => content()}</Show>
+            {description()}
           </span>
         </InboxItem.Description>
-      </Show>
+      )}
     </Show>
   );
+}
+
+function unreadGroupLabel(type: ReturnType<typeof useNotificationType>) {
+  return () =>
+    match(type())
+      .with('new_email', () => 'emails')
+      .with(
+        'channel_mention',
+        'channel_message_send',
+        'channel_message_reply',
+        () => 'messages'
+      )
+      .with(
+        'document_mention',
+        'mentioned_in_document_comment',
+        'replied_to_document_comment_thread',
+        'commented_on_document',
+        () => 'comments'
+      )
+      .with('task_assigned', () => 'tasks')
+      .with(
+        'github_pr_status_changed',
+        'github_review_requested',
+        'github_pr_comment',
+        'github_pr_mention',
+        'github_pr_review',
+        () => 'GitHub updates'
+      )
+      .otherwise(() => 'notifications');
 }
 
 function TimestampColumn() {
@@ -455,12 +495,13 @@ function TimestampColumn() {
   };
   const unreadSubItemCount = () =>
     item().subItems?.filter((subItem) => subItem.unread).length ?? 0;
+  const unreadGroupCount = () => (item().unread ? 1 : 0) + unreadSubItemCount();
   const showUnreadDot = () => {
-    if (groupCount()) return item().unread || unreadSubItemCount() === 1;
+    if (groupCount()) return false;
     return unread() || item().unread;
   };
   const badgeCount = () => {
-    if (unreadSubItemCount() > 1) return unreadSubItemCount();
+    if (unreadGroupCount() > 0) return unreadGroupCount();
     return groupCount();
   };
 
@@ -476,7 +517,7 @@ function TimestampColumn() {
                   <span
                     class={cn(
                       'grid h-4 min-w-4 place-items-center rounded px-1 text-xs',
-                      unreadSubItemCount() > 1
+                      unreadGroupCount() > 0
                         ? 'bg-accent text-surface'
                         : 'bg-ink-muted/10 text-ink-muted'
                     )}

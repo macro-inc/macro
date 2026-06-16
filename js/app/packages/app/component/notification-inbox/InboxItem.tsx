@@ -339,12 +339,14 @@ function Description(props: DescriptionProps) {
   };
   const unreadSubItemCount = () =>
     parent.item().subItems?.filter((subItem) => subItem.unread).length ?? 0;
+  const unreadGroupCount = () =>
+    (parent.item().unread ? 1 : 0) + unreadSubItemCount();
   const showUnreadDot = () => {
-    if (groupCount()) return parent.item().unread || unreadSubItemCount() === 1;
+    if (groupCount()) return false;
     return parent.unread() || parent.item().unread;
   };
   const badgeCount = () => {
-    if (unreadSubItemCount() > 1) return unreadSubItemCount();
+    if (unreadGroupCount() > 0) return unreadGroupCount();
     return groupCount();
   };
   const context: InboxItemContextValue = {
@@ -380,12 +382,14 @@ function Description(props: DescriptionProps) {
                     <span
                       class={cn(
                         'ml-auto grid h-4 min-w-4 place-items-center rounded px-1 text-xs',
-                        unreadSubItemCount() > 1
-                          ? 'bg-accent text-surface'
+                        unreadGroupCount() > 0
+                          ? 'bg-accent/10 text-accent'
                           : 'bg-ink-muted/10 text-ink-muted'
                       )}
                     >
-                      {count()}
+                      {unreadGroupCount() > 0
+                        ? `${count()} new notifications`
+                        : count()}
                     </span>
                   </Layer>
                 )}

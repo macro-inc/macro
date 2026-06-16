@@ -490,15 +490,18 @@ export function InboxItemLayout(
   const type = useNotificationType();
   const unreadSubItemCount = () =>
     item().subItems?.filter((subItem) => subItem.unread).length ?? 0;
+  const unreadGroupCount = () => (item().unread ? 1 : 0) + unreadSubItemCount();
+  const groupCount = () => {
+    const count = (item().subItems?.length ?? 0) + 1;
+    return count > 1 ? count : undefined;
+  };
   const showUnreadDot = () => {
-    if (badgeCount()) return item().unread || unreadSubItemCount() === 1;
+    if (groupCount()) return false;
     return unread() || item().unread;
   };
   const badgeCount = () => {
-    if (unreadSubItemCount() > 1) return unreadSubItemCount();
-
-    const count = (item().subItems?.length ?? 0) + 1;
-    return count > 1 ? count : undefined;
+    if (unreadGroupCount() > 0) return unreadGroupCount();
+    return groupCount();
   };
 
   return (
@@ -561,12 +564,14 @@ export function InboxItemLayout(
                           <span
                             class={cn(
                               'grid h-4 min-w-4 place-items-center rounded px-1 text-xs',
-                              unreadSubItemCount() > 1
-                                ? 'bg-accent text-surface'
+                              unreadGroupCount() > 0
+                                ? 'bg-accent/10 text-accent'
                                 : 'bg-ink-muted/10 text-ink-muted'
                             )}
                           >
-                            {count()}
+                            {unreadGroupCount() > 0
+                              ? `${count()} new notifications`
+                              : count()}
                           </span>
                         </Layer>
                       )}
