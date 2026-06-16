@@ -154,6 +154,6 @@ pub struct Config {
 impl Config {
     pub fn from_env() -> anyhow::Result<Self> {
         macro_config::ConfigLoader::load::<Config>()
-            .context("failed to load authentication service config")
+            .context("failed to load config")
     }
 }
