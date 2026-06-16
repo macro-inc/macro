@@ -10803,34 +10803,42 @@
         ],
         "properties": {
           "channel_type": {
-            "$ref": "#/components/schemas/ChannelType"
+            "$ref": "#/components/schemas/ChannelType",
+            "description": "type of the channel"
           },
           "created_at": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "description": "timestamp of when the channel was created"
           },
           "id": {
             "type": "string",
-            "format": "uuid"
+            "format": "uuid",
+            "description": "uuid of the channel"
           },
           "name": {
-            "type": ["string", "null"]
+            "type": ["string", "null"],
+            "description": "string name of the channel"
           },
           "org_id": {
             "type": ["integer", "null"],
             "format": "int32",
+            "description": "id of the organization this channel belongs too",
             "minimum": 0
           },
           "owner_id": {
-            "type": "string"
+            "type": "string",
+            "description": "id of the user who created the channel"
           },
           "team_id": {
             "type": ["string", "null"],
-            "format": "uuid"
+            "format": "uuid",
+            "description": "id of the team this channel belongs to"
           },
           "updated_at": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "description": "timestamp of when the channel was last updated"
           }
         }
       },
@@ -10982,21 +10990,26 @@
         "properties": {
           "channel_id": {
             "type": "string",
-            "format": "uuid"
+            "format": "uuid",
+            "description": "id of the channel"
           },
           "joined_at": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "description": "timestamp of when the user joined the channel"
           },
           "left_at": {
             "type": ["string", "null"],
-            "format": "date-time"
+            "format": "date-time",
+            "description": "timestamp of when the user left the channel"
           },
           "role": {
-            "$ref": "#/components/schemas/ParticipantRole"
+            "$ref": "#/components/schemas/ParticipantRole",
+            "description": "type of the participant"
           },
           "user_id": {
-            "type": "string"
+            "type": "string",
+            "description": "id of the user"
           }
         }
       },
@@ -11124,19 +11137,23 @@
         }
       },
       "ChannelWithParticipants": {
-        "type": "object",
-        "required": ["channel", "participants"],
-        "properties": {
-          "channel": {
+        "allOf": [
+          {
             "$ref": "#/components/schemas/Channel"
           },
-          "participants": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ChannelParticipant"
+          {
+            "type": "object",
+            "required": ["participants"],
+            "properties": {
+              "participants": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ChannelParticipant"
+                }
+              }
             }
           }
-        }
+        ]
       },
       "Chat": {
         "type": "object",

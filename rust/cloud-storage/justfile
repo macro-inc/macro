@@ -74,7 +74,6 @@ setup_test_envs:
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./email_db_client/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./email_refresh_handler/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./comms_db_client/.env
-    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./comms/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./document_cognition_service/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./document_text_extractor/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./organization_retention_handler/.env

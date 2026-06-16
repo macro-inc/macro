@@ -5,4 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * string name of the channel
+ */
 export type ChannelName = string | null;

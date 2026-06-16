@@ -11,13 +11,23 @@ import type { ChannelTeamId } from './channelTeamId';
 import type { ChannelType } from './channelType';
 
 export interface Channel {
+  /** type of the channel */
   channel_type: ChannelType;
+  /** timestamp of when the channel was created */
   created_at: string;
+  /** uuid of the channel */
   id: string;
+  /** string name of the channel */
   name?: ChannelName;
-  /** @minimum 0 */
+  /**
+   * id of the organization this channel belongs too
+   * @minimum 0
+   */
   org_id?: ChannelOrgId;
+  /** id of the user who created the channel */
   owner_id: string;
+  /** id of the team this channel belongs to */
   team_id?: ChannelTeamId;
+  /** timestamp of when the channel was last updated */
   updated_at: string;
 }

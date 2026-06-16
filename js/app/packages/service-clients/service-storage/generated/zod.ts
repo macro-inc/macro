@@ -6264,7 +6264,7 @@ export const getItemsSoupQueryParams = zod.object({
   cursor: zod.string().optional().describe('Base64 encoded cursor value.'),
 });
 
-export const getItemsSoupResponseItemsItemDataChannelOrgIdMin = 0;
+export const getItemsSoupResponseItemsItemDataOrgIdMin = 0;
 
 export const getItemsSoupResponse = zod.object({
   items: zod.array(
@@ -7352,33 +7352,55 @@ export const getItemsSoupResponse = zod.object({
         zod.object({
           data: zod
             .object({
-              channel: zod.object({
-                channel_type: zod
-                  .enum(['public', 'private', 'direct_message', 'team'])
-                  .describe('Type of channel.'),
-                created_at: zod.iso.datetime({}),
-                id: zod.uuid(),
-                name: zod.string().nullish(),
-                org_id: zod
-                  .number()
-                  .min(getItemsSoupResponseItemsItemDataChannelOrgIdMin)
-                  .nullish(),
-                owner_id: zod.string(),
-                team_id: zod.uuid().nullish(),
-                updated_at: zod.iso.datetime({}),
-              }),
-              participants: zod.array(
-                zod.object({
-                  channel_id: zod.uuid(),
-                  joined_at: zod.iso.datetime({}),
-                  left_at: zod.iso.datetime({}).nullish(),
-                  role: zod
-                    .enum(['owner', 'admin', 'member'])
-                    .describe('The role a user has within a channel.'),
-                  user_id: zod.string(),
-                })
-              ),
+              channel_type: zod
+                .enum(['public', 'private', 'direct_message', 'team'])
+                .describe('Type of channel.'),
+              created_at: zod.iso
+                .datetime({})
+                .describe('timestamp of when the channel was created'),
+              id: zod.uuid().describe('uuid of the channel'),
+              name: zod
+                .string()
+                .nullish()
+                .describe('string name of the channel'),
+              org_id: zod
+                .number()
+                .min(getItemsSoupResponseItemsItemDataOrgIdMin)
+                .nullish()
+                .describe('id of the organization this channel belongs too'),
+              owner_id: zod
+                .string()
+                .describe('id of the user who created the channel'),
+              team_id: zod
+                .uuid()
+                .nullish()
+                .describe('id of the team this channel belongs to'),
+              updated_at: zod.iso
+                .datetime({})
+                .describe('timestamp of when the channel was last updated'),
             })
+            .and(
+              zod.object({
+                participants: zod.array(
+                  zod.object({
+                    channel_id: zod.uuid().describe('id of the channel'),
+                    joined_at: zod.iso
+                      .datetime({})
+                      .describe(
+                        'timestamp of when the user joined the channel'
+                      ),
+                    left_at: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe('timestamp of when the user left the channel'),
+                    role: zod
+                      .enum(['owner', 'admin', 'member'])
+                      .describe('The role a user has within a channel.'),
+                    user_id: zod.string().describe('id of the user'),
+                  })
+                ),
+              })
+            )
             .and(
               zod.object({
                 latest_message: zod
@@ -8165,7 +8187,7 @@ export const postItemsSoupBody = zod
     })
   );
 
-export const postItemsSoupResponseItemsItemDataChannelOrgIdMin = 0;
+export const postItemsSoupResponseItemsItemDataOrgIdMin = 0;
 
 export const postItemsSoupResponse = zod.object({
   items: zod.array(
@@ -9253,33 +9275,55 @@ export const postItemsSoupResponse = zod.object({
         zod.object({
           data: zod
             .object({
-              channel: zod.object({
-                channel_type: zod
-                  .enum(['public', 'private', 'direct_message', 'team'])
-                  .describe('Type of channel.'),
-                created_at: zod.iso.datetime({}),
-                id: zod.uuid(),
-                name: zod.string().nullish(),
-                org_id: zod
-                  .number()
-                  .min(postItemsSoupResponseItemsItemDataChannelOrgIdMin)
-                  .nullish(),
-                owner_id: zod.string(),
-                team_id: zod.uuid().nullish(),
-                updated_at: zod.iso.datetime({}),
-              }),
-              participants: zod.array(
-                zod.object({
-                  channel_id: zod.uuid(),
-                  joined_at: zod.iso.datetime({}),
-                  left_at: zod.iso.datetime({}).nullish(),
-                  role: zod
-                    .enum(['owner', 'admin', 'member'])
-                    .describe('The role a user has within a channel.'),
-                  user_id: zod.string(),
-                })
-              ),
+              channel_type: zod
+                .enum(['public', 'private', 'direct_message', 'team'])
+                .describe('Type of channel.'),
+              created_at: zod.iso
+                .datetime({})
+                .describe('timestamp of when the channel was created'),
+              id: zod.uuid().describe('uuid of the channel'),
+              name: zod
+                .string()
+                .nullish()
+                .describe('string name of the channel'),
+              org_id: zod
+                .number()
+                .min(postItemsSoupResponseItemsItemDataOrgIdMin)
+                .nullish()
+                .describe('id of the organization this channel belongs too'),
+              owner_id: zod
+                .string()
+                .describe('id of the user who created the channel'),
+              team_id: zod
+                .uuid()
+                .nullish()
+                .describe('id of the team this channel belongs to'),
+              updated_at: zod.iso
+                .datetime({})
+                .describe('timestamp of when the channel was last updated'),
             })
+            .and(
+              zod.object({
+                participants: zod.array(
+                  zod.object({
+                    channel_id: zod.uuid().describe('id of the channel'),
+                    joined_at: zod.iso
+                      .datetime({})
+                      .describe(
+                        'timestamp of when the user joined the channel'
+                      ),
+                    left_at: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe('timestamp of when the user left the channel'),
+                    role: zod
+                      .enum(['owner', 'admin', 'member'])
+                      .describe('The role a user has within a channel.'),
+                    user_id: zod.string().describe('id of the user'),
+                  })
+                ),
+              })
+            )
             .and(
               zod.object({
                 latest_message: zod
@@ -9626,7 +9670,7 @@ export const postItemsSoupAstBody = zod
     })
   );
 
-export const postItemsSoupAstResponseItemsItemDataChannelOrgIdMin = 0;
+export const postItemsSoupAstResponseItemsItemDataOrgIdMin = 0;
 
 export const postItemsSoupAstResponse = zod.object({
   items: zod.array(
@@ -10714,33 +10758,55 @@ export const postItemsSoupAstResponse = zod.object({
         zod.object({
           data: zod
             .object({
-              channel: zod.object({
-                channel_type: zod
-                  .enum(['public', 'private', 'direct_message', 'team'])
-                  .describe('Type of channel.'),
-                created_at: zod.iso.datetime({}),
-                id: zod.uuid(),
-                name: zod.string().nullish(),
-                org_id: zod
-                  .number()
-                  .min(postItemsSoupAstResponseItemsItemDataChannelOrgIdMin)
-                  .nullish(),
-                owner_id: zod.string(),
-                team_id: zod.uuid().nullish(),
-                updated_at: zod.iso.datetime({}),
-              }),
-              participants: zod.array(
-                zod.object({
-                  channel_id: zod.uuid(),
-                  joined_at: zod.iso.datetime({}),
-                  left_at: zod.iso.datetime({}).nullish(),
-                  role: zod
-                    .enum(['owner', 'admin', 'member'])
-                    .describe('The role a user has within a channel.'),
-                  user_id: zod.string(),
-                })
-              ),
+              channel_type: zod
+                .enum(['public', 'private', 'direct_message', 'team'])
+                .describe('Type of channel.'),
+              created_at: zod.iso
+                .datetime({})
+                .describe('timestamp of when the channel was created'),
+              id: zod.uuid().describe('uuid of the channel'),
+              name: zod
+                .string()
+                .nullish()
+                .describe('string name of the channel'),
+              org_id: zod
+                .number()
+                .min(postItemsSoupAstResponseItemsItemDataOrgIdMin)
+                .nullish()
+                .describe('id of the organization this channel belongs too'),
+              owner_id: zod
+                .string()
+                .describe('id of the user who created the channel'),
+              team_id: zod
+                .uuid()
+                .nullish()
+                .describe('id of the team this channel belongs to'),
+              updated_at: zod.iso
+                .datetime({})
+                .describe('timestamp of when the channel was last updated'),
             })
+            .and(
+              zod.object({
+                participants: zod.array(
+                  zod.object({
+                    channel_id: zod.uuid().describe('id of the channel'),
+                    joined_at: zod.iso
+                      .datetime({})
+                      .describe(
+                        'timestamp of when the user joined the channel'
+                      ),
+                    left_at: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe('timestamp of when the user left the channel'),
+                    role: zod
+                      .enum(['owner', 'admin', 'member'])
+                      .describe('The role a user has within a channel.'),
+                    user_id: zod.string().describe('id of the user'),
+                  })
+                ),
+              })
+            )
             .and(
               zod.object({
                 latest_message: zod
@@ -11292,11 +11358,11 @@ export const postItemsSoupAstGroupedBody = zod
 
 export const postItemsSoupAstGroupedResponseGroupsItemTotalCountMin = 0;
 
-export const postItemsSoupAstGroupedResponseItemsDataChannelOrgIdMin = 0;
+export const postItemsSoupAstGroupedResponseItemsDataOrgIdMin = 0;
 
 export const postItemsSoupAstGroupedResponseGroupTotalCountMin = 0;
 
-export const postItemsSoupAstGroupedResponseItemsDataChannelOrgIdMinOne = 0;
+export const postItemsSoupAstGroupedResponseItemsDataOrgIdMinOne = 0;
 
 export const postItemsSoupAstGroupedResponse = zod
   .union([
@@ -12461,35 +12527,65 @@ export const postItemsSoupAstGroupedResponse = zod
                 zod.object({
                   data: zod
                     .object({
-                      channel: zod.object({
-                        channel_type: zod
-                          .enum(['public', 'private', 'direct_message', 'team'])
-                          .describe('Type of channel.'),
-                        created_at: zod.iso.datetime({}),
-                        id: zod.uuid(),
-                        name: zod.string().nullish(),
-                        org_id: zod
-                          .number()
-                          .min(
-                            postItemsSoupAstGroupedResponseItemsDataChannelOrgIdMin
-                          )
-                          .nullish(),
-                        owner_id: zod.string(),
-                        team_id: zod.uuid().nullish(),
-                        updated_at: zod.iso.datetime({}),
-                      }),
-                      participants: zod.array(
-                        zod.object({
-                          channel_id: zod.uuid(),
-                          joined_at: zod.iso.datetime({}),
-                          left_at: zod.iso.datetime({}).nullish(),
-                          role: zod
-                            .enum(['owner', 'admin', 'member'])
-                            .describe('The role a user has within a channel.'),
-                          user_id: zod.string(),
-                        })
-                      ),
+                      channel_type: zod
+                        .enum(['public', 'private', 'direct_message', 'team'])
+                        .describe('Type of channel.'),
+                      created_at: zod.iso
+                        .datetime({})
+                        .describe('timestamp of when the channel was created'),
+                      id: zod.uuid().describe('uuid of the channel'),
+                      name: zod
+                        .string()
+                        .nullish()
+                        .describe('string name of the channel'),
+                      org_id: zod
+                        .number()
+                        .min(postItemsSoupAstGroupedResponseItemsDataOrgIdMin)
+                        .nullish()
+                        .describe(
+                          'id of the organization this channel belongs too'
+                        ),
+                      owner_id: zod
+                        .string()
+                        .describe('id of the user who created the channel'),
+                      team_id: zod
+                        .uuid()
+                        .nullish()
+                        .describe('id of the team this channel belongs to'),
+                      updated_at: zod.iso
+                        .datetime({})
+                        .describe(
+                          'timestamp of when the channel was last updated'
+                        ),
                     })
+                    .and(
+                      zod.object({
+                        participants: zod.array(
+                          zod.object({
+                            channel_id: zod
+                              .uuid()
+                              .describe('id of the channel'),
+                            joined_at: zod.iso
+                              .datetime({})
+                              .describe(
+                                'timestamp of when the user joined the channel'
+                              ),
+                            left_at: zod.iso
+                              .datetime({})
+                              .nullish()
+                              .describe(
+                                'timestamp of when the user left the channel'
+                              ),
+                            role: zod
+                              .enum(['owner', 'admin', 'member'])
+                              .describe(
+                                'The role a user has within a channel.'
+                              ),
+                            user_id: zod.string().describe('id of the user'),
+                          })
+                        ),
+                      })
+                    )
                     .and(
                       zod.object({
                         latest_message: zod
@@ -13916,35 +14012,67 @@ export const postItemsSoupAstGroupedResponse = zod
                 zod.object({
                   data: zod
                     .object({
-                      channel: zod.object({
-                        channel_type: zod
-                          .enum(['public', 'private', 'direct_message', 'team'])
-                          .describe('Type of channel.'),
-                        created_at: zod.iso.datetime({}),
-                        id: zod.uuid(),
-                        name: zod.string().nullish(),
-                        org_id: zod
-                          .number()
-                          .min(
-                            postItemsSoupAstGroupedResponseItemsDataChannelOrgIdMinOne
-                          )
-                          .nullish(),
-                        owner_id: zod.string(),
-                        team_id: zod.uuid().nullish(),
-                        updated_at: zod.iso.datetime({}),
-                      }),
-                      participants: zod.array(
-                        zod.object({
-                          channel_id: zod.uuid(),
-                          joined_at: zod.iso.datetime({}),
-                          left_at: zod.iso.datetime({}).nullish(),
-                          role: zod
-                            .enum(['owner', 'admin', 'member'])
-                            .describe('The role a user has within a channel.'),
-                          user_id: zod.string(),
-                        })
-                      ),
+                      channel_type: zod
+                        .enum(['public', 'private', 'direct_message', 'team'])
+                        .describe('Type of channel.'),
+                      created_at: zod.iso
+                        .datetime({})
+                        .describe('timestamp of when the channel was created'),
+                      id: zod.uuid().describe('uuid of the channel'),
+                      name: zod
+                        .string()
+                        .nullish()
+                        .describe('string name of the channel'),
+                      org_id: zod
+                        .number()
+                        .min(
+                          postItemsSoupAstGroupedResponseItemsDataOrgIdMinOne
+                        )
+                        .nullish()
+                        .describe(
+                          'id of the organization this channel belongs too'
+                        ),
+                      owner_id: zod
+                        .string()
+                        .describe('id of the user who created the channel'),
+                      team_id: zod
+                        .uuid()
+                        .nullish()
+                        .describe('id of the team this channel belongs to'),
+                      updated_at: zod.iso
+                        .datetime({})
+                        .describe(
+                          'timestamp of when the channel was last updated'
+                        ),
                     })
+                    .and(
+                      zod.object({
+                        participants: zod.array(
+                          zod.object({
+                            channel_id: zod
+                              .uuid()
+                              .describe('id of the channel'),
+                            joined_at: zod.iso
+                              .datetime({})
+                              .describe(
+                                'timestamp of when the user joined the channel'
+                              ),
+                            left_at: zod.iso
+                              .datetime({})
+                              .nullish()
+                              .describe(
+                                'timestamp of when the user left the channel'
+                              ),
+                            role: zod
+                              .enum(['owner', 'admin', 'member'])
+                              .describe(
+                                'The role a user has within a channel.'
+                              ),
+                            user_id: zod.string().describe('id of the user'),
+                          })
+                        ),
+                      })
+                    )
                     .and(
                       zod.object({
                         latest_message: zod

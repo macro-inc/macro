@@ -5,4 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * id of the team this channel belongs to
+ */
 export type ChannelTeamId = string | null;
