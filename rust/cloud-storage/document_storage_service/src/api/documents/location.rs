@@ -127,7 +127,6 @@ async fn sign_document_key(
     let signed_options = get_cloudfront_signed_options(
         &state
             .config
-            .vars
             .document_storage_service_cloudfront_signer_public_key_id,
         state
             .config
@@ -141,7 +140,6 @@ async fn sign_document_key(
     let signed_url = get_presigned_url(
         &state
             .config
-            .vars
             .document_storage_service_cloudfront_distribution_url,
         signed_key,
         &signed_options,
@@ -229,7 +227,6 @@ async fn get_docx_urls(
     let signed_options = get_cloudfront_signed_options(
         &state
             .config
-            .vars
             .document_storage_service_cloudfront_signer_public_key_id,
         state
             .config
@@ -242,7 +239,6 @@ async fn get_docx_urls(
 
     let cloudfront_distribution_url = state
         .config
-        .vars
         .document_storage_service_cloudfront_distribution_url
         .as_ref();
 

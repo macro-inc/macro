@@ -3606,6 +3606,7 @@ dependencies = [
  "macro_auth",
  "macro_aws_config",
  "macro_axum_utils",
+ "macro_config",
  "macro_cors",
  "macro_db_client",
  "macro_entrypoint",
