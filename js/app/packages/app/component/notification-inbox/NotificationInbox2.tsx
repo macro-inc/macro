@@ -5,6 +5,7 @@ import {
 import { PreviewPanel } from '@app/component/PreviewPanel';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { Resize } from '@core/component/Resize';
+import { TabsInset } from '@core/component/TabsInset';
 import type { EntityData } from '@entity';
 import type { UnifiedNotification } from '@notifications';
 import CalendarIcon from '@phosphor/calendar-blank.svg';
@@ -38,6 +39,8 @@ type InboxDateGroup = {
 };
 
 type NotificationTag = UnifiedNotification['notification_metadata']['tag'];
+
+type ReadFilter = 'all' | 'unread' | 'read';
 
 type DevNotificationFilter = {
   id: string;
@@ -364,7 +367,9 @@ function itemDensity(item: InboxItemData) {
 function NotificationInboxList(props: {
   groups: InboxDateGroup[];
   hiddenFilterIds: string[];
+  readFilter: ReadFilter;
   selectedItem: InboxItemData | undefined;
+  onReadFilterChange: (filter: ReadFilter) => void;
   onSelect: (item: InboxItemData) => void;
   onToggleFilter: (filterId: string) => void;
 }) {
@@ -375,7 +380,17 @@ function NotificationInboxList(props: {
 
   return (
     <div class="flex size-full min-h-0 flex-col bg-surface p-2">
-      <div class="mb-2 flex shrink-0 flex-col gap-1">
+      <div class="mb-2 flex shrink-0 flex-col gap-2">
+        <TabsInset
+          class="h-auto w-fit"
+          list={[
+            { value: 'all', label: 'All' },
+            { value: 'unread', label: 'Unread' },
+            { value: 'read', label: 'Read' },
+          ]}
+          value={props.readFilter}
+          onChange={(value) => props.onReadFilterChange(value as ReadFilter)}
+        />
         <div class="flex gap-1">
           <Button
             class="h-7 w-fit bg-surface text-ink-muted"
@@ -470,6 +485,7 @@ export function NotificationInbox2() {
   const orchestrator = useGlobalBlockOrchestrator();
   const notificationSource = useGlobalNotificationSource();
   const [hiddenFilterIds, setHiddenFilterIds] = createSignal<string[]>([]);
+  const [readFilter, setReadFilter] = createSignal<ReadFilter>('all');
   const hiddenTags = createMemo(() => {
     const ids = new Set(hiddenFilterIds());
     return new Set(
@@ -487,6 +503,11 @@ export function NotificationInbox2() {
           (notification) =>
             !hiddenTags().has(notification.notification_metadata.tag)
         )
+        .filter((notification) => {
+          if (readFilter() === 'all') return true;
+          const unread = !notification.viewed_at && !notification.done;
+          return readFilter() === 'unread' ? unread : !unread;
+        })
     )
   );
   const toggleFilter = (filterId: string) => {
@@ -528,6 +549,8 @@ export function NotificationInbox2() {
             <NotificationInboxList
               groups={groups()}
               hiddenFilterIds={hiddenFilterIds()}
+              readFilter={readFilter()}
+              onReadFilterChange={setReadFilter}
               onSelect={setSelectedItem}
               onToggleFilter={toggleFilter}
               selectedItem={selectedItem()}
