@@ -5,7 +5,10 @@ import {
   loadResult,
 } from '@core/block';
 import { ENABLE_MARKDOWN_LIVE_COLLABORATION } from '@core/constant/featureFlags';
+import { queryClient } from '@queries/client';
 import { waitForDocumentSyncServiceReady } from '@queries/storage/document-location';
+import type { DocumentLoadBundle } from '@queries/storage/documentLoad/documentLoadBundle';
+import { documentLoadKeys } from '@queries/storage/documentLoad/keys';
 import { storageServiceClient } from '@service-storage/client';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { DocumentMetadata } from '@service-storage/generated/schemas/documentMetadata';
@@ -14,9 +17,6 @@ import { createSyncServiceSource } from '@service-sync/source';
 import { err, ok } from 'neverthrow';
 import MarkdownBlock from './component/Block';
 import type { MarkdownRewriteOutput } from './signal/rewriteSignal';
-import { queryClient } from '@queries/client';
-import { documentLoadKeys } from '@queries/storage/documentLoad/keys';
-import type { DocumentLoadBundle } from '@queries/storage/documentLoad/documentLoadBundle';
 
 export const definition = defineBlock({
   name: 'md',

@@ -24,7 +24,8 @@ async function fetchDocumentLoadBundle(
   ]);
 
   if (maybeToken.isErr()) throw new Error('UNAUTHORIZED');
-  if (maybeDocument.isErr()) throw new Error('Failed to fetch document metadata');
+  if (maybeDocument.isErr())
+    throw new Error('Failed to fetch document metadata');
 
   return {
     documentMetadata: maybeDocument.value.documentMetadata,
@@ -46,5 +47,8 @@ export function seedDocumentLoadBundle(
   documentId: string,
   bundle: DocumentLoadBundle
 ) {
-  queryClient.setQueryData(documentLoadKeys.bundle(documentId).queryKey, bundle);
+  queryClient.setQueryData(
+    documentLoadKeys.bundle(documentId).queryKey,
+    bundle
+  );
 }
