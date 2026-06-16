@@ -13,9 +13,10 @@ export const TASK_STATUS_FILTER_IDS: FilterID[] = [
 
 /**
  * Shared mechanics for the task-status multi-select, used by both the status
- * chip and the filter menu so they behave identically. The selection can never
- * be empty: unchecking the last status (or "All" on the sole one) re-enables
- * every status; "Only" narrows to a single status.
+ * chip and the filter menu so they behave identically. Toggling a status is a
+ * plain toggle, so unchecking the last one leaves the selection empty (no
+ * filter). "Only" narrows to a single status, flipping to "All" — which, like
+ * the chip's clear, re-enables every status.
  */
 export function useTaskStatusFilter() {
   const { soup, queryFilters } = useSoupView();
@@ -50,10 +51,6 @@ export function useTaskStatusFilter() {
 
   const toggle = (id: FilterID) => {
     const active = isActive(id);
-    if (active && activeIds().length === 1) {
-      enableAll();
-      return;
-    }
     batch(() => setStatus(id, active));
   };
 
