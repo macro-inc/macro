@@ -454,7 +454,7 @@ export function useFilterRefinements() {
           multiple: true,
           isValueActive: (id) => taskStatus.isActive(id as FilterID),
           onToggleValue: (id) => taskStatus.toggle(id as FilterID),
-          onRemoveAll: () => taskStatus.enableAll(),
+          onRemoveAll: () => taskStatus.clear(),
         }))
       );
     };
@@ -620,7 +620,8 @@ export function useFilterRefinements() {
     if (!preset) return;
 
     // On task tabs that default to a status subset (the open set), "Clear all"
-    // reveals every status instead of restoring that subset.
+    // empties the status filter (shows every status) instead of restoring that
+    // subset.
     const presetSeedsStatusSubset = (preset.clientFilters.or ?? []).some((id) =>
       TASK_STATUS_FILTER_IDS.includes(id as FilterID)
     );
@@ -629,7 +630,7 @@ export function useFilterRefinements() {
       soup.predicates.set(preset.clientFilters);
       queryFilters.replace(preset.filters ?? null);
       setAssigneeFilter([]);
-      if (presetSeedsStatusSubset) taskStatus.enableAll();
+      if (presetSeedsStatusSubset) taskStatus.clear();
     });
   };
 
