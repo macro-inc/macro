@@ -3,7 +3,7 @@ import { isMobile } from '@core/mobile/isMobile';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import CaretRight from '@phosphor/caret-right.svg?component-solid';
 import CheckIcon from '@phosphor/check.svg?component-solid';
-import { cn, Layer } from '@ui';
+import { addCtrlJKMenuNavigation, cn, Layer } from '@ui';
 import {
   type Component,
   createEffect,
@@ -391,6 +391,13 @@ export function ContextMenuContent(props: ParentProps<MenuContentProps>) {
       observer?.disconnect();
     });
   });
+
+  createEffect(() => {
+    if (!contentRef) return;
+    const cleanup = addCtrlJKMenuNavigation(contentRef);
+    onCleanup(cleanup);
+  });
+
   return (
     <MobileConditionalOverlay mobileFullScreen={props.mobileFullScreen}>
       <Show
