@@ -128,6 +128,7 @@ function Content(props: ContentProps) {
         'col-span-3 grid w-full grid-cols-[0.5rem_var(--inbox-item-icon-size)_minmax(0,1fr)] items-center gap-x-3 rounded-lg px-2',
         ctx.density() === 'compact' ? 'min-h-9 py-1' : 'min-h-11 py-1.5',
         ctx.tone() === 'muted' ? 'bg-ink-muted/2.5' : 'bg-surface',
+        ctx.unread() === false && 'opacity-70',
         !ctx.selected() &&
           'hover:bg-active/40 hover:ring hover:ring-edge-muted hover:ring-inset',
         ctx.selected() && 'bg-active/60 ring ring-edge ring-inset',
