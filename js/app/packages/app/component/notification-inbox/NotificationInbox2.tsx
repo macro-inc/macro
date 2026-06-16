@@ -6,12 +6,24 @@ import { PreviewPanel } from '@app/component/PreviewPanel';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { Resize } from '@core/component/Resize';
 import { TabsInset } from '@core/component/TabsInset';
+import {
+  createHotkeyGroup,
+  registerHotkey,
+  useHotkeyDOMScope,
+} from '@core/hotkey/hotkeys';
 import type { EntityData } from '@entity';
 import type { UnifiedNotification } from '@notifications';
 import CalendarIcon from '@phosphor/calendar-blank.svg';
 import ArrowSquareOutIcon from '@phosphor-icons/core/regular/arrow-square-out.svg?component-solid';
 import { Button, cn } from '@ui';
-import { createEffect, createMemo, createSignal, For, Show } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  onCleanup,
+  Show,
+} from 'solid-js';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
 import { InboxItem, type InboxItem as InboxItemData } from './InboxItem';
 import { InboxItemInlineTypeLayout } from './layouts/InboxItemInlineTypeLayout';
@@ -566,55 +578,75 @@ function NotificationInboxList(props: {
     if (index < 0) lastFocusedRowId = undefined;
   });
 
-  const handleKeyDown = (event: KeyboardEvent) => {
-    const target = event.target as HTMLElement | null;
-    if (
-      target?.closest('button,a,input,textarea,select,[contenteditable=true]')
-    ) {
-      return;
-    }
+  const [attachHotkeys, scopeId] = useHotkeyDOMScope('notification-inbox');
+  const group = createHotkeyGroup();
 
-    if (event.key === 'j' || event.key === 'ArrowDown') {
-      event.preventDefault();
+  registerHotkey({
+    hotkey: ['j', 'arrowdown'],
+    scopeId,
+    description: 'Down',
+    keyDownHandler: () => {
       navigateBy(1);
-      return;
-    }
+      return true;
+    },
+    hide: true,
+  }).withGroup(group);
 
-    if (event.key === 'k' || event.key === 'ArrowUp') {
-      event.preventDefault();
+  registerHotkey({
+    hotkey: ['k', 'arrowup'],
+    scopeId,
+    description: 'Up',
+    keyDownHandler: () => {
       navigateBy(-1);
-      return;
-    }
+      return true;
+    },
+    hide: true,
+  }).withGroup(group);
 
-    if (event.key === 'ArrowRight') {
+  registerHotkey({
+    hotkey: ['arrowright'],
+    scopeId,
+    description: 'Expand item',
+    keyDownHandler: () => {
       const row = focusedRow();
-      if (row?.depth === 0 && row.item.subItems?.length) {
-        event.preventDefault();
-        setExpanded(row.item, true);
-      }
-      return;
-    }
+      if (row?.depth !== 0 || !row.item.subItems?.length) return false;
+      setExpanded(row.item, true);
+      return true;
+    },
+    hide: true,
+  }).withGroup(group);
 
-    if (event.key === 'ArrowLeft') {
+  registerHotkey({
+    hotkey: ['arrowleft'],
+    scopeId,
+    description: 'Collapse item',
+    keyDownHandler: () => {
       const row = focusedRow();
-      if (row?.depth === 0 && row.item.subItems?.length) {
-        event.preventDefault();
-        setExpanded(row.item, false);
-      }
-      return;
-    }
+      if (row?.depth !== 0 || !row.item.subItems?.length) return false;
+      setExpanded(row.item, false);
+      return true;
+    },
+    hide: true,
+  }).withGroup(group);
 
-    if (event.key === 'Enter') {
-      event.preventDefault();
+  registerHotkey({
+    hotkey: ['enter'],
+    scopeId,
+    description: 'Open item',
+    keyDownHandler: () => {
       selectCurrent();
-    }
-  };
+      return true;
+    },
+    hide: true,
+  }).withGroup(group);
+
+  onCleanup(() => group.dispose());
 
   return (
     <div
+      ref={attachHotkeys}
       class="flex size-full min-h-0 flex-col bg-surface p-2 outline-none"
       tabIndex={0}
-      onKeyDown={handleKeyDown}
     >
       <div class="mb-2 flex shrink-0 flex-col gap-2">
         <TabsInset
