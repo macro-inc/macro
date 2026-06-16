@@ -2385,6 +2385,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "cached",
+ "channels",
  "chrono",
  "doppleganger",
  "futures",
@@ -10825,6 +10826,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "aws-sdk-s3",
+ "channels",
  "chrono",
  "clap",
  "comms_db_client",

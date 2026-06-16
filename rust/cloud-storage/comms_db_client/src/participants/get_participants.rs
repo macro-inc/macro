@@ -1,20 +1,27 @@
 use anyhow::{Context, Result};
-use doppleganger::Doppleganger;
-use doppleganger::Mirror;
+use channels::domain::models::ChannelParticipant;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
-use model::comms::{ChannelId, ChannelParticipant};
 use sqlx::Transaction;
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
-#[derive(sqlx::Type, Doppleganger, Debug)]
-#[dg(forward = model::comms::ParticipantRole)]
+#[derive(sqlx::Type, Debug)]
 #[sqlx(rename_all = "lowercase")]
 pub enum DbParticipantRole {
     Admin,
     Member,
     Owner,
+}
+
+impl From<DbParticipantRole> for channels::domain::models::ParticipantRole {
+    fn from(role: DbParticipantRole) -> Self {
+        match role {
+            DbParticipantRole::Admin => Self::Admin,
+            DbParticipantRole::Member => Self::Member,
+            DbParticipantRole::Owner => Self::Owner,
+        }
+    }
 }
 
 #[tracing::instrument(skip(tsx))]
@@ -36,16 +43,12 @@ pub async fn get_participants_tsx<'t>(
         "#,
         channel_id
     )
-    .try_map(|row| {
-        Ok(ChannelParticipant {
-            channel_id: ChannelId(row.channel_id),
-            user_id: macro_user_id::user_id::MacroUserIdStr::parse_from_str(&row.user_id)
-                .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
-                .into_owned(),
-            role: DbParticipantRole::mirror(row.role),
-            joined_at: row.joined_at,
-            left_at: row.left_at,
-        })
+    .map(|row| ChannelParticipant {
+        channel_id: row.channel_id,
+        user_id: row.user_id,
+        role: row.role.into(),
+        joined_at: row.joined_at,
+        left_at: row.left_at,
     })
     .fetch_all(tsx.as_mut())
     .await?;
@@ -72,16 +75,12 @@ pub async fn get_participants(
         "#,
         channel_id
     )
-    .try_map(|row| {
-        Ok(ChannelParticipant {
-            channel_id: ChannelId(row.channel_id),
-            user_id: macro_user_id::user_id::MacroUserIdStr::parse_from_str(&row.user_id)
-                .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
-                .into_owned(),
-            role: DbParticipantRole::mirror(row.role),
-            joined_at: row.joined_at,
-            left_at: row.left_at,
-        })
+    .map(|row| ChannelParticipant {
+        channel_id: row.channel_id,
+        user_id: row.user_id,
+        role: row.role.into(),
+        joined_at: row.joined_at,
+        left_at: row.left_at,
     })
     .fetch_all(db)
     .await?;

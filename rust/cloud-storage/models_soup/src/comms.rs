@@ -1,10 +1,105 @@
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
-use model::comms;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
-pub use comms::{
-    Channel, ChannelId, ChannelMessage, ChannelType, LatestMessage, OrganizationId, ParticipantRole,
-};
+/// Organization id for soup channel payloads.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(transparent)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct OrganizationId(pub u32);
+
+/// Channel id for soup channel payloads.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(transparent)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct ChannelId(pub Uuid);
+
+/// Channel type for soup channel payloads.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub enum ChannelType {
+    /// Public channel.
+    Public,
+    /// Private group channel.
+    Private,
+    /// One-to-one direct message channel.
+    DirectMessage,
+    /// Team channel.
+    Team,
+}
+
+/// Role of a channel participant.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub enum ParticipantRole {
+    /// Channel owner.
+    Owner,
+    /// Channel admin.
+    Admin,
+    /// Regular member.
+    #[default]
+    Member,
+}
+
+/// Channel metadata in soup payloads.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct Channel {
+    /// Channel id.
+    #[cfg_attr(feature = "schema", schema(value_type = Uuid))]
+    pub id: ChannelId,
+    /// Channel display name.
+    pub name: Option<String>,
+    /// Channel type.
+    pub channel_type: ChannelType,
+    /// Organization id.
+    #[cfg_attr(feature = "schema", schema(value_type = Option<u32>))]
+    pub org_id: Option<OrganizationId>,
+    /// Team id.
+    #[serde(default)]
+    pub team_id: Option<Uuid>,
+    /// Creation timestamp.
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    /// Update timestamp.
+    pub updated_at: chrono::DateTime<chrono::Utc>,
+    /// Channel owner.
+    #[cfg_attr(feature = "schema", schema(value_type = String))]
+    pub owner_id: MacroUserIdStr<'static>,
+}
+
+/// Lightweight channel message for soup payloads.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct ChannelMessage {
+    /// Message id.
+    pub message_id: Uuid,
+    /// Thread parent id.
+    pub thread_id: Option<Uuid>,
+    /// Sender id.
+    pub sender_id: String,
+    /// Message content.
+    pub content: String,
+    /// Creation timestamp.
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    /// Update timestamp.
+    pub updated_at: chrono::DateTime<chrono::Utc>,
+    /// Deletion timestamp.
+    pub deleted_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// Message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`.
+    pub mentions: Vec<String>,
+}
+
+/// Latest-message bundle for soup payloads.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct LatestMessage {
+    /// Latest message including thread replies.
+    pub latest_message: Option<ChannelMessage>,
+    /// Latest top-level non-thread message.
+    pub latest_non_thread_message: Option<ChannelMessage>,
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
@@ -27,7 +122,7 @@ pub struct ChannelWithParticipants {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct ChannelParticipant {
-    #[cfg_attr(feature = "schema", schema(value_type = uuid::Uuid))]
+    #[cfg_attr(feature = "schema", schema(value_type = Uuid))]
     pub channel_id: ChannelId,
     #[cfg_attr(feature = "schema", schema(value_type = String))]
     pub user_id: macro_user_id::user_id::MacroUserIdStr<'static>,
