@@ -274,11 +274,12 @@ export function MarkdownEditor(props: {
   createEffect(() => {
     // We still want the editor to be locked down (for certain things like click events on check
     // lists) when the user does not have editor access.
-    editor.setEditable(canEdit() || canComment());
+    editor.setEditable(editorReady() && (canEdit() || canComment()));
   });
 
   const isContentEditable = createMemo(() => {
     return (
+      editorReady() &&
       (canEdit() ?? false) &&
       !isGenerating() &&
       !generatedAndWaiting() &&
@@ -754,7 +755,7 @@ export function MarkdownEditor(props: {
   createEffect(() => {
     // We still want the editor to be locked down (for certain things like click events on check
     // lists) when the user does not have editor access.
-    editor.setEditable(canEdit() ?? false);
+    editor.setEditable(editorReady() && (canEdit() ?? false));
   });
 
   plugins.useReactive(
