@@ -50,6 +50,7 @@ type InboxItemContextValue = {
   item: Accessor<InboxItem>;
   unread: Accessor<boolean | undefined>;
   selected: Accessor<boolean | undefined>;
+  highlighted: Accessor<boolean | undefined>;
 };
 
 const InboxItemContext = createContext<InboxItemContextValue>();
@@ -70,6 +71,7 @@ interface RootProps {
   children: JSX.Element;
   unread?: boolean;
   selected?: boolean;
+  highlighted?: boolean;
   class?: string;
 }
 
@@ -79,10 +81,12 @@ function Root(props: RootProps) {
     props.unread ??
     (item().unread || item().subItems?.some((subItem) => subItem.unread));
   const selected = () => props.selected;
+  const highlighted = () => props.highlighted;
   const context: InboxItemContextValue = {
     item,
     unread,
     selected,
+    highlighted,
   };
 
   return (
@@ -115,10 +119,11 @@ function Content(props: ContentProps) {
         'min-h-11 bg-surface py-1.5',
         ctx.unread() === false && 'opacity-70',
         !ctx.selected() &&
+          !ctx.highlighted() &&
           'hover:bg-active/40 hover:ring hover:ring-edge-muted hover:ring-inset',
-        ctx.selected() && 'bg-active/60 ring ring-edge ring-inset',
+        ctx.highlighted() && 'bg-active/50 ring ring-edge-muted ring-inset',
         interactive() &&
-          'outline-none focus-visible:bg-active/60 focus-visible:ring focus-visible:ring-edge focus-visible:ring-inset',
+          'outline-none focus-visible:bg-accent/10 focus-visible:ring focus-visible:ring-accent/40 focus-visible:ring-inset',
         props.class
       )}
       role={interactive() ? 'button' : undefined}

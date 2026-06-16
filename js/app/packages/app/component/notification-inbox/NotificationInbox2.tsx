@@ -660,11 +660,9 @@ function NotificationInboxList(props: {
             return (
               <div class="pb-1.5">
                 <InboxItem.Root
+                  highlighted={focusedRow()?.item.id === row.item.id}
                   item={row.item}
-                  selected={
-                    props.selectedItem?.id === row.item.id ||
-                    focusedRow()?.item.id === row.item.id
-                  }
+                  selected={props.selectedItem?.id === row.item.id}
                 >
                   <Show
                     when={layoutVariant() === 'inline-type'}
