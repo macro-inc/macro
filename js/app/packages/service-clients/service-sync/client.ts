@@ -284,7 +284,11 @@ export const syncServiceClient = {
     const data = (await response.json()) as VersionPin[];
     return ok(data);
   },
-  async createPin(args: { documentId: string; label: string; pinnedAtMs?: number }) {
+  async createPin(args: {
+    documentId: string;
+    label: string;
+    pinnedAtMs?: number;
+  }) {
     const token = await getPermissionToken('document', args.documentId);
     const response = await platformFetch(
       `${SYNC_SERVICE_WORKER_URL}/document/${args.documentId}/pins`,

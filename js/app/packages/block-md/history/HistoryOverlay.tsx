@@ -1,17 +1,18 @@
-import { useSplitLayout } from '@app/component/split-layout/layout';
 import { SplitToolbarLeft } from '@app/component/split-layout/components/SplitToolbar';
+import { useSplitLayout } from '@app/component/split-layout/layout';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { toast } from '@core/component/Toast/Toast';
-import { storageServiceClient } from '@service-storage/client';
-import {
-  type HistorySession,
-  syncServiceClient,
-} from '@service-sync/client';
-import { useHistoryStateQuery } from '@queries/history';
-import { useCreatePinMutation, useDeletePinMutation, usePinsQuery } from '@queries/pins';
-import { Button } from '@ui';
 import GitFork from '@phosphor-icons/core/regular/git-fork.svg?component-solid';
+import { useHistoryStateQuery } from '@queries/history';
+import {
+  useCreatePinMutation,
+  useDeletePinMutation,
+  usePinsQuery,
+} from '@queries/pins';
+import { storageServiceClient } from '@service-storage/client';
+import { type HistorySession, syncServiceClient } from '@service-sync/client';
+import { Button } from '@ui';
 import {
   createMemo,
   createResource,
@@ -91,7 +92,10 @@ export function HistoryOverlay(props: {
   };
 
   return (
-    <div class="absolute inset-0 z-20" style={{ display: props.visible ? undefined : 'none' }}>
+    <div
+      class="absolute inset-0 z-20"
+      style={{ display: props.visible ? undefined : 'none' }}
+    >
       <div class="absolute inset-y-0 -inset-x-1 -z-10 bg-surface" />
       {/* Fork button portalled into the toolbar left, on top of the hamburger. */}
       <Show when={props.visible}>

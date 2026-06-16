@@ -3,19 +3,12 @@ import { makeResizeObserver } from '@solid-primitives/resize-observer';
 import { group, max } from 'd3-array';
 import { scaleLinear } from 'd3-scale';
 import { area, curveBasis } from 'd3-shape';
-import {
-  createMemo,
-  createSignal,
-  For,
-  onMount,
-  Show,
-} from 'solid-js';
+import { createMemo, createSignal, For, onMount, Show } from 'solid-js';
 import { CreatePin } from './CreatePin';
 import {
   humanizeDuration,
-  intervalWarpEnd,
   type Interval,
-  LANE_HUES,
+  intervalWarpEnd,
   SESSION_GAP_MS,
   userColor,
   userLabel,
@@ -49,7 +42,9 @@ export function HistoryScrubber(props: {
   const [width, setWidth] = createSignal(0);
   const [cursorMs, setCursorMs] = createSignal<number | null>(null);
   const [hidden, setHidden] = createSignal<ReadonlySet<string>>(new Set());
-  const [view, setView] = createSignal<{ start: number; end: number } | null>(null);
+  const [view, setView] = createSignal<{ start: number; end: number } | null>(
+    null
+  );
 
   type Drag =
     | { mode: 'scrub'; startPx: number }
@@ -64,7 +59,11 @@ export function HistoryScrubber(props: {
 
   const users = createMemo<ScrubberUser[]>(() => {
     const ids = [...new Set(props.sessions.map((s) => s.userId))];
-    return ids.map((id) => ({ id, label: userLabel(id), color: userColor(id) }));
+    return ids.map((id) => ({
+      id,
+      label: userLabel(id),
+      color: userColor(id),
+    }));
   });
 
   const toggleUser = (id: string) => {
@@ -128,7 +127,8 @@ export function HistoryScrubber(props: {
 
   const warpScale = createMemo(() => {
     const { intervals } = warp();
-    if (intervals.length === 0) return scaleLinear().domain([0, 1]).range([0, 0]);
+    if (intervals.length === 0)
+      return scaleLinear().domain([0, 1]).range([0, 0]);
     return scaleLinear()
       .domain(intervals.flatMap((iv) => [iv.startMs, iv.endMs]))
       .range(intervals.flatMap((iv) => [iv.warpStart, intervalWarpEnd(iv)]))
@@ -206,7 +206,10 @@ export function HistoryScrubber(props: {
   let lastClickMs = 0;
 
   const onPointerDown = (e: PointerEvent) => {
-    if (createPinAt()) { setCreatePinAt(null); return; }
+    if (createPinAt()) {
+      setCreatePinAt(null);
+      return;
+    }
     setHoverPx(null);
     const px = localPx(e.clientX);
     const tp = thumbPx();
@@ -222,7 +225,10 @@ export function HistoryScrubber(props: {
   const onPointerMove = (e: PointerEvent) => {
     const px = localPx(e.clientX);
     const d = drag();
-    if (!d) { setHoverPx(px); return; }
+    if (!d) {
+      setHoverPx(px);
+      return;
+    }
     if (d.mode === 'scrub') {
       setCursorMs(pxToMs(px));
     } else {
@@ -254,7 +260,8 @@ export function HistoryScrubber(props: {
 
   const marquee = createMemo(() => {
     const d = drag();
-    return d?.mode === 'marquee' && Math.abs(d.curPx - d.startPx) > DRAG_THRESHOLD
+    return d?.mode === 'marquee' &&
+      Math.abs(d.curPx - d.startPx) > DRAG_THRESHOLD
       ? d
       : null;
   });
@@ -271,7 +278,11 @@ export function HistoryScrubber(props: {
       if (right < 0 || left > w) continue;
       const markerWidth = right - left;
       if (markerWidth < GAP_MARKER_MIN_PX) continue;
-      out.push({ left, width: markerWidth, label: humanizeDuration(cur.startMs - prev.endMs) });
+      out.push({
+        left,
+        width: markerWidth,
+        label: humanizeDuration(cur.startMs - prev.endMs),
+      });
     }
     return out;
   });
@@ -321,13 +332,14 @@ export function HistoryScrubber(props: {
         ref={containerRef}
         class="relative isolate mx-6 mb-4 min-w-0 flex-1 touch-none select-none"
         style={{
-          cursor: drag()?.mode === 'scrub'
-            ? 'grabbing'
-            : thumbPx() !== null &&
-                hoverPx() !== null &&
-                Math.abs(hoverPx()! - thumbPx()!) <= THUMB_HIT_PX
-              ? 'grab'
-              : 'crosshair',
+          cursor:
+            drag()?.mode === 'scrub'
+              ? 'grabbing'
+              : thumbPx() !== null &&
+                  hoverPx() !== null &&
+                  Math.abs(hoverPx()! - thumbPx()!) <= THUMB_HIT_PX
+                ? 'grab'
+                : 'crosshair',
         }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -359,7 +371,9 @@ export function HistoryScrubber(props: {
         </Show>
 
         {/* Hover preview line */}
-        <Show when={hoverPx() !== null && drag() === null && createPinAt() === null}>
+        <Show
+          when={hoverPx() !== null && drag() === null && createPinAt() === null}
+        >
           <div
             class="pointer-events-none absolute inset-y-0 z-10 w-px bg-accent/30"
             style={{ left: `${hoverPx() ?? 0}px` }}
@@ -402,7 +416,10 @@ export function HistoryScrubber(props: {
             <CreatePin
               leftPx={target().leftPx}
               containerWidth={width()}
-              onConfirm={(label) => { props.onCreatePin(target().atMs, label); setCreatePinAt(null); }}
+              onConfirm={(label) => {
+                props.onCreatePin(target().atMs, label);
+                setCreatePinAt(null);
+              }}
               onCancel={() => setCreatePinAt(null)}
             />
           )}

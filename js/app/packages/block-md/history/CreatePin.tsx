@@ -10,7 +10,8 @@ export function CreatePin(props: {
   const [label, setLabel] = createSignal('');
   onMount(() => inputRef.focus());
 
-  const left = () => Math.min(Math.max(72, props.leftPx), props.containerWidth - 72);
+  const left = () =>
+    Math.min(Math.max(72, props.leftPx), props.containerWidth - 72);
 
   const confirm = () => {
     const l = label().trim();
@@ -33,11 +34,26 @@ export function CreatePin(props: {
           onInput={(e) => setLabel(e.currentTarget.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter') confirm();
-            if (e.key === 'Escape') { e.preventDefault(); props.onCancel(); }
+            if (e.key === 'Escape') {
+              e.preventDefault();
+              props.onCancel();
+            }
           }}
         />
-        <button type="button" class="text-[11px] text-accent hover:opacity-70" onClick={confirm}>✓</button>
-        <button type="button" class="text-[11px] text-ink-muted hover:opacity-70" onClick={props.onCancel}>✕</button>
+        <button
+          type="button"
+          class="text-[11px] text-accent hover:opacity-70"
+          onClick={confirm}
+        >
+          ✓
+        </button>
+        <button
+          type="button"
+          class="text-[11px] text-ink-muted hover:opacity-70"
+          onClick={props.onCancel}
+        >
+          ✕
+        </button>
       </div>
     </div>
   );

@@ -10,7 +10,6 @@ import {
   ToolButton,
 } from '@app/component/ResponsiveBlockToolbar';
 import { SidePanel, useSidePanel } from '@app/component/side-panel';
-import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
 import type { FileOperation } from '@app/component/split-layout/components/SplitFileMenu';
 import {
   SplitHeaderLeft,
@@ -63,13 +62,15 @@ import {
   Show,
 } from 'solid-js';
 import { DispatchAgentButton } from './DispatchAgentMenu';
-import { HISTORY_DRAWER_ID, historyDrawerId } from './History';
 
-export function TopBar(props: {
-  name?: Accessor<string | undefined>;
-  viewingHistory?: Accessor<boolean>;
-  setViewingHistory?: Setter<boolean>;
-} = {}) {
+
+export function TopBar(
+  props: {
+    name?: Accessor<string | undefined>;
+    viewingHistory?: Accessor<boolean>;
+    setViewingHistory?: Setter<boolean>;
+  } = {}
+) {
   const canEdit = useCanEdit();
   const blockName = useBlockName();
   const blockId = useBlockId();
@@ -82,7 +83,6 @@ export function TopBar(props: {
 
   const downloadAsMarkdownText = useDownloadDocumentAsMarkdownText();
 
-  const historyControl = useDrawerControl(historyDrawerId(blockId));
   const shareCtx = useShareDialogContext();
   const blockAliasedName = useBlockAliasedName();
   const isTask = blockAliasedName === 'task';
@@ -283,12 +283,13 @@ export function TopBar(props: {
   );
 }
 
-export function InstructionsTopBar(props: {
-  viewingHistory?: Accessor<boolean>;
-  setViewingHistory?: Setter<boolean>;
-} = {}) {
+export function InstructionsTopBar(
+  props: {
+    viewingHistory?: Accessor<boolean>;
+    setViewingHistory?: Setter<boolean>;
+  } = {}
+) {
   const canEdit = useCanEdit();
-  const historyControl = useDrawerControl(HISTORY_DRAWER_ID);
 
   const tools: BlockTool[] = [
     {

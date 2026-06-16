@@ -12,7 +12,9 @@ export function usePinsQuery(documentId: Accessor<string>) {
   return useQuery<VersionPin[]>(() => ({
     queryKey: pinKeys.list(documentId()),
     queryFn: async () => {
-      const maybe = await syncServiceClient.getPins({ documentId: documentId() });
+      const maybe = await syncServiceClient.getPins({
+        documentId: documentId(),
+      });
       if (maybe.isErr()) throw new Error(maybe.error);
       return maybe.value;
     },
@@ -41,7 +43,8 @@ export function useCreatePinMutation(documentId: Accessor<string>) {
       return maybe.value;
     },
     onSuccess: () => invalidatePins(documentId()),
-    onError: () => toast.failure('Label can only be letters, dashes, and numbers'),
+    onError: () =>
+      toast.failure('Label can only be letters, dashes, and numbers'),
   }));
 }
 

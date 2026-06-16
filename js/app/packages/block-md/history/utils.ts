@@ -27,4 +27,5 @@ export function humanizeDuration(ms: number): string {
 }
 
 export type Interval = { startMs: number; endMs: number; warpStart: number };
-export const intervalWarpEnd = (iv: Interval) => iv.warpStart + (iv.endMs - iv.startMs);
+export const intervalWarpEnd = (iv: Interval) =>
+  iv.warpStart + (iv.endMs - iv.startMs);

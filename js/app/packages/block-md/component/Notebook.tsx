@@ -278,7 +278,7 @@ export function Notebook(props: {
         ref={contentRef}
         classList={{ relative: true }}
       >
-        <TitleEditor autoFocusOnMount={!navigatedFromJK()}/>
+        <TitleEditor autoFocusOnMount={!navigatedFromJK()} />
         <div class="spacer h-3" />
         <div class="mb-6 flex flex-row flex-wrap items-center gap-2 text-sm empty:hidden">
           <InlineTaskProperties />
@@ -289,9 +289,7 @@ export function Notebook(props: {
           {/* Relative wrapper so the history overlay covers only the body region,
               leaving the title + properties above it untouched and aligned. */}
           <div class="relative">
-            <MarkdownEditor
-              loroManager={props.loroManager}
-            />
+            <MarkdownEditor loroManager={props.loroManager} />
             <HistoryOverlay
               documentId={documentId}
               documentName={documentName()}
