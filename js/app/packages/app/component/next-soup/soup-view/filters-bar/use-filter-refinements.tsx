@@ -295,6 +295,11 @@ export function useFilterRefinements() {
     >();
 
     for (const category of viewCategories()) {
+      // The tasks Status filter is built as a dedicated always-present chip
+      // below (it shows the enabled statuses by default), not via the generic
+      // refinement path.
+      if (view === 'tasks' && category.id === 'status') continue;
+
       const activeValues: FilterValue[] = [];
       const allOptions: FilterValue[] = [];
 
@@ -406,6 +411,77 @@ export function useFilterRefinements() {
       );
     }
 
+    // Task statuses render as a single always-present chip so the active
+    // filtering (open tabs default to Not Started / In Progress / In Review)
+    // is visible rather than implied. Plain checkboxes toggle a status, and
+    // unchecking the last enabled one snaps back to the tab default.
+    const pushTaskStatusChip = () => {
+      if (view !== 'tasks') return;
+      const statusCategory = viewCategories().find((c) => c.id === 'status');
+      if (!statusCategory) return;
+
+      const allOptions: FilterValue[] = statusCategory.options.map((o) => ({
+        id: o.id,
+        label: o.label,
+        icon: o.icon,
+      }));
+
+      const getActiveValues = (): FilterValue[] =>
+        allOptions.filter((o) => soup.predicates.isActive(o.id));
+
+      // The "all" tab shows every status by default, so there's nothing to
+      // surface until the user narrows.
+      if (getActiveValues().length === 0) return;
+
+      const key = 'status';
+      seenKeys.add(key);
+
+      const defaultStatusIds = (preset?.clientFilters.or ?? []).filter((id) =>
+        allOptions.some((o) => o.id === id)
+      ) as FilterID[];
+
+      const setStatus = (id: string, active: boolean) => {
+        soup.predicates.toggle({ or: [id as FilterID] });
+        const query = getFilterQuery(id);
+        if (!query) return;
+        if (active) queryFilters.remove(query);
+        else queryFilters.add(query);
+      };
+
+      const resetToDefault = () => {
+        batch(() => {
+          const current = getActiveValues().map((v) => v.id);
+          for (const id of current) {
+            if (!defaultStatusIds.includes(id as FilterID)) setStatus(id, true);
+          }
+          for (const id of defaultStatusIds) {
+            if (!current.includes(id)) setStatus(id, false);
+          }
+        });
+      };
+
+      filters.push(
+        getOrCreateConsolidatedChip(key, () => ({
+          key,
+          categoryLabel: 'Status',
+          categoryLabelPlural: 'Statuses',
+          values: getActiveValues,
+          availableOptions: allOptions,
+          multiple: true,
+          isValueActive: (id) => soup.predicates.isActive(id),
+          onToggleValue: (id) => {
+            const active = soup.predicates.isActive(id);
+            if (active && getActiveValues().length === 1) {
+              resetToDefault();
+              return;
+            }
+            batch(() => setStatus(id, active));
+          },
+          onRemoveAll: () => resetToDefault(),
+        }))
+      );
+    };
+
     // Assignee filter (consolidated) - using searchable approach
     const pushAssigneeConsolidatedChip = () => {
       const key = 'assignee';
@@ -454,6 +530,7 @@ export function useFilterRefinements() {
       );
     };
 
+    pushTaskStatusChip();
     pushAssigneeConsolidatedChip();
 
     // Evict stale chips
