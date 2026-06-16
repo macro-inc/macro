@@ -15,8 +15,8 @@ pub use metadata::{
     DocumentMentionMetadata, GithubPrCheckRun, GithubPrCheckRunState, GithubPrComment,
     GithubPrCommentKind, GithubPrEventAction, GithubPrEventStatus, GithubPrMention,
     GithubPrMentionLocation, GithubPrNotificationCommon, GithubPrReview, GithubPrReviewState,
-    GithubPrStatusChanged, GithubReviewRequested, InboxReauthRequiredMetadata, InviteToTeamMetadata,
-    ItemSharedMetadata, MentionedInDocumentCommentMetadata, NewEmailMetadata,
+    GithubPrStatusChanged, GithubReviewRequested, InboxReauthRequiredMetadata,
+    InviteToTeamMetadata, ItemSharedMetadata, MentionedInDocumentCommentMetadata, NewEmailMetadata,
     NotificationDocumentSubType, NotificationTitle, RepliedToDocumentCommentThreadMetadata,
     TaskAssignedMetadata,
 };
