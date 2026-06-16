@@ -8,7 +8,39 @@ pub mod get_user_permissions;
 mod get_legacy_user_info;
 pub use get_legacy_user_info::{LegacyUserInfo, get_legacy_user_info};
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
+use model::authentication::user::UserThemePreferences;
 use model::user::{UserInfo, UserInfoWithMacroUserId};
+
+/// Gets the user's preferred light/dark themes and system-match flag.
+#[tracing::instrument(skip(db), err)]
+pub async fn get_user_theme_preferences(
+    db: &sqlx::Pool<sqlx::Postgres>,
+    user_id: &MacroUserId<Lowercase<'_>>,
+) -> anyhow::Result<UserThemePreferences> {
+    let prefs = sqlx::query!(
+        r#"
+        SELECT
+            "preferredLightTheme" as "preferred_light_theme!",
+            "preferredDarkTheme"  as "preferred_dark_theme!",
+            "themeMatchesSystem"  as "theme_matches_system!"
+        FROM "User"
+        WHERE "id" = $1
+        "#,
+        user_id.as_ref()
+    )
+    .map(|row| UserThemePreferences {
+        preferred_light_theme: row.preferred_light_theme,
+        preferred_dark_theme: row.preferred_dark_theme,
+        theme_matches_system: row.theme_matches_system,
+    })
+    .fetch_optional(db)
+    .await?;
+
+    match prefs {
+        Some(prefs) => Ok(prefs),
+        None => anyhow::bail!("user not found"),
+    }
+}
 
 /// Gets the stripe customer id for a given user id
 #[tracing::instrument(skip(db))]

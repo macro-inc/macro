@@ -1,4 +1,4 @@
-import { DEFAULT_DARK_THEME, DEFAULT_THEMES } from '../constants';
+import { DEFAULT_DARK_THEME, DEFAULT_LIGHT_THEME, DEFAULT_THEMES } from '../constants';
 import { createMemo, createSignal } from 'solid-js';
 import type { ThemeV0, ThemeV1, ThemeV2 } from '../types/themeTypes';
 import { convertThemev0v1, convertThemev1v2 } from '../utils/themeMigrations';
@@ -25,12 +25,62 @@ setUserThemes(
   })
 );
 
-export const [currentThemeId, setCurrentThemeId] = makePersisted(
+export const [currentThemeId, setCurrentThemeId_] = makePersisted(
   createSignal<string>(DEFAULT_DARK_THEME),
   {name: 'macro-selected-theme'}
 );
 
 export const themes = createMemo(() => [...DEFAULT_THEMES, ...userThemes()]);
+
+// Per-mode theme preferences. Persisted locally as an offline cache / first-paint
+// hint; the backend is the source of truth and hydrates these on login (see
+// themeSync.ts), then write-through PATCHes them on change.
+export const [lightModeTheme, setLightModeTheme] = makePersisted(
+  createSignal<string>(DEFAULT_LIGHT_THEME),
+  {name: 'macro-light-mode-theme'}
+);
+
+export const [darkModeTheme, setDarkModeTheme] = makePersisted(
+  createSignal<string>(DEFAULT_DARK_THEME),
+  {name: 'macro-dark-mode-theme'}
+);
+
+export const [themeShouldMatchSystem, setThemeShouldMatchSystem] = makePersisted(
+  createSignal<boolean>(true),
+  {name: 'macro-theme-should-match-system'}
+);
+
+const supportsMatchMedia =
+  typeof window !== 'undefined' && typeof window.matchMedia === 'function';
+
+// Tracks the OS color scheme so the active theme can follow it when
+// themeShouldMatchSystem is on.
+export const [systemMode, setSystemMode] = createSignal<'dark' | 'light'>(
+  supportsMatchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+    ? 'dark'
+    : 'light'
+);
+
+if (supportsMatchMedia) {
+  const darkModeQuery = window.matchMedia('(prefers-color-scheme: dark)');
+  darkModeQuery.addEventListener('change', (e: MediaQueryListEvent) => {
+    setSystemMode(e.matches ? 'dark' : 'light');
+  });
+}
+
+// If the theme should match the system, setting the current theme also stores it
+// as the preferred theme for the current mode. This avoids a user picking a theme,
+// refreshing, and being reverted to their preferred mode's theme.
+export const setCurrentThemeId = (
+  ...args: Parameters<typeof setCurrentThemeId_>
+) => {
+  setCurrentThemeId_(...args);
+  if (themeShouldMatchSystem()) {
+    systemMode() === 'dark'
+      ? setDarkModeTheme(...args)
+      : setLightModeTheme(...args);
+  }
+};
 
 // Theme-list filters: whether light and/or dark themes are shown in the list.
 export const [showLightThemes, setShowLightThemes] = makePersisted(

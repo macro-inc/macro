@@ -4,17 +4,64 @@ import { ThemeEditorBasic, randomizeTheme } from '@theme/components/ThemeEditorB
 import ThemeTools from '@theme/components/ThemeTools';
 import ThemeList from '@theme/components/ThemeList';
 import { isMobile } from '@core/mobile/isMobile';
-import { createSignal, Show } from 'solid-js';
+import { createSignal, For, Show } from 'solid-js';
 import { TabsInset } from '@core/component/TabsInset';
 import IconDice from '@phosphor-icons/core/regular/dice-five.svg?component-solid';
 import IconFunnel from '@phosphor-icons/core/regular/funnel-simple.svg?component-solid';
-import { setShowDarkThemes, setShowLightThemes, showDarkThemes, showLightThemes } from '@theme/signals/themeSignals';
-import { Button, InlineCheckbox, Panel, ToggleSwitch } from '@ui';
+import { darkModeTheme, lightModeTheme, setDarkModeTheme, setLightModeTheme, setShowDarkThemes, setShowLightThemes, setThemeShouldMatchSystem, showDarkThemes, showLightThemes, themes, themeShouldMatchSystem } from '@theme/signals/themeSignals';
+import { isTokensDark } from '@theme/utils/themeUtils';
+import { ThemeChips } from '@theme/components/ThemeChips';
+import type { ThemeV2 } from '@theme/types/themeTypes';
+import { Button, Dropdown, InlineCheckbox, Panel, ToggleSwitch } from '@ui';
 
 type PanelA = 'basic' | 'advanced';
 type PanelB ='themes' | 'ui'
 
+function ThemePreferenceRow(props: {
+  label: string;
+  value: () => string;
+  options: () => ThemeV2[];
+  onSelect: (id: string) => void;
+}) {
+  const selectedTheme = () =>
+    themes().find((theme) => theme.id === props.value());
+
+  return (
+    <div class="bg-surface flex items-center justify-between h-15.25 px-6">
+      <div class="text-sm">{props.label}</div>
+      <Dropdown>
+        <Dropdown.Trigger>
+          <span class="flex items-center gap-2">
+            {selectedTheme()?.name ?? props.value()}
+            <Show when={selectedTheme()}>
+              {(theme) => <ThemeChips theme={theme()} size="sm" />}
+            </Show>
+          </span>
+        </Dropdown.Trigger>
+        <Dropdown.Content>
+          <Dropdown.Group>
+            <For each={props.options()}>
+              {(theme) => (
+                <Dropdown.Item onSelect={() => props.onSelect(theme.id)}>
+                  <span class="flex items-center gap-2">
+                    {theme.name}
+                    <ThemeChips theme={theme} size="sm" />
+                  </span>
+                </Dropdown.Item>
+              )}
+            </For>
+          </Dropdown.Group>
+        </Dropdown.Content>
+      </Dropdown>
+    </div>
+  );
+}
+
 function UserInterface() {
+  const lightThemes = () =>
+    themes().filter((theme) => !isTokensDark(theme.tokens));
+  const darkThemes = () => themes().filter((theme) => isTokensDark(theme.tokens));
+
   return (
     <div class="grid gap-px bg-edge-muted border-b border-edge-muted">
       <div class="bg-surface flex items-center justify-between h-15.25 px-6">
@@ -32,6 +79,28 @@ function UserInterface() {
           checked={tooltipsEnabled()}
         />
       </div>
+
+      <div class="bg-surface flex items-center justify-between h-15.25 px-6">
+        <div class="text-sm">Auto-detect color scheme</div>
+        <ToggleSwitch
+          onChange={setThemeShouldMatchSystem}
+          checked={themeShouldMatchSystem()}
+        />
+      </div>
+
+      <ThemePreferenceRow
+        label="Preferred light theme"
+        value={lightModeTheme}
+        options={lightThemes}
+        onSelect={setLightModeTheme}
+      />
+
+      <ThemePreferenceRow
+        label="Preferred dark theme"
+        value={darkModeTheme}
+        options={darkThemes}
+        onSelect={setDarkModeTheme}
+      />
 
     </div>
   );

@@ -1,8 +1,8 @@
-import { currentThemeId, setCurrentThemeId, setHtmlColor, setIsThemeSaved, setThemeDepth, setUserThemes, themeDepth, themes, userThemes} from '../signals/themeSignals';
+import { currentThemeId, darkModeTheme, lightModeTheme, setCurrentThemeId, setHtmlColor, setIsThemeSaved, setThemeDepth, setUserThemes, systemMode, themeDepth, themes, themeShouldMatchSystem, userThemes} from '../signals/themeSignals';
 import type { ThemeV2, ThemeV2Tokens } from '../types/themeTypes';
 import { themeReactive } from '../signals/themeReactive';
 import { toast } from '@core/component/Toast/Toast';
-import { batch } from 'solid-js';
+import { batch, createEffect, on } from 'solid-js';
 import { DEFAULT_DARK_THEME } from '../constants';
 
 export function exportTheme(themeId?: string){
@@ -70,6 +70,23 @@ export function applyTheme(id: string): void{
       syncHtmlColor();
     });
   });
+}
+
+/** When auto-detect is on, keeps the active theme in sync with the OS color
+ *  scheme by applying the preferred light or dark theme as the system flips.
+ *  Call once from a reactive root (see Root.tsx). */
+export function systemThemeEffect(): void{
+  createEffect(
+    on(
+      [themeShouldMatchSystem, systemMode, darkModeTheme, lightModeTheme],
+      () => {
+        if(themeShouldMatchSystem()){
+          applyTheme(systemMode() === 'dark' ? darkModeTheme() : lightModeTheme());
+        }
+      },
+      { defer: true }
+    )
+  );
 }
 
 /** Persists the live background color, used for the pre-hydration first paint. */

@@ -85,7 +85,12 @@ import { currentThemeId } from '../../theme/signals/themeSignals';
 import {
   applyTheme,
   ensureMinimalThemeContrast,
+  systemThemeEffect,
 } from '../../theme/utils/themeUtils';
+import {
+  hydrateThemePreferencesFromBackend,
+  setupThemePreferenceSync,
+} from '../signal/themeSync';
 import { Login } from './auth/Login';
 import { setCookie } from './auth/Shared';
 import { Signup } from './auth/Signup';
@@ -419,10 +424,22 @@ function UserInfoSideEffects() {
   // Set user info for observability and analytics
   const userInfo = useUserInfo();
 
+  // Keep the active theme following the OS color scheme, and write per-mode
+  // theme preferences through to the backend. Set up once in this stable owner;
+  // hydration is triggered below once the user is authenticated.
+  systemThemeEffect();
+  setupThemePreferenceSync();
+
   let identified = false;
+  let themeHydrated = false;
   createEffect(
     on(userInfo, (user) => {
       if (!user || !user.authenticated) return;
+
+      if (!themeHydrated) {
+        themeHydrated = true;
+        void hydrateThemePreferencesFromBackend();
+      }
 
       if (posthog.instance._isIdentified() || identified) {
         return;
