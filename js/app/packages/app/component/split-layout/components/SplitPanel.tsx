@@ -153,12 +153,11 @@ export function SplitPanel(props: SplitPanelProps) {
           </Show>
 
           <div
-            class="relative"
             classList={{
               'fixed inset-16 z-modal-overlay isolate opacity-50':
                 props.handle.isSpotLight(),
               'opacity-100': props.active || props.handle.isSpotLight(),
-              'size-full': !props.handle.isSpotLight(),
+              'relative size-full': !props.handle.isSpotLight(),
             }}
             ref={(ref) => {
               setPanelRef(ref);
