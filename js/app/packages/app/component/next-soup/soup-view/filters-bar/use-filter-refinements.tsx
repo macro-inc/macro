@@ -413,8 +413,9 @@ export function useFilterRefinements() {
 
     // Task statuses render as a single always-present chip so the active
     // filtering (open tabs default to Not Started / In Progress / In Review)
-    // is visible rather than implied. Plain checkboxes toggle a status, and
-    // unchecking the last enabled one snaps back to the tab default.
+    // is visible rather than implied. Plain checkboxes toggle a status,
+    // unchecking the last enabled one snaps back to the tab default, and
+    // clearing the chip reveals every status.
     const pushTaskStatusChip = () => {
       if (view !== 'tasks') return;
       const statusCategory = viewCategories().find((c) => c.id === 'status');
@@ -429,9 +430,11 @@ export function useFilterRefinements() {
       const getActiveValues = (): FilterValue[] =>
         allOptions.filter((o) => soup.predicates.isActive(o.id));
 
-      // The "all" tab shows every status by default, so there's nothing to
-      // surface until the user narrows.
-      if (getActiveValues().length === 0) return;
+      // Only surface the chip when the statuses are actually narrowed: an empty
+      // set is the "all" tab default and a fully-selected set isn't a filter,
+      // so neither needs a chip.
+      const activeCount = getActiveValues().length;
+      if (activeCount === 0 || activeCount === allOptions.length) return;
 
       const key = 'status';
       seenKeys.add(key);
@@ -477,7 +480,7 @@ export function useFilterRefinements() {
             }
             batch(() => setStatus(id, active));
           },
-          onRemoveAll: () => resetToDefault(),
+          onRemoveAll: () => batch(() => enableAllTaskStatuses()),
         }))
       );
     };
@@ -619,6 +622,20 @@ export function useFilterRefinements() {
       : filter.query;
   };
 
+  // Enables every task status (used by the status chip's clear and "Clear all"
+  // so clearing reveals all statuses rather than snapping to the open-set
+  // default). Idempotent; callers wrap it in a batch.
+  const enableAllTaskStatuses = () => {
+    const statusCategory = viewCategories().find((c) => c.id === 'status');
+    if (!statusCategory) return;
+    for (const option of statusCategory.options) {
+      if (soup.predicates.isActive(option.id)) continue;
+      soup.predicates.toggle({ or: [option.id as FilterID] });
+      const query = getFilterQuery(option.id);
+      if (query) queryFilters.add(query);
+    }
+  };
+
   const getInboxTypeQuery = (activeTypeIds: string[]): Query | undefined => {
     const preset = currentPreset();
     if (currentView() !== 'inbox' || !preset) return undefined;
@@ -642,10 +659,23 @@ export function useFilterRefinements() {
     const preset = currentPreset();
     if (!preset) return;
 
+    // On task tabs that default to a status subset (the open set), "Clear all"
+    // reveals every status instead of restoring that subset.
+    const statusOptionIds = new Set(
+      (currentView() === 'tasks'
+        ? (viewCategories().find((c) => c.id === 'status')?.options ?? [])
+        : []
+      ).map((o) => o.id)
+    );
+    const presetSeedsStatusSubset = (preset.clientFilters.or ?? []).some((id) =>
+      statusOptionIds.has(id)
+    );
+
     batch(() => {
       soup.predicates.set(preset.clientFilters);
       queryFilters.replace(preset.filters ?? null);
       setAssigneeFilter([]);
+      if (presetSeedsStatusSubset) enableAllTaskStatuses();
     });
   };
 
