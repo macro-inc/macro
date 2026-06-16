@@ -1,8 +1,10 @@
-use channels::domain::models::{ChannelId, OrganizationId};
-use chrono::{DateTime, Utc};
-use macro_user_id::user_id::MacroUserIdStr;
+use model::comms;
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
+
+pub use comms::{
+    Channel, ChannelId, ChannelMessage, ChannelParticipant, ChannelType, ChannelWithParticipants,
+    LatestMessage, OrganizationId, ParticipantRole,
+};
 
 #[derive(Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
@@ -13,80 +15,4 @@ pub struct SoupChannel {
     pub latest_message: LatestMessage,
     pub viewed_at: Option<chrono::DateTime<chrono::Utc>>,
     pub interacted_at: Option<chrono::DateTime<chrono::Utc>>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-pub struct ChannelWithParticipants {
-    pub channel: Channel,
-    pub participants: Vec<ChannelParticipant>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-pub struct LatestMessage {
-    pub latest_message: Option<ChannelMessage>,
-    pub latest_non_thread_message: Option<ChannelMessage>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-pub struct ChannelMessage {
-    pub message_id: Uuid,
-    pub thread_id: Option<Uuid>,
-    pub sender_id: String,
-    pub content: String,
-    pub created_at: chrono::DateTime<chrono::Utc>,
-    pub updated_at: chrono::DateTime<chrono::Utc>,
-    pub deleted_at: Option<chrono::DateTime<chrono::Utc>>,
-    /// message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`
-    pub mentions: Vec<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-pub struct Channel {
-    #[cfg_attr(feature = "schema", schema(value_type = Uuid))]
-    pub id: ChannelId,
-    pub name: Option<String>,
-    pub channel_type: ChannelType,
-    #[cfg_attr(feature = "schema", schema(value_type = Option<u32>))]
-    pub org_id: Option<OrganizationId>,
-    #[cfg_attr(feature = "schema", schema(value_type = Option<uuid::Uuid>))]
-    pub team_id: Option<uuid::Uuid>,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-    #[cfg_attr(feature = "schema", schema(value_type = String))]
-    pub owner_id: MacroUserIdStr<'static>,
-}
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-pub enum ChannelType {
-    Public,
-    Private,
-    DirectMessage,
-    Team,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-pub struct ChannelParticipant {
-    #[cfg_attr(feature = "schema", schema(value_type = Uuid))]
-    pub channel_id: ChannelId,
-    #[cfg_attr(feature = "schema", schema(value_type = String))]
-    pub user_id: MacroUserIdStr<'static>,
-    pub role: ParticipantRole,
-    pub joined_at: DateTime<Utc>,
-    pub left_at: Option<DateTime<Utc>>,
-}
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-pub enum ParticipantRole {
-    Owner,
-    Admin,
-    Member,
 }

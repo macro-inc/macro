@@ -10,16 +10,6 @@ use uuid::Uuid;
 
 pub use bot_id::BotId;
 
-/// Organization id wrapper used by legacy channel API models.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(transparent)]
-pub struct OrganizationId(pub u32);
-
-/// Channel id wrapper used by legacy channel API models.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
-#[serde(transparent)]
-pub struct ChannelId(pub Uuid);
-
 /// Error returned when a sender storage string is not a user or bot id.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("invalid sender id: {value}")]

@@ -119,6 +119,9 @@ pub struct Channel {
     /// id of the organization this channel belongs too
     #[schema(value_type = Option<u32>)]
     pub org_id: Option<OrganizationId>,
+    /// id of the team this channel belongs to
+    #[serde(default)]
+    pub team_id: Option<Uuid>,
     /// timestamp of when the channel was created
     pub created_at: chrono::DateTime<chrono::Utc>,
     /// timestamp of when the channel was last updated

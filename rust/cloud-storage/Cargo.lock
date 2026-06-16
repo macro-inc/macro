@@ -7722,7 +7722,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "call",
- "channels",
  "chrono",
  "crm",
  "document_sub_type",
@@ -7730,6 +7729,7 @@ dependencies = [
  "email",
  "item_filters",
  "macro_user_id",
+ "model",
  "model-entity",
  "models_pagination",
  "models_properties",
