@@ -174,7 +174,7 @@ function BlockMarkdownContent({ optimisticSnapshot }: BlockMarkdownProps) {
       >
         <ModalsProvider>
           <SidePanel.Layout>
-            <Show when={ENABLE_MARKDOWN_SIDE_PANEL && !isInstructionsMd()}>
+            <Show when={ENABLE_MARKDOWN_SIDE_PANEL && !isInstructionsMd() && !isViewingHistory}>
               <MarkdownSidePanelSections
                 canEdit={canEdit()}
                 documentName={displayName() ?? ''}

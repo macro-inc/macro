@@ -2,6 +2,74 @@ use crate::timeit;
 use std::collections::HashMap;
 use tracing::{error, trace};
 use worker::D1Database;
+
+#[derive(serde::Deserialize, serde::Serialize, Clone)]
+pub struct VersionPin {
+    pub id: String,
+    pub document_id: String,
+    pub label: String,
+    pub created_by: String,
+    pub pinned_at_ms: i64,
+}
+
+pub async fn insert_pin(db: D1Database, pin: &VersionPin) -> worker::Result<()> {
+    let dbres = db
+        .prepare(
+            "INSERT INTO version_pins (id, document_id, label, created_by, pinned_at_ms) VALUES (?, ?, ?, ?, ?);",
+        )
+        .bind(&[
+            pin.id.as_str().into(),
+            pin.document_id.as_str().into(),
+            pin.label.as_str().into(),
+            pin.created_by.as_str().into(),
+            (pin.pinned_at_ms as f64).into(),
+        ])?
+        .run()
+        .await?;
+    if let Some(e) = dbres.error() {
+        error!(error = e, pin_id = pin.id, "Error inserting pin into D1");
+        return Err(worker::Error::from(e));
+    }
+    Ok(())
+}
+
+pub async fn get_pins_for_document(
+    db: D1Database,
+    document_id: &str,
+) -> worker::Result<Vec<VersionPin>> {
+    let result = db
+        .prepare(
+            "SELECT id, document_id, label, created_by, pinned_at_ms FROM version_pins WHERE document_id = ? ORDER BY pinned_at_ms ASC;",
+        )
+        .bind(&[document_id.into()])?
+        .all()
+        .await?;
+    Ok(result.results::<VersionPin>()?)
+}
+
+pub async fn delete_pin(
+    db: D1Database,
+    document_id: &str,
+    pin_id: &str,
+) -> worker::Result<bool> {
+    let dbres = db
+        .prepare(
+            "DELETE FROM version_pins WHERE id = ? AND document_id = ?;",
+        )
+        .bind(&[pin_id.into(), document_id.into()])?
+        .run()
+        .await?;
+    if let Some(e) = dbres.error() {
+        error!(error = e, pin_id, "Error deleting pin from D1");
+        return Err(worker::Error::from(e));
+    }
+    let deleted = dbres
+        .meta()?
+        .and_then(|m| m.changes)
+        .map(|c| c > 0)
+        .unwrap_or(false);
+    Ok(deleted)
+}
 pub async fn insert_user_mapping(
     db: D1Database,
     user_id: &str,

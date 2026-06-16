@@ -83,6 +83,13 @@ export type HistoryVersionId = {
   counter: number;
 };
 
+export type VersionPin = {
+  id: string;
+  label: string;
+  createdBy: string;
+  pinnedAtMs: number;
+};
+
 export const syncServiceClient = {
   async wakeup(args: { documentId: string }) {
     await syncFetch(`/document/${args.documentId}/wakeup`, {
@@ -258,6 +265,64 @@ export const syncServiceClient = {
       }
     }
     return ok({ bytes, versionId });
+  },
+  async getPins(args: { documentId: string }) {
+    const token = await getPermissionToken('document', args.documentId);
+    const response = await platformFetch(
+      `${SYNC_SERVICE_WORKER_URL}/document/${args.documentId}/pins`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          ...(isTauri() && { Origin: SYNC_ORIGIN }),
+        },
+        method: 'GET',
+      }
+    );
+    if (!response.ok) {
+      return err(`Failed to fetch pins: ${response.status}`);
+    }
+    const data = (await response.json()) as VersionPin[];
+    return ok(data);
+  },
+  async createPin(args: { documentId: string; label: string; pinnedAtMs?: number }) {
+    const token = await getPermissionToken('document', args.documentId);
+    const response = await platformFetch(
+      `${SYNC_SERVICE_WORKER_URL}/document/${args.documentId}/pins`,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          ...(isTauri() && { Origin: SYNC_ORIGIN }),
+        },
+        method: 'POST',
+        body: JSON.stringify({
+          label: args.label,
+          ...(args.pinnedAtMs !== undefined && { pinnedAtMs: args.pinnedAtMs }),
+        }),
+      }
+    );
+    if (!response.ok) {
+      return err(`Failed to create pin: ${response.status}`);
+    }
+    const data = (await response.json()) as { id: string; pinnedAtMs: number };
+    return ok(data);
+  },
+  async deletePin(args: { documentId: string; pinId: string }) {
+    const token = await getPermissionToken('document', args.documentId);
+    const response = await platformFetch(
+      `${SYNC_SERVICE_WORKER_URL}/document/${args.documentId}/pins/${args.pinId}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          ...(isTauri() && { Origin: SYNC_ORIGIN }),
+        },
+        method: 'DELETE',
+      }
+    );
+    if (!response.ok) {
+      return err(`Failed to delete pin: ${response.status}`);
+    }
+    return ok(undefined);
   },
   async getRaw(args: { documentId: string }): Promise<SerializedEditorState> {
     const token = await getPermissionToken('document', args.documentId);

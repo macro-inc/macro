@@ -13,8 +13,9 @@
 
 use std::collections::HashMap;
 
-/// Largest gap (ms) between consecutive edits that still counts as one session.
-pub const SESSION_GAP_MS: i64 = 5 * 60 * 1000;
+/// Largest gap in ms between consecutive edits that still counts as one session
+/// sort of a subjective thing, for now 10 minutes
+pub const SESSION_GAP_MS: i64 = 10 * 60 * 1000;
 
 /// A detected editing session for one user over a contiguous (within-gap) run of
 /// edits. `start_ms`/`end_ms` are the oldest/newest edit timestamps (ms).

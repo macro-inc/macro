@@ -6,13 +6,12 @@ import { toast } from '@core/component/Toast/Toast';
 import { storageServiceClient } from '@service-storage/client';
 import {
   type HistorySession,
-  type HistoryVersionId,
   syncServiceClient,
 } from '@service-sync/client';
+import { useHistoryStateQuery } from '@queries/history';
+import { useCreatePinMutation, useDeletePinMutation, usePinsQuery } from '@queries/pins';
 import { Button } from '@ui';
 import GitFork from '@phosphor-icons/core/regular/git-fork.svg?component-solid';
-import type { SerializedEditorState } from 'lexical';
-import { LoroDoc } from 'loro-crdt';
 import {
   createMemo,
   createResource,
@@ -43,6 +42,10 @@ export function HistoryOverlay(props: {
   const [history] = createResource(() => props.documentId, fetchHistory);
   const { insertSplit } = useSplitLayout();
 
+  const pins = usePinsQuery(() => props.documentId);
+  const createPin = useCreatePinMutation(() => props.documentId);
+  const deletePin = useDeletePinMutation(() => props.documentId);
+
   const onKeyDown = (e: KeyboardEvent) => {
     if (!props.visible || e.key !== 'Escape' || e.defaultPrevented) return;
     e.preventDefault();
@@ -56,55 +59,26 @@ export function HistoryOverlay(props: {
   const [selected, setSelected] = createSignal<Date | null>(null);
 
   // The moment we resolve state at: the selected cursor, or the latest session end.
-  const targetAt = createMemo<Date | undefined>(() => {
+  const targetAtMs = createMemo<number | undefined>(() => {
     const scrubbed = selected();
-    if (scrubbed) return scrubbed;
+    if (scrubbed) return scrubbed.getTime();
 
     const sessions = history()?.sessions;
     if (!sessions || sessions.length === 0) return undefined;
 
-    const latest = sessions.reduce(
-      (m, s) => Math.max(m, s.endMs),
-      sessions[0].endMs
-    );
-    return new Date(latest);
+    return sessions.reduce((m, s) => Math.max(m, s.endMs), sessions[0].endMs);
   });
 
-  const [committed] = createResource(
-    // Key on epoch-ms so equal moments don't refetch (Date identity would).
-    () => targetAt()?.getTime(),
-    async (
-      tMs
-    ): Promise<
-      | { state: SerializedEditorState; versionId: HistoryVersionId | null }
-      | undefined
-    > => {
-      const maybe = await syncServiceClient.getStateAt({
-        documentId: props.documentId,
-        tMs,
-      });
-      if (maybe.isErr()) {
-        console.error("Couldn't get state at history moment", maybe.error);
-        return undefined;
-      }
-      const doc = new LoroDoc();
-      doc.import(maybe.value.bytes);
-      return {
-        state: doc.toJSON() as SerializedEditorState,
-        versionId: maybe.value.versionId,
-      };
-    }
-  );
+  const committed = useHistoryStateQuery(() => props.documentId, targetAtMs);
 
   const [forking, setForking] = createSignal(false);
-  const handleFork = async () => {
-    const current = committed.latest;
+  const handleFork = async (keepOpen = false) => {
+    const current = committed.data;
     if (!current || forking()) return;
     setForking(true);
     const res = await storageServiceClient.copyDocument({
       documentId: props.documentId,
       documentName: `${props.documentName} (forked)`,
-      // The viewed moment's version → a state-only fork (no history copied).
       syncServiceVersion: current.versionId ?? undefined,
     });
     setForking(false);
@@ -113,7 +87,7 @@ export function HistoryOverlay(props: {
       return;
     }
     insertSplit({ type: 'md', id: res.value.documentId }, 'fork');
-    props.onExit();
+    if (!keepOpen) props.onExit();
   };
 
   return (
@@ -126,16 +100,16 @@ export function HistoryOverlay(props: {
             variant="active"
             size="sm"
             class="order-first"
-            onClick={handleFork}
-            disabled={forking() || !committed.latest}
+            onClick={(e) => handleFork(e.ctrlKey || e.metaKey)}
+            disabled={forking() || !committed.data}
           >
             <GitFork />
             {forking() ? 'Forking…' : 'Fork'}
           </Button>
         </SplitToolbarLeft>
       </Show>
-      {/* `.latest` keeps the last rendered state visible while the next loads. */}
-      <Show keyed when={committed.latest?.state}>
+      {/* placeholderData keeps the last rendered state visible while the next loads. */}
+      <Show keyed when={committed.data?.state}>
         {(state) => {
           const config = buildConfig('markdown')
             .withMentions()
@@ -158,7 +132,13 @@ export function HistoryOverlay(props: {
         {(h) => (
           <div class="fixed inset-x-0 bottom-0 z-30 flex items-center gap-3 border-edge border-t bg-active px-3 pt-4 pb-3 ">
             <div class="flex-1 min-w-0">
-              <HistoryScrubber sessions={h().sessions} onSelect={setSelected} />
+              <HistoryScrubber
+                  sessions={h().sessions}
+                  pins={pins.data ?? []}
+                  onSelect={setSelected}
+                  onCreatePin={(atMs, label) => createPin.mutate({ atMs, label })}
+                  onDeletePin={(pinId) => deletePin.mutate(pinId)}
+                />
             </div>
           </div>
         )}

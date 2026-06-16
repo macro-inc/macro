@@ -34,7 +34,7 @@ import {
   Show,
   untrack,
 } from 'solid-js';
-import { HistoryOverlay } from './HistoryOverlay';
+import { HistoryOverlay } from '../history/HistoryOverlay';
 import { InlineTaskGithubPullRequests } from './InlineTaskGithubPullRequests';
 import { InlineTaskProperties } from './InlineTaskProperties';
 import { InstructionsEditor } from './InstructionsEditor';
