@@ -529,6 +529,10 @@ const cloudStorageService = new CloudStorageService(
         name: 'DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY',
         value: pulumi.interpolate`${CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME}`,
       },
+      {
+        name: 'DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME',
+        value: CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME,
+      },
       { name: 'ISSUER', value: pulumi.interpolate`${FUSIONAUTH_ISSUER}` },
       {
         name: 'JWT_SECRET_KEY',
