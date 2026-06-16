@@ -6,6 +6,7 @@ use call::domain::service::{CallRecordQueryServiceImpl, CallServiceImpl};
 use call::inbound::toolset::CallToolContext;
 use call::outbound::pg_call_repo::PgCallRepo;
 use call::outbound::s3_recording_storage::S3RecordingStorage;
+use channels::outbound::pg_channels_repo::PgChannelsRepo;
 use comms::domain::service::ChannelServiceImpl;
 use comms::outbound::postgres::comms_repo::PgCommsRepo;
 use comms::outbound::postgres::user_repo::PgUserRepo;
@@ -297,8 +298,8 @@ async fn main() -> anyhow::Result<()> {
             Arc::new(chat::outbound::postgres::PgChatRepo::new(db.clone())),
             entity_access_service.clone(),
         ),
-        channel: comms::inbound::attachment::CommsAttachmentService::new(
-            Arc::new(PgCommsRepo::new(ReadOnlyPool(db.clone()))),
+        channel: channels::inbound::attachment::ChannelAttachmentService::new(
+            Arc::new(PgChannelsRepo::new(db.clone())),
             entity_access_service.clone(),
         ),
         static_file: static_file::inbound::attachment::StaticFileAttachmentService::new(Arc::new(

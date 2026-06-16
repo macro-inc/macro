@@ -1,6 +1,8 @@
 #[cfg(test)]
 mod tests;
 
+#[cfg(feature = "attachment")]
+use crate::domain::ports::ChannelAttachmentRepo;
 use crate::domain::{
     models::{
         Activity, ActivityType, AttachmentChannelReference, AttachmentEntityReference,
@@ -9,8 +11,9 @@ use crate::domain::{
         ChannelMessageKind, ChannelMetadata, ChannelParticipant, ChannelPreviewRow, ChannelType,
         CountedReaction, CreateChannelRequest, CreateEntityMentionOptions, EntityMention,
         MessageAttachment, MessagePageDirection, MutatedAttachment, MutatedMessage,
-        NewChannelAttachment, ParticipantRole, PatchChannelRequest, ResolvedChannelMessage, Sender,
-        SimpleMention, ThreadData, ThreadReplyRow, TopLevelMessageRow,
+        NewChannelAttachment, ParticipantRole, PatchChannelRequest, RecentChannelMessage,
+        ResolvedChannelMessage, Sender, SimpleMention, ThreadData, ThreadReplyRow,
+        TopLevelMessageRow,
     },
     ports::{ChannelRepo, TopLevelMessagesQueryResult},
 };
@@ -612,6 +615,71 @@ fn fallback_user_name(user_id: &str) -> String {
         .split_once('@')
         .map_or(email, |(local, _)| local)
         .to_string()
+}
+
+#[cfg(feature = "attachment")]
+impl ChannelAttachmentRepo for PgChannelsRepo {
+    type Err = anyhow::Error;
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_channel_name_for_attachment(
+        &self,
+        channel_id: Uuid,
+    ) -> Result<Option<String>, Self::Err> {
+        sqlx::query_scalar!("SELECT name FROM comms_channels WHERE id = $1", channel_id)
+            .fetch_optional(&self.pool)
+            .await
+            .map(|row| row.flatten())
+            .map_err(Into::into)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_recent_messages_for_attachment(
+        &self,
+        channel_id: Uuid,
+        limit: u32,
+    ) -> Result<Vec<RecentChannelMessage>, Self::Err> {
+        Ok(sqlx::query!(
+            r#"
+        SELECT
+            m.id AS "message_id!",
+            m.thread_id,
+            m.sender_id AS "sender_id!",
+            m.content AS "content!",
+            m.created_at AS "created_at!",
+            m.updated_at AS "updated_at!",
+            m.deleted_at::timestamptz AS "deleted_at?",
+            COALESCE(
+                ARRAY(
+                    SELECT entity_type || ':' || entity_id
+                    FROM comms_entity_mentions em
+                    WHERE em.source_entity_type = 'message'
+                      AND em.source_entity_id = m.id::text
+                ),
+                '{}'::text[]
+            ) AS "mentions!"
+        FROM comms_messages m
+        WHERE m.channel_id = $1
+          AND m.deleted_at IS NULL
+        ORDER BY m.created_at DESC
+        LIMIT $2
+        "#,
+            channel_id,
+            i64::from(limit)
+        )
+        .map(|row| RecentChannelMessage {
+            message_id: row.message_id,
+            thread_id: row.thread_id,
+            sender_id: row.sender_id,
+            content: row.content,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            deleted_at: row.deleted_at,
+            mentions: row.mentions,
+        })
+        .fetch_all(&self.pool)
+        .await?)
+    }
 }
 
 impl ChannelRepo for PgChannelsRepo {

@@ -1,3 +1,6 @@
+/// Attachment adapter for resolving channel references into AI-consumable context.
+#[cfg(feature = "attachment")]
+pub mod attachment;
 /// Axum handler and router for channel messages.
 #[cfg(feature = "inbound")]
 pub mod axum_router;

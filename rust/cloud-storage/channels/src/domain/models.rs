@@ -245,6 +245,27 @@ impl Identify for ChannelMessage {
     }
 }
 
+/// Lightweight channel message used when rendering a channel as an AI attachment.
+#[derive(Debug, Clone)]
+pub struct RecentChannelMessage {
+    /// Message id.
+    pub message_id: Uuid,
+    /// Thread parent id, if this message is a reply.
+    pub thread_id: Option<Uuid>,
+    /// Sender actor id.
+    pub sender_id: String,
+    /// Message body.
+    pub content: String,
+    /// Message creation timestamp.
+    pub created_at: DateTime<Utc>,
+    /// Message update timestamp.
+    pub updated_at: DateTime<Utc>,
+    /// Message deletion timestamp, if any.
+    pub deleted_at: Option<DateTime<Utc>>,
+    /// Message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`.
+    pub mentions: Vec<String>,
+}
+
 impl SortOn<CreatedAt> for ChannelMessage {
     fn sort_on(sort_type: CreatedAt) -> impl FnMut(&Self) -> CursorVal<CreatedAt> {
         move |msg| CursorVal {

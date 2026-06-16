@@ -8,8 +8,8 @@ use crate::domain::models::{
     GetOrCreatePrivateRequest, MessageAttachment, MessagePageDirection, MutatedAttachment,
     MutatedMessage, NewChannelAttachment, PatchChannelRequest, PatchMessageRequest,
     PostMessageRequest, PostMessageResponse, PostReactionRequest, PostTypingRequest,
-    ReferencedShareItem, RemoveParticipantsRequest, ResolvedChannelMessage, Sender, SimpleMention,
-    ThreadData, ThreadReply, ThreadReplyRow, TopLevelMessageRow,
+    RecentChannelMessage, ReferencedShareItem, RemoveParticipantsRequest, ResolvedChannelMessage,
+    Sender, SimpleMention, ThreadData, ThreadReply, ThreadReplyRow, TopLevelMessageRow,
 };
 use crate::domain::side_effects::{
     ChannelDocumentMention, ChannelNotificationEffect, ChannelRealtimeEffect,
@@ -23,6 +23,27 @@ use uuid::Uuid;
 
 /// Repository for channel persistence and query data.
 #[cfg_attr(test, mockall::automock(type Err = anyhow::Error;))]
+/// Repository methods needed to render channels as AI attachments.
+#[cfg(feature = "attachment")]
+pub trait ChannelAttachmentRepo: Send + Sync + 'static {
+    /// Error type for repo operations.
+    type Err: Into<anyhow::Error> + Send;
+
+    /// Fetch the stored channel name, if one exists.
+    fn get_channel_name_for_attachment(
+        &self,
+        channel_id: Uuid,
+    ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
+
+    /// Fetch recent non-deleted channel messages, newest-first.
+    fn get_recent_messages_for_attachment(
+        &self,
+        channel_id: Uuid,
+        limit: u32,
+    ) -> impl Future<Output = Result<Vec<RecentChannelMessage>, Self::Err>> + Send;
+}
+
+/// Repository for channel persistence and query data.
 pub trait ChannelRepo: Send + Sync + 'static {
     /// Error type for repo operations.
     type Err: Into<anyhow::Error> + Send;

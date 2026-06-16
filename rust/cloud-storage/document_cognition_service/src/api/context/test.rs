@@ -108,6 +108,7 @@ impl StreamRepo for MockStreamRepo {
 
 pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Arc<ApiContext> {
     use aws_sdk_sqs;
+    use channels::outbound::pg_channels_repo::PgChannelsRepo;
     use comms::domain::service::ChannelServiceImpl;
     use comms::outbound::postgres::comms_repo::PgCommsRepo;
     use comms::outbound::postgres::user_repo::PgUserRepo;
@@ -394,8 +395,8 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
                     Arc::new(chat::outbound::postgres::PgChatRepo::new(pool.clone())),
                     entity_access_service.clone(),
                 ),
-                channel: comms::inbound::attachment::CommsAttachmentService::new(
-                    Arc::new(PgCommsRepo::new(readonly_pool::ReadOnlyPool(pool.clone()))),
+                channel: channels::inbound::attachment::ChannelAttachmentService::new(
+                    Arc::new(PgChannelsRepo::new(pool.clone())),
                     entity_access_service.clone(),
                 ),
                 static_file: static_file::inbound::attachment::StaticFileAttachmentService::new(

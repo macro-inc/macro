@@ -7,11 +7,11 @@ use ai_tools::{
 };
 use attachment::provider::AttachmentProvider;
 use axum::extract::FromRef;
+use channels::inbound::attachment::ChannelAttachmentService;
+use channels::outbound::pg_channels_repo::PgChannelsRepo;
 use chat::domain::service::MessageServiceImpl;
 use chat::inbound::attachment::ChatAttachmentService;
 use chat::outbound::postgres::PgChatRepo;
-use comms::inbound::attachment::CommsAttachmentService;
-use comms::outbound::postgres::comms_repo::PgCommsRepo;
 use connection_gateway::service::connection::ConnectionRepo;
 use document_storage_service_client::DocumentStorageServiceClient;
 use documents::inbound::attachment::DocumentAttachmentService;
@@ -38,7 +38,7 @@ pub type DcsAttachmentProvider = AttachmentProvider<
     DocumentAttachmentService<ToolDocumentService, ToolEntityAccessService>,
     EmailAttachmentService<ToolEmailService, ToolEntityAccessService>,
     ChatAttachmentService<PgChatRepo, ToolEntityAccessService>,
-    CommsAttachmentService<PgCommsRepo, ToolEntityAccessService>,
+    ChannelAttachmentService<PgChannelsRepo, ToolEntityAccessService>,
     StaticFileAttachmentService<CdnStaticFileRepo>,
 >;
 
