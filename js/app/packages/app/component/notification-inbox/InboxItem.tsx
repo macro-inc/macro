@@ -2,6 +2,7 @@ import { UserIcon } from '@core/component/UserIcon';
 import { macroIdToEmail, tryMacroId, useDisplayName } from '@core/user';
 import type { EntityData } from '@entity';
 import type { UnifiedNotification } from '@notifications/types';
+import CaretRightIcon from '@phosphor-icons/core/regular/caret-right.svg?component-solid';
 import { Property } from '@property';
 import type { Property as PropertyT } from '@property/types';
 import { Avatar, Button, type ButtonProps, cn, Layer } from '@ui';
@@ -74,7 +75,9 @@ interface RootProps {
 
 function Root(props: RootProps) {
   const item = () => props.item;
-  const unread = () => props.unread ?? item().unread;
+  const unread = () =>
+    props.unread ??
+    (item().unread || item().subItems?.some((subItem) => subItem.unread));
   const selected = () => props.selected;
   const context: InboxItemContextValue = {
     item,
@@ -146,11 +149,13 @@ function Leading(props: SlotProps) {
 
 function UnreadIndicator(props: { unread?: boolean; class?: string }) {
   const ctx = useInboxItem();
-  const unread = () => props.unread ?? ctx.unread();
+  const grouped = () => Boolean(ctx.item().subItems?.length);
 
   return (
-    <Show when={unread()}>
-      <span class={cn('size-2 rounded-full bg-accent', props.class)} />
+    <Show when={grouped()}>
+      <CaretRightIcon
+        class={cn('size-2.5 text-ink-extra-muted', props.class)}
+      />
     </Show>
   );
 }
@@ -316,6 +321,16 @@ function Description(props: DescriptionProps) {
     const count = (parent.item().subItems?.length ?? 0) + 1;
     return count > 1 ? count : undefined;
   };
+  const unreadSubItemCount = () =>
+    parent.item().subItems?.filter((subItem) => subItem.unread).length ?? 0;
+  const showUnreadDot = () => {
+    if (groupCount()) return parent.item().unread || unreadSubItemCount() === 1;
+    return parent.unread() || parent.item().unread;
+  };
+  const badgeCount = () => {
+    if (unreadSubItemCount() > 1) return unreadSubItemCount();
+    return groupCount();
+  };
   const context: InboxItemContextValue = {
     ...parent,
   };
@@ -332,22 +347,36 @@ function Description(props: DescriptionProps) {
         {local.children}
         <Show when={showTimestamp()}>
           <Show
-            when={groupCount()}
+            when={showUnreadDot()}
             fallback={
-              <Show when={parent.item().timestamp}>
-                {(timestamp) => (
-                  <Timestamp class="ml-auto">{timestamp()}</Timestamp>
+              <Show
+                when={badgeCount()}
+                fallback={
+                  <Show when={parent.item().timestamp}>
+                    {(timestamp) => (
+                      <Timestamp class="ml-auto">{timestamp()}</Timestamp>
+                    )}
+                  </Show>
+                }
+              >
+                {(count) => (
+                  <Layer depth={5}>
+                    <span
+                      class={cn(
+                        'ml-auto grid h-4 min-w-4 place-items-center rounded px-1 text-xs',
+                        unreadSubItemCount() > 1
+                          ? 'bg-accent text-surface'
+                          : 'bg-ink-muted/10 text-ink-muted'
+                      )}
+                    >
+                      {count()}
+                    </span>
+                  </Layer>
                 )}
               </Show>
             }
           >
-            {(count) => (
-              <Layer depth={5}>
-                <span class="ml-auto grid h-4 min-w-4 place-items-center rounded bg-ink-muted/10 px-1 text-xs text-ink-muted">
-                  {count()}
-                </span>
-              </Layer>
-            )}
+            <span class="ml-auto size-2 rounded-full bg-accent" />
           </Show>
         </Show>
       </div>

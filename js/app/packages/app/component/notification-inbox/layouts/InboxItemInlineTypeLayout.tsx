@@ -16,7 +16,7 @@ import GitMergeIcon from '@phosphor-icons/core/regular/git-merge.svg?component-s
 import GitPullRequestIcon from '@phosphor-icons/core/regular/git-pull-request.svg?component-solid';
 import PhoneIcon from '@phosphor-icons/core/regular/phone.svg?component-solid';
 import UsersIcon from '@phosphor-icons/core/regular/users.svg?component-solid';
-import { Avatar, Layer } from '@ui';
+import { Avatar, cn, Layer } from '@ui';
 import { formatDistanceToNow } from 'date-fns';
 import { For, Match, Show, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
@@ -362,6 +362,19 @@ function Description() {
     if (metadata?.tag !== 'new_email') return undefined;
     return String(metadata.content.subject || '') || undefined;
   };
+  const unreadSubItems = () =>
+    item().subItems?.filter((subItem) => subItem.unread) ?? [];
+  const groupedDescription = () => {
+    const unreadItems = unreadSubItems();
+    if (unreadItems.length > 1) {
+      const label = type()?.startsWith('channel_')
+        ? 'messages'
+        : 'notifications';
+      return `${unreadItems.length} new ${label}`;
+    }
+
+    return unreadItems[0]?.content || item().content;
+  };
 
   return (
     <Show when={item().senderName || item().action || item().content}>
@@ -376,7 +389,7 @@ function Description() {
                   item().senderName ||
                   item().senderId ||
                   action() ||
-                  item().content ||
+                  groupedDescription() ||
                   item().properties?.length
                 }
               >
@@ -399,7 +412,7 @@ function Description() {
                   <For each={item().properties ?? []}>
                     {(property) => <PropertyPill property={property} />}
                   </For>
-                  <Show when={item().content}>
+                  <Show when={groupedDescription()}>
                     {(content) => <ContentText content={content()} />}
                   </Show>
                 </div>
@@ -422,50 +435,65 @@ function Description() {
           </Show>
         }
       >
-        <>
-          <InboxItem.Description timestamp={false}>
-            <Show when={emailSubject()}>
-              {(subject) => (
-                <span class="min-w-0 truncate text-xs text-ink-muted/70">
-                  {subject()}
-                </span>
-              )}
-            </Show>
-          </InboxItem.Description>
-          <Show when={item().content}>
-            {(content) => (
-              <span class="block min-w-0 truncate text-xs text-ink-muted/70">
-                <ContentText content={content()} />
-              </span>
-            )}
-          </Show>
-        </>
+        <InboxItem.Description class="overflow-hidden" timestamp={false}>
+          <span class="min-w-0 truncate text-xs text-ink-muted/70">
+            <Show when={emailSubject()}>{(subject) => subject()}</Show>
+            <Show when={emailSubject() && item().content}> — </Show>
+            <Show when={item().content}>{(content) => content()}</Show>
+          </span>
+        </InboxItem.Description>
       </Show>
     </Show>
   );
 }
 
 function TimestampColumn() {
-  const { item } = useInboxItem();
+  const { item, unread } = useInboxItem();
   const groupCount = () => {
     const count = (item().subItems?.length ?? 0) + 1;
     return count > 1 ? count : undefined;
   };
+  const unreadSubItemCount = () =>
+    item().subItems?.filter((subItem) => subItem.unread).length ?? 0;
+  const showUnreadDot = () => {
+    if (groupCount()) return item().unread || unreadSubItemCount() === 1;
+    return unread() || item().unread;
+  };
+  const badgeCount = () => {
+    if (unreadSubItemCount() > 1) return unreadSubItemCount();
+    return groupCount();
+  };
 
   return (
-    <div class="flex h-full flex-col items-end gap-1 pt-0.5">
+    <div class="flex h-full flex-col items-end justify-between pt-0.5">
+      <div class="flex h-4 items-center justify-end">
+        <Show
+          when={showUnreadDot()}
+          fallback={
+            <Show when={badgeCount()}>
+              {(count) => (
+                <Layer depth={5}>
+                  <span
+                    class={cn(
+                      'grid h-4 min-w-4 place-items-center rounded px-1 text-xs',
+                      unreadSubItemCount() > 1
+                        ? 'bg-accent text-surface'
+                        : 'bg-ink-muted/10 text-ink-muted'
+                    )}
+                  >
+                    {count()}
+                  </span>
+                </Layer>
+              )}
+            </Show>
+          }
+        >
+          <span class="size-2 rounded-full bg-accent" />
+        </Show>
+      </div>
       <Show when={item().timestamp}>
         {(timestamp) => (
           <InboxItem.Timestamp>{timestamp()}</InboxItem.Timestamp>
-        )}
-      </Show>
-      <Show when={groupCount()}>
-        {(count) => (
-          <Layer depth={5}>
-            <span class="grid h-4 min-w-4 place-items-center rounded bg-ink-muted/10 px-1 text-xs text-ink-muted">
-              {count()}
-            </span>
-          </Layer>
         )}
       </Show>
     </div>
@@ -483,7 +511,7 @@ export function InboxItemInlineTypeLayout(
       <ActorIcon />
       <InboxItem.Body>
         <div class="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-x-2">
-          <div class="min-w-0">
+          <div class="flex min-w-0 flex-col gap-1">
             <Header />
             <Description />
           </div>

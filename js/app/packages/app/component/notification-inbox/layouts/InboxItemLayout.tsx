@@ -2,6 +2,8 @@ import {
   EntityIcon,
   type EntityIconSelector,
 } from '@core/component/EntityIcon';
+import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
 import GithubIcon from '@icon/mcp-github.svg';
 import UsersIcon from '@phosphor/users.svg';
 import AtIcon from '@phosphor-icons/core/regular/at.svg?component-solid';
@@ -15,7 +17,7 @@ import PhoneIcon from '@phosphor-icons/core/regular/phone.svg?component-solid';
 import RobotIcon from '@phosphor-icons/core/regular/robot.svg?component-solid';
 import UserPlusIcon from '@phosphor-icons/core/regular/user-plus.svg?component-solid';
 import XCircleIcon from '@phosphor-icons/core/regular/x-circle.svg?component-solid';
-import { Layer } from '@ui';
+import { cn, Layer } from '@ui';
 import { For, type JSX, Match, Show, Switch } from 'solid-js';
 import { match, P } from 'ts-pattern';
 import { InboxItem, PropertyPill, useInboxItem } from '../InboxItem';
@@ -264,6 +266,18 @@ function NotificationTitle(props: {
   );
 }
 
+function DescriptionText(props: { content: string }) {
+  return (
+    <span class="min-w-0 truncate text-xs text-ink-muted/70">
+      <StaticMarkdown
+        markdown={props.content}
+        singleLine
+        theme={unifiedListMarkdownTheme}
+      />
+    </span>
+  );
+}
+
 function NotificationDescription(props: { avatar?: boolean } = {}) {
   const { item } = useInboxItem();
   const showAvatar = () => props.avatar ?? true;
@@ -307,11 +321,7 @@ function NotificationDescription(props: { avatar?: boolean } = {}) {
           )}
         </Show>
         <Show when={item().content}>
-          {(content) => (
-            <span class="min-w-0 truncate text-xs text-ink-muted/70">
-              {content()}
-            </span>
-          )}
+          {(content) => <DescriptionText content={content()} />}
         </Show>
       </InboxItem.Description>
     </Show>
@@ -419,7 +429,11 @@ function EmailDescription() {
       <Show when={item().content}>
         {(content) => (
           <span class="block min-w-0 max-w-xl truncate text-xs text-ink-muted/70">
-            {content()}
+            <StaticMarkdown
+              markdown={content()}
+              singleLine
+              theme={unifiedListMarkdownTheme}
+            />
           </span>
         )}
       </Show>
@@ -472,8 +486,20 @@ function GithubStatusContextLine() {
 export function InboxItemLayout(
   props: { onClick?: (event: MouseEvent) => void } = {}
 ) {
-  const { item } = useInboxItem();
+  const { item, unread } = useInboxItem();
   const type = useNotificationType();
+  const unreadSubItemCount = () =>
+    item().subItems?.filter((subItem) => subItem.unread).length ?? 0;
+  const showUnreadDot = () => {
+    if (badgeCount()) return item().unread || unreadSubItemCount() === 1;
+    return unread() || item().unread;
+  };
+  const badgeCount = () => {
+    if (unreadSubItemCount() > 1) return unreadSubItemCount();
+
+    const count = (item().subItems?.length ?? 0) + 1;
+    return count > 1 ? count : undefined;
+  };
 
   return (
     <Switch fallback={<StandardLayout onClick={props.onClick} />}>
@@ -516,26 +542,38 @@ export function InboxItemLayout(
                   {(property) => <PropertyPill property={property} />}
                 </For>
                 <Show
-                  when={
-                    (item().subItems?.length ?? 0) > 0
-                      ? (item().subItems?.length ?? 0) + 1
-                      : undefined
-                  }
+                  when={showUnreadDot()}
                   fallback={
-                    <Show when={item().timestamp}>
-                      {(timestamp) => (
-                        <InboxItem.Timestamp>{timestamp()}</InboxItem.Timestamp>
+                    <Show
+                      when={badgeCount()}
+                      fallback={
+                        <Show when={item().timestamp}>
+                          {(timestamp) => (
+                            <InboxItem.Timestamp>
+                              {timestamp()}
+                            </InboxItem.Timestamp>
+                          )}
+                        </Show>
+                      }
+                    >
+                      {(count) => (
+                        <Layer depth={5}>
+                          <span
+                            class={cn(
+                              'grid h-4 min-w-4 place-items-center rounded px-1 text-xs',
+                              unreadSubItemCount() > 1
+                                ? 'bg-accent text-surface'
+                                : 'bg-ink-muted/10 text-ink-muted'
+                            )}
+                          >
+                            {count()}
+                          </span>
+                        </Layer>
                       )}
                     </Show>
                   }
                 >
-                  {(count) => (
-                    <Layer depth={5}>
-                      <span class="grid h-4 min-w-4 place-items-center rounded bg-ink-muted/10 px-1 text-xs text-ink-muted">
-                        {count()}
-                      </span>
-                    </Layer>
-                  )}
+                  <span class="size-2 rounded-full bg-accent" />
                 </Show>
               </span>
             </InboxItem.Description>
