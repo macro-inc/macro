@@ -320,7 +320,110 @@ export function Lightbox(props: LightboxProps) {
   let isSwiping = false;
   let zoompinchHandlingTouch = false;
 
+  // Inertial panning ("momentum"). After a single-finger pan while zoomed in,
+  // releasing lets the image keep gliding in the release direction and ease to
+  // a stop. Velocity is sampled from the engine's own translate after each move
+  // — so it already reflects edge clamping (a pan pinned at a boundary reads as
+  // zero velocity and won't fling) — then replayed in a dt-scaled rAF loop, so
+  // the feel is frame-rate independent. setTranslateFromUserGesture re-clamps
+  // every frame, which is what eases the glide to a halt at the bounds.
+  const MOMENTUM_FRICTION = 0.92; // velocity retained per 60fps frame
+  const MOMENTUM_MIN_SPEED = 0.015; // px/ms — below this the glide stops
+  const MOMENTUM_MAX_SPEED = 4; // px/ms — clamp pathologically fast flicks
+  const MOMENTUM_MAX_GAP_MS = 80; // skip the fling if the finger paused before lift
+  let momentumVx = 0; // px/ms
+  let momentumVy = 0;
+  let momentumLastX = 0;
+  let momentumLastY = 0;
+  let momentumLastTime = 0;
+  let momentumRaf: number | undefined;
+
+  const cancelMomentum = () => {
+    if (momentumRaf !== undefined) {
+      cancelAnimationFrame(momentumRaf);
+      momentumRaf = undefined;
+    }
+  };
+  onCleanup(cancelMomentum);
+
+  // Re-baseline velocity tracking to the engine's current translate. Called
+  // when an engine-handled gesture starts so the first move measures cleanly.
+  const resetMomentumTracking = (engine: ZoompinchHandle['engine']) => {
+    momentumVx = 0;
+    momentumVy = 0;
+    momentumLastX = engine.translateX;
+    momentumLastY = engine.translateY;
+    momentumLastTime = performance.now();
+  };
+
+  // Fold the latest engine translate into the smoothed velocity estimate.
+  const sampleMomentum = (engine: ZoompinchHandle['engine']) => {
+    const now = performance.now();
+    const dt = now - momentumLastTime;
+    if (dt > 0) {
+      const vx = (engine.translateX - momentumLastX) / dt;
+      const vy = (engine.translateY - momentumLastY) / dt;
+      // Weight the newest sample but keep history to smooth out finger jitter.
+      momentumVx = vx * 0.8 + momentumVx * 0.2;
+      momentumVy = vy * 0.8 + momentumVy * 0.2;
+    }
+    momentumLastX = engine.translateX;
+    momentumLastY = engine.translateY;
+    momentumLastTime = now;
+  };
+
+  const startMomentum = (engine: ZoompinchHandle['engine']) => {
+    cancelMomentum();
+    // Ignore stale velocity — the finger came to rest before lifting.
+    if (performance.now() - momentumLastTime > MOMENTUM_MAX_GAP_MS) return;
+    const speed = Math.hypot(momentumVx, momentumVy);
+    if (speed < MOMENTUM_MIN_SPEED) return;
+    if (speed > MOMENTUM_MAX_SPEED) {
+      const k = MOMENTUM_MAX_SPEED / speed;
+      momentumVx *= k;
+      momentumVy *= k;
+    }
+
+    let lastFrame = performance.now();
+    const step = () => {
+      // Bail if the engine went away (unmount / image swap) mid-glide.
+      if (!zoompinchHandle()) {
+        momentumRaf = undefined;
+        return;
+      }
+      const now = performance.now();
+      const dt = Math.min(now - lastFrame, 32); // cap to avoid post-stall jumps
+      lastFrame = now;
+
+      const beforeX = engine.translateX;
+      const beforeY = engine.translateY;
+      engine.setTranslateFromUserGesture(
+        engine.translateX + momentumVx * dt,
+        engine.translateY + momentumVy * dt
+      );
+      engine.update();
+
+      // An axis pinned at a clamp edge stops moving — drop its velocity so the
+      // glide doesn't coast in place.
+      if (Math.abs(engine.translateX - beforeX) < 0.01) momentumVx = 0;
+      if (Math.abs(engine.translateY - beforeY) < 0.01) momentumVy = 0;
+
+      const decay = MOMENTUM_FRICTION ** (dt / 16.6667);
+      momentumVx *= decay;
+      momentumVy *= decay;
+
+      if (Math.hypot(momentumVx, momentumVy) < MOMENTUM_MIN_SPEED) {
+        momentumRaf = undefined;
+        return;
+      }
+      momentumRaf = requestAnimationFrame(step);
+    };
+    momentumRaf = requestAnimationFrame(step);
+  };
+
   const touchOnStart = (e: TouchEvent, engine: ZoompinchHandle['engine']) => {
+    // Any new touch catches an in-flight glide (tap-to-stop).
+    cancelMomentum();
     const doSwipeDetection =
       isTouchDevice() && e.touches.length === 1 && totalZoom() <= 1.01;
     if (doSwipeDetection) {
@@ -332,6 +435,7 @@ export function Lightbox(props: LightboxProps) {
     } else {
       engine.handleTouchstart(e);
       zoompinchHandlingTouch = true;
+      resetMomentumTracking(engine);
     }
   };
 
@@ -341,6 +445,9 @@ export function Lightbox(props: LightboxProps) {
   ) => {
     if (zoompinchHandlingTouch) {
       engine.handleTouchmove(e);
+      // Track velocity for single-finger pans only; a pinch shouldn't fling.
+      if (e.touches.length === 1) sampleMomentum(engine);
+      else resetMomentumTracking(engine);
       return;
     }
     // Second finger appeared mid-gesture: switch to zoompinch
@@ -348,6 +455,7 @@ export function Lightbox(props: LightboxProps) {
       engine.handleTouchstart(e);
       zoompinchHandlingTouch = true;
       isSwiping = false;
+      resetMomentumTracking(engine);
       return;
     }
     swipeEndX = e.touches[0].clientX;
@@ -375,6 +483,10 @@ export function Lightbox(props: LightboxProps) {
     if (zoompinchHandlingTouch) {
       engine.handleTouchend(e);
       zoompinchHandlingTouch = false;
+      // Fling only when the last finger lifts after a single-finger pan while
+      // zoomed in — releasing one finger of a pinch leaves touches behind, and
+      // there's nothing to pan when the image already fits.
+      if (e.touches.length === 0 && totalZoom() > 1.01) startMomentum(engine);
       return;
     }
     if (isSwiping && totalZoom() <= 1.01) {
@@ -477,6 +589,7 @@ export function Lightbox(props: LightboxProps) {
   createEffect(() => {
     props.src();
     untrack(() => {
+      cancelMomentum();
       const handle = zoompinchHandle();
       if (handle) applyZoom(handle, 1);
       else setZoom(1);
