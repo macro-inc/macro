@@ -42,8 +42,11 @@ async fn send_health_check_messages(ctx: &context::Context) -> Result<(), Error>
         return Ok(());
     }
 
-    let current_hour = chrono::Utc::now().hour() as i32;
-    let bucket = current_hour % interval_hours;
+    let now = chrono::Utc::now();
+    let current_hour = now.hour();
+    // Bucket on hours since the epoch rather than hour-of-day, so every bucket stays
+    // reachable even when the interval exceeds 24 hours.
+    let bucket = (now.timestamp().div_euclid(3600) % i64::from(interval_hours)) as i32;
     let provider_filter = DbUserProvider::Gmail;
 
     // uses the index idx_links_active_provider_hash_bucket
