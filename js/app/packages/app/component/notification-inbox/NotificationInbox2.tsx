@@ -1,427 +1,231 @@
-import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
-import type { Property } from '@property/types';
-import { For } from 'solid-js';
+import {
+  useGlobalBlockOrchestrator,
+  useGlobalNotificationSource,
+} from '@app/component/GlobalAppState';
+import { PreviewPanel } from '@app/component/PreviewPanel';
+import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
+import { Resize } from '@core/component/Resize';
+import type { EntityData } from '@entity';
+import type { UnifiedNotification } from '@notifications';
+import CalendarIcon from '@phosphor/calendar-blank.svg';
+import { cn } from '@ui';
+import { createEffect, createMemo, createSignal, For, Show } from 'solid-js';
 import { InboxItem, type InboxItem as InboxItemData } from './InboxItem';
 import { InboxItemLayout } from './layouts/InboxItemLayout';
+import {
+  notificationAction,
+  notificationContent,
+  notificationSenderName,
+  notificationTitle,
+} from './notification-extractors';
+import {
+  getChannelGroupKey,
+  getChannelNode,
+  getChannelThreadId,
+  getDateGroupKey,
+  getDateGroupLabel,
+  getNotificationGroupKey,
+  getNotificationTime,
+  isChannelNotification,
+  sortNotifications,
+} from './notification-utils';
 
-type ExampleGroup = {
+type InboxDateGroup = {
+  id: string;
   label: string;
   items: InboxItemData[];
 };
 
-const createdAt = new Date(0).toISOString();
-const systemOwner = { scope: 'system' } as const;
+const transformNotificationItem = (args: {
+  id: string;
+  notification: UnifiedNotification;
+  subItems?: UnifiedNotification[];
+}): InboxItemData => {
+  const title = notificationTitle(args.notification);
+  const showSubItems =
+    args.notification.notification_metadata.tag !== 'github_pr_status_changed';
 
-const notification = (
-  tag: NonNullable<
-    InboxItemData['notification']
-  >['notification_metadata']['tag'],
-  content: Record<string, unknown> = {}
-): NonNullable<InboxItemData['notification']> =>
-  ({
-    notification_metadata: {
-      tag,
-      content: {
-        channelName: 'Design System',
-        documentName: 'Project brief',
-        teamName: 'Macro',
-        owner: 'macro',
-        repo: 'app',
-        number: 2842,
-        status: 'open',
-        ...content,
-      },
-    },
-  }) as unknown as NonNullable<InboxItemData['notification']>;
+  return {
+    id: args.id,
+    notification: args.notification,
+    entityId: args.notification.entity_id,
+    entityType: args.notification.entity_type as InboxItemData['entityType'],
+    entityName: title,
+    senderId: args.notification.sender_id ?? undefined,
+    senderName: notificationSenderName(args.notification),
+    action: notificationAction(args.notification),
+    targetName: title,
+    content: notificationContent(args.notification),
+    timestamp: args.notification.created_at ?? args.notification.updated_at,
+    unread: !args.notification.viewed_at && !args.notification.done,
+    subItems: showSubItems
+      ? args.subItems?.map((subItem) =>
+          transformNotificationItem({
+            id: `notification:${subItem.id}`,
+            notification: subItem,
+          })
+        )
+      : undefined,
+  };
+};
 
-const statusOptions = [
-  { id: PROPERTY_OPTION_IDS.STATUS.NOT_STARTED, label: 'Todo' },
-  { id: PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS, label: 'In progress' },
-  { id: PROPERTY_OPTION_IDS.STATUS.IN_REVIEW, label: 'In review' },
-  { id: PROPERTY_OPTION_IDS.STATUS.COMPLETED, label: 'Done' },
-];
+const groupInboxItemsByDate = (items: InboxItemData[]): InboxDateGroup[] => {
+  const groups = new Map<string, InboxDateGroup>();
 
-const priorityOptions = [
-  { id: PROPERTY_OPTION_IDS.PRIORITY.LOW, label: 'Low' },
-  { id: PROPERTY_OPTION_IDS.PRIORITY.MEDIUM, label: 'Medium' },
-  { id: PROPERTY_OPTION_IDS.PRIORITY.HIGH, label: 'High' },
-  { id: PROPERTY_OPTION_IDS.PRIORITY.URGENT, label: 'Urgent' },
-];
+  for (const item of items) {
+    const notification = item.notification;
+    if (!notification) continue;
 
-const selectProperty = (args: {
-  propertyDefinitionId: string;
-  displayName: string;
-  value: string;
-  options: Array<{ id: string; label: string }>;
-}): Property => ({
-  propertyId: args.propertyDefinitionId,
-  propertyDefinitionId: args.propertyDefinitionId,
-  displayName: args.displayName,
-  isMultiSelect: false,
-  isMetadata: false,
-  isSystemProperty: true,
-  isRequired: args.propertyDefinitionId === SYSTEM_PROPERTY_IDS.STATUS,
-  options: args.options.map((option, displayOrder) => ({
-    id: option.id,
-    property_definition_id: args.propertyDefinitionId,
-    value: { type: 'string', value: option.label },
-    display_order: displayOrder,
-    created_at: createdAt,
-    updated_at: createdAt,
-  })),
-  owner: systemOwner,
-  createdAt,
-  updatedAt: createdAt,
-  valueType: 'SELECT_STRING',
-  value: [args.value],
-});
+    const time = getNotificationTime(notification as UnifiedNotification);
+    const id = getDateGroupKey(time);
+    const existing = groups.get(id);
 
-const statusProperty = (value: string): Property =>
-  selectProperty({
-    propertyDefinitionId: SYSTEM_PROPERTY_IDS.STATUS,
-    displayName: 'Status',
-    value,
-    options: statusOptions,
-  });
+    if (existing) {
+      existing.items.push(item);
+      continue;
+    }
 
-const priorityProperty = (value: string): Property =>
-  selectProperty({
-    propertyDefinitionId: SYSTEM_PROPERTY_IDS.PRIORITY,
-    displayName: 'Priority',
-    value,
-    options: priorityOptions,
-  });
+    groups.set(id, {
+      id,
+      label: getDateGroupLabel(time),
+      items: [item],
+    });
+  }
 
-const exampleGroups: ExampleGroup[] = [
-  {
-    label: 'Email',
-    items: [
-      {
-        id: 'email-unread',
-        notification: notification('new_email'),
-        entityId: 'thread-planning',
-        entityType: 'email',
-        entityName: 'Quarterly planning notes and next steps for the launch',
-        unread: true,
-        senderName: 'Maya Chen',
-        content: 'Can you review the timeline before our afternoon sync?',
-        timestamp: '2m',
-      },
-      {
-        id: 'email-read-long-snippet',
-        notification: notification('new_email'),
-        entityId: 'thread-customer-feedback',
-        entityType: 'email',
-        entityName: 'Customer feedback from design partners',
-        senderName: 'Elena Park',
-        content:
-          'Forwarding the notes from the pilot customers. The main theme is that notification grouping needs to feel predictable.',
-        timestamp: '47m',
-      },
-    ],
-  },
-  {
-    label: 'Channels',
-    items: [
-      {
-        id: 'channel-mention',
-        notification: notification('channel_mention'),
-        entityId: 'channel-design-system',
-        entityType: 'channel',
-        entityName: 'Design System',
-        unread: true,
-        senderName: 'Priya',
-        action: 'mentioned you',
-        content:
-          '“Can we reuse the same primitive for tasks and notifications?”',
-        timestamp: '6m',
-      },
-      {
-        id: 'channel-message-send',
-        notification: notification('channel_message_send'),
-        entityId: 'channel-product',
-        entityType: 'channel',
-        entityName: 'Product',
-        senderName: 'Riley',
-        action: 'sent a message',
-        content: 'I pushed the latest mocks for the notification inbox.',
-        timestamp: '9m',
-      },
-      {
-        id: 'channel-message-reply',
-        notification: notification('channel_message_reply'),
-        entityId: 'channel-product',
-        entityType: 'channel',
-        entityName: 'Product',
-        senderName: 'Sam',
-        action: 'replied',
-        content: 'This should also work for grouped channel threads.',
-        timestamp: '12m',
-      },
-      {
-        id: 'channel-invite',
-        notification: notification('channel_invite'),
-        entityId: 'channel-infra',
-        entityType: 'channel',
-        entityName: 'Infrastructure',
-        senderName: 'Casey',
-        action: 'invited you to',
-        timestamp: '18m',
-      },
-    ],
-  },
-  {
-    label: 'Documents and comments',
-    items: [
-      {
-        id: 'document-mention',
-        notification: notification('document_mention'),
-        entityId: 'doc-notification-inbox-proposal',
-        entityType: 'document',
-        entityName: 'Notification Inbox Proposal',
-        senderName: 'Nina',
-        action: 'mentioned you',
-        timestamp: '31m',
-      },
-      {
-        id: 'document-comment-mention',
-        notification: notification('mentioned_in_document_comment'),
-        entityId: 'doc-q3-plan',
-        entityType: 'document',
-        entityName: 'Q3 Launch Plan',
-        unread: true,
-        senderName: 'Morgan',
-        action: 'mentioned you in a comment',
-        content: 'Can you confirm the dependency list before Friday?',
-        timestamp: '42m',
-      },
-      {
-        id: 'document-comment-reply',
-        notification: notification('replied_to_document_comment_thread'),
-        entityId: 'doc-release-notes',
-        entityType: 'document',
-        entityName: 'Release Notes',
-        senderName: 'Devon',
-        action: 'replied',
-        content: 'I updated the changelog section with the migration notes.',
-        timestamp: '55m',
-      },
-      {
-        id: 'document-commented',
-        notification: notification('commented_on_document'),
-        entityId: 'doc-roadmap',
-        entityType: 'document',
-        entityName: 'Roadmap',
-        senderName: 'Avery',
-        action: 'commented',
-        content: 'Should this move into the next milestone?',
-        timestamp: '1h',
-      },
-    ],
-  },
-  {
-    label: 'Tasks with property variants',
-    items: [
-      {
-        id: 'task-high-priority',
-        notification: notification('task_assigned'),
-        entityId: 'task-inbox-item',
-        entityType: 'document',
-        entityName: 'Ship the new inbox item primitive',
-        unread: true,
-        senderName: 'Alex',
-        action: 'assigned you',
-        properties: [
-          statusProperty(PROPERTY_OPTION_IDS.STATUS.IN_REVIEW),
-          priorityProperty(PROPERTY_OPTION_IDS.PRIORITY.HIGH),
-        ],
-        breadcrumb: ['Projects', 'Inbox refresh'],
-        timestamp: '2h',
-      },
-      {
-        id: 'task-due-today',
-        notification: notification('task_assigned'),
-        entityId: 'task-preview-selection',
-        entityType: 'document',
-        entityName: 'Wire row selection into preview panel',
-        senderName: 'Marin',
-        action: 'assigned you',
-        properties: [
-          statusProperty(PROPERTY_OPTION_IDS.STATUS.NOT_STARTED),
-          priorityProperty(PROPERTY_OPTION_IDS.PRIORITY.URGENT),
-        ],
-        breadcrumb: ['Product', 'Inbox'],
-        timestamp: '3h',
-      },
-      {
-        id: 'task-low-priority',
-        notification: notification('task_assigned'),
-        entityId: 'task-copy-polish',
-        entityType: 'document',
-        entityName: 'Polish empty state copy',
-        senderName: 'Quinn',
-        action: 'assigned you',
-        properties: [
-          statusProperty(PROPERTY_OPTION_IDS.STATUS.NOT_STARTED),
-          priorityProperty(PROPERTY_OPTION_IDS.PRIORITY.LOW),
-        ],
-        breadcrumb: ['Shared', 'Polish'],
-        timestamp: '5h',
-      },
-    ],
-  },
-  {
-    label: 'GitHub pull requests',
-    items: [
-      {
-        id: 'github-pr-opened',
-        notification: notification('github_pr_status_changed', {
-          number: 2840,
-          status: 'open',
-        }),
-        entityId: 'github-pr-2840',
-        entityType: 'foreign',
-        entityName: 'Add notification inbox primitives',
-        senderName: 'Jordan',
-        action: 'opened',
-        timestamp: '4h',
-      },
-      {
-        id: 'github-pr-merged',
-        notification: notification('github_pr_status_changed', {
-          number: 2839,
-          status: 'merged',
-        }),
-        entityId: 'github-pr-2839',
-        entityType: 'foreign',
-        entityName: 'Lazy-load notification preview data',
-        senderName: 'Iris',
-        action: 'merged',
-        timestamp: '4h',
-      },
-      {
-        id: 'github-pr-closed',
-        notification: notification('github_pr_status_changed', {
-          number: 2838,
-          status: 'closed',
-        }),
-        entityId: 'github-pr-2838',
-        entityType: 'foreign',
-        entityName: 'Remove old inbox experiment flag',
-        senderName: 'Kai',
-        action: 'closed',
-        timestamp: '4h',
-      },
-      {
-        id: 'github-review-requested',
-        notification: notification('github_review_requested', { number: 2841 }),
-        entityId: 'github-pr-2841',
-        entityType: 'foreign',
-        entityName: 'Fix notification inbox layout jitter',
-        senderName: 'Jordan',
-        action: 'requested your review',
-        timestamp: '4h',
-      },
-      {
-        id: 'github-pr-comment',
-        notification: notification('github_pr_comment', { number: 2842 }),
-        entityId: 'github-pr-2842',
-        entityType: 'foreign',
-        entityName: 'Refactor inbox adapters',
-        senderName: 'Mina',
-        action: 'commented',
-        content: 'Could we keep the adapter output flatter here?',
-        timestamp: '5h',
-      },
-      {
-        id: 'github-pr-mention',
-        notification: notification('github_pr_mention', { number: 2843 }),
-        entityId: 'github-pr-2843',
-        entityType: 'foreign',
-        entityName: 'Preview panel wiring',
-        senderName: 'Noah',
-        action: 'mentioned you',
-        content: '@you can you take a look at the preview selection state?',
-        timestamp: '6h',
-      },
-      {
-        id: 'github-pr-review',
-        notification: notification('github_pr_review', { number: 2844 }),
-        entityId: 'github-pr-2844',
-        entityType: 'foreign',
-        entityName: 'Notification inbox grouping',
-        senderName: 'Iris',
-        action: 'approved',
-        content: 'Looks good with a few small comments.',
-        timestamp: '7h',
-      },
-    ],
-  },
-  {
-    label: 'AI, calls, and team invites',
-    items: [
-      {
-        id: 'ai-response',
-        notification: notification('ai_response'),
-        entityId: 'chat-ai-response',
-        entityType: 'chat',
-        entityName: 'AI response ready',
-        unread: true,
-        senderName: 'AI response',
-        action: 'is ready',
-        content: 'Summarized the discussion and drafted follow-up tasks.',
-        timestamp: '3h',
-      },
-      {
-        id: 'call-started',
-        notification: notification('call-started'),
-        entityId: 'call-standup',
-        entityType: 'call',
-        entityName: 'Engineering Daily',
-        senderName: 'Standup call',
-        action: 'started',
-        timestamp: 'now',
-      },
-      {
-        id: 'team-invite',
-        notification: notification('invite_to_team'),
-        entityId: 'team-product-engineering',
-        entityName: 'Product Engineering',
-        senderName: 'Taylor',
-        action: 'invited you to',
-        timestamp: '24m',
-      },
-    ],
-  },
-];
+  return Array.from(groups.values()).toSorted(
+    (a, b) =>
+      getNotificationTime(b.items[0].notification as UnifiedNotification) -
+      getNotificationTime(a.items[0].notification as UnifiedNotification)
+  );
+};
 
-export function NotificationInbox2() {
+const buildInboxItems = (
+  notifications: UnifiedNotification[]
+): InboxItemData[] => {
+  const sorted = sortNotifications(notifications);
+  const groupedNotifications = new Map<string, UnifiedNotification[]>();
+  const referencedChannelThreadIds = new Set<string>();
+  const items: InboxItemData[] = [];
+  let currentChannelGroupKey: string | undefined;
+  let currentChannelCompositeKey: string | undefined;
+
+  for (const notification of sorted) {
+    const threadId = getChannelThreadId(notification);
+    if (threadId) {
+      referencedChannelThreadIds.add(getChannelNode(notification, threadId));
+    }
+  }
+
+  for (const notification of sorted) {
+    const groupKey = getNotificationGroupKey(notification);
+    if (groupKey) {
+      currentChannelGroupKey = undefined;
+      currentChannelCompositeKey = undefined;
+      groupedNotifications.set(groupKey, [
+        ...(groupedNotifications.get(groupKey) ?? []),
+        notification,
+      ]);
+      continue;
+    }
+
+    if (isChannelNotification(notification)) {
+      const channelGroupKey = getChannelGroupKey(
+        notification,
+        referencedChannelThreadIds
+      );
+      if (currentChannelGroupKey !== channelGroupKey) {
+        currentChannelGroupKey = channelGroupKey;
+        currentChannelCompositeKey = `channel:${channelGroupKey}:${notification.id}`;
+      }
+
+      const compositeKey = currentChannelCompositeKey;
+      if (!compositeKey) continue;
+
+      groupedNotifications.set(compositeKey, [
+        ...(groupedNotifications.get(compositeKey) ?? []),
+        notification,
+      ]);
+      continue;
+    }
+
+    currentChannelGroupKey = undefined;
+    currentChannelCompositeKey = undefined;
+
+    items.push(
+      transformNotificationItem({
+        id: `notification:${notification.id}`,
+        notification,
+      })
+    );
+  }
+
+  for (const [key, group] of groupedNotifications) {
+    const notifications = sortNotifications(group);
+    items.push(
+      transformNotificationItem({
+        id: key,
+        notification: notifications[0],
+        subItems: notifications.slice(1),
+      })
+    );
+  }
+
+  return items.toSorted(
+    (a, b) =>
+      getNotificationTime(b.notification as UnifiedNotification) -
+      getNotificationTime(a.notification as UnifiedNotification)
+  );
+};
+
+const buildInboxGroups = (
+  notifications: UnifiedNotification[]
+): InboxDateGroup[] => groupInboxItemsByDate(buildInboxItems(notifications));
+
+function previewEntity(item: InboxItemData): EntityData | undefined {
+  if (!item.entityId || !item.entityType) return undefined;
+
+  const name = item.entityName || item.targetName || 'Preview';
+
+  return {
+    id: item.entityId,
+    type: item.entityType,
+    name,
+    ownerId: '',
+    createdAt: null,
+    updatedAt: null,
+  } as EntityData;
+}
+
+function itemDensity(item: InboxItemData) {
+  const tag = item.notification?.notification_metadata.tag;
+  if (tag === 'task_assigned' || tag === 'call-started') return 'compact';
+  return 'default';
+}
+
+function NotificationInboxList(props: {
+  groups: InboxDateGroup[];
+  selectedItem: InboxItemData | undefined;
+  onSelect: (item: InboxItemData) => void;
+}) {
   return (
-    <div class="size-full min-h-0 bg-surface p-2" data-list-view="inbox2">
-      <div class="size-full flex flex-col items-center gap-3 overflow-y-auto">
-        <For each={exampleGroups}>
+    <div class="size-full min-h-0 bg-surface p-2">
+      <div class="size-full flex flex-col gap-3 overflow-y-auto">
+        <For each={props.groups}>
           {(group) => (
-            <section class="flex w-full max-w-sm flex-col gap-1">
-              <div class="sticky top-0 z-1 bg-surface py-1">
-                <span class="px-2 text-[11px] font-medium uppercase tracking-wide text-ink-extra-muted">
-                  {group.label}
-                </span>
-              </div>
+            <section class="flex w-full flex-col gap-1">
+              <header class="sticky top-0 z-1 bg-active py-2 px-3 rounded-md flex items-center gap-1">
+                <CalendarIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
+                <h1 class="text-sm text-ink">{group.label}</h1>
+              </header>
               <For each={group.items}>
                 {(item) => (
                   <InboxItem.Root
+                    density={itemDensity(item)}
                     item={item}
-                    density={
-                      item.notification?.notification_metadata.tag ===
-                        'task_assigned' ||
-                      item.notification?.notification_metadata.tag ===
-                        'call-started'
-                        ? 'compact'
-                        : 'default'
-                    }
+                    selected={props.selectedItem?.id === item.id}
                     tone="default"
                   >
-                    <InboxItemLayout />
+                    <InboxItemLayout onClick={() => props.onSelect(item)} />
                   </InboxItem.Root>
                 )}
               </For>
@@ -429,6 +233,82 @@ export function NotificationInbox2() {
           )}
         </For>
       </div>
+    </div>
+  );
+}
+
+export function NotificationInbox2() {
+  const panel = useSplitPanelOrThrow();
+  const orchestrator = useGlobalBlockOrchestrator();
+  const notificationSource = useGlobalNotificationSource();
+  const groups = createMemo(() =>
+    buildInboxGroups(
+      notificationSource
+        .notifications()
+        .filter((notification) => !notification.deleted_at)
+    )
+  );
+  const [selectedItem, setSelectedItem] = createSignal<
+    InboxItemData | undefined
+  >();
+  const selectedEntity = () => {
+    const item = selectedItem();
+    if (!item) return undefined;
+    return previewEntity(item);
+  };
+  const previewVisible = () => !!selectedItem();
+
+  createEffect(() => {
+    const [getPreview, setPreview] = panel.previewState;
+    if (previewVisible() !== getPreview()) setPreview(previewVisible());
+  });
+
+  return (
+    <div class="size-full min-h-0 bg-surface" data-list-view="inbox2">
+      <Resize.Zone direction="horizontal" gutter={0}>
+        <Resize.Panel
+          id="notification-inbox-list"
+          maxSize={previewVisible() ? 840 : undefined}
+          minSize={200}
+        >
+          <div
+            class={cn(
+              'max-w-md size-full min-w-0 min-h-0',
+              previewVisible() && 'border-r border-edge-muted'
+            )}
+          >
+            <NotificationInboxList
+              groups={groups()}
+              onSelect={setSelectedItem}
+              selectedItem={selectedItem()}
+            />
+          </div>
+        </Resize.Panel>
+        <Show when={previewVisible()}>
+          <Resize.Panel
+            id="notification-inbox-preview"
+            minSize={300}
+            target={{ kind: 'percent', percent: 70 }}
+          >
+            <Show
+              fallback={
+                <div class="flex size-full items-center justify-center text-sm text-ink-extra-muted">
+                  Preview unavailable
+                </div>
+              }
+              when={selectedEntity()}
+            >
+              {(entity) => (
+                <PreviewPanel
+                  orchestrator={orchestrator}
+                  selectedEntity={entity()}
+                  splitPanelContext={panel}
+                />
+              )}
+            </Show>
+          </Resize.Panel>
+        </Show>
+      </Resize.Zone>
     </div>
   );
 }

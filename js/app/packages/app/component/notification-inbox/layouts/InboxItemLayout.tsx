@@ -175,7 +175,7 @@ function useNotificationType() {
   return () => item().notification?.notification_metadata.tag;
 }
 
-function notificationTitleContext(item: InboxItem) {
+function notificationTitleContext(item: InboxItem): string | undefined {
   const metadata = item.notification?.notification_metadata;
   if (!metadata) return undefined;
 
@@ -188,28 +188,14 @@ function notificationTitleContext(item: InboxItem) {
           'channel_message_reply'
         ),
       },
-      (metadata) => metadata.content.channelName
+      (metadata) => String(metadata.content.channelName)
     )
-    .with({ tag: 'channel_invite' }, (metadata) => metadata.content.channelName)
-    .with({ tag: 'invite_to_team' }, (metadata) => metadata.content.teamName)
-    .with(
-      { tag: 'document_mention' },
-      (metadata) => metadata.content.documentName
+    .with({ tag: 'invite_to_team' }, (metadata) =>
+      String(metadata.content.teamName)
     )
     .with(
       {
         tag: P.union(
-          'mentioned_in_document_comment',
-          'replied_to_document_comment_thread',
-          'commented_on_document'
-        ),
-      },
-      (metadata) => metadata.content.documentName
-    )
-    .with(
-      {
-        tag: P.union(
-          'github_pr_status_changed',
           'github_review_requested',
           'github_pr_comment',
           'github_pr_mention',
@@ -217,7 +203,7 @@ function notificationTitleContext(item: InboxItem) {
         ),
       },
       (metadata) =>
-        `${metadata.content.owner}/${metadata.content.repo}#${metadata.content.number}`
+        `${String(metadata.content.owner)}/${String(metadata.content.repo)}#${String(metadata.content.number)}`
     )
     .otherwise(() => undefined);
 }
@@ -230,7 +216,6 @@ function notificationTitleContextHref(item: InboxItem) {
     .with(
       {
         tag: P.union(
-          'github_pr_status_changed',
           'github_review_requested',
           'github_pr_comment',
           'github_pr_mention',
@@ -238,7 +223,7 @@ function notificationTitleContextHref(item: InboxItem) {
         ),
       },
       (metadata) =>
-        `https://github.com/${metadata.content.owner}/${metadata.content.repo}/pull/${metadata.content.number}`
+        `https://github.com/${String(metadata.content.owner)}/${String(metadata.content.repo)}/pull/${String(metadata.content.number)}`
     )
     .otherwise(() => undefined);
 }
@@ -308,10 +293,16 @@ function NotificationDescription(props: { avatar?: boolean } = {}) {
                 </span>
               }
             >
-              <InboxItem.Sender class="font-normal text-ink-muted/85">
-                {senderName()}
-                <Show when={item().action}>{(action) => <> {action()}</>}</Show>
-              </InboxItem.Sender>
+              <span class="contents">
+                <InboxItem.Sender class="font-normal text-ink-muted/85" />
+                <Show when={item().action}>
+                  {(action) => (
+                    <span class="shrink-0 text-xs text-ink-muted/85">
+                      {action()}
+                    </span>
+                  )}
+                </Show>
+              </span>
             </Show>
           )}
         </Show>
@@ -334,6 +325,7 @@ type StandardLayoutProps = {
   description?: JSX.Element;
   descriptionAvatar?: boolean;
   actions?: JSX.Element;
+  onClick?: (event: MouseEvent) => void;
 };
 
 function StandardLayout(props: StandardLayoutProps) {
@@ -370,7 +362,7 @@ function StandardLayout(props: StandardLayoutProps) {
 
   return (
     <>
-      <InboxItem.Content>
+      <InboxItem.Content onClick={props.onClick}>
         <InboxItem.Icon class="size-8">
           {props.icon ?? <NotificationIcon />}
         </InboxItem.Icon>
@@ -421,10 +413,13 @@ function GithubStatusContextLine() {
               <span class="shrink-0 text-xs text-ink-muted">{action()}</span>
             }
           >
-            {(senderName) => (
-              <InboxItem.Sender class="font-normal text-ink-muted/85">
-                {senderName()} {action()}
-              </InboxItem.Sender>
+            {(_senderName) => (
+              <span class="contents">
+                <InboxItem.Sender class="font-normal text-ink-muted/85" />
+                <span class="shrink-0 text-xs text-ink-muted/85">
+                  {action()}
+                </span>
+              </span>
             )}
           </Show>
           <InboxItem.Link>{number()}</InboxItem.Link>
@@ -434,34 +429,43 @@ function GithubStatusContextLine() {
   );
 }
 
-export function InboxItemLayout() {
+export function InboxItemLayout(
+  props: { onClick?: (event: MouseEvent) => void } = {}
+) {
   const { item } = useInboxItem();
   const type = useNotificationType();
 
   return (
-    <Switch fallback={<StandardLayout />}>
+    <Switch fallback={<StandardLayout onClick={props.onClick} />}>
       <Match when={type() === 'channel_invite'}>
         <StandardLayout
+          onClick={props.onClick}
           actions={<InboxItem.ActionButton>Accept</InboxItem.ActionButton>}
         />
       </Match>
       <Match when={type() === 'invite_to_team'}>
         <StandardLayout
+          onClick={props.onClick}
           actions={<InboxItem.ActionButton>Accept</InboxItem.ActionButton>}
         />
       </Match>
       <Match when={type() === 'task_assigned'}>
         <StandardLayout
+          onClick={props.onClick}
           description={
             <InboxItem.Description density="compact" timestamp={false}>
               <Show when={item().senderName}>
-                {(senderName) => (
-                  <InboxItem.Sender class="font-normal text-ink-muted/85">
-                    {senderName()}
+                {(_senderName) => (
+                  <span class="contents">
+                    <InboxItem.Sender class="font-normal text-ink-muted/85" />
                     <Show when={item().action}>
-                      {(action) => <> {action()}</>}
+                      {(action) => (
+                        <span class="shrink-0 text-xs text-ink-muted/85">
+                          {action()}
+                        </span>
+                      )}
                     </Show>
-                  </InboxItem.Sender>
+                  </span>
                 )}
               </Show>
               <span class="ml-auto flex shrink-0 items-center gap-1">
@@ -470,9 +474,22 @@ export function InboxItemLayout() {
                     <PropertyPill property={property} density="compact" />
                   )}
                 </For>
-                <Show when={item().timestamp}>
-                  {(timestamp) => (
-                    <InboxItem.Timestamp>{timestamp()}</InboxItem.Timestamp>
+                <Show
+                  when={item().subItems?.length}
+                  fallback={
+                    <Show when={item().timestamp}>
+                      {(timestamp) => (
+                        <InboxItem.Timestamp>{timestamp()}</InboxItem.Timestamp>
+                      )}
+                    </Show>
+                  }
+                >
+                  {(count) => (
+                    <Layer depth={5}>
+                      <span class="grid h-4 min-w-4 place-items-center rounded-md bg-active px-1 text-xs text-ink-muted">
+                        {count()}
+                      </span>
+                    </Layer>
                   )}
                 </Show>
               </span>
@@ -481,10 +498,14 @@ export function InboxItemLayout() {
         />
       </Match>
       <Match when={type() === 'github_pr_status_changed'}>
-        <StandardLayout description={<GithubStatusContextLine />} />
+        <StandardLayout
+          description={<GithubStatusContextLine />}
+          onClick={props.onClick}
+        />
       </Match>
       <Match when={type() === 'call-started'}>
         <StandardLayout
+          onClick={props.onClick}
           actions={<InboxItem.ActionButton>Join</InboxItem.ActionButton>}
           descriptionAvatar={false}
         />

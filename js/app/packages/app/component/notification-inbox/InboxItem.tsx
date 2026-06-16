@@ -1,9 +1,11 @@
 import { UserIcon } from '@core/component/UserIcon';
+import { macroIdToEmail, tryMacroId, useDisplayName } from '@core/user';
 import type { EntityData } from '@entity';
 import type { UnifiedNotification } from '@notifications/types';
 import { Property } from '@property';
 import type { Property as PropertyT } from '@property/types';
-import { Avatar, Button, type ButtonProps, cn } from '@ui';
+import { Avatar, Button, type ButtonProps, cn, Layer } from '@ui';
+import { format } from 'date-fns';
 import {
   type Accessor,
   createContext,
@@ -45,6 +47,7 @@ export interface InboxItem {
   content?: string;
   properties?: PropertyT[];
   breadcrumb?: string[];
+  subItems?: InboxItem[];
   timestamp?: string;
   unread?: boolean;
 }
@@ -125,9 +128,10 @@ function Content(props: ContentProps) {
         'col-span-3 grid w-full grid-cols-[0.5rem_var(--inbox-item-icon-size)_minmax(0,1fr)] items-center gap-x-3 rounded-lg px-2',
         ctx.density() === 'compact' ? 'min-h-9 py-1' : 'min-h-11 py-1.5',
         ctx.tone() === 'muted' ? 'bg-ink-muted/2.5' : 'bg-surface',
-        'hover:bg-ink-muted/6',
-        ctx.selected() && 'bg-active/60 ring ring-edge ring-inset',
-        interactive() && 'outline-none focus-visible:bg-active',
+        'hover:ring hover:ring-edge hover:ring-inset',
+        ctx.selected() && 'bg-active/60 hover:ring-0',
+        interactive() &&
+          'outline-none focus-visible:ring focus-visible:ring-edge focus-visible:ring-inset',
         props.class
       )}
       role={interactive() ? 'button' : undefined}
@@ -217,7 +221,15 @@ function Header(props: HeaderProps) {
 
 function Sender(props: SlotProps) {
   const ctx = useInboxItem();
-  const name = () => props.children?.toString() || ctx.item().senderName || '?';
+  const fallbackName = () =>
+    ctx.item().senderName || ctx.item().senderId || '?';
+  const macroId = tryMacroId(ctx.item().senderId ?? fallbackName());
+  const [displayName] = useDisplayName(macroId);
+  const name = () => {
+    if (displayName()) return displayName();
+    if (macroId) return macroIdToEmail(macroId);
+    return fallbackName();
+  };
   const initials = () =>
     name()
       .split(/\s+/)
@@ -237,7 +249,7 @@ function Sender(props: SlotProps) {
     >
       <span class="size-3 shrink-0 overflow-hidden rounded-full">
         <Show
-          when={ctx.item().senderId}
+          when={macroId}
           fallback={
             <Avatar size="fill" class="text-[8px]">
               <Avatar.Fallback>{initials()}</Avatar.Fallback>
@@ -254,15 +266,24 @@ function Sender(props: SlotProps) {
           )}
         </Show>
       </span>
-      <span class="min-w-0 truncate">{props.children}</span>
+      <span class="min-w-0 truncate">{name()}</span>
     </span>
   );
+}
+
+function formatTimestamp(value: JSX.Element) {
+  if (typeof value !== 'string') return value;
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+
+  return format(date, 'p');
 }
 
 function Timestamp(props: SlotProps) {
   return (
     <span class={cn('shrink-0 text-xs text-ink-extra-muted/70', props.class)}>
-      {props.children}
+      {formatTimestamp(props.children)}
     </span>
   );
 }
@@ -330,15 +351,31 @@ function Description(props: DescriptionProps) {
     <InboxItemContext.Provider value={context}>
       <div
         class={cn(
-          'flex min-w-0 items-center text-ink-muted/70',
-          density() === 'compact' ? 'gap-1 text-xs' : 'gap-1.5 text-xs',
+          'flex min-w-0 items-center text-ink-muted/70 gap-1 text-xs',
           local.class
         )}
         {...rest}
       >
         {local.children}
-        <Show when={showTimestamp() && parent.item().timestamp}>
-          {(timestamp) => <Timestamp class="ml-auto">{timestamp()}</Timestamp>}
+        <Show when={showTimestamp()}>
+          <Show
+            when={parent.item().subItems?.length}
+            fallback={
+              <Show when={parent.item().timestamp}>
+                {(timestamp) => (
+                  <Timestamp class="ml-auto">{timestamp()}</Timestamp>
+                )}
+              </Show>
+            }
+          >
+            {(count) => (
+              <Layer depth={5}>
+                <span class="ml-auto grid h-4 min-w-4 place-items-center rounded-md bg-active px-1 text-xs text-ink-muted">
+                  {count()}
+                </span>
+              </Layer>
+            )}
+          </Show>
         </Show>
       </div>
     </InboxItemContext.Provider>
