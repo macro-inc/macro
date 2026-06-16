@@ -121,6 +121,11 @@ const INBOX_FILTER_CATEGORIES: FilterCategory[] = [
         label: 'Files',
         icon: () => <EntityIcon targetType="files" size="xs" />,
       },
+      {
+        id: 'github-pr',
+        label: 'GitHub PRs',
+        icon: () => <EntityIcon targetType="githubPullRequest" size="xs" />,
+      },
     ],
     multiple: true,
   },
