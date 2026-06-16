@@ -1,6 +1,6 @@
 use std::{borrow::Cow, sync::Mutex};
 
-use loro::{ExportMode, Frontiers, LoroDoc, ToJson, VersionVector, ID};
+use loro::{ExportMode, Frontiers, ID, LoroDoc, ToJson, VersionVector};
 use tracing::{debug, info};
 use web_time::Instant;
 use worker::Result;
@@ -150,14 +150,16 @@ impl DocumentState {
     ) -> Vec<crate::sessionize::Session> {
         let mut events: Vec<(String, i64)> = Vec::new();
         let heads: Vec<ID> = self.loro_doc.oplog_frontiers().iter().collect();
-        let res = self.loro_doc.travel_change_ancestors(&heads, &mut |change| {
-            let user = peer_to_user
-                .get(&change.id.peer)
-                .map(String::as_str)
-                .unwrap_or("unknown");
-            events.push((user.to_string(), change.timestamp * 1000));
-            std::ops::ControlFlow::Continue(())
-        });
+        let res = self
+            .loro_doc
+            .travel_change_ancestors(&heads, &mut |change| {
+                let user = peer_to_user
+                    .get(&change.id.peer)
+                    .map(String::as_str)
+                    .unwrap_or("unknown");
+                events.push((user.to_string(), change.timestamp * 1000));
+                std::ops::ControlFlow::Continue(())
+            });
         if let Err(error) = res {
             debug!(error =? error, "travel_change_ancestors failed during history_sessions");
         }
@@ -177,9 +179,9 @@ impl DocumentState {
         let mut changes_visited: u64 = 0;
         let mut changes_included: u64 = 0;
         let mut ops_included: u64 = 0;
-        let (res, elapsed) = crate::timeit!(self
-            .loro_doc
-            .travel_change_ancestors(&heads, &mut |change| {
+        let (res, elapsed) = crate::timeit!(self.loro_doc.travel_change_ancestors(
+            &heads,
+            &mut |change| {
                 changes_visited += 1;
                 if change.timestamp * 1000 <= t_ms {
                     changes_included += 1;
@@ -198,7 +200,8 @@ impl DocumentState {
                     );
                 }
                 std::ops::ControlFlow::Continue(())
-            }));
+            }
+        ));
         info!(
             t_ms,
             changes_visited,

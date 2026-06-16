@@ -468,10 +468,9 @@ impl DocumentSyncSession {
                 .into_iter()
                 .filter_map(|p| p.peer_id.parse::<u64>().ok().map(|id| (id, p.user_id)))
                 .collect();
-            *self
-                .peer_user_override
-                .lock("DocumentSyncSession::peer_user_override set within set_memory_state_handler") =
-                Some(map);
+            *self.peer_user_override.lock(
+                "DocumentSyncSession::peer_user_override set within set_memory_state_handler",
+            ) = Some(map);
         }
 
         Response::empty()
@@ -712,7 +711,11 @@ impl DocumentSyncSession {
         let vv = doc_state.version_vector_at(t_ms);
         // The walk has returned; if the request hangs past this line the cost is
         // the loro state reconstruction (checkout/export), not the oplog walk.
-        tracing::info!(t_ms, has_vv = vv.is_some(), "state_at: walk done, starting export");
+        tracing::info!(
+            t_ms,
+            has_vv = vv.is_some(),
+            "state_at: walk done, starting export"
+        );
         let (out, export_elapsed) = crate::timeit!(match &vv {
             None => doc_state
                 .export_snapshot(Some(ExportMode::StateOnly(None)))

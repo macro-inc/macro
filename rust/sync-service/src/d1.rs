@@ -47,15 +47,9 @@ pub async fn get_pins_for_document(
     Ok(result.results::<VersionPin>()?)
 }
 
-pub async fn delete_pin(
-    db: D1Database,
-    document_id: &str,
-    pin_id: &str,
-) -> worker::Result<bool> {
+pub async fn delete_pin(db: D1Database, document_id: &str, pin_id: &str) -> worker::Result<bool> {
     let dbres = db
-        .prepare(
-            "DELETE FROM version_pins WHERE id = ? AND document_id = ?;",
-        )
+        .prepare("DELETE FROM version_pins WHERE id = ? AND document_id = ?;")
         .bind(&[pin_id.into(), document_id.into()])?
         .run()
         .await?;
