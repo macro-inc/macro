@@ -387,7 +387,7 @@ export function MarkdownImage(props: ImageDecoratorProps) {
 
       <Dialog.Portal>
         <Dialog.Overlay class="fixed inset-0 z-modal bg-modal-overlay pattern-edge-muted pattern-diagonal-4" />
-        <Lightbox src={imageUrl} imageId={() => props.id} />
+        <Lightbox src={imageUrl} imageId={() => props.id} navigationHidden />
       </Dialog.Portal>
     </Dialog>
   );
