@@ -50,7 +50,7 @@ function NotificationBadge() {
         () => <ChatIcon class={className} />
       )
       .with('github_pr_status_changed', () => (
-        <GithubIcon class="size-3 text-ink-muted/60" />
+        <GithubIcon class="size-3 shrink-0 text-ink-muted/60" />
       ))
       .otherwise(() => undefined);
 
@@ -187,7 +187,7 @@ function EntityTypeIcon() {
       <UsersIcon class="size-3.5 shrink-0 text-ink-muted" />
     ))
     .with('github_pr_status_changed', () => (
-      <GithubStatusIcon class="size-3.5" />
+      <GithubStatusIcon class="size-3.5 shrink-0" />
     ))
     .with(
       'github_review_requested',
@@ -340,7 +340,7 @@ function ContentText(props: { content: string }) {
   const markdown = shouldRenderMarkdownContent(type);
 
   return (
-    <span class="min-w-0 truncate">
+    <span class="block min-w-0 overflow-hidden truncate">
       <Show when={markdown()} fallback={props.content}>
         <StaticMarkdown
           markdown={props.content}
@@ -393,7 +393,7 @@ function Description() {
                   item().properties?.length
                 }
               >
-                <div class="flex min-w-0 items-center gap-1 text-xs text-ink-muted/70">
+                <div class="flex min-w-0 items-center gap-1 truncate text-xs text-ink-muted/70">
                   <Show
                     when={
                       type() === 'ai_response'
@@ -435,7 +435,7 @@ function Description() {
           </Show>
         }
       >
-        <InboxItem.Description class="overflow-hidden" timestamp={false}>
+        <InboxItem.Description class="truncate" timestamp={false}>
           <span class="min-w-0 truncate text-xs text-ink-muted/70">
             <Show when={emailSubject()}>{(subject) => subject()}</Show>
             <Show when={emailSubject() && item().content}> — </Show>

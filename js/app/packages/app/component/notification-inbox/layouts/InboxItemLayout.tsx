@@ -136,31 +136,31 @@ function NotificationIcon() {
     .with('github_pr_status_changed', () => (
       <NotificationIconFrame
         badge={<GithubStatusIcon class="size-3" />}
-        icon={<GithubIcon class="size-5 text-ink-muted" />}
+        icon={<GithubIcon class="size-5 shrink-0 text-ink-muted" />}
       />
     ))
     .with('github_review_requested', () => (
       <NotificationIconFrame
         badge={<FileMagnifyingGlassIcon class="size-3 text-alert-ink" />}
-        icon={<GithubIcon class="size-5 text-ink-muted" />}
+        icon={<GithubIcon class="size-5 shrink-0 text-ink-muted" />}
       />
     ))
     .with('github_pr_comment', () => (
       <NotificationIconFrame
         badge={<ChatIcon class="size-3" />}
-        icon={<GithubIcon class="size-5 text-ink-muted" />}
+        icon={<GithubIcon class="size-5 shrink-0 text-ink-muted" />}
       />
     ))
     .with('github_pr_mention', () => (
       <NotificationIconFrame
         badge={<AtIcon class="size-3" />}
-        icon={<GithubIcon class="size-5 text-ink-muted" />}
+        icon={<GithubIcon class="size-5 shrink-0 text-ink-muted" />}
       />
     ))
     .with('github_pr_review', () => (
       <NotificationIconFrame
         badge={<ChecksIcon class="size-3 text-success" />}
-        icon={<GithubIcon class="size-5 text-ink-muted" />}
+        icon={<GithubIcon class="size-5 shrink-0 text-ink-muted" />}
       />
     ))
     .with('call-started', () => (
@@ -268,7 +268,7 @@ function NotificationTitle(props: {
 
 function DescriptionText(props: { content: string }) {
   return (
-    <span class="min-w-0 truncate text-xs text-ink-muted/70">
+    <span class="block min-w-0 overflow-hidden truncate text-xs text-ink-muted/70">
       <StaticMarkdown
         markdown={props.content}
         singleLine
@@ -428,7 +428,7 @@ function EmailDescription() {
       </InboxItem.Description>
       <Show when={item().content}>
         {(content) => (
-          <span class="block min-w-0 max-w-xl truncate text-xs text-ink-muted/70">
+          <span class="block min-w-0 overflow-hidden truncate text-xs text-ink-muted/70">
             <StaticMarkdown
               markdown={content()}
               singleLine

@@ -339,7 +339,7 @@ function Description(props: DescriptionProps) {
     <InboxItemContext.Provider value={context}>
       <div
         class={cn(
-          'flex min-w-0 items-center text-ink-muted/70 gap-1 text-xs',
+          'flex min-w-0 items-center gap-1 truncate text-ink-muted/70 text-xs',
           local.class
         )}
         {...rest}
