@@ -11,12 +11,6 @@ export const TASK_STATUS_FILTER_IDS: FilterID[] = [
   'task-canceled',
 ];
 
-/**
- * Shared mechanics for the task-status multi-select, used by both the status
- * chip and the filter menu so they behave identically. Toggling a status is a
- * plain toggle, so unchecking the last one leaves the selection empty (no
- * filter); clear empties the selection for the chip's ✕ / "Clear all".
- */
 export function useTaskStatusFilter() {
   const { soup, queryFilters } = useSoupView();
 
@@ -25,7 +19,6 @@ export function useTaskStatusFilter() {
     return query ? (query as Query) : undefined;
   };
 
-  // `wasActive` is the pre-toggle state, which decides the add/remove direction.
   const setStatus = (id: FilterID, wasActive: boolean) => {
     soup.predicates.toggle({ or: [id] });
     const query = statusQuery(id);

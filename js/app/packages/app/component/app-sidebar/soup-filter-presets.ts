@@ -43,11 +43,7 @@ type ViewTabConfig = {
   tabs: TabConfig;
 };
 
-/**
- * Statuses shown by default in the open-task tabs (Assigned / Created). The
- * status filter chip mirrors this default and lets the user reveal Completed /
- * Canceled. Keep the filter ids and the include props in sync.
- */
+// Default statuses for the open-task tabs; keep the ids and include props in sync.
 const OPEN_TASK_STATUS_FILTER_IDS: FilterID[] = [
   'task-not-started',
   'task-in-progress',

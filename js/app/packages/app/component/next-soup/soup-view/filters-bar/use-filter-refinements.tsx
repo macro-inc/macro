@@ -300,9 +300,7 @@ export function useFilterRefinements() {
     >();
 
     for (const category of viewCategories()) {
-      // The tasks Status filter is built as a dedicated always-present chip
-      // below (it shows the enabled statuses by default), not via the generic
-      // refinement path.
+      // Status has a dedicated chip below.
       if (view === 'tasks' && category.id === 'status') continue;
 
       const activeValues: FilterValue[] = [];
@@ -416,11 +414,7 @@ export function useFilterRefinements() {
       );
     }
 
-    // Task statuses render as a single chip so the active filtering (open tabs
-    // default to Not Started / In Progress / In Review) is visible rather than
-    // implied. Plain checkboxes toggle a status; the selection can never be
-    // empty — unchecking the last one (like clearing the chip) re-enables every
-    // status, which then reads as "no filter" and drops the chip.
+    // Dedicated chip: the generic builder would hide the preset-seeded default.
     const pushTaskStatusChip = () => {
       if (view !== 'tasks') return;
       const statusCategory = viewCategories().find((c) => c.id === 'status');
@@ -435,9 +429,7 @@ export function useFilterRefinements() {
       const getActiveValues = (): FilterValue[] =>
         allOptions.filter((o) => taskStatus.isActive(o.id as FilterID));
 
-      // Only surface the chip when the statuses are actually narrowed: an empty
-      // set is the "all" tab default and a fully-selected set isn't a filter,
-      // so neither needs a chip.
+      // No chip when not narrowed (empty, or all selected = no filter).
       const activeCount = getActiveValues().length;
       if (activeCount === 0 || activeCount === allOptions.length) return;
 
@@ -619,9 +611,7 @@ export function useFilterRefinements() {
     const preset = currentPreset();
     if (!preset) return;
 
-    // On task tabs that default to a status subset (the open set), "Clear all"
-    // empties the status filter (shows every status) instead of restoring that
-    // subset.
+    // "Clear all" empties the status filter rather than restoring the default subset.
     const presetSeedsStatusSubset = (preset.clientFilters.or ?? []).some((id) =>
       TASK_STATUS_FILTER_IDS.includes(id as FilterID)
     );
