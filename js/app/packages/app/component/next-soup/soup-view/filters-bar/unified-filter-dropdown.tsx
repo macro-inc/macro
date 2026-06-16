@@ -718,14 +718,6 @@ export const UnifiedFilterDropdown = (
                                   isStatus
                                     ? taskStatus.isActive(option.id)
                                     : isOptionActive(option.id);
-                                const soleActive = () =>
-                                  isStatus
-                                    ? taskStatus.isSoleActive(option.id)
-                                    : isFilterSoleActive(category, option.id);
-                                const selectOnly = () =>
-                                  isStatus
-                                    ? taskStatus.selectOnly(option.id)
-                                    : selectOnlyFilter(category, option.id);
                                 return (
                                   <Dropdown.Item
                                     onSelect={() =>
@@ -754,7 +746,9 @@ export const UnifiedFilterDropdown = (
                                       {option.label}
                                     </span>
 
-                                    <Show when={category.multiple}>
+                                    {/* Status keeps plain checkboxes; Only/All
+                                        is for the other multi-select filters. */}
+                                    <Show when={category.multiple && !isStatus}>
                                       <button
                                         type="button"
                                         class="shrink-0 text-xxs text-ink-muted opacity-0 group-hover:opacity-100 group-data-highlighted:opacity-100 hover:text-ink"
@@ -765,10 +759,12 @@ export const UnifiedFilterDropdown = (
                                         onPointerUp={(e) => e.stopPropagation()}
                                         onClick={(e) => {
                                           e.stopPropagation();
-                                          selectOnly();
+                                          selectOnlyFilter(category, option.id);
                                         }}
                                       >
-                                        {soleActive() ? 'All' : 'Only'}
+                                        {isFilterSoleActive(category, option.id)
+                                          ? 'All'
+                                          : 'Only'}
                                       </button>
                                     </Show>
                                   </Dropdown.Item>

@@ -494,8 +494,6 @@ export function useFilterRefinements() {
           multiple: true,
           isValueActive: (id) => taskStatus.isActive(id as FilterID),
           onToggleValue: (id) => taskStatus.toggle(id as FilterID),
-          onOnly: (id) => taskStatus.selectOnly(id as FilterID),
-          isValueSoleActive: (id) => taskStatus.isSoleActive(id as FilterID),
           onRemoveAll: () => taskStatus.enableAll(),
         }))
       );
