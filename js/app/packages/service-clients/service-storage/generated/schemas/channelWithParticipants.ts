@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { Channel } from './channel';
-import type { ChannelWithParticipantsAllOf } from './channelWithParticipantsAllOf';
+import type { ChannelParticipant } from './channelParticipant';
 
-export type ChannelWithParticipants = Channel & ChannelWithParticipantsAllOf;
+export interface ChannelWithParticipants {
+  channel: Channel;
+  participants: ChannelParticipant[];
+}

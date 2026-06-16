@@ -8,14 +8,9 @@ import type { ChannelParticipantLeftAt } from './channelParticipantLeftAt';
 import type { ParticipantRole } from './participantRole';
 
 export interface ChannelParticipant {
-  /** id of the channel */
   channel_id: string;
-  /** timestamp of when the user joined the channel */
   joined_at: string;
-  /** timestamp of when the user left the channel */
   left_at?: ChannelParticipantLeftAt;
-  /** type of the participant */
   role: ParticipantRole;
-  /** id of the user */
   user_id: string;
 }

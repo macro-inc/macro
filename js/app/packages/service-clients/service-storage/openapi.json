@@ -10990,26 +10990,21 @@
         "properties": {
           "channel_id": {
             "type": "string",
-            "format": "uuid",
-            "description": "id of the channel"
+            "format": "uuid"
           },
           "joined_at": {
             "type": "string",
-            "format": "date-time",
-            "description": "timestamp of when the user joined the channel"
+            "format": "date-time"
           },
           "left_at": {
             "type": ["string", "null"],
-            "format": "date-time",
-            "description": "timestamp of when the user left the channel"
+            "format": "date-time"
           },
           "role": {
-            "$ref": "#/components/schemas/ParticipantRole",
-            "description": "type of the participant"
+            "$ref": "#/components/schemas/ParticipantRole"
           },
           "user_id": {
-            "type": "string",
-            "description": "id of the user"
+            "type": "string"
           }
         }
       },
@@ -11137,23 +11132,19 @@
         }
       },
       "ChannelWithParticipants": {
-        "allOf": [
-          {
+        "type": "object",
+        "required": ["channel", "participants"],
+        "properties": {
+          "channel": {
             "$ref": "#/components/schemas/Channel"
           },
-          {
-            "type": "object",
-            "required": ["participants"],
-            "properties": {
-              "participants": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/ChannelParticipant"
-                }
-              }
+          "participants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChannelParticipant"
             }
           }
-        ]
+        }
       },
       "Chat": {
         "type": "object",

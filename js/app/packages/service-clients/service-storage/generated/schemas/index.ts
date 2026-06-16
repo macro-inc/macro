@@ -207,7 +207,6 @@ export * from './channelType';
 export * from './channelWebhookRequest';
 export * from './channelWebhookResponse';
 export * from './channelWithParticipants';
-export * from './channelWithParticipantsAllOf';
 export * from './chat';
 export * from './chatCreatedAt';
 export * from './chatDeletedAt';
