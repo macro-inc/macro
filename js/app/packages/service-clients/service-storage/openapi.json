@@ -10196,7 +10196,7 @@
       "BotToken": {
         "type": "object",
         "description": "Bot token metadata.",
-        "required": ["id", "bot_id", "token_prefix", "created_at"],
+        "required": ["id", "bot_id", "token", "created_at"],
         "properties": {
           "bot_id": {
             "$ref": "#/components/schemas/BotId",
@@ -10231,9 +10231,9 @@
             "format": "date-time",
             "description": "Revocation timestamp."
           },
-          "token_prefix": {
+          "token": {
             "type": "string",
-            "description": "Token lookup prefix."
+            "description": "Raw bearer token."
           }
         }
       },
