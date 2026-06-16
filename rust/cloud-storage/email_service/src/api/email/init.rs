@@ -537,8 +537,10 @@ pub async fn handler(
     };
 
     // Concurrent /email/init calls for the same inbox upsert the same link (ON CONFLICT)
-    // and would each enqueue a backfill. If one is already in flight for this link, reuse
-    // it instead of starting (and history-logging) a duplicate.
+    // and would each enqueue a backfill. Reuse an in-flight backfill if one already exists
+    // for this link rather than starting a duplicate. This cheap pre-check covers the common
+    // sequential case; the partial unique index behind create_backfill_job closes the
+    // check-then-create race for truly concurrent callers.
     if let Some(existing) =
         email_db_client::backfill::job::get::get_active_backfill_job(&ctx.db, link.id)
             .await
@@ -554,7 +556,33 @@ pub async fn handler(
             .into_response());
     }
 
-    // Record link creation in history table for tracking (best-effort)
+    let Some(backfill_job) = email_db_client::backfill::job::insert::create_backfill_job(
+        &ctx.db,
+        link.id,
+        link.fusionauth_user_id.as_str(),
+        None,
+    )
+    .await
+    .context("Failed to create backfill job")?
+    else {
+        // Lost the create race: a concurrent init already started this link's backfill.
+        // Reuse it without writing a duplicate history row or enqueueing a second backfill.
+        let existing =
+            email_db_client::backfill::job::get::get_active_backfill_job(&ctx.db, link.id)
+                .await
+                .context("Failed to fetch in-flight backfill job after insert conflict")?
+                .context("backfill insert conflicted but no active job found")?;
+        return Ok((
+            StatusCode::OK,
+            Json(InitResponse {
+                link_id: link.id,
+                backfill_job_id: Some(existing.id),
+            }),
+        )
+            .into_response());
+    };
+
+    // Genuinely new job — record link creation in history (best-effort) only now.
     email_db_client::links_history::insert::insert_email_link_history(
         &ctx.db,
         link.id,
@@ -567,15 +595,6 @@ pub async fn handler(
         tracing::error!(error=?e, link_id=?link.id, "Failed to insert email link history");
     })
     .ok();
-
-    let backfill_job = email_db_client::backfill::job::insert::create_backfill_job(
-        &ctx.db,
-        link.id,
-        link.fusionauth_user_id.as_str(),
-        None,
-    )
-    .await
-    .context("Failed to create backfill job")?;
 
     let ps_message = BackfillPubsubMessage {
         backfill_operation: BackfillOperation::Init(JobScopedPayload {
