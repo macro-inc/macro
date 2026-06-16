@@ -114,12 +114,12 @@ function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
 
   // The desktop settings split doesn't exist on mobile, so the callback
   // returns mobile users to the list view with the toast as confirmation.
-  const navigateToAccountSettings = () => {
+  const navigateToEmailSettings = () => {
     if (isMobile()) {
       navigateToSuccess();
       return;
     }
-    setActiveTabId('Account');
+    setActiveTabId('Email');
     navigate('/component/mail/component/settings', { replace: true });
   };
 
@@ -131,12 +131,12 @@ function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
         // than flashing a stale list until its own refetch lands.
         await query.refetch();
         toast.success('Inbox connected', { mobile: true });
-        navigateToAccountSettings();
+        navigateToEmailSettings();
       },
       async (err) => {
         if (err.tag === 'AlreadyInitialized') {
           await query.refetch();
-          navigateToAccountSettings();
+          navigateToEmailSettings();
           return;
         }
         // The mailbox is already connected by someone else. Hold the callback open

@@ -1,7 +1,8 @@
 import { DropdownMenu as KobalteDropdownMenu } from '@kobalte/core/dropdown-menu';
 import CheckIcon from '@phosphor/check.svg';
-import { type ComponentProps, splitProps } from 'solid-js';
+import { type ComponentProps, onCleanup, splitProps } from 'solid-js';
 import { cn } from '../utils/classname';
+import { addCtrlJKMenuNavigation } from '../utils/menuKeyboardNavigation';
 import { Button, type ButtonProps } from './Button';
 import { Surface, type SurfaceProps } from './Surface';
 
@@ -82,6 +83,15 @@ function resolvePortalMount(
   return searchRef?.closest<HTMLElement>('.portal-scope') ?? undefined;
 }
 
+function installKeyboardNavigation(el: HTMLElement) {
+  const cleanup = addCtrlJKMenuNavigation(el);
+  onCleanup(cleanup);
+}
+
+function callRef<T>(ref: ((el: T) => void) | undefined, el: T) {
+  ref?.(el);
+}
+
 function DropdownContent(props: DropdownContentProps) {
   let searchRef: HTMLDivElement | undefined;
   const [local, rest] = splitProps(props, [
@@ -90,7 +100,13 @@ function DropdownContent(props: DropdownContentProps) {
     'mount',
     'portalScope',
     'children',
+    'ref',
   ]);
+  const setContentRef = (el: HTMLElement) => {
+    installKeyboardNavigation(el);
+    callRef(local.ref, el);
+  };
+
   return (
     <>
       <div class="hidden" ref={searchRef} />
@@ -102,6 +118,7 @@ function DropdownContent(props: DropdownContentProps) {
           depth={local.depth ?? 2}
           as={Surface}
           {...rest}
+          ref={setContentRef}
         >
           <div class="flex flex-col gap-px bg-edge-muted size-full">
             {local.children}
@@ -120,7 +137,13 @@ function DropdownSubContent(props: DropdownSubContentProps) {
     'mount',
     'portalScope',
     'children',
+    'ref',
   ]);
+  const setContentRef = (el: HTMLElement) => {
+    installKeyboardNavigation(el);
+    callRef(local.ref, el);
+  };
+
   return (
     <>
       <div class="hidden" ref={searchRef} />
@@ -132,6 +155,7 @@ function DropdownSubContent(props: DropdownSubContentProps) {
           depth={local.depth ?? 2}
           as={Surface}
           {...rest}
+          ref={setContentRef}
         >
           <div class="flex flex-col gap-px bg-edge-muted size-full">
             {local.children}

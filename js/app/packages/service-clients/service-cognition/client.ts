@@ -19,6 +19,7 @@ import type { GetChatPermissionsResponse } from './generated/schemas/getChatPerm
 import type { GetChatResponse } from './generated/schemas/getChatResponse';
 import type { GetChatsForAttachmentResponse } from './generated/schemas/getChatsForAttachmentResponse';
 import type { HttpSendChatMessageRequest } from './generated/schemas/httpSendChatMessageRequest';
+import type { ModelsResponse } from './generated/schemas/modelsResponse';
 import type { PatchChatRequest } from './generated/schemas/patchChatRequest';
 import type { SendChatMessageResponse } from './generated/schemas/sendChatMessageResponse';
 import type { ServerResponse } from './generated/schemas/serverResponse';
@@ -199,6 +200,14 @@ export const cognitionApiServiceClient = {
       })
     ).map((result) => result);
   },
+  async getModels() {
+    return (
+      await dcsFetch<ModelsResponse>(`/chats/models`, {
+        method: 'GET',
+      })
+    ).map((result) => result);
+  },
+
   async getChatsForAttachment(args: { attachment_id: string }) {
     const { attachment_id } = args;
     return (

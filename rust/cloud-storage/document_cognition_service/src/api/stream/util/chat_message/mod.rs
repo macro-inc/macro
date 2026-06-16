@@ -7,7 +7,6 @@ use crate::{
     model::stream::SendChatMessagePayload,
 };
 
-use agent::AgentModel;
 use agent::types::Role;
 use agent::types::{ChatMessage, ChatMessageContent};
 use anyhow::{Context, Result};
@@ -23,7 +22,7 @@ pub async fn store_incoming_message(
     ctx: Arc<ApiContext>,
     user_id: &str,
     chat: &ChatResponse,
-    model: AgentModel,
+    model: &str,
     incoming_message: &SendChatMessagePayload,
 ) -> Result<ResolvedMessageContent> {
     let created_at = chrono::Utc::now();
@@ -52,7 +51,7 @@ pub async fn store_incoming_message(
         }),
         created_at,
         updated_at: created_at,
-        model,
+        model: model.to_string(),
     };
 
     let user_id: macro_user_id::user_id::MacroUserIdStr<'static> =
@@ -83,7 +82,7 @@ pub async fn store_conversation_messages(
     user_id: &str,
     chat_id: &str,
     messages: Vec<ChatMessage>,
-    model: AgentModel,
+    model: &str,
     first_message_id: Option<String>,
 ) -> Result<Vec<String>> {
     if messages.is_empty() {
@@ -108,7 +107,7 @@ pub async fn store_conversation_messages(
             content: message.content,
             role: message.role,
             attachments: None,
-            model,
+            model: model.to_string(),
             created_at,
             updated_at: created_at,
         };

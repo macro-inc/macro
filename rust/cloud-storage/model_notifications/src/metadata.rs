@@ -195,6 +195,81 @@ impl NotificationTitle for GithubPrStatusChanged {
     }
 }
 
+/// The normalized result state for a GitHub pull request check-run notification.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ToSchema, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum GithubPrCheckRunState {
+    /// The check run completed successfully.
+    Completed,
+    /// The check run completed with a failure-like conclusion.
+    Failed,
+}
+
+/// Metadata for a notification that a GitHub pull request check run completed.
+#[derive(Debug, Clone, PartialEq, Eq, ToSchema, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GithubPrCheckRun {
+    /// Fields shared with the other GitHub pull request notifications.
+    #[serde(flatten)]
+    pub common: GithubPrNotificationCommon,
+    /// The GitHub numeric id of the check run.
+    pub check_run_github_id: u64,
+    /// The display name GitHub reported for the check run.
+    pub check_name: String,
+    /// The raw GitHub check run status.
+    pub check_status: String,
+    /// The raw GitHub check run conclusion.
+    pub conclusion: String,
+    /// The normalized notification state for this check run.
+    pub state: GithubPrCheckRunState,
+    /// The public GitHub URL for the check run.
+    pub check_url: String,
+    /// When GitHub marked the check run as complete.
+    pub completed_at: DateTime<Utc>,
+}
+
+impl GithubPrCheckRun {
+    fn state_verb(&self) -> &'static str {
+        match self.state {
+            GithubPrCheckRunState::Completed => "completed",
+            GithubPrCheckRunState::Failed => "failed",
+        }
+    }
+
+    fn display_check_name(&self) -> &str {
+        let check_name = self.check_name.trim();
+        if check_name.is_empty() {
+            return "Check";
+        }
+
+        check_name
+    }
+}
+
+impl Notification for GithubPrCheckRun {
+    const TYPE_NAME: &'static str = "github_pr_check_run";
+}
+
+impl NotificationTitle for GithubPrCheckRun {
+    fn format_title(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        Ok(format!(
+            "{} {} on a pull request",
+            self.display_check_name(),
+            self.state_verb()
+        ))
+    }
+
+    fn format_body(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        Ok(self.common.format_body())
+    }
+}
+
 /// Metadata for a notification that the user's review was requested on a GitHub pull request.
 #[derive(Debug, Clone, PartialEq, Eq, ToSchema, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -605,6 +680,40 @@ pub struct NewEmailMetadata {
     pub thread_id: String,
     pub subject: String,
     pub snippet: String,
+}
+
+/// Metadata for a notification that a linked inbox's grant has died and the
+/// inbox must be reconnected. Fanned out to the inbox owner and every delegate,
+/// since any of them holding the Google grant can restore sync.
+#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct InboxReauthRequiredMetadata {
+    /// The address of the inbox that needs to be reconnected.
+    #[serde(alias = "email_address")]
+    pub email_address: String,
+}
+
+impl notification::domain::models::Notification for InboxReauthRequiredMetadata {
+    const TYPE_NAME: &'static str = "inbox_reauth_required";
+}
+
+impl NotificationTitle for InboxReauthRequiredMetadata {
+    fn format_title(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        Ok(format!("Reconnect {}", self.email_address))
+    }
+
+    fn format_body(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        Ok(
+            "Sync stopped because the Google connection expired. Reconnect to restore it."
+                .to_string(),
+        )
+    }
 }
 
 impl notification::domain::models::Notification for NewEmailMetadata {

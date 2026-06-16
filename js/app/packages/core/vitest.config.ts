@@ -11,6 +11,11 @@ export default defineConfig({
     solidPlugin(),
     wasm(),
   ],
+  resolve: {
+    alias: {
+      'loro-crdt': 'loro-crdt/base64',
+    },
+  },
   test: {
     environment: 'jsdom',
     globals: true,

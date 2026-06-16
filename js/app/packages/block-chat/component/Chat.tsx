@@ -23,6 +23,7 @@ import { useGetChatAttachmentInfo } from '@core/component/AI/signal/attachment';
 import { getPendingSend } from '@core/component/AI/signal/pendingSend';
 import { registerToolHandler } from '@core/component/AI/signal/tool';
 import { deriveChatName } from '@core/component/AI/util/deriveName';
+import { parseModel } from '@core/component/AI/util/parse';
 import {
   getChatInputStoredState,
   type StoredStuff,
@@ -53,10 +54,15 @@ export function Chat(props: { data: ChatData }) {
   const loadedState = getChatInputStoredState(props.data.chat.id);
   const { showPaywall } = usePaywallState();
 
+  // Seed the selector from the chat's stored model, then the local draft, then
+  // the default. The chat input reconciles to an available model if the user
+  // isn't entitled to this one.
+  const initialModel = parseModel(props.data.chat.model) ?? loadedState.model;
+
   return (
     <ChatInputProvider
       initialAttachments={loadedState.attachments}
-      model={loadedState.model}
+      model={initialModel}
     >
       <ChatProvider
         chatId={props.data.chat.id}

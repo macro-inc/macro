@@ -1,4 +1,3 @@
-use agent::AgentModel;
 use agent::types::AssistantMessagePart;
 use model_entity::Entity;
 use serde::{Deserialize, Serialize};
@@ -25,8 +24,8 @@ pub struct SendChatMessagePayload {
     pub content: String,
     /// Id of the chat the message belongs to
     pub chat_id: String,
-    /// the chate model to respond with
-    pub model: AgentModel,
+    /// the chat model to respond with (provider api id)
+    pub model: String,
     /// Additional system instructions appended to the base system prompt
     #[serde(skip_serializing_if = "Option::is_none")]
     pub additional_instructions: Option<String>,
@@ -73,10 +72,7 @@ pub enum ChatStream {
 #[serde(rename_all = "snake_case", tag = "stream_error")]
 pub enum StreamError {
     #[error("provider error")]
-    ProviderError {
-        stream_id: String,
-        model: AgentModel,
-    },
+    ProviderError { stream_id: String, model: String },
 
     #[error("model context overflow")]
     ModelContextOverflow { stream_id: String },

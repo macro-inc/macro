@@ -40,6 +40,24 @@ fn github_pr_status_changed() -> GithubPrStatusChanged {
     }
 }
 
+fn github_pr_check_run(state: GithubPrCheckRunState) -> GithubPrCheckRun {
+    let conclusion = match state {
+        GithubPrCheckRunState::Completed => "success",
+        GithubPrCheckRunState::Failed => "failure",
+    };
+
+    GithubPrCheckRun {
+        common: github_pr_common(),
+        check_run_github_id: 987_654_321,
+        check_name: "CI / tests".to_string(),
+        check_status: "completed".to_string(),
+        conclusion: conclusion.to_string(),
+        state,
+        check_url: "https://github.com/macro/app/runs/987654321".to_string(),
+        completed_at: utc_datetime("2026-05-25T19:01:02Z"),
+    }
+}
+
 #[test]
 fn github_pr_status_changed_serializes_with_camel_case_fields_and_lowercase_enums() {
     let event = github_pr_status_changed();
@@ -162,6 +180,99 @@ fn github_pr_status_changed_deserializes_from_legacy_github_pr_event_tag() {
 
     let crate::NotifEvent::GithubPrStatusChanged(actual) = event else {
         panic!("expected github_pr_status_changed variant");
+    };
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn github_pr_check_run_serializes_with_camel_case_fields_and_lowercase_state() {
+    let event = github_pr_check_run(GithubPrCheckRunState::Completed);
+
+    let value = serde_json::to_value(&event).unwrap();
+
+    assert_eq!(
+        value,
+        serde_json::json!({
+            "foreignEntityId": "11111111-1111-4111-8111-111111111111",
+            "githubKey": "macro/app/pull/42",
+            "owner": "macro",
+            "repo": "app",
+            "number": 42,
+            "url": "https://github.com/macro/app/pull/42",
+            "displayName": "macro/app#42",
+            "title": "Add GitHub PR notifications",
+            "senderGithubLogin": "octocat",
+            "senderGithubUserId": "12345",
+            "senderGithubAvatarUrl": "https://avatars.githubusercontent.com/u/12345?v=4",
+            "checkRunGithubId": 987654321,
+            "checkName": "CI / tests",
+            "checkStatus": "completed",
+            "conclusion": "success",
+            "state": "completed",
+            "checkUrl": "https://github.com/macro/app/runs/987654321",
+            "completedAt": "2026-05-25T19:01:02Z"
+        })
+    );
+}
+
+#[test]
+fn github_pr_check_run_tagged_content_serializes_with_type_name() {
+    let event = github_pr_check_run(GithubPrCheckRunState::Completed);
+    let foreign_entity_id = event.common.foreign_entity_id.to_string();
+
+    let value =
+        serde_json::to_value(notification::domain::models::TaggedContent::new(event)).unwrap();
+
+    assert_eq!(value["tag"], "github_pr_check_run");
+    assert_eq!(value["content"]["checkRunGithubId"], 987_654_321);
+    assert_eq!(
+        value["content"]["foreignEntityId"],
+        serde_json::json!(foreign_entity_id)
+    );
+}
+
+#[test]
+fn github_pr_check_run_formats_title_and_body_by_state() {
+    let completed = github_pr_check_run(GithubPrCheckRunState::Completed);
+    let failed = github_pr_check_run(GithubPrCheckRunState::Failed);
+
+    assert_eq!(
+        completed
+            .format_title(Some(uid("macro|ignored.sender@macro.com")))
+            .unwrap(),
+        "CI / tests completed on a pull request"
+    );
+    assert_eq!(
+        failed.format_title(None).unwrap(),
+        "CI / tests failed on a pull request"
+    );
+    assert_eq!(
+        completed.format_body(None).unwrap(),
+        "macro/app#42: Add GitHub PR notifications"
+    );
+}
+
+#[test]
+fn github_pr_check_run_notif_event_deserializes_and_renders_in_app() {
+    let expected = github_pr_check_run(GithubPrCheckRunState::Failed);
+    let value = serde_json::json!({
+        "tag": "github_pr_check_run",
+        "content": serde_json::to_value(&expected).unwrap(),
+    });
+
+    let event: crate::NotifEvent = serde_json::from_value(value).unwrap();
+
+    assert_eq!(
+        event.format_title(None).unwrap(),
+        "CI / tests failed on a pull request"
+    );
+    assert_eq!(
+        event.format_body(None).unwrap(),
+        "macro/app#42: Add GitHub PR notifications"
+    );
+
+    let crate::NotifEvent::GithubPrCheckRun(actual) = event else {
+        panic!("expected github_pr_check_run variant");
     };
     assert_eq!(actual, expected);
 }

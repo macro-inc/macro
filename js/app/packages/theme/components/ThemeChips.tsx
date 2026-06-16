@@ -1,14 +1,39 @@
 import type { ThemeV2 } from '@theme/types/themeTypes';
 import IconTextA from '@phosphor-icons/core/regular/text-a-underline.svg?component-solid';
+import { cn } from '@ui';
 
 type Token = { l: number; c: number; h: number };
+type ThemeChipsSize = 'sm' | 'md';
+
+const sizeStyles: Record<
+  ThemeChipsSize,
+  {
+    root: string;
+    accent: string;
+    icon: string;
+  }
+> = {
+  md: {
+    root: 'gap-2 p-2 rounded-sm',
+    accent: 'size-[13px]',
+    icon: 'size-[18px]',
+  },
+  sm: {
+    root: 'gap-1 py-[3px] px-[5px] rounded-md',
+    accent: 'size-[9px]',
+    icon: 'size-3',
+  },
+};
 
 /** A theme swatch: an encompassing square of the theme's panel surface with the
  *  accent and ink (A) inside. Always shows the theme's original intended colors
  *  — each theme is intrinsically light or dark. */
-export function ThemeChips(props: { theme: ThemeV2 }) {
+export function ThemeChips(props: { theme: ThemeV2; size?: ThemeChipsSize }) {
+  const styles = () => sizeStyles[props.size ?? 'md'];
   const oklch = (token: Token) => {
-    if (!token) { return 'transparent'; }
+    if (!token) {
+      return 'transparent';
+    }
     return `oklch(${token.l} ${token.c} ${token.h}deg)`;
   };
 
@@ -28,14 +53,21 @@ export function ThemeChips(props: { theme: ThemeV2 }) {
   // Uniform padding around and gap between the items so the spacing reads evenly.
   return (
     <span
-      class="inline-flex items-center rounded-sm border border-edge-muted"
-      style={{ 'background-color': bg(), padding: '8px', gap: '8px' }}
+      class={cn(
+        'inline-flex items-center border border-edge-muted',
+        styles().root
+      )}
+      style={{
+        'background-color': bg(),
+      }}
     >
       <span
-        class="inline-block rounded-xs"
-        style={{ 'background-color': accent(), width: '13px', height: '13px' }}
+        class={cn('inline-block rounded-xs', styles().accent)}
+        style={{
+          'background-color': accent(),
+        }}
       />
-      <IconTextA style={{ color: ink(), width: '18px', height: '18px' }} />
+      <IconTextA class={styles().icon} style={{ color: ink() }} />
     </span>
   );
 }

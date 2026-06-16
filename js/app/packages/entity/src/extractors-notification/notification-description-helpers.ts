@@ -35,11 +35,13 @@ export function getActionVerb(type: NotificationType): string {
     .with('invite_to_team', () => 'invited you')
     .with('task_assigned', () => 'assigned you')
     .with('github_pr_status_changed', () => 'updated a pull request')
+    .with('github_pr_check_run', () => 'completed a check')
     .with('github_review_requested', () => 'requested your review')
     .with('github_pr_comment', () => 'commented on a pull request')
     .with('github_pr_mention', () => 'mentioned you on a pull request')
     .with('github_pr_review', () => 'reviewed your pull request')
     .with('call-started', () => 'started a call')
+    .with('inbox_reauth_required', () => 'needs reconnection')
     .exhaustive();
 }
 
@@ -70,6 +72,7 @@ export function getTypeNoun(type: NotificationType, count: number): string {
     .with('github_pr_status_changed', () =>
       count === 1 ? 'pull request' : 'pull requests'
     )
+    .with('github_pr_check_run', () => (count === 1 ? 'check' : 'checks'))
     .with('github_review_requested', () =>
       count === 1 ? 'review request' : 'review requests'
     )
@@ -77,6 +80,7 @@ export function getTypeNoun(type: NotificationType, count: number): string {
     .with('github_pr_mention', () => (count === 1 ? 'mention' : 'mentions'))
     .with('github_pr_review', () => (count === 1 ? 'review' : 'reviews'))
     .with('call-started', () => (count === 1 ? 'call' : 'calls'))
+    .with('inbox_reauth_required', () => (count === 1 ? 'inbox' : 'inboxes'))
     .exhaustive();
 }
 

@@ -139,7 +139,7 @@ export function ComposeBody(props: {
     <>
       <div class="size-full min-h-0 sm:max-h-full mobile:flex-1 flex flex-col flex-1">
         <div
-          class="grow size-full flex flex-col cursor-text placeholder:text-ink-placeholder placeholder:opacity-50 overflow-hidden relative"
+          class="grow size-full flex flex-col cursor-text placeholder:text-ink-placeholder placeholder:opacity-50 overflow-hidden relative [&_.text-ink-placeholder]:left-0 [&_.text-ink-placeholder>p]:my-0"
           ref={bodyDiv}
           onclick={() => {
             editor()?.focus();

@@ -811,6 +811,11 @@ export type initGmailLinkResponse401 = {
   status: 401;
 };
 
+export type initGmailLinkResponse402 = {
+  data: ErrorResponse;
+  status: 402;
+};
+
 export type initGmailLinkResponse429 = {
   data: ErrorResponse;
   status: 429;
@@ -827,6 +832,7 @@ export type initGmailLinkResponseSuccess = initGmailLinkResponse200 & {
 export type initGmailLinkResponseError = (
   | initGmailLinkResponse400
   | initGmailLinkResponse401
+  | initGmailLinkResponse402
   | initGmailLinkResponse429
   | initGmailLinkResponse500
 ) & {

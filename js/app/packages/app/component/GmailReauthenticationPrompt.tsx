@@ -1,65 +1,90 @@
-import { emailAuthUrl } from '@core/auth/email';
 import { toast } from '@core/component/Toast/Toast';
-import { authServiceClient } from '@service-auth/client';
-import { onMount } from 'solid-js';
+import { useAddInboxFlow } from '@core/email-link';
+import { useEmailLinksQuery } from '@queries/email/link';
+import { createEffect, onCleanup } from 'solid-js';
 
-let gmailReauthenticationToastId: number | undefined;
-
-function clearGmailReauthenticationToastState(): void {
-  gmailReauthenticationToastId = undefined;
-}
-
-function handleGmailReauthenticationToastAction(): void {
-  if (gmailReauthenticationToastId !== undefined) {
-    toast.dismiss(gmailReauthenticationToastId);
-  }
-  clearGmailReauthenticationToastState();
-
-  window.location.href = emailAuthUrl({
-    returnPath: `${window.location.pathname}${window.location.search}${window.location.hash}`,
-  });
-}
-
-function showGmailReauthenticationToast(): void {
-  if (gmailReauthenticationToastId !== undefined) return;
-
-  gmailReauthenticationToastId = toast.custom(
-    {
-      title: 'Reconnect Gmail',
-      content(): string {
-        return 'Your Gmail authorization has expired. Reconnect Gmail to restore email sync.';
-      },
-      actions: [
-        {
-          label: 'Reconnect',
-          onClick: handleGmailReauthenticationToastAction,
-        },
-      ],
-    },
-    {
-      persistent: true,
-      onDismiss: clearGmailReauthenticationToastState,
-    }
-  );
-}
-
-async function checkGmailReauthenticationStatus(): Promise<void> {
-  const response = await authServiceClient.checkGmailLinkStatus();
-
-  const needsReauthentication = response.isOk()
-    ? response.value.reauthentication_required
-    : response.error.some(
-        (error) => error.code === 'REAUTHENTICATION_REQUIRED'
-      );
-
-  if (needsReauthentication) {
-    showGmailReauthenticationToast();
-  }
-}
-
+/**
+ * Surfaces a per-inbox "Reconnect Gmail" prompt for every linked inbox whose grant
+ * has died, driven by `needs_reauth` from the (already polled) links list. Because
+ * the links list includes delegated/shared inboxes, a shared inbox's prompt fans
+ * out to every sharer automatically. Replaces the old mount-once, primary-only
+ * `/link/gmail/status` check.
+ */
 export function GmailReauthenticationPrompt() {
-  onMount(() => {
-    void checkGmailReauthenticationStatus();
+  const linksQuery = useEmailLinksQuery();
+  const startAddInbox = useAddInboxFlow();
+
+  // One persistent toast per broken inbox, keyed by link id.
+  const toastIds = new Map<string, number>();
+  // Inboxes the user dismissed this session; not re-prompted until they recover.
+  const dismissed = new Set<string>();
+
+  const dismissToast = (linkId: string) => {
+    const id = toastIds.get(linkId);
+    if (id !== undefined) {
+      toast.dismiss(id);
+      toastIds.delete(linkId);
+    }
+  };
+
+  createEffect(() => {
+    const links = linksQuery.data?.links ?? [];
+    const needingReauth = new Set(
+      links.filter((link) => link.needs_reauth).map((link) => link.id)
+    );
+
+    // Clear toasts and dismissals for inboxes that recovered or were removed, so a
+    // later failure can prompt again.
+    for (const linkId of [...toastIds.keys()]) {
+      if (!needingReauth.has(linkId)) dismissToast(linkId);
+    }
+    for (const linkId of [...dismissed]) {
+      if (!needingReauth.has(linkId)) dismissed.delete(linkId);
+    }
+
+    for (const link of links) {
+      if (
+        !link.needs_reauth ||
+        toastIds.has(link.id) ||
+        dismissed.has(link.id)
+      ) {
+        continue;
+      }
+
+      const linkId = link.id;
+      const id = toast.custom(
+        {
+          title: 'Reconnect Gmail',
+          content(): string {
+            return `Sync stopped for ${link.email_address}. Reconnect to restore email sync.`;
+          },
+          actions: [
+            {
+              label: 'Reconnect',
+              onClick: () => {
+                // Suppress re-prompting until the inbox recovers; on native the page
+                // stays mounted while the OAuth flow runs.
+                dismissed.add(linkId);
+                dismissToast(linkId);
+                void startAddInbox();
+              },
+            },
+          ],
+        },
+        {
+          persistent: true,
+          onDismiss: () => {
+            toastIds.delete(linkId);
+            dismissed.add(linkId);
+          },
+        }
+      );
+      toastIds.set(linkId, id);
+    }
+  });
+
+  onCleanup(() => {
+    for (const linkId of [...toastIds.keys()]) dismissToast(linkId);
   });
 
   return null;

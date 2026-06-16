@@ -1,4 +1,3 @@
-use agent::AgentModel;
 use model::chat::ChatMessageWithAttachments;
 use models_permissions::share_permission::access_level::AccessLevel;
 use serde::{Deserialize, Serialize};
@@ -58,8 +57,8 @@ pub struct ChatResponse {
     pub name: String,
     /// The messages in the chat.
     pub messages: Vec<ChatMessageWithAttachments>,
-    /// The model used to generate the chat.
-    pub model: Option<AgentModel>,
+    /// The model used to generate the chat (provider api id).
+    pub model: Option<String>,
     /// The time the chat was created.
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
     /// The time the chat was last updated.

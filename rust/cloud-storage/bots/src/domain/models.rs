@@ -40,6 +40,47 @@ impl std::str::FromStr for BotKind {
     }
 }
 
+/// Channel type for a channel containing a bot.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum BotChannelType {
+    /// Public channel.
+    Public,
+    /// Private channel.
+    Private,
+    /// Direct message channel.
+    DirectMessage,
+    /// Team channel.
+    Team,
+}
+
+impl BotChannelType {
+    /// Storage representation.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Public => "public",
+            Self::Private => "private",
+            Self::DirectMessage => "direct_message",
+            Self::Team => "team",
+        }
+    }
+}
+
+impl std::str::FromStr for BotChannelType {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "public" => Ok(Self::Public),
+            "private" => Ok(Self::Private),
+            "direct_message" => Ok(Self::DirectMessage),
+            "team" => Ok(Self::Team),
+            other => Err(format!("unknown bot channel type: {other}")),
+        }
+    }
+}
+
 /// Bot owner.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
@@ -85,6 +126,20 @@ pub struct Bot {
     pub deleted_at: Option<DateTime<Utc>>,
 }
 
+/// Channel containing a bot.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct BotChannel {
+    /// Channel id.
+    pub channel_id: Uuid,
+    /// Channel display name.
+    pub name: Option<String>,
+    /// Channel type.
+    pub channel_type: BotChannelType,
+    /// Timestamp when the bot joined the channel.
+    pub joined_at: DateTime<Utc>,
+}
+
 /// Bot token metadata.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
@@ -93,8 +148,8 @@ pub struct BotToken {
     pub id: Uuid,
     /// Owning bot id.
     pub bot_id: BotId,
-    /// Token lookup prefix.
-    pub token_prefix: String,
+    /// Raw bearer token.
+    pub token: String,
     /// Optional token label.
     pub label: Option<String>,
     /// Last successful use.
@@ -121,8 +176,6 @@ pub struct AuthenticatedBot {
 pub struct BotTokenCandidate {
     /// Token metadata.
     pub token: BotToken,
-    /// Stored token hash.
-    pub token_hash: Vec<u8>,
     /// Authenticated bot principal associated with the token.
     pub bot: AuthenticatedBot,
 }
@@ -195,7 +248,7 @@ pub struct CreateChannelScopedBotRequest {
     pub token_expires_at: Option<DateTime<Utc>>,
 }
 
-/// Response containing a newly minted token. The raw token is shown once.
+/// Response containing a newly minted token.
 #[derive(Debug, Clone, Serialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct CreateBotTokenResponse {

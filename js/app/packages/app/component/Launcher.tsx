@@ -1,6 +1,7 @@
 import { analytics } from '@app/lib/analytics';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { setAutomationComposerOpen } from '@block-automation/component';
+import { EMAIL_COMPOSE_TO_INPUT_ID } from '@block-email/constants';
 import type { BlockAlias, BlockName } from '@core/block';
 import { getIconConfig } from '@core/component/EntityIcon';
 import {
@@ -8,6 +9,7 @@ import {
   ENABLE_SNIPPETS_FLAG,
   ENABLE_SNIPPETS_OVERRIDE,
 } from '@core/constant/featureFlags';
+import { triggerFocusInput } from '@core/directive/focusInput';
 import {
   createHotkeyGroup,
   registerHotkey,
@@ -207,6 +209,11 @@ export function runCreateAction(
       });
       return;
     case 'email':
+      // Focus the "To" field within this gesture so the iOS keyboard opens;
+      // the compose mounts asynchronously, so this waits for the input.
+      triggerFocusInput(() =>
+        document.getElementById(EMAIL_COMPOSE_TO_INPUT_ID)
+      );
       createComponent({
         componentId: 'email-compose',
         shouldInsert,
@@ -274,6 +281,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     icon: WideFileMd,
     animatedIcon: AnimatedFileMdIcon,
     description: 'Create doc',
+    keywords: ['new', 'make', 'add', 'document', 'note'],
     blockName: 'md',
     hotkeyToken: TOKENS.create.note,
     altHotkeyToken: TOKENS.create.noteNewSplit,
@@ -288,6 +296,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     icon: WideTask,
     animatedIcon: AnimatedTaskIcon,
     description: 'Create task',
+    keywords: ['new', 'make', 'add', 'todo'],
     blockName: 'task',
     hotkeyToken: TOKENS.create.task,
     altHotkeyToken: TOKENS.create.taskNewSplit,
@@ -302,6 +311,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     icon: WideSnippet,
     animatedIcon: AnimatedSnippetIcon,
     description: 'Create snippet',
+    keywords: ['new', 'make', 'add'],
     blockName: 'snippet',
     hotkeyToken: TOKENS.create.snippet,
     altHotkeyToken: TOKENS.create.snippetNewSplit,
@@ -316,6 +326,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     icon: WideEmail,
     animatedIcon: AnimatedEmailIcon,
     description: 'Create email',
+    keywords: ['new', 'make', 'add', 'compose'],
     blockName: 'email',
     hotkeyToken: TOKENS.create.email,
     altHotkeyToken: TOKENS.create.emailNewSplit,
@@ -330,6 +341,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     icon: WideChat,
     animatedIcon: AnimatedChatIcon,
     description: 'Create message',
+    keywords: ['new', 'make', 'add', 'channel'],
     blockName: 'channel',
     hotkeyToken: TOKENS.create.message,
     altHotkeyToken: TOKENS.create.messageNewSplit,
@@ -344,6 +356,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     icon: WideStar,
     animatedIcon: AnimatedStarIcon,
     description: 'Create AI chat',
+    keywords: ['new', 'make', 'add', 'agent'],
     blockName: 'chat',
     hotkeyToken: TOKENS.create.chat,
     altHotkeyToken: TOKENS.create.chatNewSplit,
@@ -358,6 +371,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     icon: WideDiagram,
     animatedIcon: AnimatedDiagramIcon,
     description: 'Create canvas',
+    keywords: ['new', 'make', 'add', 'diagram'],
     blockName: 'canvas',
     hotkeyToken: TOKENS.create.canvas,
     altHotkeyToken: TOKENS.create.canvasNewSplit,
@@ -374,6 +388,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     icon: WideFolder,
     animatedIcon: AnimatedFolderIcon,
     description: 'Create folder',
+    keywords: ['new', 'make', 'add', 'project'],
     blockName: 'project',
     hotkeyToken: TOKENS.create.project,
     altHotkeyToken: TOKENS.create.projectNewSplit,
@@ -388,6 +403,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     icon: WideFileCode,
     animatedIcon: AnimatedFileCodeIcon,
     description: 'Create code file',
+    keywords: ['new', 'make', 'add'],
     blockName: 'code',
     hotkeyToken: TOKENS.create.code,
     altHotkeyToken: TOKENS.create.codeNewSplit,

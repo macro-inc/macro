@@ -166,7 +166,9 @@ const AssigneeGroupContent = (props: {
   assigneeId: MacroId;
   fallbackLabel: string;
 }) => {
-  const [assigneeName] = useDisplayName(props.assigneeId);
+  const [assigneeName] = useDisplayName(props.assigneeId, {
+    emailFallback: 'local-part',
+  });
   return (
     <>
       <UserIcon
@@ -397,6 +399,8 @@ export const SoupView = (props: SoupViewProps) => {
     | SetPredicatesInput<string>
     | undefined;
 
+  const persistedSearchText = entryState?.['search.text'] as string | undefined;
+
   const persistedGroupBy = entryState?.['soup.groupBy'] as
     | string
     | null
@@ -430,7 +434,7 @@ export const SoupView = (props: SoupViewProps) => {
       soupView.initialize({
         initialQuery: persistedFilters ?? props.initialFilters,
         initialClientFilters: persistedPredicates ?? props.initialClientFilters,
-        initialSearchText: props.initialSearchText,
+        initialSearchText: persistedSearchText ?? props.initialSearchText,
         disableLocalSearch: props.disableLocalSearch,
         additionalEntities: props.additionalEntities,
       });
@@ -585,7 +589,14 @@ export const SoupView = (props: SoupViewProps) => {
       }}
     >
       <div class="size-full flex flex-col" data-list-view={activeListView()}>
-        <div class="flex flex-col w-full">
+        <div
+          class={cn('flex flex-col w-full', {
+            // In preview the separating border sits below this region, so it
+            // ends up under the active-filters bar when shown, otherwise right
+            // under the toolbar (the wrapper collapses to zero height).
+            'border-b border-edge-muted': !isMobile() && !!soup.previewEntity(),
+          })}
+        >
           <SplitHeaderLeft>
             <div
               class={cn('h-full flex gap-3 items-center', {
@@ -1141,6 +1152,11 @@ export const SoupViewList = (props: SoupViewListProps) => {
       setPreview(hasPreviewEntity);
     }
   });
+
+  // The preview flag lives on the panel, so clear it when the soup view
+  // unmounts (e.g. pressing enter replaces the split with the full entity);
+  // otherwise it stays stale-true and the entity's toolbar keeps the border.
+  onCleanup(() => panel.previewState[1](false));
 
   return (
     <MaybeSoupEntityActionDrawerManager>

@@ -253,8 +253,12 @@ export const SoupViewContextProvider: FlowComponent<
   );
 
   // Expose the mail view's inbox filter to consumers outside the split tree
-  // (the sidebar's nested account rows read and set it by split id).
-  {
+  // (the sidebar's nested account rows read and set it by split id). The
+  // provider outlives content swaps within a split, so track the live content
+  // reactively and (un)register as the mail list becomes / stops being the
+  // shown view — registering also flushes any filter the sidebar queued while
+  // navigating here, so a sidebar inbox selection takes on the first click.
+  createEffect(() => {
     const content = panel.handle.content();
     if (content.type === 'component' && content.id === 'mail') {
       const dispose = registerInboxFilterSplit(panel.handle.id, {
@@ -263,7 +267,7 @@ export const SoupViewContextProvider: FlowComponent<
       });
       onCleanup(dispose);
     }
-  }
+  });
   const [activeTab, setActiveTab] = useEntryState<string | undefined>(
     'soup.tab',
     { default: undefined }

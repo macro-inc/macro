@@ -24,6 +24,7 @@ import type {
   McpAuthCallbackParams,
   MemoryErrorBody,
   MemoryResponse,
+  ModelsResponse,
   PatchChatRequest,
   RejectToolCallRequest,
   SendChatMessageResponse,
@@ -453,6 +454,53 @@ export const getChatHistoryBatchMessagesHandler = async (
     status: res.status,
     headers: res.headers,
   } as getChatHistoryBatchMessagesHandlerResponse;
+};
+
+/**
+ * @summary List all chat models, each flagged with whether the requesting user has
+access (free users get Haiku; professional users get everything).
+ */
+export type listModelsResponse200 = {
+  data: ModelsResponse;
+  status: 200;
+};
+
+export type listModelsResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type listModelsResponseSuccess = listModelsResponse200 & {
+  headers: Headers;
+};
+export type listModelsResponseError = listModelsResponse500 & {
+  headers: Headers;
+};
+
+export type listModelsResponse =
+  | listModelsResponseSuccess
+  | listModelsResponseError;
+
+export const getListModelsUrl = () => {
+  return `/chats/models`;
+};
+
+export const listModels = async (
+  options?: RequestInit
+): Promise<listModelsResponse> => {
+  const res = await fetch(getListModelsUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listModelsResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listModelsResponse;
 };
 
 /**

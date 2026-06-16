@@ -823,6 +823,35 @@ export const createCommentResponse = zod
   );
 
 /**
+ * @summary Handler for `GET /bots/{bot_id}/channels`.
+ */
+export const listBotChannelsParams = zod.object({
+  bot_id: zod.string().describe('Bot ID'),
+});
+
+export const listBotChannelsResponseItem = zod
+  .object({
+    channel_id: zod.uuid().describe('Channel id.'),
+    channel_type: zod
+      .enum(['public', 'private', 'direct_message', 'team'])
+      .describe('Channel type for a channel containing a bot.'),
+    joined_at: zod.iso
+      .datetime({})
+      .describe('Timestamp when the bot joined the channel.'),
+    name: zod.string().nullish().describe('Channel display name.'),
+  })
+  .describe('Channel containing a bot.');
+export const listBotChannelsResponse = zod.array(listBotChannelsResponseItem);
+
+/**
+ * @summary Handler for `DELETE /bots/{bot_id}/channels/{channel_id}`.
+ */
+export const removeBotFromChannelByBotParams = zod.object({
+  bot_id: zod.string().describe('Bot ID'),
+  channel_id: zod.uuid().describe('Channel ID'),
+});
+
+/**
  * Batch-fetches lightweight previews for a list of call ids. Mirrors the
 `POST /documents/preview` endpoint: no per-id access checks, duplicate
 ids are deduplicated server-side, and missing ids come back as

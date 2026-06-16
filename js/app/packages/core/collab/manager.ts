@@ -552,6 +552,14 @@ export function createLoroManager<S extends GenericRootSchema>(
     let pos: { update?: Cursor; offset: number; side: Side } | undefined;
     try {
       pos = loroDoc().getCursorPos(cursor);
+      if (!pos) {
+        return err([
+          {
+            code: LoroManagerError.GetCursorPosFailed,
+            message: "loro didn't give us a cursor position",
+          },
+        ]);
+      }
     } catch (e) {
       console.error('Failed to get cursor pos', e);
       pushError(LoroManagerError.GetCursorPosFailed);

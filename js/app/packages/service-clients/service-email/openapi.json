@@ -4157,6 +4157,7 @@
           "provider",
           "is_sync_active",
           "sync_status",
+          "needs_reauth",
           "settings",
           "is_primary",
           "created_at",
@@ -4185,6 +4186,10 @@
           },
           "macro_id": {
             "type": "string"
+          },
+          "needs_reauth": {
+            "type": "boolean",
+            "description": "Whether the link's Google grant needs to be reconnected. Drives the\nper-inbox reconnect prompt independently of the sync-status badge."
           },
           "photo_url": {
             "type": ["string", "null"],
@@ -4748,8 +4753,8 @@
       },
       "SyncStatus": {
         "type": "string",
-        "description": "Coarse sync state for an inbox, used to render a one-line hint in the\nmulti-inbox settings list. Derived from the link's `is_sync_active` flag and\nits most recent backfill job.",
-        "enum": ["SYNCING", "UP_TO_DATE", "ERROR", "INACTIVE"]
+        "description": "Coarse sync state for an inbox, used to render a one-line hint in the\nmulti-inbox settings list. Derived from the link's `is_sync_active` flag, its\nreauth health, and its most recent backfill job.",
+        "enum": ["SYNCING", "UP_TO_DATE", "ERROR", "NEEDS_REAUTH", "INACTIVE"]
       },
       "Thread": {
         "type": "object",

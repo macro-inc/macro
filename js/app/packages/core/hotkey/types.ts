@@ -44,10 +44,16 @@ export interface HotkeyCommand {
   hide?: boolean | (() => boolean);
   // Optional icon to display in the command palette.
   icon?: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
+  // Optional custom icon component to display in the command palette.
+  commandPaletteIcon?: Component<{ class?: string }>;
   // Optional component to display in the command palette
   displayComponent?: Component<any>;
   // Optional tags for categorizing in the command palette.
   tags?: string[];
+  // Optional related search terms for the command palette.
+  keywords?: string[];
+  // If true, command palette search also includes one level of nested commands.
+  surfaceNestedCommands?: boolean;
   /**
    * @description Should the focus be returned to the previously active element when this command is selected in the Konsole
    * @default true
@@ -161,6 +167,10 @@ export interface HotkeyRegistrationOptions {
    */
   icon?: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
   /**
+   * Optional custom icon component to display in the command palette.
+   */
+  commandPaletteIcon?: Component<{ class?: string }>;
+  /**
    * Optional component to display in command palette rather than description.
    */
   displayComponent?: Component<any>;
@@ -168,6 +178,14 @@ export interface HotkeyRegistrationOptions {
    * Optional tags for categorizing in the command palette.
    */
   tags?: string[];
+  /**
+   * Optional related search terms for the command palette.
+   */
+  keywords?: string[];
+  /**
+   * If true, command palette search also includes one level of nested commands.
+   */
+  surfaceNestedCommands?: boolean;
 
   /**
    * @description Should the focus be returned to the previously active element when this command is selected in the Konsole

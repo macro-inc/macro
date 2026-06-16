@@ -1,225 +1,158 @@
+use anyhow::Context;
 pub use macro_env::Environment;
-use macro_env_var::{env_var, maybe_env_var};
-use macro_service_urls::{ConnectionGatewayUrl, LexicalServiceUrl, SyncServiceUrl};
+use macro_env_var::{env_vars, maybe_env_vars};
 use secretsmanager_client::LocalOrRemoteSecret;
 
-/// The configuration parameters for the application.
-///
-/// These can either be passed on the command line, or pulled from environment variables.
-/// The latter is preferred as environment variables are one of the recommended ways to
-/// populate the Docker container
-///
-/// See `.env.sample` in document-storage-service root for details.
-pub struct Config {
-    pub vars: EnvVars,
+pub const DEFAULT_PRESIGNED_URL_EXPIRY_SECONDS: u64 = 900; // 15 minutes
+pub const DEFAULT_PRESIGNED_URL_BROWSER_CACHE_EXPIRY_SECONDS: u64 = 840; // remember that this is just a suggestion to the client browser 
 
-    /// The port to listen for HTTP requests on.
-    pub port: usize,
-
-    /// The environment we are in
-    pub environment: Environment,
-
-    /// Connection gateway URL.
-    pub connection_gateway_url: String,
-
-    /// Sync service URL.
-    pub sync_service_url: String,
-
-    /// Lexical service URL.
-    pub lexical_service_url: String,
-
-    /// Maximum number of SQS messages to receive per poll for the delete document worker
-    pub queue_max_messages: i32,
-    /// SQS long-poll wait time in seconds for the delete document worker
-    pub queue_wait_time_seconds: i32,
-
-    /// The document limit for free users
-    pub document_limit: u64,
-
-    /// The number of seconds a presigned url is valid for
-    pub document_storage_service_presigned_url_expiry_seconds: u64,
-    /// The number of seconds a browser cache for a presigned url is valid for
-    pub document_storage_service_presigned_url_browser_cache_expiry_seconds: u64,
-    pub document_storage_service_cloudfront_signer_private_key:
-        LocalOrRemoteSecret<DocumentStorageServiceCloudfrontSignerPrivateKeySecretName>,
-
-    pub document_permission_jwt: LocalOrRemoteSecret<DocumentPermissionJwtSecretKey>,
+env_vars! {
+    pub struct DatabaseUrl;
+    pub struct DatabaseUrlReadonly;
+    pub struct DocumentStorageBucket;
+    pub struct DocxDocumentUploadBucket;
+    pub struct DocumentDeleteQueue;
+    pub struct DocumentStorageServiceCloudfrontDistributionUrl;
+    pub struct DocumentStorageServiceCloudfrontSignerPublicKeyId;
+    pub struct RedisUri;
+    pub struct NotificationQueue;
+    pub struct SearchEventQueue;
+    pub struct BulkUploadRequestsTable;
+    pub struct UploadStagingBucket;
+    pub struct SyncServiceAuthKey;
+    pub struct OpensearchUrl;
+    pub struct OpensearchUsername;
+    pub struct OpensearchPassword;
+    pub struct ContactsQueue;
+    pub struct GithubSyncAppUrl;
+    pub struct GithubSyncAppClientId;
+    pub struct LivekitServerUrl;
+    pub struct LivekitApiKey;
+    pub struct LivekitApiSecret;
+    /// OpenAI API key used to generate task-dedup embeddings. Required —
+    /// injected as `OPENAI_API_KEY` from the `openai-key` secret by the
+    /// infra stack, the same way `document_cognition_service` consumes it.
+    pub struct OpenaiApiKey;
+    pub struct DocumentLimit;
+    pub struct DocumentStorageServicePresignedUrlExpirySeconds;
+    pub struct DocumentStorageServicePresignedUrlBrowserCacheExpirySeconds;
+    pub struct DocumentStorageServiceCloudfrontSignerPrivateKeySecretName;
+    #[derive(Clone)]
+    pub struct DocumentPermissionJwtSecretKey;
+    pub struct GithubWebhookSecretKey;
+    pub struct GithubSyncAppPemSecretKey;
+    pub struct CalWebhookSecretKey;
+    pub struct CalEventTypeContentNamesKey;
+    pub struct MetaPixelId;
+    pub struct MetaAccessToken;
+    #[derive(Clone)]
+    pub struct DocumentStorageServiceAuthKey;
+    pub struct InternalApiSecretKey;
 }
 
-env_var! {
-    struct EnvVars {
-        pub DatabaseUrl,
-        pub DatabaseUrlReadonly,
-        pub DocumentStorageBucket,
-        pub DocxDocumentUploadBucket,
-        pub DocumentDeleteQueue,
-        pub DocumentStorageServiceCloudfrontDistributionUrl,
-        pub DocumentStorageServiceCloudfrontSignerPublicKeyId,
-        pub RedisUri,
-        pub NotificationQueue,
-        pub SearchEventQueue,
-        pub BulkUploadRequestsTable,
-        pub UploadStagingBucket,
-        pub SyncServiceAuthKey,
-        pub OpensearchUrl,
-        pub OpensearchUsername,
-        pub OpensearchPassword,
-        pub ContactsQueue,
-        pub GithubSyncAppUrl,
-        pub GithubSyncAppClientId,
-        pub LivekitServerUrl,
-        pub LivekitApiKey,
-        pub LivekitApiSecret,
-        /// OpenAI API key used to generate task-dedup embeddings. Required —
-        /// injected as `OPENAI_API_KEY` from the `openai-key` secret by the
-        /// infra stack, the same way `document_cognition_service` consumes it.
-        pub OpenaiApiKey,
-    }
-}
-
-maybe_env_var! {
+maybe_env_vars! {
     /// Optional name of the LiveKit agent to dispatch for call transcription.
     pub struct LivekitTranscriptionAgentName;
-}
-
-maybe_env_var! {
     /// Shared secret for internal call endpoints (e.g. transcript ingestion from the agent).
     pub struct InternalCallSecret;
-}
-
-maybe_env_var! {
     /// Public base URL of this service (e.g. `https://cloud-storage.macro.com`),
     /// used to build the ring-status URL included in VoIP push payloads.
     /// When unset, payloads omit the URL and native ring-status polling is off.
     pub struct CallRingStatusBaseUrl;
-}
-
-maybe_env_var! {
     /// S3 bucket for call recording egress.
     pub struct CallRecordingS3Bucket;
-}
-maybe_env_var! {
     /// AWS region for the call recording S3 bucket.
     pub struct CallRecordingS3Region;
-}
-maybe_env_var! {
     /// AWS access key for call recording S3 uploads.
     pub struct CallRecordingS3AccessKey;
-}
-maybe_env_var! {
     /// AWS secret key for call recording S3 uploads.
     pub struct CallRecordingS3Secret;
-}
-
-env_var! { struct Port; }
-env_var! { struct DocumentLimit; }
-env_var! { struct DocumentStorageServicePresignedUrlExpirySeconds; }
-env_var! { struct DocumentStorageServicePresignedUrlBrowserCacheExpirySeconds; }
-env_var! { pub struct DocumentStorageServiceCloudfrontSignerPrivateKeySecretName; }
-env_var! {
-    #[derive(Clone)]
-    pub struct DocumentPermissionJwtSecretKey;
-}
-env_var! {
-    pub struct GithubWebhookSecretKey;
-}
-
-env_var! {
-    pub struct GithubSyncAppPemSecretKey;
-}
-
-env_var! {
-    pub struct CalWebhookSecretKey;
-}
-
-env_var! {
-    /// Secrets Manager secret name holding the JSON map from cal.com
-    /// `eventTypeId` to Meta `content_name`.
-    pub struct CalEventTypeContentNamesKey;
-}
-
-env_var! {
-    /// Meta (Facebook) Conversions API pixel id. Required — pair with
-    /// [`MetaAccessToken`] for cal → Meta Lead tracking. Set to a dummy
-    /// value locally; it's only exercised when a cal webhook fires.
-    pub struct MetaPixelId;
-}
-
-env_var! {
-    /// Meta (Facebook) Conversions API access token. Required — see
-    /// [`MetaPixelId`].
-    pub struct MetaAccessToken;
-}
-
-maybe_env_var! {
     /// Optional Meta test event code — routes events to Meta's test events
     /// view instead of production tracking.
     pub struct MetaTestEventCode;
 }
 
-impl Config {
-    pub fn from_env(
-        document_storage_service_cloudfront_signer_private_key: LocalOrRemoteSecret<
-            DocumentStorageServiceCloudfrontSignerPrivateKeySecretName,
-        >,
-        document_permission_jwt: LocalOrRemoteSecret<DocumentPermissionJwtSecretKey>,
-    ) -> anyhow::Result<Self> {
-        let environment = Environment::new_or_prod();
+/// The configuration parameters for the application.
+#[derive(macro_config::MacroConfig)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub struct Config {
+    pub database_url: DatabaseUrl,
+    pub database_url_readonly: DatabaseUrlReadonly,
+    pub document_storage_bucket: DocumentStorageBucket,
+    pub docx_document_upload_bucket: DocxDocumentUploadBucket,
+    pub document_delete_queue: DocumentDeleteQueue,
+    pub document_storage_service_cloudfront_distribution_url:
+        DocumentStorageServiceCloudfrontDistributionUrl,
+    pub document_storage_service_cloudfront_signer_public_key_id:
+        DocumentStorageServiceCloudfrontSignerPublicKeyId,
+    pub redis_uri: RedisUri,
+    pub notification_queue: NotificationQueue,
+    pub search_event_queue: SearchEventQueue,
+    pub bulk_upload_requests_table: BulkUploadRequestsTable,
+    pub upload_staging_bucket: UploadStagingBucket,
+    pub sync_service_auth_key: LocalOrRemoteSecret<SyncServiceAuthKey>,
+    pub opensearch_url: OpensearchUrl,
+    pub opensearch_username: OpensearchUsername,
+    pub opensearch_password: OpensearchPassword,
+    pub contacts_queue: ContactsQueue,
+    pub github_sync_app_url: GithubSyncAppUrl,
+    pub github_sync_app_client_id: GithubSyncAppClientId,
+    pub livekit_server_url: LivekitServerUrl,
+    pub livekit_api_key: LivekitApiKey,
+    pub livekit_api_secret: LivekitApiSecret,
+    pub openai_api_key: OpenaiApiKey,
+    pub github_webhook_secret_key: LocalOrRemoteSecret<GithubWebhookSecretKey>,
+    pub github_sync_app_pem_secret_key: LocalOrRemoteSecret<GithubSyncAppPemSecretKey>,
+    pub cal_webhook_secret_key: CalWebhookSecretKey,
+    pub cal_event_type_content_names_key: CalEventTypeContentNamesKey,
+    pub meta_pixel_id: MetaPixelId,
+    pub meta_access_token: MetaAccessToken,
+    pub document_storage_service_auth_key: DocumentStorageServiceAuthKey,
+    pub internal_api_secret_key: LocalOrRemoteSecret<InternalApiSecretKey>,
+    // pub vars: EnvVars,
+    /// The port to listen for HTTP requests on.
+    #[macro_config_default(8080)]
+    pub port: usize,
 
-        let port = Port::new()
-            .ok()
-            .and_then(|v| v.as_ref().parse::<usize>().ok())
-            .unwrap_or(8080);
+    /// The environment we are in
+    #[macro_config_default(Environment::new_or_prod())]
+    pub environment: Environment,
 
-        let document_limit = DocumentLimit::new()
-            .ok()
-            .and_then(|v| v.as_ref().parse::<u64>().ok())
-            .unwrap_or(20);
+    /// Maximum number of SQS messages to receive per poll for the delete document worker
+    #[macro_config_default(10)]
+    pub queue_max_messages: i32,
+    /// SQS long-poll wait time in seconds for the delete document worker
+    #[macro_config_default(4)]
+    pub queue_wait_time_seconds: i32,
 
-        let document_storage_service_presigned_url_expiry_seconds =
-            DocumentStorageServicePresignedUrlExpirySeconds::new()
-                .ok()
-                .and_then(|v| v.as_ref().parse::<u64>().ok())
-                .unwrap_or(DEFAULT_PRESIGNED_URL_EXPIRY_SECONDS);
+    /// The document limit for free users
+    #[macro_config_default(20)]
+    pub document_limit: u64,
 
-        let document_storage_service_presigned_url_browser_cache_expiry_seconds =
-            DocumentStorageServicePresignedUrlBrowserCacheExpirySeconds::new()
-                .ok()
-                .and_then(|v| v.as_ref().parse::<u64>().ok())
-                .unwrap_or(DEFAULT_PRESIGNED_URL_BROWSER_CACHE_EXPIRY_SECONDS);
+    /// The number of seconds a presigned url is valid for
+    #[macro_config_default(DEFAULT_PRESIGNED_URL_EXPIRY_SECONDS)]
+    pub document_storage_service_presigned_url_expiry_seconds: u64,
+    /// The number of seconds a browser cache for a presigned url is valid for
+    #[macro_config_default(DEFAULT_PRESIGNED_URL_BROWSER_CACHE_EXPIRY_SECONDS)]
+    pub document_storage_service_presigned_url_browser_cache_expiry_seconds: u64,
 
-        let queue_max_messages: i32 = std::env::var("QUEUE_MAX_MESSAGES")
-            .unwrap_or("10".to_string())
-            .parse()
-            .unwrap_or(10);
+    pub document_storage_service_cloudfront_signer_private_key:
+        LocalOrRemoteSecret<DocumentStorageServiceCloudfrontSignerPrivateKeySecretName>,
 
-        let queue_wait_time_seconds: i32 = std::env::var("QUEUE_WAIT_TIME_SECONDS")
-            .unwrap_or("4".to_string())
-            .parse()
-            .unwrap_or(4);
+    pub document_permission_jwt: LocalOrRemoteSecret<DocumentPermissionJwtSecretKey>,
 
-        let vars = EnvVars::new()?;
-        let connection_gateway_url = ConnectionGatewayUrl::new()?.to_string();
-        let sync_service_url = SyncServiceUrl::new()?.to_string();
-        let lexical_service_url = LexicalServiceUrl::new()?.to_string();
-
-        Ok(Config {
-            vars,
-            port,
-            environment,
-            connection_gateway_url,
-            sync_service_url,
-            lexical_service_url,
-            queue_max_messages,
-            queue_wait_time_seconds,
-            document_limit,
-            document_storage_service_presigned_url_expiry_seconds,
-            document_storage_service_presigned_url_browser_cache_expiry_seconds,
-            document_storage_service_cloudfront_signer_private_key,
-            document_permission_jwt,
-        })
-    }
+    pub livekit_transcription_agent_name: LivekitTranscriptionAgentName,
+    pub internal_call_secret: InternalCallSecret,
+    pub call_ring_status_base_url: CallRingStatusBaseUrl,
+    pub call_recording_s3_bucket: CallRecordingS3Bucket,
+    pub call_recording_s3_region: CallRecordingS3Region,
+    pub call_recording_s3_access_key: CallRecordingS3AccessKey,
+    pub call_recording_s3_secret: CallRecordingS3Secret,
+    pub meta_test_event_code: MetaTestEventCode,
 }
 
-pub const DEFAULT_PRESIGNED_URL_EXPIRY_SECONDS: u64 = 900; // 15 minutes
-pub const DEFAULT_PRESIGNED_URL_BROWSER_CACHE_EXPIRY_SECONDS: u64 = 840; // remember that this is just a suggestion to the client browser 
+impl Config {
+    pub fn from_env() -> anyhow::Result<Self> {
+        macro_config::ConfigLoader::load::<Config>().context("failed to load config")
+    }
+}

@@ -109,7 +109,7 @@ export function threadMapper(email: EmailEntity): CombinedEntity {
 export function getEntityName(entity: CombinedEntity): string {
   if (entity.kind === 'user') {
     const { name, email } = entity.data;
-    if (name === email) return email;
+    if (name === email) return email.split('@')[0] || email;
     return name;
   }
 

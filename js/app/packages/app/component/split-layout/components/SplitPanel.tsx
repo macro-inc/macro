@@ -153,12 +153,11 @@ export function SplitPanel(props: SplitPanelProps) {
           </Show>
 
           <div
-            class="relative"
             classList={{
               'fixed inset-16 z-modal-overlay isolate opacity-50':
                 props.handle.isSpotLight(),
               'opacity-100': props.active || props.handle.isSpotLight(),
-              'size-full': !props.handle.isSpotLight(),
+              'relative size-full': !props.handle.isSpotLight(),
             }}
             ref={(ref) => {
               setPanelRef(ref);
@@ -193,8 +192,9 @@ export function SplitPanel(props: SplitPanelProps) {
                 class={cn(
                   'items-start py-2 overflow-visible',
                   !hasToolbarContent() && 'hidden',
-                  !previewState() &&
-                    'border-b-0' /* scuffed: this is shit, but we are blinded by linear */
+                  (!previewState() ||
+                    isListViewID(props.handle.content().id)) &&
+                    'border-b-0' /* List views draw the preview border below their filter bar instead (see SoupView). */
                 )}
               >
                 <SplitToolbar ref={setToolbarRef} />

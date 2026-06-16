@@ -129,8 +129,9 @@ pub async fn fetch_pubsub_gmail_token(
     ctx: &PubSubContext,
     link: &Link,
 ) -> result::Result<String, ProcessingError> {
-    let gmail_access_token = crate::util::gmail::auth::fetch_token_or_delete_on_revocation(
+    let gmail_access_token = crate::util::gmail::auth::fetch_token_or_mark_reauth(
         link,
+        &ctx.db,
         &ctx.redis_client,
         &ctx.auth_service_client,
         &ctx.sqs_client,

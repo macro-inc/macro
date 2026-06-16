@@ -54,6 +54,7 @@ import type { ApiChannelMessagesPage } from './generated/schemas/apiChannelMessa
 import type { ApiChannelParticipant } from './generated/schemas/apiChannelParticipant';
 import type { ApiResolvedChannelMessage } from './generated/schemas/apiResolvedChannelMessage';
 import type { ApiThreadReply } from './generated/schemas/apiThreadReply';
+import type { BotChannel } from './generated/schemas/botChannel';
 import type { ChannelMessageFilters } from './generated/schemas/channelMessageFilters';
 import { ChannelType } from './generated/schemas/channelType';
 import {
@@ -247,6 +248,7 @@ export type TaskSimilaritySearchResponse = {
   results: TaskSimilarityResult[];
 };
 
+type WithBotId = { bot_id: string };
 type WithChannelId = { channel_id: string };
 type WithMessageId = { message_id: string };
 type WithMentionId = { mention_id: string };
@@ -465,6 +467,22 @@ export const storageServiceClient = {
         method: 'GET',
       })
     ).map((result) => result);
+  },
+
+  async getBotChannels(args: WithBotId) {
+    const { bot_id } = args;
+    return (
+      await dssFetch<BotChannel[]>(`/bots/${bot_id}/channels`, {
+        method: 'GET',
+      })
+    ).map((result) => result);
+  },
+
+  async removeBotFromChannel(args: WithBotId & WithChannelId) {
+    const { bot_id, channel_id } = args;
+    return await dssFetch(`/bots/${bot_id}/channels/${channel_id}`, {
+      method: 'DELETE',
+    });
   },
 
   async getOrCreateDirectMessage(args: GetOrCreateDmRequest) {
