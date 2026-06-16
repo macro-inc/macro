@@ -332,7 +332,7 @@ export default function GlobalShortcuts() {
 
   const setPreferredLightScope = registerHotkey({
     scopeId: 'global',
-    description: 'Set preferred light mode theme',
+    description: 'Set default light theme',
     keyDownHandler: () => {
       return true;
     },
@@ -356,7 +356,7 @@ export default function GlobalShortcuts() {
 
   const setPreferredDarkScope = registerHotkey({
     scopeId: 'global',
-    description: 'Set preferred dark mode theme',
+    description: 'Set default dark theme',
     keyDownHandler: () => {
       return true;
     },
@@ -382,7 +382,7 @@ export default function GlobalShortcuts() {
     scopeId: 'global',
     description: createMemo(
       () =>
-        `${themeShouldMatchSystem() ? 'Turn off a' : 'A'}uto detect color scheme`
+        `${themeShouldMatchSystem() ? 'Turn off a' : 'A'}uto-detect color scheme`
     ),
     keyDownHandler: () => {
       setThemeShouldMatchSystem((prev) => !prev);

@@ -471,7 +471,7 @@ export function ThemeEditorBasic(){
             --b4: color-mix(in oklch, oklch(var(--b4l) var(--b4c) var(--b4h)), oklch(var(--c4l) var(--c4c) var(--c4h)) 30%);
           "
         >
-          <div class="flex items-center gap-3 @2xl:flex-col @2xl:items-stretch @2xl:gap-[3px]">
+          <div class="flex items-center gap-2 @2xl:flex-col @2xl:items-stretch @2xl:gap-[3px]">
           <div class="w-[9ch] shrink-0 @2xl:w-auto">Chroma</div>
           <div class="flex flex-1 items-center gap-3 min-w-0 @2xl:flex-none">
           <div
@@ -546,7 +546,7 @@ export function ThemeEditorBasic(){
           </div>
           </div>
 
-          <div class="flex items-center gap-3 @2xl:flex-col @2xl:items-stretch @2xl:gap-[3px]">
+          <div class="flex items-center gap-2 @2xl:flex-col @2xl:items-stretch @2xl:gap-[3px]">
           <div class="w-[9ch] shrink-0 @2xl:w-auto">Tint</div>
           <div class="flex flex-1 items-center gap-3 min-w-0 @2xl:flex-none">
           <div
@@ -640,7 +640,7 @@ export function ThemeEditorBasic(){
           </div>
           </div>
 
-          <div class="flex items-center gap-3 @2xl:flex-col @2xl:items-stretch @2xl:gap-[3px]">
+          <div class="flex items-center gap-2 @2xl:flex-col @2xl:items-stretch @2xl:gap-[3px]">
           <div class="w-[9ch] shrink-0 @2xl:w-auto">Contrast</div>
           <div class="flex flex-1 items-center gap-3 min-w-0 @2xl:flex-none">
           <div
@@ -750,7 +750,7 @@ export function ThemeEditorBasic(){
           </div>
           </div>
 
-          <div class="flex items-center gap-3 @2xl:flex-col @2xl:items-stretch @2xl:gap-[3px]">
+          <div class="flex items-center gap-2 @2xl:flex-col @2xl:items-stretch @2xl:gap-[3px]">
           <div class="w-[9ch] shrink-0 @2xl:w-auto">Depth</div>
           <div class="flex flex-1 items-center gap-3 min-w-0 @2xl:flex-none">
           <div

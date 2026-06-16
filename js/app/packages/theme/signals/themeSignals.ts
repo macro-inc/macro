@@ -25,7 +25,7 @@ setUserThemes(
   })
 );
 
-export const [currentThemeId, setCurrentThemeId_] = makePersisted(
+export const [currentThemeId, setCurrentThemeId] = makePersisted(
   createSignal<string>(DEFAULT_DARK_THEME),
   {name: 'macro-selected-theme'}
 );
@@ -67,20 +67,6 @@ if (supportsMatchMedia) {
     setSystemMode(e.matches ? 'dark' : 'light');
   });
 }
-
-// If the theme should match the system, setting the current theme also stores it
-// as the preferred theme for the current mode. This avoids a user picking a theme,
-// refreshing, and being reverted to their preferred mode's theme.
-export const setCurrentThemeId = (
-  ...args: Parameters<typeof setCurrentThemeId_>
-) => {
-  setCurrentThemeId_(...args);
-  if (themeShouldMatchSystem()) {
-    systemMode() === 'dark'
-      ? setDarkModeTheme(...args)
-      : setLightModeTheme(...args);
-  }
-};
 
 // Theme-list filters: whether light and/or dark themes are shown in the list.
 export const [showLightThemes, setShowLightThemes] = makePersisted(

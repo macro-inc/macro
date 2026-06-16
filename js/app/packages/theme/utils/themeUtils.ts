@@ -78,7 +78,13 @@ export function applyTheme(id: string): void{
 export function systemThemeEffect(): void{
   createEffect(
     on(
-      [themeShouldMatchSystem, systemMode, darkModeTheme, lightModeTheme],
+      // Only react to the OS color scheme flipping or auto-detect turning on —
+      // deliberately NOT to darkModeTheme/lightModeTheme. `on` runs its callback
+      // untracked, so reading the defaults below does not subscribe to them. This
+      // keeps "Set default light/dark theme" from re-applying the current mode's
+      // default and clobbering the active theme; a new default takes effect on the
+      // next mode change (or when auto-detect is toggled on).
+      [themeShouldMatchSystem, systemMode],
       () => {
         if(themeShouldMatchSystem()){
           applyTheme(systemMode() === 'dark' ? darkModeTheme() : lightModeTheme());
