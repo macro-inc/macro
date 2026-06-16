@@ -102,7 +102,7 @@ export default function GlobalShortcuts() {
 
   useHotkeyAnalytics();
 
-  const { openSettings, closeSettings, settingsOpen, setActiveTabId } =
+  const { openSettings, settingsOpen, setActiveTabId, toggleSettings } =
     useSettingsState();
   const logout = useLogout();
 
@@ -225,8 +225,7 @@ export default function GlobalShortcuts() {
     scopeId: 'global',
     description: 'Toggle settings',
     keyDownHandler: () => {
-      if (settingsOpen()) closeSettings();
-      else openSettingsModal();
+      toggleSettings();
       return true;
     },
     runWithInputFocused: true,

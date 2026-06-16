@@ -116,9 +116,31 @@ export const useSettingsState = () => {
     setModalOpen(true);
   };
 
+  // Focus-aware toggle: bring settings to the user rather than destroying it,
+  // and only close when settings is what they're actually looking at.
   const toggleSettings = () => {
-    if (isOpen()) closeSettings();
-    else openSettings();
+    // Modal takes priority: if it's open, close it.
+    if (modalOpen()) {
+      setModalOpen(false);
+      return;
+    }
+
+    const settingsSplit = getSettingsSplit();
+    if (settingsSplit) {
+      const manager = globalSplitManager();
+      // Docked but not the active split → bring focus to it instead of closing.
+      if (manager && manager.activeSplitId() !== settingsSplit.id) {
+        manager.activateSplit(settingsSplit.id);
+        focusSettingsPanel();
+        return;
+      }
+      // Docked and already focused → close it.
+      manager?.removeSplit(settingsSplit.id);
+      return;
+    }
+
+    // Nothing open → open the modal (mobile falls back to split internally).
+    openSettings();
   };
 
   return {
