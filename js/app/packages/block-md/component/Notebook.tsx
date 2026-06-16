@@ -39,7 +39,10 @@ import { MarkdownEditor } from './MarkdownEditor';
 import { TaskDiscussion } from './TaskDiscussion';
 import { TaskDuplicateMatchPill } from './TaskDuplicateMatches';
 import { TitleEditor } from './TitleEditor';
-import { registerMarkdownCommands } from './useMarkdownCommands';
+import {
+  registerLexicalStateDebuggerCommand,
+  registerMarkdownCommands,
+} from './useMarkdownCommands';
 
 const NoteTargetWidth = 768;
 const CommentTargetWidth = 320;
@@ -87,6 +90,8 @@ export function Notebook(props: { loroManager: LoroManager }) {
   const [layoutMode, setLayoutMode] = createSignal(CommentLayoutMode.none);
   const [width, setWidth] = createSignal(0);
   const [leftFloatX, setLeftFloatX] = createSignal(0);
+  const [showLexicalStateDebugger, setShowLexicalStateDebugger] =
+    createSignal(false);
 
   const comments = commentsStore.get;
   const hasComment = createMemo(() => {
@@ -183,7 +188,9 @@ export function Notebook(props: { loroManager: LoroManager }) {
   createEffect(() => {
     if (!scopeId()) return;
     const group = untrack(() =>
-      registerMarkdownCommands(scopeId(), () => md.editor, editorHasFocus)
+      registerMarkdownCommands(scopeId(), () => md.editor, editorHasFocus, {
+        toggleStateDebugger: () => setShowLexicalStateDebugger((prev) => !prev),
+      })
     );
     onCleanup(() => group.dispose());
   });
@@ -274,7 +281,13 @@ export function Notebook(props: { loroManager: LoroManager }) {
           <TaskDuplicateMatchPill />
         </div>
         <ParamsProvider>
-          <MarkdownEditor loroManager={props.loroManager} />
+          <MarkdownEditor
+            loroManager={props.loroManager}
+            showLexicalStateDebugger={showLexicalStateDebugger()}
+            onLexicalStateDebuggerClose={() =>
+              setShowLexicalStateDebugger(false)
+            }
+          />
           <Show when={ENABLE_RAIL_CHAT_TASK_COMMENTS && isTask}>
             <TaskDiscussion />
           </Show>
@@ -297,6 +310,9 @@ export function Notebook(props: { loroManager: LoroManager }) {
 
 export function InstructionsNotebook(props: { loroManager: LoroManager }) {
   const setStore = mdStore.set;
+  const scopeId = blockHotkeyScopeSignal.get;
+  const [showLexicalStateDebugger, setShowLexicalStateDebugger] =
+    createSignal(false);
 
   let notebookRef!: HTMLDivElement;
   let contentRef!: HTMLDivElement;
@@ -316,13 +332,27 @@ export function InstructionsNotebook(props: { loroManager: LoroManager }) {
     });
   });
 
+  createEffect(() => {
+    if (!scopeId()) return;
+    const group = untrack(() =>
+      registerLexicalStateDebuggerCommand(scopeId(), {
+        toggleStateDebugger: () => setShowLexicalStateDebugger((prev) => !prev),
+      })
+    );
+    onCleanup(() => group.dispose());
+  });
+
   return (
     <div
       class="flex relative text-ink min-h-full min-w-0 px-6"
       ref={notebookRef}
     >
       <div class="grow max-w-3xl pt-12 min-w-0 mx-auto" ref={contentRef}>
-        <InstructionsEditor loroManager={props.loroManager} />
+        <InstructionsEditor
+          loroManager={props.loroManager}
+          showLexicalStateDebugger={showLexicalStateDebugger()}
+          onLexicalStateDebuggerClose={() => setShowLexicalStateDebugger(false)}
+        />
       </div>
     </div>
   );

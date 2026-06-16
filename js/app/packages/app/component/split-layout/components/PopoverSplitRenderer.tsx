@@ -99,6 +99,8 @@ function PopoverSplitModal(props: {
     panelSize: { width: null, height: null },
     contentOffsetTop,
     setContentOffsetTop,
+    bottomPanel: () => undefined,
+    registerBottomPanel: () => () => {},
     previewState: [previewState, setPreviewState] as [
       typeof previewState,
       typeof setPreviewState,
