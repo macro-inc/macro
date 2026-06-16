@@ -68,6 +68,7 @@ export type ScalarFieldFilters = {
   folderDone?: boolean;
   foreignEntitySeen?: boolean;
   foreignEntityDone?: boolean;
+  foreignEntityIncludesMe?: boolean;
   callStatus?: CallStatus;
   callAttended?: boolean;
   crmCompanyHidden?: boolean;

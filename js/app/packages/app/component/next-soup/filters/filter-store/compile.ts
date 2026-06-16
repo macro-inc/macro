@@ -58,8 +58,8 @@ const AST = {
   not(ast: BackendAst): BackendAst {
     return { '!': ast };
   },
-  literal(field: string, value: unknown): BackendAst {
-    return { l: { [field]: value } };
+  literal(field: string, value?: unknown): BackendAst {
+    return value === undefined ? { l: field } : { l: { [field]: value } };
   },
 };
 
@@ -69,6 +69,8 @@ const FIELD_CONFIG: Record<
     target: QueryTarget;
     field: string;
     formatValue?: (value: unknown) => unknown;
+    // unit: true -> `{ l: field }`; unit: false/undefined -> `{ l: { field: value } }`
+    unit?: boolean;
   }
 > = {
   documentId: { target: 'df', field: 'id' },
@@ -116,6 +118,7 @@ const FIELD_CONFIG: Record<
   foreignEntityRecordId: { target: 'fef', field: 'id' },
   foreignEntitySeen: { target: 'fef', field: 'ns' },
   foreignEntityDone: { target: 'fef', field: 'nd' },
+  foreignEntityIncludesMe: { target: 'fef', field: 'me', unit: true },
   crmCompanyId: { target: 'ccf', field: 'id' },
   crmCompanyHidden: { target: 'ccf', field: 'hidden' },
 };
@@ -176,6 +179,15 @@ export function compileToAst(state: QueryState): TargetAstMap {
     const config = FIELD_CONFIG[fieldName];
     const includeVal = state.include[fieldName];
     const excludeVal = state.exclude[fieldName];
+
+    if (config.unit) {
+      if (includeVal === true) {
+        byTarget[config.target].push(AST.literal(config.field));
+      } else if (excludeVal === true) {
+        byTarget[config.target].push(AST.not(AST.literal(config.field)));
+      }
+      continue;
+    }
 
     const format = config.formatValue ?? ((v: unknown) => v);
 
