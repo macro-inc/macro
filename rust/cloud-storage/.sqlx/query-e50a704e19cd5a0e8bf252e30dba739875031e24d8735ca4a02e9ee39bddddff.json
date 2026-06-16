@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO bot_tokens (\n                id, bot_id, token_hash, token_prefix, label, expires_at\n            )\n            VALUES ($1, $2, $3, $4, $5, $6)\n            RETURNING id, bot_id, token_prefix, label, last_used_at, expires_at, revoked_at, created_at\n            ",
+  "query": "\n            INSERT INTO bot_tokens (\n                id, bot_id, token, label, expires_at\n            )\n            VALUES ($1, $2, $3, $4, $5)\n            RETURNING id, bot_id, token, label, last_used_at, expires_at, revoked_at, created_at\n            ",
   "describe": {
     "columns": [
       {
@@ -15,7 +15,7 @@
       },
       {
         "ordinal": 2,
-        "name": "token_prefix",
+        "name": "token",
         "type_info": "Text"
       },
       {
@@ -48,7 +48,6 @@
       "Left": [
         "Uuid",
         "Uuid",
-        "Bytea",
         "Text",
         "Text",
         "Timestamptz"
@@ -65,5 +64,5 @@
       false
     ]
   },
-  "hash": "dcf19b1a30385a18a23d0fa7d4d724d755c0a3353480bcbe573a3f867cf24091"
+  "hash": "e50a704e19cd5a0e8bf252e30dba739875031e24d8735ca4a02e9ee39bddddff"
 }
