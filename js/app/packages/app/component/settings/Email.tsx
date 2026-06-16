@@ -73,6 +73,8 @@ export function Email() {
     return { primary, others };
   });
 
+  const hasAdditionalInboxes = createMemo(() => inboxes().others.length > 0);
+
   const onConnectEmail = async () => {
     if (isEmailActionPending()) return;
     setIsEmailActionPending(true);
@@ -125,7 +127,7 @@ export function Email() {
   return (
     <IntegrationPanelShell title="Email">
       <Show
-        when={multiInboxFlag().enabled}
+        when={multiInboxFlag().enabled || hasAdditionalInboxes()}
         fallback={
           <ConnectionHero
             icon={WideEmailIcon}
@@ -198,22 +200,24 @@ export function Email() {
                 Gmail accounts Macro can read and act on.
               </p>
             </div>
-            <Show
-              when={!emailLinksQuery.isLoading}
-              fallback={
-                <span class="ml-auto text-sm text-ink-muted">Loading…</span>
-              }
-            >
-              <Button
-                variant="active"
-                size="sm"
-                depth={3}
-                class="ml-auto shrink-0"
-                onClick={() => guardAddInbox(openAddInboxDialog)}
+            <Show when={multiInboxFlag().enabled}>
+              <Show
+                when={!emailLinksQuery.isLoading}
+                fallback={
+                  <span class="ml-auto text-sm text-ink-muted">Loading…</span>
+                }
               >
-                <PlusIcon class="size-4" />
-                Add inbox
-              </Button>
+                <Button
+                  variant="active"
+                  size="sm"
+                  depth={3}
+                  class="ml-auto shrink-0"
+                  onClick={() => guardAddInbox(openAddInboxDialog)}
+                >
+                  <PlusIcon class="size-4" />
+                  Add inbox
+                </Button>
+              </Show>
             </Show>
           </div>
 
