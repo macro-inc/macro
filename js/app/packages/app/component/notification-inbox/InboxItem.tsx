@@ -346,6 +346,10 @@ function Description(props: DescriptionProps) {
   const density = () => local.density ?? parent.density();
   const tone = () => local.tone ?? parent.tone();
   const showTimestamp = () => local.timestamp ?? true;
+  const groupCount = () => {
+    const count = (parent.item().subItems?.length ?? 0) + 1;
+    return count > 1 ? count : undefined;
+  };
   const context: InboxItemContextValue = {
     ...parent,
     density,
@@ -364,7 +368,7 @@ function Description(props: DescriptionProps) {
         {local.children}
         <Show when={showTimestamp()}>
           <Show
-            when={parent.item().subItems?.length}
+            when={groupCount()}
             fallback={
               <Show when={parent.item().timestamp}>
                 {(timestamp) => (
@@ -375,7 +379,7 @@ function Description(props: DescriptionProps) {
           >
             {(count) => (
               <Layer depth={5}>
-                <span class="ml-auto grid h-4 min-w-4 place-items-center rounded-md bg-active px-1 text-xs text-ink-muted">
+                <span class="ml-auto grid h-4 min-w-4 place-items-center rounded bg-ink-muted/10 px-1 text-xs text-ink-muted">
                   {count()}
                 </span>
               </Layer>

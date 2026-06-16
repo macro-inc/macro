@@ -367,35 +367,52 @@ function NotificationInboxList(props: {
   onSelect: (item: InboxItemData) => void;
   onToggleFilter: (filterId: string) => void;
 }) {
+  const [showDevFilters, setShowDevFilters] = createSignal(false);
+
   return (
     <div class="flex size-full min-h-0 flex-col bg-surface p-2">
-      <div class="mb-2 flex shrink-0 flex-wrap gap-1">
-        <For each={devNotificationFilters}>
-          {(filter) => {
-            const hidden = () => props.hiddenFilterIds.includes(filter.id);
+      <div class="mb-2 flex shrink-0 flex-col gap-1">
+        <Button
+          class="h-7 w-fit bg-surface text-ink-muted"
+          depth={2}
+          size="sm"
+          variant="base"
+          onClick={() => setShowDevFilters((value) => !value)}
+        >
+          Dev filters
+        </Button>
+        <Show when={showDevFilters()}>
+          <div class="flex flex-wrap gap-1 rounded-md border border-dashed border-edge-muted bg-ink-muted/2.5 p-1">
+            <For each={devNotificationFilters}>
+              {(filter) => {
+                const hidden = () => props.hiddenFilterIds.includes(filter.id);
 
-            return (
-              <Button
-                class="h-7 bg-surface"
-                depth={2}
-                size="sm"
-                variant={hidden() ? 'active' : 'base'}
-                onClick={() => props.onToggleFilter(filter.id)}
-              >
-                {hidden() ? 'Show' : 'Hide'} {filter.label}
-              </Button>
-            );
-          }}
-        </For>
+                return (
+                  <Button
+                    class="h-7 bg-surface"
+                    depth={2}
+                    size="sm"
+                    variant={hidden() ? 'active' : 'base'}
+                    onClick={() => props.onToggleFilter(filter.id)}
+                  >
+                    {hidden() ? 'Show' : 'Hide'} {filter.label}
+                  </Button>
+                );
+              }}
+            </For>
+          </div>
+        </Show>
       </div>
       <div class="min-h-0 flex-1 overflow-y-auto">
         <div class="flex min-h-full flex-col gap-3 pb-2">
           <For each={props.groups}>
             {(group) => (
-              <section class="flex w-full flex-col gap-1">
-                <header class="sticky top-0 z-1 bg-active py-2 px-3 rounded-md flex items-center gap-1">
-                  <CalendarIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
-                  <h1 class="text-sm text-ink">{group.label}</h1>
+              <section class="flex w-full flex-col gap-1.5">
+                <header class="sticky top-0 z-1 flex items-center gap-1 bg-surface px-2 py-1">
+                  <CalendarIcon class="size-3 shrink-0 text-ink-extra-muted" />
+                  <h1 class="text-xs font-medium text-ink-extra-muted">
+                    {group.label}
+                  </h1>
                 </header>
                 <For each={group.items}>
                   {(item) => (

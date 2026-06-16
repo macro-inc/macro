@@ -475,7 +475,11 @@ export function InboxItemLayout(
                   )}
                 </For>
                 <Show
-                  when={item().subItems?.length}
+                  when={
+                    (item().subItems?.length ?? 0) > 0
+                      ? (item().subItems?.length ?? 0) + 1
+                      : undefined
+                  }
                   fallback={
                     <Show when={item().timestamp}>
                       {(timestamp) => (
@@ -486,7 +490,7 @@ export function InboxItemLayout(
                 >
                   {(count) => (
                     <Layer depth={5}>
-                      <span class="grid h-4 min-w-4 place-items-center rounded-md bg-active px-1 text-xs text-ink-muted">
+                      <span class="grid h-4 min-w-4 place-items-center rounded bg-ink-muted/10 px-1 text-xs text-ink-muted">
                         {count()}
                       </span>
                     </Layer>
