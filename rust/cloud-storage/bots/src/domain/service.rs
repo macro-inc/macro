@@ -40,18 +40,13 @@ fn validate_handle(handle: &str) -> Result<(), BotError> {
     Ok(())
 }
 
-fn token_candidate_is_valid(
-    candidate: &BotTokenCandidate,
-    hash: &[u8],
-    now: &DateTime<Utc>,
-) -> bool {
+fn token_candidate_is_valid(candidate: &BotTokenCandidate, now: &DateTime<Utc>) -> bool {
     candidate.token.revoked_at.is_none()
         && candidate
             .token
             .expires_at
             .as_ref()
             .is_none_or(|expires_at| expires_at > now)
-        && tokens::verify_hash(&candidate.token_hash, hash)
 }
 
 impl<R> BotServiceImpl<R>
@@ -115,24 +110,26 @@ where
         }
     }
 
-    async fn authenticate_candidates(
+    async fn authenticate_candidate(
         &self,
-        candidates: Vec<BotTokenCandidate>,
-        hash: &[u8],
+        candidate: Option<BotTokenCandidate>,
     ) -> Result<AuthenticatedBot, BotError> {
+        let Some(candidate) = candidate else {
+            return Err(BotError::Unauthorized);
+        };
+
         let now = Utc::now();
-        for candidate in candidates {
-            if token_candidate_is_valid(&candidate, hash, &now) {
-                let token_id = candidate.token.id;
-                let bot = candidate.bot;
-                self.repo
-                    .mark_token_used(token_id)
-                    .await
-                    .map_err(|err| BotError::Repo(err.into()))?;
-                return Ok(bot);
-            }
+        if !token_candidate_is_valid(&candidate, &now) {
+            return Err(BotError::Unauthorized);
         }
-        Err(BotError::Unauthorized)
+
+        let token_id = candidate.token.id;
+        let bot = candidate.bot;
+        self.repo
+            .mark_token_used(token_id)
+            .await
+            .map_err(|err| BotError::Repo(err.into()))?;
+        Ok(bot)
     }
 }
 
@@ -162,24 +159,18 @@ where
     ) -> Result<CreateChannelScopedBotResponse, BotError> {
         validate_handle(&req.handle)?;
         let owner = self.owner_for_request(caller.clone(), req.team_id).await?;
-        let generated = tokens::generate_token();
+        let generated_token = tokens::generate_token();
         let (bot, token) = self
             .repo
-            .create_channel_scoped_bot(
-                owner,
-                caller,
-                channel_id,
-                generated.hash,
-                generated.prefix,
-                req,
-            )
+            .create_channel_scoped_bot(owner, caller, channel_id, generated_token, req)
             .await
             .map_err(|err| BotError::Repo(err.into()))?;
+        let bot_token = token.token.clone();
 
         Ok(CreateChannelScopedBotResponse {
             bot,
             token,
-            bot_token: generated.token,
+            bot_token,
         })
     }
 
@@ -279,15 +270,17 @@ where
         req: CreateBotTokenRequest,
     ) -> Result<super::models::CreateBotTokenResponse, BotError> {
         self.ensure_manageable(caller, bot_id).await?;
-        let generated = tokens::generate_token();
+        let generated_token = tokens::generate_token();
         let token = self
             .repo
-            .create_token(bot_id, generated.hash, generated.prefix, req)
+            .create_token(bot_id, generated_token, req)
             .await
             .map_err(|err| BotError::Repo(err.into()))?;
+        let bearer_token = token.token.clone();
+
         Ok(super::models::CreateBotTokenResponse {
             token,
-            bearer_token: generated.token,
+            bearer_token,
         })
     }
 
@@ -323,14 +316,12 @@ where
     }
 
     async fn authenticate_token(&self, token: &str) -> Result<AuthenticatedBot, BotError> {
-        let prefix = tokens::token_prefix(token).ok_or(BotError::Unauthorized)?;
-        let hash = tokens::hash_token(token);
-        let candidates = self
+        let candidate = self
             .repo
-            .token_candidates(prefix)
+            .token_candidate(token)
             .await
             .map_err(|err| BotError::Repo(err.into()))?;
-        self.authenticate_candidates(candidates, &hash).await
+        self.authenticate_candidate(candidate).await
     }
 
     async fn authenticate_channel_token(
@@ -338,13 +329,11 @@ where
         channel_id: Uuid,
         token: &str,
     ) -> Result<AuthenticatedBot, BotError> {
-        let prefix = tokens::token_prefix(token).ok_or(BotError::Unauthorized)?;
-        let hash = tokens::hash_token(token);
-        let candidates = self
+        let candidate = self
             .repo
-            .channel_token_candidates(channel_id, prefix)
+            .channel_token_candidate(channel_id, token)
             .await
             .map_err(|err| BotError::Repo(err.into()))?;
-        self.authenticate_candidates(candidates, &hash).await
+        self.authenticate_candidate(candidate).await
     }
 }

@@ -28,8 +28,7 @@ pub trait BotRepo: Clone + Send + Sync + 'static {
         owner: BotOwner,
         created_by: MacroUserIdStr<'static>,
         channel_id: Uuid,
-        token_hash: Vec<u8>,
-        token_prefix: String,
+        token: String,
         req: CreateChannelScopedBotRequest,
     ) -> impl Future<Output = Result<(Bot, BotToken), Self::Err>> + Send;
 
@@ -84,8 +83,7 @@ pub trait BotRepo: Clone + Send + Sync + 'static {
     fn create_token(
         &self,
         bot_id: BotId,
-        token_hash: Vec<u8>,
-        token_prefix: String,
+        token: String,
         req: CreateBotTokenRequest,
     ) -> impl Future<Output = Result<BotToken, Self::Err>> + Send;
 
@@ -102,18 +100,18 @@ pub trait BotRepo: Clone + Send + Sync + 'static {
         token_id: Uuid,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
-    /// Lookup token candidates by prefix.
-    fn token_candidates(
+    /// Lookup a token candidate by exact raw token value.
+    fn token_candidate(
         &self,
-        token_prefix: &str,
-    ) -> impl Future<Output = Result<Vec<BotTokenCandidate>, Self::Err>> + Send;
+        token: &str,
+    ) -> impl Future<Output = Result<Option<BotTokenCandidate>, Self::Err>> + Send;
 
-    /// Lookup token candidates by channel and prefix.
-    fn channel_token_candidates(
+    /// Lookup a channel-scoped token candidate by exact raw token value.
+    fn channel_token_candidate(
         &self,
         channel_id: Uuid,
-        token_prefix: &str,
-    ) -> impl Future<Output = Result<Vec<BotTokenCandidate>, Self::Err>> + Send;
+        token: &str,
+    ) -> impl Future<Output = Result<Option<BotTokenCandidate>, Self::Err>> + Send;
 
     /// Mark a token as used.
     fn mark_token_used(&self, token_id: Uuid)
