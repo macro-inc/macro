@@ -12,26 +12,27 @@ import { emailKeys } from './keys';
 
 const LINK_STALE_TIME = 5 * 60 * 1000;
 
-const HEALTH_PROBE_MIN_INTERVAL_MS = 15 * 60 * 1000;
-const HEALTH_PROBE_TS_KEY = 'inbox-health-probe-ts';
+const HEALTH_PROBE_STALE_TIME = 15 * 60 * 1000;
 
 /**
  * Asks the server to probe each linked inbox's grant against Google and record its
- * health, so a grant that died while the app was closed surfaces soon after the next
- * load rather than waiting on the daily refresh. Throttled client-side so re-mounts
- * within the window don't re-trigger (the server also throttles per inbox).
- * Fire-and-forget: the refreshed `needs_reauth` is picked up by the next links refetch
- * (focus or stale time), which drives the reconnect prompt.
+ * health, so a grant that died while the user was away surfaces soon after they return
+ * rather than waiting on the daily refresh. Runs on mount and on window focus, throttled
+ * to once per stale-time window (the server also throttles per inbox). Fire-and-forget:
+ * the refreshed `needs_reauth` is read by `useEmailLinksQuery`, which drives the reconnect
+ * prompt — nothing renders from this query.
  */
-export function triggerInboxHealthProbe() {
-  try {
-    const last = Number(localStorage.getItem(HEALTH_PROBE_TS_KEY) ?? 0);
-    if (Date.now() - last < HEALTH_PROBE_MIN_INTERVAL_MS) return;
-    localStorage.setItem(HEALTH_PROBE_TS_KEY, String(Date.now()));
-  } catch {
-    // localStorage unavailable; probe anyway since the server throttles per inbox.
-  }
-  void emailClient.healthCheckLinks();
+export function useInboxHealthProbeQuery() {
+  return useQuery(() => ({
+    queryKey: emailKeys.linksHealthProbe.queryKey,
+    queryFn: async () => {
+      await emailClient.healthCheckLinks();
+      return null;
+    },
+    staleTime: HEALTH_PROBE_STALE_TIME,
+    refetchOnWindowFocus: true,
+    retry: false,
+  }));
 }
 
 export function useEmailLinksQuery() {
