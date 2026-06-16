@@ -585,10 +585,7 @@ export function Lightbox(props: LightboxProps) {
                 onWindowMove: touchOnWindowMove,
                 onWindowEnd: touchOnWindowEnd,
               }}
-              class={cn(
-                'relative overflow-hidden',
-                !cardSize() && 'size-full'
-              )}
+              class={cn('relative overflow-hidden', !cardSize() && 'size-full')}
               style={{
                 cursor: cursor(),
                 ...(cardSize() && {
