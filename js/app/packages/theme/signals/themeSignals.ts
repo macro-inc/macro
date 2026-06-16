@@ -32,9 +32,9 @@ export const [currentThemeId, setCurrentThemeId] = makePersisted(
 
 export const themes = createMemo(() => [...DEFAULT_THEMES, ...userThemes()]);
 
-// Per-mode theme preferences. Persisted locally as an offline cache / first-paint
-// hint; the backend is the source of truth and hydrates these on login (see
-// themeSync.ts), then write-through PATCHes them on change.
+// Per-mode theme preferences, persisted to localStorage. Applied by
+// systemThemeEffect (themeUtils.ts) when themeShouldMatchSystem is on and the OS
+// color scheme is (or becomes) the matching mode.
 export const [lightModeTheme, setLightModeTheme] = makePersisted(
   createSignal<string>(DEFAULT_LIGHT_THEME),
   {name: 'macro-light-mode-theme'}
