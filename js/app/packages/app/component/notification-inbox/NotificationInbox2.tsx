@@ -9,6 +9,7 @@ import { TabsInset } from '@core/component/TabsInset';
 import type { EntityData } from '@entity';
 import type { UnifiedNotification } from '@notifications';
 import CalendarIcon from '@phosphor/calendar-blank.svg';
+import ArrowSquareOutIcon from '@phosphor-icons/core/regular/arrow-square-out.svg?component-solid';
 import { Button, cn } from '@ui';
 import { createEffect, createMemo, createSignal, For, Show } from 'solid-js';
 import { InboxItem, type InboxItem as InboxItemData } from './InboxItem';
@@ -279,6 +280,51 @@ const getChannelPreviewEntity = (
   } as EntityData;
 };
 
+function getGithubUrl(item: InboxItemData) {
+  const metadata = item.notification?.notification_metadata;
+  if (
+    metadata?.tag !== 'github_pr_status_changed' &&
+    metadata?.tag !== 'github_review_requested' &&
+    metadata?.tag !== 'github_pr_comment' &&
+    metadata?.tag !== 'github_pr_mention' &&
+    metadata?.tag !== 'github_pr_review'
+  ) {
+    return undefined;
+  }
+
+  return `https://github.com/${metadata.content.owner}/${metadata.content.repo}/pull/${metadata.content.number}`;
+}
+
+function GithubPreviewFallback(props: { item: InboxItemData }) {
+  const url = () => getGithubUrl(props.item);
+
+  return (
+    <div class="flex size-full items-center justify-center p-6">
+      <div class="flex max-w-sm flex-col items-center gap-3 text-center">
+        <div class="flex flex-col gap-1">
+          <div class="text-sm font-medium text-ink">PR block coming soon</div>
+          <p class="text-xs text-ink-muted">
+            GitHub pull request previews are not available here yet.
+          </p>
+        </div>
+        <Show when={url()}>
+          {(href) => (
+            <a
+              class="inline-flex h-7 items-center gap-1 rounded-md border border-edge-muted bg-active px-2 text-xs text-ink-muted shadow-sm transition-colors hover:bg-hover hover:text-ink active:bg-active focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              href={href()}
+              rel="noreferrer"
+              target="_blank"
+            >
+              Open in GitHub
+              <ArrowSquareOutIcon class="size-4" />
+            </a>
+          )}
+        </Show>
+      </div>
+    </div>
+  );
+}
+
 function previewEntity(item: InboxItemData): EntityData | undefined {
   const notification = item.notification as UnifiedNotification | undefined;
   if (!notification) return undefined;
@@ -517,6 +563,11 @@ export function NotificationInbox2() {
     if (!item) return undefined;
     return previewEntity(item);
   };
+  const selectedGithubUrl = () => {
+    const item = selectedItem();
+    if (!item) return undefined;
+    return getGithubUrl(item);
+  };
   const previewVisible = () => true;
 
   createEffect(() => {
@@ -556,20 +607,29 @@ export function NotificationInbox2() {
         >
           <div class="size-full min-h-0 min-w-0">
             <Show
+              when={selectedGithubUrl()}
               fallback={
-                <div class="flex size-full items-center justify-center text-sm text-ink-extra-muted">
-                  Select a notification to preview it
-                </div>
+                <Show
+                  fallback={
+                    <div class="flex size-full items-center justify-center text-sm text-ink-extra-muted">
+                      Select a notification to preview it
+                    </div>
+                  }
+                  when={selectedEntity()}
+                >
+                  {(entity) => (
+                    <PreviewPanel
+                      orchestrator={orchestrator}
+                      selectedEntity={entity()}
+                      splitPanelContext={panel}
+                    />
+                  )}
+                </Show>
               }
-              when={selectedEntity()}
             >
-              {(entity) => (
-                <PreviewPanel
-                  orchestrator={orchestrator}
-                  selectedEntity={entity()}
-                  splitPanelContext={panel}
-                />
-              )}
+              <Show when={selectedItem()}>
+                {(item) => <GithubPreviewFallback item={item()} />}
+              </Show>
             </Show>
           </div>
         </Resize.Panel>
