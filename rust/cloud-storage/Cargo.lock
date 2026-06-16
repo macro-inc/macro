@@ -6780,11 +6780,13 @@ name = "macro_config"
 version = "0.1.0"
 dependencies = [
  "macro_config_derive",
+ "macro_env",
  "macro_env_var",
  "remote_env_var",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
+ "tokio",
  "tracing",
  "workspace-hack",
 ]

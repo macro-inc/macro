@@ -113,8 +113,12 @@ async fn main() -> anyhow::Result<()> {
         aws_sdk_secretsmanager::Client::new(&aws_config),
     );
 
-    // Parse our configuration from the environment.
-    let config = Config::from_env().context("expected to be able to generate config")?;
+    // Parse our configuration from the environment, then resolve any secret-manager backed values.
+    let config = Config::from_env()
+        .context("expected to be able to generate config")?
+        .resolve_remote_secrets(env, &secretsmanager_client)
+        .await
+        .context("expected to be able to resolve config secrets")?;
 
     tracing::trace!("initialized config");
 

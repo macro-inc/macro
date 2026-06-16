@@ -2159,6 +2159,9 @@
     "macro_config": [
       "macro_config",
       "macro_config_derive",
+      "macro_env",
+      "macro_env_var",
+      "remote_env_var",
       "workspace-hack"
     ],
     "macro_config_derive": [
