@@ -35,7 +35,6 @@ import {
 } from '@app/component/next-soup/soup-view/soup-view-context';
 import { SoupViewCreateButton } from '@app/component/next-soup/soup-view/soup-view-create-button';
 import { SoupViewFileDropzone } from '@app/component/next-soup/soup-view/soup-view-file-dropzone';
-import { SoupViewMobileSearchBar } from '@app/component/next-soup/soup-view/soup-view-mobile-search';
 import {
   CollapsedSoupViewTabs,
   MobileSoupViewTabs,
@@ -404,22 +403,22 @@ export const SoupView = (props: SoupViewProps) => {
       >
         <div class="size-full flex flex-col" data-list-view={activeListView()}>
           <div class="flex flex-col w-full">
-            <SplitHeaderLeft>
-              <div
-                class={cn('h-full flex gap-3 items-center', {
-                  'shrink-0': !narrowSearchExpanded(),
-                  'flex-1 min-w-0': narrowSearchExpanded(),
-                })}
-              >
-                <Show when={!isMobile() && !narrowSearchExpanded()}>
-                  <span class="text-base font-bold">{props.viewName}</span>
-                </Show>
-                <Show
-                  when={
-                    !narrowSearchExpanded() && !isComponentListView('search')
-                  }
+            <Show when={!isMobile()}>
+              <SplitHeaderLeft>
+                <div
+                  class={cn('h-full flex gap-3 items-center', {
+                    'shrink-0': !narrowSearchExpanded(),
+                    'flex-1 min-w-0': narrowSearchExpanded(),
+                  })}
                 >
-                  <Show when={!isMobile()}>
+                  <Show when={!narrowSearchExpanded()}>
+                    <span class="text-base font-bold">{props.viewName}</span>
+                  </Show>
+                  <Show
+                    when={
+                      !narrowSearchExpanded() && !isComponentListView('search')
+                    }
+                  >
                     <CollapsibleHeaderItem
                       id="tabs"
                       priority={1}
@@ -428,19 +427,15 @@ export const SoupView = (props: SoupViewProps) => {
                       containerClass="h-full"
                     />
                   </Show>
-                </Show>
-                <Show
-                  when={
-                    !isMobile() &&
-                    !narrowSearchExpanded() &&
-                    isComponentListView('mail')
-                  }
-                >
-                  <InboxSelector />
-                </Show>
-              </div>
-            </SplitHeaderLeft>
-            <Show when={!isMobile()}>
+                  <Show
+                    when={
+                      !narrowSearchExpanded() && isComponentListView('mail')
+                    }
+                  >
+                    <InboxSelector />
+                  </Show>
+                </div>
+              </SplitHeaderLeft>
               <SplitHeaderRight>
                 <Show
                   when={
@@ -522,10 +517,6 @@ export const SoupView = (props: SoupViewProps) => {
               </SoupViewFileDropzone>
             </Suspense>
             <Show when={isMobile()}>
-              <SoupViewMobileSearchBar
-                open={mobileSearchOpen}
-                onClose={() => setMobileSearchOpen(false)}
-              />
               <FloatRegion region="accessory">
                 <MobileSoupViewTabs />
               </FloatRegion>

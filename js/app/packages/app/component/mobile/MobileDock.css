@@ -1,22 +1,34 @@
 @keyframes morePopoverShow {
   from {
-    transform: translateY(100%);
+    width: 10rem;
+    height: 5rem;
   }
   to {
-    transform: translateY(0);
+    width: var(
+      --more-popover-width,
+      calc(100vw - 2 * var(--mobile-chrome-gutter, 0.75rem))
+    );
+    height: var(--more-popover-height, 23.5rem);
   }
 }
 @keyframes morePopoverHide {
   from {
-    transform: translateY(0);
+    width: var(
+      --more-popover-width,
+      calc(100vw - 2 * var(--mobile-chrome-gutter, 0.75rem))
+    );
+    height: var(--more-popover-height, 23.5rem);
+    opacity: 1;
   }
   to {
-    transform: translateY(100%);
+    width: 0rem;
+    height: 0rem;
+    opacity: 0;
   }
 }
 .more-popover-content {
-  animation: morePopoverHide 100ms ease-in forwards;
+  animation: morePopoverHide 120ms ease-in forwards;
 }
 .more-popover-content[data-expanded] {
-  animation: morePopoverShow 100ms ease-out;
+  animation: morePopoverShow 150ms cubic-bezier(0.2, 1.05, 1, 1.1);
 }

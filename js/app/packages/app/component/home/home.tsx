@@ -1,5 +1,4 @@
 import { useAnalytics } from '@app/component/analytics-context';
-import { SoupViewMobileSettingsButton } from '@app/component/next-soup/soup-view/soup-view-mobile-settings-button';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import { useHasPaidAccess } from '@core/auth';
@@ -17,7 +16,6 @@ import { deriveChatName } from '@core/component/AI/util/deriveName';
 import { ENABLE_HOME_OVERRIDE } from '@core/constant/featureFlags';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { useUserContext } from '@core/context/user';
-import { isMobile } from '@core/mobile/isMobile';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isPaymentError } from '@core/util/handlePaymentError';
@@ -25,7 +23,7 @@ import { createRenameDssEntityMutation } from '@macro-entity';
 import { invalidateAllSoup } from '@queries/soup/normalized-cache';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { Navigate } from '@solidjs/router';
-import { createMemo, Show } from 'solid-js';
+import { createMemo } from 'solid-js';
 import { HomeSectionBoundary } from './home-section-boundary';
 
 const MACRO_LOGO_PATH =
@@ -70,12 +68,6 @@ export function Home() {
       <ChatInputProvider>
         <DragDropWrapper class="relative size-full">
           <HomeContent />
-          <Show when={isMobile()}>
-            <SoupViewMobileSettingsButton
-              visible={() => true}
-              class="right-4 top-4"
-            />
-          </Show>
         </DragDropWrapper>
       </ChatInputProvider>
     </ShowFeatureFlag>

@@ -1,12 +1,11 @@
 /** Mobile Search is based on Command Menu. */
 
 import { openEntityInSplitFromUnifiedList } from '@app/component/next-soup/utils';
-import { Tabs } from '@core/component/Tabs';
 import { TailSpinner } from '@core/component/TailSpinner';
 import { itemToBlockName } from '@core/constant/allBlocks';
 import { getActiveCommandsFromScope } from '@core/hotkey/getCommands';
 import { runCommand } from '@core/hotkey/utils';
-import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
+import { hapticImpact } from '@core/mobile/haptics';
 import { debouncedDependent } from '@core/util/debounce';
 import { windowSearchMatch } from '@core/util/searchHighlight';
 import { openExternalUrl } from '@core/util/url';
@@ -17,13 +16,13 @@ import {
   type WithSearch,
 } from '@entity';
 import { SearchContent } from '@entity/extractors-search/search-content';
-import { Dialog } from '@kobalte/core/dialog';
 import ArrowLeft from '@phosphor/arrow-left.svg';
 import SearchIcon from '@phosphor-icons/core/regular/magnifying-glass.svg?component-solid';
 import { useFullTextSearch } from '@queries/soup/useFullTextSearch';
 import { cn, Layer } from '@ui';
 import {
   createSignal,
+  For,
   Match,
   onCleanup,
   onMount,
@@ -40,7 +39,12 @@ import {
   useCommandItems,
 } from '../command/useCommandItems';
 import { useSplitLayout } from '../split-layout/layout';
+import { FloatRegion } from './float-regions/FloatRegion';
 import { SearchState } from './mobileSearchState';
+import { pressPulse } from './pressPulse';
+
+// Keeps the directive import from being tree-shaken / lint-flagged.
+false && pressPulse;
 
 const CATEGORIES: { id: CategoryFilter; label: string }[] = [
   { id: 'all', label: 'All' },
@@ -55,22 +59,9 @@ const CATEGORIES: { id: CategoryFilter; label: string }[] = [
 
 export function MobileSearchOuter() {
   return (
-    <Dialog open={SearchState.isOpen()} onOpenChange={SearchState.setIsOpen}>
-      <Dialog.Portal>
-        <Layer depth={2}>
-          <Dialog.Content
-            class={cn(
-              'fixed inset-0 z-modal flex flex-col h-[calc(var(--dvh,1dvh)*100)] pt-(--safe-top) pl-(--safe-left) pr-(--safe-right)',
-              {
-                'pb-(--safe-bottom)': !virtualKeyboardVisible(),
-              }
-            )}
-          >
-            <MobileSearchInner />
-          </Dialog.Content>
-        </Layer>
-      </Dialog.Portal>
-    </Dialog>
+    <Show when={SearchState.isOpen()}>
+      <MobileSearchInner />
+    </Show>
   );
 }
 
@@ -161,38 +152,76 @@ function MobileSearchInner() {
     }
   };
 
+  const showTabs = () =>
+    !SearchState.isInCommandScope() && !SearchState.isFullTextMode();
+
   return (
-    <div class="flex flex-col h-full bg-surface">
-      <ResultsContainer
-        nameMatchItems={filteredItems()}
-        fullTextItems={fullTextResults()}
-        onSelectNameMatch={(item, openInNewSplit) =>
-          handleItemAction(item, openInNewSplit)
-        }
-        onSelectFullText={(entity) => handleFullTextItemAction(entity)}
-        isLoading={() => SearchState.isFullTextMode() && isFullTextLoading()}
-        onFullTextSearch={() => SearchState.enableFullTextMode()}
-        query={SearchState.query}
-      />
-      <Show
-        when={!SearchState.isInCommandScope() && !SearchState.isFullTextMode()}
-      >
-        <CategoryFilterTabs />
+    <>
+      {/* Full-frame results surface. Sits below the float host (see
+          zMobileSearch) so the input (dock region) and tabs (accessory
+          region) float over it; bottom padding clears that floating chrome. */}
+      <Layer depth={0}>
+        <div class="fixed inset-0 z-mobile-search flex flex-col bg-surface pt-(--safe-top) pr-(--safe-right) pb-[calc(var(--virtual-keyboard-height)+var(--mobile-content-inset-bottom))] pl-(--safe-left)">
+          <ResultsContainer
+            nameMatchItems={filteredItems()}
+            fullTextItems={fullTextResults()}
+            onSelectNameMatch={(item, openInNewSplit) =>
+              handleItemAction(item, openInNewSplit)
+            }
+            onSelectFullText={(entity) => handleFullTextItemAction(entity)}
+            isLoading={() =>
+              SearchState.isFullTextMode() && isFullTextLoading()
+            }
+            onFullTextSearch={() => SearchState.enableFullTextMode()}
+            query={SearchState.query}
+          />
+        </div>
+      </Layer>
+
+      {/* Category filter tabs → accessory region (above the input). */}
+      <Show when={showTabs()}>
+        <FloatRegion
+          region="accessory"
+          priority={20}
+          active={() => SearchState.isOpen()}
+        >
+          <CategoryFilterTabs />
+        </FloatRegion>
       </Show>
-      {/* Search Input */}
-      <div class="flex items-center gap-2 bg-surface px-2 border-t border-edge-muted">
+
+      {/* Search input → dock region. High priority so it wins over the dock
+          while search is open, regardless of keyboard visibility. */}
+      <FloatRegion
+        region="dock"
+        priority={20}
+        active={() => SearchState.isOpen()}
+      >
+        <SearchInputBar onBack={handleBack} />
+      </FloatRegion>
+    </>
+  );
+}
+
+function SearchInputBar(props: { onBack: () => void }) {
+  // Focus (and the iOS keyboard) is driven by triggerFocusInput from the dock
+  // Search button, which targets this input by id once it mounts here.
+  return (
+    <div class="pointer-events-auto px-(--mobile-chrome-gutter)">
+      <div class="island flex h-11 items-center gap-1 rounded-full pr-3 pl-1">
         <button
-          class="text-ink-muted flex flex-col items-center justify-center pl-2 pt-3 pb-2"
-          onClick={handleBack}
+          type="button"
+          class="flex size-9 shrink-0 items-center justify-center rounded-full text-ink-muted"
+          onClick={props.onBack}
+          aria-label="Back"
           title="Back (Esc)"
         >
-          <ArrowLeft class="size-6" />
+          <ArrowLeft class="size-5" />
         </button>
         <input
           id="mobile-search-input"
           type="text"
-          class="pt-3 pb-2 flex-1 bg-transparent border-0 outline-none focus:outline-none ring-0 focus:ring-0 text-ink-muted placeholder:text-ink-placeholder"
-          placeholder={'Search...'}
+          class="h-full min-w-0 flex-1 border-0 bg-transparent text-ink outline-none ring-0 placeholder:text-ink-placeholder focus:outline-none focus:ring-0"
+          placeholder="Search..."
           value={SearchState.query()}
           onInput={(e) => SearchState.setQuery(e.currentTarget.value)}
         />
@@ -395,16 +424,37 @@ function FullTextResultItem(props: {
 
 function CategoryFilterTabs() {
   return (
-    <div class="bg-surface border-t border-edge-muted h-11 px-1 overflow-x-auto scrollbar-hidden">
-      <Tabs
-        list={CATEGORIES.map((c) => ({ value: c.id, label: c.label }))}
-        value={SearchState.categoryFilter()}
-        onChange={(value) => {
-          if (value) SearchState.setCategoryFilter(value as CategoryFilter);
-        }}
-        indicatorPosition="top"
-        class="w-max **:data-indicator:h-0.75"
-      />
+    <div class="flex items-center gap-2 px-(--mobile-chrome-gutter)">
+      <div class="pointer-events-auto flex min-w-0 gap-2 overflow-x-auto scrollbar-hidden py-1">
+        <For each={CATEGORIES}>
+          {(category) => {
+            const active = () => SearchState.categoryFilter() === category.id;
+            return (
+              <button
+                type="button"
+                use:pressPulse
+                data-checked={active() ? '' : undefined}
+                class={cn(
+                  'h-8 shrink-0 whitespace-nowrap rounded-full px-3.5 text-sm font-medium shadow-md border',
+                  active()
+                    ? 'bg-accent text-surface border-accent'
+                    : 'bg-surface text-ink-extra-muted border-edge'
+                )}
+                // Keep the search input focused (keyboard open): preventing
+                // the pointerdown default stops the button from taking focus,
+                // without blocking the click or the strip's scroll.
+                onPointerDown={(e) => {
+                  e.preventDefault();
+                  hapticImpact('light');
+                }}
+                onClick={() => SearchState.setCategoryFilter(category.id)}
+              >
+                {category.label}
+              </button>
+            );
+          }}
+        </For>
+      </div>
     </div>
   );
 }

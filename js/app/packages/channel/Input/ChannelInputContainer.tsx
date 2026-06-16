@@ -9,7 +9,7 @@ export function ChannelInputContainer(props: {
   return (
     <div
       class={cn(
-        'pb-2 mobile:pb-0 w-full flex justify-center **:data-input-editor-shell:max-h-[calc(60*var(--dvh,1dvh))] mobile:**:data-input-editor-shell:max-h-[calc(32*var(--dvh,1dvh))]',
+        'pb-2 mobile:pb-0 w-full flex justify-center **:data-input-editor-shell:max-h-[calc(60*var(--dvh,1dvh))] mobile:**:data-input-editor-shell:max-h-[calc(32*var(--dvh,1dvh))] mobile:px-(--mobile-chrome-gutter) mobile:pointer-events-auto',
         props.isHidden && 'hidden'
       )}
       ref={props.ref}

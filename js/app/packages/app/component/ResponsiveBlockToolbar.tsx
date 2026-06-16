@@ -122,15 +122,17 @@ export function ResponsiveBlockToolbar(props: BlockToolbarProps) {
       }
     >
       <SplitHeaderRight>
-        <SplitFileMenu
-          id={props.id}
-          itemType={props.itemType}
-          name={props.name}
-          formattedName={props.formattedName}
-          ops={props.ops}
-          tools={props.tools}
-          buttonClass="order-last"
-        />
+        <HeaderIsland>
+          <SplitFileMenu
+            id={props.id}
+            itemType={props.itemType}
+            name={props.name}
+            formattedName={props.formattedName}
+            ops={props.ops}
+            tools={props.tools}
+            buttonClass="order-last"
+          />
+        </HeaderIsland>
       </SplitHeaderRight>
     </Show>
   );

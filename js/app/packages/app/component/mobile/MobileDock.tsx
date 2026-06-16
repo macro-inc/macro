@@ -1,7 +1,11 @@
 import './MobileDock.css';
 import { isListViewID, type ListView } from '@app/constants/list-views';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { useSettingsState } from '@core/constant/SettingsState';
+import { triggerFocusInput } from '@core/directive/focusInput';
 import { hapticImpact } from '@core/mobile/haptics';
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import IconGear from '@icon/macro-gear.svg';
 import { AnimatedCallIcon } from '@icon/wide-call';
 import { AnimatedChannelIcon } from '@icon/wide-channel';
 import { AnimatedEmailIcon } from '@icon/wide-email';
@@ -12,16 +16,20 @@ import { AnimatedPlusIcon } from '@icon/wide-plus';
 import { AnimatedSearchIcon } from '@icon/wide-search';
 import { AnimatedStarIcon } from '@icon/wide-star';
 import { AnimatedTaskIcon } from '@icon/wide-task';
-import { Popover } from '@kobalte/core/popover';
 import CaretUpIcon from '@phosphor/caret-up.svg';
 import HomeIcon from '@phosphor/house.svg';
+import { createElementSize } from '@solid-primitives/resize-observer';
 import { useLocation } from '@solidjs/router';
-import { cn, islandClass } from '@ui';
+import { cn } from '@ui';
 import { type Component, createSignal, For, type JSX, Show } from 'solid-js';
-import { Dynamic } from 'solid-js/web';
+import { Dynamic, Portal } from 'solid-js/web';
 import { setCreateMenuOpen } from '../Launcher';
 import { useSplitLayout } from '../split-layout/layout';
 import { SearchState } from './mobileSearchState';
+import { pressPulse } from './pressPulse';
+
+// Keeps the directive import from being tree-shaken / lint-flagged.
+false && pressPulse;
 
 const ICON_ANIMATION_DURATION_MS = 500;
 
@@ -43,6 +51,9 @@ type MobileDockButtonProps = {
   class?: string;
   /** Plain svg icons (Home, Caret) don't accept `triggerAnimation`. */
   animateIcon?: boolean;
+  /** Fire on pointer-down instead of release. (More menu: opening on press
+   * enables the hold-and-drag row selection gesture.) */
+  fireOnPress?: boolean;
 };
 
 function MobileDockButton(props: MobileDockButtonProps) {
@@ -52,19 +63,24 @@ function MobileDockButton(props: MobileDockButtonProps) {
     <button
       type="button"
       ref={props.ref}
+      use:pressPulse
       onPointerDown={() => {
         hapticImpact('light');
         if (props.animateIcon !== false) {
           setAnimating(true);
           setTimeout(() => setAnimating(false), ICON_ANIMATION_DURATION_MS);
         }
-        props.onClick();
+        if (props.fireOnPress) props.onClick();
+      }}
+      // Default: fires on release — the press pulse holds the on-state while
+      // touched. (Not on fireOnPress buttons, which already fired above.)
+      onClick={() => {
+        if (!props.fireOnPress) props.onClick();
       }}
       onTouchMove={props.onTouchMove}
       onTouchEnd={props.onTouchEnd}
       class={cn(
-        'pointer-events-auto flex items-center justify-center',
-        islandClass,
+        'island pointer-events-auto flex items-center justify-center',
         props.active && 'text-accent',
         props.class
       )}
@@ -94,18 +110,40 @@ const MORE_VIEWS: { id: ListView; label: string; icon: IconComponent }[] = [
 ];
 
 function MorePopover(props: {
-  active: boolean;
   isActive: (id: DockId) => boolean;
   onNavigate: (id: DockId) => void;
 }) {
+  const { settingsOpen, toggleSettings } = useSettingsState();
+  // `open` drives the show/hide animation (via data-expanded); `mounted`
+  // keeps the overlay in the DOM until the hide animation finishes.
   const [open, setOpen] = createSignal(false);
-  const [anchorRef, setAnchorRef] = createSignal<HTMLElement>();
+  const [mounted, setMounted] = createSignal(false);
   const [hoveredId, setHoveredId] = createSignal<string | null>(null);
   // The menu's natural size, fed to the open/close animation as CSS vars —
-  // the popover container animates its real width/height between the dock
-  // button's size and these (see MobileDock.css).
+  // the container animates its real width/height between the dock button's
+  // size and these (see MobileDock.css).
   const [menuRef, setMenuRef] = createSignal<HTMLDivElement>();
   const menuSize = createElementSize(menuRef);
+
+  const openMenu = () => {
+    setMounted(true);
+    setOpen(true);
+  };
+
+  const closeMenu = () => {
+    setOpen(false);
+    setHoveredId(null);
+  };
+
+  // Row selection: unmount instantly, no hide animation. The size animation
+  // is layout-bound and would drop frames while navigation mounts the
+  // destination view; the animated close is kept for plain dismissals
+  // (backdrop, caret, More button), where the main thread is idle.
+  const dismissMenu = () => {
+    setOpen(false);
+    setMounted(false);
+    setHoveredId(null);
+  };
 
   const handleTouchMove = (e: TouchEvent) => {
     if (!open()) return;
@@ -119,13 +157,23 @@ function MorePopover(props: {
     }
   };
 
+  // Acts on a row by id. 'settings' toggles the settings panel; list-view ids
+  // navigate. Shared by tap (onClick) and the hold-and-drag-release gesture.
+  const select = (id: string | null) => {
+    if (id === 'settings') {
+      toggleSettings();
+    } else if (isListViewID(id)) {
+      props.onNavigate(id);
+    } else {
+      return;
+    }
+    dismissMenu();
+  };
+
   const handleTouchEnd = () => {
     const id = hoveredId();
     setHoveredId(null);
-    if (isListViewID(id)) {
-      props.onNavigate(id);
-      setOpen(false);
-    }
+    select(id);
   };
 
   return (
@@ -133,72 +181,115 @@ function MorePopover(props: {
       <MobileDockButton
         icon={CaretUpIcon}
         animateIcon={false}
-        active={props.active}
-        onClick={() => setOpen((prev) => !prev)}
-        ref={setAnchorRef}
+        fireOnPress
+        onClick={() => (open() ? closeMenu() : openMenu())}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
         class="size-10 rounded-full"
-        iconClass={cn(
-          'transition-transform duration-200',
-          open() && 'rotate-180'
-        )}
       />
-      <Popover
-        open={open()}
-        onOpenChange={(isOpen) => {
-          setOpen(isOpen);
-          if (!isOpen) setHoveredId(null);
-        }}
-        placement="top-end"
-        overflowPadding={10}
-        anchorRef={anchorRef}
-      >
-        <Popover.Portal>
-          {/* The content box is what the open/close animation sizes; the
-              inner menu keeps its full size and bottom-right alignment, so
-              the growing container reveals it instead of reflowing it. */}
-          <Popover.Content
-            class="more-popover-content z-modal pointer-events-auto flex flex-col items-end justify-end overflow-hidden rounded-sm bg-surface shadow-lg ring ring-edge"
-            style={{
-              '--more-popover-width': menuSize.width
-                ? `${menuSize.width}px`
-                : undefined,
-              '--more-popover-height': menuSize.height
-                ? `${menuSize.height}px`
-                : undefined,
+      <Show when={mounted()}>
+        <Portal>
+          {/* Backdrop: any tap outside the menu closes it. The bottom
+              padding mirrors FloatRegionHost's, so the menu's bottom edge
+              aligns with the bottom of the dock. */}
+          <div
+            class={cn(
+              'fixed inset-0 z-modal flex items-end justify-center pb-3',
+              isNativeMobilePlatform() && 'pb-7'
+            )}
+            onPointerDown={(e) => {
+              if (e.target === e.currentTarget) closeMenu();
             }}
           >
-            <div class="flex w-52 shrink-0 flex-col gap-1 p-1" ref={setMenuRef}>
-              <For each={MORE_VIEWS}>
-              {(item) => (
+            {/* The container is what the open/close animation sizes; it
+                expands upward from the dock line. The inner menu keeps its
+                full size, pinned to the container's left edge (so it rides
+                leftward as the box widens from center) and to its bottom
+                edge (so it stays put vertically and is unmasked top-down as
+                the box grows upward). */}
+            <div
+              class="more-popover-content flex items-end justify-start overflow-hidden rounded-2xl bg-surface border border-edge"
+              data-expanded={open() ? '' : undefined}
+              style={{
+                '--more-popover-width': menuSize.width
+                  ? `${menuSize.width}px`
+                  : undefined,
+                '--more-popover-height': menuSize.height
+                  ? `${menuSize.height}px`
+                  : undefined,
+              }}
+              onAnimationEnd={(e) => {
+                // Icon animations bubble animationend; only unmount when the
+                // container's own hide animation completes.
+                if (e.target === e.currentTarget && !open()) setMounted(false);
+              }}
+            >
+              {/* Width matches the dock: full screen minus its gutters. */}
+              <div
+                class="flex w-[calc(100vw-2*var(--mobile-chrome-gutter))] shrink-0 flex-col gap-1 p-1"
+                ref={setMenuRef}
+              >
                 <button
                   type="button"
-                  data-more-item={item.id}
+                  data-more-item="settings"
                   class={cn(
-                    'flex h-11 items-center gap-2 rounded-sm px-3 text-sm',
-                    props.isActive(item.id) ? 'text-accent' : 'text-ink',
-                    hoveredId() === item.id ? 'bg-hover' : 'hover:bg-hover'
+                    'flex h-11 items-center gap-2 rounded-lg px-3 text-sm',
+                    settingsOpen() ? 'text-accent' : 'text-ink',
+                    hoveredId() === 'settings' ? 'bg-hover' : 'hover:bg-hover'
                   )}
                   onClick={() => {
                     hapticImpact('light');
-                    props.onNavigate(item.id);
-                    setOpen(false);
+                    select('settings');
                   }}
                 >
                   <div class="size-4 shrink-0 [&_svg]:size-4">
-                    <Dynamic
-                      component={item.icon}
-                      triggerAnimation={hoveredId() === item.id}
-                    />
+                    <IconGear />
                   </div>
-                  <span>{item.label}</span>
+                  <span>Settings</span>
                 </button>
-              )}
-            </For>
-          </Popover.Content>
-        </Popover.Portal>
-      </Popover>
+                <For each={MORE_VIEWS}>
+                  {(item) => (
+                    <button
+                      type="button"
+                      data-more-item={item.id}
+                      class={cn(
+                        'flex h-11 items-center gap-2 rounded-lg px-3 text-sm',
+                        props.isActive(item.id) ? 'text-accent' : 'text-ink',
+                        hoveredId() === item.id ? 'bg-hover' : 'hover:bg-hover'
+                      )}
+                      onClick={() => {
+                        hapticImpact('light');
+                        select(item.id);
+                      }}
+                    >
+                      <div class="size-4 shrink-0 [&_svg]:size-4">
+                        <Dynamic
+                          component={item.icon}
+                          triggerAnimation={hoveredId() === item.id}
+                        />
+                      </div>
+                      <span>{item.label}</span>
+                    </button>
+                  )}
+                </For>
+                {/* Full-bleed divider between the list and the Views row. */}
+                <div class="-mx-1 h-px shrink-0 bg-edge" />
+                <button
+                  type="button"
+                  class="flex h-9 shrink-0 items-center justify-between px-3 text-sm font-medium text-ink-muted"
+                  onPointerDown={() => {
+                    hapticImpact('light');
+                    closeMenu();
+                  }}
+                >
+                  <span>Views</span>
+                  <CaretUpIcon class="size-6 rotate-180 text-ink" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </Portal>
+      </Show>
     </>
   );
 }
@@ -216,8 +307,6 @@ export function MobileDock() {
     return activeContent.id === id;
   };
 
-  const isMoreActive = () => MORE_VIEWS.some((v) => isActive(v.id));
-
   const navigate = (id: DockId) => {
     // If we're already on a soup/component view, replace in-place (mergeHistory)
     // so the tab switch doesn't push a new entry into the swipe-back BG slot.
@@ -229,7 +318,7 @@ export function MobileDock() {
   };
 
   return (
-    <div class="flex items-center gap-3 px-3">
+    <div class="flex items-center gap-3 px-(--mobile-chrome-gutter)">
       <MobileDockButton
         icon={HomeIcon}
         animateIcon={false}
@@ -249,14 +338,17 @@ export function MobileDock() {
         class="h-10 flex-1 gap-1 rounded-full px-3"
         onClick={() => {
           SearchState.maybeResetState();
+          // Arm the focus before opening: iOS only raises the keyboard for a
+          // synchronous focus inside the gesture, so triggerFocusInput grabs a
+          // temp input now and transfers to the real search input once the
+          // dock region portals it in.
+          triggerFocusInput(() =>
+            document.getElementById('mobile-search-input')
+          );
           SearchState.open();
         }}
       />
-      <MorePopover
-        active={isMoreActive()}
-        isActive={isActive}
-        onNavigate={navigate}
-      />
+      <MorePopover isActive={isActive} onNavigate={navigate} />
       <MobileDockButton
         icon={AnimatedPlusIcon}
         class="size-10 rounded-full"

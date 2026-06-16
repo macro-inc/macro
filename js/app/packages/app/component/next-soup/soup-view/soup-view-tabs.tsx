@@ -3,6 +3,7 @@ import {
   type PresetContext,
   VIEW_TAB_PRESETS,
 } from '@app/component/app-sidebar/soup-filter-presets';
+import { pressPulse } from '@app/component/mobile/pressPulse';
 import type { FilterID } from '@app/component/next-soup/filters';
 import type { FilterContext } from '@app/component/next-soup/filters/configs';
 import {
@@ -20,9 +21,12 @@ import { TabsInset } from '@core/component/TabsInset';
 import { TabsInsetDropdown } from '@core/component/TabsInsetDropdown';
 import { useUserContext } from '@core/context/user';
 import { hapticImpact } from '@core/mobile/haptics';
-import { cn } from '@ui';
 import { useIsTeamAdmin } from '@queries/team/teams';
+import { cn } from '@ui';
 import { batch, createEffect, createMemo, For, Match, Switch } from 'solid-js';
+
+// Keeps the directive import from being tree-shaken / lint-flagged.
+false && pressPulse;
 
 /** Views that have tab definitions. Shared between VIEW_TAB_LISTS and VIEW_TAB_PRESETS. */
 export type TabbedListView = Extract<
@@ -284,9 +288,9 @@ export const MobileSoupViewTabs = () => {
   const listView = useCurrentListView();
 
   return (
-    <div class="flex items-center gap-2 px-3">
+    <div class="flex items-center px-(--mobile-chrome-gutter)">
       <MobileFilterDrawer />
-      <div class="pointer-events-auto flex min-w-0 gap-2 overflow-x-auto scrollbar-hidden py-1">
+      <div class="pointer-events-auto flex min-w-0 gap-2 overflow-x-auto scrollbar-hidden pl-2">
         <Switch>
           <For
             each={
@@ -351,15 +355,16 @@ const MobileViewTabs = (props: { view: TabbedListView }) => {
           return (
             <button
               type="button"
+              use:pressPulse
               data-checked={active() ? '' : undefined}
               class={cn(
-                'h-8 shrink-0 whitespace-nowrap rounded-full px-3.5 text-sm font-medium shadow-md ring transition-colors',
+                'h-8 shrink-0 whitespace-nowrap rounded-full px-3.5 text-sm font-medium shadow-md border',
                 active()
-                  ? 'bg-accent text-surface ring-accent'
-                  : 'bg-surface text-ink-extra-muted ring-edge'
+                  ? 'bg-accent text-surface border-accent'
+                  : 'bg-surface text-ink-extra-muted border-edge'
               )}
+              onPointerDown={() => hapticImpact('light')}
               onClick={() => {
-                hapticImpact('light');
                 applyTabPreset(props.view, item.value);
               }}
             >
