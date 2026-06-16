@@ -2,8 +2,6 @@ use std::{borrow::Cow, sync::Mutex};
 
 use loro::{ExportMode, Frontiers, LoroDoc, ToJson, VersionVector, ID};
 use tracing::{debug, info};
-use loro::{ExportMode, Frontiers, LoroDoc, ToJson, VersionVector};
-use tracing::debug;
 use web_time::Instant;
 use worker::Result;
 
@@ -213,6 +211,14 @@ impl DocumentState {
             debug!(error =? error, "travel_change_ancestors failed during version_vector_at");
         }
         Some(vv)
+    }
+
+    pub fn frontier_ids_at(&self, vv: &VersionVector) -> Vec<(u64, i32)> {
+        self.loro_doc
+            .vv_to_frontiers(vv)
+            .iter()
+            .map(|id| (id.peer, id.counter))
+            .collect()
     }
 
     /// State-only snapshot bytes at the version pinned by `vv` (read-only; does not

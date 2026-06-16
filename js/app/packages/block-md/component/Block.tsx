@@ -110,6 +110,7 @@ export default function BlockMarkdown(props: BlockMarkdownProps) {
 function BlockMarkdownContent({ optimisticSnapshot }: BlockMarkdownProps) {
   useBlockEntityCommands();
   const [scrollRef, setScrollRef] = createSignal<HTMLDivElement>();
+  const [isViewingHistory, setIsViewingHistory] = createSignal(false);
   const blockId = useBlockId();
 
   const getSyncSource = blockSyncSourceSignal.get;
@@ -184,9 +185,18 @@ function BlockMarkdownContent({ optimisticSnapshot }: BlockMarkdownProps) {
                 <Suspense>
                   <Show
                     when={!isInstructionsMd()}
-                    fallback={<InstructionsTopBar />}
+                    fallback={
+                      <InstructionsTopBar
+                        viewingHistory={isViewingHistory}
+                        setViewingHistory={setIsViewingHistory}
+                      />
+                    }
                   >
-                    <TopBar name={displayName} />
+                    <TopBar
+                      name={displayName}
+                      viewingHistory={isViewingHistory}
+                      setViewingHistory={setIsViewingHistory}
+                    />
                   </Show>
                 </Suspense>
                 <Suspense>
@@ -211,10 +221,19 @@ function BlockMarkdownContent({ optimisticSnapshot }: BlockMarkdownProps) {
                       <Show
                         when={!isInstructionsMd()}
                         fallback={
-                          <InstructionsNotebook loroManager={loroManager} />
+                          <InstructionsNotebook
+                            loroManager={loroManager}
+                            viewingHistory={isViewingHistory}
+                            setViewingHistory={setIsViewingHistory}
+                          />
                         }
                       >
-                        <Notebook loroManager={loroManager} />
+                        <Notebook
+                          loroManager={loroManager}
+                          viewingHistory={isViewingHistory}
+                          setViewingHistory={setIsViewingHistory}
+                          documentId={blockId}
+                        />
                       </Show>
                     </Suspense>
                   </div>

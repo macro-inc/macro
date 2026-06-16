@@ -45,6 +45,8 @@ pub mod status_codes {
 
 const DOCUMENT_ID_KEY: &str = "DOCUMENT_ID";
 
+const STATE_AT_VERSION_HEADER: &str = "x-version-id";
+
 mod path {
     pub const CONNECT: &str = "connect";
     pub const EXISTS: &str = "exists";
@@ -614,10 +616,14 @@ impl DocumentSyncSession {
 
         // Prefer the in-memory override (set via the dev-only set_memory_state),
         // otherwise resolve peers from D1 as usual.
+        #[cfg(feature = "dev-endpoints")]
         let override_map = self
             .peer_user_override
             .lock("DocumentSyncSession::peer_user_override get within history_meta_handler")
             .clone();
+        #[cfg(not(feature = "dev-endpoints"))]
+        let override_map: Option<std::collections::BTreeMap<u64, String>> = None;
+
         let peer_to_user: std::collections::BTreeMap<u64, String> = match override_map {
             Some(map) => map,
             None => {
@@ -709,7 +715,22 @@ impl DocumentSyncSession {
             export_ms = export_elapsed.as_millis(),
             "state_at: export done"
         );
-        Ok(ResponseBuilder::new().body(ResponseBody::Body(out)))
+
+        let mut builder = ResponseBuilder::new();
+        if let Some((peer, counter)) = vv
+            .as_ref()
+            .and_then(|vv| doc_state.frontier_ids_at(vv).into_iter().next())
+        {
+            let header = serde_json::to_string(&VersionIndicator {
+                // we share it so that they can go from timestamp -> fork it
+                // later using this
+                peer: peer.to_string(),
+                counter,
+            })
+            .context("failed to serialize state-at version id")?;
+            builder = builder.with_header(STATE_AT_VERSION_HEADER, &header)?;
+        }
+        Ok(builder.body(ResponseBody::Body(out)))
     }
 
     async fn connect_handler(&self, req: Request, document_id: &str) -> Result<Response> {
@@ -976,6 +997,7 @@ impl DurableObject for DocumentSyncSession {
             awareness: EphemeralStore::new(5_000),
             ws_meta_map: Arc::new(Mutex::new(Default::default())),
             msg_buffer: Arc::new(Mutex::new(vec![])),
+            #[cfg(feature = "dev-endpoints")]
             peer_user_override: Mutex::new(None),
         }
     }
@@ -1237,6 +1259,7 @@ pub fn cors(request_origin: Option<&str>) -> Cors {
     Cors::new()
         .with_credentials(true)
         .with_allowed_headers(vec!["authorization", "content-type"])
+        .with_exposed_headers(vec![STATE_AT_VERSION_HEADER])
         .with_methods(vec![
             Method::Get,
             Method::Post,

@@ -76,6 +76,13 @@ export type HistorySession = {
   count: number;
 };
 
+/** A single frontier op-id — structurally a `SyncServiceVersionID`, so it can
+ * be passed straight to the copy/fork path. */
+export type HistoryVersionId = {
+  peer: string;
+  counter: number;
+};
+
 export const syncServiceClient = {
   async wakeup(args: { documentId: string }) {
     await syncFetch(`/document/${args.documentId}/wakeup`, {
@@ -234,23 +241,23 @@ export const syncServiceClient = {
       Authorization: `Bearer ${token}`,
       ...(isTauri() && { Origin: SYNC_ORIGIN }),
     };
-    // The server replies 503 while it builds the history-checkpoint ladder in
-    // the background; retry with exponential backoff until it's ready.
-    const MAX_TRIES = 8;
-    for (let attempt = 1; attempt <= MAX_TRIES; attempt++) {
-      const response = await platformFetch(url, { headers, method: 'GET' });
-      if (response.ok) {
-        return ok(new Uint8Array(await response.arrayBuffer()));
-      }
-      if (response.status === 503 && attempt < MAX_TRIES) {
-        await new Promise((r) =>
-          setTimeout(r, Math.min(2000, 250 * 2 ** (attempt - 1)))
-        );
-        continue;
-      }
+    const response = await platformFetch(url, { headers, method: 'GET' });
+    if (!response.ok) {
       return err(`Failed to fetch state at t: ${response.status}`);
     }
-    return err('Failed to fetch state at t: retries exhausted');
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    // The resolved version of this moment, for forking. Absent for an empty
+    // oplog. Exposed cross-origin via the sync-service CORS config.
+    let versionId: HistoryVersionId | null = null;
+    const raw = response.headers.get('x-version-id');
+    if (raw) {
+      try {
+        versionId = JSON.parse(raw) as HistoryVersionId;
+      } catch {
+        versionId = null;
+      }
+    }
+    return ok({ bytes, versionId });
   },
   async getRaw(args: { documentId: string }): Promise<SerializedEditorState> {
     const token = await getPermissionToken('document', args.documentId);

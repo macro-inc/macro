@@ -430,7 +430,7 @@ export function HistoryScrubber(props: {
           <For each={gapMarkers()}>
             {(g) => (
               <div
-                class="absolute inset-y-0 flex items-center justify-center overflow-hidden whitespace-nowrap text-[10px] text-ink-muted"
+                class="absolute inset-y-0 flex items-center justify-center overflow-hidden whitespace-nowrap text-xxs text-ink-muted"
                 style={{ left: `${g.left}px`, width: `${g.width}px` }}
               >
                 {`·· ${g.label} ··`}
@@ -489,10 +489,10 @@ export function HistoryScrubber(props: {
         </div>
 
         {/* Diagonal edge labels showing the visible window's real-time bounds */}
-        <span class="absolute top-full left-0 origin-top-left -rotate-12 text-[10px] text-ink-muted">
+        <span class="absolute top-full left-0 origin-top-left -rotate-12 text-xxs text-ink-muted">
           {fmt(new Date(unwarp(viewW().start)))}
         </span>
-        <span class="absolute top-full right-0 origin-top-right rotate-12 text-[10px] text-ink-muted">
+        <span class="absolute top-full right-0 origin-top-right rotate-12 text-xxs text-ink-muted">
           {fmt(new Date(unwarp(viewW().end)))}
         </span>
       </div>

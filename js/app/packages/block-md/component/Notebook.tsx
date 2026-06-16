@@ -1,4 +1,3 @@
-import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
 import { useNavigatedFromJK } from '@app/component/useNavigatedFromJK';
 import { CommentMargin } from '@block-md/comments/CommentMargin';
 import {
@@ -7,7 +6,7 @@ import {
 } from '@block-md/comments/commentStore';
 import { useGoToTempRedirect } from '@block-md/signal/location';
 import { mdStore } from '@block-md/signal/markdownBlockData';
-import { useBlockAliasedName, useBlockId } from '@core/block';
+import { useBlockAliasedName } from '@core/block';
 import type { LoroManager } from '@core/collab/manager';
 import { editorFocusSignal } from '@core/component/LexicalMarkdown/utils';
 import { ParamsProvider } from '@core/component/ParamsProvider';
@@ -25,15 +24,16 @@ import { tempRedirectLocation } from '@core/signal/location';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { makeResizeObserver } from '@solid-primitives/resize-observer';
 import {
+  type Accessor,
   createEffect,
   createMemo,
   createSignal,
   onCleanup,
   onMount,
+  type Setter,
   Show,
   untrack,
 } from 'solid-js';
-import { historyDrawerId } from './History';
 import { HistoryOverlay } from './HistoryOverlay';
 import { InlineTaskGithubPullRequests } from './InlineTaskGithubPullRequests';
 import { InlineTaskProperties } from './InlineTaskProperties';
@@ -73,7 +73,12 @@ const widthToMode = (width: number): CommentLayoutMode => {
   return CommentLayoutMode.none;
 };
 
-export function Notebook(props: { loroManager: LoroManager }) {
+export function Notebook(props: {
+  loroManager: LoroManager;
+  viewingHistory: Accessor<boolean>;
+  setViewingHistory: Setter<boolean>;
+  documentId: string;
+}) {
   const blockElement = blockElementSignal.get;
   const setStore = mdStore.set;
   const setWideEnoughForComments = commentWidthSignal.set;
@@ -82,10 +87,7 @@ export function Notebook(props: { loroManager: LoroManager }) {
   const isTask = useBlockAliasedName() === 'task';
   const md = mdStore.get;
   const { navigatedFromJK } = useNavigatedFromJK();
-
-  // History overlay reuses the existing top-bar History toggle (drawer control).
-  const historyBlockId = useBlockId();
-  const historyControl = useDrawerControl(historyDrawerId(historyBlockId));
+  const documentId = props.documentId;
 
   let notebookRef!: HTMLDivElement;
   let commentMarginRef: HTMLDivElement | undefined;
@@ -128,9 +130,8 @@ export function Notebook(props: { loroManager: LoroManager }) {
 
   createEffect(() => {
     const goToTempRedirect = useGoToTempRedirect();
-    const documentId = useBlockId();
     const recentState = tempRedirectLocation();
-    if (!documentId || !recentState) return;
+    if (!recentState) return;
 
     setTimeout(() => {
       goToTempRedirect(documentId, recentState);
@@ -277,10 +278,7 @@ export function Notebook(props: { loroManager: LoroManager }) {
         ref={contentRef}
         classList={{ relative: true }}
       >
-        <TitleEditor
-          autoFocusOnMount={!navigatedFromJK()}
-          mustBeConnected={props.mustBeConnected}
-        />
+        <TitleEditor autoFocusOnMount={!navigatedFromJK()}/>
         <div class="spacer h-3" />
         <div class="mb-6 flex flex-row flex-wrap items-center gap-2 text-sm empty:hidden">
           <InlineTaskProperties />
@@ -293,12 +291,12 @@ export function Notebook(props: { loroManager: LoroManager }) {
           <div class="relative">
             <MarkdownEditor
               loroManager={props.loroManager}
-              mustBeConnected={props.mustBeConnected}
             />
-            <Show when={historyControl.isOpen() && historyBlockId}>
+            <Show when={props.viewingHistory()}>
               <HistoryOverlay
-                documentId={historyBlockId!}
-                onExit={() => historyControl.close()}
+                documentId={documentId}
+                documentName={documentName()}
+                onExit={() => props.setViewingHistory(false)}
               />
             </Show>
           </div>
@@ -322,7 +320,11 @@ export function Notebook(props: { loroManager: LoroManager }) {
   );
 }
 
-export function InstructionsNotebook(props: { loroManager: LoroManager }) {
+export function InstructionsNotebook(props: {
+  loroManager: LoroManager;
+  viewingHistory: Accessor<boolean>;
+  setViewingHistory: Setter<boolean>;
+}) {
   const setStore = mdStore.set;
 
   let notebookRef!: HTMLDivElement;

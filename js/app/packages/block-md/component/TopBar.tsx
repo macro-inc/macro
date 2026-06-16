@@ -59,12 +59,17 @@ import {
   For,
   on,
   onCleanup,
+  type Setter,
   Show,
 } from 'solid-js';
 import { DispatchAgentButton } from './DispatchAgentMenu';
 import { HISTORY_DRAWER_ID, historyDrawerId } from './History';
 
-export function TopBar(props: { name?: Accessor<string | undefined> } = {}) {
+export function TopBar(props: {
+  name?: Accessor<string | undefined>;
+  viewingHistory?: Accessor<boolean>;
+  setViewingHistory?: Setter<boolean>;
+} = {}) {
   const canEdit = useCanEdit();
   const blockName = useBlockName();
   const blockId = useBlockId();
@@ -161,8 +166,8 @@ export function TopBar(props: { name?: Accessor<string | undefined> } = {}) {
     {
       label: 'History',
       icon: ClockIcon,
-      action: historyControl.toggle,
-      isActive: historyControl.isOpen,
+      action: () => props.setViewingHistory?.(!props.viewingHistory?.()),
+      isActive: props.viewingHistory ?? (() => false),
       condition: () =>
         ENABLE_MARKDOWN_LIVE_COLLABORATION &&
         ENABLE_HISTORY_COMPONENT &&
@@ -278,7 +283,10 @@ export function TopBar(props: { name?: Accessor<string | undefined> } = {}) {
   );
 }
 
-export function InstructionsTopBar() {
+export function InstructionsTopBar(props: {
+  viewingHistory?: Accessor<boolean>;
+  setViewingHistory?: Setter<boolean>;
+} = {}) {
   const canEdit = useCanEdit();
   const historyControl = useDrawerControl(HISTORY_DRAWER_ID);
 
@@ -286,8 +294,8 @@ export function InstructionsTopBar() {
     {
       label: 'History',
       icon: ClockIcon,
-      action: historyControl.toggle,
-      isActive: historyControl.isOpen,
+      action: () => props.setViewingHistory?.(!props.viewingHistory?.()),
+      isActive: props.viewingHistory ?? (() => false),
       condition: () =>
         ENABLE_MARKDOWN_LIVE_COLLABORATION &&
         ENABLE_HISTORY_COMPONENT &&

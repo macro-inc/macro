@@ -1,6 +1,16 @@
+import { useSplitLayout } from '@app/component/split-layout/layout';
+import { SplitToolbarLeft } from '@app/component/split-layout/components/SplitToolbar';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
-import { type HistorySession, syncServiceClient } from '@service-sync/client';
+import { toast } from '@core/component/Toast/Toast';
+import { storageServiceClient } from '@service-storage/client';
+import {
+  type HistorySession,
+  type HistoryVersionId,
+  syncServiceClient,
+} from '@service-sync/client';
+import { Button } from '@ui';
+import GitFork from '@phosphor-icons/core/regular/git-fork.svg?component-solid';
 import type { SerializedEditorState } from 'lexical';
 import { LoroDoc } from 'loro-crdt';
 import {
@@ -26,9 +36,11 @@ async function fetchHistory(
 
 export function HistoryOverlay(props: {
   documentId: string;
+  documentName: string;
   onExit: () => void;
 }) {
   const [history] = createResource(() => props.documentId, fetchHistory);
+  const { insertSplit } = useSplitLayout();
 
   const onKeyDown = (e: KeyboardEvent) => {
     if (e.key !== 'Escape' || e.defaultPrevented) return;
@@ -57,10 +69,15 @@ export function HistoryOverlay(props: {
     return new Date(latest);
   });
 
-  const [committedState] = createResource(
+  const [committed] = createResource(
     // Key on epoch-ms so equal moments don't refetch (Date identity would).
     () => targetAt()?.getTime(),
-    async (tMs): Promise<SerializedEditorState | undefined> => {
+    async (
+      tMs
+    ): Promise<
+      | { state: SerializedEditorState; versionId: HistoryVersionId | null }
+      | undefined
+    > => {
       const maybe = await syncServiceClient.getStateAt({
         documentId: props.documentId,
         tMs,
@@ -70,16 +87,52 @@ export function HistoryOverlay(props: {
         return undefined;
       }
       const doc = new LoroDoc();
-      doc.import(maybe.value);
-      return doc.toJSON() as SerializedEditorState;
+      doc.import(maybe.value.bytes);
+      return {
+        state: doc.toJSON() as SerializedEditorState,
+        versionId: maybe.value.versionId,
+      };
     }
   );
+
+  const [forking, setForking] = createSignal(false);
+  const handleFork = async () => {
+    const current = committed.latest;
+    if (!current || forking()) return;
+    setForking(true);
+    const res = await storageServiceClient.copyDocument({
+      documentId: props.documentId,
+      documentName: `${props.documentName} (forked)`,
+      // The viewed moment's version → a state-only fork (no history copied).
+      syncServiceVersion: current.versionId ?? undefined,
+    });
+    setForking(false);
+    if (res.isErr()) {
+      toast.failure('Failed to fork document');
+      return;
+    }
+    insertSplit({ type: 'md', id: res.value.documentId }, 'fork');
+    props.onExit();
+  };
 
   return (
     <div class="absolute inset-0 z-20">
       <div class="absolute inset-y-0 -inset-x-1 -z-10 bg-surface" />
+      {/* Fork button portalled into the toolbar left, on top of the hamburger. */}
+       <SplitToolbarLeft>
+        <Button
+          variant="active"
+          size="sm"
+          class="order-first"
+          onClick={handleFork}
+          disabled={forking() || !committed.latest}
+        >
+          <GitFork />
+          {forking() ? 'Forking…' : 'Fork'}
+        </Button>
+      </SplitToolbarLeft>
       {/* `.latest` keeps the last rendered state visible while the next loads. */}
-      <Show keyed when={committedState.latest}>
+      <Show keyed when={committed.latest?.state}>
         {(state) => {
           const config = buildConfig('markdown')
             .withMentions()
@@ -99,8 +152,10 @@ export function HistoryOverlay(props: {
       {/* Controls pinned to the viewport so they're reachable on long docs. */}
       <Show when={history()}>
         {(h) => (
-          <div class="fixed inset-x-0 bottom-0 z-30 flex items-center border-edge border-t bg-active px-3 pt-4 pb-3">
-            <HistoryScrubber sessions={h().sessions} onSelect={setSelected} />
+          <div class="fixed inset-x-0 bottom-0 z-30 flex items-center gap-3 border-edge border-t bg-active px-3 pt-4 pb-3 ">
+            <div class="flex-1 min-w-0">
+              <HistoryScrubber sessions={h().sessions} onSelect={setSelected} />
+            </div>
           </div>
         )}
       </Show>
