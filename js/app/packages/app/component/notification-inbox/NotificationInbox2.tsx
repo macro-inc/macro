@@ -256,7 +256,7 @@ export function NotificationInbox2() {
     if (!item) return undefined;
     return previewEntity(item);
   };
-  const previewVisible = () => !!selectedItem();
+  const previewVisible = () => true;
 
   createEffect(() => {
     const [getPreview, setPreview] = panel.previewState;
@@ -273,7 +273,7 @@ export function NotificationInbox2() {
         >
           <div
             class={cn(
-              'max-w-md size-full min-w-0 min-h-0',
+              'size-full min-w-0 min-h-0',
               previewVisible() && 'border-r border-edge-muted'
             )}
           >
@@ -284,30 +284,28 @@ export function NotificationInbox2() {
             />
           </div>
         </Resize.Panel>
-        <Show when={previewVisible()}>
-          <Resize.Panel
-            id="notification-inbox-preview"
-            minSize={300}
-            target={{ kind: 'percent', percent: 70 }}
+        <Resize.Panel
+          id="notification-inbox-preview"
+          minSize={300}
+          target={{ kind: 'percent', percent: 70 }}
+        >
+          <Show
+            fallback={
+              <div class="flex size-full items-center justify-center text-sm text-ink-extra-muted">
+                Select a notification to preview it
+              </div>
+            }
+            when={selectedEntity()}
           >
-            <Show
-              fallback={
-                <div class="flex size-full items-center justify-center text-sm text-ink-extra-muted">
-                  Preview unavailable
-                </div>
-              }
-              when={selectedEntity()}
-            >
-              {(entity) => (
-                <PreviewPanel
-                  orchestrator={orchestrator}
-                  selectedEntity={entity()}
-                  splitPanelContext={panel}
-                />
-              )}
-            </Show>
-          </Resize.Panel>
-        </Show>
+            {(entity) => (
+              <PreviewPanel
+                orchestrator={orchestrator}
+                selectedEntity={entity()}
+                splitPanelContext={panel}
+              />
+            )}
+          </Show>
+        </Resize.Panel>
       </Resize.Zone>
     </div>
   );
