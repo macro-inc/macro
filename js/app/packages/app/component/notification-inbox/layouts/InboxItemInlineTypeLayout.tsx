@@ -340,7 +340,7 @@ function ContentText(props: { content: string }) {
   const markdown = shouldRenderMarkdownContent(type);
 
   return (
-    <span class="min-w-0 max-w-[75%] truncate">
+    <span class="min-w-0 truncate">
       <Show when={markdown()} fallback={props.content}>
         <StaticMarkdown
           markdown={props.content}
@@ -428,7 +428,7 @@ function Description() {
           <InboxItem.Description timestamp={false}>
             <Show when={emailSubject()}>
               {(subject) => (
-                <span class="min-w-0 max-w-[75%] truncate text-xs text-ink-muted/70">
+                <span class="min-w-0 truncate text-xs text-ink-muted/70">
                   {subject()}
                 </span>
               )}
@@ -436,7 +436,7 @@ function Description() {
           </InboxItem.Description>
           <Show when={item().content}>
             {(content) => (
-              <span class="block min-w-0 max-w-[75%] truncate text-xs text-ink-muted/70">
+              <span class="block min-w-0 truncate text-xs text-ink-muted/70">
                 <ContentText content={content()} />
               </span>
             )}
