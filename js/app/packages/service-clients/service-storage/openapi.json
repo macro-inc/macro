@@ -594,6 +594,132 @@
         }
       }
     },
+    "/bots/{bot_id}/channels": {
+      "get": {
+        "tags": ["bots"],
+        "summary": "Handler for `GET /bots/{bot_id}/channels`.",
+        "operationId": "list_bot_channels",
+        "parameters": [
+          {
+            "name": "bot_id",
+            "in": "path",
+            "description": "Bot ID",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/BotId"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/BotChannel"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/bots/{bot_id}/channels/{channel_id}": {
+      "delete": {
+        "tags": ["bots"],
+        "summary": "Handler for `DELETE /bots/{bot_id}/channels/{channel_id}`.",
+        "operationId": "remove_bot_from_channel_by_bot",
+        "parameters": [
+          {
+            "name": "bot_id",
+            "in": "path",
+            "description": "Bot ID",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/BotId"
+            }
+          },
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/call/record/preview": {
       "post": {
         "tags": ["call::inbound::axum_router"],
@@ -10148,6 +10274,36 @@
             "description": "Update timestamp."
           }
         }
+      },
+      "BotChannel": {
+        "type": "object",
+        "description": "Channel containing a bot.",
+        "required": ["channel_id", "channel_type", "joined_at"],
+        "properties": {
+          "channel_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Channel id."
+          },
+          "channel_type": {
+            "$ref": "#/components/schemas/BotChannelType",
+            "description": "Channel type."
+          },
+          "joined_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when the bot joined the channel."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "Channel display name."
+          }
+        }
+      },
+      "BotChannelType": {
+        "type": "string",
+        "description": "Channel type for a channel containing a bot.",
+        "enum": ["public", "private", "direct_message", "team"]
       },
       "BotId": {
         "type": "string"
