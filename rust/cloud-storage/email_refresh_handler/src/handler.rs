@@ -58,7 +58,7 @@ async fn send_health_check_messages(ctx: &context::Context) -> Result<(), Error>
         WHERE
             is_sync_active = TRUE
             AND provider = $1
-            AND (abs(hashtext(id::text)) % $2::int4) = $3::int4
+            AND (abs(hashtext(id::text)::bigint) % $2::int4) = $3::int4
         "#,
         provider_filter as _,
         interval_hours,
