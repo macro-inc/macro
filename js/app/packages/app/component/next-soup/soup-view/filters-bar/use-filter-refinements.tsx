@@ -411,11 +411,11 @@ export function useFilterRefinements() {
       );
     }
 
-    // Task statuses render as a single always-present chip so the active
-    // filtering (open tabs default to Not Started / In Progress / In Review)
-    // is visible rather than implied. Plain checkboxes toggle a status,
-    // unchecking the last enabled one snaps back to the tab default, and
-    // clearing the chip reveals every status.
+    // Task statuses render as a single chip so the active filtering (open tabs
+    // default to Not Started / In Progress / In Review) is visible rather than
+    // implied. Plain checkboxes toggle a status; the selection can never be
+    // empty — unchecking the last one (like clearing the chip) re-enables every
+    // status, which then reads as "no filter" and drops the chip.
     const pushTaskStatusChip = () => {
       if (view !== 'tasks') return;
       const statusCategory = viewCategories().find((c) => c.id === 'status');
@@ -439,28 +439,12 @@ export function useFilterRefinements() {
       const key = 'status';
       seenKeys.add(key);
 
-      const defaultStatusIds = (preset?.clientFilters.or ?? []).filter((id) =>
-        allOptions.some((o) => o.id === id)
-      ) as FilterID[];
-
       const setStatus = (id: string, active: boolean) => {
         soup.predicates.toggle({ or: [id as FilterID] });
         const query = getFilterQuery(id);
         if (!query) return;
         if (active) queryFilters.remove(query);
         else queryFilters.add(query);
-      };
-
-      const resetToDefault = () => {
-        batch(() => {
-          const current = getActiveValues().map((v) => v.id);
-          for (const id of current) {
-            if (!defaultStatusIds.includes(id as FilterID)) setStatus(id, true);
-          }
-          for (const id of defaultStatusIds) {
-            if (!current.includes(id)) setStatus(id, false);
-          }
-        });
       };
 
       filters.push(
@@ -474,8 +458,10 @@ export function useFilterRefinements() {
           isValueActive: (id) => soup.predicates.isActive(id),
           onToggleValue: (id) => {
             const active = soup.predicates.isActive(id);
+            // Never allow an empty selection: unchecking the last enabled
+            // status re-enables all of them instead.
             if (active && getActiveValues().length === 1) {
-              resetToDefault();
+              batch(() => enableAllTaskStatuses());
               return;
             }
             batch(() => setStatus(id, active));
