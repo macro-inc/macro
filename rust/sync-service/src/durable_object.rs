@@ -283,27 +283,10 @@ async fn bump_alarm(state: &State) -> Result<()> {
 }
 
 impl DocumentSyncSession {
-    pub fn env(&self) -> &Env {
-        &self.env
-    }
-
-    /// Spawn a fire-and-forget task that the DO will keep alive past the
-    /// current request, but won't block subsequent requests on. Use for
-    /// background writes (e.g. blame, snapshot push) that mustn't be cancelled
-    /// when the handler returns.
-    pub fn wait_until<F>(&self, future: F)
-    where
-        F: std::future::Future<Output = ()> + 'static,
-    {
-        self.state.wait_until(future);
-    }
-
     pub fn get_websockets(&self) -> Vec<WebSocket> {
         self.state.get_websockets()
     }
 
-    /// Buffer blame events in memory. Cheap synchronous push; events are
-    /// flushed to D1 in a single `batch()` from the alarm tick.
     pub fn push_blame_events(&self, events: Vec<crate::d1::BlameEvent>) {
         if events.is_empty() {
             return;
@@ -596,9 +579,6 @@ impl DocumentSyncSession {
         })
     }
 
-    /// Return who last edited the given Lexical node and when. Joins blame
-    /// with peer_user_map in D1 so user_id (MacroId) comes back resolved.
-    /// Returns 404 if the node has no recorded edits.
     async fn blame_handler(&self, node_id: Option<&str>) -> Result<Response> {
         let node_id = node_id.ok_or_else(|| Error::from("missing node_id"))?;
         let document_id = self.document_id().await?.to_string();
