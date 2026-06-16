@@ -48,7 +48,7 @@ export function InboxSelector() {
       <SearchableMultiSelect
         options={picker.options}
         activeIds={picker.activeIds}
-        onChange={picker.onChange}
+        onChange={(ids) => (ids.length ? picker.onChange(ids) : picker.reset())}
         onOnly={picker.selectOnly}
         placeholder="Search inboxes..."
         preserveOrder

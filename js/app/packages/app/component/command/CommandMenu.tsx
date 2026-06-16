@@ -7,6 +7,11 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { TabsInset } from '@core/component/TabsInset';
 import { itemToBlockName } from '@core/constant/allBlocks';
 import { getActiveCommandsFromScope } from '@core/hotkey/getCommands';
+import {
+  hotkeyScopeTree,
+  setActiveScope,
+  setPressedKeys,
+} from '@core/hotkey/state';
 import type { RegisterHotkeyReturn } from '@core/hotkey/types';
 import { runCommand } from '@core/hotkey/utils';
 import { debouncedDependent } from '@core/util/debounce';
@@ -200,6 +205,15 @@ export function CommandMenuInner(props: {
 
       // Check if this is a multi-stage command
       if (command.activateCommandScopeId) {
+        const commandScope = hotkeyScopeTree.get(
+          command.activateCommandScopeId
+        );
+        if (commandScope) {
+          commandScope.parentScopeId = hotkeyScope;
+          setPressedKeys(new Set<string>());
+          setActiveScope(commandScope.scopeId);
+        }
+
         // Get commands from the nested scope
         const nestedCommands = getActiveCommandsFromScope(
           command.activateCommandScopeId,
@@ -217,6 +231,9 @@ export function CommandMenuInner(props: {
       }
 
       // Regular command - close and run
+      if (CommandState.commandScopeCommands().length > 0) {
+        setActiveScope(hotkeyScope);
+      }
       CommandState.close();
       CommandState.setQuery('');
       runCommand(command);
@@ -383,6 +400,7 @@ export function CommandMenuInner(props: {
       if (CommandState.commandScopeCommands().length > 0) {
         CommandState.clearCommandScopeCommands();
         CommandState.setSelectedIndex(0);
+        setActiveScope(hotkeyScope);
         return true;
       }
       // Entity action mode and normal mode both close the menu
@@ -407,6 +425,7 @@ export function CommandMenuInner(props: {
       if (CommandState.commandScopeCommands().length > 0) {
         CommandState.clearCommandScopeCommands();
         CommandState.setSelectedIndex(0);
+        setActiveScope(hotkeyScope);
         return true;
       }
       // Entity action mode doesn't have "back" - just close with escape

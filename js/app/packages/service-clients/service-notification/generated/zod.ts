@@ -551,6 +551,24 @@ export const listTypedNotificationsResponse = zod
                     .object({
                       content: zod
                         .object({
+                          emailAddress: zod
+                            .string()
+                            .describe(
+                              'The address of the inbox that needs to be reconnected.'
+                            ),
+                        })
+                        .describe(
+                          "Metadata for a notification that a linked inbox's grant has died and the\ninbox must be reconnected. Fanned out to the inbox owner and every delegate,\nsince any of them holding the Google grant can restore sync."
+                        ),
+                      tag: zod.enum(['inbox_reauth_required']),
+                    })
+                    .describe(
+                      "A linked inbox's grant died and must be reconnected."
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
                           invitedBy: zod
                             .string()
                             .describe('The user who sent the invitation'),
@@ -1768,6 +1786,24 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                     .object({
                       content: zod
                         .object({
+                          emailAddress: zod
+                            .string()
+                            .describe(
+                              'The address of the inbox that needs to be reconnected.'
+                            ),
+                        })
+                        .describe(
+                          "Metadata for a notification that a linked inbox's grant has died and the\ninbox must be reconnected. Fanned out to the inbox owner and every delegate,\nsince any of them holding the Google grant can restore sync."
+                        ),
+                      tag: zod.enum(['inbox_reauth_required']),
+                    })
+                    .describe(
+                      "A linked inbox's grant died and must be reconnected."
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
                           invitedBy: zod
                             .string()
                             .describe('The user who sent the invitation'),
@@ -2979,6 +3015,24 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                     .object({
                       content: zod
                         .object({
+                          emailAddress: zod
+                            .string()
+                            .describe(
+                              'The address of the inbox that needs to be reconnected.'
+                            ),
+                        })
+                        .describe(
+                          "Metadata for a notification that a linked inbox's grant has died and the\ninbox must be reconnected. Fanned out to the inbox owner and every delegate,\nsince any of them holding the Google grant can restore sync."
+                        ),
+                      tag: zod.enum(['inbox_reauth_required']),
+                    })
+                    .describe(
+                      "A linked inbox's grant died and must be reconnected."
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
                           invitedBy: zod
                             .string()
                             .describe('The user who sent the invitation'),
@@ -4171,6 +4225,22 @@ export const getTypedNotificationByIdResponse = zod
               tag: zod.enum(['new_email']),
             })
             .describe('A new email has been sent to the user.'),
+          zod
+            .object({
+              content: zod
+                .object({
+                  emailAddress: zod
+                    .string()
+                    .describe(
+                      'The address of the inbox that needs to be reconnected.'
+                    ),
+                })
+                .describe(
+                  "Metadata for a notification that a linked inbox's grant has died and the\ninbox must be reconnected. Fanned out to the inbox owner and every delegate,\nsince any of them holding the Google grant can restore sync."
+                ),
+              tag: zod.enum(['inbox_reauth_required']),
+            })
+            .describe("A linked inbox's grant died and must be reconnected."),
           zod
             .object({
               content: zod

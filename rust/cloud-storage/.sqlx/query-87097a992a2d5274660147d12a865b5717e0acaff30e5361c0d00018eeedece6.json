@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        INSERT INTO email_backfill_jobs (id, link_id, fusionauth_user_id, threads_requested_limit, status)\n        VALUES ($1, $2, $3, $4, 'Init')\n        RETURNING \n            id, \n            link_id, \n            fusionauth_user_id,\n            threads_requested_limit,\n            total_threads,\n            threads_retrieved_count,\n            status as \"status: db::backfill::BackfillJobStatus\",\n            created_at, \n            updated_at\n        ",
+  "query": "\n        INSERT INTO email_backfill_jobs (id, link_id, fusionauth_user_id, threads_requested_limit, status)\n        VALUES ($1, $2, $3, $4, 'Init')\n        ON CONFLICT (link_id) WHERE status IN ('Init', 'InProgress') DO NOTHING\n        RETURNING\n            id,\n            link_id,\n            fusionauth_user_id,\n            threads_requested_limit,\n            total_threads,\n            threads_retrieved_count,\n            status as \"status: db::backfill::BackfillJobStatus\",\n            created_at,\n            updated_at\n        ",
   "describe": {
     "columns": [
       {
@@ -82,5 +82,5 @@
       false
     ]
   },
-  "hash": "ea7622c671b053d5519e2fb2a996372002b31d070e2cbfe2d58ae763bc04b7c6"
+  "hash": "87097a992a2d5274660147d12a865b5717e0acaff30e5361c0d00018eeedece6"
 }

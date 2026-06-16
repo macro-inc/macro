@@ -13,6 +13,10 @@ use serde_json::Value;
 use std::fmt::Display;
 
 #[doc(hidden)]
+pub use macro_env as __macro_env;
+#[doc(hidden)]
+pub use remote_env_var as __remote_env_var;
+#[doc(hidden)]
 pub use serde as __serde;
 use std::str::FromStr;
 

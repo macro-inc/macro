@@ -15,4 +15,5 @@ config:
   mcp-server:macro_db_secret_key: macro-db-prod
   mcp-server:sync_service_auth_key: sync-service-key-prod
   mcp-server:anthropic_api_key: anthropic-api-key
+  mcp-server:openai_api_key: openai-key
   datadog:validate: "false"

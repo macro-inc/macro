@@ -47,21 +47,9 @@ const OPEN_ROUTER_API_KEY = aws.secretsmanager
   })
   .apply((secret) => secret.secretString);
 
-const OPENAI_API_KEY = aws.secretsmanager
-  .getSecretVersionOutput({
-    secretId: config.require('openai_api_key'),
-  })
-  .apply((secret) => secret.secretString);
-
 const XAI_API_KEY = aws.secretsmanager
   .getSecretVersionOutput({
     secretId: config.require('xai-api-key'),
-  })
-  .apply((secret) => secret.secretString);
-
-const ANTHROPIC_API_KEY = aws.secretsmanager
-  .getSecretVersionOutput({
-    secretId: config.require('anthropic_api_key'),
   })
   .apply((secret) => secret.secretString);
 
@@ -167,14 +155,6 @@ const service = new AgentScheduleService(`agent-schedule-service-${stack}`, {
     {
       name: 'OPEN_ROUTER_API_KEY',
       value: pulumi.interpolate`${OPEN_ROUTER_API_KEY}`,
-    },
-    {
-      name: 'OPENAI_API_KEY',
-      value: pulumi.interpolate`${OPENAI_API_KEY}`,
-    },
-    {
-      name: 'ANTHROPIC_API_KEY',
-      value: pulumi.interpolate`${ANTHROPIC_API_KEY}`,
     },
     {
       name: 'XAI_API_KEY',

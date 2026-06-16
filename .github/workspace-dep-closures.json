@@ -1125,6 +1125,8 @@
       "macro_auth",
       "macro_aws_config",
       "macro_axum_utils",
+      "macro_config",
+      "macro_config_derive",
       "macro_cors",
       "macro_db_client",
       "macro_entrypoint",
@@ -2157,6 +2159,9 @@
     "macro_config": [
       "macro_config",
       "macro_config_derive",
+      "macro_env",
+      "macro_env_var",
+      "remote_env_var",
       "workspace-hack"
     ],
     "macro_config_derive": [

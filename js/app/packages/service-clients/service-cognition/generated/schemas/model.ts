@@ -7,14 +7,14 @@ import { z } from 'zod';
 export type Model = (typeof Model)[keyof typeof Model];
 
 export const Model = {
-  'claude-opus-4-7': 'claude-opus-4-7',
+  'claude-opus-4-8': 'claude-opus-4-8',
   'claude-haiku-4-5': 'claude-haiku-4-5',
   'gpt-5.5': 'gpt-5.5',
   'gpt-5-mini': 'gpt-5-mini',
 } as const;
 
 export const AllModels: Model[] = [
-  'claude-opus-4-7',
+  'claude-opus-4-8',
   'claude-haiku-4-5',
   'gpt-5.5',
   'gpt-5-mini',

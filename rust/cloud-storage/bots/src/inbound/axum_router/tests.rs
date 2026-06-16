@@ -1,6 +1,7 @@
 use super::*;
 use crate::domain::models::{
-    AuthenticatedBot, CreateChannelScopedBotRequest, CreateChannelScopedBotResponse,
+    AuthenticatedBot, BotChannel, BotChannelType, CreateChannelScopedBotRequest,
+    CreateChannelScopedBotResponse,
 };
 use crate::{domain::service::BotServiceImpl, outbound::pg_bots_repo::PgBotsRepo};
 use axum::{
@@ -35,16 +36,24 @@ enum TestBotMode {
 #[derive(Clone)]
 struct TestBotService {
     mode: TestBotMode,
+    bot_channels: Vec<BotChannel>,
     add_calls: Arc<AtomicUsize>,
     remove_calls: Arc<AtomicUsize>,
+    list_bot_channels_calls: Arc<AtomicUsize>,
 }
 
 impl TestBotService {
     fn new(mode: TestBotMode) -> Self {
+        Self::with_bot_channels(mode, Vec::new())
+    }
+
+    fn with_bot_channels(mode: TestBotMode, bot_channels: Vec<BotChannel>) -> Self {
         Self {
             mode,
+            bot_channels,
             add_calls: Arc::new(AtomicUsize::new(0)),
             remove_calls: Arc::new(AtomicUsize::new(0)),
+            list_bot_channels_calls: Arc::new(AtomicUsize::new(0)),
         }
     }
 
@@ -121,6 +130,16 @@ impl BotService for TestBotService {
     ) -> Result<(), BotError> {
         self.remove_calls.fetch_add(1, Ordering::SeqCst);
         self.result()
+    }
+
+    async fn list_bot_channels(
+        &self,
+        _caller: MacroUserIdStr<'static>,
+        _bot_id: BotId,
+    ) -> Result<Vec<BotChannel>, BotError> {
+        self.list_bot_channels_calls.fetch_add(1, Ordering::SeqCst);
+        self.result()?;
+        Ok(self.bot_channels.clone())
     }
 
     async fn list_channel_bots(&self, _channel_id: Uuid) -> Result<Vec<Bot>, BotError> {
@@ -363,6 +382,106 @@ fn macro_user_id(value: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(value.to_string()).expect("valid macro user id")
 }
 
+fn bot_channel(channel_id: Uuid) -> BotChannel {
+    BotChannel {
+        channel_id,
+        name: Some("alarms".to_string()),
+        channel_type: BotChannelType::Private,
+        joined_at: chrono::Utc::now(),
+    }
+}
+
+async fn read_bot_channels(response: axum::response::Response) -> Vec<BotChannel> {
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    serde_json::from_slice(&body).unwrap()
+}
+
+#[tokio::test]
+async fn bot_owner_can_list_bot_channels_via_http() {
+    let channel_id = Uuid::new_v4();
+    let service = TestBotService::with_bot_channels(TestBotMode::Ok, vec![bot_channel(channel_id)]);
+    let bot_id = BotId::from_uuid(Uuid::new_v4());
+    let request = Request::builder()
+        .method("GET")
+        .uri(format!("/bots/{bot_id}/channels"))
+        .body(Body::empty())
+        .unwrap();
+
+    let response = router(service.clone(), EntityParticipantRole::Member)
+        .oneshot(request)
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let channels = read_bot_channels(response).await;
+    assert_eq!(channels.len(), 1);
+    assert_eq!(channels[0].channel_id, channel_id);
+    assert_eq!(channels[0].name.as_deref(), Some("alarms"));
+    assert_eq!(channels[0].channel_type, BotChannelType::Private);
+    assert_eq!(service.list_bot_channels_calls.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn bot_listing_requires_bot_usability() {
+    let service = TestBotService::new(TestBotMode::Unauthorized);
+    let bot_id = BotId::from_uuid(Uuid::new_v4());
+    let request = Request::builder()
+        .method("GET")
+        .uri(format!("/bots/{bot_id}/channels"))
+        .body(Body::empty())
+        .unwrap();
+
+    let response = router(service.clone(), EntityParticipantRole::Member)
+        .oneshot(request)
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(service.list_bot_channels_calls.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn bot_owner_can_remove_bot_from_channel_via_bot_route_without_channel_admin() {
+    let service = TestBotService::new(TestBotMode::Ok);
+    let channel_id = Uuid::new_v4();
+    let bot_id = BotId::from_uuid(Uuid::new_v4());
+    let request = Request::builder()
+        .method("DELETE")
+        .uri(format!("/bots/{bot_id}/channels/{channel_id}"))
+        .body(Body::empty())
+        .unwrap();
+
+    let response = router(service.clone(), EntityParticipantRole::Member)
+        .oneshot(request)
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    assert_eq!(service.remove_calls.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn bot_remove_channel_requires_bot_usability() {
+    let service = TestBotService::new(TestBotMode::Unauthorized);
+    let channel_id = Uuid::new_v4();
+    let bot_id = BotId::from_uuid(Uuid::new_v4());
+    let request = Request::builder()
+        .method("DELETE")
+        .uri(format!("/bots/{bot_id}/channels/{channel_id}"))
+        .body(Body::empty())
+        .unwrap();
+
+    let response = router(service.clone(), EntityParticipantRole::Member)
+        .oneshot(request)
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(service.remove_calls.load(Ordering::SeqCst), 1);
+}
+
 #[tokio::test]
 async fn channel_member_cannot_add_bot_to_channel() {
     let service = TestBotService::new(TestBotMode::Ok);
@@ -447,6 +566,96 @@ async fn channel_admin_still_needs_bot_usability_to_remove_bot() {
 
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     assert_eq!(service.remove_calls.load(Ordering::SeqCst), 1);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn bot_owner_can_list_and_remove_bot_channels_via_bot_routes(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    const BOT_OWNER_ID: &str = "macro|bot-owner@example.com";
+    const CHANNEL_ADMIN_ID: &str = "macro|channel-admin@example.com";
+    let channel_id = Uuid::new_v4();
+
+    insert_user(&pool, BOT_OWNER_ID).await?;
+    insert_user(&pool, CHANNEL_ADMIN_ID).await?;
+    insert_private_channel_with_admin(&pool, channel_id, CHANNEL_ADMIN_ID).await?;
+
+    let bot_service = BotServiceImpl::new(PgBotsRepo::new(pool.clone()));
+    let bot = bot_service
+        .create_bot(
+            macro_user_id(BOT_OWNER_ID),
+            CreateBotRequest {
+                team_id: None,
+                name: "Datadog Alerts".to_string(),
+                handle: "bot-route-alerts".to_string(),
+                description: Some("Posts alarm notifications".to_string()),
+                avatar_url: None,
+            },
+        )
+        .await?;
+
+    bot_service
+        .add_bot_to_channel(macro_user_id(BOT_OWNER_ID), channel_id, bot.id)
+        .await?;
+
+    let bot_principal_id = bot.id.to_storage_string();
+    let router = real_router(pool.clone(), BOT_OWNER_ID);
+    let list_request = Request::builder()
+        .method("GET")
+        .uri(format!("/bots/{}/channels", bot.id))
+        .body(Body::empty())
+        .unwrap();
+
+    let list_response = router.clone().oneshot(list_request).await.unwrap();
+    assert_eq!(list_response.status(), StatusCode::OK);
+    let channels = read_bot_channels(list_response).await;
+    assert_eq!(channels.len(), 1);
+    assert_eq!(channels[0].channel_id, channel_id);
+    assert_eq!(channels[0].name.as_deref(), Some("alarms"));
+    assert_eq!(channels[0].channel_type, BotChannelType::Private);
+
+    let remove_request = Request::builder()
+        .method("DELETE")
+        .uri(format!("/bots/{}/channels/{channel_id}", bot.id))
+        .body(Body::empty())
+        .unwrap();
+
+    let remove_response = router.clone().oneshot(remove_request).await.unwrap();
+    assert_eq!(remove_response.status(), StatusCode::NO_CONTENT);
+
+    let left_at: Option<chrono::DateTime<chrono::Utc>> = sqlx::query_scalar(
+        r#"
+        SELECT left_at
+        FROM comms_channel_participants
+        WHERE channel_id = $1 AND user_id = $2
+        "#,
+    )
+    .bind(channel_id)
+    .bind(&bot_principal_id)
+    .fetch_one(&pool)
+    .await?;
+    assert!(left_at.is_some());
+
+    let list_request = Request::builder()
+        .method("GET")
+        .uri(format!("/bots/{}/channels", bot.id))
+        .body(Body::empty())
+        .unwrap();
+
+    let list_response = router.clone().oneshot(list_request).await.unwrap();
+    assert_eq!(list_response.status(), StatusCode::OK);
+    assert!(read_bot_channels(list_response).await.is_empty());
+
+    let missing_remove_request = Request::builder()
+        .method("DELETE")
+        .uri(format!("/bots/{}/channels/{channel_id}", bot.id))
+        .body(Body::empty())
+        .unwrap();
+
+    let missing_remove_response = router.oneshot(missing_remove_request).await.unwrap();
+    assert_eq!(missing_remove_response.status(), StatusCode::NOT_FOUND);
+
+    Ok(())
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

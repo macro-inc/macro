@@ -12,6 +12,7 @@
         "@pulumi/docker-build": "^0.0.15",
         "@pulumi/pulumi": "^3.209.0",
         "@pulumi/tls": "*",
+        "@pulumiverse/doppler": "^0.9.0",
         "dotenv": "^17.2.3",
         "minimist": "^1.2.8",
       },
@@ -105,6 +106,10 @@
     },
     "stacks/document-text-extractor": {
       "name": "document-text-extractor-stack",
+      "version": "0.0.0",
+    },
+    "stacks/doppler-projects": {
+      "name": "doppler-projects-stack",
       "version": "0.0.0",
     },
     "stacks/email-service": {
@@ -396,6 +401,8 @@
 
     "@pulumi/tls": ["@pulumi/tls@5.1.1", "", { "dependencies": { "@pulumi/pulumi": "^3.142.0" } }, "sha512-XSIXU1z/aaDFeQWTnjgHhbDuxEl9k5661mMfVu3DEXNDWUJh96r4qC3yYjxKsRRuuErrkZhWqrkSwi2QEnTrUA=="],
 
+    "@pulumiverse/doppler": ["@pulumiverse/doppler@0.9.0", "", { "dependencies": { "@pulumi/pulumi": "^3.0.0" } }, "sha512-xPBYujdP41N3p/fpZwjtsHcTNBN8DZoAYQ+2mNpIg6hx/sJVaqDJuvpZdoIqvlLEMeuq3SXICUoU/9G4eXemHg=="],
+
     "@sigstore/bundle": ["@sigstore/bundle@2.3.2", "", { "dependencies": { "@sigstore/protobuf-specs": "^0.3.2" } }, "sha512-wueKWDk70QixNLB363yHc2D2ItTgYiMTdPwK8D9dKQMR3ZQ0c35IxP5xnwQ8cNLoCgCRcHf14kE+CLIvNX1zmA=="],
 
     "@sigstore/core": ["@sigstore/core@1.1.0", "", {}, "sha512-JzBqdVIyqm2FRQCulY6nbQzMpJJpSiJ8XXWMhtOX9eKgaXXpfNOF53lzQEjIydlStnd/eFtuC1dW4VYdD93oRg=="],
@@ -627,6 +634,8 @@
     "document-storage-stack": ["document-storage-stack@workspace:stacks/document-storage"],
 
     "document-text-extractor-stack": ["document-text-extractor-stack@workspace:stacks/document-text-extractor"],
+
+    "doppler-projects-stack": ["doppler-projects-stack@workspace:stacks/doppler-projects"],
 
     "dotenv": ["dotenv@17.2.3", "", {}, "sha512-JVUnt+DUIzu87TABbhPmNfVdBDt18BLOWjMUFJMSi/Qqg7NTYtabbvSNJGOJ7afbRuv9D/lngizHtP7QyLQ+9w=="],
 

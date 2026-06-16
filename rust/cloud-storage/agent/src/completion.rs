@@ -1,68 +1,52 @@
 /// One-shot completion — send a prompt and get a string response.
-use crate::model::{AgentModel, ModelProvider};
-use rig_core::client::{CompletionClient, ProviderClient};
+use crate::model::router::{AllModelsRouter, RoutedModel};
+use crate::model::types::Model;
+use rig_core::client::ProviderClient;
 use rig_core::completion::{CompletionModel, Prompt};
 use rig_core::message::Message;
 use rig_core::providers::{anthropic, openai};
+use std::sync::Arc;
+
+/// Build a router over provider clients from the environment.
+///
+/// `ANTHROPIC_API_KEY` and `OPENAI_API_KEY` are required.
+fn env_router() -> anyhow::Result<AllModelsRouter> {
+    let anthropic = Arc::new(anthropic::Client::from_env()?);
+    let openai = Arc::new(openai::Client::from_env()?);
+    Ok(AllModelsRouter::new(anthropic, openai))
+}
 
 /// Send a system prompt + user message and return the model's text response.
 ///
 /// This is the simple, non-streaming path for one-shot tasks like
-/// summarization.
-#[tracing::instrument(skip(system_prompt, user_message), err)]
-pub async fn complete(
-    model: AgentModel,
+/// summarization. `model` is anything stringifiable to an api id — an
+/// [`AgentModel`](crate::AgentModel) or a raw string from the frontend.
+#[tracing::instrument(skip(model, system_prompt, user_message), err)]
+pub async fn complete<M: ToString>(
+    model: M,
     system_prompt: &str,
     user_message: &str,
 ) -> anyhow::Result<String> {
-    match model.provider() {
-        ModelProvider::Anthropic => {
-            let client = anthropic::Client::from_env()?;
-            prompt_once(
-                client.completion_model(model.api_id()),
-                system_prompt,
-                user_message,
-            )
-            .await
-        }
-        ModelProvider::OpenAi => {
-            let client = openai::Client::from_env()?;
-            prompt_once(
-                client.completion_model(model.api_id()),
-                system_prompt,
-                user_message,
-            )
-            .await
-        }
+    match env_router()?.route_or_default(&model.to_string()) {
+        RoutedModel::Anthropic(m) => prompt_once(m.completion(), system_prompt, user_message).await,
+        RoutedModel::OpenAi(m) => prompt_once(m.completion(), system_prompt, user_message).await,
     }
 }
 
 /// Send a system prompt + conversation history and return the model's text
 /// response.
-#[tracing::instrument(skip(system_prompt, messages), err)]
-pub async fn complete_with_history(
-    model: AgentModel,
+#[tracing::instrument(skip(model, system_prompt, messages), err)]
+pub async fn complete_with_history<M: ToString>(
+    model: M,
     system_prompt: &str,
     messages: Vec<Message>,
 ) -> anyhow::Result<String> {
-    match model.provider() {
-        ModelProvider::Anthropic => {
-            let client = anthropic::Client::from_env()?;
-            prompt_with_history(
-                client.completion_model(model.api_id()),
-                system_prompt,
-                messages,
-            )
-            .await
+    match env_router()?.route_or_default(&model.to_string()) {
+        RoutedModel::Anthropic(m) => {
+            prompt_with_history(m.completion(), system_prompt, messages).await
         }
-        ModelProvider::OpenAi => {
-            let client = openai::Client::from_env()?;
-            prompt_with_history(
-                client.completion_model(model.api_id()),
-                system_prompt,
-                messages,
-            )
-            .await
+        RoutedModel::OpenAi(m) => {
+            prompt_with_history(m.completion(), system_prompt, messages).await
         }
     }
 }

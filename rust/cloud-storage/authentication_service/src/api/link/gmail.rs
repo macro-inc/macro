@@ -6,6 +6,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use macro_middleware::tracking::ClientIp;
+use macro_middleware::user_permissions::attach_user_permissions::PermissionsExtractor;
 use model::response::ErrorResponse;
 use model_user::axum_extractor::MacroUserExtractor;
 use roles_and_permissions::domain::model::PermissionId;
@@ -90,24 +91,17 @@ pub(crate) struct InitGmailLinkQueryParams {
             (status = 500, body=ErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, ip_context, user_context), fields(client_ip=%ip_context, user_id=%user_context.user_context.user_id, fusion_user_id=%user_context.user_context.fusion_user_id), err)]
+#[tracing::instrument(skip(ctx, ip_context, user_context, permissions), fields(client_ip=%ip_context, user_id=%user_context.user_context.user_id, fusion_user_id=%user_context.user_context.fusion_user_id), err)]
 pub async fn init_gmail_link_handler(
     State(ctx): State<ApiContext>,
     query: Query<InitGmailLinkQueryParams>,
     ip_context: ClientIp,
     user_context: MacroUserExtractor,
+    PermissionsExtractor(permissions): PermissionsExtractor,
 ) -> Result<Json<InitGmailLinkResponse>, InitGmailLinkError> {
     let Query(InitGmailLinkQueryParams { original_url }) = query;
 
-    let has_professional_access =
-        user_context
-            .user_context
-            .permissions
-            .as_ref()
-            .is_some_and(|permissions| {
-                permissions.contains(&PermissionId::ReadProfessionalFeatures.to_string())
-            });
-    if !has_professional_access {
+    if !permissions.contains(&PermissionId::ReadProfessionalFeatures.to_string()) {
         return Err(InitGmailLinkError::PaymentRequired);
     }
 

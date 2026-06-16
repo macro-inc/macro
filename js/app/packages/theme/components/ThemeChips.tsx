@@ -14,12 +14,12 @@ const sizeStyles: Record<
   }
 > = {
   md: {
-    root: 'gap-2 p-2',
+    root: 'gap-2 p-2 rounded-sm',
     accent: 'size-[13px]',
     icon: 'size-[18px]',
   },
   sm: {
-    root: 'gap-1 p-[3px]',
+    root: 'gap-1 py-[3px] px-[5px] rounded-md',
     accent: 'size-[9px]',
     icon: 'size-3',
   },
@@ -54,7 +54,7 @@ export function ThemeChips(props: { theme: ThemeV2; size?: ThemeChipsSize }) {
   return (
     <span
       class={cn(
-        'inline-flex items-center rounded-sm border border-edge-muted',
+        'inline-flex items-center border border-edge-muted',
         styles().root
       )}
       style={{

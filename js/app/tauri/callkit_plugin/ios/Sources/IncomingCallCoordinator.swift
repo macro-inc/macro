@@ -27,6 +27,7 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
     private var reportedConnectedOutgoingCallUUIDs: Set<UUID> = []
     private var cachedVoipToken: String?
     private var pendingAnsweredCall: (channelId: String, nativeMedia: Bool)?
+    private var pendingEndCallCompletions: [UUID: [() -> Void]] = [:]
 
     init(
         mediaSession: @escaping () -> NativeLiveKitCallSession,
@@ -85,17 +86,48 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
 
         let title = channelName?.trimmingCharacters(in: .whitespacesAndNewlines)
         let displayTitle = title?.isEmpty == false ? title : nil
+        let isAnsweringPendingIncomingCall = activeCallUUID == uuid
+            && pendingCalls[uuid] != nil
+            && !outgoingCallUUIDs.contains(uuid)
         pendingCalls[uuid] = PendingCallInfo(
             channelId: channelId,
             channelName: displayTitle,
             callerName: callerName
         )
         pendingCallTokens[uuid] = PendingCallToken(serverUrl: serverUrl, token: token)
+
+        if isAnsweringPendingIncomingCall {
+            activeNativeMediaUUID = uuid
+            let mediaSession = mediaSessionProvider()
+            mediaSession.setChannelTitle(displayTitle)
+            mediaSession.prepareForCallKitAudio()
+            activateNativeMediaAudioIfNeeded(reason: "JS answer prepared")
+            let action = CXAnswerCallAction(call: uuid)
+            let transaction = CXTransaction(action: action)
+            print("[CallKit] Requesting CXAnswerCallAction from JS uuid=\(uuid.uuidString) channelId=\(channelId) channelName=\(displayTitle ?? "nil")")
+            callController.request(transaction) { error in
+                DispatchQueue.main.async {
+                    if let error {
+                        print("[CallKit] JS CXAnswerCallAction request failed uuid=\(uuid.uuidString) error=\(error)")
+                        if self.activeNativeMediaUUID == uuid {
+                            self.activeNativeMediaUUID = nil
+                        }
+                    } else {
+                        print("[CallKit] JS CXAnswerCallAction request accepted uuid=\(uuid.uuidString)")
+                    }
+                    completion(error)
+                }
+            }
+            return
+        }
+
         activeCallUUID = uuid
         activeNativeMediaUUID = uuid
         outgoingCallUUIDs.insert(uuid)
         reportedConnectedOutgoingCallUUIDs.remove(uuid)
-        mediaSessionProvider().setChannelTitle(displayTitle)
+        let mediaSession = mediaSessionProvider()
+        mediaSession.setChannelTitle(displayTitle)
+        mediaSession.prepareForCallKitAudio()
         activateNativeMediaAudioIfNeeded(reason: "outgoing call prepared")
 
         let handle = CXHandle(type: .generic, value: displayTitle ?? channelId)
@@ -132,6 +164,7 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
         }
 
         print("[CallKit] endActiveCall requesting CXEndCallAction uuid=\(uuid.uuidString)")
+        appendPendingEndCallCompletion(uuid: uuid, completion)
         requestEndCall(uuid: uuid) { [weak self] error in
             guard let self else {
                 completion()
@@ -148,8 +181,23 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
                             await mediaSession.disconnect()
                         }
                     }
+                    return
                 }
-                completion()
+
+                DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self] in
+                    guard let self else { return }
+                    guard self.pendingEndCallCompletions[uuid]?.isEmpty == false else { return }
+                    print("[CallKit] Timed out waiting for CXEndCallAction provider callback; completing JS endActiveCall uuid=\(uuid.uuidString)")
+                    let shouldDisconnectNativeMedia = self.activeNativeMediaUUID == uuid
+                    self.completePendingEndCall(uuid: uuid)
+                    self.clearCallState(uuid: uuid)
+                    if shouldDisconnectNativeMedia {
+                        let mediaSession = self.mediaSessionProvider()
+                        Task {
+                            await mediaSession.disconnect()
+                        }
+                    }
+                }
             }
         }
     }
@@ -303,6 +351,7 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
         pendingAnsweredCall = nil
         outgoingCallUUIDs.removeAll()
         reportedConnectedOutgoingCallUUIDs.removeAll()
+        completeAllPendingEndCalls()
         if activeNativeMediaUUID != nil {
             activeNativeMediaUUID = nil
             let mediaSession = mediaSessionProvider()
@@ -326,6 +375,7 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
         activeCallUUID = uuid
         activeNativeMediaUUID = uuid
         provider.reportOutgoingCall(with: uuid, startedConnectingAt: Date())
+        mediaSessionProvider().prepareForCallKitAudio()
         action.fulfill()
         print("[CallKit] Fulfilled CXStartCallAction uuid=\(uuid.uuidString)")
 
@@ -473,6 +523,28 @@ final class IncomingCallCoordinator: NSObject, CXProviderDelegate, PKPushRegistr
         outgoingCallUUIDs.remove(uuid)
         reportedConnectedOutgoingCallUUIDs.remove(uuid)
         pendingAnsweredCall = nil
+        completePendingEndCall(uuid: uuid)
+    }
+
+    private func appendPendingEndCallCompletion(uuid: UUID, _ completion: @escaping () -> Void) {
+        var completions = pendingEndCallCompletions[uuid] ?? []
+        completions.append(completion)
+        pendingEndCallCompletions[uuid] = completions
+    }
+
+    private func completePendingEndCall(uuid: UUID) {
+        guard let completions = pendingEndCallCompletions.removeValue(forKey: uuid) else { return }
+        for completion in completions {
+            completion()
+        }
+    }
+
+    private func completeAllPendingEndCalls() {
+        let completions = pendingEndCallCompletions.values.flatMap { $0 }
+        pendingEndCallCompletions.removeAll()
+        for completion in completions {
+            completion()
+        }
     }
 
     private func startRingStatePolling(uuid: UUID, ringStatusUrl: String, bearerToken: String) {

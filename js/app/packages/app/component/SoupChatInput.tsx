@@ -1,6 +1,5 @@
 import { useAnalytics } from '@app/component/analytics-context';
 import { useSoup } from '@app/component/next-soup/soup-context';
-import { useHasPaidAccess } from '@core/auth/license';
 import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
 import {
@@ -27,7 +26,6 @@ function SoupChatInputInner() {
   const splitPanelContext = useSplitPanelOrThrow();
   const soup = useSoup();
   const input = useChatInputContext();
-  const hasPaid = useHasPaidAccess();
 
   const { getAttachmentFromMention } = useGetChatAttachmentInfo();
 
@@ -64,12 +62,6 @@ function SoupChatInputInner() {
   const renameMutation = createRenameDssEntityMutation();
 
   const handleSend = async (request: ChatSendInput) => {
-    if (!hasPaid()) {
-      const { showPaywall } = usePaywallState();
-      showPaywall(PaywallKey.CHAT_LIMIT);
-      return;
-    }
-
     const backgroundSend = request.metaKey;
 
     // Create a new persistent chat

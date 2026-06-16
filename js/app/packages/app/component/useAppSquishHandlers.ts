@@ -8,7 +8,7 @@ import { isEditableInput } from '@core/util/isEditableInput';
 import { isIOS } from '@solid-primitives/platform';
 import { onCleanup, onMount } from 'solid-js';
 
-const IOS_ACTIVE_ELEMENT_POLL_INTERVAL_MS = 1000;
+const ACTIVE_ELEMENT_POLL_INTERVAL_MS = 1000;
 
 function getViewportHeight() {
   return window.visualViewport?.height ?? window.innerHeight;
@@ -24,6 +24,34 @@ function resetVirtualKeyboardState() {
   );
 }
 
+function createActiveElementPolling(onActiveElementLost: () => void) {
+  let activeElementPollIntervalId: number | undefined;
+
+  const stop = () => {
+    if (activeElementPollIntervalId === undefined) return;
+
+    window.clearInterval(activeElementPollIntervalId);
+    activeElementPollIntervalId = undefined;
+  };
+
+  const start = () => {
+    if (activeElementPollIntervalId !== undefined) return;
+
+    activeElementPollIntervalId = window.setInterval(() => {
+      if (!virtualKeyboardVisible()) {
+        stop();
+        return;
+      }
+
+      if (!isEditableInput(document.activeElement)) {
+        onActiveElementLost();
+      }
+    }, ACTIVE_ELEMENT_POLL_INTERVAL_MS);
+  };
+
+  return { start, stop };
+}
+
 /**
  * Functionality for responding to virtual keyboard appearance in web app and native mobile app.
  */
@@ -34,9 +62,21 @@ export function useAppSquishHandlers() {
       duration: number;
     }>;
 
+    let activeElementPolling: ReturnType<typeof createActiveElementPolling>;
+
+    function resetNativeVirtualKeyboardState() {
+      activeElementPolling.stop();
+      resetVirtualKeyboardState();
+    }
+
+    activeElementPolling = createActiveElementPolling(
+      resetNativeVirtualKeyboardState
+    );
+
     const handleKeyboardWillShow = (event: VirtualKeyboardEvent) => {
       setVirtualKeyboardVisible(true);
       setVirtualKeyboardHeight(event.detail?.height ?? 0);
+      activeElementPolling.start();
       const newViewportHeight =
         (window.visualViewport?.height ?? 0) - (event.detail?.height ?? 0);
       const dvh = newViewportHeight * 0.01;
@@ -48,7 +88,7 @@ export function useAppSquishHandlers() {
     };
 
     const handleKeyboardWillHide = () => {
-      resetVirtualKeyboardState();
+      resetNativeVirtualKeyboardState();
     };
 
     const handleVisibilityChange = () => {
@@ -56,7 +96,7 @@ export function useAppSquishHandlers() {
         document.visibilityState === 'visible' &&
         !isEditableInput(document.activeElement)
       ) {
-        resetVirtualKeyboardState();
+        resetNativeVirtualKeyboardState();
       }
     };
 
@@ -71,6 +111,7 @@ export function useAppSquishHandlers() {
       document.addEventListener('visibilitychange', handleVisibilityChange);
 
       onCleanup(() => {
+        activeElementPolling.stop();
         window.removeEventListener('keyboardWillShow', handleKeyboardWillShow);
         window.removeEventListener('keyboardWillHide', handleKeyboardWillHide);
         document.removeEventListener(
@@ -83,20 +124,12 @@ export function useAppSquishHandlers() {
     // iOS Safari visual viewport events are only useful after editable focus.
     // A later shrink is the keyboard show signal; focusout remains the reset.
     let viewportHeightBeforeFocus: number | undefined;
-    let activeElementPollIntervalId: number | undefined;
     let deferredResetTimeoutId: number | undefined;
 
     const syncViewportHeight = () => {
       const viewportHeight = getViewportHeight();
       const vh = viewportHeight * 0.01;
       document.documentElement.style.setProperty('--dvh', `${vh}px`);
-    };
-
-    const stopActiveElementPolling = () => {
-      if (activeElementPollIntervalId === undefined) return;
-
-      window.clearInterval(activeElementPollIntervalId);
-      activeElementPollIntervalId = undefined;
     };
 
     const clearDeferredReset = () => {
@@ -106,12 +139,18 @@ export function useAppSquishHandlers() {
       deferredResetTimeoutId = undefined;
     };
 
-    const resetIOSVirtualKeyboardState = () => {
+    let activeElementPolling: ReturnType<typeof createActiveElementPolling>;
+
+    function resetIOSVirtualKeyboardState() {
       clearDeferredReset();
       viewportHeightBeforeFocus = undefined;
-      stopActiveElementPolling();
+      activeElementPolling.stop();
       resetVirtualKeyboardState();
-    };
+    }
+
+    activeElementPolling = createActiveElementPolling(
+      resetIOSVirtualKeyboardState
+    );
 
     const deferIOSVirtualKeyboardReset = () => {
       clearDeferredReset();
@@ -123,25 +162,10 @@ export function useAppSquishHandlers() {
       });
     };
 
-    const startActiveElementPolling = () => {
-      if (activeElementPollIntervalId !== undefined) return;
-
-      activeElementPollIntervalId = window.setInterval(() => {
-        if (!virtualKeyboardVisible()) {
-          stopActiveElementPolling();
-          return;
-        }
-
-        if (!isEditableInput(document.activeElement)) {
-          resetIOSVirtualKeyboardState();
-        }
-      }, IOS_ACTIVE_ELEMENT_POLL_INTERVAL_MS);
-    };
-
     const handleResize = () => {
       if (virtualKeyboardVisible()) {
         syncViewportHeight();
-        startActiveElementPolling();
+        activeElementPolling.start();
         return;
       }
 
@@ -155,7 +179,7 @@ export function useAppSquishHandlers() {
       const viewportHeight = getViewportHeight();
       if (viewportHeight < viewportHeightBeforeFocus) {
         setVirtualKeyboardVisible(true);
-        startActiveElementPolling();
+        activeElementPolling.start();
         syncViewportHeight();
         setTimeout(() => {
           window.scrollTo(0, 0);
@@ -201,7 +225,7 @@ export function useAppSquishHandlers() {
 
       onCleanup(() => {
         clearDeferredReset();
-        stopActiveElementPolling();
+        activeElementPolling.stop();
         if (window.visualViewport) {
           window.visualViewport.removeEventListener('resize', handleResize);
           window.visualViewport.removeEventListener('scroll', handleResize);

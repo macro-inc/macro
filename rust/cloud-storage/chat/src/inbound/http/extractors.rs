@@ -1,5 +1,8 @@
 //! Axum extractors for chat inbound handlers.
 
+use crate::domain::models::FREE_MODEL;
+use crate::domain::ports::ModelAccessService;
+use crate::domain::service::ModelAccessServiceImpl;
 use agent::AgentModel;
 use axum::extract::FromRequestParts;
 use axum::http::StatusCode;
@@ -7,20 +10,44 @@ use axum::http::request::Parts;
 use axum::response::IntoResponse;
 use model::user::UserContext;
 use roles_and_permissions::domain::model::PermissionId;
-use std::collections::HashSet;
 
-/// Axum extractor that resolves the AI model a user is entitled to based on
-/// their permissions.
+/// Axum extractor resolving the requesting user's model entitlement from their
+/// permissions.
 ///
-/// Paid users get their highest subscribed model. Free users get Haiku.
-#[derive(Debug)]
-pub struct ChatModelAccess(AgentModel);
+/// Free users may use only [`FREE_MODEL`] (Haiku); professional (paid) users
+/// may use every chat model. Backed by [`ModelAccessServiceImpl`].
+#[derive(Debug, Clone, Copy)]
+pub struct ChatModelAccess {
+    professional: bool,
+}
 
 impl ChatModelAccess {
-    /// Returns the resolved model.
-    pub fn model(&self) -> AgentModel {
-        self.0
+    /// Whether the user holds the professional (paid) entitlement.
+    pub fn professional(&self) -> bool {
+        self.professional
     }
+
+    /// Whether the user may use the model identified by `model_id` (an api id).
+    pub fn has_access(&self, model_id: &str) -> bool {
+        ModelAccessServiceImpl.has_access(self.professional, model_id)
+    }
+
+    /// The default model for this user — the best one they're entitled to.
+    pub fn model(&self) -> AgentModel {
+        if self.professional {
+            AgentModel::Smart
+        } else {
+            FREE_MODEL
+        }
+    }
+}
+
+/// Whether the user holds the professional (paid) entitlement, derived from the
+/// existing roles-and-permissions access API.
+fn is_professional(user: &UserContext) -> bool {
+    user.permissions
+        .as_ref()
+        .is_some_and(|perms| perms.contains(&PermissionId::ReadProfessionalFeatures.to_string()))
 }
 
 /// Error returned when [`ChatModelAccess`] cannot be extracted.
@@ -39,20 +66,6 @@ impl IntoResponse for ChatModelAccessRejection {
     }
 }
 
-fn model_for_permissions(permissions: Option<&HashSet<String>>) -> AgentModel {
-    let Some(permissions) = permissions else {
-        return AgentModel::Haiku4_5;
-    };
-
-    if permissions.contains(&PermissionId::WriteOpus.to_string()) {
-        AgentModel::Opus4_7
-    } else if permissions.contains(&PermissionId::WriteSonnet.to_string()) {
-        AgentModel::Sonnet4_6
-    } else {
-        AgentModel::Haiku4_5
-    }
-}
-
 impl<S: Send + Sync> FromRequestParts<S> for ChatModelAccess {
     type Rejection = ChatModelAccessRejection;
 
@@ -62,9 +75,9 @@ impl<S: Send + Sync> FromRequestParts<S> for ChatModelAccess {
             .get::<UserContext>()
             .ok_or(ChatModelAccessRejection::MissingUserContext)?;
 
-        Ok(ChatModelAccess(model_for_permissions(
-            user_context.permissions.as_ref(),
-        )))
+        Ok(ChatModelAccess {
+            professional: is_professional(user_context),
+        })
     }
 }
 
@@ -72,56 +85,52 @@ impl<S: Send + Sync> FromRequestParts<S> for ChatModelAccess {
 mod test {
     use super::*;
 
-    fn permissions(values: &[PermissionId]) -> HashSet<String> {
-        values.iter().map(ToString::to_string).collect()
+    fn access(permissions: &[PermissionId]) -> ChatModelAccess {
+        let professional = permissions.contains(&PermissionId::ReadProfessionalFeatures);
+        ChatModelAccess { professional }
+    }
+
+    fn user(permissions: &[PermissionId]) -> UserContext {
+        UserContext {
+            permissions: Some(permissions.iter().map(ToString::to_string).collect()),
+            ..Default::default()
+        }
     }
 
     #[test]
-    fn missing_permissions_resolve_to_haiku() {
-        assert_eq!(model_for_permissions(None), AgentModel::Haiku4_5);
+    fn no_permissions_is_free() {
+        assert!(!is_professional(&UserContext::default()));
+        assert!(!is_professional(&user(&[])));
     }
 
     #[test]
-    fn empty_permissions_resolve_to_haiku() {
-        let permissions = HashSet::new();
-
-        assert_eq!(
-            model_for_permissions(Some(&permissions)),
-            AgentModel::Haiku4_5
-        );
+    fn professional_permission_is_professional() {
+        assert!(is_professional(&user(&[
+            PermissionId::ReadProfessionalFeatures
+        ])));
     }
 
     #[test]
-    fn haiku_permission_resolves_to_haiku() {
-        let permissions = permissions(&[PermissionId::WriteHaiku]);
-
-        assert_eq!(
-            model_for_permissions(Some(&permissions)),
-            AgentModel::Haiku4_5
-        );
+    fn free_user_defaults_to_haiku_and_only_has_haiku() {
+        let free = access(&[]);
+        assert_eq!(free.model(), FREE_MODEL);
+        assert!(free.has_access(FREE_MODEL.api_id()));
+        assert!(!free.has_access(AgentModel::Smart.api_id()));
     }
 
     #[test]
-    fn sonnet_permission_resolves_to_sonnet() {
-        let permissions = permissions(&[PermissionId::WriteHaiku, PermissionId::WriteSonnet]);
-
-        assert_eq!(
-            model_for_permissions(Some(&permissions)),
-            AgentModel::Sonnet4_6
-        );
+    fn professional_user_defaults_to_smart_and_has_everything() {
+        let pro = access(&[PermissionId::ReadProfessionalFeatures]);
+        assert_eq!(pro.model(), AgentModel::Smart);
+        assert!(pro.has_access(AgentModel::Smart.api_id()));
+        assert!(pro.has_access(FREE_MODEL.api_id()));
     }
 
+    // Permission strings unrelated to the professional flag don't grant access.
     #[test]
-    fn opus_permission_resolves_to_opus() {
-        let permissions = permissions(&[
-            PermissionId::WriteHaiku,
-            PermissionId::WriteSonnet,
-            PermissionId::WriteOpus,
-        ]);
-
-        assert_eq!(
-            model_for_permissions(Some(&permissions)),
-            AgentModel::Opus4_7
-        );
+    fn unrelated_permissions_stay_free() {
+        let acc = access(&[PermissionId::WriteHaiku, PermissionId::WriteOpus]);
+        assert!(!acc.professional());
+        assert!(!acc.has_access(AgentModel::Smart.api_id()));
     }
 }

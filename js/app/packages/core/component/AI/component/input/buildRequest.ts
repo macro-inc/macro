@@ -30,16 +30,13 @@ export function useSendChatMessage() {
     attachments,
     toolset,
   }: ChatSendInput & { chatId?: string }): Promise<SendChatMessageResult> {
-    const modelInstructions = model ? `\nYou are ${model}` : '';
-    const additional = `${additionalInstructions()}${modelInstructions}`;
-
     const response = await cognitionApiServiceClient.sendStreamChatMessage({
       content,
       model: model ?? DEFAULT_MODEL,
       chat_id: chatId,
       attachments: attachments.length > 0 ? attachments : undefined,
       toolset,
-      additional_instructions: additional,
+      additional_instructions: additionalInstructions(),
     });
 
     if (isPaymentError(response)) {

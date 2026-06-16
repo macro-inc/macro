@@ -2,7 +2,7 @@ use crate::api::context::ApiContext;
 use crate::model::stream::ToolSet;
 use agent::structured_output::DynamicSchema;
 use agent::types::{ChatMessage, ChatMessageContent, Role};
-use agent::{AgentLoop, AgentModel, StreamAccumulator};
+use agent::{AgentLoop, StreamAccumulator};
 use axum::Json;
 use axum::extract::{Extension, State};
 use axum::http::StatusCode;
@@ -20,7 +20,7 @@ use utoipa::ToSchema;
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct StructuredCompletionRequest {
     pub prompt: String,
-    pub model: AgentModel,
+    pub model: String,
     pub output_schema: DynamicSchema,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub additional_instructions: Option<String>,

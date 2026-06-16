@@ -57,6 +57,7 @@ dependencies = [
  "macro_user_id",
  "model-entity",
  "non_empty",
+ "regex",
  "rig-core",
  "schemars 1.2.1",
  "serde",
@@ -3605,6 +3606,7 @@ dependencies = [
  "macro_auth",
  "macro_aws_config",
  "macro_axum_utils",
+ "macro_config",
  "macro_cors",
  "macro_db_client",
  "macro_entrypoint",
@@ -6778,11 +6780,13 @@ name = "macro_config"
 version = "0.1.0"
 dependencies = [
  "macro_config_derive",
+ "macro_env",
  "macro_env_var",
  "remote_env_var",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
+ "tokio",
  "tracing",
  "workspace-hack",
 ]
@@ -13991,7 +13995,6 @@ dependencies = [
  "rand 0.8.6",
  "rand 0.9.4",
  "redis",
- "regex",
  "regex-automata",
  "regex-syntax",
  "reqwest 0.13.4",

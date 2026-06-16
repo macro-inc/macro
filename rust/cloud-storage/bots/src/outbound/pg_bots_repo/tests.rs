@@ -1,6 +1,8 @@
 use super::*;
 use crate::domain::{
-    models::{CreateBotRequest, CreateBotTokenRequest, CreateChannelScopedBotRequest},
+    models::{
+        BotChannelType, CreateBotRequest, CreateBotTokenRequest, CreateChannelScopedBotRequest,
+    },
     ports::{BotError, BotService},
     service::BotServiceImpl,
 };
@@ -270,6 +272,57 @@ async fn add_remove_channel_bot_requires_bot_usability_and_soft_removes(
 
     assert!(left_at.is_some());
     assert!(service.list_channel_bots(channel_id).await?.is_empty());
+
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn list_bot_channels_requires_manageable_bot_and_returns_only_active_channels(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let service = service(&pool);
+    let active_channel_id = Uuid::new_v4();
+    let removed_channel_id = Uuid::new_v4();
+    insert_channel(&pool, active_channel_id).await?;
+    insert_channel(&pool, removed_channel_id).await?;
+
+    let bot = service
+        .create_bot(user_id(USER_OWNER), create_req("channel-list"))
+        .await?;
+    let empty_bot = service
+        .create_bot(user_id(USER_OWNER), create_req("empty-channel-list"))
+        .await?;
+
+    let err = service
+        .list_bot_channels(user_id(USER_OTHER), bot.id)
+        .await
+        .expect_err("non-owner must not list someone else's bot channels");
+    assert!(matches!(err, BotError::Unauthorized));
+
+    let empty_channels = service
+        .list_bot_channels(user_id(USER_OWNER), empty_bot.id)
+        .await?;
+    assert!(empty_channels.is_empty());
+
+    service
+        .add_bot_to_channel(user_id(USER_OWNER), removed_channel_id, bot.id)
+        .await?;
+    service
+        .remove_bot_from_channel(user_id(USER_OWNER), removed_channel_id, bot.id)
+        .await?;
+    service
+        .add_bot_to_channel(user_id(USER_OWNER), active_channel_id, bot.id)
+        .await?;
+
+    let channels = service
+        .list_bot_channels(user_id(USER_OWNER), bot.id)
+        .await?;
+
+    assert_eq!(channels.len(), 1);
+    assert_eq!(channels[0].channel_id, active_channel_id);
+    assert_eq!(channels[0].name.as_deref(), Some("alarms"));
+    assert_eq!(channels[0].channel_type, BotChannelType::Private);
+    assert!(channels[0].joined_at <= chrono::Utc::now());
 
     Ok(())
 }

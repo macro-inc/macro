@@ -13,6 +13,7 @@ async-openai = { workspace = true }
 async-stream = { workspace = true }
 async-trait = { workspace = true }
 futures = { workspace = true }
+regex = { workspace = true }
 # Macro fork of rig (upstream main + with_non_strict_tools() on Responses
 # API models). Drop back to crates.io once the patch lands upstream.
 rig-core = { git = "https://github.com/macro-inc/rig", branch = "feat/responses-api-non-strict-tools" }

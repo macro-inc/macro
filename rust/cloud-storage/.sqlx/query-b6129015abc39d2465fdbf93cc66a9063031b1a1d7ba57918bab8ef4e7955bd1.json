@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                c.id AS channel_id,\n                c.name,\n                c.channel_type::text AS \"channel_type!\",\n                cp.joined_at\n            FROM comms_channel_participants cp\n            JOIN comms_channels c ON c.id = cp.channel_id\n            WHERE cp.user_id = $1\n              AND cp.left_at IS NULL\n            ORDER BY cp.joined_at ASC, c.id ASC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "channel_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "channel_type!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "joined_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      null,
+      false
+    ]
+  },
+  "hash": "b6129015abc39d2465fdbf93cc66a9063031b1a1d7ba57918bab8ef4e7955bd1"
+}

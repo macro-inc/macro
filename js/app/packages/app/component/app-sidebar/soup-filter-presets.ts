@@ -69,6 +69,7 @@ const getInboxSignalFilters = () => {
       // defineQueryFilters excludes unreferenced entity types). Rendering is
       // still gated on the supported-foreign-entities flag client-side.
       foreignEntityDone: false,
+      foreignEntityIncludesMe: true,
       emailShared: 'exclude',
     },
     exclude: getDisabledSnippetSubtypeExclude(),
@@ -107,7 +108,10 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
       all: () => ({
         filters: {
           // crm companies aren't surfaced outside the Companies view.
-          include: { crmCompanyId: [NIL_UUID] },
+          include: {
+            crmCompanyId: [NIL_UUID],
+            foreignEntityIncludesMe: true,
+          },
           exclude: {
             documentId: [NIL_UUID],
             threadId: [NIL_UUID],

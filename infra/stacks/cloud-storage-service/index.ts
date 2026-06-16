@@ -133,12 +133,11 @@ const OPENSEARCH_URL: pulumi.Output<string> = opensearchStack
   .apply((domainEndpoint) => `https://${domainEndpoint}`);
 
 const OPENSEARCH_USERNAME = 'macrouser';
-const OPENSEARCH_PASSWORD = config.require('opensearch_password_key');
-const opensearchPasswordArn = aws.secretsmanager
+const OPENSEARCH_PASSWORD = aws.secretsmanager
   .getSecretVersionOutput({
-    secretId: OPENSEARCH_PASSWORD,
+    secretId: config.require('opensearch_password_key'),
   })
-  .apply((secret) => secret.arn);
+  .apply((secret) => secret.secretString);
 
 const cloudStorageStack = new pulumi.StackReference('cloud-storage-stack', {
   name: `macro-inc/document-storage/${stack}`,
@@ -406,7 +405,6 @@ const cloudStorageService = new CloudStorageService(
       internalApiKeyArn,
       syncServiceAuthKeyArn,
       MACRO_API_TOKENS.macroApiTokenPublicKeyArn,
-      opensearchPasswordArn,
       githubWebhookSecretKeyArn,
       githubSyncAppPemArn,
       calWebhookSecretKeyArn,
@@ -528,8 +526,12 @@ const cloudStorageService = new CloudStorageService(
         value: pulumi.interpolate`${cloudfronSignerPublicKeyId}`,
       },
       {
-        name: 'DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME',
+        name: 'DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY',
         value: pulumi.interpolate`${CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME}`,
+      },
+      {
+        name: 'DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME',
+        value: CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME,
       },
       { name: 'ISSUER', value: pulumi.interpolate`${FUSIONAUTH_ISSUER}` },
       {

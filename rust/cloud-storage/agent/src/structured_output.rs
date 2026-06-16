@@ -4,8 +4,6 @@ use rig_core::message::Message;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use crate::model::AgentModel;
-
 /// Schema definition for dynamic structured completions.
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct DynamicSchema {
@@ -20,9 +18,9 @@ pub struct DynamicSchema {
 
 /// Run a completion with conversation history and return a JSON value
 /// conforming to `schema`.
-#[tracing::instrument(skip(system_prompt, messages, schema), err)]
-pub async fn dynamic_structured_completion(
-    model: AgentModel,
+#[tracing::instrument(skip(model, system_prompt, messages, schema), err)]
+pub async fn dynamic_structured_completion<M: ToString>(
+    model: M,
     system_prompt: &str,
     messages: Vec<Message>,
     schema: DynamicSchema,

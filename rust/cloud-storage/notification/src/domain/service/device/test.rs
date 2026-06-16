@@ -6,7 +6,7 @@ use crate::domain::service::ingress::{NotificationReaderService, PlatformArnConf
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
 use serde::Serialize;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
 
 fn test_user_id() -> MacroUserIdStr<'static> {
@@ -163,6 +163,13 @@ impl NotificationRepository for MockNotifRepo {
         &self,
         _: &[uuid::Uuid],
     ) -> Result<Vec<crate::domain::models::NotificationIdAndCollapseKey>, Report> {
+        unimplemented!()
+    }
+    async fn get_digest_eligible_notification_ids(
+        &self,
+        _: macro_user_id::user_id::MacroUserIdStr<'_>,
+        _: &[uuid::Uuid],
+    ) -> Result<HashSet<uuid::Uuid>, Report> {
         unimplemented!()
     }
     async fn get_user_notifications<T: serde::de::DeserializeOwned + Send>(

@@ -9,6 +9,7 @@ import type { SoupPage } from '@service-storage/generated/schemas/soupPage';
 import {
   type InfiniteData,
   partialMatchKey,
+  type Query,
   type QueryKey,
 } from '@tanstack/solid-query';
 import { isAfter } from 'date-fns';
@@ -46,6 +47,19 @@ type SoupSearchInfiniteData = InfiniteData<
 >;
 
 /**
+ * Cancel in-flight soup list refetches before an optimistic cache write.
+ *
+ * Only cancels queries that already have data. Cancelling an in-flight
+ * initial fetch (data === undefined) reverts it to a stuck pending/idle
+ * state, which leaves the soup view blank on refresh.
+ */
+function cancelSoupQueries() {
+  const predicate = (query: Query) => query.state.data !== undefined;
+  queryClient.cancelQueries({ queryKey: soupKeys.items._def, predicate });
+  queryClient.cancelQueries({ queryKey: soupKeys.astItems._def, predicate });
+}
+
+/**
  * Optimistically update a single soup entity across all queries that
  * reference it. After normy's field merge, reconciles group membership in
  * every grouped cache containing this entity (`itemIds`-only mutations;
@@ -56,11 +70,11 @@ type SoupSearchInfiniteData = InfiniteData<
  * - Channels: `{ tag: 'channel', data: { channel: { id, ...fields } }, frecency_score }`
  * - Everything else: `{ tag, data: { id, ...fields }, frecency_score }`
  */
+
 export function optimisticUpdateSoupEntity<T extends SoupEntityTag>(
   partial: SoupEntityPartial<T>
 ): SoupTransaction {
-  queryClient.cancelQueries({ queryKey: soupKeys.items._def });
-  queryClient.cancelQueries({ queryKey: soupKeys.astItems._def });
+  cancelSoupQueries();
 
   const normalizer = getSoupNormalizer();
   const normKey = getNormalizationObjectKey(partial);
@@ -144,8 +158,7 @@ export function getSoupItemId(item: SoupApiItem): string {
  * and upsert into each resolvable group. Date / unresolved labels invalidate.
  */
 export function insertSoupEntity(item: SoupApiItem): SoupTransaction {
-  queryClient.cancelQueries({ queryKey: soupKeys.items._def });
-  queryClient.cancelQueries({ queryKey: soupKeys.astItems._def });
+  cancelSoupQueries();
 
   const previous = snapshotSoup();
   queryClient.setQueriesData<SoupItemsInfiniteData>(
@@ -217,8 +230,7 @@ export function insertSoupEntity(item: SoupApiItem): SoupTransaction {
 }
 
 export function removeSoupEntities(entityIds: Set<string>): SoupTransaction {
-  queryClient.cancelQueries({ queryKey: soupKeys.items._def });
-  queryClient.cancelQueries({ queryKey: soupKeys.astItems._def });
+  cancelSoupQueries();
 
   const previous = snapshotSoup();
 

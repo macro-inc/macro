@@ -121,11 +121,10 @@ export const MobileFilterDrawer = () => {
 
   const toggleInbox = (id: string) => {
     const current = picker.activeIds();
-    picker.onChange(
-      current.includes(id)
-        ? current.filter((activeId) => activeId !== id)
-        : [...current, id]
-    );
+    const next = current.includes(id)
+      ? current.filter((activeId) => activeId !== id)
+      : [...current, id];
+    return next.length ? picker.onChange(next) : picker.reset();
   };
 
   const VIEW_SORT_OPTIONS: Partial<Record<ListView, SortOption[]>> = {

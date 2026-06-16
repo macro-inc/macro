@@ -438,6 +438,8 @@ async fn seed(args: SeedArgs, ctx: SeedCliContext) -> anyhow::Result<()> {
             provider: seed_data.provider,
             is_sync_active: true,
             is_primary,
+            needs_reauth: false,
+            last_sync_error_at: None,
             created_at: now,
             updated_at: now,
         };

@@ -1,5 +1,4 @@
 use super::NewAttachment;
-use agent::AgentModel;
 use agent::types::{ChatMessageContent, Role};
 use chrono::{DateTime, Utc};
 use model_entity::Entity;
@@ -44,8 +43,8 @@ pub struct NewChatMessage {
     pub role: Role,
     /// The ids of the attachments used to generate the message
     pub attachments: Option<Vec<NewAttachment>>,
-    /// The model used to generate the chat
-    pub model: AgentModel,
+    /// The model used to generate the chat (provider api id)
+    pub model: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }

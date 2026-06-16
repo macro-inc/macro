@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider, is_sync_active)\n        VALUES ($1, $2, $3, $4, $5, $6)\n        ON CONFLICT (fusionauth_user_id, email_address, provider) \n        DO UPDATE SET \n            is_sync_active = EXCLUDED.is_sync_active,\n            updated_at = NOW()\n        RETURNING id, is_primary\n        ",
+  "query": "\n        INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider, is_sync_active)\n        VALUES ($1, $2, $3, $4, $5, $6)\n        ON CONFLICT (fusionauth_user_id, email_address, provider)\n        DO UPDATE SET\n            is_sync_active = EXCLUDED.is_sync_active,\n            needs_reauth = false,\n            last_sync_error_at = NULL,\n            updated_at = NOW()\n        RETURNING id, is_primary\n        ",
   "describe": {
     "columns": [
       {
@@ -38,5 +38,5 @@
       false
     ]
   },
-  "hash": "3438cbfd6a3d2354c38bfb1eda314caaf7a8f149d1b20385ab990f4c32c406fe"
+  "hash": "74e2214e68d34a0c65aab38926518e3c0b8905a79eeb38ed7f84258b00a1b991"
 }

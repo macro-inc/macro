@@ -1,14 +1,8 @@
 import { DEFAULT_CHAT_NAME } from '@block-chat/definition';
 import type { CodeFileExtension } from '@block-code/util/languageSupport';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
-import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
-import {
-  authKeys,
-  invalidateUserQuota,
-  type UserInfoData,
-} from '@queries/auth';
-import { queryClient } from '@queries/client';
+import { invalidateUserQuota } from '@queries/auth';
 import { postNewHistoryItem } from '@queries/history/history';
 import { setPreviewOnCreate } from '@queries/preview/preview';
 import { refetchSoupEntity } from '@queries/soup/cache';
@@ -280,17 +274,6 @@ export async function createCanvasFileFromJsonString(args: {
 
 export async function createChat(args?: CreateChatRequest) {
   const { showPaywall } = usePaywallState();
-
-  if (!isNativeMobilePlatform()) {
-    const userInfo = queryClient.getQueryData<UserInfoData>(
-      authKeys.userInfo.queryKey
-    );
-    const status = userInfo?.licenseStatus;
-    if (status !== 'trialing' && status !== 'active') {
-      showPaywall(PaywallKey.CHAT_LIMIT);
-      return { error: 'Upgrade required.' };
-    }
-  }
 
   const maybeChat = await cognitionApiServiceClient.createChat(args ?? {});
 

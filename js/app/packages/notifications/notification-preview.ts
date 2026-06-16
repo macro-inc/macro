@@ -20,4 +20,5 @@ export const NOTIFICATION_LABEL_BY_TYPE: Record<NotificationType, string> = {
   github_pr_mention: 'MENTION',
   github_pr_review: 'REVIEW',
   'call-started': 'CALL',
+  inbox_reauth_required: 'EMAIL',
 } as const;
