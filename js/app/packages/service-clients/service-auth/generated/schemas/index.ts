@@ -113,5 +113,4 @@ export * from './userOrganizationResponse';
 export * from './userProfilePicture';
 export * from './userProfilePictureChecksum';
 export * from './userQuota';
-export * from './userThemePreferences';
 export * from './userTokensResponse';

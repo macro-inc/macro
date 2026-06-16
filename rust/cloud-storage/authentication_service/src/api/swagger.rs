@@ -42,7 +42,6 @@ use crate::api::{
 use model::authentication::login::response::SsoRequiredResponse;
 use model::authentication::{
     login::request::PasswordlessRequest, permission::Permission, user::GetUserInfo,
-    user::UserThemePreferences,
 };
 use model::response::{EmptyResponse, ErrorResponse, UserTokensResponse};
 use model::user::{
@@ -110,8 +109,6 @@ use model::user::{
                 user::get_user_quota::handler,
                 user::get_legacy_user_permissions::handler,
                 user::patch_tutorial::handler,
-                user::get_theme_preferences::handler,
-                user::patch_theme_preferences::handler,
                 user::stripe::create_checkout_session_v2::create_checkout_session,
                 user::stripe::create_portal_session::create_portal_session,
 
@@ -160,7 +157,6 @@ use model::user::{
                         EmptyResponse,
                         ErrorResponse,
                         GetUserInfo,
-                        UserThemePreferences,
                         ProfilePictures,
                         UserProfilePicture,
                         AppleLoginRequest,

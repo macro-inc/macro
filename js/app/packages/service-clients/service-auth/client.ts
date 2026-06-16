@@ -23,7 +23,6 @@ import type {
   PatchUserTutorialRequest,
   SendMobileWelcomeEmailResponse,
   UserQuota,
-  UserThemePreferences,
 } from './generated/schemas';
 import type { AppleLoginRequest } from './generated/schemas/appleLoginRequest';
 import type { CreateTeamRequest } from './generated/schemas/createTeamRequest';
@@ -290,24 +289,6 @@ export const authServiceClient = {
     return (
       await fetchWithAuth<UserName>(`${authHost}/user/name?${queryString}`, {
         method: 'PUT',
-      })
-    ).map((result) => result);
-  },
-  async getThemePreferences() {
-    return (
-      await fetchWithAuth<UserThemePreferences>(
-        `${authHost}/user/theme_preferences`,
-        {
-          method: 'GET',
-        }
-      )
-    ).map((result) => result);
-  },
-  async patchThemePreferences(args: UserThemePreferences) {
-    return (
-      await fetchWithAuth<EmptyResponse>(`${authHost}/user/theme_preferences`, {
-        method: 'PATCH',
-        body: JSON.stringify(args),
       })
     ).map((result) => result);
   },

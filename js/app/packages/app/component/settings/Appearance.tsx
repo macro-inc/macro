@@ -11,7 +11,9 @@ import IconFunnel from '@phosphor-icons/core/regular/funnel-simple.svg?component
 import { darkModeTheme, lightModeTheme, setDarkModeTheme, setLightModeTheme, setShowDarkThemes, setShowLightThemes, setThemeShouldMatchSystem, showDarkThemes, showLightThemes, themes, themeShouldMatchSystem } from '@theme/signals/themeSignals';
 import { isTokensDark } from '@theme/utils/themeUtils';
 import { ThemeChips } from '@theme/components/ThemeChips';
+import { ThemeChipPill } from '@theme/components/ThemeChipPill';
 import type { ThemeV2 } from '@theme/types/themeTypes';
+import { DropdownMenu as KobalteDropdownMenu } from '@kobalte/core/dropdown-menu';
 import { Button, cn, Dropdown, InlineCheckbox, Panel, ToggleSwitch } from '@ui';
 
 type PanelA = 'basic' | 'advanced';
@@ -42,14 +44,13 @@ function ThemePreferenceRow(props: {
     >
       <div class="text-sm">{props.label}</div>
       <Dropdown>
-        <Dropdown.Trigger class="bg-surface pl-0 touch:border-transparent">
-          <span class="flex items-center gap-2">
-            <Show when={selectedTheme()}>
-              {(theme) => <ThemeChips theme={theme()} size="sm" />}
-            </Show>
-            {selectedTheme()?.name ?? props.value()}
-          </span>
-        </Dropdown.Trigger>
+        {/* Same pill as the theme mention chip; `as` makes it the dropdown trigger. */}
+        <KobalteDropdownMenu.Trigger
+          as={ThemeChipPill}
+          class="h-auto"
+          theme={selectedTheme()}
+          name={selectedTheme()?.name ?? props.value()}
+        />
         <Dropdown.Content>
           <Dropdown.Group>
             <For each={props.options()}>
