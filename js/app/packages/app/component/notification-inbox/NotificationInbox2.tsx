@@ -42,7 +42,7 @@ type InboxDateGroup = {
 
 type InboxListRow =
   | { type: 'header'; id: string; label: string }
-  | { type: 'item'; id: string; item: InboxItemData };
+  | { type: 'item'; id: string; item: InboxItemData; depth: number };
 
 type NotificationTag = UnifiedNotification['notification_metadata']['tag'];
 
@@ -426,14 +426,39 @@ function NotificationInboxList(props: {
 
   const [virtualHandle, setVirtualHandle] = createSignal<VirtualizerHandle>();
 
+  const [expandedItemIds, setExpandedItemIds] = createSignal<string[]>([]);
+
+  const isExpanded = (item: InboxItemData) =>
+    expandedItemIds().includes(item.id);
+
+  const setExpanded = (item: InboxItemData, expanded: boolean) => {
+    if (!item.subItems?.length) return;
+
+    setExpandedItemIds((ids) => {
+      const alreadyExpanded = ids.includes(item.id);
+      if (expanded === alreadyExpanded) return ids;
+      return expanded ? [...ids, item.id] : ids.filter((id) => id !== item.id);
+    });
+  };
+
+  const toggleExpanded = (item: InboxItemData) => {
+    setExpanded(item, !isExpanded(item));
+  };
+
   const rows = createMemo<InboxListRow[]>(() =>
     props.groups.flatMap((group) => [
       { type: 'header' as const, id: group.id, label: group.label },
-      ...group.items.map((item) => ({
-        type: 'item' as const,
-        id: item.id,
-        item,
-      })),
+      ...group.items.flatMap((item) => [
+        { type: 'item' as const, id: item.id, item, depth: 0 },
+        ...(isExpanded(item)
+          ? (item.subItems ?? []).map((subItem) => ({
+              type: 'item' as const,
+              id: subItem.id,
+              item: subItem,
+              depth: 1,
+            }))
+          : []),
+      ]),
     ])
   );
 
@@ -517,6 +542,11 @@ function NotificationInboxList(props: {
   const selectCurrent = () => {
     const row = focusedRow();
     if (row) {
+      if (row.depth === 0 && row.item.subItems?.length) {
+        toggleExpanded(row.item);
+        return;
+      }
+
       props.onSelect(row.item);
       return;
     }
@@ -553,6 +583,24 @@ function NotificationInboxList(props: {
     if (event.key === 'k' || event.key === 'ArrowUp') {
       event.preventDefault();
       navigateBy(-1);
+      return;
+    }
+
+    if (event.key === 'ArrowRight') {
+      const row = focusedRow();
+      if (row?.depth === 0 && row.item.subItems?.length) {
+        event.preventDefault();
+        setExpanded(row.item, true);
+      }
+      return;
+    }
+
+    if (event.key === 'ArrowLeft') {
+      const row = focusedRow();
+      if (row?.depth === 0 && row.item.subItems?.length) {
+        event.preventDefault();
+        setExpanded(row.item, false);
+      }
       return;
     }
 
@@ -657,24 +705,33 @@ function NotificationInboxList(props: {
               );
             }
 
+            const onItemClick = () => {
+              if (row.depth === 0 && row.item.subItems?.length) {
+                toggleExpanded(row.item);
+                return;
+              }
+
+              props.onSelect(row.item);
+            };
+
             return (
-              <div class="pb-1.5">
+              <div
+                class={cn(
+                  'pb-1.5',
+                  row.depth > 0 && 'ml-2 border-l border-edge-muted pl-4'
+                )}
+              >
                 <InboxItem.Root
+                  expanded={isExpanded(row.item)}
                   highlighted={focusedRow()?.item.id === row.item.id}
                   item={row.item}
                   selected={props.selectedItem?.id === row.item.id}
                 >
                   <Show
                     when={layoutVariant() === 'inline-type'}
-                    fallback={
-                      <InboxItemLayout
-                        onClick={() => props.onSelect(row.item)}
-                      />
-                    }
+                    fallback={<InboxItemLayout onClick={onItemClick} />}
                   >
-                    <InboxItemInlineTypeLayout
-                      onClick={() => props.onSelect(row.item)}
-                    />
+                    <InboxItemInlineTypeLayout onClick={onItemClick} />
                   </Show>
                 </InboxItem.Root>
               </div>

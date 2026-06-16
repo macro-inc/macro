@@ -51,6 +51,7 @@ type InboxItemContextValue = {
   unread: Accessor<boolean | undefined>;
   selected: Accessor<boolean | undefined>;
   highlighted: Accessor<boolean | undefined>;
+  expanded: Accessor<boolean | undefined>;
 };
 
 const InboxItemContext = createContext<InboxItemContextValue>();
@@ -72,21 +73,27 @@ interface RootProps {
   unread?: boolean;
   selected?: boolean;
   highlighted?: boolean;
+  expanded?: boolean;
   class?: string;
 }
 
 function Root(props: RootProps) {
   const item = () => props.item;
-  const unread = () =>
-    props.unread ??
-    (item().unread || item().subItems?.some((subItem) => subItem.unread));
+  const unread = () => {
+    const hasUnreadSubItems = item().subItems?.some(
+      (subItem) => subItem.unread
+    );
+    return props.unread ?? Boolean(item().unread || hasUnreadSubItems);
+  };
   const selected = () => props.selected;
   const highlighted = () => props.highlighted;
+  const expanded = () => props.expanded;
   const context: InboxItemContextValue = {
     item,
     unread,
     selected,
     highlighted,
+    expanded,
   };
 
   return (
@@ -159,7 +166,11 @@ function UnreadIndicator(props: { unread?: boolean; class?: string }) {
   return (
     <Show when={grouped()}>
       <CaretRightIcon
-        class={cn('size-2.5 text-ink-extra-muted', props.class)}
+        class={cn(
+          'size-2.5 text-ink-extra-muted transition-transform',
+          ctx.expanded() && 'rotate-90',
+          props.class
+        )}
       />
     </Show>
   );
