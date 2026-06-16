@@ -12,6 +12,7 @@ import CalendarIcon from '@phosphor/calendar-blank.svg';
 import ArrowSquareOutIcon from '@phosphor-icons/core/regular/arrow-square-out.svg?component-solid';
 import { Button, cn } from '@ui';
 import { createEffect, createMemo, createSignal, For, Show } from 'solid-js';
+import { type VirtualizerHandle, VList } from 'virtua/solid';
 import { InboxItem, type InboxItem as InboxItemData } from './InboxItem';
 import { InboxItemInlineTypeLayout } from './layouts/InboxItemInlineTypeLayout';
 import { InboxItemLayout } from './layouts/InboxItemLayout';
@@ -38,6 +39,10 @@ type InboxDateGroup = {
   label: string;
   items: InboxItemData[];
 };
+
+type InboxListRow =
+  | { type: 'header'; id: string; label: string }
+  | { type: 'item'; id: string; item: InboxItemData };
 
 type NotificationTag = UnifiedNotification['notification_metadata']['tag'];
 
@@ -414,12 +419,155 @@ function NotificationInboxList(props: {
   onToggleFilter: (filterId: string) => void;
 }) {
   const [showDevFilters, setShowDevFilters] = createSignal(false);
+
   const [layoutVariant, setLayoutVariant] = createSignal<
     'default' | 'inline-type'
   >('default');
 
+  const [virtualHandle, setVirtualHandle] = createSignal<VirtualizerHandle>();
+
+  const rows = createMemo<InboxListRow[]>(() =>
+    props.groups.flatMap((group) => [
+      { type: 'header' as const, id: group.id, label: group.label },
+      ...group.items.map((item) => ({
+        type: 'item' as const,
+        id: item.id,
+        item,
+      })),
+    ])
+  );
+
+  const [scrollOffset, setScrollOffset] = createSignal(0);
+
+  const currentHeader = () => {
+    const handle = virtualHandle();
+    const firstIndex = handle?.findItemIndex(scrollOffset()) ?? 0;
+    const header = rows()
+      .slice(0, firstIndex + 1)
+      .findLast((row) => row.type === 'header');
+
+    return header?.label;
+  };
+
+  const [focusedIndex, setFocusedIndex] = createSignal(-1);
+
+  let lastFocusedRowId: string | undefined;
+
+  const rowIndexForItem = (item: InboxItemData) =>
+    rows().findIndex((row) => row.type === 'item' && row.item.id === item.id);
+
+  const focusedRow = () => {
+    const index = focusedIndex();
+    if (index === -1) return undefined;
+
+    const row = rows()[index];
+    return row?.type === 'item' ? row : undefined;
+  };
+
+  const shouldSkipRow = (row: InboxListRow) => row.type === 'header';
+
+  const setFocus = (index: number) => {
+    const row = rows()[index];
+    if (!row || shouldSkipRow(row)) return undefined;
+
+    setFocusedIndex(index);
+    lastFocusedRowId = row.id;
+    virtualHandle()?.scrollToIndex(index, { align: 'nearest' });
+    return row;
+  };
+
+  const findNextIndex = (startIndex: number, offset: number) => {
+    const list = rows();
+    if (!list.length) return -1;
+
+    const direction = offset > 0 ? 1 : -1;
+    let cursor = startIndex;
+
+    while (true) {
+      cursor += direction;
+      if (cursor < 0 || cursor >= list.length) {
+        return startIndex;
+      }
+
+      const row = list[cursor];
+      if (row && !shouldSkipRow(row)) return cursor;
+    }
+  };
+
+  const navigateBy = (offset: number) => {
+    const list = rows();
+    if (!list.length) return;
+
+    const current = focusedIndex();
+    if (current === -1) {
+      const direction = offset > 0 ? 1 : -1;
+      let index = offset > 0 ? 0 : list.length - 1;
+      while (index >= 0 && index < list.length && shouldSkipRow(list[index])) {
+        index += direction;
+      }
+      if (index < 0 || index >= list.length) return;
+      setFocus(index);
+      return;
+    }
+
+    const nextIndex = findNextIndex(current, offset);
+    if (nextIndex !== -1) setFocus(nextIndex);
+  };
+
+  const selectCurrent = () => {
+    const row = focusedRow();
+    if (row) {
+      props.onSelect(row.item);
+      return;
+    }
+
+    const firstRow = rows().find((row) => row.type === 'item');
+    if (!firstRow) return;
+
+    setFocus(rowIndexForItem(firstRow.item));
+    props.onSelect(firstRow.item);
+  };
+
+  createEffect(() => {
+    if (!lastFocusedRowId) return;
+
+    const index = rows().findIndex((row) => row.id === lastFocusedRowId);
+    setFocusedIndex(index);
+    if (index < 0) lastFocusedRowId = undefined;
+  });
+
+  const handleKeyDown = (event: KeyboardEvent) => {
+    const target = event.target as HTMLElement | null;
+    if (
+      target?.closest('button,a,input,textarea,select,[contenteditable=true]')
+    ) {
+      return;
+    }
+
+    if (event.key === 'j' || event.key === 'ArrowDown') {
+      event.preventDefault();
+      navigateBy(1);
+      return;
+    }
+
+    if (event.key === 'k' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      navigateBy(-1);
+      return;
+    }
+
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      selectCurrent();
+    }
+  };
+
   return (
-    <div class="flex size-full min-h-0 flex-col bg-surface p-2">
+    <div
+      class="flex size-full min-h-0 flex-col bg-surface p-2 outline-none"
+      tabIndex={0}
+      onKeyDown={handleKeyDown}
+    >
       <div class="mb-2 flex shrink-0 flex-col gap-2">
         <TabsInset
           class="h-auto w-fit"
@@ -477,42 +625,64 @@ function NotificationInboxList(props: {
           </div>
         </Show>
       </div>
-      <div class="min-h-0 flex-1 overflow-y-auto">
-        <div class="flex min-h-full flex-col gap-3 pb-2">
-          <For each={props.groups}>
-            {(group) => (
-              <section class="flex w-full flex-col gap-1.5">
-                <header class="sticky top-0 z-1 flex items-center gap-1 bg-surface px-2 py-1">
-                  <CalendarIcon class="size-3 shrink-0 text-ink-extra-muted" />
-                  <h1 class="text-xs font-medium text-ink-extra-muted">
-                    {group.label}
-                  </h1>
-                </header>
-                <For each={group.items}>
-                  {(item) => (
-                    <InboxItem.Root
-                      item={item}
-                      selected={props.selectedItem?.id === item.id}
-                    >
-                      <Show
-                        when={layoutVariant() === 'inline-type'}
-                        fallback={
-                          <InboxItemLayout
-                            onClick={() => props.onSelect(item)}
-                          />
-                        }
-                      >
-                        <InboxItemInlineTypeLayout
-                          onClick={() => props.onSelect(item)}
-                        />
-                      </Show>
-                    </InboxItem.Root>
-                  )}
-                </For>
-              </section>
-            )}
-          </For>
-        </div>
+      <div class="flex min-h-0 flex-1 flex-col">
+        <Show when={currentHeader()}>
+          {(label) => (
+            <header class="flex shrink-0 items-center gap-1 bg-surface px-2 py-4">
+              <CalendarIcon class="size-3 shrink-0 text-ink-extra-muted" />
+              <h1 class="text-xs font-medium text-ink-extra-muted">
+                {label()}
+              </h1>
+            </header>
+          )}
+        </Show>
+        <VList
+          ref={setVirtualHandle}
+          data={rows()}
+          class="min-h-0 flex-1 scrollbar-hidden"
+          style={{ height: '100%', width: '100%' }}
+          onScroll={setScrollOffset}
+        >
+          {(row) => {
+            if (row.type === 'header') {
+              return (
+                <Show when={row.label !== currentHeader()}>
+                  <header class="mt-3 flex items-center gap-1 bg-surface px-2 py-4 first:mt-0">
+                    <CalendarIcon class="size-3 shrink-0 text-ink-extra-muted" />
+                    <h1 class="text-xs font-medium text-ink-extra-muted">
+                      {row.label}
+                    </h1>
+                  </header>
+                </Show>
+              );
+            }
+
+            return (
+              <div class="pb-1.5">
+                <InboxItem.Root
+                  item={row.item}
+                  selected={
+                    props.selectedItem?.id === row.item.id ||
+                    focusedRow()?.item.id === row.item.id
+                  }
+                >
+                  <Show
+                    when={layoutVariant() === 'inline-type'}
+                    fallback={
+                      <InboxItemLayout
+                        onClick={() => props.onSelect(row.item)}
+                      />
+                    }
+                  >
+                    <InboxItemInlineTypeLayout
+                      onClick={() => props.onSelect(row.item)}
+                    />
+                  </Show>
+                </InboxItem.Root>
+              </div>
+            );
+          }}
+        </VList>
       </div>
     </div>
   );
