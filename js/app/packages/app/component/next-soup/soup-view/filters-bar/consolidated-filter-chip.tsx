@@ -45,10 +45,6 @@ export type ConsolidatedFilter = {
   onToggleValue?: (valueId: string) => void;
   /** Check if a value is active */
   isValueActive?: (valueId: string) => boolean;
-  /** Per-row "Only" affordance that narrows to a single value. */
-  onOnly?: (valueId: string) => void;
-  /** Whether a value is the sole active one (flips "Only" to "All"). */
-  isValueSoleActive?: (valueId: string) => boolean;
 
   // Searchable filter props (for In/From style filters)
   searchableOptions?: Accessor<SearchableOption[]>;
@@ -223,28 +219,6 @@ const ValueDropdownContent = (props: { filter: ConsolidatedFilter }) => {
                 >
                   {option.label}
                 </span>
-
-                <Show when={props.filter.onOnly}>
-                  {(onOnly) => (
-                    <button
-                      type="button"
-                      class="shrink-0 text-xxs text-ink-muted opacity-0 group-hover:opacity-100 group-data-highlighted:opacity-100 hover:text-ink"
-                      onPointerDown={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                      }}
-                      onPointerUp={(e) => e.stopPropagation()}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onOnly()(option.id);
-                      }}
-                    >
-                      {props.filter.isValueSoleActive?.(option.id)
-                        ? 'All'
-                        : 'Only'}
-                    </button>
-                  )}
-                </Show>
               </Dropdown.Item>
             );
           }}

@@ -44,7 +44,6 @@ import {
   SearchableMultiSelectInline,
   type SearchableOption,
 } from './searchable-multi-select';
-import { useTaskStatusFilter } from './task-status-filter';
 
 export const TypeIndicator = (props: { active: boolean }) => (
   <span
@@ -480,7 +479,6 @@ export const UnifiedFilterDropdown = (
     useSoupView();
   const contacts = useContacts();
   const userId = useUserId();
-  const taskStatus = useTaskStatusFilter();
 
   const currentView = createMemo((): ListView | undefined => {
     const content = panel.handle.content();
@@ -539,31 +537,6 @@ export const UnifiedFilterDropdown = (
     } else {
       queryFilters.add(query);
     }
-  };
-
-  const activeOptionIds = (category: FilterCategory) =>
-    category.options.filter((o) => isOptionActive(o.id)).map((o) => o.id);
-
-  const isFilterSoleActive = (category: FilterCategory, optionId: string) => {
-    const active = activeOptionIds(category);
-    return active.length === 1 && active[0] === optionId;
-  };
-
-  // Narrow a category to a single value; clicking the sole active value clears
-  // the category ("All"). Reuses toggleFilter so each category's query handling
-  // (including the inbox type special case) stays intact.
-  const selectOnlyFilter = (category: FilterCategory, optionId: FilterID) => {
-    const active = activeOptionIds(category);
-    if (active.length === 1 && active[0] === optionId) {
-      toggleFilter(optionId);
-      return;
-    }
-    batch(() => {
-      for (const id of active) {
-        if (id !== optionId) toggleFilter(id);
-      }
-      if (!isOptionActive(optionId)) toggleFilter(optionId);
-    });
   };
 
   // Assignee options for tasks view
@@ -712,19 +685,10 @@ export const UnifiedFilterDropdown = (
                           <Dropdown.Group>
                             <For each={category.options}>
                               {(option) => {
-                                const isStatus =
-                                  isTasksView() && category.id === 'status';
-                                const active = () =>
-                                  isStatus
-                                    ? taskStatus.isActive(option.id)
-                                    : isOptionActive(option.id);
+                                const active = () => isOptionActive(option.id);
                                 return (
                                   <Dropdown.Item
-                                    onSelect={() =>
-                                      isStatus
-                                        ? taskStatus.toggle(option.id)
-                                        : toggleFilter(option.id)
-                                    }
+                                    onSelect={() => toggleFilter(option.id)}
                                     closeOnSelect={!category.multiple}
                                   >
                                     <TypeIndicator active={active()} />
@@ -745,28 +709,6 @@ export const UnifiedFilterDropdown = (
                                     >
                                       {option.label}
                                     </span>
-
-                                    {/* Status keeps plain checkboxes; Only/All
-                                        is for the other multi-select filters. */}
-                                    <Show when={category.multiple && !isStatus}>
-                                      <button
-                                        type="button"
-                                        class="shrink-0 text-xxs text-ink-muted opacity-0 group-hover:opacity-100 group-data-highlighted:opacity-100 hover:text-ink"
-                                        onPointerDown={(e) => {
-                                          e.preventDefault();
-                                          e.stopPropagation();
-                                        }}
-                                        onPointerUp={(e) => e.stopPropagation()}
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          selectOnlyFilter(category, option.id);
-                                        }}
-                                      >
-                                        {isFilterSoleActive(category, option.id)
-                                          ? 'All'
-                                          : 'Only'}
-                                      </button>
-                                    </Show>
                                   </Dropdown.Item>
                                 );
                               }}
@@ -793,12 +735,11 @@ export const UnifiedFilterDropdown = (
               {/* Single category: render options directly */}
               <For each={categories()[0]!.options}>
                 {(option) => {
-                  const category = categories()[0]!;
                   const active = () => isOptionActive(option.id);
                   return (
                     <Dropdown.Item
                       onSelect={() => toggleFilter(option.id)}
-                      closeOnSelect={!category.multiple}
+                      closeOnSelect={!categories()[0]!.multiple}
                     >
                       <TypeIndicator active={active()} />
 
@@ -818,26 +759,6 @@ export const UnifiedFilterDropdown = (
                       >
                         {option.label}
                       </span>
-
-                      <Show when={category.multiple}>
-                        <button
-                          type="button"
-                          class="shrink-0 text-xxs text-ink-muted opacity-0 group-hover:opacity-100 group-data-highlighted:opacity-100 hover:text-ink"
-                          onPointerDown={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                          }}
-                          onPointerUp={(e) => e.stopPropagation()}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            selectOnlyFilter(category, option.id);
-                          }}
-                        >
-                          {isFilterSoleActive(category, option.id)
-                            ? 'All'
-                            : 'Only'}
-                        </button>
-                      </Show>
                     </Dropdown.Item>
                   );
                 }}
