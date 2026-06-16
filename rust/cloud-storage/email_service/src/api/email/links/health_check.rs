@@ -3,9 +3,12 @@ use axum::Extension;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Json, Response};
-use email_service::util::gmail::auth::fetch_token_or_mark_reauth_no_cache;
+use email_service::util::gmail::auth::{
+    fetch_token_or_mark_reauth_no_cache, is_reauth_required_error,
+};
 use model::response::{EmptyResponse, ErrorResponse};
 use model::user::UserContext;
+use models_email::email::service::pubsub::LinkManagerMessage;
 use std::time::Duration;
 use thiserror::Error;
 
@@ -78,18 +81,42 @@ pub async fn health_check_handler(
                 return;
             }
 
-            fetch_token_or_mark_reauth_no_cache(
+            let probe = fetch_token_or_mark_reauth_no_cache(
                 &link,
                 &ctx.db,
                 &ctx.redis_client,
                 &ctx.auth_service_client,
                 &ctx.sqs_client,
             )
-            .await
-            .inspect_err(|e| {
+            .await;
+
+            let Err(e) = probe else { return };
+
+            if !is_reauth_required_error(&e) {
                 tracing::debug!(error=?e, link_id=%link.id, "Health probe token fetch failed");
-            })
-            .ok();
+                return;
+            }
+
+            // A revoked grant marks the link and fans out as a side effect of the probe.
+            // If that mark did not persist, the signal would be lost on this fire-and-forget
+            // path, so hand off to the link-manager queue, which retries until it sticks.
+            let persisted = email_db_client::links::get::fetch_link_by_id(&ctx.db, link.id)
+                .await
+                .ok()
+                .flatten()
+                .is_some_and(|l| l.needs_reauth);
+
+            if !persisted {
+                ctx.sqs_client
+                    .enqueue_link_manager_notification(LinkManagerMessage::HealthCheck {
+                        link_id: link.id,
+                    })
+                    .await
+                    .inspect_err(|enqueue_err| {
+                        tracing::error!(error=?enqueue_err, link_id=%link.id, "Failed to enqueue health-check retry after unpersisted reauth");
+                    })
+                    .ok();
+            }
         });
     }
 
