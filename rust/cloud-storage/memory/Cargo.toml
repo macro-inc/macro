@@ -7,6 +7,7 @@ version = "0.1.0"
 
 [dependencies]
 agent = { path = "../agent" }
+ai_usage = { path = "../ai_usage" }
 ai_tools = { path = "../ai_tools" }
 ai_toolset = { path = "../ai_toolset" }
 anyhow = { workspace = true }

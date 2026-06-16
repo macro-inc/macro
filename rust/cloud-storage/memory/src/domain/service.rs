@@ -166,16 +166,16 @@ where
             previous_memory.as_deref(),
         );
 
-        let agent_loop = AgentLoop::new().with_model(GENERATION_MODEL);
+        let agent_loop =
+            AgentLoop::new(self.tool_context.recorder.clone()).with_model(GENERATION_MODEL);
         let toolset: Arc<dyn ai_toolset::ToolSet<_> + Send + Sync> =
             self.tools.toolset.clone() as _;
+        let usage_ctx = ai_usage::UsageContext::new(ai_usage::AiFeature::Memory, user.clone());
+        // Carry the feature on the context so tool-spawned subagents attribute to it.
+        let mut tool_context = self.tool_context.clone();
+        tool_context.usage_context = usage_ctx.clone();
         let mut session = agent_loop
-            .session(
-                toolset,
-                Arc::new(self.tool_context.clone()),
-                &system_prompt,
-                user.clone(),
-            )
+            .session(toolset, Arc::new(tool_context), &system_prompt, usage_ctx)
             .await;
 
         let user_msg = ChatMessage {
@@ -209,7 +209,7 @@ where
         }
 
         // 2nd pass: judge the memory quality
-        judge_memory(&memory).await?;
+        judge_memory(&memory, user.clone(), self.tool_context.recorder.as_ref()).await?;
 
         self.memory_repo.save_memory(&memory, user).await?;
         Ok(memory)
@@ -245,8 +245,12 @@ fn build_generation_system_prompt(
     prompt
 }
 
-#[tracing::instrument(skip(memory), err)]
-async fn judge_memory(memory: &str) -> super::Result<()> {
+#[tracing::instrument(skip(memory, user, recorder), err)]
+async fn judge_memory(
+    memory: &str,
+    user: macro_user_id::user_id::MacroUserIdStr<'static>,
+    recorder: &dyn ai_usage::UsageRecorder,
+) -> super::Result<()> {
     let user_message = format!(
         "Evaluate this memory and respond with ONLY a JSON object \
          (no markdown, no code fences):\n\
@@ -254,9 +258,15 @@ async fn judge_memory(memory: &str) -> super::Result<()> {
          ---\n\n{memory}"
     );
 
-    let response = agent::complete(JUDGE_MODEL, JUDGE_PROMPT, &user_message)
-        .await
-        .map_err(|e| anyhow::anyhow!(e))?;
+    let response = agent::complete(
+        JUDGE_MODEL,
+        JUDGE_PROMPT,
+        &user_message,
+        recorder,
+        ai_usage::UsageContext::new(ai_usage::AiFeature::Memory, user),
+    )
+    .await
+    .map_err(|e| anyhow::anyhow!(e))?;
 
     let judgement: MemoryJudgement = serde_json::from_str(response.trim())
         .map_err(|e| anyhow::anyhow!("failed to parse judge response: {e}\nraw: {response}"))?;

@@ -328,6 +328,8 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         team_tool_context: ai_tools::build_team_tool_context(pool.clone()),
         schedule_tool_context: ai_tools::no_op_schedule_context(),
         anthropic_tool_context: ai_tools::build_anthropic_tool_context_test(),
+        recorder: ai_usage::pg_recorder(pool.clone()),
+        usage_context: ai_usage::UsageContext::system(ai_usage::AiFeature::Chat),
     };
     let all_tools = ai_tools::all_tools();
     let all_tools_toolset = all_tools.toolset.clone();
@@ -340,6 +342,10 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         memory_repo,
         tool_service_context.clone(),
         all_tools,
+    ));
+
+    let usage_service = Arc::new(ai_usage::domain::service::UsageServiceImpl::new(
+        ai_usage::outbound::PgUsageRepo::new(pool.clone()),
     ));
 
     let api_context = ApiContext {
@@ -364,6 +370,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         stream_repo: MockStreamRepo::new(),
         document_tool_context: document_tool_context.clone(),
         memory_service,
+        usage_service,
         properties_tool_context,
         email_tool_context,
         call_tool_context,

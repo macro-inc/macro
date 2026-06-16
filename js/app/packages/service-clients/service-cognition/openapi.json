@@ -11,6 +11,107 @@
     "version": "1.0.0"
   },
   "paths": {
+    "/ai-cost/pricing": {
+      "post": {
+        "tags": ["ai_usage"],
+        "summary": "Set the pricing for a model and recompute its recorded rows. Admin only.",
+        "operationId": "set_pricing_handler",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetPricingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Pricing updated"
+          },
+          "403": {
+            "description": "Admin access required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ai-cost/usage": {
+      "post": {
+        "tags": ["ai_usage"],
+        "summary": "Query recorded AI usage. Admin only.",
+        "operationId": "get_usage_handler",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UsageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Usage summary",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsageSummary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Admin access required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/attachments/{attachment_id}/chats": {
       "get": {
         "tags": ["get_chats_for_attachment"],
@@ -1439,6 +1540,19 @@
           }
         }
       },
+      "AiFeature": {
+        "type": "string",
+        "description": "Everything we use AI for. The wire / DB form of each variant is its\n`snake_case` name.",
+        "enum": [
+          "chat",
+          "memory",
+          "automation",
+          "dynamic_completions_api",
+          "chat_rename",
+          "call_summary",
+          "channel_bot"
+        ]
+      },
       "AssistantMessagePart": {
         "oneOf": [
           {
@@ -2098,6 +2212,30 @@
           }
         ]
       },
+      "CompletionUsage": {
+        "type": "object",
+        "description": "A recorded completion: who, what feature, optional entity, and the cost.",
+        "required": ["feature", "user", "cost"],
+        "properties": {
+          "cost": {
+            "$ref": "#/components/schemas/Usage",
+            "description": "Token usage and cost."
+          },
+          "entity": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The entity the completion related to, if any."
+          },
+          "feature": {
+            "$ref": "#/components/schemas/AiFeature",
+            "description": "The feature that performed the completion."
+          },
+          "user": {
+            "$ref": "#/components/schemas/MacroUserIdStr",
+            "description": "The user the completion was performed for (the [system user](SYSTEM_USER_ID)\nfor background work)."
+          }
+        }
+      },
       "ConversationRecord": {
         "type": "object",
         "required": ["chat_id", "title", "messages"],
@@ -2221,6 +2359,17 @@
           "crm_contact"
         ]
       },
+      "ErrorBody": {
+        "type": "object",
+        "description": "Error response body.",
+        "required": ["error"],
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Human-readable error description."
+          }
+        }
+      },
       "ErrorResponse": {
         "type": "object",
         "description": "A plain old json error response for use with axum.\nyup, thats it.",
@@ -2229,6 +2378,29 @@
           "message": {
             "type": "string",
             "description": "Message to explain failure"
+          }
+        }
+      },
+      "FeatureUsage": {
+        "type": "object",
+        "description": "Usage for a single feature, with its rolled-up dollar total.",
+        "required": ["feature", "entries", "total"],
+        "properties": {
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CompletionUsage"
+            },
+            "description": "The individual completions recorded for this feature."
+          },
+          "feature": {
+            "$ref": "#/components/schemas/AiFeature",
+            "description": "The feature."
+          },
+          "total": {
+            "type": "number",
+            "format": "float",
+            "description": "Total cost across `entries` (USD)."
           }
         }
       },
@@ -2789,6 +2961,9 @@
           }
         }
       },
+      "MacroUserIdStr": {
+        "type": "string"
+      },
       "MemoryErrorBody": {
         "type": "object",
         "required": ["error"],
@@ -2957,6 +3132,28 @@
           }
         }
       },
+      "Price": {
+        "type": "object",
+        "description": "Resolved price for one completion.",
+        "required": ["price_per_million_in", "price_per_million_out", "total"],
+        "properties": {
+          "price_per_million_in": {
+            "type": "number",
+            "format": "float",
+            "description": "Price per million input tokens (USD)."
+          },
+          "price_per_million_out": {
+            "type": "number",
+            "format": "float",
+            "description": "Price per million output tokens (USD)."
+          },
+          "total": {
+            "type": "number",
+            "format": "float",
+            "description": "Total cost of the completion (USD)."
+          }
+        }
+      },
       "RejectToolCallRequest": {
         "type": "object",
         "description": "Request body for rejecting a pending tool call.",
@@ -3060,6 +3257,27 @@
           "url": {
             "type": "string",
             "description": "The MCP server URL."
+          }
+        }
+      },
+      "SetPricingRequest": {
+        "type": "object",
+        "description": "Request body for [`set_pricing_handler`].",
+        "required": ["model", "price_per_mil_in", "price_per_mil_out"],
+        "properties": {
+          "model": {
+            "type": "string",
+            "description": "The model api id to (re)price."
+          },
+          "price_per_mil_in": {
+            "type": "number",
+            "format": "float",
+            "description": "New price per million input tokens (USD)."
+          },
+          "price_per_mil_out": {
+            "type": "number",
+            "format": "float",
+            "description": "New price per million output tokens (USD)."
           }
         }
       },
@@ -3387,6 +3605,94 @@
           "toolCallId": {
             "type": "string",
             "description": "The tool call ID whose response should be updated."
+          }
+        }
+      },
+      "Usage": {
+        "type": "object",
+        "description": "The token usage and resolved cost of a single completion.",
+        "required": ["input_tokens", "output_tokens", "model", "created_at"],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the completion was recorded."
+          },
+          "input_tokens": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Tokens consumed by the input.",
+            "minimum": 0
+          },
+          "model": {
+            "type": "string",
+            "description": "The model api id (e.g. `claude-opus-4-8`)."
+          },
+          "output_tokens": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Tokens generated in the output.",
+            "minimum": 0
+          },
+          "price": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Price",
+                "description": "Resolved price, or `None` when the model had no pricing at record time."
+              }
+            ]
+          }
+        }
+      },
+      "UsageRequest": {
+        "type": "object",
+        "description": "Request body for [`get_usage_handler`].",
+        "properties": {
+          "features": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AiFeature"
+            },
+            "description": "If empty, include all features."
+          },
+          "from": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Inclusive lower bound on `created_at`."
+          },
+          "include_users": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "If empty, include all users."
+          },
+          "until": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Exclusive upper bound on `created_at`."
+          }
+        }
+      },
+      "UsageSummary": {
+        "type": "object",
+        "description": "The result of a usage query: per-feature breakdown plus a grand total.",
+        "required": ["entries", "total"],
+        "properties": {
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FeatureUsage"
+            },
+            "description": "Per-feature usage."
+          },
+          "total": {
+            "type": "number",
+            "format": "float",
+            "description": "Grand total cost across all features (USD)."
           }
         }
       },

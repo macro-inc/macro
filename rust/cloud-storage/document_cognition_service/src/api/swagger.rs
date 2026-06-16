@@ -17,6 +17,7 @@ use crate::model::{
     response::attachments::GetChatsForAttachmentResponse,
     stream::{ChatStream, SendChatMessagePayload, StreamError, ToolSet},
 };
+use ai_usage::inbound::axum_router::{self as ai_usage_api};
 use mcp_client::inbound::axum_router::{
     self as mcp_api, AddServerRequest, ServerResponse, StartAuthRequest, StartAuthResponse,
     UpdateServerRequest,
@@ -83,6 +84,8 @@ use utoipa::OpenApi;
             stream_stop::stop_chat_stream,
             structured_completion::structured_completion,
             memory_api::get_memory_handler,
+            ai_usage_api::get_usage_handler,
+            ai_usage_api::set_pricing_handler,
             mcp_api::list_servers,
             mcp_api::add_server,
             mcp_api::update_server,
@@ -170,6 +173,17 @@ use utoipa::OpenApi;
                 // Memory
                 MemoryResponse,
                 MemoryErrorBody,
+
+                // AI cost
+                ai_usage_api::UsageRequest,
+                ai_usage_api::SetPricingRequest,
+                ai_usage_api::ErrorBody,
+                ai_usage::UsageSummary,
+                ai_usage::FeatureUsage,
+                ai_usage::CompletionUsage,
+                ai_usage::Usage,
+                ai_usage::Price,
+                ai_usage::AiFeature,
 
                 // MCP
                 ServerResponse,

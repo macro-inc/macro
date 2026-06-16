@@ -505,7 +505,7 @@ async fn main() -> anyhow::Result<()> {
         recording_storage,
         config.vars.livekit_server_url.as_ref(),
     )
-    .with_summarizer(AiCallSummarizer::new());
+    .with_summarizer(AiCallSummarizer::new(ai_usage::pg_recorder(db.clone())));
     if let Some(secret) = internal_call_secret {
         call_service_builder = call_service_builder.with_internal_call_secret(secret);
     }
@@ -594,7 +594,7 @@ async fn main() -> anyhow::Result<()> {
         TextEmbedding3Small::new(openai_api_key),
         PgTaskVectorDb::new(db.clone()),
         NoOpReranker,
-        Arc::new(AgentDuplicateJudge::new()),
+        Arc::new(AgentDuplicateJudge::new(ai_usage::pg_recorder(db.clone()))),
         Arc::new(ConnectionGatewayTaskDedupNotifier::new(
             conn_gateway_client.clone(),
         )),

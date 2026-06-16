@@ -36,6 +36,7 @@ bytes = { workspace = true }
 bzip2 = { workspace = true, default-features = false, features = [
   "libbz2-rs-sys",
 ] }
+ai_usage = { path = "../ai_usage" }
 analytics_client = { path = "../analytics_client" }
 cal = { path = "../cal", features = ["axum", "outbound"] }
 call = { path = "../call" }
