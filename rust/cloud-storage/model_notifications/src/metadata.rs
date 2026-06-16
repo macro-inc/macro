@@ -1,5 +1,4 @@
 use chrono::{DateTime, Utc};
-use doppleganger::Doppleganger;
 pub use invite_email::{ChannelInviteMetadata, InviteToTeamMetadata};
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::{email::ReadEmailParts, user_id::MacroUserIdStr};
@@ -485,8 +484,7 @@ impl NotificationTitle for GithubPrReview {
     }
 }
 
-#[derive(Debug, Clone, Copy, ToSchema, Doppleganger, Serialize, Deserialize)]
-#[dg(backward = models_comms::channel::ChannelType)]
+#[derive(Debug, Clone, Copy, ToSchema, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ChannelType {
     #[serde(alias = "Public", alias = "public")]
@@ -497,17 +495,6 @@ pub enum ChannelType {
     DirectMessage,
     #[serde(alias = "Team", alias = "team")]
     Team,
-}
-
-impl ChannelType {
-    pub fn to_model_comms(self) -> models_comms::channel::ChannelType {
-        match self {
-            ChannelType::Public => models_comms::channel::ChannelType::Public,
-            ChannelType::Private => models_comms::channel::ChannelType::Private,
-            ChannelType::DirectMessage => models_comms::channel::ChannelType::DirectMessage,
-            ChannelType::Team => models_comms::channel::ChannelType::Team,
-        }
-    }
 }
 
 /// Common metadata for notifications on channels

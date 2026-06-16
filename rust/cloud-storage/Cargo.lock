@@ -2392,7 +2392,6 @@ dependencies = [
  "macro_user_id",
  "macro_uuid",
  "model",
- "models_comms",
  "serde",
  "serde_json",
  "sqlx",
@@ -7472,7 +7471,6 @@ dependencies = [
  "model_file_type",
  "model_user",
  "models_bulk_upload",
- "models_comms",
  "models_pagination",
  "models_permissions",
  "schemars 1.2.1",
@@ -7528,12 +7526,10 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
- "doppleganger",
  "invite_email",
  "macro_user_id",
  "mention_utils",
  "model-entity",
- "models_comms",
  "models_pagination",
  "notification",
  "paste",
@@ -7568,22 +7564,6 @@ dependencies = [
  "serde",
  "strum",
  "utoipa",
- "workspace-hack",
-]
-
-[[package]]
-name = "models_comms"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "chrono",
- "doppleganger",
- "frecency",
- "macro_user_id",
- "serde",
- "strum",
- "thiserror 2.0.18",
- "uuid",
  "workspace-hack",
 ]
 
@@ -8137,7 +8117,6 @@ dependencies = [
  "model_file_type",
  "model_notifications",
  "model_user",
- "models_comms",
  "models_pagination",
  "notification",
  "notification_db_client",

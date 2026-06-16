@@ -1,7 +1,6 @@
 use chrono::{DateTime, Utc};
-use doppleganger::Doppleganger;
+use doppleganger::Primitive;
 use macro_user_id::user_id::MacroUserIdStr;
-pub use models_comms::channel::{ChannelId, OrganizationId};
 use serde::{Deserialize, Serialize};
 use sqlx::Type;
 use std::collections::HashMap;
@@ -11,6 +10,18 @@ use uuid::Uuid;
 
 /// Ugly place to store the models that are used by service client.
 /// it's ugly to promot someone else moving it as I am lazy -- Hutch.
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(transparent)]
+pub struct OrganizationId(pub u32);
+
+impl Primitive for OrganizationId {}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(transparent)]
+pub struct ChannelId(pub Uuid);
+
+impl Primitive for ChannelId {}
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct AddUserToOrgChannelsRequest {
@@ -47,12 +58,9 @@ pub struct UserActivityForChannel {
     pub updated_at: chrono::NaiveDateTime,
 }
 
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type, ToSchema, Default, Doppleganger,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type, ToSchema, Default)]
 #[sqlx(type_name = "comms_participant_role", rename_all = "lowercase")]
 #[serde(rename_all = "snake_case")]
-#[dg(backward = models_comms::channel::ParticipantRole)]
 pub enum ParticipantRole {
     Owner,
     Admin,
@@ -60,8 +68,7 @@ pub enum ParticipantRole {
     Member,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, Doppleganger)]
-#[dg(backward = models_comms::channel::ChannelParticipant)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ChannelParticipant {
     /// id of the channel
     #[schema(value_type = Uuid)]
@@ -85,7 +92,6 @@ pub struct ChannelParticipant {
     Eq,
     Display,
     ToSchema,
-    Doppleganger,
     Serialize,
     Deserialize,
     sqlx::Type,
@@ -94,7 +100,6 @@ pub struct ChannelParticipant {
 #[strum(serialize_all = "snake_case")]
 #[serde(rename_all = "snake_case")]
 #[sqlx(type_name = "comms_channel_type", rename_all = "snake_case")]
-#[dg(backward = models_comms::channel::ChannelType)]
 pub enum ChannelType {
     Public,
     Private,
@@ -102,8 +107,7 @@ pub enum ChannelType {
     Team,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, PartialEq, Eq, Doppleganger)]
-#[dg(backward = models_comms::channel::Channel)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, PartialEq, Eq)]
 pub struct Channel {
     /// uuid of the channel
     #[schema(value_type = Uuid)]
@@ -124,16 +128,14 @@ pub struct Channel {
     pub owner_id: MacroUserIdStr<'static>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, Doppleganger)]
-#[dg(backward = models_comms::channel::ChannelWithParticipants)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ChannelWithParticipants {
     #[serde(flatten)]
     pub channel: Channel,
     pub participants: Vec<ChannelParticipant>,
 }
 
-#[derive(Debug, Clone, Default, ToSchema, Serialize, Deserialize, Doppleganger)]
-#[dg(backward = models_comms::channel::LatestMessage)]
+#[derive(Debug, Clone, Default, ToSchema, Serialize, Deserialize)]
 pub struct LatestMessage {
     pub latest_message: Option<ChannelMessage>,
     pub latest_non_thread_message: Option<ChannelMessage>,
@@ -172,8 +174,7 @@ pub struct CreateWelcomeMessageRequest {
     pub to_user_id: MacroUserIdStr<'static>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, Doppleganger)]
-#[dg(backward = models_comms::channel::ChannelMessage)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ChannelMessage {
     pub message_id: Uuid,
     pub thread_id: Option<Uuid>,

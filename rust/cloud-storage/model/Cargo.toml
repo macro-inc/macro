@@ -17,7 +17,6 @@ model-error-response = { path = "../model-error-response" }
 model_file_type = { path = "../model_file_type", features = ["utoipa"] }
 model_user = { path = "../model_user", features = ["axum"] }
 models_bulk_upload = { path = "../models_bulk_upload" }
-models_comms = { path = "../models_comms" }
 models_pagination = { path = "../models_pagination" }
 models_permissions = { path = "../models_permissions" }
 schemars = { workspace = true }

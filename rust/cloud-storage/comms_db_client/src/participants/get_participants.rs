@@ -3,13 +3,13 @@ use doppleganger::Doppleganger;
 use doppleganger::Mirror;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
-use model::comms::ChannelId;
+use model::comms::{ChannelId, ChannelParticipant};
 use sqlx::Transaction;
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
 #[derive(sqlx::Type, Doppleganger, Debug)]
-#[dg(forward = models_comms::channel::ParticipantRole)]
+#[dg(forward = model::comms::ParticipantRole)]
 #[sqlx(rename_all = "lowercase")]
 pub enum DbParticipantRole {
     Admin,
@@ -21,7 +21,7 @@ pub enum DbParticipantRole {
 pub async fn get_participants_tsx<'t>(
     tsx: &mut Transaction<'t, Postgres>,
     channel_id: &Uuid,
-) -> Result<Vec<models_comms::channel::ChannelParticipant>, sqlx::Error> {
+) -> Result<Vec<ChannelParticipant>, sqlx::Error> {
     let participants = sqlx::query!(
         r#"
         SELECT
@@ -37,7 +37,7 @@ pub async fn get_participants_tsx<'t>(
         channel_id
     )
     .try_map(|row| {
-        Ok(models_comms::channel::ChannelParticipant {
+        Ok(ChannelParticipant {
             channel_id: ChannelId(row.channel_id),
             user_id: macro_user_id::user_id::MacroUserIdStr::parse_from_str(&row.user_id)
                 .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
@@ -57,7 +57,7 @@ pub async fn get_participants_tsx<'t>(
 pub async fn get_participants(
     db: &Pool<Postgres>,
     channel_id: &Uuid,
-) -> Result<Vec<models_comms::channel::ChannelParticipant>, sqlx::Error> {
+) -> Result<Vec<ChannelParticipant>, sqlx::Error> {
     let participants = sqlx::query!(
         r#"
         SELECT
@@ -73,7 +73,7 @@ pub async fn get_participants(
         channel_id
     )
     .try_map(|row| {
-        Ok(models_comms::channel::ChannelParticipant {
+        Ok(ChannelParticipant {
             channel_id: ChannelId(row.channel_id),
             user_id: macro_user_id::user_id::MacroUserIdStr::parse_from_str(&row.user_id)
                 .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
