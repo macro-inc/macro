@@ -441,10 +441,7 @@ export function InboxItemLayout(
   return (
     <Switch fallback={<StandardLayout onClick={props.onClick} />}>
       <Match when={type() === 'channel_invite'}>
-        <StandardLayout
-          onClick={props.onClick}
-          actions={<InboxItem.ActionButton>Accept</InboxItem.ActionButton>}
-        />
+        <StandardLayout onClick={props.onClick} />
       </Match>
       <Match when={type() === 'invite_to_team'}>
         <StandardLayout
