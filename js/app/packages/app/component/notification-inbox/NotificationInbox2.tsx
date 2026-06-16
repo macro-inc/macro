@@ -8,7 +8,7 @@ import { Resize } from '@core/component/Resize';
 import type { EntityData } from '@entity';
 import type { UnifiedNotification } from '@notifications';
 import CalendarIcon from '@phosphor/calendar-blank.svg';
-import { cn } from '@ui';
+import { Button, cn } from '@ui';
 import { createEffect, createMemo, createSignal, For, Show } from 'solid-js';
 import { InboxItem, type InboxItem as InboxItemData } from './InboxItem';
 import { InboxItemLayout } from './layouts/InboxItemLayout';
@@ -35,6 +35,51 @@ type InboxDateGroup = {
   label: string;
   items: InboxItemData[];
 };
+
+type NotificationTag = UnifiedNotification['notification_metadata']['tag'];
+
+type DevNotificationFilter = {
+  id: string;
+  label: string;
+  tags: NotificationTag[];
+};
+
+const devNotificationFilters: DevNotificationFilter[] = [
+  { id: 'email', label: 'Email', tags: ['new_email'] },
+  {
+    id: 'channels',
+    label: 'Channels',
+    tags: ['channel_mention', 'channel_message_send', 'channel_message_reply'],
+  },
+  {
+    id: 'invites',
+    label: 'Invites',
+    tags: ['channel_invite', 'invite_to_team'],
+  },
+  {
+    id: 'documents',
+    label: 'Docs',
+    tags: [
+      'document_mention',
+      'mentioned_in_document_comment',
+      'replied_to_document_comment_thread',
+      'commented_on_document',
+    ],
+  },
+  { id: 'tasks', label: 'Tasks', tags: ['task_assigned'] },
+  { id: 'ai', label: 'AI', tags: ['ai_response'] },
+  {
+    id: 'github',
+    label: 'GitHub',
+    tags: [
+      'github_pr_status_changed',
+      'github_review_requested',
+      'github_pr_comment',
+      'github_pr_mention',
+      'github_pr_review',
+    ],
+  },
+];
 
 const transformNotificationItem = (args: {
   id: string;
@@ -181,19 +226,132 @@ const buildInboxGroups = (
   notifications: UnifiedNotification[]
 ): InboxDateGroup[] => groupInboxItemsByDate(buildInboxItems(notifications));
 
-function previewEntity(item: InboxItemData): EntityData | undefined {
-  if (!item.entityId || !item.entityType) return undefined;
+const getNotificationDateValue = (
+  notification: UnifiedNotification
+): string | null => notification.created_at ?? notification.updated_at ?? null;
 
-  const name = item.entityName || item.targetName || 'Preview';
+const getChannelPreviewEntity = (
+  notification: UnifiedNotification
+): EntityData | undefined => {
+  const metadata = notification.notification_metadata;
+
+  if (
+    metadata.tag !== 'channel_message_send' &&
+    metadata.tag !== 'channel_message_reply' &&
+    metadata.tag !== 'channel_mention'
+  ) {
+    return undefined;
+  }
+
+  const channelType =
+    metadata.content.channelType === 'directMessage'
+      ? 'direct_message'
+      : metadata.content.channelType;
+  const senderId =
+    metadata.tag === 'channel_message_reply'
+      ? metadata.content.userId
+      : (notification.sender_id ?? undefined);
+  const date = getNotificationDateValue(notification);
 
   return {
-    id: item.entityId,
-    type: item.entityType,
-    name,
+    id: metadata.content.messageId,
+    type: 'channel_message',
+    name: metadata.content.messageContent || metadata.content.channelName || '',
     ownerId: '',
-    createdAt: null,
-    updatedAt: null,
+    createdAt: date,
+    updatedAt: date,
+    channelId: notification.entity_id,
+    channelName: metadata.content.channelName ?? 'Channel',
+    channelType:
+      channelType === 'direct_message' ? 'direct_message' : channelType,
+    messageId: metadata.content.messageId,
+    threadId:
+      metadata.tag === 'channel_message_reply' ||
+      metadata.tag === 'channel_mention'
+        ? (metadata.content.threadId ?? undefined)
+        : undefined,
+    senderId: senderId ?? '',
+    content: metadata.content.messageContent ?? '',
   } as EntityData;
+};
+
+function previewEntity(item: InboxItemData): EntityData | undefined {
+  const notification = item.notification as UnifiedNotification | undefined;
+  if (!notification) return undefined;
+
+  const channelEntity = getChannelPreviewEntity(notification);
+  if (channelEntity) return channelEntity;
+
+  const metadata = notification.notification_metadata;
+  const date = getNotificationDateValue(notification);
+
+  switch (metadata.tag) {
+    case 'new_email':
+      return {
+        id: notification.entity_id,
+        type: 'email',
+        name: metadata.content.subject || 'Email',
+        ownerId: '',
+        createdAt: date,
+        updatedAt: date,
+        viewedAt: notification.viewed_at ?? null,
+        isRead: !!notification.viewed_at,
+        isDraft: false,
+        snippet: metadata.content.snippet ?? undefined,
+        isImportant: false,
+        done: !!notification.done,
+        senderEmail: metadata.content.sender ?? undefined,
+        senderName: metadata.content.sender ?? undefined,
+      } as EntityData;
+    case 'task_assigned':
+      return {
+        id: notification.entity_id,
+        type: 'document',
+        name: metadata.content.taskName ?? 'Task',
+        ownerId: '',
+        createdAt: date,
+        updatedAt: date,
+        viewedAt: notification.viewed_at ?? null,
+        fileType: 'md',
+        subType: { type: 'task' },
+      } as EntityData;
+    case 'document_mention':
+    case 'mentioned_in_document_comment':
+    case 'replied_to_document_comment_thread':
+    case 'commented_on_document':
+      return {
+        id: notification.entity_id,
+        type: 'document',
+        name: metadata.content.documentName ?? 'Document',
+        ownerId: '',
+        createdAt: date,
+        updatedAt: date,
+        viewedAt: notification.viewed_at ?? null,
+        fileType: metadata.content.fileType ?? 'md',
+        subType: metadata.content.subType ?? null,
+      } as EntityData;
+    case 'ai_response':
+      return {
+        id: notification.entity_id,
+        type: 'chat',
+        name: metadata.content.summary || 'AI response',
+        ownerId: '',
+        createdAt: date,
+        updatedAt: date,
+        viewedAt: notification.viewed_at ?? null,
+      } as EntityData;
+    default:
+      if (!item.entityId || !item.entityType) return undefined;
+
+      return {
+        id: item.entityId,
+        type: item.entityType,
+        name: item.entityName || item.targetName || 'Preview',
+        ownerId: '',
+        createdAt: date,
+        updatedAt: date,
+      } as EntityData;
+  }
 }
 
 function itemDensity(item: InboxItemData) {
@@ -204,11 +362,32 @@ function itemDensity(item: InboxItemData) {
 
 function NotificationInboxList(props: {
   groups: InboxDateGroup[];
+  hiddenFilterIds: string[];
   selectedItem: InboxItemData | undefined;
   onSelect: (item: InboxItemData) => void;
+  onToggleFilter: (filterId: string) => void;
 }) {
   return (
     <div class="size-full min-h-0 bg-surface p-2">
+      <div class="mb-2 flex shrink-0 flex-wrap gap-1">
+        <For each={devNotificationFilters}>
+          {(filter) => {
+            const hidden = () => props.hiddenFilterIds.includes(filter.id);
+
+            return (
+              <Button
+                class="h-7 bg-surface"
+                depth={2}
+                size="sm"
+                variant={hidden() ? 'active' : 'base'}
+                onClick={() => props.onToggleFilter(filter.id)}
+              >
+                {hidden() ? 'Show' : 'Hide'} {filter.label}
+              </Button>
+            );
+          }}
+        </For>
+      </div>
       <div class="size-full flex flex-col gap-3 overflow-y-auto">
         <For each={props.groups}>
           {(group) => (
@@ -241,13 +420,33 @@ export function NotificationInbox2() {
   const panel = useSplitPanelOrThrow();
   const orchestrator = useGlobalBlockOrchestrator();
   const notificationSource = useGlobalNotificationSource();
+  const [hiddenFilterIds, setHiddenFilterIds] = createSignal<string[]>([]);
+  const hiddenTags = createMemo(() => {
+    const ids = new Set(hiddenFilterIds());
+    return new Set(
+      devNotificationFilters
+        .filter((filter) => ids.has(filter.id))
+        .flatMap((filter) => filter.tags)
+    );
+  });
   const groups = createMemo(() =>
     buildInboxGroups(
       notificationSource
         .notifications()
         .filter((notification) => !notification.deleted_at)
+        .filter(
+          (notification) =>
+            !hiddenTags().has(notification.notification_metadata.tag)
+        )
     )
   );
+  const toggleFilter = (filterId: string) => {
+    setHiddenFilterIds((ids) =>
+      ids.includes(filterId)
+        ? ids.filter((id) => id !== filterId)
+        : [...ids, filterId]
+    );
+  };
   const [selectedItem, setSelectedItem] = createSignal<
     InboxItemData | undefined
   >();
@@ -264,7 +463,7 @@ export function NotificationInbox2() {
   });
 
   return (
-    <div class="size-full min-h-0 bg-surface" data-list-view="inbox2">
+    <div class="relative size-full min-h-0 bg-surface" data-list-view="inbox2">
       <Resize.Zone direction="horizontal" gutter={0}>
         <Resize.Panel
           id="notification-inbox-list"
@@ -279,7 +478,9 @@ export function NotificationInbox2() {
           >
             <NotificationInboxList
               groups={groups()}
+              hiddenFilterIds={hiddenFilterIds()}
               onSelect={setSelectedItem}
+              onToggleFilter={toggleFilter}
               selectedItem={selectedItem()}
             />
           </div>
