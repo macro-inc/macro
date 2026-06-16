@@ -2,7 +2,7 @@
 
 use super::{
     models::{
-        AuthenticatedBot, Bot, BotId, BotKind, BotOwner, BotToken, BotTokenCandidate,
+        AuthenticatedBot, Bot, BotChannel, BotId, BotKind, BotOwner, BotToken, BotTokenCandidate,
         CreateBotRequest, CreateBotTokenRequest, CreateChannelScopedBotRequest,
         CreateChannelScopedBotResponse, PatchBotRequest,
     },
@@ -254,6 +254,18 @@ where
         } else {
             Err(BotError::NotFound("channel bot not found".to_string()))
         }
+    }
+
+    async fn list_bot_channels(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        bot_id: BotId,
+    ) -> Result<Vec<BotChannel>, BotError> {
+        self.ensure_manageable(caller, bot_id).await?;
+        self.repo
+            .list_bot_channels(bot_id)
+            .await
+            .map_err(|err| BotError::Repo(err.into()))
     }
 
     async fn list_channel_bots(&self, channel_id: Uuid) -> Result<Vec<Bot>, BotError> {

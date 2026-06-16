@@ -1,6 +1,6 @@
 use super::*;
 use crate::domain::models::{
-    AuthenticatedBot, CreateChannelScopedBotRequest, CreateChannelScopedBotResponse,
+    AuthenticatedBot, BotChannel, CreateChannelScopedBotRequest, CreateChannelScopedBotResponse,
 };
 use crate::{domain::service::BotServiceImpl, outbound::pg_bots_repo::PgBotsRepo};
 use axum::{
@@ -121,6 +121,14 @@ impl BotService for TestBotService {
     ) -> Result<(), BotError> {
         self.remove_calls.fetch_add(1, Ordering::SeqCst);
         self.result()
+    }
+
+    async fn list_bot_channels(
+        &self,
+        _caller: MacroUserIdStr<'static>,
+        _bot_id: BotId,
+    ) -> Result<Vec<BotChannel>, BotError> {
+        unimplemented!()
     }
 
     async fn list_channel_bots(&self, _channel_id: Uuid) -> Result<Vec<Bot>, BotError> {
