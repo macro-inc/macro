@@ -36,6 +36,10 @@ function translatedArrowKey(e: KeyboardEvent, macOnly: boolean) {
       return 'ArrowDown';
     case 'k':
       return 'ArrowUp';
+    case 'h':
+      return 'ArrowLeft';
+    case 'l':
+      return 'ArrowRight';
   }
 }
 
