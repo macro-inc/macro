@@ -2,6 +2,8 @@ import {
   EntityIcon,
   type EntityIconSelector,
 } from '@core/component/EntityIcon';
+import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
 import { UserIcon } from '@core/component/UserIcon';
 import { MACRO_AGENT_BOT_ID } from '@core/constant/macroAgent';
 import MacroLogo from '@icon/macro-logo.svg';
@@ -14,7 +16,7 @@ import GitMergeIcon from '@phosphor-icons/core/regular/git-merge.svg?component-s
 import GitPullRequestIcon from '@phosphor-icons/core/regular/git-pull-request.svg?component-solid';
 import PhoneIcon from '@phosphor-icons/core/regular/phone.svg?component-solid';
 import UsersIcon from '@phosphor-icons/core/regular/users.svg?component-solid';
-import { Avatar } from '@ui';
+import { Avatar, Layer } from '@ui';
 import { formatDistanceToNow } from 'date-fns';
 import { For, Match, Show, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
@@ -318,6 +320,38 @@ function RelativeTimestamp() {
   );
 }
 
+function shouldRenderMarkdownContent(
+  type: ReturnType<typeof useNotificationType>
+) {
+  return () =>
+    type() === 'channel_mention' ||
+    type() === 'channel_message_send' ||
+    type() === 'channel_message_reply' ||
+    type() === 'mentioned_in_document_comment' ||
+    type() === 'replied_to_document_comment_thread' ||
+    type() === 'commented_on_document' ||
+    type() === 'github_pr_comment' ||
+    type() === 'github_pr_mention' ||
+    type() === 'github_pr_review';
+}
+
+function ContentText(props: { content: string }) {
+  const type = useNotificationType();
+  const markdown = shouldRenderMarkdownContent(type);
+
+  return (
+    <span class="min-w-0 max-w-[75%] truncate">
+      <Show when={markdown()} fallback={props.content}>
+        <StaticMarkdown
+          markdown={props.content}
+          singleLine
+          theme={unifiedListMarkdownTheme}
+        />
+      </Show>
+    </span>
+  );
+}
+
 function Description() {
   const { item } = useInboxItem();
   const type = useNotificationType();
@@ -368,9 +402,7 @@ function Description() {
                     )}
                   </For>
                   <Show when={item().content}>
-                    {(content) => (
-                      <span class="min-w-0 max-w-xl truncate">{content()}</span>
-                    )}
+                    {(content) => <ContentText content={content()} />}
                   </Show>
                 </div>
               </Show>
@@ -396,7 +428,7 @@ function Description() {
           <InboxItem.Description timestamp={false}>
             <Show when={emailSubject()}>
               {(subject) => (
-                <span class="min-w-0 max-w-xl truncate text-xs text-ink-muted/70">
+                <span class="min-w-0 max-w-[75%] truncate text-xs text-ink-muted/70">
                   {subject()}
                 </span>
               )}
@@ -404,8 +436,8 @@ function Description() {
           </InboxItem.Description>
           <Show when={item().content}>
             {(content) => (
-              <span class="block min-w-0 max-w-xl truncate text-xs text-ink-muted/70">
-                {content()}
+              <span class="block min-w-0 max-w-[75%] truncate text-xs text-ink-muted/70">
+                <ContentText content={content()} />
               </span>
             )}
           </Show>
@@ -417,13 +449,28 @@ function Description() {
 
 function TimestampColumn() {
   const { item } = useInboxItem();
+  const groupCount = () => {
+    const count = (item().subItems?.length ?? 0) + 1;
+    return count > 1 ? count : undefined;
+  };
 
   return (
-    <Show when={item().timestamp}>
-      {(timestamp) => (
-        <InboxItem.Timestamp class="pt-0.5">{timestamp()}</InboxItem.Timestamp>
-      )}
-    </Show>
+    <div class="flex h-full flex-col items-end gap-1 pt-0.5">
+      <Show when={item().timestamp}>
+        {(timestamp) => (
+          <InboxItem.Timestamp>{timestamp()}</InboxItem.Timestamp>
+        )}
+      </Show>
+      <Show when={groupCount()}>
+        {(count) => (
+          <Layer depth={5}>
+            <span class="grid h-4 min-w-4 place-items-center rounded bg-ink-muted/10 px-1 text-xs text-ink-muted">
+              {count()}
+            </span>
+          </Layer>
+        )}
+      </Show>
+    </div>
   );
 }
 
@@ -437,7 +484,7 @@ export function InboxItemInlineTypeLayout(
       </InboxItem.Leading>
       <ActorIcon />
       <InboxItem.Body>
-        <div class="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-x-2">
+        <div class="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-x-2">
           <div class="min-w-0">
             <Header />
             <Description />
