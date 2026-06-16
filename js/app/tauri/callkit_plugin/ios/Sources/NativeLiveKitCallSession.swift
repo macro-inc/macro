@@ -222,7 +222,8 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
 
     func connect(uuid: UUID, channelId: String, serverUrl: String, token: String) {
         print("[CallKit] Native LiveKit connect requested uuid=\(uuid.uuidString) channelId=\(channelId)")
-        microphoneCoordinator.reset(desiredMuted: false)
+        let desiredAudioMuted = microphoneCoordinator.desiredMuted
+        microphoneCoordinator.reset(desiredMuted: desiredAudioMuted)
         didApplyDefaultSpeakerRoute = false
         lastAudioRouteSnapshot = nil
         lastAudioEngineInputAvailable = nil
@@ -242,13 +243,13 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
             channelId: channelId,
             callId: uuid.uuidString,
             connectionState: "connecting",
-            isAudioMuted: false,
+            isAudioMuted: desiredAudioMuted,
             isVideoMuted: true,
             videoOverlayMode: "hidden"
         )
         pinnedRemoteVideoParticipantId = nil
         speakingRemoteParticipantIds = []
-        videoOverlay.setAudioMuted(false)
+        videoOverlay.setAudioMuted(desiredAudioMuted)
         videoOverlay.setLocalVideoEnabled(false)
         emitSnapshot()
         defaultBuiltInSpeakerRouteOnceIfNeeded(reason: "connect")
@@ -345,7 +346,8 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
 
     func setAudioMuted(_ muted: Bool) {
         guard activeCallUUID != nil, room != nil else {
-            print("[CallKit] setAudioMuted ignored; no active native room muted=\(muted)")
+            let generation = microphoneCoordinator.setDesiredMuted(muted)
+            print("[CallKit] setAudioMuted queued; no active native room muted=\(muted) generation=\(generation)")
             return
         }
 
@@ -950,9 +952,10 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
     }
 
     private func applyInitialMicrophoneState(room: Room, uuid: UUID, reason: String) {
+        let muted = microphoneCoordinator.desiredMuted
         let generation = microphoneCoordinator.generation
-        print("[CallKit] Applying initial LiveKit microphone state reason=\(reason) uuid=\(uuid.uuidString) generation=\(generation)")
-        applyMicrophoneState(false, room: room, uuid: uuid, generation: generation, reason: reason)
+        print("[CallKit] Applying initial LiveKit microphone state muted=\(muted) reason=\(reason) uuid=\(uuid.uuidString) generation=\(generation)")
+        applyMicrophoneState(muted, room: room, uuid: uuid, generation: generation, reason: reason)
     }
 
     private func restoreMicrophoneIfNeeded(reason: String) {
