@@ -89,7 +89,17 @@ where
         let mut frecency_map: HashMap<Uuid, AggregateFrecency> = frecency
             .unwrap_or_default()
             .into_iter()
-            .filter_map(|f| Some((Uuid::from_str(&f.id.entity.entity_id).ok()?, f)))
+            .filter_map(|f| match Uuid::from_str(&f.id.entity.entity_id) {
+                Ok(channel_id) => Some((channel_id, f)),
+                Err(error) => {
+                    tracing::warn!(
+                        %error,
+                        entity_id = %f.id.entity.entity_id,
+                        "invalid channel entity id in frecency result"
+                    );
+                    None
+                }
+            })
             .collect();
 
         let name_lookup = names.map(|n| {

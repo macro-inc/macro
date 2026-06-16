@@ -673,7 +673,7 @@ static CHANNEL_LIST_SELECT: &str = r#"
         ($4::timestamptz IS NULL)
         OR
         ((CASE $2 WHEN 'created_at' THEN uc.created_at ELSE uc.updated_at END), uc.id::text) < ($4, $5)
-    ORDER BY (CASE $2 WHEN 'created_at' THEN uc.created_at ELSE uc.updated_at END) DESC, uc.updated_at DESC
+    ORDER BY (CASE $2 WHEN 'created_at' THEN uc.created_at ELSE uc.updated_at END) DESC, uc.id::text DESC
     LIMIT $3
 "#;
 
@@ -1074,12 +1074,14 @@ impl ChannelListUserRepo for PgChannelsRepo {
         "#,
             &ids
         )
-        .map(|row| UserName {
-            id: MacroUserIdStr::parse_from_str(&row.user_profile_id)
-                .expect("valid macro user id from db")
-                .into_owned(),
-            first_name: row.first_name,
-            last_name: row.last_name,
+        .try_map(|row| {
+            Ok(UserName {
+                id: MacroUserIdStr::parse_from_str(&row.user_profile_id)
+                    .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
+                    .into_owned(),
+                first_name: row.first_name,
+                last_name: row.last_name,
+            })
         })
         .fetch_all(&self.pool)
         .await?)

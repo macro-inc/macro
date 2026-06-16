@@ -17,6 +17,8 @@ use crate::domain::{
     ports::ChannelListService,
 };
 
+const DEFAULT_CHANNEL_LIST_LIMIT: u32 = 100;
+
 /// Router state for legacy channel-list endpoints.
 pub struct ChannelListRouterState<S> {
     /// Inner channel list service.
@@ -86,7 +88,7 @@ async fn get_channels_handler<S: ChannelListService>(
         .inner
         .get_channels(GetChannelsRequest {
             macro_id: macro_user_id,
-            limit: None,
+            limit: Some(DEFAULT_CHANNEL_LIST_LIMIT),
             query: models_pagination::Query::Sort(
                 models_pagination::SimpleSortMethod::UpdatedAt,
                 None,
@@ -244,6 +246,8 @@ pub struct Channel {
     /// id of the organization this channel belongs too
     #[schema(value_type = Option<u32>)]
     pub org_id: Option<u32>,
+    /// id of the team this channel belongs to
+    pub team_id: Option<Uuid>,
     /// timestamp of when the channel was created
     pub created_at: chrono::DateTime<chrono::Utc>,
     /// timestamp of when the channel was last updated
@@ -260,6 +264,7 @@ impl From<ChannelListItem> for Channel {
             name: value.name,
             channel_type: value.channel_type.into(),
             org_id: value.org_id.and_then(|org_id| u32::try_from(org_id).ok()),
+            team_id: value.team_id,
             created_at: value.created_at,
             updated_at: value.updated_at,
             owner_id: value.owner_id,
