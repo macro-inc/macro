@@ -24,15 +24,6 @@ jobs:
       DD_API_KEY: ${{ secrets.DD_API_KEY }}
       CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
-  deploy-lexical-service:
-    name: Deploy Lexical Service
-    needs: [deploy-cloud-storage]
-    uses: ./.github/workflows/deploy-lexical-service.yml
-    with:
-      environment: prod
-    secrets:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-
   build:
     name: Build Web App
     runs-on: linux-extra-beefy
