@@ -158,6 +158,9 @@
     },
     {
       "includes": ["packages/service-clients/**/generated/**"],
+      "linter": {
+        "enabled": false
+      },
       "assist": {
         "actions": {
           "source": {

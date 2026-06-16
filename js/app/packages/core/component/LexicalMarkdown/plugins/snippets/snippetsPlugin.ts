@@ -15,7 +15,6 @@ import {
   InlineSearchNodesType,
   validTriggerPosition,
 } from '@lexical-core';
-import { fetchSnippetRaw } from '@queries/storage/snippets';
 import {
   $getNodeByKey,
   $insertNodes,
@@ -30,6 +29,7 @@ import {
   type LexicalCommand,
   type LexicalEditor,
   type LexicalNode,
+  type SerializedEditorState,
 } from 'lexical';
 import { nanoid } from 'nanoid';
 import { createLexicalWrapper } from '../../context/LexicalWrapperContext';
@@ -39,6 +39,7 @@ import {
   initializeEditorWithState,
   setEditorStateFromMarkdown,
 } from '../../utils';
+import { $replaceAwaitNodeWithSnippet } from './snippetInsertion';
 
 const TYPE_SNIPPET_SYMBOL_COMMAND: LexicalCommand<void> = createCommand(
   'SNIPPET_SYMBOL_COMMAND'
@@ -51,10 +52,21 @@ export const CLOSE_SNIPPET_SEARCH_COMMAND: LexicalCommand<void> = createCommand(
 export const REMOVE_SNIPPET_SEARCH_COMMAND: LexicalCommand<void> =
   createCommand('REMOVE_SNIPPET_SEARCH_COMMAND');
 
-export const INSERT_SNIPPET_COMMAND: LexicalCommand<{
+/**
+ * Payload for inserting a snippet. The plugin owns the markdown conversion and
+ * node insertion; the caller stays opinionated about *how* a snippet's content
+ * is retrieved by supplying `fetchSnippet` (see SnippetsMenu).
+ */
+export type InsertSnippetPayload = {
+  /** Identifier of the snippet being inserted; guards against self-insertion. */
   documentId: string;
   sourceDocumentId?: string;
-}> = createCommand('INSERT_SNIPPET_COMMAND');
+  /** Resolves the snippet's serialized editor state from wherever it lives. */
+  fetchSnippet: () => Promise<SerializedEditorState>;
+};
+
+export const INSERT_SNIPPET_COMMAND: LexicalCommand<InsertSnippetPayload> =
+  createCommand('INSERT_SNIPPET_COMMAND');
 
 type SnippetsPluginProps = {
   menu: MenuOperations;
@@ -82,15 +94,14 @@ function $getActiveSnippetSearchNode(): InlineSearchNode | null {
 }
 
 /**
- * Fetch a snippet document's content and render it to internal markdown.
- * Content lives in sync-service; a plugin-scoped markdown editor converts the
- * serialized state to a markdown string the target editor can ingest.
+ * Render a snippet's serialized editor state to internal markdown. A
+ * plugin-scoped markdown editor converts the serialized state to a markdown
+ * string the target editor can ingest.
  */
-async function fetchSnippetMarkdown(
-  documentId: string,
+function snippetStateAsMarkdown(
+  rawState: SerializedEditorState,
   extractionEditor: LexicalEditor
-): Promise<string> {
-  const rawState = await fetchSnippetRaw({ documentId });
+): string {
   initializeEditorWithState(extractionEditor, rawState);
   return editorStateAsMarkdown(extractionEditor, 'internal');
 }
@@ -135,10 +146,7 @@ function registerSnippetsPlugin(
       isInteractable: () => false,
     });
 
-  function insertSnippet(payload: {
-    documentId: string;
-    sourceDocumentId?: string;
-  }) {
+  function insertSnippet(payload: InsertSnippetPayload) {
     const sourceDocumentId = payload.sourceDocumentId ?? props.sourceDocumentId;
     if (sourceDocumentId === payload.documentId) {
       return;
@@ -146,7 +154,7 @@ function registerSnippetsPlugin(
 
     const replaceAwaitNode = (
       insertedAwaitNodeKey: string,
-      $createReplacement?: () => LexicalNode[] | null | undefined
+      $createSnippetNodes?: () => LexicalNode[] | null | undefined
     ) => {
       editor.update(
         () => {
@@ -154,26 +162,7 @@ function registerSnippetsPlugin(
           if (!$isAwaitNode(target)) {
             return;
           }
-
-          const nodes = $createReplacement?.() ?? [];
-          if (nodes.length === 0) {
-            const next = target.getNextSibling();
-            const prev = target.getPreviousSibling();
-            target.remove();
-            if (next) next.selectStart();
-            else if (prev) prev.selectEnd();
-            return;
-          }
-
-          const first = nodes[0]!;
-          target.replace(first);
-          let cursor = first;
-          for (let i = 1; i < nodes.length; i++) {
-            const next = nodes[i]!;
-            cursor.insertAfter(next);
-            cursor = next;
-          }
-          cursor.selectEnd();
+          $replaceAwaitNodeWithSnippet(target, $createSnippetNodes?.() ?? []);
         },
         { tag: HISTORY_MERGE_TAG }
       );
@@ -181,10 +170,8 @@ function registerSnippetsPlugin(
 
     const fetchAndReplaceSnippet = async (insertedAwaitNodeKey: string) => {
       try {
-        const markdown = await fetchSnippetMarkdown(
-          payload.documentId,
-          extractionEditor
-        );
+        const rawState = await payload.fetchSnippet();
+        const markdown = snippetStateAsMarkdown(rawState, extractionEditor);
         if (!markdown.trim()) {
           replaceAwaitNode(insertedAwaitNodeKey);
           return;

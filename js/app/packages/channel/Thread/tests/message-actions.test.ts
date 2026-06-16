@@ -3,29 +3,45 @@ import { describe, expect, it } from 'vitest';
 import {
   buildMessageLink,
   buildQuoteReplyValue,
-  canEditOrDeleteMessage,
+  canDeleteMessage,
+  canEditMessage,
   canReplyToMessage,
   DEFAULT_REACTION_EMOJI,
   hasReactionFromUser,
 } from '../utils/message-actions';
 
 describe('message-actions helpers', () => {
-  it('allows edit/delete only for own non-deleted messages', () => {
+  it('allows edit only for own non-deleted messages', () => {
     expect(
-      canEditOrDeleteMessage(
-        { sender_id: 'user-1', deleted_at: null },
-        'user-1'
-      )
+      canEditMessage({ sender_id: 'user-1', deleted_at: null }, 'user-1')
     ).toBe(true);
     expect(
-      canEditOrDeleteMessage(
-        { sender_id: 'user-2', deleted_at: null },
+      canEditMessage({ sender_id: 'user-2', deleted_at: null }, 'user-1')
+    ).toBe(false);
+    expect(
+      canEditMessage({ sender_id: 'bot|bot-1', deleted_at: null }, 'user-1')
+    ).toBe(false);
+    expect(
+      canEditMessage(
+        { sender_id: 'user-1', deleted_at: '2026-02-25T00:00:00.000Z' },
         'user-1'
       )
     ).toBe(false);
+  });
+
+  it('allows delete for own and bot non-deleted messages', () => {
     expect(
-      canEditOrDeleteMessage(
-        { sender_id: 'user-1', deleted_at: '2026-02-25T00:00:00.000Z' },
+      canDeleteMessage({ sender_id: 'user-1', deleted_at: null }, 'user-1')
+    ).toBe(true);
+    expect(
+      canDeleteMessage({ sender_id: 'user-2', deleted_at: null }, 'user-1')
+    ).toBe(false);
+    expect(
+      canDeleteMessage({ sender_id: 'bot|bot-1', deleted_at: null }, 'user-1')
+    ).toBe(true);
+    expect(
+      canDeleteMessage(
+        { sender_id: 'bot|bot-1', deleted_at: '2026-02-25T00:00:00.000Z' },
         'user-1'
       )
     ).toBe(false);

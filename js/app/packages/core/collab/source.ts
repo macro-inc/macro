@@ -1,5 +1,5 @@
 import type { Listen } from '@solid-primitives/event-bus';
-import type { Frontiers } from 'loro-crdt';
+import type { VersionVector } from 'loro-crdt';
 import type { ResultAsync } from 'neverthrow';
 import type { Accessor } from 'solid-js';
 import type { RawUpdate } from './shared';
@@ -42,11 +42,6 @@ export type TimeoutError = {
   duration: number;
 };
 
-export type MissingAckError = {
-  type: 'missing_ack';
-  update: RawUpdate;
-};
-
 export type SyncError =
   | ConnectionFailedError
   | TimeoutError
@@ -72,42 +67,18 @@ export enum SyncSourceStatus {
   Connecting,
 }
 
-export type SyncSource = {
-  readonly listen: Listen<SyncSourceEvent>;
+export type LiveSyncSource = {
   readonly documentId: string;
-
-  /** Pushes an update to the source
-   *
-   * @param update - The update to push, should be a [RawUpdate] from [LoroDoc.export()]
-   **/
-  pushUpdate: (
-    update: RawUpdate,
-    peerId: bigint
-  ) => ResultAsync<void, MissingAckError>;
-
-  /** Pushes an awareness update to the source
-   *
-   * @param awareness - The awareness update to push, should be a [RawUpdate] from [EphemeralStore.encode()]
-   **/
+  readonly listen: Listen<SyncSourceEvent>;
+  /** Sends a batch of updates to the server. Resolves true if acked, false if timed out. */
+  pushUpdate: (updates: RawUpdate[]) => Promise<boolean>;
   pushAwareness: (awareness: RawUpdate) => void;
-
-  /**
-   * Registers a new peerId that is associated with the current source
-   *
-   * @param peerId - The peerId to register
-   **/
   registerPeerId: (peerId: bigint) => void;
-
   status: Accessor<SyncSourceStatus>;
-
   requestUpdatesSince: (
-    version: Frontiers
+    version: VersionVector
   ) => ResultAsync<RawUpdate, TimeoutError>;
-
-  /** Requests a shallow snapshot from the source */
   requestSnapshot: () => ResultAsync<RawUpdate, TimeoutError>;
-
   reconnect: () => void;
-
   cleanup: () => void;
 };

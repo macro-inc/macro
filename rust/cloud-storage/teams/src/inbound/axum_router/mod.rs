@@ -22,6 +22,8 @@ pub mod join_team;
 pub mod patch_team;
 /// Enable / disable CRM for a team.
 pub mod patch_team_crm_settings;
+/// Extractor ensuring the authenticated user is premium.
+pub mod premium_user;
 /// Reject a team invitation.
 pub mod reject_invitation;
 /// Remove a user from a team.

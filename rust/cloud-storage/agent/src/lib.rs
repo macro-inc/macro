@@ -4,7 +4,6 @@
 
 mod accumulator;
 mod agent_loop;
-mod anthropic_model;
 mod completion;
 mod convert;
 mod error;
@@ -22,9 +21,9 @@ pub use completion::{complete, complete_with_history};
 pub use convert::{merge_consecutive_parts, to_rig_messages};
 pub use error::AgentError;
 pub use hook::StreamBridge;
-pub use model::AgentModel;
+pub use model::{AgentModel, ModelProvider};
 pub use stream::{ChatCompletionStream, McpInfo, StreamPart, ToolCall, ToolResponse, Usage};
-pub use tool_adapter::{DynToolSetAdapter, ToolsetToolAdapter};
+pub use tool_adapter::{DynToolSetAdapter, ToolsetToolAdapter, normalize_request_schema};
 
 pub use rig_core::message::Message;
 pub use rig_core::tool::{Tool, ToolDyn};

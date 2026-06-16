@@ -90,7 +90,7 @@ impl TryFrom<BotRow> for Bot {
 struct BotTokenRow {
     id: Uuid,
     bot_id: Uuid,
-    token_prefix: String,
+    token: String,
     label: Option<String>,
     last_used_at: Option<DateTime<Utc>>,
     expires_at: Option<DateTime<Utc>>,
@@ -103,7 +103,7 @@ impl From<BotTokenRow> for BotToken {
         Self {
             id: row.id,
             bot_id: BotId::from_uuid(row.bot_id),
-            token_prefix: row.token_prefix,
+            token: row.token,
             label: row.label,
             last_used_at: row.last_used_at,
             expires_at: row.expires_at,
@@ -117,8 +117,7 @@ impl From<BotTokenRow> for BotToken {
 struct TokenCandidateRow {
     token_id: Uuid,
     bot_id: Uuid,
-    token_hash: Vec<u8>,
-    token_prefix: String,
+    token: String,
     label: Option<String>,
     last_used_at: Option<DateTime<Utc>>,
     expires_at: Option<DateTime<Utc>>,
@@ -137,7 +136,7 @@ impl TokenCandidateRow {
         let token = BotToken {
             id: self.token_id,
             bot_id,
-            token_prefix: self.token_prefix,
+            token: self.token,
             label: self.label,
             last_used_at: self.last_used_at,
             expires_at: self.expires_at,
@@ -147,7 +146,6 @@ impl TokenCandidateRow {
 
         Ok(BotTokenCandidate {
             token,
-            token_hash: self.token_hash,
             bot: AuthenticatedBot { bot_id, kind },
         })
     }
@@ -214,8 +212,7 @@ impl BotRepo for PgBotsRepo {
         owner: BotOwner,
         created_by: MacroUserIdStr<'static>,
         channel_id: Uuid,
-        token_hash: Vec<u8>,
-        token_prefix: String,
+        token: String,
         req: CreateChannelScopedBotRequest,
     ) -> Result<(Bot, BotToken), Self::Err> {
         let bot_id = BotId::from_uuid(macro_uuid::generate_uuid_v7());
@@ -277,15 +274,14 @@ impl BotRepo for PgBotsRepo {
             BotTokenRow,
             r#"
             INSERT INTO bot_tokens (
-                id, bot_id, token_hash, token_prefix, label, expires_at
+                id, bot_id, token, label, expires_at
             )
-            VALUES ($1, $2, $3, $4, $5, $6)
-            RETURNING id, bot_id, token_prefix, label, last_used_at, expires_at, revoked_at, created_at
+            VALUES ($1, $2, $3, $4, $5)
+            RETURNING id, bot_id, token, label, last_used_at, expires_at, revoked_at, created_at
             "#,
             token_id,
             bot_id.as_uuid(),
-            token_hash,
-            token_prefix,
+            token,
             req.token_label,
             req.token_expires_at,
         )
@@ -545,8 +541,7 @@ impl BotRepo for PgBotsRepo {
     async fn create_token(
         &self,
         bot_id: BotId,
-        token_hash: Vec<u8>,
-        token_prefix: String,
+        token: String,
         req: CreateBotTokenRequest,
     ) -> Result<BotToken, Self::Err> {
         let token_id = macro_uuid::generate_uuid_v7();
@@ -554,15 +549,14 @@ impl BotRepo for PgBotsRepo {
             BotTokenRow,
             r#"
             INSERT INTO bot_tokens (
-                id, bot_id, token_hash, token_prefix, label, expires_at
+                id, bot_id, token, label, expires_at
             )
-            VALUES ($1, $2, $3, $4, $5, $6)
-            RETURNING id, bot_id, token_prefix, label, last_used_at, expires_at, revoked_at, created_at
+            VALUES ($1, $2, $3, $4, $5)
+            RETURNING id, bot_id, token, label, last_used_at, expires_at, revoked_at, created_at
             "#,
             token_id,
             bot_id.as_uuid(),
-            token_hash,
-            token_prefix,
+            token,
             req.label,
             req.expires_at,
         )
@@ -576,7 +570,7 @@ impl BotRepo for PgBotsRepo {
         let rows = sqlx::query_as!(
             BotTokenRow,
             r#"
-            SELECT id, bot_id, token_prefix, label, last_used_at, expires_at, revoked_at, created_at
+            SELECT id, bot_id, token, label, last_used_at, expires_at, revoked_at, created_at
             FROM bot_tokens
             WHERE bot_id = $1
               AND revoked_at IS NULL
@@ -608,18 +602,14 @@ impl BotRepo for PgBotsRepo {
         Ok(result.rows_affected() > 0)
     }
 
-    async fn token_candidates(
-        &self,
-        token_prefix: &str,
-    ) -> Result<Vec<BotTokenCandidate>, Self::Err> {
-        let rows = sqlx::query_as!(
+    async fn token_candidate(&self, token: &str) -> Result<Option<BotTokenCandidate>, Self::Err> {
+        let row = sqlx::query_as!(
             TokenCandidateRow,
             r#"
             SELECT
                 bt.id AS token_id,
                 bt.bot_id,
-                bt.token_hash,
-                bt.token_prefix,
+                bt.token,
                 bt.label,
                 bt.last_used_at,
                 bt.expires_at,
@@ -628,33 +618,30 @@ impl BotRepo for PgBotsRepo {
                 b.kind
             FROM bot_tokens bt
             JOIN bots b ON b.id = bt.bot_id
-            WHERE bt.token_prefix = $1
+            WHERE bt.token = $1
               AND b.deleted_at IS NULL
             "#,
-            token_prefix,
+            token,
         )
-        .fetch_all(&self.pool)
+        .fetch_optional(&self.pool)
         .await
-        .context("failed to lookup bot token candidates")?;
+        .context("failed to lookup bot token candidate")?;
 
-        rows.into_iter()
-            .map(TokenCandidateRow::into_candidate)
-            .collect()
+        row.map(TokenCandidateRow::into_candidate).transpose()
     }
 
-    async fn channel_token_candidates(
+    async fn channel_token_candidate(
         &self,
         channel_id: Uuid,
-        token_prefix: &str,
-    ) -> Result<Vec<BotTokenCandidate>, Self::Err> {
-        let rows = sqlx::query_as!(
+        token: &str,
+    ) -> Result<Option<BotTokenCandidate>, Self::Err> {
+        let row = sqlx::query_as!(
             TokenCandidateRow,
             r#"
             SELECT
                 bt.id AS token_id,
                 bt.bot_id,
-                bt.token_hash,
-                bt.token_prefix,
+                bt.token,
                 bt.label,
                 bt.last_used_at,
                 bt.expires_at,
@@ -667,19 +654,17 @@ impl BotRepo for PgBotsRepo {
               ON cp.channel_id = $1
              AND cp.user_id = ('bot|' || b.id::text)
              AND cp.left_at IS NULL
-            WHERE bt.token_prefix = $2
+            WHERE bt.token = $2
               AND b.deleted_at IS NULL
             "#,
             channel_id,
-            token_prefix,
+            token,
         )
-        .fetch_all(&self.pool)
+        .fetch_optional(&self.pool)
         .await
-        .context("failed to lookup channel bot token candidates")?;
+        .context("failed to lookup channel bot token candidate")?;
 
-        rows.into_iter()
-            .map(TokenCandidateRow::into_candidate)
-            .collect()
+        row.map(TokenCandidateRow::into_candidate).transpose()
     }
 
     async fn mark_token_used(&self, token_id: Uuid) -> Result<(), Self::Err> {

@@ -153,8 +153,6 @@ export * from './structuredCompletionError';
 export * from './structuredCompletionRequest';
 export * from './structuredCompletionRequestAdditionalInstructions';
 export * from './structuredCompletionResponse';
-export * from './toolSchema';
-export * from './toolSchemas';
 export * from './toolSet';
 export * from './toolSetOneOf';
 export * from './toolSetOneOfThree';

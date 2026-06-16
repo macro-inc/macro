@@ -65,6 +65,13 @@ for lambda in "${LAMBDAS[@]}"; do
   if [[ "$lambda" == "call_recording_preview_handler" ]]; then
     test -f "$OUTPUT_DIR/target/lambda/$lambda/ffmpeg-layer.zip"
   fi
+  # document_text_extractor dlopen's ./pdfium-lib/linux/libpdfium.so at runtime,
+  # so the blob has to be bundled inside bootstrap.zip (see deployLambdaPackage
+  # in flake.nix) -- guard against shipping the binary without it.
+  if [[ "$lambda" == "document_text_extractor" ]]; then
+    unzip -l "$OUTPUT_DIR/target/lambda/$lambda/bootstrap.zip" | grep -q 'pdfium-lib/linux/libpdfium.so' \
+      || { echo "document_text_extractor bootstrap.zip is missing pdfium-lib/linux/libpdfium.so" >&2; exit 1; }
+  fi
 done
 
 tar -C "$OUTPUT_DIR" -czf lambda-artifacts.tar.gz target

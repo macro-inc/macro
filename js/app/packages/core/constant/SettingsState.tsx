@@ -15,9 +15,11 @@ export type SettingsTab =
   | 'Mobile App'
   | 'Agent'
   | 'Team'
+  | 'Email'
+  | 'GitHub'
   | 'Admin';
 
-const [activeTabId, setActiveTabId] = createSignal<SettingsTab>('Appearance');
+const [activeTabId, setActiveTabId] = createSignal<SettingsTab>('Account');
 
 export type AgentSettingsSubTab = 'connectors' | 'mcp_server';
 export const [agentSettingsSubTab, setAgentSettingsSubTab] =

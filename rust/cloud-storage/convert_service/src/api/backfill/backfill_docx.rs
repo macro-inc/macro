@@ -65,7 +65,7 @@ pub async fn handler(
         let chunk_result = futures::stream::iter(chunk.iter())
             .then(|doc| {
                 let s3_client = ctx.s3_client.clone();
-                let document_storage_bucket = ctx.config.document_storage_bucket.clone();
+                let document_storage_bucket = ctx.config.document_storage_bucket.to_string();
 
                 async move { process_docx(&s3_client, &document_storage_bucket, doc).await }
             })

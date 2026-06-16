@@ -25,7 +25,6 @@ import { tempRedirectLocation } from '@core/signal/location';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { makeResizeObserver } from '@solid-primitives/resize-observer';
 import {
-  type Accessor,
   createEffect,
   createMemo,
   createSignal,
@@ -74,10 +73,7 @@ const widthToMode = (width: number): CommentLayoutMode => {
   return CommentLayoutMode.none;
 };
 
-export function Notebook(props: {
-  loroManager: Accessor<LoroManager | undefined>;
-  mustBeConnected?: boolean;
-}) {
+export function Notebook(props: { loroManager: LoroManager }) {
   const blockElement = blockElementSignal.get;
   const setStore = mdStore.set;
   const setWideEnoughForComments = commentWidthSignal.set;
@@ -326,9 +322,7 @@ export function Notebook(props: {
   );
 }
 
-export function InstructionsNotebook(props: {
-  loroManager: Accessor<LoroManager | undefined>;
-}) {
+export function InstructionsNotebook(props: { loroManager: LoroManager }) {
   const setStore = mdStore.set;
 
   let notebookRef!: HTMLDivElement;

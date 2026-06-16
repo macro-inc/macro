@@ -1413,7 +1413,16 @@
       "AgentModel": {
         "type": "string",
         "description": "Model to use for completions.\n\nUnrecognized model strings (including retired Google/OpenAI variants\nfrom older data) deserialize to `Retired` via the manual\n`Deserialize` impl.",
-        "enum": ["smart", "fast", "opus4_7", "sonnet4_6", "haiku4_5", "retired"]
+        "enum": [
+          "smart",
+          "fast",
+          "opus4_7",
+          "sonnet4_6",
+          "haiku4_5",
+          "gpt5_5",
+          "gpt5Mini",
+          "retired"
+        ]
       },
       "AssistantMessagePart": {
         "oneOf": [
@@ -3196,37 +3205,6 @@
         "required": ["result"],
         "properties": {
           "result": {}
-        }
-      },
-      "ToolSchema": {
-        "type": "object",
-        "description": "Schema information for a single tool, serializable for API responses.",
-        "required": ["name", "inputSchema", "outputSchema"],
-        "properties": {
-          "inputSchema": {
-            "description": "The JSON schema for the tool's input parameters."
-          },
-          "name": {
-            "type": "string",
-            "description": "The name of the tool."
-          },
-          "outputSchema": {
-            "description": "The JSON schema for the tool's output."
-          }
-        }
-      },
-      "ToolSchemas": {
-        "type": "object",
-        "description": "A collection of tool schemas, typically used for API responses.",
-        "required": ["schemas"],
-        "properties": {
-          "schemas": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ToolSchema"
-            },
-            "description": "The list of tool schemas."
-          }
         }
       },
       "ToolSet": {

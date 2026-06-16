@@ -3,7 +3,6 @@ use crate::domain::{
     models::{CreateBotRequest, CreateBotTokenRequest, CreateChannelScopedBotRequest},
     ports::{BotError, BotService},
     service::BotServiceImpl,
-    tokens,
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::PgPool;
@@ -296,10 +295,7 @@ async fn create_channel_scoped_bot_creates_bot_participant_and_token(
     assert_eq!(created.bot.created_by.as_deref(), Some(USER_OWNER));
     assert_eq!(created.token.bot_id, created.bot.id);
     assert_eq!(created.token.label.as_deref(), Some("Webhook"));
-    assert_eq!(
-        tokens::token_prefix(&created.bot_token),
-        Some(created.token.token_prefix.as_str())
-    );
+    assert_eq!(created.token.token, created.bot_token);
     assert_eq!(
         active_channel_participant_count(&pool, channel_id, created.bot.id).await?,
         1
@@ -422,6 +418,8 @@ async fn revoke_token_prevents_future_authentication(pool: PgPool) -> anyhow::Re
         )
         .await?;
 
+    assert_eq!(created.token.token, created.bearer_token);
+
     let authenticated = service.authenticate_token(&created.bearer_token).await?;
     assert_eq!(authenticated.bot_id, bot.id);
     assert_eq!(authenticated.kind, BotKind::Owned);
@@ -435,6 +433,76 @@ async fn revoke_token_prevents_future_authentication(pool: PgPool) -> anyhow::Re
         .await
         .expect_err("revoked token must not authenticate");
     assert!(matches!(err, BotError::Unauthorized));
+
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn list_tokens_returns_raw_token_for_manageable_bot(pool: PgPool) -> anyhow::Result<()> {
+    let service = service(&pool);
+    let bot = service
+        .create_bot(user_id(USER_OWNER), create_req("listed-token"))
+        .await?;
+
+    let created = service
+        .create_token(
+            user_id(USER_OWNER),
+            bot.id,
+            CreateBotTokenRequest {
+                label: Some("Listable".to_string()),
+                expires_at: None,
+            },
+        )
+        .await?;
+
+    let tokens = service.list_tokens(user_id(USER_OWNER), bot.id).await?;
+
+    assert_eq!(tokens.len(), 1);
+    assert_eq!(tokens[0].id, created.token.id);
+    assert_eq!(tokens[0].bot_id, bot.id);
+    assert_eq!(tokens[0].token, created.bearer_token);
+    assert_eq!(tokens[0].label.as_deref(), Some("Listable"));
+
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn authenticate_channel_token_accepts_migrated_uuid_token(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let service = service(&pool);
+    let channel_id = Uuid::new_v4();
+    insert_channel(&pool, channel_id).await?;
+
+    let bot = service
+        .create_bot(user_id(USER_OWNER), create_req("migrated-uuid-token"))
+        .await?;
+    service
+        .add_bot_to_channel(user_id(USER_OWNER), channel_id, bot.id)
+        .await?;
+
+    let token_id = Uuid::new_v4();
+    let raw_token = Uuid::new_v4().to_string();
+    sqlx::query(
+        r#"
+        INSERT INTO bot_tokens (id, bot_id, token, label)
+        VALUES ($1, $2, $3, $4)
+        "#,
+    )
+    .bind(token_id)
+    .bind(bot.id.as_uuid())
+    .bind(&raw_token)
+    .bind("migrated row")
+    .execute(&pool)
+    .await?;
+
+    let authenticated = service
+        .authenticate_channel_token(channel_id, &raw_token)
+        .await?;
+
+    assert_eq!(authenticated.bot_id, bot.id);
+    assert_eq!(authenticated.kind, BotKind::Owned);
+    assert!(token_last_used_at(&pool, token_id).await?.is_some());
 
     Ok(())
 }

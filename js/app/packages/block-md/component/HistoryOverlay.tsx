@@ -50,7 +50,10 @@ export function HistoryOverlay(props: {
     const sessions = history()?.sessions;
     if (!sessions || sessions.length === 0) return undefined;
 
-    const latest = sessions.reduce((m, s) => Math.max(m, s.endMs), sessions[0].endMs);
+    const latest = sessions.reduce(
+      (m, s) => Math.max(m, s.endMs),
+      sessions[0].endMs
+    );
     return new Date(latest);
   });
 

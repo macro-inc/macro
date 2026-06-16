@@ -101,6 +101,24 @@ export const listTypedNotificationsQueryParams = zod.object({
 
 export const listTypedNotificationsResponseItemsItemNotificationMetadataContentNumberMin = 0;
 
+export const listTypedNotificationsResponseItemsItemNotificationMetadataContentNumberMinOne = 0;
+
+export const listTypedNotificationsResponseItemsItemNotificationMetadataContentCheckRunGithubIdMin = 0;
+
+export const listTypedNotificationsResponseItemsItemNotificationMetadataContentNumberMinTwo = 0;
+
+export const listTypedNotificationsResponseItemsItemNotificationMetadataContentNumberMinThree = 0;
+
+export const listTypedNotificationsResponseItemsItemNotificationMetadataContentCommentGithubIdMin = 0;
+
+export const listTypedNotificationsResponseItemsItemNotificationMetadataContentNumberMinFour = 0;
+
+export const listTypedNotificationsResponseItemsItemNotificationMetadataContentCommentGithubIdMinOne = 0;
+
+export const listTypedNotificationsResponseItemsItemNotificationMetadataContentNumberMinFive = 0;
+
+export const listTypedNotificationsResponseItemsItemNotificationMetadataContentReviewGithubIdMin = 0;
+
 export const listTypedNotificationsResponse = zod
   .object({
     items: zod
@@ -616,17 +634,6 @@ export const listTypedNotificationsResponse = zod
                     .object({
                       content: zod
                         .object({
-                          action: zod
-                            .enum(['opened', 'reopened', 'closed'])
-                            .describe(
-                              'The GitHub pull request webhook action that triggered the notification.'
-                            ),
-                          baseBranch: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The pull request base branch, when available.'
-                            ),
                           displayName: zod
                             .string()
                             .describe(
@@ -642,18 +649,6 @@ export const listTypedNotificationsResponse = zod
                             .describe(
                               'The external GitHub key, in `owner\/repo\/pull\/number` format.'
                             ),
-                          headBranch: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The pull request head branch, when available.'
-                            ),
-                          mergedAt: zod.iso
-                            .datetime({})
-                            .nullish()
-                            .describe(
-                              'When the pull request was merged, when available.'
-                            ),
                           number: zod
                             .number()
                             .min(
@@ -665,16 +660,6 @@ export const listTypedNotificationsResponse = zod
                             .describe(
                               'The GitHub repository owner or organization.'
                             ),
-                          previousStatus: zod
-                            .union([
-                              zod.null(),
-                              zod
-                                .enum(['open', 'closed', 'merged'])
-                                .describe(
-                                  'The normalized lifecycle status for a GitHub pull request notification.'
-                                ),
-                            ])
-                            .optional(),
                           repo: zod
                             .string()
                             .describe('The GitHub repository name.'),
@@ -696,10 +681,120 @@ export const listTypedNotificationsResponse = zod
                             .describe(
                               'The stable GitHub numeric user id for the sender, serialized as a string.'
                             ),
-                          status: zod
-                            .enum(['open', 'closed', 'merged'])
+                          title: zod
+                            .string()
                             .describe(
-                              'The normalized lifecycle status for a GitHub pull request notification.'
+                              'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
+                            ),
+                          url: zod
+                            .string()
+                            .describe(
+                              'The public GitHub URL for the pull request.'
+                            ),
+                        })
+                        .describe(
+                          'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
+                        )
+                        .and(
+                          zod.object({
+                            action: zod
+                              .enum(['opened', 'reopened', 'closed'])
+                              .describe(
+                                'The GitHub pull request webhook action that triggered the notification.'
+                              ),
+                            baseBranch: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The pull request base branch, when available.'
+                              ),
+                            headBranch: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The pull request head branch, when available.'
+                              ),
+                            mergedAt: zod.iso
+                              .datetime({})
+                              .nullish()
+                              .describe(
+                                'When the pull request was merged, when available.'
+                              ),
+                            previousStatus: zod
+                              .union([
+                                zod.null(),
+                                zod
+                                  .enum(['open', 'closed', 'merged'])
+                                  .describe(
+                                    'The normalized lifecycle status for a GitHub pull request notification.'
+                                  ),
+                              ])
+                              .optional(),
+                            status: zod
+                              .enum(['open', 'closed', 'merged'])
+                              .describe(
+                                'The normalized lifecycle status for a GitHub pull request notification.'
+                              ),
+                          })
+                        )
+                        .describe(
+                          'Metadata for a GitHub pull request lifecycle notification.'
+                        ),
+                      tag: zod.enum(['github_pr_status_changed']),
+                    })
+                    .describe(
+                      'A GitHub pull request changed lifecycle state.\n\nThe `github_pr_event` alias keeps rows and queue messages persisted\nbefore the rename deserializable.'
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          displayName: zod
+                            .string()
+                            .describe(
+                              'A compact label suitable for display in the UI.'
+                            ),
+                          foreignEntityId: zod
+                            .uuid()
+                            .describe(
+                              'The source-specific internal foreign entity row id for this pull request.'
+                            ),
+                          githubKey: zod
+                            .string()
+                            .describe(
+                              'The external GitHub key, in `owner\/repo\/pull\/number` format.'
+                            ),
+                          number: zod
+                            .number()
+                            .min(
+                              listTypedNotificationsResponseItemsItemNotificationMetadataContentNumberMinOne
+                            )
+                            .describe('The GitHub pull request number.'),
+                          owner: zod
+                            .string()
+                            .describe(
+                              'The GitHub repository owner or organization.'
+                            ),
+                          repo: zod
+                            .string()
+                            .describe('The GitHub repository name.'),
+                          senderGithubAvatarUrl: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The GitHub avatar URL for the sender, when available.'
+                            ),
+                          senderGithubLogin: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The GitHub login for the sender, when available.'
+                            ),
+                          senderGithubUserId: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The stable GitHub numeric user id for the sender, serialized as a string.'
                             ),
                           title: zod
                             .string()
@@ -713,11 +808,455 @@ export const listTypedNotificationsResponse = zod
                             ),
                         })
                         .describe(
-                          'Metadata for a GitHub pull request lifecycle notification.'
+                          'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
+                        )
+                        .and(
+                          zod.object({
+                            checkName: zod
+                              .string()
+                              .describe(
+                                'The display name GitHub reported for the check run.'
+                              ),
+                            checkRunGithubId: zod
+                              .number()
+                              .min(
+                                listTypedNotificationsResponseItemsItemNotificationMetadataContentCheckRunGithubIdMin
+                              )
+                              .describe(
+                                'The GitHub numeric id of the check run.'
+                              ),
+                            checkStatus: zod
+                              .string()
+                              .describe('The raw GitHub check run status.'),
+                            checkUrl: zod
+                              .string()
+                              .describe(
+                                'The public GitHub URL for the check run.'
+                              ),
+                            completedAt: zod.iso
+                              .datetime({})
+                              .describe(
+                                'When GitHub marked the check run as complete.'
+                              ),
+                            conclusion: zod
+                              .string()
+                              .describe('The raw GitHub check run conclusion.'),
+                            state: zod
+                              .enum(['completed', 'failed'])
+                              .describe(
+                                'The normalized result state for a GitHub pull request check-run notification.'
+                              ),
+                          })
+                        )
+                        .describe(
+                          'Metadata for a notification that a GitHub pull request check run completed.'
                         ),
-                      tag: zod.enum(['github_pr_event']),
+                      tag: zod.enum(['github_pr_check_run']),
                     })
-                    .describe('A GitHub pull request changed lifecycle state.'),
+                    .describe('A GitHub pull request check run completed.'),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          displayName: zod
+                            .string()
+                            .describe(
+                              'A compact label suitable for display in the UI.'
+                            ),
+                          foreignEntityId: zod
+                            .uuid()
+                            .describe(
+                              'The source-specific internal foreign entity row id for this pull request.'
+                            ),
+                          githubKey: zod
+                            .string()
+                            .describe(
+                              'The external GitHub key, in `owner\/repo\/pull\/number` format.'
+                            ),
+                          number: zod
+                            .number()
+                            .min(
+                              listTypedNotificationsResponseItemsItemNotificationMetadataContentNumberMinTwo
+                            )
+                            .describe('The GitHub pull request number.'),
+                          owner: zod
+                            .string()
+                            .describe(
+                              'The GitHub repository owner or organization.'
+                            ),
+                          repo: zod
+                            .string()
+                            .describe('The GitHub repository name.'),
+                          senderGithubAvatarUrl: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The GitHub avatar URL for the sender, when available.'
+                            ),
+                          senderGithubLogin: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The GitHub login for the sender, when available.'
+                            ),
+                          senderGithubUserId: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The stable GitHub numeric user id for the sender, serialized as a string.'
+                            ),
+                          title: zod
+                            .string()
+                            .describe(
+                              'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
+                            ),
+                          url: zod
+                            .string()
+                            .describe(
+                              'The public GitHub URL for the pull request.'
+                            ),
+                        })
+                        .describe(
+                          'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
+                        )
+                        .and(
+                          zod.object({
+                            requestedReviewerGithubLogin: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The GitHub login of the requested reviewer, when available.'
+                              ),
+                            requestedReviewerGithubUserId: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The stable GitHub numeric user id of the requested reviewer, serialized as a string.'
+                              ),
+                          })
+                        )
+                        .describe(
+                          "Metadata for a notification that the user's review was requested on a GitHub pull request."
+                        ),
+                      tag: zod.enum(['github_review_requested']),
+                    })
+                    .describe(
+                      "The user's review was requested on a GitHub pull request."
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          displayName: zod
+                            .string()
+                            .describe(
+                              'A compact label suitable for display in the UI.'
+                            ),
+                          foreignEntityId: zod
+                            .uuid()
+                            .describe(
+                              'The source-specific internal foreign entity row id for this pull request.'
+                            ),
+                          githubKey: zod
+                            .string()
+                            .describe(
+                              'The external GitHub key, in `owner\/repo\/pull\/number` format.'
+                            ),
+                          number: zod
+                            .number()
+                            .min(
+                              listTypedNotificationsResponseItemsItemNotificationMetadataContentNumberMinThree
+                            )
+                            .describe('The GitHub pull request number.'),
+                          owner: zod
+                            .string()
+                            .describe(
+                              'The GitHub repository owner or organization.'
+                            ),
+                          repo: zod
+                            .string()
+                            .describe('The GitHub repository name.'),
+                          senderGithubAvatarUrl: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The GitHub avatar URL for the sender, when available.'
+                            ),
+                          senderGithubLogin: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The GitHub login for the sender, when available.'
+                            ),
+                          senderGithubUserId: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The stable GitHub numeric user id for the sender, serialized as a string.'
+                            ),
+                          title: zod
+                            .string()
+                            .describe(
+                              'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
+                            ),
+                          url: zod
+                            .string()
+                            .describe(
+                              'The public GitHub URL for the pull request.'
+                            ),
+                        })
+                        .describe(
+                          'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
+                        )
+                        .and(
+                          zod.object({
+                            commentGithubId: zod
+                              .number()
+                              .min(
+                                listTypedNotificationsResponseItemsItemNotificationMetadataContentCommentGithubIdMin
+                              )
+                              .nullish()
+                              .describe(
+                                'The GitHub numeric id of the comment, when available.'
+                              ),
+                            commentKind: zod
+                              .enum(['issue', 'review_comment'])
+                              .describe(
+                                'The kind of GitHub comment that triggered a [`GithubPrComment`] notification.'
+                              ),
+                            commentSnippet: zod
+                              .string()
+                              .describe(
+                                'A truncated excerpt of the comment body.'
+                              ),
+                            commentUrl: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The public GitHub URL for the comment, when available.'
+                              ),
+                          })
+                        )
+                        .describe(
+                          'Metadata for a notification that a GitHub pull request was commented on.'
+                        ),
+                      tag: zod.enum(['github_pr_comment']),
+                    })
+                    .describe('A GitHub pull request was commented on.'),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          displayName: zod
+                            .string()
+                            .describe(
+                              'A compact label suitable for display in the UI.'
+                            ),
+                          foreignEntityId: zod
+                            .uuid()
+                            .describe(
+                              'The source-specific internal foreign entity row id for this pull request.'
+                            ),
+                          githubKey: zod
+                            .string()
+                            .describe(
+                              'The external GitHub key, in `owner\/repo\/pull\/number` format.'
+                            ),
+                          number: zod
+                            .number()
+                            .min(
+                              listTypedNotificationsResponseItemsItemNotificationMetadataContentNumberMinFour
+                            )
+                            .describe('The GitHub pull request number.'),
+                          owner: zod
+                            .string()
+                            .describe(
+                              'The GitHub repository owner or organization.'
+                            ),
+                          repo: zod
+                            .string()
+                            .describe('The GitHub repository name.'),
+                          senderGithubAvatarUrl: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The GitHub avatar URL for the sender, when available.'
+                            ),
+                          senderGithubLogin: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The GitHub login for the sender, when available.'
+                            ),
+                          senderGithubUserId: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The stable GitHub numeric user id for the sender, serialized as a string.'
+                            ),
+                          title: zod
+                            .string()
+                            .describe(
+                              'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
+                            ),
+                          url: zod
+                            .string()
+                            .describe(
+                              'The public GitHub URL for the pull request.'
+                            ),
+                        })
+                        .describe(
+                          'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
+                        )
+                        .and(
+                          zod.object({
+                            commentGithubId: zod
+                              .number()
+                              .min(
+                                listTypedNotificationsResponseItemsItemNotificationMetadataContentCommentGithubIdMinOne
+                              )
+                              .nullish()
+                              .describe(
+                                'The GitHub numeric id of the comment or review containing the mention, when available.'
+                              ),
+                            commentUrl: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The public GitHub URL for the text containing the mention, when available.'
+                              ),
+                            location: zod
+                              .enum([
+                                'pr_body',
+                                'comment',
+                                'review',
+                                'review_comment',
+                              ])
+                              .describe(
+                                'Where in a GitHub pull request the user was mentioned.'
+                              ),
+                            textSnippet: zod
+                              .string()
+                              .describe(
+                                'A truncated excerpt of the text containing the mention.'
+                              ),
+                          })
+                        )
+                        .describe(
+                          'Metadata for a notification that the user was mentioned on a GitHub pull request.'
+                        ),
+                      tag: zod.enum(['github_pr_mention']),
+                    })
+                    .describe(
+                      'The user was mentioned on a GitHub pull request.'
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          displayName: zod
+                            .string()
+                            .describe(
+                              'A compact label suitable for display in the UI.'
+                            ),
+                          foreignEntityId: zod
+                            .uuid()
+                            .describe(
+                              'The source-specific internal foreign entity row id for this pull request.'
+                            ),
+                          githubKey: zod
+                            .string()
+                            .describe(
+                              'The external GitHub key, in `owner\/repo\/pull\/number` format.'
+                            ),
+                          number: zod
+                            .number()
+                            .min(
+                              listTypedNotificationsResponseItemsItemNotificationMetadataContentNumberMinFive
+                            )
+                            .describe('The GitHub pull request number.'),
+                          owner: zod
+                            .string()
+                            .describe(
+                              'The GitHub repository owner or organization.'
+                            ),
+                          repo: zod
+                            .string()
+                            .describe('The GitHub repository name.'),
+                          senderGithubAvatarUrl: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The GitHub avatar URL for the sender, when available.'
+                            ),
+                          senderGithubLogin: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The GitHub login for the sender, when available.'
+                            ),
+                          senderGithubUserId: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The stable GitHub numeric user id for the sender, serialized as a string.'
+                            ),
+                          title: zod
+                            .string()
+                            .describe(
+                              'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
+                            ),
+                          url: zod
+                            .string()
+                            .describe(
+                              'The public GitHub URL for the pull request.'
+                            ),
+                        })
+                        .describe(
+                          'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
+                        )
+                        .and(
+                          zod.object({
+                            reviewGithubId: zod
+                              .number()
+                              .min(
+                                listTypedNotificationsResponseItemsItemNotificationMetadataContentReviewGithubIdMin
+                              )
+                              .nullish()
+                              .describe(
+                                'The GitHub numeric id of the review, when available.'
+                              ),
+                            reviewSnippet: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'A truncated excerpt of the review body, when any was written.'
+                              ),
+                            reviewUrl: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The public GitHub URL for the review, when available.'
+                              ),
+                            state: zod
+                              .enum([
+                                'approved',
+                                'changes_requested',
+                                'commented',
+                              ])
+                              .describe(
+                                'The state of a submitted GitHub pull request review.'
+                              ),
+                          })
+                        )
+                        .describe(
+                          "Metadata for a notification that a review was submitted on the user's GitHub pull request."
+                        ),
+                      tag: zod.enum(['github_pr_review']),
+                    })
+                    .describe(
+                      "A review was submitted on the user's GitHub pull request."
+                    ),
                 ])
                 .describe(
                   'Mirrors [`model_notifications::NotificationEvent`] but uses `tag` \/ `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait.'
@@ -778,6 +1317,24 @@ export const bulkGetTypedNotificationsByEventItemIdsBody = zod
   .describe('Request body for bulk-fetching notifications by event item IDs.');
 
 export const bulkGetTypedNotificationsByEventItemIdsResponseItemsItemNotificationMetadataContentNumberMin = 0;
+
+export const bulkGetTypedNotificationsByEventItemIdsResponseItemsItemNotificationMetadataContentNumberMinOne = 0;
+
+export const bulkGetTypedNotificationsByEventItemIdsResponseItemsItemNotificationMetadataContentCheckRunGithubIdMin = 0;
+
+export const bulkGetTypedNotificationsByEventItemIdsResponseItemsItemNotificationMetadataContentNumberMinTwo = 0;
+
+export const bulkGetTypedNotificationsByEventItemIdsResponseItemsItemNotificationMetadataContentNumberMinThree = 0;
+
+export const bulkGetTypedNotificationsByEventItemIdsResponseItemsItemNotificationMetadataContentCommentGithubIdMin = 0;
+
+export const bulkGetTypedNotificationsByEventItemIdsResponseItemsItemNotificationMetadataContentNumberMinFour = 0;
+
+export const bulkGetTypedNotificationsByEventItemIdsResponseItemsItemNotificationMetadataContentCommentGithubIdMinOne = 0;
+
+export const bulkGetTypedNotificationsByEventItemIdsResponseItemsItemNotificationMetadataContentNumberMinFive = 0;
+
+export const bulkGetTypedNotificationsByEventItemIdsResponseItemsItemNotificationMetadataContentReviewGithubIdMin = 0;
 
 export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
   .object({
@@ -1294,17 +1851,6 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                     .object({
                       content: zod
                         .object({
-                          action: zod
-                            .enum(['opened', 'reopened', 'closed'])
-                            .describe(
-                              'The GitHub pull request webhook action that triggered the notification.'
-                            ),
-                          baseBranch: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The pull request base branch, when available.'
-                            ),
                           displayName: zod
                             .string()
                             .describe(
@@ -1320,18 +1866,6 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                             .describe(
                               'The external GitHub key, in `owner\/repo\/pull\/number` format.'
                             ),
-                          headBranch: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The pull request head branch, when available.'
-                            ),
-                          mergedAt: zod.iso
-                            .datetime({})
-                            .nullish()
-                            .describe(
-                              'When the pull request was merged, when available.'
-                            ),
                           number: zod
                             .number()
                             .min(
@@ -1343,16 +1877,6 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                             .describe(
                               'The GitHub repository owner or organization.'
                             ),
-                          previousStatus: zod
-                            .union([
-                              zod.null(),
-                              zod
-                                .enum(['open', 'closed', 'merged'])
-                                .describe(
-                                  'The normalized lifecycle status for a GitHub pull request notification.'
-                                ),
-                            ])
-                            .optional(),
                           repo: zod
                             .string()
                             .describe('The GitHub repository name.'),
@@ -1374,10 +1898,120 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                             .describe(
                               'The stable GitHub numeric user id for the sender, serialized as a string.'
                             ),
-                          status: zod
-                            .enum(['open', 'closed', 'merged'])
+                          title: zod
+                            .string()
                             .describe(
-                              'The normalized lifecycle status for a GitHub pull request notification.'
+                              'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
+                            ),
+                          url: zod
+                            .string()
+                            .describe(
+                              'The public GitHub URL for the pull request.'
+                            ),
+                        })
+                        .describe(
+                          'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
+                        )
+                        .and(
+                          zod.object({
+                            action: zod
+                              .enum(['opened', 'reopened', 'closed'])
+                              .describe(
+                                'The GitHub pull request webhook action that triggered the notification.'
+                              ),
+                            baseBranch: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The pull request base branch, when available.'
+                              ),
+                            headBranch: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The pull request head branch, when available.'
+                              ),
+                            mergedAt: zod.iso
+                              .datetime({})
+                              .nullish()
+                              .describe(
+                                'When the pull request was merged, when available.'
+                              ),
+                            previousStatus: zod
+                              .union([
+                                zod.null(),
+                                zod
+                                  .enum(['open', 'closed', 'merged'])
+                                  .describe(
+                                    'The normalized lifecycle status for a GitHub pull request notification.'
+                                  ),
+                              ])
+                              .optional(),
+                            status: zod
+                              .enum(['open', 'closed', 'merged'])
+                              .describe(
+                                'The normalized lifecycle status for a GitHub pull request notification.'
+                              ),
+                          })
+                        )
+                        .describe(
+                          'Metadata for a GitHub pull request lifecycle notification.'
+                        ),
+                      tag: zod.enum(['github_pr_status_changed']),
+                    })
+                    .describe(
+                      'A GitHub pull request changed lifecycle state.\n\nThe `github_pr_event` alias keeps rows and queue messages persisted\nbefore the rename deserializable.'
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          displayName: zod
+                            .string()
+                            .describe(
+                              'A compact label suitable for display in the UI.'
+                            ),
+                          foreignEntityId: zod
+                            .uuid()
+                            .describe(
+                              'The source-specific internal foreign entity row id for this pull request.'
+                            ),
+                          githubKey: zod
+                            .string()
+                            .describe(
+                              'The external GitHub key, in `owner\/repo\/pull\/number` format.'
+                            ),
+                          number: zod
+                            .number()
+                            .min(
+                              bulkGetTypedNotificationsByEventItemIdsResponseItemsItemNotificationMetadataContentNumberMinOne
+                            )
+                            .describe('The GitHub pull request number.'),
+                          owner: zod
+                            .string()
+                            .describe(
+                              'The GitHub repository owner or organization.'
+                            ),
+                          repo: zod
+                            .string()
+                            .describe('The GitHub repository name.'),
+                          senderGithubAvatarUrl: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The GitHub avatar URL for the sender, when available.'
+                            ),
+                          senderGithubLogin: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The GitHub login for the sender, when available.'
+                            ),
+                          senderGithubUserId: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The stable GitHub numeric user id for the sender, serialized as a string.'
                             ),
                           title: zod
                             .string()
@@ -1391,11 +2025,455 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                             ),
                         })
                         .describe(
-                          'Metadata for a GitHub pull request lifecycle notification.'
+                          'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
+                        )
+                        .and(
+                          zod.object({
+                            checkName: zod
+                              .string()
+                              .describe(
+                                'The display name GitHub reported for the check run.'
+                              ),
+                            checkRunGithubId: zod
+                              .number()
+                              .min(
+                                bulkGetTypedNotificationsByEventItemIdsResponseItemsItemNotificationMetadataContentCheckRunGithubIdMin
+                              )
+                              .describe(
+                                'The GitHub numeric id of the check run.'
+                              ),
+                            checkStatus: zod
+                              .string()
+                              .describe('The raw GitHub check run status.'),
+                            checkUrl: zod
+                              .string()
+                              .describe(
+                                'The public GitHub URL for the check run.'
+                              ),
+                            completedAt: zod.iso
+                              .datetime({})
+                              .describe(
+                                'When GitHub marked the check run as complete.'
+                              ),
+                            conclusion: zod
+                              .string()
+                              .describe('The raw GitHub check run conclusion.'),
+                            state: zod
+                              .enum(['completed', 'failed'])
+                              .describe(
+                                'The normalized result state for a GitHub pull request check-run notification.'
+                              ),
+                          })
+                        )
+                        .describe(
+                          'Metadata for a notification that a GitHub pull request check run completed.'
                         ),
-                      tag: zod.enum(['github_pr_event']),
+                      tag: zod.enum(['github_pr_check_run']),
                     })
-                    .describe('A GitHub pull request changed lifecycle state.'),
+                    .describe('A GitHub pull request check run completed.'),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          displayName: zod
+                            .string()
+                            .describe(
+                              'A compact label suitable for display in the UI.'
+                            ),
+                          foreignEntityId: zod
+                            .uuid()
+                            .describe(
+                              'The source-specific internal foreign entity row id for this pull request.'
+                            ),
+                          githubKey: zod
+                            .string()
+                            .describe(
+                              'The external GitHub key, in `owner\/repo\/pull\/number` format.'
+                            ),
+                          number: zod
+                            .number()
+                            .min(
+                              bulkGetTypedNotificationsByEventItemIdsResponseItemsItemNotificationMetadataContentNumberMinTwo
+                            )
+                            .describe('The GitHub pull request number.'),
+                          owner: zod
+                            .string()
+                            .describe(
+                              'The GitHub repository owner or organization.'
+                            ),
+                          repo: zod
+                            .string()
+                            .describe('The GitHub repository name.'),
+                          senderGithubAvatarUrl: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The GitHub avatar URL for the sender, when available.'
+                            ),
+                          senderGithubLogin: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The GitHub login for the sender, when available.'
+                            ),
+                          senderGithubUserId: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The stable GitHub numeric user id for the sender, serialized as a string.'
+                            ),
+                          title: zod
+                            .string()
+                            .describe(
+                              'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
+                            ),
+                          url: zod
+                            .string()
+                            .describe(
+                              'The public GitHub URL for the pull request.'
+                            ),
+                        })
+                        .describe(
+                          'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
+                        )
+                        .and(
+                          zod.object({
+                            requestedReviewerGithubLogin: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The GitHub login of the requested reviewer, when available.'
+                              ),
+                            requestedReviewerGithubUserId: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The stable GitHub numeric user id of the requested reviewer, serialized as a string.'
+                              ),
+                          })
+                        )
+                        .describe(
+                          "Metadata for a notification that the user's review was requested on a GitHub pull request."
+                        ),
+                      tag: zod.enum(['github_review_requested']),
+                    })
+                    .describe(
+                      "The user's review was requested on a GitHub pull request."
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          displayName: zod
+                            .string()
+                            .describe(
+                              'A compact label suitable for display in the UI.'
+                            ),
+                          foreignEntityId: zod
+                            .uuid()
+                            .describe(
+                              'The source-specific internal foreign entity row id for this pull request.'
+                            ),
+                          githubKey: zod
+                            .string()
+                            .describe(
+                              'The external GitHub key, in `owner\/repo\/pull\/number` format.'
+                            ),
+                          number: zod
+                            .number()
+                            .min(
+                              bulkGetTypedNotificationsByEventItemIdsResponseItemsItemNotificationMetadataContentNumberMinThree
+                            )
+                            .describe('The GitHub pull request number.'),
+                          owner: zod
+                            .string()
+                            .describe(
+                              'The GitHub repository owner or organization.'
+                            ),
+                          repo: zod
+                            .string()
+                            .describe('The GitHub repository name.'),
+                          senderGithubAvatarUrl: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The GitHub avatar URL for the sender, when available.'
+                            ),
+                          senderGithubLogin: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The GitHub login for the sender, when available.'
+                            ),
+                          senderGithubUserId: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The stable GitHub numeric user id for the sender, serialized as a string.'
+                            ),
+                          title: zod
+                            .string()
+                            .describe(
+                              'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
+                            ),
+                          url: zod
+                            .string()
+                            .describe(
+                              'The public GitHub URL for the pull request.'
+                            ),
+                        })
+                        .describe(
+                          'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
+                        )
+                        .and(
+                          zod.object({
+                            commentGithubId: zod
+                              .number()
+                              .min(
+                                bulkGetTypedNotificationsByEventItemIdsResponseItemsItemNotificationMetadataContentCommentGithubIdMin
+                              )
+                              .nullish()
+                              .describe(
+                                'The GitHub numeric id of the comment, when available.'
+                              ),
+                            commentKind: zod
+                              .enum(['issue', 'review_comment'])
+                              .describe(
+                                'The kind of GitHub comment that triggered a [`GithubPrComment`] notification.'
+                              ),
+                            commentSnippet: zod
+                              .string()
+                              .describe(
+                                'A truncated excerpt of the comment body.'
+                              ),
+                            commentUrl: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The public GitHub URL for the comment, when available.'
+                              ),
+                          })
+                        )
+                        .describe(
+                          'Metadata for a notification that a GitHub pull request was commented on.'
+                        ),
+                      tag: zod.enum(['github_pr_comment']),
+                    })
+                    .describe('A GitHub pull request was commented on.'),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          displayName: zod
+                            .string()
+                            .describe(
+                              'A compact label suitable for display in the UI.'
+                            ),
+                          foreignEntityId: zod
+                            .uuid()
+                            .describe(
+                              'The source-specific internal foreign entity row id for this pull request.'
+                            ),
+                          githubKey: zod
+                            .string()
+                            .describe(
+                              'The external GitHub key, in `owner\/repo\/pull\/number` format.'
+                            ),
+                          number: zod
+                            .number()
+                            .min(
+                              bulkGetTypedNotificationsByEventItemIdsResponseItemsItemNotificationMetadataContentNumberMinFour
+                            )
+                            .describe('The GitHub pull request number.'),
+                          owner: zod
+                            .string()
+                            .describe(
+                              'The GitHub repository owner or organization.'
+                            ),
+                          repo: zod
+                            .string()
+                            .describe('The GitHub repository name.'),
+                          senderGithubAvatarUrl: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The GitHub avatar URL for the sender, when available.'
+                            ),
+                          senderGithubLogin: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The GitHub login for the sender, when available.'
+                            ),
+                          senderGithubUserId: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The stable GitHub numeric user id for the sender, serialized as a string.'
+                            ),
+                          title: zod
+                            .string()
+                            .describe(
+                              'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
+                            ),
+                          url: zod
+                            .string()
+                            .describe(
+                              'The public GitHub URL for the pull request.'
+                            ),
+                        })
+                        .describe(
+                          'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
+                        )
+                        .and(
+                          zod.object({
+                            commentGithubId: zod
+                              .number()
+                              .min(
+                                bulkGetTypedNotificationsByEventItemIdsResponseItemsItemNotificationMetadataContentCommentGithubIdMinOne
+                              )
+                              .nullish()
+                              .describe(
+                                'The GitHub numeric id of the comment or review containing the mention, when available.'
+                              ),
+                            commentUrl: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The public GitHub URL for the text containing the mention, when available.'
+                              ),
+                            location: zod
+                              .enum([
+                                'pr_body',
+                                'comment',
+                                'review',
+                                'review_comment',
+                              ])
+                              .describe(
+                                'Where in a GitHub pull request the user was mentioned.'
+                              ),
+                            textSnippet: zod
+                              .string()
+                              .describe(
+                                'A truncated excerpt of the text containing the mention.'
+                              ),
+                          })
+                        )
+                        .describe(
+                          'Metadata for a notification that the user was mentioned on a GitHub pull request.'
+                        ),
+                      tag: zod.enum(['github_pr_mention']),
+                    })
+                    .describe(
+                      'The user was mentioned on a GitHub pull request.'
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          displayName: zod
+                            .string()
+                            .describe(
+                              'A compact label suitable for display in the UI.'
+                            ),
+                          foreignEntityId: zod
+                            .uuid()
+                            .describe(
+                              'The source-specific internal foreign entity row id for this pull request.'
+                            ),
+                          githubKey: zod
+                            .string()
+                            .describe(
+                              'The external GitHub key, in `owner\/repo\/pull\/number` format.'
+                            ),
+                          number: zod
+                            .number()
+                            .min(
+                              bulkGetTypedNotificationsByEventItemIdsResponseItemsItemNotificationMetadataContentNumberMinFive
+                            )
+                            .describe('The GitHub pull request number.'),
+                          owner: zod
+                            .string()
+                            .describe(
+                              'The GitHub repository owner or organization.'
+                            ),
+                          repo: zod
+                            .string()
+                            .describe('The GitHub repository name.'),
+                          senderGithubAvatarUrl: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The GitHub avatar URL for the sender, when available.'
+                            ),
+                          senderGithubLogin: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The GitHub login for the sender, when available.'
+                            ),
+                          senderGithubUserId: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The stable GitHub numeric user id for the sender, serialized as a string.'
+                            ),
+                          title: zod
+                            .string()
+                            .describe(
+                              'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
+                            ),
+                          url: zod
+                            .string()
+                            .describe(
+                              'The public GitHub URL for the pull request.'
+                            ),
+                        })
+                        .describe(
+                          'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
+                        )
+                        .and(
+                          zod.object({
+                            reviewGithubId: zod
+                              .number()
+                              .min(
+                                bulkGetTypedNotificationsByEventItemIdsResponseItemsItemNotificationMetadataContentReviewGithubIdMin
+                              )
+                              .nullish()
+                              .describe(
+                                'The GitHub numeric id of the review, when available.'
+                              ),
+                            reviewSnippet: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'A truncated excerpt of the review body, when any was written.'
+                              ),
+                            reviewUrl: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The public GitHub URL for the review, when available.'
+                              ),
+                            state: zod
+                              .enum([
+                                'approved',
+                                'changes_requested',
+                                'commented',
+                              ])
+                              .describe(
+                                'The state of a submitted GitHub pull request review.'
+                              ),
+                          })
+                        )
+                        .describe(
+                          "Metadata for a notification that a review was submitted on the user's GitHub pull request."
+                        ),
+                      tag: zod.enum(['github_pr_review']),
+                    })
+                    .describe(
+                      "A review was submitted on the user's GitHub pull request."
+                    ),
                 ])
                 .describe(
                   'Mirrors [`model_notifications::NotificationEvent`] but uses `tag` \/ `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait.'
@@ -1450,6 +2528,24 @@ export const getTypedNotificationsByEventItemIdQueryParams = zod.object({
 });
 
 export const getTypedNotificationsByEventItemIdResponseItemsItemNotificationMetadataContentNumberMin = 0;
+
+export const getTypedNotificationsByEventItemIdResponseItemsItemNotificationMetadataContentNumberMinOne = 0;
+
+export const getTypedNotificationsByEventItemIdResponseItemsItemNotificationMetadataContentCheckRunGithubIdMin = 0;
+
+export const getTypedNotificationsByEventItemIdResponseItemsItemNotificationMetadataContentNumberMinTwo = 0;
+
+export const getTypedNotificationsByEventItemIdResponseItemsItemNotificationMetadataContentNumberMinThree = 0;
+
+export const getTypedNotificationsByEventItemIdResponseItemsItemNotificationMetadataContentCommentGithubIdMin = 0;
+
+export const getTypedNotificationsByEventItemIdResponseItemsItemNotificationMetadataContentNumberMinFour = 0;
+
+export const getTypedNotificationsByEventItemIdResponseItemsItemNotificationMetadataContentCommentGithubIdMinOne = 0;
+
+export const getTypedNotificationsByEventItemIdResponseItemsItemNotificationMetadataContentNumberMinFive = 0;
+
+export const getTypedNotificationsByEventItemIdResponseItemsItemNotificationMetadataContentReviewGithubIdMin = 0;
 
 export const getTypedNotificationsByEventItemIdResponse = zod
   .object({
@@ -1966,17 +3062,6 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                     .object({
                       content: zod
                         .object({
-                          action: zod
-                            .enum(['opened', 'reopened', 'closed'])
-                            .describe(
-                              'The GitHub pull request webhook action that triggered the notification.'
-                            ),
-                          baseBranch: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The pull request base branch, when available.'
-                            ),
                           displayName: zod
                             .string()
                             .describe(
@@ -1992,18 +3077,6 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                             .describe(
                               'The external GitHub key, in `owner\/repo\/pull\/number` format.'
                             ),
-                          headBranch: zod
-                            .string()
-                            .nullish()
-                            .describe(
-                              'The pull request head branch, when available.'
-                            ),
-                          mergedAt: zod.iso
-                            .datetime({})
-                            .nullish()
-                            .describe(
-                              'When the pull request was merged, when available.'
-                            ),
                           number: zod
                             .number()
                             .min(
@@ -2015,16 +3088,6 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                             .describe(
                               'The GitHub repository owner or organization.'
                             ),
-                          previousStatus: zod
-                            .union([
-                              zod.null(),
-                              zod
-                                .enum(['open', 'closed', 'merged'])
-                                .describe(
-                                  'The normalized lifecycle status for a GitHub pull request notification.'
-                                ),
-                            ])
-                            .optional(),
                           repo: zod
                             .string()
                             .describe('The GitHub repository name.'),
@@ -2046,10 +3109,120 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                             .describe(
                               'The stable GitHub numeric user id for the sender, serialized as a string.'
                             ),
-                          status: zod
-                            .enum(['open', 'closed', 'merged'])
+                          title: zod
+                            .string()
                             .describe(
-                              'The normalized lifecycle status for a GitHub pull request notification.'
+                              'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
+                            ),
+                          url: zod
+                            .string()
+                            .describe(
+                              'The public GitHub URL for the pull request.'
+                            ),
+                        })
+                        .describe(
+                          'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
+                        )
+                        .and(
+                          zod.object({
+                            action: zod
+                              .enum(['opened', 'reopened', 'closed'])
+                              .describe(
+                                'The GitHub pull request webhook action that triggered the notification.'
+                              ),
+                            baseBranch: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The pull request base branch, when available.'
+                              ),
+                            headBranch: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The pull request head branch, when available.'
+                              ),
+                            mergedAt: zod.iso
+                              .datetime({})
+                              .nullish()
+                              .describe(
+                                'When the pull request was merged, when available.'
+                              ),
+                            previousStatus: zod
+                              .union([
+                                zod.null(),
+                                zod
+                                  .enum(['open', 'closed', 'merged'])
+                                  .describe(
+                                    'The normalized lifecycle status for a GitHub pull request notification.'
+                                  ),
+                              ])
+                              .optional(),
+                            status: zod
+                              .enum(['open', 'closed', 'merged'])
+                              .describe(
+                                'The normalized lifecycle status for a GitHub pull request notification.'
+                              ),
+                          })
+                        )
+                        .describe(
+                          'Metadata for a GitHub pull request lifecycle notification.'
+                        ),
+                      tag: zod.enum(['github_pr_status_changed']),
+                    })
+                    .describe(
+                      'A GitHub pull request changed lifecycle state.\n\nThe `github_pr_event` alias keeps rows and queue messages persisted\nbefore the rename deserializable.'
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          displayName: zod
+                            .string()
+                            .describe(
+                              'A compact label suitable for display in the UI.'
+                            ),
+                          foreignEntityId: zod
+                            .uuid()
+                            .describe(
+                              'The source-specific internal foreign entity row id for this pull request.'
+                            ),
+                          githubKey: zod
+                            .string()
+                            .describe(
+                              'The external GitHub key, in `owner\/repo\/pull\/number` format.'
+                            ),
+                          number: zod
+                            .number()
+                            .min(
+                              getTypedNotificationsByEventItemIdResponseItemsItemNotificationMetadataContentNumberMinOne
+                            )
+                            .describe('The GitHub pull request number.'),
+                          owner: zod
+                            .string()
+                            .describe(
+                              'The GitHub repository owner or organization.'
+                            ),
+                          repo: zod
+                            .string()
+                            .describe('The GitHub repository name.'),
+                          senderGithubAvatarUrl: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The GitHub avatar URL for the sender, when available.'
+                            ),
+                          senderGithubLogin: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The GitHub login for the sender, when available.'
+                            ),
+                          senderGithubUserId: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The stable GitHub numeric user id for the sender, serialized as a string.'
                             ),
                           title: zod
                             .string()
@@ -2063,11 +3236,455 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                             ),
                         })
                         .describe(
-                          'Metadata for a GitHub pull request lifecycle notification.'
+                          'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
+                        )
+                        .and(
+                          zod.object({
+                            checkName: zod
+                              .string()
+                              .describe(
+                                'The display name GitHub reported for the check run.'
+                              ),
+                            checkRunGithubId: zod
+                              .number()
+                              .min(
+                                getTypedNotificationsByEventItemIdResponseItemsItemNotificationMetadataContentCheckRunGithubIdMin
+                              )
+                              .describe(
+                                'The GitHub numeric id of the check run.'
+                              ),
+                            checkStatus: zod
+                              .string()
+                              .describe('The raw GitHub check run status.'),
+                            checkUrl: zod
+                              .string()
+                              .describe(
+                                'The public GitHub URL for the check run.'
+                              ),
+                            completedAt: zod.iso
+                              .datetime({})
+                              .describe(
+                                'When GitHub marked the check run as complete.'
+                              ),
+                            conclusion: zod
+                              .string()
+                              .describe('The raw GitHub check run conclusion.'),
+                            state: zod
+                              .enum(['completed', 'failed'])
+                              .describe(
+                                'The normalized result state for a GitHub pull request check-run notification.'
+                              ),
+                          })
+                        )
+                        .describe(
+                          'Metadata for a notification that a GitHub pull request check run completed.'
                         ),
-                      tag: zod.enum(['github_pr_event']),
+                      tag: zod.enum(['github_pr_check_run']),
                     })
-                    .describe('A GitHub pull request changed lifecycle state.'),
+                    .describe('A GitHub pull request check run completed.'),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          displayName: zod
+                            .string()
+                            .describe(
+                              'A compact label suitable for display in the UI.'
+                            ),
+                          foreignEntityId: zod
+                            .uuid()
+                            .describe(
+                              'The source-specific internal foreign entity row id for this pull request.'
+                            ),
+                          githubKey: zod
+                            .string()
+                            .describe(
+                              'The external GitHub key, in `owner\/repo\/pull\/number` format.'
+                            ),
+                          number: zod
+                            .number()
+                            .min(
+                              getTypedNotificationsByEventItemIdResponseItemsItemNotificationMetadataContentNumberMinTwo
+                            )
+                            .describe('The GitHub pull request number.'),
+                          owner: zod
+                            .string()
+                            .describe(
+                              'The GitHub repository owner or organization.'
+                            ),
+                          repo: zod
+                            .string()
+                            .describe('The GitHub repository name.'),
+                          senderGithubAvatarUrl: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The GitHub avatar URL for the sender, when available.'
+                            ),
+                          senderGithubLogin: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The GitHub login for the sender, when available.'
+                            ),
+                          senderGithubUserId: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The stable GitHub numeric user id for the sender, serialized as a string.'
+                            ),
+                          title: zod
+                            .string()
+                            .describe(
+                              'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
+                            ),
+                          url: zod
+                            .string()
+                            .describe(
+                              'The public GitHub URL for the pull request.'
+                            ),
+                        })
+                        .describe(
+                          'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
+                        )
+                        .and(
+                          zod.object({
+                            requestedReviewerGithubLogin: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The GitHub login of the requested reviewer, when available.'
+                              ),
+                            requestedReviewerGithubUserId: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The stable GitHub numeric user id of the requested reviewer, serialized as a string.'
+                              ),
+                          })
+                        )
+                        .describe(
+                          "Metadata for a notification that the user's review was requested on a GitHub pull request."
+                        ),
+                      tag: zod.enum(['github_review_requested']),
+                    })
+                    .describe(
+                      "The user's review was requested on a GitHub pull request."
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          displayName: zod
+                            .string()
+                            .describe(
+                              'A compact label suitable for display in the UI.'
+                            ),
+                          foreignEntityId: zod
+                            .uuid()
+                            .describe(
+                              'The source-specific internal foreign entity row id for this pull request.'
+                            ),
+                          githubKey: zod
+                            .string()
+                            .describe(
+                              'The external GitHub key, in `owner\/repo\/pull\/number` format.'
+                            ),
+                          number: zod
+                            .number()
+                            .min(
+                              getTypedNotificationsByEventItemIdResponseItemsItemNotificationMetadataContentNumberMinThree
+                            )
+                            .describe('The GitHub pull request number.'),
+                          owner: zod
+                            .string()
+                            .describe(
+                              'The GitHub repository owner or organization.'
+                            ),
+                          repo: zod
+                            .string()
+                            .describe('The GitHub repository name.'),
+                          senderGithubAvatarUrl: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The GitHub avatar URL for the sender, when available.'
+                            ),
+                          senderGithubLogin: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The GitHub login for the sender, when available.'
+                            ),
+                          senderGithubUserId: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The stable GitHub numeric user id for the sender, serialized as a string.'
+                            ),
+                          title: zod
+                            .string()
+                            .describe(
+                              'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
+                            ),
+                          url: zod
+                            .string()
+                            .describe(
+                              'The public GitHub URL for the pull request.'
+                            ),
+                        })
+                        .describe(
+                          'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
+                        )
+                        .and(
+                          zod.object({
+                            commentGithubId: zod
+                              .number()
+                              .min(
+                                getTypedNotificationsByEventItemIdResponseItemsItemNotificationMetadataContentCommentGithubIdMin
+                              )
+                              .nullish()
+                              .describe(
+                                'The GitHub numeric id of the comment, when available.'
+                              ),
+                            commentKind: zod
+                              .enum(['issue', 'review_comment'])
+                              .describe(
+                                'The kind of GitHub comment that triggered a [`GithubPrComment`] notification.'
+                              ),
+                            commentSnippet: zod
+                              .string()
+                              .describe(
+                                'A truncated excerpt of the comment body.'
+                              ),
+                            commentUrl: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The public GitHub URL for the comment, when available.'
+                              ),
+                          })
+                        )
+                        .describe(
+                          'Metadata for a notification that a GitHub pull request was commented on.'
+                        ),
+                      tag: zod.enum(['github_pr_comment']),
+                    })
+                    .describe('A GitHub pull request was commented on.'),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          displayName: zod
+                            .string()
+                            .describe(
+                              'A compact label suitable for display in the UI.'
+                            ),
+                          foreignEntityId: zod
+                            .uuid()
+                            .describe(
+                              'The source-specific internal foreign entity row id for this pull request.'
+                            ),
+                          githubKey: zod
+                            .string()
+                            .describe(
+                              'The external GitHub key, in `owner\/repo\/pull\/number` format.'
+                            ),
+                          number: zod
+                            .number()
+                            .min(
+                              getTypedNotificationsByEventItemIdResponseItemsItemNotificationMetadataContentNumberMinFour
+                            )
+                            .describe('The GitHub pull request number.'),
+                          owner: zod
+                            .string()
+                            .describe(
+                              'The GitHub repository owner or organization.'
+                            ),
+                          repo: zod
+                            .string()
+                            .describe('The GitHub repository name.'),
+                          senderGithubAvatarUrl: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The GitHub avatar URL for the sender, when available.'
+                            ),
+                          senderGithubLogin: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The GitHub login for the sender, when available.'
+                            ),
+                          senderGithubUserId: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The stable GitHub numeric user id for the sender, serialized as a string.'
+                            ),
+                          title: zod
+                            .string()
+                            .describe(
+                              'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
+                            ),
+                          url: zod
+                            .string()
+                            .describe(
+                              'The public GitHub URL for the pull request.'
+                            ),
+                        })
+                        .describe(
+                          'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
+                        )
+                        .and(
+                          zod.object({
+                            commentGithubId: zod
+                              .number()
+                              .min(
+                                getTypedNotificationsByEventItemIdResponseItemsItemNotificationMetadataContentCommentGithubIdMinOne
+                              )
+                              .nullish()
+                              .describe(
+                                'The GitHub numeric id of the comment or review containing the mention, when available.'
+                              ),
+                            commentUrl: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The public GitHub URL for the text containing the mention, when available.'
+                              ),
+                            location: zod
+                              .enum([
+                                'pr_body',
+                                'comment',
+                                'review',
+                                'review_comment',
+                              ])
+                              .describe(
+                                'Where in a GitHub pull request the user was mentioned.'
+                              ),
+                            textSnippet: zod
+                              .string()
+                              .describe(
+                                'A truncated excerpt of the text containing the mention.'
+                              ),
+                          })
+                        )
+                        .describe(
+                          'Metadata for a notification that the user was mentioned on a GitHub pull request.'
+                        ),
+                      tag: zod.enum(['github_pr_mention']),
+                    })
+                    .describe(
+                      'The user was mentioned on a GitHub pull request.'
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          displayName: zod
+                            .string()
+                            .describe(
+                              'A compact label suitable for display in the UI.'
+                            ),
+                          foreignEntityId: zod
+                            .uuid()
+                            .describe(
+                              'The source-specific internal foreign entity row id for this pull request.'
+                            ),
+                          githubKey: zod
+                            .string()
+                            .describe(
+                              'The external GitHub key, in `owner\/repo\/pull\/number` format.'
+                            ),
+                          number: zod
+                            .number()
+                            .min(
+                              getTypedNotificationsByEventItemIdResponseItemsItemNotificationMetadataContentNumberMinFive
+                            )
+                            .describe('The GitHub pull request number.'),
+                          owner: zod
+                            .string()
+                            .describe(
+                              'The GitHub repository owner or organization.'
+                            ),
+                          repo: zod
+                            .string()
+                            .describe('The GitHub repository name.'),
+                          senderGithubAvatarUrl: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The GitHub avatar URL for the sender, when available.'
+                            ),
+                          senderGithubLogin: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The GitHub login for the sender, when available.'
+                            ),
+                          senderGithubUserId: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The stable GitHub numeric user id for the sender, serialized as a string.'
+                            ),
+                          title: zod
+                            .string()
+                            .describe(
+                              'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
+                            ),
+                          url: zod
+                            .string()
+                            .describe(
+                              'The public GitHub URL for the pull request.'
+                            ),
+                        })
+                        .describe(
+                          'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
+                        )
+                        .and(
+                          zod.object({
+                            reviewGithubId: zod
+                              .number()
+                              .min(
+                                getTypedNotificationsByEventItemIdResponseItemsItemNotificationMetadataContentReviewGithubIdMin
+                              )
+                              .nullish()
+                              .describe(
+                                'The GitHub numeric id of the review, when available.'
+                              ),
+                            reviewSnippet: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'A truncated excerpt of the review body, when any was written.'
+                              ),
+                            reviewUrl: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The public GitHub URL for the review, when available.'
+                              ),
+                            state: zod
+                              .enum([
+                                'approved',
+                                'changes_requested',
+                                'commented',
+                              ])
+                              .describe(
+                                'The state of a submitted GitHub pull request review.'
+                              ),
+                          })
+                        )
+                        .describe(
+                          "Metadata for a notification that a review was submitted on the user's GitHub pull request."
+                        ),
+                      tag: zod.enum(['github_pr_review']),
+                    })
+                    .describe(
+                      "A review was submitted on the user's GitHub pull request."
+                    ),
                 ])
                 .describe(
                   'Mirrors [`model_notifications::NotificationEvent`] but uses `tag` \/ `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait.'
@@ -2137,6 +3754,24 @@ export const getTypedNotificationByIdParams = zod.object({
 });
 
 export const getTypedNotificationByIdResponseNotificationMetadataContentNumberMin = 0;
+
+export const getTypedNotificationByIdResponseNotificationMetadataContentNumberMinOne = 0;
+
+export const getTypedNotificationByIdResponseNotificationMetadataContentCheckRunGithubIdMin = 0;
+
+export const getTypedNotificationByIdResponseNotificationMetadataContentNumberMinTwo = 0;
+
+export const getTypedNotificationByIdResponseNotificationMetadataContentNumberMinThree = 0;
+
+export const getTypedNotificationByIdResponseNotificationMetadataContentCommentGithubIdMin = 0;
+
+export const getTypedNotificationByIdResponseNotificationMetadataContentNumberMinFour = 0;
+
+export const getTypedNotificationByIdResponseNotificationMetadataContentCommentGithubIdMinOne = 0;
+
+export const getTypedNotificationByIdResponseNotificationMetadataContentNumberMinFive = 0;
+
+export const getTypedNotificationByIdResponseNotificationMetadataContentReviewGithubIdMin = 0;
 
 export const getTypedNotificationByIdResponse = zod
   .object({
@@ -2617,15 +4252,6 @@ export const getTypedNotificationByIdResponse = zod
             .object({
               content: zod
                 .object({
-                  action: zod
-                    .enum(['opened', 'reopened', 'closed'])
-                    .describe(
-                      'The GitHub pull request webhook action that triggered the notification.'
-                    ),
-                  baseBranch: zod
-                    .string()
-                    .nullish()
-                    .describe('The pull request base branch, when available.'),
                   displayName: zod
                     .string()
                     .describe(
@@ -2641,16 +4267,6 @@ export const getTypedNotificationByIdResponse = zod
                     .describe(
                       'The external GitHub key, in `owner\/repo\/pull\/number` format.'
                     ),
-                  headBranch: zod
-                    .string()
-                    .nullish()
-                    .describe('The pull request head branch, when available.'),
-                  mergedAt: zod.iso
-                    .datetime({})
-                    .nullish()
-                    .describe(
-                      'When the pull request was merged, when available.'
-                    ),
                   number: zod
                     .number()
                     .min(
@@ -2660,16 +4276,6 @@ export const getTypedNotificationByIdResponse = zod
                   owner: zod
                     .string()
                     .describe('The GitHub repository owner or organization.'),
-                  previousStatus: zod
-                    .union([
-                      zod.null(),
-                      zod
-                        .enum(['open', 'closed', 'merged'])
-                        .describe(
-                          'The normalized lifecycle status for a GitHub pull request notification.'
-                        ),
-                    ])
-                    .optional(),
                   repo: zod.string().describe('The GitHub repository name.'),
                   senderGithubAvatarUrl: zod
                     .string()
@@ -2689,10 +4295,114 @@ export const getTypedNotificationByIdResponse = zod
                     .describe(
                       'The stable GitHub numeric user id for the sender, serialized as a string.'
                     ),
-                  status: zod
-                    .enum(['open', 'closed', 'merged'])
+                  title: zod
+                    .string()
                     .describe(
-                      'The normalized lifecycle status for a GitHub pull request notification.'
+                      'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
+                    ),
+                  url: zod
+                    .string()
+                    .describe('The public GitHub URL for the pull request.'),
+                })
+                .describe(
+                  'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
+                )
+                .and(
+                  zod.object({
+                    action: zod
+                      .enum(['opened', 'reopened', 'closed'])
+                      .describe(
+                        'The GitHub pull request webhook action that triggered the notification.'
+                      ),
+                    baseBranch: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The pull request base branch, when available.'
+                      ),
+                    headBranch: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The pull request head branch, when available.'
+                      ),
+                    mergedAt: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe(
+                        'When the pull request was merged, when available.'
+                      ),
+                    previousStatus: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum(['open', 'closed', 'merged'])
+                          .describe(
+                            'The normalized lifecycle status for a GitHub pull request notification.'
+                          ),
+                      ])
+                      .optional(),
+                    status: zod
+                      .enum(['open', 'closed', 'merged'])
+                      .describe(
+                        'The normalized lifecycle status for a GitHub pull request notification.'
+                      ),
+                  })
+                )
+                .describe(
+                  'Metadata for a GitHub pull request lifecycle notification.'
+                ),
+              tag: zod.enum(['github_pr_status_changed']),
+            })
+            .describe(
+              'A GitHub pull request changed lifecycle state.\n\nThe `github_pr_event` alias keeps rows and queue messages persisted\nbefore the rename deserializable.'
+            ),
+          zod
+            .object({
+              content: zod
+                .object({
+                  displayName: zod
+                    .string()
+                    .describe(
+                      'A compact label suitable for display in the UI.'
+                    ),
+                  foreignEntityId: zod
+                    .uuid()
+                    .describe(
+                      'The source-specific internal foreign entity row id for this pull request.'
+                    ),
+                  githubKey: zod
+                    .string()
+                    .describe(
+                      'The external GitHub key, in `owner\/repo\/pull\/number` format.'
+                    ),
+                  number: zod
+                    .number()
+                    .min(
+                      getTypedNotificationByIdResponseNotificationMetadataContentNumberMinOne
+                    )
+                    .describe('The GitHub pull request number.'),
+                  owner: zod
+                    .string()
+                    .describe('The GitHub repository owner or organization.'),
+                  repo: zod.string().describe('The GitHub repository name.'),
+                  senderGithubAvatarUrl: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      'The GitHub avatar URL for the sender, when available.'
+                    ),
+                  senderGithubLogin: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      'The GitHub login for the sender, when available.'
+                    ),
+                  senderGithubUserId: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      'The stable GitHub numeric user id for the sender, serialized as a string.'
                     ),
                   title: zod
                     .string()
@@ -2704,11 +4414,414 @@ export const getTypedNotificationByIdResponse = zod
                     .describe('The public GitHub URL for the pull request.'),
                 })
                 .describe(
-                  'Metadata for a GitHub pull request lifecycle notification.'
+                  'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
+                )
+                .and(
+                  zod.object({
+                    checkName: zod
+                      .string()
+                      .describe(
+                        'The display name GitHub reported for the check run.'
+                      ),
+                    checkRunGithubId: zod
+                      .number()
+                      .min(
+                        getTypedNotificationByIdResponseNotificationMetadataContentCheckRunGithubIdMin
+                      )
+                      .describe('The GitHub numeric id of the check run.'),
+                    checkStatus: zod
+                      .string()
+                      .describe('The raw GitHub check run status.'),
+                    checkUrl: zod
+                      .string()
+                      .describe('The public GitHub URL for the check run.'),
+                    completedAt: zod.iso
+                      .datetime({})
+                      .describe(
+                        'When GitHub marked the check run as complete.'
+                      ),
+                    conclusion: zod
+                      .string()
+                      .describe('The raw GitHub check run conclusion.'),
+                    state: zod
+                      .enum(['completed', 'failed'])
+                      .describe(
+                        'The normalized result state for a GitHub pull request check-run notification.'
+                      ),
+                  })
+                )
+                .describe(
+                  'Metadata for a notification that a GitHub pull request check run completed.'
                 ),
-              tag: zod.enum(['github_pr_event']),
+              tag: zod.enum(['github_pr_check_run']),
             })
-            .describe('A GitHub pull request changed lifecycle state.'),
+            .describe('A GitHub pull request check run completed.'),
+          zod
+            .object({
+              content: zod
+                .object({
+                  displayName: zod
+                    .string()
+                    .describe(
+                      'A compact label suitable for display in the UI.'
+                    ),
+                  foreignEntityId: zod
+                    .uuid()
+                    .describe(
+                      'The source-specific internal foreign entity row id for this pull request.'
+                    ),
+                  githubKey: zod
+                    .string()
+                    .describe(
+                      'The external GitHub key, in `owner\/repo\/pull\/number` format.'
+                    ),
+                  number: zod
+                    .number()
+                    .min(
+                      getTypedNotificationByIdResponseNotificationMetadataContentNumberMinTwo
+                    )
+                    .describe('The GitHub pull request number.'),
+                  owner: zod
+                    .string()
+                    .describe('The GitHub repository owner or organization.'),
+                  repo: zod.string().describe('The GitHub repository name.'),
+                  senderGithubAvatarUrl: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      'The GitHub avatar URL for the sender, when available.'
+                    ),
+                  senderGithubLogin: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      'The GitHub login for the sender, when available.'
+                    ),
+                  senderGithubUserId: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      'The stable GitHub numeric user id for the sender, serialized as a string.'
+                    ),
+                  title: zod
+                    .string()
+                    .describe(
+                      'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
+                    ),
+                  url: zod
+                    .string()
+                    .describe('The public GitHub URL for the pull request.'),
+                })
+                .describe(
+                  'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
+                )
+                .and(
+                  zod.object({
+                    requestedReviewerGithubLogin: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The GitHub login of the requested reviewer, when available.'
+                      ),
+                    requestedReviewerGithubUserId: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The stable GitHub numeric user id of the requested reviewer, serialized as a string.'
+                      ),
+                  })
+                )
+                .describe(
+                  "Metadata for a notification that the user's review was requested on a GitHub pull request."
+                ),
+              tag: zod.enum(['github_review_requested']),
+            })
+            .describe(
+              "The user's review was requested on a GitHub pull request."
+            ),
+          zod
+            .object({
+              content: zod
+                .object({
+                  displayName: zod
+                    .string()
+                    .describe(
+                      'A compact label suitable for display in the UI.'
+                    ),
+                  foreignEntityId: zod
+                    .uuid()
+                    .describe(
+                      'The source-specific internal foreign entity row id for this pull request.'
+                    ),
+                  githubKey: zod
+                    .string()
+                    .describe(
+                      'The external GitHub key, in `owner\/repo\/pull\/number` format.'
+                    ),
+                  number: zod
+                    .number()
+                    .min(
+                      getTypedNotificationByIdResponseNotificationMetadataContentNumberMinThree
+                    )
+                    .describe('The GitHub pull request number.'),
+                  owner: zod
+                    .string()
+                    .describe('The GitHub repository owner or organization.'),
+                  repo: zod.string().describe('The GitHub repository name.'),
+                  senderGithubAvatarUrl: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      'The GitHub avatar URL for the sender, when available.'
+                    ),
+                  senderGithubLogin: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      'The GitHub login for the sender, when available.'
+                    ),
+                  senderGithubUserId: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      'The stable GitHub numeric user id for the sender, serialized as a string.'
+                    ),
+                  title: zod
+                    .string()
+                    .describe(
+                      'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
+                    ),
+                  url: zod
+                    .string()
+                    .describe('The public GitHub URL for the pull request.'),
+                })
+                .describe(
+                  'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
+                )
+                .and(
+                  zod.object({
+                    commentGithubId: zod
+                      .number()
+                      .min(
+                        getTypedNotificationByIdResponseNotificationMetadataContentCommentGithubIdMin
+                      )
+                      .nullish()
+                      .describe(
+                        'The GitHub numeric id of the comment, when available.'
+                      ),
+                    commentKind: zod
+                      .enum(['issue', 'review_comment'])
+                      .describe(
+                        'The kind of GitHub comment that triggered a [`GithubPrComment`] notification.'
+                      ),
+                    commentSnippet: zod
+                      .string()
+                      .describe('A truncated excerpt of the comment body.'),
+                    commentUrl: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The public GitHub URL for the comment, when available.'
+                      ),
+                  })
+                )
+                .describe(
+                  'Metadata for a notification that a GitHub pull request was commented on.'
+                ),
+              tag: zod.enum(['github_pr_comment']),
+            })
+            .describe('A GitHub pull request was commented on.'),
+          zod
+            .object({
+              content: zod
+                .object({
+                  displayName: zod
+                    .string()
+                    .describe(
+                      'A compact label suitable for display in the UI.'
+                    ),
+                  foreignEntityId: zod
+                    .uuid()
+                    .describe(
+                      'The source-specific internal foreign entity row id for this pull request.'
+                    ),
+                  githubKey: zod
+                    .string()
+                    .describe(
+                      'The external GitHub key, in `owner\/repo\/pull\/number` format.'
+                    ),
+                  number: zod
+                    .number()
+                    .min(
+                      getTypedNotificationByIdResponseNotificationMetadataContentNumberMinFour
+                    )
+                    .describe('The GitHub pull request number.'),
+                  owner: zod
+                    .string()
+                    .describe('The GitHub repository owner or organization.'),
+                  repo: zod.string().describe('The GitHub repository name.'),
+                  senderGithubAvatarUrl: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      'The GitHub avatar URL for the sender, when available.'
+                    ),
+                  senderGithubLogin: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      'The GitHub login for the sender, when available.'
+                    ),
+                  senderGithubUserId: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      'The stable GitHub numeric user id for the sender, serialized as a string.'
+                    ),
+                  title: zod
+                    .string()
+                    .describe(
+                      'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
+                    ),
+                  url: zod
+                    .string()
+                    .describe('The public GitHub URL for the pull request.'),
+                })
+                .describe(
+                  'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
+                )
+                .and(
+                  zod.object({
+                    commentGithubId: zod
+                      .number()
+                      .min(
+                        getTypedNotificationByIdResponseNotificationMetadataContentCommentGithubIdMinOne
+                      )
+                      .nullish()
+                      .describe(
+                        'The GitHub numeric id of the comment or review containing the mention, when available.'
+                      ),
+                    commentUrl: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The public GitHub URL for the text containing the mention, when available.'
+                      ),
+                    location: zod
+                      .enum(['pr_body', 'comment', 'review', 'review_comment'])
+                      .describe(
+                        'Where in a GitHub pull request the user was mentioned.'
+                      ),
+                    textSnippet: zod
+                      .string()
+                      .describe(
+                        'A truncated excerpt of the text containing the mention.'
+                      ),
+                  })
+                )
+                .describe(
+                  'Metadata for a notification that the user was mentioned on a GitHub pull request.'
+                ),
+              tag: zod.enum(['github_pr_mention']),
+            })
+            .describe('The user was mentioned on a GitHub pull request.'),
+          zod
+            .object({
+              content: zod
+                .object({
+                  displayName: zod
+                    .string()
+                    .describe(
+                      'A compact label suitable for display in the UI.'
+                    ),
+                  foreignEntityId: zod
+                    .uuid()
+                    .describe(
+                      'The source-specific internal foreign entity row id for this pull request.'
+                    ),
+                  githubKey: zod
+                    .string()
+                    .describe(
+                      'The external GitHub key, in `owner\/repo\/pull\/number` format.'
+                    ),
+                  number: zod
+                    .number()
+                    .min(
+                      getTypedNotificationByIdResponseNotificationMetadataContentNumberMinFive
+                    )
+                    .describe('The GitHub pull request number.'),
+                  owner: zod
+                    .string()
+                    .describe('The GitHub repository owner or organization.'),
+                  repo: zod.string().describe('The GitHub repository name.'),
+                  senderGithubAvatarUrl: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      'The GitHub avatar URL for the sender, when available.'
+                    ),
+                  senderGithubLogin: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      'The GitHub login for the sender, when available.'
+                    ),
+                  senderGithubUserId: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      'The stable GitHub numeric user id for the sender, serialized as a string.'
+                    ),
+                  title: zod
+                    .string()
+                    .describe(
+                      'The GitHub pull request title. Falls back to `display_name` when GitHub has no title.'
+                    ),
+                  url: zod
+                    .string()
+                    .describe('The public GitHub URL for the pull request.'),
+                })
+                .describe(
+                  'Fields shared by every GitHub pull request notification type.\n\nEmbedded with `#[serde(flatten)]` so the wire shape keeps these keys at the\ntop level of the metadata object.'
+                )
+                .and(
+                  zod.object({
+                    reviewGithubId: zod
+                      .number()
+                      .min(
+                        getTypedNotificationByIdResponseNotificationMetadataContentReviewGithubIdMin
+                      )
+                      .nullish()
+                      .describe(
+                        'The GitHub numeric id of the review, when available.'
+                      ),
+                    reviewSnippet: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'A truncated excerpt of the review body, when any was written.'
+                      ),
+                    reviewUrl: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The public GitHub URL for the review, when available.'
+                      ),
+                    state: zod
+                      .enum(['approved', 'changes_requested', 'commented'])
+                      .describe(
+                        'The state of a submitted GitHub pull request review.'
+                      ),
+                  })
+                )
+                .describe(
+                  "Metadata for a notification that a review was submitted on the user's GitHub pull request."
+                ),
+              tag: zod.enum(['github_pr_review']),
+            })
+            .describe(
+              "A review was submitted on the user's GitHub pull request."
+            ),
         ])
         .describe(
           'Mirrors [`model_notifications::NotificationEvent`] but uses `tag` \/ `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait.'

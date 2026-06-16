@@ -7,6 +7,7 @@ import {
 import { openEmailAuthPopup } from '@core/auth/email';
 import { toast } from '@core/component/Toast/Toast';
 
+import { getNativeMobilePlatform } from '@core/util/platform';
 import { useInitGmailLink } from '@queries/auth';
 import { invalidateUserInfo } from '@queries/auth/user-info';
 import { invalidateEmailLinks, useEmailLinksQuery } from '@queries/email/link';
@@ -16,8 +17,10 @@ import type {
   ResyncResponse,
 } from '@service-email/generated/schemas';
 import type { UseQueryResult } from '@tanstack/solid-query';
+import { invoke } from '@tauri-apps/api/core';
 import { err, okAsync, ResultAsync } from 'neverthrow';
 import { createMemo, createSignal } from 'solid-js';
+import { requestShareInboxConfirmation } from './share-conflict';
 
 const [emailRefetchInterval, setEmailRefetchInterval] = createSignal<
   number | undefined
@@ -196,10 +199,81 @@ export function initAndStartEmailSync() {
  * Starts the add-inbox flow: fetches the Gmail link authorization URL and
  * navigates the browser to the OAuth consent page. The callback returns to
  * `/inbox-link-callback`, which provisions the new link.
+ *
+ * On native iOS the OAuth runs inline in an `ASWebAuthenticationSession` via
+ * the Tauri auth plugin (the app never navigates away), and the link is
+ * provisioned here directly with the `link_id` from the init response. A
+ * shared-inbox conflict is surfaced through `requestShareInboxConfirmation`,
+ * rendered by the globally mounted dialog.
  */
 export function useAddInboxFlow() {
   const initGmailLink = useInitGmailLink();
+  const { query, initEmailLink } = useEmailLinks();
+
+  const completeNativeLink = async (linkId: string, forceShare: boolean) => {
+    await initEmailLink({ linkId, forceShare }).match(
+      async () => {
+        await query.refetch();
+        toast.success('Inbox connected', { mobile: true });
+      },
+      async (error) => {
+        if (error.tag === 'AlreadyInitialized') {
+          await query.refetch();
+          return;
+        }
+        if (error.tag === 'SharedInboxConflict' && !forceShare) {
+          requestShareInboxConfirmation({
+            emailAddress: error.emailAddress,
+            ownerEmail: error.ownerEmail,
+            onShare: () => void completeNativeLink(linkId, true),
+          });
+          return;
+        }
+        toast.failure('Failed to add inbox', { mobile: true });
+      }
+    );
+  };
+
+  const startNativeFlow = async () => {
+    const result = await initGmailLink.mutateAsync(
+      'macro://inbox-link-callback'
+    );
+    if (result.isErr()) {
+      toast.failure('Failed to start Gmail link flow', { mobile: true });
+      return;
+    }
+
+    let auth: { success: boolean; token?: string; error?: string };
+    try {
+      auth = await invoke('plugin:auth|authenticate', {
+        payload: {
+          authUrl: result.value.authorization_url,
+          callbackScheme: 'macro',
+          ephemeralSession: true,
+        },
+      });
+    } catch (error) {
+      console.error('add-inbox authenticate failed', error);
+      toast.failure('Failed to add inbox', { mobile: true });
+      return;
+    }
+
+    if (!auth.success || !auth.token) {
+      if (auth.error !== 'User canceled login') {
+        toast.failure('Failed to add inbox', { mobile: true });
+      }
+      return;
+    }
+
+    await completeNativeLink(result.value.link_id, false);
+  };
+
   return async () => {
+    if (getNativeMobilePlatform() === 'ios') {
+      await startNativeFlow();
+      return;
+    }
+
     const callbackUrl = `${window.location.origin}${ROUTER_BASE_CONCAT}inbox-link-callback`;
     const result = await initGmailLink.mutateAsync(callbackUrl);
     if (result.isOk()) {

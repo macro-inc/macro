@@ -16,14 +16,17 @@ aws-sdk-s3 = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 axum = { workspace = true }
+database_env_vars = { path = "../macro_env_vars/database_env_vars" }
 futures = { workspace = true }
 http-body-util = { workspace = true }
 lambda_client = { path = "../lambda_client" }
 macro_aws_config = { path = "../macro_aws_config", features = ["s3"] }
 macro_cors = { path = "../macro_cors" }
+macro_config = { path = "../macro_config" }
 macro_db_client = { path = "../macro_db_client" }
 macro_entrypoint = { path = "../macro_entrypoint" }
 macro_env = { path = "../macro_env" }
+macro_env_var = { path = "../macro_env_var" }
 macro_middleware = { path = "../macro_middleware", default-features = false, features = [
   "auth",
 ] }

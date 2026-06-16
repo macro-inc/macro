@@ -5,6 +5,7 @@ import {
 } from '@queries/channel/sync';
 import { handleCommsTyping } from '@queries/channel/typing';
 import { invalidateContacts } from '@queries/contacts/contacts';
+import { handleRefreshEmail } from '@queries/email/sync';
 import {
   applyNotificationStatusUpdate,
   notificationStatusUpdatePayloadSchema,
@@ -85,6 +86,9 @@ export function QuerySyncProvider(props: SyncProviderProps) {
           return;
         }
         applyNotificationStatusUpdate(result.data);
+      })
+      .with({ type: 'refresh_email' }, () => {
+        withParsedWebsocketPayload(data.type, data.data, handleRefreshEmail);
       })
       .with({ type: 'task_duplicate_matches_updated' }, () => {
         withParsedWebsocketPayload(

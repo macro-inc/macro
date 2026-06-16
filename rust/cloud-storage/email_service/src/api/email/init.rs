@@ -17,6 +17,7 @@ use model::user::axum_extractor::MacroUserExtractor;
 use models_email::email::service::backfill::{
     BackfillJobStatus, BackfillOperation, BackfillPubsubMessage, InitPayload, JobScopedPayload,
 };
+use models_email::gmail::error::GmailError;
 use models_email::service::link;
 use models_email::service::link::Link;
 use strum_macros::AsRefStr;
@@ -160,7 +161,7 @@ pub async fn handler(
 
     let pg_repo = EmailPgRepo::new(ctx.db.clone());
 
-    let (link, email_address) = if let Some(link_id) = link_id {
+    let (link, _email_address) = if let Some(link_id) = link_id {
         let in_progress =
             macro_db_client::in_progress_user_link::get_in_progress_user_link(&ctx.db, &link_id)
                 .await
@@ -227,6 +228,7 @@ pub async fn handler(
                     &mut *tx,
                     &user_context.user_id,
                     child_macro_id,
+                    child_link.id,
                 )
                 .await
                 .context("Failed to insert macro_user_links edge")?;
@@ -269,9 +271,11 @@ pub async fn handler(
                     .context("child macro user disappeared before self-link bootstrap")?
                     .to_string();
 
+            enforce_backfill_rate_limit(&ctx.db, &child_fusion_id, &linked_email).await?;
+
             let gmail_token =
                 fetch_gmail_token_for_email(&ctx, &child_fusion_id, &linked_email).await?;
-            let watch_response = ctx.gmail_client.register_watch(&gmail_token).await?;
+            let watch_response = register_watch_recovering(&ctx.gmail_client, &gmail_token).await?;
 
             // All writes commit atomically so a partial failure leaves no dangling link,
             // edge, or consumed in_progress row.
@@ -294,6 +298,7 @@ pub async fn handler(
                 &mut *tx,
                 &user_context.user_id,
                 child_macro_id,
+                link.id,
             )
             .await
             .context("Failed to insert macro_user_links edge")?;
@@ -393,7 +398,11 @@ pub async fn handler(
                 // fetches for this inbox fail, so the update is retried before giving up.
                 match ctx
                     .auth_service_client
-                    .relocate_inbox_grant(&linked_email, &existing_link.fusionauth_user_id)
+                    .relocate_inbox_grant(
+                        &linked_email,
+                        &existing_link.fusionauth_user_id,
+                        &promoted.mailbox_fusion_id.to_string(),
+                    )
                     .await
                 {
                     Ok(shared_fusionauth_user_id) => {
@@ -440,10 +449,13 @@ pub async fn handler(
                     .into_response());
             }
 
+            enforce_backfill_rate_limit(&ctx.db, &user_context.fusion_user_id, &linked_email)
+                .await?;
+
             let gmail_token =
                 fetch_gmail_token_for_email(&ctx, &user_context.fusion_user_id, &linked_email)
                     .await?;
-            let watch_response = ctx.gmail_client.register_watch(&gmail_token).await?;
+            let watch_response = register_watch_recovering(&ctx.gmail_client, &gmail_token).await?;
 
             let mut tx = ctx
                 .db
@@ -490,6 +502,8 @@ pub async fn handler(
         let email = extract_email_with_response(&user_context.user_id)
             .map_err(|_| InitError::BadRequest("Failed to extract email".to_string()))?;
 
+        enforce_backfill_rate_limit(&ctx.db, &user_context.fusion_user_id, &email).await?;
+
         let gmail_token = email_service::util::gmail::auth::fetch_gmail_token_no_cache(
             &user_context,
             &ctx.redis_client,
@@ -498,7 +512,7 @@ pub async fn handler(
         .await
         .map_err(|_| InitError::BadRequest("Failed to fetch Gmail token".to_string()))?;
 
-        let watch_response = ctx.gmail_client.register_watch(&gmail_token).await?;
+        let watch_response = register_watch_recovering(&ctx.gmail_client, &gmail_token).await?;
 
         let mut tx = ctx
             .db
@@ -522,21 +536,22 @@ pub async fn handler(
         (link, email)
     };
 
-    // users can only have 3 jobs within past 24h and one backfill job per link in progress at a time
-    let recent_jobs = email_db_client::backfill::job::get::get_recent_jobs_by_fusionauth_user_id(
-        &ctx.db,
-        &link.fusionauth_user_id,
-    )
-    .await
-    .context("Failed to fetch jobs by macro id")?;
-
-    if recent_jobs.len() >= 3 && !email_address.ends_with("@macro.com") {
-        tracing::info!(user_id = %user_context.user_id, "Too many jobs error");
-        email_db_client::links::delete::delete_link_by_id(&ctx.db, link.id)
+    // Concurrent /email/init calls for the same inbox upsert the same link (ON CONFLICT)
+    // and would each enqueue a backfill. If one is already in flight for this link, reuse
+    // it instead of starting (and history-logging) a duplicate.
+    if let Some(existing) =
+        email_db_client::backfill::job::get::get_active_backfill_job(&ctx.db, link.id)
             .await
-            .context("Failed to delete link")?;
-
-        return Err(InitError::TooManyJobs);
+            .context("Failed to check for an in-flight backfill job")?
+    {
+        return Ok((
+            StatusCode::OK,
+            Json(InitResponse {
+                link_id: link.id,
+                backfill_job_id: Some(existing.id),
+            }),
+        )
+            .into_response());
     }
 
     // Record link creation in history table for tracking (best-effort)
@@ -609,6 +624,51 @@ pub async fn handler(
         .into_response())
 }
 
+/// Rejects a connect when this Gmail identity already has 3+ recent backfill jobs in
+/// the last 24h (`@macro.com` is exempt). Enforced before the link and Gmail watch are
+/// created so a rejected connect never has to tear down a half-provisioned inbox.
+async fn enforce_backfill_rate_limit(
+    db: &sqlx::PgPool,
+    fusion_user_id: &str,
+    email_address: &str,
+) -> Result<(), InitError> {
+    let recent_jobs = email_db_client::backfill::job::get::get_recent_jobs_by_fusionauth_user_id(
+        db,
+        fusion_user_id,
+    )
+    .await
+    .context("Failed to fetch recent backfill jobs")?;
+
+    if recent_jobs.len() >= 3 && !email_address.ends_with("@macro.com") {
+        return Err(InitError::TooManyJobs);
+    }
+
+    Ok(())
+}
+
+/// Registers a Gmail watch, recovering from the one-watch-per-mailbox limit. A watch
+/// left over from a prior connect (e.g. a disconnect that could not reach Gmail to stop
+/// it) makes a fresh registration fail with 400 "Only one user push notification client
+/// allowed ... call /stop then try again". On that error we stop the stale watch and
+/// retry once.
+async fn register_watch_recovering(
+    client: &gmail_client::GmailClient,
+    access_token: &str,
+) -> Result<models_email::gmail::history::WatchResponse, InitError> {
+    match client.register_watch(access_token).await {
+        Ok(response) => Ok(response),
+        Err(GmailError::Conflict(_)) => {
+            tracing::warn!("Stale Gmail watch blocks registration; stopping it and retrying");
+            client
+                .stop_watch(access_token)
+                .await
+                .context("Failed to stop stale Gmail watch before retry")?;
+            Ok(client.register_watch(access_token).await?)
+        }
+        Err(e) => Err(e.into()),
+    }
+}
+
 /// Fetches a Gmail access token scoped to a specific linked email. Use this instead
 /// of going through the `UserContext`-keyed path when the target inbox is not the
 /// JWT subject's primary email.
@@ -648,13 +708,16 @@ async fn enable_gmail_sync_for(
     email_address: &str,
     history_id: &str,
 ) -> Result<Link, InitError> {
+    let email_address = EmailStr::try_from(email_address.to_string())?;
+    let is_primary = link::Link::derive_is_primary(&macro_id, &email_address);
     let link = link::Link {
         id: macro_uuid::generate_uuid_v7(),
         macro_id,
         fusionauth_user_id: fusion_user_id.to_string(),
-        email_address: EmailStr::try_from(email_address.to_string())?,
+        email_address,
         provider: link::UserProvider::Gmail,
         is_sync_active: true,
+        is_primary,
         created_at: Default::default(),
         updated_at: Default::default(),
     };

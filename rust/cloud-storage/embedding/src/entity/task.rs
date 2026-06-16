@@ -9,7 +9,7 @@ static BODY: &str = "body";
 pub struct Task<'a> {
     /// task name
     pub title: Cow<'a, str>,
-    /// task body
+    /// task body, as internal markdown
     pub body: Cow<'a, str>,
 }
 

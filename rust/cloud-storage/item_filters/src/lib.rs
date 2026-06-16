@@ -387,6 +387,11 @@ pub struct ForeignEntityFilters {
     /// absent applies no filter. Serialized in filter ASTs as the `"me"` literal.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub includes_me: bool,
+
+    /// Filter by the notification state of the foreign entity (e.g. whether the requesting user's
+    /// GitHub PR notification is done/seen).
+    #[serde(default, skip_serializing_if = "NotificationFilters::is_empty")]
+    pub notification_filters: NotificationFilters,
 }
 
 impl IsEmpty for ForeignEntityFilters {
@@ -396,11 +401,13 @@ impl IsEmpty for ForeignEntityFilters {
             foreign_entity_ids,
             foreign_entity_sources,
             includes_me,
+            notification_filters,
         } = self;
         ids.is_empty()
             && foreign_entity_ids.is_empty()
             && foreign_entity_sources.is_empty()
             && !*includes_me
+            && notification_filters.is_empty()
     }
 }
 

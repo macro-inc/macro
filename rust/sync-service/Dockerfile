@@ -23,12 +23,14 @@ WORKDIR /app
 
 # Copy cargo files first for dependency caching
 COPY Cargo.toml Cargo.lock build.rs ./
+COPY bebop-schema/Cargo.toml bebop-schema/Cargo.toml
 
 # Create dummy src to build dependencies only (cached layer)
-RUN mkdir -p src && \
+RUN mkdir -p src bebop-schema/src && \
     echo "use worker::*; #[event(fetch)] async fn fetch(_: Request, _: Env, _: Context) -> Result<Response> { Response::ok(\"ok\") }" > src/lib.rs && \
+    echo "" > bebop-schema/src/lib.rs && \
     worker-build --release && \
-    rm -rf src target/wasm32-unknown-unknown/release/.fingerprint/*sync* \
+    rm -rf src bebop-schema/src target/wasm32-unknown-unknown/release/.fingerprint/*sync* \
            target/wasm32-unknown-unknown/release/deps/*sync*
 
 # Copy package files and install npm dependencies

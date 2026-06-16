@@ -685,6 +685,7 @@ async fn main() -> anyhow::Result<()> {
             access_service: entity_access_service.clone(),
             pool: db.clone(),
             task_dedup_service,
+            lexical_client: lexical_client.clone(),
             creator: documents_hex::domain::create::DocumentCreator::new(
                 document_service,
                 markdown_initializer,

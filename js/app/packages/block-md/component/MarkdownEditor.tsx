@@ -217,8 +217,7 @@ function getBlankMarkdownPlaceholder(canEdit: boolean) {
 
 export function MarkdownEditor(props: {
   autoFocusOnMount?: boolean;
-  loroManager: Accessor<LoroManager | undefined>;
-  mustBeConnected?: boolean;
+  loroManager: LoroManager;
 }) {
   const blockData = blockDataSignal.get;
   const blockId = useBlockId();
@@ -231,7 +230,7 @@ export function MarkdownEditor(props: {
   const saveMarkdownDocument = useSaveMarkdownDocument();
   const setMdStore = mdStore.set;
   const md = mdStore.get;
-  const canEdit = useCanEdit(props.mustBeConnected);
+  const canEdit = useCanEdit();
   const canComment = useCanComment();
   const [blockElement] = blockElementSignal;
   const [findAndReplaceStore, setFindAndReplaceStore] = FindAndReplaceStore;
@@ -421,12 +420,9 @@ export function MarkdownEditor(props: {
     dndDragMove(event);
   });
 
-  // handler for the find and replace directive
   const onSetListOffset = (listOffset: NodekeyOffset[]) => {
     setFindAndReplaceStore('listOffset', listOffset);
-    if (
-      findAndReplaceStore.currentMatch >= findAndReplaceStore.listOffset.length
-    ) {
+    if (findAndReplaceStore.currentMatch >= listOffset.length) {
       setFindAndReplaceStore('currentMatch', 0);
     }
   };
@@ -513,7 +509,7 @@ export function MarkdownEditor(props: {
     if (!IS_SYNC()) {
       return createPeerIdValidator(() => undefined, false);
     }
-    const peerId = () => props.loroManager()?.getPeerIdStr();
+    const peerId = () => props.loroManager.getPeerIdStr();
     return createPeerIdValidator(peerId, true);
   };
 
@@ -524,7 +520,7 @@ export function MarkdownEditor(props: {
     .markdownShortcuts()
     .delete()
     .state<EditorState>(setState, 'json')
-    .history(400, props.loroManager())
+    .history(400, props.loroManager)
     .use(tabIndentationPlugin())
     .use(selectionDataPlugin(lexicalWrapper))
     .use(horizontalRulePlugin())
@@ -577,6 +573,7 @@ export function MarkdownEditor(props: {
     )
     .use(
       findAndReplacePlugin({
+        getListOffset: () => findAndReplaceStore.listOffset,
         setListOffset: onSetListOffset,
       })
     )
@@ -631,7 +628,7 @@ export function MarkdownEditor(props: {
   }
 
   if (ENABLE_MARKDOWN_LIVE_COLLABORATION) {
-    const peerId = () => props.loroManager()?.getPeerIdStr();
+    const peerId = () => props.loroManager.getPeerIdStr();
     plugins.use(
       peerIdPlugin({
         peerId,
@@ -806,9 +803,12 @@ export function MarkdownEditor(props: {
     );
   };
 
-  // handle updates to the highlights if the document is modified
-  additionalCleanups.push(
-    editor.registerUpdateListener(() => {
+  let searchRefreshQueued = false;
+  const queueSearchRefresh = () => {
+    if (searchRefreshQueued) return;
+    searchRefreshQueued = true;
+    queueMicrotask(() => {
+      searchRefreshQueued = false;
       if (
         findAndReplaceStore.searchIsOpen &&
         findAndReplaceStore.searchInputText
@@ -818,6 +818,18 @@ export function MarkdownEditor(props: {
           findAndReplaceStore.searchInputText
         );
       }
+    });
+  };
+
+  // Refresh highlights only after content mutations. Selection-only updates
+  // still fire Lexical update listeners and must not synchronously dispatch
+  // another command from inside the commit.
+  additionalCleanups.push(
+    editor.registerUpdateListener(({ dirtyElements, dirtyLeaves }) => {
+      if (dirtyElements.size === 0 && dirtyLeaves.size === 0) return;
+      if (!findAndReplaceStore.searchIsOpen) return;
+      if (!findAndReplaceStore.searchInputText) return;
+      queueSearchRefresh();
     })
   );
 
@@ -846,6 +858,8 @@ export function MarkdownEditor(props: {
       initializeEditorEmpty(editor);
 
       registerSaveListener();
+      // Mark ready so the loading skeleton clears and the blank placeholder shows.
+      setEditorReady(true);
       return;
     }
 
@@ -940,8 +954,9 @@ export function MarkdownEditor(props: {
           </div>
         )}
       </Show>
+      {/* Note: the mt-1.5 here is to preserve markdown node margin tops. which means this div should avoid padding and border. */}
       <div
-        class="relative"
+        class="relative mt-1.5"
         ref={editorContainerRef}
         use:fileFolderDrop={{
           onDrop: (fileEntries, folderEntries, e) => {
@@ -991,7 +1006,17 @@ export function MarkdownEditor(props: {
           editorFocus={editorFocus}
           style={{ height: `${clickTargetHeight()}px` }}
         />
-        <Show when={isBlankMarkdown()}>
+        <Show when={!editorReady()}>
+          <div
+            aria-hidden="true"
+            class="pointer-events-none absolute inset-x-0 top-0 flex flex-col gap-2.5 pt-1"
+          >
+            <div class="skeleton-shimmer h-2.5 w-full rounded-full bg-placeholder/30" />
+            <div class="skeleton-shimmer h-2.5 w-full rounded-full bg-placeholder/30" />
+            <div class="skeleton-shimmer h-2.5 w-2/3 rounded-full bg-placeholder/30" />
+          </div>
+        </Show>
+        <Show when={editorReady() && isBlankMarkdown()}>
           <div class="pointer-events-none text-ink-placeholder absolute top-0">
             {getBlankMarkdownPlaceholder(canEdit())}
           </div>

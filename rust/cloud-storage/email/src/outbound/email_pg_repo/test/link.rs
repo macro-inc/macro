@@ -98,17 +98,19 @@ async fn test_inboxes_for_macro_id_includes_own_and_delegated(
             ('a1000000-0000-0000-0000-000000000001'::uuid, 'macro|alice@test.com', 'fa-alice', 'alice@test.com', 'GMAIL', true, NOW() - INTERVAL '2 hours', NOW()),
             ('a2000000-0000-0000-0000-000000000002'::uuid, 'macro|alice@test.com', 'fa-alice', 'alice.work@test.com', 'GMAIL', true, NOW() - INTERVAL '1 hour', NOW()),
             ('5e000000-0000-0000-0000-000000000003'::uuid, 'macro|shared@test.com', 'fa-shared', 'shared@test.com', 'GMAIL', true, NOW(), NOW()),
+            ('5f000000-0000-0000-0000-000000000005'::uuid, 'macro|shared@test.com', 'fa-shared', 'shared.other@test.com', 'GMAIL', true, NOW(), NOW()),
             ('b0000000-0000-0000-0000-000000000004'::uuid, 'macro|bob@test.com', 'fa-bob', 'bob@test.com', 'GMAIL', true, NOW(), NOW())
         "#,
     )
     .execute(&pool)
     .await?;
 
-    // alice is the primary; shared@ is delegated to her. bob is unrelated.
+    // alice is the primary; only shared@'s first inbox is delegated to her.
+    // bob is unrelated.
     sqlx::query(
         r#"
-        INSERT INTO macro_user_links (primary_macro_id, child_macro_id) VALUES
-            ('macro|alice@test.com', 'macro|shared@test.com')
+        INSERT INTO macro_user_links (primary_macro_id, child_macro_id, link_id) VALUES
+            ('macro|alice@test.com', 'macro|shared@test.com', '5e000000-0000-0000-0000-000000000003'::uuid)
         "#,
     )
     .execute(&pool)
@@ -131,6 +133,10 @@ async fn test_inboxes_for_macro_id_includes_own_and_delegated(
     assert!(
         emails.contains("shared@test.com"),
         "delegated inbox must be included"
+    );
+    assert!(
+        !emails.contains("shared.other@test.com"),
+        "child's inbox outside the link-scoped grant must be excluded"
     );
     assert!(
         !emails.contains("bob@test.com"),
@@ -247,8 +253,8 @@ async fn test_owned_link_for_thread_resolves_own_and_delegated(
     .await?;
 
     sqlx::query(
-        r#"INSERT INTO macro_user_links (primary_macro_id, child_macro_id)
-           VALUES ('macro|primary@test.com', 'macro|child@test.com')"#,
+        r#"INSERT INTO macro_user_links (primary_macro_id, child_macro_id, link_id)
+           VALUES ('macro|primary@test.com', 'macro|child@test.com', 'c0000000-0000-0000-0000-000000000001'::uuid)"#,
     )
     .execute(&pool)
     .await?;

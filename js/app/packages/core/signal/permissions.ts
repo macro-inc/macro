@@ -1,17 +1,14 @@
 import { useIsAuthenticated } from '@core/auth';
-import { SyncSourceStatus } from '@core/collab/source';
 import {
   getPermissions,
   hasPermissions,
   Permissions,
 } from '@core/component/SharePermissions';
-import { isSourceSyncService } from '@core/util/source';
 import { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import { createMemo } from 'solid-js';
 import {
   blockFileSignal,
   blockSourceSignal,
-  blockSyncSourceSignal,
   blockUserAccessSignal,
 } from './load';
 
@@ -35,31 +32,15 @@ const useHasAccess = (requestedPermissions: Permissions) => {
   );
 };
 
-const useIsEditable = (mustBeConnected: boolean = true) => {
+const useIsEditable = (_mustBeConnected: boolean = true) => {
   const source = blockSourceSignal.get;
-  const syncSource = blockSyncSourceSignal.get;
-  return createMemo(() => {
-    const source_ = source();
-    if (!source_) return false;
-    if (isSourceSyncService(source_)) {
-      const syncSource_ = syncSource();
-      if (!syncSource_) return false;
-      if (!mustBeConnected) return true;
-      const status = syncSource_.status();
-      return status === SyncSourceStatus.Connected;
-    }
-
-    return true;
-  });
+  return createMemo(() => source() != null);
 };
 
-const usePermissionCan = (
-  requestedPermissions: Permissions,
-  mustBeConnected: boolean = true
-) => {
+const usePermissionCan = (requestedPermissions: Permissions) => {
   const isAuthenticated = useIsAuthenticated();
   const hasAccess = useHasAccess(requestedPermissions);
-  const isEditable = useIsEditable(mustBeConnected);
+  const isEditable = useIsEditable();
 
   return createMemo(() => {
     if (!isAuthenticated()) return false;
@@ -70,8 +51,7 @@ const usePermissionCan = (
 
 export const useCanView = () => useHasAccess(Permissions.CAN_VIEW);
 export const useCanComment = () => usePermissionCan(Permissions.CAN_COMMENT);
-export const useCanEdit = (mustBeConnected: boolean = true) =>
-  usePermissionCan(Permissions.CAN_EDIT, mustBeConnected);
+export const useCanEdit = () => usePermissionCan(Permissions.CAN_EDIT);
 export const useIsDocumentOwner = () => useHasAccess(Permissions.OWNER);
 
 const _useReadOnly = () => {

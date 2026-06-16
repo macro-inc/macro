@@ -5,6 +5,10 @@ import { asFileType } from '@core/component/AI/util';
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins/mentions';
 import { ENABLE_CHAT_CHANNEL_ATTACHMENT } from '@core/constant/featureFlags';
 import { useChannelsContext } from '@core/context/channels';
+import {
+  getCachedItemPreview,
+  isAccessiblePreviewItem,
+} from '@queries/preview';
 import { createSignal } from 'solid-js';
 
 export function useAttachments(initial?: Attachment[]): Attachments {
@@ -42,35 +46,43 @@ export const useChatAttachableHistory = () => {
 };
 
 export const useGetChatAttachmentInfo = () => {
-  const history = useChatAttachableHistory();
   const { channels } = useChannelsContext();
 
-  const getDocumentAttachment = (id: string): Attachment | undefined => {
-    const item = history().find((item) => item.id === id);
-    if (!item) return;
-    if (item.type !== 'document') return;
+  // fallback for callers that only have an id: the mentions menu and
+  // attachment pickers render previews, so the item is usually cached
+  const cachedDocumentFileType = (id: string): string | undefined => {
+    const preview = getCachedItemPreview(id);
+    if (!preview || !isAccessiblePreviewItem(preview)) return;
+    if (preview.type !== 'document') return;
+    return preview.fileType;
+  };
 
-    const fileType = asFileType(item.fileType);
+  const getDocumentAttachment = (
+    id: string,
+    fileType?: string | null
+  ): Attachment | undefined => {
+    // mention nodes use '' when the block name has no file type mapping,
+    // so empty string falls back to the cache too
+    const knownFileType = fileType || cachedDocumentFileType(id);
+    const validFileType = asFileType(knownFileType);
 
-    if (!fileType) {
-      console.error('Invalid file type', item.fileType);
+    if (!validFileType) {
+      console.error('Invalid file type', knownFileType);
       return;
-    } else if (!SUPPORTED_ATTACHMENT_EXTENSIONS.includes(fileType)) {
-      console.error('Invalid file type', item.fileType);
+    } else if (!SUPPORTED_ATTACHMENT_EXTENSIONS.includes(validFileType)) {
+      console.error('Invalid file type', knownFileType);
       return;
     }
 
     return {
-      entity_id: item.id,
+      entity_id: id,
       entity_type: 'document',
     };
   };
 
   const getProjectAttachment = (id: string): Attachment | undefined => {
-    const item = history().find((item) => item.id === id);
-    if (!item || item.type !== 'project') return;
     return {
-      entity_id: item.id,
+      entity_id: id,
       entity_type: 'project',
     };
   };
@@ -100,7 +112,7 @@ export const useGetChatAttachmentInfo = () => {
     mention: ItemMention
   ): Attachment | undefined => {
     if (mention.itemType === 'document') {
-      return getDocumentAttachment(mention.itemId);
+      return getDocumentAttachment(mention.itemId, mention.fileType);
     } else if (mention.itemType === 'channel') {
       return getChannelAttachment(mention);
     } else if (mention.itemType === 'thread') {

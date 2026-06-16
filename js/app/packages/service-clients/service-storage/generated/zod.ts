@@ -7998,6 +7998,23 @@ export const postItemsSoupBody = zod
           .describe(
             'When true, only return foreign entities whose metadata lists the requesting user as a\nparticipant (GitHub `involves:me` semantics for `github_pull_request` records). False or\nabsent applies no filter. Serialized in filter ASTs as the `\"me\"` literal.'
           ),
+        notification_filters: zod
+          .object({
+            done: zod
+              .boolean()
+              .nullish()
+              .describe(
+                'Filter by notification done state. `Some(true)` selects done\nnotifications; `Some(false)` selects not-done notifications.'
+              ),
+            seen: zod
+              .boolean()
+              .nullish()
+              .describe(
+                'Filter by notification seen state. `Some(true)` selects seen\nnotifications; `Some(false)` selects not-seen notifications.'
+              ),
+          })
+          .optional()
+          .describe('Notification state filters for channel message queries.'),
       })
       .optional()
       .describe('Filters for foreign entity records.'),

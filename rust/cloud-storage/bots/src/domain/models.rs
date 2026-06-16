@@ -93,8 +93,8 @@ pub struct BotToken {
     pub id: Uuid,
     /// Owning bot id.
     pub bot_id: BotId,
-    /// Token lookup prefix.
-    pub token_prefix: String,
+    /// Raw bearer token.
+    pub token: String,
     /// Optional token label.
     pub label: Option<String>,
     /// Last successful use.
@@ -121,8 +121,6 @@ pub struct AuthenticatedBot {
 pub struct BotTokenCandidate {
     /// Token metadata.
     pub token: BotToken,
-    /// Stored token hash.
-    pub token_hash: Vec<u8>,
     /// Authenticated bot principal associated with the token.
     pub bot: AuthenticatedBot,
 }
@@ -195,7 +193,7 @@ pub struct CreateChannelScopedBotRequest {
     pub token_expires_at: Option<DateTime<Utc>>,
 }
 
-/// Response containing a newly minted token. The raw token is shown once.
+/// Response containing a newly minted token.
 #[derive(Debug, Clone, Serialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct CreateBotTokenResponse {

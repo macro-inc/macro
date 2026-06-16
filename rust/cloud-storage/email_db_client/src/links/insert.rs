@@ -9,6 +9,7 @@ mod test;
 
 struct LinkId {
     id: Uuid,
+    is_primary: bool,
 }
 
 /// Upserts a link record with the provided Link struct.
@@ -31,6 +32,7 @@ pub async fn upsert_link(
         email_address,
         provider,
         is_sync_active,
+        is_primary: _,
         created_at,
         updated_at,
     } = service_link;
@@ -46,7 +48,7 @@ pub async fn upsert_link(
         DO UPDATE SET 
             is_sync_active = EXCLUDED.is_sync_active,
             updated_at = NOW()
-        RETURNING id
+        RETURNING id, is_primary
         "#,
         id,
         macro_id.as_ref(),
@@ -65,6 +67,7 @@ pub async fn upsert_link(
         email_address,
         provider,
         is_sync_active,
+        is_primary: result.is_primary,
         created_at,
         updated_at,
     };

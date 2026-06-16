@@ -145,23 +145,21 @@ fn convert_assistant(msg: &ChatMessage) -> Vec<Message> {
                     assistant_parts.push(AssistantContent::text(text));
                 }
             }
-            AssistantMessagePart::ToolCall { name, json, id } => {
+            AssistantMessagePart::ToolCall { name, json, id }
+            | AssistantMessagePart::McpToolCall { name, json, id, .. } => {
                 saw_tool_call = true;
-                assistant_parts.push(AssistantContent::ToolCall(ToolCall::new(
-                    id.clone(),
-                    ToolFunction::new(name.clone(), json.clone()),
-                )));
-            }
-            AssistantMessagePart::McpToolCall { name, json, id, .. } => {
-                saw_tool_call = true;
-                assistant_parts.push(AssistantContent::ToolCall(ToolCall::new(
-                    id.clone(),
-                    ToolFunction::new(name.clone(), json.clone()),
-                )));
+                assistant_parts.push(AssistantContent::ToolCall(
+                    ToolCall::new(
+                        replay_item_id(id),
+                        ToolFunction::new(name.clone(), json.clone()),
+                    )
+                    .with_call_id(id.clone()),
+                ));
             }
             AssistantMessagePart::ToolCallResponseJson { id, json, .. } => {
                 let text = serde_json::to_string(json).unwrap_or_default();
-                tool_results.push(UserContent::tool_result(
+                tool_results.push(UserContent::tool_result_with_call_id(
+                    replay_item_id(id),
                     id.clone(),
                     OneOrMany::one(ToolResultContent::text(text)),
                 ));
@@ -169,7 +167,8 @@ fn convert_assistant(msg: &ChatMessage) -> Vec<Message> {
             AssistantMessagePart::ToolCallErr {
                 id, description, ..
             } => {
-                tool_results.push(UserContent::tool_result(
+                tool_results.push(UserContent::tool_result_with_call_id(
+                    replay_item_id(id),
                     id.clone(),
                     OneOrMany::one(ToolResultContent::text(description.clone())),
                 ));
@@ -180,6 +179,18 @@ fn convert_assistant(msg: &ChatMessage) -> Vec<Message> {
 
     flush(&mut out, &mut assistant_parts, &mut tool_results);
     out
+}
+
+/// Item id replayed to the provider for a persisted tool call or result.
+///
+/// The persisted id is the provider call id when one exists (OpenAI's
+/// `call_…`) or an internal nanoid otherwise. OpenAI's Responses API rejects
+/// replayed `function_call` item ids that don't begin with `fc`, and pairs
+/// calls to results through `call_id` — which is why the persisted id is also
+/// set as `call_id` above. Anthropic ignores `call_id` and only requires a
+/// result's id to match its call's id, which this uniform prefix preserves.
+fn replay_item_id(id: &str) -> String {
+    format!("fc_{id}")
 }
 
 /// Merges consecutive `Text` and `Thinking` parts into single entries.

@@ -60,7 +60,8 @@ function humanizeDuration(ms: number): string {
 type Interval = { startMs: number; endMs: number; warpStart: number };
 
 /** Where an interval ends on the warped axis. */
-const intervalWarpEnd = (iv: Interval) => iv.warpStart + (iv.endMs - iv.startMs);
+const intervalWarpEnd = (iv: Interval) =>
+  iv.warpStart + (iv.endMs - iv.startMs);
 
 export function HistoryScrubber(props: {
   sessions: readonly HistorySession[];
@@ -86,7 +87,11 @@ export function HistoryScrubber(props: {
 
   const users = createMemo<ScrubberUser[]>(() => {
     const ids = [...new Set(props.sessions.map((s) => s.userId))];
-    return ids.map((id) => ({ id, label: userLabel(id), color: userColor(id) }));
+    return ids.map((id) => ({
+      id,
+      label: userLabel(id),
+      color: userColor(id),
+    }));
   });
 
   const toggleUser = (id: string) => {
@@ -140,7 +145,8 @@ export function HistoryScrubber(props: {
         // the log term squashes long gaps so a day idle doesn't dwarf the editing.
         const gapMs = merged[i].startMs - merged[i - 1].endMs;
         offset +=
-          SESSION_GAP_MS * (1 + Math.log(1 + (gapMs - SESSION_GAP_MS) / SESSION_GAP_MS));
+          SESSION_GAP_MS *
+          (1 + Math.log(1 + (gapMs - SESSION_GAP_MS) / SESSION_GAP_MS));
       }
       const span = merged[i];
       // Floor to ≥1ms wide so the polylinear scale's domain stays strictly
@@ -159,7 +165,8 @@ export function HistoryScrubber(props: {
   // pin to the ends; `.invert()` is the warped → wall-clock direction.
   const warpScale = createMemo(() => {
     const { intervals } = warp();
-    if (intervals.length === 0) return scaleLinear().domain([0, 1]).range([0, 0]);
+    if (intervals.length === 0)
+      return scaleLinear().domain([0, 1]).range([0, 0]);
     return scaleLinear()
       .domain(intervals.flatMap((iv) => [iv.startMs, iv.endMs]))
       .range(intervals.flatMap((iv) => [iv.warpStart, intervalWarpEnd(iv)]))
@@ -298,7 +305,8 @@ export function HistoryScrubber(props: {
   // In-progress zoom selection rectangle (marquee only, past the threshold).
   const marquee = createMemo(() => {
     const d = drag();
-    return d?.mode === 'marquee' && Math.abs(d.curPx - d.startPx) > DRAG_THRESHOLD
+    return d?.mode === 'marquee' &&
+      Math.abs(d.curPx - d.startPx) > DRAG_THRESHOLD
       ? d
       : null;
   });

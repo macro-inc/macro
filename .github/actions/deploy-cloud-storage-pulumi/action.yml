@@ -6,11 +6,12 @@ inputs:
     description: 'Whether to setup docker'
     required: false
     default: 'true'
-  use-blacksmith-builder:
+  use-namespace-builder:
     description: >-
-      Use a Blacksmith buildkit builder whose layer cache lives on a per-Dockerfile
-      sticky disk (persists the heavy base layers across runs). Only valid on
-      Blacksmith runners; defaults to the stock docker/setup-buildx-action.
+      Use a Namespace remote Docker builder (persistent layer cache, so heavy
+      bases like LibreOffice/Collabora stay warm across deploys). Requires the
+      nsc CLI (preinstalled on Namespace runners); defaults to the stock
+      docker/setup-buildx-action.
     required: false
     default: 'false'
   use-lfs:
@@ -56,11 +57,11 @@ inputs:
     required: false
     default: ''
   prebuilt-binaries-tar:
-    description: 'Optional path to a prebuilt-binaries.tar.gz already present on disk (e.g. a Blacksmith sticky-disk handoff). When set, takes precedence over prebuilt-binaries-artifact and skips the GitHub artifact download.'
+    description: 'Optional path to a prebuilt-binaries.tar.gz already present on disk (e.g. downloaded from Namespace artifact storage). When set, takes precedence over prebuilt-binaries-artifact and skips the GitHub artifact download.'
     required: false
     default: ''
   lambda-artifacts-tar:
-    description: 'Optional path to a lambda-artifacts.tar.gz already present on disk (e.g. a Blacksmith sticky-disk handoff). When set, takes precedence over lambda-artifacts and skips the GitHub artifact download.'
+    description: 'Optional path to a lambda-artifacts.tar.gz already present on disk (e.g. downloaded from Namespace artifact storage). When set, takes precedence over lambda-artifacts and skips the GitHub artifact download.'
     required: false
     default: ''
   cloud-storage-service-name:
@@ -101,6 +102,12 @@ runs:
         mkdir -p rust/cloud-storage/prebuilt
         # Prefer an on-disk tar (sticky-disk handoff); fall back to the downloaded artifact.
         src="${TAR_PATH:-rust/cloud-storage/prebuilt-artifact/prebuilt-binaries.tar.gz}"
+        if [[ ! -f "$src" ]]; then
+          echo "::error::prebuilt binaries tar missing at $src — the handoff download/extract chain broke upstream; check this job's download step and the build job's upload receipt."
+          echo "--- $(dirname "$src") contents ---"; ls -la "$(dirname "$src")" || true
+          exit 1
+        fi
+        echo "handoff receipt: $(sha256sum "$src" | cut -d' ' -f1) ($(stat -c%s "$src") bytes)"
         tar -xzf "$src" -C rust/cloud-storage/prebuilt
 
     - name: Download Lambda artifacts
@@ -119,6 +126,12 @@ runs:
         set -euo pipefail
         # Prefer an on-disk tar (sticky-disk handoff); fall back to the downloaded artifact.
         src="${TAR_PATH:-rust/cloud-storage/lambda-artifact/lambda-artifacts.tar.gz}"
+        if [[ ! -f "$src" ]]; then
+          echo "::error::lambda artifacts tar missing at $src — the handoff download/extract chain broke upstream; check this job's download step and the build job's upload receipt."
+          echo "--- $(dirname "$src") contents ---"; ls -la "$(dirname "$src")" || true
+          exit 1
+        fi
+        echo "handoff receipt: $(sha256sum "$src" | cut -d' ' -f1) ($(stat -c%s "$src") bytes)"
         tar -xzf "$src" -C rust/cloud-storage
 
     - name: Check Lambda config for inline build
@@ -147,17 +160,17 @@ runs:
         AWS_SECRET_ACCESS_KEY: ${{ inputs.aws-secret-key }}
       run: .github/scripts/build-cloud-storage-lambdas.sh
 
-    # setup docker -- a Blacksmith builder keeps the buildkit layer cache on a
-    # per-Dockerfile sticky disk (so heavy bases like LibreOffice/Collabora stay
-    # warm across runs instead of re-pulling ~hundreds of MB from ECR each time);
+    # setup docker -- a Namespace remote builder keeps a persistent buildkit
+    # layer cache (so heavy bases like LibreOffice/Collabora stay warm across
+    # runs instead of re-pulling ~hundreds of MB from ECR each time);
     # otherwise the stock buildx builder. Pulumi's docker-build provider uses
     # whichever is set as the default builder.
-    - name: Set up Blacksmith Docker builder
-      if: ${{ inputs.use-docker == 'true' && inputs.use-blacksmith-builder == 'true' }}
-      uses: useblacksmith/setup-docker-builder@v1
+    - name: Set up Namespace Docker builder
+      if: ${{ inputs.use-docker == 'true' && inputs.use-namespace-builder == 'true' }}
+      uses: namespacelabs/nscloud-setup-buildx-action@d059ed7184f0bc7c8b27e8810cea153d02bcc6dd # v0.0.23
 
     - uses: docker/setup-buildx-action@v3
-      if: ${{ inputs.use-docker == 'true' && inputs.use-blacksmith-builder != 'true' }}
+      if: ${{ inputs.use-docker == 'true' && inputs.use-namespace-builder != 'true' }}
 
     # install bun
     - uses: oven-sh/setup-bun@v2

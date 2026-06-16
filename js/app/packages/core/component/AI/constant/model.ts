@@ -1,4 +1,5 @@
 import AnthropicIcon from '@core/component/AI/assets/anthropic.svg';
+import OpenAiIcon from '@core/component/AI/assets/openai.svg';
 import type { TModel } from '@core/component/AI/types';
 
 export { Model } from '@core/component/AI/types';
@@ -13,6 +14,8 @@ export const MODEL_PRETTYNAME: ExhaustiveMap = {
   opus4_7: 'Opus 4.7',
   sonnet4_6: 'Sonnet 4.6',
   haiku4_5: 'Haiku 4.5',
+  gpt5_5: 'GPT-5.5',
+  gpt5Mini: 'GPT-5 mini',
   retired: 'Retired',
 } as const;
 
@@ -22,6 +25,8 @@ export const MODEL_PROVIDER_ICON: ExhaustiveMap = {
   opus4_7: AnthropicIcon,
   sonnet4_6: AnthropicIcon,
   haiku4_5: AnthropicIcon,
+  gpt5_5: OpenAiIcon,
+  gpt5Mini: OpenAiIcon,
   retired: AnthropicIcon,
 };
 

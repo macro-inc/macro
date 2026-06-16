@@ -1074,3 +1074,166 @@ async fn crm_scope_dedupe_mid_thread_join_copies_stay_separate(
 
     Ok(())
 }
+
+// =====================================================================
+// Non-primary links — alice has a connected secondary mailbox
+// (alice.personal@gmail.com) on the same macro_id. Team scope must only
+// read primary links (email_address = the owner's macro_id email), so the
+// personal link's threads/contacts/labels never feed team-scoped results.
+// =====================================================================
+
+const ALICE_PERSONAL_LINK_ID: &str = "a0000004-0000-0000-0000-000000000004";
+const TP1_ALICE_PERSONAL_INBOX_ACME: &str = "22220004-0000-0000-0000-000000000001";
+const TP2_ALICE_PERSONAL_INBOX_SECRET: &str = "22220004-0000-0000-0000-000000000002";
+
+// =====================================================================
+// 23. Broad team-scoped query: alice's personal-mailbox threads must not
+//     appear even though their senders match the filter and the link's
+//     macro_id is a team member.
+// =====================================================================
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("email_dynamic_query_crm_scope")
+    )
+)]
+async fn crm_scope_excludes_non_primary_link_threads(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let team_id = Uuid::parse_str(TEAM_ALPHA_ID)?;
+    let filter = Arc::new(Expr::Literal(EmailLiteral::Sender(Email::Partial(
+        "com".to_string(),
+    ))));
+
+    let ids = run_and_collect_ids(&pool, filter, Some(team_id)).await?;
+
+    assert!(
+        !ids.contains(TP1_ALICE_PERSONAL_INBOX_ACME),
+        "alice's personal-mailbox thread must not appear in team scope"
+    );
+    assert!(
+        !ids.contains(TP2_ALICE_PERSONAL_INBOX_SECRET),
+        "alice's personal-mailbox thread must not appear in team scope"
+    );
+    assert!(ids.contains(TA1_ALICE_INBOX_ACME), "primary link still in");
+    assert!(ids.contains(TB1_BOB_INBOX_ACME), "primary link still in");
+    assert_eq!(
+        ids.len(),
+        4,
+        "expected only the 4 primary-link inbox threads, got: {:?}",
+        ids
+    );
+
+    Ok(())
+}
+
+// =====================================================================
+// 24. Complete sender under team scope: the address resolves on alice's
+//     primary, bob's, AND alice's personal link — only the primary-link
+//     threads come back.
+// =====================================================================
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("email_dynamic_query_crm_scope")
+    )
+)]
+async fn crm_scope_complete_sender_skips_non_primary_link(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let team_id = Uuid::parse_str(TEAM_ALPHA_ID)?;
+    let filter = Arc::new(Expr::Literal(EmailLiteral::Sender(complete(
+        "outsider@acme.com",
+    ))));
+
+    let ids = run_and_collect_ids(&pool, filter, Some(team_id)).await?;
+
+    assert!(ids.contains(TA1_ALICE_INBOX_ACME));
+    assert!(ids.contains(TB1_BOB_INBOX_ACME));
+    assert!(
+        !ids.contains(TP1_ALICE_PERSONAL_INBOX_ACME),
+        "personal-mailbox thread from the same sender must not appear"
+    );
+    assert_eq!(ids.len(), 2, "expected 2 threads, got: {:?}", ids);
+
+    Ok(())
+}
+
+// =====================================================================
+// 25. An address whose only contact rows live on a non-primary link must
+//     not resolve under team scope — the query short-circuits to empty
+//     instead of surfacing the personal mailbox's thread.
+// =====================================================================
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("email_dynamic_query_crm_scope")
+    )
+)]
+async fn crm_scope_non_primary_only_contact_does_not_resolve(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let team_id = Uuid::parse_str(TEAM_ALPHA_ID)?;
+    let filter = Arc::new(Expr::Literal(EmailLiteral::Sender(complete(
+        "secret@personal.com",
+    ))));
+
+    let ids = run_and_collect_ids(&pool, filter, Some(team_id)).await?;
+
+    assert!(
+        ids.is_empty(),
+        "secret@personal.com only exists in alice's personal mailbox; got: {:?}",
+        ids
+    );
+
+    Ok(())
+}
+
+// =====================================================================
+// 26. The per-user "Me" path (no team_id) stays multi-inbox-wide: with
+//     both of alice's links in link_ids, personal-mailbox threads are
+//     returned alongside primary ones.
+// =====================================================================
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("email_dynamic_query_crm_scope")
+    )
+)]
+async fn me_path_still_spans_non_primary_links(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let primary_link = Uuid::parse_str(ALICE_LINK_ID)?;
+    let personal_link = Uuid::parse_str(ALICE_PERSONAL_LINK_ID)?;
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox);
+    let filter = Arc::new(Expr::Literal(EmailLiteral::Sender(Email::Partial(
+        "com".to_string(),
+    ))));
+    let query = Query::new(None, SimpleSortMethod::UpdatedAt, filter);
+
+    let results = dynamic::dynamic_email_thread_cursor(
+        &pool,
+        &[primary_link, personal_link],
+        100,
+        &view,
+        query,
+        "macro|alice@team.com",
+        None,
+    )
+    .await?;
+    let ids: std::collections::HashSet<String> =
+        results.into_iter().map(|r| r.id.to_string()).collect();
+
+    assert!(ids.contains(TA1_ALICE_INBOX_ACME));
+    assert!(ids.contains(TA3_ALICE_INBOX_OTHER));
+    assert!(ids.contains(TP1_ALICE_PERSONAL_INBOX_ACME));
+    assert!(ids.contains(TP2_ALICE_PERSONAL_INBOX_SECRET));
+    assert!(!ids.contains(TA2_ALICE_TRASH_ACME), "TRASH excluded");
+    assert_eq!(ids.len(), 4, "expected 4 threads, got: {:?}", ids);
+
+    Ok(())
+}

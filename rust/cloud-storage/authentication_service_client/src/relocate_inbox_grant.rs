@@ -5,6 +5,7 @@ use crate::error::{AuthServiceClientError, GenericErrorResponse};
 struct RelocateInboxGrantRequest<'a> {
     email: &'a str,
     owner_fusionauth_user_id: &'a str,
+    desired_user_id: &'a str,
 }
 
 #[derive(serde::Deserialize)]
@@ -13,14 +14,17 @@ struct RelocateInboxGrantResponse {
 }
 
 impl AuthServiceClient {
-    /// Provisions a dedicated FusionAuth user for a shared mailbox and relocates the
-    /// mailbox's Google grant onto it (off `owner_fusionauth_user_id`). Returns the shared
-    /// user's id so the caller can re-home the link's `fusionauth_user_id`. Idempotent.
+    /// Provisions a dedicated (deactivated) FusionAuth user for a shared mailbox and
+    /// relocates the mailbox's Google grant onto it (off `owner_fusionauth_user_id`).
+    /// `desired_user_id` is used as the created user's id so it can match the mailbox's
+    /// minted `macro_user.id`. Returns the shared user's id so the caller can re-home the
+    /// link's `fusionauth_user_id`. Idempotent.
     #[tracing::instrument(skip(self), err)]
     pub async fn relocate_inbox_grant(
         &self,
         email: &str,
         owner_fusionauth_user_id: &str,
+        desired_user_id: &str,
     ) -> Result<String, AuthServiceClientError> {
         let res = self
             .client
@@ -28,6 +32,7 @@ impl AuthServiceClient {
             .json(&RelocateInboxGrantRequest {
                 email,
                 owner_fusionauth_user_id,
+                desired_user_id,
             })
             .send()
             .await

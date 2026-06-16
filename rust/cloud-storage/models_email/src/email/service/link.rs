@@ -14,8 +14,20 @@ pub struct Link {
     pub email_address: EmailStr<'static>,
     pub provider: UserProvider,
     pub is_sync_active: bool,
+    pub is_primary: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+}
+
+impl Link {
+    /// Client-side mirror of the `email_links.is_primary` generated column,
+    /// for constructing a [`Link`] that hasn't been persisted yet.
+    pub fn derive_is_primary(macro_id: &MacroUserIdStr<'_>, email_address: &EmailStr<'_>) -> bool {
+        email_address
+            .0
+            .as_ref()
+            .eq_ignore_ascii_case(macro_id.email_str())
+    }
 }
 
 #[derive(Debug, Clone, Copy, ToSchema, Serialize, Deserialize, PartialEq, Eq)]

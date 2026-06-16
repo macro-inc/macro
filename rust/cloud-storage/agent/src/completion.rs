@@ -1,10 +1,9 @@
 /// One-shot completion — send a prompt and get a string response.
-use crate::anthropic_model::AnthropicModel;
-use crate::model::AgentModel;
+use crate::model::{AgentModel, ModelProvider};
 use rig_core::client::{CompletionClient, ProviderClient};
-use rig_core::completion::Prompt;
+use rig_core::completion::{CompletionModel, Prompt};
 use rig_core::message::Message;
-use rig_core::providers::anthropic;
+use rig_core::providers::{anthropic, openai};
 
 /// Send a system prompt + user message and return the model's text response.
 ///
@@ -16,17 +15,26 @@ pub async fn complete(
     system_prompt: &str,
     user_message: &str,
 ) -> anyhow::Result<String> {
-    let client = anthropic::Client::from_env()?;
-    let raw_model = client.completion_model(model.api_id());
-    let wrapped = AnthropicModel::new(raw_model);
-
-    let agent = rig_core::agent::AgentBuilder::new(wrapped)
-        .preamble(system_prompt)
-        .max_tokens(16_000)
-        .build();
-
-    let response = agent.prompt(user_message).await?;
-    Ok(response)
+    match model.provider() {
+        ModelProvider::Anthropic => {
+            let client = anthropic::Client::from_env()?;
+            prompt_once(
+                client.completion_model(model.api_id()),
+                system_prompt,
+                user_message,
+            )
+            .await
+        }
+        ModelProvider::OpenAi => {
+            let client = openai::Client::from_env()?;
+            prompt_once(
+                client.completion_model(model.api_id()),
+                system_prompt,
+                user_message,
+            )
+            .await
+        }
+    }
 }
 
 /// Send a system prompt + conversation history and return the model's text
@@ -37,11 +45,48 @@ pub async fn complete_with_history(
     system_prompt: &str,
     messages: Vec<Message>,
 ) -> anyhow::Result<String> {
-    let client = anthropic::Client::from_env()?;
-    let raw_model = client.completion_model(model.api_id());
-    let wrapped = AnthropicModel::new(raw_model);
+    match model.provider() {
+        ModelProvider::Anthropic => {
+            let client = anthropic::Client::from_env()?;
+            prompt_with_history(
+                client.completion_model(model.api_id()),
+                system_prompt,
+                messages,
+            )
+            .await
+        }
+        ModelProvider::OpenAi => {
+            let client = openai::Client::from_env()?;
+            prompt_with_history(
+                client.completion_model(model.api_id()),
+                system_prompt,
+                messages,
+            )
+            .await
+        }
+    }
+}
 
-    let agent = rig_core::agent::AgentBuilder::new(wrapped)
+async fn prompt_once<M: CompletionModel + 'static>(
+    completion_model: M,
+    system_prompt: &str,
+    user_message: &str,
+) -> anyhow::Result<String> {
+    let agent = rig_core::agent::AgentBuilder::new(completion_model)
+        .preamble(system_prompt)
+        .max_tokens(16_000)
+        .build();
+
+    let response = agent.prompt(user_message).await?;
+    Ok(response)
+}
+
+async fn prompt_with_history<M: CompletionModel + 'static>(
+    completion_model: M,
+    system_prompt: &str,
+    messages: Vec<Message>,
+) -> anyhow::Result<String> {
+    let agent = rig_core::agent::AgentBuilder::new(completion_model)
         .preamble(system_prompt)
         .max_tokens(16_000)
         .build();

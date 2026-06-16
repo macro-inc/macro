@@ -59,10 +59,15 @@ export const staticFileClient = {
     return await staticFetch(`/file/${args.file_id}`, { method: 'GET' });
   },
 
-  async uploadToPresignedUrl(args: { url: string; blob: Blob | File }) {
+  async uploadToPresignedUrl(args: {
+    url: string;
+    blob: Blob | File;
+    contentType?: string;
+  }) {
     const result = await platformFetch(args.url, {
       method: 'PUT',
       body: args.blob,
+      headers: args.contentType ? { 'Content-Type': args.contentType } : {},
     });
     return { success: result.ok };
   },

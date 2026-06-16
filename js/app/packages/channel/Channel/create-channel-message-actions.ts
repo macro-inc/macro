@@ -9,7 +9,8 @@ import type {
 } from '../Message';
 import {
   buildMessageLink,
-  canEditOrDeleteMessage,
+  canDeleteMessage,
+  canEditMessage,
   canReplyToMessage,
   DEFAULT_REACTION_EMOJI,
   hasReactionFromUser,
@@ -100,7 +101,8 @@ export function createChannelMessageActions(
 
   return (message) => {
     const currentUserId = options.userId();
-    const canEditDelete = canEditOrDeleteMessage(message, currentUserId);
+    const canEdit = canEditMessage(message, currentUserId);
+    const canDelete = canDeleteMessage(message, currentUserId);
     const canReply = canReplyToMessage(message);
     const isDeleted = !!message.deleted_at;
 
@@ -172,8 +174,8 @@ export function createChannelMessageActions(
               }
             }
           : undefined,
-      onEdit: canEditDelete ? options.onEdit : undefined,
-      onDelete: canEditDelete
+      onEdit: canEdit ? options.onEdit : undefined,
+      onDelete: canDelete
         ? () => {
             options.deleteMessage({
               channelID: options.channelId(),

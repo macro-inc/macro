@@ -150,6 +150,15 @@ pub struct GithubPullRequestDetails {
     pub additions: u64,
     /// The number of deleted lines reported by GitHub.
     pub deletions: u64,
+    /// The GitHub login for the pull request author, when available.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub author_login: Option<String>,
+    /// The stable numeric GitHub user id for the pull request author, when available.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub author_id: Option<u64>,
+    /// The pull request description (body), when available.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
     /// Comments collected from the pull request, when enrichment includes them.
     #[serde(
         default,
@@ -206,6 +215,15 @@ pub struct EnrichedGithubPullRequest {
     pub additions: Option<u64>,
     /// The number of deleted lines reported by GitHub, when enrichment succeeds.
     pub deletions: Option<u64>,
+    /// The GitHub login for the pull request author, when available.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub author_login: Option<String>,
+    /// The stable numeric GitHub user id for the pull request author, when available.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub author_id: Option<u64>,
+    /// The pull request description (body), when available.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
     /// Comments collected from the pull request, when enrichment includes them.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub comments: Option<Vec<GithubPullRequestComment>>,
@@ -233,6 +251,9 @@ impl EnrichedGithubPullRequest {
             status: None,
             additions: None,
             deletions: None,
+            author_login: None,
+            author_id: None,
+            description: None,
             comments: None,
             checks: None,
             participant_github_user_ids: None,
@@ -257,6 +278,9 @@ impl EnrichedGithubPullRequest {
             status: Some(status),
             additions: Some(details.additions),
             deletions: Some(details.deletions),
+            author_login: details.author_login,
+            author_id: details.author_id,
+            description: details.description,
             comments: details.comments,
             checks: details.checks,
             participant_github_user_ids: details.participant_github_user_ids,
@@ -267,6 +291,8 @@ impl EnrichedGithubPullRequest {
     ///
     /// Partial refreshes may omit `comments` or `checks`. When an omitted field exists as an array in
     /// `existing_metadata`, the existing array is copied forward so richer metadata is not discarded.
+    /// The same applies to the scalar `authorLogin`, `authorId`, and `description` fields, which
+    /// fallback write paths (such as comment webhooks without a `pull_request` payload) omit.
     pub fn foreign_entity_metadata(
         &self,
         existing_metadata: Option<&serde_json::Value>,
@@ -286,6 +312,18 @@ impl EnrichedGithubPullRequest {
 
             if let Some(existing_value) = existing_object.get(field)
                 && existing_value.is_array()
+            {
+                metadata_object.insert(field.to_string(), existing_value.clone());
+            }
+        }
+
+        for field in ["authorLogin", "authorId", "description"] {
+            if metadata_object.contains_key(field) {
+                continue;
+            }
+
+            if let Some(existing_value) = existing_object.get(field)
+                && !existing_value.is_null()
             {
                 metadata_object.insert(field.to_string(), existing_value.clone());
             }

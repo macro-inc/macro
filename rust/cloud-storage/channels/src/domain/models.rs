@@ -266,7 +266,7 @@ pub struct ThreadInfo {
 }
 
 /// A reply shown in a thread preview.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ThreadReply {
     /// Reply id.
     pub id: Uuid,

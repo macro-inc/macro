@@ -10196,7 +10196,7 @@
       "BotToken": {
         "type": "object",
         "description": "Bot token metadata.",
-        "required": ["id", "bot_id", "token_prefix", "created_at"],
+        "required": ["id", "bot_id", "token", "created_at"],
         "properties": {
           "bot_id": {
             "$ref": "#/components/schemas/BotId",
@@ -10231,9 +10231,9 @@
             "format": "date-time",
             "description": "Revocation timestamp."
           },
-          "token_prefix": {
+          "token": {
             "type": "string",
-            "description": "Token lookup prefix."
+            "description": "Raw bearer token."
           }
         }
       },
@@ -14059,6 +14059,10 @@
           "includes_me": {
             "type": "boolean",
             "description": "When true, only return foreign entities whose metadata lists the requesting user as a\nparticipant (GitHub `involves:me` semantics for `github_pull_request` records). False or\nabsent applies no filter. Serialized in filter ASTs as the `\"me\"` literal."
+          },
+          "notification_filters": {
+            "$ref": "#/components/schemas/NotificationFilters",
+            "description": "Filter by the notification state of the foreign entity (e.g. whether the requesting user's\nGitHub PR notification is done/seen)."
           }
         }
       },

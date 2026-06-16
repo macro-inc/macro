@@ -79,7 +79,7 @@ function getEntityTypePluralLabel(
 function getEntityName(entity: CombinedEntity): string {
   if (entity.kind === 'user') {
     const { name, email } = entity.data;
-    if (name === email) return email;
+    if (name === email) return email.split('@')[0] || email;
     return `${name} | ${email}`;
   }
   const data = entity.data;
@@ -522,7 +522,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                               <Entity.Icon entity={entity.data as EntityData} />
                             </Show>
                           </div>
-                          <span class="truncate min-w-0">
+                          <span class="truncate min-w-0 max-w-full">
                             <Show
                               when={entity.kind === 'entity'}
                               fallback={getEntityName(entity)}

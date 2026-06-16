@@ -1,5 +1,6 @@
 import { useAnalytics } from '@app/component/analytics-context';
 import { getViewPreset } from '@app/component/app-sidebar/soup-filter-presets';
+import { openChatWithMessage } from '@app/component/ChatWithAgentButton';
 import { getSearchSplit } from '@app/component/next-soup/soup-view/search-controllers';
 import { isListViewID } from '@app/constants/list-views';
 import { globalSplitManager } from '@app/signal/splitLayout';
@@ -36,6 +37,7 @@ import { CommandState } from './state';
 import type { CategoryFilter } from './types';
 import {
   type CommandMenuItem,
+  isAskAiItem,
   isCommandItem,
   isEntityItem,
   isSearchItem,
@@ -80,7 +82,7 @@ export function CommandMenu() {
   });
 
   const handleSelect = (item: CommandMenuItem) => {
-    if (isSearchItem(item)) suppressCloseAutoFocus = true;
+    if (isSearchItem(item) || isAskAiItem(item)) suppressCloseAutoFocus = true;
   };
 
   return (
@@ -148,8 +150,12 @@ export function CommandMenuInner(props: {
     on([query, CommandState.categoryFilter], () => {
       const items = filteredItems();
       const firstIsSearch = items[0] && isSearchItem(items[0]);
+      // Skip past the search row only onto a real result — when the query has
+      // no results the rows below are fallbacks (ask AI), and the search row
+      // should stay the default.
+      const secondIsResult = items[1] && !isAskAiItem(items[1]);
       setShouldScrollSelectedIntoView(false);
-      CommandState.setSelectedIndex(firstIsSearch && items.length > 1 ? 1 : 0);
+      CommandState.setSelectedIndex(firstIsSearch && secondIsResult ? 1 : 0);
     })
   );
 
@@ -170,6 +176,10 @@ export function CommandMenuInner(props: {
   const selectedIsSearch = () => {
     const item = selectedItem();
     return item && isSearchItem(item);
+  };
+  const selectedIsAskAi = () => {
+    const item = selectedItem();
+    return item && isAskAiItem(item);
   };
 
   function handleItemAction(item: CommandMenuItem, openInNewSplit = false) {
@@ -235,6 +245,14 @@ export function CommandMenuInner(props: {
           );
         }
       }
+      CommandState.close();
+      CommandState.setQuery('');
+      return;
+    }
+
+    if (isAskAiItem(item)) {
+      // Opens a new chat split and sends the query immediately.
+      openChatWithMessage(item.query);
       CommandState.close();
       CommandState.setQuery('');
       return;
@@ -605,6 +623,9 @@ export function CommandMenuInner(props: {
                 label="Search in new split"
               />
             </Show>
+          </Match>
+          <Match when={selectedIsAskAi()}>
+            <HotkeyHint command={confirmHotkey} label="Ask AI" />
           </Match>
           <Match when={selectedIsEntity()}>
             <HotkeyHint command={confirmHotkey} label="Open" />

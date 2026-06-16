@@ -3,6 +3,7 @@ import { getFaviconUrl } from '@app/util/favicon';
 import { markdownToPlainText } from '@lexical-core';
 import { themeReactive } from '../theme/signals/themeReactive';
 import type { PlatformNotificationState } from './components/PlatformNotificationProvider';
+import { GITHUB_EVENT_TYPES } from './github-event-types';
 import {
   getNotificationAction,
   getNotificationContent,
@@ -86,7 +87,9 @@ export async function maybeHandlePlatformNotification(
   // render as browser/system popups.
   if (
     notification.notification_metadata.tag === 'document_mention' ||
-    notification.notification_metadata.tag === 'github_pr_event'
+    (GITHUB_EVENT_TYPES as readonly string[]).includes(
+      notification.notification_metadata.tag
+    )
   ) {
     return;
   }

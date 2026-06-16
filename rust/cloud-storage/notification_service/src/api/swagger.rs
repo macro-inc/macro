@@ -8,9 +8,11 @@ use model::{
 use model_notifications::{
     ChannelInviteMetadata, ChannelMentionMetadata, ChannelMessageSendMetadata,
     ChannelReplyMetadata, CommentedOnDocumentMetadata, CommonChannelMetadata, DeviceType,
-    DocumentMentionMetadata, GithubPrEvent, GithubPrEventAction, GithubPrEventStatus,
-    InviteToTeamMetadata, ItemSharedMetadata, NewEmailMetadata,
-    RepliedToDocumentCommentThreadMetadata, UserUnsubscribe,
+    DocumentMentionMetadata, GithubPrCheckRun, GithubPrCheckRunState, GithubPrComment,
+    GithubPrCommentKind, GithubPrEventAction, GithubPrEventStatus, GithubPrMention,
+    GithubPrMentionLocation, GithubPrNotificationCommon, GithubPrReview, GithubPrReviewState,
+    GithubPrStatusChanged, GithubReviewRequested, InviteToTeamMetadata, ItemSharedMetadata,
+    NewEmailMetadata, RepliedToDocumentCommentThreadMetadata, UserUnsubscribe,
 };
 use utoipa::OpenApi;
 
@@ -82,9 +84,19 @@ use crate::{
                         DocumentMentionMetadata,
                         RepliedToDocumentCommentThreadMetadata,
                         CommentedOnDocumentMetadata,
-                        GithubPrEvent,
+                        GithubPrNotificationCommon,
+                        GithubPrStatusChanged,
                         GithubPrEventStatus,
                         GithubPrEventAction,
+                        GithubPrCheckRun,
+                        GithubPrCheckRunState,
+                        GithubReviewRequested,
+                        GithubPrComment,
+                        GithubPrCommentKind,
+                        GithubPrMention,
+                        GithubPrMentionLocation,
+                        GithubPrReview,
+                        GithubPrReviewState,
 
                         // v2 typed notifications
                         model_notifications::NotifEvent,
