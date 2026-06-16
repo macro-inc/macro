@@ -1,6 +1,10 @@
 use chrono::{DateTime, Utc};
+#[cfg(feature = "list")]
+use item_filters::ast::{LiteralTree, channel::ChannelLiteral};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{CreatedAt, CursorVal, Identify, SortOn};
+#[cfg(feature = "list")]
+use models_pagination::{Query, SimpleSortMethod};
 use serde::{Deserialize, Serialize, Serializer};
 use uuid::Uuid;
 
@@ -376,7 +380,8 @@ impl SortOn<CreatedAt> for ChannelAttachment {
 }
 
 /// Role of a channel participant.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 #[cfg_attr(feature = "outbound", derive(sqlx::Type))]
 #[cfg_attr(
     feature = "outbound",
@@ -388,6 +393,7 @@ pub enum ParticipantRole {
     /// Channel admin.
     Admin,
     /// Regular member.
+    #[default]
     Member,
 }
 
@@ -405,7 +411,7 @@ impl std::str::FromStr for ParticipantRole {
 }
 
 /// An active participant in a channel.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChannelParticipant {
     /// Channel id.
     pub channel_id: Uuid,
@@ -987,6 +993,144 @@ pub struct ChannelPreviewData {
 pub struct WithChannelId {
     /// Channel id.
     pub channel_id: String,
+}
+
+/// User display-name components used for channel-name resolution.
+#[cfg(feature = "list")]
+#[derive(Debug, Deserialize)]
+pub struct UserName {
+    /// Macro user id.
+    pub id: MacroUserIdStr<'static>,
+    /// First name, if present.
+    pub first_name: Option<String>,
+    /// Last name, if present.
+    pub last_name: Option<String>,
+}
+
+#[cfg(feature = "list")]
+impl UserName {
+    /// Attempt to create a display name for this user.
+    pub fn display_name(&self) -> Option<String> {
+        const NA: &str = "N/A";
+        match (
+            self.first_name.as_deref().filter(|v| *v != NA),
+            self.last_name.as_deref().filter(|v| *v != NA),
+        ) {
+            (None, None) => None,
+            (None, Some(last)) => Some(last.to_string()),
+            (Some(first), None) => Some(first.to_string()),
+            (Some(first), Some(last)) => Some(format!("{first} {last}")),
+        }
+    }
+}
+
+/// Channel list request.
+#[cfg(feature = "list")]
+#[derive(Debug)]
+pub struct GetChannelsRequest {
+    /// Requesting user id.
+    pub macro_id: MacroUserIdStr<'static>,
+    /// Optional result limit.
+    pub limit: Option<u32>,
+    /// Cursor, sort, and channel-level filter.
+    pub query: Query<Uuid, SimpleSortMethod, LiteralTree<ChannelLiteral>>,
+}
+
+#[cfg(feature = "list")]
+impl GetChannelsRequest {
+    /// Convert into repository params.
+    pub fn into_params(self) -> GetChannelsParams {
+        GetChannelsParams {
+            macro_id: self.macro_id,
+            limit: self.limit,
+            query: self.query,
+        }
+    }
+}
+
+/// Channel list repository parameters.
+#[cfg(feature = "list")]
+#[derive(Debug)]
+pub struct GetChannelsParams {
+    macro_id: MacroUserIdStr<'static>,
+    limit: Option<u32>,
+    query: Query<Uuid, SimpleSortMethod, LiteralTree<ChannelLiteral>>,
+}
+
+#[cfg(feature = "list")]
+impl GetChannelsParams {
+    /// Requesting user id.
+    pub fn user(&self) -> &MacroUserIdStr<'static> {
+        &self.macro_id
+    }
+
+    /// Optional result limit.
+    pub fn limit(&self) -> Option<u32> {
+        self.limit
+    }
+
+    /// Cursor, sort, and channel-level filter.
+    pub fn query(&self) -> &Query<Uuid, SimpleSortMethod, LiteralTree<ChannelLiteral>> {
+        &self.query
+    }
+}
+
+/// Channel data plus active participants.
+#[cfg(feature = "list")]
+#[derive(Debug, Clone)]
+pub struct ChannelWithParticipants {
+    /// Channel info.
+    pub channel: ChannelListItem,
+    /// Active channel participants.
+    pub participants: Vec<ChannelParticipant>,
+}
+
+/// Channel list item.
+#[cfg(feature = "list")]
+#[derive(Debug, Clone)]
+pub struct ChannelListItem {
+    /// Channel id.
+    pub id: Uuid,
+    /// Resolved or stored name.
+    pub name: Option<String>,
+    /// Channel type.
+    pub channel_type: ChannelType,
+    /// Organization id.
+    pub org_id: Option<i64>,
+    /// Team id.
+    pub team_id: Option<Uuid>,
+    /// Creation timestamp.
+    pub created_at: DateTime<Utc>,
+    /// Update timestamp.
+    pub updated_at: DateTime<Utc>,
+    /// Channel owner user id.
+    pub owner_id: MacroUserIdStr<'static>,
+}
+
+/// Latest-message bundle for channel list results.
+#[cfg(feature = "list")]
+#[derive(Debug, Clone, Default)]
+pub struct LatestMessage {
+    /// Latest message including thread replies.
+    pub latest_message: Option<RecentChannelMessage>,
+    /// Latest non-thread top-level message.
+    pub latest_non_thread_message: Option<RecentChannelMessage>,
+}
+
+/// Channel list result enriched with latest messages, activity, and frecency.
+#[cfg(feature = "list")]
+#[derive(Debug, Clone)]
+pub struct ChannelWithLatest {
+    /// Channel plus participants.
+    pub channel: ChannelWithParticipants,
+    /// Latest message data.
+    pub latest_message: LatestMessage,
+    /// Last viewed timestamp for requesting user.
+    pub viewed_at: Option<DateTime<Utc>>,
+    /// Last interaction timestamp for requesting user.
+    pub interacted_at: Option<DateTime<Utc>>,
+    /// Aggregate frecency score.
+    pub frecency_score: Option<frecency::domain::models::AggregateFrecency>,
 }
 
 /// Raw preview row returned from the repository.
