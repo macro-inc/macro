@@ -31,6 +31,10 @@ import type {
 } from './consolidated-filter-chip';
 import type { SearchableOption } from './searchable-multi-select';
 import {
+  TASK_STATUS_FILTER_IDS,
+  useTaskStatusFilter,
+} from './task-status-filter';
+import {
   buildContactLabel,
   VIEW_FILTER_CATEGORIES,
 } from './unified-filter-dropdown';
@@ -68,6 +72,7 @@ export function useFilterRefinements() {
   const user = useUserContext();
   const contacts = useContacts();
   const currentUserId = useUserId();
+  const taskStatus = useTaskStatusFilter();
 
   const getPresetContext = (): PresetContext => ({
     userId: user.userId(),
@@ -428,7 +433,7 @@ export function useFilterRefinements() {
       }));
 
       const getActiveValues = (): FilterValue[] =>
-        allOptions.filter((o) => soup.predicates.isActive(o.id));
+        allOptions.filter((o) => taskStatus.isActive(o.id as FilterID));
 
       // Only surface the chip when the statuses are actually narrowed: an empty
       // set is the "all" tab default and a fully-selected set isn't a filter,
@@ -439,14 +444,6 @@ export function useFilterRefinements() {
       const key = 'status';
       seenKeys.add(key);
 
-      const setStatus = (id: string, active: boolean) => {
-        soup.predicates.toggle({ or: [id as FilterID] });
-        const query = getFilterQuery(id);
-        if (!query) return;
-        if (active) queryFilters.remove(query);
-        else queryFilters.add(query);
-      };
-
       filters.push(
         getOrCreateConsolidatedChip(key, () => ({
           key,
@@ -455,18 +452,11 @@ export function useFilterRefinements() {
           values: getActiveValues,
           availableOptions: allOptions,
           multiple: true,
-          isValueActive: (id) => soup.predicates.isActive(id),
-          onToggleValue: (id) => {
-            const active = soup.predicates.isActive(id);
-            // Never allow an empty selection: unchecking the last enabled
-            // status re-enables all of them instead.
-            if (active && getActiveValues().length === 1) {
-              batch(() => enableAllTaskStatuses());
-              return;
-            }
-            batch(() => setStatus(id, active));
-          },
-          onRemoveAll: () => batch(() => enableAllTaskStatuses()),
+          isValueActive: (id) => taskStatus.isActive(id as FilterID),
+          onToggleValue: (id) => taskStatus.toggle(id as FilterID),
+          onOnly: (id) => taskStatus.selectOnly(id as FilterID),
+          isValueSoleActive: (id) => taskStatus.isSoleActive(id as FilterID),
+          onRemoveAll: () => taskStatus.enableAll(),
         }))
       );
     };
@@ -608,20 +598,6 @@ export function useFilterRefinements() {
       : filter.query;
   };
 
-  // Enables every task status (used by the status chip's clear and "Clear all"
-  // so clearing reveals all statuses rather than snapping to the open-set
-  // default). Idempotent; callers wrap it in a batch.
-  const enableAllTaskStatuses = () => {
-    const statusCategory = viewCategories().find((c) => c.id === 'status');
-    if (!statusCategory) return;
-    for (const option of statusCategory.options) {
-      if (soup.predicates.isActive(option.id)) continue;
-      soup.predicates.toggle({ or: [option.id as FilterID] });
-      const query = getFilterQuery(option.id);
-      if (query) queryFilters.add(query);
-    }
-  };
-
   const getInboxTypeQuery = (activeTypeIds: string[]): Query | undefined => {
     const preset = currentPreset();
     if (currentView() !== 'inbox' || !preset) return undefined;
@@ -647,21 +623,15 @@ export function useFilterRefinements() {
 
     // On task tabs that default to a status subset (the open set), "Clear all"
     // reveals every status instead of restoring that subset.
-    const statusOptionIds = new Set(
-      (currentView() === 'tasks'
-        ? (viewCategories().find((c) => c.id === 'status')?.options ?? [])
-        : []
-      ).map((o) => o.id)
-    );
     const presetSeedsStatusSubset = (preset.clientFilters.or ?? []).some((id) =>
-      statusOptionIds.has(id)
+      TASK_STATUS_FILTER_IDS.includes(id as FilterID)
     );
 
     batch(() => {
       soup.predicates.set(preset.clientFilters);
       queryFilters.replace(preset.filters ?? null);
       setAssigneeFilter([]);
-      if (presetSeedsStatusSubset) enableAllTaskStatuses();
+      if (presetSeedsStatusSubset) taskStatus.enableAll();
     });
   };
 

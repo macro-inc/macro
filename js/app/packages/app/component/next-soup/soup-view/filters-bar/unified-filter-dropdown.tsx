@@ -44,6 +44,7 @@ import {
   SearchableMultiSelectInline,
   type SearchableOption,
 } from './searchable-multi-select';
+import { useTaskStatusFilter } from './task-status-filter';
 
 export const TypeIndicator = (props: { active: boolean }) => (
   <span
@@ -479,6 +480,7 @@ export const UnifiedFilterDropdown = (
     useSoupView();
   const contacts = useContacts();
   const userId = useUserId();
+  const taskStatus = useTaskStatusFilter();
 
   const currentView = createMemo((): ListView | undefined => {
     const content = panel.handle.content();
@@ -685,10 +687,19 @@ export const UnifiedFilterDropdown = (
                           <Dropdown.Group>
                             <For each={category.options}>
                               {(option) => {
-                                const active = () => isOptionActive(option.id);
+                                const isStatus =
+                                  isTasksView() && category.id === 'status';
+                                const active = () =>
+                                  isStatus
+                                    ? taskStatus.isActive(option.id)
+                                    : isOptionActive(option.id);
                                 return (
                                   <Dropdown.Item
-                                    onSelect={() => toggleFilter(option.id)}
+                                    onSelect={() =>
+                                      isStatus
+                                        ? taskStatus.toggle(option.id)
+                                        : toggleFilter(option.id)
+                                    }
                                     closeOnSelect={!category.multiple}
                                   >
                                     <TypeIndicator active={active()} />
@@ -709,6 +720,26 @@ export const UnifiedFilterDropdown = (
                                     >
                                       {option.label}
                                     </span>
+
+                                    <Show when={isStatus}>
+                                      <button
+                                        type="button"
+                                        class="shrink-0 text-xxs text-ink-muted opacity-0 group-hover:opacity-100 group-data-highlighted:opacity-100 hover:text-ink"
+                                        onPointerDown={(e) => {
+                                          e.preventDefault();
+                                          e.stopPropagation();
+                                        }}
+                                        onPointerUp={(e) => e.stopPropagation()}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          taskStatus.selectOnly(option.id);
+                                        }}
+                                      >
+                                        {taskStatus.isSoleActive(option.id)
+                                          ? 'All'
+                                          : 'Only'}
+                                      </button>
+                                    </Show>
                                   </Dropdown.Item>
                                 );
                               }}
