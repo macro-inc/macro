@@ -238,6 +238,8 @@ use utoipa::OpenApi;
         channels::inbound::axum_router::post_activity_handler,
 
         // bots
+        bots::inbound::axum_router::list_bot_channels_handler,
+        bots::inbound::axum_router::remove_bot_channel_handler,
         bots::inbound::channel_webhook_router::create_channel_scoped_bot_handler,
         bots::inbound::channel_webhook_router::post_channel_webhook_handler,
 
@@ -473,6 +475,8 @@ use utoipa::OpenApi;
             bots::domain::models::BotKind,
             bots::domain::models::BotOwner,
             bots::domain::models::BotToken,
+            bots::domain::models::BotChannel,
+            bots::domain::models::BotChannelType,
             bots::domain::models::ChannelWebhookRequest,
             bots::domain::models::ChannelWebhookResponse,
             bots::domain::models::CreateChannelScopedBotRequest,

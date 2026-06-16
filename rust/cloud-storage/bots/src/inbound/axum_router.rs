@@ -256,7 +256,23 @@ async fn revoke_token_handler<S: BotService, Svc: EntityAccessService>(
     Ok(StatusCode::NO_CONTENT)
 }
 
-async fn list_bot_channels_handler<S: BotService, Svc: EntityAccessService>(
+/// Handler for `GET /bots/{bot_id}/channels`.
+#[utoipa::path(
+    get,
+    tag = "bots",
+    operation_id = "list_bot_channels",
+    path = "/bots/{bot_id}/channels",
+    params(
+        ("bot_id" = BotId, Path, description = "Bot ID")
+    ),
+    responses(
+        (status = 200, body = Vec<BotChannel>),
+        (status = 401, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+pub async fn list_bot_channels_handler<S: BotService, Svc: EntityAccessService>(
     State(state): State<BotsRouterState<S, Svc>>,
     user: MacroUserExtractor,
     Path(path): Path<BotPath>,
@@ -269,7 +285,24 @@ async fn list_bot_channels_handler<S: BotService, Svc: EntityAccessService>(
     ))
 }
 
-async fn remove_bot_channel_handler<S: BotService, Svc: EntityAccessService>(
+/// Handler for `DELETE /bots/{bot_id}/channels/{channel_id}`.
+#[utoipa::path(
+    delete,
+    tag = "bots",
+    operation_id = "remove_bot_from_channel_by_bot",
+    path = "/bots/{bot_id}/channels/{channel_id}",
+    params(
+        ("bot_id" = BotId, Path, description = "Bot ID"),
+        ("channel_id" = Uuid, Path, description = "Channel ID")
+    ),
+    responses(
+        (status = 204),
+        (status = 401, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+pub async fn remove_bot_channel_handler<S: BotService, Svc: EntityAccessService>(
     State(state): State<BotsRouterState<S, Svc>>,
     user: MacroUserExtractor,
     Path(path): Path<BotChannelPath>,
