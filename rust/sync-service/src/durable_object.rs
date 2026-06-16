@@ -795,13 +795,12 @@ impl DocumentSyncSession {
                 let body: CreatePinBody = serde_json::from_slice(&req.bytes().await?)
                     .context("invalid create-pin JSON body")?;
 
-                if body.label.is_empty()
-                    || !body.label.chars().all(|c| c.is_ascii_alphabetic() || c == '-' || c == '_')
-                {
+                // kept in sync with js/app/packages/queries/pins.ts PIN_LABEL_RE
+                if !lazy_regex::regex_is_match!(r"^[a-zA-Z0-9_-]+$", &body.label) {
                     return ResponseBuilder::new()
                         .with_status(400)
                         .from_json(&serde_json::json!({
-                            "error": "Label may only contain letters, dashes, and underscores"
+                            "error": "Label can only be letters, dashes, and numbers"
                         }));
                 }
 

@@ -23,9 +23,15 @@ export function invalidatePins(documentId: string) {
   return queryClient.invalidateQueries({ queryKey: pinKeys.list(documentId) });
 }
 
+// kept in sync with rust/sync-service/src/durable_object.rs PIN_LABEL_RE
+const PIN_LABEL_RE = /^[a-zA-Z0-9_-]+$/;
+
 export function useCreatePinMutation(documentId: Accessor<string>) {
   return useMutation(() => ({
     mutationFn: async (vars: { atMs: number; label: string }) => {
+      if (!PIN_LABEL_RE.test(vars.label)) {
+        throw new Error('Label can only be letters, dashes, and numbers');
+      }
       const maybe = await syncServiceClient.createPin({
         documentId: documentId(),
         label: vars.label,
@@ -35,7 +41,7 @@ export function useCreatePinMutation(documentId: Accessor<string>) {
       return maybe.value;
     },
     onSuccess: () => invalidatePins(documentId()),
-    onError: () => toast.failure('Label may only contain letters, dashes, and underscores'),
+    onError: () => toast.failure('Label can only be letters, dashes, and numbers'),
   }));
 }
 

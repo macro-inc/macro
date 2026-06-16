@@ -316,7 +316,7 @@ export function HistoryScrubber(props: {
     });
 
   return (
-    <div class="flex flex-1 items-start gap-4">
+    <div class="flex w-full items-start gap-4">
       <div
         ref={containerRef}
         class="relative isolate mx-6 mb-4 min-w-0 flex-1 touch-none select-none"

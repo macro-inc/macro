@@ -130,15 +130,15 @@ export function HistoryOverlay(props: {
       {/* Controls pinned to the viewport so they're reachable on long docs. */}
       <Show when={history()}>
         {(h) => (
-          <div class="fixed inset-x-0 bottom-0 z-30 flex items-center gap-3 border-edge border-t bg-active px-3 pt-4 pb-3 ">
-            <div class="flex-1 min-w-0">
+          <div class="fixed inset-x-0 bottom-0 z-30 min-h-20 h-[15vh] max-h-60 border-edge border-t bg-active">
+            <div class="h-full overflow-y-auto px-3 pt-4 pb-3">
               <HistoryScrubber
-                  sessions={h().sessions}
-                  pins={pins.data ?? []}
-                  onSelect={setSelected}
-                  onCreatePin={(atMs, label) => createPin.mutate({ atMs, label })}
-                  onDeletePin={(pinId) => deletePin.mutate(pinId)}
-                />
+                sessions={h().sessions}
+                pins={pins.data ?? []}
+                onSelect={setSelected}
+                onCreatePin={(atMs, label) => createPin.mutate({ atMs, label })}
+                onDeletePin={(pinId) => deletePin.mutate(pinId)}
+              />
             </div>
           </div>
         )}

@@ -57,4 +57,5 @@ uuid = { version = "1.16.0", features = ["v4", "js"] }
 loro = "1.13"
 jsonwebtoken = { git = "https://github.com/whutchinson98/jsonwebtoken", features = ["rust_crypto"] }
 matchit =  "0.8.4"
+lazy-regex = "3"
 
