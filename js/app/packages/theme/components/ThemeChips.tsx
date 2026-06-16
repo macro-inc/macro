@@ -2,13 +2,40 @@ import type { ThemeV2 } from '@theme/types/themeTypes';
 import IconTextA from '@phosphor-icons/core/regular/text-a-underline.svg?component-solid';
 
 type Token = { l: number; c: number; h: number };
+type ThemeChipsSize = 'default' | 'small';
+
+const sizeStyles: Record<
+  ThemeChipsSize,
+  {
+    padding: string;
+    gap: string;
+    accentSize: string;
+    iconSize: string;
+  }
+> = {
+  default: {
+    padding: '8px',
+    gap: '8px',
+    accentSize: '13px',
+    iconSize: '18px',
+  },
+  small: {
+    padding: '3px',
+    gap: '4px',
+    accentSize: '9px',
+    iconSize: '12px',
+  },
+};
 
 /** A theme swatch: an encompassing square of the theme's panel surface with the
  *  accent and ink (A) inside. Always shows the theme's original intended colors
  *  — each theme is intrinsically light or dark. */
-export function ThemeChips(props: { theme: ThemeV2 }) {
+export function ThemeChips(props: { theme: ThemeV2; size?: ThemeChipsSize }) {
+  const styles = () => sizeStyles[props.size ?? 'default'];
   const oklch = (token: Token) => {
-    if (!token) { return 'transparent'; }
+    if (!token) {
+      return 'transparent';
+    }
     return `oklch(${token.l} ${token.c} ${token.h}deg)`;
   };
 
@@ -29,13 +56,23 @@ export function ThemeChips(props: { theme: ThemeV2 }) {
   return (
     <span
       class="inline-flex items-center rounded-sm border border-edge-muted"
-      style={{ 'background-color': bg(), padding: '8px', gap: '8px' }}
+      style={{
+        'background-color': bg(),
+        padding: styles().padding,
+        gap: styles().gap,
+      }}
     >
       <span
         class="inline-block rounded-xs"
-        style={{ 'background-color': accent(), width: '13px', height: '13px' }}
+        style={{
+          'background-color': accent(),
+          width: styles().accentSize,
+          height: styles().accentSize,
+        }}
       />
-      <IconTextA style={{ color: ink(), width: '18px', height: '18px' }} />
+      <IconTextA
+        style={{ color: ink(), width: styles().iconSize, height: styles().iconSize }}
+      />
     </span>
   );
 }

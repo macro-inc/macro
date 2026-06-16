@@ -271,9 +271,7 @@ export default function GlobalShortcuts() {
   const ThemeDisplay: Component<{ theme: ThemeV2 }> = (props) => (
     <div class="flex items-center gap-2">
       {props.theme.name}
-      <div class="px-1 ring ring-edge-muted rounded-xs">
-        <ThemeChips theme={props.theme} />
-      </div>
+      <ThemeChips theme={props.theme} size="small" />
     </div>
   );
 
