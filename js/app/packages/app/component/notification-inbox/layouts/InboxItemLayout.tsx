@@ -496,7 +496,7 @@ export function InboxItemLayout(
         <StandardLayout
           onClick={props.onClick}
           description={
-            <InboxItem.Description density="compact" timestamp={false}>
+            <InboxItem.Description timestamp={false}>
               <Show when={item().senderName}>
                 {(_senderName) => (
                   <span class="contents">
@@ -513,9 +513,7 @@ export function InboxItemLayout(
               </Show>
               <span class="ml-auto flex shrink-0 items-center gap-1">
                 <For each={item().properties ?? []}>
-                  {(property) => (
-                    <PropertyPill property={property} density="compact" />
-                  )}
+                  {(property) => <PropertyPill property={property} />}
                 </For>
                 <Show
                   when={

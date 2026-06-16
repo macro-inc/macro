@@ -15,13 +15,6 @@ import {
   splitProps,
   useContext,
 } from 'solid-js';
-export type InboxItemDensity = 'default' | 'compact';
-export type InboxItemTone = 'default' | 'muted';
-
-export interface InboxItemStyleProps {
-  density?: InboxItemDensity;
-  tone?: InboxItemTone;
-}
 
 type InboxItemNotification =
   | UnifiedNotification
@@ -54,8 +47,6 @@ export interface InboxItem {
 
 type InboxItemContextValue = {
   item: Accessor<InboxItem>;
-  density: Accessor<InboxItemDensity>;
-  tone: Accessor<InboxItemTone>;
   unread: Accessor<boolean | undefined>;
   selected: Accessor<boolean | undefined>;
 };
@@ -78,21 +69,15 @@ interface RootProps {
   children: JSX.Element;
   unread?: boolean;
   selected?: boolean;
-  density?: InboxItemDensity;
-  tone?: InboxItemTone;
   class?: string;
 }
 
 function Root(props: RootProps) {
   const item = () => props.item;
-  const density = () => props.density ?? 'default';
-  const tone = () => props.tone ?? 'default';
   const unread = () => props.unread ?? item().unread;
   const selected = () => props.selected;
   const context: InboxItemContextValue = {
     item,
-    density,
-    tone,
     unread,
     selected,
   };
@@ -102,9 +87,7 @@ function Root(props: RootProps) {
       <div
         class={cn(
           'group/inbox-item grid w-full grid-cols-[0.5rem_var(--inbox-item-icon-size)_minmax(0,1fr)] gap-x-3 text-sm',
-          density() === 'compact'
-            ? '[--inbox-item-icon-size:2rem]'
-            : '[--inbox-item-icon-size:2rem]',
+          '[--inbox-item-icon-size:2rem]',
           props.class
         )}
       >
@@ -126,8 +109,7 @@ function Content(props: ContentProps) {
     <div
       class={cn(
         'col-span-3 grid w-full grid-cols-[0.5rem_var(--inbox-item-icon-size)_minmax(0,1fr)] items-center gap-x-3 rounded-lg px-2',
-        ctx.density() === 'compact' ? 'min-h-9 py-1' : 'min-h-11 py-1.5',
-        ctx.tone() === 'muted' ? 'bg-ink-muted/2.5' : 'bg-surface',
+        'min-h-11 bg-surface py-1.5',
         ctx.unread() === false && 'opacity-70',
         !ctx.selected() &&
           'hover:bg-active/40 hover:ring hover:ring-edge-muted hover:ring-inset',
@@ -174,16 +156,11 @@ function UnreadIndicator(props: { unread?: boolean; class?: string }) {
 }
 
 function Icon(props: SlotProps) {
-  const ctx = useInboxItem();
-
   return (
     <span
       class={cn(
         'flex shrink-0 self-center items-center justify-center overflow-visible text-ink-muted',
-        ctx.density() === 'compact'
-          ? 'min-w-4 h-4'
-          : 'min-w-[var(--inbox-item-icon-size)] h-[var(--inbox-item-icon-size)]',
-        ctx.tone() === 'muted' && 'text-ink-extra-muted',
+        'min-w-[var(--inbox-item-icon-size)] h-[var(--inbox-item-icon-size)]',
         props.class
       )}
     >
@@ -193,16 +170,8 @@ function Icon(props: SlotProps) {
 }
 
 function Body(props: SlotProps) {
-  const ctx = useInboxItem();
-
   return (
-    <div
-      class={cn(
-        'flex min-w-0 flex-1 flex-col',
-        ctx.density() === 'compact' ? 'gap-0' : 'gap-0.5',
-        props.class
-      )}
-    >
+    <div class={cn('flex min-w-0 flex-1 flex-col', 'gap-0.5', props.class)}>
       {props.children}
     </div>
   );
@@ -211,16 +180,8 @@ function Body(props: SlotProps) {
 interface HeaderProps extends SlotProps {}
 
 function Header(props: HeaderProps) {
-  const ctx = useInboxItem();
-
   return (
-    <div
-      class={cn(
-        'flex min-w-0 items-center',
-        ctx.density() === 'compact' ? 'gap-1' : 'gap-1.5',
-        props.class
-      )}
-    >
+    <div class={cn('flex min-w-0 items-center', 'gap-1.5', props.class)}>
       {props.children}
     </div>
   );
@@ -246,7 +207,6 @@ interface SenderProps extends SlotProps {
 }
 
 function Sender(props: SenderProps) {
-  const ctx = useInboxItem();
   const { macroId, name } = useSenderDisplayName();
   const showAvatar = () => props.avatar ?? true;
   const initials = () =>
@@ -254,7 +214,7 @@ function Sender(props: SenderProps) {
       .split(/\s+/)
       .filter(Boolean)
       .slice(0, 2)
-      .map((part) => part[0]?.toUpperCase())
+      .map((part: string) => part[0]?.toUpperCase())
       .join('') || '?';
 
   return (
@@ -262,7 +222,7 @@ function Sender(props: SenderProps) {
       class={cn(
         'min-w-0 shrink-0 inline-flex items-center gap-1',
         'text-xs',
-        ctx.tone() === 'muted' ? 'text-ink-muted' : 'text-ink',
+        'text-ink',
         props.class
       )}
     >
@@ -315,11 +275,9 @@ interface LinkProps extends SlotProps {
 }
 
 function Link(props: LinkProps) {
-  const ctx = useInboxItem();
   const className = () =>
     cn(
       'min-w-0 truncate text-xs text-ink-muted/70 underline-offset-2 transition-colors hover:text-accent hover:underline',
-      ctx.tone() === 'muted' && 'text-ink-extra-muted',
       props.class
     );
 
@@ -346,21 +304,13 @@ function Link(props: LinkProps) {
   );
 }
 
-interface DescriptionProps extends SlotProps, InboxItemStyleProps {
+interface DescriptionProps extends SlotProps {
   timestamp?: boolean;
 }
 
 function Description(props: DescriptionProps) {
-  const [local, rest] = splitProps(props, [
-    'density',
-    'tone',
-    'timestamp',
-    'class',
-    'children',
-  ]);
+  const [local, rest] = splitProps(props, ['timestamp', 'class', 'children']);
   const parent = useInboxItem();
-  const density = () => local.density ?? parent.density();
-  const tone = () => local.tone ?? parent.tone();
   const showTimestamp = () => local.timestamp ?? true;
   const groupCount = () => {
     const count = (parent.item().subItems?.length ?? 0) + 1;
@@ -368,8 +318,6 @@ function Description(props: DescriptionProps) {
   };
   const context: InboxItemContextValue = {
     ...parent,
-    density,
-    tone,
   };
 
   return (
@@ -407,30 +355,15 @@ function Description(props: DescriptionProps) {
   );
 }
 
-interface ContextSlotProps extends SlotProps, InboxItemStyleProps {}
+interface ContextSlotProps extends SlotProps {}
 
 function Section(props: ContextSlotProps) {
-  const [local, rest] = splitProps(props, [
-    'density',
-    'tone',
-    'class',
-    'children',
-  ]);
-  const parent = useInboxItem();
-  const density = () => local.density ?? parent.density();
-  const tone = () => local.tone ?? parent.tone();
-  const context: InboxItemContextValue = {
-    ...parent,
-    density,
-    tone,
-  };
+  const [local, rest] = splitProps(props, ['class', 'children']);
 
   return (
-    <InboxItemContext.Provider value={context}>
-      <div class={cn('flex min-w-0 flex-col gap-1', local.class)} {...rest}>
-        {local.children}
-      </div>
-    </InboxItemContext.Provider>
+    <div class={cn('flex min-w-0 flex-col gap-1', local.class)} {...rest}>
+      {local.children}
+    </div>
   );
 }
 
@@ -460,27 +393,21 @@ function ActionButton(props: ActionButtonProps) {
   );
 }
 
-interface PillProps extends SlotProps, InboxItemStyleProps {
+interface PillProps extends SlotProps {
   title?: string;
   variant?: 'default' | 'muted' | 'accent';
 }
 
 export function Pill(props: PillProps) {
   const variant = () => props.variant ?? 'default';
-  const density = () => props.density ?? 'default';
-  const tone = () => props.tone ?? 'default';
 
   return (
     <span
       class={cn(
-        'inline-flex max-w-full min-w-0 items-center rounded-full border text-ink-muted',
-        density() === 'compact' ? 'h-4 px-1 text-[10px]' : 'h-5 px-1.5 text-xs',
+        'inline-flex h-5 max-w-full min-w-0 items-center rounded-full border px-1.5 text-xs text-ink-muted',
         variant() === 'default' && 'border-edge-muted',
         variant() === 'muted' && 'border-edge-muted/70 text-ink-extra-muted',
         variant() === 'accent' && 'border-accent/20 bg-accent/8 text-accent',
-        tone() === 'muted' &&
-          variant() === 'default' &&
-          'border-edge-muted/70 text-ink-extra-muted',
         props.class
       )}
       title={props.title}
@@ -490,7 +417,7 @@ export function Pill(props: PillProps) {
   );
 }
 
-interface PropertyPillProps extends InboxItemStyleProps {
+interface PropertyPillProps {
   property: PropertyT;
   class?: string;
 }
@@ -506,17 +433,8 @@ export function PropertyPill(props: PropertyPillProps) {
   );
 }
 
-export function SharedPill(
-  props: InboxItemStyleProps & {
-    label?: JSX.Element;
-    class?: string;
-  }
-) {
-  return (
-    <Pill class={props.class} density={props.density} tone={props.tone}>
-      {props.label ?? 'Shared'}
-    </Pill>
-  );
+export function SharedPill(props: { label?: JSX.Element; class?: string }) {
+  return <Pill class={props.class}>{props.label ?? 'Shared'}</Pill>;
 }
 
 interface BreadcrumbProps {

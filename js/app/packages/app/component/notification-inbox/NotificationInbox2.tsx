@@ -358,12 +358,6 @@ function previewEntity(item: InboxItemData): EntityData | undefined {
   }
 }
 
-function itemDensity(item: InboxItemData) {
-  const tag = item.notification?.notification_metadata.tag;
-  if (tag === 'task_assigned' || tag === 'call-started') return 'compact';
-  return 'default';
-}
-
 function NotificationInboxList(props: {
   groups: InboxDateGroup[];
   hiddenFilterIds: string[];
@@ -451,10 +445,8 @@ function NotificationInboxList(props: {
                 <For each={group.items}>
                   {(item) => (
                     <InboxItem.Root
-                      density={itemDensity(item)}
                       item={item}
                       selected={props.selectedItem?.id === item.id}
-                      tone="default"
                     >
                       <Show
                         when={layoutVariant() === 'inline-type'}

@@ -76,7 +76,7 @@ function ActorIcon() {
       .split(/\s+/)
       .filter(Boolean)
       .slice(0, 2)
-      .map((part) => part[0]?.toUpperCase())
+      .map((part: string) => part[0]?.toUpperCase())
       .join('') || '?';
 
   return (
@@ -397,9 +397,7 @@ function Description() {
                     {(action) => <span class="shrink-0">{action()}</span>}
                   </Show>
                   <For each={item().properties ?? []}>
-                    {(property) => (
-                      <PropertyPill property={property} density="compact" />
-                    )}
+                    {(property) => <PropertyPill property={property} />}
                   </For>
                   <Show when={item().content}>
                     {(content) => <ContentText content={content()} />}
