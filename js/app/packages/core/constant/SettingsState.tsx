@@ -80,7 +80,9 @@ export const useSettingsState = () => {
       { type: 'component', id: 'settings' },
       {
         activate: true,
-        allowDuplicate: true,
+        // Single settings split only: getSettingsSplit/removeSettingsSplit
+        // assume one exists, so reuse an existing one instead of duplicating.
+        allowDuplicate: false,
         preferNewSplit: true,
         mergeHistory: false,
       }
