@@ -1,4 +1,6 @@
 use crate::domain::events::ChannelEvent;
+#[cfg(feature = "attachment")]
+use crate::domain::models::RecentChannelMessage;
 use crate::domain::models::{
     Activity, ActivityType, AddParticipantsRequest, AttachmentEntityReference, BotId,
     BotSenderProfile, ChannelAttachment, ChannelAttachmentType, ChannelContextMessage, ChannelInfo,
@@ -8,8 +10,8 @@ use crate::domain::models::{
     GetOrCreatePrivateRequest, MessageAttachment, MessagePageDirection, MutatedAttachment,
     MutatedMessage, NewChannelAttachment, PatchChannelRequest, PatchMessageRequest,
     PostMessageRequest, PostMessageResponse, PostReactionRequest, PostTypingRequest,
-    RecentChannelMessage, ReferencedShareItem, RemoveParticipantsRequest, ResolvedChannelMessage,
-    Sender, SimpleMention, ThreadData, ThreadReply, ThreadReplyRow, TopLevelMessageRow,
+    ReferencedShareItem, RemoveParticipantsRequest, ResolvedChannelMessage, Sender, SimpleMention,
+    ThreadData, ThreadReply, ThreadReplyRow, TopLevelMessageRow,
 };
 #[cfg(feature = "list")]
 use crate::domain::models::{

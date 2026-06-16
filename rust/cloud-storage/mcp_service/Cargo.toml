@@ -15,7 +15,7 @@ aws-sdk-sqs = { workspace = true }
 axum = { workspace = true, features = ["tower-log"] }
 call = { path = "../call", default-features = false, features = ["ports"] }
 chat = { path = "../chat", features = ["ai_tools", "outbound"] }
-comms = { path = "../comms", features = ["outbound"] }
+channels = { path = "../channels", features = ["outbound"] }
 crm = { path = "../crm" }
 documents = { path = "../documents", features = ["ai_tools"] }
 email = { path = "../email", features = ["outbound"] }

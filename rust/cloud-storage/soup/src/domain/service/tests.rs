@@ -1,8 +1,8 @@
 use crate::domain::models::FrecencySoupItem;
 use crate::domain::ports::MockSoupRepo;
+use channels::domain::{models::GetChannelsRequest, ports::ChannelListService};
 use chrono::Days;
 use chrono::{DateTime, Utc};
-use comms::domain::models::GetChannelsRequest;
 use cool_asserts::assert_matches;
 use email::domain::models::{EnrichedEmailThreadPreview, PreviewView};
 use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
@@ -52,25 +52,25 @@ impl EmailPreviewServiceReadOnly for NoopEmailPreviewService {
 
 struct NoopCommsService;
 
-impl ChannelsService for NoopCommsService {
+impl ChannelListService for NoopCommsService {
     async fn get_channels(
         &self,
         _req: GetChannelsRequest,
-    ) -> Result<Vec<comms::domain::models::channel::ChannelWithLatest>, Report> {
+    ) -> Result<Vec<channels::domain::models::ChannelWithLatest>, Report> {
         Ok(Vec::new())
     }
 
     async fn get_activities(
         &self,
         _user: MacroUserIdStr<'_>,
-    ) -> Result<Vec<comms::domain::models::channel::Activity>, Report> {
+    ) -> Result<Vec<channels::domain::models::Activity>, Report> {
         Ok(Vec::new())
     }
 
     async fn get_names(
         &self,
         _names: std::collections::HashSet<MacroUserIdStr<'_>>,
-    ) -> Result<Vec<comms::domain::models::UserName>, Report> {
+    ) -> Result<Vec<channels::domain::models::UserName>, Report> {
         Ok(Vec::new())
     }
 }

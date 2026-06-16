@@ -10,9 +10,8 @@ use crate::tool_context::{
 };
 use anthropic::toolset::AnthropicToolContext;
 use anyhow::Context;
-use comms::domain::service::ChannelServiceImpl;
-use comms::outbound::postgres::comms_repo::PgCommsRepo;
-use comms::outbound::postgres::user_repo::PgUserRepo;
+use channels::domain::list_service::ChannelListServiceImpl;
+use channels::outbound::pg_channels_repo::PgChannelsRepo;
 use documents::domain::models::CloudFrontConfig;
 use documents::inbound::toolset::DocumentToolContext;
 use documents::outbound::pg_document_repo::PgDocumentRepo;
@@ -157,9 +156,9 @@ pub async fn build_tool_service_context_from_env(
         crm_service.clone(),
         0,
     );
-    let channels_service = ChannelServiceImpl::new(
-        PgCommsRepo::new(ReadOnlyPool(pool.clone())),
-        PgUserRepo::new(pool.clone()),
+    let channels_service = ChannelListServiceImpl::new(
+        PgChannelsRepo::new(pool.clone()),
+        PgChannelsRepo::new(pool.clone()),
         frecency_storage,
     );
     let channel_tool_context = crate::tool_context::build_channel_tool_context(pool.clone());

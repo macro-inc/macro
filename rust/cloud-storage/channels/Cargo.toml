@@ -36,6 +36,7 @@ list = [
   "dep:filter_ast",
   "dep:frecency",
   "dep:item_filters",
+  "dep:model-entity",
   "dep:recursion",
   "dep:rootcause",
   "dep:serde_json",

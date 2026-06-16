@@ -6,10 +6,9 @@ use call::domain::service::{CallRecordQueryServiceImpl, CallServiceImpl};
 use call::inbound::toolset::CallToolContext;
 use call::outbound::pg_call_repo::PgCallRepo;
 use call::outbound::s3_recording_storage::S3RecordingStorage;
-use channels::outbound::pg_channels_repo::PgChannelsRepo;
-use comms::domain::service::ChannelServiceImpl;
-use comms::outbound::postgres::comms_repo::PgCommsRepo;
-use comms::outbound::postgres::user_repo::PgUserRepo;
+use channels::{
+    domain::list_service::ChannelListServiceImpl, outbound::pg_channels_repo::PgChannelsRepo,
+};
 use config::{Config, EnvVars, Environment};
 use document_storage_service_client::DocumentStorageServiceClient;
 use documents::{
@@ -216,9 +215,9 @@ async fn main() -> anyhow::Result<()> {
         crm_service.clone(),
         0,
     );
-    let channels_service = ChannelServiceImpl::new(
-        PgCommsRepo::new(ReadOnlyPool(db.clone())),
-        PgUserRepo::new(db.clone()),
+    let channels_service = ChannelListServiceImpl::new(
+        PgChannelsRepo::new(db.clone()),
+        PgChannelsRepo::new(db.clone()),
         frecency_storage,
     );
     let email_service_for_tools: Arc<ai_tools::ToolEmailService> = Arc::new(email_service.clone());

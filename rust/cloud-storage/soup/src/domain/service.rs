@@ -7,7 +7,10 @@ use crate::domain::{
     ports::{SoupOutput, SoupRepo, SoupService},
 };
 use call::domain::{models::GetCallRecordsRequest, ports::CallRecordQueryService};
-use comms::domain::{models::GetChannelsRequest, ports::ChannelsService};
+use channels::domain::{
+    models::{ChannelType, GetChannelsRequest, ParticipantRole, RecentChannelMessage},
+    ports::ChannelListService,
+};
 use cowlike::CowLike;
 use crm::domain::service::CrmService;
 use doppleganger::Mirror;
@@ -48,6 +51,89 @@ use uuid::Uuid;
 #[cfg(test)]
 mod tests;
 
+fn channel_type_to_soup(channel_type: ChannelType) -> models_soup::comms::ChannelType {
+    match channel_type {
+        ChannelType::Public => models_soup::comms::ChannelType::Public,
+        ChannelType::Private => models_soup::comms::ChannelType::Private,
+        ChannelType::DirectMessage => models_soup::comms::ChannelType::DirectMessage,
+        ChannelType::Team => models_soup::comms::ChannelType::Team,
+    }
+}
+
+fn participant_role_to_soup(role: ParticipantRole) -> models_soup::comms::ParticipantRole {
+    match role {
+        ParticipantRole::Owner => models_soup::comms::ParticipantRole::Owner,
+        ParticipantRole::Admin => models_soup::comms::ParticipantRole::Admin,
+        ParticipantRole::Member => models_soup::comms::ParticipantRole::Member,
+    }
+}
+
+fn recent_channel_message_to_soup(
+    message: RecentChannelMessage,
+) -> models_soup::comms::ChannelMessage {
+    models_soup::comms::ChannelMessage {
+        message_id: message.message_id,
+        thread_id: message.thread_id,
+        sender_id: message.sender_id,
+        content: message.content,
+        created_at: message.created_at,
+        updated_at: message.updated_at,
+        deleted_at: message.deleted_at,
+        mentions: message.mentions,
+    }
+}
+
+fn channel_to_soup_channel(
+    channel: channels::domain::models::ChannelWithLatest,
+) -> Option<SoupChannel> {
+    let channel_item = channel.channel.channel;
+    Some(SoupChannel {
+        channel: models_soup::comms::ChannelWithParticipants {
+            channel: models_soup::comms::Channel {
+                id: models_comms::channel::ChannelId(channel_item.id),
+                name: channel_item.name,
+                channel_type: channel_type_to_soup(channel_item.channel_type),
+                org_id: channel_item
+                    .org_id
+                    .and_then(|org_id| u32::try_from(org_id).ok())
+                    .map(models_comms::channel::OrganizationId),
+                team_id: channel_item.team_id,
+                created_at: channel_item.created_at,
+                updated_at: channel_item.updated_at,
+                owner_id: channel_item.owner_id,
+            },
+            participants: channel
+                .channel
+                .participants
+                .into_iter()
+                .filter_map(|participant| {
+                    Some(models_soup::comms::ChannelParticipant {
+                        channel_id: models_comms::channel::ChannelId(participant.channel_id),
+                        user_id: MacroUserIdStr::parse_from_str(&participant.user_id)
+                            .ok()?
+                            .into_owned(),
+                        role: participant_role_to_soup(participant.role),
+                        joined_at: participant.joined_at,
+                        left_at: participant.left_at,
+                    })
+                })
+                .collect(),
+        },
+        latest_message: models_soup::comms::LatestMessage {
+            latest_message: channel
+                .latest_message
+                .latest_message
+                .map(recent_channel_message_to_soup),
+            latest_non_thread_message: channel
+                .latest_message
+                .latest_non_thread_message
+                .map(recent_channel_message_to_soup),
+        },
+        viewed_at: channel.viewed_at,
+        interacted_at: channel.interacted_at,
+    })
+}
+
 fn foreign_entity_to_soup_item(entity: ForeignEntity) -> SoupItem {
     SoupItem::ForeignEntity(SoupForeignEntity {
         id: entity.id,
@@ -69,7 +155,7 @@ pub struct SoupImpl<T, U, V, C, K, Crm, F> {
     frecency: U,
     /// the interface for interacting with email
     email_service: V,
-    /// the interface for interacting with comms
+    /// the interface for interacting with channels
     comms_service: C,
     /// the interface for interacting with call records
     call_record_service: K,
@@ -85,7 +171,7 @@ where
     anyhow::Error: From<T::Err>,
     U: FrecencyQueryService,
     V: EmailPreviewServiceReadOnly,
-    C: ChannelsService,
+    C: ChannelListService,
     K: CallRecordQueryService,
     Crm: CrmService,
     F: ForeignEntityService,
@@ -387,13 +473,13 @@ where
                 .await
                 .map_err(|_| SoupErr::CommsErr)
                 .map(|r| {
-                    r.into_iter().map(|mut c| {
+                    r.into_iter().filter_map(|mut c| {
                         let frecency_score = c.frecency_score.take();
-                        let soup_channel = SoupChannel::mirror(c);
-                        FrecencySoupItem {
+                        let soup_channel = channel_to_soup_channel(c)?;
+                        Some(FrecencySoupItem {
                             item: SoupItem::Channel(soup_channel),
                             frecency_score,
-                        }
+                        })
                     })
                 })?,
         ))
@@ -498,7 +584,7 @@ where
     anyhow::Error: From<T::Err>,
     U: FrecencyQueryService,
     V: EmailPreviewServiceReadOnly,
-    C: ChannelsService,
+    C: ChannelListService,
     K: CallRecordQueryService,
     Crm: CrmService,
     F: ForeignEntityService,

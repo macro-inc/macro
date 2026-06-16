@@ -6,7 +6,6 @@ version = "0.1.0"
 
 [features]
 ai_tools = [
-  "comms/outbound",
   "dep:ai_toolset",
   "dep:async-trait",
   "dep:schemars",
@@ -43,7 +42,7 @@ axum = { workspace = true, optional = true }
 axum-extra = { workspace = true, optional = true }
 call = { path = "../call", default-features = false, features = ["ports"] }
 chrono = { workspace = true }
-comms = { path = "../comms", default-features = false }
+channels = { path = "../channels", default-features = false, features = ["list"] }
 cowlike = { path = "../cowlike" }
 crm = { path = "../crm", default-features = false }
 document_sub_type = { path = "../document_sub_type" }
@@ -59,6 +58,7 @@ macro_user_id = { path = "../macro_user_id" }
 model-entity = { path = "../model-entity" }
 model-error-response = { path = "../model-error-response", optional = true }
 model_user = { path = "../model_user", optional = true, features = ["axum"] }
+models_comms = { path = "../models_comms" }
 models_grouping = { path = "../models_grouping" }
 models_pagination = { path = "../models_pagination" }
 models_properties = { path = "../models_properties" }

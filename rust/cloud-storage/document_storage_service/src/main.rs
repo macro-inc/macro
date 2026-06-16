@@ -24,6 +24,7 @@ use call::{
 };
 use channels::{
     domain::{
+        list_service::ChannelListServiceImpl,
         service::ChannelServiceImpl,
         side_effects::{ChannelSideEffectService, SpawnedChannelEventDispatcher},
     },
@@ -286,10 +287,10 @@ async fn main() -> anyhow::Result<()> {
         Some(notification_service),
     ));
 
-    // Create the comms ChannelServiceImpl instances.
-    let channel_service_for_soup = CommsChannelServiceImpl::new(
-        PgCommsRepo::new(readonly_pool::ReadOnlyPool(readonly_db.clone())),
-        PgUserRepo::new(readonly_db.clone()),
+    // Create the channel list service used by soup.
+    let channel_service_for_soup = ChannelListServiceImpl::new(
+        PgChannelsRepo::new(readonly_db.clone()),
+        PgChannelsRepo::new(readonly_db.clone()),
         frecency_storage.clone(),
     );
     let channel_service_for_comms = CommsChannelServiceImpl::new(

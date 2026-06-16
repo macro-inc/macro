@@ -108,10 +108,9 @@ impl StreamRepo for MockStreamRepo {
 
 pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Arc<ApiContext> {
     use aws_sdk_sqs;
-    use channels::outbound::pg_channels_repo::PgChannelsRepo;
-    use comms::domain::service::ChannelServiceImpl;
-    use comms::outbound::postgres::comms_repo::PgCommsRepo;
-    use comms::outbound::postgres::user_repo::PgUserRepo;
+    use channels::{
+        domain::list_service::ChannelListServiceImpl, outbound::pg_channels_repo::PgChannelsRepo,
+    };
     use document_storage_service_client::DocumentStorageServiceClient;
     use email::domain::ports::ReadonlyEmailPreviewAdapter;
     use email::domain::service::EmailServiceImpl;
@@ -173,10 +172,9 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         crm_service.clone(),
         0,
     );
-    let user_repo = PgUserRepo::new(pool.clone());
-    let channels_service = ChannelServiceImpl::new(
-        PgCommsRepo::new(readonly_pool::ReadOnlyPool(pool.clone())),
-        user_repo,
+    let channels_service = ChannelListServiceImpl::new(
+        PgChannelsRepo::new(pool.clone()),
+        PgChannelsRepo::new(pool.clone()),
         frecency_storage,
     );
     let email_service_for_tools: Arc<ai_tools::ToolEmailService> = Arc::new(email_service.clone());

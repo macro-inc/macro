@@ -44,7 +44,6 @@ call = { path = "../call", default-features = false, features = ["ports"] }
 chat = { path = "../chat", features = ["attachment"] }
 channels = { path = "../channels", features = ["outbound", "attachment"] }
 chrono = { workspace = true }
-comms = { path = "../comms", features = ["outbound"] }
 connection_gateway = { path = "../connection_gateway" }
 cookie = { workspace = true }
 crm = { path = "../crm" }

@@ -19,6 +19,7 @@ use call::{
 };
 use channels::{
     domain::{
+        list_service::ChannelListServiceImpl,
         service::ChannelServiceImpl,
         side_effects::{ChannelSideEffectService, SpawnedChannelEventDispatcher},
     },
@@ -112,7 +113,7 @@ type DssSoupState = SoupRouterState<
         PgSoupRepo,
         FrecencyQueryServiceImpl<FrecencyPgStorage>,
         ReadonlyEmailPreviewAdapter<DssEmailService>,
-        CommsChannelServiceImpl<PgCommsRepo, PgUserRepo, FrecencyPgStorage>,
+        ChannelListServiceImpl<PgChannelsRepo, PgChannelsRepo, FrecencyPgStorage>,
         call::domain::service::CallRecordQueryServiceImpl<call::outbound::pg_call_repo::PgCallRepo>,
         DssCrmService,
         ForeignEntityServiceType,
