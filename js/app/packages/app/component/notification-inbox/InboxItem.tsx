@@ -128,10 +128,10 @@ function Content(props: ContentProps) {
         'col-span-3 grid w-full grid-cols-[0.5rem_var(--inbox-item-icon-size)_minmax(0,1fr)] items-center gap-x-3 rounded-lg px-2',
         ctx.density() === 'compact' ? 'min-h-9 py-1' : 'min-h-11 py-1.5',
         ctx.tone() === 'muted' ? 'bg-ink-muted/2.5' : 'bg-surface',
-        'hover:ring hover:ring-edge hover:ring-inset',
-        ctx.selected() && 'bg-active/60 hover:ring-0',
+        !ctx.selected() && 'hover:bg-active/30',
+        ctx.selected() && 'bg-active/60 ring ring-edge ring-inset',
         interactive() &&
-          'outline-none focus-visible:ring focus-visible:ring-edge focus-visible:ring-inset',
+          'outline-none focus-visible:bg-active/60 focus-visible:ring focus-visible:ring-edge focus-visible:ring-inset',
         props.class
       )}
       role={interactive() ? 'button' : undefined}
