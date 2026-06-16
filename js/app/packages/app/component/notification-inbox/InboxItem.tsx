@@ -128,7 +128,8 @@ function Content(props: ContentProps) {
         'col-span-3 grid w-full grid-cols-[0.5rem_var(--inbox-item-icon-size)_minmax(0,1fr)] items-center gap-x-3 rounded-lg px-2',
         ctx.density() === 'compact' ? 'min-h-9 py-1' : 'min-h-11 py-1.5',
         ctx.tone() === 'muted' ? 'bg-ink-muted/2.5' : 'bg-surface',
-        !ctx.selected() && 'hover:bg-active/30',
+        !ctx.selected() &&
+          'hover:bg-active/40 hover:ring hover:ring-edge-muted hover:ring-inset',
         ctx.selected() && 'bg-active/60 ring ring-edge ring-inset',
         interactive() &&
           'outline-none focus-visible:bg-active/60 focus-visible:ring focus-visible:ring-edge focus-visible:ring-inset',
@@ -224,7 +225,7 @@ function Header(props: HeaderProps) {
   );
 }
 
-function Sender(props: SlotProps) {
+function useSenderDisplayName() {
   const ctx = useInboxItem();
   const fallbackName = () =>
     ctx.item().senderName || ctx.item().senderId || '?';
@@ -235,6 +236,18 @@ function Sender(props: SlotProps) {
     if (macroId) return macroIdToEmail(macroId);
     return fallbackName();
   };
+
+  return { macroId, name };
+}
+
+interface SenderProps extends SlotProps {
+  avatar?: boolean;
+}
+
+function Sender(props: SenderProps) {
+  const ctx = useInboxItem();
+  const { macroId, name } = useSenderDisplayName();
+  const showAvatar = () => props.avatar ?? true;
   const initials = () =>
     name()
       .split(/\s+/)
@@ -252,25 +265,27 @@ function Sender(props: SlotProps) {
         props.class
       )}
     >
-      <span class="size-3 shrink-0 overflow-hidden rounded-full">
-        <Show
-          when={macroId}
-          fallback={
-            <Avatar size="fill" class="text-[8px]">
-              <Avatar.Fallback>{initials()}</Avatar.Fallback>
-            </Avatar>
-          }
-        >
-          {(senderId) => (
-            <UserIcon
-              id={senderId()}
-              size="fill"
-              suppressClick
-              showTooltip={false}
-            />
-          )}
-        </Show>
-      </span>
+      <Show when={showAvatar()}>
+        <span class="size-3 shrink-0 overflow-hidden rounded-full">
+          <Show
+            when={macroId}
+            fallback={
+              <Avatar size="fill" class="text-[8px]">
+                <Avatar.Fallback>{initials()}</Avatar.Fallback>
+              </Avatar>
+            }
+          >
+            {(senderId) => (
+              <UserIcon
+                id={senderId()}
+                size="fill"
+                suppressClick
+                showTooltip={false}
+              />
+            )}
+          </Show>
+        </span>
+      </Show>
       <span class="min-w-0 truncate">{name()}</span>
     </span>
   );

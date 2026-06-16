@@ -11,6 +11,7 @@ import CalendarIcon from '@phosphor/calendar-blank.svg';
 import { Button, cn } from '@ui';
 import { createEffect, createMemo, createSignal, For, Show } from 'solid-js';
 import { InboxItem, type InboxItem as InboxItemData } from './InboxItem';
+import { InboxItemInlineTypeLayout } from './layouts/InboxItemInlineTypeLayout';
 import { InboxItemLayout } from './layouts/InboxItemLayout';
 import {
   notificationAction,
@@ -368,19 +369,37 @@ function NotificationInboxList(props: {
   onToggleFilter: (filterId: string) => void;
 }) {
   const [showDevFilters, setShowDevFilters] = createSignal(false);
+  const [layoutVariant, setLayoutVariant] = createSignal<
+    'default' | 'inline-type'
+  >('default');
 
   return (
     <div class="flex size-full min-h-0 flex-col bg-surface p-2">
       <div class="mb-2 flex shrink-0 flex-col gap-1">
-        <Button
-          class="h-7 w-fit bg-surface text-ink-muted"
-          depth={2}
-          size="sm"
-          variant="base"
-          onClick={() => setShowDevFilters((value) => !value)}
-        >
-          Dev filters
-        </Button>
+        <div class="flex gap-1">
+          <Button
+            class="h-7 w-fit bg-surface text-ink-muted"
+            depth={2}
+            size="sm"
+            variant="base"
+            onClick={() => setShowDevFilters((value) => !value)}
+          >
+            Dev filters
+          </Button>
+          <Button
+            class="h-7 w-fit bg-surface text-ink-muted"
+            depth={2}
+            size="sm"
+            variant={layoutVariant() === 'inline-type' ? 'active' : 'base'}
+            onClick={() =>
+              setLayoutVariant((value) =>
+                value === 'inline-type' ? 'default' : 'inline-type'
+              )
+            }
+          >
+            Inline type layout
+          </Button>
+        </div>
         <Show when={showDevFilters()}>
           <div class="flex flex-wrap gap-1 rounded-md border border-dashed border-edge-muted bg-ink-muted/2.5 p-1">
             <For each={devNotificationFilters}>
@@ -422,7 +441,18 @@ function NotificationInboxList(props: {
                       selected={props.selectedItem?.id === item.id}
                       tone="default"
                     >
-                      <InboxItemLayout onClick={() => props.onSelect(item)} />
+                      <Show
+                        when={layoutVariant() === 'inline-type'}
+                        fallback={
+                          <InboxItemLayout
+                            onClick={() => props.onSelect(item)}
+                          />
+                        }
+                      >
+                        <InboxItemInlineTypeLayout
+                          onClick={() => props.onSelect(item)}
+                        />
+                      </Show>
                     </InboxItem.Root>
                   )}
                 </For>

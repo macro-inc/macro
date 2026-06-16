@@ -390,6 +390,43 @@ function StandardLayout(props: StandardLayoutProps) {
   );
 }
 
+function EmailDescription() {
+  const { item } = useInboxItem();
+  const subject = () => {
+    const metadata = item().notification?.notification_metadata;
+    if (metadata?.tag !== 'new_email') return undefined;
+    return String(metadata.content.subject || '') || undefined;
+  };
+
+  return (
+    <>
+      <InboxItem.Description timestamp={false}>
+        <Show when={subject()}>
+          {(subject) => (
+            <span class="min-w-0 truncate text-xs text-ink-muted/85">
+              {subject()}
+            </span>
+          )}
+        </Show>
+        <Show when={item().timestamp}>
+          {(timestamp) => (
+            <InboxItem.Timestamp class="ml-auto">
+              {timestamp()}
+            </InboxItem.Timestamp>
+          )}
+        </Show>
+      </InboxItem.Description>
+      <Show when={item().content}>
+        {(content) => (
+          <span class="block min-w-0 max-w-xl truncate text-xs text-ink-muted/70">
+            {content()}
+          </span>
+        )}
+      </Show>
+    </>
+  );
+}
+
 function GithubStatusContextLine() {
   const { item } = useInboxItem();
   const prNumber = () => {
@@ -440,6 +477,12 @@ export function InboxItemLayout(
 
   return (
     <Switch fallback={<StandardLayout onClick={props.onClick} />}>
+      <Match when={type() === 'new_email'}>
+        <StandardLayout
+          description={<EmailDescription />}
+          onClick={props.onClick}
+        />
+      </Match>
       <Match when={type() === 'channel_invite'}>
         <StandardLayout onClick={props.onClick} />
       </Match>

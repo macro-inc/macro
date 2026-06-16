@@ -14,12 +14,8 @@ export const notificationContent = (
     case 'replied_to_document_comment_thread':
     case 'commented_on_document':
       return metadata.content.text;
-    case 'new_email': {
-      const subject = metadata.content.subject;
-      const snippet = metadata.content.snippet;
-      if (subject && snippet) return `${subject} — ${snippet}`;
-      return subject || snippet;
-    }
+    case 'new_email':
+      return metadata.content.snippet || undefined;
     case 'ai_response':
       return metadata.content.summary;
     case 'github_pr_comment':
@@ -80,21 +76,23 @@ export const notificationAction = (
     case 'channel_message_reply':
       return 'replied';
     case 'channel_invite':
-      return 'started a DM';
+      return 'started a conversation';
     case 'invite_to_team':
-      return 'invited you';
+      return 'invited you to join';
     case 'document_mention':
       return 'mentioned you';
     case 'mentioned_in_document_comment':
-      return 'mentioned you';
+      return 'mentioned you in a comment';
     case 'replied_to_document_comment_thread':
       return 'replied';
     case 'commented_on_document':
-      return 'commented';
+      return 'commented:';
     case 'task_assigned':
-      return 'assigned you';
+      return 'assigned this to you';
     case 'github_pr_status_changed':
-      return notification.notification_metadata.content.status;
+      return notification.notification_metadata.content.status === 'open'
+        ? 'opened'
+        : notification.notification_metadata.content.status;
     case 'github_review_requested':
       return 'requested your review';
     case 'github_pr_comment':
@@ -115,7 +113,9 @@ export const notificationSenderName = (
 
   switch (metadata.tag) {
     case 'new_email':
-      return undefined;
+      return metadata.content.sender ?? undefined;
+    case 'ai_response':
+      return 'Macro agent';
     case 'channel_message_send':
       return metadata.content.sender ?? notification.sender_id ?? undefined;
     case 'github_pr_status_changed':
