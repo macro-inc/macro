@@ -49,7 +49,7 @@ export function ThemeMention(props: ThemeMentionDecoratorProps) {
     >
       <Show when={theme()}>
         {(t) => (
-          <span class="-my-px -ml-px inline-flex self-stretch [&>span]:h-full">
+          <span class="rounded-md inline-flex self-stretch [&>span]:h-full [&>span]:border-0 [&>span]:rounded-[5px]">
             <ThemeChips theme={t()} size="sm" />
           </span>
         )}
