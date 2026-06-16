@@ -11,9 +11,12 @@ import type { LoroManager } from '@core/collab/manager';
 import { editorFocusSignal } from '@core/component/LexicalMarkdown/utils';
 import { ParamsProvider } from '@core/component/ParamsProvider';
 import {
+  DEV_MODE_ENV,
   ENABLE_MARKDOWN_COMMENTS,
   ENABLE_RAIL_CHAT_TASK_COMMENTS,
+  LOCAL_ONLY,
 } from '@core/constant/featureFlags';
+import { useIsMacroTeam } from '@core/context/team';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import {
@@ -73,6 +76,14 @@ const widthToMode = (width: number): CommentLayoutMode => {
   return CommentLayoutMode.none;
 };
 
+function useCanUseLexicalStateDebugger() {
+  const isMacroTeam = useIsMacroTeam();
+  return createMemo(() => {
+    if (LOCAL_ONLY || DEV_MODE_ENV) return true;
+    return isMacroTeam();
+  });
+}
+
 export function Notebook(props: { loroManager: LoroManager }) {
   const blockElement = blockElementSignal.get;
   const setStore = mdStore.set;
@@ -92,6 +103,7 @@ export function Notebook(props: { loroManager: LoroManager }) {
   const [leftFloatX, setLeftFloatX] = createSignal(0);
   const [showLexicalStateDebugger, setShowLexicalStateDebugger] =
     createSignal(false);
+  const canUseLexicalStateDebugger = useCanUseLexicalStateDebugger();
 
   const comments = commentsStore.get;
   const hasComment = createMemo(() => {
@@ -189,10 +201,16 @@ export function Notebook(props: { loroManager: LoroManager }) {
     if (!scopeId()) return;
     const group = untrack(() =>
       registerMarkdownCommands(scopeId(), () => md.editor, editorHasFocus, {
+        canUseStateDebugger: canUseLexicalStateDebugger,
         toggleStateDebugger: () => setShowLexicalStateDebugger((prev) => !prev),
       })
     );
     onCleanup(() => group.dispose());
+  });
+  createEffect(() => {
+    if (!canUseLexicalStateDebugger() && showLexicalStateDebugger()) {
+      setShowLexicalStateDebugger(false);
+    }
   });
 
   // In preview mode, switching between Soup tabs was causing this createEffect to overflow the stack. We should figure out that root cause, this flag fixes it for now.
@@ -283,7 +301,9 @@ export function Notebook(props: { loroManager: LoroManager }) {
         <ParamsProvider>
           <MarkdownEditor
             loroManager={props.loroManager}
-            showLexicalStateDebugger={showLexicalStateDebugger()}
+            showLexicalStateDebugger={
+              canUseLexicalStateDebugger() && showLexicalStateDebugger()
+            }
             onLexicalStateDebuggerClose={() =>
               setShowLexicalStateDebugger(false)
             }
@@ -313,6 +333,7 @@ export function InstructionsNotebook(props: { loroManager: LoroManager }) {
   const scopeId = blockHotkeyScopeSignal.get;
   const [showLexicalStateDebugger, setShowLexicalStateDebugger] =
     createSignal(false);
+  const canUseLexicalStateDebugger = useCanUseLexicalStateDebugger();
 
   let notebookRef!: HTMLDivElement;
   let contentRef!: HTMLDivElement;
@@ -336,10 +357,16 @@ export function InstructionsNotebook(props: { loroManager: LoroManager }) {
     if (!scopeId()) return;
     const group = untrack(() =>
       registerLexicalStateDebuggerCommand(scopeId(), {
+        canUseStateDebugger: canUseLexicalStateDebugger,
         toggleStateDebugger: () => setShowLexicalStateDebugger((prev) => !prev),
       })
     );
     onCleanup(() => group.dispose());
+  });
+  createEffect(() => {
+    if (!canUseLexicalStateDebugger() && showLexicalStateDebugger()) {
+      setShowLexicalStateDebugger(false);
+    }
   });
 
   return (
@@ -350,7 +377,9 @@ export function InstructionsNotebook(props: { loroManager: LoroManager }) {
       <div class="grow max-w-3xl pt-12 min-w-0 mx-auto" ref={contentRef}>
         <InstructionsEditor
           loroManager={props.loroManager}
-          showLexicalStateDebugger={showLexicalStateDebugger()}
+          showLexicalStateDebugger={
+            canUseLexicalStateDebugger() && showLexicalStateDebugger()
+          }
           onLexicalStateDebuggerClose={() => setShowLexicalStateDebugger(false)}
         />
       </div>

@@ -105,6 +105,7 @@ const ACTION_ID_TO_TOKEN: Record<string, HotkeyToken> = {
 };
 
 type LexicalStateDebuggerCommandOptions = {
+  canUseStateDebugger?: () => boolean;
   toggleStateDebugger: () => void;
 };
 
@@ -119,7 +120,10 @@ function registerLexicalStateDebuggerHotkey(
     hotkeyToken: TOKENS.md.toggleStateDebugger,
     description: 'Toggle lexical state debugger',
     icon: BugIcon,
+    hide: () => options.canUseStateDebugger?.() === false,
+    condition: () => options.canUseStateDebugger?.() !== false,
     keyDownHandler: () => {
+      if (options.canUseStateDebugger?.() === false) return false;
       options.toggleStateDebugger();
       return true;
     },
@@ -150,6 +154,7 @@ export function registerMarkdownCommands(
   getEditor: () => LexicalEditor | undefined,
   condition?: () => boolean,
   options?: {
+    canUseStateDebugger?: () => boolean;
     toggleStateDebugger?: () => void;
   }
 ) {
@@ -210,6 +215,7 @@ export function registerMarkdownCommands(
     registerLexicalStateDebuggerHotkey(
       scopeId,
       {
+        canUseStateDebugger: options.canUseStateDebugger,
         toggleStateDebugger: options.toggleStateDebugger,
       },
       group
