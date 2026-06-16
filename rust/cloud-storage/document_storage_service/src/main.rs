@@ -28,7 +28,7 @@ use channels::{
         service::ChannelServiceImpl,
         side_effects::{ChannelSideEffectService, SpawnedChannelEventDispatcher},
     },
-    inbound::axum_router::ChannelsRouterState,
+    inbound::{axum_router::ChannelsRouterState, list_router::ChannelListRouterState},
     outbound::{
         connection_gateway_realtime::ConnectionGatewayChannelRealtimePublisher,
         contacts_dispatcher::ContactsChannelDispatcher,
@@ -37,11 +37,6 @@ use channels::{
         pg_channels_repo::PgChannelsRepo, pg_side_effect_context::PgChannelSideEffectContext,
         sqs_search_indexer::SqsChannelSearchIndexer,
     },
-};
-use comms::{
-    domain::service::ChannelServiceImpl as CommsChannelServiceImpl,
-    inbound::router::CommsRouterState,
-    outbound::postgres::{comms_repo::PgCommsRepo, user_repo::PgUserRepo},
 };
 use config::{Config, Environment};
 use connection::{
@@ -293,14 +288,12 @@ async fn main() -> anyhow::Result<()> {
         PgChannelsRepo::new(readonly_db.clone()),
         frecency_storage.clone(),
     );
-    let channel_service_for_comms = CommsChannelServiceImpl::new(
-        PgCommsRepo::new(readonly_pool::ReadOnlyPool(db.clone())),
-        PgUserRepo::new(db.clone()),
+    // Create the legacy channel list router state for routes mounted under /comms.
+    let channel_list_state = ChannelListRouterState::new(ChannelListServiceImpl::new(
+        PgChannelsRepo::new(db.clone()),
+        PgChannelsRepo::new(db.clone()),
         frecency_storage.clone(),
-    );
-
-    // Create the CommsRouterState for the comms hex routes mounted under /comms.
-    let comms_state = CommsRouterState::new(channel_service_for_comms);
+    ));
 
     let s3 = Arc::new(S3::new(
         s3_client,
@@ -646,9 +639,9 @@ async fn main() -> anyhow::Result<()> {
         config: Arc::new(config),
         jwt_validation_args,
         dss_auth_key,
-        // Comms service fields
+        // Shared frecency storage and legacy channel list routes.
         frecency_storage,
-        comms_state,
+        channel_list_state,
         entity_access_service: entity_access_service.clone(),
         documents_state: DocumentRouterState {
             service: document_service.clone(),

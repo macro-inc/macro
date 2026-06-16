@@ -45,7 +45,6 @@ channels = { path = "../channels", features = ["inbound", "outbound"] }
 chrono = { workspace = true }
 clap = { workspace = true }
 cloudfront_sign = { workspace = true }
-comms = { path = "../comms", features = ["inbound", "outbound"] }
 comms_db_client = { path = "../comms_db_client" }
 contacts = { path = "../contacts" }
 connection = { path = "../connection", default-features = false, features = [

@@ -202,7 +202,7 @@ fn api_router(state: ApiContext) -> Router {
         )
         .nest(
             "/comms",
-            comms::inbound::router::comms_router(state.comms_state.clone()),
+            channels::inbound::list_router::channel_list_router(state.channel_list_state.clone()),
         )
         .nest("/entity", entity::router())
         .nest(

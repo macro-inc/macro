@@ -1,13 +1,11 @@
 use chrono::{DateTime, Utc};
-use comms::domain::models::channel::{ChannelId, OrganizationId};
-use doppleganger::Doppleganger;
 use macro_user_id::user_id::MacroUserIdStr;
+use models_comms::channel::{ChannelId, OrganizationId};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Debug, Doppleganger, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-#[dg(backward = comms::domain::models::channel::ChannelWithLatest)]
 pub struct SoupChannel {
     #[serde(flatten)]
     pub channel: ChannelWithParticipants,
@@ -17,25 +15,22 @@ pub struct SoupChannel {
     pub interacted_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-#[derive(Debug, Doppleganger, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-#[dg(backward = comms::domain::models::channel::ChannelWithParticipants)]
 pub struct ChannelWithParticipants {
     pub channel: Channel,
     pub participants: Vec<ChannelParticipant>,
 }
 
-#[derive(Debug, Doppleganger, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-#[dg(backward = comms::domain::models::channel::LatestMessage)]
 pub struct LatestMessage {
     pub latest_message: Option<ChannelMessage>,
     pub latest_non_thread_message: Option<ChannelMessage>,
 }
 
-#[derive(Debug, Doppleganger, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-#[dg(backward = comms::domain::models::channel::ChannelMessage)]
 pub struct ChannelMessage {
     pub message_id: Uuid,
     pub thread_id: Option<Uuid>,
@@ -48,9 +43,8 @@ pub struct ChannelMessage {
     pub mentions: Vec<String>,
 }
 
-#[derive(Debug, Doppleganger, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-#[dg(backward = comms::domain::models::channel::Channel)]
 pub struct Channel {
     #[cfg_attr(feature = "schema", schema(value_type = Uuid))]
     pub id: ChannelId,
@@ -66,9 +60,8 @@ pub struct Channel {
     pub owner_id: MacroUserIdStr<'static>,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Doppleganger)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-#[dg(backward = comms::domain::models::channel::ChannelType)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub enum ChannelType {
     Public,
@@ -77,9 +70,8 @@ pub enum ChannelType {
     Team,
 }
 
-#[derive(Debug, Doppleganger, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-#[dg(backward = comms::domain::models::channel::ChannelParticipant)]
 pub struct ChannelParticipant {
     #[cfg_attr(feature = "schema", schema(value_type = Uuid))]
     pub channel_id: ChannelId,
@@ -90,9 +82,8 @@ pub struct ChannelParticipant {
     pub left_at: Option<DateTime<Utc>>,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Doppleganger)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-#[dg(backward = comms::domain::models::channel::ParticipantRole)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub enum ParticipantRole {
     Owner,
