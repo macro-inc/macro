@@ -359,21 +359,15 @@ export function useFilterRefinements() {
       };
 
       filters.push(
-        getOrCreateConsolidatedChip(key, () => ({
-          key,
-          categoryLabel: group.label,
-          categoryLabelPlural: group.labelPlural,
-          values: getActiveValues, // Accessor - computed fresh each render
-          availableOptions: group.allOptions,
-          multiple: group.multiple,
-          isValueActive: (id) => soup.predicates.isActive(id),
-          onToggleValue: (id) => {
-            const isInboxTypeFilter =
-              currentView() === 'inbox' && categoryId === 'type';
+        getOrCreateConsolidatedChip(key, () => {
+          const isInboxTypeFilter = () =>
+            currentView() === 'inbox' && categoryId === 'type';
+
+          const toggleValue = (id: string) => {
             batch(() => {
               soup.predicates.toggle({ or: [id as FilterID] });
 
-              if (isInboxTypeFilter) {
+              if (isInboxTypeFilter()) {
                 const activeTypeIds = group.allOptions
                   .filter((option) => soup.predicates.isActive(option.id))
                   .map((option) => option.id);
@@ -390,29 +384,75 @@ export function useFilterRefinements() {
                 queryFilters.remove(query);
               }
             });
-          },
-          onRemoveAll: () => {
-            // Compute current active values at removal time
+          };
+
+          // Narrow the category to a single value; clicking the sole active
+          // value instead clears the category ("All").
+          const selectOnly = (id: string) => {
             const currentValues = getActiveValues();
-            const isInboxTypeFilter =
-              currentView() === 'inbox' && categoryId === 'type';
+            const wasActive = currentValues.some((v) => v.id === id);
+            if (wasActive && currentValues.length === 1) {
+              toggleValue(id);
+              return;
+            }
             batch(() => {
               for (const value of currentValues) {
-                soup.predicates.toggle({ or: [value.id as FilterID] });
+                if (value.id !== id)
+                  soup.predicates.toggle({ or: [value.id as FilterID] });
               }
+              if (!wasActive) soup.predicates.toggle({ or: [id as FilterID] });
 
-              if (isInboxTypeFilter) {
-                queryFilters.replace(getInboxTypeQuery([]) ?? null);
+              if (isInboxTypeFilter()) {
+                queryFilters.replace(getInboxTypeQuery([id]) ?? null);
                 return;
               }
 
               for (const value of currentValues) {
+                if (value.id === id) continue;
                 const query = getFilterQuery(value.id);
                 if (query) queryFilters.remove(query);
               }
+              if (!wasActive) {
+                const query = getFilterQuery(id);
+                if (query) queryFilters.add(query);
+              }
             });
-          },
-        }))
+          };
+
+          return {
+            key,
+            categoryLabel: group.label,
+            categoryLabelPlural: group.labelPlural,
+            values: getActiveValues, // Accessor - computed fresh each render
+            availableOptions: group.allOptions,
+            multiple: group.multiple,
+            isValueActive: (id) => soup.predicates.isActive(id),
+            onToggleValue: toggleValue,
+            onOnly: group.multiple ? selectOnly : undefined,
+            isValueSoleActive: (id) => {
+              const active = getActiveValues();
+              return active.length === 1 && active[0].id === id;
+            },
+            onRemoveAll: () => {
+              const currentValues = getActiveValues();
+              batch(() => {
+                for (const value of currentValues) {
+                  soup.predicates.toggle({ or: [value.id as FilterID] });
+                }
+
+                if (isInboxTypeFilter()) {
+                  queryFilters.replace(getInboxTypeQuery([]) ?? null);
+                  return;
+                }
+
+                for (const value of currentValues) {
+                  const query = getFilterQuery(value.id);
+                  if (query) queryFilters.remove(query);
+                }
+              });
+            },
+          };
+        })
       );
     }
 
