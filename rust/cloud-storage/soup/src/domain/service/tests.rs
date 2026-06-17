@@ -1,7 +1,10 @@
 use crate::domain::models::FrecencySoupItem;
 use crate::domain::ports::MockSoupRepo;
 use channels::domain::{
-    models::{ChannelThreadReplyRows, GetChannelsRequest, GetThreadReplyRowsRequest},
+    models::{
+        ChannelThreadReplyRows, GetChannelsRequest, GetThreadReplyRowsRequest, ThreadReplyRow,
+        TopLevelMessageRow,
+    },
     ports::ChannelListService,
 };
 use chrono::Days;
@@ -21,7 +24,8 @@ use frecency::domain::ports::MockFrecencyQueryService;
 use frecency::domain::services::FrecencyQueryServiceImpl;
 use frecency::{domain::models::AggregateFrecency, outbound::mock::MockFrecencyStorage};
 use item_filters::{
-    EntityFilters, ForeignEntityFilters, ast::foreign_entity::ForeignEntityLiteral,
+    ChannelThreadFilters, EntityFilters, ForeignEntityFilters,
+    ast::foreign_entity::ForeignEntityLiteral,
 };
 use model_entity::EntityType;
 use models_pagination::{
@@ -75,6 +79,76 @@ impl ChannelListService for NoopCommsService {
         _req: GetThreadReplyRowsRequest,
     ) -> Result<Vec<ChannelThreadReplyRows>, Report> {
         Ok(Vec::new())
+    }
+
+    async fn get_names(
+        &self,
+        _names: std::collections::HashSet<MacroUserIdStr<'_>>,
+    ) -> Result<Vec<channels::domain::models::UserName>, Report> {
+        Ok(Vec::new())
+    }
+}
+
+#[derive(Clone)]
+struct RecordingCommsService {
+    rows: Vec<ChannelThreadReplyRows>,
+    channel_calls: Arc<Mutex<u32>>,
+    channel_filters: Arc<Mutex<Vec<String>>>,
+    thread_filters: Arc<Mutex<Vec<String>>>,
+}
+
+impl RecordingCommsService {
+    fn new(rows: Vec<ChannelThreadReplyRows>) -> Self {
+        Self {
+            rows,
+            channel_calls: Arc::new(Mutex::new(0)),
+            channel_filters: Arc::new(Mutex::new(Vec::new())),
+            thread_filters: Arc::new(Mutex::new(Vec::new())),
+        }
+    }
+
+    fn channel_calls(&self) -> u32 {
+        *self.channel_calls.lock().unwrap()
+    }
+
+    fn channel_filters(&self) -> Vec<String> {
+        self.channel_filters.lock().unwrap().clone()
+    }
+
+    fn thread_filters(&self) -> Vec<String> {
+        self.thread_filters.lock().unwrap().clone()
+    }
+}
+
+impl ChannelListService for RecordingCommsService {
+    async fn get_channels(
+        &self,
+        req: GetChannelsRequest,
+    ) -> Result<Vec<channels::domain::models::ChannelWithLatest>, Report> {
+        *self.channel_calls.lock().unwrap() += 1;
+        self.channel_filters
+            .lock()
+            .unwrap()
+            .push(serde_json::to_string(req.query.filter()).unwrap());
+        Ok(Vec::new())
+    }
+
+    async fn get_activities(
+        &self,
+        _user: MacroUserIdStr<'_>,
+    ) -> Result<Vec<channels::domain::models::Activity>, Report> {
+        Ok(Vec::new())
+    }
+
+    async fn get_thread_reply_rows(
+        &self,
+        req: GetThreadReplyRowsRequest,
+    ) -> Result<Vec<ChannelThreadReplyRows>, Report> {
+        self.thread_filters
+            .lock()
+            .unwrap()
+            .push(serde_json::to_string(req.query.filter()).unwrap());
+        Ok(self.rows.clone())
     }
 
     async fn get_names(
@@ -415,6 +489,150 @@ fn foreign_entity_for_source(
         created_at: DateTime::default(),
         updated_at,
     }
+}
+
+fn channel_thread_rows(
+    channel_id: Uuid,
+    thread_id: Uuid,
+    reply_id: Uuid,
+    updated_at: DateTime<Utc>,
+) -> ChannelThreadReplyRows {
+    ChannelThreadReplyRows {
+        parent: TopLevelMessageRow {
+            id: thread_id,
+            channel_id,
+            sender_id: "macro|test@example.com".to_string(),
+            content: "thread parent".to_string(),
+            created_at: DateTime::default(),
+            updated_at,
+            edited_at: None,
+            deleted_at: None,
+        },
+        replies: vec![ThreadReplyRow {
+            id: reply_id,
+            thread_id,
+            sender_id: "macro|other@example.com".to_string(),
+            content: "thread reply".to_string(),
+            created_at: DateTime::default() + Days::new(1),
+            updated_at: DateTime::default() + Days::new(1),
+            edited_at: None,
+        }],
+    }
+}
+
+#[tokio::test]
+async fn simple_soup_includes_channel_threads() {
+    let user = MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();
+    let channel_id = Uuid::from_u128(0xaaaa);
+    let thread_id = Uuid::from_u128(0xbbbb);
+    let reply_id = Uuid::from_u128(0xcccc);
+    let comms_service = RecordingCommsService::new(vec![channel_thread_rows(
+        channel_id,
+        thread_id,
+        reply_id,
+        DateTime::default() + Days::new(2),
+    )]);
+
+    let mut soup_mock = MockSoupRepo::new();
+    soup_mock
+        .expect_unexpanded_generic_cursor_soup()
+        .times(1)
+        .returning(|_params| Box::pin(async move { Ok(Vec::new()) }));
+
+    let page = SoupImpl::new(
+        soup_mock,
+        FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
+        NoopEmailPreviewService,
+        comms_service.clone(),
+        NoopCallRecordQueryService,
+        NoOpCrmService,
+        NoopForeignEntityService,
+    )
+    .get_user_soup(
+        SoupRequest {
+            email_preview_view: PreviewView::StandardLabel(
+                email::domain::models::PreviewViewStandardLabel::Inbox,
+            ),
+            link_ids: vec![],
+            soup_type: SoupType::UnExpanded,
+            limit: 20,
+            cursor: SoupQuery::new_sort_simple(
+                SimpleSortMethod::UpdatedAt,
+                EntityFilters::default(),
+            ),
+            user,
+        },
+        None,
+    )
+    .await
+    .unwrap()
+    .unwrap_left();
+
+    assert_eq!(page.items.len(), 1);
+    assert_matches!(
+        &page.items[0].item,
+        SoupItem::ChannelThread(thread) => {
+            assert_eq!(thread.channel_id.0, channel_id);
+            assert_eq!(thread.root_message.message_id, thread_id);
+            assert_eq!(thread.messages.len(), 1);
+            assert_eq!(thread.messages[0].message_id, reply_id);
+        }
+    );
+}
+
+#[tokio::test]
+async fn simple_soup_uses_channel_thread_filters_without_touching_channel_filters() {
+    let user = MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();
+    let thread_id = Uuid::from_u128(0xbbbb);
+    let comms_service = RecordingCommsService::new(Vec::new());
+
+    let mut soup_mock = MockSoupRepo::new();
+    soup_mock
+        .expect_unexpanded_generic_cursor_soup()
+        .times(1)
+        .returning(|_params| Box::pin(async move { Ok(Vec::new()) }));
+
+    let _page = SoupImpl::new(
+        soup_mock,
+        FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
+        NoopEmailPreviewService,
+        comms_service.clone(),
+        NoopCallRecordQueryService,
+        NoOpCrmService,
+        NoopForeignEntityService,
+    )
+    .get_user_soup(
+        SoupRequest {
+            email_preview_view: PreviewView::StandardLabel(
+                email::domain::models::PreviewViewStandardLabel::Inbox,
+            ),
+            link_ids: vec![],
+            soup_type: SoupType::UnExpanded,
+            limit: 20,
+            cursor: SoupQuery::new_sort_simple(
+                SimpleSortMethod::UpdatedAt,
+                EntityFilters {
+                    channel_thread_filters: ChannelThreadFilters {
+                        thread_ids: vec![thread_id.to_string()],
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+            ),
+            user,
+        },
+        None,
+    )
+    .await
+    .unwrap()
+    .unwrap_left();
+
+    assert_eq!(comms_service.channel_calls(), 1);
+    assert_eq!(comms_service.channel_filters(), vec!["null".to_string()]);
+    let thread_filters = comms_service.thread_filters();
+    assert_eq!(thread_filters.len(), 1);
+    assert!(thread_filters[0].contains("ThreadId"));
+    assert!(thread_filters[0].contains(&thread_id.to_string()));
 }
 
 #[tokio::test]
