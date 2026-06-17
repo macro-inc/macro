@@ -177,20 +177,22 @@ function MobileToolbar(props: {
     <SplitHeaderRight>
       <HeaderIsland>
         <div class="flex items-center pl-2">
-          <div class="relative" ref={props.attachButtonRef}>
-            <Button
-              ref={(el) =>
-                fileSelector(el, () => ({
-                  multiple: true,
-                  onSelect: props.handleAddAttachments,
-                }))
-              }
-              class="aspect-square p-1"
-              disabled={ctx.disabled()}
-            >
-              <PaperclipHorizontalIcon class="h-5" />
-            </Button>
-          </div>
+          <Show when={!ctx.hideAttachments}>
+            <div class="relative" ref={props.attachButtonRef}>
+              <Button
+                ref={(el) =>
+                  fileSelector(el, () => ({
+                    multiple: true,
+                    onSelect: props.handleAddAttachments,
+                  }))
+                }
+                class="aspect-square p-1"
+                disabled={ctx.disabled()}
+              >
+                <PaperclipHorizontalIcon class="h-5" />
+              </Button>
+            </div>
+          </Show>
           <Show when={ENABLE_EMAIL_SCHEDULED_SEND && ctx.onSendTimeChange}>
             <EmailDateSelector
               sendTime={ctx.sendTime()}

@@ -36,7 +36,7 @@ export function HeaderTitleMenu(
         {props.children}
         <CaretDownIcon class="size-3 shrink-0 text-ink-muted" />
       </Dropdown.Trigger>
-      <Dropdown.Content>
+      <Dropdown.Content depth={3} class="shadow-md">
         <Dropdown.Group>
           <For each={[...props.items]}>
             {(item) => (

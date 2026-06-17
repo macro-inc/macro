@@ -34,7 +34,7 @@ export function FloatRegionHost() {
   });
 
   return (
-    <Layer depth={4}>
+    <Layer depth={3}>
       <div
         ref={setHostRef}
         class={cn(

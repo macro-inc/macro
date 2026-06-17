@@ -1,6 +1,7 @@
 import { CircleSpinner } from '@core/component/CircleSpinner';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
+import { isMobile } from '@core/mobile/isMobile';
 import { cn } from '@ui';
 import { createSignal, type JSX, onMount, Show, Suspense } from 'solid-js';
 import { FromInboxSelector } from '../FromInboxSelector';

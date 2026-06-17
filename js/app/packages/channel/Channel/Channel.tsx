@@ -122,7 +122,8 @@ export function Channel(props: ChannelProps) {
     isMobile()
       ? {
           start: splitPanel?.contentOffsetTop() ?? 0,
-          end: FloatRegions.hostHeight(),
+          // '4' here is a magic offset so that the ThreadRail correctly hits the the curved edge of the floating input. Not idea, but low impact and it works.
+          end: FloatRegions.hostHeight() - 4,
         }
       : { start: 0, end: 0 };
 

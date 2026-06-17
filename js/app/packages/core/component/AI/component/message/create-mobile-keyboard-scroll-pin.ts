@@ -5,6 +5,8 @@ import {
 } from '@solid-primitives/resize-observer';
 import { type Accessor, createEffect, on, onMount } from 'solid-js';
 
+// Matches the AI chat's own near-bottom threshold (see ChatMessages); larger
+// than the channel list's 50 so streaming/keyboard reflow still re-pins.
 const NEAR_BOTTOM_THRESHOLD = 100;
 
 /**

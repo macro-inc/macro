@@ -18,7 +18,7 @@ import { type ParentProps, Show } from 'solid-js';
 export function HeaderIsland(props: ParentProps<{ class?: string }>) {
   return (
     <Show when={isMobile()} fallback={props.children}>
-      <Layer depth={4}>
+      <Layer depth={3}>
         <div
           data-header-island
           class={cn(

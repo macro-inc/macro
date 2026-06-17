@@ -59,7 +59,7 @@ export type ThreadListScrollState = {
   viewportSize: number;
 };
 
-export type FullFrameTheadListScrollInsets = {
+export type FullFrameThreadListScrollInsets = {
   /** Space reserved before the first message (e.g. status bar + floating header). */
   start: number;
   /** Space reserved after the last message (e.g. floating input + dock). */
@@ -81,7 +81,7 @@ type ThreadListProps = {
    * scrolls behind the floating chrome. Rendered as scroll-content padding and fed to
    * virtua via `startMargin` + per-align scroll offsets.
    */
-  fullFrameScrollInsets?: Accessor<FullFrameTheadListScrollInsets>;
+  fullFrameScrollInsets?: Accessor<FullFrameThreadListScrollInsets>;
 };
 
 const NEAR_TOP_THRESHOLD = 800;
@@ -110,7 +110,7 @@ export function getTargetAlign(
   }
 }
 
-const NO_SCROLL_INSETS: FullFrameTheadListScrollInsets = { start: 0, end: 0 };
+const NO_SCROLL_INSETS: FullFrameThreadListScrollInsets = { start: 0, end: 0 };
 
 export function ThreadList(props: ThreadListProps) {
   const [virtualHandle, setVirtualHandle] = createSignal<VirtualizerHandle>();

@@ -202,7 +202,7 @@ export const MobileFilterDrawer = () => {
           aria-label="Open filters"
           variant="ghost"
           size="sm"
-          depth={4}
+          depth={3}
           class="island pointer-events-auto relative size-10 shrink-0 rounded-full bg-surface [&_svg]:size-5"
           ref={pressPulse}
         >

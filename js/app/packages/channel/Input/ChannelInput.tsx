@@ -359,6 +359,7 @@ export function ChannelInput(props: ChannelInputProps) {
           data-collapsed-input-file-picker
         />
         <CollapsedInput
+          class="mobile:rounded-full"
           draft={inputState.view().value}
           renderDraft={(draft) => (
             <StaticMarkdown
@@ -387,7 +388,7 @@ export function ChannelInput(props: ChannelInputProps) {
         }}
         onFocusIn={() => setIsFocused(true)}
         active={isFocused()}
-        class={cn('rounded-xl', isCollapsed() && 'hidden')}
+        class={cn('rounded-xl mobile:rounded-3xl', isCollapsed() && 'hidden')}
         depth={2}
         solid
       >

@@ -1,4 +1,4 @@
-@keyframes morePopoverShow {
+@keyframes more-popover-show {
   from {
     width: 10rem;
     height: 5rem;
@@ -11,7 +11,7 @@
     height: var(--more-popover-height, 23.5rem);
   }
 }
-@keyframes morePopoverHide {
+@keyframes more-popover-hide {
   from {
     width: var(
       --more-popover-width,
@@ -27,8 +27,8 @@
   }
 }
 .more-popover-content {
-  animation: morePopoverHide 120ms ease-in forwards;
+  animation: more-popover-hide 120ms ease-in forwards;
 }
 .more-popover-content[data-expanded] {
-  animation: morePopoverShow 150ms cubic-bezier(0.2, 1.05, 1, 1.1);
+  animation: more-popover-show 150ms cubic-bezier(0.2, 1.05, 1, 1.1);
 }

@@ -20,6 +20,12 @@ export function ChannelCallButton(props: { channelId: string }) {
   const tooltip = () => (isCallInProgress() ? 'Join Call' : 'Start Call');
   const label = () => (isCallInProgress() ? 'Join' : 'Call');
 
+  const variant = () => {
+    if (isMobile()) return 'ghost';
+    if (isCallInProgress()) return 'success';
+    return 'base';
+  };
+
   const handleClick = async () => {
     if (call.isJoining()) return;
     try {
@@ -34,7 +40,7 @@ export function ChannelCallButton(props: { channelId: string }) {
       <Button
         onClick={handleClick}
         tooltip={tooltip()}
-        variant={isMobile() ? 'ghost' : isCallInProgress() ? 'success' : 'base'}
+        variant={variant()}
         size="sm"
         depth={2}
         class={cn(

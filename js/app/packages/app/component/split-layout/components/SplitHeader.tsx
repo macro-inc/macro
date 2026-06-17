@@ -79,9 +79,7 @@ function SplitForwardButton() {
       hotkey={TOKENS.split.go.forward}
       disabled={!context.handle.canGoForward()}
       onClick={context.handle.goForward}
-      class={cn(
-        'p-1 rounded-lg',
-      )}
+      class={cn('p-1 rounded-lg')}
     >
       <CaretRight class="h-4" />
     </Button>
@@ -250,7 +248,7 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
         </Show>*/}
 
         <div
-          class="min-w-4 h-full grow shrink flex items-center justify-end gap-0.5 px-2 mobile:px-0 mobile:gap-2"
+          class="h-full grow shrink flex items-center justify-end gap-0.5 px-2 mobile:px-0 mobile:gap-2"
           ref={(ref) => {
             panel.layoutRefs.headerRight = ref;
           }}

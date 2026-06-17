@@ -67,9 +67,10 @@ export function PillTabs<T extends string>(props: {
     <div
       ref={stripRef}
       class={cn(
-        // py-1 gives the pills' shadow vertical room (overflow-x:auto forces
-        // overflow-y to auto, which would otherwise clip it).
-        'pointer-events-auto flex min-w-0 items-center gap-2 overflow-x-auto py-1 scrollbar-hidden',
+        // overflow-x:auto forces overflow-y to auto, which clips the pills'
+        // shadow. The padding gives the shadow room inside the (clipping)
+        // padding box; the matching negative margin cancels its layout impact.
+        'pointer-events-auto -my-3 flex min-w-0 items-center gap-2 overflow-x-auto py-3 pr-2 scrollbar-hidden',
         props.class
       )}
     >
@@ -82,7 +83,7 @@ export function PillTabs<T extends string>(props: {
               use:pressPulse
               data-checked={active() ? '' : undefined}
               class={cn(
-                'h-8 shrink-0 whitespace-nowrap rounded-full border px-3.5 text-sm font-medium shadow-md',
+                'h-10 shrink-0 whitespace-nowrap rounded-full border px-3.5 text-sm font-medium shadow-md',
                 active()
                   ? 'bg-accent text-surface border-accent'
                   : 'bg-surface text-ink-extra-muted border-edge'

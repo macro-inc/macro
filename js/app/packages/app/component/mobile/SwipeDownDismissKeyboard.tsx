@@ -12,8 +12,7 @@ const ZONE_HEIGHT = 20; // px above keyboard that activates blur
 // docked to the keyboard, and taps commonly drift past the swipe threshold —
 // treat gestures starting on interactive elements as taps, not dismissal
 // swipes.
-const INTERACTIVE_SELECTOR =
-  'button, [role="button"], a[href], input, textarea, select, [contenteditable="true"]';
+const INTERACTIVE_SELECTOR = 'button, [role="button"], a[href], select';
 
 function isInteractiveTarget(target: EventTarget | null): boolean {
   return (

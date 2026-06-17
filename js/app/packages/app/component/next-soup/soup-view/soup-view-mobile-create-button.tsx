@@ -99,7 +99,7 @@ export function SoupViewMobileCreateButton(props: {
   const isVisible = () => (props.visible?.() ?? true) && !!createAction();
 
   return (
-    <Layer depth={4}>
+    <Layer depth={3}>
       <button
         type="button"
         class={cn(

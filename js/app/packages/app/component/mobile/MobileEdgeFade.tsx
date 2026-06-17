@@ -20,7 +20,7 @@ export function MobileTopEdgeFade() {
           style={{
             height: `calc(var(--mobile-content-inset-top, 0px) + ${TOP_FALLOFF})`,
             background:
-              'linear-gradient(to bottom, var(--color-surface), transparent)',
+              'linear-gradient(to bottom, var(--color-surface) 10%, 70%, transparent)',
           }}
         />
       </Layer>
@@ -37,7 +37,7 @@ export function MobileBottomEdgeFade() {
         style={{
           top: `calc(${BOTTOM_FALLOFF} * -1)`,
           background:
-            'linear-gradient(to top, var(--color-surface), transparent)',
+            'linear-gradient(to top, var(--color-surface), 60%, transparent)',
         }}
       />
     </Layer>

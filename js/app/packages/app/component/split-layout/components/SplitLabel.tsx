@@ -207,9 +207,10 @@ export function BlockItemSplitLabel(props: {
         >
           <EntityIcon class="shrink-0" targetType={targetType()} size="xs" />
           <Show when={props.badges}>{props.badges}</Show>
-          <span class="ph-no-capture min-w-0 truncate text-sm font-medium">
-            {displayName() ?? ''}
-          </span>
+          <SplitLabel
+            label={displayName() ?? ''}
+            lockRename={!isOwner() || props.lockRename}
+          />
         </HeaderTitleMenu>
       </Show>
     </HeaderIsland>

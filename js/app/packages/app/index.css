@@ -224,16 +224,11 @@
 }
 
 [data-press-pulse] {
-  transition:
-    transform 100ms cubic-bezier(0.34, 1.56, 0.64, 1);
-    /*background-color 150ms ease-out;*/
+  transition: transform 100ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 [data-press-pulse][data-pressed] {
   transform: scale(1.08);
-  /*background-color: var(--color-active);*/
-  transition:
-    transform 100ms ease-out;
-    /*background-color 100ms ease-out;*/
+  transition: transform 100ms ease-out;
 }
 
 @layer base {
