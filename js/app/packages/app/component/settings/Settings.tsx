@@ -228,7 +228,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
 
       <div class="flex grow min-h-1 overflow-hidden">
         <Show when={!isMobile()}>
-          <SideNav>
+          <SideNav class="w-[clamp(168px,22%,220px)]">
             <For each={groups()}>
               {(group) => (
                 <SideNav.Group label={group.label}>
