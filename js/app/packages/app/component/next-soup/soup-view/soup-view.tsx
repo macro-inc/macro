@@ -684,18 +684,18 @@ export const SoupView = (props: SoupViewProps) => {
           </Show>
         </div>
         <SoupFiltersBar />
-      </div>
-      <div class="relative grow min-h-1 flex max-sm:flex-col flex-row size-full">
-        <Suspense>
-          <SoupViewFileDropzone>
-            <SoupViewList />
-          </SoupViewFileDropzone>
-        </Suspense>
-        <Show when={isMobile()}>
-          <FloatRegion region="accessory">
-            <MobileSoupViewTabs />
-          </FloatRegion>
-        </Show>
+        <div class="relative grow min-h-1 flex max-sm:flex-col flex-row size-full">
+          <Suspense>
+            <SoupViewFileDropzone>
+              <SoupViewList />
+            </SoupViewFileDropzone>
+          </Suspense>
+          <Show when={isMobile()}>
+            <FloatRegion region="accessory">
+              <MobileSoupViewTabs />
+            </FloatRegion>
+          </Show>
+        </div>
       </div>
       <Suspense>
         <Show when={ENABLE_UNIFIED_LIST_AI_INPUT && !isMobile()}>
