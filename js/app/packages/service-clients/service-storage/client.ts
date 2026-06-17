@@ -32,6 +32,7 @@ import { err, ok, type Result } from 'neverthrow';
 import type { ApiChannelWithLatest } from './channel-list-types';
 import type {
   AccessLevel,
+  AiProjectionResponse,
   CallRecordPreview,
   ForeignEntity,
   GithubPullRequestsResponse,
@@ -115,6 +116,7 @@ import type { GetProjectContentResponse } from './generated/schemas/getProjectCo
 import type { GetProjectResponse } from './generated/schemas/getProjectResponse';
 import type { Item } from './generated/schemas/item';
 import type { LocationResponseV3 } from './generated/schemas/locationResponseV3';
+import type { MaterializeAIProjectionRequest } from './generated/schemas/materializeAIProjectionRequest';
 import type { PatchChannelRequest } from './generated/schemas/patchChannelRequest';
 import type { PatchMessageRequest } from './generated/schemas/patchMessageRequest';
 import type { PinRequest } from './generated/schemas/pinRequest';
@@ -365,6 +367,29 @@ export const storageServiceClient = {
         body: JSON.stringify({ document_ids: args.document_ids }),
       })
     ).map((result) => result);
+  },
+
+  async materializeAIProjection(request: MaterializeAIProjectionRequest) {
+    const result = await dssFetch<AiProjectionResponse>(
+      `/ai_projections/materialize`,
+      {
+        method: 'POST',
+        body: JSON.stringify(request),
+      }
+    );
+
+    if (result.isErr()) {
+      const isForbidden = result.error.some(
+        (error) =>
+          error.code === 'FORBIDDEN' || error.message.includes('403')
+      );
+
+      if (isForbidden) {
+        showPaywall(PaywallKey.AI_PROJECTION);
+      }
+    }
+
+    return result;
   },
 
   async getSoupItems(args: {

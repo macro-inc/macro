@@ -7,6 +7,7 @@ export enum PaywallKey {
   FILE_LIMIT = 'FILE_LIMIT',
   IMAGE_LIMIT = 'IMAGE_LIMIT',
   MODEL_LIMIT = 'MODEL_LIMIT',
+  AI_PROJECTION = 'AI_PROJECTION',
   CHAT_LIMIT = 'CHAT_LIMIT',
   O1_LIMIT = 'O1_LIMIT',
   CANVAS_CLIKED = 'CANVAS_CLIKED',
@@ -24,6 +25,8 @@ export const PaywallMessages: Record<PaywallKey, string> = {
     'You have reached the chat limit of your current plan. Please upgrade to continue.',
   [PaywallKey.IMAGE_LIMIT]: `You've reached your ${DAILY_LIMIT} daily limit for AI image processing. Please upgrade to continue.`,
   [PaywallKey.MODEL_LIMIT]: `You have reached the ${DAILY_LIMIT} daily uses of smart models. Please upgrade to continue.`,
+  [PaywallKey.AI_PROJECTION]:
+    'AI projections are a paid feature. Please upgrade to continue.',
   [PaywallKey.O1_LIMIT]: 'Upgrade your plan to use smart models.',
   [PaywallKey.CANVAS_CLIKED]:
     'Upgrade your plan to have AI generate canvases (diagrams, whiteboards, drawings).',
