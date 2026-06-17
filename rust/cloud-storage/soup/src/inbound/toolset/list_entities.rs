@@ -136,6 +136,14 @@ pub enum EntityItem {
         /// Channel name, when present.
         name: Option<String>,
     },
+    /// Channel thread item.
+    #[serde(rename_all = "camelCase")]
+    ChannelThread {
+        /// Parent message id for the thread.
+        id: Uuid,
+        /// Channel id containing the thread.
+        channel_id: Uuid,
+    },
     /// Call record item.
     #[serde(rename_all = "camelCase")]
     Call {
@@ -180,6 +188,10 @@ impl From<SoupItem> for EntityItem {
             SoupItem::Channel(channel) => EntityItem::Channel {
                 id: channel.channel.channel.id.0,
                 name: channel.channel.channel.name.clone(),
+            },
+            SoupItem::ChannelThread(thread) => EntityItem::ChannelThread {
+                id: thread.message.message_id,
+                channel_id: thread.channel_id.0,
             },
             SoupItem::Call(record) => EntityItem::Call {
                 id: record.call_id,
@@ -512,6 +524,7 @@ pub(super) fn build_summary(
     let mut projects = 0;
     let mut emails = 0;
     let mut channels = 0;
+    let mut channel_threads = 0;
     let mut call_records = 0;
     let mut foreign_entities = 0;
 
@@ -522,6 +535,7 @@ pub(super) fn build_summary(
             EntityItem::Project { .. } => projects += 1,
             EntityItem::Email { .. } => emails += 1,
             EntityItem::Channel { .. } => channels += 1,
+            EntityItem::ChannelThread { .. } => channel_threads += 1,
             EntityItem::Call { .. } => call_records += 1,
             EntityItem::ForeignEntity { .. } => foreign_entities += 1,
         }
@@ -556,6 +570,12 @@ pub(super) fn build_summary(
         parts.push(format!(
             "{channels} channel{}",
             if channels == 1 { "" } else { "s" }
+        ));
+    }
+    if channel_threads > 0 {
+        parts.push(format!(
+            "{channel_threads} channel thread{}",
+            if channel_threads == 1 { "" } else { "s" }
         ));
     }
     if call_records > 0 {

@@ -112,6 +112,20 @@ pub struct SoupChannel {
     pub interacted_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
+/// A top-level channel message thread for soup payloads.
+///
+/// This reuses the existing lightweight [`ChannelMessage`] shape used by
+/// [`SoupChannel`] latest-message data.
+#[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct SoupChannelThread {
+    /// Channel that owns the thread.
+    #[cfg_attr(feature = "schema", schema(value_type = Uuid))]
+    pub channel_id: ChannelId,
+    /// Top-level message that acts as the thread parent.
+    pub message: ChannelMessage,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct ChannelWithParticipants {
@@ -230,6 +244,24 @@ impl From<channels::domain::models::ChannelWithLatest> for SoupChannel {
             latest_message: latest_message_from_channels(channel.latest_message),
             viewed_at: channel.viewed_at,
             interacted_at: channel.interacted_at,
+        }
+    }
+}
+
+impl From<channels::domain::models::ChannelMessage> for SoupChannelThread {
+    fn from(message: channels::domain::models::ChannelMessage) -> Self {
+        Self {
+            channel_id: ChannelId(message.channel_id),
+            message: ChannelMessage {
+                message_id: message.id,
+                thread_id: None,
+                sender_id: message.sender_id,
+                content: message.content,
+                created_at: message.created_at,
+                updated_at: message.updated_at,
+                deleted_at: message.deleted_at,
+                mentions: Vec::new(),
+            },
         }
     }
 }

@@ -4,7 +4,10 @@ use crate::document::SoupDocument;
 use crate::email_thread::SoupEnrichedEmailThreadPreview;
 use crate::foreign_entity::SoupForeignEntity;
 use crate::project::SoupProject;
-use crate::{chat::SoupChat, comms::SoupChannel};
+use crate::{
+    chat::SoupChat,
+    comms::{SoupChannel, SoupChannelThread},
+};
 use chrono::{DateTime, Utc};
 use model_entity::{Entity, EntityType};
 use models_pagination::{Identify, SimpleSortMethod, SortOn};
@@ -21,6 +24,7 @@ pub enum SoupItem {
     Project(SoupProject),
     EmailThread(SoupEnrichedEmailThreadPreview),
     Channel(SoupChannel),
+    ChannelThread(SoupChannelThread),
     Call(SoupCallRecord),
     CrmCompany(SoupCrmCompany),
     ForeignEntity(SoupForeignEntity),
@@ -45,6 +49,9 @@ impl SoupItem {
             SoupItem::Channel(channel) => {
                 EntityType::Channel.with_entity_string(channel.channel.channel.id.0.to_string())
             }
+            SoupItem::ChannelThread(thread) => {
+                EntityType::Channel.with_entity_string(thread.message.message_id.to_string())
+            }
             SoupItem::Call(record) => {
                 EntityType::Call.with_entity_string(record.call_id.to_string())
             }
@@ -64,6 +71,7 @@ impl SoupItem {
             SoupItem::Project(soup_project) => soup_project.updated_at,
             SoupItem::EmailThread(soup_thread) => soup_thread.thread.updated_at,
             SoupItem::Channel(soup_channel) => soup_channel.channel.channel.updated_at,
+            SoupItem::ChannelThread(thread) => thread.message.updated_at,
             SoupItem::Call(record) => record.ended_at.unwrap_or(record.started_at),
             SoupItem::CrmCompany(company) => company.updated_at,
             SoupItem::ForeignEntity(foreign_entity) => foreign_entity.updated_at,
@@ -124,6 +132,10 @@ impl SoupItem {
             (SoupItem::Channel(soup_channel), SimpleSortMethod::ViewedUpdated) => soup_channel
                 .viewed_at
                 .unwrap_or(soup_channel.channel.channel.updated_at),
+            (SoupItem::ChannelThread(thread), SimpleSortMethod::CreatedAt) => {
+                thread.message.created_at
+            }
+            (SoupItem::ChannelThread(thread), _) => thread.message.updated_at,
             (SoupItem::Call(record), SimpleSortMethod::CreatedAt) => record.started_at,
             (SoupItem::Call(record), _) => record.ended_at.unwrap_or(record.started_at),
             (SoupItem::CrmCompany(company), SimpleSortMethod::CreatedAt) => company.created_at,
@@ -152,6 +164,7 @@ impl Identify for SoupItem {
             SoupItem::Project(soup_project) => soup_project.id,
             SoupItem::EmailThread(thread) => thread.thread.id,
             SoupItem::Channel(soup_channel) => soup_channel.channel.channel.id.0,
+            SoupItem::ChannelThread(thread) => thread.message.message_id,
             SoupItem::Call(record) => record.call_id,
             SoupItem::CrmCompany(company) => company.id,
             SoupItem::ForeignEntity(foreign_entity) => foreign_entity.id,
@@ -196,6 +209,7 @@ impl SoupItem {
                 PropertiesEntityType::Chat,
             )),
             SoupItem::Channel(_) => None,
+            SoupItem::ChannelThread(_) => None,
             SoupItem::Call(_) => None,
             // CRM companies are not in entity_properties.
             SoupItem::CrmCompany(_) => None,
