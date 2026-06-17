@@ -127,19 +127,21 @@ export function registerEditorMutationObserver(
       callbacks.forEach((callback) => callback());
     });
 
-    const cleanupRootListener = editor.registerRootListener((root, prevRoot) => {
-      if (prevRoot) {
-        observer.disconnect();
+    const cleanupRootListener = editor.registerRootListener(
+      (root, prevRoot) => {
+        if (prevRoot) {
+          observer.disconnect();
+        }
+        if (root) {
+          observer.observe(root, {
+            attributes: true,
+            childList: true,
+            characterData: true,
+            subtree: true,
+          });
+        }
       }
-      if (root) {
-        observer.observe(root, {
-          attributes: true,
-          childList: true,
-          characterData: true,
-          subtree: true,
-        });
-      }
-    });
+    );
 
     editorObserver = { observer, callbacks, cleanupRootListener };
     mutationObserversByEditor.set(editor, editorObserver);
