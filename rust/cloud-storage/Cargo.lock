@@ -11224,6 +11224,7 @@ dependencies = [
  "macro_aws_config",
  "macro_entrypoint",
  "macro_env",
+ "macro_env_var",
  "mockall",
  "redis",
  "sqlx",
