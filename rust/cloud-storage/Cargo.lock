@@ -10744,6 +10744,7 @@ dependencies = [
  "macro_aws_config",
  "macro_db_client",
  "macro_env",
+ "macro_env_var",
  "macro_middleware",
  "macro_user_id",
  "model",

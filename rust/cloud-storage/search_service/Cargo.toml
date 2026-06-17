@@ -37,6 +37,7 @@ models_soup = { path = "../models_soup" }
 properties_db_client = { path = "../properties_db_client" }
 readonly_pool = { path = "../readonly_pool" }
 macro_env = { path = "../macro_env" }
+macro_env_var = { path = "../macro_env_var" }
 macro_middleware = { path = "../macro_middleware", default-features = false, features = [
   "auth",
 ] }
