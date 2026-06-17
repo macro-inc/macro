@@ -2,7 +2,7 @@ import { useItemPreviewData } from '@core/component/ItemPreview';
 import { UserIcon } from '@core/component/UserIcon';
 import { type DateValue, formatDate } from '@core/util/date';
 import type { NamedSubType } from '@entity';
-import { isAccessiblePreviewItem, type ItemEntity } from '@queries/preview';
+import { type ItemEntity, isAccessiblePreviewItem } from '@queries/preview';
 import type { ItemType } from '@service-storage/client';
 import { Show } from 'solid-js';
 

@@ -64,7 +64,11 @@ function Fallback(props: {
   fill?: boolean;
 }) {
   return (
-    <ImagePlaceholder dims={props.dims} square={props.square} fill={props.fill} />
+    <ImagePlaceholder
+      dims={props.dims}
+      square={props.square}
+      fill={props.fill}
+    />
   );
 }
 
