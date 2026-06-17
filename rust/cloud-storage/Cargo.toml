@@ -3,6 +3,7 @@ resolver = "2"
 
 members = [
   "agent",
+  "ai_projections",
   "ai_usage",
   "authentication_service",
   "backfill_entity_access",

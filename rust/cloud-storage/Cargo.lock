@@ -95,6 +95,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "ai_projections"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "hex",
+ "macro_user_id",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.18",
+ "tokio",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "ai_tools"
 version = "0.1.0"
 dependencies = [
