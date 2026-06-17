@@ -58,6 +58,7 @@ enum SnsMode {
     },
 }
 
+#[allow(clippy::disallowed_methods, reason = "Only used when running locally")]
 #[tokio::main]
 async fn main() -> Result<(), Report> {
     tracing_subscriber::fmt::init();
@@ -371,6 +372,7 @@ async fn run_state_machine_c(
 }
 
 /// Poll for ready digest batches via the egress service.
+#[allow(clippy::disallowed_methods, reason = "Only used when running locally")]
 async fn poll_email_digests(egress: &impl NotificationEgress) -> Result<(), Report> {
     println!("\n--- Poll Email Digests ---\n");
 
