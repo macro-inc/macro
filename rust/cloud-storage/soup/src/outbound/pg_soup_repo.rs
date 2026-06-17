@@ -19,11 +19,13 @@ mod expanded;
 pub mod grouping;
 mod unexpanded;
 
+/// PostgreSQL implementation of [`SoupRepo`].
 pub struct PgSoupRepo {
     pool: ReadOnlyPool,
 }
 
 impl PgSoupRepo {
+    /// Creates a PostgreSQL soup repository using the provided read-only pool.
     pub fn new(pool: ReadOnlyPool) -> Self {
         PgSoupRepo { pool }
     }

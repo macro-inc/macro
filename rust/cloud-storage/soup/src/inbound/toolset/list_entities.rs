@@ -32,12 +32,16 @@ use super::SoupToolContext;
 const RESULT_LIMIT: u16 = 50;
 const MAX_RESULT_LIMIT: u16 = 500;
 
+/// Sort order for the list entities AI tool.
 #[derive(Debug, Clone, Copy, Default, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum SortBy {
+    /// Sort by most recently viewed.
     RecentlyViewed,
+    /// Sort by most recently updated.
     #[default]
     RecentlyUpdated,
+    /// Sort by most recently created.
     RecentlyCreated,
 }
 
@@ -68,38 +72,88 @@ impl EmailPreset {
     }
 }
 
+/// Entity types that can be returned by the list entities AI tool.
 #[derive(Debug, Clone, Copy, Deserialize, JsonSchema, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum ItemType {
+    /// Macro document.
     Document,
+    /// AI chat conversation.
     AiChat,
+    /// Macro project.
     Project,
+    /// Email thread.
     Email,
+    /// Chat channel.
     Channel,
+    /// Call record.
     Call,
+    /// Foreign entity record.
     ForeignEntity,
 }
 
+/// Item returned by the list entities AI tool.
 #[derive(Debug, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase", tag = "type")]
 pub enum EntityItem {
+    /// Macro document item.
     #[serde(rename_all = "camelCase")]
-    Document { id: Uuid, name: String },
+    Document {
+        /// Document id.
+        id: Uuid,
+        /// Document name.
+        name: String,
+    },
+    /// AI chat item.
     #[serde(rename_all = "camelCase")]
-    AiChat { id: Uuid, name: String },
+    AiChat {
+        /// Chat id.
+        id: Uuid,
+        /// Chat name.
+        name: String,
+    },
+    /// Project item.
     #[serde(rename_all = "camelCase")]
-    Project { id: Uuid, name: String },
+    Project {
+        /// Project id.
+        id: Uuid,
+        /// Project name.
+        name: String,
+    },
+    /// Email thread item.
     #[serde(rename_all = "camelCase")]
-    Email { id: Uuid, subject: Option<String> },
+    Email {
+        /// Email thread id.
+        id: Uuid,
+        /// Email subject, when present.
+        subject: Option<String>,
+    },
+    /// Channel item.
     #[serde(rename_all = "camelCase")]
-    Channel { id: Uuid, name: Option<String> },
+    Channel {
+        /// Channel id.
+        id: Uuid,
+        /// Channel name, when present.
+        name: Option<String>,
+    },
+    /// Call record item.
     #[serde(rename_all = "camelCase")]
-    Call { id: Uuid, created_by: String },
+    Call {
+        /// Call id.
+        id: Uuid,
+        /// User or actor that created the call.
+        created_by: String,
+    },
+    /// Foreign entity item.
     #[serde(rename_all = "camelCase")]
     ForeignEntity {
+        /// Foreign entity row id.
         id: Uuid,
+        /// Provider-specific foreign entity id.
         foreign_entity_id: String,
+        /// Provider/source name for the foreign entity.
         foreign_entity_source: String,
+        /// Foreign entity metadata.
         metadata: serde_json::Value,
     },
 }
@@ -146,13 +200,17 @@ impl From<SoupItem> for EntityItem {
     }
 }
 
+/// Response returned by the list entities AI tool.
 #[derive(Debug, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ListEntitiesResponse {
+    /// Items returned for the request.
     pub items: Vec<EntityItem>,
+    /// Human-readable summary of the returned items.
     pub summary: String,
 }
 
+/// AI tool request for browsing workspace entities through soup.
 #[derive(Debug, Deserialize, JsonSchema, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 #[schemars(
@@ -160,18 +218,21 @@ pub struct ListEntitiesResponse {
     description = "Browse the user's Macro workspace to see recent items they have access to. Returns Macro documents, AI conversations, projects, emails, chat channels, call records, and foreign entities. Use this to get an overview of what the user has been working on or to find items by type. Start here for activity-summary questions such as \"what happened today\", \"what's going on\", \"catch me up\", or \"what happened in standup today\"; apply precise time, type, channel, or mailbox filters when the user gives that scope. For Macro task requests such as \"list my tasks\", \"tasks assigned to me\", or \"tasks I completed yesterday\", prefer this tool over external task trackers such as Linear unless the user explicitly asks for Linear. Macro tasks are document items with df subtype {\"l\":{\"dst\":\"task\"}} and includeTypes [\"document\"]. Filter task Status and Assignees through propf using entity_type TASK: Status property 00000001-0000-0000-0000-000000000002, Completed option 00000001-0000-0000-0002-000000000004, Assignees property 00000001-0000-0000-0000-000000000001. The current user's assignee entity id is their Macro user id, usually macro|<their email address from context>. For \"completed yesterday\", combine status Completed, assigned-to-me, and a df updatedAt yesterday window with ua gte/lt ISO timestamps. For finding specific items by name or content, use the search tool instead."
 )]
 pub struct ListEntities {
+    /// Filter returned items to specific item types.
     #[schemars(
         description = "Filter returned items to specific item types. If not provided, returns all types. Example: [\"document\", \"email\"] returns only documents and emails. Macro tasks are returned as document items, so use includeTypes=[\"document\"] with df subtype task for task requests. This is folded into the AST and applied as part of cursor-level filtering."
     )]
     #[serde(default)]
     pub include_types: Option<Vec<ItemType>>,
 
+    /// Sort order for returned items.
     #[schemars(
         description = "How to sort results: recently_viewed, recently_updated (default to this), or recently_created. Use recently_updated for updated_at-style soup results."
     )]
     #[serde(default)]
     pub sort_by: SortBy,
 
+    /// Document entity AST filter.
     #[schemars(
         description = "Full soup AST document filter (df). Use the same shape as /items/soup/ast, e.g. {\"l\":{\"id\":\"...\"}}. For Macro tasks, use {\"l\":{\"dst\":\"task\"}}. For \"completed yesterday\", AND the task subtype with updatedAt bounds, e.g. {\"&\":[{\"l\":{\"dst\":\"task\"}},{\"&\":[{\"l\":{\"ua\":{\"gte\":\"<start>\"}}},{\"l\":{\"ua\":{\"lt\":\"<end>\"}}}]}]} using ISO timestamps.",
         with = "Option<serde_json::Value>"
@@ -179,6 +240,7 @@ pub struct ListEntities {
     #[serde(default, rename = "df")]
     pub document_filter: LiteralTree<DocumentLiteral>,
 
+    /// Project entity AST filter.
     #[schemars(
         description = "Full soup AST project filter (pf).",
         with = "Option<serde_json::Value>"
@@ -186,6 +248,7 @@ pub struct ListEntities {
     #[serde(default, rename = "pf")]
     pub project_filter: LiteralTree<ProjectLiteral>,
 
+    /// AI chat entity AST filter.
     #[schemars(
         description = "Full soup AST AI chat filter (cf).",
         with = "Option<serde_json::Value>"
@@ -193,12 +256,14 @@ pub struct ListEntities {
     #[serde(default, rename = "cf")]
     pub chat_filter: LiteralTree<ChatLiteral>,
 
+    /// High-level email filter preset.
     #[schemars(
         description = "High-level email filter preset. Use \"signal\" for signal emails. Signal emails and important emails are synonymous: if the user asks for important emails, use emailPreset=\"signal\". This expands to the email AST {\"&\":[{\"l\":{\"Importance\":true}},{\"l\":{\"Shared\":\"exclude\"}}]} and defaults results to emails if includeTypes is omitted."
     )]
     #[serde(default)]
     pub email_preset: Option<EmailPreset>,
 
+    /// Email entity AST filter.
     #[schemars(
         description = "Advanced full soup AST email filter (ef). Prefer emailPreset=\"signal\" for common requests. Signal emails and important emails are synonymous; they use {\"&\":[{\"l\":{\"Importance\":true}},{\"l\":{\"Shared\":\"exclude\"}}]}.",
         with = "Option<serde_json::Value>"
@@ -206,6 +271,7 @@ pub struct ListEntities {
     #[serde(default, rename = "ef")]
     pub email_filter: LiteralTree<EmailLiteral>,
 
+    /// Channel entity AST filter.
     #[schemars(
         description = "Full soup AST channel filter (chanf).",
         with = "Option<serde_json::Value>"
@@ -213,6 +279,7 @@ pub struct ListEntities {
     #[serde(default, rename = "chanf")]
     pub channel_filter: LiteralTree<ChannelLiteral>,
 
+    /// Call entity AST filter.
     #[schemars(
         description = "Full soup AST call filter (callf).",
         with = "Option<serde_json::Value>"
@@ -220,6 +287,7 @@ pub struct ListEntities {
     #[serde(default, rename = "callf")]
     pub call_filter: LiteralTree<CallLiteral>,
 
+    /// Foreign entity AST filter.
     #[schemars(
         description = "Full soup AST foreign entity filter (fef).",
         with = "Option<serde_json::Value>"
@@ -227,6 +295,7 @@ pub struct ListEntities {
     #[serde(default, rename = "fef")]
     pub foreign_entity_filter: LiteralTree<ForeignEntityLiteral>,
 
+    /// Entity property AST filter.
     #[schemars(
         description = "Full soup AST property filter (propf). Use this for Macro task Status, Assignees, Priority, and other entity properties. For task Status Completed: {\"l\":{\"pd\":\"00000001-0000-0000-0000-000000000002\",\"et\":\"TASK\",\"v\":{\"so\":\"00000001-0000-0000-0002-000000000004\"}}}. For tasks assigned to the current user: {\"l\":{\"pd\":\"00000001-0000-0000-0000-000000000001\",\"et\":\"TASK\",\"v\":{\"er\":\"macro|user@example.com\"}}}. Combine both with &: {\"&\":[statusCompleted, assignedToMe]}. Prefer this over Linear tools for unqualified task requests.",
         with = "Option<serde_json::Value>"
@@ -234,6 +303,7 @@ pub struct ListEntities {
     #[serde(default, rename = "propf")]
     pub properties_filter: LiteralTree<PropertiesLiteral>,
 
+    /// Mailbox view used to hydrate email previews.
     #[schemars(description = "\
 Which mailbox view to hydrate previews from for email results. Valid values: inbox \
 (default), sent, drafts, starred, all, important, other, or user:<label>.\n\
@@ -245,6 +315,7 @@ override the default when the user explicitly asks for a specific mailbox or lab
     #[serde(default, rename = "emailView")]
     pub email_view: Option<String>,
 
+    /// Maximum number of items to return.
     #[schemars(description = "Maximum number of items to return. Defaults to 50; max 500.")]
     #[serde(default)]
     pub limit: Option<u16>,

@@ -33,9 +33,12 @@ use non_empty::IsEmpty;
 use thiserror::Error;
 use uuid::Uuid;
 
+/// Controls whether soup items should include expanded nested data.
 #[derive(Debug, Clone, Copy)]
 pub enum SoupType {
+    /// Return fully expanded soup items.
     Expanded,
+    /// Return compact soup items without expanded nested data.
     UnExpanded,
 }
 
@@ -120,15 +123,21 @@ impl SimpleSortQuery {
     }
 }
 
+/// Parameters for fetching soup items by an explicit ordered entity list.
 #[derive(Debug)]
 pub struct AdvancedSortParams<'a> {
+    /// Entities to fetch and preserve in the requested order.
     pub entities: &'a [Entity<'a>],
+    /// User whose accessible soup items should be fetched.
     pub user_id: MacroUserIdStr<'a>,
 }
 
+/// Cursor or initial-sort query for a soup request.
 #[derive(Debug)]
 pub enum SoupQuery<T> {
+    /// Query sorted by a simple timestamp-based method.
     Simple(SimpleQueryInner<T>),
+    /// Query sorted by frecency.
     Frecency(FrecencyQueryInner<T>),
 }
 
@@ -187,6 +196,7 @@ impl<T> SoupQuery<T> {
         SoupQuery::Frecency(FrecencyQueryInner(models_pagination::Query::Cursor(cursor)))
     }
 
+    /// Returns the filter payload embedded in this query.
     pub fn filter(&self) -> &T {
         match self {
             SoupQuery::Simple(SimpleQueryInner(query)) => query.filter(),
@@ -196,6 +206,7 @@ impl<T> SoupQuery<T> {
 }
 
 impl SoupQuery<EntityFilters> {
+    /// Converts high-level entity filters into an AST-backed soup query.
     pub fn into_ast(self) -> Result<SoupQuery<Option<EntityFilterAst>>, ExpandErr> {
         match self {
             SoupQuery::Simple(SimpleQueryInner(query)) => Ok(SoupQuery::Simple(SimpleQueryInner(
@@ -208,12 +219,18 @@ impl SoupQuery<EntityFilters> {
     }
 }
 
+/// Request to fetch a page of soup items for a user.
 #[derive(Debug)]
 pub struct SoupRequest<T> {
+    /// Whether to return expanded or unexpanded soup items.
     pub soup_type: SoupType,
+    /// Maximum number of items to return.
     pub limit: u16,
+    /// Initial query or pagination cursor to execute.
     pub cursor: SoupQuery<T>,
+    /// User whose soup should be queried.
     pub user: MacroUserIdStr<'static>,
+    /// Email preview view used when hydrating email soup items.
     pub email_preview_view: PreviewView,
     /// Every inbox the caller can read (own + delegated via macro_user_links).
     /// Empty when the caller has no inboxes — `build_email_request` returns
@@ -645,22 +662,31 @@ pub struct GroupedSoupItem {
     pub group_display_order: Option<i32>,
 }
 
+/// Errors returned while building or executing soup queries.
 #[derive(Debug, Error)]
 pub enum SoupErr {
+    /// Frecency query failed.
     #[error(transparent)]
     FrecencyErr(#[from] FrecencyQueryErr),
+    /// Soup repository query failed.
     #[error(transparent)]
     SoupDbErr(#[from] anyhow::Error),
+    /// Email preview lookup failed.
     #[error(transparent)]
     EmailErr(#[from] email::domain::models::EmailErr),
+    /// Channel or communication lookup failed.
     #[error("A comms error has occured, see logs for more details")]
     CommsErr,
+    /// Call record lookup failed.
     #[error("A call error has occurred, see logs for more details")]
     CallErr,
+    /// CRM lookup failed.
     #[error("A CRM error has occurred, see logs for more details")]
     CrmErr,
+    /// Foreign entity lookup failed.
     #[error(transparent)]
     ForeignEntityErr(#[from] ForeignEntityError),
+    /// Entity filter AST expansion failed.
     #[error(transparent)]
     AstErr(#[from] ExpandErr),
 }

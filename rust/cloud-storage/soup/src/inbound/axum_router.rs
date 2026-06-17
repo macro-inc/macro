@@ -65,6 +65,7 @@ use uuid::Uuid;
 #[cfg(test)]
 mod tests;
 
+/// Query parameters shared by soup endpoints.
 #[derive(Debug, Default, serde::Deserialize, IntoParams, ToSchema)]
 #[into_params(parameter_in = Query)]
 pub struct Params {
@@ -79,13 +80,19 @@ pub struct Params {
     sort_method: Option<SoupApiSort>,
 }
 
+/// Sort options accepted by non-grouped soup API endpoints.
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum SoupApiSort {
+    /// Sort by last viewed time.
     ViewedAt,
+    /// Sort by creation time.
     CreatedAt,
+    /// Sort by last update time.
     UpdatedAt,
+    /// Sort by viewed and updated activity.
     ViewedUpdated,
+    /// Sort by frecency score.
     Frecency,
 }
 
@@ -105,9 +112,13 @@ impl SoupApiSort {
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum GroupedSoupSort {
+    /// Sort by last viewed time.
     ViewedAt,
+    /// Sort by creation time.
     CreatedAt,
+    /// Sort by last update time.
     UpdatedAt,
+    /// Sort by viewed and updated activity.
     ViewedUpdated,
 }
 
@@ -299,6 +310,7 @@ impl From<GroupMeta> for ApiGroupMeta {
     }
 }
 
+/// Response page for non-grouped soup endpoints.
 #[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct SoupPage {
     items: Vec<SoupApiItem>,
@@ -330,7 +342,9 @@ pub struct GroupedSoupGroupPage {
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(tag = "mode", rename_all = "snake_case")]
 pub enum GroupedSoupPage {
+    /// Initial grouped response containing multiple groups.
     Initial(GroupedSoupInitialPage),
+    /// Follow-up response for one specific group.
     GroupPage(GroupedSoupGroupPage),
 }
 
@@ -339,6 +353,7 @@ struct ApiGroupedSoupParts {
     groups: Vec<ApiGroupMeta>,
 }
 
+/// Shared state for soup API routes.
 pub struct SoupRouterState<T, U, EAS> {
     service: Arc<T>,
     email: EmailRouterState<U>,
@@ -373,6 +388,7 @@ where
     U: EmailService,
     EAS: entity_access::domain::ports::EntityAccessService,
 {
+    /// Creates router state from the soup service, email service, and entity access service.
     pub fn new(service: T, email: U, entity_access_service: Arc<EAS>) -> Self {
         SoupRouterState {
             service: Arc::new(service),
@@ -572,6 +588,7 @@ fn ast_requests_crm_admin(expr: &Expr<CrmCompanyLiteral>) -> bool {
     }
 }
 
+/// Builds the Axum router for soup HTTP endpoints.
 pub fn soup_router<T, U, EAS, S>(state: SoupRouterState<T, U, EAS>) -> Router<S>
 where
     T: SoupService,
@@ -587,6 +604,7 @@ where
         .with_state(state)
 }
 
+/// API representation of a soup item with its frecency score.
 #[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct SoupApiItem {
     #[serde(flatten)]
@@ -609,18 +627,25 @@ impl SoupApiItem {
     }
 }
 
+/// Errors returned by soup HTTP handlers.
 #[derive(Debug, Error)]
 pub enum SoupHandlerErr {
+    /// Internal soup service error.
     #[error("An internal server error has occurred")]
     Internal(SoupErr),
+    /// Internal email service error.
     #[error("An internal email server error has occurred")]
     EmailErr(#[from] EmailErr),
+    /// Invalid filter AST expansion.
     #[error("Invalid filter arguments provided")]
     ExpandErr(ExpandErr),
+    /// Invalid compound filter expansion.
     #[error("Invalid compound filter could not be expanded")]
     Expand,
+    /// CRM-scoped query was requested without team membership.
     #[error("CRM-scoped queries require team membership")]
     CrmScopeForbidden,
+    /// Hidden CRM company query was requested without admin privileges.
     #[error("Querying hidden CRM companies requires admin/owner team role")]
     CrmAdminRequired,
 }
@@ -721,6 +746,7 @@ where
         .await
 }
 
+/// Request body for the typed soup endpoint.
 #[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PostSoupRequest {
@@ -795,6 +821,7 @@ where
         .await
 }
 
+/// Request body for the AST soup endpoint.
 #[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PostSoupAstRequest {
@@ -887,7 +914,9 @@ pub struct PostGroupedSoupAstGroupPageRequest {
 #[derive(Debug, Deserialize, ToSchema)]
 #[serde(tag = "mode", rename_all = "snake_case")]
 pub enum PostGroupedSoupAstRequest {
+    /// Initial grouped soup request.
     Initial(PostGroupedSoupAstInitialRequest),
+    /// Request for a page within one group.
     GroupPage(PostGroupedSoupAstGroupPageRequest),
 }
 
@@ -998,6 +1027,7 @@ fn require_crm_admin_role(
     Ok(())
 }
 
+/// Wire-format entity filter AST accepted by soup AST endpoints.
 #[derive(Debug, Default, Serialize, Deserialize, Clone, ToSchema)]
 pub struct ApiEntityFilterAst {
     /// the filters that should be applied to the document entity
@@ -1054,15 +1084,20 @@ pub struct ApiEntityFilterAst {
     pub email_crm_addresses: Vec<String>,
 }
 
+/// Document literal accepted by the soup AST API.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(untagged)]
 pub enum ApiDocumentLiteral {
+    /// A plain document filter literal.
     Plain(DocumentLiteral),
+    /// A compound literal for document file associations.
     FileAssoc(CompoundDocumentLiteral),
 }
 
+/// Compound document filter literal accepted by the soup AST API.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum CompoundDocumentLiteral {
+    /// Match documents associated with a file id.
     #[serde(rename = "fa")]
     FileAssoc(String),
 }

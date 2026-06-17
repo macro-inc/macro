@@ -90,6 +90,7 @@ where
     Crm: CrmService,
     F: ForeignEntityService,
 {
+    /// Creates a soup service from its repository and dependent domain services.
     pub fn new(
         soup_storage: T,
         frecency: U,
