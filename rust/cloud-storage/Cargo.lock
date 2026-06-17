@@ -99,16 +99,20 @@ name = "ai_projections"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "axum",
  "chrono",
  "hex",
  "macro_db_migrator",
  "macro_user_id",
+ "model_user",
  "serde",
  "serde_json",
  "sha2 0.10.9",
  "sqlx",
  "thiserror 2.0.18",
  "tokio",
+ "tracing",
+ "utoipa",
  "uuid",
  "workspace-hack",
 ]
