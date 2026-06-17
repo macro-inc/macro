@@ -1,57 +1,50 @@
 use super::*;
-use ai_toolset::generate_tool_input_schema;
-use ai_toolset::tool_object::validate_tool_schema;
+use ai_toolset::schema::generate_validated_input_schema;
 
 #[test]
 fn test_read_metadata_schema_validation() {
-    let schema = generate_tool_input_schema!(ReadMetadata);
-
-    let result = validate_tool_schema(&schema);
+    let result = generate_validated_input_schema::<ReadMetadata>();
     assert!(result.is_ok(), "{:?}", result);
 
-    let (name, description) = result.unwrap();
+    let validated = result.unwrap();
     assert_eq!(
-        name, "ReadMetadata",
+        validated.name, "ReadMetadata",
         "Tool name should match the schemars title"
     );
     assert!(
-        description.contains("Retrieve"),
+        validated.description.contains("Retrieve"),
         "Description should contain expected text"
     );
 }
 
 #[test]
 fn test_read_content_schema_validation() {
-    let schema = generate_tool_input_schema!(ReadContent);
-
-    let result = validate_tool_schema(&schema);
+    let result = generate_validated_input_schema::<ReadContent>();
     assert!(result.is_ok(), "{:?}", result);
 
-    let (name, description) = result.unwrap();
+    let validated = result.unwrap();
     assert_eq!(
-        name, "ReadContent",
+        validated.name, "ReadContent",
         "Tool name should match the schemars title"
     );
     assert!(
-        description.contains("Retrieve"),
+        validated.description.contains("Retrieve"),
         "Description should contain expected text"
     );
 }
 
 #[test]
 fn test_create_document_schema_validation() {
-    let schema = generate_tool_input_schema!(CreateDocument);
-
-    let result = validate_tool_schema(&schema);
+    let result = generate_validated_input_schema::<CreateDocument>();
     assert!(result.is_ok(), "{:?}", result);
 
-    let (name, description) = result.unwrap();
+    let validated = result.unwrap();
     assert_eq!(
-        name, "CreateDocument",
+        validated.name, "CreateDocument",
         "Tool name should match the schemars title"
     );
     assert!(
-        description.contains("Create"),
+        validated.description.contains("Create"),
         "Description should contain expected text"
     );
 }

@@ -480,6 +480,7 @@ describe('optimisticUpdateSoupItemUpdatedAt', () => {
 // -- Normalized grouped cache tests --
 
 import type { GroupByField, GroupMeta } from '../grouped/types';
+import { NOT_SET_GROUP_KEY } from '../grouped/types';
 import type { SoupAstItemsGroupedPage } from '../items';
 
 const STATUS_DEF = 'status-def-id';
@@ -502,6 +503,16 @@ function mockTaskItem(id: string, statusOption: string): SoupApiItem {
         },
       ],
     },
+    frecency_score: 1,
+  } as unknown as SoupApiItem;
+}
+
+/** Build an email-thread item. Emails carry no task properties, so under a
+ * property grouping they resolve to the NOT_SET bucket. */
+function mockEmailItem(id: string): SoupApiItem {
+  return {
+    tag: 'emailThread',
+    data: { id, subject: `email ${id}` },
     frecency_score: 1,
   } as unknown as SoupApiItem;
 }
@@ -548,6 +559,21 @@ function seedGroupedAstQuery(
 ) {
   const key = [...soupKeys.astItems._def, {}, {}, STATUS_GROUP_BY, suffix];
   testQueryClient.setQueryDefaults(key, { meta: { groupBy: STATUS_GROUP_BY } });
+  testQueryClient.setQueryData(key, data);
+  return key;
+}
+
+/** Seed a grouped astItems query that also carries an item filter, mirroring
+ * a list view's `soupItemMatchesListView` gate. */
+function seedGroupedAstQueryWithFilter(
+  data: InfiniteData<SoupAstItemsGroupedPage, unknown>,
+  itemFilter: (item: SoupApiItem) => boolean,
+  suffix = 'grouped-filtered-seed'
+) {
+  const key = [...soupKeys.astItems._def, {}, {}, STATUS_GROUP_BY, suffix];
+  testQueryClient.setQueryDefaults(key, {
+    meta: { groupBy: STATUS_GROUP_BY, itemFilter },
+  });
   testQueryClient.setQueryData(key, data);
   return key;
 }
@@ -728,5 +754,63 @@ describe('optimisticUpdateSoupEntity — cross-group move', () => {
       >(key)!;
     expect(after.pages[0].groups[0].itemIds).toEqual(['a-1']);
     expect(after.pages[0].groups[0].totalCount).toBe(1);
+  });
+});
+
+describe('optimisticUpdateSoupEntity — parent item filter gate', () => {
+  it('does not bucket an entity that fails the query item filter', () => {
+    const items = [mockTaskItem('a-1', 'in_progress')];
+    const groups = [buildGroup('in_progress', ['a-1'], 1, 0)];
+    const key = seedGroupedAstQueryWithFilter(
+      mockGroupedParentCache(items, groups),
+      (item) => item.tag !== 'emailThread'
+    );
+
+    mockNormalizer.getObjectById.mockReturnValue(mockEmailItem('e-1'));
+
+    optimisticUpdateSoupEntity({
+      tag: 'emailThread',
+      data: { id: 'e-1' },
+      frecency_score: 1,
+    } as unknown as Parameters<typeof optimisticUpdateSoupEntity>[0]);
+
+    const page =
+      testQueryClient.getQueryData<
+        InfiniteData<SoupAstItemsGroupedPage, unknown>
+      >(key)!.pages[0];
+
+    expect(page.items['e-1']).toBeUndefined();
+    expect(page.groups.map((g) => g.key)).toEqual(['in_progress']);
+    expect(page.groups.some((g) => g.itemIds.includes('e-1'))).toBe(false);
+  });
+
+  it('removes a previously-bucketed entity that now fails the filter', () => {
+    const items = [mockTaskItem('a-1', 'in_progress'), mockEmailItem('e-1')];
+    const groups = [
+      buildGroup('in_progress', ['a-1'], 1, 0),
+      buildGroup(NOT_SET_GROUP_KEY, ['e-1'], 1, 1),
+    ];
+    const key = seedGroupedAstQueryWithFilter(
+      mockGroupedParentCache(items, groups),
+      (item) => item.tag !== 'emailThread'
+    );
+
+    mockNormalizer.getObjectById.mockReturnValue(mockEmailItem('e-1'));
+
+    optimisticUpdateSoupEntity({
+      tag: 'emailThread',
+      data: { id: 'e-1' },
+      frecency_score: 1,
+    } as unknown as Parameters<typeof optimisticUpdateSoupEntity>[0]);
+
+    const page =
+      testQueryClient.getQueryData<
+        InfiniteData<SoupAstItemsGroupedPage, unknown>
+      >(key)!.pages[0];
+
+    expect(page.items['e-1']).toBeUndefined();
+    const notSet = page.groups.find((g) => g.key === NOT_SET_GROUP_KEY)!;
+    expect(notSet.itemIds).toEqual([]);
+    expect(notSet.totalCount).toBe(0);
   });
 });

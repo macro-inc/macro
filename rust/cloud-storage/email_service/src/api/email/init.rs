@@ -17,6 +17,7 @@ use model::user::axum_extractor::MacroUserExtractor;
 use models_email::email::service::backfill::{
     BackfillJobStatus, BackfillOperation, BackfillPubsubMessage, InitPayload, JobScopedPayload,
 };
+use models_email::gmail::error::GmailError;
 use models_email::service::link;
 use models_email::service::link::Link;
 use strum_macros::AsRefStr;
@@ -160,7 +161,7 @@ pub async fn handler(
 
     let pg_repo = EmailPgRepo::new(ctx.db.clone());
 
-    let (link, email_address) = if let Some(link_id) = link_id {
+    let (link, _email_address) = if let Some(link_id) = link_id {
         let in_progress =
             macro_db_client::in_progress_user_link::get_in_progress_user_link(&ctx.db, &link_id)
                 .await
@@ -227,6 +228,7 @@ pub async fn handler(
                     &mut *tx,
                     &user_context.user_id,
                     child_macro_id,
+                    child_link.id,
                 )
                 .await
                 .context("Failed to insert macro_user_links edge")?;
@@ -252,15 +254,28 @@ pub async fn handler(
             }
 
             // Self-link bootstrap: the child macro_user exists but never connected an inbox.
-            // Provision its email_links row with the child's macro_id (inbox ownership) but the
-            // primary's fusionauth_user_id — the OAuth grant lives under the primary's fusion id,
-            // and token resolution, message/thread scoping, and backfill rate-limiting key off it.
+            // Provision its email_links row entirely under the child's identity: the OAuth
+            // grant (FA IdP link) is attached to the child's fusion user at the OAuth
+            // callback — it is also the child's login identity, so it cannot live under the
+            // primary — and token resolution, scoping, and backfill rate-limiting key off it.
+            // Access for the primary comes from the macro_user_links edge alone.
             let child_macro_id_owned = MacroUserIdStr::try_from(child_macro_id.to_string())?;
 
+            // `existing_owner` proved a User row exists for this email, so a miss here means
+            // the child account vanished mid-flight. Abort rather than fall back to the
+            // requester's fusion id, which would provision the link under the wrong identity.
+            let child_fusion_id =
+                macro_db_client::user::get::get_macro_user_id_by_email(&ctx.db, &linked_email)
+                    .await
+                    .context("Failed to look up child's fusion id for self-link bootstrap")?
+                    .context("child macro user disappeared before self-link bootstrap")?
+                    .to_string();
+
+            enforce_backfill_rate_limit(&ctx.db, &child_fusion_id, &linked_email).await?;
+
             let gmail_token =
-                fetch_gmail_token_for_email(&ctx, &user_context.fusion_user_id, &linked_email)
-                    .await?;
-            let watch_response = ctx.gmail_client.register_watch(&gmail_token).await?;
+                fetch_gmail_token_for_email(&ctx, &child_fusion_id, &linked_email).await?;
+            let watch_response = register_watch_recovering(&ctx.gmail_client, &gmail_token).await?;
 
             // All writes commit atomically so a partial failure leaves no dangling link,
             // edge, or consumed in_progress row.
@@ -272,7 +287,7 @@ pub async fn handler(
 
             let link = enable_gmail_sync_for(
                 tx.as_mut(),
-                &user_context.fusion_user_id,
+                &child_fusion_id,
                 child_macro_id_owned,
                 &linked_email,
                 &watch_response.history_id,
@@ -283,6 +298,7 @@ pub async fn handler(
                 &mut *tx,
                 &user_context.user_id,
                 child_macro_id,
+                link.id,
             )
             .await
             .context("Failed to insert macro_user_links edge")?;
@@ -374,6 +390,55 @@ pub async fn handler(
                     .await
                     .context("Failed to commit shared-inbox promotion transaction")?;
 
+                // Relocate the mailbox's Google grant onto a dedicated FusionAuth user so the
+                // inbox keeps syncing regardless of which connector stays. Done after the
+                // commit: if relocation fails the inbox keeps working under the original
+                // owner's grant (prior behavior) and the relocation can be retried. Once the
+                // grant has moved, the link row must point at the shared user or token
+                // fetches for this inbox fail, so the update is retried before giving up.
+                match ctx
+                    .auth_service_client
+                    .relocate_inbox_grant(
+                        &linked_email,
+                        &existing_link.fusionauth_user_id,
+                        &promoted.mailbox_fusion_id.to_string(),
+                    )
+                    .await
+                {
+                    Ok(shared_fusionauth_user_id) => {
+                        const MAX_LINK_UPDATE_ATTEMPTS: u32 = 3;
+                        for attempt in 1..=MAX_LINK_UPDATE_ATTEMPTS {
+                            match email_db_client::links::update::update_link_fusionauth_user_id(
+                                &ctx.db,
+                                promoted.link_id,
+                                &shared_fusionauth_user_id,
+                            )
+                            .await
+                            {
+                                Ok(()) => break,
+                                Err(e) if attempt < MAX_LINK_UPDATE_ATTEMPTS => {
+                                    tracing::warn!(error=?e, attempt, "Retrying link fusionauth_user_id update after grant relocation");
+                                    tokio::time::sleep(std::time::Duration::from_millis(
+                                        200 * u64::from(attempt),
+                                    ))
+                                    .await;
+                                }
+                                Err(e) => {
+                                    tracing::error!(
+                                        error=?e,
+                                        link_id=%promoted.link_id,
+                                        shared_fusionauth_user_id=%shared_fusionauth_user_id,
+                                        "Failed to re-home link fusionauth_user_id after grant relocation; inbox token fetches will fail until the link is re-homed to the shared user"
+                                    );
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        tracing::error!(error=?e, "Failed to relocate shared-inbox grant; inbox keeps syncing under the original owner's grant");
+                    }
+                }
+
                 return Ok((
                     StatusCode::OK,
                     Json(InitResponse {
@@ -384,10 +449,13 @@ pub async fn handler(
                     .into_response());
             }
 
+            enforce_backfill_rate_limit(&ctx.db, &user_context.fusion_user_id, &linked_email)
+                .await?;
+
             let gmail_token =
                 fetch_gmail_token_for_email(&ctx, &user_context.fusion_user_id, &linked_email)
                     .await?;
-            let watch_response = ctx.gmail_client.register_watch(&gmail_token).await?;
+            let watch_response = register_watch_recovering(&ctx.gmail_client, &gmail_token).await?;
 
             let mut tx = ctx
                 .db
@@ -434,6 +502,8 @@ pub async fn handler(
         let email = extract_email_with_response(&user_context.user_id)
             .map_err(|_| InitError::BadRequest("Failed to extract email".to_string()))?;
 
+        enforce_backfill_rate_limit(&ctx.db, &user_context.fusion_user_id, &email).await?;
+
         let gmail_token = email_service::util::gmail::auth::fetch_gmail_token_no_cache(
             &user_context,
             &ctx.redis_client,
@@ -442,7 +512,7 @@ pub async fn handler(
         .await
         .map_err(|_| InitError::BadRequest("Failed to fetch Gmail token".to_string()))?;
 
-        let watch_response = ctx.gmail_client.register_watch(&gmail_token).await?;
+        let watch_response = register_watch_recovering(&ctx.gmail_client, &gmail_token).await?;
 
         let mut tx = ctx
             .db
@@ -466,24 +536,53 @@ pub async fn handler(
         (link, email)
     };
 
-    // users can only have 3 jobs within past 24h and one backfill job per link in progress at a time
-    let recent_jobs = email_db_client::backfill::job::get::get_recent_jobs_by_fusionauth_user_id(
-        &ctx.db,
-        &link.fusionauth_user_id,
-    )
-    .await
-    .context("Failed to fetch jobs by macro id")?;
-
-    if recent_jobs.len() >= 3 && !email_address.ends_with("@macro.com") {
-        tracing::info!(user_id = %user_context.user_id, "Too many jobs error");
-        email_db_client::links::delete::delete_link_by_id(&ctx.db, link.id)
+    // Concurrent /email/init calls for the same inbox upsert the same link (ON CONFLICT)
+    // and would each enqueue a backfill. Reuse an in-flight backfill if one already exists
+    // for this link rather than starting a duplicate. This cheap pre-check covers the common
+    // sequential case; the partial unique index behind create_backfill_job closes the
+    // check-then-create race for truly concurrent callers.
+    if let Some(existing) =
+        email_db_client::backfill::job::get::get_active_backfill_job(&ctx.db, link.id)
             .await
-            .context("Failed to delete link")?;
-
-        return Err(InitError::TooManyJobs);
+            .context("Failed to check for an in-flight backfill job")?
+    {
+        return Ok((
+            StatusCode::OK,
+            Json(InitResponse {
+                link_id: link.id,
+                backfill_job_id: Some(existing.id),
+            }),
+        )
+            .into_response());
     }
 
-    // Record link creation in history table for tracking (best-effort)
+    let Some(backfill_job) = email_db_client::backfill::job::insert::create_backfill_job(
+        &ctx.db,
+        link.id,
+        link.fusionauth_user_id.as_str(),
+        None,
+    )
+    .await
+    .context("Failed to create backfill job")?
+    else {
+        // Lost the create race: a concurrent init already started this link's backfill.
+        // Reuse it without writing a duplicate history row or enqueueing a second backfill.
+        let existing =
+            email_db_client::backfill::job::get::get_active_backfill_job(&ctx.db, link.id)
+                .await
+                .context("Failed to fetch in-flight backfill job after insert conflict")?
+                .context("backfill insert conflicted but no active job found")?;
+        return Ok((
+            StatusCode::OK,
+            Json(InitResponse {
+                link_id: link.id,
+                backfill_job_id: Some(existing.id),
+            }),
+        )
+            .into_response());
+    };
+
+    // Genuinely new job — record link creation in history (best-effort) only now.
     email_db_client::links_history::insert::insert_email_link_history(
         &ctx.db,
         link.id,
@@ -496,15 +595,6 @@ pub async fn handler(
         tracing::error!(error=?e, link_id=?link.id, "Failed to insert email link history");
     })
     .ok();
-
-    let backfill_job = email_db_client::backfill::job::insert::create_backfill_job(
-        &ctx.db,
-        link.id,
-        link.fusionauth_user_id.as_str(),
-        None,
-    )
-    .await
-    .context("Failed to create backfill job")?;
 
     let ps_message = BackfillPubsubMessage {
         backfill_operation: BackfillOperation::Init(JobScopedPayload {
@@ -553,6 +643,51 @@ pub async fn handler(
         .into_response())
 }
 
+/// Rejects a connect when this Gmail identity already has 3+ recent backfill jobs in
+/// the last 24h (`@macro.com` is exempt). Enforced before the link and Gmail watch are
+/// created so a rejected connect never has to tear down a half-provisioned inbox.
+async fn enforce_backfill_rate_limit(
+    db: &sqlx::PgPool,
+    fusion_user_id: &str,
+    email_address: &str,
+) -> Result<(), InitError> {
+    let recent_jobs = email_db_client::backfill::job::get::get_recent_jobs_by_fusionauth_user_id(
+        db,
+        fusion_user_id,
+    )
+    .await
+    .context("Failed to fetch recent backfill jobs")?;
+
+    if recent_jobs.len() >= 3 && !email_address.ends_with("@macro.com") {
+        return Err(InitError::TooManyJobs);
+    }
+
+    Ok(())
+}
+
+/// Registers a Gmail watch, recovering from the one-watch-per-mailbox limit. A watch
+/// left over from a prior connect (e.g. a disconnect that could not reach Gmail to stop
+/// it) makes a fresh registration fail with 400 "Only one user push notification client
+/// allowed ... call /stop then try again". On that error we stop the stale watch and
+/// retry once.
+async fn register_watch_recovering(
+    client: &gmail_client::GmailClient,
+    access_token: &str,
+) -> Result<models_email::gmail::history::WatchResponse, InitError> {
+    match client.register_watch(access_token).await {
+        Ok(response) => Ok(response),
+        Err(GmailError::Conflict(_)) => {
+            tracing::warn!("Stale Gmail watch blocks registration; stopping it and retrying");
+            client
+                .stop_watch(access_token)
+                .await
+                .context("Failed to stop stale Gmail watch before retry")?;
+            Ok(client.register_watch(access_token).await?)
+        }
+        Err(e) => Err(e.into()),
+    }
+}
+
 /// Fetches a Gmail access token scoped to a specific linked email. Use this instead
 /// of going through the `UserContext`-keyed path when the target inbox is not the
 /// JWT subject's primary email.
@@ -582,8 +717,8 @@ async fn fetch_gmail_token_for_email(
 /// Gmail watch. Runs on a caller-provided connection so the writes can join a wider
 /// transaction; callers register the watch (external IO) beforehand and pass its `history_id`.
 /// Caller-provided identifiers let this serve the JWT-driven new-user signup, the
-/// `link_id`-driven add-inbox flow, and the self-link bootstrap (where `macro_id` is the
-/// child's but `fusion_user_id` is the primary's).
+/// `link_id`-driven add-inbox flow, and the self-link bootstrap (where both `macro_id`
+/// and `fusion_user_id` are the child's — the grant lives with the mailbox's own account).
 #[tracing::instrument(skip(conn), err)]
 async fn enable_gmail_sync_for(
     conn: &mut sqlx::PgConnection,
@@ -592,13 +727,18 @@ async fn enable_gmail_sync_for(
     email_address: &str,
     history_id: &str,
 ) -> Result<Link, InitError> {
+    let email_address = EmailStr::try_from(email_address.to_string())?;
+    let is_primary = link::Link::derive_is_primary(&macro_id, &email_address);
     let link = link::Link {
         id: macro_uuid::generate_uuid_v7(),
         macro_id,
         fusionauth_user_id: fusion_user_id.to_string(),
-        email_address: EmailStr::try_from(email_address.to_string())?,
+        email_address,
         provider: link::UserProvider::Gmail,
         is_sync_active: true,
+        is_primary,
+        needs_reauth: false,
+        last_sync_error_at: None,
         created_at: Default::default(),
         updated_at: Default::default(),
     };

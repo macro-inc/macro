@@ -1,3 +1,4 @@
+import { isMobile } from '@core/mobile/isMobile';
 import { pickNativePhotoLibraryMedia } from '@core/mobile/nativePhotoLibrary';
 import { isPlatform } from '@core/util/platform';
 import { type Accessor, createEffect, createSignal, on } from 'solid-js';
@@ -26,7 +27,13 @@ export function createCollapsedInputState(options: {
 
   const attach = () => {
     if (isPlatform('ios')) {
-      void pickNativePhotoLibraryMedia().then(attachFiles);
+      void pickNativePhotoLibraryMedia().then((files) => {
+        if (files === null) {
+          filePickerRef?.click();
+          return;
+        }
+        return attachFiles(files);
+      });
       return;
     }
     filePickerRef?.click();
@@ -42,7 +49,7 @@ export function createCollapsedInputState(options: {
 
   return {
     /** Whether the collapsed stand-in renders instead of the real input. */
-    isCollapsed: () => !isExpanded(),
+    isCollapsed: () => isMobile() && !isExpanded(),
     expand: () => setIsExpanded(true),
     collapse: () => setIsExpanded(false),
     attach,

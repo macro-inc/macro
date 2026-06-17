@@ -9,6 +9,7 @@ test-support = []
 
 [dependencies]
 agent = { path = "../agent" }
+ai_usage = { path = "../ai_usage" }
 anthropic = { path = "../anthropic", features = ["toolset"] }
 attachment = { path = "../attachment" }
 non_empty = { path = "../non_empty" }
@@ -22,7 +23,6 @@ chat = { path = "../chat", features = ["ai_tools", "outbound"] }
 channels = { path = "../channels", features = ["ai_tools", "outbound"] }
 chrono.workspace = true
 dateparser.workspace = true
-comms = { path = "../comms", features = ["outbound"] }
 connection = { path = "../connection", default-features = false, features = [
   "ports",
 ] }
@@ -78,6 +78,7 @@ secretsmanager_client = { path = "../secretsmanager_client" }
 aws-sdk-secretsmanager = { workspace = true }
 
 macro_service_urls = { path = "../macro_service_urls" }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 cool_asserts = "2"

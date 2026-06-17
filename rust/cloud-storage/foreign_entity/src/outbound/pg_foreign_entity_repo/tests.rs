@@ -739,6 +739,287 @@ async fn get_for_user_includes_me_under_not_fails_closed(pool: PgPool) {
     assert!(entities.is_empty());
 }
 
+/// Insert a `foreign_entity`-scoped notification and the matching per-user row so the
+/// notification done/seen predicates have something to match against.
+async fn insert_foreign_entity_notification(
+    pool: &PgPool,
+    foreign_entity_id: Uuid,
+    user_id: &str,
+    done: bool,
+    seen: bool,
+) {
+    let notification_id = Uuid::now_v7();
+    sqlx::query(
+        r#"
+        INSERT INTO notification (id, notification_event_type, event_item_id, event_item_type, service_sender)
+        VALUES ($1, 'github_pr_status_changed', $2, 'foreign_entity', 'test')
+        "#,
+    )
+    .bind(notification_id)
+    .bind(foreign_entity_id.to_string())
+    .execute(pool)
+    .await
+    .expect("notification row should be inserted");
+
+    let seen_at: Option<chrono::NaiveDateTime> = seen.then(|| Utc::now().naive_utc());
+    sqlx::query(
+        r#"
+        INSERT INTO user_notification (user_id, notification_id, done, seen_at)
+        VALUES ($1, $2, $3, $4)
+        "#,
+    )
+    .bind(user_id)
+    .bind(notification_id)
+    .bind(done)
+    .bind(seen_at)
+    .execute(pool)
+    .await
+    .expect("user_notification row should be inserted");
+}
+
+fn notification_done_filter(done: bool) -> LiteralTree<ForeignEntityLiteral> {
+    Some(Arc::new(Expr::val(ForeignEntityLiteral::NotificationDone(
+        done,
+    ))))
+}
+
+fn notification_seen_filter(seen: bool) -> LiteralTree<ForeignEntityLiteral> {
+    Some(Arc::new(Expr::val(ForeignEntityLiteral::NotificationSeen(
+        seen,
+    ))))
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn get_for_user_notification_done_filters_by_done_state(pool: PgPool) {
+    let repo = PgForeignEntityRepo::new(pool.clone());
+    let macro_id = "macro|user@example.com";
+
+    let done =
+        insert_foreign_entity_for_source(&repo, "done-pr", "github_pull_request", macro_id, "user")
+            .await;
+    let not_done = insert_foreign_entity_for_source(
+        &repo,
+        "not-done-pr",
+        "github_pull_request",
+        macro_id,
+        "user",
+    )
+    .await;
+    // No notification at all: matches neither done=true nor done=false.
+    insert_foreign_entity_for_source(
+        &repo,
+        "no-notif-pr",
+        "github_pull_request",
+        macro_id,
+        "user",
+    )
+    .await;
+
+    insert_foreign_entity_notification(&pool, done.id, macro_id, true, false).await;
+    insert_foreign_entity_notification(&pool, not_done.id, macro_id, false, false).await;
+
+    let done_matches = repo
+        .get_foreign_entities_for_user(
+            Some(macro_id.to_string()),
+            vec![SourceId::user(macro_id)],
+            10,
+            filter_query(notification_done_filter(true)),
+        )
+        .await
+        .expect("done=true filter should be applied");
+
+    let not_done_matches = repo
+        .get_foreign_entities_for_user(
+            Some(macro_id.to_string()),
+            vec![SourceId::user(macro_id)],
+            10,
+            filter_query(notification_done_filter(false)),
+        )
+        .await
+        .expect("done=false filter should be applied");
+
+    assert_eq!(done_matches, vec![done]);
+    assert_eq!(not_done_matches, vec![not_done]);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn get_for_user_notification_seen_filters_by_seen_state(pool: PgPool) {
+    let repo = PgForeignEntityRepo::new(pool.clone());
+    let macro_id = "macro|user@example.com";
+
+    let seen =
+        insert_foreign_entity_for_source(&repo, "seen-pr", "github_pull_request", macro_id, "user")
+            .await;
+    let unseen = insert_foreign_entity_for_source(
+        &repo,
+        "unseen-pr",
+        "github_pull_request",
+        macro_id,
+        "user",
+    )
+    .await;
+
+    insert_foreign_entity_notification(&pool, seen.id, macro_id, false, true).await;
+    insert_foreign_entity_notification(&pool, unseen.id, macro_id, false, false).await;
+
+    let seen_matches = repo
+        .get_foreign_entities_for_user(
+            Some(macro_id.to_string()),
+            vec![SourceId::user(macro_id)],
+            10,
+            filter_query(notification_seen_filter(true)),
+        )
+        .await
+        .expect("seen=true filter should be applied");
+
+    let unseen_matches = repo
+        .get_foreign_entities_for_user(
+            Some(macro_id.to_string()),
+            vec![SourceId::user(macro_id)],
+            10,
+            filter_query(notification_seen_filter(false)),
+        )
+        .await
+        .expect("seen=false filter should be applied");
+
+    assert_eq!(seen_matches, vec![seen]);
+    assert_eq!(unseen_matches, vec![unseen]);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn get_for_user_notification_done_composes_with_source(pool: PgPool) {
+    let repo = PgForeignEntityRepo::new(pool.clone());
+    let macro_id = "macro|user@example.com";
+
+    let github = insert_foreign_entity_for_source(
+        &repo,
+        "github-pr",
+        "github_pull_request",
+        macro_id,
+        "user",
+    )
+    .await;
+    let linear =
+        insert_foreign_entity_for_source(&repo, "linear-issue", "linear_issue", macro_id, "user")
+            .await;
+
+    insert_foreign_entity_notification(&pool, github.id, macro_id, true, false).await;
+    insert_foreign_entity_notification(&pool, linear.id, macro_id, true, false).await;
+
+    let filter = Some(Arc::new(Expr::and(
+        Expr::val(ForeignEntityLiteral::ForeignEntitySource(
+            "github_pull_request".to_string(),
+        )),
+        Expr::val(ForeignEntityLiteral::NotificationDone(true)),
+    )));
+
+    let matches = repo
+        .get_foreign_entities_for_user(
+            Some(macro_id.to_string()),
+            vec![SourceId::user(macro_id)],
+            10,
+            filter_query(filter),
+        )
+        .await
+        .expect("source AND notification done filter should be applied");
+
+    assert_eq!(matches, vec![github]);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn get_for_user_notification_done_scopes_to_requesting_user(pool: PgPool) {
+    let repo = PgForeignEntityRepo::new(pool.clone());
+    let macro_id = "macro|user@example.com";
+    let other_id = "macro|other@example.com";
+
+    let entity = insert_foreign_entity_for_source(
+        &repo,
+        "shared-pr",
+        "github_pull_request",
+        macro_id,
+        "user",
+    )
+    .await;
+    // The done notification belongs to a different user.
+    insert_foreign_entity_notification(&pool, entity.id, other_id, true, false).await;
+
+    let matches = repo
+        .get_foreign_entities_for_user(
+            Some(macro_id.to_string()),
+            vec![SourceId::user(macro_id)],
+            10,
+            filter_query(notification_done_filter(true)),
+        )
+        .await
+        .expect("notification filter scoped to requesting user should be applied");
+
+    assert!(matches.is_empty());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn get_for_user_notification_filter_without_requesting_user_returns_empty(pool: PgPool) {
+    let repo = PgForeignEntityRepo::new(pool.clone());
+    let macro_id = "macro|user@example.com";
+
+    let entity =
+        insert_foreign_entity_for_source(&repo, "done-pr", "github_pull_request", macro_id, "user")
+            .await;
+    insert_foreign_entity_notification(&pool, entity.id, macro_id, true, false).await;
+
+    let matches = repo
+        .get_foreign_entities_for_user(
+            None,
+            vec![SourceId::user(macro_id)],
+            10,
+            filter_query(notification_done_filter(true)),
+        )
+        .await
+        .expect("notification filter without a requesting user should succeed");
+
+    assert!(matches.is_empty());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn get_for_user_contradictory_notification_done_matches_nothing(pool: PgPool) {
+    let repo = PgForeignEntityRepo::new(pool.clone());
+    let macro_id = "macro|user@example.com";
+
+    let entity =
+        insert_foreign_entity_for_source(&repo, "done-pr", "github_pull_request", macro_id, "user")
+            .await;
+    insert_foreign_entity_notification(&pool, entity.id, macro_id, true, false).await;
+
+    // Sanity check: done=true alone matches the entity.
+    let one_sided = repo
+        .get_foreign_entities_for_user(
+            Some(macro_id.to_string()),
+            vec![SourceId::user(macro_id)],
+            10,
+            filter_query(notification_done_filter(true)),
+        )
+        .await
+        .expect("done=true filter should be applied");
+    assert_eq!(one_sided, vec![entity.clone()]);
+
+    // done=true AND done=false is contradictory and must match nothing rather than
+    // collapsing to a single-sided predicate.
+    let contradiction = Some(Arc::new(Expr::and(
+        Expr::val(ForeignEntityLiteral::NotificationDone(true)),
+        Expr::val(ForeignEntityLiteral::NotificationDone(false)),
+    )));
+    let matches = repo
+        .get_foreign_entities_for_user(
+            Some(macro_id.to_string()),
+            vec![SourceId::user(macro_id)],
+            10,
+            filter_query(contradiction),
+        )
+        .await
+        .expect("contradictory notification filter should be applied");
+
+    assert!(matches.is_empty());
+}
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn patch_updates_selected_fields_preserves_others_and_refreshes_updated_at(pool: PgPool) {
     let repo = PgForeignEntityRepo::new(pool.clone());

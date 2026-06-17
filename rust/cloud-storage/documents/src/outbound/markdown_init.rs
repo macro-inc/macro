@@ -64,43 +64,27 @@ where
         document_id: &str,
         markdown: &str,
     ) -> Result<(), DocumentError> {
-        // TODO: we are fire-and-forget-ing for the empty case because the UI
-        // handles this as a special case to make creating "fresh" documents
-        // faster. If this works, we would like to always fire-and-forget here.
-        if markdown.is_empty() {
-            let document_id = document_id.to_owned();
-            let sync_service_client = self.sync_service_client.clone();
-
-            // Right now on the frontend we wait until this endpoint returns
-            // before redirecting to the new document window. As a
-            // proof-of-concept, we change the contract: we kick-off
-            // initialization and assume that it eventually is initialized, and
-            // allow the user to edit the document buffering CRDT events in the
-            // meantime. We can follow the general pattern of "it will be
-            // initialized eventually," in both cases, but just for now we just
-            // do it for the blank document case only.
-            tokio::spawn(async move {
-                if let Err(e) = sync_service_client
-                    .initialize_from_snapshot(&document_id, MARKDOWN_GOLDEN_SNAPSHOT)
-                    .await
-                {
-                    tracing::error!(error=?e, "failed to initialize document from snapshot");
-                }
-            });
-
-            Ok(())
+        let loro_snapshot = if markdown.is_empty() {
+            MARKDOWN_GOLDEN_SNAPSHOT.into()
         } else {
-            let snapshot = self
-                .lexical_client
+            self.lexical_client
                 .markdown_to_loro_snapshot(markdown)
                 .await
-                .map_err(DocumentError::Internal)?;
+                .map_err(DocumentError::Internal)?
+        };
 
-            self.sync_service_client
-                .initialize_from_snapshot(document_id, &snapshot)
+        let sync_service_client = self.sync_service_client.clone();
+        let document_id = document_id.to_owned();
+        tokio::spawn(async move {
+            if let Err(e) = sync_service_client
+                .initialize_from_snapshot(&document_id, loro_snapshot.as_slice())
                 .await
-                .map_err(DocumentError::Internal)
-        }
+            {
+                tracing::error!(error=?e, "failed to initialize sync service from snapshot");
+            }
+        });
+
+        Ok(())
     }
 }
 

@@ -12,8 +12,10 @@ aws_lambda_events = { workspace = true, features = ["eventbridge"] }
 lambda_runtime = { workspace = true }
 macro_entrypoint = { path = "../macro_entrypoint" }
 macro_env = { path = "../macro_env" }
+macro_env_var = { path = "../macro_env_var" }
 sqlx = { workspace = true }
 sqs_client = { path = "../sqs_client", default-features = false, features = ["email", "sfs_delete"] }
 tokio = { workspace = true }
 tracing = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 

@@ -177,6 +177,50 @@ fn expand_macro_config(input: DeriveInput) -> syn::Result<TokenStream2> {
         }
     });
 
+    let (inherent_impl_generics, inherent_ty_generics, inherent_where_clause) =
+        input.generics.split_for_impl();
+    let remote_secret_resolver_impl = if field_data
+        .iter()
+        .any(|field| is_remote_secret_type(&field.ty))
+    {
+        let bindings = field_data.iter().map(|field| &field.ident);
+        let field_initializers = field_data.iter().map(|field| {
+            let ident = &field.ident;
+            if is_remote_secret_type(&field.ty) {
+                quote! {
+                    #ident: #ident.resolve_from_secret_manager(environment, secret_manager).await?,
+                }
+            } else {
+                quote! { #ident, }
+            }
+        });
+
+        quote! {
+            impl #inherent_impl_generics #struct_name #inherent_ty_generics #inherent_where_clause {
+                #[doc = "Resolve all `LocalOrRemoteSecret` fields through the provided secret manager."]
+                pub async fn resolve_remote_secrets<__MacroConfigSecretManager>(
+                    self,
+                    environment: ::macro_config::__macro_env::Environment,
+                    secret_manager: &__MacroConfigSecretManager,
+                ) -> ::core::result::Result<
+                    Self,
+                    <__MacroConfigSecretManager as ::macro_config::__remote_env_var::SecretManager>::Err,
+                >
+                where
+                    __MacroConfigSecretManager: ::macro_config::__remote_env_var::SecretManager,
+                {
+                    let Self { #(#bindings),* } = self;
+
+                    ::core::result::Result::Ok(Self {
+                        #(#field_initializers)*
+                    })
+                }
+            }
+        }
+    } else {
+        quote! {}
+    };
+
     Ok(quote! {
         impl #impl_generics ::macro_config::__serde::Deserialize<'de> for #struct_name #ty_generics #where_clause {
             fn deserialize<__D>(deserializer: __D) -> Result<Self, __D::Error>
@@ -252,6 +296,8 @@ fn expand_macro_config(input: DeriveInput) -> syn::Result<TokenStream2> {
         }
 
         #(#from_ref_impls)*
+
+        #remote_secret_resolver_impl
     })
 }
 
@@ -367,6 +413,19 @@ fn to_screaming_snake_case(value: &str) -> String {
     }
 
     out
+}
+
+fn is_remote_secret_type(ty: &Type) -> bool {
+    let Type::Path(path) = ty else {
+        return false;
+    };
+
+    let Some(segment) = path.path.segments.last() else {
+        return false;
+    };
+
+    let ident = segment.ident.to_string();
+    ident == "LocalOrRemoteSecret" || ident == "OptionalLocalOrRemoteSecret"
 }
 
 fn is_option_type(ty: &Type) -> bool {

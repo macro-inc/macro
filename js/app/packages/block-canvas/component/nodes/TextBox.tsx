@@ -223,6 +223,7 @@ function TextBoxEditor(props: {
               editor={editor}
               menu={menu()}
               useBlockBoundary={true}
+              sourceDocumentId={props.blockId}
             />
           )}
         </Show>

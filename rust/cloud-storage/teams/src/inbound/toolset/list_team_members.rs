@@ -22,7 +22,8 @@ use serde::{Deserialize, Serialize};
 pub struct ToolTeamMember {
     /// The user's Macro user id.
     pub user_id: String,
-    /// The user's role in the team.
+    /// The user's workspace permission role (owner/admin/member). An app
+    /// permission level, not a job title or evidence of company ownership.
     pub role: String,
 }
 
@@ -41,7 +42,8 @@ impl From<TeamMember<'static>> for ToolTeamMember {
 pub struct ToolTeamInvite {
     /// The invited email address.
     pub email: String,
-    /// The role the invited user will receive.
+    /// The workspace permission role (owner/admin/member) the invited user
+    /// will receive. An app permission level, not a job title.
     pub role: String,
 }
 
@@ -68,7 +70,7 @@ pub struct ListTeamMembersResponse {
 #[derive(Debug, Deserialize, JsonSchema, Clone, Default)]
 #[schemars(
     title = "ListTeamMembers",
-    description = "List the current members and pending invites for the authenticated user's team. Requires the caller to be a team member."
+    description = "List the current members and pending invites for the authenticated user's team. Requires the caller to be a team member. The returned roles (owner/admin/member) are app permission levels only, not job titles — they say nothing about the org chart. Never infer that someone is a founder, an executive, or the company's owner from their workspace role."
 )]
 #[allow(unused)]
 // empty structs can't be deserialized;

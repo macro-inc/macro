@@ -160,6 +160,25 @@ export function ComposeLayout(props: {
     hotkeyToken: 'email.send',
     displayPriority: 10,
   });
+  // On mobile the Cc/Bcc/From rows fold back into the combined row when the
+  // user moves focus on without having added any Cc/Bcc recipients.
+  // Uncommitted text in either field also blocks the fold so it isn't
+  // silently discarded.
+  const collapseCcBccIfEmpty = () => {
+    if (!isMobile()) return;
+    if (ctx.recipients().cc.length > 0 || ctx.recipients().bcc.length > 0)
+      return;
+    const hasPendingInput = [
+      refs().ccRecipientsSelector,
+      refs().bccRecipientsSelector,
+    ].some(
+      (el) => el instanceof HTMLInputElement && el.value.trim().length > 0
+    );
+    if (hasPendingInput) return;
+    setShowCc(false);
+    setShowBcc(false);
+  };
+
   return (
     <div
       ref={registerRef('containerRef')}
@@ -169,7 +188,10 @@ export function ComposeLayout(props: {
       )}
     >
       <div class="pb-1 w-full h-max shrink-0">
-        <div class="mb-4 h-6 flex items-center justify-between">
+        <div
+          class="mb-4 h-6 flex items-center justify-between gap-3"
+          classList={{ hidden: isMobile() && !props.header }}
+        >
           <Show
             when={props.header}
             fallback={
@@ -184,8 +206,8 @@ export function ComposeLayout(props: {
                 }
               >
                 <Show when={ctx.fromAddress?.()}>
-                  <div class="text-xs text-ink-extra-muted/50 flex items-center gap-1">
-                    <span>from</span>
+                  <div class="text-xs text-ink-extra-muted/50 flex items-center gap-1 min-w-0">
+                    <span class="shrink-0">from</span>
                     <FromInboxSelector
                       links={ctx.fromInboxes?.() ?? []}
                       activeLinkId={ctx.selectedFromLinkId?.()}
@@ -198,25 +220,28 @@ export function ComposeLayout(props: {
           >
             {props.header}
           </Show>
-          <div class="flex gap-2 ml-auto">
+          <div
+            class="flex items-center gap-3 ml-auto shrink-0"
+            classList={{ hidden: isMobile() }}
+          >
             <Show when={!isCcVisible()}>
               <button
                 type="button"
-                class="text-ink-muted hover:text-ink hover:bg-hover"
+                class="px-1.5 -mx-1.5 py-1 rounded-md text-sm text-ink-muted hover:text-ink hover:bg-hover"
                 onClick={() => setShowCc(true)}
                 disabled={ctx.disabled()}
               >
-                + Cc
+                Cc
               </button>
             </Show>
             <Show when={!isBccVisible()}>
               <button
                 type="button"
-                class="text-ink-muted hover:text-ink hover:bg-hover"
+                class="px-1.5 -mx-1.5 py-1 rounded-md text-sm text-ink-muted hover:text-ink hover:bg-hover"
                 onClick={() => setShowBcc(true)}
                 disabled={ctx.disabled()}
               >
-                + Bcc
+                Bcc
               </button>
             </Show>
           </div>
@@ -230,9 +255,12 @@ export function ComposeLayout(props: {
           setShowCc={setShowCc}
           showBcc={showBcc}
           setShowBcc={setShowBcc}
+          onToRowFocusIn={collapseCcBccIfEmpty}
         />
 
-        <ComposeSubject inputRef={registerRef('subjectInput')} />
+        <div onFocusIn={collapseCcBccIfEmpty}>
+          <ComposeSubject inputRef={registerRef('subjectInput')} />
+        </div>
       </div>
 
       <div class="size-full flex flex-col min-h-0 mt-4">

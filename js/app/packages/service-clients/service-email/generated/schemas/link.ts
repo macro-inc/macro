@@ -15,9 +15,12 @@ export interface Link {
   email_address: string;
   fusionauth_user_id: string;
   id: string;
-  is_inbox_only: boolean;
+  is_primary: boolean;
   is_sync_active: boolean;
   macro_id: string;
+  /** Whether the link's Google grant needs to be reconnected. Drives the
+per-inbox reconnect prompt independently of the sync-status badge. */
+  needs_reauth: boolean;
   /** The inbox's own profile photo (its self-contact's SFS photo), if synced. */
   photo_url?: LinkPhotoUrl;
   provider: UserProvider;

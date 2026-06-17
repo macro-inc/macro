@@ -58,6 +58,16 @@ pub trait GithubSyncRepo: Send + Sync + 'static {
         github_user_id: &str,
     ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
 
+    /// Maps GitHub logins to the Macro user IDs linked to them via the `github_links` table.
+    ///
+    /// Logins are matched case-insensitively and returned lowercased. A login absent
+    /// from the result has no link; a login may map to multiple Macro users because
+    /// `github_links.github_username` is not unique.
+    fn get_macro_ids_by_github_logins(
+        &self,
+        github_logins: &[String],
+    ) -> impl Future<Output = Result<std::collections::HashMap<String, Vec<String>>, Self::Err>> + Send;
+
     /// Returns all team IDs the given macro user belongs to.
     fn get_user_team_ids(
         &self,

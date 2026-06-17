@@ -28,6 +28,7 @@ macro_uuid = { path = "../macro_uuid"}
 chrono = { workspace = true}
 chrono-tz = { version = "0.10.4", features = ["serde"] }
 agent = { path = "../agent" }
+ai_usage = { path = "../ai_usage" }
 tokio = { workspace = true }
 futures = { workspace = true }
 tracing = { workspace = true }
@@ -59,3 +60,4 @@ secretsmanager_client = { path = "../secretsmanager_client" }
 aws-sdk-secretsmanager = { workspace = true }
 
 macro_service_urls = { path = "../macro_service_urls" }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

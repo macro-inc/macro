@@ -1,9 +1,7 @@
 import { currentThemeId, isThemeSaved, themes } from '../signals/themeSignals';
-import IconLightDark from '@icon/macro-light-dark.svg';
-import { invertTheme, saveTheme } from '../utils/themeUtils';
-import { randomizeTheme } from './ThemeEditorBasic';
-import IconDice from '@phosphor-icons/core/regular/dice-five.svg?component-solid';
+import { saveTheme } from '../utils/themeUtils';
 import IconSave from '@phosphor-icons/core/regular/floppy-disk-back.svg?component-solid';
+import { isMobile } from '@core/mobile/isMobile';
 import { createMemo, Show } from 'solid-js';
 import { Button, cn } from '@ui';
 
@@ -44,24 +42,6 @@ function ThemeTools(props: { class?: string }) {
         </Button>
       </Show>
 
-      <Button
-        label="Randomize Theme"
-        onPointerDown={randomizeTheme}
-        variant="ghost"
-        size="icon-sm"
-      >
-        <IconDice />
-      </Button>
-
-      <Button
-        label="Toggle Light / Dark"
-        onPointerDown={invertTheme}
-        variant="ghost"
-        size="icon-sm"
-      >
-        <IconLightDark />
-      </Button>
-
       <div
         onKeyDown={(e) => {
           if(e.key === 'Enter'){
@@ -88,7 +68,8 @@ function ThemeTools(props: { class?: string }) {
         )}
         style={{
           'white-space': 'nowrap',
-          'flex': '0 1 13rem',
+          // Narrower on mobile so it fits on the same line as the Basic/Advanced tabs.
+          'flex': isMobile() ? '0 1 7.5rem' : '0 1 13rem',
           'min-width': '0',
         }}
         contentEditable={true}

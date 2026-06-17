@@ -11,7 +11,7 @@ import {
   type CommandWithInfo,
   getActiveCommandsFromScope,
 } from '@core/hotkey/getCommands';
-import { activeScope } from '@core/hotkey/state';
+import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
 import type { HotkeyCommand } from '@core/hotkey/types';
 import {
   createFreshSearch,
@@ -49,8 +49,19 @@ type SearchItem = {
   category: CategoryFilter;
 };
 
+/** Ask-AI item: opens a new AI chat seeded with the query */
+type AskAiItem = {
+  id: string;
+  kind: 'ask-ai';
+  bucket: 'ask-ai';
+  searchText: string;
+  sortTimestamp: number;
+  timestamps: TimestampedItem;
+  query: string;
+};
+
 /** Combined item type for command menu (quickAccess items + commands) */
-type CommandMenuItem = QuickAccessItem | CommandItem | SearchItem;
+type CommandMenuItem = QuickAccessItem | CommandItem | SearchItem | AskAiItem;
 
 function isCommandItem(item: CommandMenuItem): item is CommandItem {
   return item.kind === 'command';
@@ -66,6 +77,10 @@ function _isUserItem(item: CommandMenuItem): item is UserItem {
 
 function isSearchItem(item: CommandMenuItem): item is SearchItem {
   return item.kind === 'search';
+}
+
+function isAskAiItem(item: CommandMenuItem): item is AskAiItem {
+  return item.kind === 'ask-ai';
 }
 
 /** Categories that surface a "Search for [query]" row in the command menu */
@@ -89,6 +104,18 @@ function makeSearchItem(query: string, category: CategoryFilter): SearchItem {
     timestamps: { viewedAt: undefined, updatedAt: undefined },
     query,
     category,
+  };
+}
+
+function makeAskAiItem(query: string): AskAiItem {
+  return {
+    id: `ask-ai:${query}`,
+    kind: 'ask-ai',
+    bucket: 'ask-ai',
+    searchText: query,
+    sortTimestamp: 0,
+    timestamps: { viewedAt: undefined, updatedAt: undefined },
+    query,
   };
 }
 
@@ -137,6 +164,7 @@ function commandsToItems(
         ? command.description()
         : command.description;
     const tags = command.tags?.join(' ') ?? '';
+    const keywords = command.keywords?.join(' ') ?? '';
     const id = `command-${description.replaceAll(' ', '-')}`;
     const lastUsedAt = getCommandLastUsedAt(id);
 
@@ -144,7 +172,7 @@ function commandsToItems(
       id,
       kind: 'command',
       bucket: 'command',
-      searchText: [tags, description].filter(Boolean).join(' '),
+      searchText: [tags, keywords, description].filter(Boolean).join(' '),
       sortTimestamp: lastUsedAt?.getTime() ?? 0,
       timestamps: { viewedAt: lastUsedAt, updatedAt: lastUsedAt },
       data: command,
@@ -154,6 +182,50 @@ function commandsToItems(
   });
 
   return items.sort((a, b) => b.sortTimestamp - a.sortTimestamp);
+}
+
+function commandDisplayStep(
+  command: CommandWithInfo
+): DisplayHotkeyStep | null {
+  if (command.hotkeyToken) return { token: command.hotkeyToken };
+  const hotkey = command.hotkeys?.[0];
+  return hotkey ? { shortcut: hotkey } : null;
+}
+
+function nestedCommandScopeDisplaySequence(command: CommandWithInfo) {
+  const scope = hotkeyScopeTree.get(command.scopeId);
+  const activationKey =
+    scope?.type === 'command' ? scope.activationKeys?.[0] : undefined;
+  const childStep = commandDisplayStep(command);
+
+  if (!activationKey || !childStep) return undefined;
+
+  return [{ shortcut: activationKey }, childStep];
+}
+
+function getSurfacedNestedCommands(commands: CommandWithInfo[]) {
+  return commands.flatMap((command) => {
+    if (!command.surfaceNestedCommands || !command.activateCommandScopeId) {
+      return [];
+    }
+
+    const parentStep = commandDisplayStep(command);
+    if (!parentStep) return [];
+
+    return getActiveCommandsFromScope(command.activateCommandScopeId, {
+      sortByScopeLevel: false,
+      hideShadowedCommands: false,
+      hideCommandsWithoutHotkeys: false,
+      limitToCurrentScope: true,
+      ignoreInputFocused: true,
+    }).map((nestedCommand) => ({
+      command: nestedCommand,
+      displayHotkeySequence: [
+        parentStep,
+        commandDisplayStep(nestedCommand),
+      ].filter((step): step is DisplayHotkeyStep => step !== null),
+    }));
+  });
 }
 
 /**
@@ -185,7 +257,9 @@ function useCommandsList(): () => CommandItem[] {
     // If we're in a command scope (multi-stage command), show those commands instead
     const scopeCommands = CommandState.commandScopeCommands();
     if (scopeCommands.length > 0) {
-      return commandsToItems(scopeCommands);
+      return commandsToItems(scopeCommands, {
+        displayHotkeySequence: nestedCommandScopeDisplaySequence,
+      });
     }
 
     // If in entity action mode, filter to only show selection modification commands
@@ -198,8 +272,25 @@ function useCommandsList(): () => CommandItem[] {
 
     // Include sidebar go-to commands in the main command menu with their
     // leader-key sequence rendered as a display-only shortcut.
+    const surfacedNestedCommands = getSurfacedNestedCommands(capturedCommands);
+    const surfacedHotkeySequences = new Map(
+      surfacedNestedCommands.map((item) => [
+        item.command,
+        item.displayHotkeySequence,
+      ])
+    );
+
     return [
-      ...commandsToItems(capturedCommands),
+      ...commandsToItems(
+        [
+          ...capturedCommands,
+          ...surfacedNestedCommands.map((item) => item.command),
+        ],
+        {
+          displayHotkeySequence: (command) =>
+            surfacedHotkeySequences.get(command),
+        }
+      ),
       ...commandsToItems(goToCommands, {
         displayHotkeySequence: (command) => {
           const hotkey = command.hotkeys?.[0];
@@ -236,7 +327,7 @@ function useQuickAccessBuckets(): Record<
     all: allWithCommands,
     channels: quickAccess.useList('channel'),
     dms: quickAccess.useList('dm'),
-    documents: quickAccess.useList('note', 'document'),
+    documents: quickAccess.useList('note', 'document', 'snippet'),
     tasks: quickAccess.useList('task'),
     chats: quickAccess.useList('chat'),
     projects: quickAccess.useList('project'),
@@ -287,6 +378,11 @@ export function useCommandItems(
     const ranked = q ? search()(items, q).map((result) => result.item) : items;
 
     if (shouldShowSearchRow(q)) {
+      // With no direct results the menu would only offer search, so also
+      // offer handing the query to AI.
+      if (ranked.length === 0) {
+        return [makeSearchItem(q, categoryFilter()), makeAskAiItem(q)];
+      }
       return [makeSearchItem(q, categoryFilter()), ...ranked];
     }
 
@@ -296,5 +392,5 @@ export function useCommandItems(
   return filteredItems;
 }
 
-export type { CommandMenuItem, SearchItem };
-export { isCommandItem, isEntityItem, isSearchItem };
+export type { AskAiItem, CommandMenuItem, SearchItem };
+export { isAskAiItem, isCommandItem, isEntityItem, isSearchItem };

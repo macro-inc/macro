@@ -245,7 +245,7 @@ export function Thread(props: {
                     <Show when={replyIds().length > 0 && lastReplyId()}>
                       <Show when={collapsedCount() > 0}>
                         <button
-                          class="text-xs text-ink-extra-muted hover:bg-hover hover:ring hover:ring-edge-muted text-left ml-5 rounded p-1 px-2 mb-2"
+                          class="text-xs text-ink-extra-muted hover:bg-hover text-left ml-5 rounded p-1 px-2 mb-2"
                           on:click={() => {
                             batch(() => {
                               setActiveThread(props.comment.threadId);

@@ -77,7 +77,11 @@ pub async fn handler(
         &header,
         &document_permissions_token,
         &jsonwebtoken::EncodingKey::from_secret(
-            state.config.document_permission_jwt.as_ref().as_bytes(),
+            state
+                .config
+                .document_permission_jwt_secret_key
+                .as_ref()
+                .as_bytes(),
         ),
     )
     .map_err(|e| {

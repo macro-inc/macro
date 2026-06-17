@@ -4,14 +4,14 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { GithubPrEvent } from './githubPrEvent';
+import type { AiResponseMetadata } from './aiResponseMetadata';
 import type { NotifEventOneOfTwofiveTag } from './notifEventOneOfTwofiveTag';
 
 /**
- * A GitHub pull request changed lifecycle state.
+ * An AI assistant responded to a chat.
  */
 export type NotifEventOneOfTwofive = {
-  /** A GitHub pull request changed lifecycle state. */
-  content: GithubPrEvent;
+  /** An AI assistant responded to a chat. */
+  content: AiResponseMetadata;
   tag: NotifEventOneOfTwofiveTag;
 };

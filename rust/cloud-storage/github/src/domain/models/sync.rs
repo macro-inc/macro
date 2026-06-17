@@ -361,6 +361,28 @@ static TEAM_TASK_REFERENCE_RE: LazyLock<Regex> = LazyLock::new(|| {
         .expect("valid regex")
 });
 
+/// Regex matching GitHub `@login` mentions in markdown-ish text.
+///
+/// The leading guard requires the `@` to start the text or follow a
+/// non-login character, which also rejects email addresses (`a@b.com`).
+/// The login follows GitHub's username grammar: 1-39 alphanumerics or
+/// non-leading/non-trailing hyphens. Code spans are not treated specially.
+static GITHUB_MENTION_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?i)(?:^|[^a-z0-9-])@([a-z0-9](?:-?[a-z0-9]){0,38})").expect("valid regex")
+});
+
+/// Extract unique GitHub `@login` mentions from text, normalized to lowercase.
+///
+/// Results are sorted for determinism.
+pub fn extract_github_mentions(text: &str) -> Vec<String> {
+    let logins: std::collections::BTreeSet<String> = GITHUB_MENTION_RE
+        .captures_iter(text)
+        .map(|caps| caps[1].to_lowercase())
+        .collect();
+
+    logins.into_iter().collect()
+}
+
 /// A team-scoped task reference in the form `{team_slug}-{team_task_id}`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TeamTaskReference {

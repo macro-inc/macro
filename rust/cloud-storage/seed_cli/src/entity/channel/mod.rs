@@ -6,10 +6,10 @@ mod test;
 use std::path::Path;
 
 use anyhow::Context;
+use channels::domain::models::ChannelType;
 use clap::{Args, Subcommand, ValueEnum};
 use comms_db_client::channels::create_channel::CreateChannelOptions;
 use comms_db_client::channels::seed_channel::SeedChannelOptions;
-use model::comms::ChannelType;
 use serde::Deserialize;
 use uuid::Uuid;
 

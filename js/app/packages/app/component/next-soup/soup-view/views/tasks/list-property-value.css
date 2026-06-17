@@ -1,5 +1,5 @@
 .task-grid-row {
-  --task-col-status: 7rem;
+  --task-col-status: 7.25rem;
   --task-col-priority: 7rem;
   --task-col-assignees: 9rem;
   --task-col-created-by: 7rem;

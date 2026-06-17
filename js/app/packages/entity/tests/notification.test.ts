@@ -1,4 +1,7 @@
-import type { GithubPrEvent } from '@service-notification/generated/schemas';
+import type {
+  GithubPrCheckRun,
+  GithubPrStatusChanged,
+} from '@service-notification/generated/schemas';
 import { describe, expect, it } from 'vitest';
 import type { Notification } from '../src/types/notification';
 import {
@@ -14,12 +17,21 @@ const GITHUB_PR_FOREIGN_ENTITY_ID = '123e4567-e89b-12d3-a456-426614174000';
 
 type GithubPrNotification = Notification & {
   notification_metadata: {
-    content: GithubPrEvent;
-    tag: 'github_pr_event';
+    content: GithubPrStatusChanged;
+    tag: 'github_pr_status_changed';
   };
 };
 
-function githubPrEvent(overrides: Partial<GithubPrEvent> = {}): GithubPrEvent {
+type GithubPrCheckRunNotification = Notification & {
+  notification_metadata: {
+    content: GithubPrCheckRun;
+    tag: 'github_pr_check_run';
+  };
+};
+
+function githubPrStatusChanged(
+  overrides: Partial<GithubPrStatusChanged> = {}
+): GithubPrStatusChanged {
   return {
     action: 'opened',
     displayName: 'macro/macro#42',
@@ -36,14 +48,48 @@ function githubPrEvent(overrides: Partial<GithubPrEvent> = {}): GithubPrEvent {
 }
 
 function githubPrNotification(
-  overrides: Partial<GithubPrEvent> = {}
+  overrides: Partial<GithubPrStatusChanged> = {}
 ): GithubPrNotification {
   return {
     notification_metadata: {
-      content: githubPrEvent(overrides),
-      tag: 'github_pr_event',
+      content: githubPrStatusChanged(overrides),
+      tag: 'github_pr_status_changed',
     },
   } as GithubPrNotification;
+}
+
+function githubPrCheckRun(
+  overrides: Partial<GithubPrCheckRun> = {}
+): GithubPrCheckRun {
+  return {
+    checkName: 'CI / tests',
+    checkRunGithubId: 987654321,
+    checkStatus: 'completed',
+    checkUrl: 'https://github.com/macro/macro/runs/987654321',
+    completedAt: '2026-06-15T20:00:00Z',
+    conclusion: 'success',
+    displayName: 'macro/macro#42',
+    foreignEntityId: GITHUB_PR_FOREIGN_ENTITY_ID,
+    githubKey: 'macro/macro/pull/42',
+    number: 42,
+    owner: 'macro',
+    repo: 'macro',
+    state: 'completed',
+    title: 'Add notification support',
+    url: 'https://github.com/macro/macro/pull/42',
+    ...overrides,
+  };
+}
+
+function githubPrCheckRunNotification(
+  overrides: Partial<GithubPrCheckRun> = {}
+): GithubPrCheckRunNotification {
+  return {
+    notification_metadata: {
+      content: githubPrCheckRun(overrides),
+      tag: 'github_pr_check_run',
+    },
+  } as GithubPrCheckRunNotification;
 }
 
 describe('notification utils', () => {
@@ -286,8 +332,25 @@ describe('notification utils', () => {
       expect(getNotificationActionText(notification)).toBe('assigned');
     });
 
-    it('returns correct action text for github_pr_event', () => {
+    it('returns correct action text for github_pr_status_changed', () => {
       expect(getNotificationActionText(githubPrNotification())).toBe('updated');
+    });
+
+    it('returns completed action text for github_pr_check_run', () => {
+      expect(getNotificationActionText(githubPrCheckRunNotification())).toBe(
+        'completed'
+      );
+    });
+
+    it('returns failed action text for failed github_pr_check_run', () => {
+      expect(
+        getNotificationActionText(
+          githubPrCheckRunNotification({
+            conclusion: 'failure',
+            state: 'failed',
+          })
+        )
+      ).toBe('failed');
     });
   });
 
@@ -386,6 +449,26 @@ describe('notification utils', () => {
       expect(extractMessageContent(githubPrNotification({ title: '' }))).toBe(
         'macro/macro#42'
       );
+    });
+
+    it('extracts GitHub PR check-run check name', () => {
+      expect(extractMessageContent(githubPrCheckRunNotification())).toBe(
+        'CI / tests'
+      );
+    });
+
+    it('falls back to GitHub PR title when check-run check name is empty', () => {
+      expect(
+        extractMessageContent(githubPrCheckRunNotification({ checkName: '' }))
+      ).toBe('Add notification support');
+    });
+
+    it('falls back to GitHub PR display name when check-run name and title are empty', () => {
+      expect(
+        extractMessageContent(
+          githubPrCheckRunNotification({ checkName: '', title: '' })
+        )
+      ).toBe('macro/macro#42');
     });
 
     it('returns empty string for channel_invite', () => {

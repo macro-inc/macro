@@ -19,6 +19,20 @@ export type SearchableOption = {
   icon?: () => JSX.Element;
 };
 
+export type SearchableSelectAction = {
+  label: string;
+  icon?: () => JSX.Element;
+  onSelect: () => void;
+};
+
+/**
+ * Sentinel id for the action row. It rides the option collection so kobalte's
+ * arrow-key highlighting and Enter-to-select reach it like any other row, but
+ * "selecting" it fires `action.onSelect` and closes the menu instead of
+ * toggling the multi-select value.
+ */
+const ACTION_ID = '__searchable-multi-select-action__';
+
 const ITEM_HEIGHT = 36;
 const LISTBOX_CLASS = 'max-h-[240px] overflow-y-auto scrollbar-hidden';
 
@@ -39,8 +53,14 @@ type SearchableMultiSelectProps = {
   listboxClass?: string;
   /** Keep `options` in their given order instead of pinning selected first. */
   preserveOrder?: boolean;
-  /** Render a per-row "Only" action that narrows the selection to that row. */
+  /**
+   * Render a per-row "Only" action that narrows the selection to that row.
+   * When the row is already the sole active one the label flips to "All" and
+   * the handler is expected to restore the full selection.
+   */
   onOnly?: (id: string) => void;
+  /** Non-toggling action row appended after the options. */
+  action?: SearchableSelectAction;
   open?: Accessor<boolean>;
   onOpenChange?: (open: boolean) => void;
   children: JSX.Element;
@@ -49,22 +69,25 @@ type SearchableMultiSelectProps = {
 const SearchableMultiSelectItem = (itemProps: {
   item: CollectionNode<SearchableOption>;
   onOnly?: (id: string) => void;
+  isSoleActive?: (id: string) => boolean;
 }) => (
   <Combobox.Item
     item={itemProps.item}
     class="w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-left text-xs data-highlighted:bg-ink/5 group cursor-default"
   >
-    <span
-      class={cn(
-        'size-3.5 flex items-center justify-center shrink-0 rounded-sm border text-surface',
-        'border-transparent group-hover:not-hover:border-edge-muted group-data-highlighted:not-hover:border-edge-muted hover:border-accent',
-        'group-data-selected:bg-accent group-data-selected:border-accent'
-      )}
-    >
-      <Combobox.ItemIndicator>
-        <CheckIcon class="size-2.5" />
-      </Combobox.ItemIndicator>
-    </span>
+    <Show when={itemProps.item.rawValue.id !== ACTION_ID}>
+      <span
+        class={cn(
+          'size-3.5 flex items-center justify-center shrink-0 rounded-sm border text-surface',
+          'border-transparent group-hover:not-hover:border-edge-muted group-data-highlighted:not-hover:border-edge-muted hover:border-accent',
+          'group-data-selected:bg-accent group-data-selected:border-accent'
+        )}
+      >
+        <Combobox.ItemIndicator>
+          <CheckIcon class="size-2.5" />
+        </Combobox.ItemIndicator>
+      </span>
+    </Show>
     <Show when={itemProps.item.rawValue.icon}>
       {(icon) => (
         <span class="size-4 flex items-center justify-center shrink-0">
@@ -75,7 +98,11 @@ const SearchableMultiSelectItem = (itemProps: {
     <Combobox.ItemLabel class="flex-1 truncate text-ink-muted group-data-selected:text-ink">
       {itemProps.item.rawValue.label}
     </Combobox.ItemLabel>
-    <Show when={itemProps.onOnly}>
+    <Show
+      when={
+        itemProps.item.rawValue.id !== ACTION_ID ? itemProps.onOnly : undefined
+      }
+    >
       {(onOnly) => (
         <button
           type="button"
@@ -90,7 +117,9 @@ const SearchableMultiSelectItem = (itemProps: {
             onOnly()(itemProps.item.rawValue.id);
           }}
         >
-          Only
+          {itemProps.isSoleActive?.(itemProps.item.rawValue.id)
+            ? 'All'
+            : 'Only'}
         </button>
       )}
     </Show>
@@ -101,6 +130,7 @@ const VirtualizedListbox = (props: {
   options: SearchableOption[];
   class?: string;
   onOnly?: (id: string) => void;
+  isSoleActive?: (id: string) => boolean;
 }) => {
   let handle: VirtualizerHandle | undefined;
   return (
@@ -120,7 +150,11 @@ const VirtualizedListbox = (props: {
           itemSize={ITEM_HEIGHT}
         >
           {(item) => (
-            <SearchableMultiSelectItem item={item} onOnly={props.onOnly} />
+            <SearchableMultiSelectItem
+              item={item}
+              onOnly={props.onOnly}
+              isSoleActive={props.isSoleActive}
+            />
           )}
         </Virtualizer>
       )}
@@ -171,7 +205,6 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
   };
 
   const activeOptions = useActiveOptions(props.options, props.activeIds);
-  const hasMatches = useHasMatches(props.options, searchQuery);
   const selectedFirstOptions = useSelectedFirst({
     items: props.options,
     selectedIds: props.activeIds,
@@ -181,14 +214,33 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
   });
   const sortedOptions = () =>
     props.preserveOrder ? props.options() : selectedFirstOptions();
-
-  const handleChange = (selected: SearchableOption[]) => {
-    props.onChange(selected.map((o) => o.id));
-  };
+  const displayOptions = createMemo(() => {
+    const action = props.action;
+    if (!action) return sortedOptions();
+    return [
+      ...sortedOptions(),
+      { id: ACTION_ID, label: action.label, icon: action.icon },
+    ];
+  });
+  const hasMatches = useHasMatches(displayOptions, searchQuery);
 
   const handleOpenChange = (open: boolean) => {
     setIsOpen(open);
     if (!open) setSearchQuery('');
+  };
+
+  const handleChange = (selected: SearchableOption[]) => {
+    if (props.action && selected.some((o) => o.id === ACTION_ID)) {
+      handleOpenChange(false);
+      props.action.onSelect();
+      return;
+    }
+    props.onChange(selected.map((o) => o.id));
+  };
+
+  const isSoleActive = (id: string) => {
+    const ids = props.activeIds();
+    return ids.length === 1 && ids[0] === id;
   };
 
   return (
@@ -197,7 +249,7 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
       selectionBehavior="toggle"
       closeOnSelection={false}
       open={isOpen()}
-      options={sortedOptions()}
+      options={displayOptions()}
       value={activeOptions()}
       onChange={handleChange}
       onInputChange={setSearchQuery}
@@ -243,9 +295,10 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
                 }
               >
                 <VirtualizedListbox
-                  options={sortedOptions()}
+                  options={displayOptions()}
                   class={props.listboxClass}
                   onOnly={props.onOnly}
+                  isSoleActive={isSoleActive}
                 />
               </Show>
             </div>

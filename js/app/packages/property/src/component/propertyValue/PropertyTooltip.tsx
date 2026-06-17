@@ -105,7 +105,7 @@ const TooltipWrapper = (props: {
 };
 
 const ValueContainer = (props: { children: JSX.Element }) => (
-  <div class="inline-flex items-center gap-1.5 px-2 py-1 text-xs leading-none text-ink-muted h-fit w-fit rounded-sm">
+  <div class="inline-flex min-w-0 items-center gap-1.5 px-2 py-0.5 text-xs leading-5 text-ink-muted w-fit rounded-sm">
     {props.children}
   </div>
 );
@@ -247,7 +247,7 @@ const EntityValuePill = (props: { entity: EntityReference }) => {
   return (
     <ValueContainer>
       <Show when={icon()}>{icon()}</Show>
-      <span class="truncate max-w-37.5">{name()}</span>
+      <span class="min-w-0 truncate max-w-37.5">{name()}</span>
     </ValueContainer>
   );
 };
@@ -264,7 +264,7 @@ const UserEntityItem = (props: { entity: EntityReference }) => {
       <div class="size-4 rounded-full overflow-hidden shrink-0">
         <UserIcon id={props.entity.entity_id} isDeleted={false} size="fill" />
       </div>
-      <span class="truncate max-w-37.5">{name()}</span>
+      <span class="min-w-0 truncate max-w-37.5">{name()}</span>
     </ValueContainer>
   );
 };

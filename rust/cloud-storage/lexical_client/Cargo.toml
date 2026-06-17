@@ -10,6 +10,7 @@ models_search = { path = "../models_search" }
 reqwest = { workspace = true }
 serde = { workspace = true }
 tracing = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 serde_json = { workspace = true }

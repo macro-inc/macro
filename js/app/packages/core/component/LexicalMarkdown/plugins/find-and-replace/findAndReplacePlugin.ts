@@ -62,6 +62,7 @@ interface NoneBreakNode {
 }
 
 type FindAndReplaceProps = {
+  getListOffset: () => NodekeyOffset[];
   setListOffset: (listOffset: NodekeyOffset[]) => void;
 };
 
@@ -450,9 +451,26 @@ function buildNodeKeyOffsetList(
 }
 
 function selectNextKey(key: NodeKey) {
+  if (!key) return;
   const nodeSelection = $createNodeSelection();
   nodeSelection.add(key);
   $setSelection(nodeSelection);
+}
+
+function areListOffsetsEqual(left: NodekeyOffset[], right: NodekeyOffset[]) {
+  if (left.length !== right.length) return false;
+  for (let i = 0; i < left.length; i += 1) {
+    const leftItem = left[i];
+    const rightItem = right[i];
+    if (leftItem.key !== rightItem.key) return false;
+    if (leftItem.pairKey !== rightItem.pairKey) return false;
+    if (leftItem.offset.start !== rightItem.offset.start) return false;
+    if (leftItem.offset.end !== rightItem.offset.end) return false;
+    if (leftItem.offset.isReplace !== rightItem.offset.isReplace) {
+      return false;
+    }
+  }
+  return true;
 }
 
 function registerFindAndReplacePlugin(
@@ -460,6 +478,9 @@ function registerFindAndReplacePlugin(
   props: FindAndReplaceProps
 ) {
   const updateListOffset = (nodeKeyOffsetList: NodekeyOffset[]) => {
+    if (areListOffsetsEqual(props.getListOffset(), nodeKeyOffsetList)) {
+      return;
+    }
     props.setListOffset(nodeKeyOffsetList);
   };
 
@@ -567,61 +588,59 @@ function registerFindAndReplacePlugin(
     editor.registerCommand(
       DO_SEARCH_COMMAND,
       (searchString: string) => {
-        editor.getEditorState().read(() => {
-          const root = $getRoot();
-          const regex = new RegExp(preg_quote(searchString, '/'), 'gi');
-          var rootText = traverseNodeGetText(root);
-          rootText = rootText.replace(/\n+/g, '\n').replace(/^(\n)+/, '');
+        const root = $getRoot();
+        const regex = new RegExp(preg_quote(searchString, '/'), 'gi');
+        var rootText = traverseNodeGetText(root);
+        rootText = rootText.replace(/\n+/g, '\n').replace(/^(\n)+/, '');
 
-          const indexes: number[] = [];
-          let found = regex.exec(rootText);
-          while (found) {
-            indexes.push(found.index);
-            found = regex.exec(rootText);
-          }
-          const nodes = getNoneBreakNodes(root, searchString, indexes, {
-            currentMatchIndex: 0,
-            previousLength: 0,
-          });
-
-          const nodeKeyOffsetList: NodekeyOffset[] = [];
-          nodes.map((node) => {
-            const hightlightTarget = highlightMultipleNode(
-              node.node,
-              searchString,
-              { startIndex: 0, totalLength: node.node.getTextContent().length }
-            );
-            const originalLocations: StringLocation[] = node.realLocations.map(
-              (rLocation) => {
-                return {
-                  searchStart: rLocation.location,
-                  searchLength: rLocation.matched.length,
-                };
-              }
-            );
-            const additionLocations: StringLocation[] = [];
-            const mainIndex = { currentIndex: 0 };
-            hightlightTarget.map((hNode) => {
-              buildNodeKeyOffsetList(
-                hNode,
-                additionLocations,
-                originalLocations,
-                mainIndex,
-                nodeKeyOffsetList
-              );
-            });
-          });
-          let previousPairKey = 0;
-          nodeKeyOffsetList.map(function (item) {
-            if (item.offset.isReplace) {
-              previousPairKey += 1;
-              item.pairKey = previousPairKey;
-            } else {
-              item.pairKey = previousPairKey;
-            }
-          });
-          updateListOffset(nodeKeyOffsetList);
+        const indexes: number[] = [];
+        let found = regex.exec(rootText);
+        while (found) {
+          indexes.push(found.index);
+          found = regex.exec(rootText);
+        }
+        const nodes = getNoneBreakNodes(root, searchString, indexes, {
+          currentMatchIndex: 0,
+          previousLength: 0,
         });
+
+        const nodeKeyOffsetList: NodekeyOffset[] = [];
+        nodes.map((node) => {
+          const hightlightTarget = highlightMultipleNode(
+            node.node,
+            searchString,
+            { startIndex: 0, totalLength: node.node.getTextContent().length }
+          );
+          const originalLocations: StringLocation[] = node.realLocations.map(
+            (rLocation) => {
+              return {
+                searchStart: rLocation.location,
+                searchLength: rLocation.matched.length,
+              };
+            }
+          );
+          const additionLocations: StringLocation[] = [];
+          const mainIndex = { currentIndex: 0 };
+          hightlightTarget.map((hNode) => {
+            buildNodeKeyOffsetList(
+              hNode,
+              additionLocations,
+              originalLocations,
+              mainIndex,
+              nodeKeyOffsetList
+            );
+          });
+        });
+        let previousPairKey = 0;
+        nodeKeyOffsetList.map(function (item) {
+          if (item.offset.isReplace) {
+            previousPairKey += 1;
+            item.pairKey = previousPairKey;
+          } else {
+            item.pairKey = previousPairKey;
+          }
+        });
+        updateListOffset(nodeKeyOffsetList);
         return true;
       },
       COMMAND_PRIORITY_HIGH

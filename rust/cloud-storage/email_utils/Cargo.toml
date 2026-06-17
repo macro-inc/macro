@@ -10,3 +10,4 @@ html2text = "0.15.1"
 lazy_static = { workspace = true }
 regex = { workspace = true }
 scraper = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

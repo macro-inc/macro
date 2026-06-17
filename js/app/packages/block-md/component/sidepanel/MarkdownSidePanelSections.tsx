@@ -13,6 +13,7 @@ import {
 import { Notifications } from '@core/component/Notifications';
 import { References } from '@core/component/References';
 import { UserIcon } from '@core/component/UserIcon';
+import { useUserId } from '@core/context/user';
 import type { Entity, EntityType } from '@core/types';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { type DateValue, formatDate } from '@core/util/date';
@@ -79,7 +80,7 @@ export function MarkdownSidePanelSections(
         <DetailsSectionContent />
       </SidePanel.Section>
       <Show when={isSnippet()}>
-        <SnippetSharingSectionConditional documentId={blockId} />
+        <SnippetSharingOwnerSectionConditional documentId={blockId} />
       </Show>
       <SidePanel.Section
         id="properties"
@@ -111,13 +112,29 @@ export function MarkdownSidePanelSections(
 // Sharing Section (snippets)
 // ─────────────────────────────────────────────────────────────────────────────
 
+function SnippetSharingOwnerSectionConditional(props: { documentId: string }) {
+  const currentUserId = useUserId();
+  const metadataQuery = useDocumentMetadataQuery(() => props.documentId);
+
+  const isOwner = createMemo(() => {
+    const ownerId = metadataQuery.data?.owner;
+    const userId = currentUserId();
+    return !!ownerId && !!userId && ownerId === userId;
+  });
+
+  return (
+    <Show when={isOwner()}>
+      <SnippetSharingTeamSectionConditional documentId={props.documentId} />
+    </Show>
+  );
+}
+
 /**
- * "Share with team" toggle for snippets — same UI and behavior as the Calls
- * and CRM sharing sections. Only rendered when the snippet owner belongs to a
- * team; sharing grants the team Edit access so the snippet shows up in
- * teammates' `;` menus and they can collaboratively maintain it.
+ * "Share with team" toggle for snippets. Only mounted for the snippet owner;
+ * sharing grants the owner's team Edit access so teammates can insert and
+ * maintain the snippet.
  */
-function SnippetSharingSectionConditional(props: { documentId: string }) {
+function SnippetSharingTeamSectionConditional(props: { documentId: string }) {
   const teamShareQuery = useDocumentTeamShareQuery(() => props.documentId);
 
   return (

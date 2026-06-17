@@ -2,6 +2,7 @@ import { useBlockEntityCommands } from '@app/component/next-soup/actions';
 import { useMaybePreviewPanel } from '@app/component/PreviewPanel';
 import { HeaderIsland } from '@app/component/split-layout/components/HeaderIsland';
 import { SplitHeaderRight } from '@app/component/split-layout/components/SplitHeader';
+import { useNavigatedFromJK } from '@app/component/useNavigatedFromJK';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { URL_PARAMS } from '@block-channel/constants';
 import { ChannelAttachmentsTab } from '@channel/Attachments/ChannelAttachmentsTab';
@@ -40,7 +41,7 @@ import { useBlockId } from '@core/block';
 import { EntityPermissionsGate } from '@core/component/EntityPermissionsGate';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import { useChannelName, useChannelType } from '@core/context/channels';
-import { createMethodRegistration } from '@core/orchestrator';
+import { awaitCondition, createMethodRegistration } from '@core/orchestrator';
 import { blockHandleSignal } from '@core/signal/load';
 import { useActiveCallQuery } from '@queries/call/call';
 import { useChannelParticipantsQuery } from '@queries/channel/channel-participants';
@@ -170,6 +171,7 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
   useBlockEntityCommands();
 
   const isPreview = !!useMaybePreviewPanel();
+  const { navigatedFromJK } = useNavigatedFromJK();
   const channelId = useBlockId();
   const blockHandle = blockHandleSignal.get;
   const [searchParams, setSearchParams] = useSearchParams();
@@ -193,13 +195,15 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
   );
   const [pendingJoinCall, setPendingJoinCall] = createSignal(wantsJoinCall);
 
-  /** Set when `<NewChannel>` mounts (Messages tab only); used for goToMessage. */
-  const messagesChannelHandle: { current?: ChannelHandle } = {};
+  // Set when `<NewChannel>` mounts (Messages tab only); used for goToMessage.
+  // A signal so goToLocationFromParams can await it via the orchestrator's
+  // availability primitive when the tab hasn't mounted yet.
+  const [messagesHandle, setMessagesHandle] = createSignal<ChannelHandle>();
 
   const setActiveTab = (tab: ChannelTabId) => {
     tab = normalizeChannelTab(tab);
     if (tab !== 'messages') {
-      messagesChannelHandle.current = undefined;
+      setMessagesHandle(undefined);
     }
     setActiveTabInternal(tab);
   };
@@ -263,12 +267,16 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
       const { targetMessageId, targetMessageReplyId } =
         convertTargetMessage(params);
 
-      if (targetMessageId && messagesChannelHandle.current) {
+      if (targetMessageId) {
         setActiveTab(DEFAULT_CHANNEL_TAB);
-        messagesChannelHandle.current.goToMessage(
-          targetMessageId,
-          targetMessageReplyId
-        );
+        // The Messages tab may not have mounted yet (e.g. right after the split
+        // opens). Wait for its handle via the orchestrator's availability
+        // primitive, then navigate.
+        await awaitCondition(
+          () => messagesHandle() !== undefined,
+          10_000
+        ).catch(() => {});
+        messagesHandle()?.goToMessage(targetMessageId, targetMessageReplyId);
       }
 
       if (isJoinCallRequested(params[CHANNEL_URL_PARAMS.joinCall])) {
@@ -301,7 +309,7 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
   };
 
   const onChannelReady = (handle: ChannelHandle) => {
-    messagesChannelHandle.current = handle;
+    setMessagesHandle(() => handle);
   };
 
   return (
@@ -328,7 +336,7 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
               <NewChannel
                 channelId={channelId}
                 onHandleReady={onChannelReady}
-                autofocus={!isPreview}
+                autofocus={!isPreview && !navigatedFromJK()}
                 {...convertTargetMessage(initialTargetMessageParams())}
               />
             </Match>

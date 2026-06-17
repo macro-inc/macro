@@ -1,6 +1,7 @@
 import { analytics } from '@app/lib/analytics';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { setAutomationComposerOpen } from '@block-automation/component';
+import { EMAIL_COMPOSE_TO_INPUT_ID } from '@block-email/constants';
 import type { BlockAlias, BlockName } from '@core/block';
 import { getIconConfig } from '@core/component/EntityIcon';
 import {
@@ -8,6 +9,7 @@ import {
   ENABLE_SNIPPETS_FLAG,
   ENABLE_SNIPPETS_OVERRIDE,
 } from '@core/constant/featureFlags';
+import { triggerFocusInput } from '@core/directive/focusInput';
 import {
   createHotkeyGroup,
   registerHotkey,
@@ -207,6 +209,11 @@ export function runCreateAction(
       });
       return;
     case 'email':
+      // Focus the "To" field within this gesture so the iOS keyboard opens;
+      // the compose mounts asynchronously, so this waits for the input.
+      triggerFocusInput(() =>
+        document.getElementById(EMAIL_COMPOSE_TO_INPUT_ID)
+      );
       createComponent({
         componentId: 'email-compose',
         shouldInsert,
@@ -274,6 +281,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     icon: WideFileMd,
     animatedIcon: AnimatedFileMdIcon,
     description: 'Create doc',
+    keywords: ['new', 'make', 'add', 'document', 'note'],
     blockName: 'md',
     hotkeyToken: TOKENS.create.note,
     altHotkeyToken: TOKENS.create.noteNewSplit,
@@ -288,6 +296,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     icon: WideTask,
     animatedIcon: AnimatedTaskIcon,
     description: 'Create task',
+    keywords: ['new', 'make', 'add', 'todo'],
     blockName: 'task',
     hotkeyToken: TOKENS.create.task,
     altHotkeyToken: TOKENS.create.taskNewSplit,
@@ -302,6 +311,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     icon: WideSnippet,
     animatedIcon: AnimatedSnippetIcon,
     description: 'Create snippet',
+    keywords: ['new', 'make', 'add'],
     blockName: 'snippet',
     hotkeyToken: TOKENS.create.snippet,
     altHotkeyToken: TOKENS.create.snippetNewSplit,
@@ -316,6 +326,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     icon: WideEmail,
     animatedIcon: AnimatedEmailIcon,
     description: 'Create email',
+    keywords: ['new', 'make', 'add', 'compose'],
     blockName: 'email',
     hotkeyToken: TOKENS.create.email,
     altHotkeyToken: TOKENS.create.emailNewSplit,
@@ -330,6 +341,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     icon: WideChat,
     animatedIcon: AnimatedChatIcon,
     description: 'Create message',
+    keywords: ['new', 'make', 'add', 'channel'],
     blockName: 'channel',
     hotkeyToken: TOKENS.create.message,
     altHotkeyToken: TOKENS.create.messageNewSplit,
@@ -344,6 +356,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     icon: WideStar,
     animatedIcon: AnimatedStarIcon,
     description: 'Create AI chat',
+    keywords: ['new', 'make', 'add', 'agent'],
     blockName: 'chat',
     hotkeyToken: TOKENS.create.chat,
     altHotkeyToken: TOKENS.create.chatNewSplit,
@@ -358,6 +371,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     icon: WideDiagram,
     animatedIcon: AnimatedDiagramIcon,
     description: 'Create canvas',
+    keywords: ['new', 'make', 'add', 'diagram'],
     blockName: 'canvas',
     hotkeyToken: TOKENS.create.canvas,
     altHotkeyToken: TOKENS.create.canvasNewSplit,
@@ -374,6 +388,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     icon: WideFolder,
     animatedIcon: AnimatedFolderIcon,
     description: 'Create folder',
+    keywords: ['new', 'make', 'add', 'project'],
     blockName: 'project',
     hotkeyToken: TOKENS.create.project,
     altHotkeyToken: TOKENS.create.projectNewSplit,
@@ -388,6 +403,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     icon: WideFileCode,
     animatedIcon: AnimatedFileCodeIcon,
     description: 'Create code file',
+    keywords: ['new', 'make', 'add'],
     blockName: 'code',
     hotkeyToken: TOKENS.create.code,
     altHotkeyToken: TOKENS.create.codeNewSplit,
@@ -521,29 +537,14 @@ export const LauncherInner = (props: LauncherInnerProps) => {
 
   const focusMenuItem = (label: string) => {
     const menuItem = document.querySelector<HTMLElement>(
-      `.create-menu-${label}`
+      `.create-menu-${label.toLowerCase()}`
     );
 
-    if (menuItem) {
-      menuItem.focus();
-    }
+    if (!menuItem) return false;
+
+    menuItem.focus();
 
     return true;
-  };
-
-  // Mirrors the grid-cols-2 / sm:grid-cols-4 / xl:grid-cols-N classes in the JSX
-  const getColumnCount = () => {
-    const width = window.innerWidth;
-    const length = blocks().length;
-    if (width >= 1280) {
-      if (length >= 8) return 8;
-      if (length >= 7) return 7;
-      if (length >= 6) return 6;
-      if (length >= 5) return 5;
-      return 4;
-    }
-    if (width >= 640) return 4;
-    return 2;
   };
 
   const moveFocus = (delta: number) => {
@@ -564,6 +565,26 @@ export const LauncherInner = (props: LauncherInnerProps) => {
 
     nextEl.focus();
 
+    setFocusedIndex(nextIndex);
+
+    return true;
+  };
+
+  const getGridColumnCount = () => {
+    const columns = window.getComputedStyle(ref).gridTemplateColumns;
+    return Math.max(columns.split(' ').filter(Boolean).length, 1);
+  };
+
+  const moveFocusRow = (direction: -1 | 1) => {
+    const columnCount = getGridColumnCount();
+    const nextIndex = focusedIndex() + columnCount * direction;
+
+    if (nextIndex < 0 || nextIndex >= blocks().length) return false;
+
+    const nextEl = tabbable(ref)[nextIndex];
+    if (!nextEl) return false;
+
+    nextEl.focus();
     setFocusedIndex(nextIndex);
 
     return true;
@@ -628,7 +649,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
     description: 'Navigate Up',
     keyDownHandler: (e) => {
       e?.preventDefault();
-      return moveFocus(-getColumnCount());
+      return moveFocusRow(-1);
     },
   }).withGroup(hkGroup);
 
@@ -638,7 +659,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
     description: 'Navigate Down',
     keyDownHandler: (e) => {
       e?.preventDefault();
-      return moveFocus(getColumnCount());
+      return moveFocusRow(1);
     },
   }).withGroup(hkGroup);
 
@@ -703,19 +724,9 @@ export const LauncherInner = (props: LauncherInnerProps) => {
 
   onCleanup(hkGroup.dispose);
 
-  // horrible but tailwind requires the full strings
-  const gridColsClass = () => {
-    const length = blocks().length;
-    if (length >= 8) return 'xl:grid-cols-8';
-    if (length >= 7) return 'xl:grid-cols-7';
-    if (length >= 6) return 'xl:grid-cols-6';
-    if (length >= 5) return 'xl:grid-cols-5';
-    return '';
-  };
-
   return (
-    <div class="bg-surface ring-1 ring-edge-muted rounded-xl">
-      <div class="flex items-center justify-between p-2 px-6 border-b border-edge-muted">
+    <div class="bg-surface ring-1 ring-edge-muted rounded-xl max-w-[calc(100vw-2rem)]">
+      <div class="flex items-center justify-between p-2 px-4 sm:px-6 border-b border-edge-muted">
         <h1 class="font-bold text-ink-muted">Create New</h1>
         <p class="gap-2 text-ink-extra-muted text-xs items-center hidden touch:hidden md:flex">
           <style>{`
@@ -748,10 +759,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
         </p>
       </div>
       <div
-        class={cn(
-          'relative grid grid-cols-2 sm:grid-cols-4 gap-3 p-6 isolate brackets-never',
-          gridColsClass()
-        )}
+        class="relative grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 justify-items-center gap-3 p-4 sm:p-6 isolate brackets-never"
         ref={ref}
       >
         <For each={blocks()}>

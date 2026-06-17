@@ -32,6 +32,7 @@ models_permissions = { path = "../models_permissions" }
 # Database
 entity_access_db_utils = { path = "../entity_access_db_utils", optional = true }
 sqlx = { workspace = true, optional = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 cool_asserts = "2"

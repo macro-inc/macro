@@ -1,6 +1,6 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
-import { getServiceUrl, ServiceUrl, stack } from '../../shared';
+import { config, getServiceUrl, ServiceUrl, stack } from '../../shared';
 
 /**
  * Infrastructure wiring required by services that host the `ai_tools` crate
@@ -104,6 +104,14 @@ export function getAiToolsInfra(): AiToolsInfra {
     .getSecretVersionOutput({ secretId: `github-client-secret-${stack}` })
     .apply((secret) => secret.secretString);
 
+  const OPENAI_API_KEY = aws.secretsmanager
+    .getSecretVersionOutput({ secretId: config.require('openai_api_key') })
+    .apply((secret) => secret.secretString);
+
+  const ANTHROPIC_API_KEY = aws.secretsmanager
+    .getSecretVersionOutput({ secretId: config.require('anthropic_api_key') })
+    .apply((secret) => secret.secretString);
+
   const envVars: AiToolsInfra['envVars'] = [
     {
       name: 'INTERNAL_API_SECRET_KEY',
@@ -177,6 +185,14 @@ export function getAiToolsInfra(): AiToolsInfra {
     {
       name: 'GITHUB_CLIENT_ID',
       value: pulumi.interpolate`${GITHUB_CLIENT_ID}`,
+    },
+    {
+      name: 'OPENAI_API_KEY',
+      value: pulumi.interpolate`${OPENAI_API_KEY}`,
+    },
+    {
+      name: 'ANTHROPIC_API_KEY',
+      value: pulumi.interpolate`${ANTHROPIC_API_KEY}`,
     },
   ];
 

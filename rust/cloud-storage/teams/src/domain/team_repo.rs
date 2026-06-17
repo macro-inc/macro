@@ -282,6 +282,13 @@ pub trait TeamService: Clone + Send + Sync + 'static {
         team_name: &str,
     ) -> impl Future<Output = Result<Team, CreateTeamError>> + Send;
 
+    /// Checks whether the user is a premium user, i.e. has an active
+    /// stripe subscription.
+    fn is_user_premium(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<bool, TeamError>> + Send;
+
     /// Invites users to a team
     /// This will also handle the teams subscription.
     /// Returns the team invites created.

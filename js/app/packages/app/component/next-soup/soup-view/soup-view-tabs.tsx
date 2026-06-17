@@ -106,7 +106,7 @@ const useCurrentListView = () => {
   });
 };
 
-const PRESERVE_FILTERS_ON_TAB_CHANGE: ListView[] = ['documents'];
+const PRESERVE_FILTERS_ON_TAB_CHANGE: ListView[] = ['documents', 'tasks'];
 
 export const shouldPreserveFiltersOnTabChange = (view: ListView) =>
   PRESERVE_FILTERS_ON_TAB_CHANGE.includes(view);

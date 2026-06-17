@@ -39,12 +39,12 @@ export const ListPropertyValue: Component<ListPropertyValueProps> = (props) => {
     >
       <Property.Tooltip property={props.property}>
         <Layer depth={2}>
-          <Property.EditTrigger class="list-property-cell min-w-0 rounded-full hover:bg-surface/50 inline-flex items-center gap-1 px-2 py-1.5 leading-tight text-left hover:ring ring-edge ring-inset">
+          <Property.EditTrigger class="list-property-cell w-full max-w-full min-w-0 overflow-hidden rounded-full hover:bg-surface/50 inline-flex items-center gap-1 px-2 py-1.5 leading-tight text-left @max-[840px]/u-list:px-1">
             <Show
               when={!isEmpty()}
               fallback={
                 <>
-                  <CircleDashedEmpty class="size-3 shrink-0 opacity-50" />
+                  <CircleDashedEmpty class="size-3 shrink-0 opacity-50 @max-[840px]/u-list:size-4" />
                   <span class="truncate flex-1 opacity-50 @max-[840px]/u-list:hidden">
                     {props.property.displayName}
                   </span>
@@ -55,7 +55,7 @@ export const ListPropertyValue: Component<ListPropertyValueProps> = (props) => {
                 fallback={
                   <Property.Icon
                     property={props.property}
-                    class="size-3 shrink-0"
+                    class="size-3 shrink-0 @max-[840px]/u-list:size-4"
                   />
                 }
               >
@@ -71,16 +71,20 @@ export const ListPropertyValue: Component<ListPropertyValueProps> = (props) => {
                     <Property.UserStack
                       property={props.property}
                       maxUsers={1}
+                      avatarClass="@max-[840px]/u-list:size-5"
                     />
                   </div>
                 </Match>
                 <Match when={isUserEntity()}>
-                  <Property.Icon property={props.property} />
+                  <Property.Icon
+                    property={props.property}
+                    class="@max-[840px]/u-list:size-5"
+                  />
                 </Match>
               </Switch>
               <Property.Text
                 property={props.property}
-                class="flex-1 @max-[840px]/u-list:hidden"
+                class="min-w-0 max-w-full flex-1 @max-[840px]/u-list:hidden"
               />
             </Show>
             <Property.Caret class="@max-[840px]/u-list:hidden" />

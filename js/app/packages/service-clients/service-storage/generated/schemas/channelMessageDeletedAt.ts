@@ -5,4 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Deletion timestamp.
+ */
 export type ChannelMessageDeletedAt = string | null;

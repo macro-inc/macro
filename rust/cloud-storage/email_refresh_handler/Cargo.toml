@@ -13,6 +13,7 @@ chrono = { workspace = true }
 lambda_runtime = { workspace = true }
 macro_entrypoint = { path = "../macro_entrypoint" }
 macro_env = { path = "../macro_env" }
+macro_env_var = { path = "../macro_env_var" }
 model = { path = "../model" }
 models_email = { path = "../models_email" }
 sqlx = { workspace = true }
@@ -20,6 +21,7 @@ sqs_client = { path = "../sqs_client" }
 tokio = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [package.metadata.cargo-machete]
 ignored = []

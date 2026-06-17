@@ -1,3 +1,4 @@
+import { SplitBottomPanel } from '@app/component/split-layout/components/SplitBottomPanel';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { CommentsProvider } from '@block-md/comments/CommentsProvider';
 import { URL_PARAMS } from '@block-md/constants';
@@ -124,12 +125,10 @@ import {
   ENABLE_MARKDOWN_COMMENTS,
   ENABLE_MARKDOWN_DIFF,
   ENABLE_MARKDOWN_LIVE_COLLABORATION,
-  LOCAL_ONLY,
 } from '@core/constant/featureFlags';
 import { IS_MAC } from '@core/constant/isMac';
 import { useUserId } from '@core/context/user';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
-import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { blockElementSignal } from '@core/signal/blockElement';
 import {
@@ -193,8 +192,6 @@ import { MarkdownPopup } from './MarkdownPopup';
 
 false && fileFolderDrop;
 
-const DEBUG = LOCAL_ONLY;
-
 // There is an invisible div below the editor that clicks to set editor focus
 // and add a new line. This constant is the minimum height of that element (in pixels)
 // once the editor has at least one full page of content.
@@ -202,10 +199,24 @@ const EDITOR_PADDING_BOTTOM = 200;
 // For tasks, the click target is a small fixed pad so the activity section stays visible.
 const TASK_EDITOR_PADDING_BOTTOM = 48;
 
+function getBlankMarkdownPlaceholder(canEdit: boolean) {
+  if (!canEdit) return 'This document is blank...';
+
+  const hints = [
+    "'/' for commands",
+    "'@' to reference files",
+    "';' for snippets",
+  ];
+  if (ENABLE_MARKDOWN_AI_GENERATE) hints.push("'space' for AI writing");
+
+  return `Press ${hints.join(', ')}...`;
+}
+
 export function MarkdownEditor(props: {
   autoFocusOnMount?: boolean;
-  loroManager: Accessor<LoroManager | undefined>;
-  mustBeConnected?: boolean;
+  loroManager: LoroManager;
+  showLexicalStateDebugger?: boolean;
+  onLexicalStateDebuggerClose?: () => void;
 }) {
   const blockData = blockDataSignal.get;
   const blockId = useBlockId();
@@ -218,7 +229,7 @@ export function MarkdownEditor(props: {
   const saveMarkdownDocument = useSaveMarkdownDocument();
   const setMdStore = mdStore.set;
   const md = mdStore.get;
-  const canEdit = useCanEdit(props.mustBeConnected);
+  const canEdit = useCanEdit();
   const canComment = useCanComment();
   const [blockElement] = blockElementSignal;
   const [findAndReplaceStore, setFindAndReplaceStore] = FindAndReplaceStore;
@@ -263,11 +274,12 @@ export function MarkdownEditor(props: {
   createEffect(() => {
     // We still want the editor to be locked down (for certain things like click events on check
     // lists) when the user does not have editor access.
-    editor.setEditable(canEdit() || canComment());
+    editor.setEditable(editorReady() && (canEdit() || canComment()));
   });
 
   const isContentEditable = createMemo(() => {
     return (
+      editorReady() &&
       (canEdit() ?? false) &&
       !isGenerating() &&
       !generatedAndWaiting() &&
@@ -408,12 +420,9 @@ export function MarkdownEditor(props: {
     dndDragMove(event);
   });
 
-  // handler for the find and replace directive
   const onSetListOffset = (listOffset: NodekeyOffset[]) => {
     setFindAndReplaceStore('listOffset', listOffset);
-    if (
-      findAndReplaceStore.currentMatch >= findAndReplaceStore.listOffset.length
-    ) {
+    if (findAndReplaceStore.currentMatch >= listOffset.length) {
       setFindAndReplaceStore('currentMatch', 0);
     }
   };
@@ -500,7 +509,7 @@ export function MarkdownEditor(props: {
     if (!IS_SYNC()) {
       return createPeerIdValidator(() => undefined, false);
     }
-    const peerId = () => props.loroManager()?.getPeerIdStr();
+    const peerId = () => props.loroManager.getPeerIdStr();
     return createPeerIdValidator(peerId, true);
   };
 
@@ -511,7 +520,7 @@ export function MarkdownEditor(props: {
     .markdownShortcuts()
     .delete()
     .state<EditorState>(setState, 'json')
-    .history(400, props.loroManager())
+    .history(400, props.loroManager)
     .use(tabIndentationPlugin())
     .use(selectionDataPlugin(lexicalWrapper))
     .use(horizontalRulePlugin())
@@ -532,6 +541,7 @@ export function MarkdownEditor(props: {
       snippetsPlugin({
         menu: snippetsMenuOperations,
         peerIdValidator: peerIdValidator(),
+        sourceDocumentId: blockId,
       })
     )
     .use(
@@ -563,6 +573,7 @@ export function MarkdownEditor(props: {
     )
     .use(
       findAndReplacePlugin({
+        getListOffset: () => findAndReplaceStore.listOffset,
         setListOffset: onSetListOffset,
       })
     )
@@ -617,7 +628,7 @@ export function MarkdownEditor(props: {
   }
 
   if (ENABLE_MARKDOWN_LIVE_COLLABORATION) {
-    const peerId = () => props.loroManager()?.getPeerIdStr();
+    const peerId = () => props.loroManager.getPeerIdStr();
     plugins.use(
       peerIdPlugin({
         peerId,
@@ -744,7 +755,7 @@ export function MarkdownEditor(props: {
   createEffect(() => {
     // We still want the editor to be locked down (for certain things like click events on check
     // lists) when the user does not have editor access.
-    editor.setEditable(canEdit() ?? false);
+    editor.setEditable(editorReady() && (canEdit() ?? false));
   });
 
   plugins.useReactive(
@@ -792,9 +803,12 @@ export function MarkdownEditor(props: {
     );
   };
 
-  // handle updates to the highlights if the document is modified
-  additionalCleanups.push(
-    editor.registerUpdateListener(() => {
+  let searchRefreshQueued = false;
+  const queueSearchRefresh = () => {
+    if (searchRefreshQueued) return;
+    searchRefreshQueued = true;
+    queueMicrotask(() => {
+      searchRefreshQueued = false;
       if (
         findAndReplaceStore.searchIsOpen &&
         findAndReplaceStore.searchInputText
@@ -804,6 +818,18 @@ export function MarkdownEditor(props: {
           findAndReplaceStore.searchInputText
         );
       }
+    });
+  };
+
+  // Refresh highlights only after content mutations. Selection-only updates
+  // still fire Lexical update listeners and must not synchronously dispatch
+  // another command from inside the commit.
+  additionalCleanups.push(
+    editor.registerUpdateListener(({ dirtyElements, dirtyLeaves }) => {
+      if (dirtyElements.size === 0 && dirtyLeaves.size === 0) return;
+      if (!findAndReplaceStore.searchIsOpen) return;
+      if (!findAndReplaceStore.searchInputText) return;
+      queueSearchRefresh();
     })
   );
 
@@ -832,6 +858,8 @@ export function MarkdownEditor(props: {
       initializeEditorEmpty(editor);
 
       registerSaveListener();
+      // Mark ready so the loading skeleton clears and the blank placeholder shows.
+      setEditorReady(true);
       return;
     }
 
@@ -926,8 +954,9 @@ export function MarkdownEditor(props: {
           </div>
         )}
       </Show>
+      {/* Note: the mt-1.5 here is to preserve markdown node margin tops. which means this div should avoid padding and border. */}
       <div
-        class="relative"
+        class="relative mt-1.5"
         ref={editorContainerRef}
         use:fileFolderDrop={{
           onDrop: (fileEntries, folderEntries, e) => {
@@ -977,11 +1006,19 @@ export function MarkdownEditor(props: {
           editorFocus={editorFocus}
           style={{ height: `${clickTargetHeight()}px` }}
         />
-        <Show when={isBlankMarkdown()}>
+        <Show when={!editorReady()}>
+          <div
+            aria-hidden="true"
+            class="pointer-events-none absolute inset-x-0 top-0 flex flex-col gap-2.5 pt-1"
+          >
+            <div class="skeleton-shimmer h-2.5 w-full rounded-full bg-placeholder/30" />
+            <div class="skeleton-shimmer h-2.5 w-full rounded-full bg-placeholder/30" />
+            <div class="skeleton-shimmer h-2.5 w-2/3 rounded-full bg-placeholder/30" />
+          </div>
+        </Show>
+        <Show when={editorReady() && isBlankMarkdown()}>
           <div class="pointer-events-none text-ink-placeholder absolute top-0">
-            {canEdit()
-              ? `Press '/' for commands, '@' to reference files${ENABLE_MARKDOWN_AI_GENERATE ? ", 'space' for AI writing..." : '...'}`
-              : `This document is blank...`}
+            {getBlankMarkdownPlaceholder(canEdit())}
           </div>
         </Show>
         <DecoratorRenderer editor={editor} />
@@ -1032,6 +1069,7 @@ export function MarkdownEditor(props: {
           editor={editor}
           menu={snippetsMenuOperations}
           useBlockBoundary={true}
+          sourceDocumentId={blockId}
         />
 
         <ActionMenu editor={editor} menu={actionsMenuOperations} />
@@ -1075,10 +1113,16 @@ export function MarkdownEditor(props: {
           />
         </Show>
 
-        <Show when={DEBUG && !isMobile()}>
+        <Show when={props.showLexicalStateDebugger}>
           <Show when={state()}>
             {(state) => (
-              <LexicalStateDebugger state={state()}></LexicalStateDebugger>
+              <SplitBottomPanel
+                id="lexical-state-debugger"
+                title="Lexical state debugger"
+                onClose={props.onLexicalStateDebuggerClose}
+              >
+                <LexicalStateDebugger state={state()}></LexicalStateDebugger>
+              </SplitBottomPanel>
             )}
           </Show>
         </Show>

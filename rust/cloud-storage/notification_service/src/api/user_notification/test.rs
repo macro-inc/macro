@@ -166,7 +166,7 @@ fn to_typed_row_task_assigned() {
 }
 
 #[test]
-fn to_typed_row_github_pr_event() {
+fn to_typed_row_github_pr_status_changed() {
     let foreign_entity_id = uuid::Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000")
         .expect("valid foreign entity id");
     let metadata = serde_json::json!({
@@ -189,20 +189,20 @@ fn to_typed_row_github_pr_event() {
         "mergedAt": "2026-06-01T16:00:00Z"
     });
 
-    let mut row = make_row("github_pr_event", metadata);
+    let mut row = make_row("github_pr_status_changed", metadata);
     row.entity = EntityType::ForeignEntity.with_entity_string(foreign_entity_id.to_string());
 
-    let typed = to_typed_row(row).expect("should deserialize github_pr_event");
+    let typed = to_typed_row(row).expect("should deserialize github_pr_status_changed");
 
     match typed.notification_metadata {
-        NotifEvent::GithubPrEvent(event) => {
-            assert_eq!(event.foreign_entity_id, foreign_entity_id);
-            assert_eq!(event.github_key, "macro/repo/pull/42");
+        NotifEvent::GithubPrStatusChanged(event) => {
+            assert_eq!(event.common.foreign_entity_id, foreign_entity_id);
+            assert_eq!(event.common.github_key, "macro/repo/pull/42");
             assert_eq!(event.status, GithubPrEventStatus::Merged);
             assert_eq!(event.action, GithubPrEventAction::Closed);
             assert_eq!(event.previous_status, Some(GithubPrEventStatus::Open));
         }
-        other => panic!("expected GithubPrEvent variant, got {other:?}"),
+        other => panic!("expected GithubPrStatusChanged variant, got {other:?}"),
     }
 }
 

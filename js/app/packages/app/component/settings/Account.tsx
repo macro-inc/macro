@@ -14,11 +14,7 @@ import {
 import { ShowFeatureFlag, useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
   DISABLE_AUTO_UPDATE_UI_FLAG,
-  ENABLE_EMAIL,
   ENABLE_AUTO_UPDATE_UI_OVERRIDE,
-  ENABLE_INBOX_RESYNC,
-  ENABLE_INBOX_SYNC_STATUS,
-  ENABLE_MULTI_INBOX_OVERRIDE,
   ENABLE_PROFILE_PICTURES,
   ENABLE_NEW_PRICING_OVERRIDE,
 } from '@core/constant/featureFlags';
@@ -32,34 +28,24 @@ import {
 import IconUpload from '@phosphor-icons/core/regular/upload-simple.svg?component-solid';
 import SignOutIcon from '@phosphor-icons/core/regular/sign-out.svg?component-solid';
 import XIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
-import ArrowsClockwiseIcon from '@phosphor-icons/core/regular/arrows-clockwise.svg?component-solid';
-import PlusIcon from '@phosphor-icons/core/regular/plus.svg?component-solid';
 import { authServiceClient } from '@service-auth/client';
-import type {
-  Link as EmailLink,
-  SyncStatus,
-} from '@service-email/generated/schemas';
 import { useEmail, useLicenseStatus, useUserId } from '@core/context/user';
 import {
   createEffect,
   createMemo,
   createResource,
   createSignal,
-  For,
   type JSX,
   Match,
   Show,
   Switch,
 } from 'solid-js';
 import { usePermissions } from '@core/context/user';
+import { PERMISSION_IDS } from '@core/constant/permissions';
 import { useSettingsState } from '@core/constant/SettingsState';
 import PaywallComponent from '../paywall/PaywallComponent';
 import PaywallTeamMemberView from '../paywall/PaywallTeamMemberView';
 import PaywallTeamOwnerView from '../paywall/PaywallTeamOwnerView';
-import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
-import { useEmailLinks, useEmailLinksStatus } from '@core/email-link';
-import { useInitGmailLink } from '@queries/auth';
-import { useRemoveInboxMutation } from '@queries/email/link';
 import {
   type SupportedNotificationSettings,
   useNotificationSettings,
@@ -73,8 +59,6 @@ false && fileSelector;
 
 // 16 megabytes
 const MAX_PROFILE_PICTURE_SIZE = 16 * 1000 * 1000;
-
-type GithubLinkStatus = 'linked' | 'unlinked' | 'reauthentication_required';
 
 async function uploadProfilePicture(
   file: File
@@ -262,9 +246,6 @@ function ProfilePictureRow(props: { userId: string }) {
 // Not accessible if user is not authenticated
 export function Account() {
   const email = useEmail();
-  const multiInboxFlag = useFeatureFlag('enable-multi-inbox', {
-    enabledOverride: ENABLE_MULTI_INBOX_OVERRIDE,
-  });
   const userId = useUserId();
   const licenseStatus = useLicenseStatus();
   const logout = useLogout();
@@ -276,40 +257,8 @@ export function Account() {
   const autoUpdateUIEnabled = createMemo(
     () => ENABLE_AUTO_UPDATE_UI_OVERRIDE ?? !disableAutoUpdateUIFlag().enabled
   );
-  const [showEmailModal, setShowEmailModal] = createSignal<boolean>(false);
   const [showDeleteModal, setShowDeleteModal] = createSignal<boolean>(false);
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] = createSignal<boolean>(false);
-
-  const {
-    query: emailLinksQuery,
-    connect: connectEmail,
-    disconnect: disconnectEmail,
-    resyncInbox,
-  } = useEmailLinks();
-  const removeInboxMutation = useRemoveInboxMutation({
-    onSuccess: () => toast.success('Inbox removed'),
-    onError: () => toast.failure('Failed to remove inbox. Please try again.'),
-  });
-  const [removeTarget, setRemoveTarget] = createSignal<{
-    id: string;
-    email: string;
-    isOwn: boolean;
-  } | null>(null);
-  const [resyncingIds, setResyncingIds] = createSignal<ReadonlySet<string>>(
-    new Set()
-  );
-
-  // The primary inbox is the one matching the account email; it sorts to the top
-  // and is labelled. Everything else (other own inboxes + delegated/shared) follows.
-  const inboxes = createMemo(() => {
-    const links = emailLinksQuery.data?.links ?? [];
-    const primaryEmail = email()?.toLowerCase();
-    const primary = links.find(
-      (link) => link.email_address.toLowerCase() === primaryEmail
-    );
-    const others = links.filter((link) => link !== primary);
-    return { primary, others };
-  });
 
   const userTeamsQuery = useUserTeamsQuery();
   const ownedTeam = createMemo(() => {
@@ -332,94 +281,6 @@ export function Account() {
   const [updatedLastName, setUpdatedLastName] = createSignal<
     string | undefined
   >(undefined);
-
-  const emailActive = useEmailLinksStatus();
-
-  const [isEmailActionPending, setIsEmailActionPending] = createSignal(false);
-
-  const onConnectEmail = async () => {
-    if (isEmailActionPending()) return;
-    setIsEmailActionPending(true);
-    await connectEmail().match(
-      () => {},
-      () => toast.failure('Failed to connect email')
-    );
-    setIsEmailActionPending(false);
-  };
-
-  const initGmailLink = useInitGmailLink();
-  const handleAddInbox = async () => {
-    const callbackUrl = `${window.location.origin}${ROUTER_BASE_CONCAT}inbox-link-callback`;
-    const result = await initGmailLink.mutateAsync(callbackUrl);
-    if (result.isOk()) {
-      window.location.href = result.value.authorization_url;
-    } else {
-      toast.failure('Failed to start Gmail link flow');
-    }
-  };
-
-  const handleResyncInbox = async (linkId: string) => {
-    setResyncingIds((prev) => new Set(prev).add(linkId));
-    await resyncInbox(linkId).match(
-      (res) => {
-        toast.success(
-          res.already_in_progress ? 'Sync already in progress' : 'Re-sync started'
-        );
-      },
-      () => toast.failure('Failed to start re-sync')
-    );
-    setResyncingIds((prev) => {
-      const next = new Set(prev);
-      next.delete(linkId);
-      return next;
-    });
-  };
-
-  const handleRemoveInbox = () => {
-    const target = removeTarget();
-    if (!target) return;
-    setRemoveTarget(null);
-    removeInboxMutation.mutate(target.id);
-  };
-
-  const [githubLinkStatus, { refetch: refetchGithubLinkStatus }] =
-    createResource(async (): Promise<GithubLinkStatus> => {
-      const response = await authServiceClient.checkGithubLinkStatus();
-
-      if (response.isOk()) {
-        return response.value.reauthentication_required
-          ? 'reauthentication_required'
-          : 'linked';
-      }
-
-      const needsReauthentication = response.error.some(
-        (error) => error.code === 'REAUTHENTICATION_REQUIRED'
-      );
-      return needsReauthentication ? 'reauthentication_required' : 'unlinked';
-    });
-
-  const handleGithubEnable = async () => {
-    const url = await authServiceClient.initGithubLink(window.location.href);
-    if (url.isOk()) {
-      window.location.href = url.value;
-    }
-  };
-
-  const handleGithubDisable = async () => {
-    await authServiceClient.deleteGithubLink();
-    refetchGithubLinkStatus();
-  };
-
-  const handleGithubReconnect = async () => {
-    const url = await authServiceClient.reauthenticateGithub(
-      window.location.href
-    );
-    if (url.isOk()) {
-      window.location.href = url.value;
-    } else {
-      toast.failure('Failed to start GitHub reconnect flow');
-    }
-  };
 
   const firstName = () => {
     // Display any updated first name immediately without having to refetch
@@ -459,7 +320,7 @@ export function Account() {
           </Panel.Header>
 
           <Panel.Toolbar class="h-full w-full">
-            <Show when={permissions()?.includes('write:stripe_subscription') && !isNativeMobilePlatform()}>
+            <Show when={permissions()?.includes(PERMISSION_IDS.WRITE_STRIPE_SUBSCRIPTION) && !isNativeMobilePlatform()}>
               <div class="px-4 py-2 w-full">
                 <ShowFeatureFlag
                   key="enable-new-pricing"
@@ -552,277 +413,21 @@ export function Account() {
                 <BundleUpdateRow />
               </Show>
 
-              <Show when={ENABLE_EMAIL && !multiInboxFlag().enabled}>
-                <Row
-                  label={
-                    showEmailModal()
-                      ? 'Disabling will clear all email data from Macro'
-                      : 'Email'
-                  }
-                >
-                  <Show
-                    when={showEmailModal()}
-                    fallback={
-                      <Show
-                        when={!emailActive()}
-                        fallback={
-                          <Button
-                            variant="base"
-                            size="sm"
-                            depth={3}
-                            disabled={isEmailActionPending()}
-                            onClick={() => setShowEmailModal(true)}
-                          >
-                            Disable
-                          </Button>
-                        }
-                      >
-                        <Button
-                          variant="base"
-                          size="sm"
-                          depth={3}
-                          disabled={isEmailActionPending()}
-                          onClick={onConnectEmail}
-                        >
-                          Enable
-                        </Button>
-                      </Show>
-                    }
-                  >
-                    <div class="flex flex-row">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        depth={3}
-                        disabled={isEmailActionPending()}
-                        onClick={async () => {
-                          if (isEmailActionPending()) return;
-                          setIsEmailActionPending(true);
-                          await disconnectEmail().match(
-                            () => {
-                              setShowEmailModal(false);
-                              toast.success(
-                                'Email disabled — clearing your data.'
-                              );
-                            },
-                            () => {
-                              toast.failure(
-                                'Failed to disable email. Please try again.'
-                              );
-                            }
-                          );
-                          setIsEmailActionPending(false);
-                        }}
-                      >
-                        Confirm
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        depth={3}
-                        onClick={() => setShowEmailModal(false)}
-                      >
-                        Cancel
-                      </Button>
-                    </div>
-                  </Show>
-                </Row>
-              </Show>
-
-              <Show when={ENABLE_EMAIL && multiInboxFlag().enabled}>
-                <div class="bg-surface">
-                  <div class="flex items-center justify-between h-15.25 px-6">
-                    <div class="text-sm">Inboxes</div>
-                    <Show
-                      when={!emailLinksQuery.isLoading}
-                      fallback={
-                        <span class="text-sm text-ink-muted">Loading…</span>
-                      }
-                    >
-                      <Show
-                        when={emailActive()}
-                        fallback={
-                          <Button
-                            variant="base"
-                            size="sm"
-                            depth={3}
-                            disabled={isEmailActionPending()}
-                            onClick={onConnectEmail}
-                          >
-                            Enable
-                          </Button>
-                        }
-                      >
-                        <Tooltip label="Add inbox">
-                          <Button
-                            variant="base"
-                            size="sm"
-                            depth={3}
-                            onClick={handleAddInbox}
-                            aria-label="Add inbox"
-                          >
-                            <PlusIcon class="size-4" />
-                          </Button>
-                        </Tooltip>
-                      </Show>
-                    </Show>
-                  </div>
-                  <Show when={emailActive()}>
-                    <Show when={inboxes().primary}>
-                      {(primary) => (
-                        <InboxRow
-                          link={primary()}
-                          isPrimary
-                          isOwn={primary().macro_id === userId()}
-                          resyncing={resyncingIds().has(primary().id)}
-                          onResync={() => handleResyncInbox(primary().id)}
-                          onRemove={() =>
-                            setRemoveTarget({
-                              id: primary().id,
-                              email: primary().email_address,
-                              isOwn: primary().macro_id === userId(),
-                            })
-                          }
-                        />
-                      )}
-                    </Show>
-                    <Show when={!inboxes().primary && email()}>
-                      <DisabledPrimaryRow
-                        email={email() ?? ''}
-                        onEnable={onConnectEmail}
-                      />
-                    </Show>
-                    <For each={inboxes().others}>
-                      {(link) => (
-                        <InboxRow
-                          link={link}
-                          isPrimary={false}
-                          isOwn={link.macro_id === userId()}
-                          resyncing={resyncingIds().has(link.id)}
-                          onResync={() => handleResyncInbox(link.id)}
-                          onRemove={() =>
-                            setRemoveTarget({
-                              id: link.id,
-                              email: link.email_address,
-                              isOwn: link.macro_id === userId(),
-                            })
-                          }
-                        />
-                      )}
-                    </For>
-                  </Show>
-                </div>
-              </Show>
-
-              <Row label="GitHub">
-                <Show
-                  when={!githubLinkStatus.loading}
-                  fallback={
-                    <span class="text-sm text-ink-muted">Loading…</span>
-                  }
-                >
-                  <Switch
-                    fallback={
-                      <Button
-                        variant="base"
-                        size="sm"
-                        depth={3}
-                        onClick={handleGithubEnable}
-                      >
-                        Enable
-                      </Button>
-                    }
-                  >
-                    <Match
-                      when={githubLinkStatus() === 'reauthentication_required'}
-                    >
-                      <Button
-                        variant="base"
-                        size="sm"
-                        depth={3}
-                        onClick={handleGithubReconnect}
-                      >
-                        Reconnect
-                      </Button>
-                    </Match>
-                    <Match when={githubLinkStatus() === 'linked'}>
-                      <Button
-                        variant="base"
-                        size="sm"
-                        depth={3}
-                        onClick={handleGithubDisable}
-                      >
-                        Disable
-                      </Button>
-                    </Match>
-                  </Switch>
-                </Show>
-              </Row>
-
               <NotificationToggle />
             </div>
 
-            <div class="flex items-center justify-end h-10 px-6">
+            <div class="flex items-center justify-center px-6 py-6">
               <Button
-                variant="base"
-                size="sm"
+                variant="danger"
+                size="md"
                 depth={3}
+                class="px-4"
                 onClick={logoutHandler}
               >
                 <SignOutIcon class="size-4" />
                 Logout
               </Button>
             </div>
-
-            <Dialog
-              open={removeTarget() !== null}
-              onOpenChange={(open) => {
-                if (!open) setRemoveTarget(null);
-              }}
-              position="center"
-              class="w-120"
-            >
-              <Panel active depth={2} class="rounded-xl">
-                <Panel.Header class="px-6">
-                  <Dialog.Title class="text-ink text-sm font-semibold">
-                    Remove inbox
-                  </Dialog.Title>
-                </Panel.Header>
-                <Panel.Body class="p-6 font-sans flex flex-col gap-3">
-                  <Dialog.Description class="text-ink-muted text-sm/tight font-normal">
-                    <Show
-                      when={removeTarget()?.isOwn}
-                      fallback={
-                        <>
-                          Remove access to{' '}
-                          <span class="text-ink">{removeTarget()?.email}</span>?
-                          The inbox and its data stay with its owner.
-                        </>
-                      }
-                    >
-
-                        Remove{' '}
-                        <span class="text-ink">{removeTarget()?.email}</span>?
-                        This clears all of its email data from Macro and cannot be
-                        undone.
-
-                    </Show>
-                  </Dialog.Description>
-                  <div class="pt-3 justify-end items-center gap-3 inline-flex">
-                    <Button
-                      variant="base"
-                      depth={3}
-                      onClick={() => setRemoveTarget(null)}
-                    >
-                      Cancel
-                    </Button>
-                    <Button variant="danger" depth={3} onClick={handleRemoveInbox}>
-                      Remove
-                    </Button>
-                  </div>
-                </Panel.Body>
-              </Panel>
-            </Dialog>
 
             <Show when={isNativeMobilePlatform()}>
               <div class="border-t border-edge pt-4">
@@ -902,119 +507,6 @@ function Row(props: { label: string; children?: any }) {
     <div class="bg-surface flex items-center justify-between h-15.25 px-6">
       <div class="text-sm">{props.label}</div>
       <div class="text-right">{props.children}</div>
-    </div>
-  );
-}
-
-function syncStatusLabel(status: SyncStatus): string {
-  switch (status) {
-    case 'SYNCING':
-      return 'Syncing…';
-    case 'UP_TO_DATE':
-      return 'Up to date';
-    case 'ERROR':
-      return 'Error — re-sync';
-    case 'INACTIVE':
-      return 'Disabled';
-  }
-}
-
-function Chip(props: { label: string }) {
-  return (
-    <span class="shrink-0 rounded bg-edge-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-ink-muted">
-      {props.label}
-    </span>
-  );
-}
-
-// Placeholder shown when the account's primary inbox has been removed but other
-// inboxes remain. It is not a real link — re-enabling re-runs the Gmail enable
-// flow, which re-links and backfills.
-function DisabledPrimaryRow(props: { email: string; onEnable: () => void }) {
-  return (
-    <div class="bg-surface flex items-center justify-between gap-3 h-15.25 px-6">
-      <div class="min-w-0 flex flex-col gap-0.5">
-        <div class="flex items-center gap-2 min-w-0">
-          <span class="ph-no-capture text-sm truncate text-ink-muted">
-            {props.email}
-          </span>
-          <Chip label="Primary" />
-          <Chip label="Disabled" />
-        </div>
-        <span class="text-xs text-ink-muted">Sync disabled</span>
-      </div>
-      <Button variant="base" size="sm" depth={3} onClick={props.onEnable}>
-        Enable
-      </Button>
-    </div>
-  );
-}
-
-function InboxRow(props: {
-  link: EmailLink;
-  isPrimary: boolean;
-  isOwn: boolean;
-  resyncing: boolean;
-  onResync: () => void;
-  onRemove: () => void;
-}) {
-  return (
-    <div class="bg-surface flex items-center justify-between gap-3 h-15.25 px-6">
-      <div class="min-w-0 flex flex-col gap-0.5">
-        <div class="flex items-center gap-2 min-w-0">
-          <span class="ph-no-capture text-sm truncate">
-            {props.link.email_address}
-          </span>
-          <Show when={props.isPrimary}>
-            <Chip label="Primary" />
-          </Show>
-          <Show when={!props.isPrimary && !props.isOwn}>
-            <Chip label="Shared" />
-          </Show>
-        </div>
-        <Show when={ENABLE_INBOX_SYNC_STATUS}>
-          <span
-            class="text-xs"
-            classList={{
-              'text-failure': props.link.sync_status === 'ERROR',
-              'text-ink-muted': props.link.sync_status !== 'ERROR',
-            }}
-          >
-            {syncStatusLabel(props.link.sync_status)}
-          </span>
-        </Show>
-      </div>
-      <div class="flex items-center gap-2 shrink-0">
-        <Show when={ENABLE_INBOX_RESYNC}>
-          <Tooltip label="Force sync">
-            <Button
-              variant="base"
-              size="sm"
-              depth={3}
-              disabled={
-                props.resyncing ||
-                (ENABLE_INBOX_SYNC_STATUS &&
-                  props.link.sync_status === 'SYNCING')
-              }
-              onClick={props.onResync}
-              aria-label={`Force sync ${props.link.email_address}`}
-            >
-              <ArrowsClockwiseIcon class="size-4" />
-            </Button>
-          </Tooltip>
-        </Show>
-        <Tooltip label="Remove inbox">
-          <Button
-            variant="base"
-            size="sm"
-            depth={3}
-            onClick={props.onRemove}
-            aria-label={`Remove ${props.link.email_address}`}
-          >
-            <XIcon class="size-4" />
-          </Button>
-        </Tooltip>
-      </div>
     </div>
   );
 }

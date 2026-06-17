@@ -1,10 +1,54 @@
 /// Adapts `ai_toolset` tool types into RIG [`ToolDyn`] objects.
+#[cfg(test)]
+mod test;
+
 use ai_toolset::tool_object::ToolSetCallable;
 use ai_toolset::{AsyncToolCollection, RequestContext, RequestSchema, ToolSet as AiToolSet};
 use rig_core::completion::ToolDefinition;
 use rig_core::tool::{ToolDyn, ToolError};
 use rig_core::wasm_compat::WasmBoxedFuture;
 use std::sync::{Arc, RwLock};
+
+/// Ensure every object schema carries an explicit `properties` map.
+///
+/// Zero-argument tools serialize to `{"type": "object"}` with no
+/// `properties` key, which OpenAI's strict function validation rejects
+/// ("object schema missing properties"). Adding an empty map is a
+/// semantic no-op accepted by every provider. Recurses through the
+/// standard schema-bearing keywords.
+pub fn normalize_request_schema(schema: &mut serde_json::Value) {
+    let serde_json::Value::Object(map) = schema else {
+        return;
+    };
+
+    if map.get("type").and_then(|t| t.as_str()) == Some("object") && !map.contains_key("properties")
+    {
+        map.insert(
+            "properties".to_owned(),
+            serde_json::Value::Object(serde_json::Map::new()),
+        );
+    }
+
+    for key in ["properties", "$defs", "definitions"] {
+        if let Some(serde_json::Value::Object(children)) = map.get_mut(key) {
+            for child in children.values_mut() {
+                normalize_request_schema(child);
+            }
+        }
+    }
+    for key in ["anyOf", "oneOf", "allOf", "prefixItems"] {
+        if let Some(serde_json::Value::Array(children)) = map.get_mut(key) {
+            for child in children.iter_mut() {
+                normalize_request_schema(child);
+            }
+        }
+    }
+    for key in ["items", "additionalProperties", "not", "if", "then", "else"] {
+        if let Some(child) = map.get_mut(key) {
+            normalize_request_schema(child);
+        }
+    }
+}
 
 type Deserializer<Context> = Box<
     dyn Fn(
@@ -48,7 +92,8 @@ where
             .into_iter()
             .map(|(name, tool_object)| {
                 let description = tool_object.description.clone();
-                let input_schema = serde_json::Value::Object(tool_object.input_schema.clone());
+                let mut input_schema = serde_json::Value::Object(tool_object.input_schema.clone());
+                normalize_request_schema(&mut input_schema);
                 let deserializer = Box::new(
                     move |json: &serde_json::Value| -> Result<
                         Box<dyn ToolSetCallable<Context> + Send + Sync>,
@@ -144,8 +189,9 @@ where
         schemas
             .into_iter()
             .map(|RequestSchema { name, schema }| {
-                let schema_json = serde_json::to_value(&schema)
+                let mut schema_json = serde_json::to_value(&schema)
                     .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
+                normalize_request_schema(&mut schema_json);
                 DynToolSetAdapter {
                     name,
                     schema: schema_json,

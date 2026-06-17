@@ -77,12 +77,6 @@ pub async fn list_links_handler(
 
     let tasks = links.into_iter().map(|link| {
         let ctx = ctx.clone();
-        // Secondary mailbox (email differs from its macro user's own) = inbox-only, not a user.
-        let is_inbox_only = !link
-            .email_address
-            .0
-            .as_ref()
-            .eq_ignore_ascii_case(link.macro_id.email_str());
         async move {
             let settings = email_db_client::settings::fetch_settings(&ctx.db, link.id)
                 .await
@@ -96,6 +90,7 @@ pub async fn list_links_handler(
                 .map_err(ListLinksError::DatabaseError)?;
             let sync_status = api::link::SyncStatus::derive(
                 link.is_sync_active,
+                link.needs_reauth,
                 latest_job.map(|job| job.status),
             );
 
@@ -132,7 +127,6 @@ pub async fn list_links_handler(
                 api::settings::Settings::from(settings),
                 sync_status,
                 photo_url,
-                is_inbox_only,
             ))
         }
     });

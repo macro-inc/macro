@@ -16,6 +16,14 @@ prepare_db:
 format:
     SQLX_OFFLINE=true cargo fmt
 
+# Regenerate dependency-unification metadata after changing any Cargo.toml:
+# the workspace-hack crate (feature unification, see .config/hakari.toml) and
+# the per-artifact dep closure map consumed by the flake's deploy builds.
+# Runs the lock-pinned generator in tools/xtask/, so local runs always match CI.
+# CI fails if either artifact is stale.
+hakari:
+    cargo run -p xtask -- deps
+
 clean:
     cargo clean
     git restore target/lambda
@@ -66,7 +74,6 @@ setup_test_envs:
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./email_db_client/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./email_refresh_handler/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./comms_db_client/.env
-    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./comms/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./document_cognition_service/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./document_text_extractor/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./organization_retention_handler/.env
@@ -93,6 +100,7 @@ setup_test_envs:
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./referral/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./chat/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./memory/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./ai_usage/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./call/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./backfill_entity_access/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./entity_access_management/.env
@@ -104,6 +112,7 @@ setup_test_envs:
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crm/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./bots/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./call_recording_preview_handler/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./share_permission_db_utils/.env
 
 setup_macrodb:
     just macro_db_client/create_db

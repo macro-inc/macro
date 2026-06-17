@@ -12,7 +12,7 @@ export type {
 export { CallControls } from './CallControls/CallControls';
 export { CallEventSync } from './CallEventSync';
 export { CallOverlay } from './CallOverlay';
-export { CallStartedNotifier } from './CallStartedNotifier';
+export { CallStartedNotifier, stopCallRinger } from './CallStartedNotifier';
 export { ChannelCallAutoJoin } from './ChannelCallAutoJoin';
 export { ChannelCallButton } from './ChannelCallButton';
 export { ChannelCallTab } from './ChannelCallTab';

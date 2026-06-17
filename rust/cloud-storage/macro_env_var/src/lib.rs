@@ -5,6 +5,11 @@ use thiserror::Error;
 
 const APP_SECRETS_JSON_ENV: &str = "APP_SECRETS_JSON";
 
+#[allow(dead_code)]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "macro_env_var is the sanctioned wrapper around std::env::var"
+)]
 fn read_std_env(s: &'static str) -> Result<String, std::env::VarError> {
     std::env::var(s)
 }
@@ -23,26 +28,42 @@ where
     }
 }
 
-/// Read a value from `APP_SECRETS_JSON` without mutating the process environment.
-pub fn read_from_app_secrets_json(key: &'static str) -> Option<String> {
-    read_from_app_secrets_json_with(key, read_std_env)
+fn read_env_var_with<F>(s: &'static str, read_var: F) -> Result<String, std::env::VarError>
+where
+    F: Fn(&'static str) -> Result<String, std::env::VarError>,
+{
+    match read_from_app_secrets_json_with(s, &read_var) {
+        Some(value) => Ok(value),
+        None => read_var(s),
+    }
+}
+
+fn optional_read_env_var_with<F>(
+    s: &'static str,
+    read_var: F,
+) -> Result<Option<String>, std::env::VarError>
+where
+    F: Fn(&'static str) -> Result<String, std::env::VarError>,
+{
+    match read_env_var_with(s, read_var) {
+        Ok(value) => Ok(Some(value)),
+        Err(std::env::VarError::NotPresent) => Ok(None),
+        Err(err) => Err(err),
+    }
 }
 
 fn read_env_with<F>(s: &'static str, read_var: F) -> Result<String, VarNameErr>
 where
     F: Fn(&'static str) -> Result<String, std::env::VarError>,
 {
-    match read_from_app_secrets_json_with(s, &read_var) {
-        Some(value) => Ok(value),
-        None => read_var(s).map_err(|err| VarNameErr { var_name: s, err }),
-    }
+    read_env_var_with(s, read_var).map_err(|err| VarNameErr { var_name: s, err })
 }
 
 fn maybe_read_env_with<F>(s: &'static str, read_var: F) -> Option<String>
 where
     F: Fn(&'static str) -> Result<String, std::env::VarError>,
 {
-    read_from_app_secrets_json_with(s, &read_var).or_else(|| read_var(s).ok())
+    optional_read_env_var_with(s, read_var).ok().flatten()
 }
 
 #[cfg(test)]
@@ -50,7 +71,10 @@ mod tests;
 
 #[cfg(test)]
 mod testing_harness {
-    use super::{VarNameErr, maybe_read_env_with, read_env_with};
+    use super::{
+        VarNameErr, maybe_read_env_with, optional_read_env_var_with, read_env_var_with,
+        read_env_with,
+    };
     use std::cell::Cell;
 
     type MockValue = Cell<Option<Box<dyn Fn(&'static str) -> Result<String, std::env::VarError>>>>;
@@ -66,6 +90,10 @@ mod testing_harness {
         }
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "test harness falls back to the same sanctioned std::env::var wrapper behavior"
+    )]
     fn get_env(s: &'static str) -> Result<String, std::env::VarError> {
         let cur_getter = MOCK_VAR_GETTER.replace(None);
         match cur_getter {
@@ -78,12 +106,22 @@ mod testing_harness {
         }
     }
 
-    pub fn read_env(s: &'static str) -> Result<String, VarNameErr> {
+    pub(crate) fn read_env(s: &'static str) -> Result<String, VarNameErr> {
         read_env_with(s, get_env)
     }
 
-    pub fn maybe_read_env(s: &'static str) -> Option<String> {
+    pub(crate) fn maybe_read_env(s: &'static str) -> Option<String> {
         maybe_read_env_with(s, get_env)
+    }
+
+    pub(crate) fn read_env_var(s: &'static str) -> Result<String, std::env::VarError> {
+        read_env_var_with(s, get_env)
+    }
+
+    pub(crate) fn optional_read_env_var(
+        s: &'static str,
+    ) -> Result<Option<String>, std::env::VarError> {
+        optional_read_env_var_with(s, get_env)
     }
 
     pub(crate) fn with_mock_env<F, Cb, U>(f: F, cb: Cb) -> U
@@ -98,13 +136,35 @@ mod testing_harness {
 }
 
 #[cfg(test)]
-pub use testing_harness::maybe_read_env;
+pub(crate) use testing_harness::maybe_read_env;
 #[cfg(test)]
-pub use testing_harness::read_env;
+pub(crate) use testing_harness::optional_read_env_var;
+#[cfg(test)]
+pub(crate) use testing_harness::read_env;
+#[cfg(test)]
+pub(crate) use testing_harness::read_env_var;
 
 #[cfg(not(test))]
 pub fn read_env(s: &'static str) -> Result<String, VarNameErr> {
     read_env_with(s, read_std_env)
+}
+
+/// Read an environment variable from `APP_SECRETS_JSON` or the process environment.
+///
+/// This uses the same lookup order as generated [`env_var!`] types, but returns the raw
+/// [`std::env::VarError`] so callers can map errors into their own error types.
+#[cfg(not(test))]
+pub fn read_env_var(s: &'static str) -> Result<String, std::env::VarError> {
+    read_env_var_with(s, read_std_env)
+}
+
+/// Read an optional environment variable from `APP_SECRETS_JSON` or the process environment.
+///
+/// Missing variables return `Ok(None)`. Values present in `APP_SECRETS_JSON` take precedence over
+/// process environment variables. Non-Unicode process environment values are returned as errors.
+#[cfg(not(test))]
+pub fn optional_read_env_var(s: &'static str) -> Result<Option<String>, std::env::VarError> {
+    optional_read_env_var_with(s, read_std_env)
 }
 
 /// Read an environment variable, returning `None` if it is not present.
@@ -293,6 +353,74 @@ macro_rules! env_var {
     };
 }
 
+/// A macro for defining multiple environment variable structs in a single invocation.
+///
+/// Each definition expands exactly as if it were passed to [`env_var!`] on its own.
+///
+/// # Example
+///
+/// ```
+/// use macro_env_var::env_vars;
+///
+/// env_vars! {
+///     pub struct BaseUrl;
+///     pub struct DatabaseUrl;
+///     #[derive(Debug, Clone)]
+///     pub struct RedisUri;
+/// }
+///
+/// let _url: Result<BaseUrl, _> = BaseUrl::new();
+/// ```
+#[macro_export]
+macro_rules! env_vars {
+    (
+        $(
+            $(#[$attr:meta])*
+            $v:vis struct $n:ident;
+        )*
+    ) => {
+        $(
+            $crate::env_var! {
+                $(#[$attr])*
+                $v struct $n;
+            }
+        )*
+    };
+}
+
+/// A macro for defining multiple optional environment variable structs in a single invocation.
+///
+/// Each definition expands exactly as if it were passed to [`maybe_env_var!`] on its own.
+///
+/// # Example
+///
+/// ```
+/// use macro_env_var::maybe_env_vars;
+///
+/// maybe_env_vars! {
+///     pub struct OptionalApiKey;
+///     pub struct OptionalFeatureFlag;
+/// }
+///
+/// let _key: Option<OptionalApiKey> = OptionalApiKey::new();
+/// ```
+#[macro_export]
+macro_rules! maybe_env_vars {
+    (
+        $(
+            $(#[$attr:meta])*
+            $v:vis struct $n:ident;
+        )*
+    ) => {
+        $(
+            $crate::maybe_env_var! {
+                $(#[$attr])*
+                $v struct $n;
+            }
+        )*
+    };
+}
+
 /// A macro for defining optional environment variables that return `Option` instead of `Result`.
 ///
 /// Use this when an environment variable is optional and its absence is expected behavior,
@@ -310,6 +438,25 @@ macro_rules! env_var {
 /// // Returns None if OPTIONAL_API_KEY is not set
 /// let _key: Option<OptionalApiKey> = OptionalApiKey::new();
 /// ```
+///
+/// # Deserialization
+///
+/// When deserialized (for example as a field of a `macro_config::MacroConfig` struct), a missing
+/// or `null` value produces the `Unset` variant instead of an error, so the generated type can be
+/// used directly as a config field without wrapping it in `Option`. Use `value()` to read it:
+///
+/// ```
+/// use macro_env_var::maybe_env_var;
+///
+/// maybe_env_var! {
+///     pub struct OptionalToken;
+/// }
+///
+/// let set: OptionalToken = serde_json::from_str(r#""abc""#).unwrap();
+/// let unset: OptionalToken = serde_json::from_str("null").unwrap();
+/// assert_eq!(set.value(), Some("abc"));
+/// assert_eq!(unset.value(), None);
+/// ```
 #[macro_export]
 macro_rules! maybe_env_var {
     (
@@ -319,13 +466,18 @@ macro_rules! maybe_env_var {
         $crate::paste::paste! {
             #[doc = "struct which represents the optional `" $n:snake:upper "` environment variable.
             This returns `Option<Self>` when the variable may or may not be present.
+            When deserialized (e.g. by `macro_config`), a missing variable produces [`" $n "`::Unset]
+            instead of an error, so this type can be used as a bare config field without wrapping it
+            in `Option`. Use [`" $n "`::value] to access the value.
             See [`" $n "`::new] for usage methods"]
             $(#[$attr])*
             $v enum $n {
                 #[doc = "This environment var is allocated and read at runtime"]
                 Runtime(std::sync::Arc<str>),
                 #[doc = "This environment var was present at compile time. It may or may not currently exist at runtime."]
-                Comptime(&'static str)
+                Comptime(&'static str),
+                #[doc = "This environment var was not set. Produced by deserialization when the variable is absent or `null`."]
+                Unset
             }
 
             impl $n {
@@ -353,12 +505,34 @@ macro_rules! maybe_env_var {
                     Self::Comptime(s)
                 }
 
+                #[doc = "Create an instance representing an unset `" $n:snake:upper "` variable"]
+                #[allow(dead_code)]
+                $v const fn new_unset() -> Self {
+                    Self::Unset
+                }
+
+                #[doc = "Get the value as a string slice, or `None` if the variable was not set"]
+                #[allow(dead_code)]
+                $v fn value(&self) -> Option<&str> {
+                    match self {
+                        Self::Runtime(i) => Some(i),
+                        Self::Comptime(i) => Some(i),
+                        Self::Unset => None
+                    }
+                }
+
+                #[doc = "Whether the variable was set"]
+                #[allow(dead_code)]
+                $v fn is_set(&self) -> bool {
+                    !matches!(self, Self::Unset)
+                }
+
                 #[allow(dead_code)]
                 #[doc = "Get a reference to the internal [std::sync::Arc] if this is a runtime allocated env var"]
                 $v fn runtime_inner(&self) -> Option<&std::sync::Arc<str>> {
                     match self {
                         Self::Runtime(i) => Some(i),
-                        Self::Comptime(_) => None
+                        Self::Comptime(_) | Self::Unset => None
                     }
                 }
 
@@ -367,36 +541,51 @@ macro_rules! maybe_env_var {
                 $v fn comptime_inner(&self) -> Option<&'static str> {
                     match self {
                         Self::Comptime(i) => Some(i),
-                        Self::Runtime(_) => None
+                        Self::Runtime(_) | Self::Unset => None
                     }
                 }
 
                 #[allow(dead_code)]
-                #[doc = "Returns an Arc<str> of the contained value"]
-                $v fn as_arc(&self) -> std::sync::Arc<str> {
+                #[doc = "Returns an Arc<str> of the contained value, or `None` if the variable was not set"]
+                $v fn as_arc(&self) -> Option<std::sync::Arc<str>> {
                     match self {
-                        Self::Comptime(i) => std::sync::Arc::from(*i),
-                        Self::Runtime(i) => i.clone()
+                        Self::Comptime(i) => Some(std::sync::Arc::from(*i)),
+                        Self::Runtime(i) => Some(i.clone()),
+                        Self::Unset => None
                     }
                 }
             }
 
+            #[doc = "Panics when the variable is [`" $n "`::Unset]; use [`" $n "`::value] when the
+            value may be unset (e.g. when loaded through `macro_config`)."]
             impl std::ops::Deref for $n {
                 type Target = str;
 
                 fn deref(&self) -> &Self::Target {
                     match self {
                         Self::Runtime(i) => &*i,
-                        Self::Comptime(i) => i
+                        Self::Comptime(i) => i,
+                        Self::Unset => panic!(concat!(
+                            "dereferenced unset env var `",
+                            stringify!([<$n:snake:upper>]),
+                            "`; use `.value()` to handle the unset case"
+                        ))
                     }
                 }
             }
 
+            #[doc = "Panics when the variable is [`" $n "`::Unset]; use [`" $n "`::value] when the
+            value may be unset (e.g. when loaded through `macro_config`)."]
             impl std::convert::AsRef<str> for $n {
                 fn as_ref(&self) -> &str {
                     match self {
                         Self::Runtime(i) => &*i,
-                        Self::Comptime(i) => i
+                        Self::Comptime(i) => i,
+                        Self::Unset => panic!(concat!(
+                            "read unset env var `",
+                            stringify!([<$n:snake:upper>]),
+                            "` as a str; use `.value()` to handle the unset case"
+                        ))
                     }
                 }
             }
@@ -406,8 +595,53 @@ macro_rules! maybe_env_var {
                 where
                     D: $crate::serde::Deserializer<'de>,
                 {
-                    let value = <String as $crate::serde::Deserialize>::deserialize(deserializer)?;
-                    Ok(Self::Runtime(std::sync::Arc::from(value)))
+                    struct __MaybeEnvVarVisitor;
+
+                    impl<'de> $crate::serde::de::Visitor<'de> for __MaybeEnvVarVisitor {
+                        type Value = $n;
+
+                        fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                            formatter.write_str("an optional string")
+                        }
+
+                        fn visit_none<E>(self) -> Result<Self::Value, E>
+                        where
+                            E: $crate::serde::de::Error,
+                        {
+                            Ok($n::Unset)
+                        }
+
+                        fn visit_unit<E>(self) -> Result<Self::Value, E>
+                        where
+                            E: $crate::serde::de::Error,
+                        {
+                            Ok($n::Unset)
+                        }
+
+                        fn visit_some<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+                        where
+                            D: $crate::serde::Deserializer<'de>,
+                        {
+                            let value = <String as $crate::serde::Deserialize>::deserialize(deserializer)?;
+                            Ok($n::Runtime(std::sync::Arc::from(value)))
+                        }
+
+                        fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+                        where
+                            E: $crate::serde::de::Error,
+                        {
+                            Ok($n::Runtime(std::sync::Arc::from(value)))
+                        }
+
+                        fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
+                        where
+                            E: $crate::serde::de::Error,
+                        {
+                            Ok($n::Runtime(std::sync::Arc::from(value)))
+                        }
+                    }
+
+                    deserializer.deserialize_option(__MaybeEnvVarVisitor)
                 }
             }
         }

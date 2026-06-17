@@ -1,16 +1,16 @@
 ---
 title: "Blocks"
 icon: "cubes"
-description: "Blocks are the core building blocks of Macro. They work together like Lego."
+description: "Blocks are at the core of Macro's philosophy. They are designed to work together like legos."
 ---
 
 Everything in Macro is a **block**. The current first-party block types are `md` (documents), `email`, `channel`, `chat` (agents), `automation`, `project` (tasks), `contact` (crm), `company` (crm), `call`, `canvas`, `code`, `image`, `video`, `pdf`, and `unknown` (fallback).
 
 ## Splits
 
-On desktop — but not on mobile — Macro has its own window manager that lets you multi-task in your browser in one tab. By default when you open Macro you have one _split_.
+On desktop (not on mobile), Macro has its own window manager that lets you multi-task in your browser in one tab. By default when you open Macro you have one _split_.
 
-In general, you can press <kbd>shift</kbd> to open an @mention or list item in a new split.
+In general, you can use <kbd>shift</kbd>\+click to open an @mention or list item in a new split.
 
 Each split maintains its own history. Use <kbd>opt</kbd> <kbd>\[</kbd> or <kbd>opt</kbd> <kbd>\]</kbd> to move back and forward, or just press the chevron icons in the top bar of the split.
 
@@ -20,7 +20,7 @@ Create a split with <kbd>cmd</kbd>\+<kbd>\\</kbd>, focus left/right with <kbd>sh
   ![Multiple splits open side by side in a single Macro tab](/images/Screenshot-2026-06-09-at-4.49.29-PM.png)
 </Frame>
 
-The number of splits you can have open at once is determined by your monitor size and zoom. If there isn't room for another split, the new one replaces the rightmost split.
+The number of splits you can have open at once is determined by your monitor size and zoom. If there isn't room for another split, Macro won't open a new one until you close one.
 
 ## Previews
 
@@ -38,7 +38,7 @@ Most block types have on-hover previews to provide context without needing to cl
 
 ## Embeds
 
-Most blocks embed read-only in a markdown doc, with editing and markup tools disabled. Note that, unlike mentioning docs in channels — where permissions are automatically granted to members of the channel — permissions are not auto-granted for embeds or mentions in documents. You'll have to also share the files you embed.
+Most blocks embed read-only in a markdown doc, with editing and markup tools disabled. Note that permissions are not auto-granted for embeds or mentions in documents, unlike mentions in channels, where channel members get access automatically. You'll have to also share the files you embed.
 
 <Frame>
   ![A block embedded read-only inside a markdown document](/images/Screenshot-2026-06-09-at-4.50.07-PM.png)
@@ -58,6 +58,6 @@ To create an embed, first create an @mention by hitting `@` or dragging and drop
 
 ## More about blocks
 
-- **References, sharing & permissions** — Every block has a References panel (backlinks to everywhere it's mentioned or embedded) and the same share dialog, with owner / editor / commenter / viewer access levels plus public links for documents.
-- **Real-time collaboration** — Collaborative blocks (docs, pdf markup) sync through **Loro CRDTs** over a **Cloudflare Durable Objects** backend: the Rust `sync-service` spins up one Durable Object "room" per document, and clients connect over WebSocket to `/document/:id`. This is what gives you multiplayer editing, presence cursors, and full offline support.
-- **Search & Inbox** — One unified [Search](/product/search) index covers every block type, filterable by type and by mentioned person. The unified [Inbox](/product/inbox) pulls open notifications from across blocks into a single recency-sorted list.
+- **References, sharing & permissions**: every block has a References panel (backlinks to everywhere it's mentioned or embedded) and the same share dialog, with owner / editor / commenter / viewer access levels plus public links for documents.
+- **Real-time collaboration**: collaborative blocks (docs, pdf markup) sync through **Loro CRDTs** over a **Cloudflare Durable Objects** backend: the Rust `sync-service` spins up one Durable Object "room" per document, and clients connect over WebSocket to `/document/:id`. This is what gives you multiplayer editing, presence cursors, and full offline support.
+- **Search & Inbox**: one unified [Search](/product/search) index covers every block type, filterable by type and by mentioned person. The unified [Inbox](/product/inbox) pulls open notifications from across blocks into a single recency-sorted list.

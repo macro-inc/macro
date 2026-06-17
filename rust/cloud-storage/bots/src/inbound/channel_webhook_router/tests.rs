@@ -1,6 +1,6 @@
 use super::*;
 use crate::domain::models::{
-    AuthenticatedBot, Bot, BotId, BotKind, BotOwner, BotToken, CreateBotRequest,
+    AuthenticatedBot, Bot, BotChannel, BotId, BotKind, BotOwner, BotToken, CreateBotRequest,
     CreateBotTokenRequest, CreateBotTokenResponse, PatchBotRequest,
 };
 use axum::{
@@ -170,6 +170,14 @@ impl BotService for TestBotService {
         _channel_id: Uuid,
         _bot_id: BotId,
     ) -> Result<(), BotError> {
+        unimplemented!()
+    }
+
+    async fn list_bot_channels(
+        &self,
+        _caller: MacroUserIdStr<'static>,
+        _bot_id: BotId,
+    ) -> Result<Vec<BotChannel>, BotError> {
         unimplemented!()
     }
 
@@ -421,6 +429,8 @@ fn webhook_router(service: TestBotService, poster: TestChannelPoster) -> Router 
 
 fn scoped_bot_response(bot_id: BotId) -> CreateChannelScopedBotResponse {
     let now = chrono::Utc::now();
+    let bot_token = "mbot_test_1234".to_string();
+
     CreateChannelScopedBotResponse {
         bot: Bot {
             id: bot_id,
@@ -440,14 +450,14 @@ fn scoped_bot_response(bot_id: BotId) -> CreateChannelScopedBotResponse {
         token: BotToken {
             id: Uuid::new_v4(),
             bot_id,
-            token_prefix: "mbot_test".to_string(),
+            token: bot_token.clone(),
             label: Some("webhook".to_string()),
             last_used_at: None,
             expires_at: None,
             revoked_at: None,
             created_at: now,
         },
-        bot_token: "mbot_test_1234".to_string(),
+        bot_token,
     }
 }
 

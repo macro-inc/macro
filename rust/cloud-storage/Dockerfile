@@ -30,8 +30,7 @@ RUN : \
   && apt-get clean \
   && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /app/svc /app/svc
-RUN chmod +x svc
+COPY --chmod=755 --from=builder /app/svc /app/svc
 
 ENV PORT=8080
 EXPOSE ${PORT}

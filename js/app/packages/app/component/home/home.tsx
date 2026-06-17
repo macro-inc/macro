@@ -1,7 +1,6 @@
 import { useAnalytics } from '@app/component/analytics-context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
-import { useHasPaidAccess } from '@core/auth';
 import { DragDropWrapper } from '@core/component/AI/component/DragDrop';
 import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
@@ -147,7 +146,6 @@ const HomeChatInput = () => {
   const analytics = useAnalytics();
   const splitPanelContext = useSplitPanelOrThrow();
   const input = useChatInputContext();
-  const hasPaid = useHasPaidAccess();
 
   const { getAttachmentFromMention } = useGetChatAttachmentInfo();
 
@@ -176,12 +174,6 @@ const HomeChatInput = () => {
   const renameMutation = createRenameDssEntityMutation();
 
   const handleSend = async (request: ChatSendInput) => {
-    if (!hasPaid()) {
-      const { showPaywall } = usePaywallState();
-      showPaywall(PaywallKey.CHAT_LIMIT);
-      return;
-    }
-
     const backgroundSend = request.metaKey;
 
     // Create a new persistent chat

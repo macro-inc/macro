@@ -14,25 +14,25 @@ import type {
   GroupHeaderProps,
   SoupRow,
 } from '@app/component/next-soup/create-soup-state';
-import type { QueryState } from '@app/component/next-soup/filters/filter-store';
+import type {
+  Query,
+  QueryState,
+} from '@app/component/next-soup/filters/filter-store';
 import type { SetPredicatesInput } from '@app/component/next-soup/filters/filter-store/predicates-store';
 import { useSoup } from '@app/component/next-soup/soup-context';
+import { registerDocumentsFilterSplit } from '@app/component/next-soup/soup-view/documents-filter-controllers';
 import { EmptyState } from '@app/component/next-soup/soup-view/empty-states';
 import { InboxSelector } from '@app/component/next-soup/soup-view/filters-bar/inbox-selector';
 import { SoupFiltersBar } from '@app/component/next-soup/soup-view/filters-bar/soup-filters-bar';
 import { SoupSearchbar } from '@app/component/next-soup/soup-view/filters-bar/soup-view-search-bar';
 import { useFilterRefinements } from '@app/component/next-soup/soup-view/filters-bar/use-filter-refinements';
 import { MaybeSoupEntityActionDrawerManager } from '@app/component/next-soup/soup-view/SoupEntityActionDrawerManager';
-import type { SystemSortOption } from '@app/component/next-soup/soup-view/sort-options';
 import { SoupEntityContextMenu } from '@app/component/next-soup/soup-view/soup-entity-context-menu';
 import {
   persistSoupNavigationTouchHighlight,
   soupNavigationTouchHighlight,
 } from '@app/component/next-soup/soup-view/soup-navigation-touch-highlight';
-import {
-  SoupViewContextProvider,
-  useSoupView,
-} from '@app/component/next-soup/soup-view/soup-view-context';
+import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { SoupViewCreateButton } from '@app/component/next-soup/soup-view/soup-view-create-button';
 import { SoupViewFileDropzone } from '@app/component/next-soup/soup-view/soup-view-file-dropzone';
 import {
@@ -62,7 +62,9 @@ import {
   useSplitPanel,
   useSplitPanelOrThrow,
 } from '@app/component/split-layout/layoutUtils';
+import { LIST_VIEW_DOCS_URL } from '@app/constants/docs-links';
 import { isListViewID, type ListView } from '@app/constants/list-views';
+import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { usePreference } from '@app/preferences/use-preference';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
@@ -80,6 +82,7 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import { useDisplayName } from '@core/user/displayName';
 import { type MacroId, tryMacroId } from '@core/user/macroId';
+import { openExternalUrl } from '@core/util/url';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import {
   type EntityData,
@@ -93,9 +96,11 @@ import { createEffectOnEntityTypeNotification } from '@notifications';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import ChevronRightIcon from '@phosphor/caret-right.svg';
 import CheckIcon from '@phosphor/check.svg';
+import CircleDashed from '@phosphor/circle-dashed.svg';
+import InfoIcon from '@phosphor/info.svg';
 import Spinner from '@phosphor/spinner.svg';
 import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
-import { SYSTEM_PROPERTY_IDS } from '@property/constants';
+import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { useQueryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
 import { invalidateEntityNotifications } from '@queries/notification/user-notifications';
@@ -110,6 +115,7 @@ import {
   batch,
   createEffect,
   createMemo,
+  createRenderEffect,
   createSignal,
   type JSX,
   Match,
@@ -131,6 +137,7 @@ export const SoupSectionHeader = (props: {
   children: JSX.Element;
   onClick?: () => void;
   highlighted?: boolean;
+  class?: string;
 }) => {
   return (
     <Layer depth={2}>
@@ -138,11 +145,13 @@ export const SoupSectionHeader = (props: {
         component={props.onClick ? 'button' : 'div'}
         type={props.onClick ? 'button' : undefined}
         onClick={props.onClick}
+        data-highlighted={props.highlighted || undefined}
         class={cn(
-          'group/header w-[calc(100%-0.5rem)] mx-1 mb-1 rounded px-2 py-2 flex items-center gap-2.5 text-xs font-semibold tracking-tight',
+          'group/header relative w-[calc(100%-0.5rem)] mx-1 my-0.5 rounded-lg px-2 py-2 flex items-center gap-2.5 text-xs font-semibold tracking-tight',
           'text-text-muted bg-surface border border-edge-muted relative',
           props.onClick && 'hover:bg-active',
-          props.highlighted && 'ring ring-edge bg-active ring-inset'
+          props.class,
+          props.highlighted && 'bg-active'
         )}
       >
         {props.children}
@@ -155,7 +164,9 @@ const AssigneeGroupContent = (props: {
   assigneeId: MacroId;
   fallbackLabel: string;
 }) => {
-  const [assigneeName] = useDisplayName(props.assigneeId);
+  const [assigneeName] = useDisplayName(props.assigneeId, {
+    emailFallback: 'local-part',
+  });
   return (
     <>
       <UserIcon
@@ -169,6 +180,19 @@ const AssigneeGroupContent = (props: {
       </span>
     </>
   );
+};
+
+const STATUS_GROUP_HEADER_TINTS: Record<string, string> = {
+  [PROPERTY_OPTION_IDS.STATUS.NOT_STARTED]:
+    'bg-task/5 border-task/10 data-highlighted:bg-task/10 hover:bg-task/10',
+  [PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS]:
+    'bg-alert/5 border-alert/10 data-highlighted:bg-alert/10 hover:bg-alert/10',
+  [PROPERTY_OPTION_IDS.STATUS.IN_REVIEW]:
+    'bg-note/5 border-note/10 data-highlighted:bg-note/10 hover:bg-note/10',
+  [PROPERTY_OPTION_IDS.STATUS.COMPLETED]:
+    'bg-accent/5 border-accent/10 data-highlighted:bg-accent/10 hover:bg-accent/10',
+  [PROPERTY_OPTION_IDS.STATUS.CANCELED]:
+    'bg-ink/5 border-ink/10 data-highlighted:bg-ink/10 hover:bg-ink/10',
 };
 
 const DefaultGroupHeader = (
@@ -187,13 +211,29 @@ const DefaultGroupHeader = (
     return tryMacroId(props.group.key);
   });
 
+  const statusTint = createMemo(() => {
+    const field = groupByField();
+    if (
+      field?.type !== 'property' ||
+      field.propertyDefinitionId !== SYSTEM_PROPERTY_IDS.STATUS
+    ) {
+      return;
+    }
+
+    const optionId = props.group.value ?? props.group.key;
+    if (typeof optionId !== 'string') return;
+
+    return STATUS_GROUP_HEADER_TINTS[optionId];
+  });
+
   return (
     <SoupSectionHeader
       onClick={() => props.group.toggle()}
       highlighted={props.highlighted}
+      class={statusTint()}
     >
       <Layer depth={3}>
-        <div class="flex items-center justify-center size-4.5 rounded-xs bg-surface group-hover/header:bg-active">
+        <div class="flex items-center justify-center size-4.5 rounded-xs group-hover/header:bg-ink/5">
           <ChevronRightIcon
             class={cn('size-2.5', {
               'rotate-90': props.group.isExpanded(),
@@ -201,29 +241,37 @@ const DefaultGroupHeader = (
           />
         </div>
       </Layer>
-      <Show
-        when={assigneeId()}
-        fallback={
-          <>
-            <PropertyValueIcon
-              optionId={props.group.value as string}
-              class="size-3.5"
+      <Switch>
+        <Match when={assigneeId()}>
+          {(id) => (
+            <AssigneeGroupContent
+              assigneeId={id()}
+              fallbackLabel={props.group.label}
             />
-            <span class="truncate">{props.group.label}</span>
-          </>
-        }
-      >
-        {(id) => (
-          <AssigneeGroupContent
-            assigneeId={id()}
-            fallbackLabel={props.group.label}
-          />
-        )}
-      </Show>
+          )}
+        </Match>
+        <Match
+          when={typeof props.group.value !== 'string' || !props.group.value}
+        >
+          <CircleDashed class="size-3.5 text-ink-extra-muted" />
+
+          <span class="truncate">{props.group.label}</span>
+        </Match>
+        <Match
+          when={typeof props.group.value === 'string' && props.group.value}
+        >
+          {(value) => (
+            <>
+              <PropertyValueIcon optionId={value()} class="size-3.5" />
+              <span class="truncate">{props.group.label}</span>
+            </>
+          )}
+        </Match>
+      </Switch>
       <span
         class={cn(
           'shrink-0 tabular-nums text-xs font-medium',
-          'px-1.5 py-px rounded-full bg-ink/10 text-text-subtle'
+          'px-1.5 py-px rounded-full bg-ink/10 text-ink-extra-muted'
         )}
       >
         {props.group.count}
@@ -338,10 +386,120 @@ interface SoupViewProps {
 export const SoupView = (props: SoupViewProps) => {
   const soup = useSoup();
   const panel = useSplitPanelOrThrow();
+  const soupView = useSoupView();
+
+  const entryState = panel.handle.currentEntryState();
+  const contentId = panel.handle.content().id;
+
+  const persistedFilters = entryState?.['search.filters'] as Query | undefined;
+
+  const persistedPredicates = entryState?.['search.predicates'] as
+    | SetPredicatesInput<string>
+    | undefined;
+
+  const persistedSearchText = entryState?.['search.text'] as string | undefined;
+
+  const persistedGroupBy = entryState?.['soup.groupBy'] as
+    | string
+    | null
+    | undefined;
+
+  const persistedActiveTab = entryState?.['soup.tab'] as string | undefined;
+
+  const persistedCollapsedGroups = entryState?.['soup.collapsedGroups'] as
+    | string[]
+    | undefined;
+
+  const [sortPref, setSortPref] = usePreference<string[]>(
+    `macro:pref:soup:${contentId}:sort`,
+    { default: [] }
+  );
+
+  // We handle the restore of the persistence here instead of within the context
+  // because the context is no longer recreated for each soup view because we
+  // moved it within the `SplitPanel`.
+  //
+  // We only restore the following because they either live as state in the
+  // context or are used within the context to produce the output (like the
+  // client filters, local search state, and additionalEntities)
+  //
+  // We use `createRenderEffect` to initialize before the elements mount
+  let init = false;
+  createRenderEffect(() => {
+    if (init) return;
+    init = true;
+    batch(() => {
+      soupView.initialize({
+        initialQuery: persistedFilters ?? props.initialFilters,
+        initialClientFilters: persistedPredicates ?? props.initialClientFilters,
+        initialSearchText: persistedSearchText ?? props.initialSearchText,
+        disableLocalSearch: props.disableLocalSearch,
+        additionalEntities: props.additionalEntities,
+      });
+
+      const initialGroupBy = persistedGroupBy ?? props.initialGroupBy;
+
+      let initialSortIds = sortPref();
+      if (initialSortIds.length === 0) {
+        initialSortIds = ['updated_at'];
+      }
+
+      let initialActiveTab = persistedActiveTab;
+
+      if (initialActiveTab === undefined && isListViewID(contentId)) {
+        initialActiveTab = VIEW_TAB_PRESETS[contentId].default;
+      }
+
+      soup.grouping.setActiveGroupId(initialGroupBy);
+      soup.grouping.collapseAll(persistedCollapsedGroups ?? []);
+
+      soup.sort.setAll(
+        initialSortIds as Parameters<typeof soup.sort.setAll>[0]
+      );
+
+      soupView.setActiveTab(initialActiveTab);
+    });
+  });
+
+  onMount(() => {
+    if (contentId !== 'documents') return;
+
+    const markdownQuery: Query = { include: { fileAssoc: ['assoc:md'] } };
+    const dispose = registerDocumentsFilterSplit(panel.handle.id, {
+      toggleMarkdownFilter: () => {
+        if (soup.predicates.isActive('doc-markdown')) {
+          soupView.queryFilters.remove(markdownQuery);
+          soup.predicates.set(({ andIds, orIds }) => ({
+            and: andIds,
+            or: orIds.filter((id) => id !== 'doc-markdown'),
+          }));
+          return;
+        }
+
+        soupView.queryFilters.add(markdownQuery);
+        soup.predicates.set(({ andIds, orIds }) => ({
+          and: andIds,
+          or: [...new Set([...orIds, 'doc-markdown'])],
+        }));
+      },
+    });
+
+    onCleanup(dispose);
+  });
 
   createEffect(() => {
     panel.handle.setDisplayName(props.viewName);
   });
+
+  // Bridge live soup sort state back to preferences. `defer: true` skips the
+  // initial run on mount, so we only write when the user actually changes it.
+  createEffect(
+    on(
+      () => soup.sort.active().map((s) => s.id),
+      (ids) => setSortPref(ids),
+      { defer: true }
+    )
+  );
 
   useSoupNotificationInvalidators();
 
@@ -362,9 +520,43 @@ export const SoupView = (props: SoupViewProps) => {
     return id && isListViewID(id) ? id : undefined;
   });
 
+  const docsUrl = createMemo(() => {
+    const view = activeListView();
+    return view ? LIST_VIEW_DOCS_URL[view] : undefined;
+  });
+
   const [narrowSearchExpanded, setNarrowSearchExpanded] = createSignal(false);
   const [mobileSearchOpen, setMobileSearchOpen] = createSignal(false);
   const [searchIsCollapsed, setSearchIsCollapsed] = createSignal(false);
+  const [floatingButtonsVisible, setFloatingButtonsVisible] =
+    createSignal(true);
+  let lastSoupScrollOffset = 0;
+  let upwardSoupScrollDistance = 0;
+
+  const resetFloatingButtonScrollTracking = (offset = 0) => {
+    lastSoupScrollOffset = Math.max(0, offset);
+    upwardSoupScrollDistance = 0;
+    setFloatingButtonsVisible(true);
+  };
+
+  const handleSoupScrollOffsetChange = (offset: number) => {
+    const nextOffset = Math.max(0, offset);
+    const delta = nextOffset - lastSoupScrollOffset;
+    lastSoupScrollOffset = nextOffset;
+
+    if (delta > 0) {
+      upwardSoupScrollDistance = 0;
+      setFloatingButtonsVisible(false);
+      return;
+    }
+
+    if (delta < 0) {
+      upwardSoupScrollDistance += Math.abs(delta);
+      if (upwardSoupScrollDistance > FLOATING_BUTTON_SCROLL_UP_THRESHOLD) {
+        setFloatingButtonsVisible(true);
+      }
+    }
+  };
 
   registerHotkey({
     hotkey: 'cmd+f',
@@ -394,82 +586,97 @@ export const SoupView = (props: SoupViewProps) => {
             : undefined,
       }}
     >
-      <SoupViewContextProvider
-        soup={soup}
-        initialQuery={props.initialFilters}
-        initialSearchText={props.initialSearchText}
-        disableLocalSearch={props.disableLocalSearch}
-        additionalEntities={props.additionalEntities}
-      >
-        <div class="size-full flex flex-col" data-list-view={activeListView()}>
-          <div class="flex flex-col w-full">
-            <Show when={!isMobile()}>
-              <SplitHeaderLeft>
-                <div
-                  class={cn('h-full flex gap-3 items-center', {
-                    'shrink-0': !narrowSearchExpanded(),
-                    'flex-1 min-w-0': narrowSearchExpanded(),
-                  })}
-                >
-                  <Show when={!narrowSearchExpanded()}>
-                    <span class="text-base font-bold">{props.viewName}</span>
-                  </Show>
-                  <Show
-                    when={
-                      !narrowSearchExpanded() && !isComponentListView('search')
-                    }
-                  >
-                    <CollapsibleHeaderItem
-                      id="tabs"
-                      priority={1}
-                      expanded={() => <SoupViewTabs />}
-                      collapsed={() => <CollapsedSoupViewTabs />}
-                      containerClass="h-full"
-                    />
-                  </Show>
-                  <Show
-                    when={
-                      !narrowSearchExpanded() && isComponentListView('mail')
-                    }
-                  >
-                    <InboxSelector />
+      <div class="size-full flex flex-col" data-list-view={activeListView()}>
+        <div
+          class={cn('flex flex-col w-full', {
+            // In preview the separating border sits below this region, so it
+            // ends up under the active-filters bar when shown, otherwise right
+            // under the toolbar (the wrapper collapses to zero height).
+            'border-b border-edge-muted': !isMobile() && !!soup.previewEntity(),
+          })}
+        >
+          <SplitHeaderLeft>
+            <div
+              class={cn('h-full flex gap-3 items-center', {
+                'shrink-0': !narrowSearchExpanded(),
+                'flex-1 min-w-0': narrowSearchExpanded(),
+              })}
+            >
+              <Show when={!isMobile() && !narrowSearchExpanded()}>
+                <div class="flex items-center gap-1">
+                  <span class="text-base font-bold">{props.viewName}</span>
+                  <Show when={docsUrl()}>
+                    {(url) => (
+                      <Button
+                        variant="ghost"
+                        class="p-0.5 rounded-sm text-ink-extra-muted hover:text-ink-muted"
+                        label="View documentation"
+                        onClick={() => openExternalUrl(url())}
+                      >
+                        <InfoIcon class="size-3.5" />
+                      </Button>
+                    )}
                   </Show>
                 </div>
-              </SplitHeaderLeft>
-              <SplitHeaderRight>
-                <Show
-                  when={
-                    !narrowSearchExpanded() && !isComponentListView('search')
-                  }
-                >
-                  <SoupViewCreateButton />
+              </Show>
+              <Show
+                when={!narrowSearchExpanded() && !isComponentListView('search')}
+              >
+                <Show when={!isMobile()}>
+                  <CollapsibleHeaderItem
+                    id="tabs"
+                    priority={1}
+                    expanded={() => <SoupViewTabs />}
+                    collapsed={() => <CollapsedSoupViewTabs />}
+                    containerClass="h-full"
+                  />
                 </Show>
-                <Show when={narrowSearchExpanded()}>
+              </Show>
+              <Show
+                when={
+                  !isMobile() &&
+                  !narrowSearchExpanded() &&
+                  isComponentListView('mail')
+                }
+              >
+                <InboxSelector />
+              </Show>
+            </div>
+          </SplitHeaderLeft>
+          <Show when={!isMobile()}>
+            <SplitHeaderRight>
+              <Show
+                when={!narrowSearchExpanded() && !isComponentListView('search')}
+              >
+                <SoupViewCreateButton />
+              </Show>
+              <Show when={narrowSearchExpanded()}>
+                <Layer depth={2}>
+                  <div class="flex-1 min-w-0">
+                    <SoupSearchbar
+                      variant="secondary"
+                      autoFocus
+                      initialValue={props.initialSearchText}
+                      onDismiss={() => setNarrowSearchExpanded(false)}
+                    />
+                  </div>
+                </Layer>
+              </Show>
+              <Show
+                when={!isComponentListView('search')}
+                fallback={
                   <Layer depth={2}>
-                    <div class="flex-1 min-w-0">
+                    <div class="grow ml-2 min-w-0 [contain:inline-size]">
                       <SoupSearchbar
                         variant="secondary"
-                        autoFocus
+                        placeholder="Search, @mention contacts"
                         initialValue={props.initialSearchText}
-                        onDismiss={() => setNarrowSearchExpanded(false)}
                       />
                     </div>
                   </Layer>
-                </Show>
-                <Show
-                  when={!isComponentListView('search')}
-                  fallback={
-                    <Layer depth={2}>
-                      <div class="grow ml-2">
-                        <SoupSearchbar
-                          variant="secondary"
-                          placeholder="Search, @mention contacts"
-                          initialValue={props.initialSearchText}
-                        />
-                      </div>
-                    </Layer>
-                  }
-                >
+                }
+              >
+                <Show when={!narrowSearchExpanded()}>
                   <CollapsibleHeaderItem
                     id="search"
                     priority={0}
@@ -488,47 +695,44 @@ export const SoupView = (props: SoupViewProps) => {
                       </Layer>
                     )}
                     collapsed={() => (
-                      <Show when={!narrowSearchExpanded()}>
-                        <Tooltip label="Search" hotkey={TOKENS.soup.openSearch}>
-                          <Button
-                            variant="base"
-                            class="p-1 size-7 rounded-lg ml-2 bg-surface"
-                            onClick={() => setNarrowSearchExpanded(true)}
-                            depth={2}
-                          >
-                            <SearchIcon class="size-4 touch:size-6" />
-                          </Button>
-                        </Tooltip>
-                      </Show>
+                      <Tooltip label="Search" hotkey={TOKENS.soup.openSearch}>
+                        <Button
+                          variant="base"
+                          class="p-1 size-7 rounded-lg ml-2 bg-surface"
+                          onClick={() => setNarrowSearchExpanded(true)}
+                          depth={2}
+                        >
+                          <SearchIcon class="size-4 touch:size-6" />
+                        </Button>
+                      </Tooltip>
                     )}
                   />
                 </Show>
-              </SplitHeaderRight>
-            </Show>
-            <SoupFiltersBar />
-          </div>
-          <div class="relative grow min-h-1 flex max-sm:flex-col flex-row size-full">
-            <Suspense>
-              <SoupViewFileDropzone>
-                <SoupViewList
-                  initialClientFilters={props.initialClientFilters}
-                  initialGroupBy={props.initialGroupBy}
-                />
-              </SoupViewFileDropzone>
-            </Suspense>
-            <Show when={isMobile()}>
-              <FloatRegion region="accessory">
-                <MobileSoupViewTabs />
-              </FloatRegion>
-            </Show>
-          </div>
+              </Show>
+            </SplitHeaderRight>
+          </Show>
+          <SoupFiltersBar />
+        </div>
+        <div class="relative grow min-h-1 flex max-sm:flex-col flex-row size-full">
+          <Suspense>
+            <SoupViewFileDropzone>
+              <SoupViewList
+                onScrollOffsetBaseline={resetFloatingButtonScrollTracking}
+                onScrollOffsetChange={handleSoupScrollOffsetChange}
+              />
+            </SoupViewFileDropzone>
+          </Suspense>
+          <Show when={isMobile()}>
+            <FloatRegion region="accessory">
+              <MobileSoupViewTabs />
+            </FloatRegion>
+          </Show>
         </div>
         <Suspense>
-          <Show when={ENABLE_UNIFIED_LIST_AI_INPUT && !isMobile()}>
-            <SoupChatInput />
-          </Show>
-        </Suspense>
-      </SoupViewContextProvider>
+        <Show when={ENABLE_UNIFIED_LIST_AI_INPUT && !isMobile()}>
+          <SoupChatInput />
+        </Show>
+      </Suspense>
     </SplitPanelContext.Provider>
   );
 };
@@ -536,8 +740,6 @@ export const SoupView = (props: SoupViewProps) => {
 interface SoupViewListProps {
   customScrollbarHidden?: boolean;
   scopeId?: string;
-  initialClientFilters?: SetPredicatesInput<string>;
-  initialGroupBy?: string;
   onScrollOffsetBaseline?: (offset: number) => void;
   onScrollOffsetChange?: (offset: number) => void;
 }
@@ -554,12 +756,16 @@ export const SoupViewList = (props: SoupViewListProps) => {
     isSearchServiceLoading,
     isLocalSearchSettling,
     activeTab,
-    setActiveTab,
     fetchNextGroupPage,
     isFetchingGroupPage,
   } = useSoupView();
   const { hasActiveRefinements, hasHiddenItems, resetToTabDefaults } =
     useFilterRefinements();
+
+  // Debug: force nav views to render their empty state regardless of content.
+  const forceEmptyState = useDebugSetting(
+    DEBUG_SETTING_KEYS.FORCE_EMPTY_STATES
+  );
 
   const { isKeypressActive } = useIsKeyPressActive();
 
@@ -637,14 +843,18 @@ export const SoupViewList = (props: SoupViewListProps) => {
   });
 
   // Register navigation hotkeys on the active list scope (usually the split
-  // scope), but dispose them with the mounted SoupViewList. This keeps j/k
-  // available while the list split is active without leaking into opened blocks
-  // after the list unmounts.
+  // scope). Most handlers are disposed with SoupViewList, but j/k intentionally
+  // remain on the split scope so an entity opened from the list can continue to
+  // drive list navigation and update the split content.
   useSoupNavigationHotkeys({
     scopeId: scopeId(),
     soup,
     splitHandle: panel.handle,
     virtualizerHandle,
+    hasNextPage: source.hasNextPage,
+    isFetching: source.isFetching,
+    isFetchingNextPage: source.isFetchingNextPage,
+    fetchNextPage: source.fetchNextPage,
   });
 
   // Register entity action hotkeys
@@ -733,6 +943,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
         openInNewSplit: event.shiftKey,
         location,
         splitHandle: panel.handle,
+        referredFrom: currentView(),
       });
     } finally {
       finishTouchHighlight?.();
@@ -839,13 +1050,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
   const cacheKey = `soup-view-${panel.handle.id}-${contentId}${previewPanel ? '-preview' : ''}`;
 
-  // Cross-session, view-kind-scoped user preferences. Each has its own
-  // localStorage key under `macro:pref:soup:{contentId}:*`.
-  const [sortPref, setSortPref] = usePreference<string[]>(
-    `macro:pref:soup:${contentId}:sort`,
-    { default: [] }
-  );
-
   // Preview-pane open state is transient per history entry: captured into
   // per-entry state on nav-away and restored on back/forward. Read
   // synchronously in the body so the first render sees the correct value
@@ -862,9 +1066,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
   // Which groups are collapsed is also per-entry state: captured on nav-away
   // and restored on back/forward.
-  const persistedCollapsedGroups = panel.handle.currentEntryState()?.[
-    'soup.collapsedGroups'
-  ] as string[] | undefined;
   const collapsedCaptorTeardown = panel.handle.registerEntryStateCaptor(
     'soup.collapsedGroups',
     () => [...soup.grouping.collapsedGroups()]
@@ -875,63 +1076,11 @@ export const SoupViewList = (props: SoupViewListProps) => {
   // grouping the user left each entry with. `null` (vs. key absent) records
   // an explicit "no grouping" choice, which would otherwise be
   // indistinguishable from a fresh entry.
-  const persistedGroupBy = panel.handle.currentEntryState()?.['soup.groupBy'] as
-    | string
-    | null
-    | undefined;
   const groupByCaptorTeardown = panel.handle.registerEntryStateCaptor(
     'soup.groupBy',
     () => soup.grouping.activeGroupId() ?? null
   );
   onCleanup(groupByCaptorTeardown);
-
-  onMount(() => {
-    batch(() => {
-      const savedSort = sortPref();
-
-      if (savedSort.length > 0) {
-        soup.sort.setAll(savedSort as SystemSortOption[]);
-      } else {
-        soup.sort.setAll(['updated_at']);
-      }
-      // soup state is shared at the SplitPanel level, so a prior view in the
-      // same split (e.g. tasks) may have left grouping state behind. Always
-      // reset to this entry's captured or initial grouping, even when
-      // undefined.
-      soup.grouping.setActiveGroupId(
-        persistedGroupBy !== undefined
-          ? (persistedGroupBy ?? undefined)
-          : props.initialGroupBy
-      );
-      soup.grouping.collapseAll(persistedCollapsedGroups ?? []);
-
-      // Apply view-supplied client filters only when per-entry state didn't
-      // already populate them in SoupViewContextProvider.
-      const hasEntryFilters =
-        panel.handle.currentEntryState()?.['search.predicates'] !== undefined;
-      if (!hasEntryFilters && props.initialClientFilters) {
-        soup.predicates.set(props.initialClientFilters);
-      }
-
-      // Default tab for list views; entry state already restored it via
-      // `useEntryState` in SoupViewContextProvider when applicable.
-      if (isListViewID(contentId) && activeTab() === undefined) {
-        const defaultTab = VIEW_TAB_PRESETS[contentId].default;
-        if (defaultTab) setActiveTab(defaultTab);
-      }
-    });
-  });
-
-  // Bridge live soup state back to preferences. `defer: true` skips the
-  // initial run on mount, so we only write when the user actually changes
-  // something.
-  createEffect(
-    on(
-      () => soup.sort.active().map((s) => s.id),
-      (ids) => setSortPref(ids),
-      { defer: true }
-    )
-  );
 
   onCleanup(() => {
     if (isProjectList) return;
@@ -987,6 +1136,11 @@ export const SoupViewList = (props: SoupViewListProps) => {
     }
   });
 
+  // The preview flag lives on the panel, so clear it when the soup view
+  // unmounts (e.g. pressing enter replaces the split with the full entity);
+  // otherwise it stays stale-true and the entity's toolbar keeps the border.
+  onCleanup(() => panel.previewState[1](false));
+
   return (
     <MaybeSoupEntityActionDrawerManager>
       <div
@@ -1021,7 +1175,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
               </Show>
               <StaticMarkdownContext>
                 <Switch>
-                  <Match when={source.isLoading() && !rows().length}>
+                  <Match when={source.isFetching() && !rows().length}>
                     {/* Non-list states pad the chrome top themselves — the
                         panel leaves list views unpadded so rows can
                         under-scroll the status bar. */}
@@ -1040,7 +1194,12 @@ export const SoupViewList = (props: SoupViewListProps) => {
                       Searching...
                     </div>
                   </Match>
-                  <Match when={!rows().length}>
+                  <Match
+                    when={
+                      (!source.isFetching() && !rows().length) ||
+                      forceEmptyState()
+                    }
+                  >
                     <div class="flex-1 min-h-0 flex flex-col mobile:pt-(--mobile-content-inset-top) mobile:pb-(--mobile-content-inset-bottom)">
                       <EmptyState
                         listView={currentView()}
@@ -1169,7 +1328,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                           class={cn(
                                             'my-1 rounded min-h-9 flex items-center justify-center',
                                             highlighted()
-                                              ? 'w-[calc(100%-0.5rem)] mx-1 ring ring-edge bg-active/60 ring-inset'
+                                              ? 'w-[calc(100%-0.5rem)] mx-1 bg-active/60'
                                               : 'mx-auto'
                                           )}
                                         >
@@ -1370,6 +1529,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
 const DEFAULT_ITEM_SIZE = 10;
 const DEFAULT_OVERSCAN = 5;
+const FLOATING_BUTTON_SCROLL_UP_THRESHOLD = 5;
 
 interface SoupListProps {
   ref?: (el: HTMLDivElement) => void;

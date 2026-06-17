@@ -122,6 +122,6 @@ export const RegisteredNodesByType: { [K in EditorType]: ValidNode[] } = {
   'plain-text': [ParagraphNode, TextNode],
   markdown: [...SupportedNodeTypes],
   'markdown-sync': [...SupportedNodeTypes],
-  chat: exclude([HeadingNode, ImageNode, VideoNode]),
+  chat: exclude([ImageNode, VideoNode]),
   title: [ParagraphNode, TextNode, InlineSearchNode],
 } as const;

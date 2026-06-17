@@ -11,7 +11,6 @@ import { plural } from '@core/util/string';
 import PaperclipIcon from '@phosphor/paperclip.svg?component-solid';
 import TextAa from '@phosphor/text-aa.svg';
 import Trash from '@phosphor/trash.svg';
-import PaperclipHorizontalIcon from '@phosphor-icons/core/regular/paperclip-horizontal.svg?component-solid';
 import { Button, SendButton, Tooltip } from '@ui';
 import { defaultSelectionData } from 'core/component/LexicalMarkdown/plugins';
 import {
@@ -176,7 +175,7 @@ function MobileToolbar(props: {
   return (
     <SplitHeaderRight>
       <HeaderIsland>
-        <div class="flex items-center pl-2">
+        <div class="flex items-center gap-1 pl-2">
           <Show when={!ctx.hideAttachments}>
             <div class="relative" ref={props.attachButtonRef}>
               <Button
@@ -186,10 +185,10 @@ function MobileToolbar(props: {
                     onSelect: props.handleAddAttachments,
                   }))
                 }
-                class="aspect-square p-1"
+                size="icon-sm"
                 disabled={ctx.disabled()}
               >
-                <PaperclipHorizontalIcon class="h-5" />
+                <PaperclipIcon />
               </Button>
             </div>
           </Show>

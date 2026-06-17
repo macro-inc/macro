@@ -31,6 +31,7 @@ ai_tools = [
 axum = [
   "dep:axum",
   "dep:axum-extra",
+  "dep:lexical_client",
   "dep:model-error-response",
   "dep:model_user",
   "dep:task_dedup",
@@ -96,6 +97,7 @@ foreign_entity = { path = "../foreign_entity", default-features = false, feature
 ], optional = true }
 macro_aws_config = { path = "../macro_aws_config", features = ["s3"] }
 macro_entrypoint = { path = "../macro_entrypoint", optional = true }
+macro_env_var = { path = "../macro_env_var" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 model = { path = "../model" }
@@ -139,6 +141,7 @@ sha2 = { workspace = true, optional = true }
 # Attachment
 attachment = { path = "../attachment", optional = true }
 non_empty = { path = "../non_empty" }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 dotenvy = { workspace = true }

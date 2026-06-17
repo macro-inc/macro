@@ -168,7 +168,12 @@ export function buildHandleFromConfig(config: EditorConfig): EditorHandle {
     }
 
     if (snippetsMenuOps) {
-      plugins.use(snippetsPlugin({ menu: snippetsMenuOps }));
+      plugins.use(
+        snippetsPlugin({
+          menu: snippetsMenuOps,
+          sourceDocumentId: config.mentions?.sourceDocumentId,
+        })
+      );
     }
   }
 

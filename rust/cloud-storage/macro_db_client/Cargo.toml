@@ -43,3 +43,4 @@ tokio = { workspace = true }
 tracing = { workspace = true }
 user_quota = { path = "../user_quota" }
 uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

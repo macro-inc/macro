@@ -14,3 +14,4 @@ serde = { workspace = true }
 thiserror = { workspace = true, optional = true }
 utoipa = { workspace = true }
 uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

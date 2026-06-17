@@ -11,6 +11,7 @@ use embedding::entity::Task;
 use embedding::{EmbeddingModel, VectorStore};
 use futures::StreamExt;
 use lexical_client::LexicalClient;
+use lexical_client::parse_markdown::MarkdownTarget;
 use macro_env_var::env_var;
 use macro_service_urls::LexicalServiceUrl;
 use secretsmanager_client::{SecretManager, SecretsManager};
@@ -398,15 +399,19 @@ async fn embed_and_store(ctx: &Context, document_id: &str) -> Result<()> {
 }
 
 /// Builds the embeddable [`Task`] for a single document: its `Document.name`
-/// becomes the title and the lexical service's rendered markdown becomes the
-/// body. Map this over a task set to get the entities to embed.
+/// becomes the title and the lexical service's embedding-format markdown
+/// becomes the body — the same format the composer's similarity search sends.
+/// Map this over a task set to get the entities to embed.
 async fn fetch_md_task(ctx: &Context, document_id: &str) -> Result<Task<'static>> {
     let title = sqlx::query_scalar!(r#"SELECT name FROM "Document" WHERE id = $1"#, document_id)
         .fetch_one(&ctx.pg)
         .await
         .map_err(anyhow::Error::from)?;
 
-    let body = ctx.lexical.get_markdown(document_id).await?;
+    let body = ctx
+        .lexical
+        .get_markdown(document_id, MarkdownTarget::Embedding)
+        .await?;
 
     Ok(Task {
         title: Cow::Owned(title),

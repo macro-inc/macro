@@ -1,7 +1,8 @@
-import { useEmail } from '@core/context/user';
+import { useUserId } from '@core/context/user';
 import { throwOnErr } from '@core/util/result';
 import { invalidateUserInfo } from '@queries/auth/user-info';
 import { queryClient } from '@queries/client';
+import { invalidateAllSoup } from '@queries/soup/normalized-cache';
 import { emailClient } from '@service-email/client';
 import type { ListLinksResponse } from '@service-email/generated/schemas';
 import { useMutation, useQuery } from '@tanstack/solid-query';
@@ -11,13 +12,27 @@ import { emailKeys } from './keys';
 
 const LINK_STALE_TIME = 5 * 60 * 1000;
 
-// A newly-linked inbox's avatar (`photo_url`) is written async, so poll the links
-// list while any inbox is still syncing; polling stops on its own once none are,
-// leaving steady-state/single-inbox users with no extra fetches.
-const LINK_SYNC_POLL_INTERVAL = 2_000;
+const HEALTH_PROBE_STALE_TIME = 15 * 60 * 1000;
 
-function isAnyInboxSyncing(data: ListLinksResponse | undefined): boolean {
-  return data?.links.some((link) => link.sync_status === 'SYNCING') ?? false;
+/**
+ * Asks the server to probe each linked inbox's grant against Google and record its
+ * health, so a grant that died while the user was away surfaces soon after they return
+ * rather than waiting on the daily refresh. Runs on mount and on window focus, throttled
+ * to once per stale-time window (the server also throttles per inbox). Fire-and-forget:
+ * the refreshed `needs_reauth` is read by `useEmailLinksQuery`, which drives the reconnect
+ * prompt — nothing renders from this query.
+ */
+export function useInboxHealthProbeQuery() {
+  return useQuery(() => ({
+    queryKey: emailKeys.linksHealthProbe.queryKey,
+    queryFn: async () => {
+      await emailClient.healthCheckLinks();
+      return null;
+    },
+    staleTime: HEALTH_PROBE_STALE_TIME,
+    refetchOnWindowFocus: true,
+    retry: false,
+  }));
 }
 
 export function useEmailLinksQuery() {
@@ -26,23 +41,22 @@ export function useEmailLinksQuery() {
     queryFn: async () => throwOnErr(async () => await emailClient.getLinks()),
     staleTime: LINK_STALE_TIME,
     refetchOnWindowFocus: 'always',
-    refetchInterval: (query) =>
-      isAnyInboxSyncing(query.state.data) ? LINK_SYNC_POLL_INTERVAL : false,
   }));
 }
 
 /**
- * The link id of the user's primary inbox — the linked inbox whose address
- * matches the account email. `undefined` until links/email load or if none match.
+ * The link id of the user's primary inbox — their own `is_primary` link.
+ * Delegated inboxes are primary for their own account, hence the macro_id
+ * guard. `undefined` until links load or if none match.
  */
 export function usePrimaryEmailLinkId() {
   const linksQuery = useEmailLinksQuery();
-  const email = useEmail();
+  const userId = useUserId();
   return createMemo(() => {
-    const primaryEmail = email()?.toLowerCase();
-    if (!primaryEmail) return undefined;
+    const uid = userId();
+    if (!uid) return undefined;
     return linksQuery.data?.links.find(
-      (link) => link.email_address.toLowerCase() === primaryEmail
+      (link) => link.is_primary && link.macro_id === uid
     )?.id;
   });
 }
@@ -117,6 +131,12 @@ export function useRemoveInboxMutation(callbacks?: RemoveInboxCallbacks) {
           // here would resurrect the optimistically-removed row; instead leave the
           // optimistic cache in place and let the next focus refetch reconcile once
           // teardown completes.
+          //
+          // Clears a delegated inbox's threads immediately (its removal is a
+          // synchronous edge drop). An owned inbox is torn down asynchronously,
+          // so its threads are dropped when the `refresh_email` `link_removed`
+          // event arrives after teardown — refetching now would race that.
+          invalidateAllSoup();
           await invalidateUserInfo();
         },
 

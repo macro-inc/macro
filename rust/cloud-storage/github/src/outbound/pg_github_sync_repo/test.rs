@@ -325,6 +325,62 @@ async fn test_get_macro_id_by_github_user_id_not_found(pool: Pool<Postgres>) {
 }
 
 // ---------------------------------------------------------------------------
+// get_macro_ids_by_github_logins
+// ---------------------------------------------------------------------------
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("github_installation_test_data"))
+)]
+async fn test_get_macro_ids_by_github_logins_matches_case_insensitively(pool: Pool<Postgres>) {
+    // A second link sharing the 'testuser' login (github_username is not unique).
+    sqlx::query!(
+        r#"
+        INSERT INTO github_links (id, macro_id, fusionauth_user_id, github_username, github_user_id)
+        VALUES ('11111111-2222-3333-4444-555555555555'::uuid, 'macro|user2@user.com', 'cccccccc-cccc-cccc-cccc-cccccccccccc'::uuid, 'TestUser', '54321')
+        "#
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let repo = PgGithubSyncRepo::new(pool);
+
+    let links = repo
+        .get_macro_ids_by_github_logins(&[
+            "TESTUSER".to_string(),
+            "solo".to_string(),
+            "unlinked".to_string(),
+        ])
+        .await
+        .unwrap();
+
+    assert_eq!(links.len(), 2);
+    let mut testuser_ids = links.get("testuser").cloned().unwrap_or_default();
+    testuser_ids.sort();
+    assert_eq!(
+        testuser_ids,
+        vec![
+            "macro|user2@user.com".to_string(),
+            "macro|user@user.com".to_string()
+        ]
+    );
+    assert_eq!(
+        links.get("solo"),
+        Some(&vec!["macro|solo@user.com".to_string()])
+    );
+    assert!(!links.contains_key("unlinked"));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_get_macro_ids_by_github_logins_empty_input(pool: Pool<Postgres>) {
+    let repo = PgGithubSyncRepo::new(pool);
+
+    let links = repo.get_macro_ids_by_github_logins(&[]).await.unwrap();
+
+    assert!(links.is_empty());
+}
+
+// ---------------------------------------------------------------------------
 // get_user_team_ids
 // ---------------------------------------------------------------------------
 

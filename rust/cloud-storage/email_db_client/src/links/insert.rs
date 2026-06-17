@@ -9,6 +9,7 @@ mod test;
 
 struct LinkId {
     id: Uuid,
+    is_primary: bool,
 }
 
 /// Upserts a link record with the provided Link struct.
@@ -31,6 +32,9 @@ pub async fn upsert_link(
         email_address,
         provider,
         is_sync_active,
+        is_primary: _,
+        needs_reauth: _,
+        last_sync_error_at: _,
         created_at,
         updated_at,
     } = service_link;
@@ -42,11 +46,13 @@ pub async fn upsert_link(
         r#"
         INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider, is_sync_active)
         VALUES ($1, $2, $3, $4, $5, $6)
-        ON CONFLICT (fusionauth_user_id, email_address, provider) 
-        DO UPDATE SET 
+        ON CONFLICT (fusionauth_user_id, email_address, provider)
+        DO UPDATE SET
             is_sync_active = EXCLUDED.is_sync_active,
+            needs_reauth = false,
+            last_sync_error_at = NULL,
             updated_at = NOW()
-        RETURNING id
+        RETURNING id, is_primary
         "#,
         id,
         macro_id.as_ref(),
@@ -65,6 +71,9 @@ pub async fn upsert_link(
         email_address,
         provider,
         is_sync_active,
+        is_primary: result.is_primary,
+        needs_reauth: false,
+        last_sync_error_at: None,
         created_at,
         updated_at,
     };

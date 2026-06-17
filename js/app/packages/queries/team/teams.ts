@@ -11,6 +11,7 @@ import type { Accessor } from 'solid-js';
 
 import { authKeys } from '../auth';
 import { queryClient } from '../client';
+import { queryReadyGate } from '../gate';
 import { type MutationCallbacks, withCallbacks } from '../utils';
 
 import { teamKeys } from './keys';
@@ -50,7 +51,8 @@ export function useIsTeamAdmin(): Accessor<boolean> {
   return () => {
     const uid = userId();
     if (!uid) return false;
-    const member = teamQuery.data?.members.find((m) => m.user_id === uid);
+    if (!queryReadyGate(teamQuery)) return false;
+    const member = teamQuery.data.members.find((m) => m.user_id === uid);
     return member?.role === TeamRole.admin || member?.role === TeamRole.owner;
   };
 }

@@ -41,6 +41,7 @@ use ::email::inbound::axum::thread_project_router::{
 };
 use model::response::EmptyResponse;
 use models_email::api::link::SyncStatus;
+use models_email::api::refresh::{BackfillStatus, RefreshEmailEvent};
 use models_email::api::settings::Settings;
 use models_email::email::service;
 use models_email::email::service::address::ContactInfoWithInteraction;
@@ -86,6 +87,7 @@ use utoipa::OpenApi;
         inbound::axum::get_thread_router::get_thread_handler,
         inbound::axum::thread_project_router::update_thread_project_handler,
         email::links::list::list_links_handler,
+        email::links::health_check::health_check_handler,
         email::links::delete::delete_link_handler,
         email::links::resync::resync_link_handler,
         email::labels::create::handler,
@@ -154,6 +156,8 @@ use utoipa::OpenApi;
             ListLinksResponse,
             Link,
             SyncStatus,
+            RefreshEmailEvent,
+            BackfillStatus,
             ResyncResponse,
             Settings,
             // Contact types

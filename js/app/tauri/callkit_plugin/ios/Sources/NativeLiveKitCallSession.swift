@@ -40,7 +40,11 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
     private var didPrepareAudio = false
     private var isCallKitAudioActive = false
     private var isActivatingAudioEngine = false
-    private var desiredAudioMuted = false
+    private var microphoneCoordinator = MicrophoneStateCoordinator()
+    private var didApplyDefaultSpeakerRoute = false
+    private var lastAudioRouteSnapshot: CallAudioRouteSnapshot?
+    private var lastAudioEngineInputAvailable: Bool?
+    private var lastAudioEngineOutputAvailable: Bool?
     private let audioEngineLogger = CallKitAudioEngineLogger()
     private let audioRouteController = CallAudioRouteController()
 
@@ -58,7 +62,7 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
         self.videoOverlay = videoOverlay
         super.init()
         audioEngineLogger.desiredMutedProvider = { [weak self] in
-            self?.desiredAudioMuted
+            self?.microphoneCoordinator.desiredMuted
         }
         configureLiveKitAudioForCallKit()
         videoOverlay.onToggleMicrophone = { [weak self] in
@@ -91,12 +95,31 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
         }
         audioRouteController.onRouteChanged = { [weak self] route in
             guard let self else { return }
+            let previousRoute = self.lastAudioRouteSnapshot
+            let previousInputAvailable = self.lastAudioEngineInputAvailable
+            let previousOutputAvailable = self.lastAudioEngineOutputAvailable
+            let inputAvailable = AudioManager.shared.engineAvailability.isInputAvailable
+            let outputAvailable = AudioManager.shared.engineAvailability.isOutputAvailable
+            self.lastAudioRouteSnapshot = route
+            self.lastAudioEngineInputAvailable = inputAvailable
+            self.lastAudioEngineOutputAvailable = outputAvailable
             self.videoOverlay.setAudioRoute(route)
             guard self.activeCallUUID != nil else { return }
-            if self.isCallKitAudioActive, !AudioManager.shared.engineAvailability.isOutputAvailable {
+
+            let routeChanged = previousRoute != route
+            let audioAvailabilityChanged = previousInputAvailable != inputAvailable
+                || previousOutputAvailable != outputAvailable
+            guard routeChanged || audioAvailabilityChanged else {
+                print("[CallKit] Audio route emit did not change route or engine availability; skipping microphone restore")
+                return
+            }
+
+            self.defaultBuiltInSpeakerRouteOnceIfNeeded(reason: "audio route changed")
+
+            if self.isCallKitAudioActive, !outputAvailable {
                 self.activateAudioEngine(reason: "audio route changed")
             } else if self.canEnableMicrophoneAudio() {
-                self.enableMicrophoneAfterAudioActivationIfNeeded(reason: "audio route changed")
+                self.restoreMicrophoneIfNeeded(reason: "audio route changed")
             }
         }
         audioRouteController.startObserving()
@@ -139,11 +162,7 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
             try session.setPreferredIOBufferDuration(0.02)
             print("[CallKit] Configured AVAudioSession category for voice call reason=\(reason) \(describeAudioSession())")
             audioRouteController.emitCurrentRoute()
-            if hasUsableAudioOutputRoute() {
-                audioRouteController.defaultToSpeakerIfBuiltInRoute(reason: "audioSessionCategoryConfigured")
-            } else {
-                print("[CallKit] Skipping built-in speaker default because AVAudioSession route is not ready reason=\(reason) \(describeAudioSession())")
-            }
+            defaultBuiltInSpeakerRouteOnceIfNeeded(reason: "audioSessionCategoryConfigured:\(reason)")
         } catch {
             print("[CallKit] Failed to set audio session category reason=\(reason): \(error) \(describeAudioSession())")
         }
@@ -171,7 +190,7 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
             try AudioManager.shared.setEngineAvailability(availability)
             isCallKitAudioActive = true
             print("[CallKit] CallKit activated AVAudioSession; LiveKit audio engine available reason=\(reason) input=\(AudioManager.shared.engineAvailability.isInputAvailable) output=\(AudioManager.shared.engineAvailability.isOutputAvailable) running=\(AudioManager.shared.isEngineRunning) \(describeAudioSession())")
-            enableMicrophoneAfterAudioActivationIfNeeded(reason: reason)
+            restoreMicrophoneIfNeeded(reason: reason)
         } catch {
             print("[CallKit] Failed to enable LiveKit audio engine after CallKit activation reason=\(reason): \(error) \(describeAudioSession())")
         }
@@ -203,6 +222,12 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
 
     func connect(uuid: UUID, channelId: String, serverUrl: String, token: String) {
         print("[CallKit] Native LiveKit connect requested uuid=\(uuid.uuidString) channelId=\(channelId)")
+        let desiredAudioMuted = microphoneCoordinator.desiredMuted
+        microphoneCoordinator.reset(desiredMuted: desiredAudioMuted)
+        didApplyDefaultSpeakerRoute = false
+        lastAudioRouteSnapshot = nil
+        lastAudioEngineInputAvailable = nil
+        lastAudioEngineOutputAvailable = nil
         prepareForCallKitAudio()
         audioRouteController.prepareForCall()
 
@@ -218,16 +243,16 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
             channelId: channelId,
             callId: uuid.uuidString,
             connectionState: "connecting",
-            isAudioMuted: false,
+            isAudioMuted: desiredAudioMuted,
             isVideoMuted: true,
             videoOverlayMode: "hidden"
         )
-        desiredAudioMuted = false
         pinnedRemoteVideoParticipantId = nil
         speakingRemoteParticipantIds = []
-        videoOverlay.setAudioMuted(false)
+        videoOverlay.setAudioMuted(desiredAudioMuted)
         videoOverlay.setLocalVideoEnabled(false)
         emitSnapshot()
+        defaultBuiltInSpeakerRouteOnceIfNeeded(reason: "connect")
 
         connectTask?.cancel()
         let oldRoom = room
@@ -273,34 +298,7 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
                 return
             }
 
-            do {
-                guard await self.ensureMicrophonePermission(uuid: uuid) else {
-                    self.updateAudioMuted(true, room: newRoom, uuid: uuid)
-                    return
-                }
-
-                print("[CallKit] Enabling LiveKit microphone uuid=\(uuid.uuidString) engineAvailable=\(AudioManager.shared.engineAvailability.isInputAvailable) engineRunning=\(AudioManager.shared.isEngineRunning) callKitAudioActive=\(self.isCallKitAudioActive) \(self.describeAudioSession())")
-                guard self.canEnableMicrophoneAudio() else {
-                    print("[CallKit] Deferring LiveKit microphone enable until CallKit audio engine is ready uuid=\(uuid.uuidString) engineAvailable=\(AudioManager.shared.engineAvailability.isInputAvailable) engineRunning=\(AudioManager.shared.isEngineRunning) callKitAudioActive=\(self.isCallKitAudioActive) \(self.describeAudioSession())")
-                    return
-                }
-                let microphoneWarning = Task {
-                    try? await Task.sleep(nanoseconds: 5_000_000_000)
-                    if !Task.isCancelled {
-                        print("[CallKit] Still waiting for LiveKit microphone enable uuid=\(uuid.uuidString) engineAvailable=\(AudioManager.shared.engineAvailability.isInputAvailable) engineRunning=\(AudioManager.shared.isEngineRunning) \(self.describeAudioSession())")
-                    }
-                }
-                defer { microphoneWarning.cancel() }
-                try await newRoom.localParticipant.setMicrophone(enabled: true)
-                self.updateAudioMuted(false, room: newRoom, uuid: uuid)
-                print("[CallKit] LiveKit microphone enabled uuid=\(uuid.uuidString) engineRunning=\(AudioManager.shared.isEngineRunning) \(self.describeAudioSession())")
-            } catch is CancellationError {
-                print("[CallKit] LiveKit microphone enable cancelled uuid=\(uuid.uuidString)")
-                return
-            } catch {
-                print("[CallKit] Failed to enable LiveKit microphone; keeping room connected uuid=\(uuid.uuidString) error=\(error) engineAvailable=\(AudioManager.shared.engineAvailability.isInputAvailable) engineRunning=\(AudioManager.shared.isEngineRunning) callKitAudioActive=\(self.isCallKitAudioActive) \(self.describeAudioSession())")
-                self.updateAudioMuted(true, room: newRoom, uuid: uuid)
-            }
+            self.applyInitialMicrophoneState(room: newRoom, uuid: uuid, reason: "connect")
         }
     }
 
@@ -347,44 +345,13 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
     }
 
     func setAudioMuted(_ muted: Bool) {
-        guard let room, let uuid = activeCallUUID else {
-            print("[CallKit] setAudioMuted ignored; no active native room muted=\(muted)")
+        guard activeCallUUID != nil, room != nil else {
+            let generation = microphoneCoordinator.setDesiredMuted(muted)
+            print("[CallKit] setAudioMuted queued; no active native room muted=\(muted) generation=\(generation)")
             return
         }
 
-        desiredAudioMuted = muted
-        print("[CallKit] Native LiveKit desired microphone muted=\(muted) uuid=\(uuid.uuidString) currentSnapshotMuted=\(activeCall?.isAudioMuted.description ?? "nil")")
-
-        Task { [weak self, weak room] in
-            guard let self, let room else { return }
-
-            do {
-                if muted {
-                    print("[CallKit] Applying native LiveKit microphone muted=true uuid=\(uuid.uuidString) desiredMuted=\(self.desiredAudioMuted)")
-                    try await room.localParticipant.setMicrophone(enabled: false)
-                    self.updateAudioMuted(true, room: room, uuid: uuid)
-                    print("[CallKit] Native LiveKit microphone muted uuid=\(uuid.uuidString) desiredMuted=\(self.desiredAudioMuted)")
-                    return
-                }
-
-                guard await self.ensureMicrophonePermission(uuid: uuid) else {
-                    self.updateAudioMuted(true, room: room, uuid: uuid)
-                    return
-                }
-
-                print("[CallKit] Applying native LiveKit microphone muted=false uuid=\(uuid.uuidString) desiredMuted=\(self.desiredAudioMuted) engineAvailable=\(AudioManager.shared.engineAvailability.isInputAvailable) engineRunning=\(AudioManager.shared.isEngineRunning) \(describeAudioSession())")
-                guard self.canEnableMicrophoneAudio() else {
-                    print("[CallKit] Deferring native LiveKit microphone unmute until CallKit audio engine is ready uuid=\(uuid.uuidString) desiredMuted=\(self.desiredAudioMuted) engineAvailable=\(AudioManager.shared.engineAvailability.isInputAvailable) engineRunning=\(AudioManager.shared.isEngineRunning) \(self.describeAudioSession())")
-                    return
-                }
-                try await room.localParticipant.setMicrophone(enabled: true)
-                self.updateAudioMuted(false, room: room, uuid: uuid)
-                print("[CallKit] Native LiveKit microphone unmuted uuid=\(uuid.uuidString) desiredMuted=\(self.desiredAudioMuted)")
-            } catch {
-                print("[CallKit] Failed to set native LiveKit microphone muted=\(muted) uuid=\(uuid.uuidString) desiredMuted=\(self.desiredAudioMuted): \(error)")
-                self.updateAudioMuted(true, room: room, uuid: uuid)
-            }
-        }
+        setDesiredAudioMuted(muted, reason: "setAudioMuted")
     }
 
     func setParticipantDisplayName(identity: String, displayName: String?) {
@@ -470,6 +437,7 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
         let currentOutput = audioRouteController.currentRouteSnapshot().output
         let enableSpeaker = currentOutput != .speaker
         print("[CallKit] Native video overlay requested speaker enabled=\(enableSpeaker) currentOutput=\(currentOutput.rawValue)")
+        didApplyDefaultSpeakerRoute = true
         audioRouteController.setSpeakerEnabled(enableSpeaker)
     }
 
@@ -949,27 +917,137 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
             && AudioManager.shared.engineAvailability.isInputAvailable
     }
 
-    private func enableMicrophoneAfterAudioActivationIfNeeded(reason: String) {
-        guard !desiredAudioMuted else { return }
-        guard let room, let uuid = activeCallUUID else { return }
-        guard activeCall?.connectionState == "connected" else { return }
-        guard canEnableMicrophoneAudio() else {
-            print("[CallKit] Waiting to restore LiveKit microphone after audio activation reason=\(reason) engineAvailable=\(AudioManager.shared.engineAvailability.isInputAvailable) engineRunning=\(AudioManager.shared.isEngineRunning) \(describeAudioSession())")
+    private func defaultBuiltInSpeakerRouteOnceIfNeeded(reason: String) {
+        guard activeCallUUID != nil else { return }
+        guard !didApplyDefaultSpeakerRoute else { return }
+        guard hasUsableAudioOutputRoute() else {
+            print("[CallKit] Skipping built-in speaker default because AVAudioSession route is not ready reason=\(reason) \(describeAudioSession())")
             return
         }
 
+        let route = audioRouteController.currentRouteSnapshot()
+        guard route.supportsSpeakerToggle else { return }
+
+        guard route.output != .speaker || !route.isSpeakerForced else {
+            didApplyDefaultSpeakerRoute = true
+            print("[CallKit] Built-in speaker default already satisfied reason=\(reason)")
+            return
+        }
+        if route.output != .unknown {
+            guard audioRouteController.canDefaultToSpeakerIfBuiltInRoute() else { return }
+        }
+
+        let didDefault = audioRouteController.defaultToSpeakerIfBuiltInRoute(reason: reason)
+        didApplyDefaultSpeakerRoute = didDefault
+        if !didDefault {
+            print("[CallKit] Built-in speaker default did not apply; will retry on later route change reason=\(reason)")
+        }
+    }
+
+    private func setDesiredAudioMuted(_ muted: Bool, reason: String) {
+        guard let room, let uuid = activeCallUUID else { return }
+        let generation = microphoneCoordinator.setDesiredMuted(muted)
+        print("[CallKit] Native LiveKit desired microphone muted=\(muted) reason=\(reason) uuid=\(uuid.uuidString) generation=\(generation) currentSnapshotMuted=\(activeCall?.isAudioMuted.description ?? "nil")")
+        applyMicrophoneState(muted, room: room, uuid: uuid, generation: generation, reason: reason)
+    }
+
+    private func applyInitialMicrophoneState(room: Room, uuid: UUID, reason: String) {
+        let muted = microphoneCoordinator.desiredMuted
+        let generation = microphoneCoordinator.generation
+        print("[CallKit] Applying initial LiveKit microphone state muted=\(muted) reason=\(reason) uuid=\(uuid.uuidString) generation=\(generation)")
+        applyMicrophoneState(muted, room: room, uuid: uuid, generation: generation, reason: reason)
+    }
+
+    private func restoreMicrophoneIfNeeded(reason: String) {
+        guard let room, let uuid = activeCallUUID else { return }
+        guard activeCall?.connectionState == "connected" else { return }
+        guard canEnableMicrophoneAudio() else {
+            print("[CallKit] Waiting to restore LiveKit microphone reason=\(reason) engineAvailable=\(AudioManager.shared.engineAvailability.isInputAvailable) engineRunning=\(AudioManager.shared.isEngineRunning) \(describeAudioSession())")
+            return
+        }
+        guard let generation = microphoneCoordinator.beginRestoreIfNeeded() else {
+            print("[CallKit] Skipping LiveKit microphone restore reason=\(reason) desiredMuted=\(microphoneCoordinator.desiredMuted) lastKnownMuted=\(microphoneCoordinator.describeLastKnownMuted()) restoreInFlight=\(microphoneCoordinator.isRestoreInFlight) lastApplyFailed=\(microphoneCoordinator.lastApplyFailed)")
+            return
+        }
+
+        applyMicrophoneState(false, room: room, uuid: uuid, generation: generation, reason: reason)
+    }
+
+    private func applyMicrophoneState(
+        _ muted: Bool,
+        room: Room,
+        uuid: UUID,
+        generation: UInt64,
+        reason: String
+    ) {
         Task { [weak self, weak room] in
             guard let self, let room else { return }
-            guard self.activeCallUUID == uuid, self.room === room, !self.desiredAudioMuted else { return }
+            let enabled = !muted
+
             do {
-                print("[CallKit] Restoring LiveKit microphone after audio activation reason=\(reason) uuid=\(uuid.uuidString) engineRunning=\(AudioManager.shared.isEngineRunning) \(self.describeAudioSession())")
-                try await room.localParticipant.setMicrophone(enabled: true)
-                self.updateAudioMuted(false, room: room, uuid: uuid)
-                print("[CallKit] Restored LiveKit microphone after audio activation reason=\(reason) uuid=\(uuid.uuidString)")
+                if enabled {
+                    guard await self.ensureMicrophonePermission(uuid: uuid) else {
+                        guard self.isCurrentMicrophoneOperation(generation, room: room, uuid: uuid, desiredMuted: muted) else { return }
+                        self.updateAudioMuted(true, room: room, uuid: uuid, expectedGeneration: generation, applyFailed: false)
+                        return
+                    }
+
+                    guard self.isCurrentMicrophoneOperation(generation, room: room, uuid: uuid, desiredMuted: muted) else {
+                        print("[CallKit] Skipping LiveKit microphone unmute for stale desired state reason=\(reason) uuid=\(uuid.uuidString) generation=\(generation) desiredMuted=\(self.microphoneCoordinator.desiredMuted)")
+                        return
+                    }
+                    guard self.canEnableMicrophoneAudio() else {
+                        print("[CallKit] Deferring LiveKit microphone unmute until CallKit audio engine is ready reason=\(reason) uuid=\(uuid.uuidString) generation=\(generation) desiredMuted=\(self.microphoneCoordinator.desiredMuted) engineAvailable=\(AudioManager.shared.engineAvailability.isInputAvailable) engineRunning=\(AudioManager.shared.isEngineRunning) \(self.describeAudioSession())")
+                        await self.markMicrophoneApplyDeferred(room: room, uuid: uuid, generation: generation)
+                        return
+                    }
+                }
+
+                guard self.isCurrentMicrophoneOperation(generation, room: room, uuid: uuid, desiredMuted: muted) else { return }
+
+                let microphoneWarning = enabled ? Task {
+                    try? await Task.sleep(nanoseconds: 5_000_000_000)
+                    if !Task.isCancelled {
+                        print("[CallKit] Still waiting for LiveKit microphone enable reason=\(reason) uuid=\(uuid.uuidString) generation=\(generation) engineAvailable=\(AudioManager.shared.engineAvailability.isInputAvailable) engineRunning=\(AudioManager.shared.isEngineRunning) \(self.describeAudioSession())")
+                    }
+                } : nil
+                defer { microphoneWarning?.cancel() }
+
+                print("[CallKit] Applying native LiveKit microphone muted=\(muted) reason=\(reason) uuid=\(uuid.uuidString) generation=\(generation) desiredMuted=\(self.microphoneCoordinator.desiredMuted) engineAvailable=\(AudioManager.shared.engineAvailability.isInputAvailable) engineRunning=\(AudioManager.shared.isEngineRunning) \(self.describeAudioSession())")
+                try await room.localParticipant.setMicrophone(enabled: enabled)
+                guard self.isCurrentMicrophoneOperation(generation, room: room, uuid: uuid, desiredMuted: muted) else {
+                    print("[CallKit] Native LiveKit microphone apply completed after desired state changed reason=\(reason) uuid=\(uuid.uuidString) generation=\(generation) desiredMuted=\(self.microphoneCoordinator.desiredMuted)")
+                    return
+                }
+                self.updateAudioMuted(muted, room: room, uuid: uuid, expectedGeneration: generation, applyFailed: false)
+                print("[CallKit] Native LiveKit microphone applied muted=\(muted) reason=\(reason) uuid=\(uuid.uuidString) generation=\(generation)")
+            } catch is CancellationError {
+                print("[CallKit] LiveKit microphone apply cancelled reason=\(reason) uuid=\(uuid.uuidString) generation=\(generation)")
             } catch {
-                print("[CallKit] Failed to restore LiveKit microphone after audio activation reason=\(reason) uuid=\(uuid.uuidString): \(error) \(self.describeAudioSession())")
+                print("[CallKit] Failed to apply native LiveKit microphone muted=\(muted) reason=\(reason) uuid=\(uuid.uuidString) generation=\(generation) desiredMuted=\(self.microphoneCoordinator.desiredMuted): \(error)")
+                guard self.isCurrentMicrophoneOperation(generation, room: room, uuid: uuid, desiredMuted: muted) else { return }
+                self.updateAudioMuted(muted, room: room, uuid: uuid, expectedGeneration: generation, applyFailed: true)
             }
         }
+    }
+
+    private func markMicrophoneApplyDeferred(room: Room, uuid: UUID, generation: UInt64) async {
+        await MainActor.run {
+            guard activeCallUUID == uuid, self.room === room else { return }
+            _ = microphoneCoordinator.markApplyDeferred(generation: generation)
+        }
+    }
+
+    private func isCurrentMicrophoneOperation(
+        _ generation: UInt64,
+        room: Room,
+        uuid: UUID,
+        desiredMuted: Bool
+    ) -> Bool {
+        activeCallUUID == uuid
+            && self.room === room
+            && microphoneCoordinator.desiredMuted == desiredMuted
+            && microphoneCoordinator.generation == generation
     }
 
     private func setOutputOnlyAvailabilityIfNeeded(uuid: UUID) {
@@ -1017,14 +1095,31 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
         }
     }
 
-    private func updateAudioMuted(_ isMuted: Bool, room: Room, uuid: UUID) {
+    private func updateAudioMuted(
+        _ isMuted: Bool,
+        room: Room,
+        uuid: UUID,
+        expectedGeneration: UInt64,
+        applyFailed: Bool
+    ) {
         DispatchQueue.main.async { [weak self, weak room] in
             guard let self, let room, self.activeCallUUID == uuid, self.room === room, var snapshot = self.activeCall else { return }
+            guard self.microphoneCoordinator.finishApply(
+                generation: expectedGeneration,
+                actualMuted: isMuted,
+                applyFailed: applyFailed
+            ) else {
+                print("[CallKit] Ignoring stale native microphone state update uuid=\(uuid.uuidString) generation=\(expectedGeneration) currentGeneration=\(self.microphoneCoordinator.generation) actualMuted=\(isMuted)")
+                return
+            }
             let previousMuted = snapshot.isAudioMuted
+            guard previousMuted != isMuted else {
+                print("[CallKit] Native LiveKit microphone state unchanged uuid=\(uuid.uuidString) actualMuted=\(isMuted) desiredMuted=\(self.microphoneCoordinator.desiredMuted) generation=\(expectedGeneration)")
+                return
+            }
             snapshot.isAudioMuted = isMuted
-            self.desiredAudioMuted = isMuted
             self.activeCall = snapshot
-            print("[CallKit] Native LiveKit microphone state updated uuid=\(uuid.uuidString) previousMuted=\(previousMuted) actualMuted=\(isMuted) desiredMuted=\(self.desiredAudioMuted)")
+            print("[CallKit] Native LiveKit microphone state updated uuid=\(uuid.uuidString) previousMuted=\(previousMuted) actualMuted=\(isMuted) desiredMuted=\(self.microphoneCoordinator.desiredMuted) generation=\(expectedGeneration)")
             self.videoOverlay.setAudioMuted(isMuted)
             self.emitSnapshot()
         }
@@ -1046,18 +1141,36 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
         if deactivateAudio, isCallKitAudioActive {
             deactivateAudioEngine()
         }
+        let disconnectedSnapshot = activeCall.map { snapshot in
+            ActiveCallSnapshot(
+                channelId: snapshot.channelId,
+                callId: snapshot.callId,
+                connectionState: "disconnected",
+                isAudioMuted: snapshot.isAudioMuted,
+                isVideoMuted: snapshot.isVideoMuted,
+                videoOverlayMode: snapshot.videoOverlayMode
+            )
+        }
         let r = room
         room = nil
         activeCallUUID = nil
         activeCall = nil
-        desiredAudioMuted = false
+        microphoneCoordinator.reset(desiredMuted: false)
+        didApplyDefaultSpeakerRoute = false
+        lastAudioRouteSnapshot = nil
+        lastAudioEngineInputAvailable = nil
+        lastAudioEngineOutputAvailable = nil
         pinnedRemoteVideoParticipantId = nil
         speakingRemoteParticipantIds = []
         participantDisplayNamesByIdentity = [:]
         onParticipantIdentitiesChanged([])
         pictureInPicture.stopAndReset()
         audioRouteController.resetSpeakerOverride()
-        emitSnapshot()
+        if let disconnectedSnapshot {
+            emitDisconnectedSnapshot(disconnectedSnapshot)
+        } else {
+            emitSnapshot()
+        }
         videoOverlay.reset()
         return r
     }
@@ -1069,6 +1182,63 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
             print("[CallKit] Emitting native snapshot state=disconnected")
         }
         onSnapshotChanged(activeCall)
+    }
+
+    private func emitDisconnectedSnapshot(_ snapshot: ActiveCallSnapshot) {
+        print("[CallKit] Emitting native snapshot state=disconnected channelId=\(snapshot.channelId) callId=\(snapshot.callId)")
+        onSnapshotChanged(snapshot)
+    }
+}
+
+private struct MicrophoneStateCoordinator {
+    private(set) var desiredMuted = false
+    private(set) var generation: UInt64 = 0
+    private(set) var lastKnownMuted: Bool?
+    private(set) var isRestoreInFlight = false
+    private(set) var lastApplyFailed = false
+
+    mutating func reset(desiredMuted: Bool) {
+        self.desiredMuted = desiredMuted
+        generation &+= 1
+        lastKnownMuted = nil
+        isRestoreInFlight = false
+        lastApplyFailed = false
+    }
+
+    mutating func setDesiredMuted(_ muted: Bool) -> UInt64 {
+        desiredMuted = muted
+        generation &+= 1
+        isRestoreInFlight = false
+        if muted {
+            lastApplyFailed = false
+        }
+        return generation
+    }
+
+    mutating func beginRestoreIfNeeded() -> UInt64? {
+        guard !desiredMuted else { return nil }
+        guard !isRestoreInFlight else { return nil }
+        guard lastApplyFailed || lastKnownMuted != false else { return nil }
+        isRestoreInFlight = true
+        return generation
+    }
+
+    mutating func finishApply(generation expectedGeneration: UInt64, actualMuted: Bool, applyFailed: Bool) -> Bool {
+        guard generation == expectedGeneration else { return false }
+        lastKnownMuted = actualMuted
+        lastApplyFailed = applyFailed
+        isRestoreInFlight = false
+        return true
+    }
+
+    mutating func markApplyDeferred(generation expectedGeneration: UInt64) -> Bool {
+        guard generation == expectedGeneration else { return false }
+        isRestoreInFlight = false
+        return true
+    }
+
+    func describeLastKnownMuted() -> String {
+        lastKnownMuted.map(String.init) ?? "nil"
     }
 }
 

@@ -1,0 +1,16 @@
+[package]
+name = "xtask"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Repo automation: regenerates workspace-hack and the deploy dep-closure map"
+
+[dependencies]
+anyhow = { workspace = true }
+serde_json = { workspace = true }
+# Pinned engine for the generated dependency artifacts. These versions live in
+# Cargo.lock, so dev machines and CI always run the identical generator —
+# upgrading it is an explicit, reviewed lock change. guppy is pinned to the
+# version this hakari release is built against.
+hakari = { version = "0.17.9", features = ["cli-support"] }
+guppy = "0.17.24"

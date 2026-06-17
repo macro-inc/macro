@@ -1,3 +1,4 @@
+import { useNavigatedFromJK } from '@app/component/useNavigatedFromJK';
 import { CommentMargin } from '@block-md/comments/CommentMargin';
 import {
   commentsStore,
@@ -10,9 +11,12 @@ import type { LoroManager } from '@core/collab/manager';
 import { editorFocusSignal } from '@core/component/LexicalMarkdown/utils';
 import { ParamsProvider } from '@core/component/ParamsProvider';
 import {
+  DEV_MODE_ENV,
   ENABLE_MARKDOWN_COMMENTS,
   ENABLE_RAIL_CHAT_TASK_COMMENTS,
+  LOCAL_ONLY,
 } from '@core/constant/featureFlags';
+import { useIsMacroTeam } from '@core/context/team';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import {
@@ -23,7 +27,6 @@ import { tempRedirectLocation } from '@core/signal/location';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { makeResizeObserver } from '@solid-primitives/resize-observer';
 import {
-  type Accessor,
   createEffect,
   createMemo,
   createSignal,
@@ -39,7 +42,10 @@ import { MarkdownEditor } from './MarkdownEditor';
 import { TaskDiscussion } from './TaskDiscussion';
 import { TaskDuplicateMatchPill } from './TaskDuplicateMatches';
 import { TitleEditor } from './TitleEditor';
-import { registerMarkdownCommands } from './useMarkdownCommands';
+import {
+  registerLexicalStateDebuggerCommand,
+  registerMarkdownCommands,
+} from './useMarkdownCommands';
 
 const NoteTargetWidth = 768;
 const CommentTargetWidth = 320;
@@ -70,10 +76,15 @@ const widthToMode = (width: number): CommentLayoutMode => {
   return CommentLayoutMode.none;
 };
 
-export function Notebook(props: {
-  loroManager: Accessor<LoroManager | undefined>;
-  mustBeConnected?: boolean;
-}) {
+function useCanUseLexicalStateDebugger() {
+  const isMacroTeam = useIsMacroTeam();
+  return createMemo(() => {
+    if (LOCAL_ONLY || DEV_MODE_ENV) return true;
+    return isMacroTeam();
+  });
+}
+
+export function Notebook(props: { loroManager: LoroManager }) {
   const blockElement = blockElementSignal.get;
   const setStore = mdStore.set;
   const setWideEnoughForComments = commentWidthSignal.set;
@@ -81,6 +92,7 @@ export function Notebook(props: {
   const scopeId = blockHotkeyScopeSignal.get;
   const isTask = useBlockAliasedName() === 'task';
   const md = mdStore.get;
+  const { navigatedFromJK } = useNavigatedFromJK();
 
   let notebookRef!: HTMLDivElement;
   let commentMarginRef: HTMLDivElement | undefined;
@@ -89,6 +101,9 @@ export function Notebook(props: {
   const [layoutMode, setLayoutMode] = createSignal(CommentLayoutMode.none);
   const [width, setWidth] = createSignal(0);
   const [leftFloatX, setLeftFloatX] = createSignal(0);
+  const [showLexicalStateDebugger, setShowLexicalStateDebugger] =
+    createSignal(false);
+  const canUseLexicalStateDebugger = useCanUseLexicalStateDebugger();
 
   const comments = commentsStore.get;
   const hasComment = createMemo(() => {
@@ -185,9 +200,17 @@ export function Notebook(props: {
   createEffect(() => {
     if (!scopeId()) return;
     const group = untrack(() =>
-      registerMarkdownCommands(scopeId(), () => md.editor, editorHasFocus)
+      registerMarkdownCommands(scopeId(), () => md.editor, editorHasFocus, {
+        canUseStateDebugger: canUseLexicalStateDebugger,
+        toggleStateDebugger: () => setShowLexicalStateDebugger((prev) => !prev),
+      })
     );
     onCleanup(() => group.dispose());
+  });
+  createEffect(() => {
+    if (!canUseLexicalStateDebugger() && showLexicalStateDebugger()) {
+      setShowLexicalStateDebugger(false);
+    }
   });
 
   // In preview mode, switching between Soup tabs was causing this createEffect to overflow the stack. We should figure out that root cause, this flag fixes it for now.
@@ -268,7 +291,7 @@ export function Notebook(props: {
   return (
     <div class={containerClasses()} ref={notebookRef}>
       <div class={contentDivClasses()} ref={contentRef}>
-        <TitleEditor autoFocusOnMount mustBeConnected={props.mustBeConnected} />
+        <TitleEditor autoFocusOnMount={!navigatedFromJK()} />
         <div class="spacer h-3" />
         <div class="mb-6 flex flex-row flex-wrap items-center gap-2 text-sm empty:hidden">
           <InlineTaskProperties />
@@ -278,7 +301,12 @@ export function Notebook(props: {
         <ParamsProvider>
           <MarkdownEditor
             loroManager={props.loroManager}
-            mustBeConnected={props.mustBeConnected}
+            showLexicalStateDebugger={
+              canUseLexicalStateDebugger() && showLexicalStateDebugger()
+            }
+            onLexicalStateDebuggerClose={() =>
+              setShowLexicalStateDebugger(false)
+            }
           />
           <Show when={ENABLE_RAIL_CHAT_TASK_COMMENTS && isTask}>
             <TaskDiscussion />
@@ -300,10 +328,12 @@ export function Notebook(props: {
   );
 }
 
-export function InstructionsNotebook(props: {
-  loroManager: Accessor<LoroManager | undefined>;
-}) {
+export function InstructionsNotebook(props: { loroManager: LoroManager }) {
   const setStore = mdStore.set;
+  const scopeId = blockHotkeyScopeSignal.get;
+  const [showLexicalStateDebugger, setShowLexicalStateDebugger] =
+    createSignal(false);
+  const canUseLexicalStateDebugger = useCanUseLexicalStateDebugger();
 
   let notebookRef!: HTMLDivElement;
   let contentRef!: HTMLDivElement;
@@ -323,13 +353,35 @@ export function InstructionsNotebook(props: {
     });
   });
 
+  createEffect(() => {
+    if (!scopeId()) return;
+    const group = untrack(() =>
+      registerLexicalStateDebuggerCommand(scopeId(), {
+        canUseStateDebugger: canUseLexicalStateDebugger,
+        toggleStateDebugger: () => setShowLexicalStateDebugger((prev) => !prev),
+      })
+    );
+    onCleanup(() => group.dispose());
+  });
+  createEffect(() => {
+    if (!canUseLexicalStateDebugger() && showLexicalStateDebugger()) {
+      setShowLexicalStateDebugger(false);
+    }
+  });
+
   return (
     <div
       class="flex relative text-ink min-h-full min-w-0 px-6"
       ref={notebookRef}
     >
       <div class="grow max-w-3xl pt-12 min-w-0 mx-auto" ref={contentRef}>
-        <InstructionsEditor loroManager={props.loroManager} />
+        <InstructionsEditor
+          loroManager={props.loroManager}
+          showLexicalStateDebugger={
+            canUseLexicalStateDebugger() && showLexicalStateDebugger()
+          }
+          onLexicalStateDebuggerClose={() => setShowLexicalStateDebugger(false)}
+        />
       </div>
     </div>
   );

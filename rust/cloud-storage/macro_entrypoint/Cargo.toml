@@ -16,3 +16,5 @@ tracing-opentelemetry = { workspace = true }
 tracing-panic = "0.1"
 tracing-subscriber = { workspace = true }
 tracing-tree = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+macro_env_var = { path = "../macro_env_var" }

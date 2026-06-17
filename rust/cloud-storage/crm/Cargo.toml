@@ -45,6 +45,7 @@ utoipa = { workspace = true, optional = true }
 reqwest = { workspace = true, optional = true }
 sqlx = { workspace = true, optional = true }
 unfurl = { path = "../unfurl", features = ["ports"], optional = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 macro_db_migrator = { path = "../macro_db_migrator" }

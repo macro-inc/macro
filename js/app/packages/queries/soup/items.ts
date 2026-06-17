@@ -235,7 +235,11 @@ export const useSoupAstItemsQuery = (
 
           return mapSoupPageToEntityList(
             { items: page.items, next_cursor: null },
-            { instructionsIdQuery }
+            {
+              instructionsIdQuery,
+              showSupportedForeignEntities:
+                options?.().showSupportedForeignEntities,
+            }
           );
         });
 
@@ -243,7 +247,20 @@ export const useSoupAstItemsQuery = (
       },
       enabled: options?.().enabled,
       staleTime: options?.().staleTime,
-      placeholderData: (p) => p,
+      placeholderData: (prev, prevQuery) => {
+        // Keep the previous rows on screen while params/filters change, but
+        // not across a grouping switch — the old groups would render under
+        // the new grouping (e.g. status groups while assignee groups load).
+        const prevGroupBy = (
+          prevQuery?.meta as SoupItemsQueryOptions['meta'] | undefined
+        )?.groupBy;
+
+        if (JSON.stringify(prevGroupBy) !== JSON.stringify(groupBy)) {
+          return undefined;
+        }
+
+        return prev;
+      },
       meta: {
         ...options?.().meta,
         groupBy,

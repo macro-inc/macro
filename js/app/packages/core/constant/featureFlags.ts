@@ -251,7 +251,7 @@ export const ENABLE_INBOX_RESYNC = resolveFeatureFlag(
 
 export const ENABLE_INBOX_SYNC_STATUS = resolveFeatureFlag(
   'ENABLE_INBOX_SYNC_STATUS',
-  false
+  true
 );
 
 const _ENABLE_TASKS_TABS = resolveFeatureFlag('ENABLE_TASKS_TABS', true);

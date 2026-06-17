@@ -24,3 +24,4 @@ uuid = { workspace = true }
 # Outbound
 connection_gateway_client = { path = "../connection_gateway_client", optional = true }
 model-entity = { path = "../model-entity", optional = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

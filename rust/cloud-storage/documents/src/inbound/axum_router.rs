@@ -45,6 +45,7 @@ use axum::{
     response::IntoResponse,
 };
 use entity_access::domain::ports::EntityAccessService;
+use lexical_client::LexicalClient;
 use model_error_response::ErrorResponse;
 use serde::Deserialize;
 use sqlx::PgPool;
@@ -123,6 +124,9 @@ pub struct DocumentRouterState<T, Svc> {
     pub pool: PgPool,
     /// Task duplicate detection service.
     pub task_dedup_service: Arc<PgTaskDedupService>,
+    /// Lexical service client, used to fetch embedding-format markdown for
+    /// task duplicate detection.
+    pub lexical_client: Arc<LexicalClient>,
     /// Backend-owned document creation use case.
     #[cfg(feature = "document_create_adapters")]
     pub creator: DefaultDocumentCreator<T>,
@@ -136,6 +140,7 @@ impl<T, Svc> Clone for DocumentRouterState<T, Svc> {
             access_service: self.access_service.clone(),
             pool: self.pool.clone(),
             task_dedup_service: self.task_dedup_service.clone(),
+            lexical_client: self.lexical_client.clone(),
             #[cfg(feature = "document_create_adapters")]
             creator: self.creator.clone(),
         }

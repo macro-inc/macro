@@ -7,6 +7,7 @@ version = "0.1.0"
 
 [dependencies]
 agent = { path = "../agent" }
+ai_usage = { path = "../ai_usage" }
 ai_tools = { path = "../ai_tools" }
 ai_toolset = { path = "../ai_toolset" }
 anyhow = { workspace = true }
@@ -29,7 +30,7 @@ tracing = { workspace = true }
 utoipa = { workspace = true }
 
 # For building ToolServiceContext
-comms = { path = "../comms" }
+channels = { path = "../channels", features = ["outbound"] }
 crm = { path = "../crm" }
 documents = { path = "../documents" }
 email = { path = "../email" }
@@ -50,6 +51,7 @@ sqs_client = { path = "../sqs_client", default-features = false, features = [
   "gmail",
 ] }
 sync_service_client = { path = "../sync_service_client" }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 
 [dev-dependencies]

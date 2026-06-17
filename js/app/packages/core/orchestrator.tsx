@@ -474,7 +474,7 @@ function defaultSourceResolver(
 
 const DEFAULT_TIMEOUT = 5_000;
 
-function awaitCondition(
+export function awaitCondition(
   condition: () => boolean,
   timeoutMs = DEFAULT_TIMEOUT
 ): Promise<void> {

@@ -21,7 +21,9 @@ export function emailToId(email: string): string {
 
 export function idToDisplayName(id: string): string {
   const macroId = tryMacroId(id);
-  const [displayName] = useDisplayName(macroId);
+  const [displayName] = useDisplayName(macroId, {
+    emailFallback: 'local-part',
+  });
   return displayName();
 }
 

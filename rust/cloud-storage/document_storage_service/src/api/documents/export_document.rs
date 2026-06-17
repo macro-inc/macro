@@ -204,7 +204,6 @@ async fn sign_docx_url(state: &ApiContext, key: &str) -> anyhow::Result<String> 
     let signed_options = get_cloudfront_signed_options(
         &state
             .config
-            .vars
             .document_storage_service_cloudfront_signer_public_key_id,
         state
             .config
@@ -218,7 +217,6 @@ async fn sign_docx_url(state: &ApiContext, key: &str) -> anyhow::Result<String> 
     let signed_url = get_presigned_url(
         &state
             .config
-            .vars
             .document_storage_service_cloudfront_distribution_url,
         &encoded_key,
         &signed_options,

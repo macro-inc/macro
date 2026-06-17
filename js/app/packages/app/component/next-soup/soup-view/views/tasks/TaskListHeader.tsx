@@ -15,7 +15,10 @@ import {
 import './list-property-value.css';
 import { Tooltip } from '@ui';
 
-const HEADER_ICON_CLASS = 'size-3 text-ink-muted';
+// `size-3` at wide/medium (shown beside the label), upsizing to `size-4` on
+// narrow containers to match the row's collapsed status/priority icons
+// (`@max-[840px]/u-list:size-4` in list-property-value.tsx).
+const HEADER_ICON_CLASS = 'size-3 @max-[840px]/u-list:size-4 text-ink-muted';
 
 /** Map column IDs to their icons for narrow mode */
 const COLUMN_ICONS: Record<string, () => JSX.Element> = {
@@ -64,8 +67,11 @@ function TaskListHeader(props: { class?: string }) {
 
   return (
     <div
+      // px-3 (12px) matches each row's total horizontal inset — the row's
+      // Entity.Root `mx-1` (4px) plus Entity.Layout `px-2` (8px) — so the
+      // header grid tracks line up exactly with the row grid tracks.
       class={cn(
-        'task-grid-row w-full grid items-center gap-2 px-2 h-10',
+        'task-grid-row w-full grid items-center gap-2 px-3 h-10',
         'text-xs font-medium text-ink-extra-muted',
         'bg-surface',
         props.class
@@ -91,6 +97,9 @@ function TaskListHeader(props: { class?: string }) {
               reversed={activeSort()?.reversed ?? false}
               onSort={setSort}
               narrowIcon={COLUMN_ICONS[col.id]}
+              // Match the row pill's px-2 content inset so titles left-align
+              // with the pill icons (wide only — narrow collapses to centered icons).
+              class="@min-[841px]/u-list:pl-2"
             />
           );
         }}
@@ -127,6 +136,10 @@ function HeaderCell(props: {
 }) {
   const justify = () =>
     props.align === 'end' ? 'justify-end' : 'justify-start';
+  // Property columns collapse to a single centered icon on narrow containers,
+  // matching the row pills (which center via `@max-[840px]/u-list:justify-center`).
+  const narrowJustify = () =>
+    props.narrowIcon ? '@max-[840px]/u-list:justify-center' : '';
 
   return (
     <div
@@ -136,7 +149,13 @@ function HeaderCell(props: {
       <Show
         when={props.sortKey}
         fallback={
-          <div class={cn('flex items-center min-w-0 w-full', justify())}>
+          <div
+            class={cn(
+              'flex items-center min-w-0 w-full',
+              justify(),
+              narrowJustify()
+            )}
+          >
             <Show when={props.narrowIcon}>
               <span class="truncate @max-[840px]/u-list:hidden">
                 {props.label}
@@ -159,7 +178,8 @@ function HeaderCell(props: {
               'flex items-center gap-1 min-w-0 w-full h-full',
               'hover:text-ink transition-colors cursor-pointer',
               props.active && 'text-ink',
-              justify()
+              justify(),
+              narrowJustify()
             )}
           >
             <Show when={props.narrowIcon}>

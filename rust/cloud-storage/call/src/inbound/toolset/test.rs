@@ -1,29 +1,27 @@
 use super::list_call_records::{ListCallRecords, build_filter};
 use super::read_call_record::ReadCallRecord;
-use ai_toolset::generate_tool_input_schema;
-use ai_toolset::tool_object::validate_tool_schema;
+use ai_toolset::schema::generate_validated_input_schema;
 use filter_ast::Expr;
 use item_filters::{CallStatus, ast::call::CallLiteral};
 use serde_json::Value;
 
 #[test]
 fn test_list_call_records_schema_validation() {
-    let schema = generate_tool_input_schema!(ListCallRecords);
-
-    let result = validate_tool_schema(&schema);
+    let result = generate_validated_input_schema::<ListCallRecords>();
     assert!(result.is_ok(), "{:?}", result);
 
-    let (name, description) = result.unwrap();
+    let validated = result.unwrap();
     assert_eq!(
-        name, "ListCallRecords",
+        validated.name, "ListCallRecords",
         "Tool name should match the schemars title"
     );
     assert!(
-        description.contains("List"),
+        validated.description.contains("List"),
         "Description should contain expected text"
     );
 
-    let schema_json = serde_json::to_value(&schema).expect("schema should serialize to JSON");
+    let schema_json =
+        serde_json::to_value(&validated.schema).expect("schema should serialize to JSON");
     let status_schema = schema_property(&schema_json, "status");
     let status_values = find_enum_values(status_schema)
         .expect("status schema should include supported enum values");
@@ -71,18 +69,16 @@ fn test_list_call_records_attended_filter_still_supported() {
 
 #[test]
 fn test_read_call_record_schema_validation() {
-    let schema = generate_tool_input_schema!(ReadCallRecord);
-
-    let result = validate_tool_schema(&schema);
+    let result = generate_validated_input_schema::<ReadCallRecord>();
     assert!(result.is_ok(), "{:?}", result);
 
-    let (name, description) = result.unwrap();
+    let validated = result.unwrap();
     assert_eq!(
-        name, "ReadCallRecord",
+        validated.name, "ReadCallRecord",
         "Tool name should match the schemars title"
     );
     assert!(
-        description.contains("transcript"),
+        validated.description.contains("transcript"),
         "Description should contain expected text"
     );
 }

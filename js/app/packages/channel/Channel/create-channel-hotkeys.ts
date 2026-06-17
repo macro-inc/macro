@@ -3,6 +3,7 @@ import { TOKENS } from '@core/hotkey/tokens';
 import type { ApiChannelMessage } from '@service-storage/generated/schemas/apiChannelMessage';
 import type { Accessor } from 'solid-js';
 import type { MessageActions, MessageData } from '../Message';
+import { isBotMessage } from '../Thread/utils/message-actions';
 import type { MessageSelection } from './create-message-selection';
 import type { ThreadListNavigation } from './ThreadList';
 
@@ -24,12 +25,23 @@ export function canReplyToSelectedMessageFromHotkey(input: {
 }) {
   return input.hasSelection && !input.isEditing;
 }
-export function canEditOrDeleteSelectedMessageFromHotkey(input: {
+export function canEditSelectedMessageFromHotkey(input: {
   hasSelection: boolean;
   isEditing: boolean;
   isOwnMessage: boolean;
 }) {
   return canReplyToSelectedMessageFromHotkey(input) && input.isOwnMessage;
+}
+export function canDeleteSelectedMessageFromHotkey(input: {
+  hasSelection: boolean;
+  isEditing: boolean;
+  isOwnMessage: boolean;
+  isBotMessage: boolean;
+}) {
+  return (
+    canReplyToSelectedMessageFromHotkey(input) &&
+    (input.isOwnMessage || input.isBotMessage)
+  );
 }
 
 export function createChannelHotkeys(options: CreateChannelHotkeysOptions) {
@@ -120,7 +132,7 @@ export function createChannelHotkeys(options: CreateChannelHotkeysOptions) {
     condition: () => {
       if (!canRunSelectionActionHotkeys()) return false;
       const msg = getSelectedMessage();
-      return canEditOrDeleteSelectedMessageFromHotkey({
+      return canEditSelectedMessageFromHotkey({
         hasSelection: true,
         isEditing: options.isEditing(),
         isOwnMessage: !!msg && msg.sender_id === options.userId(),
@@ -143,10 +155,11 @@ export function createChannelHotkeys(options: CreateChannelHotkeysOptions) {
     condition: () => {
       if (!canRunSelectionActionHotkeys()) return false;
       const msg = getSelectedMessage();
-      return canEditOrDeleteSelectedMessageFromHotkey({
+      return canDeleteSelectedMessageFromHotkey({
         hasSelection: true,
         isEditing: options.isEditing(),
         isOwnMessage: !!msg && msg.sender_id === options.userId(),
+        isBotMessage: !!msg && isBotMessage(msg),
       });
     },
     keyDownHandler: () => {

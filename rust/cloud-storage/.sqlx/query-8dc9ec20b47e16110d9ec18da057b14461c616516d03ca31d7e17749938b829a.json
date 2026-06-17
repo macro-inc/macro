@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT price_per_million_in, price_per_million_out\n            FROM ai_pricing\n            WHERE model = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "price_per_million_in",
+        "type_info": "Float4"
+      },
+      {
+        "ordinal": 1,
+        "name": "price_per_million_out",
+        "type_info": "Float4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "8dc9ec20b47e16110d9ec18da057b14461c616516d03ca31d7e17749938b829a"
+}

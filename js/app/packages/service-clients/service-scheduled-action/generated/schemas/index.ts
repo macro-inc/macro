@@ -11,7 +11,6 @@ export * from './actionExecutionRecordId';
 export * from './actionExecutionRecordResourceId';
 export * from './actionExecutionRecordResult';
 export * from './actionKind';
-export * from './agentModel';
 export * from './agentTask';
 export * from './createScheduledAction';
 export * from './createScheduledActionTask';

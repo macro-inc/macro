@@ -12,7 +12,7 @@ import UserPlusIcon from '@phosphor/user-plus.svg';
 import { cn } from '@ui';
 import type { JSX } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { match } from 'ts-pattern';
+import { match, P } from 'ts-pattern';
 import type { Notification } from '../types/notification';
 
 interface NotificationIconProps {
@@ -40,8 +40,19 @@ function getNotificationIcon(
     .with('invite_to_team', () => UserPlusIcon)
     .with('task_assigned', () => CheckIcon)
     .with('ai_response', () => ChatIcon)
-    .with('github_pr_event', () => GithubIcon)
+    .with(
+      P.union(
+        'github_pr_status_changed',
+        'github_pr_check_run',
+        'github_review_requested',
+        'github_pr_comment',
+        'github_pr_mention',
+        'github_pr_review'
+      ),
+      () => GithubIcon
+    )
     .with('call-started', () => PhoneIcon)
+    .with('inbox_reauth_required', () => EnvelopeIcon)
     .exhaustive();
 }
 

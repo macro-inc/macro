@@ -5,7 +5,10 @@ import {
   type Query,
 } from '@app/component/next-soup/filters/filter-store';
 import type { ListView } from '@app/constants/list-views';
-import { ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE } from '@core/constant/featureFlags';
+import {
+  ENABLE_SNIPPETS,
+  ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE,
+} from '@core/constant/featureFlags';
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { startOfDay, subWeeks } from 'date-fns';
 
@@ -40,6 +43,37 @@ type ViewTabConfig = {
   tabs: TabConfig;
 };
 
+// Default statuses for the open-task tabs; keep the ids and include props in sync.
+const OPEN_TASK_STATUS_FILTER_IDS: FilterID[] = [
+  'task-not-started',
+  'task-in-progress',
+  'task-in-review',
+];
+
+const OPEN_TASK_STATUS_INCLUDE_PROPS = [
+  {
+    propertyId: SYSTEM_PROPERTY_IDS.STATUS,
+    type: 'select' as const,
+    value: PROPERTY_OPTION_IDS.STATUS.NOT_STARTED,
+  },
+  {
+    propertyId: SYSTEM_PROPERTY_IDS.STATUS,
+    type: 'select' as const,
+    value: PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS,
+  },
+  {
+    propertyId: SYSTEM_PROPERTY_IDS.STATUS,
+    type: 'select' as const,
+    value: PROPERTY_OPTION_IDS.STATUS.IN_REVIEW,
+  },
+];
+
+const getExcludedDocumentSubTypes = (...subTypes: string[]) =>
+  ENABLE_SNIPPETS() ? subTypes : [...subTypes, 'snippet'];
+
+const getDisabledSnippetSubtypeExclude = (): Query['exclude'] =>
+  ENABLE_SNIPPETS() ? {} : { subType: ['snippet'] };
+
 /** Filters for inbox/signal: not done, importance=true for emails, 2-week window */
 const getInboxSignalFilters = () => {
   const twoWeeksAgo = subWeeks(startOfDay(new Date()), 2).toISOString();
@@ -55,25 +89,34 @@ const getInboxSignalFilters = () => {
       chatUpdatedAt: { gte: twoWeeksAgo },
       folderDone: false,
       folderUpdatedAt: { gte: twoWeeksAgo },
+      // Foreign entities (e.g. GitHub PRs) with a not-done notification.
+      // Referencing `fef` also opts them into the signal query (otherwise
+      // defineQueryFilters excludes unreferenced entity types). Rendering is
+      // still gated on the supported-foreign-entities flag client-side.
+      foreignEntityDone: false,
+      foreignEntityIncludesMe: true,
       emailShared: 'exclude',
     },
+    exclude: getDisabledSnippetSubtypeExclude(),
     emailView: 'inbox',
   });
 };
 
 /** Filters for inbox/noise: not done, importance=false for emails */
-const INBOX_NOISE_FILTERS = defineQueryFilters({
-  include: {
-    documentDone: false,
-    emailDone: false,
-    emailImportance: false,
-    channelDone: false,
-    chatDone: false,
-    folderDone: false,
-    emailShared: 'exclude',
-  },
-  emailView: 'inbox',
-});
+const getInboxNoiseFilters = () =>
+  defineQueryFilters({
+    include: {
+      documentDone: false,
+      emailDone: false,
+      emailImportance: false,
+      channelDone: false,
+      chatDone: false,
+      folderDone: false,
+      emailShared: 'exclude',
+    },
+    exclude: getDisabledSnippetSubtypeExclude(),
+    emailView: 'inbox',
+  });
 
 export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
   inbox: {
@@ -84,13 +127,16 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         clientFilters: { and: ['inbox'] },
       }),
       noise: () => ({
-        filters: INBOX_NOISE_FILTERS,
+        filters: getInboxNoiseFilters(),
         clientFilters: { and: ['noise'] },
       }),
       all: () => ({
         filters: {
           // crm companies aren't surfaced outside the Companies view.
-          include: { crmCompanyId: [NIL_UUID] },
+          include: {
+            crmCompanyId: [NIL_UUID],
+            foreignEntityIncludesMe: true,
+          },
           exclude: {
             documentId: [NIL_UUID],
             threadId: [NIL_UUID],
@@ -99,6 +145,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
             folderId: [NIL_UUID],
             foreignEntityRecordId:
               ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE ? [NIL_UUID] : [],
+            ...getDisabledSnippetSubtypeExclude(),
           },
           emailView: 'all',
         },
@@ -224,7 +271,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
               documentOwnerId: [ctx.userId],
               isEmailAttachment: false,
             },
-            exclude: { subType: ['task'] },
+            exclude: { subType: getExcludedDocumentSubTypes('task') },
           }),
           clientFilters: { and: ['document-or-file', 'owned-entity'] },
         };
@@ -236,7 +283,10 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
             include: {
               isEmailAttachment: false,
             },
-            exclude: { subType: ['task'], documentOwnerId: [ctx.userId] },
+            exclude: {
+              subType: getExcludedDocumentSubTypes('task'),
+              documentOwnerId: [ctx.userId],
+            },
           }),
           clientFilters: { and: ['document-or-file', 'shared-entity'] },
         };
@@ -255,7 +305,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
       }),
       all: () => ({
         filters: defineQueryFilters({
-          exclude: { subType: ['task'] },
+          exclude: { subType: getExcludedDocumentSubTypes('task') },
         }),
         clientFilters: { and: ['document-or-file'] },
       }),
@@ -276,24 +326,14 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
                   type: 'entity',
                   value: ctx.userId,
                 },
-              ],
-            },
-            exclude: {
-              properties: [
-                {
-                  propertyId: SYSTEM_PROPERTY_IDS.STATUS,
-                  type: 'select',
-                  value: PROPERTY_OPTION_IDS.STATUS.COMPLETED,
-                },
-                {
-                  propertyId: SYSTEM_PROPERTY_IDS.STATUS,
-                  type: 'select',
-                  value: PROPERTY_OPTION_IDS.STATUS.CANCELED,
-                },
+                ...OPEN_TASK_STATUS_INCLUDE_PROPS,
               ],
             },
           }),
-          clientFilters: { and: ['task', 'assigned-to', 'active-task'] },
+          clientFilters: {
+            and: ['task', 'assigned-to'],
+            or: [...OPEN_TASK_STATUS_FILTER_IDS],
+          },
           groupBy: `property:${SYSTEM_PROPERTY_IDS.PRIORITY}`,
         };
       },
@@ -301,9 +341,16 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         if (!ctx.userId) return undefined;
         return {
           filters: defineQueryFilters({
-            include: { subType: ['task'], documentOwnerId: [ctx.userId] },
+            include: {
+              subType: ['task'],
+              documentOwnerId: [ctx.userId],
+              properties: [...OPEN_TASK_STATUS_INCLUDE_PROPS],
+            },
           }),
-          clientFilters: { and: ['task', 'active-task', 'owned-entity'] },
+          clientFilters: {
+            and: ['task', 'owned-entity'],
+            or: [...OPEN_TASK_STATUS_FILTER_IDS],
+          },
           groupBy: `property:${SYSTEM_PROPERTY_IDS.STATUS}`,
         };
       },
@@ -426,6 +473,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
             foreignEntityRecordId: [NIL_UUID],
             crmCompanyId: [NIL_UUID],
           },
+          exclude: getDisabledSnippetSubtypeExclude(),
         },
         clientFilters: { and: ['search-supported'] },
       }),

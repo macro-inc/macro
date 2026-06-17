@@ -7,8 +7,13 @@ use documents::domain::ports::DocumentService;
 use foreign_entity::domain::ports::ForeignEntityService;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
-use model_notifications::{GithubPrEvent, GithubPrEventAction, GithubPrEventStatus};
-use notification::domain::{models::SendNotificationRequestBuilder, service::NotificationIngress};
+use model_notifications::{
+    GithubPrEventAction, GithubPrEventStatus, GithubPrNotificationCommon, GithubPrStatusChanged,
+};
+use notification::domain::{
+    models::{Notification, SendNotificationRequestBuilder},
+    service::NotificationIngress,
+};
 
 use crate::domain::{
     models::{
@@ -53,47 +58,80 @@ impl<
             return;
         }
 
+        let participant_user_ids = self
+            .pull_request_participant_macro_user_ids(pull_request, upserts)
+            .await;
+        if participant_user_ids.is_empty() {
+            return;
+        }
+
         let sender_id = self.notification_sender_id(event).await;
         for (upsert, transition) in transitions {
-            let recipient_ids = self.notification_recipient_ids(&upsert.source).await;
+            let recipient_ids = self
+                .participant_scoped_recipient_ids(&upsert.source, &participant_user_ids)
+                .await;
             if recipient_ids.is_empty() {
                 tracing::trace!(
                     source_id=%upsert.source.source_id(),
                     source_type=%upsert.source.source_type(),
                     foreign_entity_id=%upsert.foreign_entity_id,
-                    "skipping GitHub PR notification without recipients"
+                    "skipping GitHub PR status notification without participant-scoped recipients"
                 );
                 continue;
             }
 
-            let notification = Self::github_pr_event(
+            let notification = Self::github_pr_status_changed(
                 event,
                 pull_request,
                 upsert.foreign_entity_id,
                 action,
                 transition,
             );
-            let notification_entity =
-                EntityType::ForeignEntity.with_entity_string(upsert.foreign_entity_id.to_string());
-            let request = SendNotificationRequestBuilder {
-                notification_entity,
+            self.send_github_notification(
                 notification,
-                sender_id: sender_id.clone(),
+                upsert.foreign_entity_id,
+                sender_id.clone(),
                 recipient_ids,
-            }
-            .into_request()
-            .with_conn_gateway();
-
-            if let Err(error) = self.notification_ingress.send_notification(request).await {
-                tracing::error!(
-                    error=?error,
-                    source_id=%upsert.source.source_id(),
-                    source_type=%upsert.source.source_type(),
-                    foreign_entity_id=%upsert.foreign_entity_id,
-                    "failed to send GitHub PR notification"
-                );
-            }
+            )
+            .await;
         }
+    }
+
+    /// Send a GitHub pull request notification over the connection gateway,
+    /// logging (rather than propagating) delivery failures.
+    pub(super) async fn send_github_notification<T: Notification + Clone + 'static>(
+        &self,
+        notification: T,
+        foreign_entity_id: uuid::Uuid,
+        sender_id: Option<MacroUserIdStr<'static>>,
+        recipient_ids: HashSet<MacroUserIdStr<'static>>,
+    ) {
+        let notification_entity =
+            EntityType::ForeignEntity.with_entity_string(foreign_entity_id.to_string());
+        let request = SendNotificationRequestBuilder {
+            notification_entity,
+            notification,
+            sender_id,
+            recipient_ids,
+        }
+        .into_request()
+        .with_conn_gateway();
+
+        if let Err(error) = self.notification_ingress.send_notification(request).await {
+            tracing::error!(
+                error=?error,
+                notification_type=%T::TYPE_NAME,
+                foreign_entity_id=%foreign_entity_id,
+                "failed to send GitHub PR notification"
+            );
+        }
+    }
+
+    /// Whether the webhook event was triggered by a bot account (including the
+    /// Macro GitHub App itself, whose task-link comments echo back as
+    /// `issue_comment` webhooks).
+    pub(super) fn is_bot_sender(event: &ValidatedGithubWebhookEvent) -> bool {
+        Self::payload_string(&event.payload, &["sender", "type"]).as_deref() == Some("Bot")
     }
 
     fn status_transition(
@@ -110,7 +148,116 @@ impl<
         })
     }
 
-    async fn notification_recipient_ids(
+    pub(super) async fn pull_request_participant_macro_user_ids(
+        &self,
+        pull_request: &EnrichedGithubPullRequest,
+        upserts: &[PullRequestForeignEntityUpsert],
+    ) -> HashSet<MacroUserIdStr<'static>> {
+        let github_user_ids = Self::pull_request_participant_github_user_ids(pull_request, upserts);
+        if github_user_ids.is_empty() {
+            tracing::trace!("skipping GitHub PR notification without participant GitHub user IDs");
+            return HashSet::new();
+        }
+
+        let user_ids = self.macro_users_for_github_user_ids(&github_user_ids).await;
+        if user_ids.is_empty() {
+            tracing::trace!(
+                participant_github_user_count = github_user_ids.len(),
+                "skipping GitHub PR notification without mapped participant users"
+            );
+        }
+
+        user_ids
+    }
+
+    fn pull_request_participant_github_user_ids(
+        pull_request: &EnrichedGithubPullRequest,
+        upserts: &[PullRequestForeignEntityUpsert],
+    ) -> HashSet<String> {
+        let mut github_user_ids = HashSet::new();
+
+        if let Some(ids) = &pull_request.participant_github_user_ids {
+            github_user_ids.extend(ids.iter().filter(|id| !id.is_empty()).cloned());
+        }
+
+        for upsert in upserts {
+            github_user_ids.extend(
+                upsert
+                    .participant_github_user_ids
+                    .iter()
+                    .filter(|id| !id.is_empty())
+                    .cloned(),
+            );
+        }
+
+        github_user_ids
+    }
+
+    async fn macro_users_for_github_user_ids(
+        &self,
+        github_user_ids: &HashSet<String>,
+    ) -> HashSet<MacroUserIdStr<'static>> {
+        let mut user_ids = HashSet::new();
+
+        for github_user_id in github_user_ids {
+            let macro_id = match self
+                .repo
+                .get_macro_id_by_github_user_id(github_user_id)
+                .await
+            {
+                Ok(Some(macro_id)) => macro_id,
+                Ok(None) => {
+                    tracing::trace!(
+                        participant_github_user_id=%github_user_id,
+                        "GitHub PR participant has no Macro user mapping"
+                    );
+                    continue;
+                }
+                Err(error) => {
+                    tracing::warn!(
+                        error=?error,
+                        participant_github_user_id=%github_user_id,
+                        "failed to map GitHub PR participant"
+                    );
+                    continue;
+                }
+            };
+
+            match MacroUserIdStr::try_from(macro_id.clone()) {
+                Ok(user_id) => {
+                    user_ids.insert(user_id);
+                }
+                Err(error) => {
+                    tracing::warn!(
+                        error=?error,
+                        macro_id=%macro_id,
+                        participant_github_user_id=%github_user_id,
+                        "GitHub PR participant mapping is not a valid Macro user ID"
+                    );
+                }
+            }
+        }
+
+        user_ids
+    }
+
+    pub(super) async fn participant_scoped_recipient_ids(
+        &self,
+        source: &GithubAppInstallationSource,
+        participant_user_ids: &HashSet<MacroUserIdStr<'static>>,
+    ) -> HashSet<MacroUserIdStr<'static>> {
+        if participant_user_ids.is_empty() {
+            return HashSet::new();
+        }
+
+        self.notification_recipient_ids(source)
+            .await
+            .intersection(participant_user_ids)
+            .cloned()
+            .collect()
+    }
+
+    pub(super) async fn notification_recipient_ids(
         &self,
         source: &GithubAppInstallationSource,
     ) -> HashSet<MacroUserIdStr<'static>> {
@@ -146,7 +293,7 @@ impl<
         }
     }
 
-    async fn notification_sender_id(
+    pub(super) async fn notification_sender_id(
         &self,
         event: &ValidatedGithubWebhookEvent,
     ) -> Option<MacroUserIdStr<'static>> {
@@ -182,14 +329,13 @@ impl<
         }
     }
 
-    fn github_pr_event(
+    /// Build the metadata fields shared by every GitHub pull request notification type.
+    pub(super) fn github_pr_common(
         event: &ValidatedGithubWebhookEvent,
         pull_request: &EnrichedGithubPullRequest,
         foreign_entity_id: uuid::Uuid,
-        action: GithubPrEventAction,
-        transition: PullRequestStatusTransition,
-    ) -> GithubPrEvent {
-        GithubPrEvent {
+    ) -> GithubPrNotificationCommon {
+        GithubPrNotificationCommon {
             foreign_entity_id,
             github_key: pull_request.github_key.clone(),
             owner: pull_request.owner.clone(),
@@ -197,19 +343,31 @@ impl<
             number: pull_request.number,
             url: pull_request.url.clone(),
             display_name: pull_request.display_name.clone(),
-            title: GithubPrEvent::title_or_display_name(
+            title: GithubPrNotificationCommon::title_or_display_name(
                 pull_request.name.clone(),
                 &pull_request.display_name,
             ),
-            status: Self::github_pr_event_status(transition.status),
-            action,
-            previous_status: transition.previous_status.map(Self::github_pr_event_status),
             sender_github_login: Self::payload_string(&event.payload, &["sender", "login"]),
             sender_github_user_id: event.sender_github_user_id(),
             sender_github_avatar_url: Self::payload_string(
                 &event.payload,
                 &["sender", "avatar_url"],
             ),
+        }
+    }
+
+    fn github_pr_status_changed(
+        event: &ValidatedGithubWebhookEvent,
+        pull_request: &EnrichedGithubPullRequest,
+        foreign_entity_id: uuid::Uuid,
+        action: GithubPrEventAction,
+        transition: PullRequestStatusTransition,
+    ) -> GithubPrStatusChanged {
+        GithubPrStatusChanged {
+            common: Self::github_pr_common(event, pull_request, foreign_entity_id),
+            status: Self::github_pr_event_status(transition.status),
+            action,
+            previous_status: transition.previous_status.map(Self::github_pr_event_status),
             head_branch: Self::payload_string(&event.payload, &["pull_request", "head", "ref"]),
             base_branch: Self::payload_string(&event.payload, &["pull_request", "base", "ref"]),
             merged_at: Self::pull_request_merged_at(event),
@@ -233,7 +391,7 @@ impl<
         }
     }
 
-    fn payload_string(payload: &serde_json::Value, path: &[&str]) -> Option<String> {
+    pub(super) fn payload_string(payload: &serde_json::Value, path: &[&str]) -> Option<String> {
         let mut value = payload;
         for key in path {
             value = value.get(*key)?;

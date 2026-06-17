@@ -2,6 +2,7 @@ import type { NullableSize } from '@solid-primitives/resize-observer';
 import {
   type Accessor,
   createContext,
+  type JSX,
   type Setter,
   type Signal,
 } from 'solid-js';
@@ -11,7 +12,8 @@ export type CollapsibleRegistration = {
   id: string;
   priority: number; // lower = higher priority to collapse first
   collapsed: Accessor<boolean>;
-  setCollapsed: Setter<boolean>;
+  // silent skips onCollapsedChange — used for pre-paint trial measurements
+  setCollapsed: (value: boolean, opts?: { silent?: boolean }) => void;
   ref: Accessor<HTMLElement | null | undefined>; // uncollapsed element — measured before collapse
   collapsedRef?: Accessor<HTMLElement | null | undefined>; // collapsed element — measured while collapsed
 };
@@ -36,6 +38,13 @@ export type HalfSplitState = {
   side: 'left' | 'right';
 };
 
+export type SplitBottomPanelRegistration = {
+  id: string;
+  title?: JSX.Element;
+  content: () => JSX.Element;
+  onClose?: () => void;
+};
+
 export type SplitPanelContextType = {
   handle: SplitHandle;
   splitHotkeyScope: string;
@@ -45,6 +54,8 @@ export type SplitPanelContextType = {
   contentOffsetTop: Accessor<number>;
   setContentOffsetTop: Setter<number>;
   halfSplitState?: Accessor<HalfSplitState | undefined>;
+  bottomPanel: Accessor<SplitBottomPanelRegistration | undefined>;
+  registerBottomPanel: (panel: SplitBottomPanelRegistration) => () => void;
   previewState: Signal<boolean>;
   layoutRefs: {
     headerLeft?: HTMLDivElement;

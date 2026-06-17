@@ -1,13 +1,20 @@
 use crate::pubsub::link_manager::context::LinkManagerContext;
+use crate::pubsub::util::{build_notification_recipients, cg_refresh_email};
 use crate::util::gmail::auth::{
-    fetch_gmail_access_token_from_link, fetch_token_or_delete_on_revocation,
+    fetch_gmail_access_token_from_link, fetch_token_or_mark_reauth,
+    fetch_token_or_mark_reauth_no_cache, is_forbidden_error, is_reauth_required_error,
 };
 use crate::util::sync_contacts::sync_contacts;
 use anyhow::{Context, anyhow};
 use crm::domain::service::CrmService;
+use model_entity::EntityType;
+use model_notifications::InboxReauthRequiredMetadata;
+use models_email::api::refresh::RefreshEmailEvent;
 use models_email::email::service::pubsub::{DeletionReason, LinkManagerMessage};
 use models_email::service::cache::TokenCacheKey;
 use models_email::service::link::{Link, UserProvider};
+use notification::domain::models::SendNotificationRequestBuilder;
+use notification::domain::service::NotificationIngress;
 use sqs_client::search::SearchQueueMessage;
 use sqs_client::search::email::EmailLinkMessage;
 use sqs_worker::cleanup_message;
@@ -24,14 +31,42 @@ pub async fn process_message(
             let link = get_link_or_skip(&ctx, message, link_id).await?;
             let Some(link) = link else { return Ok(()) };
 
-            let gmail_access_token = fetch_token_or_delete_on_revocation(
+            let result = fetch_token_or_mark_reauth(
                 &link,
+                &ctx.db,
                 &ctx.redis_client,
                 &ctx.auth_service_client,
                 &ctx.sqs_client,
             )
-            .await?;
-            handle_refresh(&ctx, &link, &gmail_access_token).await?;
+            .await;
+
+            if let Some(gmail_access_token) = settle_reauth_fetch(&ctx, &link, result).await? {
+                handle_refresh(&ctx, &link, &gmail_access_token).await?;
+            }
+        }
+        LinkManagerMessage::HealthCheck { link_id } => {
+            let link = get_link_or_skip(&ctx, message, link_id).await?;
+            let Some(link) = link else { return Ok(()) };
+
+            // Probe-only: the health side effects happen inside the fetch; a live token
+            // needs no follow-up work here. No-cache so a just-revoked grant is observed
+            // now rather than masked by a still-valid cached access token.
+            let result = fetch_token_or_mark_reauth_no_cache(
+                &link,
+                &ctx.db,
+                &ctx.redis_client,
+                &ctx.auth_service_client,
+                &ctx.sqs_client,
+            )
+            .await;
+
+            settle_reauth_fetch(&ctx, &link, result).await?;
+        }
+        LinkManagerMessage::NotifyReauthRequired { link_id } => {
+            let link = get_link_or_skip(&ctx, message, link_id).await?;
+            let Some(link) = link else { return Ok(()) };
+
+            handle_notify_reauth_required(&ctx, &link).await?;
         }
         LinkManagerMessage::DeleteLink {
             link_id,
@@ -40,13 +75,7 @@ pub async fn process_message(
             let link = get_link_or_skip(&ctx, message, link_id).await?;
             let Some(link) = link else { return Ok(()) };
 
-            let gmail_access_token = fetch_gmail_access_token_from_link(
-                &link,
-                &ctx.redis_client,
-                &ctx.auth_service_client,
-            )
-            .await
-            .ok();
+            let gmail_access_token = fetch_teardown_token(&ctx, &link).await;
             handle_delete(&ctx, &link, gmail_access_token.as_deref(), &deletion_reason).await?;
         }
         LinkManagerMessage::DeleteUser { fusionauth_user_id } => {
@@ -56,6 +85,35 @@ pub async fn process_message(
 
     cleanup_message(&ctx.sqs_worker, message).await?;
     Ok(())
+}
+
+/// Settles the outcome of a token fetch that records reauth health (the `*_or_mark_reauth`
+/// family). Returns the token on success. When the grant is gone the link has already been
+/// marked for reauth as a side effect, so the message is terminal — return `None` to let it
+/// be dropped — but only once that mark is persisted; if the mark write itself failed,
+/// propagate the error so the message retries and the health signal isn't lost. Other,
+/// transient errors propagate to retry.
+async fn settle_reauth_fetch(
+    ctx: &LinkManagerContext,
+    link: &Link,
+    result: anyhow::Result<String>,
+) -> anyhow::Result<Option<String>> {
+    match result {
+        Ok(token) => Ok(Some(token)),
+        Err(e) if is_reauth_required_error(&e) => {
+            let persisted = email_db_client::links::get::fetch_link_by_id(&ctx.db, link.id)
+                .await
+                .context("Failed to verify needs_reauth state after token fetch failure")?
+                .is_some_and(|l| l.needs_reauth);
+
+            if !persisted {
+                return Err(e.context("reauth required but needs_reauth not persisted"));
+            }
+
+            Ok(None)
+        }
+        Err(e) => Err(e),
+    }
 }
 
 /// Fetches a link by ID, cleaning up the message and returning `None` if not found.
@@ -70,6 +128,38 @@ async fn get_link_or_skip(
         cleanup_message(&ctx.sqs_worker, message).await?;
     }
     Ok(link)
+}
+
+/// Best-effort token fetch for stopping a Gmail watch during link teardown. A transient
+/// auth-service failure would otherwise drop the stop silently and leave the watch
+/// running, so retry a few times. A revoked grant (Forbidden) can never yield a token,
+/// so don't retry it — the watch then lingers until Gmail expires it or the next connect
+/// stops it.
+async fn fetch_teardown_token(ctx: &LinkManagerContext, link: &Link) -> Option<String> {
+    const MAX_ATTEMPTS: u32 = 3;
+
+    for attempt in 1..=MAX_ATTEMPTS {
+        match fetch_gmail_access_token_from_link(link, &ctx.redis_client, &ctx.auth_service_client)
+            .await
+        {
+            Ok(token) => return Some(token),
+            Err(e) if is_forbidden_error(&e) => {
+                tracing::warn!(error=?e, link_id=%link.id, "Gmail access revoked; cannot stop watch (it will expire on its own)");
+                return None;
+            }
+            Err(e) if attempt < MAX_ATTEMPTS => {
+                tracing::warn!(error=?e, attempt, link_id=%link.id, "Transient failure fetching token to stop Gmail watch; retrying");
+                tokio::time::sleep(std::time::Duration::from_millis(200 * u64::from(attempt)))
+                    .await;
+            }
+            Err(e) => {
+                tracing::warn!(error=?e, link_id=%link.id, "Could not fetch token to stop Gmail watch after retries; watch will linger until it expires or the next connect stops it");
+                return None;
+            }
+        }
+    }
+
+    None
 }
 
 /// Handles the Refresh operation: renews Gmail watch subscription and syncs contacts.
@@ -109,6 +199,43 @@ async fn handle_refresh(
     Ok(())
 }
 
+/// Notifies the inbox owner and every delegate that the link's grant has died and
+/// the inbox must be reconnected. Reuses the new-mail recipient computation so a
+/// shared inbox reaches everyone who could hold the Google grant.
+#[tracing::instrument(skip(ctx), fields(link = ?link), err)]
+async fn handle_notify_reauth_required(
+    ctx: &LinkManagerContext,
+    link: &Link,
+) -> anyhow::Result<()> {
+    let primaries = macro_db_client::macro_user_links::get_primaries_for_link(
+        &ctx.db,
+        link.macro_id.as_ref(),
+        link.id,
+    )
+    .await
+    .context("Failed to fetch delegated primaries for reauth notification")?;
+
+    let recipient_ids = build_notification_recipients(&link.macro_id, primaries);
+
+    let request = SendNotificationRequestBuilder {
+        notification_entity: EntityType::User.with_entity_string(link.macro_id.to_string()),
+        notification: InboxReauthRequiredMetadata {
+            email_address: link.email_address.0.as_ref().to_string(),
+        },
+        sender_id: None,
+        recipient_ids,
+    }
+    .into_request()
+    .with_conn_gateway();
+
+    ctx.notification_ingress_service
+        .send_notification(request)
+        .await
+        .map_err(|e| anyhow!("failed to send reauth notification: {e}"))?;
+
+    Ok(())
+}
+
 /// Fetches all links for a user and deletes each one via the existing delete handler.
 #[tracing::instrument(skip(ctx), err)]
 async fn handle_delete_all_user_links(
@@ -132,10 +259,7 @@ async fn handle_delete_all_user_links(
     );
 
     for link in &links {
-        let gmail_access_token =
-            fetch_gmail_access_token_from_link(link, &ctx.redis_client, &ctx.auth_service_client)
-                .await
-                .ok();
+        let gmail_access_token = fetch_teardown_token(ctx, link).await;
 
         if let Err(e) = handle_delete(
             ctx,
@@ -251,6 +375,15 @@ async fn handle_delete(
         .await
         .context("Failed to delete link in background task")?;
 
+    // The teardown is async relative to the delete request, so signal completion
+    // now that the rows are gone — a client showing this inbox can drop its data.
+    cg_refresh_email(
+        &ctx.connection_gateway_client,
+        link.macro_id.as_ref(),
+        RefreshEmailEvent::LinkRemoved { link_id: link.id },
+    )
+    .await;
+
     // Mark the link as deleted in history table for tracking (best-effort)
     if let Err(e) = email_db_client::links_history::update::set_deleted_at(
         &ctx.db,
@@ -262,42 +395,47 @@ async fn handle_delete(
         tracing::error!(error=?e, link_id=?link.id, "Failed to set deleted_at on email link history");
     }
 
-    // If this was the owner's last inbox, prune any delegation edges pointing at
-    // them so grantees don't retain dangling references. A delegation edge grants
-    // access to all of the owner's inboxes, so only clean up once none remain.
-    // Best-effort: leftover edges are harmless (they resolve to nothing).
-    match email_db_client::links::get::fetch_link_by_macro_id(&ctx.db, link.macro_id.as_ref()).await
-    {
-        Ok(None) => {
-            if let Err(e) = macro_db_client::macro_user_links::delete_edges_for_child(
-                &ctx.db,
-                link.macro_id.as_ref(),
-            )
-            .await
-            {
-                tracing::error!(error=?e, "Failed to prune delegation edges after deleting owner's last inbox");
-            }
-        }
-        Ok(Some(_)) => {
-            tracing::debug!("Owner has remaining inboxes; keeping delegation edges");
-        }
-        Err(e) => {
-            tracing::error!(error=?e, "Failed to check remaining inboxes for delegation edge cleanup");
-        }
-    }
+    // Delegation edges scoped to the deleted link were cascaded away by FK; no
+    // manual pruning is needed.
 
     // If the deleted link was a promoted shared mailbox, remove its minted macro user too
     // (this also cascades its delegation edges and the promoted-mailbox marker). No-op for
     // ordinary inboxes; best-effort, since the link and its data are already gone.
     match ctx.db.acquire().await {
         Ok(mut conn) => {
-            if let Err(e) = macro_db_client::shared_inbox::delete_promoted_mailbox_user(
+            match macro_db_client::shared_inbox::delete_promoted_mailbox_user(
                 &mut conn,
                 link.macro_id.as_ref(),
             )
             .await
             {
-                tracing::error!(error=?e, "Failed to delete minted user for promoted shared mailbox");
+                Ok(Some(minted_id)) => {
+                    // The minted id is the authoritative stub id: grant relocation creates the
+                    // mailbox's FusionAuth user with it, so it can never be a human connector's
+                    // account. Deleting by it (rather than the link's fusionauth_user_id, which
+                    // is stale when the post-relocation re-home failed) cleans the stub even in
+                    // partial states; the endpoint no-ops when relocation never created the user
+                    // and refuses active users as a second guard.
+                    let minted_id = minted_id.to_string();
+                    if link.fusionauth_user_id != minted_id {
+                        tracing::warn!(
+                            link_fusionauth_user_id = %link.fusionauth_user_id,
+                            %minted_id,
+                            "Promoted mailbox link did not point at its minted stub; deleting stub by minted id"
+                        );
+                    }
+                    if let Err(e) = ctx
+                        .auth_service_client
+                        .delete_inbox_grant_user(&minted_id)
+                        .await
+                    {
+                        tracing::error!(error=?e, "Failed to delete FusionAuth stub for promoted shared mailbox");
+                    }
+                }
+                Ok(None) => {}
+                Err(e) => {
+                    tracing::error!(error=?e, "Failed to delete minted user for promoted shared mailbox");
+                }
             }
         }
         Err(e) => {

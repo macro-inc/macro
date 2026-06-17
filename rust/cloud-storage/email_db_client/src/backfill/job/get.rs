@@ -132,7 +132,8 @@ pub async fn get_recent_jobs_by_fusionauth_user_id(
     pool: &PgPool,
     fusionauth_user_id: &str,
 ) -> anyhow::Result<Vec<service::backfill::BackfillJob>> {
-    // Query for all jobs created within the last 24 hours for the specified link
+    // Jobs created in the last 24h for this user, excluding terminal (Cancelled/Failed)
+    // statuses, used for the connect rate limit.
     let records = sqlx::query_as!(
         db::backfill::BackfillJob,
         r#"
@@ -149,6 +150,7 @@ pub async fn get_recent_jobs_by_fusionauth_user_id(
         FROM email_backfill_jobs
         WHERE fusionauth_user_id = $1
         AND created_at > NOW() - INTERVAL '24 hours'
+        AND status NOT IN ('Cancelled', 'Failed')
         ORDER BY created_at DESC
         "#,
         fusionauth_user_id
@@ -161,3 +163,6 @@ pub async fn get_recent_jobs_by_fusionauth_user_id(
 
     Ok(jobs)
 }
+
+#[cfg(test)]
+mod test;

@@ -18,8 +18,9 @@ inbound = [
 ]
 outbound = [
   "dep:agent",
+  "dep:ai_usage",
   "dep:aws-sdk-s3",
-  "comms/outbound",
+  "channels/outbound",
   "dep:entity_access_db_utils",
   "dep:futures",
   "dep:livekit-api",
@@ -33,13 +34,14 @@ ports = ["dep:entity_access", "dep:tokio"]
 
 [dependencies]
 agent = { path = "../agent", optional = true }
+ai_usage = { path = "../ai_usage", optional = true }
 ai_toolset = { path = "../ai_toolset", optional = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true, optional = true }
 aws-sdk-s3 = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
 chrono = { workspace = true }
-comms = { path = "../comms", default-features = false }
+channels = { path = "../channels", default-features = false, optional = true }
 connection = { path = "../connection", default-features = false, features = [
   "ports",
 ] }
@@ -73,6 +75,7 @@ tokio = { workspace = true, features = ["macros"], optional = true }
 tracing = { workspace = true }
 utoipa = { workspace = true, optional = true }
 uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 macro_db_migrator = { path = "../macro_db_migrator" }

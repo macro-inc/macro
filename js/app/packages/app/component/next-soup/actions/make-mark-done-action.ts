@@ -143,7 +143,8 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
       entity.type === 'channel' ||
       entity.type === 'chat' ||
       entity.type === 'document' ||
-      entity.type === 'project'
+      entity.type === 'project' ||
+      entity.type === 'foreign'
     ) {
       return true;
     }

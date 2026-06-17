@@ -6,9 +6,9 @@ use call::domain::service::{CallRecordQueryServiceImpl, CallServiceImpl};
 use call::inbound::toolset::CallToolContext;
 use call::outbound::pg_call_repo::PgCallRepo;
 use call::outbound::s3_recording_storage::S3RecordingStorage;
-use comms::domain::service::ChannelServiceImpl;
-use comms::outbound::postgres::comms_repo::PgCommsRepo;
-use comms::outbound::postgres::user_repo::PgUserRepo;
+use channels::{
+    domain::list_service::ChannelListServiceImpl, outbound::pg_channels_repo::PgChannelsRepo,
+};
 use config::{Config, EnvVars, Environment};
 use document_storage_service_client::DocumentStorageServiceClient;
 use documents::{
@@ -215,9 +215,9 @@ async fn main() -> anyhow::Result<()> {
         crm_service.clone(),
         0,
     );
-    let channels_service = ChannelServiceImpl::new(
-        PgCommsRepo::new(ReadOnlyPool(db.clone())),
-        PgUserRepo::new(db.clone()),
+    let channels_service = ChannelListServiceImpl::new(
+        PgChannelsRepo::new(db.clone()),
+        PgChannelsRepo::new(db.clone()),
         frecency_storage,
     );
     let email_service_for_tools: Arc<ai_tools::ToolEmailService> = Arc::new(email_service.clone());
@@ -297,8 +297,8 @@ async fn main() -> anyhow::Result<()> {
             Arc::new(chat::outbound::postgres::PgChatRepo::new(db.clone())),
             entity_access_service.clone(),
         ),
-        channel: comms::inbound::attachment::CommsAttachmentService::new(
-            Arc::new(PgCommsRepo::new(ReadOnlyPool(db.clone()))),
+        channel: channels::inbound::attachment::ChannelAttachmentService::new(
+            Arc::new(PgChannelsRepo::new(db.clone())),
             entity_access_service.clone(),
         ),
         static_file: static_file::inbound::attachment::StaticFileAttachmentService::new(Arc::new(
@@ -385,6 +385,8 @@ async fn main() -> anyhow::Result<()> {
         team_tool_context: ai_tools::build_team_tool_context(db.clone()),
         schedule_tool_context: ai_tools::NoOpScheduleContext,
         anthropic_tool_context: ai_tools::build_anthropic_tool_context(),
+        recorder: ai_usage::pg_recorder(db.clone()),
+        usage_context: ai_usage::UsageContext::system(ai_usage::AiFeature::Chat),
     };
     let all_tools = ai_tools::all_tools();
     let all_tools_toolset = all_tools.toolset.clone();
@@ -401,6 +403,14 @@ async fn main() -> anyhow::Result<()> {
     ));
 
     tracing::info!("initialized memory service");
+
+    // Build the AI cost service. It backs both the admin query/pricing router
+    // and the usage recorder threaded through the tool service context.
+    let usage_service = Arc::new(ai_usage::domain::service::UsageServiceImpl::new(
+        ai_usage::outbound::PgUsageRepo::new(db.clone()),
+    ));
+
+    tracing::info!("initialized ai cost service");
 
     let mcp_credentials_key_b64 = match config.environment {
         Environment::Local => config.mcp_credentials_key_secret_name.clone(),
@@ -448,6 +458,7 @@ async fn main() -> anyhow::Result<()> {
         stream_repo,
         document_tool_context,
         memory_service,
+        usage_service,
         properties_tool_context,
         email_tool_context: email_tool_context.clone(),
         call_tool_context,

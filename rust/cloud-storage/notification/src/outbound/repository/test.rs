@@ -26,7 +26,16 @@ struct TestGithubNotification {
 }
 
 impl Notification for TestGithubNotification {
-    const TYPE_NAME: &'static str = "github_pr_event";
+    const TYPE_NAME: &'static str = "github_pr_status_changed";
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct TestGithubCheckRunNotification {
+    message: String,
+}
+
+impl Notification for TestGithubCheckRunNotification {
+    const TYPE_NAME: &'static str = "github_pr_check_run";
 }
 
 fn test_user(email: &str) -> MacroUserIdStr<'static> {
@@ -313,6 +322,90 @@ async fn test_get_basic_notifications_empty(pool: Pool<Postgres>) {
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("notifications_with_collapse_keys")
+    )
+)]
+async fn test_get_digest_eligible_notification_ids_filters_seen_deleted_missing_and_other_users(
+    pool: Pool<Postgres>,
+) {
+    let user = test_user("user@test.com");
+    let other_user = test_user("other@test.com");
+    let eligible_id = uuid::Uuid::parse_str("0193b1ea-a542-7589-893b-2b4a509c1e76").unwrap();
+    let seen_id = uuid::Uuid::parse_str("0193b1ea-b642-7589-893b-2b4a509c1e76").unwrap();
+    let deleted_id = uuid::Uuid::parse_str("0193b1ea-c742-7589-893b-2b4a509c1e76").unwrap();
+    let other_user_id = uuid::Uuid::parse_str("0193b1ea-d842-7589-893b-2b4a509c1e76").unwrap();
+    let missing_id = uuid::Uuid::parse_str("0193b1ea-e942-7589-893b-2b4a509c1e76").unwrap();
+
+    sqlx::query!(
+        r#"
+        INSERT INTO notification (id, notification_event_type, event_item_id, event_item_type, service_sender, metadata)
+        VALUES
+            ($1, 'test', 'item-3', 'document', 'test_service', '{}'),
+            ($2, 'test', 'item-4', 'document', 'test_service', '{}')
+        "#,
+        deleted_id,
+        other_user_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    sqlx::query!(
+        r#"
+        INSERT INTO user_notification (user_id, notification_id, created_at, deleted_at)
+        VALUES ($1, $2, '2025-01-01 00:00:02', '2025-01-01 00:01:00')
+        "#,
+        user.to_string(),
+        deleted_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    sqlx::query!(
+        r#"
+        INSERT INTO user_notification (user_id, notification_id, created_at)
+        VALUES ($1, $2, '2025-01-01 00:00:03')
+        "#,
+        other_user.to_string(),
+        other_user_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    pool.mark_notifications_seen(&user, &[seen_id])
+        .await
+        .unwrap();
+
+    let result = pool
+        .get_digest_eligible_notification_ids(
+            &user,
+            &[eligible_id, seen_id, deleted_id, other_user_id, missing_id],
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(result.len(), 1);
+    assert!(result.contains(&eligible_id));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_get_digest_eligible_notification_ids_empty_input(pool: Pool<Postgres>) {
+    let user = test_user("user@test.com");
+
+    let result = pool
+        .get_digest_eligible_notification_ids(&user, &[])
+        .await
+        .unwrap();
+
+    assert!(result.is_empty());
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("user_notifications"))
 )]
 async fn test_get_user_notifications(pool: Pool<Postgres>) {
@@ -483,7 +576,9 @@ async fn test_get_user_notifications_filters_type_and_entity(pool: Pool<Postgres
 async fn test_get_user_notifications_filters_github_type_and_entity(pool: Pool<Postgres>) {
     let user = test_user("github-recipient@test.com");
     let foreign_entity_id = uuid::Uuid::new_v4().to_string();
+    let check_run_foreign_entity_id = uuid::Uuid::new_v4().to_string();
     let github_notification_id = uuid::Uuid::new_v4();
+    let check_run_notification_id = uuid::Uuid::new_v4();
 
     let github_request = SendNotificationRequestBuilder {
         notification_entity: EntityType::ForeignEntity
@@ -497,6 +592,24 @@ async fn test_get_user_notifications_filters_github_type_and_entity(pool: Pool<P
     pool.create_notification(github_request, github_notification_id, "test_service", None)
         .await
         .unwrap();
+
+    let check_run_request = SendNotificationRequestBuilder {
+        notification_entity: EntityType::ForeignEntity
+            .with_entity_string(check_run_foreign_entity_id.clone()),
+        notification: TaggedContent::new(TestGithubCheckRunNotification {
+            message: "check run".to_string(),
+        }),
+        sender_id: None,
+        recipient_ids: std::collections::HashSet::from([user.clone()]),
+    };
+    pool.create_notification(
+        check_run_request,
+        check_run_notification_id,
+        "test_service",
+        None,
+    )
+    .await
+    .unwrap();
 
     let non_github_request = SendNotificationRequestBuilder {
         notification_entity: EntityType::ForeignEntity
@@ -530,22 +643,41 @@ async fn test_get_user_notifications_filters_github_type_and_entity(pool: Pool<P
         )
         .await
         .unwrap();
-    assert_eq!(github_type_results.len(), 1);
+    assert_eq!(github_type_results.len(), 2);
+
+    let github_type_result_ids: std::collections::HashSet<_> = github_type_results
+        .iter()
+        .map(|row| row.notification_id)
+        .collect();
     assert_eq!(
-        github_type_results[0].notification_id,
-        github_notification_id
+        github_type_result_ids,
+        std::collections::HashSet::from([github_notification_id, check_run_notification_id])
     );
+
+    let github_type_event_types: std::collections::HashSet<_> = github_type_results
+        .iter()
+        .map(|row| row.notification_event_type.as_str())
+        .collect();
     assert_eq!(
-        github_type_results[0].notification_event_type,
-        "github_pr_event"
+        github_type_event_types,
+        std::collections::HashSet::from(["github_pr_status_changed", "github_pr_check_run"])
     );
+
+    let github_type_entity_ids: std::collections::HashSet<_> = github_type_results
+        .iter()
+        .map(|row| row.entity.entity_id.as_ref())
+        .collect();
     assert_eq!(
-        github_type_results[0].entity.entity_type,
-        EntityType::ForeignEntity
+        github_type_entity_ids,
+        std::collections::HashSet::from([
+            foreign_entity_id.as_str(),
+            check_run_foreign_entity_id.as_str(),
+        ])
     );
-    assert_eq!(
-        github_type_results[0].entity.entity_id.as_ref(),
-        foreign_entity_id.as_str()
+    assert!(
+        github_type_results
+            .iter()
+            .all(|row| row.entity.entity_type == EntityType::ForeignEntity)
     );
 
     let github_entity_results: Vec<UserNotificationRow<serde_json::Value>> = pool
@@ -569,6 +701,37 @@ async fn test_get_user_notifications_filters_github_type_and_entity(pool: Pool<P
     assert_eq!(
         github_entity_results[0].notification_id,
         github_notification_id
+    );
+
+    let check_run_entity_results: Vec<UserNotificationRow<serde_json::Value>> = pool
+        .get_user_notifications(
+            user.clone(),
+            10,
+            Query::Sort(CreatedAt, ()),
+            NotificationListFilters {
+                done: Some(false),
+                seen: None,
+                include_types: Vec::new(),
+                entities: vec![NotificationEntityRef {
+                    entity_type: NotificationItemType::Github,
+                    id: check_run_foreign_entity_id.clone(),
+                }],
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(check_run_entity_results.len(), 1);
+    assert_eq!(
+        check_run_entity_results[0].notification_id,
+        check_run_notification_id
+    );
+    assert_eq!(
+        check_run_entity_results[0].notification_event_type,
+        "github_pr_check_run"
+    );
+    assert_eq!(
+        check_run_entity_results[0].entity.entity_id.as_ref(),
+        check_run_foreign_entity_id.as_str()
     );
 
     let wrong_entity_results: Vec<UserNotificationRow<serde_json::Value>> = pool

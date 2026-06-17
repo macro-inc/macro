@@ -1,12 +1,18 @@
 union FromPeer {
   1 -> struct PeerUpdate {
-    byte[] update;
+    byte[][] updates;
+    string id;
   }
   2 -> struct PeerAwareness {
     byte[] awareness;
   }
   3 -> struct PeerRequestSince {
-    byte[] frontiers;
+    // We send a version vector instead of frontiers because the client may
+    // have local ops the server hasn't received yet (offline edits or
+    // unflushed WAL on reconnect). Frontiers would reference those ops
+    // directly and `frontiersToVV` would panic on the server. A VV is just
+    // per-peer counters — unknown peers are harmless.
+    byte[] vv;
   }
   4 -> struct PeerRequestSnapshot {}
   5 -> struct PeerRegisterId {
@@ -29,11 +35,11 @@ union FromRemote {
     byte[] snapshot;
   }
   5 -> struct RemoteUpdateAck {
-    byte[] update;
+    string id;
   }
   6 -> struct RemoteUpdateSince {
     byte[] update;
-    byte[] frontiers;
+    byte[] vv;
   }
 }
 

@@ -36,13 +36,13 @@ model_user = { path = "../model_user", optional = true, features = ["axum"] }
 rand = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true, optional = true }
-sha2 = { workspace = true }
 sqlx = { workspace = true, optional = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, optional = true }
 tracing = { workspace = true }
 utoipa = { workspace = true, optional = true }
 uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 entity_access = { path = "../entity_access", default-features = false, features = [

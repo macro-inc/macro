@@ -12,3 +12,4 @@ anyhow = { workspace = true }
 aws-sdk-sesv2 = { workspace = true }
 mockall = { workspace = true }
 tracing = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

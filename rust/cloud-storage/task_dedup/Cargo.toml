@@ -30,6 +30,7 @@ default = ["backfill"]
 
 [dependencies]
 agent = { path = "../agent" }
+ai_usage = { path = "../ai_usage" }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 connection_gateway_client = { path = "../connection_gateway_client" }
@@ -62,6 +63,7 @@ tokio = { workspace = true, features = [
 macro_env_var = { path = "../macro_env_var", optional = true }
 
 macro_service_urls = { path = "../macro_service_urls" }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 macro_db_migrator = { path = "../macro_db_migrator" }

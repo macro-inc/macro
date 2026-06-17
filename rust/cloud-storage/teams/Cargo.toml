@@ -83,6 +83,7 @@ sqs_client = { path = "../sqs_client", default-features = false, features = [
   "email",
 ], optional = true }
 models_email = { path = "../models_email", optional = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 macro_db_migrator = { path = "../macro_db_migrator" }

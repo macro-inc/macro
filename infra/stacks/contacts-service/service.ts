@@ -13,10 +13,11 @@ import { EcrImage } from '../../packages/service';
 import {
   BASE_DOMAIN,
   CLOUD_TRAIL_SNS_TOPIC_ARN,
+  DopplerEcsEnvironment,
   stack,
 } from '../../packages/shared';
 
-const BASE_NAME = 'contacts-service';
+const BASE_NAME = pulumi.getProject();
 const BASE_PATH = '../../../rust/cloud-storage';
 export const SERVICE_DOMAIN_NAME = `contacts${
   stack === 'prod' ? '' : `-${stack}`
@@ -181,6 +182,12 @@ export class ContactsService extends pulumi.ComponentResource {
     this.lb = lb;
     this.listener = listener;
 
+    const dopplerEcsEnvironment = new DopplerEcsEnvironment(
+      BASE_NAME,
+      { tags: this.tags },
+      { parent: this }
+    );
+
     // Fargate Service
     const service = new awsx.ecs.FargateService(
       `${BASE_NAME}`,
@@ -199,6 +206,9 @@ export class ContactsService extends pulumi.ComponentResource {
         taskDefinitionArgs: {
           taskRole: {
             roleArn: this.role.arn,
+          },
+          executionRole: {
+            roleArn: dopplerEcsEnvironment.executionRole.arn,
           },
           containers: {
             log_router: fargateLogRouterSidecarContainer,
@@ -220,6 +230,7 @@ export class ContactsService extends pulumi.ComponentResource {
                   value: '1',
                 },
               ],
+              secrets: [...dopplerEcsEnvironment.containerSecrets],
               logConfiguration: {
                 logDriver: 'awsfirelens',
                 options: {

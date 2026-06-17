@@ -108,9 +108,9 @@ impl StreamRepo for MockStreamRepo {
 
 pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Arc<ApiContext> {
     use aws_sdk_sqs;
-    use comms::domain::service::ChannelServiceImpl;
-    use comms::outbound::postgres::comms_repo::PgCommsRepo;
-    use comms::outbound::postgres::user_repo::PgUserRepo;
+    use channels::{
+        domain::list_service::ChannelListServiceImpl, outbound::pg_channels_repo::PgChannelsRepo,
+    };
     use document_storage_service_client::DocumentStorageServiceClient;
     use email::domain::ports::ReadonlyEmailPreviewAdapter;
     use email::domain::service::EmailServiceImpl;
@@ -172,10 +172,9 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         crm_service.clone(),
         0,
     );
-    let user_repo = PgUserRepo::new(pool.clone());
-    let channels_service = ChannelServiceImpl::new(
-        PgCommsRepo::new(readonly_pool::ReadOnlyPool(pool.clone())),
-        user_repo,
+    let channels_service = ChannelListServiceImpl::new(
+        PgChannelsRepo::new(pool.clone()),
+        PgChannelsRepo::new(pool.clone()),
         frecency_storage,
     );
     let email_service_for_tools: Arc<ai_tools::ToolEmailService> = Arc::new(email_service.clone());
@@ -328,6 +327,8 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         team_tool_context: ai_tools::build_team_tool_context(pool.clone()),
         schedule_tool_context: ai_tools::no_op_schedule_context(),
         anthropic_tool_context: ai_tools::build_anthropic_tool_context_test(),
+        recorder: ai_usage::pg_recorder(pool.clone()),
+        usage_context: ai_usage::UsageContext::system(ai_usage::AiFeature::Chat),
     };
     let all_tools = ai_tools::all_tools();
     let all_tools_toolset = all_tools.toolset.clone();
@@ -340,6 +341,10 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         memory_repo,
         tool_service_context.clone(),
         all_tools,
+    ));
+
+    let usage_service = Arc::new(ai_usage::domain::service::UsageServiceImpl::new(
+        ai_usage::outbound::PgUsageRepo::new(pool.clone()),
     ));
 
     let api_context = ApiContext {
@@ -364,6 +369,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         stream_repo: MockStreamRepo::new(),
         document_tool_context: document_tool_context.clone(),
         memory_service,
+        usage_service,
         properties_tool_context,
         email_tool_context,
         call_tool_context,
@@ -387,8 +393,8 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
                     Arc::new(chat::outbound::postgres::PgChatRepo::new(pool.clone())),
                     entity_access_service.clone(),
                 ),
-                channel: comms::inbound::attachment::CommsAttachmentService::new(
-                    Arc::new(PgCommsRepo::new(readonly_pool::ReadOnlyPool(pool.clone()))),
+                channel: channels::inbound::attachment::ChannelAttachmentService::new(
+                    Arc::new(PgChannelsRepo::new(pool.clone())),
                     entity_access_service.clone(),
                 ),
                 static_file: static_file::inbound::attachment::StaticFileAttachmentService::new(

@@ -40,6 +40,17 @@ pub(crate) async fn register_watch(
             .text()
             .await
             .unwrap_or_else(|_| "Failed to read error body".to_string());
+
+        // Gmail permits only one active push channel per mailbox; a watch left over from a
+        // prior registration makes a fresh watch fail with a 400 carrying this message. Map
+        // it to a typed Conflict so callers can stop the stale watch and retry rather than
+        // matching the response body themselves.
+        if status == reqwest::StatusCode::BAD_REQUEST
+            && error_body.contains("push notification client allowed")
+        {
+            return Err(GmailError::Conflict(error_body));
+        }
+
         return Err(GmailError::ApiError(format!(
             "({}): {}",
             status, error_body

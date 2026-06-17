@@ -36,6 +36,7 @@ bytes = { workspace = true }
 bzip2 = { workspace = true, default-features = false, features = [
   "libbz2-rs-sys",
 ] }
+ai_usage = { path = "../ai_usage" }
 analytics_client = { path = "../analytics_client" }
 cal = { path = "../cal", features = ["axum", "outbound"] }
 call = { path = "../call" }
@@ -44,7 +45,6 @@ channels = { path = "../channels", features = ["inbound", "outbound"] }
 chrono = { workspace = true }
 clap = { workspace = true }
 cloudfront_sign = { workspace = true }
-comms = { path = "../comms", features = ["inbound", "outbound"] }
 comms_db_client = { path = "../comms_db_client" }
 contacts = { path = "../contacts" }
 connection = { path = "../connection", default-features = false, features = [
@@ -148,6 +148,8 @@ utoipa = { workspace = true, features = ["axum_extras"] }
 utoipa-swagger-ui = { workspace = true, features = ["axum"] }
 uuid = { workspace = true }
 zip = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+macro_config = { path = "../macro_config" }
 
 [dev-dependencies]
 cool_asserts = "2"

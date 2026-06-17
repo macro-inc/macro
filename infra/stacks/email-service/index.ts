@@ -624,6 +624,9 @@ new EmailPubSubWorkers('email-pubsub-workers', {
 
 const DELETE_UNUSED_AFTER_DAYS = config.require(`delete_unused_after_days`);
 const DELETE_INACTIVE_AFTER_DAYS = config.require(`delete_inactive_after_days`);
+const INBOX_HEALTH_POLL_INTERVAL_HOURS = config.require(
+  `inbox_health_poll_interval_hours`
+);
 
 const emailRefreshHandler = new EmailRefreshHandler('email-refresh-handler', {
   queueArns: [linkManagerQueueArn],
@@ -635,6 +638,7 @@ const emailRefreshHandler = new EmailRefreshHandler('email-refresh-handler', {
     RUST_LOG: 'email_refresh_handler=info',
     DELETE_UNUSED_AFTER_DAYS: pulumi.interpolate`${DELETE_UNUSED_AFTER_DAYS}`,
     DELETE_INACTIVE_AFTER_DAYS: pulumi.interpolate`${DELETE_INACTIVE_AFTER_DAYS}`,
+    INBOX_HEALTH_POLL_INTERVAL_HOURS: pulumi.interpolate`${INBOX_HEALTH_POLL_INTERVAL_HOURS}`,
   },
   tags,
 });

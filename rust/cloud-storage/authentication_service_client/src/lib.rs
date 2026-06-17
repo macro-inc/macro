@@ -1,5 +1,7 @@
+pub mod delete_inbox_grant_user;
 pub mod error;
 pub mod google_access_token;
+pub mod relocate_inbox_grant;
 pub mod unlink;
 pub mod users;
 
