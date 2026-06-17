@@ -3774,6 +3774,7 @@ dependencies = [
  "lexical_client",
  "macro_aws_config",
  "macro_entrypoint",
+ "macro_env_var",
  "macro_service_urls",
  "model",
  "s3_key",
