@@ -107,6 +107,14 @@ type Token = {
 };
 
 const CodeHighlightShim = {
+  createEmptyLinePlaceholder: (): Node => {
+    const spanNode = document.createElement('span');
+    spanNode.classList.add('md-code-empty-line');
+    spanNode.setAttribute('aria-hidden', 'true');
+    spanNode.innerText = '\u200B';
+    return spanNode;
+  },
+
   /**
    * Get highlight spans from the Prism tokens.
    */
@@ -116,6 +124,7 @@ const CodeHighlightShim = {
     theme: EditorThemeClasses
   ): Node[] => {
     const nodes: Node[] = [];
+    let atLineStart = true;
     for (const token of tokens) {
       if (typeof token === 'string') {
         const partials = token.split(/(\n|\t)/);
@@ -123,12 +132,17 @@ const CodeHighlightShim = {
         for (let i = 0; i < partialsLength; i++) {
           const part = partials[i];
           if (part === '\n' || part === '\r\n') {
+            if (atLineStart) {
+              nodes.push(CodeHighlightShim.createEmptyLinePlaceholder());
+            }
             nodes.push(document.createElement('br'));
+            atLineStart = true;
           } else if (part === '\t') {
             const tabNode = document.createElement('span');
             const className = theme.tab;
             if (className) tabNode.classList.add(className);
             nodes.push(tabNode);
+            atLineStart = false;
           } else if (part.length > 0) {
             const spanNode = document.createElement('span');
             const className = type
@@ -137,6 +151,7 @@ const CodeHighlightShim = {
             if (className) spanNode.classList.add(className);
             spanNode.innerText = part;
             nodes.push(spanNode);
+            atLineStart = false;
           }
         }
       } else {
@@ -151,6 +166,9 @@ const CodeHighlightShim = {
           );
         }
       }
+    }
+    if (nodes.length === 0) {
+      nodes.push(CodeHighlightShim.createEmptyLinePlaceholder());
     }
     return nodes;
   },
