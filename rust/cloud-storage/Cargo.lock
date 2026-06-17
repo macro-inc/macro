@@ -3621,6 +3621,7 @@ dependencies = [
  "macro_project_utils",
  "macro_service_urls",
  "macro_sha_count_client",
+ "macro_tower_layers",
  "macro_user_id",
  "macro_uuid",
  "mockall",
