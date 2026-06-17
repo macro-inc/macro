@@ -365,6 +365,7 @@ async fn test_expanded_soup_by_ids(pool: Pool<Postgres>) {
             | SoupItem::Project(_)
             | SoupItem::EmailThread(_)
             | SoupItem::Channel(_)
+            | SoupItem::ChannelThread(_)
             | SoupItem::Call(_)
             | SoupItem::CrmCompany(_)
             | SoupItem::ForeignEntity(_) => None,
