@@ -5070,6 +5070,7 @@ dependencies = [
  "jsonwebtoken 10.3.0",
  "macro_db_migrator",
  "macro_env",
+ "macro_env_var",
  "macro_service_urls",
  "macro_user_id",
  "macro_uuid",
