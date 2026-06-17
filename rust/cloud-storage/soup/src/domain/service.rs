@@ -7,7 +7,10 @@ use crate::domain::{
     ports::{SoupOutput, SoupRepo, SoupService},
 };
 use call::domain::{models::GetCallRecordsRequest, ports::CallRecordQueryService};
-use channels::domain::{models::GetChannelsRequest, ports::ChannelListService};
+use channels::domain::{
+    models::{GetChannelsRequest, GetThreadReplyRowsRequest},
+    ports::ChannelListService,
+};
 use cowlike::CowLike;
 use crm::domain::service::CrmService;
 use doppleganger::Mirror;
@@ -32,7 +35,7 @@ use models_pagination::{
 };
 use models_soup::{
     call_record::SoupCallRecord,
-    comms::SoupChannel,
+    comms::{SoupChannel, SoupChannelThread},
     crm_company::SoupCrmCompany,
     email_thread::{
         SoupAttachment, SoupContact, SoupEmailThreadPreview, SoupEnrichedEmailThreadPreview,
@@ -401,6 +404,30 @@ where
     }
 
     #[tracing::instrument(err, skip(self, req))]
+    async fn handle_comms_thread_request(
+        &self,
+        req: Option<GetThreadReplyRowsRequest>,
+    ) -> Result<impl Iterator<Item = FrecencySoupItem>, SoupErr> {
+        let Some(req) = req else {
+            return Ok(Either::Left(None.into_iter()));
+        };
+
+        Ok(Either::Right(
+            self.comms_service
+                .get_thread_reply_rows(req)
+                .await
+                .map_err(|_| SoupErr::CommsErr)?
+                .into_iter()
+                .map(|rows| FrecencySoupItem {
+                    item: SoupItem::ChannelThread(SoupChannelThread::new_from_thread_reply_rows(
+                        rows,
+                    )),
+                    frecency_score: None,
+                }),
+        ))
+    }
+
+    #[tracing::instrument(err, skip(self, req))]
     async fn handle_crm_company_request(
         &self,
         req: Option<GetCrmCompaniesRequest>,
@@ -524,6 +551,7 @@ where
         let foreign_entity_query = req.build_foreign_entity_query();
         let email_request = req.build_email_request(team_receipt);
         let comms_request = req.build_comms_request();
+        let comms_thread_request = req.build_comms_thread_request();
         let call_request = req.build_call_request();
 
         match req.cursor {
@@ -543,6 +571,8 @@ where
 
                 let comms_soup_fut = self.handle_comms_request(comms_request);
 
+                let comms_thread_soup_fut = self.handle_comms_thread_request(comms_thread_request);
+
                 let call_soup_fut = self.handle_call_request(call_request);
 
                 let crm_company_soup_fut = self.handle_crm_company_request(crm_company_request);
@@ -558,6 +588,7 @@ where
                     main_soup,
                     email_soup,
                     comms_soup,
+                    comms_thread_soup,
                     call_soup,
                     crm_company_soup,
                     foreign_entity_soup,
@@ -565,6 +596,7 @@ where
                     main_soup_fut,
                     email_soup_fut,
                     comms_soup_fut,
+                    comms_thread_soup_fut,
                     call_soup_fut,
                     crm_company_soup_fut,
                     foreign_entity_soup_fut,
@@ -573,6 +605,7 @@ where
                 let page = main_soup?
                     .chain(email_soup?)
                     .chain(comms_soup?)
+                    .chain(comms_thread_soup?)
                     .chain(call_soup?)
                     .chain(crm_company_soup?)
                     .chain(foreign_entity_soup?)

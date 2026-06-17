@@ -1192,6 +1192,67 @@ pub struct GetChannelsParams {
     query: Query<Uuid, SimpleSortMethod, LiteralTree<ChannelLiteral>>,
 }
 
+/// Channel thread reply rows request.
+#[cfg(feature = "list")]
+#[derive(Debug)]
+pub struct GetThreadReplyRowsRequest {
+    /// Requesting user id.
+    pub macro_id: MacroUserIdStr<'static>,
+    /// Optional result limit.
+    pub limit: Option<u32>,
+    /// Cursor, sort, and channel/message-level filter.
+    pub query: Query<Uuid, SimpleSortMethod, LiteralTree<ChannelLiteral>>,
+}
+
+#[cfg(feature = "list")]
+impl GetThreadReplyRowsRequest {
+    /// Convert into repository params.
+    pub fn into_params(self) -> GetThreadReplyRowsParams {
+        GetThreadReplyRowsParams {
+            macro_id: self.macro_id,
+            limit: self.limit,
+            query: self.query,
+        }
+    }
+}
+
+/// Channel thread reply rows repository parameters.
+#[cfg(feature = "list")]
+#[derive(Debug)]
+pub struct GetThreadReplyRowsParams {
+    macro_id: MacroUserIdStr<'static>,
+    limit: Option<u32>,
+    query: Query<Uuid, SimpleSortMethod, LiteralTree<ChannelLiteral>>,
+}
+
+#[cfg(feature = "list")]
+impl GetThreadReplyRowsParams {
+    /// Requesting user id.
+    pub fn user(&self) -> &MacroUserIdStr<'static> {
+        &self.macro_id
+    }
+
+    /// Optional result limit.
+    pub fn limit(&self) -> Option<u32> {
+        self.limit
+    }
+
+    /// Cursor, sort, and channel/message-level filter.
+    pub fn query(&self) -> &Query<Uuid, SimpleSortMethod, LiteralTree<ChannelLiteral>> {
+        &self.query
+    }
+}
+
+/// A top-level channel message plus all reply rows for Soup thread rendering.
+#[cfg(feature = "list")]
+#[derive(Debug, Clone)]
+pub struct ChannelThreadReplyRows {
+    /// Top-level parent message for the thread.
+    pub parent: TopLevelMessageRow,
+    /// Non-deleted replies in oldest-first order.
+    pub replies: Vec<ThreadReplyRow>,
+}
+
 #[cfg(feature = "list")]
 impl GetChannelsParams {
     /// Requesting user id.

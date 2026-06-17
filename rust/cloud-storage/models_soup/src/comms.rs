@@ -262,6 +262,36 @@ impl ChannelMessage {
             mentions: Vec::new(),
         }
     }
+
+    /// Converts a raw channels-domain top-level message row into a Soup channel message.
+    pub fn new_from_top_level_message_row(
+        row: channels::domain::models::TopLevelMessageRow,
+    ) -> Self {
+        Self {
+            message_id: row.id,
+            thread_id: None,
+            sender_id: row.sender_id,
+            content: row.content,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            deleted_at: row.deleted_at,
+            mentions: Vec::new(),
+        }
+    }
+
+    /// Converts a raw channels-domain thread reply row into a Soup channel message.
+    pub fn new_from_thread_reply_row(row: channels::domain::models::ThreadReplyRow) -> Self {
+        Self {
+            message_id: row.id,
+            thread_id: Some(row.thread_id),
+            sender_id: row.sender_id,
+            content: row.content,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            deleted_at: None,
+            mentions: Vec::new(),
+        }
+    }
 }
 
 impl LatestMessage {
@@ -369,6 +399,22 @@ impl SoupChannelThread {
             messages: replies
                 .into_iter()
                 .map(|reply| ChannelMessage::new_from_thread_reply(parent_id, reply))
+                .collect(),
+        }
+    }
+
+    /// Converts raw channels-domain parent/reply rows into a Soup thread.
+    pub fn new_from_thread_reply_rows(
+        rows: channels::domain::models::ChannelThreadReplyRows,
+    ) -> Self {
+        let channel_id = rows.parent.channel_id;
+        Self {
+            channel_id: ChannelId(channel_id),
+            root_message: ChannelMessage::new_from_top_level_message_row(rows.parent),
+            messages: rows
+                .replies
+                .into_iter()
+                .map(ChannelMessage::new_from_thread_reply_row)
                 .collect(),
         }
     }

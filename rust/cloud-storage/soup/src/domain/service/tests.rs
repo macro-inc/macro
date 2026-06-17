@@ -1,6 +1,9 @@
 use crate::domain::models::FrecencySoupItem;
 use crate::domain::ports::MockSoupRepo;
-use channels::domain::{models::GetChannelsRequest, ports::ChannelListService};
+use channels::domain::{
+    models::{ChannelThreadReplyRows, GetChannelsRequest, GetThreadReplyRowsRequest},
+    ports::ChannelListService,
+};
 use chrono::Days;
 use chrono::{DateTime, Utc};
 use cool_asserts::assert_matches;
@@ -64,6 +67,13 @@ impl ChannelListService for NoopCommsService {
         &self,
         _user: MacroUserIdStr<'_>,
     ) -> Result<Vec<channels::domain::models::Activity>, Report> {
+        Ok(Vec::new())
+    }
+
+    async fn get_thread_reply_rows(
+        &self,
+        _req: GetThreadReplyRowsRequest,
+    ) -> Result<Vec<ChannelThreadReplyRows>, Report> {
         Ok(Vec::new())
     }
 
