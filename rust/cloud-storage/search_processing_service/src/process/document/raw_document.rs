@@ -22,7 +22,7 @@ use crate::{
     process::document::document_info::{DocumentInfo, get_document_info},
 };
 
-use super::SearchExtractorMessage;
+use super::{DocumentPropertiesUpdate, SearchExtractorMessage};
 
 async fn upsert_document(
     opensearch_client: &OpensearchClient,
@@ -416,6 +416,34 @@ pub async fn update_search_with_sync_document(
 
     upsert_document(opensearch_client, search_extractor_message, upserts).await?;
 
+    Ok(())
+}
+
+/// Refresh only the indexed `properties` of a document after a property
+/// mutation, without re-extracting its content.
+pub async fn update_search_with_property_update(
+    opensearch_client: &OpensearchClient,
+    db: &sqlx::Pool<sqlx::Postgres>,
+    message: &DocumentPropertiesUpdate,
+) -> anyhow::Result<()> {
+    let entity_type = EntityType::from_str(&message.entity_type)
+        .with_context(|| format!("invalid entity_type '{}'", message.entity_type))?;
+    let properties = get_entity_properties_for_index(db, &message.document_id, entity_type)
+        .await
+        .context("failed to fetch properties for reindex")?;
+    let indexed: Vec<IndexedProperty> = properties
+        .into_iter()
+        .map(|p| IndexedProperty {
+            definition_id: p.definition_id,
+            values: p.values,
+            number_value: p.number_value,
+            date_value: p.date_value,
+        })
+        .collect();
+    opensearch_client
+        .update_document_properties(&message.document_id, &indexed)
+        .await
+        .context("failed to update document properties in search index")?;
     Ok(())
 }
 
