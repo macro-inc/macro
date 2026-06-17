@@ -6,6 +6,10 @@ use thiserror::Error;
 const APP_SECRETS_JSON_ENV: &str = "APP_SECRETS_JSON";
 
 #[allow(dead_code)]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "macro_env_var is the sanctioned wrapper around std::env::var"
+)]
 fn read_std_env(s: &'static str) -> Result<String, std::env::VarError> {
     std::env::var(s)
 }
@@ -86,6 +90,10 @@ mod testing_harness {
         }
     }
 
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "test harness falls back to the same sanctioned std::env::var wrapper behavior"
+    )]
     fn get_env(s: &'static str) -> Result<String, std::env::VarError> {
         let cur_getter = MOCK_VAR_GETTER.replace(None);
         match cur_getter {
