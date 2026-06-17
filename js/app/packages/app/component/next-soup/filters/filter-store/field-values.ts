@@ -21,13 +21,10 @@ export const addFieldValues = (
     if (!value.length) continue;
 
     const existing = (target[key] ?? []) as unknown[];
-    const updated = [...existing];
-
-    for (const v of value) {
-      if (!updated.some((e) => deepEqual(e, v))) updated.push(v);
-    }
-
-    result[key] = updated;
+    // Keep duplicates as lightweight reference counts. Markdown and Snippets
+    // both contribute assoc:md; removing one filter must leave the other's
+    // backend query value in place.
+    result[key] = [...existing, ...value];
   }
 
   return result as FieldFilters;
@@ -53,10 +50,12 @@ export const removeFieldValues = (
     const existing = target[key] as unknown[];
     if (!value.length || !Array.isArray(existing)) continue;
 
-    const toRemove = value as unknown[];
-    const filtered = existing.filter(
-      (e) => !toRemove.some((v) => deepEqual(e, v))
-    );
+    const filtered = [...existing];
+    // Remove one occurrence per contributed value rather than every equal value.
+    for (const v of value as unknown[]) {
+      const index = filtered.findIndex((e) => deepEqual(e, v));
+      if (index !== -1) filtered.splice(index, 1);
+    }
 
     if (filtered.length === 0) {
       delete result[key];

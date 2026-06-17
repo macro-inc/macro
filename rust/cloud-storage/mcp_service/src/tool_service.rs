@@ -104,14 +104,14 @@ where
         .with_description(
             "Search, read, and create content across documents, emails, and messages in Macro.",
         );
-        info.instructions = Some(
+        info.instructions = Some(format!(
             "This server provides tools for interacting with a user's Macro workspace. \
              Use ContentSearch and NameSearch to find entities. \
              Use ReadContent, ReadMetadata, and ReadThread to read them. \
              Use CreateDocument to create new documents. \
-             Use ListEntities to browse recent items."
-                .into(),
-        );
+             Use ListEntities to browse recent items.\n\n{}",
+            prompt::MCP_INSTRUCTIONS,
+        ));
         info
     }
 

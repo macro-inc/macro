@@ -25,22 +25,16 @@ setUserThemes(
   })
 );
 
-export const [currentThemeId, setCurrentThemeId_] = makePersisted(
+export const [currentThemeId, setCurrentThemeId] = makePersisted(
   createSignal<string>(DEFAULT_DARK_THEME),
   {name: 'macro-selected-theme'}
 );
 
-// If theme should match system, when we set current theme, we also set the corresponding mode's theme
-// This avoids the issue where a user sets a theme, and then refreshes, and gets reverted to their preferred mode's theme.
-export const setCurrentThemeId = ( ...args: Parameters<typeof setCurrentThemeId_> ) => {
-  setCurrentThemeId_(...args);
-  if(themeShouldMatchSystem()){
-    systemMode() === 'dark' ? setDarkModeTheme(...args) : setLightModeTheme(...args);
-  }
-};
-
 export const themes = createMemo(() => [...DEFAULT_THEMES, ...userThemes()]);
 
+// Per-mode theme preferences, persisted to localStorage. Applied by
+// systemThemeEffect (themeUtils.ts) when themeShouldMatchSystem is on and the OS
+// color scheme is (or becomes) the matching mode.
 export const [lightModeTheme, setLightModeTheme] = makePersisted(
   createSignal<string>(DEFAULT_LIGHT_THEME),
   {name: 'macro-light-mode-theme'}
@@ -59,6 +53,8 @@ export const [themeShouldMatchSystem, setThemeShouldMatchSystem] = makePersisted
 const supportsMatchMedia =
   typeof window !== 'undefined' && typeof window.matchMedia === 'function';
 
+// Tracks the OS color scheme so the active theme can follow it when
+// themeShouldMatchSystem is on.
 export const [systemMode, setSystemMode] = createSignal<'dark' | 'light'>(
   supportsMatchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
     ? 'dark'
@@ -71,5 +67,15 @@ if (supportsMatchMedia) {
     setSystemMode(e.matches ? 'dark' : 'light');
   });
 }
+
+// Theme-list filters: whether light and/or dark themes are shown in the list.
+export const [showLightThemes, setShowLightThemes] = makePersisted(
+  createSignal<boolean>(true),
+  {name: 'macro-show-light-themes'}
+);
+export const [showDarkThemes, setShowDarkThemes] = makePersisted(
+  createSignal<boolean>(true),
+  {name: 'macro-show-dark-themes'}
+);
 
 export const [themeDepth, setThemeDepth] = createSignal<number>(0.15);

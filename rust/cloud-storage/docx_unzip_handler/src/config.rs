@@ -1,4 +1,13 @@
 use anyhow::Context;
+use macro_env_var::env_vars;
+
+env_vars! {
+    pub struct DatabaseUrl;
+    pub struct RedisUri;
+    pub struct DocumentStorageBucket;
+    pub struct WebSocketResponseLambda;
+    pub struct ConvertQueue;
+}
 
 /// The configuration parameters for the application.
 ///
@@ -27,15 +36,22 @@ pub struct Config {
 
 impl Config {
     pub fn from_env() -> anyhow::Result<Self> {
-        let database_url =
-            std::env::var("DATABASE_URL").context("DATABASE_URL must be provided")?;
-        let redis_uri = std::env::var("REDIS_URI").context("REDIS_URI must be provided")?;
-        let document_storage_bucket = std::env::var("DOCUMENT_STORAGE_BUCKET")
-            .context("DOCUMENT_STORAGE_BUCKET must be provided")?;
-        let web_socket_response_lambda = std::env::var("WEB_SOCKET_RESPONSE_LAMBDA")
-            .context("WEB_SOCKET_RESPONSE_LAMBDA must be provided")?;
-        let convert_queue =
-            std::env::var("CONVERT_QUEUE").context("CONVERT_QUEUE must be provided")?;
+        let database_url = DatabaseUrl::new()
+            .context("DATABASE_URL must be provided")?
+            .to_string();
+        let redis_uri = RedisUri::new()
+            .context("REDIS_URI must be provided")?
+            .to_string();
+        let document_storage_bucket = DocumentStorageBucket::new()
+            .context("DOCUMENT_STORAGE_BUCKET must be provided")?
+            .to_string();
+        let web_socket_response_lambda = WebSocketResponseLambda::new()
+            .context("WEB_SOCKET_RESPONSE_LAMBDA must be provided")?
+            .to_string();
+        let convert_queue = ConvertQueue::new()
+            .context("CONVERT_QUEUE must be provided")?
+            .to_string();
+
         Ok(Config {
             database_url,
             redis_uri,

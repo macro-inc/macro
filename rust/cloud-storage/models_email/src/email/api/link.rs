@@ -7,9 +7,12 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+#[cfg(test)]
+mod test;
+
 /// Coarse sync state for an inbox, used to render a one-line hint in the
-/// multi-inbox settings list. Derived from the link's `is_sync_active` flag and
-/// its most recent backfill job.
+/// multi-inbox settings list. Derived from the link's `is_sync_active` flag, its
+/// reauth health, and its most recent backfill job.
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum SyncStatus {
@@ -19,16 +22,28 @@ pub enum SyncStatus {
     UpToDate,
     /// The most recent backfill failed; the user can re-sync to recover.
     Error,
+    /// The link's Google grant has stopped working; the user must reconnect.
+    NeedsReauth,
     /// Syncing has been turned off for this inbox.
     Inactive,
 }
 
 impl SyncStatus {
-    /// Derives the sync status from the link's active flag and the status of its
-    /// most recent backfill job (if any).
-    pub fn derive(is_sync_active: bool, latest_job_status: Option<BackfillJobStatus>) -> Self {
+    /// Derives the sync status from the link's active flag, its reauth health,
+    /// and the status of its most recent backfill job (if any). A dead grant
+    /// takes precedence over backfill state because no sync can proceed until
+    /// the user reconnects.
+    pub fn derive(
+        is_sync_active: bool,
+        needs_reauth: bool,
+        latest_job_status: Option<BackfillJobStatus>,
+    ) -> Self {
         if !is_sync_active {
             return SyncStatus::Inactive;
+        }
+
+        if needs_reauth {
+            return SyncStatus::NeedsReauth;
         }
 
         match latest_job_status {
@@ -80,6 +95,9 @@ pub struct Link {
     pub provider: UserProvider,
     pub is_sync_active: bool,
     pub sync_status: SyncStatus,
+    /// Whether the link's Google grant needs to be reconnected. Drives the
+    /// per-inbox reconnect prompt independently of the sync-status badge.
+    pub needs_reauth: bool,
     pub signature: Option<String>,
     pub settings: Settings,
     pub is_primary: bool,
@@ -104,6 +122,7 @@ impl Link {
             provider: UserProvider::from(source.provider),
             is_sync_active: source.is_sync_active,
             sync_status,
+            needs_reauth: source.needs_reauth,
             signature,
             settings,
             is_primary: source.is_primary,

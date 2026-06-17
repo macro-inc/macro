@@ -1,0 +1,10 @@
+[package]
+name = "sync_service_bebop_schema"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+bebop-owned-all = []
+
+[dependencies]
+bebop = "3.1.3"

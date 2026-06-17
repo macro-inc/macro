@@ -6,6 +6,7 @@ version = "0.1.0"
 
 [dependencies]
 axum = { workspace = true }
+macro_env_var = { path = "../../macro_env_var" }
 native_app_service = { path = "../../native_app_service" }
 rootcause = { workspace = true }
 semver = { workspace = true }

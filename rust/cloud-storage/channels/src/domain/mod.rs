@@ -1,5 +1,8 @@
 /// Domain events emitted by channel workflows.
 pub mod events;
+/// Legacy channel list service implementation.
+#[cfg(feature = "list")]
+pub mod list_service;
 /// Domain models for channel messages.
 pub mod models;
 #[cfg(feature = "ports")]

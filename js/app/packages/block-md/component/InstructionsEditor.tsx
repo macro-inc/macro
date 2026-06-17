@@ -1,3 +1,4 @@
+import { SplitBottomPanel } from '@app/component/split-layout/components/SplitBottomPanel';
 import { markdownBlockErrorSignal } from '@block-md/signal/error';
 import { revisionsSignal, rewriteSignal } from '@block-md/signal/rewriteSignal';
 import { useBlockId } from '@core/block';
@@ -74,11 +75,12 @@ import type { MarkdownRewriteOutput } from '../signal/rewriteSignal';
 import { useBlockSave, useSaveMarkdownDocument } from '../signal/save';
 import { MarkdownCollabProvider } from './MarkdownCollabProvider';
 
-const DEBUG = false;
 const EDITOR_PADDING_BOTTOM = 120;
 
 export function InstructionsEditor(props: {
-  loroManager: Accessor<LoroManager | undefined>;
+  loroManager: LoroManager;
+  showLexicalStateDebugger?: boolean;
+  onLexicalStateDebuggerClose?: () => void;
 }) {
   const blockData = blockDataSignal.get;
   const blockId = useBlockId();
@@ -158,7 +160,7 @@ export function InstructionsEditor(props: {
     if (!IS_SYNC()) {
       return createPeerIdValidator(() => undefined, false);
     }
-    const peerId = () => props.loroManager()?.getPeerIdStr();
+    const peerId = () => props.loroManager.getPeerIdStr();
     return createPeerIdValidator(peerId, true);
   };
 
@@ -173,7 +175,7 @@ export function InstructionsEditor(props: {
     .markdownShortcuts()
     .delete()
     .state<EditorState>(setState, 'json')
-    .history(400, props.loroManager())
+    .history(400, props.loroManager)
     .use(userPromptPlugin)
     .use(
       emojisPlugin({
@@ -211,7 +213,7 @@ export function InstructionsEditor(props: {
     );
 
   if (ENABLE_MARKDOWN_LIVE_COLLABORATION) {
-    const peerId = () => props.loroManager()?.getPeerIdStr();
+    const peerId = () => props.loroManager.getPeerIdStr();
     plugins.use(
       peerIdPlugin({
         peerId,
@@ -442,10 +444,16 @@ export function InstructionsEditor(props: {
           sourceDocumentId={blockId}
         />
 
-        <Show when={DEBUG}>
+        <Show when={props.showLexicalStateDebugger}>
           <Show when={state()}>
             {(state) => (
-              <LexicalStateDebugger state={state()}></LexicalStateDebugger>
+              <SplitBottomPanel
+                id="lexical-state-debugger"
+                title="Lexical state debugger"
+                onClose={props.onLexicalStateDebuggerClose}
+              >
+                <LexicalStateDebugger state={state()}></LexicalStateDebugger>
+              </SplitBottomPanel>
             )}
           </Show>
         </Show>

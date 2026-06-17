@@ -89,6 +89,34 @@ function createGithubPrNotification(): UnifiedNotification {
   });
 }
 
+function createGithubPrCheckRunNotification(): UnifiedNotification {
+  return baseNotification({
+    entity_id: '123e4567-e89b-12d3-a456-426614174000',
+    entity_type: 'foreign_entity',
+    notification_event_type: 'github_pr_check_run',
+    notification_metadata: {
+      tag: 'github_pr_check_run',
+      content: {
+        checkName: 'CI / tests',
+        checkRunGithubId: 987654321,
+        checkStatus: 'completed',
+        checkUrl: 'https://github.com/macro/macro/runs/987654321',
+        completedAt: '2026-06-15T20:00:00Z',
+        conclusion: 'success',
+        displayName: 'macro/macro#42',
+        foreignEntityId: '123e4567-e89b-12d3-a456-426614174000',
+        githubKey: 'macro/macro/pull/42',
+        number: 42,
+        owner: 'macro',
+        repo: 'macro',
+        state: 'completed',
+        title: 'Add notification support',
+        url: 'https://github.com/macro/macro/pull/42',
+      },
+    },
+  });
+}
+
 function createNotificationInterface(
   showNotification: PlatformNotificationState['showNotification']
 ): PlatformNotificationState {
@@ -117,6 +145,21 @@ describe('maybeHandlePlatformNotification', () => {
 
     await maybeHandlePlatformNotification(
       createGithubPrNotification(),
+      notificationInterface,
+      {} as SplitManager
+    );
+
+    expect(showNotification).not.toHaveBeenCalled();
+  });
+
+  it('skips GitHub PR check-run events as browser notifications', async () => {
+    const showNotification = vi.fn<
+      PlatformNotificationState['showNotification']
+    >(async () => 'not-granted');
+    const notificationInterface = createNotificationInterface(showNotification);
+
+    await maybeHandlePlatformNotification(
+      createGithubPrCheckRunNotification(),
       notificationInterface,
       {} as SplitManager
     );

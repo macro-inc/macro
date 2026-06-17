@@ -28,6 +28,8 @@ pub struct DbLink {
     pub provider: DbUserProvider,
     pub is_sync_active: bool,
     pub is_primary: bool,
+    pub needs_reauth: bool,
+    pub last_sync_error_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -49,6 +51,8 @@ impl From<models_email::email::service::link::Link> for DbLink {
             },
             is_sync_active: service_link.is_sync_active,
             is_primary: service_link.is_primary,
+            needs_reauth: service_link.needs_reauth,
+            last_sync_error_at: service_link.last_sync_error_at,
             created_at: service_link.created_at,
             updated_at: service_link.updated_at,
         }
@@ -67,6 +71,8 @@ impl TryFrom<DbLink> for models_email::email::service::link::Link {
             provider,
             is_sync_active,
             is_primary,
+            needs_reauth,
+            last_sync_error_at,
             created_at,
             updated_at,
         } = value;
@@ -80,6 +86,8 @@ impl TryFrom<DbLink> for models_email::email::service::link::Link {
             },
             is_sync_active,
             is_primary,
+            needs_reauth,
+            last_sync_error_at,
             created_at,
             updated_at,
         })

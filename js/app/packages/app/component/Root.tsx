@@ -16,6 +16,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
 import { ChannelsContextProvider } from '@core/context/channels';
 import { QuickAccessProvider } from '@core/context/quickAccess';
+import { TeamContextProvider } from '@core/context/team';
 import {
   UserContextProvider,
   useUserId,
@@ -420,6 +421,9 @@ function UserInfoSideEffects() {
   // Set user info for observability and analytics
   const userInfo = useUserInfo();
 
+  // Keep the active theme following the OS color scheme when auto-detect is on.
+  systemThemeEffect();
+
   let identified = false;
   createEffect(
     on(userInfo, (user) => {
@@ -501,7 +505,6 @@ export function Root() {
   });
 
   onMount(() => {
-    systemThemeEffect();
     applyTheme(currentThemeId());
     ensureMinimalThemeContrast();
   });
@@ -521,39 +524,41 @@ export function Root() {
                 <GlobalShareInboxConflictDialog />
                 <QuerySyncProviderWithUserId />
                 <UserInfoSideEffects />
-                <ConfiguredGlobalAppStateProvider>
-                  <MutationUndoProvider>
-                    <ChannelsContextProvider>
-                      <CallProvider>
-                        <CallKitSync />
-                        <CallStartedNotifier />
-                        <QuickAccessProvider>
-                          <SearchProvider>
-                            <ChatAttachmentsInit />
-                            <ReactiveFavicon />
-                            <Title>{tabTitle()}</Title>
-                            <Suspense>
-                              <IsomorphicRouter
-                                transformUrl={transformShortIdInUrlPathname}
-                                root={Layout}
-                                rootPreload={rootPreload}
-                                base={ROUTER_BASE}
-                              >
-                                {{
-                                  path: '/',
-                                  component: TauriRouteListener,
-                                  children: ROUTES,
-                                }}
-                              </IsomorphicRouter>
-                            </Suspense>
-                            <InitialInteractiveOnboardingModal />
-                            <ToastRegion />
-                          </SearchProvider>
-                        </QuickAccessProvider>
-                      </CallProvider>
-                    </ChannelsContextProvider>
-                  </MutationUndoProvider>
-                </ConfiguredGlobalAppStateProvider>
+                <TeamContextProvider>
+                  <ConfiguredGlobalAppStateProvider>
+                    <MutationUndoProvider>
+                      <ChannelsContextProvider>
+                        <CallProvider>
+                          <CallKitSync />
+                          <CallStartedNotifier />
+                          <QuickAccessProvider>
+                            <SearchProvider>
+                              <ChatAttachmentsInit />
+                              <ReactiveFavicon />
+                              <Title>{tabTitle()}</Title>
+                              <Suspense>
+                                <IsomorphicRouter
+                                  transformUrl={transformShortIdInUrlPathname}
+                                  root={Layout}
+                                  rootPreload={rootPreload}
+                                  base={ROUTER_BASE}
+                                >
+                                  {{
+                                    path: '/',
+                                    component: TauriRouteListener,
+                                    children: ROUTES,
+                                  }}
+                                </IsomorphicRouter>
+                              </Suspense>
+                              <InitialInteractiveOnboardingModal />
+                              <ToastRegion />
+                            </SearchProvider>
+                          </QuickAccessProvider>
+                        </CallProvider>
+                      </ChannelsContextProvider>
+                    </MutationUndoProvider>
+                  </ConfiguredGlobalAppStateProvider>
+                </TeamContextProvider>
               </UserContextProvider>
             </EntityProvider>
           </PosthogProvider>

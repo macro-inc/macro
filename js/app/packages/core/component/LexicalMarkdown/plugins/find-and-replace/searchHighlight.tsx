@@ -1,9 +1,16 @@
 import { FindAndReplaceStore } from '@block-md/signal/findAndReplaceStore';
 import { mdStore } from '@block-md/signal/markdownBlockData';
+import { mergeRegister } from '@lexical/utils';
 import { createCallback } from '@solid-primitives/rootless';
 import { cn } from '@ui';
-import { createEffect, For, onCleanup, onMount } from 'solid-js';
+import { createEffect, For } from 'solid-js';
 import { Portal } from 'solid-js/web';
+import {
+  autoRegister,
+  lazyRegister,
+  registerEditorWidthObserver,
+  registerInternalLayoutShiftListener,
+} from '../shared/utils';
 import type { NodekeyOffset } from './findAndReplacePlugin';
 import {
   type FloatingStyle,
@@ -17,6 +24,21 @@ function getFirstChild(htmlEl: ChildNode | null | undefined) {
   return htmlEl;
 }
 
+function registerEventListener<K extends keyof HTMLElementEventMap>(
+  target: HTMLElement | null,
+  type: K,
+  listener: (event: HTMLElementEventMap[K]) => void
+): () => void;
+function registerEventListener(
+  target: HTMLElement | null,
+  type: string,
+  listener: EventListener
+) {
+  if (!target) return () => {};
+  target.addEventListener(type, listener);
+  return () => target.removeEventListener(type, listener);
+}
+
 export function SearchHighlight({
   anchorElem = document.body,
 }: {
@@ -25,6 +47,7 @@ export function SearchHighlight({
   const mdData = mdStore.get;
   const editor = () => mdData.editor;
   let stateListOffsetRef: NodekeyOffset[] = [];
+  let animationFrame: number | undefined;
 
   const updateTextFormatFloatingToolbar = createCallback(
     (listOffset: NodekeyOffset[]) => {
@@ -67,37 +90,52 @@ export function SearchHighlight({
     }
   );
 
-  createEffect(() => {
-    stateListOffsetRef = FindAndReplaceStore.get.listOffset;
-    updateTextFormatFloatingToolbar(stateListOffsetRef);
-  });
-
-  onMount(() => {
-    const scrollerElem = anchorElem.parentElement;
-
-    const update = () => {
-      if (stateListOffsetRef) {
-        const editorInstance = editor();
-        if (!editorInstance) return;
-
-        editorInstance.getEditorState().read(() => {
-          updateTextFormatFloatingToolbar(stateListOffsetRef);
-        });
-      }
-    };
-
-    window.addEventListener('resize', update);
-    if (scrollerElem) {
-      scrollerElem.addEventListener('scroll', update);
+  const update = createCallback(() => {
+    if (animationFrame !== undefined) {
+      cancelAnimationFrame(animationFrame);
     }
 
-    onCleanup(() => {
-      window.removeEventListener('resize', update);
-      if (scrollerElem) {
-        scrollerElem.removeEventListener('scroll', update);
-      }
+    animationFrame = requestAnimationFrame(() => {
+      animationFrame = undefined;
+      const editorInstance = editor();
+      if (!editorInstance) return;
+
+      editorInstance.getEditorState().read(() => {
+        updateTextFormatFloatingToolbar(stateListOffsetRef);
+      });
     });
   });
+
+  createEffect(() => {
+    stateListOffsetRef = FindAndReplaceStore.get.listOffset;
+    update();
+  });
+
+  lazyRegister(editor, (editorInstance) =>
+    mergeRegister(
+      registerInternalLayoutShiftListener(editorInstance, update),
+      registerEditorWidthObserver(
+        editorInstance,
+        update,
+        '[data-block-content]'
+      ),
+      editorInstance.registerUpdateListener(
+        ({ dirtyElements, dirtyLeaves }) => {
+          if (dirtyElements.size === 0 && dirtyLeaves.size === 0) return;
+          update();
+        }
+      )
+    )
+  );
+
+  autoRegister(
+    registerEventListener(anchorElem.parentElement, 'scroll', update),
+    () => {
+      if (animationFrame !== undefined) {
+        cancelAnimationFrame(animationFrame);
+      }
+    }
+  );
 
   return null;
 }
@@ -107,7 +145,6 @@ export function FloatingSearchHighlight({
 }: {
   anchorElem?: HTMLElement;
 }) {
-  // SCUFFED THEME: how should we define the highlight color?
   return (
     <Portal mount={anchorElem}>
       <For each={FindAndReplaceStore.get.styles}>
@@ -117,8 +154,8 @@ export function FloatingSearchHighlight({
             class={cn(
               'z-150 m-0 text-transparent h-4.5 absolute top-0 left-0 opacity-50 pointer-events-none',
               item.idx === FindAndReplaceStore.get.currentMatch + 1
-                ? 'bg-[oklch(0.827_0.119_306.383)]'
-                : 'bg-[oklch(0.827_0.119_306.383)]/50'
+                ? 'bg-accent'
+                : 'bg-accent/50'
             )}
           />
         )}

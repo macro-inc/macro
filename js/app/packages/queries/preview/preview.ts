@@ -8,7 +8,12 @@ import { queryClient } from '../client';
 import { previewDataLoader } from './dataloader';
 import { defaultNameTransform, fetchMessageContext } from './fetchers';
 import { previewKeys } from './keys';
-import type { AccessiblePreviewItem, ItemEntity, PreviewItem } from './types';
+import {
+  type AccessiblePreviewItem,
+  type ItemEntity,
+  isAccessiblePreviewItem,
+  type PreviewItem,
+} from './types';
 
 // DEBUG VARS
 const SIMULATE_BACKEND_DELAY_MS = 0;
@@ -93,6 +98,37 @@ export function useItemPreview(item: Accessor<ItemEntity>) {
   return [preview] as const;
 }
 
+/** Stale time for live display names (e.g. open-document titles), which
+ * should pick up external renames on remount rather than waiting out the
+ * 24h preview default. */
+const RAW_NAME_STALE_TIME = 5 * 60 * 1000;
+
+/**
+ * Subscribe to an item's raw (untransformed) display name.
+ * Returns undefined while loading or when the item is inaccessible, so
+ * callers can fall through to their own defaults. Optimistic rename and
+ * file-type mutations write to this cache via `setPreviewName` /
+ * `setPreviewFileType`.
+ */
+export function useItemRawName(
+  item: Accessor<{ id: string; type?: ItemType }>
+): Accessor<string | undefined> {
+  const query = useQuery(() => {
+    const { id, type } = item();
+    const entity: ItemEntity = type === 'channel' ? { id, type } : { id, type };
+    return {
+      ...itemPreviewQueryOptions(entity),
+      staleTime: RAW_NAME_STALE_TIME,
+    };
+  });
+
+  return () => {
+    const data = queryReadyGate(query) ? query.data : undefined;
+    if (!data || !isAccessiblePreviewItem(data)) return undefined;
+    return data.rawName;
+  };
+}
+
 /** Invalidate preview for the given item id. if no id is provided, invalidates all previews */
 export function invalidatePreview(itemId?: string) {
   if (!itemId)
@@ -139,14 +175,17 @@ export function setPreviewName({
   itemType?: ItemType;
 }) {
   const prev = getPreviewData(itemId);
-  if (prev)
+  // only merge into accessible entries: a cached no_access/does_not_exist
+  // (e.g. a fetch that raced backend propagation of a new item) would
+  // otherwise swallow the optimistic name, so fall through and overwrite
+  if (prev && isAccessiblePreviewItem(prev))
     return setPreviewData(itemId, (prev) => ({
       ...prev,
       rawName: name,
       name,
     }));
 
-  if (!itemType) {
+  if (!itemType && !prev) {
     console.warn('no preview item type provided for cache miss, using default');
   }
 
@@ -156,16 +195,18 @@ export function setPreviewName({
     name,
     loading: false,
     access: 'access',
-    type: itemType ?? DEFAULT_ITEM_TYPE,
+    type: itemType ?? prev?.type ?? DEFAULT_ITEM_TYPE,
   };
 
   // if the item isn't in the cache, we can optimistically create a new item
   const res = setPreviewData(itemId, (_prev) => defaultPreviewItem);
 
-  // invalidate the item so that we can refetch on next render
-  // note that we cannot directly call the fetch here because the item name is not necessarily updated on the backend
+  // mark stale for the next natural refetch (mount/focus) without refetching
+  // active observers now: the backend may not have processed the rename yet,
+  // so an immediate refetch could clobber the optimistic name with the old one
   queryClient.invalidateQueries({
     queryKey: previewKeys.item(itemId).queryKey,
+    refetchType: 'none',
   });
 
   return res;
@@ -177,7 +218,11 @@ export function setPreviewName({
  * before the backend has fully propagated the new item.
  *
  * Call this immediately after creating an item to ensure the preview cache
- * has valid data before any components try to fetch it.
+ * has valid data before any components try to fetch it. The seed is stored
+ * as fresh data: it carries exactly what was sent to the backend
+ * (name/fileType/subType), so there is nothing to refetch, and an immediate
+ * revalidation could race propagation and clobber the seed with
+ * 'does_not_exist'. Server truth reconciles through normal staleness.
  *
  * @param itemId - The unique identifier of the newly created item
  * @param itemType - The type of item ('document', 'chat', 'project', etc.)
@@ -232,14 +277,5 @@ export function setPreviewOnCreate({
     updatedAt: new Date().toISOString(),
   };
 
-  // Optimistically set the preview data
   setPreviewData(itemId, (_prev) => defaultPreviewItem);
-
-  // Schedule a background refetch to get the real data from the server
-  // Use a small delay to give the backend time to propagate
-  setTimeout(() => {
-    queryClient.invalidateQueries({
-      queryKey: previewKeys.item(itemId).queryKey,
-    });
-  }, 100);
 }

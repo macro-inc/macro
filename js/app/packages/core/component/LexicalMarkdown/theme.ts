@@ -67,7 +67,8 @@ export const theme: EditorThemeClasses = {
     listitemChecked: 'checked md-strike text-ink-extra-muted',
   },
   link: 'text-accent underline hover:underline cursor-default underline-offset-[0.15em]',
-  quote: 'md-quote border-l-2 border-edge pl-4 py-2 italic text-ink-muted my-4',
+  quote:
+    'md-quote border-l-2 border-edge pl-4 py-2 italic text-ink-muted my-4 first:mt-1.5',
   code: 'bg-message font-mono p-3 rounded block md-code-box before:text-ink-extra-muted/70 whitespace-pre mb-4',
   static: {
     'code-container': 'bg-message rounded',
@@ -92,7 +93,7 @@ export const theme: EditorThemeClasses = {
   tableFrozenColumn: 'md-table-frozen-column',
   tableFrozenRow: 'md-table-frozen-row',
   tableRowStriping: 'md-table-row-striping',
-  tableScrollableWrapper: 'md-table-scrollable-wrapper',
+  tableScrollableWrapper: 'md-table-scrollable-wrapper first:mt-1.5',
   tableSelected: 'md-table-selected',
   tableSelection: 'md-table-selection',
   mark: 'md-mark',

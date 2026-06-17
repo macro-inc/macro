@@ -284,7 +284,7 @@ async fn remove_user_from_org_channels(
         remove_participant(
             db,
             RemoveParticipantOptions {
-                channel_id: &channel.id.0,
+                channel_id: &channel.id,
                 user_id,
             },
         )

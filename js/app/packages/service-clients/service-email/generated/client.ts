@@ -1756,6 +1756,68 @@ export const listLinks = async (
 };
 
 /**
+ * Probes run in the background and the response returns immediately to stay off the
+load path; each persisted flag is picked up by the next links read. Probes are
+throttled per link in Redis so frequent calls — and many sharers of a shared inbox —
+collapse to one refresh per window.
+ * @summary Probes the live auth state of each of the caller's inboxes (owned and delegated)
+against the auth service and records the result on each link. A grant that died
+while the caller was inactive is detected here within minutes instead of waiting on
+the daily refresh sweep; the side effects (clearing or setting the reauth flag, and
+the one-time reauth fan-out) are handled by `fetch_token_or_mark_reauth_no_cache`.
+ */
+export type healthCheckLinksResponse202 = {
+  data: EmptyResponse;
+  status: 202;
+};
+
+export type healthCheckLinksResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type healthCheckLinksResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type healthCheckLinksResponseSuccess = healthCheckLinksResponse202 & {
+  headers: Headers;
+};
+export type healthCheckLinksResponseError = (
+  | healthCheckLinksResponse401
+  | healthCheckLinksResponse500
+) & {
+  headers: Headers;
+};
+
+export type healthCheckLinksResponse =
+  | healthCheckLinksResponseSuccess
+  | healthCheckLinksResponseError;
+
+export const getHealthCheckLinksUrl = () => {
+  return `/email/links/health-check`;
+};
+
+export const healthCheckLinks = async (
+  options?: RequestInit
+): Promise<healthCheckLinksResponse> => {
+  const res = await fetch(getHealthCheckLinksUrl(), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: healthCheckLinksResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as healthCheckLinksResponse;
+};
+
+/**
  * For an inbox the caller owns this enqueues a full cascade teardown
 (`LinkManagerMessage::DeleteLink`). For an inbox reached via delegation it
 only drops the `macro_user_links` edge, leaving the owner's data intact.

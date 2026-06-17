@@ -70,12 +70,14 @@ async fn main() -> Result<(), Report> {
     println!("\n=== Notification Digest Sandbox ===\n");
 
     // --- Phase 1: Connect to persistence ---
+    #[expect(clippy::disallowed_methods, reason = "Only used when running locally")]
     let default_db = std::env::var("DATABASE_URL")
         .unwrap_or_else(|_| "postgres://user:password@localhost:5432/macrodb".to_string());
     let database_url = inquire::Text::new("Postgres URL?")
         .with_default(&default_db)
         .prompt()?;
 
+    #[expect(clippy::disallowed_methods, reason = "Only used when running locally")]
     let default_redis =
         std::env::var("REDIS_URI").unwrap_or_else(|_| "redis://localhost:6379".to_string());
     let redis_uri = inquire::Text::new("Redis URL?")
@@ -377,6 +379,7 @@ async fn poll_email_digests(egress: &impl NotificationEgress) -> Result<(), Repo
     fn digest_to_sandbox(
         batch: notification::domain::models::email_notification_digest::ports::DigestBatch,
     ) -> Result<SandboxNotification, Report> {
+        #[expect(clippy::disallowed_methods, reason = "Only used when running locally")]
         let secret = std::env::var("URL_SIGNING_HMAC")
             .unwrap_or_else(|_| "sandbox-default-hmac-secret".to_string());
         let hmac_key = Hmac::<sha2::Sha256>::new_from_slice(secret.as_bytes())

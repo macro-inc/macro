@@ -7,14 +7,24 @@
 import type { ChannelMessageDeletedAt } from './channelMessageDeletedAt';
 import type { ChannelMessageThreadId } from './channelMessageThreadId';
 
+/**
+ * Lightweight channel message for soup payloads.
+ */
 export interface ChannelMessage {
+  /** Message content. */
   content: string;
+  /** Creation timestamp. */
   created_at: string;
+  /** Deletion timestamp. */
   deleted_at?: ChannelMessageDeletedAt;
-  /** message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}` */
+  /** Message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`. */
   mentions: string[];
+  /** Message id. */
   message_id: string;
+  /** Sender id. */
   sender_id: string;
+  /** Thread parent id. */
   thread_id?: ChannelMessageThreadId;
+  /** Update timestamp. */
   updated_at: string;
 }

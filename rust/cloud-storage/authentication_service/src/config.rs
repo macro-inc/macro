@@ -1,19 +1,20 @@
 use std::sync::LazyLock;
 
 use anyhow::Context;
+use database_env_vars::{DatabaseUrl, RedisUri};
 pub use macro_env::Environment;
 use macro_env_var::{env_vars, maybe_env_vars};
 
 // BASE_URL config value. This is validated when creating the config in main.rs
 pub static BASE_URL: LazyLock<String> = LazyLock::new(|| {
-    macro_config::required_config_value("BASE_URL")
+    BaseUrl::new()
         .expect("BASE_URL must be provided via APP_SECRETS_JSON or env")
+        .as_ref()
+        .to_string()
 });
 
 env_vars! {
     pub struct BaseUrl;
-    pub struct DatabaseUrl;
-    pub struct RedisUri;
     pub struct FusionAuthTenantId;
     pub struct FusionAuthApiSecretKey;
     pub struct FusionAuthClientId;

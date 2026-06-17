@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use macro_env_var::maybe_env_vars;
 use native_app_service::{
     domain::{
         models::{BundleManifest, BundleUpdatePolicy, PlatformData, UpdateErr},
@@ -66,12 +67,17 @@ async fn sha256_hex(path: &Path) -> std::io::Result<String> {
 const ADDR: &str = "0.0.0.0:3001";
 const ARCHIVE_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/app-archive.zip");
 
+maybe_env_vars! {
+    struct BundleUrl;
+}
+
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt::init();
 
-    let bundle_url: Url = std::env::var("BUNDLE_URL")
-        .unwrap_or_else(|_| format!("http://{ADDR}/app-archive.zip"))
+    let bundle_url: Url = BundleUrl::new()
+        .map(|url| url.to_string())
+        .unwrap_or_else(|| format!("http://{ADDR}/app-archive.zip"))
         .parse()
         .expect("BUNDLE_URL must be a valid URL");
 

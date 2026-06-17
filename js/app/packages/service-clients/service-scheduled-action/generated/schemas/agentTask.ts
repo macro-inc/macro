@@ -5,10 +5,9 @@
  * API for managing scheduled actions
  * OpenAPI spec version: 0.1.0
  */
-import type { AgentModel } from './agentModel';
 
 export interface AgentTask {
-  model: AgentModel;
+  model: string;
   prompt: string;
   user_prompt: string;
 }

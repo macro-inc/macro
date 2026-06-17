@@ -1,34 +1,29 @@
 #[allow(unused_imports)]
 use super::*;
-use ai_toolset::generate_tool_input_schema;
-use ai_toolset::tool_object::validate_tool_schema;
+use ai_toolset::schema::generate_validated_input_schema;
 
 #[test]
 fn test_get_entity_properties_schema_validation() {
-    let schema = generate_tool_input_schema!(GetEntityProperties);
-
-    let result = validate_tool_schema(&schema);
+    let result = generate_validated_input_schema::<GetEntityProperties>();
     assert!(result.is_ok(), "{:?}", result);
 
-    let (name, description) = result.unwrap();
-    assert_eq!(name, "GetEntityProperties");
+    let validated = result.unwrap();
+    assert_eq!(validated.name, "GetEntityProperties");
     assert!(
-        description.contains("Get all properties"),
+        validated.description.contains("Get all properties"),
         "Description should contain expected text"
     );
 }
 
 #[test]
 fn test_set_entity_property_schema_validation() {
-    let schema = generate_tool_input_schema!(SetEntityProperty);
-
-    let result = validate_tool_schema(&schema);
+    let result = generate_validated_input_schema::<SetEntityProperty>();
     assert!(result.is_ok(), "{:?}", result);
 
-    let (name, description) = result.unwrap();
-    assert_eq!(name, "SetEntityProperty");
+    let validated = result.unwrap();
+    assert_eq!(validated.name, "SetEntityProperty");
     assert!(
-        description.contains("Set or update a property"),
+        validated.description.contains("Set or update a property"),
         "Description should contain expected text"
     );
 }
@@ -37,7 +32,9 @@ fn test_set_entity_property_schema_validation() {
 #[test]
 #[ignore = "prints the input schema"]
 fn print_get_input_schema() {
-    let schema = generate_tool_input_schema!(GetEntityProperties);
+    let schema = generate_validated_input_schema::<GetEntityProperties>()
+        .unwrap()
+        .schema;
     println!("{}", serde_json::to_string_pretty(&schema).unwrap());
 }
 
@@ -45,7 +42,9 @@ fn print_get_input_schema() {
 #[test]
 #[ignore = "prints the input schema"]
 fn print_set_input_schema() {
-    let schema = generate_tool_input_schema!(SetEntityProperty);
+    let schema = generate_validated_input_schema::<SetEntityProperty>()
+        .unwrap()
+        .schema;
     println!("{}", serde_json::to_string_pretty(&schema).unwrap());
 }
 
@@ -53,8 +52,7 @@ fn print_set_input_schema() {
 #[test]
 #[ignore = "prints the output schema"]
 fn print_get_output_schema() {
-    let generator = ai_toolset::tool_object::minimized_output_schema_generator();
-    let schema = generator.into_root_schema_for::<GetEntityPropertiesResponse>();
+    let schema = schemars::schema_for!(GetEntityPropertiesResponse);
     println!("{}", serde_json::to_string_pretty(&schema).unwrap());
 }
 
@@ -62,7 +60,6 @@ fn print_get_output_schema() {
 #[test]
 #[ignore = "prints the output schema"]
 fn print_set_output_schema() {
-    let generator = ai_toolset::tool_object::minimized_output_schema_generator();
-    let schema = generator.into_root_schema_for::<SetEntityPropertyResponse>();
+    let schema = schemars::schema_for!(SetEntityPropertyResponse);
     println!("{}", serde_json::to_string_pretty(&schema).unwrap());
 }

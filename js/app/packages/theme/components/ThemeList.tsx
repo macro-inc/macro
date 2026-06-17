@@ -1,97 +1,65 @@
-import { currentThemeId, isThemeSaved, themes } from '../signals/themeSignals';
+import { currentThemeId, isThemeSaved, showDarkThemes, showLightThemes, themes } from '../signals/themeSignals';
 import { useAnalytics } from 'app/component/analytics-context';
-import { applyTheme } from '../utils/themeUtils';
-import { ColorSwatch } from './ColorSwatch';
+import { applyTheme, isTokensDark } from '../utils/themeUtils';
+import { ThemeChips } from './ThemeChips';
 import { ThemeCrud } from './ThemeCrud';
+import { cn } from '@ui';
 
-import { For } from 'solid-js';
+import { createMemo, For } from 'solid-js';
 
 function ThemeList() {
   const analytics = useAnalytics()
 
+  const visibleThemes = createMemo(() =>
+    themes().filter((theme) =>
+      isTokensDark(theme.tokens) ? showDarkThemes() : showLightThemes()
+    )
+  );
+
   return (
-      <>
-        <style>{`
-          .theme-list-item-name.current-theme{
-            transition: none !important;
-            color: var(--a0) !important;
-          }
-
-          @media(hover){
-            .theme-list-item-name:hover{
-              transition: none !important;
-              color: var(--a0) !important;
-            }
-          }
-        `}</style>
-
-        <div
-          style="
-            grid-template-columns: min-content 1fr min-content;
-            background-color: var(--b3);
-            box-sizing: border-box;
-            grid-auto-rows: 61px;
-            overflow-x: hidden;
-            font-size: 14px;
-            display: grid;
-            gap: 1px 0px;
-          "
-        >
-          <For each={themes()}>
-            {(theme) => (
-              <>
+      <div class="@container p-2">
+        <div class="grid grid-cols-1 gap-2 @md:grid-cols-2 @2xl:grid-cols-3">
+          <For each={visibleThemes()}>
+            {(theme) => {
+              const selected = () => theme.id === currentThemeId() && isThemeSaved();
+              const select = () => {
+                analytics.track('theme_changed', { themeId: theme.id })
+                applyTheme(theme.id)
+              };
+              return (
+                // role="button" (not <button>) because the card contains ThemeCrud's
+                // own buttons, and nesting native buttons is invalid HTML.
                 <div
-                  style="
-                    background-color: var(--b0);
-                    box-sizing: border-box;
-                    align-items: center;
-                    padding: 0 20px;
-                    display: flex;
-                    height: 100%;
-                    width: 100%;
-                    gap: 5px;
-                  "
-                >
-                  <ColorSwatch
-                    color={`oklch(${theme.tokens.a0.l} ${theme.tokens.a0.c} ${theme.tokens.a0.h}deg)`}
-                    width={'10px'}
-                  />
-                  <ColorSwatch
-                    color={`oklch(${theme.tokens.b0.l} ${theme.tokens.b0.c} ${theme.tokens.b0.h}deg)`}
-                    width={'10px'}
-                  />
-                  <ColorSwatch
-                    color={`oklch(${theme.tokens.c0.l} ${theme.tokens.c0.c} ${theme.tokens.c0.h}deg)`}
-                    width={'10px'}
-                  />
-                </div>
-                <div
-                  class={`theme-list-item-name ${theme.id === currentThemeId() && isThemeSaved() ? 'current-theme' : ''}`}
-                  onClick={() => {
-                    analytics.track('theme_changed', {themeId: theme.id})
-                    applyTheme(theme.id)
+                  role="button"
+                  tabIndex={0}
+                  class={cn(
+                    'flex min-w-0 cursor-pointer items-center gap-2 rounded-lg border bg-surface p-2 transition-colors duration-[var(--transition)]',
+                    selected() ? 'border-accent' : 'border-edge-muted hover:border-ink-muted'
+                  )}
+                  onClick={select}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      select()
+                    }
                   }}
-                  style="
-                    transition: color var(--transition);
-                    background-color: var(--b0);
-                    box-sizing: border-box;
-                    white-space: nowrap;
-                    align-items: center;
-                    padding: 0 20px;
-                    cursor: pointer;
-                    display: flex;
-                    height: 100%;
-                    width: 100%;
-                  "
                 >
-                  {theme.name}
+                  <ThemeChips theme={theme} />
+                  <span
+                    class={cn(
+                      'min-w-0 flex-1 truncate text-sm',
+                      selected() ? 'text-accent' : 'text-ink'
+                    )}
+                  >
+                    {theme.name}
+                  </span>
+                  <ThemeCrud themeId={theme.id} />
                 </div>
-                <ThemeCrud themeId={theme.id} />
-              </>
-            )}
+              )
+            }}
           </For>
         </div>
-      </>
+      </div>
   );
 }
 

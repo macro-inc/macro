@@ -212,7 +212,46 @@ fn tool_call_error_becomes_tool_result() {
     let UserContent::ToolResult(result) = content.first() else {
         panic!("expected tool result");
     };
-    assert_eq!(result.id, "call_1");
+    assert_eq!(result.id, "fc_call_1");
+    assert_eq!(result.call_id.as_deref(), Some("call_1"));
+}
+
+#[test]
+fn tool_call_round_trip_carries_call_id_and_fc_item_id() {
+    let msg = assistant_parts(vec![
+        AssistantMessagePart::ToolCall {
+            name: "search".to_owned(),
+            json: json!({"query": "test"}),
+            id: "call_1".to_owned(),
+        },
+        AssistantMessagePart::ToolCallResponseJson {
+            name: "search".to_owned(),
+            json: json!({"results": []}),
+            id: "call_1".to_owned(),
+        },
+    ]);
+    let messages = to_rig_messages(&[msg]);
+
+    let Message::Assistant { content, .. } = &messages[0] else {
+        panic!("expected assistant");
+    };
+    let AssistantContent::ToolCall(call) = content.first() else {
+        panic!("expected tool call");
+    };
+    assert_eq!(call.id, "fc_call_1");
+    assert_eq!(call.call_id.as_deref(), Some("call_1"));
+
+    let Message::User { content } = &messages[1] else {
+        panic!("expected tool result user message");
+    };
+    let UserContent::ToolResult(result) = content.first() else {
+        panic!("expected tool result");
+    };
+    assert_eq!(
+        result.id, "fc_call_1",
+        "result id must match the call's item id"
+    );
+    assert_eq!(result.call_id.as_deref(), Some("call_1"));
 }
 
 #[test]

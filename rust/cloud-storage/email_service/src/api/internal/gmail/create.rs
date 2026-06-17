@@ -88,6 +88,45 @@ pub async fn handler(
                 .into_response()
         })?;
 
+        let Some(backfill_job) = backfill_job else {
+            // An active backfill already exists for this link; reuse it and skip re-enqueue.
+            let existing =
+                email_db_client::backfill::job::get::get_active_backfill_job(&ctx.db, link.id)
+                    .await
+                    .map_err(|e| {
+                        tracing::warn!(error=?e, "error fetching active backfill_job");
+                        (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            Json(ErrorResponse {
+                                message: format!(
+                                    "error fetching active backfill job for link {}",
+                                    link_id
+                                )
+                                .into(),
+                            }),
+                        )
+                            .into_response()
+                    })?
+                    .ok_or_else(|| {
+                        (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            Json(ErrorResponse {
+                                message: format!(
+                                    "backfill conflict but no active job for link {}",
+                                    link_id
+                                )
+                                .into(),
+                            }),
+                        )
+                            .into_response()
+                    })?;
+            link_job_pairs.push(LinkJobPair {
+                link_id,
+                job_id: existing.id,
+            });
+            continue;
+        };
+
         link_job_pairs.push(LinkJobPair {
             link_id,
             job_id: backfill_job.id,

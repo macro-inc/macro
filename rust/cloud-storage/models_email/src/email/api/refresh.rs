@@ -32,4 +32,7 @@ pub enum RefreshEmailEvent {
     DeleteMessage { link_id: Uuid },
     /// The inbox `link_id` was removed and its data torn down.
     LinkRemoved { link_id: Uuid },
+    /// The self-contact photo for `link_id` finished uploading to static
+    /// file storage, so the inbox's derived `photo_url` is now available.
+    PhotoSynced { link_id: Uuid },
 }

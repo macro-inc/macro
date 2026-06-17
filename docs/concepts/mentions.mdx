@@ -16,6 +16,10 @@ Mentions are how blocks reference each other across the workspace. Typing `@` in
   />
 </Frame>
 
+<Frame>
+  ![A document @mentioned in a channel message, shared with channel members](/images/Screenshot-2026-06-09-at-3.59.41-PM.png)
+</Frame>
+
 ## Mentions in Agents
 
 Mentioning entities to AI agents inserts a pointer so the AI can read the docs. In the case of markdown docs, the agent can also read images embedded in the doc. Your agents inherit the permissions you have. If you try and give an agent a doc/entity that you don't have access to, your agents won't have access either, and your agent will tell you as much.
@@ -29,10 +33,6 @@ You don't _need to_ mention entities to agents. Since your agent has access to t
 ## Mentions in Channels
 
 The primary benefit of using Macro instead of Slack is that it is deeply linked to the rest of your workspace. Just mention any entity type and hit enter to insert an `@mention`. When you hit enter or press the send button, the item is shared with members of the channel. This avoids the footgun that can happen with Slack\+Notion, Slack\+Drive, etc., where you don't give the permissions and people need to ask "hey can you share \_\_ with me?"
-
-<Frame>
-  ![A document @mentioned in a channel message, shared with channel members](/images/Screenshot-2026-06-09-at-3.59.41-PM.png)
-</Frame>
 
 **When people are added or removed from a channel, permissions to shared items flow through accordingly.** This is really helpful when somebody joins or leaves your company, so they already have access to everything they need. This is why we recommend using Channels for each team, so that permissions for all entities your team needs are handled automatically.
 
@@ -82,12 +82,14 @@ Use canvases to embed other entities on a 2D plane. This is useful for mind-mapp
 
 ## What happens when you mention...
 
-- **People** by name or email. The person will receive a notification, even if they are not an existing Macro user, if you mention them in a comment or a channel. If you mention them in the body of a task or markdown doc, they will _not_ get notified. You need to manually share it with them. We know this is a bit of a weird design decision; the reason we made it after dogfooding for a while is that, any time you want to @mention someone in a doc, you definitionally are not finished writing the doc, so you don't want them to get a notification yet. It's unclear when they _should_ receive that notification, so we determined it best that mentions in the context of documents don't notify or share with mentioned users.
-- **Documents and blocks**: any doc, task, canvas, code file, PDF, etc. In the context of a channel, the document gets shared. In a comment or a document, it does not.
-- **Contacts and company** records, rendered differently for people vs. organizations. Company and contact records are not shared when mentioned; their sharing is determined by Teams.
-- **Channels**, or a specific **message** or thread. Mentioning a channel doesn't grant permissions, and neither does mentioning a message. There is no way to share a message with someone who isn't in the channel, because the ability to view a message is determined by channel membership. If you need to share a message without adding somebody to a channel, send a screenshot. To add somebody to a channel, don't mention the channel. Go to the channel and add them as a participant.
-- **Dates** with a date picker.
+- **People**: If you mention them by name or email in a comment or channel, even if they are not a Macro user, they will get a notification. On the other hand, if you mention them in the body of a task or markdown doc, they will _not_ get notified. If you want them to be notified, you need to manually share it. We know this is a bit of a weird design decision; the reason we made it after dogfooding for a while is that, any time you want to @mention someone in a doc, you definitionally are not finished writing the doc, so you don't want them to get a notification yet. It's unclear when they _should_ receive that notification, so we determined it best that mentions in the context of documents don't notify or share with mentioned users.
+- **Documents and Blocks**: In the context of a channel, the document gets shared. In a comment or a document, it does not.
+- **Contacts and Company Records**: These are not shared when mentioned. Their sharing is determined by Teams.
+- **Channels, Threads, or a Specific Message**: Mentioning a channel doesn't grant permissions, and neither does mentioning a message. There is no way to share a message with someone who isn't in the channel, because the ability to view a message is determined by channel membership. If you need to share a message without adding somebody to a channel, send a screenshot. To add somebody to a channel, don't mention the channel — go to the channel and add them as a participant.
+- **Dates**: Choosing a date from the date picker inserts a date reference (useful for due dates, scheduling, and filtering). Dates don't notify or share anything.
 
-In a document or chat, a mention is a navigable link and a source of context. In an **email body** it has side effects: mentioning a person adds them to CC, and mentioning a document inserts a link _and_ updates that document's permissions so recipients can open it. In a **channel** there are two special mentions on top of the normal ones: `@here` pings every participant, and `@Macro` invokes the agent inline.
+In a document or chat, a mention is a navigable link and a source of context. In an **email body** it has side effects: mentioning a person adds them to CC. Mentioning a document inserts a link _and_ updates that document's permissions so recipients can open it.
 
-The agent leans on mentions heavily: anything you @mention into a chat is pulled in as context, and autocomplete there surfaces your currently open tabs first.
+In a **channel** there are two special mentions on top of the normal ones: `@here` pings every participant, and `@Macro` invokes the agent inline.
+
+The agent leans on mentions heavily: anything you @mention into a chat is pulled in as context.

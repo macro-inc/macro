@@ -1,4 +1,5 @@
 import type { EmailRecipient } from '@block-email/component/EmailContext';
+import { EMAIL_COMPOSE_TO_INPUT_ID } from '@block-email/constants';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { isMobile } from '@core/mobile/isMobile';
 import { cn } from '@ui';
@@ -190,13 +191,14 @@ export function ComposeRecipients(props: {
   const recipientSelector = (
     field: RecipientFieldId,
     inputRef?: (el: HTMLElement) => void,
-    opts?: { focusOnMount?: boolean; includeSelf?: boolean }
+    opts?: { focusOnMount?: boolean; includeSelf?: boolean; inputId?: string }
   ) => (
     <RecipientSelector
       inputRef={(el) => {
         inputEls[field] = el;
         inputRef?.(el);
       }}
+      inputId={opts?.inputId}
       options={ctx.recipientOptions}
       selfEmail={ctx.fromAddress?.()}
       selectedOptions={ctx.recipients()[field]}
@@ -281,6 +283,7 @@ export function ComposeRecipients(props: {
           recipientSelector('to', props.toRef, {
             focusOnMount: ctx.focusRecipientsOnMount,
             includeSelf: ctx.includeSelf,
+            inputId: EMAIL_COMPOSE_TO_INPUT_ID,
           })
         )}
         <Show when={ctx.validationError('no_recipient')}>

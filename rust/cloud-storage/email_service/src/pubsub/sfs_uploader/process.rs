@@ -1,10 +1,13 @@
 use crate::pubsub::sfs_uploader::context::SFSUploaderContext;
+use crate::pubsub::util::cg_refresh_email;
 use crate::util::process_pre_insert::sfs_map::fetch_and_upload_to_sfs;
 use anyhow::{Context, anyhow};
 use aws_sdk_sqs::types::Message;
+use models_email::api::refresh::RefreshEmailEvent;
 use models_email::service::pubsub::SFSUploaderMessage;
 use sqs_worker::cleanup_message;
 use std::collections::HashMap;
+use uuid::Uuid;
 
 // upload user photo_url to SFS and add url to database
 pub async fn process_message(ctx: SFSUploaderContext, message: &Message) -> anyhow::Result<()> {
@@ -34,15 +37,51 @@ pub async fn process_message(ctx: SFSUploaderContext, message: &Message) -> anyh
     // update contact's photo url to new SFS url and upsert entry in database
     contact.sfs_photo_url = Some(sfs_url);
 
-    if let Err(err) =
-        email_db_client::contacts::upsert_sync::upsert_contacts(&ctx.db, &[contact]).await
-    {
-        tracing::error!(error = ?err, "Unable to upsert contact");
+    let link_id = contact.link_id;
+    let contact_email = contact.email_address.clone();
+
+    match email_db_client::contacts::upsert_sync::upsert_contacts(&ctx.db, &[contact]).await {
+        Ok(_) => notify_if_self_contact(&ctx, link_id, contact_email.as_deref()).await,
+        Err(err) => tracing::error!(error = ?err, "Unable to upsert contact"),
     }
 
     cleanup_message(&ctx.sqs_worker, message).await?;
 
     Ok(())
+}
+
+/// Emit `PhotoSynced` only when the uploaded contact is the inbox's own
+/// self-contact, i.e. its email matches the link's inbox address. The worker
+/// also uploads correspondent and attachment images, which share no email with
+/// the inbox and must not signal that the inbox's own photo changed.
+async fn notify_if_self_contact(
+    ctx: &SFSUploaderContext,
+    link_id: Uuid,
+    contact_email: Option<&str>,
+) {
+    let Some(contact_email) = contact_email else {
+        return;
+    };
+
+    let link = match email_db_client::links::get::fetch_link_by_id(&ctx.db, link_id).await {
+        Ok(Some(link)) => link,
+        Ok(None) => return,
+        Err(e) => {
+            tracing::error!(error = ?e, link_id = %link_id, "Failed to fetch link for photo sync");
+            return;
+        }
+    };
+
+    if !contact_email.eq_ignore_ascii_case(link.email_address.0.as_ref()) {
+        return;
+    }
+
+    cg_refresh_email(
+        &ctx.connection_gateway_client,
+        link.macro_id.as_ref(),
+        RefreshEmailEvent::PhotoSynced { link_id },
+    )
+    .await;
 }
 
 /// Deserializes the SQS message body into a SfsUploaderMessage struct.

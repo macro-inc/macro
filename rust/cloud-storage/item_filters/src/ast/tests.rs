@@ -1052,6 +1052,73 @@ fn foreign_entity_includes_me_ands_with_sources() {
 }
 
 #[test]
+fn foreign_entity_notification_filters_expand_as_literals() {
+    let f = EntityFilters {
+        foreign_entity_filters: ForeignEntityFilters {
+            notification_filters: crate::NotificationFilters {
+                done: Some(true),
+                seen: Some(false),
+            },
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let ast = Arc::into_inner(
+        EntityFilterAst::new_from_filters(f)
+            .unwrap()
+            .unwrap()
+            .foreign_entity_filter
+            .unwrap(),
+    )
+    .unwrap();
+
+    let json = serde_json::to_string(&ast).unwrap();
+    assert!(
+        json.contains(r#""nd":true"#),
+        "expected done literal: {json}"
+    );
+    assert!(
+        json.contains(r#""ns":false"#),
+        "expected seen literal: {json}"
+    );
+}
+
+#[test]
+fn foreign_entity_notification_done_ands_with_source() {
+    let f = EntityFilters {
+        foreign_entity_filters: ForeignEntityFilters {
+            foreign_entity_sources: vec!["github_pull_request".to_string()],
+            notification_filters: crate::NotificationFilters {
+                done: Some(true),
+                seen: None,
+            },
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let ast = Arc::into_inner(
+        EntityFilterAst::new_from_filters(f)
+            .unwrap()
+            .unwrap()
+            .foreign_entity_filter
+            .unwrap(),
+    )
+    .unwrap();
+
+    let json = serde_json::to_value(ast).unwrap();
+    let exp = json!({
+        "&": [
+            { "l": { "fes": "github_pull_request" } },
+            { "l": { "nd": true } }
+        ]
+    });
+
+    assert_eq!(json, exp);
+}
+
+#[test]
 fn foreign_entity_invalid_id_returns_uuid_error() {
     let f = EntityFilters {
         foreign_entity_filters: ForeignEntityFilters {

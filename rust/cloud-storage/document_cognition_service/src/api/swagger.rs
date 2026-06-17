@@ -17,7 +17,7 @@ use crate::model::{
     response::attachments::GetChatsForAttachmentResponse,
     stream::{ChatStream, SendChatMessagePayload, StreamError, ToolSet},
 };
-use agent::AgentModel;
+use ai_usage::inbound::axum_router::{self as ai_usage_api};
 use mcp_client::inbound::axum_router::{
     self as mcp_api, AddServerRequest, ServerResponse, StartAuthRequest, StartAuthResponse,
     UpdateServerRequest,
@@ -26,7 +26,10 @@ use memory::inbound::axum_router::{self as memory_api, MemoryErrorBody, MemoryRe
 
 use crate::api::preview::get_batch_preview::{GetBatchPreviewRequest, GetBatchPreviewResponse};
 
-use chat::domain::models::{ChatResponse, GetChatResponse, WebCitation};
+use chat::domain::models::{
+    ChatResponse, GetChatResponse, ModelAccess, ModelsResponse, WebCitation,
+};
+use chat::inbound::http::models as chat_models;
 use chat::inbound::http::router::{
     self as chat_router, CallToolRequest, CallToolResponse, CreateChatRequest,
     GetChatPermissionsResponse, PatchChatRequest, RejectToolCallRequest, UpdateToolCallRequest,
@@ -71,6 +74,7 @@ use utoipa::OpenApi;
             chat_router::update_tool_response_handler,
             chat_router::call_tool_handler,
             chat_router::reject_tool_call_handler,
+            chat_models::list_models_handler,
             get_chats_for_attachment::get_chats_for_attachment_handler,
             citations::get_citation_handler,
             get_batch_preview::handler,
@@ -80,6 +84,8 @@ use utoipa::OpenApi;
             stream_stop::stop_chat_stream,
             structured_completion::structured_completion,
             memory_api::get_memory_handler,
+            ai_usage_api::get_usage_handler,
+            ai_usage_api::set_pricing_handler,
             mcp_api::list_servers,
             mcp_api::add_server,
             mcp_api::update_server,
@@ -90,7 +96,8 @@ use utoipa::OpenApi;
         components(
             schemas(
                 DocumentCognitionServiceApiVersion,
-                AgentModel,
+                ModelAccess,
+                ModelsResponse,
                 // Generic
                 StringIDResponse,
                 GenericErrorResponse,
@@ -167,6 +174,17 @@ use utoipa::OpenApi;
                 MemoryResponse,
                 MemoryErrorBody,
 
+                // AI cost
+                ai_usage_api::UsageRequest,
+                ai_usage_api::SetPricingRequest,
+                ai_usage_api::ErrorBody,
+                ai_usage::UsageSummary,
+                ai_usage::FeatureUsage,
+                ai_usage::CompletionUsage,
+                ai_usage::Usage,
+                ai_usage::Price,
+                ai_usage::AiFeature,
+
                 // MCP
                 ServerResponse,
                 AddServerRequest,
@@ -174,10 +192,6 @@ use utoipa::OpenApi;
                 StartAuthRequest,
                 StartAuthResponse,
                 model_error_response::ErrorResponse,
-
-                // Tools
-                ai_toolset::schema::ToolSchema,
-                ai_toolset::schema::ToolSchemas,
             ),
         ),
         tags(

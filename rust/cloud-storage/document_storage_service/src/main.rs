@@ -2,9 +2,8 @@
 use crate::{
     api::context::{ApiContext, DocumentStorageServiceAuthKey, TaskPropertiesAdapter},
     config::{
-        CalEventTypeContentNamesKey, CalWebhookSecretKey, DocumentPermissionJwtSecretKey,
-        DocumentStorageServiceCloudfrontSignerPrivateKeySecretName, GithubSyncAppPemSecretKey,
-        GithubWebhookSecretKey, MetaAccessToken, MetaPixelId, MetaTestEventCode,
+        CalEventTypeContentNamesKey, CalWebhookSecretKey, MetaAccessToken, MetaPixelId,
+        MetaTestEventCode,
     },
     service::s3::S3,
 };
@@ -25,10 +24,11 @@ use call::{
 };
 use channels::{
     domain::{
+        list_service::ChannelListServiceImpl,
         service::ChannelServiceImpl,
         side_effects::{ChannelSideEffectService, SpawnedChannelEventDispatcher},
     },
-    inbound::axum_router::ChannelsRouterState,
+    inbound::{axum_router::ChannelsRouterState, list_router::ChannelListRouterState},
     outbound::{
         connection_gateway_realtime::ConnectionGatewayChannelRealtimePublisher,
         contacts_dispatcher::ContactsChannelDispatcher,
@@ -37,11 +37,6 @@ use channels::{
         pg_channels_repo::PgChannelsRepo, pg_side_effect_context::PgChannelSideEffectContext,
         sqs_search_indexer::SqsChannelSearchIndexer,
     },
-};
-use comms::{
-    domain::service::ChannelServiceImpl as CommsChannelServiceImpl,
-    inbound::router::CommsRouterState,
-    outbound::postgres::{comms_repo::PgCommsRepo, user_repo::PgUserRepo},
 };
 use config::{Config, Environment};
 use connection::{
@@ -71,7 +66,8 @@ use github::outbound::pg_github_sync_repo::PgGithubSyncRepo;
 use lexical_client::LexicalClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
-use macro_middleware::auth::internal_access::InternalApiSecretKey;
+use macro_env_var::maybe_env_vars;
+use macro_service_urls::{ConnectionGatewayUrl, LexicalServiceUrl, SyncServiceUrl};
 use macro_sha_count_client::Redis;
 use notification::domain::service::SqsNotificationIngress;
 use notification::outbound::queue::SqsQueue;
@@ -103,6 +99,11 @@ mod config;
 mod model;
 mod service;
 
+maybe_env_vars! {
+    struct AppleBundleId;
+    struct SnsApnsVoipPlatformArn;
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     MacroEntrypoint::default().init();
@@ -114,23 +115,12 @@ async fn main() -> anyhow::Result<()> {
         aws_sdk_secretsmanager::Client::new(&aws_config),
     );
 
-    let cloudfront_signer_private_key = secretsmanager_client
-        .get_maybe_secret_value(
-            env,
-            DocumentStorageServiceCloudfrontSignerPrivateKeySecretName::new()?,
-        )
-        .await?;
-
-    let document_permission_jwt_secret = secretsmanager_client
-        .get_maybe_secret_value(env, DocumentPermissionJwtSecretKey::new()?)
-        .await?;
-
-    // Parse our configuration from the environment.
-    let config = Config::from_env(
-        cloudfront_signer_private_key,
-        document_permission_jwt_secret,
-    )
-    .context("expected to be able to generate config")?;
+    // Parse our configuration from the environment, then resolve any secret-manager backed values.
+    let config = Config::from_env()
+        .context("expected to be able to generate config")?
+        .resolve_remote_secrets(env, &secretsmanager_client)
+        .await
+        .context("expected to be able to resolve config secrets")?;
 
     tracing::trace!("initialized config");
 
@@ -143,7 +133,7 @@ async fn main() -> anyhow::Result<()> {
     let db = PgPoolOptions::new()
         .min_connections(min_connections)
         .max_connections(max_connections)
-        .connect(&config.vars.database_url)
+        .connect(&config.database_url)
         .await
         .context("could not connect to db")?;
 
@@ -156,7 +146,7 @@ async fn main() -> anyhow::Result<()> {
     let readonly_db = match PgPoolOptions::new()
         .min_connections(min_connections)
         .max_connections(max_connections)
-        .connect(&config.vars.database_url_readonly)
+        .connect(&config.database_url_readonly)
         .await
     {
         Ok(pool) => {
@@ -173,7 +163,7 @@ async fn main() -> anyhow::Result<()> {
 
     let dynamodb_client = DynamodbClient::new_from_client(
         dynamo_db.clone(),
-        Some(config.vars.bulk_upload_requests_table.as_ref().to_string()),
+        Some(config.bulk_upload_requests_table.as_ref().to_string()),
     );
     tracing::trace!("initialized dynamodb client");
 
@@ -182,13 +172,13 @@ async fn main() -> anyhow::Result<()> {
     tracing::trace!("initialized s3 client");
 
     let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(&aws_config))
-        .search_event_queue(&config.vars.search_event_queue)
-        .document_delete_queue(&config.vars.document_delete_queue);
+        .search_event_queue(&config.search_event_queue)
+        .document_delete_queue(&config.document_delete_queue);
 
     let contacts_ingress = Arc::new(contacts::domain::service::SqsContactsIngress {
         queue: contacts::outbound::ingress::SqsContactsQueue::new(
             aws_sdk_sqs::Client::new(&aws_config),
-            config.vars.contacts_queue.as_ref().to_string(),
+            config.contacts_queue.to_string(),
         ),
     });
 
@@ -196,7 +186,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Redis handles it own connection pool internally. Each time we use redis
     // we should be using redis_client.get_connection() to grab a specific connection
-    let redis_client = redis::Client::open(config.vars.redis_uri.as_ref())
+    let redis_client = redis::Client::open(config.redis_uri.to_string().as_ref())
         .expect("could not connect to redis client");
 
     match redis_client.get_connection().is_err() {
@@ -208,34 +198,21 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
-    let internal_api_secret = secretsmanager_client
-        .get_maybe_secret_value(config.environment, InternalApiSecretKey::new()?)
-        .await?;
-
     let dss_auth_key = DocumentStorageServiceAuthKey::new()?;
 
     let conn_gateway_client = ConnectionGatewayClient::new(
-        internal_api_secret.as_ref().to_string(),
-        config.connection_gateway_url.clone(),
+        config.internal_api_secret_key.as_ref().to_string(),
+        ConnectionGatewayUrl::new()?.to_string(),
     );
 
-    let sync_service_auth_key = match config.environment {
-        Environment::Local => config.vars.sync_service_auth_key.as_ref().to_string(),
-        _ => secretsmanager_client
-            .get_secret_value(&config.vars.sync_service_auth_key)
-            .await
-            .context("unable to get secret")?
-            .to_string(),
-    };
-
     let sync_service_client = Arc::new(SyncServiceClient::new(
-        sync_service_auth_key,
-        config.sync_service_url.clone(),
+        config.sync_service_auth_key.as_ref().to_string(),
+        SyncServiceUrl::new()?.to_string(),
     ));
 
     let lexical_client = Arc::new(LexicalClient::new(
-        internal_api_secret.as_ref().to_string(),
-        config.lexical_service_url.clone(),
+        config.internal_api_secret_key.as_ref().to_string(),
+        LexicalServiceUrl::new()?.to_string(),
     ));
 
     let jwt_validation_args =
@@ -243,19 +220,10 @@ async fn main() -> anyhow::Result<()> {
             .await?;
 
     // Initialize OpenSearch client
-    let opensearch_password = match config.environment {
-        Environment::Local => config.vars.opensearch_password.as_ref().to_string(),
-        _ => secretsmanager_client
-            .get_secret_value(&config.vars.opensearch_password)
-            .await
-            .context("unable to get opensearch secret")?
-            .to_string(),
-    };
-
     let opensearch_client = OpensearchClient::new(
-        config.vars.opensearch_url.as_ref().to_string(),
-        config.vars.opensearch_username.as_ref().to_string(),
-        opensearch_password,
+        config.opensearch_url.to_string(),
+        config.opensearch_username.to_string(),
+        config.opensearch_password.to_string(),
     )
     .context("unable to create opensearch client")?;
 
@@ -291,7 +259,7 @@ async fn main() -> anyhow::Result<()> {
         SystemPropertiesServiceImpl::new(PgSystemPropertiesRepository::new(db.clone()));
     let ingress_queue = SqsQueue::new(
         aws_sdk_sqs::Client::new(&aws_config),
-        config.vars.notification_queue.as_ref().to_string(),
+        config.notification_queue.to_string(),
     );
     let notification_ingress_service = Arc::new(SqsNotificationIngress {
         queue: ingress_queue.clone(),
@@ -314,38 +282,34 @@ async fn main() -> anyhow::Result<()> {
         Some(notification_service),
     ));
 
-    // Create the comms ChannelServiceImpl instances.
-    let channel_service_for_soup = CommsChannelServiceImpl::new(
-        PgCommsRepo::new(readonly_pool::ReadOnlyPool(readonly_db.clone())),
-        PgUserRepo::new(readonly_db.clone()),
+    // Create the channel list service used by soup.
+    let channel_service_for_soup = ChannelListServiceImpl::new(
+        PgChannelsRepo::new(readonly_db.clone()),
+        PgChannelsRepo::new(readonly_db.clone()),
         frecency_storage.clone(),
     );
-    let channel_service_for_comms = CommsChannelServiceImpl::new(
-        PgCommsRepo::new(readonly_pool::ReadOnlyPool(db.clone())),
-        PgUserRepo::new(db.clone()),
+    // Create the legacy channel list router state for routes mounted under /comms.
+    let channel_list_state = ChannelListRouterState::new(ChannelListServiceImpl::new(
+        PgChannelsRepo::new(db.clone()),
+        PgChannelsRepo::new(db.clone()),
         frecency_storage.clone(),
-    );
-
-    // Create the CommsRouterState for the comms hex routes mounted under /comms.
-    let comms_state = CommsRouterState::new(channel_service_for_comms);
+    ));
 
     let s3 = Arc::new(S3::new(
         s3_client,
-        config.vars.document_storage_bucket.as_ref(),
-        config.vars.docx_document_upload_bucket.as_ref(),
-        config.vars.upload_staging_bucket.as_ref(),
+        config.document_storage_bucket.as_ref(),
+        config.docx_document_upload_bucket.as_ref(),
+        config.upload_staging_bucket.as_ref(),
     ));
     let system_properties_service = Arc::new(system_properties_service);
 
     let document_repo = PgDocumentRepo::new(db.clone());
     let cloudfront_config = CloudFrontConfig {
         distribution_url: config
-            .vars
             .document_storage_service_cloudfront_distribution_url
             .as_ref()
             .to_string(),
         signer_public_key_id: config
-            .vars
             .document_storage_service_cloudfront_signer_public_key_id
             .as_ref()
             .to_string(),
@@ -359,8 +323,8 @@ async fn main() -> anyhow::Result<()> {
     };
     let s3_upload_adapter = S3UploadUrlAdapter::new(
         macro_aws_config::s3_client().await,
-        config.vars.document_storage_bucket.as_ref(),
-        config.vars.docx_document_upload_bucket.as_ref(),
+        config.document_storage_bucket.as_ref(),
+        config.docx_document_upload_bucket.as_ref(),
     );
     let markdown_initializer =
         documents_hex::outbound::markdown_init::LexicalSyncMarkdownInitializer::new(
@@ -392,24 +356,16 @@ async fn main() -> anyhow::Result<()> {
         ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone())),
     ));
 
-    let github_webhook_secret = secretsmanager_client
-        .get_maybe_secret_value(env, GithubWebhookSecretKey::new()?)
-        .await?;
-
-    let github_sync_app_pem = secretsmanager_client
-        .get_maybe_secret_value(env, GithubSyncAppPemSecretKey::new()?)
-        .await?;
-
     let foreign_entity_service = Arc::new(ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(
         db.clone(),
     )));
 
     let github_sync_service_impl = GithubSyncServiceImpl::new(
         GithubSyncConfig {
-            webhook_secret: github_webhook_secret.as_ref().to_string(),
-            github_sync_app_url: config.vars.github_sync_app_url.to_string(),
-            sync_app_pem: github_sync_app_pem.as_ref().to_string(),
-            sync_app_client_id: config.vars.github_sync_app_client_id.to_string(),
+            webhook_secret: config.github_webhook_secret_key.as_ref().to_string(),
+            github_sync_app_url: config.github_sync_app_url.to_string(),
+            sync_app_pem: config.github_sync_app_pem_secret_key.as_ref().to_string(),
+            sync_app_client_id: config.github_sync_app_client_id.to_string(),
         },
         document_service.clone(),
         foreign_entity_service.clone(),
@@ -455,18 +411,22 @@ async fn main() -> anyhow::Result<()> {
     let cal_webhook_state = CalWebhookRouterState::new(cal_webhook_service);
 
     // Call service (LiveKit)
-    let transcription_agent_name =
-        config::LivekitTranscriptionAgentName::new().map(|v| v.as_ref().to_owned());
-    let internal_call_secret = config::InternalCallSecret::new().map(|v| v.as_ref().to_owned());
+    let transcription_agent_name = config
+        .livekit_transcription_agent_name
+        .value()
+        .map(|v| v.to_owned());
+
+    let internal_call_secret = config.internal_call_secret.value().map(|v| v.to_owned());
+
     anyhow::ensure!(
         transcription_agent_name.is_none() || internal_call_secret.is_some(),
         "LIVEKIT_TRANSCRIPTION_AGENT_NAME is set but INTERNAL_CALL_SECRET is missing — \
          the transcription agent will not be able to submit transcripts"
     );
     let livekit_rtc_client = LivekitRtcClient::new(
-        config.vars.livekit_server_url.as_ref(),
-        config.vars.livekit_api_key.as_ref(),
-        config.vars.livekit_api_secret.as_ref(),
+        config.livekit_server_url.as_ref(),
+        config.livekit_api_key.as_ref(),
+        config.livekit_api_secret.as_ref(),
         transcription_agent_name,
     );
     let call_connection_service =
@@ -503,9 +463,9 @@ async fn main() -> anyhow::Result<()> {
         (*entity_access_service).clone(),
         (*notification_ingress_service).clone(),
         recording_storage,
-        config.vars.livekit_server_url.as_ref(),
+        config.livekit_server_url.as_ref(),
     )
-    .with_summarizer(AiCallSummarizer::new());
+    .with_summarizer(AiCallSummarizer::new(ai_usage::pg_recorder(db.clone())));
     if let Some(secret) = internal_call_secret {
         call_service_builder = call_service_builder.with_internal_call_secret(secret);
     }
@@ -523,10 +483,9 @@ async fn main() -> anyhow::Result<()> {
     //
     // Option<VoipPushServiceImpl<...>> is used as the type parameter so the
     // type stays stable regardless of whether VoIP push is configured.
-    let voip_sender = if let (Ok(bundle_id), Ok(voip_arn)) = (
-        std::env::var("APPLE_BUNDLE_ID"),
-        std::env::var("SNS_APNS_VOIP_PLATFORM_ARN"),
-    ) {
+    let voip_sender = if let (Some(bundle_id), Some(voip_arn)) =
+        (AppleBundleId::new(), SnsApnsVoipPlatformArn::new())
+    {
         if voip_arn.is_empty() {
             tracing::warn!("voip push disabled: SNS_APNS_VOIP_PLATFORM_ARN is set but empty");
             None
@@ -535,10 +494,14 @@ async fn main() -> anyhow::Result<()> {
                 notification::outbound::repository::DbNotificationRepository::new(db.clone());
             let voip_mobile = notification::outbound::mobile::MobilePushAdapter {
                 push_service: aws_sdk_sns::Client::new(&aws_config),
-                apns_bundle_id: bundle_id.clone(),
-                voip_bundle_id: Some(format!("{}.voip", bundle_id)),
+                apns_bundle_id: bundle_id.to_string(),
+                voip_bundle_id: Some(format!("{}.voip", bundle_id.as_ref())),
             };
-            tracing::info!(bundle_id, voip_arn, "voip push enabled");
+            tracing::info!(
+                bundle_id = bundle_id.as_ref(),
+                voip_arn = voip_arn.as_ref(),
+                "voip push enabled"
+            );
             Some(notification::domain::service::VoipPushServiceImpl::new(
                 voip_repo,
                 voip_mobile,
@@ -566,7 +529,7 @@ async fn main() -> anyhow::Result<()> {
     // Create the SQS worker for delete document processing before config is moved
     let delete_document_worker = sqs_worker::SQSWorker::new(
         aws_sdk_sqs::Client::new(&aws_config),
-        config.vars.document_delete_queue.as_ref().to_string(),
+        config.document_delete_queue.to_string(),
         config.queue_max_messages,
         config.queue_wait_time_seconds,
     );
@@ -584,7 +547,7 @@ async fn main() -> anyhow::Result<()> {
     // (resolved from the `openai-key` secret at deploy time by the infra stack),
     // the same way `document_cognition_service` consumes it. Fail fast if it's
     // empty so the service never starts with a broken task-dedup embedder.
-    let openai_api_key = config.vars.openai_api_key.as_ref().to_owned();
+    let openai_api_key = config.openai_api_key.as_ref().to_owned();
     anyhow::ensure!(
         !openai_api_key.trim().is_empty(),
         "OpenAI API key is required for task dedup embeddings",
@@ -594,7 +557,7 @@ async fn main() -> anyhow::Result<()> {
         TextEmbedding3Small::new(openai_api_key),
         PgTaskVectorDb::new(db.clone()),
         NoOpReranker,
-        Arc::new(AgentDuplicateJudge::new()),
+        Arc::new(AgentDuplicateJudge::new(ai_usage::pg_recorder(db.clone()))),
         Arc::new(ConnectionGatewayTaskDedupNotifier::new(
             conn_gateway_client.clone(),
         )),
@@ -676,9 +639,9 @@ async fn main() -> anyhow::Result<()> {
         config: Arc::new(config),
         jwt_validation_args,
         dss_auth_key,
-        // Comms service fields
+        // Shared frecency storage and legacy channel list routes.
         frecency_storage,
-        comms_state,
+        channel_list_state,
         entity_access_service: entity_access_service.clone(),
         documents_state: DocumentRouterState {
             service: document_service.clone(),

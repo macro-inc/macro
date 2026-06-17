@@ -2,7 +2,7 @@ import { batch, createEffect, createSignal, For, type Setter, untrack } from 'so
 import { convertOklchTo, getOklch, validateColor } from '../utils/colorUtil';
 import type { ThemeReactiveColor } from '../types/themeTypes';
 import { themeReactive } from '../signals/themeReactive';
-import { ColorSwatch } from './ColorSwatch';
+import { ColorPickerPopover } from './ColorPickerPopover';
 
 const displayType = () => 'hex';
 
@@ -100,10 +100,7 @@ export function ThemeEditorAdvanced(){
                           width: 100%;
                         "
                       >
-                        <ColorSwatch
-                          color={`oklch(${colorValue.l[0]()} ${colorValue.c[0]()} ${colorValue.h[0]()}deg)`}
-                          width={'100%'}
-                        />
+                        <ColorPickerPopover colorKey={colorKey} colorValue={colorValue} />
                       </div>
 
                       <div

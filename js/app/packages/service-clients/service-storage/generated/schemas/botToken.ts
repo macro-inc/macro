@@ -28,6 +28,6 @@ export interface BotToken {
   last_used_at?: BotTokenLastUsedAt;
   /** Revocation timestamp. */
   revoked_at?: BotTokenRevokedAt;
-  /** Token lookup prefix. */
-  token_prefix: string;
+  /** Raw bearer token. */
+  token: string;
 }

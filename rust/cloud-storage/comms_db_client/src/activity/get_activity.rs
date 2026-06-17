@@ -1,7 +1,7 @@
 use crate::model::Activity;
 use anyhow::{Context, Result};
+use channels::domain::models::{ChannelHistoryInfo, ChannelType, UserActivityForChannel};
 use chrono::{DateTime, Utc};
-use model::comms::{ChannelHistoryInfo, ChannelType, UserActivityForChannel};
 use sqlx::{Pool, Postgres};
 use std::collections::HashMap;
 use uuid::Uuid;

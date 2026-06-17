@@ -130,7 +130,7 @@ interface ToastOptions {
 
 interface ToastSuccessOptions extends ToastOptions {
   actions?: ToastAction[];
-  /** When true, bypasses the 3s dedupe so repeated calls stack instead of replacing. */
+  /** When true, bypasses the 3s duplicate-message throttle. */
   stack?: boolean;
 }
 
@@ -161,18 +161,45 @@ interface ToastMessage {
 const recentToasts: Map<string, ToastMessage> = new Map();
 const THROTTLE_DURATION = 3000;
 
-/** Maximum number of toasts visible at one time in the main region. */
-const MAX_VISIBLE_TOASTS = 3;
 /**
- * Ordered list of active (non-persistent) toast IDs in the main region,
- * oldest first. Used to evict the oldest toast when the limit is exceeded.
+ * The currently-visible toast in the main region. Each new toast dismisses the
+ * previous one immediately so transient notifications never stack.
  */
-const activeToastIds: number[] = [];
+let activeToastId: number | undefined;
 /**
  * The currently-visible mobile toast. The mobile region only shows one toast
  * at a time — each new mobile toast dismisses the previous one immediately.
  */
 let activeMobileToastId: number | undefined;
+
+function getActiveToastId(region: string): number | undefined {
+  if (region === 'mobile-toast-region') return activeMobileToastId;
+  if (region === 'toast-region') return activeToastId;
+  return undefined;
+}
+
+function setActiveToastId(region: string, toastId: number | undefined): void {
+  if (region === 'mobile-toast-region') {
+    activeMobileToastId = toastId;
+  } else if (region === 'toast-region') {
+    activeToastId = toastId;
+  }
+}
+
+function dismissActiveToast(region: string): boolean {
+  const activeId = getActiveToastId(region);
+  if (activeId === undefined) return false;
+
+  setActiveToastId(region, undefined);
+  toaster.dismiss(activeId);
+  return true;
+}
+
+function clearTrackedToast(region: string, toastId: number): void {
+  if (getActiveToastId(region) === toastId) {
+    setActiveToastId(region, undefined);
+  }
+}
 
 function createToastKey(message: string, type: ToastType): string {
   return `${type}:${message}`;
@@ -279,6 +306,8 @@ function ToastContent(props: {
   custom?: CustomToastConfig;
   /** Render the mobile variant (no highlight border, text-xs, simplified). */
   mobile?: boolean;
+  /** Avoid entrance motion when this toast is replacing another toast. */
+  skipOpenAnimation?: boolean;
   /** Called when this toast is removed from the DOM, so callers can clean up tracking. */
   onDismiss?: () => void;
 }) {
@@ -351,8 +380,9 @@ function ToastContent(props: {
       toastId={props.toastId}
       class={cn(
         `relative overflow-visible pointer-events-auto
-        data-opened:animate-slide-in transition-[transform,opacity] duration-100 ease-in data-closed:opacity-0 data-[swipe=move]:translate-x-(--kb-toast-swipe-move-x)
+        transition-[transform,opacity] duration-100 ease-in data-closed:opacity-0 data-[swipe=move]:translate-x-(--kb-toast-swipe-move-x)
         data-[swipe=cancel]:translate-x-0 data-[swipe=cancel]:ease-out data-[swipe=cancel]:duration-200 data-[swipe=end]:animate-swipe-out`,
+        !props.skipOpenAnimation && 'data-opened:animate-slide-in',
         props.mobile && 'w-full'
       )}
       persistent={true}
@@ -367,7 +397,7 @@ function ToastContent(props: {
               <>
                 <Dynamic component={embed()} />
                 <Toast.CloseButton class="absolute top-2 right-2 z-user-highlight">
-                  <Button variant="ghost" size="icon-sm" class="rounded-xs">
+                  <Button variant="ghost" size="icon-sm">
                     <XIcon />
                   </Button>
                 </Toast.CloseButton>
@@ -406,7 +436,7 @@ function ToastContent(props: {
                   </Show>
                   <Show when={!props.mobile}>
                     <Toast.CloseButton>
-                      <Button variant="ghost" size="icon-sm" class="rounded-xs">
+                      <Button variant="ghost" size="icon-sm">
                         <XIcon />
                       </Button>
                     </Toast.CloseButton>
@@ -456,7 +486,7 @@ function ToastContent(props: {
                   </Show>
                   <Show when={!props.mobile}>
                     <Toast.CloseButton>
-                      <Button variant="ghost" size="icon-sm" class="rounded-xs">
+                      <Button variant="ghost" size="icon-sm">
                         <XIcon />
                       </Button>
                     </Toast.CloseButton>
@@ -502,6 +532,7 @@ async function promise<T>(
 ): Promise<T> {
   const useMobile = options.mobile && isMobile();
   const region = useMobile ? 'mobile-toast-region' : 'toast-region';
+  const skipOpenAnimation = dismissActiveToast(region);
 
   const toastId = toaster.show(
     (props) => (
@@ -512,10 +543,13 @@ async function promise<T>(
         subtext={options.subtext}
         persistent={true}
         mobile={useMobile}
+        skipOpenAnimation={skipOpenAnimation}
+        onDismiss={() => clearTrackedToast(region, props.toastId)}
       />
     ),
     { region }
   );
+  setActiveToastId(region, toastId);
 
   return promiseArg
     .then((result) => {
@@ -570,20 +604,7 @@ function createToast(
 
   const useMobile = mobile && isMobile();
   const region = useMobile ? 'mobile-toast-region' : 'toast-region';
-
-  if (useMobile) {
-    // Mobile region shows only the latest toast — dismiss the previous one.
-    if (activeMobileToastId !== undefined) {
-      toaster.dismiss(activeMobileToastId);
-    }
-  } else {
-    // Evict the oldest visible toast when the display limit is reached, so the
-    // newest toast always appears immediately instead of being queued.
-    if (activeToastIds.length >= MAX_VISIBLE_TOASTS) {
-      const oldestId = activeToastIds.shift();
-      if (oldestId !== undefined) toaster.dismiss(oldestId);
-    }
-  }
+  const skipOpenAnimation = dismissActiveToast(region);
 
   const toastId = toaster.show(
     (props) => (
@@ -597,26 +618,16 @@ function createToast(
         // When undefined, ToastContent falls back to its own default dismiss timing internally.
         duration={duration}
         mobile={useMobile}
+        skipOpenAnimation={skipOpenAnimation}
         onDismiss={() => {
-          if (useMobile) {
-            if (activeMobileToastId === props.toastId) {
-              activeMobileToastId = undefined;
-            }
-          } else {
-            const idx = activeToastIds.indexOf(props.toastId);
-            if (idx !== -1) activeToastIds.splice(idx, 1);
-          }
+          clearTrackedToast(region, props.toastId);
         }}
       />
     ),
     { region }
   );
 
-  if (useMobile) {
-    activeMobileToastId = toastId;
-  } else {
-    activeToastIds.push(toastId);
-  }
+  setActiveToastId(region, toastId);
 
   if (!stack) {
     const key = createToastKey(message, toastType);
@@ -651,7 +662,8 @@ function embed(
   const useMobile = options?.mobile && isMobile();
   const region =
     options?.region ?? (useMobile ? 'mobile-toast-region' : 'toast-region');
-  return toaster.show(
+  const skipOpenAnimation = dismissActiveToast(region);
+  const toastId = toaster.show(
     (props) => (
       <ToastContent
         toastId={props.toastId}
@@ -659,10 +671,14 @@ function embed(
         persistent={options?.persistent}
         duration={options?.duration}
         mobile={useMobile}
+        skipOpenAnimation={skipOpenAnimation}
+        onDismiss={() => clearTrackedToast(region, props.toastId)}
       />
     ),
     { region }
   );
+  setActiveToastId(region, toastId);
+  return toastId;
 }
 
 // ─── custom ──────────────────────────────────────────────────────────────────
@@ -685,7 +701,8 @@ function custom(
   const useMobile = options?.mobile && isMobile();
   const region =
     options?.region ?? (useMobile ? 'mobile-toast-region' : 'toast-region');
-  return toaster.show(
+  const skipOpenAnimation = dismissActiveToast(region);
+  const toastId = toaster.show(
     (props) => (
       <ToastContent
         toastId={props.toastId}
@@ -693,11 +710,17 @@ function custom(
         persistent={options?.persistent}
         duration={options?.duration}
         mobile={useMobile}
-        onDismiss={options?.onDismiss}
+        skipOpenAnimation={skipOpenAnimation}
+        onDismiss={() => {
+          clearTrackedToast(region, props.toastId);
+          options?.onDismiss?.();
+        }}
       />
     ),
     { region }
   );
+  setActiveToastId(region, toastId);
+  return toastId;
 }
 
 // ─── upload helper (kept for backwards compat) ───────────────────────────────

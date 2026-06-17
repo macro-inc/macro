@@ -98,7 +98,7 @@ pub async fn incr_completed_messages(
 
 /// performs actions when all threads and messages have been backfilled for the user.
 #[tracing::instrument(skip(ctx))]
-async fn handle_job_completed(
+pub(super) async fn handle_job_completed(
     ctx: &PubSubContext,
     link: &Link,
     job_id: Uuid,

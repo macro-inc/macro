@@ -45,17 +45,10 @@ import { useSsoLogin } from './useSsoLogin';
 
 function PostLoginRedirect() {
   const navigate = useNavigate();
-  const { initEmailLink } = useEmailLinks();
 
-  onMount(async () => {
-    await initEmailLink().match(
-      () => {},
-      (err) => {
-        if (err.tag !== 'AlreadyInitialized') {
-          console.error('Failed to init email link on login', err);
-        }
-      }
-    );
+  // Login init is owned by the per-method handlers (the session-token effect and
+  // onComplete); this redirect only navigates, so login doesn't fire init twice.
+  onMount(() => {
     navigate('/', { replace: true });
   });
 

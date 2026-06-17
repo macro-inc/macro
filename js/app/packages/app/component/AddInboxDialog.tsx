@@ -1,3 +1,5 @@
+import { useHasPaidAccess } from '@core/auth';
+import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { useAddInboxFlow } from '@core/email-link';
 import { Button, Dialog, Panel } from '@ui';
 import { createSignal, onCleanup } from 'solid-js';
@@ -10,6 +12,23 @@ const [isOpen, setIsOpen] = createSignal(false);
  * selector) open settings first and the dialog appears once it mounts.
  */
 export const openAddInboxDialog = () => setIsOpen(true);
+
+/**
+ * Connecting more than one inbox is a paid feature. Returns a guard that runs
+ * `proceed` for paid users and otherwise opens the paywall, so every add-inbox
+ * entry point gates on the same key.
+ */
+export function useAddInboxGate() {
+  const hasPaidAccess = useHasPaidAccess();
+  const { showPaywall } = usePaywallState();
+  return (proceed: () => void) => {
+    if (!hasPaidAccess()) {
+      showPaywall(PaywallKey.MULTI_INBOX);
+      return;
+    }
+    proceed();
+  };
+}
 
 /**
  * Confirmation step before the add-inbox OAuth redirect. Confirming kicks off

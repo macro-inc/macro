@@ -1,8 +1,8 @@
 use crate::domain::models::FrecencySoupItem;
 use crate::domain::ports::MockSoupRepo;
+use channels::domain::{models::GetChannelsRequest, ports::ChannelListService};
 use chrono::Days;
 use chrono::{DateTime, Utc};
-use comms::domain::models::GetChannelsRequest;
 use cool_asserts::assert_matches;
 use email::domain::models::{EnrichedEmailThreadPreview, PreviewView};
 use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
@@ -52,25 +52,25 @@ impl EmailPreviewServiceReadOnly for NoopEmailPreviewService {
 
 struct NoopCommsService;
 
-impl ChannelsService for NoopCommsService {
+impl ChannelListService for NoopCommsService {
     async fn get_channels(
         &self,
         _req: GetChannelsRequest,
-    ) -> Result<Vec<comms::domain::models::channel::ChannelWithLatest>, Report> {
+    ) -> Result<Vec<channels::domain::models::ChannelWithLatest>, Report> {
         Ok(Vec::new())
     }
 
     async fn get_activities(
         &self,
         _user: MacroUserIdStr<'_>,
-    ) -> Result<Vec<comms::domain::models::channel::Activity>, Report> {
+    ) -> Result<Vec<channels::domain::models::Activity>, Report> {
         Ok(Vec::new())
     }
 
     async fn get_names(
         &self,
         _names: std::collections::HashSet<MacroUserIdStr<'_>>,
-    ) -> Result<Vec<comms::domain::models::UserName>, Report> {
+    ) -> Result<Vec<channels::domain::models::UserName>, Report> {
         Ok(Vec::new())
     }
 }
@@ -210,8 +210,12 @@ fn foreign_entity_matches_literal(entity: &ForeignEntity, literal: &ForeignEntit
         ForeignEntityLiteral::ForeignEntitySource(source) => {
             entity.foreign_entity_source.as_str() == source.as_str()
         }
-        // "me" resolution happens in the repository; the fake cannot resolve it, so fail closed.
-        ForeignEntityLiteral::IncludesMe => false,
+        // "me" and notification done/seen resolution happen in the repository (against the
+        // metadata participant list and the notification tables); the fake cannot resolve them,
+        // so fail closed.
+        ForeignEntityLiteral::IncludesMe
+        | ForeignEntityLiteral::NotificationDone(_)
+        | ForeignEntityLiteral::NotificationSeen(_) => false,
     }
 }
 

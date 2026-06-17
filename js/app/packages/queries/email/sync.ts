@@ -4,6 +4,7 @@ import { invalidateAllSoup } from '@queries/soup/normalized-cache';
 import {
   BackfillStatus,
   type RefreshEmailEvent,
+  RefreshEmailEventOneOfOneoneEvent,
 } from '@service-email/generated/schemas';
 import { leadingAndTrailing, throttle } from '@solid-primitives/scheduled';
 import { invalidateEmailLinks } from './link';
@@ -27,15 +28,18 @@ function asRefreshEmailEvent(payload: unknown): RefreshEmailEvent | undefined {
 }
 
 /**
- * Handles `refresh_email` websocket events. Only `backfill` events act here:
- * steady-state mutations (`upsert_message`, `update_labels`, `delete_message`)
- * already invalidate soup through the notification-driven path, and reacting to
- * them again would double-refetch.
+ * Handles `refresh_email` websocket events. Steady-state mutations
+ * (`upsert_message`, `update_labels`, `delete_message`) already invalidate soup
+ * through the notification-driven path, and reacting to them again would
+ * double-refetch, so only `backfill`, `link_removed`, and `photo_synced` act
+ * here.
  *
  * Backfill produces no notifications, so this is its only refresh signal.
  * `progress` refetches soup, throttled because the backend emits one event per
  * batch of threads. `complete`/`failed` additionally refetch the links list so
  * the inbox's `sync_status` settles out of `SYNCING`, and surface a toast.
+ * `photo_synced` refetches the links list so the inbox's derived `photo_url`
+ * lands once its self-contact photo finishes uploading.
  */
 export function handleRefreshEmail(payload: unknown): void {
   const event = asRefreshEmailEvent(payload);
@@ -46,6 +50,13 @@ export function handleRefreshEmail(payload: unknown): void {
   // done; refetching on the delete request itself races the cascade delete.
   if (event.event === 'link_removed') {
     invalidateAllSoup();
+    invalidateEmailLinks();
+    return;
+  }
+
+  // The inbox's own photo finished uploading; refetch links to pick up the
+  // newly-derived `photo_url`.
+  if (event.event === RefreshEmailEventOneOfOneoneEvent.photo_synced) {
     invalidateEmailLinks();
     return;
   }

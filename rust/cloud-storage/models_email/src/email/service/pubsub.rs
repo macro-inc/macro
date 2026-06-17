@@ -75,6 +75,14 @@ pub enum LinkManagerMessage {
     },
     /// Delete all links for a user, identified by fusionauth_user_id.
     DeleteUser { fusionauth_user_id: String },
+    /// Notify everyone who can act on a link (its owner and any delegates) that
+    /// its grant has gone dead and the inbox needs to be reconnected. Enqueued
+    /// once, on the edge where a link first transitions into needs-reauth.
+    NotifyReauthRequired { link_id: Uuid },
+    /// Probe a single link's grant and record its sync health, without renewing the
+    /// Gmail watch or syncing contacts. Enqueued by the periodic health poll so a dead
+    /// grant surfaces between the daily full refreshes.
+    HealthCheck { link_id: Uuid },
 }
 
 /// The message we send from the email_scheduled_handler lambda to the service via SQS to trigger

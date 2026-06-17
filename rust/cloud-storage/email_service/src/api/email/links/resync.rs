@@ -62,14 +62,26 @@ pub async fn resync_link_handler(
         .into_response());
     }
 
-    let backfill_job = email_db_client::backfill::job::insert::create_backfill_job(
+    let Some(backfill_job) = email_db_client::backfill::job::insert::create_backfill_job(
         &ctx.db,
         link.id,
         link.fusionauth_user_id.as_str(),
         None,
     )
     .await
-    .context("failed to create backfill job")?;
+    .context("failed to create backfill job")?
+    else {
+        // A concurrent request started the backfill between the check above and here.
+        let active = email_db_client::backfill::job::get::get_active_backfill_job(&ctx.db, link.id)
+            .await
+            .context("failed to fetch active backfill job after insert conflict")?
+            .context("backfill insert conflicted but no active job found")?;
+        return Ok(Json(ResyncResponse {
+            backfill_job_id: active.id,
+            already_in_progress: true,
+        })
+        .into_response());
+    };
 
     let ps_message = BackfillPubsubMessage {
         backfill_operation: BackfillOperation::Init(JobScopedPayload {

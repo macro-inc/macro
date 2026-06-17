@@ -6,7 +6,7 @@ pub use grouping::{
 };
 
 use call::domain::models::GetCallRecordsRequest;
-use comms::domain::models::GetChannelsRequest;
+use channels::domain::models::GetChannelsRequest;
 use crm::domain::auth::CrmTeamReceipt;
 use crm::domain::companies_repo::{CrmCompanyListSort, CrmCompanySoupCursor};
 use email::domain::models::{GetEmailsRequest, PreviewView};

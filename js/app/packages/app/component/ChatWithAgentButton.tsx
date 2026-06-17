@@ -1,4 +1,6 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { DEFAULT_MODEL } from '@core/component/AI/constant';
+import { setPendingSendData } from '@core/component/AI/signal/pendingSend';
 import type { Attachment } from '@core/component/AI/types';
 import { storeChatStateImmediate } from '@core/component/AI/util/storage';
 import { toast } from '@core/component/Toast/Toast';
@@ -55,6 +57,8 @@ function buildAttachment(entity: ChatWithAgentEntity): Attachment | undefined {
 async function createAndOpenChat(seed: {
   input?: string;
   attachments?: Attachment[];
+  /** When set, sent immediately when the chat opens instead of seeding the input */
+  message?: string;
 }) {
   const result = await createChat();
   if ('error' in result || !result.chatId) {
@@ -63,7 +67,16 @@ async function createAndOpenChat(seed: {
     return;
   }
 
-  storeChatStateImmediate(result.chatId, seed);
+  const { message, ...stored } = seed;
+  if (message) {
+    setPendingSendData({
+      content: message,
+      attachments: seed.attachments ?? [],
+      model: DEFAULT_MODEL,
+    });
+  } else {
+    storeChatStateImmediate(result.chatId, stored);
+  }
   globalSplitManager()?.openWithSplit(
     { type: 'chat', id: result.chatId },
     { activate: true, preferNewSplit: true }
@@ -82,6 +95,11 @@ export async function openChatWithAgent(entity: ChatWithAgentEntity) {
 
 export async function openChatWithInput(initialInput: string) {
   await createAndOpenChat({ input: initialInput });
+}
+
+/** Open a new chat and immediately send `message` (the chat picks it up via pending send) */
+export async function openChatWithMessage(message: string) {
+  await createAndOpenChat({ message });
 }
 
 export function ChatWithAgentButton(props: { entity: ChatWithAgentEntity }) {

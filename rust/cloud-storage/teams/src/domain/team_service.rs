@@ -298,6 +298,25 @@ where
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn is_user_premium(&self, user_id: &MacroUserIdStr<'_>) -> Result<bool, TeamError> {
+        let Some(customer_id) = self.team_repository.get_stripe_customer_id(user_id).await? else {
+            return Ok(false);
+        };
+
+        match self
+            .customer_repository
+            .get_subscription_id_for_customer(&customer_id)
+            .await
+        {
+            Ok(_) => Ok(true),
+            Err(CustomerError::NoStripeCustomerId | CustomerError::SubscriptionNotActive) => {
+                Ok(false)
+            }
+            Err(e) => Err(TeamError::StorageLayerError(e.into())),
+        }
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn invite_users_to_team(
         &self,
         entity_access_receipt: EntityAccessReceipt<OwnerTeamRole>,

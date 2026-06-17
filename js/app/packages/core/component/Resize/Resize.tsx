@@ -169,6 +169,7 @@ function Zone(props: ParentProps<ZoneProps>) {
                     offset={panel().offset + panel().size}
                     index={actualIndex}
                     nudge={solver.moveHandle}
+                    root={root}
                   />
                 </Show>
               );
@@ -370,11 +371,11 @@ type GutterProps = {
   offset: number;
   index: number;
   nudge: (index: number, amt: number) => void;
+  root: () => HTMLDivElement | undefined;
 };
 
 function Gutter(props: GutterProps) {
-  const ctx = useContext(ResizeZoneContext);
-  if (!ctx) throw new Error('<Resize.Gutter> must be inside <Resize.Zone>');
+  const ctx = useContext(ResizeZoneContext)!;
   const styles = createMemo(() => {
     if (ctx.direction === 'horizontal') {
       return {
@@ -396,24 +397,52 @@ function Gutter(props: GutterProps) {
   });
 
   let [ptrDown, setPtrDown] = createSignal(false);
+  let lastPointerPosition: number | undefined;
+
+  function getAxisZoom() {
+    const root = props.root();
+    if (!root) return 1;
+
+    const rect = root.getBoundingClientRect();
+    const visualSize =
+      ctx.direction === 'horizontal' ? rect.width : rect.height;
+    const layoutSize =
+      ctx.direction === 'horizontal' ? root.offsetWidth : root.offsetHeight;
+
+    if (visualSize <= 0 || layoutSize <= 0) return 1;
+    return visualSize / layoutSize;
+  }
+
+  function eventPosition(ev: PointerEvent) {
+    return ctx.direction === 'horizontal' ? ev.clientX : ev.clientY;
+  }
 
   function onPointerDown(ev: PointerEvent) {
     if (ev.button !== 0) return;
     (ev.currentTarget as HTMLElement).setPointerCapture?.(ev.pointerId);
     window.addEventListener('pointermove', onPointerMove);
     window.addEventListener('pointerup', onPointerUp, { once: true });
+    window.addEventListener('pointercancel', onPointerUp, { once: true });
+    lastPointerPosition = eventPosition(ev);
     setPtrDown(true);
     ev.preventDefault();
   }
 
   function onPointerMove(ev: PointerEvent) {
     if (!ptrDown) return;
-    const delta = ctx?.direction === 'horizontal' ? ev.movementX : ev.movementY;
+    const position = eventPosition(ev);
+    const prevPosition = lastPointerPosition ?? position;
+    lastPointerPosition = position;
+
+    const delta = (position - prevPosition) / getAxisZoom();
     props.nudge(props.index, delta);
   }
 
   function onPointerUp() {
     window.removeEventListener('pointermove', onPointerMove);
+    window.removeEventListener('pointerup', onPointerUp);
+    window.removeEventListener('pointercancel', onPointerUp);
+    lastPointerPosition = undefined;
     setPtrDown(false);
   }
 

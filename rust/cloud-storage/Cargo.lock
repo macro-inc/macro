@@ -48,15 +48,18 @@ name = "agent"
 version = "0.1.0"
 dependencies = [
  "ai_toolset",
+ "ai_usage",
  "anyhow",
  "async-openai",
  "async-stream",
  "async-trait",
  "attachment",
  "futures",
+ "macro_env_var",
  "macro_user_id",
  "model-entity",
  "non_empty",
+ "regex",
  "rig-core",
  "schemars 1.2.1",
  "serde",
@@ -97,6 +100,7 @@ version = "0.1.0"
 dependencies = [
  "agent",
  "ai_toolset",
+ "ai_usage",
  "anthropic",
  "anyhow",
  "async-trait",
@@ -108,7 +112,6 @@ dependencies = [
  "channels",
  "chat",
  "chrono",
- "comms",
  "connection",
  "cool_asserts",
  "crm",
@@ -179,6 +182,28 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.18",
+ "tracing",
+ "utoipa",
+ "workspace-hack",
+]
+
+[[package]]
+name = "ai_usage"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "chrono",
+ "macro_db_migrator",
+ "macro_user_id",
+ "macro_uuid",
+ "model_user",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "strum",
+ "thiserror 2.0.18",
+ "tokio",
  "tracing",
  "utoipa",
  "workspace-hack",
@@ -306,6 +331,7 @@ dependencies = [
  "chrono",
  "futures",
  "lazy_static",
+ "macro_env_var",
  "rand 0.9.4",
  "regex",
  "reqwest 0.13.4",
@@ -675,6 +701,7 @@ dependencies = [
  "comms_db_client",
  "cookie",
  "cool_asserts",
+ "database_env_vars",
  "document_storage_service_client",
  "doppleganger",
  "doppler-config",
@@ -1767,7 +1794,6 @@ dependencies = [
  "rand 0.9.4",
  "serde",
  "serde_json",
- "sha2 0.10.9",
  "sqlx",
  "thiserror 2.0.18",
  "tokio",
@@ -1929,12 +1955,13 @@ version = "0.1.0"
 dependencies = [
  "agent",
  "ai_toolset",
+ "ai_usage",
  "anyhow",
  "async-trait",
  "aws-sdk-s3",
  "axum",
+ "channels",
  "chrono",
- "comms",
  "connection",
  "entity_access",
  "entity_access_db_utils",
@@ -1978,6 +2005,7 @@ dependencies = [
  "macro_aws_config",
  "macro_db_migrator",
  "macro_entrypoint",
+ "macro_env_var",
  "sqlx",
  "tokio",
  "tracing",
@@ -2097,6 +2125,7 @@ dependencies = [
  "agent",
  "ai_tools",
  "ai_toolset",
+ "ai_usage",
  "anyhow",
  "async-trait",
  "bot_id",
@@ -2119,6 +2148,7 @@ dependencies = [
  "ai_toolset",
  "anyhow",
  "async-trait",
+ "attachment",
  "axum",
  "bot_id",
  "chrono",
@@ -2126,7 +2156,11 @@ dependencies = [
  "contacts",
  "entity_access",
  "entity_access_db_utils",
+ "filter_ast",
+ "frecency",
+ "futures",
  "http-body-util",
+ "item_filters",
  "macro_db_migrator",
  "macro_user_id",
  "macro_uuid",
@@ -2137,7 +2171,10 @@ dependencies = [
  "model_user",
  "models_pagination",
  "models_permissions",
+ "non_empty",
  "notification",
+ "recursion",
+ "rootcause",
  "schemars 1.2.1",
  "serde",
  "serde_json",
@@ -2343,46 +2380,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "comms"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "attachment",
- "axum",
- "chrono",
- "doppleganger",
- "entity_access",
- "filter_ast",
- "frecency",
- "futures",
- "item_filters",
- "macro_db_migrator",
- "macro_user_id",
- "model-entity",
- "model_user",
- "models_comms",
- "models_pagination",
- "non_empty",
- "readonly_pool",
- "recursion",
- "rootcause",
- "serde",
- "serde_json",
- "sqlx",
- "thiserror 2.0.18",
- "tokio",
- "tracing",
- "utoipa",
- "uuid",
- "workspace-hack",
-]
-
-[[package]]
 name = "comms_db_client"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "cached",
+ "channels",
  "chrono",
  "doppleganger",
  "futures",
@@ -2390,7 +2393,6 @@ dependencies = [
  "macro_user_id",
  "macro_uuid",
  "model",
- "models_comms",
  "serde",
  "serde_json",
  "sqlx",
@@ -2598,12 +2600,15 @@ dependencies = [
  "aws-sdk-sqs",
  "axum",
  "contacts",
+ "database_env_vars",
  "http-body-util",
  "macro_auth",
  "macro_aws_config",
+ "macro_config",
  "macro_cors",
  "macro_entrypoint",
  "macro_env",
+ "macro_env_var",
  "macro_middleware",
  "macro_service_urls",
  "macro_user_id",
@@ -2625,9 +2630,9 @@ dependencies = [
 
 [[package]]
 name = "convert_case"
-version = "0.10.0"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "633458d4ef8c78b72454de2d54fd6ab2e60f9e02be22f3c6104cdc8a4e0fceb9"
+checksum = "affbf0190ed2caf063e3def54ff444b449371d55c58e513a95ab98eca50adb49"
 dependencies = [
  "unicode-segmentation",
 ]
@@ -2642,14 +2647,17 @@ dependencies = [
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
  "axum",
+ "database_env_vars",
  "futures",
  "http-body-util",
  "lambda_client",
  "macro_aws_config",
+ "macro_config",
  "macro_cors",
  "macro_db_client",
  "macro_entrypoint",
  "macro_env",
+ "macro_env_var",
  "macro_middleware",
  "macro_uuid",
  "model",
@@ -3118,6 +3126,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a4ae5f15dda3c708c0ade84bfee31ccab44a3da4f88015ed22f63732abe300c8"
 
 [[package]]
+name = "database_env_vars"
+version = "0.1.0"
+dependencies = [
+ "macro_env_var",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
 name = "dataloss_prevention_handler"
 version = "0.1.0"
 dependencies = [
@@ -3128,6 +3145,7 @@ dependencies = [
  "lambda_runtime",
  "macro_aws_config",
  "macro_entrypoint",
+ "macro_env_var",
  "s3_client",
  "sns_client",
  "tokio",
@@ -3191,6 +3209,7 @@ dependencies = [
  "aws_lambda_events",
  "lambda_runtime",
  "macro_entrypoint",
+ "macro_env_var",
  "macro_uuid",
  "sqlx",
  "tokio",
@@ -3213,6 +3232,7 @@ dependencies = [
  "macro_db_client",
  "macro_entrypoint",
  "macro_env",
+ "macro_env_var",
  "macro_uuid",
  "model",
  "serde",
@@ -3447,6 +3467,7 @@ dependencies = [
  "aho-corasick",
  "ai_tools",
  "ai_toolset",
+ "ai_usage",
  "anyhow",
  "async-openai",
  "async-stream",
@@ -3458,9 +3479,9 @@ dependencies = [
  "aws-sdk-sqs",
  "axum",
  "call",
+ "channels",
  "chat",
  "chrono",
- "comms",
  "connection_gateway",
  "cookie",
  "crm",
@@ -3542,6 +3563,7 @@ name = "document_storage_service"
 version = "0.1.0"
 dependencies = [
  "ai_tools",
+ "ai_usage",
  "analytics_client",
  "anyhow",
  "aws-sdk-dynamodb",
@@ -3562,7 +3584,6 @@ dependencies = [
  "chrono",
  "clap",
  "cloudfront_sign",
- "comms",
  "comms_db_client",
  "connection",
  "connection_gateway_client",
@@ -3590,6 +3611,7 @@ dependencies = [
  "macro_auth",
  "macro_aws_config",
  "macro_axum_utils",
+ "macro_config",
  "macro_cors",
  "macro_db_client",
  "macro_entrypoint",
@@ -3723,6 +3745,7 @@ dependencies = [
  "lexical_client",
  "macro_aws_config",
  "macro_entrypoint",
+ "macro_env_var",
  "macro_service_urls",
  "model",
  "s3_key",
@@ -3765,6 +3788,7 @@ dependencies = [
  "macro_aws_config",
  "macro_db_migrator",
  "macro_entrypoint",
+ "macro_env_var",
  "macro_service_urls",
  "macro_user_id",
  "macro_uuid",
@@ -3815,6 +3839,7 @@ dependencies = [
  "macro_db_client",
  "macro_entrypoint",
  "macro_env",
+ "macro_env_var",
  "macro_sha_count_client",
  "macro_uuid",
  "model",
@@ -4121,6 +4146,7 @@ dependencies = [
  "macro_db_migrator",
  "macro_entrypoint",
  "macro_env",
+ "macro_env_var",
  "model",
  "models_email",
  "sqlx",
@@ -4144,6 +4170,7 @@ dependencies = [
  "macro_db_migrator",
  "macro_entrypoint",
  "macro_env",
+ "macro_env_var",
  "models_email",
  "sqlx",
  "sqs_client",
@@ -4270,6 +4297,7 @@ dependencies = [
  "macro_aws_config",
  "macro_entrypoint",
  "macro_env",
+ "macro_env_var",
  "sqlx",
  "sqs_client",
  "tokio",
@@ -4287,6 +4315,7 @@ dependencies = [
  "lambda_runtime",
  "macro_db_client",
  "macro_entrypoint",
+ "macro_env_var",
  "serde",
  "serde_json",
  "sqlx",
@@ -5012,6 +5041,7 @@ dependencies = [
  "jsonwebtoken 10.3.0",
  "macro_db_migrator",
  "macro_env",
+ "macro_env_var",
  "macro_service_urls",
  "macro_user_id",
  "macro_uuid",
@@ -5918,6 +5948,7 @@ dependencies = [
  "macro_cors",
  "macro_entrypoint",
  "macro_env",
+ "macro_env_var",
  "macro_middleware",
  "model",
  "reqwest 0.13.4",
@@ -6580,11 +6611,13 @@ dependencies = [
  "anyhow",
  "futures",
  "http 1.4.0",
+ "macro_env_var",
  "reqwest 0.13.4",
  "serde",
  "serde_json",
  "tokio",
  "tokio-tungstenite 0.28.0",
+ "tracing",
  "tungstenite 0.28.0",
  "workspace-hack",
 ]
@@ -6763,11 +6796,13 @@ name = "macro_config"
 version = "0.1.0"
 dependencies = [
  "macro_config_derive",
+ "macro_env",
  "macro_env_var",
  "remote_env_var",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
+ "tokio",
  "tracing",
  "workspace-hack",
 ]
@@ -6843,6 +6878,7 @@ version = "0.1.0"
 dependencies = [
  "dotenvy",
  "macro_env",
+ "macro_env_var",
  "opentelemetry",
  "opentelemetry-otlp",
  "opentelemetry_sdk",
@@ -7171,13 +7207,14 @@ version = "0.1.0"
 dependencies = [
  "ai_tools",
  "ai_toolset",
+ "ai_usage",
  "anyhow",
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
  "axum",
  "call",
+ "channels",
  "chat",
- "comms",
  "crm",
  "documents",
  "email",
@@ -7200,6 +7237,7 @@ dependencies = [
  "macro_user_id",
  "mcp_auth_proxy",
  "notification",
+ "prompt",
  "properties",
  "readonly_pool",
  "redis",
@@ -7250,11 +7288,12 @@ dependencies = [
  "agent",
  "ai_tools",
  "ai_toolset",
+ "ai_usage",
  "anyhow",
  "axum",
  "call",
+ "channels",
  "chrono",
- "comms",
  "crm",
  "documents",
  "email",
@@ -7434,7 +7473,6 @@ dependencies = [
  "model_file_type",
  "model_user",
  "models_bulk_upload",
- "models_comms",
  "models_pagination",
  "models_permissions",
  "schemars 1.2.1",
@@ -7490,12 +7528,10 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
- "doppleganger",
  "invite_email",
  "macro_user_id",
  "mention_utils",
  "model-entity",
- "models_comms",
  "models_pagination",
  "notification",
  "paste",
@@ -7530,22 +7566,6 @@ dependencies = [
  "serde",
  "strum",
  "utoipa",
- "workspace-hack",
-]
-
-[[package]]
-name = "models_comms"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "chrono",
- "doppleganger",
- "frecency",
- "macro_user_id",
- "serde",
- "strum",
- "thiserror 2.0.18",
- "uuid",
  "workspace-hack",
 ]
 
@@ -7704,14 +7724,15 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "call",
+ "channels",
  "chrono",
- "comms",
  "crm",
  "document_sub_type",
  "doppleganger",
  "email",
  "item_filters",
  "macro_user_id",
+ "model",
  "model-entity",
  "models_pagination",
  "models_properties",
@@ -7828,6 +7849,7 @@ name = "native_app_server"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "macro_env_var",
  "native_app_service",
  "rootcause",
  "semver",
@@ -7847,6 +7869,7 @@ dependencies = [
  "axum",
  "cool_asserts",
  "futures",
+ "macro_env_var",
  "reqwest 0.13.4",
  "rootcause",
  "semver",
@@ -8071,6 +8094,7 @@ dependencies = [
  "aws-sdk-sqs",
  "axum",
  "chrono",
+ "database_env_vars",
  "decode_jwt",
  "email_formatting",
  "hmac 0.12.1",
@@ -8079,6 +8103,7 @@ dependencies = [
  "last_online_tracker",
  "macro_auth",
  "macro_aws_config",
+ "macro_config",
  "macro_cors",
  "macro_entrypoint",
  "macro_env",
@@ -8095,7 +8120,6 @@ dependencies = [
  "model_file_type",
  "model_notifications",
  "model_user",
- "models_comms",
  "models_pagination",
  "notification",
  "notification_db_client",
@@ -8220,7 +8244,7 @@ version = "5.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "51e219e79014df21a225b1860a479e2dcd7cbd9130f4defd4bd0e191ea31d67d"
 dependencies = [
- "base64 0.22.1",
+ "base64 0.21.7",
  "chrono",
  "getrandom 0.2.17",
  "http 1.4.0",
@@ -8563,6 +8587,7 @@ dependencies = [
  "lambda_runtime",
  "macro_aws_config",
  "macro_entrypoint",
+ "macro_env_var",
  "sqlx",
  "sqs_client",
  "tokio",
@@ -8580,6 +8605,7 @@ dependencies = [
  "lambda_runtime",
  "macro_aws_config",
  "macro_entrypoint",
+ "macro_env_var",
  "serde_json",
  "sqlx",
  "sqs_client",
@@ -9532,7 +9558,7 @@ dependencies = [
  "once_cell",
  "socket2 0.6.3",
  "tracing",
- "windows-sys 0.60.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -10043,9 +10069,8 @@ checksum = "47b34b781b31e5d73e9fbc8689c70551fd1ade9a19e3e28cfec8580a79290cc4"
 
 [[package]]
 name = "rig-core"
-version = "0.37.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a6bd308c89a90f89ce7cd6641a078c7d2a2c55fb5a4147fd48b5a0989c3430bd"
+version = "0.38.2"
+source = "git+https://github.com/macro-inc/rig?branch=feat%2Fresponses-api-non-strict-tools#6deadfc6f9b432c849ea79733a549f46407530b7"
 dependencies = [
  "as-any",
  "async-stream",
@@ -10069,7 +10094,7 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.18",
  "tokio",
- "tokio-tungstenite 0.23.1",
+ "tokio-tungstenite 0.28.0",
  "tracing",
  "tracing-futures",
  "url",
@@ -10077,9 +10102,8 @@ dependencies = [
 
 [[package]]
 name = "rig-derive"
-version = "0.1.14"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5ba9149c63403a49ddfd5d373860487e6feef0021bfe5329812d1c4e72ee207c"
+version = "0.38.2"
+source = "git+https://github.com/macro-inc/rig?branch=feat%2Fresponses-api-non-strict-tools#6deadfc6f9b432c849ea79733a549f46407530b7"
 dependencies = [
  "convert_case",
  "deluxe",
@@ -10480,6 +10504,7 @@ dependencies = [
  "agent",
  "ai_tools",
  "ai_toolset",
+ "ai_usage",
  "anyhow",
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
@@ -10618,6 +10643,7 @@ dependencies = [
  "macro_db_client",
  "macro_entrypoint",
  "macro_env",
+ "macro_env_var",
  "macro_middleware",
  "macro_service_urls",
  "macro_user_id",
@@ -10660,8 +10686,8 @@ dependencies = [
  "anyhow",
  "aws-sdk-secretsmanager",
  "axum",
+ "channels",
  "chrono",
- "comms",
  "comms_db_client",
  "crm",
  "document_sub_type",
@@ -10675,6 +10701,7 @@ dependencies = [
  "macro_aws_config",
  "macro_db_client",
  "macro_env",
+ "macro_env_var",
  "macro_middleware",
  "macro_user_id",
  "model",
@@ -10725,6 +10752,7 @@ dependencies = [
  "lambda_runtime",
  "macro_aws_config",
  "macro_entrypoint",
+ "macro_env_var",
  "macro_service_urls",
  "s3_key",
  "sqs_client",
@@ -10799,6 +10827,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "aws-sdk-s3",
+ "channels",
  "chrono",
  "clap",
  "comms_db_client",
@@ -11161,6 +11190,7 @@ dependencies = [
  "macro_aws_config",
  "macro_entrypoint",
  "macro_env",
+ "macro_env_var",
  "mockall",
  "redis",
  "sqlx",
@@ -11380,8 +11410,8 @@ dependencies = [
  "axum",
  "axum-extra",
  "call",
+ "channels",
  "chrono",
- "comms",
  "cool_asserts",
  "cowlike",
  "crm",
@@ -11736,6 +11766,7 @@ dependencies = [
  "macro_cors",
  "macro_entrypoint",
  "macro_env",
+ "macro_env_var",
  "macro_middleware",
  "macro_service_urls",
  "model",
@@ -12025,6 +12056,7 @@ name = "task_dedup"
 version = "0.1.0"
 dependencies = [
  "agent",
+ "ai_usage",
  "anyhow",
  "async-trait",
  "aws-sdk-secretsmanager",
@@ -12322,22 +12354,6 @@ dependencies = [
  "futures-core",
  "tokio",
  "tokio-stream",
-]
-
-[[package]]
-name = "tokio-tungstenite"
-version = "0.23.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c6989540ced10490aaf14e6bad2e3d33728a2813310a0c71d1574304c49631cd"
-dependencies = [
- "futures-util",
- "log",
- "rustls 0.23.40",
- "rustls-pki-types",
- "tokio",
- "tokio-rustls 0.26.4",
- "tungstenite 0.23.0",
- "webpki-roots 0.26.11",
 ]
 
 [[package]]
@@ -12728,26 +12744,6 @@ checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 
 [[package]]
 name = "tungstenite"
-version = "0.23.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6e2e2ce1e47ed2994fd43b04c8f618008d4cabdd5ee34027cf14f9d918edd9c8"
-dependencies = [
- "byteorder",
- "bytes",
- "data-encoding",
- "http 1.4.0",
- "httparse",
- "log",
- "rand 0.8.6",
- "rustls 0.23.40",
- "rustls-pki-types",
- "sha1 0.10.6",
- "thiserror 1.0.69",
- "utf-8",
-]
-
-[[package]]
-name = "tungstenite"
 version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8628dcc84e5a09eb3d8423d6cb682965dea9133204e8fb3efee74c2a0c259442"
@@ -12833,6 +12829,7 @@ dependencies = [
  "macro_cors",
  "macro_entrypoint",
  "macro_env",
+ "macro_env_var",
  "reqwest 0.13.4",
  "scraper",
  "serde",
@@ -12948,6 +12945,7 @@ dependencies = [
  "lambda_runtime",
  "macro_aws_config",
  "macro_entrypoint",
+ "macro_env_var",
  "macro_service_urls",
  "model",
  "model-entity",
@@ -12977,6 +12975,7 @@ dependencies = [
  "lambda_runtime",
  "macro_aws_config",
  "macro_entrypoint",
+ "macro_env_var",
  "models_bulk_upload",
  "s3_key",
  "serde",
@@ -13017,10 +13016,12 @@ dependencies = [
  "lambda_runtime",
  "macro_db_client",
  "macro_entrypoint",
+ "macro_env_var",
  "serde",
  "serde_json",
  "sqlx",
  "tokio",
+ "tracing",
  "workspace-hack",
 ]
 
@@ -13600,15 +13601,6 @@ dependencies = [
 
 [[package]]
 name = "windows-sys"
-version = "0.60.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f2f500e4d28234f72040990ec9d39e3a6b950f9f22d3dba18416c35882612bcb"
-dependencies = [
- "windows-targets 0.53.5",
-]
-
-[[package]]
-name = "windows-sys"
 version = "0.61.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ae137229bcbd6cdf0f7b80a31df61766145077ddf49416a728b02cb3921ff3fc"
@@ -13655,28 +13647,11 @@ dependencies = [
  "windows_aarch64_gnullvm 0.52.6",
  "windows_aarch64_msvc 0.52.6",
  "windows_i686_gnu 0.52.6",
- "windows_i686_gnullvm 0.52.6",
+ "windows_i686_gnullvm",
  "windows_i686_msvc 0.52.6",
  "windows_x86_64_gnu 0.52.6",
  "windows_x86_64_gnullvm 0.52.6",
  "windows_x86_64_msvc 0.52.6",
-]
-
-[[package]]
-name = "windows-targets"
-version = "0.53.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4945f9f551b88e0d65f3db0bc25c33b8acea4d9e41163edf90dcd0b19f9069f3"
-dependencies = [
- "windows-link",
- "windows_aarch64_gnullvm 0.53.1",
- "windows_aarch64_msvc 0.53.1",
- "windows_i686_gnu 0.53.1",
- "windows_i686_gnullvm 0.53.1",
- "windows_i686_msvc 0.53.1",
- "windows_x86_64_gnu 0.53.1",
- "windows_x86_64_gnullvm 0.53.1",
- "windows_x86_64_msvc 0.53.1",
 ]
 
 [[package]]
@@ -13698,12 +13673,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32a4622180e7a0ec044bb555404c800bc9fd9ec262ec147edd5989ccd0c02cd3"
 
 [[package]]
-name = "windows_aarch64_gnullvm"
-version = "0.53.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a9d8416fa8b42f5c947f8482c43e7d89e73a173cead56d044f6a56104a6d1b53"
-
-[[package]]
 name = "windows_aarch64_msvc"
 version = "0.42.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13720,12 +13689,6 @@ name = "windows_aarch64_msvc"
 version = "0.52.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "09ec2a7bb152e2252b53fa7803150007879548bc709c039df7627cabbd05d469"
-
-[[package]]
-name = "windows_aarch64_msvc"
-version = "0.53.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b9d782e804c2f632e395708e99a94275910eb9100b2114651e04744e9b125006"
 
 [[package]]
 name = "windows_i686_gnu"
@@ -13746,22 +13709,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8e9b5ad5ab802e97eb8e295ac6720e509ee4c243f69d781394014ebfe8bbfa0b"
 
 [[package]]
-name = "windows_i686_gnu"
-version = "0.53.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "960e6da069d81e09becb0ca57a65220ddff016ff2d6af6a223cf372a506593a3"
-
-[[package]]
 name = "windows_i686_gnullvm"
 version = "0.52.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0eee52d38c090b3caa76c563b86c3a4bd71ef1a819287c19d586d7334ae8ed66"
-
-[[package]]
-name = "windows_i686_gnullvm"
-version = "0.53.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fa7359d10048f68ab8b09fa71c3daccfb0e9b559aed648a8f95469c27057180c"
 
 [[package]]
 name = "windows_i686_msvc"
@@ -13782,12 +13733,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "240948bc05c5e7c6dabba28bf89d89ffce3e303022809e73deaefe4f6ec56c66"
 
 [[package]]
-name = "windows_i686_msvc"
-version = "0.53.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e7ac75179f18232fe9c285163565a57ef8d3c89254a30685b57d83a38d326c2"
-
-[[package]]
 name = "windows_x86_64_gnu"
 version = "0.42.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13804,12 +13749,6 @@ name = "windows_x86_64_gnu"
 version = "0.52.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "147a5c80aabfbf0c7d901cb5895d1de30ef2907eb21fbbab29ca94c5b08b1a78"
-
-[[package]]
-name = "windows_x86_64_gnu"
-version = "0.53.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9c3842cdd74a865a8066ab39c8a7a473c0778a3f29370b5fd6b4b9aa7df4a499"
 
 [[package]]
 name = "windows_x86_64_gnullvm"
@@ -13830,12 +13769,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "24d5b23dc417412679681396f2b49f3de8c1473deb516bd34410872eff51ed0d"
 
 [[package]]
-name = "windows_x86_64_gnullvm"
-version = "0.53.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ffa179e2d07eee8ad8f57493436566c7cc30ac536a3379fdf008f47f6bb7ae1"
-
-[[package]]
 name = "windows_x86_64_msvc"
 version = "0.42.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13852,12 +13785,6 @@ name = "windows_x86_64_msvc"
 version = "0.52.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
-
-[[package]]
-name = "windows_x86_64_msvc"
-version = "0.53.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d6bbff5f0aada427a1e5a6da5f1f98158182f26556f345ac9e04d36d0ebed650"
 
 [[package]]
 name = "winnow"
@@ -13991,6 +13918,7 @@ dependencies = [
  "macro_aws_config",
  "macro_entrypoint",
  "macro_env",
+ "macro_env_var",
  "mockall",
  "serde_json",
  "tokio",
@@ -14086,7 +14014,6 @@ dependencies = [
  "rand 0.8.6",
  "rand 0.9.4",
  "redis",
- "regex",
  "regex-automata",
  "regex-syntax",
  "reqwest 0.13.4",

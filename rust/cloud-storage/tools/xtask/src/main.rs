@@ -17,6 +17,7 @@
 
 mod closures;
 mod hakari_ops;
+mod nextest_filter;
 
 use std::path::Path;
 
@@ -26,12 +27,20 @@ use guppy::MetadataCommand;
 
 fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let check = match args.iter().map(String::as_str).collect::<Vec<_>>()[..] {
-        ["deps"] => false,
-        ["deps", "--check"] => true,
-        _ => bail!("usage: cargo run -p xtask -- deps [--check]"),
-    };
+    match args.iter().map(String::as_str).collect::<Vec<_>>()[..] {
+        ["deps"] => run_deps(false),
+        ["deps", "--check"] => run_deps(true),
+        ["nextest-filter", changed_files_path] => {
+            let graph = build_graph(false)?;
+            nextest_filter::run(&graph, Path::new(changed_files_path))
+        }
+        _ => bail!(
+            "usage:\n  cargo run -p xtask -- deps [--check]\n  cargo run -p xtask -- nextest-filter <changed-files-path>"
+        ),
+    }
+}
 
+fn run_deps(check: bool) -> Result<()> {
     let graph = build_graph(check)?;
 
     let mut drift: Vec<String> = Vec::new();
