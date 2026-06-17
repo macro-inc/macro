@@ -117,13 +117,22 @@ export function createTimelineScales(
   });
 
   return {
+    /** Merged + warped session intervals. Source of truth for all coordinate math. */
     compressedTimeline,
+    /** The slice of the timeline currently on screen, in warped coordinates. Defaults to
+     *  the last DEFAULT_SESSIONS blocks; updated when the user pans or zooms. */
     visibleWindow,
+    /** Gap labels between activity blocks, pre-filtered to those wide enough to display. */
     gapMarkers,
+    /** Warped position → real timestamp (ms). Inverse of the warp compression. */
     warpedPositionToTimestamp,
+    /** Warped position → screen pixel within the container. */
     warpedPositionToContainerPosition,
+    /** Screen pixel → warped position. */
     containerPositionToWarpedPosition,
+    /** Real timestamp (ms) → screen pixel. Full two-step pipeline. */
     timestampToContainerPosition,
+    /** Screen pixel → real timestamp (ms). Full two-step pipeline. */
     containerPositionToTimestamp,
   };
 }

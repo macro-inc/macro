@@ -34,7 +34,8 @@ export function CreatePin(props: {
           value={label()}
           onInput={(e) => setLabel(e.currentTarget.value)}
           onKeyDown={(e) => {
-            if (e.key.length === 1 && !PIN_LABEL_RE.test(e.key)) e.preventDefault();
+            if (e.key.length === 1 && !PIN_LABEL_RE.test(e.key))
+              e.preventDefault();
             if (e.key === 'Enter') confirm();
             if (e.key === 'Escape') {
               e.preventDefault();
