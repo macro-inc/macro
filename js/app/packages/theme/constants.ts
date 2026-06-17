@@ -225,9 +225,9 @@ export const DEFAULT_THEMES = [
       a2: { l: 0.60, c: 0.19, h: 230 },
       a3: { l: 0.60, c: 0.19, h: 270 },
       a4: { l: 0.60, c: 0.19, h: 310 },
-      b0: { l: 0.98, c: 0.02, h: 292 },
-      b1: { l: 0.96, c: 0.025, h: 292 },
-      b2: { l: 0.93, c: 0.03, h: 303 },
+      b0: { l: 0.98, c: 0.012, h: 292 },
+      b1: { l: 0.96, c: 0.015, h: 292 },
+      b2: { l: 0.93, c: 0.018, h: 303 },
       b3: { l: 0.88, c: 0.04, h: 165 },
       b4: { l: 0.82, c: 0.05, h: 180 },
       c0: { l: 0.21, c: 0.06, h: 150 },
@@ -267,7 +267,7 @@ export const DEFAULT_THEMES = [
     id: 'Decepticon',
     name: 'Decepticon',
     version: 2,
-    depth: 0.06,
+    depth: 0.08,
     tokens: {
       // Accent: bold purple primary, then a vivid wide-hue categorical set
       a0: { l: 0.48,  c: 0.359, h: 289 },
@@ -279,8 +279,8 @@ export const DEFAULT_THEMES = [
       b0: { l: 0.913, c: 0.00,  h: 123 },
       b1: { l: 0.875, c: 0.02,  h: 215 },
       b2: { l: 0.813, c: 0.045, h: 157 },
-      b3: { l: 0.782, c: 0.00,  h: 339.44 },
-      b4: { l: 0.731, c: 0.00,  h: 339.44 },
+      b3: { l: 0.86,  c: 0.00,  h: 339.44 },
+      b4: { l: 0.83,  c: 0.00,  h: 339.44 },
       // Text: near-black, neutral
       c0: { l: 0.087, c: 0.00,  h: 339.44 },
       c1: { l: 0.125, c: 0.00,  h: 339.44 },
