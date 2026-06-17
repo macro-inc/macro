@@ -1,0 +1,143 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE ai_projection_instances\n            SET status = 'refreshing',\n                claimed_at = $1,\n                updated_at = $1\n            WHERE id = (\n                SELECT id\n                FROM ai_projection_instances\n                WHERE next_refresh_at <= $1\n                  AND (claimed_at IS NULL OR claimed_at <= $2)\n                  AND (\n                      (expiry = 'day' AND last_requested_at > $1::timestamptz - INTERVAL '1 day')\n                      OR (expiry = 'week' AND last_requested_at > $1::timestamptz - INTERVAL '7 days')\n                      OR (expiry = 'month' AND last_requested_at > $1::timestamptz - INTERVAL '30 days')\n                  )\n                ORDER BY next_refresh_at ASC, updated_at ASC, id ASC\n                FOR UPDATE SKIP LOCKED\n                LIMIT 1\n            )\n            RETURNING\n                id as \"id!: Uuid\",\n                projection_id as \"projection_id!: String\",\n                target_type as \"target_type!: String\",\n                target_id as \"target_id!: String\",\n                prompt_hash as \"prompt_hash!: String\",\n                prompt as \"prompt!: String\",\n                context,\n                schema as \"schema?: Value\",\n                generation_user_id as \"generation_user_id!: String\",\n                refresh_cadence as \"refresh_cadence!: String\",\n                expiry as \"expiry!: String\",\n                status as \"status!: String\",\n                output,\n                error,\n                generated_at as \"generated_at?: DateTime<Utc>\",\n                stale_at as \"stale_at?: DateTime<Utc>\",\n                next_refresh_at as \"next_refresh_at!: DateTime<Utc>\",\n                claimed_at as \"claimed_at?: DateTime<Utc>\",\n                last_requested_at as \"last_requested_at!: DateTime<Utc>\",\n                created_at as \"created_at!: DateTime<Utc>\",\n                updated_at as \"updated_at!: DateTime<Utc>\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!: Uuid",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "projection_id!: String",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "target_type!: String",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "target_id!: String",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "prompt_hash!: String",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "prompt!: String",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "context",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "schema?: Value",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 8,
+        "name": "generation_user_id!: String",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "refresh_cadence!: String",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "expiry!: String",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "status!: String",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "output",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
+        "name": "error",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
+        "name": "generated_at?: DateTime<Utc>",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 15,
+        "name": "stale_at?: DateTime<Utc>",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 16,
+        "name": "next_refresh_at!: DateTime<Utc>",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 17,
+        "name": "claimed_at?: DateTime<Utc>",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 18,
+        "name": "last_requested_at!: DateTime<Utc>",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 19,
+        "name": "created_at!: DateTime<Utc>",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 20,
+        "name": "updated_at!: DateTime<Utc>",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "33491c11a5d6b43f27c7236d1b287f94d8a47a44b21890869af6c934e77abcea"
+}

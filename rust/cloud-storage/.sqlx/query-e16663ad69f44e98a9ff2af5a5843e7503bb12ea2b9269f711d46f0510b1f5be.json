@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM ai_projection_instances\n            WHERE (expiry = 'day' AND last_requested_at <= $1::timestamptz - INTERVAL '1 day')\n               OR (expiry = 'week' AND last_requested_at <= $1::timestamptz - INTERVAL '7 days')\n               OR (expiry = 'month' AND last_requested_at <= $1::timestamptz - INTERVAL '30 days')\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e16663ad69f44e98a9ff2af5a5843e7503bb12ea2b9269f711d46f0510b1f5be"
+}

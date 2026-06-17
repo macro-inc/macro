@@ -1,0 +1,153 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO ai_projection_instances (\n                id,\n                projection_id,\n                target_type,\n                target_id,\n                prompt_hash,\n                prompt,\n                context,\n                schema,\n                generation_user_id,\n                refresh_cadence,\n                expiry,\n                status,\n                next_refresh_at,\n                last_requested_at,\n                created_at,\n                updated_at\n            )\n            VALUES (\n                $1,\n                $2,\n                $3,\n                $4,\n                $5,\n                $6,\n                $7,\n                $8,\n                $9,\n                $10,\n                $11,\n                'cold',\n                $12,\n                $12,\n                $12,\n                $12\n            )\n            ON CONFLICT (projection_id, target_type, target_id, prompt_hash) DO UPDATE\n            SET prompt = EXCLUDED.prompt,\n                context = EXCLUDED.context,\n                schema = EXCLUDED.schema,\n                generation_user_id = EXCLUDED.generation_user_id,\n                refresh_cadence = EXCLUDED.refresh_cadence,\n                expiry = EXCLUDED.expiry,\n                last_requested_at = GREATEST(\n                    ai_projection_instances.last_requested_at,\n                    EXCLUDED.last_requested_at\n                ),\n                updated_at = EXCLUDED.updated_at\n            RETURNING\n                id as \"id!: Uuid\",\n                projection_id as \"projection_id!: String\",\n                target_type as \"target_type!: String\",\n                target_id as \"target_id!: String\",\n                prompt_hash as \"prompt_hash!: String\",\n                prompt as \"prompt!: String\",\n                context,\n                schema as \"schema?: Value\",\n                generation_user_id as \"generation_user_id!: String\",\n                refresh_cadence as \"refresh_cadence!: String\",\n                expiry as \"expiry!: String\",\n                status as \"status!: String\",\n                output,\n                error,\n                generated_at as \"generated_at?: DateTime<Utc>\",\n                stale_at as \"stale_at?: DateTime<Utc>\",\n                next_refresh_at as \"next_refresh_at!: DateTime<Utc>\",\n                claimed_at as \"claimed_at?: DateTime<Utc>\",\n                last_requested_at as \"last_requested_at!: DateTime<Utc>\",\n                created_at as \"created_at!: DateTime<Utc>\",\n                updated_at as \"updated_at!: DateTime<Utc>\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!: Uuid",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "projection_id!: String",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "target_type!: String",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "target_id!: String",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "prompt_hash!: String",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "prompt!: String",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "context",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "schema?: Value",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 8,
+        "name": "generation_user_id!: String",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "refresh_cadence!: String",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "expiry!: String",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "status!: String",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "output",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
+        "name": "error",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
+        "name": "generated_at?: DateTime<Utc>",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 15,
+        "name": "stale_at?: DateTime<Utc>",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 16,
+        "name": "next_refresh_at!: DateTime<Utc>",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 17,
+        "name": "claimed_at?: DateTime<Utc>",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 18,
+        "name": "last_requested_at!: DateTime<Utc>",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 19,
+        "name": "created_at!: DateTime<Utc>",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 20,
+        "name": "updated_at!: DateTime<Utc>",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Jsonb",
+        "Text",
+        "Text",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "51da979dfdba99cdac35583b24310dad6817a8ae9803aa603b3eb30d91915ff2"
+}

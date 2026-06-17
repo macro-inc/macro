@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT EXISTS(\n                SELECT 1\n                FROM team\n                WHERE id = $1\n                  AND owner_id = $2\n\n                UNION\n\n                SELECT 1\n                FROM team_user\n                WHERE team_id = $1\n                  AND user_id = $2\n            ) as \"can_access!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "can_access!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "fbd72dc1a59e934ce82cef69a64d8b4c99f037aa39c675cf58fc3e1041059dc6"
+}

@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE ai_projection_instances\n            SET status = 'ready',\n                output = $5,\n                error = NULL,\n                generated_at = $6,\n                stale_at = CASE refresh_cadence\n                    WHEN 'high' THEN $6::timestamptz + INTERVAL '1 hour'\n                    WHEN 'medium' THEN $6::timestamptz + INTERVAL '6 hours'\n                    WHEN 'low' THEN $6::timestamptz + INTERVAL '24 hours'\n                    ELSE $6::timestamptz\n                END,\n                next_refresh_at = CASE refresh_cadence\n                    WHEN 'high' THEN $6::timestamptz + INTERVAL '1 hour'\n                    WHEN 'medium' THEN $6::timestamptz + INTERVAL '6 hours'\n                    WHEN 'low' THEN $6::timestamptz + INTERVAL '24 hours'\n                    ELSE $6::timestamptz\n                END,\n                claimed_at = NULL,\n                updated_at = $6\n            WHERE projection_id = $1\n              AND target_type = $2\n              AND target_id = $3\n              AND prompt_hash = $4\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "14d4e0f60923a633ec17c2013d88b5984524c5b7b428b84091c9cbe40bc8eba0"
+}
