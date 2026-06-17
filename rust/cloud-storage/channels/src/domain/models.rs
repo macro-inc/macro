@@ -1,6 +1,9 @@
 use chrono::{DateTime, Utc};
 #[cfg(feature = "list")]
-use item_filters::ast::{LiteralTree, channel::ChannelLiteral};
+use item_filters::ast::{
+    LiteralTree,
+    channel::{ChannelLiteral, ChannelThreadLiteral},
+};
 use macro_user_id::{email::ReadEmailParts, user_id::MacroUserIdStr};
 use models_pagination::{CreatedAt, CursorVal, Identify, SortOn};
 #[cfg(feature = "list")]
@@ -1200,8 +1203,8 @@ pub struct GetThreadReplyRowsRequest {
     pub macro_id: MacroUserIdStr<'static>,
     /// Optional result limit.
     pub limit: Option<u32>,
-    /// Cursor, sort, and channel/message-level filter.
-    pub query: Query<Uuid, SimpleSortMethod, LiteralTree<ChannelLiteral>>,
+    /// Cursor, sort, and channel-thread-level filter.
+    pub query: Query<Uuid, SimpleSortMethod, LiteralTree<ChannelThreadLiteral>>,
 }
 
 #[cfg(feature = "list")]
@@ -1222,7 +1225,7 @@ impl GetThreadReplyRowsRequest {
 pub struct GetThreadReplyRowsParams {
     macro_id: MacroUserIdStr<'static>,
     limit: Option<u32>,
-    query: Query<Uuid, SimpleSortMethod, LiteralTree<ChannelLiteral>>,
+    query: Query<Uuid, SimpleSortMethod, LiteralTree<ChannelThreadLiteral>>,
 }
 
 #[cfg(feature = "list")]
@@ -1237,8 +1240,8 @@ impl GetThreadReplyRowsParams {
         self.limit
     }
 
-    /// Cursor, sort, and channel/message-level filter.
-    pub fn query(&self) -> &Query<Uuid, SimpleSortMethod, LiteralTree<ChannelLiteral>> {
+    /// Cursor, sort, and channel-thread-level filter.
+    pub fn query(&self) -> &Query<Uuid, SimpleSortMethod, LiteralTree<ChannelThreadLiteral>> {
         &self.query
     }
 }

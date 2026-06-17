@@ -26,7 +26,10 @@ use chrono::{DateTime, Utc};
 #[cfg(feature = "list")]
 use filter_ast::Expr;
 #[cfg(feature = "list")]
-use item_filters::ast::{LiteralTree, channel::ChannelLiteral};
+use item_filters::ast::{
+    LiteralTree,
+    channel::{ChannelLiteral, ChannelThreadLiteral},
+};
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use models_pagination::{CreatedAt, Query};
 #[cfg(feature = "list")]
@@ -800,125 +803,39 @@ fn push_channel_thread_sort_expr(
 #[cfg(feature = "list")]
 fn push_channel_thread_filter_expr(
     builder: &mut QueryBuilder<'static, Postgres>,
-    expr: &Expr<ChannelLiteral>,
-    requesting_user_id: &str,
+    expr: &Expr<ChannelThreadLiteral>,
 ) {
     match expr {
         Expr::And(a, b) => {
             builder.push("(");
-            push_channel_thread_filter_expr(builder, a, requesting_user_id);
+            push_channel_thread_filter_expr(builder, a);
             builder.push(" AND ");
-            push_channel_thread_filter_expr(builder, b, requesting_user_id);
+            push_channel_thread_filter_expr(builder, b);
             builder.push(")");
         }
         Expr::Or(a, b) => {
             builder.push("(");
-            push_channel_thread_filter_expr(builder, a, requesting_user_id);
+            push_channel_thread_filter_expr(builder, a);
             builder.push(" OR ");
-            push_channel_thread_filter_expr(builder, b, requesting_user_id);
+            push_channel_thread_filter_expr(builder, b);
             builder.push(")");
         }
         Expr::Not(a) => {
             builder.push("(NOT ");
-            push_channel_thread_filter_expr(builder, a, requesting_user_id);
+            push_channel_thread_filter_expr(builder, a);
             builder.push(")");
         }
-        Expr::Literal(ChannelLiteral::ThreadId(id)) => {
+        Expr::Literal(ChannelThreadLiteral::ThreadId(id)) => {
             builder.push("m.id = ");
             builder.push_bind(*id);
         }
-        Expr::Literal(ChannelLiteral::Mention(user)) => {
-            builder.push(
-                r#"EXISTS (
-                    SELECT 1
-                    FROM comms_entity_mentions em
-                    JOIN comms_messages mentioned_message
-                      ON mentioned_message.id::text = em.source_entity_id
-                     AND em.source_entity_type = 'message'
-                    WHERE (mentioned_message.id = m.id OR mentioned_message.thread_id = m.id)
-                      AND mentioned_message.deleted_at IS NULL
-                      AND em.entity_type = 'user'
-                      AND em.entity_id = "#,
-            );
-            builder.push_bind(user.as_ref().to_string());
-            builder.push(")");
-        }
-        Expr::Literal(ChannelLiteral::OrganizationId(org_id)) => {
-            builder.push("c.org_id = ");
-            builder.push_bind(*org_id);
-        }
-        Expr::Literal(ChannelLiteral::TeamId(team_id)) => {
-            builder.push("c.team_id = ");
-            builder.push_bind(*team_id);
-        }
-        Expr::Literal(ChannelLiteral::ChannelId(channel_id)) => {
+        Expr::Literal(ChannelThreadLiteral::ChannelId(channel_id)) => {
             builder.push("c.id = ");
             builder.push_bind(*channel_id);
         }
-        Expr::Literal(ChannelLiteral::Sender(sender)) => {
-            builder.push(
-                r#"EXISTS (
-                    SELECT 1
-                    FROM comms_messages sender_message
-                    WHERE (sender_message.id = m.id OR sender_message.thread_id = m.id)
-                      AND sender_message.deleted_at IS NULL
-                      AND sender_message.sender_id = "#,
-            );
+        Expr::Literal(ChannelThreadLiteral::RootSender(sender)) => {
+            builder.push("m.sender_id = ");
             builder.push_bind(sender.as_ref().to_string());
-            builder.push(")");
-        }
-        Expr::Literal(ChannelLiteral::ChannelType(channel_type)) => {
-            builder.push("c.channel_type = ");
-            builder.push_bind(channel_type.to_string());
-            builder.push("::comms_channel_type");
-        }
-        Expr::Literal(ChannelLiteral::Importance(true)) => {
-            builder.push("TRUE");
-        }
-        Expr::Literal(ChannelLiteral::Importance(false)) => {
-            builder.push("FALSE");
-        }
-        Expr::Literal(ChannelLiteral::NotificationDone(done)) => {
-            builder.push(
-                r#"EXISTS (
-                    SELECT 1
-                    FROM notification n
-                    JOIN user_notification un ON un.notification_id = n.id
-                    WHERE un.user_id = "#,
-            );
-            builder.push_bind(requesting_user_id.to_string());
-            builder.push(
-                r#"
-                      AND un.deleted_at IS NULL
-                      AND n.event_item_type = 'message'
-                      AND n.event_item_id = m.id::text
-                      AND un.done = "#,
-            );
-            builder.push_bind(*done);
-            builder.push(")");
-        }
-        Expr::Literal(ChannelLiteral::NotificationSeen(seen)) => {
-            builder.push(
-                r#"EXISTS (
-                    SELECT 1
-                    FROM notification n
-                    JOIN user_notification un ON un.notification_id = n.id
-                    WHERE un.user_id = "#,
-            );
-            builder.push_bind(requesting_user_id.to_string());
-            builder.push(
-                r#"
-                      AND un.deleted_at IS NULL
-                      AND n.event_item_type = 'message'
-                      AND n.event_item_id = m.id::text
-                      AND "#,
-            );
-            if *seen {
-                builder.push("un.seen_at IS NOT NULL");
-            } else {
-                builder.push("un.seen_at IS NULL");
-            }
-            builder.push(")");
         }
     }
 }
@@ -972,7 +889,7 @@ fn build_channel_thread_rows_query(
 
     if let Some(expr) = cursor.filter().as_deref() {
         builder.push(" AND ");
-        push_channel_thread_filter_expr(&mut builder, expr, params.user().as_ref());
+        push_channel_thread_filter_expr(&mut builder, expr);
     }
 
     builder.push(" AND (");

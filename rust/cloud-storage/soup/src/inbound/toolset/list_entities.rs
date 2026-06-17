@@ -11,9 +11,15 @@ use filter_ast::Expr;
 use item_filters::{
     SharedEmailFilter,
     ast::{
-        EntityFilterAst, LiteralTree, call::CallLiteral, channel::ChannelLiteral,
-        chat::ChatLiteral, crm_company::CrmCompanyLiteral, document::DocumentLiteral,
-        email::EmailLiteral, foreign_entity::ForeignEntityLiteral, project::ProjectLiteral,
+        EntityFilterAst, LiteralTree,
+        call::CallLiteral,
+        channel::{ChannelLiteral, ChannelThreadLiteral},
+        chat::ChatLiteral,
+        crm_company::CrmCompanyLiteral,
+        document::DocumentLiteral,
+        email::EmailLiteral,
+        foreign_entity::ForeignEntityLiteral,
+        project::ProjectLiteral,
         properties::PropertiesLiteral,
     },
 };
@@ -86,6 +92,8 @@ pub enum ItemType {
     Email,
     /// Chat channel.
     Channel,
+    /// Chat channel thread.
+    ChannelThread,
     /// Call record.
     Call,
     /// Foreign entity record.
@@ -291,6 +299,14 @@ pub struct ListEntities {
     #[serde(default, rename = "chanf")]
     pub channel_filter: LiteralTree<ChannelLiteral>,
 
+    /// Channel thread entity AST filter.
+    #[schemars(
+        description = "Full soup AST channel thread filter (cthf).",
+        with = "Option<serde_json::Value>"
+    )]
+    #[serde(default, rename = "cthf")]
+    pub channel_thread_filter: LiteralTree<ChannelThreadLiteral>,
+
     /// Call entity AST filter.
     #[schemars(
         description = "Full soup AST call filter (callf).",
@@ -349,6 +365,7 @@ impl ListEntities {
                 crm_scope: None,
             },
             channel_filter: self.channel_filter.clone(),
+            channel_thread_filter: self.channel_thread_filter.clone(),
             call_filter: self.call_filter.clone(),
             // CrmCompany not in the tool surface — force-filter so the
             // AI never sees one.
@@ -396,6 +413,13 @@ impl ListEntities {
                 ast.channel_filter
             } else {
                 Some(Arc::new(Expr::val(ChannelLiteral::ChannelId(Uuid::nil()))))
+            },
+            channel_thread_filter: if include_types.contains(&ItemType::ChannelThread) {
+                ast.channel_thread_filter
+            } else {
+                Some(Arc::new(Expr::val(ChannelThreadLiteral::ThreadId(
+                    Uuid::nil(),
+                ))))
             },
             call_filter: if include_types.contains(&ItemType::Call) {
                 ast.call_filter

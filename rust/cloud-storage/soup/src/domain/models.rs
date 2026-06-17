@@ -19,7 +19,7 @@ use foreign_entity::domain::{
 use frecency::domain::models::{AggregateFrecency, FrecencyQueryErr};
 use item_filters::{
     EntityFilters,
-    ast::{EntityFilterAst, ExpandErr, channel::ChannelLiteral, crm_company::CrmCompanyLiteral},
+    ast::{EntityFilterAst, ExpandErr, crm_company::CrmCompanyLiteral},
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
@@ -454,30 +454,21 @@ impl SoupRequest<Option<EntityFilterAst>> {
             macro_id: self.user.clone(),
             limit: Some(self.limit as u32),
             query: match &self.cursor {
-                SoupQuery::Simple(SimpleQueryInner(Query::Sort(t, f))) => {
-                    let filter = f.as_ref().and_then(|f| f.channel_filter.clone());
-                    if channel_filter_contains_thread_id(filter.as_deref()) {
-                        return None;
-                    }
-                    Some(Query::Sort(*t, filter))
-                }
+                SoupQuery::Simple(SimpleQueryInner(Query::Sort(t, f))) => Some(Query::Sort(
+                    *t,
+                    f.as_ref().and_then(|f| f.channel_filter.clone()),
+                )),
                 SoupQuery::Simple(SimpleQueryInner(Query::Cursor(CursorWithValAndFilter {
                     id,
                     limit,
                     val,
                     filter,
-                }))) => {
-                    let filter = filter.as_ref().and_then(|f| f.channel_filter.clone());
-                    if channel_filter_contains_thread_id(filter.as_deref()) {
-                        return None;
-                    }
-                    Some(Query::Cursor(CursorWithValAndFilter {
-                        id: *id,
-                        limit: *limit,
-                        val: val.clone(),
-                        filter,
-                    }))
-                }
+                }))) => Some(Query::Cursor(CursorWithValAndFilter {
+                    id: *id,
+                    limit: *limit,
+                    val: val.clone(),
+                    filter: filter.as_ref().and_then(|f| f.channel_filter.clone()),
+                })),
                 // query by frecency not yet implemented for channels
                 SoupQuery::Frecency(_) => None,
             }?,
@@ -486,30 +477,23 @@ impl SoupRequest<Option<EntityFilterAst>> {
 
     pub(crate) fn build_comms_thread_request(&self) -> Option<GetThreadReplyRowsRequest> {
         let query = match &self.cursor {
-            SoupQuery::Simple(SimpleQueryInner(Query::Sort(t, f))) => {
-                let filter = f.as_ref().and_then(|f| f.channel_filter.clone());
-                if !channel_filter_contains_thread_id(filter.as_deref()) {
-                    return None;
-                }
-                Some(Query::Sort(*t, filter))
-            }
+            SoupQuery::Simple(SimpleQueryInner(Query::Sort(t, f))) => Some(Query::Sort(
+                *t,
+                f.as_ref().and_then(|f| f.channel_thread_filter.clone()),
+            )),
             SoupQuery::Simple(SimpleQueryInner(Query::Cursor(CursorWithValAndFilter {
                 id,
                 limit,
                 val,
                 filter,
-            }))) => {
-                let filter = filter.as_ref().and_then(|f| f.channel_filter.clone());
-                if !channel_filter_contains_thread_id(filter.as_deref()) {
-                    return None;
-                }
-                Some(Query::Cursor(CursorWithValAndFilter {
-                    id: *id,
-                    limit: *limit,
-                    val: val.clone(),
-                    filter,
-                }))
-            }
+            }))) => Some(Query::Cursor(CursorWithValAndFilter {
+                id: *id,
+                limit: *limit,
+                val: val.clone(),
+                filter: filter
+                    .as_ref()
+                    .and_then(|f| f.channel_thread_filter.clone()),
+            })),
             // query by frecency not yet implemented for channel threads
             SoupQuery::Frecency(_) => None,
         }?;
@@ -557,17 +541,6 @@ impl SoupRequest<Option<EntityFilterAst>> {
         }
 
         source_ids
-    }
-}
-
-fn channel_filter_contains_thread_id(expr: Option<&Expr<ChannelLiteral>>) -> bool {
-    match expr {
-        Some(Expr::Literal(ChannelLiteral::ThreadId(_))) => true,
-        Some(Expr::And(a, b)) | Some(Expr::Or(a, b)) => {
-            channel_filter_contains_thread_id(Some(a)) || channel_filter_contains_thread_id(Some(b))
-        }
-        Some(Expr::Not(a)) => channel_filter_contains_thread_id(Some(a)),
-        Some(Expr::Literal(_)) | None => false,
     }
 }
 

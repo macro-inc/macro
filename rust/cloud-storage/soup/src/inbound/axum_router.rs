@@ -33,7 +33,7 @@ use item_filters::{
     ast::{
         EntityFilterAst, ExpandErr, LiteralTree,
         call::CallLiteral,
-        channel::ChannelLiteral,
+        channel::{ChannelLiteral, ChannelThreadLiteral},
         chat::ChatLiteral,
         crm_company::CrmCompanyLiteral,
         document::DocumentLiteral,
@@ -1053,6 +1053,10 @@ pub struct ApiEntityFilterAst {
     #[serde(default, rename = "chanf")]
     #[schema(value_type = serde_json::Value)]
     pub channel_filter: LiteralTree<ChannelLiteral>,
+    /// the filters that should be applied to the channel-thread entity
+    #[serde(default, rename = "cthf")]
+    #[schema(value_type = serde_json::Value)]
+    pub channel_thread_filter: LiteralTree<ChannelThreadLiteral>,
     /// the filters that should be applied to foreign entity records
     #[serde(default, rename = "fef")]
     #[schema(value_type = serde_json::Value)]
@@ -1151,6 +1155,7 @@ impl ApiEntityFilterAst {
             chat_filter,
             email_filter,
             channel_filter,
+            channel_thread_filter,
             foreign_entity_filter,
             call_filter,
             crm_company_filter,
@@ -1217,6 +1222,7 @@ impl ApiEntityFilterAst {
                 crm_scope,
             },
             channel_filter,
+            channel_thread_filter,
             call_filter,
             crm_company_filter,
             foreign_entity_filter,
