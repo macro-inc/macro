@@ -80,7 +80,9 @@ function MessageRowUI(
         )}
         <div class="text-xs text-ink truncate grow">{displayName()}</div>
         <Show when={props.date}>
-          <div class="text-xs text-ink-muted">{formatDate(props.date)}</div>
+          <div class="text-xs text-ink-placeholder">
+            {formatDate(props.date)}
+          </div>
         </Show>
       </div>
       <Show when={props.children}>
