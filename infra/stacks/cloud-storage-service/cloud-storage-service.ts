@@ -16,10 +16,11 @@ import {
   BASE_DOMAIN,
   CLOUD_TRAIL_SNS_TOPIC_ARN,
   SERVICE_DOMAIN_NAME,
+  DopplerEcsEnvironment,
   stack,
 } from '../../packages/shared';
 
-const BASE_NAME = 'cloud-storage-service';
+const BASE_NAME = pulumi.getProject();
 const BASE_PATH = '../../../rust/cloud-storage';
 
 type CreateCloudStorageServiceServiceArgs = {
@@ -306,6 +307,12 @@ export class CloudStorageService extends pulumi.ComponentResource {
     this.lb = lb;
     this.listener = listener;
 
+    const dopplerEcsEnvironment = new DopplerEcsEnvironment(
+      BASE_NAME,
+      { tags: this.tags },
+      { parent: this }
+    );
+
     // service
     const service = new awsx.ecs.FargateService(
       `${BASE_NAME}`,
@@ -325,6 +332,9 @@ export class CloudStorageService extends pulumi.ComponentResource {
           taskRole: {
             roleArn: this.role.arn,
           },
+          executionRole: {
+            roleArn: dopplerEcsEnvironment.executionRole.arn,
+          },
           containers: {
             log_router: fargateLogRouterSidecarContainer,
             datadog_agent: datadogAgentContainer,
@@ -335,6 +345,7 @@ export class CloudStorageService extends pulumi.ComponentResource {
               cpu: stack === 'prod' ? 2048 : 512,
               memory: stack === 'prod' ? 4096 : 2048,
               environment: containerEnvVars,
+              secrets: [...dopplerEcsEnvironment.containerSecrets],
               logConfiguration: {
                 logDriver: 'awsfirelens',
                 options: {
