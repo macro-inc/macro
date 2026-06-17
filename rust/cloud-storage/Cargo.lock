@@ -6630,11 +6630,13 @@ dependencies = [
  "anyhow",
  "futures",
  "http 1.4.0",
+ "macro_env_var",
  "reqwest 0.13.4",
  "serde",
  "serde_json",
  "tokio",
  "tokio-tungstenite 0.28.0",
+ "tracing",
  "tungstenite 0.28.0",
  "workspace-hack",
 ]

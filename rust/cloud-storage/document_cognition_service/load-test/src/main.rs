@@ -2,22 +2,25 @@ mod config;
 use anyhow::{Context, Result};
 use futures::{SinkExt, StreamExt};
 use http::uri::Uri;
+use macro_env_var::env_vars;
 use serde::{Deserialize, Serialize};
 use std::{sync::Arc, time::Duration};
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 use tungstenite::ClientRequestBuilder;
 
+env_vars! {
+    struct Token;
+}
+
 /// Returns a chat id of a newly created chat
 async fn create_chat(config: Arc<config::Config>) -> anyhow::Result<String> {
     let client = reqwest::Client::new();
+    let token = Token::new().context("TOKEN must be provided")?;
 
     let response = client
         .post(format!("https://{}/chats", config.base_url))
         .header(reqwest::header::CONTENT_TYPE, "application/json")
-        .header(
-            "Authorization",
-            format!("Bearer {}", std::env::var("TOKEN").unwrap()),
-        )
+        .header("Authorization", format!("Bearer {}", token.as_ref()))
         .body(r#"{}"#)
         .send()
         .await?
@@ -34,14 +37,12 @@ async fn create_chat(config: Arc<config::Config>) -> anyhow::Result<String> {
 /// deletes a chat given the chat id
 async fn delete_chat(config: &config::Config, chat_id: &str) -> anyhow::Result<()> {
     let client = reqwest::Client::new();
+    let token = Token::new().context("TOKEN must be provided")?;
 
     client
         .delete(format!("https://{}/chats/{}", config.base_url, chat_id))
         .header(reqwest::header::CONTENT_TYPE, "application/json")
-        .header(
-            "Authorization",
-            format!("Bearer {}", std::env::var("TOKEN").unwrap()),
-        )
+        .header("Authorization", format!("Bearer {}", token.as_ref()))
         .send()
         .await?
         .json::<serde_json::Value>()
@@ -77,13 +78,11 @@ async fn connection(config: Arc<config::Config>) -> Result<ConnectionReport> {
     let mut times_to_acknowledge = Vec::new();
     let mut times_to_finish = Vec::new();
     let chat_id = create_chat(config.clone()).await?;
+    let token = Token::new().context("TOKEN must be provided")?;
 
     let req =
         ClientRequestBuilder::new("wss://document-cognition-dev.macro.com/stream".parse::<Uri>()?)
-            .with_header(
-                "Authorization",
-                format!("Bearer {}", std::env::var("TOKEN").unwrap()),
-            );
+            .with_header("Authorization", format!("Bearer {}", token.as_ref()));
 
     let (ws_stream, _) = connect_async(req).await?;
     let (mut wx, mut rx) = ws_stream.split();
@@ -266,9 +265,7 @@ async fn main() -> anyhow::Result<()> {
         .context("ERROR: expected load config path in args. eg: `cargo run -- config.json`")?
         .to_string();
 
-    if std::env::var("TOKEN").is_err() {
-        anyhow::bail!("please set `TOKEN` env var with your macro-token");
-    }
+    Token::new().context("please set `TOKEN` env var with your macro-token")?;
 
     let config = Arc::new(config::read(&config_path)?);
     let chat_id = create_chat(config.clone()).await.unwrap();
