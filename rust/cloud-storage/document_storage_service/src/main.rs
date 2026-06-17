@@ -70,6 +70,7 @@ use github::outbound::pg_github_sync_repo::PgGithubSyncRepo;
 use lexical_client::LexicalClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
+use macro_env_var::maybe_env_vars;
 use macro_service_urls::{ConnectionGatewayUrl, LexicalServiceUrl, SyncServiceUrl};
 use macro_sha_count_client::Redis;
 use notification::domain::service::SqsNotificationIngress;
@@ -101,6 +102,11 @@ mod api;
 mod config;
 mod model;
 mod service;
+
+maybe_env_vars! {
+    struct AppleBundleId;
+    struct SnsApnsVoipPlatformArn;
+}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -483,10 +489,9 @@ async fn main() -> anyhow::Result<()> {
     //
     // Option<VoipPushServiceImpl<...>> is used as the type parameter so the
     // type stays stable regardless of whether VoIP push is configured.
-    let voip_sender = if let (Ok(bundle_id), Ok(voip_arn)) = (
-        std::env::var("APPLE_BUNDLE_ID"),
-        std::env::var("SNS_APNS_VOIP_PLATFORM_ARN"),
-    ) {
+    let voip_sender = if let (Some(bundle_id), Some(voip_arn)) =
+        (AppleBundleId::new(), SnsApnsVoipPlatformArn::new())
+    {
         if voip_arn.is_empty() {
             tracing::warn!("voip push disabled: SNS_APNS_VOIP_PLATFORM_ARN is set but empty");
             None
@@ -495,10 +500,14 @@ async fn main() -> anyhow::Result<()> {
                 notification::outbound::repository::DbNotificationRepository::new(db.clone());
             let voip_mobile = notification::outbound::mobile::MobilePushAdapter {
                 push_service: aws_sdk_sns::Client::new(&aws_config),
-                apns_bundle_id: bundle_id.clone(),
-                voip_bundle_id: Some(format!("{}.voip", bundle_id)),
+                apns_bundle_id: bundle_id.to_string(),
+                voip_bundle_id: Some(format!("{}.voip", bundle_id.as_ref())),
             };
-            tracing::info!(bundle_id, voip_arn, "voip push enabled");
+            tracing::info!(
+                bundle_id = bundle_id.as_ref(),
+                voip_arn = voip_arn.as_ref(),
+                "voip push enabled"
+            );
             Some(notification::domain::service::VoipPushServiceImpl::new(
                 voip_repo,
                 voip_mobile,
