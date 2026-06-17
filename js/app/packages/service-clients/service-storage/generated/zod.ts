@@ -161,6 +161,83 @@ export const getRecentActivityHandlerResponse = zod.object({
 });
 
 /**
+ * @summary Materialize an AI projection for the authenticated paid user.
+ */
+export const materializeAiProjectionBody = zod
+  .object({
+    context: zod
+      .string()
+      .nullish()
+      .describe(
+        'Optional frontend context appended to the generation request.'
+      ),
+    expiry: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['day', 'week', 'month'])
+          .describe('Inactivity expiry window for an AI projection.'),
+      ])
+      .optional(),
+    forceRefresh: zod
+      .boolean()
+      .optional()
+      .describe('Force a background refresh even when cached output is fresh.'),
+    id: zod.string().describe('Frontend-defined projection id.'),
+    prompt: zod.string().describe('Prompt used to generate the projection.'),
+    refreshCadence: zod
+      .enum(['high', 'medium', 'low'])
+      .describe('Refresh cadence for an active AI projection.'),
+    schema: zod
+      .unknown()
+      .optional()
+      .describe('Optional schema metadata for future structured output.'),
+    target: zod
+      .union([
+        zod
+          .object({
+            id: zod.string().describe('Target user id.'),
+            type: zod.enum(['user']),
+          })
+          .describe('Projection scoped to a single user.'),
+        zod
+          .object({
+            id: zod.string().describe('Target team id.'),
+            type: zod.enum(['team']),
+          })
+          .describe('Projection scoped to a team.'),
+      ])
+      .describe('Target for an AI projection.'),
+  })
+  .describe('Request body for lazily materializing an AI projection.');
+
+export const materializeAiProjectionResponse = zod
+  .object({
+    data: zod
+      .string()
+      .nullish()
+      .describe('Cached projection output when available.'),
+    error: zod
+      .string()
+      .nullish()
+      .describe('Last generation error when available.'),
+    generatedAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('When the current output was generated.'),
+    staleAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('When the current output becomes stale.'),
+    status: zod
+      .enum(['cold', 'ready', 'refreshing', 'error'])
+      .describe('Backend status for a materialized AI projection.'),
+  })
+  .describe(
+    'Response body returned by the AI projection materialization endpoint.'
+  );
+
+/**
  * @summary Deletes a single unthreaded anchor for a document
 If you need to delete a threaded anchor, see the delete comment handler
  */

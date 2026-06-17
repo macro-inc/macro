@@ -82,6 +82,68 @@
         "deprecated": true
       }
     },
+    "/ai_projections/materialize": {
+      "post": {
+        "tags": ["ai_projections"],
+        "summary": "Materialize an AI projection for the authenticated paid user.",
+        "operationId": "materialize_ai_projection",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MaterializeAIProjectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Current materialized projection state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiProjectionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid projection definition",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiProjectionErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Paid access or target authorization required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiProjectionErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected service error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiProjectionErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/annotations/anchors": {
       "delete": {
         "tags": ["annotations::delete_anchor"],
@@ -9031,6 +9093,96 @@
           }
         }
       },
+      "AiProjectionErrorResponse": {
+        "type": "object",
+        "description": "Error body returned by AI projection endpoints.",
+        "required": ["error"],
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Human-readable error message."
+          }
+        }
+      },
+      "AiProjectionExpiry": {
+        "type": "string",
+        "description": "Inactivity expiry window for an AI projection.",
+        "enum": ["day", "week", "month"]
+      },
+      "AiProjectionRefreshCadence": {
+        "type": "string",
+        "description": "Refresh cadence for an active AI projection.",
+        "enum": ["high", "medium", "low"]
+      },
+      "AiProjectionResponse": {
+        "type": "object",
+        "description": "Response body returned by the AI projection materialization endpoint.",
+        "required": ["status"],
+        "properties": {
+          "data": {
+            "type": ["string", "null"],
+            "description": "Cached projection output when available."
+          },
+          "error": {
+            "type": ["string", "null"],
+            "description": "Last generation error when available."
+          },
+          "generatedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the current output was generated."
+          },
+          "staleAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the current output becomes stale."
+          },
+          "status": {
+            "$ref": "#/components/schemas/AiProjectionStatus",
+            "description": "Current backend status."
+          }
+        }
+      },
+      "AiProjectionStatus": {
+        "type": "string",
+        "description": "Backend status for a materialized AI projection.",
+        "enum": ["cold", "ready", "refreshing", "error"]
+      },
+      "AiProjectionTarget": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Projection scoped to a single user.",
+            "required": ["id", "type"],
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "Target user id."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["user"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Projection scoped to a team.",
+            "required": ["id", "type"],
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "Target team id."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["team"]
+              }
+            }
+          }
+        ],
+        "description": "Target for an AI projection."
+      },
       "Anchor": {
         "oneOf": [
           {
@@ -15335,6 +15487,51 @@
           }
         ],
         "description": "Location response with content lifecycle metadata."
+      },
+      "MaterializeAIProjectionRequest": {
+        "type": "object",
+        "description": "Request body for lazily materializing an AI projection.",
+        "required": ["id", "target", "prompt", "refreshCadence"],
+        "properties": {
+          "context": {
+            "type": ["string", "null"],
+            "description": "Optional frontend context appended to the generation request."
+          },
+          "expiry": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AiProjectionExpiry",
+                "description": "Inactivity expiry window for this projection."
+              }
+            ]
+          },
+          "forceRefresh": {
+            "type": "boolean",
+            "description": "Force a background refresh even when cached output is fresh."
+          },
+          "id": {
+            "type": "string",
+            "description": "Frontend-defined projection id."
+          },
+          "prompt": {
+            "type": "string",
+            "description": "Prompt used to generate the projection."
+          },
+          "refreshCadence": {
+            "$ref": "#/components/schemas/AiProjectionRefreshCadence",
+            "description": "Refresh cadence for active cached output."
+          },
+          "schema": {
+            "description": "Optional schema metadata for future structured output."
+          },
+          "target": {
+            "$ref": "#/components/schemas/AiProjectionTarget",
+            "description": "Projection target."
+          }
+        }
       },
       "Mentions": {
         "type": "object",

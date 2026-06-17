@@ -183,6 +183,9 @@ use utoipa::OpenApi;
         documents_hex::inbound::axum_router::team_share::get_team_share_handler,
         documents_hex::inbound::axum_router::team_share::set_team_share_handler,
 
+        // AI projections
+        ai_projections::inbound::axum_router::materialize_ai_projection_handler,
+
         // instructions
         instructions::create_instructions::create_instructions_handler,
         instructions::get_instructions::get_instructions_handler,
@@ -560,6 +563,15 @@ use utoipa::OpenApi;
             documents_hex::domain::models::GithubPullRequestCheckRun,
             documents_hex::domain::models::GithubPullRequestComment,
             documents_hex::domain::models::GithubPullRequestsResponse,
+
+            // AI projections
+            ai_projections::inbound::axum_router::AIProjectionResponse,
+            ai_projections::inbound::axum_router::AIProjectionTarget,
+            ai_projections::inbound::axum_router::AIProjectionStatus,
+            ai_projections::inbound::axum_router::AIProjectionRefreshCadence,
+            ai_projections::inbound::axum_router::AIProjectionExpiry,
+            ai_projections::inbound::axum_router::AIProjectionErrorResponse,
+            ai_projections::inbound::axum_router::MaterializeAIProjectionRequest,
 
             // Sync service
             sync_service_hex::domain::models::BulkWakeupRequest,

@@ -69,6 +69,7 @@ where
 /// Target for an AI projection.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase", tag = "type")]
+#[schema(as = AiProjectionTarget)]
 pub enum AIProjectionTarget {
     /// Projection scoped to a single user.
     User {
@@ -94,6 +95,7 @@ impl From<AIProjectionTarget> for DomainTarget {
 /// Refresh cadence for an active AI projection.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
+#[schema(as = AiProjectionRefreshCadence)]
 pub enum AIProjectionRefreshCadence {
     /// Refresh approximately hourly.
     High,
@@ -116,6 +118,7 @@ impl From<AIProjectionRefreshCadence> for DomainRefreshCadence {
 /// Inactivity expiry window for an AI projection.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
+#[schema(as = AiProjectionExpiry)]
 pub enum AIProjectionExpiry {
     /// Expire after one day without access.
     Day,
@@ -138,6 +141,7 @@ impl From<AIProjectionExpiry> for DomainProjectionExpiry {
 /// Backend status for a materialized AI projection.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
+#[schema(as = AiProjectionStatus)]
 pub enum AIProjectionStatus {
     /// The projection has no cached output yet.
     Cold,
@@ -204,6 +208,7 @@ impl From<MaterializeAIProjectionRequest> for DomainMaterializeProjectionRequest
 /// Response body returned by the AI projection materialization endpoint.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
+#[schema(as = AiProjectionResponse)]
 pub struct AIProjectionResponse {
     /// Current backend status.
     pub status: AIProjectionStatus,
@@ -235,6 +240,7 @@ impl From<DomainMaterializeProjectionResponse> for AIProjectionResponse {
 
 /// Error body returned by AI projection endpoints.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
+#[schema(as = AiProjectionErrorResponse)]
 pub struct AIProjectionErrorResponse {
     /// Human-readable error message.
     pub error: String,
