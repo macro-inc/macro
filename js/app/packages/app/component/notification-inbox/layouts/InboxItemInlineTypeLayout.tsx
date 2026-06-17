@@ -17,7 +17,6 @@ import GitPullRequestIcon from '@phosphor-icons/core/regular/git-pull-request.sv
 import PhoneIcon from '@phosphor-icons/core/regular/phone.svg?component-solid';
 import UsersIcon from '@phosphor-icons/core/regular/users.svg?component-solid';
 import { Avatar, cn, Layer } from '@ui';
-import { formatDistanceToNow } from 'date-fns';
 import { For, Match, Show, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
 import { InboxItem, PropertyPill, useInboxItem } from '../InboxItem';
@@ -262,29 +261,32 @@ function itemTitle() {
     item().targetName || item().entityName || context() || 'Notification';
 }
 
-function isGithubNotificationType(
-  type: ReturnType<typeof useNotificationType>
-) {
-  return () =>
-    type() === 'github_pr_status_changed' ||
-    type() === 'github_review_requested' ||
-    type() === 'github_pr_comment' ||
-    type() === 'github_pr_mention' ||
-    type() === 'github_pr_review';
+function emailSubject() {
+  const { item } = useInboxItem();
+
+  return () => {
+    const metadata = item().notification?.notification_metadata;
+    if (metadata?.tag !== 'new_email') return undefined;
+    return String(metadata.content.subject || '') || undefined;
+  };
 }
 
-function Header() {
+function TitleRow() {
   const { item } = useInboxItem();
   const type = useNotificationType();
   const title = itemTitle();
-  const displayTitle = () =>
-    type() === 'ai_response' ? item().senderName || 'Macro agent' : title();
+  const subject = emailSubject();
+  const displayTitle = () => {
+    if (type() === 'new_email') return subject() || title();
+    if (type() === 'ai_response') return item().senderName || 'Macro agent';
+    return title();
+  };
 
   return (
-    <InboxItem.Header>
+    <div class="flex min-w-0 items-center gap-1 text-sm text-ink-muted">
       <EntityTypeIcon />
-      <span class="min-w-0 truncate text-sm text-ink">{displayTitle()}</span>
-    </InboxItem.Header>
+      <span class="min-w-0 truncate">{displayTitle()}</span>
+    </div>
   );
 }
 
@@ -298,26 +300,6 @@ function actionText() {
     if (type() === 'github_pr_mention') return undefined;
     return item().action;
   };
-}
-
-function RelativeTimestamp() {
-  const { item } = useInboxItem();
-  const value = () => {
-    const timestamp = item().timestamp;
-    if (!timestamp) return undefined;
-
-    const date = new Date(timestamp);
-    if (Number.isNaN(date.getTime())) return timestamp;
-    return `${formatDistanceToNow(date)} ago`;
-  };
-
-  return (
-    <Show when={value()}>
-      {(value) => (
-        <span class="shrink-0 text-xs text-ink-muted/70">{value()}</span>
-      )}
-    </Show>
-  );
 }
 
 function shouldRenderMarkdownContent(
@@ -355,13 +337,7 @@ function ContentText(props: { content: string }) {
 function Description() {
   const { item } = useInboxItem();
   const type = useNotificationType();
-  const action = actionText();
-  const context = titleContext();
-  const emailSubject = () => {
-    const metadata = item().notification?.notification_metadata;
-    if (metadata?.tag !== 'new_email') return undefined;
-    return String(metadata.content.subject || '') || undefined;
-  };
+
   const unreadSubItems = () =>
     item().subItems?.filter((subItem) => subItem.unread) ?? [];
   const unreadGroupCount = () =>
@@ -373,86 +349,14 @@ function Description() {
     if (!item().subItems?.length || unreadGroupCount() === 0) return undefined;
     return `${unreadGroupCount()} new ${groupLabel()}`;
   };
+  const description = () => unreadGroupDescription() || groupedDescription();
 
   return (
-    <Show
-      when={unreadGroupDescription()}
-      fallback={
-        <Show when={item().senderName || item().action || item().content}>
-          <Show
-            when={type() === 'new_email'}
-            fallback={
-              <Show
-                when={isGithubNotificationType(type)()}
-                fallback={
-                  <Show
-                    when={
-                      item().senderName ||
-                      item().senderId ||
-                      action() ||
-                      groupedDescription() ||
-                      item().properties?.length
-                    }
-                  >
-                    <div class="flex min-w-0 items-center gap-1 truncate text-xs text-ink-muted/70">
-                      <Show
-                        when={
-                          type() === 'ai_response'
-                            ? undefined
-                            : item().senderName || item().senderId
-                        }
-                      >
-                        <InboxItem.Sender
-                          avatar={false}
-                          class="min-w-0 shrink-0 truncate text-xs text-ink-muted/70"
-                        />
-                      </Show>
-                      <Show when={action()}>
-                        {(action) => <span class="shrink-0">{action()}</span>}
-                      </Show>
-                      <For each={item().properties ?? []}>
-                        {(property) => <PropertyPill property={property} />}
-                      </For>
-                      <Show when={groupedDescription()}>
-                        {(content) => <ContentText content={content()} />}
-                      </Show>
-                    </div>
-                  </Show>
-                }
-              >
-                <InboxItem.Description timestamp={false}>
-                  <InboxItem.Sender
-                    avatar={false}
-                    class="min-w-0 shrink-0 truncate text-xs text-ink-muted/70"
-                  />
-                  <Show when={action()}>
-                    {(action) => <span class="shrink-0">{action()}</span>}
-                  </Show>
-                  <RelativeTimestamp />
-                  <Show when={context()}>
-                    {(value) => <span class="shrink-0">{value()}</span>}
-                  </Show>
-                </InboxItem.Description>
-              </Show>
-            }
-          >
-            <InboxItem.Description class="truncate" timestamp={false}>
-              <span class="min-w-0 truncate text-xs text-ink-muted/70">
-                <Show when={emailSubject()}>{(subject) => subject()}</Show>
-                <Show when={emailSubject() && item().content}> — </Show>
-                <Show when={item().content}>{(content) => content()}</Show>
-              </span>
-            </InboxItem.Description>
-          </Show>
-        </Show>
-      }
-    >
-      {(description) => (
-        <InboxItem.Description class="truncate" timestamp={false}>
-          <span class="min-w-0 truncate text-xs text-ink-muted/70">
-            {description()}
-          </span>
-        </InboxItem.Description>
+    <Show when={description()}>
+      {(content) => (
+        <div class="min-w-0 truncate text-sm text-ink-muted/75">
+          <ContentText content={content()} />
+        </div>
       )}
     </Show>
   );
@@ -487,8 +391,9 @@ function unreadGroupLabel(type: ReturnType<typeof useNotificationType>) {
       .otherwise(() => 'notifications');
 }
 
-function TimestampColumn() {
+function ActionRow() {
   const { item, unread } = useInboxItem();
+  const action = actionText();
   const groupCount = () => {
     const count = (item().subItems?.length ?? 0) + 1;
     return count > 1 ? count : undefined;
@@ -506,35 +411,58 @@ function TimestampColumn() {
   };
 
   return (
-    <div class="flex h-full flex-col items-end justify-between pt-0.5">
-      <div class="flex h-4 items-center justify-end">
-        <Show
-          when={showUnreadDot()}
-          fallback={
-            <Show when={badgeCount()}>
-              {(count) => (
-                <Layer depth={5}>
-                  <span
-                    class={cn(
-                      'grid h-4 min-w-4 place-items-center rounded px-1 text-xs',
-                      unreadGroupCount() > 0
-                        ? 'bg-accent text-surface'
-                        : 'bg-ink-muted/10 text-ink-muted'
-                    )}
-                  >
-                    {count()}
-                  </span>
-                </Layer>
-              )}
-            </Show>
-          }
-        >
-          <span class="size-2 rounded-full bg-accent" />
-        </Show>
-      </div>
+    <div class="flex min-w-0 items-center gap-1 text-xs text-ink-extra-muted/70">
+      <Show
+        when={item().senderName || item().senderId}
+        fallback={
+          <Show
+            when={
+              item().notification?.notification_metadata.tag === 'ai_response'
+            }
+          >
+            Macro agent
+          </Show>
+        }
+      >
+        <InboxItem.Sender
+          avatar={false}
+          class="min-w-0 shrink-0 truncate text-xs text-ink-extra-muted/70"
+        />
+      </Show>
+      <Show when={action()}>
+        {(action) => <span class="min-w-0 truncate">{action()}</span>}
+      </Show>
+      <For each={item().properties ?? []}>
+        {(property) => <PropertyPill property={property} />}
+      </For>
+      <Show
+        when={showUnreadDot()}
+        fallback={
+          <Show when={badgeCount()}>
+            {(count) => (
+              <Layer depth={5}>
+                <span
+                  class={cn(
+                    'grid h-4 min-w-4 shrink-0 place-items-center rounded px-1 text-xs',
+                    unreadGroupCount() > 0
+                      ? 'bg-accent text-surface'
+                      : 'bg-ink-muted/10 text-ink-muted'
+                  )}
+                >
+                  {count()}
+                </span>
+              </Layer>
+            )}
+          </Show>
+        }
+      >
+        <span class="size-2 shrink-0 rounded-full bg-accent" />
+      </Show>
       <Show when={item().timestamp}>
         {(timestamp) => (
-          <InboxItem.Timestamp>{timestamp()}</InboxItem.Timestamp>
+          <InboxItem.Timestamp class="ml-auto">
+            {timestamp()}
+          </InboxItem.Timestamp>
         )}
       </Show>
     </div>
@@ -551,12 +479,12 @@ export function InboxItemInlineTypeLayout(
       </InboxItem.Leading>
       <ActorIcon />
       <InboxItem.Body>
-        <div class="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-x-2">
-          <div class="flex min-w-0 flex-col gap-1">
-            <Header />
+        <div class="flex min-w-0 flex-col gap-1">
+          <ActionRow />
+          <div class="flex min-w-0 flex-col">
+            <TitleRow />
             <Description />
           </div>
-          <TimestampColumn />
         </div>
       </InboxItem.Body>
     </InboxItem.Content>
