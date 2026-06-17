@@ -86,6 +86,10 @@ impl DecodedJwt {
         query_params: Params,
         jwt_validation_args: &JwtValidationArgs,
     ) -> Result<DecodedJwt, DecodeJwtError> {
+        #[allow(
+            clippy::disallowed_methods,
+            reason = "Only used when running locally"
+        )]
         if cfg!(feature = "local_auth") && std::env::var("LOCAL_USER_ID").is_ok() {
             let user_id =
                 std::env::var("LOCAL_USER_ID").unwrap_or("macro|orguser@org.com".to_string());
