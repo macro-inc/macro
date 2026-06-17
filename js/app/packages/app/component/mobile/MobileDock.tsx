@@ -5,8 +5,8 @@ import { useSettingsState } from '@core/constant/SettingsState';
 import { triggerFocusInput } from '@core/directive/focusInput';
 import { hapticImpact } from '@core/mobile/haptics';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
-import IconGear from '@icon/macro-gear.svg';
 import { ICON_ANIMATION_DURATION_MS } from '@icon/animation';
+import IconGear from '@icon/macro-gear.svg';
 import { AnimatedCallIcon } from '@icon/wide-call';
 import { AnimatedChannelIcon } from '@icon/wide-channel';
 import { AnimatedEmailIcon } from '@icon/wide-email';
@@ -33,6 +33,10 @@ import { pressPulse } from './pressPulse';
 false && pressPulse;
 
 type DockId = ListView | 'home';
+
+type IconComponent = Component<
+  JSX.SvgSVGAttributes<SVGSVGElement> | { triggerAnimation?: boolean }
+>;
 
 type MobileDockButtonProps = {
   icon: IconComponent;

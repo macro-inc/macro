@@ -528,35 +528,6 @@ export const SoupView = (props: SoupViewProps) => {
   const [narrowSearchExpanded, setNarrowSearchExpanded] = createSignal(false);
   const [mobileSearchOpen, setMobileSearchOpen] = createSignal(false);
   const [searchIsCollapsed, setSearchIsCollapsed] = createSignal(false);
-  const [floatingButtonsVisible, setFloatingButtonsVisible] =
-    createSignal(true);
-  let lastSoupScrollOffset = 0;
-  let upwardSoupScrollDistance = 0;
-
-  const resetFloatingButtonScrollTracking = (offset = 0) => {
-    lastSoupScrollOffset = Math.max(0, offset);
-    upwardSoupScrollDistance = 0;
-    setFloatingButtonsVisible(true);
-  };
-
-  const handleSoupScrollOffsetChange = (offset: number) => {
-    const nextOffset = Math.max(0, offset);
-    const delta = nextOffset - lastSoupScrollOffset;
-    lastSoupScrollOffset = nextOffset;
-
-    if (delta > 0) {
-      upwardSoupScrollDistance = 0;
-      setFloatingButtonsVisible(false);
-      return;
-    }
-
-    if (delta < 0) {
-      upwardSoupScrollDistance += Math.abs(delta);
-      if (upwardSoupScrollDistance > FLOATING_BUTTON_SCROLL_UP_THRESHOLD) {
-        setFloatingButtonsVisible(true);
-      }
-    }
-  };
 
   registerHotkey({
     hotkey: 'cmd+f',
@@ -711,24 +682,22 @@ export const SoupView = (props: SoupViewProps) => {
               </Show>
             </SplitHeaderRight>
           </Show>
-          <SoupFiltersBar />
         </div>
-        <div class="relative grow min-h-1 flex max-sm:flex-col flex-row size-full">
-          <Suspense>
-            <SoupViewFileDropzone>
-              <SoupViewList
-                onScrollOffsetBaseline={resetFloatingButtonScrollTracking}
-                onScrollOffsetChange={handleSoupScrollOffsetChange}
-              />
-            </SoupViewFileDropzone>
-          </Suspense>
-          <Show when={isMobile()}>
-            <FloatRegion region="accessory">
-              <MobileSoupViewTabs />
-            </FloatRegion>
-          </Show>
-        </div>
+        <SoupFiltersBar />
+      </div>
+      <div class="relative grow min-h-1 flex max-sm:flex-col flex-row size-full">
         <Suspense>
+          <SoupViewFileDropzone>
+            <SoupViewList />
+          </SoupViewFileDropzone>
+        </Suspense>
+        <Show when={isMobile()}>
+          <FloatRegion region="accessory">
+            <MobileSoupViewTabs />
+          </FloatRegion>
+        </Show>
+      </div>
+      <Suspense>
         <Show when={ENABLE_UNIFIED_LIST_AI_INPUT && !isMobile()}>
           <SoupChatInput />
         </Show>
@@ -740,8 +709,6 @@ export const SoupView = (props: SoupViewProps) => {
 interface SoupViewListProps {
   customScrollbarHidden?: boolean;
   scopeId?: string;
-  onScrollOffsetBaseline?: (offset: number) => void;
-  onScrollOffsetChange?: (offset: number) => void;
 }
 
 export const SoupViewList = (props: SoupViewListProps) => {
@@ -1024,10 +991,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
     HTMLDivElement | undefined
   >();
 
-  createEffect(() => {
-    if (rows().length === 0) props.onScrollOffsetBaseline?.(0);
-  });
-
   const entityById = createMemo(
     () => {
       const list = rows() ?? [];
@@ -1104,12 +1067,10 @@ export const SoupViewList = (props: SoupViewListProps) => {
       setSearchText(cached.searchText);
       soup.focus.set(cached.focus);
       virtualizerHandle()?.scrollTo(cached.scrollOffset ?? 0);
-      props.onScrollOffsetBaseline?.(cached.scrollOffset ?? 0);
       registerFocusEffects(false);
       return;
     }
 
-    props.onScrollOffsetBaseline?.(0);
     registerFocusEffects();
   };
 
@@ -1253,7 +1214,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
                           )}
                           class="overflow-hidden flex min-w-0"
                           virtualizerRef={registerVirtualizerHandler}
-                          onScrollOffsetChange={props.onScrollOffsetChange}
                           onScrollBottom={debouncedFetchMore}
                           scrollBottomOffset={300}
                           rows={rows()}
@@ -1529,7 +1489,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
 const DEFAULT_ITEM_SIZE = 10;
 const DEFAULT_OVERSCAN = 5;
-const FLOATING_BUTTON_SCROLL_UP_THRESHOLD = 5;
 
 interface SoupListProps {
   ref?: (el: HTMLDivElement) => void;
