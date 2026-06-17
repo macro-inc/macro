@@ -544,7 +544,19 @@ pub trait ChannelService: Send + Sync + 'static {
         limit: u16,
     ) -> impl Future<Output = Result<ChannelMessagesQueryResult, ChannelMessagesErr>> + Send;
 
-    /// Fetch all replies for the thread identified by `message_id`.
+    /// Fetch raw reply rows for the thread identified by `message_id`.
+    ///
+    /// If `message_id` is itself a reply, replies are fetched for its top-level parent.
+    fn get_thread_reply_rows(
+        &self,
+        channel_id: Uuid,
+        message_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<ThreadReplyRow>, ChannelMessagesErr>> + Send {
+        let _ = channel_id;
+        async move { Err(ChannelMessagesErr::MessageNotFound(message_id)) }
+    }
+
+    /// Fetch all enriched replies for the thread identified by `message_id`.
     ///
     /// If `message_id` is itself a reply, replies are fetched for its top-level parent.
     fn get_thread_replies(
