@@ -3816,6 +3816,7 @@ dependencies = [
  "macro_aws_config",
  "macro_db_migrator",
  "macro_entrypoint",
+ "macro_env_var",
  "macro_service_urls",
  "macro_user_id",
  "macro_uuid",

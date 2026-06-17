@@ -1,6 +1,6 @@
 //! CLI for markdown document content lifecycle backfill.
 
-use std::{env, time::Duration};
+use std::time::Duration;
 
 use anyhow::Context as _;
 use clap::Parser;
@@ -14,9 +14,17 @@ use documents::outbound::markdown_init::LexicalSyncMarkdownInitializer;
 use documents::outbound::pg_document_repo::PgDocumentRepo;
 use documents::outbound::s3_markdown_source::S3MarkdownObjectReader;
 use lexical_client::LexicalClient;
+use macro_env_var::env_vars;
 use macro_service_urls::{LexicalServiceUrl, SyncServiceUrl};
 use sqlx::postgres::PgPoolOptions;
 use sync_service_client::SyncServiceClient;
+
+env_vars! {
+    struct DatabaseUrl;
+    struct SyncServiceAuthKey;
+    struct InternalApiSecretKey;
+    struct DocumentStorageBucket;
+}
 
 /// Backfill markdown document content lifecycle from sync-service state.
 #[derive(Clone, Debug, Parser)]
@@ -87,9 +95,10 @@ async fn main() -> anyhow::Result<()> {
         tracing::warn!("dry-run mode: pass --apply to update Document.contentLocation");
     }
 
-    let database_url = env::var("DATABASE_URL").context("DATABASE_URL must be set")?;
-    let sync_service_auth_key =
-        env::var("SYNC_SERVICE_AUTH_KEY").context("SYNC_SERVICE_AUTH_KEY must be set")?;
+    let database_url = DatabaseUrl::new().context("DATABASE_URL must be set")?;
+    let sync_service_auth_key = SyncServiceAuthKey::new()
+        .context("SYNC_SERVICE_AUTH_KEY must be set")?
+        .to_string();
     let sync_service_url = SyncServiceUrl::new()?.to_string();
 
     tracing::info!(
@@ -107,7 +116,7 @@ async fn main() -> anyhow::Result<()> {
 
     let db = PgPoolOptions::new()
         .max_connections(5)
-        .connect(&database_url)
+        .connect(database_url.as_ref())
         .await
         .context("failed to connect to postgres")?;
 
@@ -157,8 +166,9 @@ fn build_markdown_initializer(
         return Ok(OptionalMarkdownInitializer::Disabled);
     }
 
-    let internal_api_secret_key = env::var("INTERNAL_API_SECRET_KEY")
-        .context("INTERNAL_API_SECRET_KEY must be set when --initialize-missing is used")?;
+    let internal_api_secret_key = InternalApiSecretKey::new()
+        .context("INTERNAL_API_SECRET_KEY must be set when --initialize-missing is used")?
+        .to_string();
     let lexical_service_url = LexicalServiceUrl::new()?.to_string();
 
     Ok(OptionalMarkdownInitializer::Enabled(
@@ -174,8 +184,9 @@ async fn build_object_reader(enabled: bool) -> anyhow::Result<OptionalMarkdownOb
         return Ok(OptionalMarkdownObjectReader::Disabled);
     }
 
-    let document_storage_bucket = env::var("DOCUMENT_STORAGE_BUCKET")
-        .context("DOCUMENT_STORAGE_BUCKET must be set when --initialize-missing is used")?;
+    let document_storage_bucket = DocumentStorageBucket::new()
+        .context("DOCUMENT_STORAGE_BUCKET must be set when --initialize-missing is used")?
+        .to_string();
 
     Ok(OptionalMarkdownObjectReader::Enabled(
         S3MarkdownObjectReader::new(document_storage_bucket, macro_aws_config::s3_client().await),

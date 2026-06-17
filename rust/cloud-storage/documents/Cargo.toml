@@ -97,6 +97,7 @@ foreign_entity = { path = "../foreign_entity", default-features = false, feature
 ], optional = true }
 macro_aws_config = { path = "../macro_aws_config", features = ["s3"] }
 macro_entrypoint = { path = "../macro_entrypoint", optional = true }
+macro_env_var = { path = "../macro_env_var" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 model = { path = "../model" }
