@@ -652,9 +652,9 @@ function NotificationInboxList(props: {
         <TabsInset
           class="h-auto w-fit"
           list={[
-            { value: 'all', label: 'All' },
             { value: 'unread', label: 'Unread' },
             { value: 'read', label: 'Read' },
+            { value: 'all', label: 'All' },
           ]}
           value={props.readFilter}
           onChange={(value) => props.onReadFilterChange(value as ReadFilter)}
@@ -780,7 +780,7 @@ export function NotificationInbox2() {
   const orchestrator = useGlobalBlockOrchestrator();
   const notificationSource = useGlobalNotificationSource();
   const [hiddenFilterIds, setHiddenFilterIds] = createSignal<string[]>([]);
-  const [readFilter, setReadFilter] = createSignal<ReadFilter>('all');
+  const [readFilter, setReadFilter] = createSignal<ReadFilter>('unread');
   const hiddenTags = createMemo(() => {
     const ids = new Set(hiddenFilterIds());
     return new Set(
