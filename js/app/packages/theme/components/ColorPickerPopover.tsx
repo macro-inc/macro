@@ -1,5 +1,5 @@
 import { Popover } from '@kobalte/core/popover';
-import { Layer } from '@ui';
+import { cn, Layer } from '@ui';
 import { batch, createEffect, createSignal, untrack } from 'solid-js';
 import { convertOklchTo, getOklch, validateColor } from '../utils/colorUtil';
 import type { ThemeReactiveColor } from '../types/themeTypes';
@@ -32,32 +32,11 @@ function Slider(props: {
           style={{ background: props.gradient() }}
         />
         <div
-          class="pointer-events-none absolute top-1/2 box-border -translate-x-1/2 -translate-y-1/2"
-          style={{
-            left: `${pct()}%`,
-            'background-color': 'var(--a0)',
-            border: '1px solid var(--b4)',
-            'border-radius': '1px',
-            height: '18px',
-            width: '7px',
-          }}
+          class="pointer-events-none absolute top-1/2 h-[18px] w-[7px] -translate-x-1/2 -translate-y-1/2 rounded-[1px] border border-edge bg-accent"
+          style={{ left: `${pct()}%` }}
         />
         <input
-          class="theme-color-picker-slider"
-          style={{
-            appearance: 'none',
-            '-webkit-appearance': 'none',
-            position: 'absolute',
-            width: 'calc(100% + 18px)',
-            height: '18px',
-            left: '-9px',
-            top: '50%',
-            transform: 'translateY(-50%)',
-            margin: '0',
-            background: 'transparent',
-            outline: 'none',
-            cursor: 'pointer',
-          }}
+          class="theme-color-picker-slider absolute -left-[9px] top-1/2 m-0 h-[18px] w-[calc(100%_+_18px)] -translate-y-1/2 cursor-pointer appearance-none bg-transparent outline-none"
           type="range"
           min={props.min}
           max={props.max}
@@ -82,8 +61,8 @@ export function ColorPickerPopover(props: { colorKey: string; colorValue: ThemeR
   // Hex field keeps its own text state while typing so slider-driven updates
   // don't fight the user's keystrokes (same guard as ThemeEditorAdvanced).
   const [hexText, setHexText] = createSignal('');
+  const [hexInvalid, setHexInvalid] = createSignal(false);
   const [isSetByInput, setIsSetByInput] = createSignal(false);
-  let hexRef!: HTMLInputElement;
 
   createEffect(() => {
     const next = convertOklchTo(l(), c(), h(), 'hex');
@@ -93,7 +72,7 @@ export function ColorPickerPopover(props: { colorKey: string; colorValue: ThemeR
 
   const setHex = (value: string) => {
     if (!value || value.trim().length < 6 || !validateColor(value)) {
-      hexRef.classList.add('invalid');
+      setHexInvalid(true);
       return;
     }
     try {
@@ -104,16 +83,19 @@ export function ColorPickerPopover(props: { colorKey: string; colorValue: ThemeR
         props.colorValue.c[1](next.c || 0);
         props.colorValue.h[1](next.h || 0);
       });
-      hexRef.classList.remove('invalid');
-    } catch (error) { console.error(`Error processing color "${value}":`, error); }
+      setHexInvalid(false);
+    } catch (error) {
+      console.error(`Error processing color "${value}":`, error);
+      setHexInvalid(true);
+    }
   };
 
   return (
     <Popover placement="bottom-start" gutter={8}>
       <style>{`
+        .theme-color-picker-slider { -webkit-appearance: none; }
         .theme-color-picker-slider::-webkit-slider-thumb { opacity: 0; }
         .theme-color-picker-slider::-moz-range-thumb { opacity: 0; }
-        .theme-color-picker-hex.invalid { color: var(--a0); }
       `}</style>
 
       <Popover.Trigger
@@ -126,12 +108,17 @@ export function ColorPickerPopover(props: { colorKey: string; colorValue: ThemeR
       <Popover.Portal>
         <Layer depth={3}>
           <Popover.Content class="z-modal">
+            <Popover.Arrow class="fill-surface" />
             <div
               class="flex w-64 flex-col gap-3 rounded-md bg-surface p-3 shadow-lg ring-1 ring-edge"
               role="dialog"
+              aria-label={`Edit color --${props.colorKey}`}
             >
               <div class="flex items-center gap-2">
-                <div class="h-8 w-8 shrink-0 rounded border border-edge" style={{ 'background-color': oklch() }} />
+                <div
+                  class="h-8 w-8 shrink-0 rounded border border-edge"
+                  style={{ 'background-color': oklch() }}
+                />
                 <div class="min-w-0">
                   <div class="truncate text-xs text-ink">{props.colorValue.description}</div>
                   <div class="font-mono text-[0.67rem] text-ink-extra-muted">--{props.colorKey}</div>
@@ -172,8 +159,10 @@ export function ColorPickerPopover(props: { colorKey: string; colorValue: ThemeR
               />
 
               <input
-                ref={hexRef}
-                class="theme-color-picker-hex rounded border border-edge-muted bg-transparent px-2 py-1 font-mono text-xs text-ink outline-none"
+                class={cn(
+                  'rounded border border-edge-muted bg-transparent px-2 py-1 font-mono text-xs text-ink outline-none',
+                  hexInvalid() && 'text-accent'
+                )}
                 value={hexText()}
                 onInput={(e) => setHex(e.currentTarget.value)}
                 spellcheck={false}
