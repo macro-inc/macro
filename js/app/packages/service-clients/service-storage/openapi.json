@@ -10794,6 +10794,7 @@
       },
       "Channel": {
         "type": "object",
+        "description": "Channel metadata in soup payloads.",
         "required": [
           "id",
           "channel_type",
@@ -10804,41 +10805,41 @@
         "properties": {
           "channel_type": {
             "$ref": "#/components/schemas/ChannelType",
-            "description": "type of the channel"
+            "description": "Channel type."
           },
           "created_at": {
             "type": "string",
             "format": "date-time",
-            "description": "timestamp of when the channel was created"
+            "description": "Creation timestamp."
           },
           "id": {
             "type": "string",
             "format": "uuid",
-            "description": "uuid of the channel"
+            "description": "Channel id."
           },
           "name": {
             "type": ["string", "null"],
-            "description": "string name of the channel"
+            "description": "Channel display name."
           },
           "org_id": {
             "type": ["integer", "null"],
             "format": "int32",
-            "description": "id of the organization this channel belongs too",
+            "description": "Organization id.",
             "minimum": 0
           },
           "owner_id": {
             "type": "string",
-            "description": "id of the user who created the channel"
+            "description": "Channel owner."
           },
           "team_id": {
             "type": ["string", "null"],
             "format": "uuid",
-            "description": "id of the team this channel belongs to"
+            "description": "Team id."
           },
           "updated_at": {
             "type": "string",
             "format": "date-time",
-            "description": "timestamp of when the channel was last updated"
+            "description": "Update timestamp."
           }
         }
       },
@@ -10902,6 +10903,7 @@
       },
       "ChannelMessage": {
         "type": "object",
+        "description": "Lightweight channel message for soup payloads.",
         "required": [
           "message_id",
           "sender_id",
@@ -10912,37 +10914,44 @@
         ],
         "properties": {
           "content": {
-            "type": "string"
+            "type": "string",
+            "description": "Message content."
           },
           "created_at": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "description": "Creation timestamp."
           },
           "deleted_at": {
             "type": ["string", "null"],
-            "format": "date-time"
+            "format": "date-time",
+            "description": "Deletion timestamp."
           },
           "mentions": {
             "type": "array",
             "items": {
               "type": "string"
             },
-            "description": "message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`"
+            "description": "Message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`."
           },
           "message_id": {
             "type": "string",
-            "format": "uuid"
+            "format": "uuid",
+            "description": "Message id."
           },
           "sender_id": {
-            "type": "string"
+            "type": "string",
+            "description": "Sender id."
           },
           "thread_id": {
             "type": ["string", "null"],
-            "format": "uuid"
+            "format": "uuid",
+            "description": "Thread parent id."
           },
           "updated_at": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "description": "Update timestamp."
           }
         }
       },
@@ -15188,6 +15197,7 @@
       },
       "LatestMessage": {
         "type": "object",
+        "description": "Latest-message bundle for soup payloads.",
         "properties": {
           "latest_message": {
             "oneOf": [
@@ -15195,7 +15205,8 @@
                 "type": "null"
               },
               {
-                "$ref": "#/components/schemas/ChannelMessage"
+                "$ref": "#/components/schemas/ChannelMessage",
+                "description": "Latest message including thread replies."
               }
             ]
           },
@@ -15205,7 +15216,8 @@
                 "type": "null"
               },
               {
-                "$ref": "#/components/schemas/ChannelMessage"
+                "$ref": "#/components/schemas/ChannelMessage",
+                "description": "Latest top-level non-thread message."
               }
             ]
           }
