@@ -55,6 +55,7 @@ dependencies = [
  "async-trait",
  "attachment",
  "futures",
+ "macro_env_var",
  "macro_user_id",
  "model-entity",
  "non_empty",

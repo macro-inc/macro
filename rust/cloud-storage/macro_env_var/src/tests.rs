@@ -70,6 +70,28 @@ fn required_env_reads_from_app_secrets_json_when_key_exists() {
 }
 
 #[test]
+fn read_env_var_exposes_std_var_error_for_missing_values() {
+    let result = with_mock_env(mock_no_env, || read_env_var("FOO"));
+
+    assert!(matches!(result, Err(std::env::VarError::NotPresent)));
+}
+
+#[test]
+fn read_env_var_reads_from_app_secrets_json_when_key_exists() {
+    let value = with_mock_env(
+        |k| match k {
+            "APP_SECRETS_JSON" => Ok(r#"{"FOO":"from-json"}"#.to_string()),
+            "FOO" => Ok("from-env".to_string()),
+            _ => Err(std::env::VarError::NotPresent),
+        },
+        || read_env_var("FOO"),
+    )
+    .unwrap();
+
+    assert_eq!(value, "from-json");
+}
+
+#[test]
 fn required_env_falls_back_to_env_when_json_is_missing() {
     let value = with_mock_env(
         |k| match k {
@@ -290,6 +312,28 @@ fn optional_env_returns_some_from_app_secrets_json_when_key_exists() {
     );
 
     assert_eq!(value.as_deref(), Some("from-json"));
+}
+
+#[test]
+fn optional_read_env_var_returns_some_from_app_secrets_json_when_key_exists() {
+    let value = with_mock_env(
+        |k| match k {
+            "APP_SECRETS_JSON" => Ok(r#"{"FOO":"from-json"}"#.to_string()),
+            "FOO" => Ok("from-env".to_string()),
+            _ => Err(std::env::VarError::NotPresent),
+        },
+        || optional_read_env_var("FOO"),
+    )
+    .unwrap();
+
+    assert_eq!(value.as_deref(), Some("from-json"));
+}
+
+#[test]
+fn optional_read_env_var_returns_none_when_neither_source_contains_key() {
+    let value = with_mock_env(mock_no_env, || optional_read_env_var("FOO")).unwrap();
+
+    assert_eq!(value, None);
 }
 
 #[test]

@@ -1,20 +1,19 @@
 /// One-shot completion — send a prompt and get a string response.
 use crate::model::router::{AllModelsRouter, RoutedModel};
 use crate::model::types::Model;
+use crate::provider_env;
 use ai_usage::{UsageContext, UsageRecorder};
 use rig_core::agent::PromptResponse;
-use rig_core::client::ProviderClient;
 use rig_core::completion::{CompletionModel, Prompt};
 use rig_core::message::Message;
-use rig_core::providers::{anthropic, openai};
 use std::sync::Arc;
 
-/// Build a router over provider clients from the environment.
+/// Build a router over provider clients from `APP_SECRETS_JSON` or the environment.
 ///
 /// `ANTHROPIC_API_KEY` and `OPENAI_API_KEY` are required.
 fn env_router() -> anyhow::Result<AllModelsRouter> {
-    let anthropic = Arc::new(anthropic::Client::from_env()?);
-    let openai = Arc::new(openai::Client::from_env()?);
+    let anthropic = Arc::new(provider_env::anthropic_client_from_env()?);
+    let openai = Arc::new(provider_env::openai_client_from_env()?);
     Ok(AllModelsRouter::new(anthropic, openai))
 }
 
