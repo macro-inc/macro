@@ -7882,6 +7882,7 @@ name = "native_app_server"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "macro_env_var",
  "native_app_service",
  "rootcause",
  "semver",
