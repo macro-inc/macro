@@ -5,7 +5,7 @@ use strum::Display;
 use uuid::Uuid;
 
 use crate::{
-    ChannelFilters,
+    ChannelFilters, ChannelThreadFilters,
     ast::{ExpandErr, ParseFromStr, UnknownValue},
 };
 
@@ -138,5 +138,49 @@ impl ExpandFrame<ChannelLiteral> for ChannelFilters {
         ]
         .into_iter()
         .fold_with(Expr::and))
+    }
+}
+
+/// the possible literal values in a channel thread filter ast
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub enum ChannelThreadLiteral {
+    /// The thread parent message id.
+    ThreadId(Uuid),
+    /// The thread must be in channel with [Uuid].
+    ChannelId(Uuid),
+    /// The sender of the root thread message must be the included user.
+    RootSender(MacroUserIdStr<'static>),
+}
+
+impl ExpandFrame<ChannelThreadLiteral> for ChannelThreadFilters {
+    type Err = ExpandErr;
+
+    fn expand_ast(
+        filter_request: ChannelThreadFilters,
+    ) -> Result<Option<Expr<ChannelThreadLiteral>>, Self::Err> {
+        let ChannelThreadFilters {
+            thread_ids,
+            channel_ids,
+            root_sender_ids,
+        } = filter_request;
+
+        let thread_ids = thread_ids
+            .iter()
+            .map(|s| Uuid::parse_str(s))
+            .try_expand(|r| r.map(ChannelThreadLiteral::ThreadId), Expr::or)?;
+
+        let channel_ids = channel_ids
+            .iter()
+            .map(|s| Uuid::parse_str(s))
+            .try_expand(|r| r.map(ChannelThreadLiteral::ChannelId), Expr::or)?;
+
+        let root_sender_ids = root_sender_ids
+            .iter()
+            .map(|s| MacroUserIdStr::parse_from_str(s).map(CowLike::into_owned))
+            .try_expand(|r| r.map(ChannelThreadLiteral::RootSender), Expr::or)?;
+
+        Ok([thread_ids, channel_ids, root_sender_ids]
+            .into_iter()
+            .fold_with(Expr::and))
     }
 }
