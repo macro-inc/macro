@@ -3,9 +3,7 @@ import type { JSX } from 'solid-js';
 
 type LayerProps = {
   children?: JSX.Element;
-  // Positive depths lighten the surface (elevated layers); negative depths
-  // darken it (recessed below the base surface, e.g. inset group headers).
-  depth?: -2 | -1 | 0 | 1 | 2 | 3 | 4 | 5;
+  depth?: 0 | 1 | 2 | 3 | 4 | 5;
 };
 
 export function Layer(props: LayerProps) {

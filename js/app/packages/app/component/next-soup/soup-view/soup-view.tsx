@@ -142,8 +142,6 @@ export const SoupSectionHeader = (props: {
   class?: string;
 }) => {
   return (
-    // Negative depth recesses the header just below the base surface so it
-    // differentiates slightly from the panel it sits on, without a border.
     <Layer depth={2}>
       <Dynamic
         component={props.onClick ? 'button' : 'div'}
@@ -152,8 +150,6 @@ export const SoupSectionHeader = (props: {
         data-highlighted={props.highlighted || undefined}
         class={cn(
           'group/header relative w-[calc(100%-0.5rem)] mx-1 my-0.5 rounded-lg px-2 py-2 flex items-center gap-2.5 text-xs font-semibold tracking-tight',
-          // Structural border differentiates the header as a UI element; hover
-          // and focus shift the background only (no extra ring).
           'text-text-muted bg-surface border border-edge-muted relative',
           props.onClick && 'hover:bg-active',
           props.class,
@@ -188,9 +184,6 @@ const AssigneeGroupContent = (props: {
   );
 };
 
-// Subtle per-status background + border tints for status-grouped headers. The
-// border tints the header's structural edge per status; selection (highlighted)
-// and hover only shift the background.
 const STATUS_GROUP_HEADER_TINTS: Record<string, string> = {
   [PROPERTY_OPTION_IDS.STATUS.NOT_STARTED]:
     'bg-task/5 border-task/10 data-highlighted:bg-task/10 hover:bg-task/10',

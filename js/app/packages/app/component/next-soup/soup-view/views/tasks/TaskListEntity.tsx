@@ -145,8 +145,6 @@ export function TaskListEntity(props: TaskListEntityProps) {
         'soup-list-entity @container/entity w-[calc(100%-0.5rem)] mr-1 relative group/narrow flex flex-col py-0.5 rounded-lg',
         {
           'min-h-10 mx-1': !isMobile(),
-          // Selection / focus / hover are expressed via background only — no
-          // ring or border (borders are reserved for structural UI edges).
           'bg-accent/8': props.checked,
           'bg-accent/16':
             props.checked && props.highlighted && !isTouchDevice(),
