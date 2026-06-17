@@ -19,7 +19,7 @@ import type { UnifiedNotification } from '@notifications';
 import CalendarIcon from '@phosphor/calendar-blank.svg';
 import ArrowSquareOutIcon from '@phosphor-icons/core/regular/arrow-square-out.svg?component-solid';
 import SlidersHorizontalIcon from '@phosphor-icons/core/regular/sliders-horizontal.svg?component-solid';
-import { Button, cn } from '@ui';
+import { Button, cn, Layer } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -732,12 +732,17 @@ function NotificationInboxList(props: {
       <div class="flex min-h-0 flex-1 flex-col">
         <Show when={currentHeader()}>
           {(label) => (
-            <header class="flex shrink-0 items-center gap-1 bg-surface px-2 py-4">
-              <CalendarIcon class="size-3 shrink-0 text-ink-extra-muted" />
-              <h1 class="text-xs font-medium text-ink-extra-muted">
-                {label()}
-              </h1>
-            </header>
+            <Layer depth={2}>
+              <div class="flex items-center">
+                <header class="border border-edge-muted rounded-full w-fit flex items-center gap-1 bg-surface whitespace-nowrap px-3 py-1.5 my-2 mx-auto">
+                  <CalendarIcon class="size-3 shrink-0 text-ink-extra-muted" />
+                  <h1 class="text-xs font-medium text-ink-extra-muted">
+                    {label()}
+                  </h1>
+                </header>
+                <div class="w-full h-px bg-edge-muted" />
+              </div>
+            </Layer>
           )}
         </Show>
         <VList
@@ -751,12 +756,17 @@ function NotificationInboxList(props: {
             if (row.type === 'header') {
               return (
                 <Show when={row.label !== currentHeader()}>
-                  <header class="mt-3 flex items-center gap-1 bg-surface px-2 py-4 first:mt-0">
-                    <CalendarIcon class="size-3 shrink-0 text-ink-extra-muted" />
-                    <h1 class="text-xs font-medium text-ink-extra-muted">
-                      {row.label}
-                    </h1>
-                  </header>
+                  <Layer depth={2}>
+                    <div class="flex items-center">
+                      <header class="border border-edge-muted rounded-full w-fit flex items-center gap-1 bg-surface whitespace-nowrap px-3 py-1.5 my-2 mx-auto">
+                        <CalendarIcon class="size-3 shrink-0 text-ink-extra-muted" />
+                        <h1 class="text-xs font-medium text-ink-extra-muted">
+                          {row.label}
+                        </h1>
+                      </header>
+                      <div class="w-full h-px bg-edge-muted" />
+                    </div>
+                  </Layer>
                 </Show>
               );
             }
