@@ -2,11 +2,15 @@ use std::str::FromStr;
 
 use anyhow::Context;
 use chrono::Utc;
+use macro_db_client::entity_property::get_entity_properties_for_index;
 use model::document::{DocumentMetadata, FileType};
+use models_properties::EntityType;
 use models_search::document::MarkdownParseResult;
 use models_search::unified::is_searchable_association;
 use opensearch_client::{
-    OpensearchClient, date_format::EpochSeconds, upsert::document::UpsertDocumentArgs,
+    OpensearchClient,
+    date_format::EpochSeconds,
+    upsert::document::{IndexedProperty, UpsertDocumentArgs},
 };
 use s3_key::{
     CONVERTED_DOCUMENT_FILE_NAME, build_cloud_storage_bucket_document_key,
@@ -59,6 +63,59 @@ async fn upsert_document(
     tracing::trace!("upserted document");
 
     Ok(())
+}
+
+/// Properties are keyed under the task entity type for tasks, otherwise the
+/// document entity type.
+fn properties_entity_type(sub_type: Option<&str>) -> EntityType {
+    if sub_type == Some("task") {
+        EntityType::Task
+    } else {
+        EntityType::Document
+    }
+}
+
+/// Fetch the entity's indexed properties once and attach them to every chunk
+/// upsert (parent metadata is denormalized identically across chunks). On a
+/// fetch error we log and index without properties rather than failing the
+/// whole document.
+async fn attach_indexed_properties(
+    db: &sqlx::Pool<sqlx::Postgres>,
+    document_id: &str,
+    sub_type: Option<&str>,
+    upserts: &mut [UpsertDocumentArgs],
+) {
+    if upserts.is_empty() {
+        return;
+    }
+    let properties = match get_entity_properties_for_index(
+        db,
+        document_id,
+        properties_entity_type(sub_type),
+    )
+    .await
+    {
+        Ok(properties) => properties,
+        Err(e) => {
+            tracing::warn!(error=?e, document_id=%document_id, "failed to fetch properties for search index");
+            return;
+        }
+    };
+    if properties.is_empty() {
+        return;
+    }
+    let indexed: Vec<IndexedProperty> = properties
+        .into_iter()
+        .map(|p| IndexedProperty {
+            definition_id: p.definition_id,
+            values: p.values,
+            number_value: p.number_value,
+            date_value: p.date_value,
+        })
+        .collect();
+    for upsert in upserts.iter_mut() {
+        upsert.properties = indexed.clone();
+    }
 }
 
 /// Processes a message for a standard document and reads the updated contents from s3 and updates
@@ -166,7 +223,7 @@ pub async fn update_search_with_raw_document(
     let updated_at = EpochSeconds::new(Utc::now().timestamp())?;
     let uuid = macro_uuid::generate_uuid_v7().to_string();
 
-    let upserts: Vec<UpsertDocumentArgs> = match file_type {
+    let mut upserts: Vec<UpsertDocumentArgs> = match file_type {
         FileType::Pdf | FileType::Docx => {
             let pages_content = parse_pdf_pages(content).context("unable to parse pdf")?;
             pages_content
@@ -182,6 +239,7 @@ pub async fn update_search_with_raw_document(
                     file_type: file_type.to_string(),
                     updated_at_seconds: updated_at,
                     sub_type: sub_type.clone(),
+                    properties: vec![],
                 })
                 .collect()
         }
@@ -198,6 +256,7 @@ pub async fn update_search_with_raw_document(
                 file_type: file_type.to_string(),
                 updated_at_seconds: updated_at,
                 sub_type: sub_type.clone(),
+                properties: vec![],
             }]
         }
         FileType::Md => {
@@ -218,6 +277,7 @@ pub async fn update_search_with_raw_document(
                     file_type: file_type.to_string(),
                     updated_at_seconds: updated_at,
                     sub_type: sub_type.clone(),
+                    properties: vec![],
                 })
                 .collect::<Vec<UpsertDocumentArgs>>()
         }
@@ -236,10 +296,19 @@ pub async fn update_search_with_raw_document(
                     file_type: file_type.to_string(),
                     updated_at_seconds: updated_at,
                     sub_type: sub_type.clone(),
+                    properties: vec![],
                 }]
             }
         }
     };
+
+    attach_indexed_properties(
+        db,
+        &search_extractor_message.document_id,
+        sub_type.as_deref(),
+        &mut upserts,
+    )
+    .await;
 
     upsert_document(opensearch_client, search_extractor_message, upserts).await?;
 
@@ -273,6 +342,7 @@ fn generate_upserts(
             file_type: file_type.to_string(),
             updated_at_seconds: updated_at,
             sub_type: sub_type.clone(),
+            properties: vec![],
         })
         .collect::<Vec<UpsertDocumentArgs>>();
 
@@ -338,7 +408,11 @@ pub async fn update_search_with_sync_document(
         }
     };
 
-    let upserts = generate_upserts(document_info, result).context("unable to generate upserts")?;
+    let sub_type = document_info.sub_type.as_ref().map(|st| st.to_string());
+    let mut upserts =
+        generate_upserts(document_info, result).context("unable to generate upserts")?;
+
+    attach_indexed_properties(db, document_id, sub_type.as_deref(), &mut upserts).await;
 
     upsert_document(opensearch_client, search_extractor_message, upserts).await?;
 

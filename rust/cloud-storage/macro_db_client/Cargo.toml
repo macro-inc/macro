@@ -31,6 +31,7 @@ models_entity_access_management = { path = "../models_entity_access_management",
 models_opensearch = { path = "../models_opensearch" }
 models_pagination = { path = "../models_pagination" }
 models_permissions = { path = "../models_permissions" }
+models_properties = { path = "../models_properties" }
 models_team = { path = "../models_team", optional = true }
 non_empty = { path = "../non_empty" }
 rand = { workspace = true, optional = true }

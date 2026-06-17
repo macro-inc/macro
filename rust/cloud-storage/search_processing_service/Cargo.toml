@@ -8,7 +8,7 @@ version = "0.1.0"
 [features]
 default = ["processing", "service"]
 processing = []
-service = ["macro_db_client"]
+service = ["macro_db_client", "models_properties"]
 
 [[bin]]
 name = "search_processing_service"
@@ -46,6 +46,7 @@ s3_key = { path = "../s3_key" }
 models_email = { path = "../models_email" }
 model_file_type = { path = "../model_file_type" }
 models_opensearch = { path = "../models_opensearch" }
+models_properties = { path = "../models_properties", optional = true }
 models_search = { path = "../models_search" }
 nom = { workspace = true }
 opensearch_client = { path = "../opensearch_client" }
