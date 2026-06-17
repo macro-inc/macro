@@ -3,6 +3,7 @@ import {
   useGlobalNotificationSource,
 } from '@app/component/GlobalAppState';
 import { PreviewPanel } from '@app/component/PreviewPanel';
+import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { Resize } from '@core/component/Resize';
 import { TabsInset } from '@core/component/TabsInset';
@@ -12,9 +13,12 @@ import {
   useHotkeyDOMScope,
 } from '@core/hotkey/hotkeys';
 import type { EntityData } from '@entity';
+import { AnimatedInboxIcon } from '@icon/wide-inbox';
+import { Popover } from '@kobalte/core/popover';
 import type { UnifiedNotification } from '@notifications';
 import CalendarIcon from '@phosphor/calendar-blank.svg';
 import ArrowSquareOutIcon from '@phosphor-icons/core/regular/arrow-square-out.svg?component-solid';
+import SlidersHorizontalIcon from '@phosphor-icons/core/regular/sliders-horizontal.svg?component-solid';
 import { Button, cn } from '@ui';
 import {
   createEffect,
@@ -430,6 +434,7 @@ function NotificationInboxList(props: {
   onSelect: (item: InboxItemData) => void;
   onToggleFilter: (filterId: string) => void;
 }) {
+  const [settingsOpen, setSettingsOpen] = createSignal(false);
   const [showDevFilters, setShowDevFilters] = createSignal(false);
 
   const [layoutVariant, setLayoutVariant] = createSignal<
@@ -648,7 +653,7 @@ function NotificationInboxList(props: {
       class="flex size-full min-h-0 flex-col bg-surface p-2 outline-none"
       tabIndex={0}
     >
-      <div class="mb-2 flex shrink-0 flex-col gap-2">
+      <div class="mb-2 flex shrink-0 items-center gap-2">
         <TabsInset
           class="h-auto w-fit"
           list={[
@@ -659,51 +664,70 @@ function NotificationInboxList(props: {
           value={props.readFilter}
           onChange={(value) => props.onReadFilterChange(value as ReadFilter)}
         />
-        <div class="flex gap-1">
-          <Button
-            class="h-7 w-fit bg-surface text-ink-muted"
+        <Popover
+          gutter={4}
+          open={settingsOpen()}
+          placement="bottom-end"
+          onOpenChange={setSettingsOpen}
+        >
+          <Popover.Trigger
+            as={Button}
+            class="ml-auto h-7 bg-surface text-ink-muted"
             depth={2}
-            size="sm"
+            size="icon-sm"
             variant="base"
-            onClick={() => setShowDevFilters((value) => !value)}
           >
-            Dev filters
-          </Button>
-          <Button
-            class="h-7 w-fit bg-surface text-ink-muted"
-            depth={2}
-            size="sm"
-            variant={layoutVariant() === 'inline-type' ? 'active' : 'base'}
-            onClick={() =>
-              setLayoutVariant((value) =>
-                value === 'inline-type' ? 'default' : 'inline-type'
-              )
-            }
-          >
-            Inline type layout
-          </Button>
-        </div>
-        <Show when={showDevFilters()}>
-          <div class="flex flex-wrap gap-1 rounded-md border border-dashed border-edge-muted bg-ink-muted/2.5 p-1">
-            <For each={devNotificationFilters}>
-              {(filter) => {
-                const hidden = () => props.hiddenFilterIds.includes(filter.id);
+            <SlidersHorizontalIcon />
+          </Popover.Trigger>
+          <Popover.Portal>
+            <Popover.Content class="z-popover flex w-72 flex-col gap-2 rounded-lg border border-edge bg-surface p-2 text-sm shadow-lg">
+              <Button
+                class="h-7 w-full justify-start bg-surface text-ink-muted"
+                depth={2}
+                size="sm"
+                variant={layoutVariant() === 'inline-type' ? 'active' : 'base'}
+                onClick={() =>
+                  setLayoutVariant((value) =>
+                    value === 'inline-type' ? 'default' : 'inline-type'
+                  )
+                }
+              >
+                Inline type layout
+              </Button>
+              <Button
+                class="h-7 w-full justify-start bg-surface text-ink-muted"
+                depth={2}
+                size="sm"
+                variant={showDevFilters() ? 'active' : 'base'}
+                onClick={() => setShowDevFilters((value) => !value)}
+              >
+                Dev filters
+              </Button>
+              <Show when={showDevFilters()}>
+                <div class="flex flex-wrap gap-1 rounded-md border border-dashed border-edge-muted bg-ink-muted/2.5 p-1">
+                  <For each={devNotificationFilters}>
+                    {(filter) => {
+                      const hidden = () =>
+                        props.hiddenFilterIds.includes(filter.id);
 
-                return (
-                  <Button
-                    class="h-7 bg-surface"
-                    depth={2}
-                    size="sm"
-                    variant={hidden() ? 'active' : 'base'}
-                    onClick={() => props.onToggleFilter(filter.id)}
-                  >
-                    {hidden() ? 'Show' : 'Hide'} {filter.label}
-                  </Button>
-                );
-              }}
-            </For>
-          </div>
-        </Show>
+                      return (
+                        <Button
+                          class="h-7 bg-surface"
+                          depth={2}
+                          size="sm"
+                          variant={hidden() ? 'active' : 'base'}
+                          onClick={() => props.onToggleFilter(filter.id)}
+                        >
+                          {hidden() ? 'Show' : 'Hide'} {filter.label}
+                        </Button>
+                      );
+                    }}
+                  </For>
+                </div>
+              </Show>
+            </Popover.Content>
+          </Popover.Portal>
+        </Popover>
       </div>
       <div class="flex min-h-0 flex-1 flex-col">
         <Show when={currentHeader()}>
@@ -834,6 +858,12 @@ export function NotificationInbox2() {
 
   return (
     <div class="relative size-full min-h-0 bg-surface" data-list-view="inbox2">
+      <SplitHeaderLeft>
+        <div class="flex h-full shrink-0 items-center gap-2">
+          <AnimatedInboxIcon class="size-4 text-ink-muted" />
+          <span class="text-base font-bold">Inbox</span>
+        </div>
+      </SplitHeaderLeft>
       <Resize.Zone direction="horizontal" gutter={0}>
         <Resize.Panel
           id="notification-inbox-list"
