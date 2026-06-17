@@ -25,8 +25,8 @@ export function invalidatePins(documentId: string) {
   return queryClient.invalidateQueries({ queryKey: pinKeys.list(documentId) });
 }
 
-// kept in sync with rust/sync-service/src/durable_object.rs PIN_LABEL_RE
-const PIN_LABEL_RE = /^[a-zA-Z0-9_-]+$/;
+// kept in sync with rust/sync-service/src/durable_object.rs — update both if you change this
+export const PIN_LABEL_RE = /^[a-zA-Z0-9_-]+$/;
 
 export function useCreatePinMutation(documentId: Accessor<string>) {
   return useMutation(() => ({

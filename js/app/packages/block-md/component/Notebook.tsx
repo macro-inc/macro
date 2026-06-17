@@ -12,6 +12,7 @@ import { editorFocusSignal } from '@core/component/LexicalMarkdown/utils';
 import { ParamsProvider } from '@core/component/ParamsProvider';
 import {
   DEV_MODE_ENV,
+  ENABLE_HISTORY_COMPONENT,
   ENABLE_MARKDOWN_COMMENTS,
   ENABLE_RAIL_CHAT_TASK_COMMENTS,
   LOCAL_ONLY,
@@ -323,12 +324,14 @@ export function Notebook(props: {
                 setShowLexicalStateDebugger(false)
               }
             />
-            <HistoryOverlay
-              documentId={documentId}
-              documentName={documentName()}
-              visible={props.viewingHistory()}
-              onExit={() => props.setViewingHistory(false)}
-            />
+            <Show when={ENABLE_HISTORY_COMPONENT}>
+              <HistoryOverlay
+                documentId={documentId}
+                documentName={documentName()}
+                visible={props.viewingHistory()}
+                onExit={() => props.setViewingHistory(false)}
+              />
+            </Show>
           </div>
           <Show when={ENABLE_RAIL_CHAT_TASK_COMMENTS && isTask}>
             <TaskDiscussion />
