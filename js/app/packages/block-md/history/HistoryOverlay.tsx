@@ -23,6 +23,8 @@ import {
 } from 'solid-js';
 import { HistoryScrubber } from './HistoryScrubber';
 
+const nameForkedDocument = (name: string) => `${name} (forked)`;
+
 async function fetchHistory(
   documentId: string
 ): Promise<{ sessions: HistorySession[] } | undefined> {
@@ -70,16 +72,19 @@ export function HistoryOverlay(props: {
     return sessions.reduce((m, s) => Math.max(m, s.endMs), sessions[0].endMs);
   });
 
-  const committed = useHistoryStateQuery(() => props.documentId, targetAtMs);
+  const stateAtCursor = useHistoryStateQuery(
+    () => props.documentId,
+    targetAtMs
+  );
 
   const [forking, setForking] = createSignal(false);
   const handleFork = async (keepOpen = false) => {
-    const current = committed.data;
+    const current = stateAtCursor.data;
     if (!current || forking()) return;
     setForking(true);
     const res = await storageServiceClient.copyDocument({
       documentId: props.documentId,
-      documentName: `${props.documentName} (forked)`,
+      documentName: nameForkedDocument(props.documentName),
       syncServiceVersion: current.versionId ?? undefined,
     });
     setForking(false);
@@ -88,7 +93,7 @@ export function HistoryOverlay(props: {
       return;
     }
     insertSplit({ type: 'md', id: res.value.documentId }, 'fork');
-    if (!keepOpen) props.onExit();
+    if (!keepOpen) props.onExit(); // hold ctrl/meta to keep history open
   };
 
   return (
@@ -97,7 +102,6 @@ export function HistoryOverlay(props: {
       style={{ display: props.visible ? undefined : 'none' }}
     >
       <div class="absolute inset-y-0 -inset-x-1 -z-10 bg-surface" />
-      {/* Fork button portalled into the toolbar left, on top of the hamburger. */}
       <Show when={props.visible}>
         <SplitToolbarLeft>
           <Button
@@ -105,7 +109,7 @@ export function HistoryOverlay(props: {
             size="sm"
             class="order-first"
             onClick={(e) => handleFork(e.ctrlKey || e.metaKey)}
-            disabled={forking() || !committed.data}
+            disabled={forking() || !stateAtCursor.data}
           >
             <GitFork />
             {forking() ? 'Forking…' : 'Fork'}
@@ -113,7 +117,7 @@ export function HistoryOverlay(props: {
         </SplitToolbarLeft>
       </Show>
       {/* placeholderData keeps the last rendered state visible while the next loads. */}
-      <Show keyed when={committed.data?.state}>
+      <Show keyed when={stateAtCursor.data?.state}>
         {(state) => {
           const config = buildConfig('markdown')
             .withMentions()
@@ -125,7 +129,6 @@ export function HistoryOverlay(props: {
               config={config}
               initialState={state}
               disabled
-              noMenus
               class="ph-no-capture w-full max-w-full pb-20 [&>*:first-child>*:first-child]:mt-0"
             />
           );

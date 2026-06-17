@@ -34,13 +34,16 @@ export function useCreatePinMutation(documentId: Accessor<string>) {
       if (!PIN_LABEL_RE.test(vars.label)) {
         throw new Error('Label can only be letters, dashes, and numbers');
       }
-      const maybe = await syncServiceClient.createPin({
+
+      const maybePin = await syncServiceClient.createPin({
         documentId: documentId(),
         label: vars.label,
         pinnedAtMs: vars.atMs,
       });
-      if (maybe.isErr()) throw new Error(maybe.error);
-      return maybe.value;
+
+      if (maybePin.isErr()) throw new Error(maybePin.error);
+
+      return maybePin.value;
     },
     onSuccess: () => invalidatePins(documentId()),
     onError: () =>
@@ -51,11 +54,12 @@ export function useCreatePinMutation(documentId: Accessor<string>) {
 export function useDeletePinMutation(documentId: Accessor<string>) {
   return useMutation(() => ({
     mutationFn: async (pinId: string) => {
-      const maybe = await syncServiceClient.deletePin({
+      const deletionResult = await syncServiceClient.deletePin({
         documentId: documentId(),
         pinId,
       });
-      if (maybe.isErr()) throw new Error(maybe.error);
+
+      if (deletionResult.isErr()) throw new Error(deletionResult.error);
     },
     onSuccess: () => invalidatePins(documentId()),
   }));

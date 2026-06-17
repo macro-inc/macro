@@ -11,7 +11,7 @@ use matchit::Router;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error, info, instrument, trace, warn};
 use worker::{
-    Context, Cors, Date, DurableObject, Env, Error, Method, Request, Response, ResponseBody,
+    Cors, Date, DurableObject, Env, Error, Method, Request, Response, ResponseBody,
     ResponseBuilder, Result, ScheduledTime, State, WebSocket, WebSocketIncomingMessage,
     WebSocketPair, durable_object,
 };
@@ -127,7 +127,7 @@ pub struct DocumentSyncSession {
     ws_meta_map: Arc<Mutex<WsMetaMap>>,
     msg_buffer: Arc<Mutex<Vec<u8>>>,
     #[cfg(feature = "dev-endpoints")]
-    peer_user_override: Mutex<Option<BTreeMap<u64, String>>>,
+    peer_user_override: Mutex<Option<std::collections::HashMap<u64, String>>>,
 }
 
 mod u64_serde_strings {
@@ -463,7 +463,7 @@ impl DocumentSyncSession {
             Some(Arc::new(state));
 
         if !body.peers.is_empty() {
-            let map: BTreeMap<u64, String> = body
+            let map: std::collections::HashMap<u64, String> = body
                 .peers
                 .into_iter()
                 .filter_map(|p| p.peer_id.parse::<u64>().ok().map(|id| (id, p.user_id)))
@@ -633,9 +633,9 @@ impl DocumentSyncSession {
             .lock("DocumentSyncSession::peer_user_override get within history_meta_handler")
             .clone();
         #[cfg(not(feature = "dev-endpoints"))]
-        let override_map: Option<std::collections::BTreeMap<u64, String>> = None;
+        let override_map: Option<std::collections::HashMap<u64, String>> = None;
 
-        let peer_to_user: std::collections::BTreeMap<u64, String> = match override_map {
+        let peer_to_user: std::collections::HashMap<u64, String> = match override_map {
             Some(map) => map,
             None => {
                 let db = self.env.d1(USER_PEER_D1_BINDING)?;
@@ -685,14 +685,11 @@ impl DocumentSyncSession {
         ResponseBuilder::new().from_json(&out)
     }
 
-    /// Document state at wall-clock time `t` (ms), returned as state-only snapshot
-    /// bytes (binary, same shape as `snapshot_handler`).
-    ///
-    /// NOTE: this is the un-optimized "phase 1" implementation. It pins the target
-    /// version by walking the full oplog history and reconstructs state at that
-    /// version on the live doc, which can be slow on large / deep-history docs. A
-    /// checkpoint ladder (resolve `t` to the nearest rung `<= t`, replay the bounded
-    /// forward segment) is the planned optimization.
+    // Get the state at a point in time
+    //
+    // We walk back potentially the full oplog history to find the state at `t`.
+    // TODO(wolf): implement checkpoint ladder, where we can do shallow snapshot
+    // + updates via sqllite instead
     async fn state_at_handler(&self, req: Request, document_id: &str) -> Result<Response> {
         if !self.exists(document_id).await? {
             return Ok(response(status_codes::NOT_FOUND));
@@ -763,7 +760,7 @@ impl DocumentSyncSession {
         match req.method() {
             Method::Get => {
                 let db = self.env.d1(USER_PEER_D1_BINDING)?;
-                let pins = crate::d1::get_pins_for_document(db, document_id).await?;
+                let pins = crate::d1::get_pins(db).await?;
 
                 #[derive(serde::Serialize)]
                 struct PinJson {
@@ -790,7 +787,8 @@ impl DocumentSyncSession {
                 #[derive(serde::Deserialize)]
                 struct CreatePinBody {
                     label: String,
-                    // JS timestamps are f64; round to i64.
+                    // was having issues with bigint not being supported, but we
+                    // plan to move to typegen utopa soon anyway
                     #[serde(rename = "pinnedAtMs")]
                     pinned_at_ms: Option<f64>,
                 }
@@ -819,7 +817,6 @@ impl DocumentSyncSession {
 
                 let pin = crate::d1::VersionPin {
                     id: uuid::Uuid::new_v4().to_string(),
-                    document_id: document_id.to_string(),
                     label: body.label,
                     created_by,
                     pinned_at_ms,
@@ -857,7 +854,7 @@ impl DocumentSyncSession {
             return Ok(response(status_codes::NOT_FOUND));
         }
         let db = self.env.d1(USER_PEER_D1_BINDING)?;
-        let deleted = crate::d1::delete_pin(db, document_id, pin_id).await?;
+        let deleted = crate::d1::delete_pin(db, pin_id).await?;
         Ok(response(if deleted {
             status_codes::OK
         } else {

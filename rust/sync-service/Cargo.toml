@@ -15,8 +15,7 @@ search-service = []
 bebop-owned-all = ["sync_service_bebop_schema/bebop-owned-all"]
 create-default-state = []
 alarm-keep-alive = []
-# TEMP/HACK: no-auth dev-only endpoints (e.g. set_memory_snapshot). NEVER in
-# `default` — only enabled in the local docker build, never in a deploy.
+#only enabled in the local docker build, never enable for deploys
 dev-endpoints = []
 
 [lib]
@@ -58,4 +57,3 @@ loro = "1.13"
 jsonwebtoken = { git = "https://github.com/whutchinson98/jsonwebtoken", features = ["rust_crypto"] }
 matchit =  "0.8.4"
 lazy-regex = "3"
-

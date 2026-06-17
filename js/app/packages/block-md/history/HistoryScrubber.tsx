@@ -1,35 +1,19 @@
 import type { HistorySession, VersionPin } from '@service-sync/client';
-import { makeResizeObserver } from '@solid-primitives/resize-observer';
-import { group, max } from 'd3-array';
-import { scaleLinear } from 'd3-scale';
-import { area, curveBasis } from 'd3-shape';
-import { createMemo, createSignal, For, onMount, Show } from 'solid-js';
+import { createElementSize } from '@solid-primitives/resize-observer';
+import { group } from 'd3-array';
+import { createMemo, createSignal, For, Show } from 'solid-js';
 import { CreatePin } from './CreatePin';
-import {
-  humanizeDuration,
-  type Interval,
-  intervalWarpEnd,
-  SESSION_GAP_MS,
-  userColor,
-  userLabel,
-} from './utils';
+import { createTimelineScales, type WindowRange } from './createTimelineScales';
+import { buildVolumeShape, VOLUME_BAND_H, type VolumeShape } from './timeline';
+import { formatTimestamp, userColor, userLabel } from './utils';
 
-/**
- * History scrubber on a warped time axis: active editing stretches keep real
- * time scale while idle gaps collapse. One lane per user below the rail shows
- * that user's sessions. Click to create a pin; click+drag to scrub; scroll to
- * pan; double-click to reset zoom.
- */
 type ScrubberUser = { id: string; label: string; color: string };
-
+type ScrubberLane = { user: ScrubberUser; sessions: HistorySession[] };
 const MIN_VIEW = 1000;
 const DRAG_THRESHOLD = 4;
 const THUMB_HIT_PX = 12;
-const DEFAULT_SESSIONS = 6;
-const GAP_MARKER_MIN_PX = 36;
-const VOLUME_BUCKETS = 80;
-const VOLUME_BAND_H = 32;
-const RAIL_HEIGHT_PX = 32; // h-8
+const RAIL_HEIGHT_PX = 32;
+const DOUBLE_CLICK_MS = 300;
 
 export function HistoryScrubber(props: {
   sessions: readonly HistorySession[];
@@ -39,15 +23,16 @@ export function HistoryScrubber(props: {
   onDeletePin: (pinId: string) => void;
 }) {
   let containerRef!: HTMLDivElement;
-  const [width, setWidth] = createSignal(0);
+  const size = createElementSize(() => containerRef);
+  const width = () => size.width ?? 0;
   const [cursorMs, setCursorMs] = createSignal<number | null>(null);
   const [hidden, setHidden] = createSignal<ReadonlySet<string>>(new Set());
-  const [view, setView] = createSignal<{ start: number; end: number } | null>(
-    null
-  );
+  const [view, setView] = createSignal<WindowRange | null>(null);
 
   type Drag =
+    // this is if we are paning
     | { mode: 'scrub'; startPx: number }
+    // and this is if we are selecting a range to zoom in on
     | { mode: 'marquee'; startPx: number; curPx: number; inLanes: boolean };
   const [drag, setDrag] = createSignal<Drag | null>(null);
 
@@ -57,8 +42,9 @@ export function HistoryScrubber(props: {
     atMs: number;
   } | null>(null);
 
+  // users (with metadata for displaying them in their tracks)
   const users = createMemo<ScrubberUser[]>(() => {
-    const ids = [...new Set(props.sessions.map((s) => s.userId))];
+    const ids = [...new Set(props.sessions.map((session) => session.userId))];
     return ids.map((id) => ({
       id,
       label: userLabel(id),
@@ -73,105 +59,38 @@ export function HistoryScrubber(props: {
     setHidden(next);
   };
 
-  const lanes = createMemo(() => {
-    const visible = props.sessions.filter((s) => !hidden().has(s.userId));
-    const byUser = group(visible, (s) => s.userId);
-    return users()
-      .filter((u) => byUser.has(u.id))
-      .map((u) => ({ user: u, sessions: byUser.get(u.id)! }));
-  });
-
-  onMount(() => {
-    const { observe } = makeResizeObserver(() =>
-      setWidth(containerRef.getBoundingClientRect().width)
+  const lanes = createMemo<ScrubberLane[]>(() => {
+    const visible = props.sessions.filter(
+      (session) => !hidden().has(session.userId)
     );
-    observe(containerRef);
-    setWidth(containerRef.getBoundingClientRect().width);
+    const byUser = group(visible, (session) => session.userId);
+    return users()
+      .filter((user) => byUser.has(user.id))
+      .map((user) => ({ user, sessions: byUser.get(user.id)! }));
   });
 
-  const warp = createMemo(() => {
-    if (props.sessions.length === 0) {
-      return { intervals: [] as Interval[], total: 1 };
-    }
-
-    const spans = props.sessions
-      .map((s) => ({ startMs: s.startMs, endMs: s.endMs }))
-      .sort((a, b) => a.startMs - b.startMs);
-    const merged: { startMs: number; endMs: number }[] = [];
-    for (const s of spans) {
-      const last = merged[merged.length - 1];
-      if (last && s.startMs - last.endMs <= SESSION_GAP_MS) {
-        last.endMs = Math.max(last.endMs, s.endMs);
-      } else {
-        merged.push({ ...s });
-      }
-    }
-
-    const intervals: Interval[] = [];
-    let offset = 0;
-    for (let i = 0; i < merged.length; i++) {
-      if (i > 0) {
-        const gapMs = merged[i].startMs - merged[i - 1].endMs;
-        offset +=
-          SESSION_GAP_MS *
-          (1 + Math.log(1 + (gapMs - SESSION_GAP_MS) / SESSION_GAP_MS));
-      }
-      const span = merged[i];
-      const endMs = Math.max(span.endMs, span.startMs + 1);
-      intervals.push({ startMs: span.startMs, endMs, warpStart: offset });
-      offset += endMs - span.startMs;
-    }
-
-    return { intervals, total: offset || 1 };
-  });
-
-  const warpScale = createMemo(() => {
-    const { intervals } = warp();
-    if (intervals.length === 0)
-      return scaleLinear().domain([0, 1]).range([0, 0]);
-    return scaleLinear()
-      .domain(intervals.flatMap((iv) => [iv.startMs, iv.endMs]))
-      .range(intervals.flatMap((iv) => [iv.warpStart, intervalWarpEnd(iv)]))
-      .clamp(true);
-  });
-
-  const warpMs = (ms: number): number => warpScale()(ms);
-  const unwarp = (warped: number): number => {
-    const ms = warpScale().invert(warped);
-    return Number.isNaN(ms) ? 0 : ms;
-  };
-
-  const defaultWindow = createMemo(() => {
-    const { intervals, total } = warp();
-    if (intervals.length <= DEFAULT_SESSIONS) return { start: 0, end: total };
-    return {
-      start: intervals[intervals.length - DEFAULT_SESSIONS].warpStart,
-      end: total,
-    };
-  });
-
-  const viewW = createMemo(() => view() ?? defaultWindow());
-
-  const xScale = createMemo(() =>
-    scaleLinear()
-      .domain([viewW().start, viewW().end])
-      .range([0, Math.max(1, width())])
-  );
-  const toPx = (warped: number) => xScale()(warped);
-  const fromPx = (px: number) => xScale().invert(px);
+  const {
+    compressedTimeline,
+    visibleWindow,
+    gapMarkers,
+    warpedPositionToTimestamp,
+    containerPositionToWarpedPosition,
+    timestampToContainerPosition,
+    containerPositionToTimestamp,
+  } = createTimelineScales(() => props.sessions, width, view);
 
   const clampView = (start: number, end: number) => {
-    const total = warp().total;
+    const total = compressedTimeline().total;
     const span = Math.min(Math.max(MIN_VIEW, end - start), total);
-    let s = Math.max(0, start);
-    if (s + span > total) s = total - span;
-    if (s < 0) s = 0;
-    return { start: s, end: s + span };
+    let clampedStart = Math.max(0, start);
+    if (clampedStart + span > total) clampedStart = total - span;
+    if (clampedStart < 0) clampedStart = 0;
+    return { start: clampedStart, end: clampedStart + span };
   };
 
   const onWheel = (e: WheelEvent) => {
     e.preventDefault();
-    const { start, end } = viewW();
+    const { start, end } = visibleWindow();
     const delta =
       Math.abs(e.deltaX) >= Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
     if (delta === 0) return;
@@ -179,28 +98,34 @@ export function HistoryScrubber(props: {
     setView(clampView(start + shift, end + shift));
   };
 
+  // Converts page clientX to a pixel offset within the container, clamped to [0, width].
+  // Clamping keeps coords valid during pointer capture when the pointer drifts outside.
   const localPx = (clientX: number) => {
     const rect = containerRef.getBoundingClientRect();
     return Math.min(Math.max(0, clientX - rect.left), rect.width);
   };
 
+  // Converts page clientY to a pixel offset from the container top (unclamped).
+  // Only used to distinguish clicks in the rail vs the user lanes below it.
   const localY = (clientY: number) => {
     return clientY - containerRef.getBoundingClientRect().top;
   };
 
-  const pxToMs = (px: number) => unwarp(fromPx(px));
-
-  const placeAt = (px: number) => {
-    const ms = pxToMs(px);
+  // Converts a pixel offset to a real timestamp: pixel → warped coord → ms.
+  const placeAt = (pointerPx: number) => {
+    const ms = containerPositionToTimestamp(pointerPx);
     setCursorMs(ms);
     props.onSelect(new Date(ms));
   };
 
   const thumbPx = createMemo<number | null>(() => {
-    const c = cursorMs();
-    const w = width();
-    const px = c === null ? w : toPx(warpMs(c));
-    return px < -0.5 || px > w + 0.5 ? null : px;
+    const cursor = cursorMs();
+    const totalWidth = width();
+    const candidatePx =
+      cursor === null ? totalWidth : timestampToContainerPosition(cursor);
+    return candidatePx < -0.5 || candidatePx > totalWidth + 0.5
+      ? null
+      : candidatePx;
   });
 
   let lastClickMs = 0;
@@ -211,120 +136,87 @@ export function HistoryScrubber(props: {
       return;
     }
     setHoverPx(null);
-    const px = localPx(e.clientX);
-    const tp = thumbPx();
-    if (tp !== null && Math.abs(px - tp) <= THUMB_HIT_PX) {
-      setDrag({ mode: 'scrub', startPx: px });
+    const pointerPx = localPx(e.clientX);
+    const thumbPosition = thumbPx();
+    if (
+      thumbPosition !== null &&
+      Math.abs(pointerPx - thumbPosition) <= THUMB_HIT_PX
+    ) {
+      setDrag({ mode: 'scrub', startPx: pointerPx });
     } else {
       const inLanes = localY(e.clientY) > RAIL_HEIGHT_PX;
-      setDrag({ mode: 'marquee', startPx: px, curPx: px, inLanes });
+      setDrag({
+        mode: 'marquee',
+        startPx: pointerPx,
+        curPx: pointerPx,
+        inLanes,
+      });
     }
     containerRef.setPointerCapture(e.pointerId);
   };
 
   const onPointerMove = (e: PointerEvent) => {
-    const px = localPx(e.clientX);
-    const d = drag();
-    if (!d) {
-      setHoverPx(px);
+    const pointerPx = localPx(e.clientX);
+    const activeDrag = drag();
+    if (!activeDrag) {
+      setHoverPx(pointerPx);
       return;
     }
-    if (d.mode === 'scrub') {
-      setCursorMs(pxToMs(px));
+    if (activeDrag.mode === 'scrub') {
+      setCursorMs(containerPositionToTimestamp(pointerPx));
     } else {
-      setDrag({ ...d, curPx: px });
+      setDrag({ ...activeDrag, curPx: pointerPx });
     }
   };
 
   const onPointerUp = (e: PointerEvent) => {
-    const d = drag();
-    if (!d) return;
+    const activeDrag = drag();
+    if (!activeDrag) return;
     setDrag(null);
-    if (warp().intervals.length === 0) return;
-    const px = localPx(e.clientX);
-    if (d.mode === 'scrub') {
-      placeAt(px);
+    if (compressedTimeline().intervals.length === 0) return;
+    const pointerPx = localPx(e.clientX);
+    if (activeDrag.mode === 'scrub') {
+      // User was dragging the thumb — commit the cursor position.
+      placeAt(pointerPx);
       return;
     }
-    if (Math.abs(d.curPx - d.startPx) > DRAG_THRESHOLD) {
-      const a = fromPx(Math.min(d.startPx, d.curPx));
-      const b = fromPx(Math.max(d.startPx, d.curPx));
-      setView(clampView(a, b));
-    } else if (!d.inLanes) {
+    if (Math.abs(activeDrag.curPx - activeDrag.startPx) > DRAG_THRESHOLD) {
+      // User drew a marquee selection — zoom the view to the selected pixel range.
+      const warpLeft = containerPositionToWarpedPosition(
+        Math.min(activeDrag.startPx, activeDrag.curPx)
+      );
+      const warpRight = containerPositionToWarpedPosition(
+        Math.max(activeDrag.startPx, activeDrag.curPx)
+      );
+      setView(clampView(warpLeft, warpRight));
+    } else if (!activeDrag.inLanes) {
+      // Short click on the rail (not the user lanes) — open the create-pin popover.
+      // We detect double-clicks manually here because the native dblclick event fires
+      // after both pointerups, so the popover would flash open before the zoom reset.
       const now = Date.now();
-      const isDouble = now - lastClickMs < 300;
+      const isDouble = now - lastClickMs < DOUBLE_CLICK_MS;
       lastClickMs = now;
-      if (!isDouble) setCreatePinAt({ leftPx: px, atMs: pxToMs(px) });
+      if (!isDouble)
+        setCreatePinAt({
+          leftPx: pointerPx,
+          atMs: containerPositionToTimestamp(pointerPx),
+        });
     }
   };
 
-  const marquee = createMemo(() => {
-    const d = drag();
-    return d?.mode === 'marquee' &&
-      Math.abs(d.curPx - d.startPx) > DRAG_THRESHOLD
-      ? d
+  // The active marquee drag, but only once it has crossed DRAG_THRESHOLD pixels —
+  // used to render the selection box highlight while the user is drawing a zoom selection.
+  const marquee = createMemo<Extract<Drag, { mode: 'marquee' }> | null>(() => {
+    const activeDrag = drag();
+    return activeDrag?.mode === 'marquee' &&
+      Math.abs(activeDrag.curPx - activeDrag.startPx) > DRAG_THRESHOLD
+      ? activeDrag
       : null;
   });
 
-  const gapMarkers = createMemo(() => {
-    const w = width();
-    const { intervals } = warp();
-    const out: { left: number; width: number; label: string }[] = [];
-    for (let i = 1; i < intervals.length; i++) {
-      const prev = intervals[i - 1];
-      const cur = intervals[i];
-      const left = toPx(intervalWarpEnd(prev));
-      const right = toPx(cur.warpStart);
-      if (right < 0 || left > w) continue;
-      const markerWidth = right - left;
-      if (markerWidth < GAP_MARKER_MIN_PX) continue;
-      out.push({
-        left,
-        width: markerWidth,
-        label: humanizeDuration(cur.startMs - prev.endMs),
-      });
-    }
-    return out;
-  });
-
-  const volume = createMemo(() => {
-    const w = width();
-    if (w <= 0 || props.sessions.length === 0) return null;
-    const bucketWidth = w / VOLUME_BUCKETS;
-    const buckets = new Array<number>(VOLUME_BUCKETS).fill(0);
-    for (const s of props.sessions) {
-      const durMin = Math.max(1, (s.endMs - s.startMs) / 60_000);
-      const rate = s.count / durMin;
-      const leftPx = Math.max(0, toPx(warpMs(s.startMs)));
-      const rightPx = Math.min(w, toPx(warpMs(s.endMs)));
-      if (rightPx < 0 || leftPx > w || rightPx < leftPx) continue;
-      const clampBucket = (px: number) =>
-        Math.max(0, Math.min(VOLUME_BUCKETS - 1, Math.floor(px / bucketWidth)));
-      const firstBucket = clampBucket(leftPx);
-      const lastBucket = Math.max(firstBucket, clampBucket(rightPx - 1e-6));
-      for (let i = firstBucket; i <= lastBucket; i++) buckets[i] += rate;
-    }
-    const peak = max(buckets) ?? 0;
-    if (peak <= 0) return null;
-    const H = VOLUME_BAND_H;
-    const areaGenerator = area<number>()
-      .x((_, i) => (i / (VOLUME_BUCKETS - 1)) * w)
-      .y0(H)
-      .y1((v) => H - (v / peak) * (H - 2))
-      .curve(curveBasis);
-    return {
-      area: areaGenerator(buckets) ?? '',
-      line: areaGenerator.lineY1()(buckets) ?? '',
-    };
-  });
-
-  const fmt = (at: Date) =>
-    at.toLocaleString(undefined, {
-      month: 'short',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-    });
+  const volume = createMemo<VolumeShape | null>(() =>
+    buildVolumeShape(props.sessions, timestampToContainerPosition, width())
+  );
 
   return (
     <div class="flex w-full items-start gap-4">
@@ -346,20 +238,22 @@ export function HistoryScrubber(props: {
         onPointerUp={onPointerUp}
         onPointerLeave={() => setHoverPx(null)}
         onWheel={onWheel}
-        onDblClick={() => setView({ start: 0, end: warp().total })}
+        onDblClick={() =>
+          setView({ start: 0, end: compressedTimeline().total })
+        }
       >
         {/* Background activity meter */}
         <Show when={volume()}>
-          {(v) => (
+          {(vol) => (
             <svg
               class="pointer-events-none absolute inset-0 -z-10 size-full text-ink-muted"
               preserveAspectRatio="none"
               viewBox={`0 0 ${width()} ${VOLUME_BAND_H}`}
               aria-hidden="true"
             >
-              <path d={v().area} fill="currentColor" class="opacity-[0.08]" />
+              <path d={vol().area} fill="currentColor" class="opacity-[0.08]" />
               <path
-                d={v().line}
+                d={vol().line}
                 fill="none"
                 stroke="currentColor"
                 stroke-width="1"
@@ -383,7 +277,8 @@ export function HistoryScrubber(props: {
         {/* Pin markers */}
         <For each={props.pins}>
           {(pin) => {
-            const px = () => toPx(warpMs(pin.pinnedAtMs));
+            const px = () => timestampToContainerPosition(pin.pinnedAtMs);
+            // 2px margin so pins at the very edge aren't clipped.
             return (
               <Show when={px() >= -2 && px() <= width() + 2}>
                 <div
@@ -392,6 +287,7 @@ export function HistoryScrubber(props: {
                   onPointerDown={(e) => e.stopPropagation()}
                   onClick={(e) => {
                     e.stopPropagation();
+                    // you can hold cmd when you click a pin to delete it
                     if (e.ctrlKey || e.metaKey) {
                       props.onDeletePin(pin.id);
                     } else {
@@ -429,23 +325,23 @@ export function HistoryScrubber(props: {
         <div class="relative h-8 overflow-hidden">
           <div class="absolute inset-x-0 top-1/2 h-0.5 -translate-y-1/2 rounded bg-edge" />
           <For each={gapMarkers()}>
-            {(g) => (
+            {(marker) => (
               <div
                 class="absolute inset-y-0 flex items-center justify-center overflow-hidden whitespace-nowrap text-[10px] text-ink-muted"
-                style={{ left: `${g.left}px`, width: `${g.width}px` }}
+                style={{ left: `${marker.left}px`, width: `${marker.width}px` }}
               >
-                {`·· ${g.label} ··`}
+                {`·· ${marker.label} ··`}
               </div>
             )}
           </For>
           {/* Marquee zoom selection */}
           <Show when={marquee()}>
-            {(m) => (
+            {(activeMarquee) => (
               <div
                 class="absolute inset-y-0 z-10 border-accent border-x bg-accent/20"
                 style={{
-                  left: `${Math.min(m().startPx, m().curPx)}px`,
-                  width: `${Math.abs(m().curPx - m().startPx)}px`,
+                  left: `${Math.min(activeMarquee().startPx, activeMarquee().curPx)}px`,
+                  width: `${Math.abs(activeMarquee().curPx - activeMarquee().startPx)}px`,
                 }}
               />
             )}
@@ -468,9 +364,11 @@ export function HistoryScrubber(props: {
               <div class="relative h-2 overflow-hidden rounded-full">
                 <div class="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-edge/60" />
                 <For each={lane.sessions}>
-                  {(s) => {
-                    const left = () => toPx(warpMs(s.startMs));
-                    const right = () => toPx(warpMs(s.endMs));
+                  {(session) => {
+                    const left = () =>
+                      timestampToContainerPosition(session.startMs);
+                    const right = () =>
+                      timestampToContainerPosition(session.endMs);
                     return (
                       <div
                         class="absolute inset-y-0 rounded-full"
@@ -491,10 +389,14 @@ export function HistoryScrubber(props: {
 
         {/* Edge time labels */}
         <span class="absolute top-full left-0 origin-top-left -rotate-12 text-[10px] text-ink-muted">
-          {fmt(new Date(unwarp(viewW().start)))}
+          {formatTimestamp(
+            new Date(warpedPositionToTimestamp(visibleWindow().start))
+          )}
         </span>
         <span class="absolute top-full right-0 origin-top-right rotate-12 text-[10px] text-ink-muted">
-          {fmt(new Date(unwarp(viewW().end)))}
+          {formatTimestamp(
+            new Date(warpedPositionToTimestamp(visibleWindow().end))
+          )}
         </span>
       </div>
 
@@ -502,18 +404,18 @@ export function HistoryScrubber(props: {
       <Show when={users().length > 0}>
         <div class="flex max-h-32 shrink-0 flex-col gap-0.5 overflow-y-auto overscroll-contain pr-1 text-xs">
           <For each={users()}>
-            {(u) => (
+            {(user) => (
               <button
                 type="button"
                 class="flex items-center gap-1.5 rounded px-1 py-0.5 text-left hover:bg-hover"
-                classList={{ 'opacity-40': hidden().has(u.id) }}
-                onClick={() => toggleUser(u.id)}
+                classList={{ 'opacity-40': hidden().has(user.id) }}
+                onClick={() => toggleUser(user.id)}
               >
                 <span
                   class="size-2 shrink-0 rounded-full"
-                  style={{ background: u.color }}
+                  style={{ background: user.color }}
                 />
-                <span class="max-w-40 truncate">{u.label}</span>
+                <span class="max-w-40 truncate">{user.label}</span>
               </button>
             )}
           </For>

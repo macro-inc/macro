@@ -44,9 +44,7 @@ RUN cd bebop && npx bebopc build
 # Copy remaining source files
 COPY . .
 
-# Build the actual application. dev-endpoints adds no-auth testing-only routes
-# (e.g. set_memory_snapshot). This Dockerfile is local-dev-only, so it's safe
-# here; it is NOT enabled by the wrangler deploy build (wrangler.toml).
+# Add a feature that adds an insecure debug endpoint for dev for seeding snapshots
 RUN worker-build --release --features dev-endpoints
 
 EXPOSE 8787

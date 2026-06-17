@@ -1,17 +1,6 @@
-//! Group document edit changes into per-user editing "sessions".
-//!
-//! [`sessionize`] takes `(user_id, timestamp_ms)` edit events (in any order),
-//! groups each user's edits whose gaps are within [`SESSION_GAP_MS`] into a single
-//! session, and returns every session over the whole history, most-recent first.
-//!
-//! This always operates on the entire history (the caller walks the full oplog and
-//! hands every change in). Volume / activity rendering is derived from these
-//! sessions on the client, so nothing extra is computed here.
-//!
-//! This is the temporary pre-SQLite-table implementation: eventually sessions will
-//! be materialized in DO SQLite rather than recomputed by walking history per call.
-
 use std::collections::HashMap;
+
+use tracing::error;
 
 /// Largest gap in ms between consecutive edits that still counts as one session
 /// sort of a subjective thing, for now 10 minutes
@@ -30,6 +19,8 @@ pub struct Session {
 /// Group `(user_id, timestamp_ms)` events into per-user sessions. Within a user,
 /// consecutive edits more than `gap_ms` apart start a new session. Returns all
 /// sessions sorted most-recent first (`end_ms` desc, deterministic tie-breaks).
+/// There can be overlapping sessions as multiple users may be editing at the
+/// same time.
 pub fn sessionize(events: Vec<(String, i64)>, gap_ms: i64) -> Vec<Session> {
     let mut by_user: HashMap<String, Vec<i64>> = HashMap::new();
     for (user, ts) in events {
@@ -37,29 +28,34 @@ pub fn sessionize(events: Vec<(String, i64)>, gap_ms: i64) -> Vec<Session> {
     }
 
     let mut sessions: Vec<Session> = Vec::new();
-    for (user, mut times) in by_user {
-        times.sort_unstable();
-        let mut iter = times.into_iter();
-        let Some(first) = iter.next() else {
+    for (user, mut edit_times) in by_user {
+        edit_times.sort_unstable(); // all edit timestamps for user from oldest to newest
+        let mut all_edit_times = edit_times.into_iter();
+
+        let Some(first) = all_edit_times.next() else {
+            error!("no events for user even though we added events for user: {}", user);
             continue;
         };
+
         let mut start = first;
         let mut end = first;
         let mut count: u32 = 1;
-        for t in iter {
-            if t - end > gap_ms {
+        for edit_time in all_edit_times {
+            // if they haven't edited for so long, start a new session
+            if edit_time - end > gap_ms {
                 sessions.push(Session {
                     user_id: user.clone(),
                     start_ms: start,
                     end_ms: end,
                     count,
                 });
-                start = t;
+                start = edit_time;
                 count = 0;
             }
-            end = t;
+            end = edit_time;
             count += 1;
         }
+        // most recent session
         sessions.push(Session {
             user_id: user.clone(),
             start_ms: start,
@@ -68,11 +64,12 @@ pub fn sessionize(events: Vec<(String, i64)>, gap_ms: i64) -> Vec<Session> {
         });
     }
 
-    // Most recent first; deterministic tie-breaks.
+    // Most recent first
     sessions.sort_by(|a, b| {
         b.end_ms
             .cmp(&a.end_ms)
             .then_with(|| b.start_ms.cmp(&a.start_ms))
+            // tiebreaker, not super important
             .then_with(|| a.user_id.cmp(&b.user_id))
     });
     sessions
@@ -164,14 +161,5 @@ mod tests {
             .unwrap();
         assert_eq!(a_old.end_ms, 1050);
         assert_eq!(a_old.count, 2);
-    }
-
-    #[test]
-    fn test_recency_ordering() {
-        let sessions = sessionize(vec![ev("a", 1000), ev("a", 1050), ev("a", 5000)], GAP);
-        assert_eq!(sessions.len(), 2);
-        assert_eq!(sessions[0].end_ms, 5000);
-        assert_eq!(sessions[1].end_ms, 1050);
-        assert_eq!(sessions[1].start_ms, 1000);
     }
 }

@@ -142,10 +142,11 @@ impl DocumentState {
     /// change's peer to a user, and groups them with [`crate::sessionize::sessionize`].
     /// `peer_to_user` maps loro peer ids to user ids; unknown peers fall back to
     /// "unknown".
-    /// TODO(history): materialize sessions in DO SQLite to avoid walking history per call.
+    /// TODO(wolf): materialize sessions in DO SQLite to avoid walking history per call.
+    /// and we can also just stop walking back if we dont always query for ALL historic sessions.
     pub fn history_sessions(
         &self,
-        peer_to_user: &std::collections::BTreeMap<u64, String>,
+        peer_to_user: &std::collections::HashMap<u64, String>,
         gap_ms: i64,
     ) -> Vec<crate::sessionize::Session> {
         let mut events: Vec<(String, i64)> = Vec::new();
@@ -156,7 +157,7 @@ impl DocumentState {
                 let user = peer_to_user
                     .get(&change.id.peer)
                     .map(String::as_str)
-                    .unwrap_or("unknown");
+                    .unwrap_or("unknown"); // we should always have a peer id, this is probably a dumb fallback
                 events.push((user.to_string(), change.timestamp * 1000));
                 std::ops::ControlFlow::Continue(())
             });

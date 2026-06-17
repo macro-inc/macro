@@ -11,27 +11,33 @@ export type HistoryStateResult = {
 
 export function useHistoryStateQuery(
   documentId: Accessor<string>,
-  tMs: Accessor<number | undefined>
+  atUnixTimeMs: Accessor<number | undefined>
 ) {
   return useQuery<HistoryStateResult | null>(() => ({
-    queryKey: ['history-state', documentId(), tMs()],
+    queryKey: ['history-state', documentId(), atUnixTimeMs()],
     queryFn: async () => {
-      const t = tMs();
-      if (t === undefined) return null;
-      const maybe = await syncServiceClient.getStateAt({
+      const unixTimeMs = atUnixTimeMs();
+      if (unixTimeMs === undefined) return null;
+
+      const maybeDoc = await syncServiceClient.getStateAt({
         documentId: documentId(),
-        tMs: t,
+        tMs: unixTimeMs,
       });
-      if (maybe.isErr()) throw new Error(maybe.error);
+
+      if (maybeDoc.isErr()) throw new Error(maybeDoc.error);
       const doc = new LoroDoc();
-      doc.import(maybe.value.bytes);
+      doc.import(maybeDoc.value.bytes);
+
       return {
         state: doc.toJSON() as SerializedEditorState,
-        versionId: maybe.value.versionId,
+        versionId: maybeDoc.value.versionId,
       };
     },
-    enabled: tMs() !== undefined,
+    enabled: atUnixTimeMs() !== undefined,
+    // the document state at "x time in the past" never "expires"
     staleTime: Infinity,
+    // keepPreviousData is just an identity function that returns the last data
+    // that tanstack provides
     placeholderData: keepPreviousData,
   }));
 }
