@@ -7,7 +7,7 @@ version = "0.1.0"
 [dependencies]
 anyhow = { workspace = true }
 cached = { workspace = true }
-channels = { path = "../channels", default-features = false, features = ["outbound"] }
+channels = { path = "../channels", default-features = false, features = ["inbound", "outbound"] }
 chrono = { workspace = true }
 doppleganger = { workspace = true }
 futures = { workspace = true }
