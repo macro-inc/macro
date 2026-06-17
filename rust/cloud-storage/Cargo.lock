@@ -8629,6 +8629,7 @@ dependencies = [
  "lambda_runtime",
  "macro_aws_config",
  "macro_entrypoint",
+ "macro_env_var",
  "sqlx",
  "sqs_client",
  "tokio",
