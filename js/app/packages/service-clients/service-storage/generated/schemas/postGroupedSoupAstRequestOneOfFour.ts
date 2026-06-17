@@ -7,5 +7,8 @@
 import type { PostGroupedSoupAstGroupPageRequest } from './postGroupedSoupAstGroupPageRequest';
 import type { PostGroupedSoupAstRequestOneOfFourAllOf } from './postGroupedSoupAstRequestOneOfFourAllOf';
 
+/**
+ * Request for a page within one group.
+ */
 export type PostGroupedSoupAstRequestOneOfFour =
   PostGroupedSoupAstGroupPageRequest & PostGroupedSoupAstRequestOneOfFourAllOf;

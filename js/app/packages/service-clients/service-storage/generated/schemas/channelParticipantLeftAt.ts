@@ -5,4 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Timestamp when the participant left the channel, if any.
+ */
 export type ChannelParticipantLeftAt = string | null;

@@ -584,15 +584,32 @@ export const ListEntities = z.object({
   includeTypes: z
     .union([
       z.array(
-        z.enum([
-          'document',
-          'ai_chat',
-          'project',
-          'email',
-          'channel',
-          'call',
-          'foreign_entity',
-        ])
+        z.any().superRefine((x, ctx) => {
+          const schemas = [
+            z.literal('document'),
+            z.literal('ai_chat'),
+            z.literal('project'),
+            z.literal('email'),
+            z.literal('channel'),
+            z.literal('call'),
+            z.literal('foreign_entity'),
+          ];
+          const errors = schemas.reduce<z.ZodError[]>(
+            (errors, schema) =>
+              ((result) => (result.error ? [...errors, result.error] : errors))(
+                schema.safeParse(x)
+              ),
+            []
+          );
+          if (schemas.length - errors.length !== 1) {
+            ctx.addIssue({
+              path: ctx.path,
+              code: 'invalid_union',
+              unionErrors: errors,
+              message: 'Invalid input: Should pass single schema',
+            });
+          }
+        })
       ),
       z.null(),
     ])
@@ -601,7 +618,29 @@ export const ListEntities = z.object({
   pf: z.any().default(null),
   propf: z.any().default(null),
   sortBy: z
-    .enum(['recently_viewed', 'recently_updated', 'recently_created'])
+    .any()
+    .superRefine((x, ctx) => {
+      const schemas = [
+        z.literal('recently_viewed'),
+        z.literal('recently_updated'),
+        z.literal('recently_created'),
+      ];
+      const errors = schemas.reduce<z.ZodError[]>(
+        (errors, schema) =>
+          ((result) => (result.error ? [...errors, result.error] : errors))(
+            schema.safeParse(x)
+          ),
+        []
+      );
+      if (schemas.length - errors.length !== 1) {
+        ctx.addIssue({
+          path: ctx.path,
+          code: 'invalid_union',
+          unionErrors: errors,
+          message: 'Invalid input: Should pass single schema',
+        });
+      }
+    })
     .optional(),
 });
 
@@ -633,6 +672,11 @@ export const ListEntitiesResponse = z.object({
           id: z.string().uuid(),
           name: z.union([z.string(), z.null()]).optional(),
           type: z.literal('channel'),
+        }),
+        z.object({
+          channelId: z.string().uuid(),
+          id: z.string().uuid(),
+          type: z.literal('channelThread'),
         }),
         z.object({
           createdBy: z.string(),

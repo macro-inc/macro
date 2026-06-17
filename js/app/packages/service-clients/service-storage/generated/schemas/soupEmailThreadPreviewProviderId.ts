@@ -5,4 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Provider-specific thread id.
+ */
 export type SoupEmailThreadPreviewProviderId = string | null;

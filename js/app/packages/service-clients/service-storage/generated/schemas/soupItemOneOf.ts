@@ -7,7 +7,11 @@
 import type { SoupDocument } from './soupDocument';
 import type { SoupItemOneOfTag } from './soupItemOneOfTag';
 
+/**
+ * Document item.
+ */
 export type SoupItemOneOf = {
+  /** Document item. */
   data: SoupDocument;
   tag: SoupItemOneOfTag;
 };

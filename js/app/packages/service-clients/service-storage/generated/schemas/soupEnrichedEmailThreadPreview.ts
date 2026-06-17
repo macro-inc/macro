@@ -7,5 +7,8 @@
 import type { SoupEmailThreadPreview } from './soupEmailThreadPreview';
 import type { SoupEnrichedEmailThreadPreviewAllOf } from './soupEnrichedEmailThreadPreviewAllOf';
 
+/**
+ * Email thread preview enriched with related metadata for Soup.
+ */
 export type SoupEnrichedEmailThreadPreview = SoupEmailThreadPreview &
   SoupEnrichedEmailThreadPreviewAllOf;

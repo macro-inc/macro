@@ -7,5 +7,8 @@
 import type { GroupedSoupInitialPage } from './groupedSoupInitialPage';
 import type { GroupedSoupPageOneOfAllOf } from './groupedSoupPageOneOfAllOf';
 
+/**
+ * Initial grouped response containing multiple groups.
+ */
 export type GroupedSoupPageOneOf = GroupedSoupInitialPage &
   GroupedSoupPageOneOfAllOf;

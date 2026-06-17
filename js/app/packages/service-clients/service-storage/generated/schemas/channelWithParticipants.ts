@@ -7,7 +7,12 @@
 import type { Channel } from './channel';
 import type { ChannelParticipant } from './channelParticipant';
 
+/**
+ * Channel metadata together with its participants.
+ */
 export interface ChannelWithParticipants {
+  /** Channel metadata. */
   channel: Channel;
+  /** Participants in the channel. */
   participants: ChannelParticipant[];
 }

@@ -8,6 +8,9 @@ import type { ParamsExpand } from './paramsExpand';
 import type { ParamsLimit } from './paramsLimit';
 import type { ParamsSortMethod } from './paramsSortMethod';
 
+/**
+ * Query parameters shared by soup endpoints.
+ */
 export interface Params {
   /** Whether to expand projects. Defaults to true. */
   expand?: ParamsExpand;

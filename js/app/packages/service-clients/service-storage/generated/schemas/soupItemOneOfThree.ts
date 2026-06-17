@@ -7,7 +7,11 @@
 import type { SoupChat } from './soupChat';
 import type { SoupItemOneOfThreeTag } from './soupItemOneOfThreeTag';
 
+/**
+ * Chat item.
+ */
 export type SoupItemOneOfThree = {
+  /** Chat item. */
   data: SoupChat;
   tag: SoupItemOneOfThreeTag;
 };

@@ -7,5 +7,8 @@
 import type { PostGroupedSoupAstInitialRequest } from './postGroupedSoupAstInitialRequest';
 import type { PostGroupedSoupAstRequestOneOfAllOf } from './postGroupedSoupAstRequestOneOfAllOf';
 
+/**
+ * Initial grouped soup request.
+ */
 export type PostGroupedSoupAstRequestOneOf = PostGroupedSoupAstInitialRequest &
   PostGroupedSoupAstRequestOneOfAllOf;

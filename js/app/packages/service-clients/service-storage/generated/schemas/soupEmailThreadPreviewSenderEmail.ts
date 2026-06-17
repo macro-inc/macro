@@ -5,4 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Sender email address for the preview.
+ */
 export type SoupEmailThreadPreviewSenderEmail = string | null;

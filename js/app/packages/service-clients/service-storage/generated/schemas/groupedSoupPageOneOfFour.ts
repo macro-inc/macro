@@ -7,5 +7,8 @@
 import type { GroupedSoupGroupPage } from './groupedSoupGroupPage';
 import type { GroupedSoupPageOneOfFourAllOf } from './groupedSoupPageOneOfFourAllOf';
 
+/**
+ * Follow-up response for one specific group.
+ */
 export type GroupedSoupPageOneOfFour = GroupedSoupGroupPage &
   GroupedSoupPageOneOfFourAllOf;

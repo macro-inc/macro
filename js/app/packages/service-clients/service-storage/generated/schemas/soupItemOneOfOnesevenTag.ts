@@ -5,10 +5,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type SoupItemOneOfOnefiveTag =
-  (typeof SoupItemOneOfOnefiveTag)[keyof typeof SoupItemOneOfOnefiveTag];
+export type SoupItemOneOfOnesevenTag =
+  (typeof SoupItemOneOfOnesevenTag)[keyof typeof SoupItemOneOfOnesevenTag];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
-export const SoupItemOneOfOnefiveTag = {
-  crmCompany: 'crmCompany',
+export const SoupItemOneOfOnesevenTag = {
+  foreignEntity: 'foreignEntity',
 } as const;

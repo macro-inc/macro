@@ -5,4 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Content id for inline attachments.
+ */
 export type SoupAttachmentContentId = string | null;

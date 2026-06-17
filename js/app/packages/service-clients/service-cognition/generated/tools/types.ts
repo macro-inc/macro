@@ -131,42 +131,106 @@ export type DocumentContentState = 'unknown' | 'pending' | 'ready';
  */
 export type DocumentSubType = 'task' | 'snippet';
 export type EmailPreset = 'signal';
+/**
+ * Item returned by the list entities AI tool.
+ */
 export type EntityItem =
   | {
+      /**
+       * Document id.
+       */
       id: string;
+      /**
+       * Document name.
+       */
       name: string;
       type: 'document';
     }
   | {
+      /**
+       * Chat id.
+       */
       id: string;
+      /**
+       * Chat name.
+       */
       name: string;
       type: 'aiChat';
     }
   | {
+      /**
+       * Project id.
+       */
       id: string;
+      /**
+       * Project name.
+       */
       name: string;
       type: 'project';
     }
   | {
+      /**
+       * Email thread id.
+       */
       id: string;
+      /**
+       * Email subject, when present.
+       */
       subject?: string | null;
       type: 'email';
     }
   | {
+      /**
+       * Channel id.
+       */
       id: string;
+      /**
+       * Channel name, when present.
+       */
       name?: string | null;
       type: 'channel';
     }
   | {
+      /**
+       * Channel id containing the thread.
+       */
+      channelId: string;
+      /**
+       * Parent message id for the thread.
+       */
+      id: string;
+      type: 'channelThread';
+    }
+  | {
+      /**
+       * User or actor that created the call.
+       */
       createdBy: string;
+      /**
+       * Call id.
+       */
       id: string;
       type: 'call';
     }
   | {
+      /**
+       * Provider-specific foreign entity id.
+       */
       foreignEntityId: string;
+      /**
+       * Provider/source name for the foreign entity.
+       */
       foreignEntitySource: string;
+      /**
+       * Foreign entity row id.
+       */
       id: string;
-      metadata: unknown;
+      /**
+       * Foreign entity metadata.
+       */
+      metadata: {
+        [k: string]: unknown;
+      };
       type: 'foreignEntity';
     };
 export type ToolEntityType =
@@ -177,6 +241,9 @@ export type ToolEntityType =
   | 'thread'
   | 'channel'
   | 'user';
+/**
+ * Entity types that can be returned by the list entities AI tool.
+ */
 export type ItemType =
   | 'document'
   | 'ai_chat'
@@ -185,6 +252,9 @@ export type ItemType =
   | 'channel'
   | 'call'
   | 'foreign_entity';
+/**
+ * Sort order for the list entities AI tool.
+ */
 export type SortBy =
   | 'recently_viewed'
   | 'recently_updated'
@@ -1345,8 +1415,17 @@ export interface ListEntities {
   };
   sortBy?: SortBy;
 }
+/**
+ * Response returned by the list entities AI tool.
+ */
 export interface ListEntitiesResponse {
+  /**
+   * Items returned for the request.
+   */
   items: EntityItem[];
+  /**
+   * Human-readable summary of the returned items.
+   */
   summary: string;
 }
 /**
