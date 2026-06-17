@@ -12979,6 +12979,7 @@ dependencies = [
  "lambda_runtime",
  "macro_aws_config",
  "macro_entrypoint",
+ "macro_env_var",
  "macro_service_urls",
  "model",
  "model-entity",

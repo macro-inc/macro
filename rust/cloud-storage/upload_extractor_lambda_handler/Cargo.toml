@@ -20,6 +20,7 @@ futures = { workspace = true }
 lambda_runtime = { workspace = true }
 macro_aws_config = { path = "../macro_aws_config" }
 macro_entrypoint = { path = "../macro_entrypoint" }
+macro_env_var = { path = "../macro_env_var" }
 model = { path = "../model" }
 model-entity = { path = "../model-entity" }
 models_bulk_upload = { path = "../models_bulk_upload" }
