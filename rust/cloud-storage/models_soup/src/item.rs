@@ -71,7 +71,7 @@ impl SoupItem {
             SoupItem::Project(soup_project) => soup_project.updated_at,
             SoupItem::EmailThread(soup_thread) => soup_thread.thread.updated_at,
             SoupItem::Channel(soup_channel) => soup_channel.channel.channel.updated_at,
-            SoupItem::ChannelThread(thread) => thread.message.updated_at,
+            SoupItem::ChannelThread(thread) => thread.updated_at(),
             SoupItem::Call(record) => record.ended_at.unwrap_or(record.started_at),
             SoupItem::CrmCompany(company) => company.updated_at,
             SoupItem::ForeignEntity(foreign_entity) => foreign_entity.updated_at,
@@ -135,7 +135,7 @@ impl SoupItem {
             (SoupItem::ChannelThread(thread), SimpleSortMethod::CreatedAt) => {
                 thread.message.created_at
             }
-            (SoupItem::ChannelThread(thread), _) => thread.message.updated_at,
+            (SoupItem::ChannelThread(thread), _) => thread.updated_at(),
             (SoupItem::Call(record), SimpleSortMethod::CreatedAt) => record.started_at,
             (SoupItem::Call(record), _) => record.ended_at.unwrap_or(record.started_at),
             (SoupItem::CrmCompany(company), SimpleSortMethod::CreatedAt) => company.created_at,

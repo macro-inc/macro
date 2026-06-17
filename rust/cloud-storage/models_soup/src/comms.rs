@@ -124,6 +124,20 @@ pub struct SoupChannelThread {
     pub channel_id: ChannelId,
     /// Top-level message that acts as the thread parent.
     pub message: ChannelMessage,
+    /// Thread replies, using the same lightweight channel message shape.
+    pub messages: Vec<ChannelMessage>,
+}
+
+impl SoupChannelThread {
+    /// Latest update timestamp across the parent message and replies.
+    pub fn updated_at(&self) -> chrono::DateTime<chrono::Utc> {
+        self.messages
+            .iter()
+            .map(|message| message.updated_at)
+            .max()
+            .unwrap_or(self.message.updated_at)
+            .max(self.message.updated_at)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -176,6 +190,22 @@ fn channel_message_from_channels(
         updated_at: message.updated_at,
         deleted_at: message.deleted_at,
         mentions: message.mentions,
+    }
+}
+
+fn channel_message_from_thread_reply(
+    parent_id: Uuid,
+    reply: channels::domain::models::ThreadReply,
+) -> ChannelMessage {
+    ChannelMessage {
+        message_id: reply.id,
+        thread_id: Some(parent_id),
+        sender_id: reply.sender_id,
+        content: reply.content,
+        created_at: reply.created_at,
+        updated_at: reply.updated_at,
+        deleted_at: None,
+        mentions: Vec::new(),
     }
 }
 
@@ -250,10 +280,18 @@ impl From<channels::domain::models::ChannelWithLatest> for SoupChannel {
 
 impl From<channels::domain::models::ChannelMessage> for SoupChannelThread {
     fn from(message: channels::domain::models::ChannelMessage) -> Self {
+        let parent_id = message.id;
+        let messages = message
+            .thread
+            .preview
+            .into_iter()
+            .map(|reply| channel_message_from_thread_reply(parent_id, reply))
+            .collect();
+
         Self {
             channel_id: ChannelId(message.channel_id),
             message: ChannelMessage {
-                message_id: message.id,
+                message_id: parent_id,
                 thread_id: None,
                 sender_id: message.sender_id,
                 content: message.content,
@@ -262,6 +300,40 @@ impl From<channels::domain::models::ChannelMessage> for SoupChannelThread {
                 deleted_at: message.deleted_at,
                 mentions: Vec::new(),
             },
+            messages,
+        }
+    }
+}
+
+impl
+    From<(
+        channels::domain::models::ChannelMessage,
+        Vec<channels::domain::models::ThreadReply>,
+    )> for SoupChannelThread
+{
+    fn from(
+        (message, replies): (
+            channels::domain::models::ChannelMessage,
+            Vec<channels::domain::models::ThreadReply>,
+        ),
+    ) -> Self {
+        let parent_id = message.id;
+        Self {
+            channel_id: ChannelId(message.channel_id),
+            message: ChannelMessage {
+                message_id: parent_id,
+                thread_id: None,
+                sender_id: message.sender_id,
+                content: message.content,
+                created_at: message.created_at,
+                updated_at: message.updated_at,
+                deleted_at: message.deleted_at,
+                mentions: Vec::new(),
+            },
+            messages: replies
+                .into_iter()
+                .map(|reply| channel_message_from_thread_reply(parent_id, reply))
+                .collect(),
         }
     }
 }
