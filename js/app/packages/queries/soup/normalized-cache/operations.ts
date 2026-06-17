@@ -147,6 +147,8 @@ export function getSoupItemId(item: SoupApiItem): string {
       return item.data.channel.id;
     case 'call':
       return item.data.callId;
+    case 'channelThread':
+      return item.data.message.message_id;
     default:
       return item.data.id;
   }
@@ -413,6 +415,7 @@ export function buildSingleEntityFilter(
       ...base,
       foreign_entity_filters: { ids: [entityId] },
     }))
+    .with('channelThread', () => base)
     .exhaustive();
 }
 
@@ -437,8 +440,12 @@ export function optimisticUpdateSoupItemViewedAt(itemId: string) {
       data: { channel: { id: itemId }, viewed_at: now },
       frecency_score: current.frecency_score,
     });
-  } else if (current.tag === 'call' || current.tag === 'foreignEntity') {
-    // Call records and foreign entities don't have viewedAt — skip.
+  } else if (
+    current.tag === 'call' ||
+    current.tag === 'foreignEntity' ||
+    current.tag === 'channelThread'
+  ) {
+    // Call records, foreign entities, and channel threads don't have viewedAt — skip.
     return;
   } else {
     optimisticUpdateSoupEntity({
@@ -475,8 +482,8 @@ export function optimisticUpdateSoupItemUpdatedAt(
       data: { channel: { id: itemId, updated_at: updatedAt } },
       frecency_score: current.frecency_score,
     });
-  } else if (current.tag === 'call') {
-    // Call records use endedAt/startedAt, not updatedAt — skip optimistic timestamp updates.
+  } else if (current.tag === 'call' || current.tag === 'channelThread') {
+    // Call records use endedAt/startedAt and channel threads nest message timestamps — skip.
     return;
   } else {
     if (!shouldUpdateOptimisticTimestamp(current.data.updatedAt, updatedAt))

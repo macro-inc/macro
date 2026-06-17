@@ -82,6 +82,11 @@ export function filterSoupItemByRequestBody(
         !isIdFilteredOut(body.channel_filters?.channel_ids, data.channel.id)
     )
     .with(
+      { tag: 'channelThread' },
+      ({ data }) =>
+        !isIdFilteredOut(body.channel_filters?.channel_ids, data.channel_id)
+    )
+    .with(
       { tag: 'project' },
       ({ data }) => !isIdFilteredOut(body.project_filters?.project_ids, data.id)
     )

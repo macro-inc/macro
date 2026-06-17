@@ -50,7 +50,11 @@ export function useRecentlyViewedSoupQuery() {
           })
       );
       return page.items.flatMap((item): RecentlyViewedItem[] => {
-        if (item.tag === 'call' || item.tag === 'foreignEntity') {
+        if (
+          item.tag === 'call' ||
+          item.tag === 'foreignEntity' ||
+          item.tag === 'channelThread'
+        ) {
           return [];
         }
 

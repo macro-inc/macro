@@ -54,6 +54,12 @@
     "composite": true,
     "incremental": true,
     "paths": {
+      "loro-crdt": [
+        "../node_modules/loro-crdt"
+      ],
+      "loro-crdt/*": [
+        "../node_modules/loro-crdt/*"
+      ],
       "@filesystem": [
         "./packages/filesystem/src"
       ],

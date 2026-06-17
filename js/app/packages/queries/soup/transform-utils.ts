@@ -54,9 +54,12 @@ type InnerSearchResult =
   | ProjectSearchResult
   | CallRecordSearchResult;
 
-// Every soup tag is handled by the map below (companies and foreign/GitHub-PR
-// entities included), so nothing is excluded here.
-type DisplayableSoupItem = SoupPage['items'][number];
+// Channel thread soup items are currently only exposed to AI tooling; the app
+// entity list does not have enough channel metadata to render them directly.
+type DisplayableSoupItem = Exclude<
+  SoupPage['items'][number],
+  { tag: 'channelThread' }
+>;
 
 type SoupEntity =
   | DocumentEntity
@@ -511,8 +514,8 @@ const resolveDocumentEntityName = (
 };
 
 export const isDisplayableSoupItem = (
-  _: SoupPage['items'][number]
-): _ is DisplayableSoupItem => true;
+  item: SoupPage['items'][number]
+): item is DisplayableSoupItem => item.tag !== 'channelThread';
 
 /**
  * The email soup query encodes "no sort timestamp" — e.g. a never-viewed thread
@@ -750,6 +753,8 @@ export const mapSoupPageToEntityList: (
 ) => SoupEntity[] = (data, options) => {
   return data.items
     .filter((item): item is DisplayableSoupItem => {
+      if (!isDisplayableSoupItem(item)) return false;
+
       if (item.tag === 'foreignEntity') {
         return (
           options.showSupportedForeignEntities === true &&
