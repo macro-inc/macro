@@ -2182,6 +2182,7 @@
     ],
     "load-test": [
       "document_cognition_service/load-test",
+      "macro_env_var",
       "workspace-hack"
     ],
     "local_e2e_integration_tests": [
@@ -2874,11 +2875,13 @@
       "workspace-hack"
     ],
     "native_app_server": [
+      "macro_env_var",
       "native_app_service",
       "tools/native_app_server",
       "workspace-hack"
     ],
     "native_app_service": [
+      "macro_env_var",
       "native_app_service",
       "workspace-hack"
     ],
