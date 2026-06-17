@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use channels::domain::models::ChannelParticipant;
+use channels::domain::models::{ChannelParticipant, Sender};
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::Transaction;
@@ -24,6 +24,13 @@ impl From<DbParticipantRole> for channels::domain::models::ParticipantRole {
     }
 }
 
+// XXX: This is a shim until we correctly implement https://macro.com/app/task/019ed710-f261-7059-b890-5ade6e11f4cd
+fn validate_participant_user_id(user_id: &str) -> Result<(), sqlx::Error> {
+    Sender::parse_storage_str(user_id)
+        .map(|_| ())
+        .map_err(|err| sqlx::Error::Decode(Box::new(err)))
+}
+
 #[tracing::instrument(skip(tsx))]
 pub async fn get_participants_tsx<'t>(
     tsx: &mut Transaction<'t, Postgres>,
@@ -43,12 +50,15 @@ pub async fn get_participants_tsx<'t>(
         "#,
         channel_id
     )
-    .map(|row| ChannelParticipant {
-        channel_id: row.channel_id,
-        user_id: row.user_id,
-        role: row.role.into(),
-        joined_at: row.joined_at,
-        left_at: row.left_at,
+    .try_map(|row| {
+        validate_participant_user_id(&row.user_id)?;
+        Ok(ChannelParticipant {
+            channel_id: row.channel_id,
+            user_id: row.user_id,
+            role: row.role.into(),
+            joined_at: row.joined_at,
+            left_at: row.left_at,
+        })
     })
     .fetch_all(tsx.as_mut())
     .await?;
@@ -75,12 +85,15 @@ pub async fn get_participants(
         "#,
         channel_id
     )
-    .map(|row| ChannelParticipant {
-        channel_id: row.channel_id,
-        user_id: row.user_id,
-        role: row.role.into(),
-        joined_at: row.joined_at,
-        left_at: row.left_at,
+    .try_map(|row| {
+        validate_participant_user_id(&row.user_id)?;
+        Ok(ChannelParticipant {
+            channel_id: row.channel_id,
+            user_id: row.user_id,
+            role: row.role.into(),
+            joined_at: row.joined_at,
+            left_at: row.left_at,
+        })
     })
     .fetch_all(db)
     .await?;
