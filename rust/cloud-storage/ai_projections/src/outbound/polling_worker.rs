@@ -1,4 +1,4 @@
-//! Tokio polling worker for background projection generation.
+//! Tokio polling scheduler for enqueueing due AI projection refreshes.
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -6,8 +6,11 @@ use std::time::{Duration, Instant};
 use chrono::{DateTime, Utc};
 use tokio::task::JoinHandle;
 
-use crate::domain::models::{CompleteProjectionRequest, FailProjectionRequest, ProjectionInstance};
-use crate::domain::ports::{AiProjectionRepository, ProjectionGenerator};
+use crate::domain::models::{
+    AiProjectionGenerationRequested, ProjectionInstance, ProjectionStatus,
+    ReleaseProjectionClaimRequest, ScheduleGenerationReason,
+};
+use crate::domain::ports::{AiProjectionGenerationPublisher, AiProjectionRepository};
 
 const DEFAULT_POLL_INTERVAL: Duration = Duration::from_secs(30);
 const DEFAULT_CLEANUP_INTERVAL: Duration = Duration::from_secs(60 * 60);
@@ -15,25 +18,25 @@ const DEFAULT_MAX_PROJECTIONS_PER_TICK: usize = 10;
 const MIN_POLL_INTERVAL: Duration = Duration::from_secs(1);
 const MIN_CLEANUP_INTERVAL: Duration = Duration::from_secs(60);
 
-/// Background worker that polls for due projection instances and materializes them.
-pub struct AiProjectionPollingWorker<R, G> {
+/// Background scheduler that enqueues due projection refreshes.
+pub struct AiProjectionPollingWorker<R, P> {
     repository: Arc<R>,
-    generator: Arc<G>,
+    publisher: Arc<P>,
     poll_interval: Duration,
     cleanup_interval: Duration,
     max_projections_per_tick: usize,
 }
 
-impl<R, G> AiProjectionPollingWorker<R, G>
+impl<R, P> AiProjectionPollingWorker<R, P>
 where
     R: AiProjectionRepository,
-    G: ProjectionGenerator,
+    P: AiProjectionGenerationPublisher,
 {
-    /// Create a polling worker with conservative default intervals.
-    pub fn new(repository: Arc<R>, generator: Arc<G>) -> Self {
+    /// Create a polling scheduler with conservative default intervals.
+    pub fn new(repository: Arc<R>, publisher: Arc<P>) -> Self {
         Self {
             repository,
-            generator,
+            publisher,
             poll_interval: DEFAULT_POLL_INTERVAL,
             cleanup_interval: DEFAULT_CLEANUP_INTERVAL,
             max_projections_per_tick: DEFAULT_MAX_PROJECTIONS_PER_TICK,
@@ -52,18 +55,18 @@ where
         self
     }
 
-    /// Override how many due projections one polling tick may process.
+    /// Override how many due projections one polling tick may enqueue.
     pub fn with_max_projections_per_tick(mut self, max_projections_per_tick: usize) -> Self {
         self.max_projections_per_tick = max_projections_per_tick.max(1);
         self
     }
 
-    /// Spawn this worker on the Tokio runtime.
+    /// Spawn this scheduler on the Tokio runtime.
     pub fn spawn(self) -> JoinHandle<()> {
         tokio::spawn(async move { self.run().await })
     }
 
-    /// Run the worker forever, logging per-tick failures and continuing.
+    /// Run the scheduler forever, logging per-tick failures and continuing.
     pub async fn run(self) {
         let mut next_cleanup = Instant::now();
 
@@ -71,7 +74,7 @@ where
             let tick_started = Instant::now();
 
             if let Err(error) = self.run_pending_once().await {
-                tracing::error!(error = ?error, "AI projection polling tick failed");
+                tracing::error!(error = ?error, "AI projection due-refresh enqueue tick failed");
             }
 
             if Instant::now() >= next_cleanup {
@@ -85,17 +88,17 @@ where
         }
     }
 
-    /// Process currently due projections once, using the current time for claiming.
+    /// Enqueue currently due projections once, using the current time for claiming.
     pub async fn run_pending_once(&self) -> anyhow::Result<usize> {
         self.run_pending_once_at(Utc::now()).await
     }
 
-    /// Process currently due projections once, using an explicit time for claiming.
+    /// Enqueue currently due projections once, using an explicit time for claiming.
     pub async fn run_pending_once_at(&self, now: DateTime<Utc>) -> anyhow::Result<usize> {
         let mut processed = 0;
 
         while processed < self.max_projections_per_tick {
-            let claimed = self.process_next_due_projection_at(now).await?;
+            let claimed = self.enqueue_next_due_projection_at(now).await?;
             if !claimed {
                 break;
             }
@@ -106,7 +109,7 @@ where
         if processed == self.max_projections_per_tick {
             tracing::debug!(
                 processed,
-                "AI projection polling tick reached the per-tick processing limit"
+                "AI projection polling tick reached the per-tick enqueue limit"
             );
         }
 
@@ -133,7 +136,7 @@ where
         Ok(deleted)
     }
 
-    async fn process_next_due_projection_at(&self, now: DateTime<Utc>) -> anyhow::Result<bool> {
+    async fn enqueue_next_due_projection_at(&self, now: DateTime<Utc>) -> anyhow::Result<bool> {
         let Some(instance) = self
             .repository
             .claim_next_due_projection(now)
@@ -143,68 +146,60 @@ where
             return Ok(false);
         };
 
-        self.generate_claimed_projection(instance).await?;
+        self.enqueue_claimed_projection(instance, now).await?;
         Ok(true)
     }
 
-    async fn generate_claimed_projection(
+    async fn enqueue_claimed_projection(
         &self,
         instance: ProjectionInstance,
+        now: DateTime<Utc>,
     ) -> anyhow::Result<()> {
         let cache_key = instance.cache_key.clone();
-        let generation = self
-            .generator
-            .generate_projection(instance.generation_request())
-            .await;
+        let event = AiProjectionGenerationRequested {
+            cache_key: cache_key.clone(),
+            reason: reason_for_due_instance(&instance),
+            requested_by: instance.generation_user_id.clone(),
+            generation_user_id: instance.generation_user_id,
+            enqueued_at: now,
+        };
 
-        match generation {
-            Ok(generated) => {
-                self.repository
-                    .complete_generation(CompleteProjectionRequest {
-                        cache_key: cache_key.clone(),
-                        output: generated.output,
-                        generated_at: Utc::now(),
-                    })
-                    .await
-                    .map_err(anyhow_error)?;
+        self.publisher
+            .publish_generation_requested(event)
+            .await
+            .map_err(anyhow_error)?;
 
-                tracing::info!(cache_key = ?cache_key, "AI projection generated successfully");
-            }
-            Err(error) => {
-                let error = anyhow_error(error);
-                let message = format!("{error:#}");
+        self.repository
+            .release_generation_claim(ReleaseProjectionClaimRequest {
+                cache_key: cache_key.clone(),
+                released_at: now,
+            })
+            .await
+            .map_err(anyhow_error)?;
 
-                self.repository
-                    .fail_generation(FailProjectionRequest {
-                        cache_key: cache_key.clone(),
-                        error: message.clone(),
-                        failed_at: Utc::now(),
-                    })
-                    .await
-                    .map_err(anyhow_error)?;
-
-                tracing::warn!(
-                    cache_key = ?cache_key,
-                    error = %message,
-                    "AI projection generation failed"
-                );
-            }
-        }
-
+        tracing::info!(cache_key = ?cache_key, "AI projection refresh enqueued");
         Ok(())
     }
 }
 
-/// Spawn a default AI projection polling worker on the Tokio runtime.
-pub fn spawn_ai_projection_polling_worker<R, G>(
+/// Spawn a default AI projection due-refresh scheduler on the Tokio runtime.
+pub fn spawn_ai_projection_polling_worker<R, P>(
     repository: Arc<R>,
-    generator: Arc<G>,
+    publisher: Arc<P>,
 ) -> JoinHandle<()>
 where
     R: AiProjectionRepository,
-    G: ProjectionGenerator,
+    P: AiProjectionGenerationPublisher,
 {
-    AiProjectionPollingWorker::new(repository, generator).spawn()
+    AiProjectionPollingWorker::new(repository, publisher).spawn()
+}
+
+fn reason_for_due_instance(instance: &ProjectionInstance) -> ScheduleGenerationReason {
+    match instance.status {
+        ProjectionStatus::Cold => ScheduleGenerationReason::ColdStart,
+        ProjectionStatus::Error => ScheduleGenerationReason::Retry,
+        ProjectionStatus::Ready | ProjectionStatus::Refreshing => ScheduleGenerationReason::Stale,
+    }
 }
 
 async fn sleep_until_next_poll(tick_started: Instant, poll_interval: Duration) {
@@ -234,50 +229,54 @@ mod test {
 
     use super::*;
     use crate::domain::models::{
-        GenerateProjectionRequest, GeneratedProjection, MaterializeProjectionRequest,
-        ProjectionExpiry, ProjectionStatus, RefreshCadence, ScheduleProjectionRequest, Target,
-        UpsertProjectionInstanceRequest,
+        ClaimProjectionGenerationRequest, ClaimProjectionGenerationResult,
+        CompleteProjectionRequest, FailProjectionRequest, MaterializeProjectionRequest,
+        ProjectionExpiry, RawProjectionGenerationMessage, RefreshCadence,
+        ScheduleProjectionRequest, Target, UpsertProjectionInstanceRequest,
     };
+    use crate::domain::ports::AiProjectionGenerationQueue;
 
     #[tokio::test]
-    async fn run_pending_once_completes_successful_generation() {
+    async fn run_pending_once_enqueues_due_projection_and_releases_claim() {
         let instance = projection_instance();
         let repository = Arc::new(FakeRepository::with_claims([instance]));
-        let generator = Arc::new(FakeGenerator::with_responses([Ok(GeneratedProjection {
-            output: "generated output".to_string(),
-        })]));
-        let worker = AiProjectionPollingWorker::new(repository.clone(), generator)
+        let publisher = Arc::new(FakePublisher::default());
+        let worker = AiProjectionPollingWorker::new(repository.clone(), publisher.clone())
             .with_max_projections_per_tick(1);
 
         let processed = worker.run_pending_once_at(test_time()).await.unwrap();
 
         assert_eq!(processed, 1);
-        assert_eq!(repository.completed_outputs(), vec!["generated output"]);
-        assert!(repository.failed_errors().is_empty());
+        assert_eq!(publisher.events().len(), 1);
+        assert_eq!(
+            publisher.events()[0].reason,
+            ScheduleGenerationReason::Stale
+        );
+        assert_eq!(repository.released_count(), 1);
     }
 
     #[tokio::test]
-    async fn run_pending_once_records_generation_failure() {
+    async fn run_pending_once_keeps_claim_when_publish_fails() {
         let instance = projection_instance();
         let repository = Arc::new(FakeRepository::with_claims([instance]));
-        let generator = Arc::new(FakeGenerator::with_responses([Err(anyhow::anyhow!(
-            "generation failed"
-        ))]));
-        let worker = AiProjectionPollingWorker::new(repository.clone(), generator)
+        let publisher = Arc::new(FakePublisher::failing());
+        let worker = AiProjectionPollingWorker::new(repository.clone(), publisher)
             .with_max_projections_per_tick(1);
 
-        let processed = worker.run_pending_once_at(test_time()).await.unwrap();
+        let error = worker
+            .run_pending_once_at(test_time())
+            .await
+            .expect_err("enqueue should fail");
 
-        assert_eq!(processed, 1);
-        assert!(repository.completed_outputs().is_empty());
-        assert_eq!(repository.failed_errors(), vec!["generation failed"]);
+        assert!(error.to_string().contains("publisher unavailable"));
+        assert_eq!(repository.released_count(), 0);
     }
 
     #[tokio::test]
     async fn cleanup_expired_delegates_to_repository() {
         let repository = Arc::new(FakeRepository::with_cleanup_deleted(3));
-        let generator = Arc::new(FakeGenerator::with_responses([]));
-        let worker = AiProjectionPollingWorker::new(repository, generator);
+        let publisher = Arc::new(FakePublisher::default());
+        let worker = AiProjectionPollingWorker::new(repository, publisher);
 
         let deleted = worker.cleanup_expired_at(test_time()).await.unwrap();
 
@@ -292,8 +291,7 @@ mod test {
     #[derive(Default)]
     struct FakeRepositoryState {
         claims: VecDeque<ProjectionInstance>,
-        completed: Vec<CompleteProjectionRequest>,
-        failed: Vec<FailProjectionRequest>,
+        released: Vec<ReleaseProjectionClaimRequest>,
         cleanup_deleted: u64,
     }
 
@@ -316,24 +314,12 @@ mod test {
             }
         }
 
-        fn completed_outputs(&self) -> Vec<String> {
+        fn released_count(&self) -> usize {
             self.state
                 .lock()
                 .expect("fake repository state lock")
-                .completed
-                .iter()
-                .map(|request| request.output.clone())
-                .collect()
-        }
-
-        fn failed_errors(&self) -> Vec<String> {
-            self.state
-                .lock()
-                .expect("fake repository state lock")
-                .failed
-                .iter()
-                .map(|request| request.error.clone())
-                .collect()
+                .released
+                .len()
         }
     }
 
@@ -344,14 +330,14 @@ mod test {
             &self,
             _request: UpsertProjectionInstanceRequest,
         ) -> impl Future<Output = Result<ProjectionInstance, Self::Err>> + Send {
-            async { unreachable!("worker does not create projection instances") }
+            async { unreachable!("scheduler does not create projection instances") }
         }
 
         fn schedule_generation(
             &self,
             _request: ScheduleProjectionRequest,
         ) -> impl Future<Output = Result<(), Self::Err>> + Send {
-            async { unreachable!("worker does not schedule projection instances") }
+            async { unreachable!("scheduler does not schedule from materialize requests") }
         }
 
         fn user_can_access_team(
@@ -359,7 +345,7 @@ mod test {
             _user_id: MacroUserIdStr<'static>,
             _team_id: String,
         ) -> impl Future<Output = Result<bool, Self::Err>> + Send {
-            async { unreachable!("worker does not authorize projection targets") }
+            async { unreachable!("scheduler does not authorize projection targets") }
         }
 
         fn claim_next_due_projection(
@@ -376,30 +362,39 @@ mod test {
             async move { Ok(claim) }
         }
 
-        fn complete_generation(
+        fn claim_generation_by_cache_key(
             &self,
-            request: CompleteProjectionRequest,
+            _request: ClaimProjectionGenerationRequest,
+        ) -> impl Future<Output = Result<ClaimProjectionGenerationResult, Self::Err>> + Send
+        {
+            async { unreachable!("scheduler does not consume queue messages") }
+        }
+
+        fn release_generation_claim(
+            &self,
+            request: ReleaseProjectionClaimRequest,
         ) -> impl Future<Output = Result<(), Self::Err>> + Send {
             self.state
                 .lock()
                 .expect("fake repository state lock")
-                .completed
+                .released
                 .push(request);
 
             async { Ok(()) }
         }
 
+        fn complete_generation(
+            &self,
+            _request: CompleteProjectionRequest,
+        ) -> impl Future<Output = Result<(), Self::Err>> + Send {
+            async { unreachable!("scheduler does not complete projection generation") }
+        }
+
         fn fail_generation(
             &self,
-            request: FailProjectionRequest,
+            _request: FailProjectionRequest,
         ) -> impl Future<Output = Result<(), Self::Err>> + Send {
-            self.state
-                .lock()
-                .expect("fake repository state lock")
-                .failed
-                .push(request);
-
-            async { Ok(()) }
+            async { unreachable!("scheduler does not record generation failures") }
         }
 
         fn cleanup_expired(
@@ -416,58 +411,96 @@ mod test {
         }
     }
 
-    struct FakeGenerator {
-        responses: Mutex<VecDeque<anyhow::Result<GeneratedProjection>>>,
+    #[derive(Default)]
+    struct FakePublisher {
+        state: Mutex<FakePublisherState>,
     }
 
-    impl FakeGenerator {
-        fn with_responses(
-            responses: impl IntoIterator<Item = anyhow::Result<GeneratedProjection>>,
-        ) -> Self {
+    #[derive(Default)]
+    struct FakePublisherState {
+        events: Vec<AiProjectionGenerationRequested>,
+        fail: bool,
+    }
+
+    impl FakePublisher {
+        fn failing() -> Self {
             Self {
-                responses: Mutex::new(responses.into_iter().collect()),
+                state: Mutex::new(FakePublisherState {
+                    fail: true,
+                    ..FakePublisherState::default()
+                }),
             }
+        }
+
+        fn events(&self) -> Vec<AiProjectionGenerationRequested> {
+            self.state
+                .lock()
+                .expect("fake publisher state lock")
+                .events
+                .clone()
         }
     }
 
-    impl ProjectionGenerator for FakeGenerator {
+    impl AiProjectionGenerationPublisher for FakePublisher {
         type Err = anyhow::Error;
 
-        fn generate_projection(
+        fn publish_generation_requested(
             &self,
-            _request: GenerateProjectionRequest,
-        ) -> impl Future<Output = Result<GeneratedProjection, Self::Err>> + Send {
-            let response = self
-                .responses
-                .lock()
-                .expect("fake generator responses lock")
-                .pop_front()
-                .expect("fake generator response");
+            event: AiProjectionGenerationRequested,
+        ) -> impl Future<Output = Result<(), Self::Err>> + Send {
+            let result = {
+                let mut state = self.state.lock().expect("fake publisher state lock");
+                if state.fail {
+                    Err(anyhow::anyhow!("publisher unavailable"))
+                } else {
+                    state.events.push(event);
+                    Ok(())
+                }
+            };
 
-            async move { response }
+            async move { result }
+        }
+    }
+
+    impl AiProjectionGenerationQueue for FakePublisher {
+        fn receive_generation_messages(
+            &self,
+        ) -> impl Future<Output = Result<Vec<RawProjectionGenerationMessage>, Self::Err>> + Send
+        {
+            async { Ok(Vec::new()) }
+        }
+
+        fn delete_generation_message(
+            &self,
+            _receipt_handle: String,
+        ) -> impl Future<Output = Result<(), Self::Err>> + Send {
+            async { Ok(()) }
         }
     }
 
     fn projection_instance() -> ProjectionInstance {
+        let requester = user_id("macro|projection@example.com");
         let request = MaterializeProjectionRequest {
             id: "inbox/important".to_string(),
-            target: Target::user("macro|projection@example.com"),
+            target: Target::user(requester.to_string()),
             prompt: "What should I triage first?".to_string(),
-            context: Some("Unread inbox notifications".to_string()),
+            context: None,
             refresh_cadence: RefreshCadence::High,
             expiry: Some(ProjectionExpiry::Day),
             schema: None,
             force_refresh: false,
         };
-        let upsert_request = UpsertProjectionInstanceRequest::from_materialize_request(
+        let upsert = UpsertProjectionInstanceRequest::from_materialize_request(
             &request,
-            user_id("macro|projection@example.com"),
+            requester,
             test_time(),
         );
-
-        let mut instance = ProjectionInstance::cold(Uuid::new_v4(), &upsert_request);
-        instance.status = ProjectionStatus::Refreshing;
-        instance.claimed_at = Some(test_time());
+        let mut instance = ProjectionInstance::cold(Uuid::new_v4(), &upsert);
+        instance.status = ProjectionStatus::Ready;
+        instance.output = Some("cached output".to_string());
+        instance.generated_at = Some(test_time() - chrono::Duration::hours(2));
+        instance.stale_at = Some(test_time() - chrono::Duration::hours(1));
+        instance.next_refresh_at = test_time() - chrono::Duration::hours(1);
         instance
     }
 

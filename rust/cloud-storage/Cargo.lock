@@ -102,6 +102,7 @@ dependencies = [
  "ai_tools",
  "ai_usage",
  "anyhow",
+ "aws-sdk-sqs",
  "axum",
  "chrono",
  "futures",

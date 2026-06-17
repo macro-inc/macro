@@ -7,8 +7,9 @@ use uuid::Uuid;
 
 use super::*;
 use crate::domain::models::{
-    AiProjectionCacheKey, CompleteProjectionRequest, FailProjectionRequest, ProjectionExpiry,
-    RefreshCadence, ScheduleGenerationReason, ScheduleProjectionRequest,
+    AiProjectionCacheKey, ClaimProjectionGenerationRequest, ClaimProjectionGenerationResult,
+    CompleteProjectionRequest, FailProjectionRequest, ProjectionExpiry, RefreshCadence,
+    ReleaseProjectionClaimRequest, ScheduleGenerationReason, ScheduleProjectionRequest,
     UpsertProjectionInstanceRequest, prompt_hash,
 };
 use crate::domain::ports::AiProjectionRepository;
@@ -195,6 +196,110 @@ async fn claim_next_due_projection_recovers_stale_claim(
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn claim_generation_by_cache_key_claims_queued_instance(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = PgAIProjectionRepo::new(pool.clone());
+    let user = user_id("macro|projection@example.com");
+    insert_user(&pool, &user).await?;
+    let now = test_time();
+    let request = upsert_request(
+        "queued/projection",
+        Target::user(user.to_string()),
+        user.clone(),
+        now,
+    );
+
+    repo.get_or_create_instance(request.clone()).await?;
+
+    let claimed = repo
+        .claim_generation_by_cache_key(claim_request(&request.cache_key, user.clone(), now))
+        .await?;
+
+    let ClaimProjectionGenerationResult::Claimed(instance) = claimed else {
+        anyhow::bail!("expected queued projection to be claimed");
+    };
+
+    assert_eq!(instance.cache_key, request.cache_key);
+    assert_eq!(instance.status, ProjectionStatus::Refreshing);
+    assert_eq!(instance.claimed_at, Some(now));
+    assert_eq!(instance.generation_user_id, user);
+
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn claim_generation_by_cache_key_skips_duplicate_after_success(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = PgAIProjectionRepo::new(pool.clone());
+    let user = user_id("macro|projection@example.com");
+    insert_user(&pool, &user).await?;
+    let now = test_time();
+    let request = upsert_request(
+        "duplicate/projection",
+        Target::user(user.to_string()),
+        user.clone(),
+        now,
+    );
+
+    repo.get_or_create_instance(request.clone()).await?;
+    repo.complete_generation(CompleteProjectionRequest {
+        cache_key: request.cache_key.clone(),
+        output: "generated output".to_string(),
+        generated_at: now + Duration::minutes(1),
+    })
+    .await?;
+
+    let result = repo
+        .claim_generation_by_cache_key(claim_request(&request.cache_key, user, now))
+        .await?;
+
+    assert_eq!(result, ClaimProjectionGenerationResult::Superseded);
+
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn release_generation_claim_clears_enqueue_claim(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = PgAIProjectionRepo::new(pool.clone());
+    let user = user_id("macro|projection@example.com");
+    insert_user(&pool, &user).await?;
+    let now = test_time();
+    let request = upsert_request(
+        "release/projection",
+        Target::user(user.to_string()),
+        user.clone(),
+        now - Duration::hours(1),
+    );
+
+    repo.get_or_create_instance(request.clone()).await?;
+    repo.claim_next_due_projection(now)
+        .await?
+        .expect("projection should be claimed for enqueue");
+    repo.release_generation_claim(ReleaseProjectionClaimRequest {
+        cache_key: request.cache_key.clone(),
+        released_at: now + Duration::seconds(1),
+    })
+    .await?;
+
+    let result = repo
+        .claim_generation_by_cache_key(claim_request(
+            &request.cache_key,
+            user,
+            now + Duration::seconds(1),
+        ))
+        .await?;
+
+    assert!(matches!(
+        result,
+        ClaimProjectionGenerationResult::Claimed(_)
+    ));
+
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn complete_generation_writes_output_and_refresh_schedule(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
@@ -212,9 +317,10 @@ async fn complete_generation_writes_output_and_refresh_schedule(
     repo.get_or_create_instance(request.clone()).await?;
     repo.schedule_generation(schedule_request(&request.cache_key, user.clone(), now))
         .await?;
-    repo.claim_next_due_projection(now)
-        .await?
-        .expect("projection should be claimed");
+    let claim = repo
+        .claim_generation_by_cache_key(claim_request(&request.cache_key, user.clone(), now))
+        .await?;
+    assert!(matches!(claim, ClaimProjectionGenerationResult::Claimed(_)));
 
     let generated_at = now + Duration::minutes(5);
     repo.complete_generation(CompleteProjectionRequest {
@@ -235,6 +341,42 @@ async fn complete_generation_writes_output_and_refresh_schedule(
     assert_eq!(stored.stale_at, Some(generated_at + Duration::hours(1)));
     assert_eq!(stored.next_refresh_at, generated_at + Duration::hours(1));
     assert_eq!(stored.claimed_at, None);
+
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn schedule_generation_does_not_overwrite_newer_completion(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = PgAIProjectionRepo::new(pool.clone());
+    let user = user_id("macro|projection@example.com");
+    insert_user(&pool, &user).await?;
+    let now = test_time();
+    let request = upsert_request(
+        "schedule-race/projection",
+        Target::user(user.to_string()),
+        user.clone(),
+        now,
+    );
+
+    repo.get_or_create_instance(request.clone()).await?;
+    repo.complete_generation(CompleteProjectionRequest {
+        cache_key: request.cache_key.clone(),
+        output: "generated output".to_string(),
+        generated_at: now + Duration::seconds(1),
+    })
+    .await?;
+    repo.schedule_generation(schedule_request(&request.cache_key, user, now))
+        .await?;
+
+    let mut touch_request = request;
+    touch_request.requested_at = now + Duration::seconds(2);
+    let stored = repo.get_or_create_instance(touch_request).await?;
+
+    assert_eq!(stored.status, ProjectionStatus::Ready);
+    assert_eq!(stored.output.as_deref(), Some("generated output"));
+    assert_eq!(stored.generated_at, Some(now + Duration::seconds(1)));
 
     Ok(())
 }
@@ -269,9 +411,10 @@ async fn fail_generation_stores_error_and_retries_without_deleting_output(
         refresh_at,
     ))
     .await?;
-    repo.claim_next_due_projection(refresh_at)
-        .await?
-        .expect("projection should be claimed");
+    let claim = repo
+        .claim_generation_by_cache_key(claim_request(&request.cache_key, user.clone(), refresh_at))
+        .await?;
+    assert!(matches!(claim, ClaimProjectionGenerationResult::Claimed(_)));
 
     let failed_at = refresh_at + Duration::minutes(1);
     repo.fail_generation(FailProjectionRequest {
@@ -399,6 +542,19 @@ fn cache_key(
         projection_id: projection_id.to_string(),
         target,
         prompt_hash: prompt_hash(prompt, context, schema.as_ref()),
+    }
+}
+
+fn claim_request(
+    cache_key: &AiProjectionCacheKey,
+    generation_user_id: MacroUserIdStr<'static>,
+    enqueued_at: DateTime<Utc>,
+) -> ClaimProjectionGenerationRequest {
+    ClaimProjectionGenerationRequest {
+        cache_key: cache_key.clone(),
+        generation_user_id,
+        enqueued_at,
+        claimed_at: enqueued_at,
     }
 }
 

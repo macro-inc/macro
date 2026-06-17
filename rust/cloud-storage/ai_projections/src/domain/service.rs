@@ -7,27 +7,32 @@ use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 
 use super::models::{
-    MaterializeProjectionRequest, MaterializeProjectionResponse, ProjectionError,
-    ProjectionInstance, ProjectionStatus, Result, ScheduleGenerationReason,
+    AiProjectionGenerationRequested, MaterializeProjectionRequest, MaterializeProjectionResponse,
+    ProjectionError, ProjectionInstance, ProjectionStatus, Result, ScheduleGenerationReason,
     ScheduleProjectionRequest, Target, UpsertProjectionInstanceRequest,
 };
-use super::ports::{AiProjectionRepository, AiProjectionService};
+use super::ports::{AiProjectionGenerationPublisher, AiProjectionRepository, AiProjectionService};
 
 /// Default implementation of the AI projection service port.
-pub struct AiProjectionServiceImpl<R> {
+pub struct AiProjectionServiceImpl<R, P> {
     repository: R,
+    publisher: P,
 }
 
-impl<R> AiProjectionServiceImpl<R> {
-    /// Create a service from its repository port.
-    pub fn new(repository: R) -> Self {
-        Self { repository }
+impl<R, P> AiProjectionServiceImpl<R, P> {
+    /// Create a service from its repository and generation publisher ports.
+    pub fn new(repository: R, publisher: P) -> Self {
+        Self {
+            repository,
+            publisher,
+        }
     }
 }
 
-impl<R> AiProjectionServiceImpl<R>
+impl<R, P> AiProjectionServiceImpl<R, P>
 where
     R: AiProjectionRepository,
+    P: AiProjectionGenerationPublisher,
 {
     /// Materialize a projection with an explicit clock value.
     pub async fn materialize_at(
@@ -53,6 +58,18 @@ where
 
         let schedule_reason = schedule_reason_for_instance(&instance, request.force_refresh, now);
         if let Some(reason) = schedule_reason {
+            let event = AiProjectionGenerationRequested {
+                cache_key: instance.cache_key.clone(),
+                reason,
+                requested_by: requester.clone(),
+                generation_user_id: instance.generation_user_id.clone(),
+                enqueued_at: now,
+            };
+            self.publisher
+                .publish_generation_requested(event)
+                .await
+                .map_err(publisher_error)?;
+
             self.repository
                 .schedule_generation(ScheduleProjectionRequest {
                     cache_key: instance.cache_key.clone(),
@@ -102,9 +119,10 @@ where
     }
 }
 
-impl<R> AiProjectionService for AiProjectionServiceImpl<R>
+impl<R, P> AiProjectionService for AiProjectionServiceImpl<R, P>
 where
     R: AiProjectionRepository,
+    P: AiProjectionGenerationPublisher,
 {
     fn materialize(
         &self,
@@ -190,4 +208,11 @@ where
     E: Into<anyhow::Error>,
 {
     ProjectionError::Repository(error.into())
+}
+
+fn publisher_error<E>(error: E) -> ProjectionError
+where
+    E: Into<anyhow::Error>,
+{
+    ProjectionError::Publisher(error.into())
 }

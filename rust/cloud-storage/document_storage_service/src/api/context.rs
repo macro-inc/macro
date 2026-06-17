@@ -1,6 +1,7 @@
 use ai_projections::{
-    domain::service::AiProjectionServiceImpl, inbound::axum_router::AIProjectionRouterState,
-    outbound::pg_projection_repo::PgAIProjectionRepo,
+    domain::service::AiProjectionServiceImpl,
+    inbound::axum_router::AIProjectionRouterState,
+    outbound::{pg_projection_repo::PgAIProjectionRepo, sqs_projection_queue::SqsProjectionQueue},
 };
 use contacts::domain::service::SqsContactsIngress;
 use contacts::outbound::ingress::SqsContactsQueue;
@@ -91,7 +92,8 @@ pub struct InternalFlag {
 }
 
 /// Type alias for the AI projection service wired into DSS.
-pub(crate) type DssAIProjectionService = AiProjectionServiceImpl<PgAIProjectionRepo>;
+pub(crate) type DssAIProjectionService =
+    AiProjectionServiceImpl<PgAIProjectionRepo, SqsProjectionQueue>;
 
 /// Type alias for the AI projections router state.
 pub(crate) type DssAIProjectionState = AIProjectionRouterState<DssAIProjectionService>;

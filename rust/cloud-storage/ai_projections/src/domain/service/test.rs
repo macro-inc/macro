@@ -8,10 +8,14 @@ use uuid::Uuid;
 
 use super::*;
 use crate::domain::models::{
-    CompleteProjectionRequest, FailProjectionRequest, GenerateProjectionRequest,
-    GeneratedProjection, ProjectionExpiry, RefreshCadence, prompt_hash,
+    AiProjectionGenerationRequested, ClaimProjectionGenerationRequest,
+    ClaimProjectionGenerationResult, CompleteProjectionRequest, FailProjectionRequest,
+    GenerateProjectionRequest, GeneratedProjection, ProjectionExpiry,
+    RawProjectionGenerationMessage, RefreshCadence, ReleaseProjectionClaimRequest, prompt_hash,
 };
-use crate::domain::ports::ProjectionGenerator;
+use crate::domain::ports::{
+    AiProjectionGenerationPublisher, AiProjectionGenerationQueue, ProjectionGenerator,
+};
 
 #[derive(Clone, Default)]
 struct FakeRepository {
@@ -124,6 +128,21 @@ impl AiProjectionRepository for FakeRepository {
         async { Ok(None) }
     }
 
+    fn claim_generation_by_cache_key(
+        &self,
+        _request: ClaimProjectionGenerationRequest,
+    ) -> impl Future<Output = std::result::Result<ClaimProjectionGenerationResult, Self::Err>> + Send
+    {
+        async { Ok(ClaimProjectionGenerationResult::NotFound) }
+    }
+
+    fn release_generation_claim(
+        &self,
+        _request: ReleaseProjectionClaimRequest,
+    ) -> impl Future<Output = std::result::Result<(), Self::Err>> + Send {
+        async { Ok(()) }
+    }
+
     fn complete_generation(
         &self,
         _request: CompleteProjectionRequest,
@@ -143,6 +162,73 @@ impl AiProjectionRepository for FakeRepository {
         _now: DateTime<Utc>,
     ) -> impl Future<Output = std::result::Result<u64, Self::Err>> + Send {
         async { Ok(0) }
+    }
+}
+
+#[derive(Clone, Default)]
+struct FakePublisher {
+    state: Arc<Mutex<FakePublisherState>>,
+}
+
+#[derive(Default)]
+struct FakePublisherState {
+    events: Vec<AiProjectionGenerationRequested>,
+    fail: bool,
+}
+
+impl FakePublisher {
+    fn failing() -> Self {
+        Self {
+            state: Arc::new(Mutex::new(FakePublisherState {
+                fail: true,
+                ..FakePublisherState::default()
+            })),
+        }
+    }
+
+    fn events(&self) -> Vec<AiProjectionGenerationRequested> {
+        self.state
+            .lock()
+            .expect("publisher state lock")
+            .events
+            .clone()
+    }
+}
+
+impl AiProjectionGenerationPublisher for FakePublisher {
+    type Err = anyhow::Error;
+
+    fn publish_generation_requested(
+        &self,
+        event: AiProjectionGenerationRequested,
+    ) -> impl Future<Output = std::result::Result<(), Self::Err>> + Send {
+        let state = self.state.clone();
+
+        async move {
+            let mut state = state.lock().expect("publisher state lock");
+            if state.fail {
+                return Err(anyhow::anyhow!("publisher unavailable"));
+            }
+
+            state.events.push(event);
+            Ok(())
+        }
+    }
+}
+
+impl AiProjectionGenerationQueue for FakePublisher {
+    fn receive_generation_messages(
+        &self,
+    ) -> impl Future<Output = std::result::Result<Vec<RawProjectionGenerationMessage>, Self::Err>> + Send
+    {
+        async { Ok(Vec::new()) }
+    }
+
+    fn delete_generation_message(
+        &self,
+        _receipt_handle: String,
+    ) -> impl Future<Output = std::result::Result<(), Self::Err>> + Send {
+        async { Ok(()) }
     }
 }
 
@@ -169,7 +255,8 @@ async fn cold_request_creates_instance_and_schedules_generation() {
     let requester = user_id("macro|projection@example.com");
     let request = materialize_request(Target::user(requester.to_string()));
     let repository = FakeRepository::default();
-    let service = AiProjectionServiceImpl::new(repository.clone());
+    let publisher = FakePublisher::default();
+    let service = AiProjectionServiceImpl::new(repository.clone(), publisher.clone());
 
     let response = service
         .materialize_at(requester.clone(), request.clone(), now)
@@ -191,6 +278,14 @@ async fn cold_request_creates_instance_and_schedules_generation() {
     assert_eq!(schedules[0].cache_key, request.cache_key());
     assert_eq!(schedules[0].requested_by, requester);
     assert_eq!(schedules[0].scheduled_at, now);
+
+    let events = publisher.events();
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].reason, ScheduleGenerationReason::ColdStart);
+    assert_eq!(events[0].cache_key, request.cache_key());
+    assert_eq!(events[0].requested_by, requester);
+    assert_eq!(events[0].generation_user_id, requester);
+    assert_eq!(events[0].enqueued_at, now);
 }
 
 #[tokio::test]
@@ -205,7 +300,8 @@ async fn ready_cached_projection_returns_without_scheduling() {
         now + Duration::hours(1),
     );
     let repository = FakeRepository::with_instance(instance);
-    let service = AiProjectionServiceImpl::new(repository.clone());
+    let publisher = FakePublisher::default();
+    let service = AiProjectionServiceImpl::new(repository.clone(), publisher.clone());
 
     let response = service
         .materialize_at(requester, request, now)
@@ -215,6 +311,7 @@ async fn ready_cached_projection_returns_without_scheduling() {
     assert_eq!(response.status, ProjectionStatus::Ready);
     assert_eq!(response.data.as_deref(), Some("cached output"));
     assert_eq!(repository.schedules(), Vec::new());
+    assert_eq!(publisher.events(), Vec::new());
 }
 
 #[tokio::test]
@@ -229,7 +326,8 @@ async fn stale_cached_projection_returns_data_and_schedules_refresh() {
         now - Duration::seconds(1),
     );
     let repository = FakeRepository::with_instance(instance);
-    let service = AiProjectionServiceImpl::new(repository.clone());
+    let publisher = FakePublisher::default();
+    let service = AiProjectionServiceImpl::new(repository.clone(), publisher.clone());
 
     let response = service
         .materialize_at(requester, request.clone(), now)
@@ -243,6 +341,11 @@ async fn stale_cached_projection_returns_data_and_schedules_refresh() {
     assert_eq!(schedules.len(), 1);
     assert_eq!(schedules[0].reason, ScheduleGenerationReason::Stale);
     assert_eq!(schedules[0].cache_key, request.cache_key());
+
+    let events = publisher.events();
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].reason, ScheduleGenerationReason::Stale);
+    assert_eq!(events[0].cache_key, request.cache_key());
 }
 
 #[tokio::test]
@@ -258,7 +361,8 @@ async fn force_refresh_schedules_even_when_cache_is_ready() {
         now + Duration::hours(1),
     );
     let repository = FakeRepository::with_instance(instance);
-    let service = AiProjectionServiceImpl::new(repository.clone());
+    let publisher = FakePublisher::default();
+    let service = AiProjectionServiceImpl::new(repository.clone(), publisher.clone());
 
     let response = service
         .materialize_at(requester, request.clone(), now)
@@ -272,6 +376,29 @@ async fn force_refresh_schedules_even_when_cache_is_ready() {
     assert_eq!(schedules.len(), 1);
     assert_eq!(schedules[0].reason, ScheduleGenerationReason::ForceRefresh);
     assert_eq!(schedules[0].cache_key, request.cache_key());
+
+    let events = publisher.events();
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].reason, ScheduleGenerationReason::ForceRefresh);
+    assert_eq!(events[0].cache_key, request.cache_key());
+}
+
+#[tokio::test]
+async fn publisher_failure_returns_error_without_scheduling_generation() {
+    let now = test_time();
+    let requester = user_id("macro|projection@example.com");
+    let request = materialize_request(Target::user(requester.to_string()));
+    let repository = FakeRepository::default();
+    let publisher = FakePublisher::failing();
+    let service = AiProjectionServiceImpl::new(repository.clone(), publisher);
+
+    let error = service
+        .materialize_at(requester, request, now)
+        .await
+        .expect_err("request should fail when enqueue fails");
+
+    assert!(matches!(error, ProjectionError::Publisher(_)));
+    assert_eq!(repository.schedules(), Vec::new());
 }
 
 #[test]
@@ -298,7 +425,8 @@ async fn user_target_mismatch_is_rejected_before_instance_creation() {
     let requester = user_id("macro|projection@example.com");
     let request = materialize_request(Target::user("macro|other@example.com"));
     let repository = FakeRepository::default();
-    let service = AiProjectionServiceImpl::new(repository.clone());
+    let publisher = FakePublisher::default();
+    let service = AiProjectionServiceImpl::new(repository.clone(), publisher.clone());
 
     let error = service
         .materialize_at(requester, request, now)
@@ -308,6 +436,7 @@ async fn user_target_mismatch_is_rejected_before_instance_creation() {
     assert!(matches!(error, ProjectionError::UserTargetMismatch { .. }));
     assert_eq!(repository.upserts(), Vec::new());
     assert_eq!(repository.schedules(), Vec::new());
+    assert_eq!(publisher.events(), Vec::new());
 }
 
 #[tokio::test]
@@ -316,7 +445,8 @@ async fn unauthorized_team_target_is_rejected_before_instance_creation() {
     let requester = user_id("macro|projection@example.com");
     let request = materialize_request(Target::team("team-1"));
     let repository = FakeRepository::default();
-    let service = AiProjectionServiceImpl::new(repository.clone());
+    let publisher = FakePublisher::default();
+    let service = AiProjectionServiceImpl::new(repository.clone(), publisher.clone());
 
     let error = service
         .materialize_at(requester, request, now)
@@ -329,6 +459,7 @@ async fn unauthorized_team_target_is_rejected_before_instance_creation() {
     ));
     assert_eq!(repository.upserts(), Vec::new());
     assert_eq!(repository.schedules(), Vec::new());
+    assert_eq!(publisher.events(), Vec::new());
 }
 
 #[tokio::test]
@@ -338,7 +469,8 @@ async fn authorized_team_target_can_materialize_cold_projection() {
     let request = materialize_request(Target::team("team-1"));
     let repository = FakeRepository::default();
     repository.allow_team_access(&requester, "team-1");
-    let service = AiProjectionServiceImpl::new(repository.clone());
+    let publisher = FakePublisher::default();
+    let service = AiProjectionServiceImpl::new(repository.clone(), publisher.clone());
 
     let response = service
         .materialize_at(requester, request, now)
@@ -347,6 +479,7 @@ async fn authorized_team_target_can_materialize_cold_projection() {
 
     assert_eq!(response.status, ProjectionStatus::Cold);
     assert_eq!(repository.schedules().len(), 1);
+    assert_eq!(publisher.events().len(), 1);
 }
 
 #[tokio::test]

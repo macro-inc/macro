@@ -1,7 +1,8 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
-import { createBucket } from '../../packages/resources';
+import { QueueAlarms, createBucket } from '../../packages/resources';
 import {
+  CLOUD_TRAIL_SNS_TOPIC_ARN,
   config,
   getMacroApiToken,
   getMacroNotify,
@@ -155,6 +156,53 @@ const cloudfrontPrivateKeySecretArn: pulumi.Output<string> = aws.secretsmanager
 
 const { searchEventQueueArn } = getSearchEventQueue();
 
+const aiProjectionDlq = new aws.sqs.Queue(`ai-projection-dlq-${stack}`, {
+  name: `ai-projection-dlq-${stack}`,
+  messageRetentionSeconds: 1209600,
+  tags,
+});
+
+new aws.cloudwatch.MetricAlarm('ai-projection-dlq-alarm', {
+  name: `ai-projection-dlq-alarm-${stack}`,
+  comparisonOperator: 'GreaterThanThreshold',
+  evaluationPeriods: 1,
+  metricName: 'ApproximateNumberOfMessagesVisible',
+  namespace: 'AWS/SQS',
+  period: 60,
+  statistic: 'Average',
+  threshold: 0,
+  dimensions: {
+    QueueName: aiProjectionDlq.name,
+  },
+  alarmActions: [CLOUD_TRAIL_SNS_TOPIC_ARN],
+  tags,
+});
+
+const aiProjectionQueue = new aws.sqs.Queue(
+  `ai-projection-queue-${stack}`,
+  {
+    name: `ai-projection-queue-${stack}`,
+    visibilityTimeoutSeconds: 900,
+    redrivePolicy: aiProjectionDlq.arn.apply((arn) =>
+      JSON.stringify({
+        deadLetterTargetArn: arn,
+        maxReceiveCount: 5,
+      })
+    ),
+    tags,
+  },
+  { dependsOn: [aiProjectionDlq] }
+);
+
+new QueueAlarms('ai-projection-queue-alarms', {
+  queue: aiProjectionQueue,
+  tags,
+});
+
+export const aiProjectionQueueArn = aiProjectionQueue.arn;
+export const aiProjectionQueueName = aiProjectionQueue.name;
+export const aiProjectionQueueUrl = aiProjectionQueue.id;
+
 const docxUploadBucket = createBucket({
   id: `docx-upload-${stack}`,
   bucketName: `docx-upload-${stack}`,
@@ -253,6 +301,7 @@ const cloudStorageService = new CloudStorageService(
       notificationIngressQueueArn,
       contactsQueueArn,
       emailScheduledQueueArn,
+      aiProjectionQueue.arn,
     ],
     vpc: coparse_api_vpc,
     platform: {
@@ -286,6 +335,10 @@ const cloudStorageService = new CloudStorageService(
       {
         name: 'DD_ENV',
         value: stack,
+      },
+      {
+        name: 'AI_PROJECTION_QUEUE',
+        value: aiProjectionQueue.id,
       },
     ],
     isPrivate: false,

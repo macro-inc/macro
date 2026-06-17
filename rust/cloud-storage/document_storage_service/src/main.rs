@@ -9,10 +9,11 @@ use crate::{
 };
 use ai_projections::{
     domain::service::AiProjectionServiceImpl,
-    inbound::axum_router::AIProjectionRouterState,
+    inbound::{axum_router::AIProjectionRouterState, sqs_worker::spawn_ai_projection_sqs_worker},
     outbound::{
         agent_generator::AgentProjectionGenerator, pg_projection_repo::PgAIProjectionRepo,
         polling_worker::spawn_ai_projection_polling_worker,
+        sqs_projection_queue::SqsProjectionQueue,
     },
 };
 use analytics_client::{AnalyticsClient, AnalyticsClientConfig, MetaConfig};
@@ -621,12 +622,24 @@ async fn main() -> anyhow::Result<()> {
         ai_projection_tool_context,
         ai_projection_tools,
     ));
+    let ai_projection_queue = Arc::new(SqsProjectionQueue::new(
+        aws_sdk_sqs::Client::new(&aws_config),
+        config.ai_projection_queue.to_string(),
+        config.queue_max_messages,
+        config.queue_wait_time_seconds,
+    ));
     let ai_projection_service = Arc::new(AiProjectionServiceImpl::new(
         ai_projection_repo.as_ref().clone(),
+        ai_projection_queue.as_ref().clone(),
     ));
     let ai_projection_state = AIProjectionRouterState::new(ai_projection_service);
-    let _ai_projection_worker =
-        spawn_ai_projection_polling_worker(ai_projection_repo, ai_projection_generator);
+    let _ai_projection_sqs_worker = spawn_ai_projection_sqs_worker(
+        ai_projection_repo.clone(),
+        ai_projection_generator,
+        ai_projection_queue.clone(),
+    );
+    let _ai_projection_due_scheduler =
+        spawn_ai_projection_polling_worker(ai_projection_repo, ai_projection_queue);
 
     let channel_bot_webhook_state =
         bots::inbound::channel_webhook_router::ChannelBotWebhookRouterState::new(

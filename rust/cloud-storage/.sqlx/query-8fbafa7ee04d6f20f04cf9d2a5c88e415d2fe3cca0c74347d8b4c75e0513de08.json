@@ -1,0 +1,55 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                expiry as \"expiry!: String\",\n                status as \"status!: String\",\n                generated_at as \"generated_at?: DateTime<Utc>\",\n                claimed_at as \"claimed_at?: DateTime<Utc>\",\n                last_requested_at as \"last_requested_at!: DateTime<Utc>\",\n                updated_at as \"updated_at!: DateTime<Utc>\"\n            FROM ai_projection_instances\n            WHERE projection_id = $1\n              AND target_type = $2\n              AND target_id = $3\n              AND prompt_hash = $4\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "expiry!: String",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "status!: String",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "generated_at?: DateTime<Utc>",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "claimed_at?: DateTime<Utc>",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "last_requested_at!: DateTime<Utc>",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "updated_at!: DateTime<Utc>",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "8fbafa7ee04d6f20f04cf9d2a5c88e415d2fe3cca0c74347d8b4c75e0513de08"
+}

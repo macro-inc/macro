@@ -10,9 +10,10 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::domain::models::{
-    AiProjectionCacheKey, CompleteProjectionRequest, FailProjectionRequest, ProjectionExpiry,
-    ProjectionInstance, ProjectionStatus, RefreshCadence, ScheduleProjectionRequest, Target,
-    UpsertProjectionInstanceRequest,
+    AiProjectionCacheKey, ClaimProjectionGenerationRequest, ClaimProjectionGenerationResult,
+    CompleteProjectionRequest, FailProjectionRequest, ProjectionExpiry, ProjectionInstance,
+    ProjectionStatus, RefreshCadence, ReleaseProjectionClaimRequest, ScheduleProjectionRequest,
+    Target, UpsertProjectionInstanceRequest,
 };
 use crate::domain::ports::AiProjectionRepository;
 
@@ -151,6 +152,7 @@ impl PgAIProjectionRepo {
               AND target_type = $2
               AND target_id = $3
               AND prompt_hash = $4
+              AND (generated_at IS NULL OR generated_at < $6)
             "#,
             request.cache_key.projection_id,
             request.cache_key.target.target_type(),
@@ -216,6 +218,7 @@ impl PgAIProjectionRepo {
                 SELECT id
                 FROM ai_projection_instances
                 WHERE next_refresh_at <= $1
+                  AND (status != 'refreshing' OR claimed_at <= $2)
                   AND (claimed_at IS NULL OR claimed_at <= $2)
                   AND (
                       (expiry = 'day' AND last_requested_at > $1::timestamptz - INTERVAL '1 day')
@@ -255,6 +258,161 @@ impl PgAIProjectionRepo {
         .try_map(ProjectionInstanceRow::try_into_projection_instance)
         .fetch_optional(&self.pool)
         .await
+    }
+
+    async fn claim_generation_by_cache_key_inner(
+        &self,
+        request: ClaimProjectionGenerationRequest,
+    ) -> Result<ClaimProjectionGenerationResult, sqlx::Error> {
+        let stale_claim_cutoff = request.claimed_at - STALE_CLAIM_AFTER;
+
+        let claimed = sqlx::query_as!(
+            ProjectionInstanceRow,
+            r#"
+            UPDATE ai_projection_instances
+            SET status = 'refreshing',
+                generation_user_id = $5,
+                claimed_at = $6,
+                updated_at = $6
+            WHERE projection_id = $1
+              AND target_type = $2
+              AND target_id = $3
+              AND prompt_hash = $4
+              AND (claimed_at IS NULL OR claimed_at <= $7)
+              AND NOT (
+                  status = 'ready'
+                  AND generated_at IS NOT NULL
+                  AND generated_at >= $8
+              )
+              AND NOT (
+                  status = 'error'
+                  AND updated_at > $8
+              )
+              AND (
+                  (expiry = 'day' AND last_requested_at > $6::timestamptz - INTERVAL '1 day')
+                  OR (expiry = 'week' AND last_requested_at > $6::timestamptz - INTERVAL '7 days')
+                  OR (expiry = 'month' AND last_requested_at > $6::timestamptz - INTERVAL '30 days')
+              )
+            RETURNING
+                id as "id!: Uuid",
+                projection_id as "projection_id!: String",
+                target_type as "target_type!: String",
+                target_id as "target_id!: String",
+                prompt_hash as "prompt_hash!: String",
+                prompt as "prompt!: String",
+                context,
+                schema as "schema?: Value",
+                generation_user_id as "generation_user_id!: String",
+                refresh_cadence as "refresh_cadence!: String",
+                expiry as "expiry!: String",
+                status as "status!: String",
+                output,
+                error,
+                generated_at as "generated_at?: DateTime<Utc>",
+                stale_at as "stale_at?: DateTime<Utc>",
+                next_refresh_at as "next_refresh_at!: DateTime<Utc>",
+                claimed_at as "claimed_at?: DateTime<Utc>",
+                last_requested_at as "last_requested_at!: DateTime<Utc>",
+                created_at as "created_at!: DateTime<Utc>",
+                updated_at as "updated_at!: DateTime<Utc>"
+            "#,
+            request.cache_key.projection_id.as_str(),
+            request.cache_key.target.target_type(),
+            request.cache_key.target.id(),
+            request.cache_key.prompt_hash.as_str(),
+            request.generation_user_id.as_ref(),
+            request.claimed_at,
+            stale_claim_cutoff,
+            request.enqueued_at,
+        )
+        .try_map(ProjectionInstanceRow::try_into_projection_instance)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        if let Some(instance) = claimed {
+            return Ok(ClaimProjectionGenerationResult::Claimed(Box::new(instance)));
+        }
+
+        self.classify_unclaimed_generation_message(request, stale_claim_cutoff)
+            .await
+    }
+
+    async fn classify_unclaimed_generation_message(
+        &self,
+        request: ClaimProjectionGenerationRequest,
+        stale_claim_cutoff: DateTime<Utc>,
+    ) -> Result<ClaimProjectionGenerationResult, sqlx::Error> {
+        let row = sqlx::query_as!(
+            ClaimProjectionStateRow,
+            r#"
+            SELECT
+                expiry as "expiry!: String",
+                status as "status!: String",
+                generated_at as "generated_at?: DateTime<Utc>",
+                claimed_at as "claimed_at?: DateTime<Utc>",
+                last_requested_at as "last_requested_at!: DateTime<Utc>",
+                updated_at as "updated_at!: DateTime<Utc>"
+            FROM ai_projection_instances
+            WHERE projection_id = $1
+              AND target_type = $2
+              AND target_id = $3
+              AND prompt_hash = $4
+            "#,
+            request.cache_key.projection_id.as_str(),
+            request.cache_key.target.target_type(),
+            request.cache_key.target.id(),
+            request.cache_key.prompt_hash.as_str(),
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        let Some(row) = row else {
+            return Ok(ClaimProjectionGenerationResult::NotFound);
+        };
+
+        if is_expired(&row.expiry, row.last_requested_at, request.claimed_at)? {
+            return Ok(ClaimProjectionGenerationResult::Expired);
+        }
+
+        if row.is_superseded(request.enqueued_at) {
+            return Ok(ClaimProjectionGenerationResult::Superseded);
+        }
+
+        if row
+            .claimed_at
+            .as_ref()
+            .is_some_and(|claimed_at| *claimed_at > stale_claim_cutoff)
+        {
+            return Ok(ClaimProjectionGenerationResult::AlreadyClaimed);
+        }
+
+        Ok(ClaimProjectionGenerationResult::AlreadyClaimed)
+    }
+
+    async fn release_generation_claim_inner(
+        &self,
+        request: ReleaseProjectionClaimRequest,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query!(
+            r#"
+            UPDATE ai_projection_instances
+            SET claimed_at = NULL,
+                updated_at = $5
+            WHERE projection_id = $1
+              AND target_type = $2
+              AND target_id = $3
+              AND prompt_hash = $4
+            "#,
+            request.cache_key.projection_id.as_str(),
+            request.cache_key.target.target_type(),
+            request.cache_key.target.id(),
+            request.cache_key.prompt_hash.as_str(),
+            request.released_at,
+        )
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
     }
 
     async fn complete_generation_inner(
@@ -382,6 +540,20 @@ impl AiProjectionRepository for PgAIProjectionRepo {
         self.claim_next_due_projection_inner(now)
     }
 
+    fn claim_generation_by_cache_key(
+        &self,
+        request: ClaimProjectionGenerationRequest,
+    ) -> impl Future<Output = Result<ClaimProjectionGenerationResult, Self::Err>> + Send {
+        self.claim_generation_by_cache_key_inner(request)
+    }
+
+    fn release_generation_claim(
+        &self,
+        request: ReleaseProjectionClaimRequest,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send {
+        self.release_generation_claim_inner(request)
+    }
+
     fn complete_generation(
         &self,
         request: CompleteProjectionRequest,
@@ -401,6 +573,27 @@ impl AiProjectionRepository for PgAIProjectionRepo {
         now: DateTime<Utc>,
     ) -> impl Future<Output = Result<u64, Self::Err>> + Send {
         self.cleanup_expired_inner(now)
+    }
+}
+
+struct ClaimProjectionStateRow {
+    expiry: String,
+    status: String,
+    generated_at: Option<DateTime<Utc>>,
+    claimed_at: Option<DateTime<Utc>>,
+    last_requested_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
+}
+
+impl ClaimProjectionStateRow {
+    fn is_superseded(&self, enqueued_at: DateTime<Utc>) -> bool {
+        let ready_after_enqueue = self
+            .generated_at
+            .is_some_and(|generated_at| generated_at >= enqueued_at)
+            && self.status == "ready";
+        let failed_after_enqueue = self.status == "error" && self.updated_at > enqueued_at;
+
+        ready_after_enqueue || failed_after_enqueue
     }
 }
 
@@ -459,6 +652,14 @@ impl ProjectionInstanceRow {
             updated_at: self.updated_at,
         })
     }
+}
+
+fn is_expired(
+    expiry: &str,
+    last_requested_at: DateTime<Utc>,
+    now: DateTime<Utc>,
+) -> Result<bool, sqlx::Error> {
+    Ok(parse_expiry(expiry)?.expires_at(last_requested_at) <= now)
 }
 
 fn parse_target(target_type: &str, target_id: String) -> Result<Target, sqlx::Error> {

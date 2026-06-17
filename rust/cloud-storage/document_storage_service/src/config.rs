@@ -12,6 +12,7 @@ env_vars! {
     pub struct DocumentStorageBucket;
     pub struct DocxDocumentUploadBucket;
     pub struct DocumentDeleteQueue;
+    pub struct AiProjectionQueue;
     pub struct DocumentStorageServiceCloudfrontDistributionUrl;
     pub struct DocumentStorageServiceCloudfrontSignerPublicKeyId;
     pub struct RedisUri;
@@ -81,6 +82,7 @@ pub struct Config {
     pub document_storage_bucket: DocumentStorageBucket,
     pub docx_document_upload_bucket: DocxDocumentUploadBucket,
     pub document_delete_queue: DocumentDeleteQueue,
+    pub ai_projection_queue: AiProjectionQueue,
     pub document_storage_service_cloudfront_distribution_url:
         DocumentStorageServiceCloudfrontDistributionUrl,
     pub document_storage_service_cloudfront_signer_public_key_id:

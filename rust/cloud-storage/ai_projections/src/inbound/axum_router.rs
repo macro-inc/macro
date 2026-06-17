@@ -290,7 +290,9 @@ impl From<ProjectionError> for AIProjectionApiError {
             | ProjectionError::EmptyTargetId => Self::bad_request(message),
             ProjectionError::UserTargetMismatch { .. }
             | ProjectionError::UnauthorizedTeamTarget { .. } => Self::forbidden(message),
-            ProjectionError::Repository(_) | ProjectionError::Generator(_) => Self::internal(error),
+            ProjectionError::Repository(_)
+            | ProjectionError::Publisher(_)
+            | ProjectionError::Generator(_) => Self::internal(error),
         }
     }
 }
