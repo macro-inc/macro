@@ -390,7 +390,7 @@ where
                 .map(|r| {
                     r.into_iter().map(|mut c| {
                         let frecency_score = c.frecency_score.take();
-                        let soup_channel = SoupChannel::from(c);
+                        let soup_channel = SoupChannel::new_from_channels(c);
                         FrecencySoupItem {
                             item: SoupItem::Channel(soup_channel),
                             frecency_score,

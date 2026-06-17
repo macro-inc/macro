@@ -159,8 +159,8 @@ pub struct ChannelParticipant {
     pub left_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-impl From<channels::domain::models::ChannelType> for ChannelType {
-    fn from(channel_type: channels::domain::models::ChannelType) -> Self {
+impl ChannelType {
+    pub fn new_from_channels(channel_type: channels::domain::models::ChannelType) -> Self {
         match channel_type {
             channels::domain::models::ChannelType::Public => Self::Public,
             channels::domain::models::ChannelType::Private => Self::Private,
@@ -170,8 +170,8 @@ impl From<channels::domain::models::ChannelType> for ChannelType {
     }
 }
 
-impl From<channels::domain::models::ParticipantRole> for ParticipantRole {
-    fn from(role: channels::domain::models::ParticipantRole) -> Self {
+impl ParticipantRole {
+    pub fn new_from_channels(role: channels::domain::models::ParticipantRole) -> Self {
         match role {
             channels::domain::models::ParticipantRole::Owner => Self::Owner,
             channels::domain::models::ParticipantRole::Admin => Self::Admin,
@@ -185,7 +185,7 @@ impl Channel {
         Self {
             id: ChannelId(channel.id),
             name: channel.name,
-            channel_type: channel.channel_type.into(),
+            channel_type: ChannelType::new_from_channels(channel.channel_type),
             org_id: channel
                 .org_id
                 .and_then(|org_id| u32::try_from(org_id).ok())
@@ -264,20 +264,10 @@ impl ChannelParticipant {
         Ok(Self {
             channel_id: ChannelId(participant.channel_id),
             user_id: MacroUserIdStr::parse_from_str(&participant.user_id)?.into_owned(),
-            role: participant.role.into(),
+            role: ParticipantRole::new_from_channels(participant.role),
             joined_at: participant.joined_at,
             left_at: participant.left_at,
         })
-    }
-}
-
-impl TryFrom<channels::domain::models::ChannelParticipant> for ChannelParticipant {
-    type Error = macro_user_id::error::ParseErr;
-
-    fn try_from(
-        participant: channels::domain::models::ChannelParticipant,
-    ) -> Result<Self, Self::Error> {
-        Self::try_new_from_channels(participant)
     }
 }
 
@@ -296,12 +286,6 @@ impl ChannelWithParticipants {
     }
 }
 
-impl From<channels::domain::models::ChannelWithParticipants> for ChannelWithParticipants {
-    fn from(channel: channels::domain::models::ChannelWithParticipants) -> Self {
-        Self::new_from_channels(channel)
-    }
-}
-
 impl SoupChannel {
     pub fn new_from_channels(channel: channels::domain::models::ChannelWithLatest) -> Self {
         Self {
@@ -310,12 +294,6 @@ impl SoupChannel {
             viewed_at: channel.viewed_at,
             interacted_at: channel.interacted_at,
         }
-    }
-}
-
-impl From<channels::domain::models::ChannelWithLatest> for SoupChannel {
-    fn from(channel: channels::domain::models::ChannelWithLatest) -> Self {
-        Self::new_from_channels(channel)
     }
 }
 
@@ -367,27 +345,5 @@ impl SoupChannelThread {
                 .map(|reply| ChannelMessage::new_from_thread_reply(parent_id, reply))
                 .collect(),
         }
-    }
-}
-
-impl From<channels::domain::models::ChannelMessage> for SoupChannelThread {
-    fn from(message: channels::domain::models::ChannelMessage) -> Self {
-        Self::new_from_channel_message(message)
-    }
-}
-
-impl
-    From<(
-        channels::domain::models::ChannelMessage,
-        Vec<channels::domain::models::ThreadReply>,
-    )> for SoupChannelThread
-{
-    fn from(
-        (message, replies): (
-            channels::domain::models::ChannelMessage,
-            Vec<channels::domain::models::ThreadReply>,
-        ),
-    ) -> Self {
-        Self::new_from_channel_message_and_replies(message, replies)
     }
 }
