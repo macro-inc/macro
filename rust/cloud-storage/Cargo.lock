@@ -7250,6 +7250,7 @@ dependencies = [
  "macro_user_id",
  "mcp_auth_proxy",
  "notification",
+ "prompt",
  "properties",
  "readonly_pool",
  "redis",
