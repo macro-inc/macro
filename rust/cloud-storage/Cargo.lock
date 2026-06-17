@@ -4342,6 +4342,7 @@ dependencies = [
  "lambda_runtime",
  "macro_db_client",
  "macro_entrypoint",
+ "macro_env_var",
  "serde",
  "serde_json",
  "sqlx",
