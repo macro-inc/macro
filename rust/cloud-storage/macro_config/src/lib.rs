@@ -103,6 +103,10 @@ where
 /// Reads the value from app secrets json env var.
 /// If `APP_SECRETS_JSON` is not present, tries to read from standard env var.
 fn read_config_value(key: &'static str) -> Option<String> {
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "Needs to read APP_SECRETS_JSON"
+    )]
     match std::env::var("APP_SECRETS_JSON") {
         Ok(raw) => {
             let json = serde_json::from_str::<Value>(&raw)
@@ -112,7 +116,7 @@ fn read_config_value(key: &'static str) -> Option<String> {
                 Value::String(s) => s,
                 other => other.to_string(),
             })
-        }
+        }        
         Err(std::env::VarError::NotPresent) => std::env::var(key).ok(),
         Err(error) => panic!("failed to read APP_SECRETS_JSON: {error}"),
     }
