@@ -1,5 +1,13 @@
 use anyhow::Context;
 pub use macro_env::Environment;
+use macro_env_var::env_vars;
+
+env_vars! {
+    struct DatabaseUrl;
+    struct DocumentDeleteQueue;
+    struct ChatDeleteQueue;
+    struct SearchEventQueue;
+}
 
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -22,17 +30,21 @@ pub struct Config {
 
 impl Config {
     pub fn from_env() -> anyhow::Result<Self> {
-        let database_url =
-            std::env::var("DATABASE_URL").context("DATABASE_URL must be provided")?;
+        let database_url = DatabaseUrl::new()
+            .context("DATABASE_URL must be provided")?
+            .to_string();
 
-        let document_delete_queue = std::env::var("DOCUMENT_DELETE_QUEUE")
-            .context("DOCUMENT_DELETE_QUEUE must be provided")?;
+        let document_delete_queue = DocumentDeleteQueue::new()
+            .context("DOCUMENT_DELETE_QUEUE must be provided")?
+            .to_string();
 
-        let chat_delete_queue =
-            std::env::var("CHAT_DELETE_QUEUE").context("CHAT_DELETE_QUEUE must be provided")?;
+        let chat_delete_queue = ChatDeleteQueue::new()
+            .context("CHAT_DELETE_QUEUE must be provided")?
+            .to_string();
 
-        let search_event_queue =
-            std::env::var("SEARCH_EVENT_QUEUE").context("SEARCH_EVENT_QUEUE must be provided")?;
+        let search_event_queue = SearchEventQueue::new()
+            .context("SEARCH_EVENT_QUEUE must be provided")?
+            .to_string();
 
         Ok(Config {
             database_url,
