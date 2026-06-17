@@ -191,6 +191,9 @@
   --z-index-modal-content: 120;
   --z-index-tool-tip:      200;
 
+  /* Soft drop shadow for floating menus/popovers (use the `shadow-menu` utility). */
+  --shadow-menu: 0 8px 24px -16px rgb(0 0 0 / 0.24), 0 2px 8px -6px rgb(0 0 0 / 0.18);
+
   /* Shared label column width for side-panel two-column grids so labels line
      up across sub-panels (Details, Properties, ...). Consumers should use
      `grid-cols-[var(--sidepanel-label-width,auto)_1fr]` so the column falls

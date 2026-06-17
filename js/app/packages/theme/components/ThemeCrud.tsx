@@ -34,7 +34,7 @@ export function ThemeCrud(props: ThemeCrudProps) {
         <Dropdown.Trigger label="Theme options" variant="ghost" size="icon-sm">
           <IconDotsThreeVertical />
         </Dropdown.Trigger>
-        <Dropdown.Content class="shadow-[0_8px_24px_-16px_rgba(0,0,0,0.24),0_2px_8px_-6px_rgba(0,0,0,0.18)]">
+        <Dropdown.Content class="shadow-menu">
           <Dropdown.Group>
             <Dropdown.Item
               class="touch:min-h-10"
