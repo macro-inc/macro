@@ -17,6 +17,7 @@ rand = { workspace = true }
 tokio = { workspace = true, features = ["sync"]}
 async-stream = { workspace = true }
 futures = { workspace = true }
+macro_env_var = { path = "../macro_env_var" }
 reqwest = { workspace = true, features = ["stream"] }
 tokio-util = { workspace = true, features = ["io"] }
 schemars = { workspace = true }
@@ -33,4 +34,3 @@ ai_toolset = { path = "../ai_toolset", optional = true }
 async-trait = { workspace = true, optional = true }
 anyhow = { workspace = true, optional = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
-macro_env_var = { path = "../macro_env_var" }
