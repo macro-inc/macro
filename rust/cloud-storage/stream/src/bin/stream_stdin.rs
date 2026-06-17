@@ -8,6 +8,7 @@ const ENTITY_TYPE: EntityType = EntityType::Channel;
 const ENTITY_ID: &str = "019467c2-49d0-7d99-b0b9-d535811a337d";
 const STREAM_ID: &str = "stdin";
 
+#[allow(clippy::disallowed_methods, reason = "Only used when running locally")]
 fn main() -> anyhow::Result<()> {
     let redis_url = std::env::var("DBURL")
         .or_else(|_| std::env::var("REDIS_URL"))
