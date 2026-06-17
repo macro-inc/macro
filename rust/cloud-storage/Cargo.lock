@@ -98,9 +98,13 @@ dependencies = [
 name = "ai_projections"
 version = "0.1.0"
 dependencies = [
+ "agent",
+ "ai_tools",
+ "ai_usage",
  "anyhow",
  "axum",
  "chrono",
+ "futures",
  "hex",
  "macro_db_migrator",
  "macro_user_id",
