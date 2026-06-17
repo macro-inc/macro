@@ -113,6 +113,14 @@ const devNotificationFilters: DevNotificationFilter[] = [
 
 type SoupEntityRecord = Record<string, unknown>;
 
+const entityMapKey = (notification: UnifiedNotification) =>
+  `${String(notification.entity_type)}:${notification.entity_id}`;
+
+const getNotificationEntity = (
+  entityById: Map<string, SoupEntityRecord> | undefined,
+  notification: UnifiedNotification
+) => entityById?.get(entityMapKey(notification));
+
 const taskProperties = (entity: SoupEntityRecord | undefined) => {
   const properties = entity?.properties;
   if (!Array.isArray(properties)) return undefined;
@@ -132,10 +140,12 @@ const transformNotificationItem = (args: {
   subItems?: UnifiedNotification[];
   entityById?: Map<string, SoupEntityRecord>;
 }): InboxItemData => {
-  const title =
-    String(args.entity?.name ?? '') || notificationTitle(args.notification);
-  const showSubItems =
-    args.notification.notification_metadata.tag !== 'github_pr_status_changed';
+  const metadata = args.notification.notification_metadata;
+  const notificationTitleValue = notificationTitle(args.notification);
+  const title = metadata.tag.startsWith('channel_')
+    ? String(args.entity?.name ?? '') || notificationTitleValue
+    : notificationTitleValue || String(args.entity?.name ?? '');
+  const showSubItems = metadata.tag !== 'github_pr_status_changed';
 
   return {
     id: args.id,
@@ -151,7 +161,7 @@ const transformNotificationItem = (args: {
       notificationContent(args.notification) ||
       String(args.entity?.snippet ?? ''),
     properties:
-      args.notification.notification_metadata.tag === 'task_assigned'
+      metadata.tag === 'task_assigned'
         ? taskProperties(args.entity)
         : undefined,
     timestamp: args.notification.created_at ?? args.notification.updated_at,
@@ -161,7 +171,7 @@ const transformNotificationItem = (args: {
           transformNotificationItem({
             id: `notification:${subItem.id}`,
             notification: subItem,
-            entity: args.entityById?.get(subItem.entity_id),
+            entity: getNotificationEntity(args.entityById, subItem),
             entityById: args.entityById,
           })
         )
@@ -256,14 +266,17 @@ const buildInboxItems = (
   return groups.map((group) => {
     const notifications = sortNotifications(group);
     const root = notifications[0];
+    const groupKey = getInboxItemGroupKey(root);
+    const groupDateKey = getDateGroupKey(getNotificationTime(root));
+
     return transformNotificationItem({
       id:
         group.length > 1
-          ? (getInboxItemGroupKey(root) ?? `notification:${root.id}`)
+          ? `${groupDateKey}:${groupKey ?? `notification:${root.id}`}`
           : `notification:${root.id}`,
       notification: root,
-      entity: entityById.get(root.entity_id),
-      subItems: notifications.slice(1),
+      entity: getNotificationEntity(entityById, root),
+      subItems: group.length > 1 ? notifications : undefined,
       entityById,
     });
   });
@@ -481,10 +494,6 @@ function NotificationInboxList(props: {
     });
   };
 
-  const toggleExpanded = (item: InboxItemData) => {
-    setExpanded(item, !isExpanded(item));
-  };
-
   const rows = createMemo<InboxListRow[]>(() =>
     props.groups.flatMap((group) => [
       { type: 'header' as const, id: group.id, label: group.label },
@@ -579,15 +588,21 @@ function NotificationInboxList(props: {
     if (nextIndex !== -1) setFocus(nextIndex);
   };
 
+  const oldestGroupItem = (item: InboxItemData) =>
+    (item.subItems ?? []).toSorted(
+      (a, b) =>
+        getNotificationTime(a.notification as UnifiedNotification) -
+        getNotificationTime(b.notification as UnifiedNotification)
+    )[0] ?? item;
+
+  const selectItem = (item: InboxItemData) => {
+    props.onSelect(item.subItems?.length ? oldestGroupItem(item) : item);
+  };
+
   const selectCurrent = () => {
     const row = focusedRow();
     if (row) {
-      if (row.depth === 0 && row.item.subItems?.length) {
-        toggleExpanded(row.item);
-        return;
-      }
-
-      props.onSelect(row.item);
+      selectItem(row.item);
       return;
     }
 
@@ -595,7 +610,7 @@ function NotificationInboxList(props: {
     if (!firstRow) return;
 
     setFocus(rowIndexForItem(firstRow.item));
-    props.onSelect(firstRow.item);
+    selectItem(firstRow.item);
   };
 
   createEffect(() => {
@@ -795,12 +810,7 @@ function NotificationInboxList(props: {
             }
 
             const onItemClick = () => {
-              if (row.depth === 0 && row.item.subItems?.length) {
-                toggleExpanded(row.item);
-                return;
-              }
-
-              props.onSelect(row.item);
+              selectItem(row.item);
             };
 
             return (
@@ -909,15 +919,16 @@ export function NotificationInbox2() {
       showSupportedForeignEntities: true,
     })
   );
-  const entityById = createMemo(
-    () =>
-      new Map(
-        (soupQuery.data ?? []).map((entity) => [
-          entity.id,
-          entity as SoupEntityRecord,
-        ])
-      )
-  );
+  const entityById = createMemo(() => {
+    const map = new Map<string, SoupEntityRecord>();
+
+    for (const entity of soupQuery.data ?? []) {
+      const record = entity as SoupEntityRecord;
+      map.set(`${String(entity.type)}:${entity.id}`, record);
+    }
+
+    return map;
+  });
   const groups = createMemo(() =>
     buildInboxGroups(
       allNotifications()

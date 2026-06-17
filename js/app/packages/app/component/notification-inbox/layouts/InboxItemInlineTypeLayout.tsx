@@ -75,44 +75,92 @@ function ActorIcon() {
   const senderId = () =>
     type() === 'ai_response' ? MACRO_AGENT_BOT_ID : item().senderId;
   const fallback = () => item().senderName || item().entityName || '?';
-  const initials = () =>
-    fallback()
+  const initials = (name = fallback()) =>
+    name
       .split(/\s+/)
       .filter(Boolean)
       .slice(0, 2)
       .map((part: string) => part[0]?.toUpperCase())
       .join('') || '?';
+  const channelGroupParticipants = () => {
+    if (!type()?.startsWith('channel_') || !item().subItems?.length) return [];
+
+    const participants = new Map<string, { id?: string; name?: string }>();
+    for (const groupItem of [item(), ...(item().subItems ?? [])]) {
+      const key = groupItem.senderId ?? groupItem.senderName;
+      if (!key) continue;
+      participants.set(key, {
+        id: groupItem.senderId,
+        name: groupItem.senderName,
+      });
+    }
+    return [...participants.values()];
+  };
 
   return (
     <InboxItem.Icon class="size-9 self-center">
       <span class="relative size-9 shrink-0">
-        <span class="grid size-full place-items-center overflow-hidden rounded-full bg-active text-ink-muted">
-          <Show
-            when={type() === 'ai_response'}
-            fallback={
+        <Show
+          when={channelGroupParticipants().length >= 2}
+          fallback={
+            <span class="grid size-full place-items-center overflow-hidden rounded-full bg-active text-ink-muted">
               <Show
-                when={senderId()}
+                when={type() === 'ai_response'}
                 fallback={
-                  <Avatar size="fill" class="text-xs">
-                    <Avatar.Fallback>{initials()}</Avatar.Fallback>
-                  </Avatar>
+                  <Show
+                    when={senderId()}
+                    fallback={
+                      <Avatar size="fill" class="text-xs">
+                        <Avatar.Fallback>{initials()}</Avatar.Fallback>
+                      </Avatar>
+                    }
+                  >
+                    {(id) => (
+                      <UserIcon
+                        id={id()}
+                        size="fill"
+                        suppressClick
+                        showTooltip={false}
+                      />
+                    )}
+                  </Show>
                 }
               >
-                {(id) => (
-                  <UserIcon
-                    id={id()}
-                    size="fill"
-                    suppressClick
-                    showTooltip={false}
-                  />
-                )}
+                <MacroLogo class="size-5" />
               </Show>
-            }
-          >
-            <MacroLogo class="size-5" />
-          </Show>
-        </span>
-        <NotificationBadge />
+            </span>
+          }
+        >
+          <div class="flex size-full items-center justify-center -space-x-3">
+            <For each={channelGroupParticipants().slice(0, 1)}>
+              {(participant) => (
+                <span class="grid size-6 shrink-0 place-items-center overflow-hidden rounded-full bg-active text-xs text-ink-muted ring ring-surface">
+                  <Show
+                    when={participant.id}
+                    fallback={<span>{initials(participant.name)}</span>}
+                  >
+                    {(id) => (
+                      <UserIcon
+                        id={id()}
+                        size="fill"
+                        suppressClick
+                        showTooltip={false}
+                      />
+                    )}
+                  </Show>
+                </span>
+              )}
+            </For>
+            <Show when={channelGroupParticipants().length > 2}>
+              <span class="z-10 grid aspect-square size-6 shrink-0 place-items-center rounded-full bg-ink-muted text-xs font-medium leading-none text-surface ring ring-surface">
+                +{channelGroupParticipants().length - 1}
+              </span>
+            </Show>
+          </div>
+        </Show>
+        <Show when={channelGroupParticipants().length < 2}>
+          <NotificationBadge />
+        </Show>
       </span>
     </InboxItem.Icon>
   );
@@ -288,11 +336,50 @@ function TitleRow() {
   );
 }
 
-function actionText() {
+function groupedActionText() {
   const { item } = useInboxItem();
   const type = useNotificationType();
 
   return () => {
+    if (!item().subItems?.length) return undefined;
+
+    const count = item().subItems?.length ?? 0;
+    const unreadCount =
+      item().subItems?.filter((subItem) => subItem.unread).length ?? 0;
+
+    if (type()?.startsWith('channel_')) {
+      const metadata = item().notification?.notification_metadata;
+      const content = metadata?.content as
+        | { threadId?: string | null }
+        | undefined;
+      const label =
+        unreadCount > 0 ? `${unreadCount} new messages` : `${count} messages`;
+
+      if (content?.threadId) return `${label} in thread`;
+      return label;
+    }
+
+    if (
+      type() === 'mentioned_in_document_comment' ||
+      type() === 'replied_to_document_comment_thread' ||
+      type() === 'commented_on_document'
+    ) {
+      const label =
+        unreadCount > 0 ? `${unreadCount} new comments` : `${count} comments`;
+      return `${label} in thread`;
+    }
+
+    return undefined;
+  };
+}
+
+function actionText() {
+  const { item } = useInboxItem();
+  const type = useNotificationType();
+  const groupText = groupedActionText();
+
+  return () => {
+    if (groupText()) return groupText();
     if (type() === 'ai_response') return 'responded';
     if (type() === 'github_pr_comment') return undefined;
     if (type() === 'github_pr_mention') return undefined;
@@ -396,7 +483,11 @@ function Description() {
     if (!item().subItems?.length || unreadGroupCount() === 0) return undefined;
     return `${unreadGroupCount()} new ${groupLabel()}`;
   };
-  const description = () => unreadGroupDescription() || groupedDescription();
+  const groupText = groupedActionText();
+  const description = () => {
+    if (groupText()) return undefined;
+    return unreadGroupDescription() || groupedDescription();
+  };
   const showTaskProperties = () =>
     type() === 'task_assigned' && Boolean(item().properties?.length);
 
@@ -448,11 +539,12 @@ function unreadGroupLabel(type: ReturnType<typeof useNotificationType>) {
 function ActionRow() {
   const { item } = useInboxItem();
   const action = actionText();
+  const groupText = groupedActionText();
 
   return (
     <div class="flex min-w-0 items-center gap-1 text-xs text-ink-extra-muted/70">
       <Show
-        when={item().senderName || item().senderId}
+        when={!groupText() && (item().senderName || item().senderId)}
         fallback={
           <Show
             when={
@@ -486,25 +578,12 @@ function ActionRow() {
 
 function TimestampColumn() {
   const { item } = useInboxItem();
-  const groupCount = () => {
-    const count = (item().subItems?.length ?? 0) + 1;
-    return count > 1 ? count : undefined;
-  };
 
   return (
-    <div class="flex h-full flex-col items-end justify-between pt-0.5">
+    <div class="flex h-full flex-col items-end pt-0.5">
       <Show when={item().timestamp}>
         {(timestamp) => (
           <InboxItem.Timestamp>{timestamp()}</InboxItem.Timestamp>
-        )}
-      </Show>
-      <Show when={groupCount()}>
-        {(count) => (
-          <Layer depth={5}>
-            <span class="grid h-4 min-w-4 place-items-center rounded bg-ink-muted/10 px-1 text-xs text-ink-muted">
-              {count()}
-            </span>
-          </Layer>
         )}
       </Show>
     </div>
