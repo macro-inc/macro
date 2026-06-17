@@ -1,13 +1,17 @@
 use crate::domain::models::{
     AttachmentEntityReference, BotId, BotSenderProfile, ChannelMessageFilters,
-    CreateEntityMentionOptions, MessagePageDirection, NotificationFilters, ParticipantRole,
+    CreateEntityMentionOptions, GetThreadReplyRowsRequest, MessagePageDirection,
+    NotificationFilters, ParticipantRole,
 };
-use crate::domain::ports::ChannelRepo;
+use crate::domain::ports::{ChannelListRepo, ChannelRepo};
 use crate::outbound::pg_channels_repo::PgChannelsRepo;
+use filter_ast::Expr;
+use item_filters::ast::{LiteralTree, channel::ChannelThreadLiteral};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_pagination::{CreatedAt, Cursor, CursorVal, Query};
+use models_pagination::{CreatedAt, Cursor, CursorVal, Query, SimpleSortMethod};
 use sqlx::{Pool, Postgres};
+use std::sync::Arc;
 use uuid::Uuid;
 
 const NO_FILTERS: ChannelMessageFilters = ChannelMessageFilters {
@@ -27,9 +31,11 @@ const CH2: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c02);
 const MSG1: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000001);
 const MSG2: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000002);
 const MSG3: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000003);
+const MSG31: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000031);
 const REPLY1: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_00000000b001);
 const REPLY2: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_00000000b002);
 const REPLY3: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_00000000b003);
+const REPLY4: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_00000000b004);
 const REPLY5: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_00000000b005);
 const DELETED_MSG_ATTACHMENT: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_00000000a004);
 const USER_A: &str = "macro|user-a@test.com";
@@ -43,6 +49,27 @@ fn repo(pool: Pool<Postgres>) -> PgChannelsRepo {
 
 fn macro_user_id(user_id: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(user_id.to_owned()).expect("valid macro user id")
+}
+
+fn thread_rows_request(
+    user_id: &str,
+    filter: LiteralTree<ChannelThreadLiteral>,
+    sort: SimpleSortMethod,
+    limit: u32,
+) -> GetThreadReplyRowsRequest {
+    GetThreadReplyRowsRequest {
+        macro_id: macro_user_id(user_id),
+        limit: Some(limit),
+        query: Query::Sort(sort, filter),
+    }
+}
+
+fn thread_filter(literal: ChannelThreadLiteral) -> LiteralTree<ChannelThreadLiteral> {
+    Some(Arc::new(Expr::val(literal)))
+}
+
+fn report_err(e: rootcause::Report) -> anyhow::Error {
+    anyhow::anyhow!("{e:?}")
 }
 
 async fn insert_channel_message_notification(
@@ -154,6 +181,176 @@ async fn top_level_ordered_newest_first(pool: Pool<Postgres>) -> anyhow::Result<
 
     let ids: Vec<Uuid> = rows.iter().map(|r| r.id).collect();
     assert_eq!(ids, vec![MSG3, MSG2, MSG1]);
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn channel_thread_rows_are_visible_to_channel_members(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    let rows = repo
+        .get_thread_reply_rows(
+            thread_rows_request(USER_A, None, SimpleSortMethod::UpdatedAt, 50).into_params(),
+        )
+        .await
+        .map_err(report_err)?;
+
+    let parent_ids = rows.iter().map(|row| row.parent.id).collect::<Vec<_>>();
+    assert_eq!(parent_ids, vec![MSG3, MSG1, MSG31]);
+
+    let msg1 = rows
+        .iter()
+        .find(|row| row.parent.id == MSG1)
+        .expect("msg1 thread should be returned");
+    let reply_ids = msg1
+        .replies
+        .iter()
+        .map(|reply| reply.id)
+        .collect::<Vec<_>>();
+    assert_eq!(reply_ids, vec![REPLY1, REPLY2, REPLY3, REPLY4]);
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn channel_thread_rows_are_scoped_to_active_channel_members(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    let rows = repo
+        .get_thread_reply_rows(
+            thread_rows_request(NON_MEMBER, None, SimpleSortMethod::UpdatedAt, 50).into_params(),
+        )
+        .await
+        .map_err(report_err)?;
+
+    assert!(rows.is_empty());
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn channel_thread_rows_filter_by_thread_id(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    let rows = repo
+        .get_thread_reply_rows(
+            thread_rows_request(
+                USER_A,
+                thread_filter(ChannelThreadLiteral::ThreadId(MSG1)),
+                SimpleSortMethod::UpdatedAt,
+                50,
+            )
+            .into_params(),
+        )
+        .await
+        .map_err(report_err)?;
+
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].parent.id, MSG1);
+    let reply_ids = rows[0]
+        .replies
+        .iter()
+        .map(|reply| reply.id)
+        .collect::<Vec<_>>();
+    assert_eq!(reply_ids, vec![REPLY1, REPLY2, REPLY3, REPLY4]);
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn channel_thread_rows_filter_by_channel_id(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    let rows = repo
+        .get_thread_reply_rows(
+            thread_rows_request(
+                USER_A,
+                thread_filter(ChannelThreadLiteral::ChannelId(CH2)),
+                SimpleSortMethod::UpdatedAt,
+                50,
+            )
+            .into_params(),
+        )
+        .await
+        .map_err(report_err)?;
+
+    assert!(rows.is_empty());
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn channel_thread_rows_filter_by_root_sender(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    let rows = repo
+        .get_thread_reply_rows(
+            thread_rows_request(
+                USER_A,
+                thread_filter(ChannelThreadLiteral::RootSender(macro_user_id(USER_A))),
+                SimpleSortMethod::UpdatedAt,
+                50,
+            )
+            .into_params(),
+        )
+        .await
+        .map_err(report_err)?;
+
+    let parent_ids = rows.iter().map(|row| row.parent.id).collect::<Vec<_>>();
+    assert_eq!(parent_ids, vec![MSG3, MSG1, MSG31]);
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn channel_thread_rows_apply_cursor(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    let first_page = repo
+        .get_thread_reply_rows(
+            thread_rows_request(USER_A, None, SimpleSortMethod::UpdatedAt, 1).into_params(),
+        )
+        .await
+        .map_err(report_err)?;
+    assert_eq!(first_page.len(), 1);
+    assert_eq!(first_page[0].parent.id, MSG3);
+
+    let second_page = repo
+        .get_thread_reply_rows(
+            GetThreadReplyRowsRequest {
+                macro_id: macro_user_id(USER_A),
+                limit: Some(50),
+                query: Query::Cursor(Cursor {
+                    id: first_page[0].parent.id,
+                    limit: 50,
+                    val: CursorVal {
+                        sort_type: SimpleSortMethod::UpdatedAt,
+                        last_val: first_page[0].parent.updated_at,
+                    },
+                    filter: None,
+                }),
+            }
+            .into_params(),
+        )
+        .await
+        .map_err(report_err)?;
+
+    let parent_ids = second_page
+        .iter()
+        .map(|row| row.parent.id)
+        .collect::<Vec<_>>();
+    assert_eq!(parent_ids, vec![MSG1, MSG31]);
     Ok(())
 }
 
