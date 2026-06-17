@@ -74,6 +74,11 @@ fn ai_feature_roundtrips_through_snake_case() {
         AiFeature::DynamicCompletionsApi.to_string(),
         "dynamic_completions_api"
     );
+    assert_eq!(AiFeature::AIProjection.to_string(), "ai_projection");
+    assert_eq!(
+        "ai_projection".parse::<AiFeature>().unwrap(),
+        AiFeature::AIProjection
+    );
     assert_eq!(
         "channel_bot".parse::<AiFeature>().unwrap(),
         AiFeature::ChannelBot

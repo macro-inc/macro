@@ -48,6 +48,10 @@ pub enum AiFeature {
     Automation,
     /// The dynamic (structured) completions API.
     DynamicCompletionsApi,
+    /// Cached AI-generated projections.
+    #[serde(rename = "ai_projection")]
+    #[strum(serialize = "ai_projection")]
+    AIProjection,
     /// Automatic chat renaming.
     ChatRename,
     /// Call recording summarization.
