@@ -1,11 +1,11 @@
-import Plus from '@phosphor/plus.svg';
-import DeleteIcon from '@phosphor/x.svg';
 import type { BlockAlias, BlockName } from '@core/block';
 import { PopupPreview } from '@core/component/DocumentPreview';
 import { HoverCard } from '@core/component/HoverCard';
 import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
 import { itemToBlockName } from '@core/constant/allBlocks';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
+import Plus from '@phosphor/plus.svg';
+import DeleteIcon from '@phosphor/x.svg';
 import { Property as PropertyNS, useProperty } from '@property';
 import { Modals } from '@property/component/modal';
 import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
