@@ -31,7 +31,7 @@ import { debounce } from '@solid-primitives/scheduled';
 import { ThemeChips } from '@theme/components/ThemeChips';
 import type { ThemeV2 } from '@theme/types/themeTypes';
 import { registerHotkey } from 'core/hotkey/hotkeys';
-import { type Component, createMemo, onCleanup } from 'solid-js';
+import { type Component, onCleanup } from 'solid-js';
 import {
   setDarkModeTheme,
   setLightModeTheme,
@@ -380,10 +380,8 @@ export default function GlobalShortcuts() {
 
   registerHotkey({
     scopeId: 'global',
-    description: createMemo(
-      () =>
-        `${themeShouldMatchSystem() ? 'Turn off a' : 'A'}uto-detect color scheme`
-    ),
+    description: () =>
+      `${themeShouldMatchSystem() ? 'Turn off a' : 'A'}uto-detect color scheme`,
     keyDownHandler: () => {
       setThemeShouldMatchSystem((prev) => !prev);
       return true;

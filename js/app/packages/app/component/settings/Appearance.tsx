@@ -48,6 +48,7 @@ function ThemePreferenceRow(props: {
         <KobalteDropdownMenu.Trigger
           as={ThemeChipPill}
           class="h-auto"
+          disabled={props.disabled?.()}
           theme={selectedTheme()}
           name={selectedTheme()?.name ?? props.value()}
         />
