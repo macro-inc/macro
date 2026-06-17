@@ -133,6 +133,7 @@
       "ai_toolset",
       "anthropic",
       "cowlike",
+      "macro_env_var",
       "macro_user_id",
       "workspace-hack"
     ],

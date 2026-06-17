@@ -331,6 +331,7 @@ dependencies = [
  "chrono",
  "futures",
  "lazy_static",
+ "macro_env_var",
  "rand 0.9.4",
  "regex",
  "reqwest 0.13.4",
