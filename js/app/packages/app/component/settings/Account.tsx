@@ -1,12 +1,12 @@
-import { capitalize } from '@block-pdf/util/StringUtils';
-import { useHasPaidAccess } from '@core/auth/license';
 import { UserIcon } from '@core/component/UserIcon';
 import { useLogout } from '@core/auth/logout';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { isMobile } from '@core/mobile/isMobile';
 import { toast } from '@core/component/Toast/Toast';
 import { staticFileIdEndpoint } from '@core/constant/servers';
 import { createStaticFile } from '@core/util/create';
-import { Dialog, Button, Panel, Tooltip } from '@ui';
+import { Dialog, Button, Panel, Tooltip, ToggleSwitch, Dropdown, cn } from '@ui';
+import { SETTINGS_ROW_DIVIDERS } from './settingsRowDividers';
 import {
   blockNameToFileExtensions,
   blockNameToMimeTypes,
@@ -19,7 +19,6 @@ import {
   ENABLE_NEW_PRICING_OVERRIDE,
 } from '@core/constant/featureFlags';
 import { useUserTeamsQuery } from '@queries/team';
-import { usePaywallState } from '@core/constant/PaywallState';
 import { fileSelector } from '@core/directive/fileSelector';
 import {
   type ProfilePictureItem,
@@ -27,9 +26,13 @@ import {
 } from '@core/signal/profilePicture';
 import IconUpload from '@phosphor-icons/core/regular/upload-simple.svg?component-solid';
 import SignOutIcon from '@phosphor-icons/core/regular/sign-out.svg?component-solid';
-import XIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
+import PencilIcon from '@phosphor/pencil-simple.svg';
+import TrashIcon from '@phosphor/trash.svg';
+import CheckIcon from '@phosphor/check.svg';
+import SpinnerIcon from '@phosphor/spinner-gap.svg';
+import WarningCircleIcon from '@phosphor/warning-circle.svg';
 import { authServiceClient } from '@service-auth/client';
-import { useEmail, useLicenseStatus, useUserId } from '@core/context/user';
+import { useEmail, useUserId } from '@core/context/user';
 import {
   createEffect,
   createMemo,
@@ -37,6 +40,7 @@ import {
   createSignal,
   type JSX,
   Match,
+  onCleanup,
   Show,
   Switch,
 } from 'solid-js';
@@ -44,8 +48,8 @@ import { usePermissions } from '@core/context/user';
 import { PERMISSION_IDS } from '@core/constant/permissions';
 import { useSettingsState } from '@core/constant/SettingsState';
 import PaywallComponent from '../paywall/PaywallComponent';
-import PaywallTeamMemberView from '../paywall/PaywallTeamMemberView';
 import PaywallTeamOwnerView from '../paywall/PaywallTeamOwnerView';
+import UsersThreeIcon from '@phosphor/users-three.svg';
 import {
   type SupportedNotificationSettings,
   useNotificationSettings,
@@ -53,6 +57,7 @@ import {
 import { useAnalytics } from '@app/component/analytics-context';
 import { useTauri, type BundleUpdateStatus } from '@macro/tauri';
 import { invoke } from '@tauri-apps/api/core';
+import { Transition } from 'solid-transition-group';
 
 // NOTE: solid directives
 false && fileSelector;
@@ -152,6 +157,19 @@ function ProfilePictureRow(props: { userId: string }) {
     mutateProfilePicture(response.url);
   };
 
+  // Hidden input drives the "Upload new picture" dropdown action — directives
+  // can't be attached to a Kobalte menu item, so we click() this from onSelect.
+  let fileInputRef: HTMLInputElement | undefined;
+  const acceptAttr = [
+    ...blockNameToMimeTypes.image,
+    ...blockNameToFileExtensions.image.map((ext) => `.${ext}`),
+  ].join(',');
+  const handleFileInput: JSX.EventHandler<HTMLInputElement, Event> = (e) => {
+    const files = Array.from(e.currentTarget.files ?? []);
+    e.currentTarget.value = '';
+    if (files.length) handleUpload(files);
+  };
+
   const handleRemove = async () => {
     setIsRemoving(true);
     const removed = await removeProfilePicture();
@@ -164,42 +182,74 @@ function ProfilePictureRow(props: { userId: string }) {
   return (
     <>
       <Row label="Profile Picture">
-        <div class="flex items-center gap-3">
-          <UserIcon
-            id={props.userId}
-            isDeleted={false}
-            size="lg"
-            class="bg-transparent"
-          />
-          <div class="flex items-center gap-2">
-            <Show when={profilePictureUrl()}>
-              <Tooltip label="Remove profile picture">
-                <Button
-                  variant="danger"
-                  size="icon-sm"
-                  depth={3}
-                  disabled={isRemoving()}
-                  onClick={() => setShowRemoveConfirmModal(true)}
-                  aria-label="Remove profile picture"
-                >
-                  <XIcon class="size-4" />
-                </Button>
-              </Tooltip>
-            </Show>
-            <span
-              class="inline-flex"
-              use:fileSelector={{
-                acceptedFileExtensions: blockNameToFileExtensions.image,
-                acceptedMimeTypes: blockNameToMimeTypes.image,
-                onSelect: handleUpload,
-              }}
-            >
-              <Button variant="base" size="sm" depth={3}>
-                <IconUpload class="size-4" />
-                Upload
-              </Button>
-            </span>
-          </div>
+        <div class="relative size-12 shrink-0">
+          <Show
+            when={profilePictureUrl()}
+            fallback={
+              // No picture: a filled circle that stands out from the surface,
+              // with the upload icon always visible. The whole circle uploads.
+              <span
+                tabindex="0"
+                role="button"
+                aria-label="Upload profile picture"
+                use:fileSelector={{
+                  acceptedFileExtensions: blockNameToFileExtensions.image,
+                  acceptedMimeTypes: blockNameToMimeTypes.image,
+                  onSelect: handleUpload,
+                }}
+                class="flex size-full cursor-pointer items-center justify-center rounded-full bg-edge text-ink-muted transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              >
+                <IconUpload class="size-5" />
+              </span>
+            }
+          >
+            {/* Has picture: hover reveals an edit affordance; clicking opens a
+                menu to replace or remove the picture. */}
+            <Dropdown>
+              <Dropdown.Trigger
+                as="div"
+                tabindex="0"
+                aria-label="Edit profile picture"
+                class="group block size-full cursor-pointer rounded-full outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              >
+                <div class="size-full overflow-hidden rounded-full">
+                  <UserIcon
+                    id={props.userId}
+                    isDeleted={false}
+                    size="fill"
+                    suppressClick
+                    showTooltip={false}
+                    class="bg-transparent"
+                  />
+                </div>
+                <div class="pointer-events-none absolute inset-0 flex items-center justify-center rounded-full bg-black/50 text-white opacity-0 transition-opacity group-hover:opacity-100">
+                  <PencilIcon class="size-5" />
+                </div>
+              </Dropdown.Trigger>
+              <Dropdown.Content class="w-48">
+                <Dropdown.Group>
+                  <Dropdown.Item onSelect={() => fileInputRef?.click()}>
+                    <IconUpload class="size-4" />
+                    Upload new picture
+                  </Dropdown.Item>
+                  <Dropdown.Item
+                    class="text-failure"
+                    onSelect={() => setShowRemoveConfirmModal(true)}
+                  >
+                    <TrashIcon class="size-4" />
+                    Remove picture
+                  </Dropdown.Item>
+                </Dropdown.Group>
+              </Dropdown.Content>
+            </Dropdown>
+            <input
+              ref={fileInputRef}
+              type="file"
+              class="hidden"
+              accept={acceptAttr}
+              onChange={handleFileInput}
+            />
+          </Show>
         </div>
       </Row>
       <Dialog
@@ -247,12 +297,9 @@ function ProfilePictureRow(props: { userId: string }) {
 export function Account() {
   const email = useEmail();
   const userId = useUserId();
-  const licenseStatus = useLicenseStatus();
   const logout = useLogout();
-  const { showPaywall } = usePaywallState();
-  const hasPaidAccess = useHasPaidAccess();
   const permissions = usePermissions();
-    const { toggleSettings } = useSettingsState();
+  const { toggleSettings } = useSettingsState();
   const disableAutoUpdateUIFlag = useFeatureFlag(DISABLE_AUTO_UPDATE_UI_FLAG);
   const autoUpdateUIEnabled = createMemo(
     () => ENABLE_AUTO_UPDATE_UI_OVERRIDE ?? !disableAutoUpdateUIFlag().enabled
@@ -273,6 +320,11 @@ export function Account() {
     if (!teams || !uid) return false;
     return teams.some((t) => t.owner_id !== uid);
   });
+
+  const newPricingFlag = useFeatureFlag('enable-new-pricing', {
+    enabledOverride: ENABLE_NEW_PRICING_OVERRIDE,
+  });
+  const newPricingEnabled = () => newPricingFlag().enabled;
 
   const userName = useUserName();
   const [updatedFirstName, setUpdatedFirstName] = createSignal<
@@ -302,10 +354,6 @@ export function Account() {
     return undefined;
   };
 
-  const logoutHandler = () => {
-    logout();
-  };
-
   const deleteAccountHandler = async () => {
     await authServiceClient.deleteUser();
     logout();
@@ -316,11 +364,24 @@ export function Account() {
         <div class="max-w-200 size-full">
           <Panel depth={2} class="h-full overflow-hidden text-ink">
           <Panel.Header class="px-6">
-            <div class="text-sm font-semibold">Account</div>
+            <div class="flex items-center gap-2">
+              <div class="text-sm font-semibold">Account</div>
+              <TeamSubscriptionPill show={isNonOwnerTeamMember()} />
+            </div>
           </Panel.Header>
 
           <Panel.Toolbar class="h-full w-full">
-            <Show when={permissions()?.includes(PERMISSION_IDS.WRITE_STRIPE_SUBSCRIPTION) && !isNativeMobilePlatform()}>
+            <Show
+              when={
+                permissions()?.includes(
+                  PERMISSION_IDS.WRITE_STRIPE_SUBSCRIPTION
+                ) &&
+                !isNativeMobilePlatform() &&
+                // Team members get the header pill instead of a card here, so
+                // skip the toolbar entirely rather than leaving it empty.
+                !(newPricingEnabled() && isNonOwnerTeamMember())
+              }
+            >
               <div class="px-4 py-2 w-full">
                 <ShowFeatureFlag
                   key="enable-new-pricing"
@@ -345,9 +406,6 @@ export function Account() {
                     <Match when={ownedTeam()}>
                       {(team) => <PaywallTeamOwnerView team={team()} />}
                     </Match>
-                    <Match when={isNonOwnerTeamMember()}>
-                      <PaywallTeamMemberView />
-                    </Match>
                   </Switch>
                 </ShowFeatureFlag>
               </div>
@@ -355,7 +413,7 @@ export function Account() {
           </Panel.Toolbar>
 
           <Panel.Body scroll class="text-ink">
-            <div class="grid gap-px bg-edge-muted border-b border-edge-muted">
+            <div class={cn('grid', SETTINGS_ROW_DIVIDERS)}>
               <Show when={ENABLE_PROFILE_PICTURES}>
                 <Show when={userId()} keyed>
                   {(id) => <ProfilePictureRow userId={id} />}
@@ -371,9 +429,17 @@ export function Account() {
               <Row label="First Name">
                 <NameInput
                   value={firstName()}
-                  onSave={(newValue) => {
-                    setUpdatedFirstName(newValue);
-                    authServiceClient.putUserName({ first_name: newValue });
+                  onSave={async (newValue) => {
+                    const prev = updatedFirstName();
+                    setUpdatedFirstName(newValue); // optimistic
+                    const res = await authServiceClient.putUserName({
+                      first_name: newValue,
+                    });
+                    if (res.isErr()) {
+                      setUpdatedFirstName(prev); // rollback
+                      return false;
+                    }
+                    return true;
                   }}
                   placeholder="Enter First Name"
                 />
@@ -382,30 +448,20 @@ export function Account() {
               <Row label="Last Name">
                 <NameInput
                   value={lastName()}
-                  onSave={(newValue) => {
-                    setUpdatedLastName(newValue);
-                    authServiceClient.putUserName({ last_name: newValue });
+                  onSave={async (newValue) => {
+                    const prev = updatedLastName();
+                    setUpdatedLastName(newValue); // optimistic
+                    const res = await authServiceClient.putUserName({
+                      last_name: newValue,
+                    });
+                    if (res.isErr()) {
+                      setUpdatedLastName(prev); // rollback
+                      return false;
+                    }
+                    return true;
                   }}
                   placeholder="Enter Last Name"
                 />
-              </Row>
-
-              <Row label="License Status">
-                <div class="flex items-center gap-3">
-                  <span class="text-sm text-ink-muted">
-                    {capitalize(licenseStatus() ?? '')}
-                  </span>
-                  <Show when={!hasPaidAccess()}>
-                    <Button
-                      variant="active"
-                      size="sm"
-                      depth={3}
-                      onClick={() => showPaywall()}
-                    >
-                      Upgrade
-                    </Button>
-                  </Show>
-                </div>
               </Row>
 
               <Show when={autoUpdateUIEnabled()}>
@@ -416,18 +472,20 @@ export function Account() {
               <NotificationToggle />
             </div>
 
-            <div class="flex items-center justify-center px-6 py-6">
-              <Button
-                variant="danger"
-                size="md"
-                depth={3}
-                class="px-4"
-                onClick={logoutHandler}
-              >
-                <SignOutIcon class="size-4" />
-                Logout
-              </Button>
-            </div>
+            <Show when={isMobile()}>
+              <div class="flex items-center justify-center px-6 py-6">
+                <Button
+                  variant="base"
+                  size="md"
+                  depth={3}
+                  class="px-4"
+                  onClick={() => logout()}
+                >
+                  <SignOutIcon class="size-4" />
+                  Log out
+                </Button>
+              </div>
+            </Show>
 
             <Show when={isNativeMobilePlatform()}>
               <div class="border-t border-edge pt-4">
@@ -511,13 +569,45 @@ function Row(props: { label: string; children?: any }) {
   );
 }
 
+/**
+ * Team members can't manage their subscription (the owner does), so instead of
+ * a full billing card we show a compact, informational pill next to the Account
+ * header with the explanation in a hover tooltip. Gated to the new-pricing
+ * rollout, matching where the team-member card used to appear.
+ */
+function TeamSubscriptionPill(props: { show: boolean }) {
+  return (
+    <Show when={props.show}>
+      <ShowFeatureFlag
+        key="enable-new-pricing"
+        enabledOverride={ENABLE_NEW_PRICING_OVERRIDE}
+      >
+        <Tooltip
+          label="Your subscription is managed by your team owner. Contact them to make changes."
+          placement="bottom"
+        >
+          <span class="inline-flex items-center gap-1.5 rounded-full border border-edge-muted px-2 py-0.5 text-xs font-medium text-ink-muted">
+            <UsersThreeIcon class="size-3.5 shrink-0 text-accent" />
+            Team Subscription
+          </span>
+        </Tooltip>
+      </ShowFeatureFlag>
+    </Show>
+  );
+}
+
+type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
+
 function NameInput(props: {
   value?: string;
   placeholder?: string;
-  onSave: (value: string) => void;
+  /** Returns whether the save succeeded so we can show status / revert. */
+  onSave: (value: string) => Promise<boolean>;
 }) {
   const [inputValue, setInputValue] = createSignal(props.value ?? '');
   const [isFocused, setIsFocused] = createSignal(false);
+  const [status, setStatus] = createSignal<SaveStatus>('idle');
+  let savedTimer: ReturnType<typeof setTimeout> | undefined;
 
   // Keep local input synced with external value, but don't clobber while typing.
   createEffect(() => {
@@ -526,10 +616,22 @@ function NameInput(props: {
     }
   });
 
-  const commit = () => {
+  onCleanup(() => clearTimeout(savedTimer));
+
+  const commit = async () => {
     const next = inputValue();
-    if (next === (props.value ?? '')) return;
-    props.onSave(next);
+    if (next === (props.value ?? '')) return; // nothing changed
+    clearTimeout(savedTimer);
+    setStatus('saving');
+    let ok = false;
+    try {
+      ok = await props.onSave(next);
+    } catch {
+      ok = false;
+    }
+    setStatus(ok ? 'saved' : 'error');
+    // Auto-clear the "Saved" check; leave the error visible until next edit.
+    if (ok) savedTimer = setTimeout(() => setStatus('idle'), 2000);
   };
 
   const handleKeyDown: JSX.EventHandler<HTMLInputElement, KeyboardEvent> = (
@@ -546,15 +648,18 @@ function NameInput(props: {
   };
 
   return (
-    <div class="ph-no-capture group relative flex items-center gap-1 rounded-lg h-7 mobile:h-9 px-2 border text-xs bg-transparent text-ink-muted border-edge-muted hover:text-ink focus-within:text-ink focus-within:border-accent">
+    <div class="ph-no-capture group relative flex items-center gap-1.5 rounded-lg h-7 mobile:h-9 px-2 border text-xs bg-transparent text-ink-muted border-edge-muted hover:text-ink focus-within:text-ink focus-within:border-accent">
       <input
         type="text"
         class="flex-1 min-w-0 bg-transparent outline-none border-0 p-0 text-xs placeholder:text-ink-extra-muted"
         value={inputValue()}
         onInput={(e) => setInputValue(e.currentTarget.value)}
-        onFocus={() => setIsFocused(true)}
+        onFocus={() => {
+          setIsFocused(true);
+          setStatus('idle'); // clear prior status while editing
+        }}
         onBlur={() => {
-          commit();
+          void commit();
           setIsFocused(false);
         }}
         onKeyDown={handleKeyDown}
@@ -563,6 +668,30 @@ function NameInput(props: {
         spellcheck={false}
         data-1p-ignore
       />
+      {/* Fixed-width slot so the status icon never widens / shifts the input. */}
+      <div class="flex size-3.5 shrink-0 items-center justify-center">
+        <Transition
+          mode="outin"
+          enterActiveClass="transition-opacity duration-200 ease-out"
+          enterClass="opacity-0"
+          exitActiveClass="transition-opacity duration-150 ease-in"
+          exitToClass="opacity-0"
+        >
+          <Switch>
+            <Match when={status() === 'saving'}>
+              <SpinnerIcon class="size-3.5 animate-spin text-ink-muted" />
+            </Match>
+            <Match when={status() === 'saved'}>
+              <CheckIcon class="size-3.5 text-success" />
+            </Match>
+            <Match when={status() === 'error'}>
+              <Tooltip label="Couldn't save — try again" placement="top">
+                <WarningCircleIcon class="size-3.5 text-failure" />
+              </Tooltip>
+            </Match>
+          </Switch>
+        </Transition>
+      </div>
     </div>
   );
 }
@@ -585,22 +714,18 @@ function NotificationSettings(props: {
 }) {
   const analytics = useAnalytics()
 
-  const handleToggle = () =>  {
+  const handleToggle = (checked: boolean) =>  {
     analytics.track('notifications_toggled')
-    props.settings.toggle(!props.settings.isEnabled())
+    props.settings.toggle(checked)
   }
 
 
   return (
     <Row label="Notifications">
-      <Button
-        variant="base"
-        size="sm"
-        depth={3}
-        onClick={handleToggle}
-      >
-        {props.settings.isEnabled() ? "Disable" : "Enable"}
-      </Button>
+      <ToggleSwitch
+        checked={props.settings.isEnabled()}
+        onChange={handleToggle}
+      />
     </Row>
   );
 }

@@ -15,6 +15,7 @@ import { ThemeChipPill } from '@theme/components/ThemeChipPill';
 import type { ThemeV2 } from '@theme/types/themeTypes';
 import { DropdownMenu as KobalteDropdownMenu } from '@kobalte/core/dropdown-menu';
 import { Button, cn, Dropdown, InlineCheckbox, Panel, ToggleSwitch } from '@ui';
+import { SETTINGS_ROW_DIVIDERS } from './settingsRowDividers';
 
 type PanelA = 'basic' | 'advanced';
 type PanelB ='themes' | 'ui'
@@ -80,7 +81,7 @@ function UserInterface() {
   const darkThemes = () => themes().filter((theme) => isTokensDark(theme.tokens));
 
   return (
-    <div class="flex flex-col">
+    <div class={cn('flex flex-col', SETTINGS_ROW_DIVIDERS)}>
       <div class="bg-surface flex items-center justify-between h-15.25 px-6">
         <div class="text-sm">Monochrome Icons</div>
         <ToggleSwitch
@@ -97,35 +98,38 @@ function UserInterface() {
         />
       </div>
 
-      <div class="bg-surface flex items-center justify-between h-15.25 px-6">
-        <div class="flex flex-col gap-0.5">
-          <div class="text-sm">Auto-detect color scheme</div>
-          <div class="text-xs text-ink-muted">
-            Switch theme with your system's light/dark mode
+      {/* Auto-detect and its dependent theme pickers form one group: keep the
+          divider above the group, but none between it and its sub-settings. */}
+      <div class="flex flex-col">
+        <div class="bg-surface flex items-center justify-between h-15.25 px-6">
+          <div class="flex flex-col gap-0.5">
+            <div class="text-sm">Auto-detect color scheme</div>
+            <div class="text-xs text-ink-muted">
+              Switch theme with your system's light/dark mode
+            </div>
           </div>
+          <ToggleSwitch
+            onChange={setThemeShouldMatchSystem}
+            checked={themeShouldMatchSystem()}
+          />
         </div>
-        <ToggleSwitch
-          onChange={setThemeShouldMatchSystem}
-          checked={themeShouldMatchSystem()}
+
+        <ThemePreferenceRow
+          label="Default light theme"
+          value={lightModeTheme}
+          options={lightThemes}
+          onSelect={setLightModeTheme}
+          disabled={() => !themeShouldMatchSystem()}
+        />
+
+        <ThemePreferenceRow
+          label="Default dark theme"
+          value={darkModeTheme}
+          options={darkThemes}
+          onSelect={setDarkModeTheme}
+          disabled={() => !themeShouldMatchSystem()}
         />
       </div>
-
-      <ThemePreferenceRow
-        label="Default light theme"
-        value={lightModeTheme}
-        options={lightThemes}
-        onSelect={setLightModeTheme}
-        disabled={() => !themeShouldMatchSystem()}
-      />
-
-      <ThemePreferenceRow
-        label="Default dark theme"
-        value={darkModeTheme}
-        options={darkThemes}
-        onSelect={setDarkModeTheme}
-        disabled={() => !themeShouldMatchSystem()}
-      />
-
     </div>
   );
 }

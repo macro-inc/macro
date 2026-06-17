@@ -1,6 +1,6 @@
 import { toast } from '@core/component/Toast/Toast';
 import { match } from 'ts-pattern';
-import { Button, Dialog, Panel, Tooltip } from '@ui';
+import { Button, cn, Dialog, Panel, Tooltip } from '@ui';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
   ENABLE_INBOX_RESYNC,
@@ -33,6 +33,7 @@ import {
   IntegrationPanelShell,
   StatusPill,
 } from './integration-ui';
+import { SETTINGS_ROW_DIVIDERS } from './settingsRowDividers';
 
 export function Email() {
   const email = useEmail();
@@ -79,6 +80,9 @@ export function Email() {
   });
 
   const hasAdditionalInboxes = createMemo(() => inboxes().others.length > 0);
+  const hasConnectedInboxes = createMemo(
+    () => inboxes().primary != null || inboxes().others.length > 0
+  );
 
   const onConnectEmail = async () => {
     if (isEmailActionPending()) return;
@@ -193,40 +197,23 @@ export function Email() {
             </ConnectionHero>
           }
         >
-          <div class="px-6 py-8 flex items-center gap-4 border-b border-edge-muted">
-            <div class="flex size-11 items-center justify-center rounded-xl bg-edge-muted shrink-0">
-              <WideEmailIcon class="size-5 text-ink" />
-            </div>
-            <div class="flex flex-col gap-1 min-w-0">
-              <div class="text-base font-semibold text-ink">
-                Connected inboxes
+          <Show when={!hasConnectedInboxes()}>
+            <div class="px-6 py-8 flex items-center gap-4 border-b border-edge-muted">
+              <div class="flex size-11 items-center justify-center rounded-xl bg-edge-muted shrink-0">
+                <WideEmailIcon class="size-5 text-ink" />
               </div>
-              <p class="text-sm text-ink-muted">
-                Gmail accounts Macro can read and act on.
-              </p>
+              <div class="flex flex-1 flex-col gap-1 min-w-0">
+                <div class="text-base font-semibold text-ink">
+                  Connected inboxes
+                </div>
+                <p class="text-sm text-ink-muted">
+                  Gmail accounts Macro can read and act on.
+                </p>
+              </div>
             </div>
-            <Show when={multiInboxFlag().enabled}>
-              <Show
-                when={!emailLinksQuery.isLoading}
-                fallback={
-                  <span class="ml-auto text-sm text-ink-muted">Loading…</span>
-                }
-              >
-                <Button
-                  variant="active"
-                  size="sm"
-                  depth={3}
-                  class="ml-auto shrink-0"
-                  onClick={() => guardAddInbox(openAddInboxDialog)}
-                >
-                  <PlusIcon class="size-4" />
-                  Add inbox
-                </Button>
-              </Show>
-            </Show>
-          </div>
+          </Show>
 
-          <div class="grid gap-px bg-edge-muted border-b border-edge-muted">
+          <div class={cn('grid', SETTINGS_ROW_DIVIDERS)}>
             <Show when={inboxes().primary}>
               {(primary) => (
                 <InboxRow
@@ -271,6 +258,26 @@ export function Email() {
                 />
               )}
             </For>
+            <Show when={multiInboxFlag().enabled}>
+              <div class="px-6 py-4 flex justify-center">
+                <Show
+                  when={!emailLinksQuery.isLoading}
+                  fallback={
+                    <span class="text-sm text-ink-muted">Loading…</span>
+                  }
+                >
+                  <Button
+                    variant="active"
+                    size="sm"
+                    depth={3}
+                    onClick={() => guardAddInbox(openAddInboxDialog)}
+                  >
+                    <PlusIcon class="size-4" />
+                    Add inbox
+                  </Button>
+                </Show>
+              </div>
+            </Show>
           </div>
         </Show>
       </Show>

@@ -37,6 +37,7 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { InCallPanel } from '@channel/Call';
 import { useCallContextOptional } from '@channel/Call/CallContext';
 import { useHasPaidAccess } from '@core/auth';
+import { useLogout } from '@core/auth/logout';
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
 import { inboxIconProps } from '@core/component/inboxIcon';
 import { UserIcon } from '@core/component/UserIcon';
@@ -82,6 +83,7 @@ import CaretDownIcon from '@phosphor/caret-down.svg';
 import CaretUpIcon from '@phosphor/caret-up.svg';
 import HomeIcon from '@phosphor/house.svg';
 import PlayIcon from '@phosphor/play.svg';
+import SignOutIcon from '@phosphor/sign-out.svg';
 import { useEmailLinksQuery } from '@queries/email/link';
 import { debounce } from '@solid-primitives/scheduled';
 import { makePersisted } from '@solid-primitives/storage';
@@ -640,6 +642,7 @@ const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
   const userId = useUserId();
   const [onboardingModalOpen, setOnboardingModalOpen] = createSignal(false);
   const { groups: settingGroups } = useSettingsTabs();
+  const logout = useLogout();
 
   return (
     <Dropdown placement="top-start" gutter={6}>
@@ -712,6 +715,17 @@ const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
             </Dropdown.Group>
           )}
         </For>
+        <Dropdown.Group>
+          <Dropdown.Item
+            class="flex items-center gap-2 px-2.5 py-2 text-sm cursor-default outline-none text-ink-muted"
+            onSelect={() => logout()}
+          >
+            <span class="size-5 flex items-center justify-center">
+              <SignOutIcon class="size-4 shrink-0 text-ink-extra-muted" />
+            </span>
+            <span class="text-ink">Log out</span>
+          </Dropdown.Item>
+        </Dropdown.Group>
       </Dropdown.Content>
       <InteractiveOnboardingModal
         open={onboardingModalOpen()}

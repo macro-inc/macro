@@ -9,6 +9,8 @@ import EnvelopeIcon from '@phosphor/envelope.svg';
 import XIcon from '@phosphor/x.svg';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
+import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
+import PencilSimpleIcon from '@phosphor/pencil-simple.svg';
 
 import { Tooltip } from '@ui';
 import { Button } from '@ui';
@@ -22,6 +24,7 @@ import {
   createSignal,
   For,
   Index,
+  mapArray,
   Match,
   Show,
   Suspense,
@@ -55,11 +58,21 @@ import { usePaywallState } from '@core/constant/PaywallState';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { z } from 'zod';
 import { getTeamSlugError, normalizeTeamSlugInput } from './teamSlug';
+import { SETTINGS_ROW_DIVIDER } from './settingsRowDividers';
 
 function useRequiresPaidUpgrade() {
   const hasPaidAccess = useHasPaidAccess();
   const newPricingFlag = useFeatureFlag('enable-new-pricing');
   return createMemo(() => newPricingFlag().enabled && !hasPaidAccess());
+}
+
+/** Subsequence fuzzy match: every char of `query` appears in order within `text`. */
+function fuzzyMatch(text: string, query: string): boolean {
+  let qi = 0;
+  for (let i = 0; i < text.length && qi < query.length; i++) {
+    if (text[i] === query[qi]) qi++;
+  }
+  return qi === query.length;
 }
 
 const roleOrder: Record<string, number> = {
@@ -307,9 +320,10 @@ function MemberRow(props: {
 
   return (
     <div
-      class="flex items-center justify-between py-2 px-6 gap-2 bg-surface hover:bg-hover"
-      classList={{ 'border-b': !props.isLast }}
-      style={{ 'border-color': 'var(--b3)' }}
+      class={cn(
+        'relative flex items-center justify-between py-2 px-6 gap-2 bg-surface hover:bg-hover',
+        !props.isLast && SETTINGS_ROW_DIVIDER
+      )}
     >
       <div class="flex items-center gap-3 min-w-0 flex-1">
         <div class="shrink-0">
@@ -786,6 +800,8 @@ function TeamManagement(props: {
   const [editingTeamName, setEditingTeamName] = createSignal<
     string | undefined
   >(undefined);
+  const [isEditingName, setIsEditingName] = createSignal(false);
+  let nameInputRef: HTMLInputElement | undefined;
   const [editingTeamSlug, setEditingTeamSlug] = createSignal<
     string | undefined
   >(undefined);
@@ -867,11 +883,43 @@ function TeamManagement(props: {
     });
   });
 
+  const [memberQuery, setMemberQuery] = createSignal('');
+
+  // Resolve each member's display name reactively. `mapArray` keeps one stable
+  // name lookup per member (not recreated on every keystroke / re-render), and
+  // disposes it when the member leaves the list.
+  const memberSearchIndex = mapArray(members, (member) => {
+    const macroId = tryMacroId(member.user_id);
+    const [displayName] = useDisplayName(macroId);
+    const email = macroId ? macroIdToEmail(macroId) : '';
+    return {
+      member,
+      haystack: () => `${displayName()} ${email}`.toLowerCase(),
+    };
+  });
+
+  // Only worth showing the filter once the list is long enough to scan.
+  const showMemberSearch = () => members().length > 5;
+
+  const filteredMembers = createMemo(() => {
+    const q = memberQuery().trim().toLowerCase();
+    if (!q) return members();
+    return memberSearchIndex()
+      .filter((entry) => fuzzyMatch(entry.haystack(), q))
+      .map((entry) => entry.member);
+  });
+
   const isOwner = createMemo(() => {
     const currentUserId = userId();
     if (!currentUserId) return false;
     return props.ownerId === currentUserId;
   });
+
+  const startEditingName = () => {
+    setEditingTeamName(props.teamName);
+    setIsEditingName(true);
+    requestAnimationFrame(() => nameInputRef?.focus());
+  };
 
   const handleSaveTeamName = () => {
     const newName = editingTeamName()?.trim();
@@ -879,12 +927,18 @@ function TeamManagement(props: {
 
     patchTeamMutation.mutate(
       { teamId: props.teamId, request: { name: newName } },
-      { onSuccess: () => setEditingTeamName(undefined) }
+      {
+        onSuccess: () => {
+          setEditingTeamName(undefined);
+          setIsEditingName(false);
+        },
+      }
     );
   };
 
   const handleCancelTeamNameEdit = () => {
     setEditingTeamName(undefined);
+    setIsEditingName(false);
   };
 
   const validateTeamSlug = (slug: string) => {
@@ -995,7 +1049,78 @@ function TeamManagement(props: {
   return (
       <>
         <Panel.Header class="justify-between px-6">
-          <div class="text-sm font-semibold">Team</div>
+          <div class="flex items-center gap-1.5 min-w-0 text-sm font-semibold">
+            <span class="shrink-0">Team</span>
+            <span class="shrink-0 text-ink-muted">•</span>
+            <Show
+              when={isOwner()}
+              fallback={
+                <span class="truncate text-ink">{props.teamName}</span>
+              }
+            >
+              <Show
+                when={isEditingName()}
+                fallback={
+                  <Tooltip label="Rename team">
+                    <button
+                      type="button"
+                      class="group -mx-1 flex min-w-0 items-center gap-1 rounded px-1 hover:bg-hover"
+                      onClick={startEditingName}
+                    >
+                      <span class="truncate text-ink">{props.teamName}</span>
+                      <PencilSimpleIcon class="size-3 shrink-0 text-ink-muted opacity-0 group-hover:opacity-100" />
+                    </button>
+                  </Tooltip>
+                }
+              >
+                <div class="flex min-w-0 items-center gap-1">
+                  <input
+                    ref={nameInputRef}
+                    type="text"
+                    value={teamNameValue()}
+                    onInput={(e) => setEditingTeamName(e.currentTarget.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleSaveTeamName();
+                      if (e.key === 'Escape') handleCancelTeamNameEdit();
+                    }}
+                    placeholder="Team name"
+                    class="w-40 min-w-0 border-b border-edge-muted bg-transparent text-ink outline-none focus:border-accent"
+                  />
+                  <Tooltip label="Save">
+                    <Button
+                      variant="active"
+                      size="icon-sm"
+                      class="rounded-xs"
+                      disabled={
+                        patchTeamMutation.isPending ||
+                        !editingTeamName()?.trim() ||
+                        !hasTeamNameChanged()
+                      }
+                      onClick={handleSaveTeamName}
+                    >
+                      <Show
+                        when={patchTeamMutation.isPending}
+                        fallback={<CheckIcon class="size-4" />}
+                      >
+                        <SpinnerIcon class="size-4 animate-spin" />
+                      </Show>
+                    </Button>
+                  </Tooltip>
+                  <Tooltip label="Cancel">
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      class="rounded-xs"
+                      disabled={patchTeamMutation.isPending}
+                      onClick={handleCancelTeamNameEdit}
+                    >
+                      <XIcon class="size-4" />
+                    </Button>
+                  </Tooltip>
+                </div>
+              </Show>
+            </Show>
+          </div>
           <Show when={isOwner()}>
             <div class="flex items-center gap-2">
               <Button
@@ -1032,59 +1157,14 @@ function TeamManagement(props: {
         <Panel.Body>
          <div class="flex h-full flex-col">
           <div class="flex flex-col gap-2 px-2 py-2 border-b border-edge-muted shrink-0">
-            <div class="flex items-center justify-between w-full border border-edge rounded-sm px-4 py-2">
-              <span class="text-sm text-ink-muted">Name</span>
-              <Show
-                when={isOwner()}
-                fallback={<span class="text-sm text-ink">{props.teamName}</span>}
-              >
-                <div class="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={teamNameValue()}
-                    onInput={(e) => setEditingTeamName(e.currentTarget.value)}
-                    placeholder="Enter team name"
-                    class="text-sm bg-surface border-none outline-none text-ink text-right w-48"
-                  />
-                  <Show when={hasTeamNameChanged()}>
-                    <div class="flex items-center gap-1 shrink-0">
-                      <Tooltip label="Save">
-                        <Button
-                          variant="active"
-                          size="icon-sm"
-                          class="rounded-xs"
-                          disabled={
-                            patchTeamMutation.isPending ||
-                            !editingTeamName()?.trim()
-                          }
-                          onClick={handleSaveTeamName}
-                        >
-                          <Show
-                            when={patchTeamMutation.isPending}
-                            fallback={<CheckIcon class="size-4" />}
-                          >
-                            <SpinnerIcon class="size-4 animate-spin" />
-                          </Show>
-                        </Button>
-                      </Tooltip>
-                      <Tooltip label="Cancel">
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          class="rounded-xs"
-                          disabled={patchTeamMutation.isPending}
-                          onClick={handleCancelTeamNameEdit}
-                        >
-                          <XIcon class="size-4" />
-                        </Button>
-                      </Tooltip>
-                    </div>
-                  </Show>
-                </div>
-              </Show>
-            </div>
-            <div class="flex items-center justify-between w-full border border-edge rounded-sm px-4 py-2 gap-3">
-              <span class="text-sm text-ink-muted">Slug</span>
+            <div class="flex items-center justify-between w-full px-4 py-2 gap-3">
+              <div class="flex flex-col gap-0.5 min-w-0">
+                <span class="text-sm">Slug</span>
+                <span class="text-xs text-ink-muted">
+                  Short code in task references like ENG-42 (GitHub, branch
+                  names).
+                </span>
+              </div>
               <Show
                 when={isOwner()}
                 fallback={
@@ -1155,6 +1235,31 @@ function TeamManagement(props: {
             </div>
           </div>
 
+          <Show when={showMemberSearch()}>
+            <div class="px-6 py-2 shrink-0">
+              <label class="flex items-center gap-2 h-8 px-2.5 rounded-lg border border-edge-muted text-ink-muted focus-within:border-accent focus-within:text-ink">
+                <MagnifyingGlassIcon class="size-4 shrink-0" />
+                <input
+                  type="text"
+                  value={memberQuery()}
+                  onInput={(e) => setMemberQuery(e.currentTarget.value)}
+                  placeholder="Filter members"
+                  class="flex-1 min-w-0 bg-transparent text-sm text-ink outline-none placeholder:text-ink-extra-muted"
+                />
+                <Show when={memberQuery()}>
+                  <button
+                    type="button"
+                    class="shrink-0 text-ink-muted hover:text-ink"
+                    aria-label="Clear filter"
+                    onClick={() => setMemberQuery('')}
+                  >
+                    <XIcon class="size-4" />
+                  </button>
+                </Show>
+              </label>
+            </div>
+          </Show>
+
           <div class="relative min-h-0 flex-1">
             <Show
               when={!teamQuery.isLoading}
@@ -1162,43 +1267,52 @@ function TeamManagement(props: {
                 <div class="animate-pulse bg-ink-extra-muted rounded h-16" />
               }
             >
-              <div
-                ref={setMemberListWrapperRef}
-                class="relative h-full min-h-0"
+              <Show
+                when={filteredMembers().length > 0}
+                fallback={
+                  <div class="flex justify-center px-6 pt-4 text-center text-sm text-ink-muted">
+                    No members match “{memberQuery()}”
+                  </div>
+                }
               >
-                <VList
-                  data={members()}
-                  class="h-full scrollbar-hidden"
-                  style={{
-                    height: '100%',
-                    width: '100%',
-                  }}
-                  bufferSize={500}
-                  data-team-members-list-container
+                <div
+                  ref={setMemberListWrapperRef}
+                  class="relative h-full min-h-0"
                 >
-                  {(member, index) => (
-                    <MemberRow
-                      member={member}
-                      isOwner={isOwner()}
-                      isCurrentUser={member.user_id === userId()}
-                      isLast={index() === members().length - 1}
-                      onRemove={() => setShowRemoveModal(member)}
-                      onRoleChange={(newRole) => {
-                        if (!props.teamId) return;
-                        patchTeamMutation.mutate({
-                          teamId: props.teamId,
-                          request: {
-                            user_role_updates: [
-                              { team_user_id: member.user_id, role: newRole },
-                            ],
-                          },
-                        });
-                      }}
-                    />
-                  )}
-                </VList>
-                <CustomScrollbar scrollContainer={memberListScrollContainer} />
-              </div>
+                  <VList
+                    data={filteredMembers()}
+                    class="h-full scrollbar-hidden"
+                    style={{
+                      height: '100%',
+                      width: '100%',
+                    }}
+                    bufferSize={500}
+                    data-team-members-list-container
+                  >
+                    {(member, index) => (
+                      <MemberRow
+                        member={member}
+                        isOwner={isOwner()}
+                        isCurrentUser={member.user_id === userId()}
+                        isLast={index() === filteredMembers().length - 1}
+                        onRemove={() => setShowRemoveModal(member)}
+                        onRoleChange={(newRole) => {
+                          if (!props.teamId) return;
+                          patchTeamMutation.mutate({
+                            teamId: props.teamId,
+                            request: {
+                              user_role_updates: [
+                                { team_user_id: member.user_id, role: newRole },
+                              ],
+                            },
+                          });
+                        }}
+                      />
+                    )}
+                  </VList>
+                  <CustomScrollbar scrollContainer={memberListScrollContainer} />
+                </div>
+              </Show>
             </Show>
           </div>
 
