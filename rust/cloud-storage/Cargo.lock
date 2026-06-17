@@ -3237,6 +3237,7 @@ dependencies = [
  "aws_lambda_events",
  "lambda_runtime",
  "macro_entrypoint",
+ "macro_env_var",
  "macro_uuid",
  "sqlx",
  "tokio",
