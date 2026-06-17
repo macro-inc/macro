@@ -15,18 +15,28 @@ use models_properties::{EntityReference, EntityType as PropertiesEntityType};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+/// A single item in the Soup feed.
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase", tag = "tag", content = "data")]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub enum SoupItem {
+    /// Document item.
     Document(SoupDocument),
+    /// Chat item.
     Chat(SoupChat),
+    /// Project item.
     Project(SoupProject),
+    /// Email thread item.
     EmailThread(SoupEnrichedEmailThreadPreview),
+    /// Channel item.
     Channel(SoupChannel),
+    /// Channel thread item.
     ChannelThread(SoupChannelThread),
+    /// Call record item.
     Call(SoupCallRecord),
+    /// CRM company item.
     CrmCompany(SoupCrmCompany),
+    /// Foreign entity item.
     ForeignEntity(SoupForeignEntity),
 }
 
@@ -64,6 +74,7 @@ impl SoupItem {
         }
     }
 
+    /// Returns the timestamp used as this item's update time.
     pub fn updated_at(&self) -> DateTime<Utc> {
         match self {
             SoupItem::Document(soup_document) => soup_document.updated_at,

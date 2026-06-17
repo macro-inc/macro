@@ -101,14 +101,19 @@ pub struct LatestMessage {
     pub latest_non_thread_message: Option<ChannelMessage>,
 }
 
+/// A channel as displayed in Soup.
 #[derive(Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct SoupChannel {
+    /// Channel metadata and participants.
     #[serde(flatten)]
     pub channel: ChannelWithParticipants,
+    /// Latest message metadata for the channel.
     #[serde(flatten)]
     pub latest_message: LatestMessage,
+    /// Timestamp when the requesting user last viewed this channel.
     pub viewed_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// Timestamp when the requesting user last interacted with this channel.
     pub interacted_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
@@ -140,26 +145,36 @@ impl SoupChannelThread {
     }
 }
 
+/// Channel metadata together with its participants.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct ChannelWithParticipants {
+    /// Channel metadata.
     pub channel: Channel,
+    /// Participants in the channel.
     pub participants: Vec<ChannelParticipant>,
 }
 
+/// A user's membership in a channel.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct ChannelParticipant {
+    /// Channel id for the participant membership.
     #[cfg_attr(feature = "schema", schema(value_type = Uuid))]
     pub channel_id: ChannelId,
+    /// Participant user id.
     #[cfg_attr(feature = "schema", schema(value_type = String))]
     pub user_id: macro_user_id::user_id::MacroUserIdStr<'static>,
+    /// Participant role in the channel.
     pub role: ParticipantRole,
+    /// Timestamp when the participant joined the channel.
     pub joined_at: chrono::DateTime<chrono::Utc>,
+    /// Timestamp when the participant left the channel, if any.
     pub left_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 impl ChannelType {
+    /// Converts a channels-domain channel type into the Soup channel type.
     pub fn new_from_channels(channel_type: channels::domain::models::ChannelType) -> Self {
         match channel_type {
             channels::domain::models::ChannelType::Public => Self::Public,
@@ -171,6 +186,7 @@ impl ChannelType {
 }
 
 impl ParticipantRole {
+    /// Converts a channels-domain participant role into the Soup participant role.
     pub fn new_from_channels(role: channels::domain::models::ParticipantRole) -> Self {
         match role {
             channels::domain::models::ParticipantRole::Owner => Self::Owner,
@@ -181,6 +197,7 @@ impl ParticipantRole {
 }
 
 impl Channel {
+    /// Converts a channels-domain list item into Soup channel metadata.
     pub fn new_from_channels(channel: channels::domain::models::ChannelListItem) -> Self {
         Self {
             id: ChannelId(channel.id),
@@ -199,6 +216,7 @@ impl Channel {
 }
 
 impl ChannelMessage {
+    /// Converts a channels-domain recent message into a Soup channel message.
     pub fn new_from_recent_channel_message(
         message: channels::domain::models::RecentChannelMessage,
     ) -> Self {
@@ -214,6 +232,7 @@ impl ChannelMessage {
         }
     }
 
+    /// Converts a channels-domain channel message into a Soup channel message.
     pub fn new_from_channel_message(message: channels::domain::models::ChannelMessage) -> Self {
         Self {
             message_id: message.id,
@@ -227,6 +246,7 @@ impl ChannelMessage {
         }
     }
 
+    /// Converts a channels-domain thread reply into a Soup channel message.
     pub fn new_from_thread_reply(
         parent_id: Uuid,
         reply: channels::domain::models::ThreadReply,
@@ -245,6 +265,7 @@ impl ChannelMessage {
 }
 
 impl LatestMessage {
+    /// Converts channels-domain latest message data into Soup latest message data.
     pub fn new_from_channels(latest_message: channels::domain::models::LatestMessage) -> Self {
         Self {
             latest_message: latest_message
@@ -258,6 +279,7 @@ impl LatestMessage {
 }
 
 impl ChannelParticipant {
+    /// Converts a channels-domain participant into a Soup participant.
     pub fn try_new_from_channels(
         participant: channels::domain::models::ChannelParticipant,
     ) -> Result<Self, macro_user_id::error::ParseErr> {
@@ -272,6 +294,7 @@ impl ChannelParticipant {
 }
 
 impl ChannelWithParticipants {
+    /// Converts channels-domain metadata and participants into the Soup shape.
     pub fn new_from_channels(channel: channels::domain::models::ChannelWithParticipants) -> Self {
         Self {
             channel: Channel::new_from_channels(channel.channel),
@@ -287,6 +310,7 @@ impl ChannelWithParticipants {
 }
 
 impl SoupChannel {
+    /// Converts channels-domain channel data with latest messages into Soup.
     pub fn new_from_channels(channel: channels::domain::models::ChannelWithLatest) -> Self {
         Self {
             channel: ChannelWithParticipants::new_from_channels(channel.channel),
@@ -298,6 +322,7 @@ impl SoupChannel {
 }
 
 impl SoupChannelThread {
+    /// Converts a channels-domain channel message with preview replies into a Soup thread.
     pub fn new_from_channel_message(message: channels::domain::models::ChannelMessage) -> Self {
         let channels::domain::models::ChannelMessage {
             id,
@@ -332,6 +357,7 @@ impl SoupChannelThread {
         }
     }
 
+    /// Converts a channels-domain channel message and replies into a Soup thread.
     pub fn new_from_channel_message_and_replies(
         message: channels::domain::models::ChannelMessage,
         replies: Vec<channels::domain::models::ThreadReply>,
