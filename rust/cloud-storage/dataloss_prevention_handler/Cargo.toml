@@ -13,6 +13,7 @@ aws-sdk-sns = { workspace = true }
 aws_lambda_events = { workspace = true, features = ["s3"] }
 lambda_runtime = { workspace = true }
 macro_entrypoint = { path = "../macro_entrypoint" }
+macro_env_var = { path = "../macro_env_var" }
 s3_client = { path = "../s3_client" }
 sns_client = { path = "../sns_client" }
 tokio = { workspace = true }

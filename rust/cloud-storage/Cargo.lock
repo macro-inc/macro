@@ -3173,6 +3173,7 @@ dependencies = [
  "lambda_runtime",
  "macro_aws_config",
  "macro_entrypoint",
+ "macro_env_var",
  "s3_client",
  "sns_client",
  "tokio",
