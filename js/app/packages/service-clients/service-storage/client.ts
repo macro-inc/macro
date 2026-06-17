@@ -380,8 +380,7 @@ export const storageServiceClient = {
 
     if (result.isErr()) {
       const isForbidden = result.error.some(
-        (error) =>
-          error.code === 'FORBIDDEN' || error.message.includes('403')
+        (error) => error.code === 'FORBIDDEN' || error.message.includes('403')
       );
 
       if (isForbidden) {

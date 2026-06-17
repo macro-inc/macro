@@ -168,9 +168,7 @@ describe('createAIProjection', () => {
     expect(projection.generatedAt()).toEqual(
       new Date('2026-06-17T16:00:00.000Z')
     );
-    expect(projection.staleAt()).toEqual(
-      new Date('2026-06-17T17:00:00.000Z')
-    );
+    expect(projection.staleAt()).toEqual(new Date('2026-06-17T17:00:00.000Z'));
 
     dispose();
   });
