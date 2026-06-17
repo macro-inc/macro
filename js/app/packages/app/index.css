@@ -189,6 +189,9 @@
   --z-index-modal-overlay: 100;
   --z-index-modal:         110;
   --z-index-modal-content: 120;
+  /* Dropdowns/popovers (`z-action-menu`). Above modal content so menus opened
+     from inside a modal render on top of it, below tooltips. */
+  --z-index-action-menu:   150;
   --z-index-tool-tip:      200;
 
   /* Soft drop shadow for floating menus/popovers (use the `shadow-menu` utility). */
