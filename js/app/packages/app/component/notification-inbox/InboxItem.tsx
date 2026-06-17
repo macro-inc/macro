@@ -2,7 +2,6 @@ import { UserIcon } from '@core/component/UserIcon';
 import { macroIdToEmail, tryMacroId, useDisplayName } from '@core/user';
 import type { EntityData } from '@entity';
 import type { UnifiedNotification } from '@notifications/types';
-import CaretRightIcon from '@phosphor-icons/core/regular/caret-right.svg?component-solid';
 import { Property } from '@property';
 import type { Property as PropertyT } from '@property/types';
 import { Avatar, Button, type ButtonProps, cn, Layer } from '@ui';
@@ -161,17 +160,11 @@ function Leading(props: SlotProps) {
 
 function UnreadIndicator(props: { unread?: boolean; class?: string }) {
   const ctx = useInboxItem();
-  const grouped = () => Boolean(ctx.item().subItems?.length);
+  const unread = () => props.unread ?? ctx.unread();
 
   return (
-    <Show when={grouped()}>
-      <CaretRightIcon
-        class={cn(
-          'size-2.5 text-ink-extra-muted transition-transform',
-          ctx.expanded() && 'rotate-90',
-          props.class
-        )}
-      />
+    <Show when={unread()}>
+      <span class={cn('size-2 rounded-full bg-accent', props.class)} />
     </Show>
   );
 }

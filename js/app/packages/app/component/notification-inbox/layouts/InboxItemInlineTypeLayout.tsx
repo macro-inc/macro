@@ -16,7 +16,7 @@ import GitMergeIcon from '@phosphor-icons/core/regular/git-merge.svg?component-s
 import GitPullRequestIcon from '@phosphor-icons/core/regular/git-pull-request.svg?component-solid';
 import PhoneIcon from '@phosphor-icons/core/regular/phone.svg?component-solid';
 import UsersIcon from '@phosphor-icons/core/regular/users.svg?component-solid';
-import { Avatar, cn, Layer } from '@ui';
+import { Avatar, Layer } from '@ui';
 import { For, Match, Show, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
 import { InboxItem, PropertyPill, useInboxItem } from '../InboxItem';
@@ -392,23 +392,8 @@ function unreadGroupLabel(type: ReturnType<typeof useNotificationType>) {
 }
 
 function ActionRow() {
-  const { item, unread } = useInboxItem();
+  const { item } = useInboxItem();
   const action = actionText();
-  const groupCount = () => {
-    const count = (item().subItems?.length ?? 0) + 1;
-    return count > 1 ? count : undefined;
-  };
-  const unreadSubItemCount = () =>
-    item().subItems?.filter((subItem) => subItem.unread).length ?? 0;
-  const unreadGroupCount = () => (item().unread ? 1 : 0) + unreadSubItemCount();
-  const showUnreadDot = () => {
-    if (groupCount()) return false;
-    return unread() || item().unread;
-  };
-  const badgeCount = () => {
-    if (unreadGroupCount() > 0) return unreadGroupCount();
-    return groupCount();
-  };
 
   return (
     <div class="flex min-w-0 items-center gap-1 text-xs text-ink-extra-muted/70">
@@ -435,34 +420,31 @@ function ActionRow() {
       <For each={item().properties ?? []}>
         {(property) => <PropertyPill property={property} />}
       </For>
-      <Show
-        when={showUnreadDot()}
-        fallback={
-          <Show when={badgeCount()}>
-            {(count) => (
-              <Layer depth={5}>
-                <span
-                  class={cn(
-                    'grid h-4 min-w-4 shrink-0 place-items-center rounded px-1 text-xs',
-                    unreadGroupCount() > 0
-                      ? 'bg-accent text-surface'
-                      : 'bg-ink-muted/10 text-ink-muted'
-                  )}
-                >
-                  {count()}
-                </span>
-              </Layer>
-            )}
-          </Show>
-        }
-      >
-        <span class="size-2 shrink-0 rounded-full bg-accent" />
-      </Show>
+    </div>
+  );
+}
+
+function TimestampColumn() {
+  const { item } = useInboxItem();
+  const groupCount = () => {
+    const count = (item().subItems?.length ?? 0) + 1;
+    return count > 1 ? count : undefined;
+  };
+
+  return (
+    <div class="flex h-full flex-col items-end justify-between pt-0.5">
       <Show when={item().timestamp}>
         {(timestamp) => (
-          <InboxItem.Timestamp class="ml-auto">
-            {timestamp()}
-          </InboxItem.Timestamp>
+          <InboxItem.Timestamp>{timestamp()}</InboxItem.Timestamp>
+        )}
+      </Show>
+      <Show when={groupCount()}>
+        {(count) => (
+          <Layer depth={5}>
+            <span class="grid h-4 min-w-4 place-items-center rounded bg-ink-muted/10 px-1 text-xs text-ink-muted">
+              {count()}
+            </span>
+          </Layer>
         )}
       </Show>
     </div>
@@ -479,12 +461,15 @@ export function InboxItemInlineTypeLayout(
       </InboxItem.Leading>
       <ActorIcon />
       <InboxItem.Body>
-        <div class="flex min-w-0 flex-col gap-1">
-          <ActionRow />
-          <div class="flex min-w-0 flex-col">
-            <TitleRow />
-            <Description />
+        <div class="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-x-2">
+          <div class="flex min-w-0 flex-col gap-1">
+            <ActionRow />
+            <div class="flex min-w-0 flex-col">
+              <TitleRow />
+              <Description />
+            </div>
           </div>
+          <TimestampColumn />
         </div>
       </InboxItem.Body>
     </InboxItem.Content>
