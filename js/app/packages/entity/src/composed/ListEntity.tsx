@@ -200,9 +200,11 @@ export function ListEntity(props: ListEntityProps) {
         'soup-list-entity rounded-lg @container/entity w-[calc(100%-0.5rem)] mr-1 relative group/narrow flex flex-col py-0.5',
         {
           'min-h-10 mx-1': !isMobile(),
+          // Selection / focus / hover are expressed via background only — no
+          // ring or border (borders are reserved for structural UI edges).
           'bg-accent/8': props.checked,
-          'ring ring-accent/16 ring-inset': props.checked && props.highlighted,
-          'ring ring-edge bg-active/60 ring-inset':
+          'bg-accent/16': props.checked && props.highlighted,
+          'bg-active/60':
             props.highlighted && !props.checked && !isTouchDevice(),
           'hover:bg-active/30':
             !props.highlighted && !props.checked && !isTouchDevice(),

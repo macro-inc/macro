@@ -156,7 +156,7 @@ function AlignmentOption(props: {
 }) {
   return (
     <div
-      class="size-6 mx-1 flex justify-center items-center rounded-sm hover:bg-hover hover-transition-bg hover:border hover:border-edge"
+      class="size-6 mx-1 flex justify-center items-center rounded-sm hover:bg-hover hover-transition-bg"
       onClick={() => {
         props.onClick(props.alignment);
       }}

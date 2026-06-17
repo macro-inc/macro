@@ -457,9 +457,10 @@ a {
 
 /* Channel message hover + non-selection highlight */
 /* Suppressed on touch devices */
+/* Background-only — borders/rings are reserved for structural UI edges. */
 html:not([data-touch-device="true"]) [data-message][data-highlighted],
 html:not([data-touch-device="true"]) [data-message]:hover{
-  @apply bg-ink/3 rounded-sm ring ring-edge ring-inset;
+  @apply bg-ink/5 rounded-sm;
 }
 
 /* Channel message long-press animation */
