@@ -8645,6 +8645,7 @@ dependencies = [
  "lambda_runtime",
  "macro_aws_config",
  "macro_entrypoint",
+ "macro_env_var",
  "serde_json",
  "sqlx",
  "sqs_client",

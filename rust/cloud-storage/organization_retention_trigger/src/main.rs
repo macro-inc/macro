@@ -9,7 +9,13 @@ use lambda_runtime::{
     tracing::{self},
 };
 use macro_entrypoint::MacroEntrypoint;
+use macro_env_var::env_vars;
 use sqlx::postgres::PgPoolOptions;
+
+env_vars! {
+    struct DatabaseUrl;
+    struct OrganizationRetentionQueue;
+}
 
 #[tracing::instrument(skip(db, sqs_client, event))]
 async fn handler(
@@ -34,24 +40,24 @@ async fn main() -> Result<(), Error> {
 
     tracing::info!("initiating lambda");
 
-    let database_url = std::env::var("DATABASE_URL").context("DATABASE_URL must be set")?;
+    let database_url = DatabaseUrl::new().context("DATABASE_URL must be set")?;
     let db = service::db::DB::new(
         PgPoolOptions::new()
             .min_connections(1)
             .max_connections(1) // we only ever need one connection per lambda
-            .connect(&database_url)
+            .connect(database_url.as_ref())
             .await
             .context("could not connect to db")?,
     );
 
     tracing::trace!("initialized db client");
 
-    let organization_retention_queue = std::env::var("ORGANIZATION_RETENTION_QUEUE")
-        .context("ORGANIZATION_RETENTION_QUEUE must be set")?;
+    let organization_retention_queue =
+        OrganizationRetentionQueue::new().context("ORGANIZATION_RETENTION_QUEUE must be set")?;
     let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(
         &macro_aws_config::get_macro_aws_config().await,
     ))
-    .organization_retention_queue(&organization_retention_queue);
+    .organization_retention_queue(organization_retention_queue.as_ref());
 
     tracing::trace!("initialized ecs client");
 
