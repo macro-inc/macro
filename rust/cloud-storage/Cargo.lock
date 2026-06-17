@@ -3591,6 +3591,7 @@ dependencies = [
 name = "document_storage_service"
 version = "0.1.0"
 dependencies = [
+ "ai_projections",
  "ai_tools",
  "ai_usage",
  "analytics_client",

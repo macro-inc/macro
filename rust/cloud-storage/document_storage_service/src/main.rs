@@ -7,6 +7,14 @@ use crate::{
     },
     service::s3::S3,
 };
+use ai_projections::{
+    domain::service::AiProjectionServiceImpl,
+    inbound::axum_router::AIProjectionRouterState,
+    outbound::{
+        agent_generator::AgentProjectionGenerator, pg_projection_repo::PgAIProjectionRepo,
+        polling_worker::spawn_ai_projection_polling_worker,
+    },
+};
 use analytics_client::{AnalyticsClient, AnalyticsClientConfig, MetaConfig};
 use anyhow::Context;
 use cal::{
@@ -596,7 +604,9 @@ async fn main() -> anyhow::Result<()> {
     let macro_agent_tool_context = ai_tools::build_tool_service_context_from_env(db.clone())
         .await
         .context("failed to build Macro agent tool context")?;
+    let ai_projection_tool_context = macro_agent_tool_context.clone();
     let macro_agent_tools = ai_tools::all_tools();
+    let ai_projection_tools = ai_tools::all_tools();
     let bot_trigger_router = channel_bots::inbound::BotTriggerRouter::new(
         channels_service.clone(),
         Arc::new(channel_bots::outbound::AgentLoopResponder::new(
@@ -605,6 +615,18 @@ async fn main() -> anyhow::Result<()> {
         )),
     );
     bot_trigger_router.spawn(bot_trigger_receiver);
+
+    let ai_projection_repo = Arc::new(PgAIProjectionRepo::new(db.clone()));
+    let ai_projection_generator = Arc::new(AgentProjectionGenerator::new(
+        ai_projection_tool_context,
+        ai_projection_tools,
+    ));
+    let ai_projection_service = Arc::new(AiProjectionServiceImpl::new(
+        ai_projection_repo.as_ref().clone(),
+    ));
+    let ai_projection_state = AIProjectionRouterState::new(ai_projection_service);
+    let _ai_projection_worker =
+        spawn_ai_projection_polling_worker(ai_projection_repo, ai_projection_generator);
 
     let channel_bot_webhook_state =
         bots::inbound::channel_webhook_router::ChannelBotWebhookRouterState::new(
@@ -680,6 +702,7 @@ async fn main() -> anyhow::Result<()> {
             service: Arc::new(crm_service),
             entity_access_service: entity_access_service.clone(),
         },
+        ai_projection_state,
     };
 
     // Spawn the delete document worker

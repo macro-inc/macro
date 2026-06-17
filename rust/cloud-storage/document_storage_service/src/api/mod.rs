@@ -128,6 +128,12 @@ fn api_router(state: ApiContext) -> Router {
                 ))),
         )
         .nest(
+            "/ai_projections",
+            ai_projections::inbound::axum_router::ai_projections_router(
+                state.ai_projection_state.clone(),
+            ),
+        )
+        .nest(
             "/history",
             history::router().layer(compose_layers![
                 axum::middleware::from_fn(macro_middleware::connection_drop_prevention_handler),

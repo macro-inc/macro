@@ -1,3 +1,7 @@
+use ai_projections::{
+    domain::service::AiProjectionServiceImpl, inbound::axum_router::AIProjectionRouterState,
+    outbound::pg_projection_repo::PgAIProjectionRepo,
+};
 use contacts::domain::service::SqsContactsIngress;
 use contacts::outbound::ingress::SqsContactsQueue;
 
@@ -85,6 +89,12 @@ use system_properties::{
 pub struct InternalFlag {
     pub internal: bool,
 }
+
+/// Type alias for the AI projection service wired into DSS.
+pub(crate) type DssAIProjectionService = AiProjectionServiceImpl<PgAIProjectionRepo>;
+
+/// Type alias for the AI projections router state.
+pub(crate) type DssAIProjectionState = AIProjectionRouterState<DssAIProjectionService>;
 
 /// CRM service for DSS — no-op resolver since DSS doesn't populate.
 pub(crate) type DssCrmService = crm::domain::service::CrmServiceImpl<
@@ -333,6 +343,7 @@ pub(crate) struct ApiContext {
     pub cal_webhook_state: DssCalWebhookState,
     pub entity_access_management_service: EntityAccessManagementService,
     pub crm_state: DssCrmState,
+    pub ai_projection_state: DssAIProjectionState,
 }
 
 env_var! {

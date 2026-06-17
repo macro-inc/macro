@@ -27,6 +27,7 @@ location_check = []
 
 [dependencies]
 anyhow = { workspace = true }
+ai_projections = { path = "../ai_projections" }
 ai_tools = { path = "../ai_tools" }
 aws-sdk-dynamodb = { workspace = true }
 aws-sdk-s3 = { workspace = true }
