@@ -103,7 +103,7 @@ async fn main() -> Result<(), Error> {
     tracing::trace!("initialized env vars");
 
     let config = macro_aws_config::get_macro_aws_config().await;
-    let dynamodb_client = DynamodbClient::new(&config, Some(dynamo_table_name.clone()));
+    let dynamodb_client = DynamodbClient::new(&config, Some(dynamo_table_name.to_string()));
 
     tracing::trace!("initialized dynamodb client");
 
