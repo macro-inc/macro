@@ -47,19 +47,9 @@ export const connectionGatewayClient = {
 };
 
 /**
- * Re-asserts `open` for every tracked entity whenever the connection-gateway socket
- * reconnects.
- *
- * The gateway binds entity tracking to a single websocket connection_id — both the presence
- * row that decides whether an "AI responded" notification is sent, and the live stream
- * subscription that delivers streamed responses. A reconnect issues a brand new connection_id,
- * but `open` is only sent once on block mount and is ref-count guarded in `trackEntity`, so it
- * is never replayed; the reconnected socket then has no presence row (→ spurious notifications
- * while the chat is open) and no stream subscription (→ missing live responses). This is most
- * visible on mobile, where backgrounding tears the socket down without unmounting the open chat.
- *
- * Call once from an app-level owner (alongside the other global connection effects) so the
- * listener is tied to that owner's lifetime rather than leaking as a module-load side effect.
+ * Re-sends `open` for every tracked entity when the socket reconnects. A reconnect gets a new
+ * connection_id, but `open` is only sent once on mount (and is ref-count guarded), so without
+ * this the new connection has no presence row or stream subscription for still-open entities.
  */
 export function useReopenTrackedEntitiesOnReconnect(): void {
   createReconnectEffect(ws, () => {
