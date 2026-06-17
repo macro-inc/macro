@@ -159,82 +159,115 @@ pub struct ChannelParticipant {
     pub left_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-fn channel_type_from_channels(channel_type: channels::domain::models::ChannelType) -> ChannelType {
-    match channel_type {
-        channels::domain::models::ChannelType::Public => ChannelType::Public,
-        channels::domain::models::ChannelType::Private => ChannelType::Private,
-        channels::domain::models::ChannelType::DirectMessage => ChannelType::DirectMessage,
-        channels::domain::models::ChannelType::Team => ChannelType::Team,
+impl From<channels::domain::models::ChannelType> for ChannelType {
+    fn from(channel_type: channels::domain::models::ChannelType) -> Self {
+        match channel_type {
+            channels::domain::models::ChannelType::Public => Self::Public,
+            channels::domain::models::ChannelType::Private => Self::Private,
+            channels::domain::models::ChannelType::DirectMessage => Self::DirectMessage,
+            channels::domain::models::ChannelType::Team => Self::Team,
+        }
     }
 }
 
-fn participant_role_from_channels(
-    role: channels::domain::models::ParticipantRole,
-) -> ParticipantRole {
-    match role {
-        channels::domain::models::ParticipantRole::Owner => ParticipantRole::Owner,
-        channels::domain::models::ParticipantRole::Admin => ParticipantRole::Admin,
-        channels::domain::models::ParticipantRole::Member => ParticipantRole::Member,
+impl From<channels::domain::models::ParticipantRole> for ParticipantRole {
+    fn from(role: channels::domain::models::ParticipantRole) -> Self {
+        match role {
+            channels::domain::models::ParticipantRole::Owner => Self::Owner,
+            channels::domain::models::ParticipantRole::Admin => Self::Admin,
+            channels::domain::models::ParticipantRole::Member => Self::Member,
+        }
     }
 }
 
-fn channel_message_from_channels(
-    message: channels::domain::models::RecentChannelMessage,
-) -> ChannelMessage {
-    ChannelMessage {
-        message_id: message.message_id,
-        thread_id: message.thread_id,
-        sender_id: message.sender_id,
-        content: message.content,
-        created_at: message.created_at,
-        updated_at: message.updated_at,
-        deleted_at: message.deleted_at,
-        mentions: message.mentions,
+impl Channel {
+    pub fn new_from_channels(channel: channels::domain::models::ChannelListItem) -> Self {
+        Self {
+            id: ChannelId(channel.id),
+            name: channel.name,
+            channel_type: channel.channel_type.into(),
+            org_id: channel
+                .org_id
+                .and_then(|org_id| u32::try_from(org_id).ok())
+                .map(OrganizationId),
+            team_id: channel.team_id,
+            created_at: channel.created_at,
+            updated_at: channel.updated_at,
+            owner_id: channel.owner_id,
+        }
     }
 }
 
-fn channel_message_from_thread_reply(
-    parent_id: Uuid,
-    reply: channels::domain::models::ThreadReply,
-) -> ChannelMessage {
-    ChannelMessage {
-        message_id: reply.id,
-        thread_id: Some(parent_id),
-        sender_id: reply.sender_id,
-        content: reply.content,
-        created_at: reply.created_at,
-        updated_at: reply.updated_at,
-        deleted_at: None,
-        mentions: Vec::new(),
+impl ChannelMessage {
+    pub fn new_from_recent_channel_message(
+        message: channels::domain::models::RecentChannelMessage,
+    ) -> Self {
+        Self {
+            message_id: message.message_id,
+            thread_id: message.thread_id,
+            sender_id: message.sender_id,
+            content: message.content,
+            created_at: message.created_at,
+            updated_at: message.updated_at,
+            deleted_at: message.deleted_at,
+            mentions: message.mentions,
+        }
+    }
+
+    pub fn new_from_channel_message(message: channels::domain::models::ChannelMessage) -> Self {
+        Self {
+            message_id: message.id,
+            thread_id: None,
+            sender_id: message.sender_id,
+            content: message.content,
+            created_at: message.created_at,
+            updated_at: message.updated_at,
+            deleted_at: message.deleted_at,
+            mentions: Vec::new(),
+        }
+    }
+
+    pub fn new_from_thread_reply(
+        parent_id: Uuid,
+        reply: channels::domain::models::ThreadReply,
+    ) -> Self {
+        Self {
+            message_id: reply.id,
+            thread_id: Some(parent_id),
+            sender_id: reply.sender_id,
+            content: reply.content,
+            created_at: reply.created_at,
+            updated_at: reply.updated_at,
+            deleted_at: None,
+            mentions: Vec::new(),
+        }
     }
 }
 
-fn channel_from_channels(channel: channels::domain::models::ChannelListItem) -> Channel {
-    Channel {
-        id: ChannelId(channel.id),
-        name: channel.name,
-        channel_type: channel_type_from_channels(channel.channel_type),
-        org_id: channel
-            .org_id
-            .and_then(|org_id| u32::try_from(org_id).ok())
-            .map(OrganizationId),
-        team_id: channel.team_id,
-        created_at: channel.created_at,
-        updated_at: channel.updated_at,
-        owner_id: channel.owner_id,
+impl LatestMessage {
+    pub fn new_from_channels(latest_message: channels::domain::models::LatestMessage) -> Self {
+        Self {
+            latest_message: latest_message
+                .latest_message
+                .map(ChannelMessage::new_from_recent_channel_message),
+            latest_non_thread_message: latest_message
+                .latest_non_thread_message
+                .map(ChannelMessage::new_from_recent_channel_message),
+        }
     }
 }
 
-fn latest_message_from_channels(
-    latest_message: channels::domain::models::LatestMessage,
-) -> LatestMessage {
-    LatestMessage {
-        latest_message: latest_message
-            .latest_message
-            .map(channel_message_from_channels),
-        latest_non_thread_message: latest_message
-            .latest_non_thread_message
-            .map(channel_message_from_channels),
+impl ChannelParticipant {
+    pub fn try_new_from_channels(
+        participant: channels::domain::models::ChannelParticipant,
+    ) -> Result<Self, macro_user_id::error::ParseErr> {
+        Ok(Self {
+            channel_id: ChannelId(participant.channel_id),
+            user_id: MacroUserIdStr::parse_from_str(&participant.user_id)?.into_owned(),
+            role: participant.role.into(),
+            joined_at: participant.joined_at,
+            left_at: participant.left_at,
+        })
     }
 }
 
@@ -244,64 +277,102 @@ impl TryFrom<channels::domain::models::ChannelParticipant> for ChannelParticipan
     fn try_from(
         participant: channels::domain::models::ChannelParticipant,
     ) -> Result<Self, Self::Error> {
-        Ok(Self {
-            channel_id: ChannelId(participant.channel_id),
-            user_id: MacroUserIdStr::parse_from_str(&participant.user_id)?.into_owned(),
-            role: participant_role_from_channels(participant.role),
-            joined_at: participant.joined_at,
-            left_at: participant.left_at,
-        })
+        Self::try_new_from_channels(participant)
     }
 }
 
-impl From<channels::domain::models::ChannelWithParticipants> for ChannelWithParticipants {
-    fn from(channel: channels::domain::models::ChannelWithParticipants) -> Self {
+impl ChannelWithParticipants {
+    pub fn new_from_channels(channel: channels::domain::models::ChannelWithParticipants) -> Self {
         Self {
-            channel: channel_from_channels(channel.channel),
+            channel: Channel::new_from_channels(channel.channel),
             participants: channel
                 .participants
                 .into_iter()
-                .filter_map(|participant| participant.try_into().ok())
+                .filter_map(|participant| {
+                    ChannelParticipant::try_new_from_channels(participant).ok()
+                })
                 .collect(),
         }
     }
 }
 
-impl From<channels::domain::models::ChannelWithLatest> for SoupChannel {
-    fn from(channel: channels::domain::models::ChannelWithLatest) -> Self {
+impl From<channels::domain::models::ChannelWithParticipants> for ChannelWithParticipants {
+    fn from(channel: channels::domain::models::ChannelWithParticipants) -> Self {
+        Self::new_from_channels(channel)
+    }
+}
+
+impl SoupChannel {
+    pub fn new_from_channels(channel: channels::domain::models::ChannelWithLatest) -> Self {
         Self {
-            channel: channel.channel.into(),
-            latest_message: latest_message_from_channels(channel.latest_message),
+            channel: ChannelWithParticipants::new_from_channels(channel.channel),
+            latest_message: LatestMessage::new_from_channels(channel.latest_message),
             viewed_at: channel.viewed_at,
             interacted_at: channel.interacted_at,
         }
     }
 }
 
-impl From<channels::domain::models::ChannelMessage> for SoupChannelThread {
-    fn from(message: channels::domain::models::ChannelMessage) -> Self {
-        let parent_id = message.id;
-        let messages = message
-            .thread
+impl From<channels::domain::models::ChannelWithLatest> for SoupChannel {
+    fn from(channel: channels::domain::models::ChannelWithLatest) -> Self {
+        Self::new_from_channels(channel)
+    }
+}
+
+impl SoupChannelThread {
+    pub fn new_from_channel_message(message: channels::domain::models::ChannelMessage) -> Self {
+        let channels::domain::models::ChannelMessage {
+            id,
+            channel_id,
+            sender_id,
+            content,
+            created_at,
+            updated_at,
+            deleted_at,
+            thread,
+            ..
+        } = message;
+        let messages = thread
             .preview
             .into_iter()
-            .map(|reply| channel_message_from_thread_reply(parent_id, reply))
+            .map(|reply| ChannelMessage::new_from_thread_reply(id, reply))
             .collect();
 
         Self {
-            channel_id: ChannelId(message.channel_id),
+            channel_id: ChannelId(channel_id),
             message: ChannelMessage {
-                message_id: parent_id,
+                message_id: id,
                 thread_id: None,
-                sender_id: message.sender_id,
-                content: message.content,
-                created_at: message.created_at,
-                updated_at: message.updated_at,
-                deleted_at: message.deleted_at,
+                sender_id,
+                content,
+                created_at,
+                updated_at,
+                deleted_at,
                 mentions: Vec::new(),
             },
             messages,
         }
+    }
+
+    pub fn new_from_channel_message_and_replies(
+        message: channels::domain::models::ChannelMessage,
+        replies: Vec<channels::domain::models::ThreadReply>,
+    ) -> Self {
+        let parent_id = message.id;
+        Self {
+            channel_id: ChannelId(message.channel_id),
+            message: ChannelMessage::new_from_channel_message(message),
+            messages: replies
+                .into_iter()
+                .map(|reply| ChannelMessage::new_from_thread_reply(parent_id, reply))
+                .collect(),
+        }
+    }
+}
+
+impl From<channels::domain::models::ChannelMessage> for SoupChannelThread {
+    fn from(message: channels::domain::models::ChannelMessage) -> Self {
+        Self::new_from_channel_message(message)
     }
 }
 
@@ -317,23 +388,6 @@ impl
             Vec<channels::domain::models::ThreadReply>,
         ),
     ) -> Self {
-        let parent_id = message.id;
-        Self {
-            channel_id: ChannelId(message.channel_id),
-            message: ChannelMessage {
-                message_id: parent_id,
-                thread_id: None,
-                sender_id: message.sender_id,
-                content: message.content,
-                created_at: message.created_at,
-                updated_at: message.updated_at,
-                deleted_at: message.deleted_at,
-                mentions: Vec::new(),
-            },
-            messages: replies
-                .into_iter()
-                .map(|reply| channel_message_from_thread_reply(parent_id, reply))
-                .collect(),
-        }
+        Self::new_from_channel_message_and_replies(message, replies)
     }
 }
