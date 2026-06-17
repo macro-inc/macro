@@ -2,6 +2,7 @@ import {
   useGlobalBlockOrchestrator,
   useGlobalNotificationSource,
 } from '@app/component/GlobalAppState';
+import { QUERY_FILTERS_BASE } from '@app/component/next-soup/filters/query-filters';
 import { PreviewPanel } from '@app/component/PreviewPanel';
 import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
@@ -13,12 +14,18 @@ import {
   useHotkeyDOMScope,
 } from '@core/hotkey/hotkeys';
 import type { EntityData } from '@entity';
+import {
+  getSortedKeyProperties,
+  soupPropertyToProperty,
+} from '@entity/extractors-property/property-helpers';
 import { AnimatedInboxIcon } from '@icon/wide-inbox';
 import { Popover } from '@kobalte/core/popover';
 import type { UnifiedNotification } from '@notifications';
 import CalendarIcon from '@phosphor/calendar-blank.svg';
 import ArrowSquareOutIcon from '@phosphor-icons/core/regular/arrow-square-out.svg?component-solid';
 import SlidersHorizontalIcon from '@phosphor-icons/core/regular/sliders-horizontal.svg?component-solid';
+import { useSoupItemsQuery } from '@queries/soup/items';
+import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
 import { Button, cn, Layer } from '@ui';
 import {
   createEffect,
@@ -39,9 +46,6 @@ import {
   notificationTitle,
 } from './notification-extractors';
 import {
-  getChannelGroupKey,
-  getChannelNode,
-  getChannelThreadId,
   getDateGroupKey,
   getDateGroupLabel,
   getNotificationGroupKey,
@@ -107,12 +111,29 @@ const devNotificationFilters: DevNotificationFilter[] = [
   },
 ];
 
+type SoupEntityRecord = Record<string, unknown>;
+
+const taskProperties = (entity: SoupEntityRecord | undefined) => {
+  const properties = entity?.properties;
+  if (!Array.isArray(properties)) return undefined;
+
+  const keyProperties = getSortedKeyProperties(
+    properties.map((property) =>
+      soupPropertyToProperty(property as SoupProperty)
+    )
+  );
+  return keyProperties.length ? keyProperties : undefined;
+};
+
 const transformNotificationItem = (args: {
   id: string;
   notification: UnifiedNotification;
+  entity?: SoupEntityRecord;
   subItems?: UnifiedNotification[];
+  entityById?: Map<string, SoupEntityRecord>;
 }): InboxItemData => {
-  const title = notificationTitle(args.notification);
+  const title =
+    String(args.entity?.name ?? '') || notificationTitle(args.notification);
   const showSubItems =
     args.notification.notification_metadata.tag !== 'github_pr_status_changed';
 
@@ -126,7 +147,13 @@ const transformNotificationItem = (args: {
     senderName: notificationSenderName(args.notification),
     action: notificationAction(args.notification),
     targetName: title,
-    content: notificationContent(args.notification),
+    content:
+      notificationContent(args.notification) ||
+      String(args.entity?.snippet ?? ''),
+    properties:
+      args.notification.notification_metadata.tag === 'task_assigned'
+        ? taskProperties(args.entity)
+        : undefined,
     timestamp: args.notification.created_at ?? args.notification.updated_at,
     unread: !args.notification.viewed_at && !args.notification.done,
     subItems: showSubItems
@@ -134,6 +161,8 @@ const transformNotificationItem = (args: {
           transformNotificationItem({
             id: `notification:${subItem.id}`,
             notification: subItem,
+            entity: args.entityById?.get(subItem.entity_id),
+            entityById: args.entityById,
           })
         )
       : undefined,
@@ -170,87 +199,81 @@ const groupInboxItemsByDate = (items: InboxItemData[]): InboxDateGroup[] => {
   );
 };
 
+const getInboxItemGroupKey = (notification: UnifiedNotification) => {
+  const metadata = notification.notification_metadata;
+  const content = metadata.content as unknown as Record<string, unknown>;
+
+  if (metadata.tag === 'new_email') return `email:${notification.entity_id}`;
+
+  if (isChannelNotification(notification)) {
+    return `channel:${notification.entity_id}:${String(content.threadId ?? 'root')}`;
+  }
+
+  if (metadata.tag.startsWith('github_')) {
+    const owner = String(content.owner ?? '');
+    const repo = String(content.repo ?? '');
+    const number = String(content.number ?? '');
+    if (owner || repo || number) return `github:${owner}/${repo}#${number}`;
+  }
+
+  const groupKey = getNotificationGroupKey(notification);
+  if (groupKey) return groupKey;
+
+  if (
+    metadata.tag === 'mentioned_in_document_comment' ||
+    metadata.tag === 'replied_to_document_comment_thread' ||
+    metadata.tag === 'commented_on_document' ||
+    metadata.tag === 'document_mention'
+  ) {
+    return `document:${notification.entity_id}:${String(
+      content.commentId ?? content.threadId ?? content.blockId ?? 'root'
+    )}`;
+  }
+
+  return undefined;
+};
+
 const buildInboxItems = (
-  notifications: UnifiedNotification[]
+  notifications: UnifiedNotification[],
+  entityById = new Map<string, SoupEntityRecord>()
 ): InboxItemData[] => {
-  const sorted = sortNotifications(notifications);
-  const groupedNotifications = new Map<string, UnifiedNotification[]>();
-  const referencedChannelThreadIds = new Set<string>();
-  const items: InboxItemData[] = [];
-  let currentChannelGroupKey: string | undefined;
-  let currentChannelCompositeKey: string | undefined;
+  const groups: UnifiedNotification[][] = [];
+  let currentKey: string | undefined;
 
-  for (const notification of sorted) {
-    const threadId = getChannelThreadId(notification);
-    if (threadId) {
-      referencedChannelThreadIds.add(getChannelNode(notification, threadId));
-    }
-  }
+  for (const notification of sortNotifications(notifications)) {
+    const key = getInboxItemGroupKey(notification);
+    const current = groups.at(-1);
 
-  for (const notification of sorted) {
-    const groupKey = getNotificationGroupKey(notification);
-    if (groupKey) {
-      currentChannelGroupKey = undefined;
-      currentChannelCompositeKey = undefined;
-      groupedNotifications.set(groupKey, [
-        ...(groupedNotifications.get(groupKey) ?? []),
-        notification,
-      ]);
+    if (key && key === currentKey && current) {
+      current.push(notification);
       continue;
     }
 
-    if (isChannelNotification(notification)) {
-      const channelGroupKey = getChannelGroupKey(
-        notification,
-        referencedChannelThreadIds
-      );
-      if (currentChannelGroupKey !== channelGroupKey) {
-        currentChannelGroupKey = channelGroupKey;
-        currentChannelCompositeKey = `channel:${channelGroupKey}:${notification.id}`;
-      }
-
-      const compositeKey = currentChannelCompositeKey;
-      if (!compositeKey) continue;
-
-      groupedNotifications.set(compositeKey, [
-        ...(groupedNotifications.get(compositeKey) ?? []),
-        notification,
-      ]);
-      continue;
-    }
-
-    currentChannelGroupKey = undefined;
-    currentChannelCompositeKey = undefined;
-
-    items.push(
-      transformNotificationItem({
-        id: `notification:${notification.id}`,
-        notification,
-      })
-    );
+    currentKey = key;
+    groups.push([notification]);
   }
 
-  for (const [key, group] of groupedNotifications) {
+  return groups.map((group) => {
     const notifications = sortNotifications(group);
-    items.push(
-      transformNotificationItem({
-        id: key,
-        notification: notifications[0],
-        subItems: notifications.slice(1),
-      })
-    );
-  }
-
-  return items.toSorted(
-    (a, b) =>
-      getNotificationTime(b.notification as UnifiedNotification) -
-      getNotificationTime(a.notification as UnifiedNotification)
-  );
+    const root = notifications[0];
+    return transformNotificationItem({
+      id:
+        group.length > 1
+          ? (getInboxItemGroupKey(root) ?? `notification:${root.id}`)
+          : `notification:${root.id}`,
+      notification: root,
+      entity: entityById.get(root.entity_id),
+      subItems: notifications.slice(1),
+      entityById,
+    });
+  });
 };
 
 const buildInboxGroups = (
-  notifications: UnifiedNotification[]
-): InboxDateGroup[] => groupInboxItemsByDate(buildInboxItems(notifications));
+  notifications: UnifiedNotification[],
+  entityById?: Map<string, SoupEntityRecord>
+): InboxDateGroup[] =>
+  groupInboxItemsByDate(buildInboxItems(notifications, entityById));
 
 const getNotificationDateValue = (
   notification: UnifiedNotification
@@ -823,11 +846,81 @@ export function NotificationInbox2() {
         .flatMap((filter) => filter.tags)
     );
   });
+  const allNotifications = createMemo(() =>
+    notificationSource
+      .notifications()
+      .filter((notification) => !notification.deleted_at)
+  );
+  const soupIds = createMemo(() => {
+    const values = {
+      channel: [] as string[],
+      chat: [] as string[],
+      document: [] as string[],
+      email: [] as string[],
+      foreign: [] as string[],
+    };
+
+    for (const notification of allNotifications()) {
+      const entityType = String(notification.entity_type);
+      if (entityType === 'channel') values.channel.push(notification.entity_id);
+      if (entityType === 'chat') values.chat.push(notification.entity_id);
+      if (entityType === 'document')
+        values.document.push(notification.entity_id);
+      if (entityType === 'email') values.email.push(notification.entity_id);
+      if (entityType === 'foreign') values.foreign.push(notification.entity_id);
+    }
+
+    return values;
+  });
+  const soupQuery = useSoupItemsQuery(
+    () => ({
+      params: { limit: 100, sort_method: 'viewed_updated' },
+      body: {
+        ...QUERY_FILTERS_BASE,
+        channel_filters: {
+          channel_ids: soupIds().channel.length
+            ? soupIds().channel
+            : QUERY_FILTERS_BASE.channel_filters?.channel_ids,
+        },
+        chat_filters: {
+          chat_ids: soupIds().chat.length
+            ? soupIds().chat
+            : QUERY_FILTERS_BASE.chat_filters?.chat_ids,
+        },
+        document_filters: {
+          document_ids: soupIds().document.length
+            ? soupIds().document
+            : QUERY_FILTERS_BASE.document_filters?.document_ids,
+        },
+        email_filters: {
+          email_thread_ids: soupIds().email.length
+            ? soupIds().email
+            : QUERY_FILTERS_BASE.email_filters?.email_thread_ids,
+        },
+        foreign_entity_filters: {
+          ids: soupIds().foreign.length
+            ? soupIds().foreign
+            : QUERY_FILTERS_BASE.foreign_entity_filters?.ids,
+        },
+      },
+    }),
+    () => ({
+      enabled: allNotifications().length > 0,
+      showSupportedForeignEntities: true,
+    })
+  );
+  const entityById = createMemo(
+    () =>
+      new Map(
+        (soupQuery.data ?? []).map((entity) => [
+          entity.id,
+          entity as SoupEntityRecord,
+        ])
+      )
+  );
   const groups = createMemo(() =>
     buildInboxGroups(
-      notificationSource
-        .notifications()
-        .filter((notification) => !notification.deleted_at)
+      allNotifications()
         .filter(
           (notification) =>
             !hiddenTags().has(notification.notification_metadata.tag)
@@ -836,7 +929,8 @@ export function NotificationInbox2() {
           if (readFilter() === 'all') return true;
           const unread = !notification.viewed_at && !notification.done;
           return readFilter() === 'unread' ? unread : !unread;
-        })
+        }),
+      entityById()
     )
   );
   const toggleFilter = (filterId: string) => {

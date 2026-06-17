@@ -6,8 +6,10 @@ import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/S
 import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
 import { UserIcon } from '@core/component/UserIcon';
 import { MACRO_AGENT_BOT_ID } from '@core/constant/macroAgent';
+import '@app/component/next-soup/soup-view/views/tasks/list-property-value.css';
 import MacroLogo from '@icon/macro-logo.svg';
 import GithubIcon from '@icon/mcp-github.svg';
+import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
 import AtIcon from '@phosphor-icons/core/regular/at.svg?component-solid';
 import BellIcon from '@phosphor-icons/core/regular/bell.svg?component-solid';
 import ChatIcon from '@phosphor-icons/core/regular/chat.svg?component-solid';
@@ -16,6 +18,9 @@ import GitMergeIcon from '@phosphor-icons/core/regular/git-merge.svg?component-s
 import GitPullRequestIcon from '@phosphor-icons/core/regular/git-pull-request.svg?component-solid';
 import PhoneIcon from '@phosphor-icons/core/regular/phone.svg?component-solid';
 import UsersIcon from '@phosphor-icons/core/regular/users.svg?component-solid';
+import { Property } from '@property';
+import type { Property as PropertyT } from '@property/types';
+import { getEntityValues, hasValue } from '@property/utils';
 import { Avatar, Layer } from '@ui';
 import { For, Match, Show, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
@@ -56,7 +61,7 @@ function NotificationBadge() {
   return (
     <Show when={icon()}>
       {(icon) => (
-        <span class="absolute -right-1 -bottom-1 grid size-4 place-items-center rounded-full bg-active ring ring-surface">
+        <span class="absolute -right-1 -bottom-1 grid size-4 place-items-center overflow-hidden rounded-full bg-surface text-ink-extra-muted ring ring-edge-muted [&_svg]:size-3">
           {icon()}
         </span>
       )}
@@ -79,39 +84,34 @@ function ActorIcon() {
       .join('') || '?';
 
   return (
-    <InboxItem.Icon class="size-8">
-      <span class="relative size-8">
-        <Show
-          when={type() === 'ai_response'}
-          fallback={
-            <Show
-              when={senderId()}
-              fallback={
-                <Avatar size="fill" class="text-xs">
-                  <Avatar.Fallback>{initials()}</Avatar.Fallback>
-                </Avatar>
-              }
-            >
-              {(id) => (
-                <UserIcon
-                  id={id()}
-                  size="fill"
-                  suppressClick
-                  showTooltip={false}
-                />
-              )}
-            </Show>
-          }
-        >
-          <Avatar
-            size="fill"
-            class="bg-surface text-accent ring-1 ring-edge-muted"
+    <InboxItem.Icon class="size-9 self-center">
+      <span class="relative size-9 shrink-0">
+        <span class="grid size-full place-items-center overflow-hidden rounded-full bg-active text-ink-muted">
+          <Show
+            when={type() === 'ai_response'}
+            fallback={
+              <Show
+                when={senderId()}
+                fallback={
+                  <Avatar size="fill" class="text-xs">
+                    <Avatar.Fallback>{initials()}</Avatar.Fallback>
+                  </Avatar>
+                }
+              >
+                {(id) => (
+                  <UserIcon
+                    id={id()}
+                    size="fill"
+                    suppressClick
+                    showTooltip={false}
+                  />
+                )}
+              </Show>
+            }
           >
-            <Avatar.Fallback>
-              <MacroLogo class="size-[70%]" />
-            </Avatar.Fallback>
-          </Avatar>
-        </Show>
+            <MacroLogo class="size-5" />
+          </Show>
+        </span>
         <NotificationBadge />
       </span>
     </InboxItem.Icon>
@@ -272,13 +272,11 @@ function emailSubject() {
 }
 
 function TitleRow() {
-  const { item } = useInboxItem();
   const type = useNotificationType();
   const title = itemTitle();
   const subject = emailSubject();
   const displayTitle = () => {
     if (type() === 'new_email') return subject() || title();
-    if (type() === 'ai_response') return item().senderName || 'Macro agent';
     return title();
   };
 
@@ -295,7 +293,7 @@ function actionText() {
   const type = useNotificationType();
 
   return () => {
-    if (type() === 'ai_response') return undefined;
+    if (type() === 'ai_response') return 'responded';
     if (type() === 'github_pr_comment') return undefined;
     if (type() === 'github_pr_mention') return undefined;
     return item().action;
@@ -315,6 +313,55 @@ function shouldRenderMarkdownContent(
     type() === 'github_pr_comment' ||
     type() === 'github_pr_mention' ||
     type() === 'github_pr_review';
+}
+
+function TaskListPropertyValue(props: { property: PropertyT }) {
+  const isUserEntity = () =>
+    props.property.valueType === 'ENTITY' &&
+    props.property.specificEntityType === 'USER';
+  const userCount = () =>
+    isUserEntity() ? getEntityValues(props.property).length : 0;
+  const isEmpty = () => !hasValue(props.property);
+
+  return (
+    <Property.Root property={props.property} canEdit={false}>
+      <Property.Tooltip property={props.property}>
+        <Layer depth={2}>
+          <Property.EditTrigger class="list-property-cell inline-flex min-w-0 items-center gap-1.5 rounded-full bg-surface/50 px-2 py-1.5 text-left text-xs leading-tight ring ring-edge ring-inset">
+            <Show
+              when={!isEmpty()}
+              fallback={
+                <>
+                  <CircleDashedEmpty class="size-3 shrink-0 opacity-50" />
+                  <span class="min-w-0 flex-1 truncate opacity-50">
+                    {props.property.displayName}
+                  </span>
+                </>
+              }
+            >
+              <Switch
+                fallback={
+                  <Property.Icon
+                    property={props.property}
+                    class="size-3 shrink-0"
+                  />
+                }
+              >
+                <Match when={userCount() > 1}>
+                  <Property.UserStack property={props.property} maxUsers={2} />
+                </Match>
+                <Match when={isUserEntity()}>
+                  <Property.Icon property={props.property} class="size-5" />
+                </Match>
+              </Switch>
+              <Property.Text property={props.property} class="min-w-0 flex-1" />
+            </Show>
+            <Property.Caret class="@max-[840px]/u-list:hidden" />
+          </Property.EditTrigger>
+        </Layer>
+      </Property.Tooltip>
+    </Property.Root>
+  );
 }
 
 function ContentText(props: { content: string }) {
@@ -350,14 +397,21 @@ function Description() {
     return `${unreadGroupCount()} new ${groupLabel()}`;
   };
   const description = () => unreadGroupDescription() || groupedDescription();
+  const showTaskProperties = () =>
+    type() === 'task_assigned' && Boolean(item().properties?.length);
 
   return (
-    <Show when={description()}>
-      {(content) => (
-        <div class="min-w-0 truncate text-sm text-ink-muted/75">
-          <ContentText content={content()} />
-        </div>
-      )}
+    <Show when={description() || showTaskProperties()}>
+      <div class="flex min-w-0 items-center gap-1 truncate text-sm text-ink-muted/75">
+        <Show when={showTaskProperties()}>
+          <For each={item().properties ?? []}>
+            {(property) => <TaskListPropertyValue property={property} />}
+          </For>
+        </Show>
+        <Show when={description()}>
+          {(content) => <ContentText content={content()} />}
+        </Show>
+      </div>
     </Show>
   );
 }
@@ -417,9 +471,15 @@ function ActionRow() {
       <Show when={action()}>
         {(action) => <span class="min-w-0 truncate">{action()}</span>}
       </Show>
-      <For each={item().properties ?? []}>
-        {(property) => <PropertyPill property={property} />}
-      </For>
+      <Show
+        when={
+          item().notification?.notification_metadata.tag !== 'task_assigned'
+        }
+      >
+        <For each={item().properties ?? []}>
+          {(property) => <PropertyPill property={property} />}
+        </For>
+      </Show>
     </div>
   );
 }
