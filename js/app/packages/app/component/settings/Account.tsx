@@ -319,9 +319,13 @@ export function Account() {
             <div class="text-sm font-semibold">Account</div>
           </Panel.Header>
 
-          <Panel.Toolbar class="h-full w-full">
-            <Show when={permissions()?.includes(PERMISSION_IDS.WRITE_STRIPE_SUBSCRIPTION) && !isNativeMobilePlatform()}>
-              <div class="px-4 py-2 w-full">
+          <Panel.Body scroll class="text-ink">
+            <Show
+              when={permissions()?.includes(
+                PERMISSION_IDS.WRITE_STRIPE_SUBSCRIPTION
+              )}
+            >
+              <div class="px-4 py-2 w-full border-b border-edge-muted">
                 <ShowFeatureFlag
                   key="enable-new-pricing"
                   enabledOverride={ENABLE_NEW_PRICING_OVERRIDE}
@@ -352,9 +356,7 @@ export function Account() {
                 </ShowFeatureFlag>
               </div>
             </Show>
-          </Panel.Toolbar>
 
-          <Panel.Body scroll class="text-ink">
             <div class="grid gap-px bg-edge-muted border-b border-edge-muted">
               <Show when={ENABLE_PROFILE_PICTURES}>
                 <Show when={userId()} keyed>
