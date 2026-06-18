@@ -231,7 +231,7 @@ function ProfilePictureRow(props: { userId: string }) {
                     class="bg-transparent"
                   />
                 </div>
-                <div class="pointer-events-none absolute inset-0 flex items-center justify-center rounded-full bg-black/50 text-white opacity-0 transition-opacity group-hover:opacity-100">
+                <div class="pointer-events-none absolute -inset-px z-10 flex items-center justify-center rounded-full bg-overlay text-ink opacity-0 transition-opacity group-hover:opacity-100">
                   <PencilIcon class="size-5" />
                 </div>
               </Dropdown.Trigger>
