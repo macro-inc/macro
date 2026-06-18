@@ -521,7 +521,10 @@ export function BaseInput(props: {
 
   const undoSend = async (draftId: string) => {
     try {
-      const result = await emailClient.unscheduleMessage({ draftID: draftId });
+      const result = await emailClient.unscheduleMessage(
+        { draftID: draftId },
+        headerLinkId()
+      );
       // A non-2xx response comes back as an Err Result (it doesn't throw), so
       // bail before reverting the send appearance in the UI.
       if (result.isErr()) {
