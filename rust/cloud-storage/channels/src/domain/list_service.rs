@@ -8,7 +8,10 @@ use model_entity::EntityType;
 use uuid::Uuid;
 
 use crate::domain::{
-    models::{Activity, ChannelType, ChannelWithLatest, GetChannelsRequest, UserName},
+    models::{
+        Activity, ChannelType, ChannelWithLatest, GetChannelsRequest, NameLookup, UserName,
+        fallback_user_name,
+    },
     ports::{ChannelListRepo, ChannelListService, ChannelListUserRepo},
 };
 
@@ -106,9 +109,9 @@ where
             n.into_iter()
                 .filter_map(|n| {
                     let display = n.display_name()?;
-                    Some((n.id.to_string(), display))
+                    Some((n.id, display))
                 })
-                .collect::<HashMap<_, _>>()
+                .collect::<NameLookup>()
         })?;
 
         let mut latest_messages = latest_messages?;
@@ -161,7 +164,7 @@ fn resolve_channel_name(
     channel_id: Uuid,
     viewer_user_id: &str,
     participants: &[crate::domain::models::ChannelParticipant],
-    name_lookup: &HashMap<String, String>,
+    name_lookup: &NameLookup,
 ) -> String {
     if let Some(name) = stored_name.filter(|name| !name.is_empty()) {
         return name.to_string();
@@ -173,7 +176,11 @@ fn resolve_channel_name(
             let mut names: Vec<_> = participants
                 .iter()
                 .filter(|p| p.user_id != viewer_user_id)
-                .map(|p| display_name(&p.user_id, name_lookup))
+                .filter_map(|p| {
+                    MacroUserIdStr::try_from(p.user_id.clone())
+                        .ok()
+                        .map(|id| id_to_display_name(&id, name_lookup))
+                })
                 .collect();
             names.sort();
             if names.is_empty() {
@@ -184,15 +191,37 @@ fn resolve_channel_name(
         }
         ChannelType::DirectMessage => participants
             .iter()
-            .find(|p| p.user_id != viewer_user_id)
-            .map(|p| display_name(&p.user_id, name_lookup))
+            .filter(|p| p.user_id != viewer_user_id)
+            .find_map(|p| {
+                MacroUserIdStr::try_from(p.user_id.clone())
+                    .ok()
+                    .map(|id| id_to_display_name(&id, name_lookup))
+            })
             .unwrap_or_else(|| "Direct message".to_string()),
     }
 }
 
-fn display_name(user_id: &str, name_lookup: &HashMap<String, String>) -> String {
-    name_lookup
-        .get(user_id)
-        .cloned()
-        .unwrap_or_else(|| user_id.to_string())
+fn id_to_display_name(user_id: &MacroUserIdStr<'static>, name_lookup: &NameLookup) -> String {
+    match name_lookup.get(user_id) {
+        Some(name) if !name.trim().is_empty() => name.clone(),
+        _ => fallback_user_name(user_id),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn display_name_falls_back_to_email_local_part() {
+        let name_lookup = HashMap::new();
+
+        let user_id =
+            MacroUserIdStr::try_from("macro|shepherd.hatton@gmail.com".to_string()).unwrap();
+
+        assert_eq!(
+            id_to_display_name(&user_id, &name_lookup),
+            "shepherd.hatton"
+        );
+    }
 }

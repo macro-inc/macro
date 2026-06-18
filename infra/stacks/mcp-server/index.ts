@@ -38,6 +38,10 @@ const FUSIONAUTH_CLIENT_ID = aws.secretsmanager
 const FUSIONAUTH_BASE_URL = config.require('fusionauth_base_url');
 const FUSIONAUTH_ISSUER = config.require('fusionauth_issuer');
 
+// Base URL of the Macro web app, used to build links to Macro items in MCP
+// responses. Consumed by mcp_service as the `APP_BASE_URL` env var.
+const APP_BASE_URL = config.require('app_base_url');
+
 const FUSIONAUTH_CLIENT_SECRET = config.require('fusionauth_client_secret');
 const fusionauthClientSecretArn: pulumi.Output<string> = aws.secretsmanager
   .getSecretVersionOutput({ secretId: FUSIONAUTH_CLIENT_SECRET })
@@ -135,6 +139,10 @@ const mcpServer = new McpServer(`mcp-server-${stack}`, {
     {
       name: 'ISSUER',
       value: pulumi.interpolate`${FUSIONAUTH_ISSUER}`,
+    },
+    {
+      name: 'APP_BASE_URL',
+      value: APP_BASE_URL,
     },
     // MCP OAuth / FusionAuth
     {

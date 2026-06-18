@@ -14,9 +14,9 @@ use crate::domain::{
         ChannelPreviewRow, ChannelType, ChannelWithParticipants, CountedReaction,
         CreateChannelRequest, CreateEntityMentionOptions, EntityMention, GetChannelsParams,
         LatestMessage, MessageAttachment, MessagePageDirection, MutatedAttachment, MutatedMessage,
-        NewChannelAttachment, ParticipantRole, PatchChannelRequest, RecentChannelMessage,
-        ResolvedChannelMessage, Sender, SimpleMention, ThreadData, ThreadReplyRow,
-        TopLevelMessageRow, UserName,
+        NameLookup, NewChannelAttachment, ParticipantRole, PatchChannelRequest,
+        RecentChannelMessage, ResolvedChannelMessage, Sender, SimpleMention, ThreadData,
+        ThreadReplyRow, TopLevelMessageRow, UserName, fallback_user_name,
     },
     ports::{ChannelRepo, TopLevelMessagesQueryResult},
 };
@@ -524,16 +524,17 @@ async fn resolve_channel_display_name(
         ChannelType::Private | ChannelType::DirectMessage => {
             let participant_ids = load_active_participant_ids(pool, info.id).await?;
             let name_lookup = load_user_display_names(pool, &participant_ids).await?;
+
             if matches!(info.channel_type, ChannelType::DirectMessage)
                 && participant_ids
                     .iter()
-                    .any(|participant_id| participant_id == viewer_user_id.as_ref())
+                    .any(|participant_id| participant_id.as_ref() == viewer_user_id.as_ref())
             {
                 if let Some(other_participant_id) = participant_ids
                     .iter()
-                    .find(|participant_id| participant_id.as_str() != viewer_user_id.as_ref())
+                    .find(|participant_id| participant_id.as_ref() != viewer_user_id.as_ref())
                 {
-                    return Ok(user_display_name(other_participant_id, &name_lookup));
+                    return Ok(id_to_display_name(other_participant_id, &name_lookup));
                 }
 
                 tracing::warn!(channel_id=%info.id, "direct message channel has no other participant");
@@ -542,7 +543,7 @@ async fn resolve_channel_display_name(
 
             Ok(participant_ids
                 .iter()
-                .map(|participant_id| user_display_name(participant_id, &name_lookup))
+                .map(|participant_id| id_to_display_name(participant_id, &name_lookup))
                 .collect::<Vec<_>>()
                 .join(", "))
         }
@@ -552,7 +553,7 @@ async fn resolve_channel_display_name(
 async fn load_active_participant_ids(
     pool: &PgPool,
     channel_id: Uuid,
-) -> anyhow::Result<Vec<String>> {
+) -> anyhow::Result<Vec<MacroUserIdStr<'static>>> {
     let rows = sqlx::query_as!(
         UserIdRow,
         r#"
@@ -565,16 +566,27 @@ async fn load_active_participant_ids(
     )
     .fetch_all(pool)
     .await?;
-    Ok(rows.into_iter().map(|row| row.user_id).collect())
+    rows.into_iter()
+        .map(|row| MacroUserIdStr::try_from(row.user_id).map_err(Into::into))
+        .collect()
 }
 
 async fn load_user_display_names(
     pool: &PgPool,
-    user_ids: &[String],
-) -> anyhow::Result<HashMap<String, String>> {
+    user_ids: &[MacroUserIdStr<'static>],
+) -> anyhow::Result<NameLookup> {
     if user_ids.is_empty() {
-        return Ok(HashMap::new());
+        return Ok(NameLookup::new());
     }
+
+    let user_id_strings: Vec<String> = user_ids
+        .iter()
+        .map(|user_id| user_id.as_ref().to_string())
+        .collect();
+    let user_ids_by_string: HashMap<_, _> = user_ids
+        .iter()
+        .map(|user_id| (user_id.as_ref().to_string(), user_id.clone()))
+        .collect();
 
     let rows = sqlx::query_as!(
         UserDisplayNameRow,
@@ -584,16 +596,20 @@ async fn load_user_display_names(
         JOIN "User" u ON mui.macro_user_id = u.macro_user_id
         WHERE u.id = ANY($1)
         "#,
-        user_ids,
+        &user_id_strings,
     )
     .fetch_all(pool)
     .await?;
 
-    let mut lookup = HashMap::with_capacity(rows.len());
+    let mut lookup = NameLookup::with_capacity(rows.len());
     for row in rows {
-        if let Some(name) = display_name(row.first_name.as_deref(), row.last_name.as_deref()) {
-            lookup.insert(row.user_profile_id, name);
-        }
+        let Some(name) = display_name(row.first_name.as_deref(), row.last_name.as_deref()) else {
+            continue;
+        };
+        let Some(user_id) = user_ids_by_string.get(&row.user_profile_id) else {
+            continue;
+        };
+        lookup.insert(user_id.clone(), name);
     }
 
     Ok(lookup)
@@ -612,20 +628,11 @@ fn display_name(first_name: Option<&str>, last_name: Option<&str>) -> Option<Str
     }
 }
 
-fn user_display_name(user_id: &str, name_lookup: &HashMap<String, String>) -> String {
-    name_lookup
-        .get(user_id)
-        .filter(|name| !name.trim().is_empty())
-        .cloned()
-        .unwrap_or_else(|| fallback_user_name(user_id))
-}
-
-fn fallback_user_name(user_id: &str) -> String {
-    let email = user_id.split_once('|').map_or(user_id, |(_, email)| email);
-    email
-        .split_once('@')
-        .map_or(email, |(local, _)| local)
-        .to_string()
+fn id_to_display_name(user_id: &MacroUserIdStr<'static>, name_lookup: &NameLookup) -> String {
+    match name_lookup.get(user_id) {
+        Some(name) if !name.trim().is_empty() => name.clone(),
+        _ => fallback_user_name(user_id),
+    }
 }
 
 #[cfg(feature = "list")]

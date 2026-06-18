@@ -379,19 +379,18 @@ export function Account() {
             </div>
           </Panel.Header>
 
-          <Panel.Toolbar class="h-full w-full">
+          <Panel.Body scroll class="text-ink">
             <Show
               when={
                 permissions()?.includes(
                   PERMISSION_IDS.WRITE_STRIPE_SUBSCRIPTION
                 ) &&
-                !isNativeMobilePlatform() &&
                 // Team members get the header pill instead of a card here, so
-                // skip the toolbar entirely rather than leaving it empty.
+                // skip this billing block rather than leaving it empty.
                 !(newPricingEnabled() && isNonOwnerTeamMember())
               }
             >
-              <div class="px-4 py-2 w-full">
+              <div class="px-4 py-2 w-full border-b border-edge-muted">
                 <ShowFeatureFlag
                   key="enable-new-pricing"
                   enabledOverride={ENABLE_NEW_PRICING_OVERRIDE}
@@ -419,9 +418,6 @@ export function Account() {
                 </ShowFeatureFlag>
               </div>
             </Show>
-          </Panel.Toolbar>
-
-          <Panel.Body scroll class="text-ink">
             <div class="grid settings-row-dividers">
               <Show when={ENABLE_PROFILE_PICTURES}>
                 <Show when={userId()} keyed>

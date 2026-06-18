@@ -110,7 +110,7 @@
   --color-accent-hover:    oklch(var(--a0) / 0.20);
 
   --color-surface:         var(--b0);
-  --color-drop-shadow:     oklch(calc(var(--b0l) - 0.01 ) var(--b0c) var(--b0h) / 0.4);
+  --color-drop-shadow:     oklch(0.15 0 0 / 0.4);
   --color-message:         color-mix(in oklch, var(--b1) 50%, var(--b2));
   --color-hover:           var(--b2);
   --color-active:          var(--b1);

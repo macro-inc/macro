@@ -6,7 +6,8 @@ import { MediaImage } from './MediaImage';
 import { MediaVideo } from './MediaVideo';
 import type { MediaItem } from './media-items';
 
-const ATTACHMENT_TILE_SIZE = 106;
+// Square tile size in px; keep in sync with the `size-25.5` class and THUMB_SIZE.
+const ATTACHMENT_TILE_SIZE = 102;
 const SINGLE_IMAGE_MAX_WIDTH = 400;
 const SINGLE_IMAGE_MAX_HEIGHT = 400;
 const MESSAGE_GALLERY_IMAGE_MAX_WIDTH = 200;
@@ -56,19 +57,21 @@ function MessageImageTile(props: {
 
 function AttachmentImageTile(props: { item: MediaItem; onOpen?: () => void }) {
   return (
-    <MediaImage.Root>
+    // Root holds the fixed square; image and fallback both fill it (no reflow).
+    <MediaImage.Root class="size-25.5">
       <MediaImage.Image
-        src={props.item.src}
+        // Small thumbnail for these ~100px boxes; src is the fallback.
+        src={props.item.thumbSrc ?? props.item.src}
         previewSrc={props.item.previewSrc}
         class={cn(
-          'size-25.5 select-none rounded-2xl border border-edge object-cover',
+          'size-full select-none rounded-2xl border border-edge object-cover',
           props.onOpen && 'hover:opacity-80'
         )}
         onOpen={props.onOpen}
         width={ATTACHMENT_TILE_SIZE}
         height={ATTACHMENT_TILE_SIZE}
         loading="lazy"
-        fallback={<MediaImage.Fallback square />}
+        fallback={<MediaImage.Fallback fill />}
       />
     </MediaImage.Root>
   );

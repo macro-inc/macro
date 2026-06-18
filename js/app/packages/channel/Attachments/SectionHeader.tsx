@@ -8,6 +8,9 @@ export function AttachmentSection(props: {
   action?: JSX.Element;
   class?: string;
   label: string;
+  /** Fill the panel height without scrolling, so a child (e.g. a virtualized
+   * list) owns the scroll container instead of `Panel.Body`. */
+  fillBody?: boolean;
 }) {
   return (
     <Panel depth={2} class={cn('h-auto', props.class)}>
@@ -15,9 +18,18 @@ export function AttachmentSection(props: {
         <h3 class="text-sm font-medium text-ink">{props.label}</h3>
         <div class="shrink-0">{props.action}</div>
       </Panel.Header>
-      <Panel.Body scroll class={props.contentClass}>
-        {props.children}
-      </Panel.Body>
+      <Show
+        when={props.fillBody}
+        fallback={
+          <Panel.Body scroll class={props.contentClass}>
+            {props.children}
+          </Panel.Body>
+        }
+      >
+        <Panel.Body class={cn('flex flex-col', props.contentClass)}>
+          {props.children}
+        </Panel.Body>
+      </Show>
     </Panel>
   );
 }

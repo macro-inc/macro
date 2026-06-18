@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 #[cfg(feature = "list")]
 use item_filters::ast::{LiteralTree, channel::ChannelLiteral};
-use macro_user_id::user_id::MacroUserIdStr;
+use macro_user_id::{email::ReadEmailParts, user_id::MacroUserIdStr};
 use models_pagination::{CreatedAt, CursorVal, Identify, SortOn};
 #[cfg(feature = "list")]
 use models_pagination::{Query, SimpleSortMethod};
@@ -1151,6 +1151,14 @@ impl UserName {
     }
 }
 
+/// Lookup from Macro user id to display name.
+pub(crate) type NameLookup = HashMap<MacroUserIdStr<'static>, String>;
+
+/// Produce the human-readable fallback for a Macro user id.
+pub(crate) fn fallback_user_name(user_id: &MacroUserIdStr<'_>) -> String {
+    user_id.email_part().local_part().to_string()
+}
+
 /// Channel list request.
 #[cfg(feature = "list")]
 #[derive(Debug)]
@@ -1366,5 +1374,12 @@ mod tests {
 
         assert_eq!(sender.to_storage_string(), storage);
         assert_eq!(serde_json::to_value(&sender).unwrap(), storage);
+    }
+
+    #[test]
+    fn fallback_user_name_uses_email_local_part() {
+        let user_id = MacroUserIdStr::parse_from_str("macro|shepherd.hatton@gmail.com").unwrap();
+
+        assert_eq!(fallback_user_name(&user_id), "shepherd.hatton");
     }
 }

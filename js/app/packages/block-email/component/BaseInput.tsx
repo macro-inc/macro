@@ -1677,6 +1677,7 @@ export function BaseInput(props: {
           </div>
           <Scroll>
             <MarkdownTextarea
+              autoLinkMatchMode="common-tlds"
               captureEditor={(editor) => {
                 setEditor(editor);
                 form().setCapturedEditor(editor);

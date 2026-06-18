@@ -7,7 +7,12 @@ fn empty_service() -> AuthenticatedToolService<()> {
     let db = PgPoolOptions::new()
         .connect_lazy("postgres://localhost/unused")
         .expect("lazy pool creation should not fail");
-    AuthenticatedToolService::new(Arc::new(AsyncToolCollection::new()), (), db)
+    AuthenticatedToolService::new(
+        Arc::new(AsyncToolCollection::new()),
+        (),
+        db,
+        "https://macro.com".to_owned(),
+    )
 }
 
 #[tokio::test]
@@ -46,6 +51,36 @@ async fn server_instructions_describe_available_workflows() {
         assert!(
             instructions.contains(expected_text),
             "instructions should mention {expected_text}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn server_instructions_link_items_as_urls_not_mention_tags() {
+    let instructions = empty_service()
+        .get_info()
+        .instructions
+        .expect("server should provide MCP instructions");
+
+    // MCP responses must link items with plain URLs built from the app base URL.
+    assert!(
+        instructions.contains("https://macro.com/app/"),
+        "instructions should build item links from the app base url"
+    );
+    // And must steer the model away from the in-app mention markup.
+    assert!(
+        instructions.contains("<m-document-mention>"),
+        "instructions should reference the mention tag it is forbidding"
+    );
+    assert!(
+        instructions.contains("Do NOT emit"),
+        "instructions should forbid emitting mention tags in MCP responses"
+    );
+    // Lists of items should be rendered as a table with number/name/link columns.
+    for column in ["number", "name", "link"] {
+        assert!(
+            instructions.contains(column),
+            "instructions should describe the {column} table column"
         );
     }
 }

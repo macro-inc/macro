@@ -45,7 +45,7 @@ export function createConfiguredDiscussionMarkdownEditor(
     .withMedia({ fileDrop: true })
     .withEmojis()
     .withActions({ ignoreActionIds: ['hr', 'table', 'latex'] })
-    .withLinks({ floatingMenu: true })
+    .withLinks({ floatingMenu: true, autoLinkMatchMode: 'common-tlds' })
     .withHistory({ timeGap: 400 })
     .withCode()
     .withRestoreFocus()

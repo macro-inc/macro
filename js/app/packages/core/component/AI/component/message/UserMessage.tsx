@@ -60,7 +60,7 @@ export function UserMessage(props: {
 
   const content = () => {
     const rawContent = cn()[1];
-    return rawContent || undefined;
+    return rawContent?.trim() ? rawContent : undefined;
   };
 
   const imageAttachments = () =>
