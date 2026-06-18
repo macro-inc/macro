@@ -46,7 +46,8 @@ fn tool_use_prompt_appends_tool_section_to_base() {
     assert!(
         rendered
             .trim_end()
-            .ends_with("read the appropriate resource using the read tool.")
+            .ends_with("Only fall back to searching by name if you cannot resolve an address.")
     );
     assert!(rendered.contains("# Tool Use"));
+    assert!(rendered.contains("read the appropriate resource using the read tool."));
 }

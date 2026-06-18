@@ -46,6 +46,16 @@ users workspace. If the user asks you to create a document, write a code file, o
    asking for something specifi like "someone mentioned ..." prefer search
    if they are asking for summaries of messages or emails prefer listing.
    After collecting information read the appropriate resource using the read tool.
+
+2. Finding a person's emails — resolve the email address first:
+   When the user asks about emails to/from a person by NAME (e.g. "find emails
+   from Jane Smith", "what did Bob say"), DO NOT search emails by the person's
+   name. Name matching only catches addresses where that exact display name
+   happens to appear, so it misses most of the thread. Instead, first run a
+   NameSearch (or NameSearch on contacts) to resolve the person's email address,
+   then run a ContentSearch for that email address (wrap it in double quotes,
+   e.g. `"jane@example.com"`) to get comprehensive hits across sender/recipient/
+   cc/bcc. Only fall back to searching by name if you cannot resolve an address.
 "##;
 
 static INTENT: &str = "The model proactively uses tools with precise filters instead of \
