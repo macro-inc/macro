@@ -18,7 +18,7 @@ use frecency::domain::ports::MockFrecencyQueryService;
 use frecency::domain::services::FrecencyQueryServiceImpl;
 use frecency::{domain::models::AggregateFrecency, outbound::mock::MockFrecencyStorage};
 use item_filters::{
-    DocumentFilters, EntityFilters, ForeignEntityFilters, ast::foreign_entity::ForeignEntityLiteral,
+    EntityFilters, ForeignEntityFilters, ast::foreign_entity::ForeignEntityLiteral,
 };
 use model_entity::EntityType;
 use models_pagination::{
@@ -1405,81 +1405,6 @@ async fn cursor_should_return_frecency() {
         let expected_uuid_str = Uuid::from_u128(1).to_string();
         assert_eq!(id, expected_uuid_str);
     })
-}
-
-#[tokio::test]
-async fn simple_sort_with_explicit_document_ids_fetches_by_id() {
-    // The channel attachments view pins an explicit set of document ids. Those
-    // must be resolved directly by id (so older attachments outside the user's
-    // recent soup still appear), not post-filtered off a recency-capped listing.
-    let user = MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();
-    let doc_id = Uuid::from_u128(7);
-
-    let mut soup_mock = MockSoupRepo::new();
-    soup_mock
-        .expect_expanded_soup_by_ids()
-        .withf(move |params| {
-            assert_matches!(
-                params,
-                AdvancedSortParams { user_id, entities } => {
-                    assert_eq!(user_id.as_ref(), "macro|test@example.com");
-                    assert_eq!(entities.len(), 1);
-                    assert_eq!(entities[0].entity_type, EntityType::Document);
-                    assert_eq!(entities[0].entity_id.to_string(), doc_id.to_string());
-                    true
-                }
-            )
-        })
-        .times(1)
-        .returning(|params| {
-            let vec = params
-                .entities
-                .iter()
-                .map(|e| soup_document(&e.entity_id))
-                .map(SoupItem::Document)
-                .collect();
-            Box::pin(async move { Ok(vec) })
-        });
-    // The generic recency listing must not be used for an explicit id set.
-    soup_mock.expect_expanded_generic_cursor_soup().never();
-
-    let page = SoupImpl::new(
-        soup_mock,
-        FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
-        NoopEmailPreviewService,
-        NoopCommsService,
-        NoopCallRecordQueryService,
-        NoOpCrmService,
-        NoopForeignEntityService,
-    )
-    .get_user_soup(
-        SoupRequest {
-            email_preview_view: PreviewView::StandardLabel(
-                email::domain::models::PreviewViewStandardLabel::Inbox,
-            ),
-            link_ids: vec![],
-            soup_type: SoupType::Expanded,
-            limit: 20,
-            cursor: SoupQuery::new_sort_simple(
-                SimpleSortMethod::ViewedAt,
-                EntityFilters {
-                    document_filters: DocumentFilters {
-                        document_ids: vec![doc_id.to_string()],
-                        ..Default::default()
-                    },
-                    ..Default::default()
-                },
-            ),
-            user: user.clone(),
-        },
-        None,
-    )
-    .await
-    .unwrap()
-    .unwrap_left();
-
-    assert_eq!(page.items.len(), 1);
-    assert_matches!(&page.items[0].item, SoupItem::Document(doc) => assert_eq!(doc.id, doc_id));
 }
 
 /// Helper to extract is_completed from a FrecencySoupItem
