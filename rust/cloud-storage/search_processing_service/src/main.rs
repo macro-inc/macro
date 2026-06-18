@@ -147,7 +147,7 @@ async fn main() -> anyhow::Result<()> {
     let sqs_client = Arc::new(sqs_client);
 
     let backfill_service = Arc::new(BackfillOrchestrator::new(
-        PgBackfillSource::new(backfill_db, config.backfill_page_sizes()),
+        PgBackfillSource::new(backfill_db, config.backfill_page_sizes()?),
         SqsSearchEventPublisher::new(sqs_client.clone()),
     ));
 
@@ -188,7 +188,7 @@ async fn main() -> anyhow::Result<()> {
     let backfill_jobs = BackfillJobs::new(
         dynamodb_client,
         config.backfill_jobs_table.to_string(),
-        std::time::Duration::from_secs(config.backfill_job_ttl_seconds),
+        std::time::Duration::from_secs(config.backfill_job_ttl_seconds()?),
     );
     if matches!(config.environment, Environment::Local) {
         backfill_jobs
