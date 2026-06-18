@@ -76,7 +76,12 @@ const githubPrFilter = config({
   id: 'github-pr',
   group: 'entity-type',
   predicate: githubPrPredicate,
-  query: isForeign,
+  query: {
+    ...isForeign,
+    include: {
+      foreignEntitySource: ['github_pull_request'],
+    },
+  },
 });
 
 export const ENTITY_TYPE_FILTERS = [
