@@ -80,6 +80,10 @@ export function buildAttachmentEntityFilters(
     },
     // Attachments are never crm companies; exclude them.
     crm_company_filters: { company_ids: [NIL_ID] },
+    // Attachments are never foreign entities; exclude them so soup doesn't
+    // fetch (and then discard) the user's foreign entities (e.g. GitHub PRs),
+    // which otherwise runs unfiltered and makes this call slow.
+    foreign_entity_filters: { ids: [NIL_ID] },
   };
 }
 
