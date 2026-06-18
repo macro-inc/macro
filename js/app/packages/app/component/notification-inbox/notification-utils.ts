@@ -124,41 +124,6 @@ export const getChannelMessageId = (
   }
 };
 
-export const getChannelThreadId = (
-  notification: UnifiedNotification
-): string | undefined => {
-  const metadata = notification.notification_metadata;
-
-  switch (metadata.tag) {
-    case 'channel_message_reply':
-      return metadata.content.threadId;
-    case 'channel_mention':
-      return metadata.content.threadId ?? undefined;
-    default:
-      return undefined;
-  }
-};
-
 export const isChannelNotification = (
   notification: UnifiedNotification
 ): boolean => getChannelMessageId(notification) !== undefined;
-
-export const getChannelNode = (
-  notification: UnifiedNotification,
-  id: string
-): string => `${notification.entity_id}:${id}`;
-
-export const getChannelGroupKey = (
-  notification: UnifiedNotification,
-  referencedThreadIds: Set<string>
-): string => {
-  const messageId = getChannelMessageId(notification);
-  const threadId = getChannelThreadId(notification);
-  const messageNode = messageId
-    ? getChannelNode(notification, messageId)
-    : undefined;
-
-  if (threadId) return getChannelNode(notification, threadId);
-  if (messageNode && referencedThreadIds.has(messageNode)) return messageNode;
-  return `${notification.entity_id}:root`;
-};

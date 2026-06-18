@@ -46,9 +46,12 @@ import {
   Show,
 } from 'solid-js';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
-import { InboxItem, type InboxItem as InboxItemData } from './InboxItem';
+import {
+  InboxItem,
+  type InboxItem as InboxItemData,
+  type InboxRelatedDocument,
+} from './InboxItem';
 import { InboxItemInlineTypeLayout } from './layouts/InboxItemInlineTypeLayout';
-import { InboxItemLayout } from './layouts/InboxItemLayout';
 import {
   notificationAction,
   notificationContent,
@@ -64,8 +67,9 @@ import {
 } from './notification-utils';
 
 type InboxSourceItem = {
-  entity: SoupEntityRecord;
+  entity: EntityData;
   notification: UnifiedNotification;
+  relatedDocuments?: InboxRelatedDocument[];
 };
 
 type InboxDateGroup = {
@@ -126,24 +130,32 @@ const devNotificationFilters: DevNotificationFilter[] = [
   },
 ];
 
-type SoupEntityRecord = Record<string, unknown>;
+const subTypeName = (subType: unknown) => {
+  if (typeof subType === 'string') return subType.toLowerCase();
+  if (subType && typeof subType === 'object' && 'type' in subType) {
+    return String((subType as { type: unknown }).type).toLowerCase();
+  }
+  return undefined;
+};
 
-const entityMapKey = (notification: UnifiedNotification) =>
-  `${String(notification.entity_type)}:${notification.entity_id}`;
+const notificationSubType = (notification: UnifiedNotification) => {
+  const content = notification.notification_metadata.content as unknown as {
+    subType?: unknown;
+  };
 
-const getNotificationEntity = (
-  entityById: Map<string, SoupEntityRecord> | undefined,
-  notification: UnifiedNotification
-) => entityById?.get(entityMapKey(notification));
+  return subTypeName(content.subType);
+};
 
-const taskProperties = (entity: SoupEntityRecord | undefined) => {
-  const properties = entity?.properties;
-  if (!Array.isArray(properties)) return undefined;
+const taskProperties = (entity: EntityData | undefined) => {
+  if (entity?.type !== 'document') return undefined;
+  if (!('properties' in entity) || !entity.properties?.length) {
+    return undefined;
+  }
+
+  const properties = entity.properties;
 
   const keyProperties = getSortedKeyProperties(
-    properties.map((property) =>
-      soupPropertyToProperty(property as SoupProperty)
-    )
+    properties.map((property: SoupProperty) => soupPropertyToProperty(property))
   );
   return keyProperties.length ? keyProperties : undefined;
 };
@@ -151,9 +163,9 @@ const taskProperties = (entity: SoupEntityRecord | undefined) => {
 const transformNotificationItem = (args: {
   id: string;
   notification: UnifiedNotification;
-  entity?: SoupEntityRecord;
+  entity?: EntityData;
+  relatedDocuments?: InboxRelatedDocument[];
   subItems?: UnifiedNotification[];
-  entityById?: Map<string, SoupEntityRecord>;
 }): InboxItemData => {
   const metadata = args.notification.notification_metadata;
   const notificationTitleValue = notificationTitle(args.notification);
@@ -165,8 +177,14 @@ const transformNotificationItem = (args: {
   return {
     id: args.id,
     notification: args.notification,
+    previewEntity: args.entity,
     entityId: args.notification.entity_id,
-    entityType: args.notification.entity_type as InboxItemData['entityType'],
+    entityType: (String(args.entity?.type ?? '') ||
+      args.notification.entity_type) as InboxItemData['entityType'],
+    entitySubType:
+      args.entity?.type === 'document'
+        ? (args.entity.subType?.type ?? notificationSubType(args.notification))
+        : notificationSubType(args.notification),
     entityName: title,
     senderId: args.notification.sender_id ?? undefined,
     senderName: notificationSenderName(args.notification),
@@ -174,11 +192,12 @@ const transformNotificationItem = (args: {
     targetName: title,
     content:
       notificationContent(args.notification) ||
-      String(args.entity?.snippet ?? ''),
+      (args.entity?.type === 'channel_message' ? args.entity.content : ''),
     properties:
       metadata.tag === 'task_assigned'
         ? taskProperties(args.entity)
         : undefined,
+    relatedDocuments: args.relatedDocuments,
     timestamp: args.notification.created_at ?? args.notification.updated_at,
     unread: !args.notification.viewed_at && !args.notification.done,
     subItems: showSubItems
@@ -186,8 +205,7 @@ const transformNotificationItem = (args: {
           transformNotificationItem({
             id: `notification:${subItem.id}`,
             notification: subItem,
-            entity: getNotificationEntity(args.entityById, subItem),
-            entityById: args.entityById,
+            entity: args.entity,
           })
         )
       : undefined,
@@ -289,14 +307,65 @@ const buildInboxItems = (items: InboxSourceItem[]): InboxItemData[] => {
           : `notification:${root.notification.id}`,
       notification: root.notification,
       entity: root.entity,
+      relatedDocuments: group.flatMap((item) => item.relatedDocuments ?? []),
       subItems:
         group.length > 1 ? group.map((item) => item.notification) : undefined,
     });
   });
 };
 
+const isChannelBackedDocumentMention = (item: InboxSourceItem) => {
+  const metadata = item.notification.notification_metadata;
+  return (
+    metadata.tag === 'document_mention' && Boolean(metadata.content.messageId)
+  );
+};
+
+const isChannelInboxItem = (item: InboxSourceItem) =>
+  isChannelNotification(item.notification);
+
+const documentMentionRelatedDocument = (
+  item: InboxSourceItem
+): InboxRelatedDocument | undefined => {
+  const metadata = item.notification.notification_metadata;
+  if (metadata.tag !== 'document_mention') return undefined;
+
+  return {
+    id: item.notification.entity_id,
+    name: metadata.content.documentName,
+    fileType: metadata.content.fileType ?? 'md',
+    senderName: notificationSenderName(item.notification),
+    subType: subTypeName(metadata.content.subType),
+  };
+};
+
+const attachChannelDocumentMentions = (items: InboxSourceItem[]) => {
+  const filtered: InboxSourceItem[] = [];
+
+  for (const item of items) {
+    const previous = filtered.at(-1);
+    const relatedDocument = documentMentionRelatedDocument(item);
+    if (
+      previous &&
+      relatedDocument &&
+      isChannelInboxItem(previous) &&
+      isChannelBackedDocumentMention(item)
+    ) {
+      previous.relatedDocuments = [
+        ...(previous.relatedDocuments ?? []),
+        relatedDocument,
+      ];
+      continue;
+    }
+
+    filtered.push(item);
+  }
+
+  return filtered;
+};
+
 const buildInboxGroups = (items: InboxSourceItem[]): InboxDateGroup[] =>
-  groupInboxItemsByDate(buildInboxItems(items));
+  groupInboxItemsByDate(buildInboxItems(attachChannelDocumentMentions(items)));
 
 const readFilterSeen = (readFilter: ReadFilter) => {
   if (readFilter === 'all') return undefined;
@@ -323,6 +392,7 @@ const inboxQueryFilters = (mode: InboxMode, readFilter: ReadFilter): Query => {
         threadId: [],
         channelId: [],
         chatId: [],
+        callId: [],
         foreignEntityRecordId: [],
         ...seenFilter,
       },
@@ -338,6 +408,7 @@ const inboxQueryFilters = (mode: InboxMode, readFilter: ReadFilter): Query => {
         emailImportance: false,
         channelDone: false,
         chatDone: false,
+        callId: [],
         folderDone: false,
         emailShared: 'exclude',
         ...seenFilter,
@@ -357,6 +428,7 @@ const inboxQueryFilters = (mode: InboxMode, readFilter: ReadFilter): Query => {
       channelDone: false,
       chatDone: false,
       chatUpdatedAt: { gte: twoWeeksAgo },
+      callId: [],
       folderDone: false,
       folderUpdatedAt: { gte: twoWeeksAgo },
       emailShared: 'exclude',
@@ -461,6 +533,8 @@ function GithubPreviewFallback(props: { item: InboxItemData }) {
 }
 
 function previewEntity(item: InboxItemData): EntityData | undefined {
+  if (item.previewEntity) return item.previewEntity;
+
   const notification = item.notification as UnifiedNotification | undefined;
   if (!notification) return undefined;
 
@@ -503,7 +577,9 @@ function previewEntity(item: InboxItemData): EntityData | undefined {
     case 'document_mention':
     case 'mentioned_in_document_comment':
     case 'replied_to_document_comment_thread':
-    case 'commented_on_document':
+    case 'commented_on_document': {
+      const subType = metadata.content.subType?.type;
+
       return {
         id: notification.entity_id,
         type: 'document',
@@ -513,8 +589,14 @@ function previewEntity(item: InboxItemData): EntityData | undefined {
         updatedAt: date,
         viewedAt: notification.viewed_at ?? null,
         fileType: metadata.content.fileType ?? 'md',
-        subType: metadata.content.subType ?? null,
+        subType:
+          subType === 'task'
+            ? { type: 'task' }
+            : subType === 'snippet'
+              ? { type: 'snippet' }
+              : null,
       } as EntityData;
+    }
     case 'ai_response':
       return {
         id: notification.entity_id,
@@ -535,6 +617,9 @@ function previewEntity(item: InboxItemData): EntityData | undefined {
         ownerId: '',
         createdAt: date,
         updatedAt: date,
+        ...(item.entityType === 'document' && item.entitySubType === 'task'
+          ? { fileType: 'md', subType: { type: 'task' as const } }
+          : {}),
       } as EntityData;
   }
 }
@@ -553,10 +638,6 @@ function NotificationInboxList(props: {
 }) {
   const [settingsOpen, setSettingsOpen] = createSignal(false);
   const [showDevFilters, setShowDevFilters] = createSignal(false);
-
-  const [layoutVariant, setLayoutVariant] = createSignal<
-    'default' | 'inline-type'
-  >('default');
 
   const [virtualHandle, setVirtualHandle] = createSignal<VirtualizerHandle>();
 
@@ -801,21 +882,6 @@ function NotificationInboxList(props: {
                   class="h-7 w-full justify-start bg-surface text-ink-muted"
                   depth={2}
                   size="sm"
-                  variant={
-                    layoutVariant() === 'inline-type' ? 'active' : 'base'
-                  }
-                  onClick={() =>
-                    setLayoutVariant((value) =>
-                      value === 'inline-type' ? 'default' : 'inline-type'
-                    )
-                  }
-                >
-                  Inline type layout
-                </Button>
-                <Button
-                  class="h-7 w-full justify-start bg-surface text-ink-muted"
-                  depth={2}
-                  size="sm"
                   variant={showDevFilters() ? 'active' : 'base'}
                   onClick={() => setShowDevFilters((value) => !value)}
                 >
@@ -941,6 +1007,30 @@ function NotificationInboxList(props: {
               const onItemClick = () => {
                 selectItem(row.item);
               };
+              const onSelectRelatedDocument = (
+                document: InboxRelatedDocument
+              ) => {
+                props.onSelect({
+                  id: `related-document:${document.id}`,
+                  previewEntity: {
+                    id: document.id,
+                    type: 'document',
+                    name: document.name,
+                    ownerId: '',
+                    fileType: document.fileType ?? 'md',
+                    subType:
+                      document.subType === 'task'
+                        ? { type: 'task' as const }
+                        : document.subType === 'snippet'
+                          ? { type: 'snippet' as const }
+                          : undefined,
+                  } as EntityData,
+                  entityId: document.id,
+                  entityType: 'document',
+                  entitySubType: document.subType,
+                  entityName: document.name,
+                });
+              };
 
               return (
                 <div
@@ -955,12 +1045,10 @@ function NotificationInboxList(props: {
                     item={row.item}
                     selected={props.selectedItem?.id === row.item.id}
                   >
-                    <Show
-                      when={layoutVariant() === 'inline-type'}
-                      fallback={<InboxItemLayout onClick={onItemClick} />}
-                    >
-                      <InboxItemInlineTypeLayout onClick={onItemClick} />
-                    </Show>
+                    <InboxItemInlineTypeLayout
+                      onClick={onItemClick}
+                      onSelectRelatedDocument={onSelectRelatedDocument}
+                    />
                   </InboxItem.Root>
                 </div>
               );
@@ -1019,22 +1107,20 @@ export function NotificationInbox2() {
         entityNotifications.push(...(notificationsByEntity[key] ?? []));
       }
 
-      const record = entity as SoupEntityRecord;
-      const messageId = record.messageId;
       const matchingNotifications =
-        entity.type === 'channel_message' && typeof messageId === 'string'
+        entity.type === 'channel_message'
           ? entityNotifications.filter((notification) => {
               const content = notification.notification_metadata.content as
                 | { messageId?: string }
                 | undefined;
-              return content?.messageId === messageId;
+              return content?.messageId === entity.messageId;
             })
           : entityNotifications;
 
       for (const notification of matchingNotifications) {
         if (notification.deleted_at || seen.has(notification.id)) continue;
         seen.add(notification.id);
-        items.push({ entity: record, notification });
+        items.push({ entity, notification });
       }
     }
 

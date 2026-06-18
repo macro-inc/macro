@@ -6,6 +6,7 @@ import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/S
 import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
 import { UserIcon } from '@core/component/UserIcon';
 import { MACRO_AGENT_BOT_ID } from '@core/constant/macroAgent';
+import { macroIdToEmail, tryMacroId, useDisplayName } from '@core/user';
 import '@app/component/next-soup/soup-view/views/tasks/list-property-value.css';
 import MacroLogo from '@icon/macro-logo.svg';
 import GithubIcon from '@icon/mcp-github.svg';
@@ -21,10 +22,15 @@ import UsersIcon from '@phosphor-icons/core/regular/users.svg?component-solid';
 import { Property } from '@property';
 import type { Property as PropertyT } from '@property/types';
 import { getEntityValues, hasValue } from '@property/utils';
-import { Avatar, Layer } from '@ui';
+import { Avatar, Dropdown, Layer } from '@ui';
 import { For, Match, Show, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
-import { InboxItem, PropertyPill, useInboxItem } from '../InboxItem';
+import {
+  InboxItem,
+  type InboxRelatedDocument,
+  PropertyPill,
+  useInboxItem,
+} from '../InboxItem';
 
 function useNotificationType() {
   const { item } = useInboxItem();
@@ -190,10 +196,11 @@ function GithubStatusIcon(props: { class?: string } = {}) {
 }
 
 function fallbackEntityIconType(
-  type: string | undefined
+  type: string | undefined,
+  subType?: string
 ): EntityIconSelector | undefined {
   if (type === 'channel_message') return 'channel';
-  if (type === 'document') return 'md';
+  if (type === 'document') return subType === 'task' ? 'task' : 'md';
   if (type === 'crm_contact' || type === 'foreign') return undefined;
   return type as EntityIconSelector | undefined;
 }
@@ -222,7 +229,12 @@ function EntityTypeIcon() {
       'mentioned_in_document_comment',
       'replied_to_document_comment_thread',
       'commented_on_document',
-      () => <EntityIcon targetType="md" class="size-3.5 shrink-0" />
+      () => (
+        <EntityIcon
+          targetType={item().entitySubType === 'task' ? 'task' : 'md'}
+          class="size-3.5 shrink-0"
+        />
+      )
     )
     .with('task_assigned', () => (
       <span class="size-3.5 shrink-0">
@@ -247,9 +259,12 @@ function EntityTypeIcon() {
       <PhoneIcon class="size-3.5 shrink-0 text-ink-muted" />
     ))
     .otherwise(() =>
-      fallbackEntityIconType(item().entityType) ? (
+      fallbackEntityIconType(item().entityType, item().entitySubType) ? (
         <EntityIcon
-          targetType={fallbackEntityIconType(item().entityType)}
+          targetType={fallbackEntityIconType(
+            item().entityType,
+            item().entitySubType
+          )}
           class="size-3.5 shrink-0"
         />
       ) : (
@@ -320,17 +335,39 @@ function emailSubject() {
 }
 
 function TitleRow() {
+  const { item } = useInboxItem();
   const type = useNotificationType();
   const title = itemTitle();
   const subject = emailSubject();
+  const rawDocumentMentionChannelName = () => {
+    const metadata = item().notification?.notification_metadata;
+    if (metadata?.tag !== 'document_mention') return undefined;
+    return String(metadata.content.channelName || '') || undefined;
+  };
+  const channelMacroId = () => {
+    const value = rawDocumentMentionChannelName();
+    return value ? tryMacroId(value) : undefined;
+  };
+  const [channelDisplayName] = useDisplayName(channelMacroId());
+  const documentMentionChannelName = () => {
+    const id = channelMacroId();
+    if (!id) return rawDocumentMentionChannelName();
+    return channelDisplayName() || macroIdToEmail(id);
+  };
   const displayTitle = () => {
     if (type() === 'new_email') return subject() || title();
+    if (type() === 'document_mention')
+      return documentMentionChannelName() || title();
     return title();
   };
 
   return (
     <div class="flex min-w-0 items-center gap-1 text-sm text-ink-muted">
-      <EntityTypeIcon />
+      <Show when={type() === 'document_mention'} fallback={<EntityTypeIcon />}>
+        <span class="size-3.5 shrink-0">
+          <EntityIcon targetType="channel" size="fill" />
+        </span>
+      </Show>
       <span class="min-w-0 truncate">{displayTitle()}</span>
     </div>
   );
@@ -380,6 +417,7 @@ function actionText() {
 
   return () => {
     if (groupText()) return groupText();
+    if (type() === 'document_mention') return 'shared a document with you';
     if (type() === 'ai_response') return 'responded';
     if (type() === 'github_pr_comment') return undefined;
     if (type() === 'github_pr_mention') return undefined;
@@ -468,7 +506,99 @@ function ContentText(props: { content: string }) {
   );
 }
 
-function Description() {
+function documentIconTarget(document: {
+  fileType?: string;
+  subType?: string;
+}): EntityIconSelector {
+  if (document.subType === 'task') return 'task';
+  if (document.fileType === 'canvas') return 'canvas';
+  return 'md';
+}
+
+function RelatedDocumentSenderName(props: { senderName?: string }) {
+  const macroId = () =>
+    props.senderName ? tryMacroId(props.senderName) : undefined;
+  const [displayName] = useDisplayName(macroId());
+  const name = () => {
+    const id = macroId();
+    if (!id) return props.senderName;
+    return displayName() || macroIdToEmail(id);
+  };
+
+  return (
+    <Show when={name()}>
+      {(senderName) => (
+        <span class="min-w-0 truncate text-xs text-ink-extra-muted">
+          {senderName()}
+        </span>
+      )}
+    </Show>
+  );
+}
+
+function RelatedDocumentPill(props: { document: InboxRelatedDocument }) {
+  return (
+    <span class="inline-flex min-w-0 items-center gap-1 rounded-full bg-surface/50 px-2 py-1 text-xs text-ink-muted ring ring-edge ring-inset">
+      <EntityIcon
+        targetType={documentIconTarget(props.document)}
+        class="size-3.5 shrink-0"
+      />
+      <span class="min-w-0 truncate">{props.document.name}</span>
+    </span>
+  );
+}
+
+function RelatedDocuments(props: {
+  onSelectDocument?: (document: InboxRelatedDocument) => void;
+}) {
+  const { item } = useInboxItem();
+  const documents = () => item().relatedDocuments ?? [];
+  const [first, ...rest] = documents();
+
+  return (
+    <Show when={first}>
+      {(document) => (
+        <div class="flex min-w-0 items-center gap-1">
+          <RelatedDocumentPill document={document()} />
+          <Show when={rest.length > 0}>
+            <Dropdown placement="bottom-start" gutter={4}>
+              <Dropdown.Trigger class="h-6 rounded-full bg-surface/50 px-2 text-xs text-ink-muted ring ring-edge ring-inset">
+                {rest.length} more
+              </Dropdown.Trigger>
+              <Dropdown.Content>
+                <Dropdown.Group>
+                  <For each={rest}>
+                    {(document) => (
+                      <Dropdown.Item
+                        class="flex h-fit max-w-64 cursor-default items-start gap-1.5 px-2.5 py-1.5 text-sm text-ink-muted outline-none hover:bg-hover"
+                        onSelect={() => props.onSelectDocument?.(document)}
+                      >
+                        <EntityIcon
+                          targetType={documentIconTarget(document)}
+                          class="mt-0.5 size-3.5 shrink-0"
+                        />
+                        <span class="flex min-w-0 flex-col">
+                          <span class="min-w-0 truncate">{document.name}</span>
+                          <RelatedDocumentSenderName
+                            senderName={document.senderName}
+                          />
+                        </span>
+                      </Dropdown.Item>
+                    )}
+                  </For>
+                </Dropdown.Group>
+              </Dropdown.Content>
+            </Dropdown>
+          </Show>
+        </div>
+      )}
+    </Show>
+  );
+}
+
+function Description(props: {
+  onSelectRelatedDocument?: (document: InboxRelatedDocument) => void;
+}) {
   const { item } = useInboxItem();
   const type = useNotificationType();
 
@@ -483,24 +613,62 @@ function Description() {
     if (!item().subItems?.length || unreadGroupCount() === 0) return undefined;
     return `${unreadGroupCount()} new ${groupLabel()}`;
   };
+  const documentMentionDescription = () => {
+    const metadata = item().notification?.notification_metadata;
+    if (metadata?.tag !== 'document_mention') return undefined;
+
+    const documentName = String(metadata.content.documentName || '');
+    const messageContent = String(metadata.content.messageContent || '');
+
+    if (documentName && messageContent)
+      return `${documentName} — ${messageContent}`;
+    return documentName || messageContent || undefined;
+  };
+  const documentMentionFileType = () => {
+    const previewEntity = item().previewEntity;
+    return previewEntity?.type === 'document'
+      ? previewEntity.fileType
+      : undefined;
+  };
   const groupText = groupedActionText();
   const description = () => {
     if (groupText()) return undefined;
+    if (type() === 'document_mention') return documentMentionDescription();
     return unreadGroupDescription() || groupedDescription();
   };
   const showTaskProperties = () =>
     type() === 'task_assigned' && Boolean(item().properties?.length);
+  const showRelatedDocuments = () =>
+    type()?.startsWith('channel_') && Boolean(item().relatedDocuments?.length);
 
   return (
-    <Show when={description() || showTaskProperties()}>
+    <Show
+      when={description() || showTaskProperties() || showRelatedDocuments()}
+    >
       <div class="flex min-w-0 items-center gap-1 truncate text-sm text-ink-muted/75">
         <Show when={showTaskProperties()}>
           <For each={item().properties ?? []}>
             {(property) => <TaskListPropertyValue property={property} />}
           </For>
         </Show>
+        <Show when={showRelatedDocuments()}>
+          <RelatedDocuments onSelectDocument={props.onSelectRelatedDocument} />
+        </Show>
         <Show when={description()}>
-          {(content) => <ContentText content={content()} />}
+          {(content) => (
+            <>
+              <Show when={type() === 'document_mention'}>
+                <EntityIcon
+                  targetType={documentIconTarget({
+                    fileType: documentMentionFileType(),
+                    subType: item().entitySubType,
+                  })}
+                  class="size-3.5 shrink-0"
+                />
+              </Show>
+              <ContentText content={content()} />
+            </>
+          )}
         </Show>
       </div>
     </Show>
@@ -591,7 +759,10 @@ function TimestampColumn() {
 }
 
 export function InboxItemInlineTypeLayout(
-  props: { onClick?: (event: MouseEvent) => void } = {}
+  props: {
+    onClick?: (event: MouseEvent) => void;
+    onSelectRelatedDocument?: (document: InboxRelatedDocument) => void;
+  } = {}
 ) {
   return (
     <InboxItem.Content class="min-h-16" onClick={props.onClick}>
@@ -605,7 +776,9 @@ export function InboxItemInlineTypeLayout(
             <ActionRow />
             <div class="flex min-w-0 flex-col">
               <TitleRow />
-              <Description />
+              <Description
+                onSelectRelatedDocument={props.onSelectRelatedDocument}
+              />
             </div>
           </div>
           <TimestampColumn />

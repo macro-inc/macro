@@ -27,11 +27,21 @@ type InboxItemNotification =
       };
     };
 
+export type InboxRelatedDocument = {
+  id: string;
+  name: string;
+  fileType?: string;
+  senderName?: string;
+  subType?: string;
+};
+
 export interface InboxItem {
   id: string;
   notification?: InboxItemNotification;
+  previewEntity?: EntityData;
   entityId?: string;
   entityType?: EntityData['type'];
+  entitySubType?: string;
   entityName?: string;
   senderId?: string;
   senderName?: string;
@@ -39,6 +49,7 @@ export interface InboxItem {
   targetName?: string;
   content?: string;
   properties?: PropertyT[];
+  relatedDocuments?: InboxRelatedDocument[];
   breadcrumb?: string[];
   subItems?: InboxItem[];
   timestamp?: string;

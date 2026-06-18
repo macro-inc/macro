@@ -1,9 +1,25 @@
 import type { UnifiedNotification } from '@notifications';
 
+type CallStartedMetadata = {
+  tag: 'call-started';
+  content: {
+    channel_name?: string | null;
+  };
+};
+
+type InboxNotificationMetadata =
+  | UnifiedNotification['notification_metadata']
+  | CallStartedMetadata;
+
+const notificationMetadata = (
+  notification: UnifiedNotification
+): InboxNotificationMetadata =>
+  notification.notification_metadata as InboxNotificationMetadata;
+
 export const notificationContent = (
   notification: UnifiedNotification
 ): string | undefined => {
-  const metadata = notification.notification_metadata;
+  const metadata = notificationMetadata(notification);
 
   switch (metadata.tag) {
     case 'channel_mention':
@@ -18,6 +34,8 @@ export const notificationContent = (
       return metadata.content.snippet || undefined;
     case 'ai_response':
       return metadata.content.summary;
+    case 'call-started':
+      return metadata.content.channel_name ?? undefined;
     case 'github_pr_comment':
       return metadata.content.commentSnippet;
     case 'github_pr_mention':
@@ -32,7 +50,7 @@ export const notificationContent = (
 export const notificationTitle = (
   notification: UnifiedNotification
 ): string | undefined => {
-  const metadata = notification.notification_metadata;
+  const metadata = notificationMetadata(notification);
 
   switch (metadata.tag) {
     case 'new_email':
@@ -60,6 +78,8 @@ export const notificationTitle = (
       return metadata.content.title || metadata.content.displayName;
     case 'ai_response':
       return 'AI response';
+    case 'call-started':
+      return metadata.content.channel_name ?? 'Call';
     default:
       return undefined;
   }
@@ -68,7 +88,9 @@ export const notificationTitle = (
 export const notificationAction = (
   notification: UnifiedNotification
 ): string | undefined => {
-  switch (notification.notification_metadata.tag) {
+  const metadata = notificationMetadata(notification);
+
+  switch (metadata.tag) {
     case 'channel_mention':
       return 'mentioned you';
     case 'channel_message_send':
@@ -90,9 +112,9 @@ export const notificationAction = (
     case 'task_assigned':
       return 'assigned this to you';
     case 'github_pr_status_changed':
-      return notification.notification_metadata.content.status === 'open'
+      return metadata.content.status === 'open'
         ? 'opened'
-        : notification.notification_metadata.content.status;
+        : metadata.content.status;
     case 'github_review_requested':
       return 'requested your review';
     case 'github_pr_comment':
@@ -101,6 +123,8 @@ export const notificationAction = (
       return 'mentioned you';
     case 'github_pr_review':
       return 'reviewed';
+    case 'call-started':
+      return 'started a call';
     default:
       return undefined;
   }
@@ -109,7 +133,7 @@ export const notificationAction = (
 export const notificationSenderName = (
   notification: UnifiedNotification
 ): string | undefined => {
-  const metadata = notification.notification_metadata;
+  const metadata = notificationMetadata(notification);
 
   switch (metadata.tag) {
     case 'new_email':
