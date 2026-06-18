@@ -59,9 +59,8 @@ impl SoupItem {
             SoupItem::Channel(channel) => {
                 EntityType::Channel.with_entity_string(channel.channel.channel.id.0.to_string())
             }
-            SoupItem::ChannelThread(thread) => {
-                EntityType::Channel.with_entity_string(thread.message.message_id.to_string())
-            }
+            SoupItem::ChannelThread(thread) => EntityType::ChannelMessage
+                .with_entity_string(thread.root_message.message_id.to_string()),
             SoupItem::Call(record) => {
                 EntityType::Call.with_entity_string(record.call_id.to_string())
             }
@@ -144,7 +143,7 @@ impl SoupItem {
                 .viewed_at
                 .unwrap_or(soup_channel.channel.channel.updated_at),
             (SoupItem::ChannelThread(thread), SimpleSortMethod::CreatedAt) => {
-                thread.message.created_at
+                thread.root_message.created_at
             }
             (SoupItem::ChannelThread(thread), _) => thread.updated_at(),
             (SoupItem::Call(record), SimpleSortMethod::CreatedAt) => record.started_at,
@@ -175,7 +174,7 @@ impl Identify for SoupItem {
             SoupItem::Project(soup_project) => soup_project.id,
             SoupItem::EmailThread(thread) => thread.thread.id,
             SoupItem::Channel(soup_channel) => soup_channel.channel.channel.id.0,
-            SoupItem::ChannelThread(thread) => thread.message.message_id,
+            SoupItem::ChannelThread(thread) => thread.root_message.message_id,
             SoupItem::Call(record) => record.call_id,
             SoupItem::CrmCompany(company) => company.id,
             SoupItem::ForeignEntity(foreign_entity) => foreign_entity.id,

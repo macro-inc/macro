@@ -128,7 +128,7 @@ pub struct SoupChannelThread {
     #[cfg_attr(feature = "schema", schema(value_type = Uuid))]
     pub channel_id: ChannelId,
     /// Top-level message that acts as the thread parent.
-    pub message: ChannelMessage,
+    pub root_message: ChannelMessage,
     /// Thread replies, using the same lightweight channel message shape.
     pub messages: Vec<ChannelMessage>,
 }
@@ -140,8 +140,8 @@ impl SoupChannelThread {
             .iter()
             .map(|message| message.updated_at)
             .max()
-            .unwrap_or(self.message.updated_at)
-            .max(self.message.updated_at)
+            .unwrap_or(self.root_message.updated_at)
+            .max(self.root_message.updated_at)
     }
 }
 
@@ -343,7 +343,7 @@ impl SoupChannelThread {
 
         Self {
             channel_id: ChannelId(channel_id),
-            message: ChannelMessage {
+            root_message: ChannelMessage {
                 message_id: id,
                 thread_id: None,
                 sender_id,
@@ -365,7 +365,7 @@ impl SoupChannelThread {
         let parent_id = message.id;
         Self {
             channel_id: ChannelId(message.channel_id),
-            message: ChannelMessage::new_from_channel_message(message),
+            root_message: ChannelMessage::new_from_channel_message(message),
             messages: replies
                 .into_iter()
                 .map(|reply| ChannelMessage::new_from_thread_reply(parent_id, reply))

@@ -253,10 +253,15 @@ pub async fn update_entity_access_channel_share_permissions(
             EntityType::User
             | EntityType::Team
             | EntityType::Channel
+            | EntityType::ChannelMessage
             | EntityType::StaticFile
             | EntityType::CrmCompany
             | EntityType::CrmContact
-            | EntityType::ForeignEntity => unreachable!(),
+            | EntityType::ForeignEntity => {
+                return Err(sqlx::Error::InvalidArgument(format!(
+                    "received unexpected entity type {entity_type:?}"
+                )));
+            }
             EntityType::Project => {
                 // Get all items in project
                 let project_items = get_nested_project_entities(transaction, entity_id).await?;
@@ -312,10 +317,15 @@ pub async fn update_entity_access_channel_share_permissions(
             EntityType::User
             | EntityType::Team
             | EntityType::Channel
+            | EntityType::ChannelMessage
             | EntityType::StaticFile
             | EntityType::CrmCompany
             | EntityType::CrmContact
-            | EntityType::ForeignEntity => unreachable!(),
+            | EntityType::ForeignEntity => {
+                return Err(sqlx::Error::InvalidArgument(format!(
+                    "Received invalid EntityType {entity_type:?}"
+                )));
+            }
             EntityType::Project => {
                 // (a) Direct grant on the project itself (granted_from_project_id IS NULL)
                 let mut qb: QueryBuilder<Postgres> = QueryBuilder::new(
