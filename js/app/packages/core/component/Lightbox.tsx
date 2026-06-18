@@ -322,21 +322,23 @@ export function Lightbox(props: LightboxProps) {
 
   // Inertial panning ("momentum"). After a single-finger pan while zoomed in,
   // releasing lets the image keep gliding in the release direction and ease to
-  // a stop. Velocity is sampled from the engine's own translate after each move
-  // — so it already reflects edge clamping (a pan pinned at a boundary reads as
-  // zero velocity and won't fling) — then replayed in a dt-scaled rAF loop, so
-  // the feel is frame-rate independent. setTranslateFromUserGesture re-clamps
-  // every frame, which is what eases the glide to a halt at the bounds.
-  const MOMENTUM_FRICTION = 0.92; // velocity retained per 60fps frame
+  // a stop. Release velocity is sampled from a short window of touch positions,
+  // including the final changedTouches point from touchend; the rAF loop then
+  // replays that velocity through setTranslateFromUserGesture, so the engine
+  // still clamps every frame and naturally kills motion at the bounds.
+  const MOMENTUM_FRICTION = 0.86; // velocity retained per 60fps frame
   const MOMENTUM_MIN_SPEED = 0.015; // px/ms — below this the glide stops
-  const MOMENTUM_MAX_SPEED = 4; // px/ms — clamp pathologically fast flicks
-  const MOMENTUM_MAX_GAP_MS = 80; // skip the fling if the finger paused before lift
+  const MOMENTUM_MAX_SPEED = 2.75; // px/ms — clamp pathologically fast flicks
+  const MOMENTUM_SAMPLE_WINDOW_MS = 160;
   let momentumVx = 0; // px/ms
   let momentumVy = 0;
-  let momentumLastX = 0;
-  let momentumLastY = 0;
-  let momentumLastTime = 0;
   let momentumRaf: number | undefined;
+  let momentumActiveTouchId: number | undefined;
+  let momentumStartX = 0;
+  let momentumStartY = 0;
+  let momentumStartTranslateX = 0;
+  let momentumStartTranslateY = 0;
+  let momentumSamples: { x: number; y: number; t: number }[] = [];
 
   const cancelMomentum = () => {
     if (momentumRaf !== undefined) {
@@ -346,36 +348,77 @@ export function Lightbox(props: LightboxProps) {
   };
   onCleanup(cancelMomentum);
 
-  // Re-baseline velocity tracking to the engine's current translate. Called
-  // when an engine-handled gesture starts so the first move measures cleanly.
-  const resetMomentumTracking = (engine: ZoompinchHandle['engine']) => {
+  const eventTime = (e: TouchEvent) => e.timeStamp || performance.now();
+
+  const getMomentumTouch = (touches: TouchList) => {
+    if (momentumActiveTouchId === undefined) return touches[0];
+    return (
+      Array.from(touches).find(
+        (touch) => touch.identifier === momentumActiveTouchId
+      ) ?? touches[0]
+    );
+  };
+
+  // Re-baseline velocity tracking when an engine-handled gesture starts or
+  // changes touch count so the next single-finger move measures cleanly.
+  const resetMomentumTracking = (
+    e: TouchEvent,
+    engine: ZoompinchHandle['engine']
+  ) => {
     momentumVx = 0;
     momentumVy = 0;
-    momentumLastX = engine.translateX;
-    momentumLastY = engine.translateY;
-    momentumLastTime = performance.now();
-  };
-
-  // Fold the latest engine translate into the smoothed velocity estimate.
-  const sampleMomentum = (engine: ZoompinchHandle['engine']) => {
-    const now = performance.now();
-    const dt = now - momentumLastTime;
-    if (dt > 0) {
-      const vx = (engine.translateX - momentumLastX) / dt;
-      const vy = (engine.translateY - momentumLastY) / dt;
-      // Weight the newest sample but keep history to smooth out finger jitter.
-      momentumVx = vx * 0.8 + momentumVx * 0.2;
-      momentumVy = vy * 0.8 + momentumVy * 0.2;
+    momentumActiveTouchId = undefined;
+    const touch = e.touches.length === 1 ? e.touches[0] : undefined;
+    const t = eventTime(e);
+    if (!touch) {
+      momentumSamples = [];
+      return;
     }
-    momentumLastX = engine.translateX;
-    momentumLastY = engine.translateY;
-    momentumLastTime = now;
+    momentumActiveTouchId = touch.identifier;
+    momentumStartX = touch.clientX;
+    momentumStartY = touch.clientY;
+    momentumStartTranslateX = engine.translateX;
+    momentumStartTranslateY = engine.translateY;
+    momentumSamples = [{ x: touch.clientX, y: touch.clientY, t }];
   };
 
-  const startMomentum = (engine: ZoompinchHandle['engine']) => {
+  const sampleMomentumTouch = (touch: Touch | undefined, t: number) => {
+    if (!touch) return;
+    momentumSamples.push({ x: touch.clientX, y: touch.clientY, t });
+    while (
+      momentumSamples.length > 1 &&
+      t - momentumSamples[0].t > MOMENTUM_SAMPLE_WINDOW_MS
+    ) {
+      momentumSamples.shift();
+    }
+    const first = momentumSamples[0];
+    const last = momentumSamples[momentumSamples.length - 1];
+    const dt = last.t - first.t;
+    if (dt <= 0) {
+      momentumVx = 0;
+      momentumVy = 0;
+    } else {
+      momentumVx = (last.x - first.x) / dt;
+      momentumVy = (last.y - first.y) / dt;
+    }
+  };
+
+  // Fold the latest single-finger touch position into the release velocity.
+  const sampleMomentum = (e: TouchEvent) => {
+    sampleMomentumTouch(getMomentumTouch(e.touches), eventTime(e));
+  };
+
+  const startMomentum = (e: TouchEvent, engine: ZoompinchHandle['engine']) => {
     cancelMomentum();
-    // Ignore stale velocity — the finger came to rest before lifting.
-    if (performance.now() - momentumLastTime > MOMENTUM_MAX_GAP_MS) return;
+    const releaseTime = eventTime(e);
+    const releaseTouch = getMomentumTouch(e.changedTouches);
+    if (!releaseTouch) return;
+    engine.setTranslateFromUserGesture(
+      momentumStartTranslateX + releaseTouch.clientX - momentumStartX,
+      momentumStartTranslateY + releaseTouch.clientY - momentumStartY
+    );
+    engine.update();
+    sampleMomentumTouch(releaseTouch, releaseTime);
     const speed = Math.hypot(momentumVx, momentumVy);
     if (speed < MOMENTUM_MIN_SPEED) return;
     if (speed > MOMENTUM_MAX_SPEED) {
@@ -397,6 +440,8 @@ export function Lightbox(props: LightboxProps) {
 
       const beforeX = engine.translateX;
       const beforeY = engine.translateY;
+      const attemptedDx = Math.abs(momentumVx * dt);
+      const attemptedDy = Math.abs(momentumVy * dt);
       engine.setTranslateFromUserGesture(
         engine.translateX + momentumVx * dt,
         engine.translateY + momentumVy * dt
@@ -405,8 +450,12 @@ export function Lightbox(props: LightboxProps) {
 
       // An axis pinned at a clamp edge stops moving — drop its velocity so the
       // glide doesn't coast in place.
-      if (Math.abs(engine.translateX - beforeX) < 0.01) momentumVx = 0;
-      if (Math.abs(engine.translateY - beforeY) < 0.01) momentumVy = 0;
+      if (attemptedDx > 0.01 && Math.abs(engine.translateX - beforeX) < 0.01) {
+        momentumVx = 0;
+      }
+      if (attemptedDy > 0.01 && Math.abs(engine.translateY - beforeY) < 0.01) {
+        momentumVy = 0;
+      }
 
       const decay = MOMENTUM_FRICTION ** (dt / 16.6667);
       momentumVx *= decay;
@@ -435,7 +484,7 @@ export function Lightbox(props: LightboxProps) {
     } else {
       engine.handleTouchstart(e);
       zoompinchHandlingTouch = true;
-      resetMomentumTracking(engine);
+      resetMomentumTracking(e, engine);
     }
   };
 
@@ -446,8 +495,8 @@ export function Lightbox(props: LightboxProps) {
     if (zoompinchHandlingTouch) {
       engine.handleTouchmove(e);
       // Track velocity for single-finger pans only; a pinch shouldn't fling.
-      if (e.touches.length === 1) sampleMomentum(engine);
-      else resetMomentumTracking(engine);
+      if (e.touches.length === 1) sampleMomentum(e);
+      else resetMomentumTracking(e, engine);
       return;
     }
     // Second finger appeared mid-gesture: switch to zoompinch
@@ -455,7 +504,7 @@ export function Lightbox(props: LightboxProps) {
       engine.handleTouchstart(e);
       zoompinchHandlingTouch = true;
       isSwiping = false;
-      resetMomentumTracking(engine);
+      resetMomentumTracking(e, engine);
       return;
     }
     swipeEndX = e.touches[0].clientX;
@@ -482,11 +531,15 @@ export function Lightbox(props: LightboxProps) {
   ) => {
     if (zoompinchHandlingTouch) {
       engine.handleTouchend(e);
-      zoompinchHandlingTouch = false;
       // Fling only when the last finger lifts after a single-finger pan while
       // zoomed in — releasing one finger of a pinch leaves touches behind, and
       // there's nothing to pan when the image already fits.
-      if (e.touches.length === 0 && totalZoom() > 1.01) startMomentum(engine);
+      if (e.touches.length === 0) {
+        zoompinchHandlingTouch = false;
+        if (totalZoom() > 1.01) startMomentum(e, engine);
+      } else {
+        resetMomentumTracking(e, engine);
+      }
       return;
     }
     if (isSwiping && totalZoom() <= 1.01) {
