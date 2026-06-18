@@ -70,7 +70,9 @@ export function createZoomModel(
     const nh = img.naturalHeight;
     if (!avail || !nw || !nh) return undefined;
     const fit = Math.min(avail.w / nw, avail.h / nh, 1);
-    return { w: Math.max(nw * fit, isMobile() ? 0 : 200), h: nh * fit };
+    const width = Math.max(nw * fit, isMobile() ? 0 : 200);
+    const scale = width / nw;
+    return { w: width, h: nh * scale };
   };
 
   // The engine caches wrapper/canvas bounds via ResizeObservers, which fire

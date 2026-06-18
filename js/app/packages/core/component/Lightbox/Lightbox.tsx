@@ -81,13 +81,16 @@ export function Lightbox(props: LightboxProps) {
         'margin-right': 'max(var(--safe-right), 0.5rem)',
       }}
     >
-      <Dialog.Content class="flex items-center justify-center bg-surface rounded-md overflow-hidden">
+      <Dialog.Content
+        aria-label="Lightbox image viewer"
+        class="flex items-center justify-center bg-surface rounded-md overflow-hidden"
+      >
         <LightboxToolbar isVisible={true}>
           <Button
             variant="ghost"
             size="icon-md"
             onClick={images.copyToClipboard}
-            disabled={images.isCopying() || images.isPrefetching()}
+            disabled={images.isBusy() || images.isPrefetching()}
             label="Copy image"
           >
             {images.isCopying() ? <SpinnerIcon /> : <ClipboardIcon />}
@@ -96,15 +99,18 @@ export function Lightbox(props: LightboxProps) {
             variant="ghost"
             size="icon-md"
             onClick={images.downloadImage}
-            disabled={images.isDownloading() || images.isPrefetching()}
+            disabled={images.isBusy() || images.isPrefetching()}
             label="Download image"
           >
             {images.isDownloading() ? <SpinnerIcon /> : <DownloadIcon />}
           </Button>
-          <Dialog.CloseButton>
-            <Button variant="ghost" size="icon-md" label="Close">
-              <XIcon />
-            </Button>
+          <Dialog.CloseButton
+            as={Button}
+            variant="ghost"
+            size="icon-md"
+            label="Close"
+          >
+            <XIcon />
           </Dialog.CloseButton>
         </LightboxToolbar>
 

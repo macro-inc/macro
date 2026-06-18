@@ -72,31 +72,36 @@ export function createImageActions(input: ImageActionsInput) {
     return cached ? Promise.resolve(cached) : fetchBlob();
   };
 
-  const [isCopying, setIsCopying] = createSignal(false);
-  const [isDownloading, setIsDownloading] = createSignal(false);
+  const [activeAction, setActiveAction] = createSignal<
+    'copy' | 'download' | undefined
+  >();
+  const isBusy = () => activeAction() != null;
+  const isCopying = () => activeAction() === 'copy';
+  const isDownloading = () => activeAction() === 'download';
 
   const copyToClipboard = async () => {
-    if (isCopying()) return;
-    setIsCopying(true);
+    if (isBusy()) return;
+    setActiveAction('copy');
     try {
       await copyImageToClipboard(fetchBlobCached, input.src() ?? '');
     } finally {
-      setIsCopying(false);
+      setActiveAction(undefined);
     }
   };
 
   const downloadImage = async () => {
-    if (isDownloading()) return;
-    setIsDownloading(true);
+    if (isBusy()) return;
+    setActiveAction('download');
     try {
       await downloadImageAction(fetchBlobCached, input.imageId());
     } finally {
-      setIsDownloading(false);
+      setActiveAction(undefined);
     }
   };
 
   return {
     isPrefetching,
+    isBusy,
     isCopying,
     isDownloading,
     copyToClipboard,

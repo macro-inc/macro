@@ -99,8 +99,12 @@ export function createMomentum(
 
   const startMomentum = (e: TouchEvent, engine: ZoompinchHandle['engine']) => {
     cancelMomentum();
+    const activeTouchId = momentumActiveTouchId;
+    if (activeTouchId === undefined || momentumSamples.length === 0) return;
     const releaseTime = eventTime(e);
-    const releaseTouch = getMomentumTouch(e.changedTouches);
+    const releaseTouch = Array.from(e.changedTouches).find(
+      (touch) => touch.identifier === activeTouchId
+    );
     if (!releaseTouch) return;
     engine.setTranslateFromUserGesture(
       momentumStartTranslateX + releaseTouch.clientX - momentumStartX,
