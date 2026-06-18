@@ -7,8 +7,8 @@ use crate::model::types::Model;
 use crate::stream::{ChatCompletionStream, StreamPart};
 use crate::tool_adapter::DynToolSetAdapter;
 use ai_toolset::{RequestContext, ToolSet as AiToolSet};
+use ai_usage::{UsageContext, UsageRecorder};
 use futures::StreamExt;
-use macro_user_id::user_id::MacroUserIdStr;
 use rig_core::agent::{Agent, MultiTurnStreamItem};
 use rig_core::client::ProviderClient;
 use rig_core::completion::{CompletionModel, GetTokenUsage};
@@ -35,20 +35,18 @@ pub struct AgentLoop {
     model: String,
     max_turns: usize,
     max_tokens: u64,
-}
-
-impl Default for AgentLoop {
-    fn default() -> Self {
-        Self::new()
-    }
+    recorder: Arc<dyn UsageRecorder>,
 }
 
 impl AgentLoop {
     /// Create an `AgentLoop` with provider clients from the environment and
     /// the default model (Opus 4.7).
     ///
+    /// `recorder` is the [`UsageRecorder`] every session created from this loop
+    /// logs token usage to — it is required so that no AI call goes unrecorded.
+    ///
     /// `ANTHROPIC_API_KEY` and `OPENAI_API_KEY` are required.
-    pub fn new() -> Self {
+    pub fn new(recorder: Arc<dyn UsageRecorder>) -> Self {
         let anthropic =
             Arc::new(anthropic::Client::from_env().expect("ANTHROPIC_API_KEY must be set"));
         let openai = Arc::new(openai::Client::from_env().expect("OPENAI_API_KEY must be set"));
@@ -58,6 +56,7 @@ impl AgentLoop {
             model: AgentModel::default().to_string(),
             max_turns: DEFAULT_MAX_TURNS,
             max_tokens: DEFAULT_MAX_TOKENS,
+            recorder,
         }
     }
 
@@ -105,18 +104,21 @@ impl AgentLoop {
     /// `toolset` is the combined tool set (static + MCP) for this request.
     /// `context` is the shared service context passed to tool calls.
     /// `system_prompt` is the system prompt for this request.
-    /// `user_id` identifies the calling user for tool dispatch.
+    /// `usage_ctx` identifies the calling user (used for tool dispatch) and the
+    /// feature/entity that token usage is recorded against.
     pub async fn session<Context>(
         &self,
         toolset: Arc<dyn AiToolSet<Context> + Send + Sync>,
         context: Arc<Context>,
         system_prompt: &str,
-        user_id: MacroUserIdStr<'static>,
+        usage_ctx: UsageContext,
     ) -> Session
     where
         Context: Clone + Send + Sync + 'static,
     {
-        let request_context = Arc::new(RwLock::new(RequestContext { user_id }));
+        let request_context = Arc::new(RwLock::new(RequestContext {
+            user_id: usage_ctx.user.clone(),
+        }));
 
         // Keep a handle to the toolset so the stream bridge can resolve MCP
         // routing info (service / display name) for tool calls. This is the
@@ -171,6 +173,9 @@ impl AgentLoop {
             history: Vec::new(),
             max_turns: self.max_turns,
             routing,
+            recorder: self.recorder.clone(),
+            usage_ctx,
+            model: self.model.clone(),
         }
     }
 }
@@ -187,6 +192,9 @@ pub struct Session {
     history: Vec<Message>,
     max_turns: usize,
     routing: ToolRouter,
+    recorder: Arc<dyn UsageRecorder>,
+    usage_ctx: UsageContext,
+    model: String,
 }
 
 impl Session {
@@ -215,6 +223,9 @@ impl Session {
                     history.to_vec(),
                     self.max_turns,
                     self.routing.clone(),
+                    self.recorder.clone(),
+                    self.usage_ctx.clone(),
+                    self.model.clone(),
                 )
                 .await
             }
@@ -225,6 +236,9 @@ impl Session {
                     history.to_vec(),
                     self.max_turns,
                     self.routing.clone(),
+                    self.recorder.clone(),
+                    self.usage_ctx.clone(),
+                    self.model.clone(),
                 )
                 .await
             }
@@ -241,12 +255,16 @@ impl Session {
 
 /// Run the agentic loop on `agent` and adapt rig's stream into the
 /// provider-agnostic [`StreamPart`] stream consumed by DCS.
+#[allow(clippy::too_many_arguments)]
 async fn run_stream<M>(
     agent: &Agent<M>,
     prompt: Message,
     history: Vec<Message>,
     max_turns: usize,
     routing: ToolRouter,
+    recorder: Arc<dyn UsageRecorder>,
+    usage_ctx: UsageContext,
+    model: String,
 ) -> ChatCompletionStream<'static>
 where
     M: CompletionModel + 'static,
@@ -281,6 +299,12 @@ where
                     match other {
                         Ok(MultiTurnStreamItem::FinalResponse(final_resp)) => {
                             let usage = final_resp.usage();
+                            // Best-effort cost logging; never fails the stream.
+                            recorder.record(usage_ctx.clone().into_event(
+                                model.clone(),
+                                usage.input_tokens,
+                                usage.output_tokens,
+                            ));
                             yield Ok(StreamPart::Usage(crate::stream::Usage {
                                 input_tokens: usage.input_tokens,
                                 output_tokens: usage.output_tokens,

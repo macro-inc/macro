@@ -36,7 +36,7 @@ env_vars! {
     pub struct DocumentLimit;
     pub struct DocumentStorageServicePresignedUrlExpirySeconds;
     pub struct DocumentStorageServicePresignedUrlBrowserCacheExpirySeconds;
-    pub struct DocumentStorageServiceCloudfrontSignerPrivateKeySecretName;
+    pub struct DocumentStorageServiceCloudfrontSignerPrivateKey;
     #[derive(Clone)]
     pub struct DocumentPermissionJwtSecretKey;
     pub struct GithubWebhookSecretKey;
@@ -137,9 +137,9 @@ pub struct Config {
     pub document_storage_service_presigned_url_browser_cache_expiry_seconds: u64,
 
     pub document_storage_service_cloudfront_signer_private_key:
-        LocalOrRemoteSecret<DocumentStorageServiceCloudfrontSignerPrivateKeySecretName>,
+        LocalOrRemoteSecret<DocumentStorageServiceCloudfrontSignerPrivateKey>,
 
-    pub document_permission_jwt: LocalOrRemoteSecret<DocumentPermissionJwtSecretKey>,
+    pub document_permission_jwt_secret_key: LocalOrRemoteSecret<DocumentPermissionJwtSecretKey>,
 
     pub livekit_transcription_agent_name: LivekitTranscriptionAgentName,
     pub internal_call_secret: InternalCallSecret,

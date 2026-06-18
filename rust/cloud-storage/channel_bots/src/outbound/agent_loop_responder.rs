@@ -22,7 +22,7 @@ impl AgentLoopResponder {
     /// Create a responder from a pre-configured tool context and toolset.
     pub fn new(tool_context: ToolServiceContext, tools: ToolSetWithPrompt) -> Self {
         Self {
-            agent_loop: AgentLoop::new(),
+            agent_loop: AgentLoop::new(tool_context.recorder.clone()),
             tool_context: Arc::new(tool_context),
             toolset: tools.toolset,
             system_prompt: format!("{}{}", prompt::channel_mention::PROMPT, tools.prompt),
@@ -38,13 +38,17 @@ impl AgentResponder for AgentLoopResponder {
         let toolset: Arc<dyn ai_toolset::ToolSet<ToolServiceContext> + Send + Sync> =
             self.toolset.clone();
 
+        let usage_ctx = ai_usage::UsageContext::new(ai_usage::AiFeature::ChannelBot, user_id);
+        // Carry the feature on the context so tool-spawned subagents attribute to it.
+        let mut tool_context = (*self.tool_context).clone();
+        tool_context.usage_context = usage_ctx.clone();
         let mut session = self
             .agent_loop
             .session(
                 toolset,
-                self.tool_context.clone(),
+                Arc::new(tool_context),
                 &self.system_prompt,
-                user_id,
+                usage_ctx,
             )
             .await;
 

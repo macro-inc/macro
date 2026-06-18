@@ -1,5 +1,6 @@
 import * as stackingContext from '@core/constant/stackingContext';
 import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { Dialog, useDialogContext } from '@kobalte/core/dialog';
 import ChevronLeftIcon from '@phosphor/caret-left.svg';
 import ChevronRightIcon from '@phosphor/caret-right.svg';
@@ -127,25 +128,205 @@ export function Lightbox(props: LightboxProps) {
   // Reactive cursor state — drives the cursor style on the Zoompinch wrapper.
   const [isDragging, setIsDragging] = createSignal(false);
   const [currentScale, setCurrentScale] = createSignal(1);
+
+  // Zoom is split into card growth × engine scale. Each card axis grows with
+  // the zoom level independently until it hits the available area, so a
+  // capped axis starts cropping while the other keeps growing. The canvas
+  // keeps the image's aspect ratio, and the engine's model is "scale 1 =
+  // canvas contain-fits the wrapper", so the displayed image size is always
+  // base × zoom and exactly fills the card on every uncapped axis.
+  let containerEl: HTMLDivElement | undefined;
+  const [baseSize, setBaseSize] = createSignal<{ w: number; h: number }>();
+  const [zoom, setZoom] = createSignal(1);
+  let inApplyZoom = false;
+
+  const availableArea = () => {
+    if (!containerEl) return undefined;
+    return {
+      w: containerEl.clientWidth,
+      // Mirror the img's sm:max-h-[80vh] cap on desktop
+      h: isMobile()
+        ? containerEl.clientHeight
+        : Math.min(containerEl.clientHeight, window.innerHeight * 0.8),
+    };
+  };
+
+  const cardSizeFor = (base: { w: number; h: number }, z: number) => {
+    const avail = availableArea();
+    if (!avail) return { w: base.w * z, h: base.h * z };
+    return {
+      w: Math.min(base.w * z, avail.w),
+      h: Math.min(base.h * z, avail.h),
+    };
+  };
+
+  const cardSize = createMemo(() => {
+    const base = baseSize();
+    return base ? cardSizeFor(base, zoom()) : undefined;
+  });
+
+  // The engine's naturalScale: how far the base-aspect canvas is scaled to
+  // contain-fit the card. Engine scale carries the rest of the total zoom.
+  const containFactor = (
+    base: { w: number; h: number },
+    card: { w: number; h: number }
+  ) => Math.min(card.w / base.w, card.h / base.h);
+
+  const totalZoom = createMemo(() => {
+    const base = baseSize();
+    const card = cardSize();
+    return base && card ? currentScale() * containFactor(base, card) : 1;
+  });
+
+  // The unzoomed card size: contain-fit into the available area without
+  // upscaling, with the img's sm:min-w-50 floor on desktop.
+  const measureBase = (img: HTMLImageElement) => {
+    const avail = availableArea();
+    const nw = img.naturalWidth;
+    const nh = img.naturalHeight;
+    if (!avail || !nw || !nh) return undefined;
+    const fit = Math.min(avail.w / nw, avail.h / nh, 1);
+    return { w: Math.max(nw * fit, isMobile() ? 0 : 200), h: nh * fit };
+  };
+
+  // The engine caches wrapper/canvas bounds via ResizeObservers, which fire
+  // after we resize the card. Refresh them synchronously so transforms applied
+  // in the same tick use the new geometry.
+  const syncEngineBounds = (handle: ZoompinchHandle) => {
+    const { engine, wrapperElement } = handle;
+    engine.wrapperBounds = wrapperElement.getBoundingClientRect();
+    const canvas = wrapperElement.querySelector(
+      '.canvas'
+    ) as HTMLElement | null;
+    if (canvas) {
+      // offsetWidth/Height: layout size, unaffected by the engine's transform
+      engine.canvasBounds = {
+        ...engine.canvasBounds,
+        width: canvas.offsetWidth,
+        height: canvas.offsetHeight,
+      };
+    }
+  };
+
+  // The canvas-relative (0-1) content point currently under the wrapper center.
+  const centerCanvasRel = (
+    engine: ZoompinchHandle['engine']
+  ): [number, number] => {
+    const [cx, cy] = engine.normalizeClientCoords(
+      engine.wrapperInnerX + engine.wrapperInnerWidth / 2,
+      engine.wrapperInnerY + engine.wrapperInnerHeight / 2
+    );
+    return [cx / engine.canvasBounds.width, cy / engine.canvasBounds.height];
+  };
+
+  const applyZoom = (
+    handle: ZoompinchHandle,
+    zoomLevel: number,
+    anchor?: [number, number]
+  ) => {
+    const { engine } = handle;
+    const base = baseSize();
+    const z = Math.max(1, zoomLevel);
+    const f = base ? containFactor(base, cardSizeFor(base, z)) : 1;
+    // Without an explicit anchor, keep whatever content point sits at the card
+    // center fixed across the resize — read it from the old geometry first.
+    const wrapperAnchor = anchor ?? ([0.5, 0.5] as [number, number]);
+    const canvasAnchor = anchor ?? centerCanvasRel(engine);
+    inApplyZoom = true;
+    setZoom(z);
+    syncEngineBounds(handle);
+    engine.applyTransform(z / f, wrapperAnchor, canvasAnchor);
+    inApplyZoom = false;
+  };
+
+  // Continuous wheel / trackpad zoom. The engine computes the new scale (so the
+  // zoom feel is unchanged), but we discard its cursor-anchored translate and
+  // re-apply the zoom anchored at the *pre-gesture* view center via applyZoom.
+  // Center-anchoring is what keeps the image continuous across the point where
+  // an axis stops growing and starts cropping: while an axis is still growing
+  // there is no overflow on it, so the engine force-centers it and an
+  // off-center anchor's offset is suppressed — it would otherwise snap free the
+  // instant the axis caps, producing a visible jump. Non-zoom wheel events pan.
+  const handleWheel = (e: WheelEvent, engine: ZoompinchHandle['engine']) => {
+    const handle = zoompinchHandle();
+    const base = baseSize();
+    const card = cardSize();
+    if (e.ctrlKey && handle && base && card) {
+      e.preventDefault();
+      const anchor = centerCanvasRel(engine); // capture before the engine moves
+      // Let the engine derive the new scale, but suppress the rebalance pass —
+      // we re-apply the zoom ourselves below with the correct anchor.
+      inApplyZoom = true;
+      engine.handleWheel(e);
+      inApplyZoom = false;
+      applyZoom(handle, engine.scale * containFactor(base, card), anchor);
+      return;
+    }
+    // Pan. The engine's own wheel-pan multiplies the delta by 25 and only
+    // normalizes when |delta| >= 100, so trackpads and hi-res mice — whose
+    // deltas are small (often fractional) — lurch hundreds of px per event,
+    // snapping straight to the clamp edge. Pan 1:1 with the real pixel delta
+    // instead. (deltaMode: 0 = px, 1 = lines, 2 = pages.)
+    e.preventDefault();
+    const unit =
+      e.deltaMode === 1
+        ? 16
+        : e.deltaMode === 2
+          ? engine.wrapperBounds.height
+          : 1;
+    engine.setTranslateFromUserGesture(
+      engine.translateX - e.deltaX * unit,
+      engine.translateY - e.deltaY * unit
+    );
+    engine.update();
+  };
+
+  // Rebalance after engine-driven zoom (wheel/pinch): move as much of the
+  // total zoom as possible into card growth, leaving the rest on the engine.
+  // Runs synchronously inside the engine's update event, before paint.
+  const rebalanceZoom = (engine: ZoompinchHandle['engine']) => {
+    if (inApplyZoom) return;
+    const handle = zoompinchHandle();
+    const base = baseSize();
+    const card = cardSize();
+    if (!handle || !base || !card) return;
+    const z = Math.max(1, engine.scale * containFactor(base, card));
+    const target = cardSizeFor(base, z);
+    if (
+      Math.abs(z / containFactor(base, target) - engine.scale) > 0.001 ||
+      Math.abs(target.w - card.w) > 0.5 ||
+      Math.abs(target.h - card.h) > 0.5
+    ) {
+      applyZoom(handle, z);
+    }
+  };
+
   const cursor = createMemo(() => {
     if (isDragging() && currentScale() > 1.01) return 'grab';
-    if (currentScale() > 1.01) return 'zoom-out';
+    if (totalZoom() > 1.01) return 'zoom-out';
     return 'zoom-in';
   });
 
-  // Swipe-to-navigate state (used inside the touch override callbacks below)
-  let swipeTouchStartX = 0;
-  let swipeTouchEndX = 0;
+  // Single-finger swipe state. On touch devices, when fully zoomed out, a
+  // single-finger drag is a swipe gesture: horizontal navigates the gallery,
+  // a downward swipe dismisses the lightbox. The axis is locked on the first
+  // clearly-directional movement so the two don't fight.
+  const SWIPE_DISMISS_DISTANCE = 100; // px of downward travel to dismiss
+  let swipeStartX = 0;
+  let swipeStartY = 0;
+  let swipeEndX = 0;
+  let swipeEndY = 0;
+  let swipeAxis: 'x' | 'y' | null = null;
   let isSwiping = false;
   let zoompinchHandlingTouch = false;
 
-  // Touch override handlers for swipe-to-navigate
   const touchOnStart = (e: TouchEvent, engine: ZoompinchHandle['engine']) => {
-    const hasNav = props.onPrevious != null || props.onNext != null;
     const doSwipeDetection =
-      isMobile() && hasNav && e.touches.length === 1 && engine.scale <= 1.01;
+      isTouchDevice() && e.touches.length === 1 && totalZoom() <= 1.01;
     if (doSwipeDetection) {
-      swipeTouchStartX = e.touches[0].clientX;
+      swipeStartX = swipeEndX = e.touches[0].clientX;
+      swipeStartY = swipeEndY = e.touches[0].clientY;
+      swipeAxis = null;
       isSwiping = false;
       zoompinchHandlingTouch = false;
     } else {
@@ -169,9 +350,21 @@ export function Lightbox(props: LightboxProps) {
       isSwiping = false;
       return;
     }
-    swipeTouchEndX = e.touches[0].clientX;
-    if (Math.abs(swipeTouchStartX - e.touches[0].clientX) > 30)
+    swipeEndX = e.touches[0].clientX;
+    swipeEndY = e.touches[0].clientY;
+    const dx = swipeEndX - swipeStartX;
+    const dy = swipeEndY - swipeStartY;
+    // Lock to the dominant axis once the gesture is clearly directional.
+    if (!swipeAxis && Math.hypot(dx, dy) > 10) {
+      swipeAxis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+    }
+    // Downward-only on the y axis — an upward drag is left alone.
+    if (
+      (swipeAxis === 'x' && Math.abs(dx) > 30) ||
+      (swipeAxis === 'y' && dy > 30)
+    ) {
       isSwiping = true;
+    }
     if (isSwiping) e.preventDefault();
   };
 
@@ -184,16 +377,23 @@ export function Lightbox(props: LightboxProps) {
       zoompinchHandlingTouch = false;
       return;
     }
-    if (isSwiping && engine.scale <= 1.01) {
-      const diff = swipeTouchStartX - swipeTouchEndX;
-      if (Math.abs(diff) > 50) {
-        if (diff > 0) props.onNext?.();
-        else props.onPrevious?.();
+    if (isSwiping && totalZoom() <= 1.01) {
+      if (swipeAxis === 'x') {
+        const diff = swipeStartX - swipeEndX;
+        if (Math.abs(diff) > 50) {
+          if (diff > 0) props.onNext?.();
+          else props.onPrevious?.();
+        }
+      } else if (
+        swipeAxis === 'y' &&
+        swipeEndY - swipeStartY > SWIPE_DISMISS_DISTANCE
+      ) {
+        dialogContext.close();
       }
     }
+    swipeAxis = null;
     isSwiping = false;
-    swipeTouchStartX = 0;
-    swipeTouchEndX = 0;
+    swipeStartX = swipeStartY = swipeEndX = swipeEndY = 0;
     zoompinchHandlingTouch = false;
   };
 
@@ -247,10 +447,10 @@ export function Lightbox(props: LightboxProps) {
         const b = engine.wrapperBounds;
         const relX = (e.clientX - b.x) / b.width;
         const relY = (e.clientY - b.y) / b.height;
-        if (engine.scale <= 1.01) {
-          engine.applyTransform(2.5, [relX, relY], [relX, relY]);
+        if (totalZoom() <= 1.01) {
+          applyZoom(handle, 2.5, [relX, relY]);
         } else {
-          engine.applyTransform(1, [0.5, 0.5], [0.5, 0.5]);
+          applyZoom(handle, 1);
         }
       };
 
@@ -276,11 +476,11 @@ export function Lightbox(props: LightboxProps) {
   // Reset zoom when navigating to a different image.
   createEffect(() => {
     props.src();
-    untrack(() => zoompinchHandle())?.engine.applyTransform(
-      1,
-      [0.5, 0.5],
-      [0.5, 0.5]
-    );
+    untrack(() => {
+      const handle = zoompinchHandle();
+      if (handle) applyZoom(handle, 1);
+      else setZoom(1);
+    });
   });
 
   const navButtonClass =
@@ -290,6 +490,7 @@ export function Lightbox(props: LightboxProps) {
 
   return (
     <div
+      ref={containerEl}
       class="fixed inset-0 z-modal flex items-center justify-center"
       style={{
         'margin-top': 'max(var(--safe-top), 0.5rem)',
@@ -298,7 +499,7 @@ export function Lightbox(props: LightboxProps) {
         'margin-right': 'max(var(--safe-right), 0.5rem)',
       }}
     >
-      <Dialog.Content class="flex items-center justify-center bg-surface">
+      <Dialog.Content class="flex items-center justify-center bg-surface rounded-md overflow-hidden">
         {/* Toolbar */}
         <LightboxToolbar isVisible={true}>
           <Button
@@ -379,7 +580,7 @@ export function Lightbox(props: LightboxProps) {
           <Show
             when={props.src()}
             fallback={
-              <div class="flex flex-col items-center justify-center gap-2 size-15 border border-edge rounded-md bg-surface">
+              <div class="flex flex-col items-center justify-center gap-2 size-15 border border-edge bg-surface">
                 <Spinner class="size-4 animate-spin" />
               </div>
             }
@@ -387,20 +588,53 @@ export function Lightbox(props: LightboxProps) {
             <Zoompinch
               handleRef={setZoompinchHandle}
               clampBounds
-              onUpdate={(engine) => setCurrentScale(engine.scale)}
+              // Engine min below 1 so gestures can zoom out past the engine's
+              // own floor; rebalanceZoom transfers that into card shrinkage
+              // and enforces the real floor of total zoom = 1.
+              minScale={0.1}
+              onUpdate={(engine) => {
+                setCurrentScale(engine.scale);
+                rebalanceZoom(engine);
+              }}
+              onWheel={handleWheel}
               touch={{
                 onStart: touchOnStart,
                 onWindowMove: touchOnWindowMove,
                 onWindowEnd: touchOnWindowEnd,
               }}
-              class="size-full relative overflow-hidden rounded-2xl"
-              style={{ cursor: cursor() }}
+              class={cn('relative overflow-hidden', !cardSize() && 'size-full')}
+              style={{
+                cursor: cursor(),
+                ...(cardSize() && {
+                  width: `${cardSize()!.w}px`,
+                  height: `${cardSize()!.h}px`,
+                }),
+              }}
+              // Give the canvas the image's own aspect ratio so the engine's
+              // contain-fit and clamping track the image content, not the
+              // (possibly differently-shaped) card.
+              canvasStyle={
+                baseSize()
+                  ? {
+                      width: `${baseSize()!.w}px`,
+                      height: `${baseSize()!.h}px`,
+                    }
+                  : undefined
+              }
             >
               <img
                 class="size-full sm:min-w-50 sm:max-h-[80vh] object-contain select-none"
                 style={{ '-webkit-touch-callout': 'none' }}
                 src={props.src()}
                 alt="preview"
+                onLoad={(e) => {
+                  const base = measureBase(e.currentTarget);
+                  if (!base) return;
+                  setBaseSize(base);
+                  const handle = zoompinchHandle();
+                  if (handle) applyZoom(handle, 1);
+                  else setZoom(1);
+                }}
               />
             </Zoompinch>
           </Show>

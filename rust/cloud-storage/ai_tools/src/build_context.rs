@@ -307,6 +307,8 @@ pub async fn build_tool_service_context_from_env(
         team_tool_context: crate::tool_context::build_team_tool_context(pool.clone()),
         schedule_tool_context: crate::NoOpScheduleContext,
         anthropic_tool_context,
+        recorder: ai_usage::pg_recorder(pool.clone()),
+        usage_context: ai_usage::UsageContext::system(ai_usage::AiFeature::Chat),
     })
 }
 

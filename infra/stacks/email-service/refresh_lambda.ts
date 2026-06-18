@@ -14,6 +14,7 @@ export type EnvVars = {
   RUST_LOG: pulumi.Output<string> | string;
   DELETE_UNUSED_AFTER_DAYS: pulumi.Output<string> | string;
   DELETE_INACTIVE_AFTER_DAYS: pulumi.Output<string> | string;
+  INBOX_HEALTH_POLL_INTERVAL_HOURS: pulumi.Output<string> | string;
 };
 
 type Args = {

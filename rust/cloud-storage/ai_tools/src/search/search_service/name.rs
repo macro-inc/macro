@@ -62,7 +62,7 @@ impl AsyncTool<Arc<SearchServiceClient>> for NameSearch {
             filters: entity_filters_from_include(self.entity_types.clone(), base_filters),
             search_on: models_search::SearchOn::Name,
             include_crm: false,
-            collapse: Some(true),
+            collapse: None,
         };
 
         let response = search_client

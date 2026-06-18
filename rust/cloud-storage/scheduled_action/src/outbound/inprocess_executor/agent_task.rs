@@ -129,14 +129,14 @@ async fn run_tool_loop(
     };
 
     let toolset: Arc<dyn AiToolSet<_> + Send + Sync> = tools.toolset;
-    let agent_loop = AgentLoop::new().with_model(&agent_task.model);
+    let agent_loop = AgentLoop::new(tool_context.recorder.clone()).with_model(&agent_task.model);
+    let usage_ctx =
+        ai_usage::UsageContext::new(ai_usage::AiFeature::Automation, action.owner.clone());
+    // Carry the feature on the context so tool-spawned subagents attribute to it.
+    let mut tool_context = tool_context.clone();
+    tool_context.usage_context = usage_ctx.clone();
     let mut session = agent_loop
-        .session(
-            toolset,
-            Arc::new(tool_context.clone()),
-            &system_prompt,
-            action.owner.clone(),
-        )
+        .session(toolset, Arc::new(tool_context), &system_prompt, usage_ctx)
         .await;
 
     let user_msg = ChatMessage {

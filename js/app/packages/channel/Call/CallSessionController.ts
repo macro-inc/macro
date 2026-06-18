@@ -10,6 +10,7 @@ type CallSessionControllerOptions = {
   nativeCall: NativeCallState | undefined;
   jsConnect: (tokenResponse: CallTokenResponse) => Promise<void>;
   jsDisconnect: () => Promise<void>;
+  clearOptimisticJoin: () => void;
 };
 
 export type CallSessionConnectMetadata = {
@@ -41,6 +42,7 @@ export function createCallSessionController(
     return createNativeCallKitSessionController({
       nativeCall: options.nativeCall,
       jsDisconnect: options.jsDisconnect,
+      clearOptimisticJoin: options.clearOptimisticJoin,
     });
   }
 
@@ -64,6 +66,7 @@ function createJsLivekitSessionController(options: {
 function createNativeCallKitSessionController(options: {
   nativeCall: NativeCallState;
   jsDisconnect: () => Promise<void>;
+  clearOptimisticJoin: () => void;
 }): CallSessionController {
   return {
     shouldRequestToken: (channelId) => {
@@ -87,9 +90,9 @@ function createNativeCallKitSessionController(options: {
 
       return !shouldSkip;
     },
-    connectWithToken: (tokenResponse, metadata) => {
+    connectWithToken: async (tokenResponse, metadata) => {
       const channelTitle = metadata?.channelTitle ?? null;
-      return startNativeCallKitOutgoingCall(
+      await startNativeCallKitOutgoingCall(
         {
           channelId: tokenResponse.channelId,
           callId: tokenResponse.callId,
@@ -100,6 +103,7 @@ function createNativeCallKitSessionController(options: {
         },
         options.nativeCall
       );
+      options.clearOptimisticJoin();
     },
     disconnect: async (disconnectOptions) => {
       if (disconnectOptions?.endNativeCall !== false) {
@@ -110,6 +114,7 @@ function createNativeCallKitSessionController(options: {
         }
       }
       await options.jsDisconnect();
+      options.clearOptimisticJoin();
     },
   };
 }

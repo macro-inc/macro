@@ -43,6 +43,7 @@
             glib
             glib.dev
             libclang
+            xz.out
           ]
           ++ pkgs.lib.optionals isLinux [
             glibc.dev

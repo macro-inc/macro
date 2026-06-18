@@ -512,10 +512,16 @@ fn stream_and_save_message(
         let toolset: Arc<dyn ai_toolset::ToolSet<_> + Send + Sync> = Arc::new(
             mcp_client::domain::service::CombinedToolSet::new(static_tools, &mcp_records).await,
         );
-        let agent_loop = AgentLoop::new().with_model(&model);
+        let agent_loop =
+            AgentLoop::new(tool_context.recorder.clone()).with_model(&model);
         let rig_messages = agent::to_rig_messages(&request);
+        let usage_ctx = ai_usage::UsageContext::new(ai_usage::AiFeature::Chat, user_id.clone())
+            .with_entity(macro_uuid::string_to_uuid(&chat_id).ok());
+        // Carry the feature on the context so tool-spawned subagents attribute to it.
+        let mut tool_context = tool_context;
+        tool_context.usage_context = usage_ctx.clone();
         let mut session = agent_loop
-            .session(toolset, Arc::new(tool_context), &system_prompt, user_id.clone())
+            .session(toolset, Arc::new(tool_context), &system_prompt, usage_ctx)
             .await;
 
         // Create the AI stream - yield error if it fails

@@ -500,7 +500,7 @@ export const SoupViewContextProvider: FlowComponent<
     queryOptions: () => {
       const view = activeListView();
       return {
-        enabled: !search.isSearching(),
+        enabled: enabled() && !search.isSearching(),
         meta: {
           itemFilter: (item) => soupItemMatchesListView(item, view),
         },

@@ -226,6 +226,7 @@ export const TOKENS = {
     math: 'md.math',
     table: 'md.table',
     divider: 'md.divider',
+    toggleStateDebugger: 'md.toggleStateDebugger',
   },
 
   // create menu

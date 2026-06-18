@@ -1,9 +1,9 @@
 import IconClipboard from '@phosphor-icons/core/regular/clipboard.svg?component-solid';
-import IconTrash from '@phosphor-icons/core/regular/trash.svg?component-solid';
+import IconDotsThreeVertical from '@phosphor/dots-three-vertical.svg';
 import { deleteTheme, exportTheme } from '../utils/themeUtils';
-import { userThemes } from '../signals/themeSignals';
+import { setDarkModeTheme, setLightModeTheme, userThemes } from '../signals/themeSignals';
 import { createMemo, Show } from 'solid-js';
-import { Button } from '@ui';
+import { Button, Dropdown } from '@ui';
 
 interface ThemeCrudProps { themeId: string; }
 
@@ -30,18 +30,39 @@ export function ThemeCrud(props: ThemeCrudProps) {
         <IconClipboard />
       </Button>
 
-      <Show when={isUserTheme()}>
-        <Button
-          onPointerDown={() => {
-            deleteTheme(props.themeId);
-          }}
-          label="Delete Theme"
-          variant="ghost"
-          size="icon-sm"
-        >
-          <IconTrash />
-        </Button>
-      </Show>
+      <Dropdown placement="bottom-end">
+        <Dropdown.Trigger label="Theme options" variant="ghost" size="icon-sm">
+          <IconDotsThreeVertical />
+        </Dropdown.Trigger>
+        <Dropdown.Content class="shadow-menu">
+          <Dropdown.Group>
+            <Dropdown.Item
+              class="touch:min-h-10"
+              onSelect={() => setDarkModeTheme(props.themeId)}
+            >
+              Set default dark theme
+            </Dropdown.Item>
+            <Dropdown.Item
+              class="touch:min-h-10"
+              onSelect={() => setLightModeTheme(props.themeId)}
+            >
+              Set default light theme
+            </Dropdown.Item>
+          </Dropdown.Group>
+          {/* Separate group renders a divider (gap-px) above the destructive
+              action; only user themes can be deleted. */}
+          <Show when={isUserTheme()}>
+            <Dropdown.Group>
+              <Dropdown.Item
+                class="text-failure touch:min-h-10"
+                onSelect={() => deleteTheme(props.themeId)}
+              >
+                Delete
+              </Dropdown.Item>
+            </Dropdown.Group>
+          </Show>
+        </Dropdown.Content>
+      </Dropdown>
     </div>
   );
 }
