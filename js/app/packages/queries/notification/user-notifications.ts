@@ -546,6 +546,7 @@ function notificationEntityTypeToSoupTag(
         'user',
         'team',
         'call',
+        'channel_message',
         'static_file',
         'crm_company',
         'crm_contact'

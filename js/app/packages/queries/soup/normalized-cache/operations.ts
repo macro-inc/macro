@@ -74,6 +74,8 @@ function cancelSoupQueries() {
 export function optimisticUpdateSoupEntity<T extends SoupEntityTag>(
   partial: SoupEntityPartial<T>
 ): SoupTransaction {
+  if (partial.tag === 'channelThread') return { rollback: () => {} };
+
   cancelSoupQueries();
 
   const normalizer = getSoupNormalizer();
@@ -148,7 +150,7 @@ export function getSoupItemId(item: SoupApiItem): string {
     case 'call':
       return item.data.callId;
     case 'channelThread':
-      return item.data.message.message_id;
+      return item.data.root_message.message_id;
     default:
       return item.data.id;
   }
@@ -160,6 +162,8 @@ export function getSoupItemId(item: SoupApiItem): string {
  * and upsert into each resolvable group. Date / unresolved labels invalidate.
  */
 export function insertSoupEntity(item: SoupApiItem): SoupTransaction {
+  if (item.tag === 'channelThread') return { rollback: () => {} };
+
   cancelSoupQueries();
 
   const previous = snapshotSoup();
@@ -341,6 +345,8 @@ export async function refetchSoupEntity(
   entityType: SoupEntityTag,
   options?: { includeRoot?: boolean }
 ): Promise<void> {
+  if (entityType === 'channelThread') return;
+
   const { storageServiceClient } = await import('@service-storage/client');
 
   const filter = buildSingleEntityFilter(entityType, entityId, options);
@@ -362,6 +368,8 @@ export async function refetchSoupEntity(
   if (!page.items.length) return;
 
   for (const item of page.items) {
+    if (item.tag === 'channelThread') continue;
+
     const itemId = getSoupItemId(item);
     if (hasSoupEntity(itemId)) {
       optimisticUpdateSoupEntity(item);
