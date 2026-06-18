@@ -358,7 +358,16 @@ export function EmailCompose(props: EmailComposeProps) {
 
   const undoSend = async (draftId: string) => {
     try {
-      await emailClient.unscheduleMessage({ draftID: draftId }, headerLinkId());
+      const result = await emailClient.unscheduleMessage(
+        { draftID: draftId },
+        headerLinkId()
+      );
+      // A non-2xx response comes back as an Err Result (it doesn't throw), so
+      // bail before reverting the send appearance in the UI.
+      if (result.isErr()) {
+        toast.failure('Failed to undo send');
+        return;
+      }
       queryClient.invalidateQueries({
         queryKey: emailKeys.previews._def,
       });
@@ -392,7 +401,7 @@ export function EmailCompose(props: EmailComposeProps) {
               },
             ]
           : undefined,
-        duration: 10_000,
+        duration: 8_000,
         mobile: true,
       });
       if (data.message.thread_db_id) {

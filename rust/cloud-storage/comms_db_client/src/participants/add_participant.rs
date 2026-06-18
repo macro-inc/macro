@@ -1,7 +1,6 @@
 use anyhow::{Context, Result};
+use channels::domain::models::ParticipantRole;
 use uuid::Uuid;
-
-use model::comms::ParticipantRole;
 
 pub struct AddParticipantOptions<'a> {
     pub channel_id: &'a Uuid,

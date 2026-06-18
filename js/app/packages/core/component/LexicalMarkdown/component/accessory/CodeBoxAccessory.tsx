@@ -46,8 +46,6 @@ import { Dynamic } from 'solid-js/web';
 import { glueToElement } from '../../directive/glueToElement';
 import { autoRegister } from '../../plugins/shared/utils';
 
-false && glueToElement;
-
 const LanguageIcons: Record<
   SupportedLanguage,
   Component<{ class?: string }>

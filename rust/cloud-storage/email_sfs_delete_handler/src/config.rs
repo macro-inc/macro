@@ -1,5 +1,11 @@
 use anyhow::Context;
 pub use macro_env::Environment;
+use macro_env_var::env_vars;
+
+env_vars! {
+    struct DatabaseUrl;
+    struct SfsDeleteQueue;
+}
 
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -16,11 +22,13 @@ pub struct Config {
 
 impl Config {
     pub fn from_env() -> anyhow::Result<Self> {
-        let database_url =
-            std::env::var("DATABASE_URL").context("DATABASE_URL must be provided")?;
+        let database_url = DatabaseUrl::new()
+            .context("DATABASE_URL must be provided")?
+            .to_string();
 
-        let email_sfs_delete_queue =
-            std::env::var("SFS_DELETE_QUEUE").context("SFS_DELETE_QUEUE must be provided")?;
+        let email_sfs_delete_queue = SfsDeleteQueue::new()
+            .context("SFS_DELETE_QUEUE must be provided")?
+            .to_string();
 
         let environment = Environment::new_or_prod();
 

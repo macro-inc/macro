@@ -6,7 +6,7 @@ const BASE_TITLES: [&str; 6] = [
     "# Tone and Style",
     "# Math Rendering Rules",
     "# Citation Rules",
-    "# Mentioning documents, channels, chats, projects, and email threads",
+    "# Mentioning documents, channels, channel messages, chats, projects, and email threads",
     "# Do Not Rules",
     "# Terms",
 ];
@@ -22,6 +22,21 @@ fn base_prompt_renders_all_sections_in_order() {
         last += position + title.len();
     }
     assert!(!rendered.contains("# Tool Use"));
+}
+
+#[test]
+fn base_prompt_includes_channel_message_mention_format() {
+    let rendered = BASE_PROMPT.to_string();
+    assert!(
+        rendered.contains(
+            r#""blockName":"channel","blockParams":{"channel_message_id":"{message_id}"}"#
+        )
+    );
+    assert!(
+        rendered.contains(
+            "Do not link only the channel unless you are referring to the whole channel."
+        )
+    );
 }
 
 #[test]

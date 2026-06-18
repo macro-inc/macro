@@ -38,7 +38,13 @@ type SplitKey = `${BlockName | BlockAlias | 'component'}:${string}`;
  */
 export type EntryState = Record<string, unknown>;
 
-export type SplitContent =
+export type SplitContent = {
+  /**
+   * Whether to preserve the params originally passed when navigating to this content.
+   * If false, then it only does so the first time.
+   */
+  preserveParams?: boolean;
+} & (
   | {
       type: BlockName | BlockAlias;
       id: string;
@@ -51,7 +57,8 @@ export type SplitContent =
       id: string;
       params?: Record<string, unknown>;
       state?: EntryState;
-    };
+    }
+);
 
 export type SplitContentType = SplitContent['type'];
 
@@ -636,7 +643,10 @@ export function createSplitLayout(
     cause: NavigationCause = 'fresh'
   ) {
     const otherSplits = state.splits.filter((s) => s.id !== split.id);
-    const content = attachAliasContext(next);
+    let content = attachAliasContext(next);
+    if (!content.preserveParams && content.params !== undefined) {
+      content = { ...content, params: undefined };
+    }
     if (isDuplicateSplit(otherSplits, next)) return;
 
     const splitIndex = splitIndexById(split.id);

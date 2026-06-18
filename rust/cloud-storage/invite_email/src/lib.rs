@@ -68,6 +68,7 @@ fn frontend_host(env: Environment) -> Url {
         Environment::Production => "https://macro.com".to_string(),
         Environment::Develop => "https://dev.macro.com".to_string(),
         Environment::Local => {
+            #[expect(clippy::disallowed_methods, reason = "Only used when running locally")]
             let port = std::env::var("FRONTEND_PORT").unwrap_or_else(|_| "3000".to_string());
             format!("http://localhost:{port}")
         }

@@ -50,3 +50,9 @@ export { Tooltip } from './components/Tooltip';
 
 /* utils */
 export { cn } from './utils/classname';
+export type { CtrlJKMenuNavigationOptions } from './utils/menuKeyboardNavigation';
+export {
+  addCtrlJKMenuNavigation,
+  ctrlJKMenuNavigation,
+  handleCtrlJKMenuNavigation,
+} from './utils/menuKeyboardNavigation';

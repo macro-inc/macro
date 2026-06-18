@@ -23,7 +23,7 @@ It can be used with the [Slack Manifest API](https://api.slack.com/reference/man
 or update the app programmatically.
 
 ## Docs
-
+- [MCP Docs](https://docs.slack.dev/ai/slack-mcp-server/)
 - [Slack MCP overview](https://docs.slack.dev/agents-and-apps/mcp-for-slack)
 - [Slack OAuth v2 user tokens](https://docs.slack.dev/authentication/installing-with-oauth)
 - [Slack scopes reference](https://docs.slack.dev/reference/scopes)

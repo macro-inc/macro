@@ -1,5 +1,6 @@
 import { useSettingsState } from '@core/constant/SettingsState';
 import type { ThemeMentionDecoratorProps } from '@lexical-core';
+import { ThemeChipPill } from '@theme/components/ThemeChipPill';
 import { setUserThemes, themes, userThemes } from '@theme/signals/themeSignals';
 import type { ThemeV2 } from '@theme/types/themeTypes';
 import { applyTheme } from '@theme/utils/themeUtils';
@@ -24,15 +25,6 @@ export function ThemeMention(props: ThemeMentionDecoratorProps) {
     return null;
   };
 
-  const a0 = () => theme()?.tokens.a0;
-  const b0 = () => theme()?.tokens.b0;
-  const c0 = () => theme()?.tokens.c0;
-
-  const oklch = (token: { l: number; c: number; h: number } | undefined) => {
-    if (!token) return 'transparent';
-    return `oklch(${token.l} ${token.c} ${token.h}deg)`;
-  };
-
   const handleClick = () => {
     const t = theme();
     if (!t) return;
@@ -47,29 +39,15 @@ export function ThemeMention(props: ThemeMentionDecoratorProps) {
   };
 
   return (
-    <button
+    <ThemeChipPill
+      type="button"
+      onClick={handleClick}
       class={cn(
-        'pointer-events-auto mx-0.5 inline-flex items-center gap-0.75 align-baseline px-1 py-px rounded-md border border-edge-muted bg-transparent',
+        'pointer-events-auto mx-0.5 align-baseline',
         isSelectedAsNode() && 'bg-active'
       )}
-      onClick={handleClick}
-      type="button"
-    >
-      <span class="inline-flex items-center gap-0.5">
-        <span
-          class="inline-block size-2.5 rounded-xs border border-edge-muted"
-          style={{ 'background-color': oklch(a0()) }}
-        />
-        <span
-          class="inline-block size-2.5 rounded-xs border border-edge-muted"
-          style={{ 'background-color': oklch(b0()) }}
-        />
-        <span
-          class="inline-block size-2.5 rounded-xs border border-edge-muted"
-          style={{ 'background-color': oklch(c0()) }}
-        />
-      </span>
-      <span class="mx-0.5 cursor-default">{props.name}</span>
-    </button>
+      theme={theme()}
+      name={props.name}
+    />
   );
 }

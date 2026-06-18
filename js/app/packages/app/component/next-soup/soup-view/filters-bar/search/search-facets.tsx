@@ -266,7 +266,8 @@ export function useSearchFacets(
     label: 'Inbox',
     options: inboxPicker.options,
     activeIds: inboxPicker.activeIds,
-    onChange: inboxPicker.onChange,
+    onChange: (ids) =>
+      ids.length ? inboxPicker.onChange(ids) : inboxPicker.reset(),
     onOnly: inboxPicker.selectOnly,
     placeholder: 'Search inboxes...',
     preserveOrder: true,

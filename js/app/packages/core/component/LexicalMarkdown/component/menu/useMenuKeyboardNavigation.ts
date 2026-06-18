@@ -7,10 +7,10 @@ type MenuKeyboardHandlers = {
   /** Called when the user navigates down (ArrowDown, Ctrl+J, Ctrl+N, Tab) */
   onDown?: (e: KeyboardEvent) => void;
 
-  /** Called when the user navigates left (ArrowLeft) */
+  /** Called when the user navigates left (ArrowLeft, Ctrl+H) */
   onLeft?: (e: KeyboardEvent) => void;
 
-  /** Called when the user navigates right (ArrowRight) */
+  /** Called when the user navigates right (ArrowRight, Ctrl+L) */
   onRight?: (e: KeyboardEvent) => void;
 
   /** Called when the user confirms selection (Enter) */
@@ -54,8 +54,8 @@ type MenuKeyboardHandlers = {
  * Key mappings:
  * - Up: ArrowUp, Ctrl+K, Ctrl+P, Shift+Tab
  * - Down: ArrowDown, Ctrl+J, Ctrl+N, Tab (without Shift)
- * - Left: ArrowLeft
- * - Right: ArrowRight
+ * - Left: ArrowLeft, Ctrl+H
+ * - Right: ArrowRight, Ctrl+L
  * - Select: Enter
  * - Close: Escape
  * - Space: Space
@@ -124,6 +124,18 @@ function createMenuKeyboardNavigation(handlers: MenuKeyboardHandlers): {
       case 'k':
         if (e.ctrlKey || e.metaKey) {
           handler = onUp;
+        }
+        break;
+
+      case 'h':
+        if (e.ctrlKey || e.metaKey) {
+          handler = onLeft;
+        }
+        break;
+
+      case 'l':
+        if (e.ctrlKey || e.metaKey) {
+          handler = onRight;
         }
         break;
 

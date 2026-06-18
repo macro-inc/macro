@@ -1,5 +1,5 @@
 use cached::proc_macro::cached;
-use model::comms::Channel;
+use channels::domain::models::ChannelListItem;
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
@@ -64,7 +64,7 @@ pub async fn get_user_channel_ids(
 pub async fn get_org_channels(
     _db: &Pool<Postgres>,
     _org_id: &i64,
-) -> Result<Vec<Channel>, sqlx::Error> {
+) -> Result<Vec<ChannelListItem>, sqlx::Error> {
     Ok(Vec::new())
 }
 

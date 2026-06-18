@@ -20,7 +20,7 @@ export class DopplerEcsEnvironment extends pulumi.ComponentResource {
     opts?: pulumi.ComponentResourceOptions
   ) {
     super('my:components:DopplerEcsEnvironment', name, {}, opts);
-    const dopplerSecretKey = `/doppler/${name}/${stack}`;
+    const dopplerSecretKey = `/doppler-sync/${name}/${stack}/doppler`;
     const dopplerSecretSyncArn: pulumi.Output<string> = aws.secretsmanager
       .getSecretVersionOutput({
         secretId: dopplerSecretKey,

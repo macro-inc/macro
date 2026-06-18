@@ -1,8 +1,8 @@
 //! Bot ports.
 
 use super::models::{
-    AuthenticatedBot, Bot, BotId, BotOwner, BotToken, BotTokenCandidate, CreateBotRequest,
-    CreateBotTokenRequest, CreateBotTokenResponse, CreateChannelScopedBotRequest,
+    AuthenticatedBot, Bot, BotChannel, BotId, BotOwner, BotToken, BotTokenCandidate,
+    CreateBotRequest, CreateBotTokenRequest, CreateBotTokenResponse, CreateChannelScopedBotRequest,
     CreateChannelScopedBotResponse, PatchBotRequest,
 };
 use macro_user_id::user_id::MacroUserIdStr;
@@ -72,6 +72,12 @@ pub trait BotRepo: Clone + Send + Sync + 'static {
         channel_id: Uuid,
         bot_id: BotId,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
+    /// List active channels containing a bot.
+    fn list_bot_channels(
+        &self,
+        bot_id: BotId,
+    ) -> impl Future<Output = Result<Vec<BotChannel>, Self::Err>> + Send;
 
     /// List active bots in a channel.
     fn list_channel_bots(
@@ -178,6 +184,13 @@ pub trait BotService: Clone + Send + Sync + 'static {
         channel_id: Uuid,
         bot_id: BotId,
     ) -> impl Future<Output = Result<(), BotError>> + Send;
+
+    /// List active channels containing a manageable bot.
+    fn list_bot_channels(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        bot_id: BotId,
+    ) -> impl Future<Output = Result<Vec<BotChannel>, BotError>> + Send;
 
     /// List channel bots.
     fn list_channel_bots(

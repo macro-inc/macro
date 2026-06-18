@@ -206,10 +206,18 @@ ol.static-md.depth-6 > li:not(.list-none)::before {
 
 .md-static-code-container:not(.no-accessory) {
   padding-top: 3.5rem;
+  align-self: stretch;
+  min-width: 0;
 }
 
 .md-static-code-container .md-code-box:not(.no-accessory) {
   margin-top: -1.5rem;
+  min-height: 2.75rem;
+}
+
+.md-code-empty-line {
+  display: inline-block;
+  min-height: 1lh;
 }
 
 .md-code-box.no-accessory .md-code-box-header {

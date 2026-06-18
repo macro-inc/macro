@@ -38,16 +38,16 @@ function CommentContainer(
 ) {
   return (
     <div
-      class="relative isolate group rounded-sm"
+      class="relative isolate group"
       classList={{
         'outline-1 outline-accent/20 -outline-offset-1': props.isHighlighted,
       }}
     >
       <div
-        class="absolute top-0 left-0 size-[calc(100%)] rounded-sm -z-1"
+        class="absolute top-0 left-0 size-[calc(100%)] rounded-lg -z-1"
         classList={{
           'bg-accent/5 opacity-100': props.isHighlighted,
-          'bg-hover opacity-0 group-hover:opacity-100': !props.isHighlighted,
+          'bg-hover/50 opacity-0 group-hover:opacity-100': !props.isHighlighted,
         }}
       />
       <div

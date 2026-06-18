@@ -3,8 +3,12 @@ use crate::util::redis::RedisClient;
 use crate::util::redis::rate_limit::RateLimitArgs;
 use chrono::{DateTime, Utc};
 use connection_gateway_client::client::ConnectionGatewayClient;
+use macro_user_id::user_id::MacroUserIdStr;
 /// shared utils across different pubsub workers
 use models_email::api::refresh::RefreshEmailEvent;
+
+#[cfg(test)]
+mod test;
 use models_email::email::service::backfill::{
     BackfillOperation, BackfillPubsubMessage, DepopulateCrmContactPayload, LinkScopedPayload,
     PopulateCrmContactPayload,
@@ -13,6 +17,34 @@ use models_email::email::service::pubsub::{DetailedError, FailureReason, Process
 use models_email::gmail::operations::GmailApiOperation;
 use std::collections::HashSet;
 use uuid::Uuid;
+
+/// The macro users to notify about a link's inbox: its owner plus every primary
+/// delegated to read it. Shared by the new-mail and reauth notification paths so
+/// both fan out to the same recipients. Delegated primaries that fail to parse as
+/// a macro user id are skipped.
+pub fn build_notification_recipients(
+    owner: &MacroUserIdStr<'static>,
+    primaries: Vec<String>,
+) -> HashSet<MacroUserIdStr<'static>> {
+    let mut recipient_ids = HashSet::from([owner.clone()]);
+
+    for primary in primaries {
+        match MacroUserIdStr::try_from(primary) {
+            Ok(id) => {
+                recipient_ids.insert(id);
+            }
+            Err(e) => {
+                tracing::warn!(
+                    error=?e,
+                    inbox_owner=%owner,
+                    "skipping delegated primary that failed to parse as a macro user id"
+                );
+            }
+        }
+    }
+
+    recipient_ids
+}
 
 /// One recipient tuple `(email, name, first_at, last_at)` fed into
 /// [`enqueue_populate_crm_contacts`]. Per-message paths use the same

@@ -1,7 +1,7 @@
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { Placement } from '@floating-ui/dom';
 import { Tooltip as KobalteTooltip } from '@kobalte/core/tooltip';
-import { type JSX, type ParentProps, Show } from 'solid-js';
+import { createSignal, type JSX, type ParentProps, Show } from 'solid-js';
 import { cn } from '../utils/classname';
 import { Surface } from './Surface';
 
@@ -11,6 +11,13 @@ type HoverCardProps = ParentProps<{
   placement?: Placement;
   content: JSX.Element;
   as?: 'div' | 'span';
+  /**
+   * When true, force the hover card closed and prevent it from opening on
+   * hover. Use to defer to another surface anchored on the same trigger — e.g.
+   * an editor popover that opens on click — so a click dismisses the hover card
+   * instead of stacking it on top of the popover.
+   */
+  disabled?: boolean;
 }>;
 
 /**
@@ -20,9 +27,17 @@ type HoverCardProps = ParentProps<{
  * </HoverCard>
  */
 export function HoverCard(props: HoverCardProps) {
+  // Controlled open: mirror Kobalte's hover-driven state via onOpenChange, then
+  // gate it on `disabled` so the card hides immediately when suppressed — even
+  // if it was already open when `disabled` flipped true.
+  const [hovered, setHovered] = createSignal(false);
+  const open = () => hovered() && !props.disabled;
+
   return (
     <Show when={!isTouchDevice()} fallback={props.children}>
       <KobalteTooltip
+        open={open()}
+        onOpenChange={setHovered}
         placement={props.placement ?? 'bottom'}
         overflowPadding={16}
         fitViewport={true}

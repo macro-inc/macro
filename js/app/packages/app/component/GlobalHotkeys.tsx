@@ -1,10 +1,15 @@
 import { useAnalytics } from '@app/component/analytics-context';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSubscribeToKeypress } from '@app/signal/hotkeyRoot';
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
 import { useLogout } from '@core/auth/logout';
 import { useOpenInstructionsMd } from '@core/component/AI/util/instructions';
 import { toast } from '@core/component/Toast/Toast';
-import { LOCAL_ONLY } from '@core/constant/featureFlags';
+import {
+  ENABLE_SNIPPETS_FLAG,
+  ENABLE_SNIPPETS_OVERRIDE,
+  LOCAL_ONLY,
+} from '@core/constant/featureFlags';
 import {
   type SettingsTab,
   useSettingsState,
@@ -16,6 +21,7 @@ import {
   openFolderPicker,
 } from '@core/util/upload';
 import IconGear from '@icon/macro-gear.svg';
+import Plus from '@phosphor/plus.svg';
 import LogoutIcon from '@phosphor/sign-out.svg';
 import Upload from '@phosphor/upload.svg';
 import UserIcon from '@phosphor/user.svg';
@@ -26,12 +32,22 @@ import { ThemeChips } from '@theme/components/ThemeChips';
 import type { ThemeV2 } from '@theme/types/themeTypes';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import { type Component, onCleanup } from 'solid-js';
-import { themes } from '../../theme/signals/themeSignals';
+import {
+  setDarkModeTheme,
+  setLightModeTheme,
+  setThemeShouldMatchSystem,
+  themeShouldMatchSystem,
+  themes,
+} from '../../theme/signals/themeSignals';
 
 import { applyTheme } from '../../theme/utils/themeUtils';
 import { globalSplitManager } from '../signal/splitLayout';
 import { CommandState } from './command';
-import { createMenuOpen, setCreateMenuOpen } from './Launcher';
+import {
+  CREATABLE_BLOCKS,
+  createMenuOpen,
+  setCreateMenuOpen,
+} from './Launcher';
 import { openMacroMcpSetupModal } from './macro-mcp-setup-modal/MacroMcpSetupModal';
 import { useSplitLayout } from './split-layout/layout';
 
@@ -92,11 +108,14 @@ export default function GlobalShortcuts() {
 
   useHotkeyAnalytics();
 
-  const { openSettings, closeSettings, settingsOpen, setActiveTabId } =
+  const { openSettings, settingsOpen, setActiveTabId, toggleSettings } =
     useSettingsState();
   const logout = useLogout();
 
   const handleFileUpload = useHandleFileUpload();
+  const snippetsFlag = useFeatureFlag(ENABLE_SNIPPETS_FLAG, {
+    enabledOverride: ENABLE_SNIPPETS_OVERRIDE,
+  });
 
   const handleCommandMenu = () => {
     if (!CommandState.isOpen()) {
@@ -105,7 +124,7 @@ export default function GlobalShortcuts() {
     CommandState.toggle();
   };
 
-  registerHotkey({
+  const createScope = registerHotkey({
     hotkeyToken: TOKENS.global.createCommand,
     hotkey: 'c',
     scopeId: 'global',
@@ -122,6 +141,28 @@ export default function GlobalShortcuts() {
     },
     displayPriority: 10,
     activateCommandScope: true,
+    surfaceNestedCommands: true,
+    keywords: ['new', 'make', 'add'],
+    icon: Plus,
+  });
+
+  CREATABLE_BLOCKS.forEach((item) => {
+    registerHotkey({
+      hotkeyToken: item.hotkeyToken,
+      hotkey: item.hotkey,
+      scopeId: createScope.commandScopeId,
+      description: item.description,
+      condition: () =>
+        (item.condition?.() ?? true) &&
+        (item.blockName !== 'snippet' || snippetsFlag().enabled),
+      keyDownHandler: item.keyDownHandler,
+      icon: Plus,
+      tags: item.tags,
+      keywords: item.keywords,
+      hide: () => item.blockName === 'snippet' && !snippetsFlag().enabled,
+      runWithInputFocused: true,
+      proxiedHotkey: true,
+    });
   });
 
   registerHotkey({
@@ -174,23 +215,11 @@ export default function GlobalShortcuts() {
     keyDownHandler: createNewSplit,
   });
 
-  const openSettingsInNewSplit = (tab?: SettingsTab) => {
+  // Settings open in a modal by default; tab selection is applied even when
+  // settings are already open.
+  const openSettingsModal = (tab?: SettingsTab) => {
     if (settingsOpen()) {
       if (tab) setActiveTabId(tab);
-      return;
-    }
-    if (canFit()) {
-      if (tab) setActiveTabId(tab);
-      analytics.track('split_created', { from: 'global_hotkey' });
-      openWithSplit(
-        { type: 'component', id: 'settings' },
-        {
-          referredFrom: 'hotkey',
-          allowDuplicate: true,
-          preferNewSplit: true,
-          mergeHistory: false,
-        }
-      );
       return;
     }
     openSettings(tab);
@@ -202,8 +231,7 @@ export default function GlobalShortcuts() {
     scopeId: 'global',
     description: 'Toggle settings',
     keyDownHandler: () => {
-      if (settingsOpen()) closeSettings();
-      else openSettingsInNewSplit();
+      toggleSettings();
       return true;
     },
     runWithInputFocused: true,
@@ -214,7 +242,7 @@ export default function GlobalShortcuts() {
     description: 'Account',
     icon: UserIcon,
     keyDownHandler: () => {
-      openSettingsInNewSplit('Account');
+      openSettingsModal('Account');
       return true;
     },
     runWithInputFocused: true,
@@ -287,6 +315,65 @@ export default function GlobalShortcuts() {
       runWithInputFocused: true,
       displayComponent: () => <ThemeDisplay theme={theme} />,
     });
+  });
+
+  const setPreferredLightScope = registerHotkey({
+    scopeId: 'global',
+    description: 'Set default light theme',
+    keyDownHandler: () => {
+      return true;
+    },
+    activateCommandScope: true,
+    runWithInputFocused: true,
+  });
+
+  themes().forEach((theme) => {
+    registerHotkey({
+      scopeId: setPreferredLightScope.commandScopeId,
+      description: `${theme.name}`,
+      keyDownHandler: () => {
+        setLightModeTheme(theme.id);
+        analytics.track('theme_changed', { themeId: theme.id });
+        return true;
+      },
+      runWithInputFocused: true,
+      displayComponent: () => <ThemeDisplay theme={theme} />,
+    });
+  });
+
+  const setPreferredDarkScope = registerHotkey({
+    scopeId: 'global',
+    description: 'Set default dark theme',
+    keyDownHandler: () => {
+      return true;
+    },
+    activateCommandScope: true,
+    runWithInputFocused: true,
+  });
+
+  themes().forEach((theme) => {
+    registerHotkey({
+      scopeId: setPreferredDarkScope.commandScopeId,
+      description: `${theme.name}`,
+      keyDownHandler: () => {
+        setDarkModeTheme(theme.id);
+        analytics.track('theme_changed', { themeId: theme.id });
+        return true;
+      },
+      runWithInputFocused: true,
+      displayComponent: () => <ThemeDisplay theme={theme} />,
+    });
+  });
+
+  registerHotkey({
+    scopeId: 'global',
+    description: () =>
+      `${themeShouldMatchSystem() ? 'Turn off a' : 'A'}uto-detect color scheme`,
+    keyDownHandler: () => {
+      setThemeShouldMatchSystem((prev) => !prev);
+      return true;
+    },
+    runWithInputFocused: true,
   });
 
   registerHotkey({

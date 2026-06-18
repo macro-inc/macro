@@ -10,14 +10,27 @@ import type { ChannelOrgId } from './channelOrgId';
 import type { ChannelTeamId } from './channelTeamId';
 import type { ChannelType } from './channelType';
 
+/**
+ * Channel metadata in soup payloads.
+ */
 export interface Channel {
+  /** Channel type. */
   channel_type: ChannelType;
+  /** Creation timestamp. */
   created_at: string;
+  /** Channel id. */
   id: string;
+  /** Channel display name. */
   name?: ChannelName;
-  /** @minimum 0 */
+  /**
+   * Organization id.
+   * @minimum 0
+   */
   org_id?: ChannelOrgId;
+  /** Channel owner. */
   owner_id: string;
+  /** Team id. */
   team_id?: ChannelTeamId;
+  /** Update timestamp. */
   updated_at: string;
 }

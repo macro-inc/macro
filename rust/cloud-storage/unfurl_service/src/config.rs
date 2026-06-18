@@ -1,4 +1,11 @@
+use anyhow::Context;
+
 pub use macro_env::Environment;
+use macro_env_var::maybe_env_vars;
+
+maybe_env_vars! {
+    struct Port;
+}
 
 /// The configuration parameters for the application.
 ///
@@ -16,10 +23,10 @@ pub struct Config {
 
 impl Config {
     pub fn from_env() -> anyhow::Result<Self> {
-        let port: usize = std::env::var("PORT")
-            .unwrap_or("8080".to_string())
-            .parse::<usize>()
-            .unwrap();
+        let port = Port::new()
+            .map(|port| port.parse::<usize>().context("PORT must be a valid usize"))
+            .transpose()?
+            .unwrap_or(8080);
         let environment = Environment::new_or_prod();
 
         Ok(Config { port, environment })

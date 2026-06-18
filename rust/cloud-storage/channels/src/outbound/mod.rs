@@ -1,3 +1,5 @@
+/// Batch channel-name resolution backed by Postgres.
+pub mod channel_name;
 /// Connection-gateway realtime adapter for channel side effects.
 pub mod connection_gateway_realtime;
 /// Contacts adapter for channel side effects.

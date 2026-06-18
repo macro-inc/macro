@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE ai_usage\n            SET price_per_million_in = $2::real,\n                price_per_million_out = $3::real,\n                total = (input_tokens::real / 1000000.0::real) * $2::real\n                      + (output_tokens::real / 1000000.0::real) * $3::real\n            WHERE model = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Float4",
+        "Float4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8f6b8f408336fd56bf212f1b17f32f36dc1fdbe6d45e4ccfe3ab938974d828c3"
+}

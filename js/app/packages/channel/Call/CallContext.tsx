@@ -884,6 +884,7 @@ function createCallState() {
 
   const currentActiveChannelId = () =>
     currentNativeCallSnapshot()?.channelId ??
+    nativeCall?.bootstrapChannelId() ??
     store.activeChannelId ??
     store.optimisticJoinChannelId;
 
@@ -899,9 +900,13 @@ function createCallState() {
   const currentIsInCall = () =>
     isActiveCallConnectionState(currentConnectionState()) ||
     (currentNativeCallSnapshot() === null &&
+      (nativeCall?.bootstrapChannelId() ?? null) !== null) ||
+    (currentNativeCallSnapshot() === null &&
       store.optimisticJoinChannelId !== null);
 
   const currentIsConnecting = () =>
+    (currentNativeCallSnapshot() === null &&
+      (nativeCall?.bootstrapChannelId() ?? null) !== null) ||
     (currentNativeCallSnapshot() === null &&
       store.optimisticJoinChannelId !== null) ||
     currentConnectionState() === ConnectionState.Connecting ||
@@ -993,6 +998,10 @@ function createCallState() {
     nativeCall,
     jsConnect: livekitJs.connect,
     jsDisconnect: livekitJs.disconnect,
+    clearOptimisticJoin: () => {
+      setStore('optimisticJoinChannelId', null);
+      setStore('joinError', null);
+    },
   });
 
   async function toggleAudio() {

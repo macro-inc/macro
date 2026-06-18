@@ -28,6 +28,10 @@ static EXTRA_HEADERS: [&str; 4] = [
 ];
 
 fn get_allowed_origins() -> Vec<Cow<'static, str>> {
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "Used to override ALLOWED_ORIGINS when running locally"
+    )]
     match std::env::var("ALLOWED_ORIGINS") {
         Ok(origins) => origins
             .split(',')

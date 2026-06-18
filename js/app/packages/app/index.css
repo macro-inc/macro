@@ -189,7 +189,13 @@
   --z-index-modal-overlay: 100;
   --z-index-modal:         110;
   --z-index-modal-content: 120;
+  /* Dropdowns/popovers (`z-action-menu`). Above modal content so menus opened
+     from inside a modal render on top of it, below tooltips. */
+  --z-index-action-menu:   150;
   --z-index-tool-tip:      200;
+
+  /* Soft drop shadow for floating menus/popovers (use the `shadow-menu` utility). */
+  --shadow-menu: 0 8px 24px -16px rgb(0 0 0 / 0.24), 0 2px 8px -6px rgb(0 0 0 / 0.18);
 
   /* Shared label column width for side-panel two-column grids so labels line
      up across sub-panels (Details, Properties, ...). Consumers should use
@@ -454,9 +460,10 @@ a {
 
 /* Channel message hover + non-selection highlight */
 /* Suppressed on touch devices */
+/* Background-only — borders/rings are reserved for structural UI edges. */
 html:not([data-touch-device="true"]) [data-message][data-highlighted],
 html:not([data-touch-device="true"]) [data-message]:hover{
-  @apply bg-ink/3 rounded-sm ring ring-edge ring-inset;
+  @apply bg-ink/5 rounded-sm;
 }
 
 /* Channel message long-press animation */

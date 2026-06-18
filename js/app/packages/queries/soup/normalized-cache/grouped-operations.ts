@@ -87,7 +87,14 @@ export function syncGroupedParents(entityId: string, entity: SoupApiItem) {
 
     if (!meta.groupBy) continue;
 
-    const nextGroupKeys = computeGroupKeysForItem(entity, meta.groupBy);
+    // Empty memberships when the entity fails the query's item filter, so
+    // `syncMembership` drops it instead of bucketing it into an unrelated
+    // view. Mirrors the `meta.itemFilter` gate in `syncGroupQueries`.
+    const filter = meta.itemFilter;
+    const nextGroupKeys =
+      filter && !filter(entity)
+        ? []
+        : computeGroupKeysForItem(entity, meta.groupBy);
 
     if (nextGroupKeys === undefined) {
       queryClient.invalidateQueries({ queryKey: query.queryKey });

@@ -1,5 +1,4 @@
 use chrono::{DateTime, Utc};
-use doppleganger::Doppleganger;
 pub use invite_email::{ChannelInviteMetadata, InviteToTeamMetadata};
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::{email::ReadEmailParts, user_id::MacroUserIdStr};
@@ -485,8 +484,7 @@ impl NotificationTitle for GithubPrReview {
     }
 }
 
-#[derive(Debug, Clone, Copy, ToSchema, Doppleganger, Serialize, Deserialize)]
-#[dg(backward = models_comms::channel::ChannelType)]
+#[derive(Debug, Clone, Copy, ToSchema, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ChannelType {
     #[serde(alias = "Public", alias = "public")]
@@ -497,17 +495,6 @@ pub enum ChannelType {
     DirectMessage,
     #[serde(alias = "Team", alias = "team")]
     Team,
-}
-
-impl ChannelType {
-    pub fn to_model_comms(self) -> models_comms::channel::ChannelType {
-        match self {
-            ChannelType::Public => models_comms::channel::ChannelType::Public,
-            ChannelType::Private => models_comms::channel::ChannelType::Private,
-            ChannelType::DirectMessage => models_comms::channel::ChannelType::DirectMessage,
-            ChannelType::Team => models_comms::channel::ChannelType::Team,
-        }
-    }
 }
 
 /// Common metadata for notifications on channels
@@ -680,6 +667,40 @@ pub struct NewEmailMetadata {
     pub thread_id: String,
     pub subject: String,
     pub snippet: String,
+}
+
+/// Metadata for a notification that a linked inbox's grant has died and the
+/// inbox must be reconnected. Fanned out to the inbox owner and every delegate,
+/// since any of them holding the Google grant can restore sync.
+#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct InboxReauthRequiredMetadata {
+    /// The address of the inbox that needs to be reconnected.
+    #[serde(alias = "email_address")]
+    pub email_address: String,
+}
+
+impl notification::domain::models::Notification for InboxReauthRequiredMetadata {
+    const TYPE_NAME: &'static str = "inbox_reauth_required";
+}
+
+impl NotificationTitle for InboxReauthRequiredMetadata {
+    fn format_title(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        Ok(format!("Reconnect {}", self.email_address))
+    }
+
+    fn format_body(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        Ok(
+            "Sync stopped because the Google connection expired. Reconnect to restore it."
+                .to_string(),
+        )
+    }
 }
 
 impl notification::domain::models::Notification for NewEmailMetadata {

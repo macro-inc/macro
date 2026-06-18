@@ -96,7 +96,7 @@
 		"loro-crdt": "1.13.3",
 		"nanoid": "^3.3.7",
 		"neverthrow": "^8.2.0",
-		"posthog-js": "^1.360.2",
+		"posthog-js": "^1.387.0",
 		"short-uuid": "^5.2.0",
 		"signature_pad": "^5.0.10",
 		"solid-gesture": "^0.0.3",

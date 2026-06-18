@@ -34,6 +34,7 @@ export function getNotificationAction(n: UnifiedNotification): string {
     .with('github_pr_comment', () => 'commented on')
     .with('github_pr_mention', () => 'mentioned you in')
     .with('github_pr_review', () => 'reviewed')
+    .with('inbox_reauth_required', () => 'needs reconnection')
     .exhaustive();
 }
 
@@ -64,6 +65,7 @@ export function getNotificationTargetName(
     .with({ tag: 'ai_response' }, () => undefined)
     .with({ tag: 'channel_message_reply' }, () => undefined)
     .with({ tag: 'new_email' }, () => undefined)
+    .with({ tag: 'inbox_reauth_required' }, () => undefined)
     .exhaustive();
 }
 
@@ -105,6 +107,7 @@ export function getNotificationContent(
     )
     .with({ tag: 'channel_invite' }, () => undefined)
     .with({ tag: 'invite_to_team' }, () => undefined)
+    .with({ tag: 'inbox_reauth_required' }, (m) => m.content.emailAddress)
     .exhaustive();
 }
 
@@ -133,5 +136,6 @@ export function shouldShowNotificationTarget(n: UnifiedNotification): boolean {
     .with({ tag: 'commented_on_document' }, () => true)
     .with({ tag: 'channel_invite' }, () => true)
     .with({ tag: 'invite_to_team' }, () => true)
+    .with({ tag: 'inbox_reauth_required' }, () => false)
     .exhaustive();
 }

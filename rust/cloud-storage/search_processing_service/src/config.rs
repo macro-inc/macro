@@ -1,6 +1,27 @@
 use anyhow::Context;
 pub use macro_env::Environment;
+use macro_env_var::{env_vars, maybe_env_vars};
 use macro_service_urls::LexicalServiceUrl;
+use secretsmanager_client::LocalOrRemoteSecret;
+
+env_vars! {
+    pub struct DatabaseUrl;
+    pub struct SearchEventQueue;
+    pub struct OpensearchUrl;
+    pub struct OpensearchUsername;
+    pub struct OpensearchPassword;
+    pub struct DocumentStorageBucket;
+    pub struct BackfillJobsTable;
+}
+
+maybe_env_vars! {
+    pub struct BackfillCallsPageSize;
+    pub struct BackfillChatsPageSize;
+    pub struct BackfillChannelsPageSize;
+    pub struct BackfillDocumentsPageSize;
+    pub struct BackfillEmailsPageSize;
+    pub struct BackfillJobTtlSeconds;
+}
 
 /// Per-entity DB page sizes used by the backfill source adapters. Tunable at
 /// runtime via the corresponding `BACKFILL_*_PAGE_SIZE` env vars.
@@ -18,11 +39,41 @@ const DEFAULT_CHATS_PAGE: usize = 5000;
 const DEFAULT_CHANNELS_PAGE: usize = 5000;
 const DEFAULT_DOCUMENTS_PAGE: usize = 1000;
 const DEFAULT_EMAILS_PAGE: usize = 1000;
+const DEFAULT_BACKFILL_JOB_TTL_SECONDS: u64 = 24 * 60 * 60;
 
+fn parse_page_size(name: &str, raw_value: Option<&str>, default: usize) -> anyhow::Result<usize> {
+    let page_size = raw_value
+        .map(|raw| {
+            raw.parse::<usize>()
+                .with_context(|| format!("{name} must be a positive integer"))
+        })
+        .transpose()?
+        .unwrap_or(default);
+
+    if page_size == 0 {
+        anyhow::bail!("{name} must be > 0");
+    }
+
+    Ok(page_size)
+}
+
+fn parse_u64(name: &str, raw_value: Option<&str>, default: u64) -> anyhow::Result<u64> {
+    raw_value
+        .map(|raw| {
+            raw.parse::<u64>()
+                .with_context(|| format!("{name} must be a positive integer"))
+        })
+        .transpose()
+        .map(|value| value.unwrap_or(default))
+}
+
+/// The configuration parameters for the application.
+#[derive(macro_config::MacroConfig)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub struct Config {
     /// The connection URL for the Postgres database this application should use.
     /// For deployed applications, this is a secret stored in AWS Secrets Manager.
-    pub database_url: String,
+    pub database_url: LocalOrRemoteSecret<DatabaseUrl>,
 
     /// Optional connection URL (or SM secret id when `environment != Local`)
     /// for the macrodb read-replica. When present, backfill reads run against
@@ -33,138 +84,101 @@ pub struct Config {
     pub database_url_readonly: Option<String>,
 
     /// The port to listen for HTTP requests on.
+    #[macro_config_default(8080)]
     pub port: usize,
 
     /// The search text extractor queue
-    pub search_event_queue: String,
+    pub search_event_queue: SearchEventQueue,
     /// The queue max messages per poll
+    #[macro_config_default(10)]
     pub queue_max_messages: i32,
     /// The queue wait time seconds
+    #[macro_config_default(20)]
     pub queue_wait_time_seconds: i32,
 
     /// The environment we are in
+    #[macro_config_default(Environment::new_or_prod())]
     pub environment: Environment,
 
     /// The URL for the Opensearch instance
-    pub opensearch_url: String,
+    pub opensearch_url: OpensearchUrl,
     /// The username for the Opensearch instance
-    pub opensearch_username: String,
+    pub opensearch_username: OpensearchUsername,
     /// The password for the Opensearch instance
-    pub opensearch_password: String,
+    pub opensearch_password: LocalOrRemoteSecret<OpensearchPassword>,
 
     /// The bucket where documents are stored
-    pub document_storage_bucket: String,
+    pub document_storage_bucket: DocumentStorageBucket,
 
     /// The number of workers to spawn
+    #[macro_config_default(10)]
     pub worker_count: u8,
 
     /// The URL for the Lexical service
+    #[macro_config_default(LexicalServiceUrl::unwrap_new().to_string())]
     pub lexical_service_url: String,
 
-    /// Per-entity DB page sizes for backfill adapters.
-    pub backfill_page_sizes: BackfillPageSizes,
+    /// DB page size used when backfilling call records.
+    pub backfill_calls_page_size: BackfillCallsPageSize,
+    /// DB page size used when backfilling chats.
+    pub backfill_chats_page_size: BackfillChatsPageSize,
+    /// DB page size used when backfilling channels.
+    pub backfill_channels_page_size: BackfillChannelsPageSize,
+    /// DB page size used when backfilling documents.
+    pub backfill_documents_page_size: BackfillDocumentsPageSize,
+    /// DB page size used when backfilling emails.
+    pub backfill_emails_page_size: BackfillEmailsPageSize,
 
     /// DynamoDB table name backing the backfill job registry. Items carry an
     /// `expires_at` epoch attribute that DynamoDB's TTL sweeps in the
     /// background, so completed jobs vanish on their own.
-    pub backfill_jobs_table: String,
+    pub backfill_jobs_table: BackfillJobsTable,
 
     /// TTL applied to the `expires_at` attribute on each job record. Acts as
     /// the GC mechanism — DynamoDB removes items shortly after this elapses.
-    pub backfill_job_ttl_seconds: u64,
-}
-
-fn parse_page_size(name: &str, default: usize) -> anyhow::Result<usize> {
-    match std::env::var(name) {
-        Ok(raw) => raw
-            .parse::<usize>()
-            .with_context(|| format!("{name} must be a positive integer"))
-            .and_then(|n| {
-                if n == 0 {
-                    anyhow::bail!("{name} must be > 0");
-                }
-                Ok(n)
-            }),
-        Err(_) => Ok(default),
-    }
+    pub backfill_job_ttl_seconds: BackfillJobTtlSeconds,
 }
 
 impl Config {
     pub fn from_env() -> anyhow::Result<Self> {
-        let database_url =
-            std::env::var("DATABASE_URL").context("DATABASE_URL must be provided")?;
+        macro_config::ConfigLoader::load::<Config>().context("failed to load config")
+    }
 
-        let database_url_readonly = std::env::var("DATABASE_URL_READONLY").ok();
-
-        let port: usize = std::env::var("PORT")
-            .unwrap_or("8080".to_string())
-            .parse::<usize>()
-            .context("should be valid port number")?;
-
-        let environment = Environment::new_or_prod();
-
-        let search_event_queue =
-            std::env::var("SEARCH_EVENT_QUEUE").context("SEARCH_EVENT_QUEUE must be provided")?;
-
-        let queue_max_messages: i32 = std::env::var("QUEUE_MAX_MESSAGES")
-            .unwrap_or("10".to_string())
-            .parse::<i32>()
-            .unwrap();
-
-        let queue_wait_time_seconds: i32 = std::env::var("QUEUE_WAIT_TIME_SECONDS")
-            .unwrap_or("20".to_string())
-            .parse::<i32>()
-            .unwrap();
-
-        let opensearch_url =
-            std::env::var("OPENSEARCH_URL").context("OPENSEARCH_URL must be provided")?;
-        let opensearch_username =
-            std::env::var("OPENSEARCH_USERNAME").context("OPENSEARCH_USERNAME must be provided")?;
-        let opensearch_password =
-            std::env::var("OPENSEARCH_PASSWORD").context("OPENSEARCH_PASSWORD must be provided")?;
-
-        let document_storage_bucket = std::env::var("DOCUMENT_STORAGE_BUCKET")
-            .context("DOCUMENT_STORAGE_BUCKET must be provided")?;
-
-        let worker_count: u8 = std::env::var("WORKER_COUNT")
-            .unwrap_or("10".to_string())
-            .parse::<u8>()
-            .unwrap();
-
-        let lexical_service_url = LexicalServiceUrl::new()?.to_string();
-
-        let backfill_page_sizes = BackfillPageSizes {
-            calls: parse_page_size("BACKFILL_CALLS_PAGE_SIZE", DEFAULT_CALLS_PAGE)?,
-            chats: parse_page_size("BACKFILL_CHATS_PAGE_SIZE", DEFAULT_CHATS_PAGE)?,
-            channels: parse_page_size("BACKFILL_CHANNELS_PAGE_SIZE", DEFAULT_CHANNELS_PAGE)?,
-            documents: parse_page_size("BACKFILL_DOCUMENTS_PAGE_SIZE", DEFAULT_DOCUMENTS_PAGE)?,
-            emails: parse_page_size("BACKFILL_EMAILS_PAGE_SIZE", DEFAULT_EMAILS_PAGE)?,
-        };
-
-        let backfill_jobs_table =
-            std::env::var("BACKFILL_JOBS_TABLE").context("BACKFILL_JOBS_TABLE must be provided")?;
-        let backfill_job_ttl_seconds: u64 = std::env::var("BACKFILL_JOB_TTL_SECONDS")
-            .unwrap_or_else(|_| (24 * 60 * 60).to_string())
-            .parse()
-            .context("BACKFILL_JOB_TTL_SECONDS must be a positive integer")?;
-
-        Ok(Config {
-            database_url,
-            database_url_readonly,
-            port,
-            search_event_queue,
-            queue_max_messages,
-            queue_wait_time_seconds,
-            environment,
-            opensearch_url,
-            opensearch_username,
-            opensearch_password,
-            document_storage_bucket,
-            worker_count,
-            lexical_service_url,
-            backfill_page_sizes,
-            backfill_jobs_table,
-            backfill_job_ttl_seconds,
+    pub fn backfill_page_sizes(&self) -> anyhow::Result<BackfillPageSizes> {
+        Ok(BackfillPageSizes {
+            calls: parse_page_size(
+                "BACKFILL_CALLS_PAGE_SIZE",
+                self.backfill_calls_page_size.value(),
+                DEFAULT_CALLS_PAGE,
+            )?,
+            chats: parse_page_size(
+                "BACKFILL_CHATS_PAGE_SIZE",
+                self.backfill_chats_page_size.value(),
+                DEFAULT_CHATS_PAGE,
+            )?,
+            channels: parse_page_size(
+                "BACKFILL_CHANNELS_PAGE_SIZE",
+                self.backfill_channels_page_size.value(),
+                DEFAULT_CHANNELS_PAGE,
+            )?,
+            documents: parse_page_size(
+                "BACKFILL_DOCUMENTS_PAGE_SIZE",
+                self.backfill_documents_page_size.value(),
+                DEFAULT_DOCUMENTS_PAGE,
+            )?,
+            emails: parse_page_size(
+                "BACKFILL_EMAILS_PAGE_SIZE",
+                self.backfill_emails_page_size.value(),
+                DEFAULT_EMAILS_PAGE,
+            )?,
         })
+    }
+
+    pub fn backfill_job_ttl_seconds(&self) -> anyhow::Result<u64> {
+        parse_u64(
+            "BACKFILL_JOB_TTL_SECONDS",
+            self.backfill_job_ttl_seconds.value(),
+            DEFAULT_BACKFILL_JOB_TTL_SECONDS,
+        )
     }
 }

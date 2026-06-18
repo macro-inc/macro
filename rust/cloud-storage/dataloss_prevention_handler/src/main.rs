@@ -5,8 +5,13 @@ use lambda_runtime::{
     tracing::{self},
 };
 use macro_entrypoint::MacroEntrypoint;
+use macro_env_var::env_vars;
 
 mod handler;
+
+env_vars! {
+    struct SnsTopicArn;
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
@@ -22,7 +27,9 @@ async fn main() -> Result<(), Error> {
     let sns_client = sns_client::SNS::new(aws_sdk_sns::Client::new(&aws_config));
     tracing::trace!("initialized sns client");
 
-    let topic_arn = std::env::var("SNS_TOPIC_ARN").context("SNS_TOPIC_ARN is required")?;
+    let topic_arn = SnsTopicArn::new()
+        .context("SNS_TOPIC_ARN is required")?
+        .to_string();
 
     let shared_s3_client = &s3_client;
     let shared_sns_client = &sns_client;

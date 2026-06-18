@@ -43,6 +43,31 @@ type ViewTabConfig = {
   tabs: TabConfig;
 };
 
+// Default statuses for the open-task tabs; keep the ids and include props in sync.
+const OPEN_TASK_STATUS_FILTER_IDS: FilterID[] = [
+  'task-not-started',
+  'task-in-progress',
+  'task-in-review',
+];
+
+const OPEN_TASK_STATUS_INCLUDE_PROPS = [
+  {
+    propertyId: SYSTEM_PROPERTY_IDS.STATUS,
+    type: 'select' as const,
+    value: PROPERTY_OPTION_IDS.STATUS.NOT_STARTED,
+  },
+  {
+    propertyId: SYSTEM_PROPERTY_IDS.STATUS,
+    type: 'select' as const,
+    value: PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS,
+  },
+  {
+    propertyId: SYSTEM_PROPERTY_IDS.STATUS,
+    type: 'select' as const,
+    value: PROPERTY_OPTION_IDS.STATUS.IN_REVIEW,
+  },
+];
+
 const getExcludedDocumentSubTypes = (...subTypes: string[]) =>
   ENABLE_SNIPPETS() ? subTypes : [...subTypes, 'snippet'];
 
@@ -70,6 +95,7 @@ const getInboxSignalFilters = () => {
       // still gated on the supported-foreign-entities flag client-side.
       foreignEntitySource: ['github_pull_request'],
       foreignEntityDone: false,
+      foreignEntityIncludesMe: true,
       emailShared: 'exclude',
     },
     exclude: getDisabledSnippetSubtypeExclude(),
@@ -113,6 +139,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
             ...(ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE
               ? { foreignEntitySource: ['github_pull_request'] }
               : {}),
+            foreignEntityIncludesMe: true,
           },
           exclude: {
             documentId: [NIL_UUID],
@@ -303,24 +330,14 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
                   type: 'entity',
                   value: ctx.userId,
                 },
-              ],
-            },
-            exclude: {
-              properties: [
-                {
-                  propertyId: SYSTEM_PROPERTY_IDS.STATUS,
-                  type: 'select',
-                  value: PROPERTY_OPTION_IDS.STATUS.COMPLETED,
-                },
-                {
-                  propertyId: SYSTEM_PROPERTY_IDS.STATUS,
-                  type: 'select',
-                  value: PROPERTY_OPTION_IDS.STATUS.CANCELED,
-                },
+                ...OPEN_TASK_STATUS_INCLUDE_PROPS,
               ],
             },
           }),
-          clientFilters: { and: ['task', 'assigned-to', 'active-task'] },
+          clientFilters: {
+            and: ['task', 'assigned-to'],
+            or: [...OPEN_TASK_STATUS_FILTER_IDS],
+          },
           groupBy: `property:${SYSTEM_PROPERTY_IDS.PRIORITY}`,
         };
       },
@@ -328,9 +345,16 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         if (!ctx.userId) return undefined;
         return {
           filters: defineQueryFilters({
-            include: { subType: ['task'], documentOwnerId: [ctx.userId] },
+            include: {
+              subType: ['task'],
+              documentOwnerId: [ctx.userId],
+              properties: [...OPEN_TASK_STATUS_INCLUDE_PROPS],
+            },
           }),
-          clientFilters: { and: ['task', 'active-task', 'owned-entity'] },
+          clientFilters: {
+            and: ['task', 'owned-entity'],
+            or: [...OPEN_TASK_STATUS_FILTER_IDS],
+          },
           groupBy: `property:${SYSTEM_PROPERTY_IDS.STATUS}`,
         };
       },

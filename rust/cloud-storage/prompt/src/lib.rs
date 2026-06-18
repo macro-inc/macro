@@ -29,3 +29,14 @@ pub static BASE_PROMPT: ComposedPrompt = tone::PROMPT
 /// The tool-enabled prompt: [`BASE_PROMPT`] with the tool use instructions
 /// appended.
 pub static TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT.compose(&tool_usage::PROMPT);
+
+/// Instructions surfaced to external MCP clients via the server `instructions`
+/// field. Carries the formatting/correctness rules Macro features depend on —
+/// mentions, citations, do-not rules, and Macro terms — so that AI used through
+/// MCP produces valid Macro mentions and citations. Deliberately omits chat
+/// tone/style and tool-use instructions, which belong to the host client, not
+/// to Macro.
+pub static MCP_INSTRUCTIONS: ComposedPrompt = mentions::PROMPT
+    .compose(&citations::PROMPT)
+    .compose(&do_not::PROMPT)
+    .compose(&about_macro::PROMPT);

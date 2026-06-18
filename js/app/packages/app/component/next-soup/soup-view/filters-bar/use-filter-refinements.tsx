@@ -31,6 +31,10 @@ import type {
 } from './consolidated-filter-chip';
 import type { SearchableOption } from './searchable-multi-select';
 import {
+  TASK_STATUS_FILTER_IDS,
+  useTaskStatusFilter,
+} from './task-status-filter';
+import {
   buildContactLabel,
   VIEW_FILTER_CATEGORIES,
 } from './unified-filter-dropdown';
@@ -68,6 +72,7 @@ export function useFilterRefinements() {
   const user = useUserContext();
   const contacts = useContacts();
   const currentUserId = useUserId();
+  const taskStatus = useTaskStatusFilter();
 
   const getPresetContext = (): PresetContext => ({
     userId: user.userId(),
@@ -295,6 +300,9 @@ export function useFilterRefinements() {
     >();
 
     for (const category of viewCategories()) {
+      // Status has a dedicated chip below.
+      if (view === 'tasks' && category.id === 'status') continue;
+
       const activeValues: FilterValue[] = [];
       const allOptions: FilterValue[] = [];
 
@@ -406,6 +414,43 @@ export function useFilterRefinements() {
       );
     }
 
+    // Dedicated chip: the generic builder would hide the preset-seeded default.
+    const pushTaskStatusChip = () => {
+      if (view !== 'tasks') return;
+      const statusCategory = viewCategories().find((c) => c.id === 'status');
+      if (!statusCategory) return;
+
+      const allOptions: FilterValue[] = statusCategory.options.map((o) => ({
+        id: o.id,
+        label: o.label,
+        icon: o.icon,
+      }));
+
+      const getActiveValues = (): FilterValue[] =>
+        allOptions.filter((o) => taskStatus.isActive(o.id as FilterID));
+
+      // No chip when not narrowed (empty, or all selected = no filter).
+      const activeCount = getActiveValues().length;
+      if (activeCount === 0 || activeCount === allOptions.length) return;
+
+      const key = 'status';
+      seenKeys.add(key);
+
+      filters.push(
+        getOrCreateConsolidatedChip(key, () => ({
+          key,
+          categoryLabel: 'Status',
+          categoryLabelPlural: 'Statuses',
+          values: getActiveValues,
+          availableOptions: allOptions,
+          multiple: true,
+          isValueActive: (id) => taskStatus.isActive(id as FilterID),
+          onToggleValue: (id) => taskStatus.toggle(id as FilterID),
+          onRemoveAll: () => taskStatus.clear(),
+        }))
+      );
+    };
+
     // Assignee filter (consolidated) - using searchable approach
     const pushAssigneeConsolidatedChip = () => {
       const key = 'assignee';
@@ -454,6 +499,7 @@ export function useFilterRefinements() {
       );
     };
 
+    pushTaskStatusChip();
     pushAssigneeConsolidatedChip();
 
     // Evict stale chips
@@ -565,10 +611,16 @@ export function useFilterRefinements() {
     const preset = currentPreset();
     if (!preset) return;
 
+    // "Clear all" empties the status filter rather than restoring the default subset.
+    const presetSeedsStatusSubset = (preset.clientFilters.or ?? []).some((id) =>
+      TASK_STATUS_FILTER_IDS.includes(id as FilterID)
+    );
+
     batch(() => {
       soup.predicates.set(preset.clientFilters);
       queryFilters.replace(preset.filters ?? null);
       setAssigneeFilter([]);
+      if (presetSeedsStatusSubset) taskStatus.clear();
     });
   };
 

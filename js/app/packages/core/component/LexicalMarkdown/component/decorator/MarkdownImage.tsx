@@ -2,6 +2,7 @@ import { internalDrag } from '@core/directive/internalDragState';
 
 false && internalDrag;
 
+import { Lightbox } from '@core/component/Lightbox';
 import { toast } from '@core/component/Toast/Toast';
 import { debouncedDependent } from '@core/util/debounce';
 
@@ -11,9 +12,8 @@ import { $isImageNode, type ImageDecoratorProps } from '@lexical-core';
 import { calculateEffectiveDimensions } from '@lexical-core/utils/media';
 import ImageIcon from '@phosphor/image-broken.svg';
 import LoadingSpinner from '@phosphor/spinner.svg';
-import XIcon from '@phosphor/x.svg';
 import { debounce } from '@solid-primitives/scheduled';
-import { Button, cn, Layer } from '@ui';
+import { cn, Layer } from '@ui';
 import {
   $createNodeSelection,
   $getNodeByKey,
@@ -386,23 +386,8 @@ export function MarkdownImage(props: ImageDecoratorProps) {
       </div>
 
       <Dialog.Portal>
-        <Dialog.Overlay class="fixed inset-0 z-modal bg-modal-overlay items-center justify-center" />
-        <div class="fixed inset-0 z-modal w-screen h-screen flex items-center justify-center bg-transparent">
-          <Dialog.Content class="relative max-w-[65%] max-h-[80vh] flex items-center justify-center">
-            <div class="absolute bg-surface top-2 right-2 flex flex-row">
-              <Dialog.CloseButton>
-                <Button variant="ghost" size="icon-md">
-                  <XIcon />
-                </Button>
-              </Dialog.CloseButton>
-            </div>
-            <img
-              crossorigin="anonymous"
-              class="max-w-full max-h-[80vh] size-auto object-contain"
-              src={imageUrl()}
-            />
-          </Dialog.Content>
-        </div>
+        <Dialog.Overlay class="fixed inset-0 z-modal bg-modal-overlay pattern-edge-muted pattern-diagonal-4" />
+        <Lightbox src={imageUrl} imageId={() => props.id} navigationHidden />
       </Dialog.Portal>
     </Dialog>
   );

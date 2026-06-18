@@ -1,6 +1,7 @@
 import { currentThemeId, isThemeSaved, themes } from '../signals/themeSignals';
 import { saveTheme } from '../utils/themeUtils';
 import IconSave from '@phosphor-icons/core/regular/floppy-disk-back.svg?component-solid';
+import { isMobile } from '@core/mobile/isMobile';
 import { createMemo, Show } from 'solid-js';
 import { Button, cn } from '@ui';
 
@@ -67,7 +68,8 @@ function ThemeTools(props: { class?: string }) {
         )}
         style={{
           'white-space': 'nowrap',
-          'flex': '0 1 13rem',
+          // Narrower on mobile so it fits on the same line as the Basic/Advanced tabs.
+          'flex': isMobile() ? '0 1 7.5rem' : '0 1 13rem',
           'min-width': '0',
         }}
         contentEditable={true}

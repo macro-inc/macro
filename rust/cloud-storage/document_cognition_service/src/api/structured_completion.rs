@@ -106,14 +106,14 @@ pub async fn structured_completion(
     };
     let rig_messages = agent::to_rig_messages(&[user_message]);
 
-    let agent_loop = AgentLoop::new().with_model(model);
+    let agent_loop = AgentLoop::new(ctx.tool_service_context.recorder.clone()).with_model(model);
+    let usage_ctx =
+        ai_usage::UsageContext::new(ai_usage::AiFeature::DynamicCompletionsApi, user_id.clone());
+    // Carry the feature on the context so tool-spawned subagents attribute to it.
+    let mut tool_context = ctx.tool_service_context.clone();
+    tool_context.usage_context = usage_ctx.clone();
     let mut session = agent_loop
-        .session(
-            toolset,
-            Arc::new(ctx.tool_service_context.clone()),
-            &system_prompt,
-            user_id,
-        )
+        .session(toolset, Arc::new(tool_context), &system_prompt, usage_ctx)
         .await;
 
     let mut ai_stream =
@@ -169,6 +169,8 @@ pub async fn structured_completion(
         &system_prompt,
         rig_messages,
         request.output_schema,
+        ctx.tool_service_context.recorder.as_ref(),
+        ai_usage::UsageContext::new(ai_usage::AiFeature::DynamicCompletionsApi, user_id),
     )
     .await
     .map_err(|e| StructuredCompletionError {

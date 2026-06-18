@@ -5,8 +5,9 @@ mod tests;
 
 use crate::domain::{
     models::{
-        AuthenticatedBot, Bot, BotId, BotKind, BotOwner, BotToken, BotTokenCandidate,
-        CreateBotRequest, CreateBotTokenRequest, CreateChannelScopedBotRequest, PatchBotRequest,
+        AuthenticatedBot, Bot, BotChannel, BotChannelType, BotId, BotKind, BotOwner, BotToken,
+        BotTokenCandidate, CreateBotRequest, CreateBotTokenRequest, CreateChannelScopedBotRequest,
+        PatchBotRequest,
     },
     ports::BotRepo,
 };
@@ -87,6 +88,32 @@ impl TryFrom<BotRow> for Bot {
 }
 
 #[derive(Debug)]
+struct BotChannelRow {
+    channel_id: Uuid,
+    name: Option<String>,
+    channel_type: String,
+    joined_at: DateTime<Utc>,
+}
+
+impl TryFrom<BotChannelRow> for BotChannel {
+    type Error = anyhow::Error;
+
+    fn try_from(row: BotChannelRow) -> Result<Self, Self::Error> {
+        let channel_type = row
+            .channel_type
+            .parse::<BotChannelType>()
+            .map_err(|err| anyhow::anyhow!(err))?;
+
+        Ok(Self {
+            channel_id: row.channel_id,
+            name: row.name,
+            channel_type,
+            joined_at: row.joined_at,
+        })
+    }
+}
+
+#[derive(Debug)]
 struct BotTokenRow {
     id: Uuid,
     bot_id: Uuid,
@@ -152,6 +179,10 @@ impl TokenCandidateRow {
 }
 
 fn map_bot_row(row: BotRow) -> anyhow::Result<Bot> {
+    row.try_into()
+}
+
+fn map_bot_channel_row(row: BotChannelRow) -> anyhow::Result<BotChannel> {
     row.try_into()
 }
 
@@ -503,6 +534,29 @@ impl BotRepo for PgBotsRepo {
         .await
         .context("failed to remove bot from channel")?;
         Ok(result.rows_affected() > 0)
+    }
+
+    async fn list_bot_channels(&self, bot_id: BotId) -> Result<Vec<BotChannel>, Self::Err> {
+        let rows = sqlx::query_as!(
+            BotChannelRow,
+            r#"
+            SELECT
+                c.id AS channel_id,
+                c.name,
+                c.channel_type::text AS "channel_type!",
+                cp.joined_at
+            FROM comms_channel_participants cp
+            JOIN comms_channels c ON c.id = cp.channel_id
+            WHERE cp.user_id = $1
+              AND cp.left_at IS NULL
+            ORDER BY cp.joined_at ASC, c.id ASC
+            "#,
+            principal_id(bot_id),
+        )
+        .fetch_all(&self.pool)
+        .await
+        .context("failed to list bot channels")?;
+        rows.into_iter().map(map_bot_channel_row).collect()
     }
 
     async fn list_channel_bots(&self, channel_id: Uuid) -> Result<Vec<Bot>, Self::Err> {

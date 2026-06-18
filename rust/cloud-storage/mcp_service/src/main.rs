@@ -9,6 +9,7 @@ mod tool_service;
 use anyhow::Context;
 use context::build_context;
 use macro_entrypoint::MacroEntrypoint;
+use macro_env_var::maybe_env_vars;
 use mcp_auth_proxy::domain::service::McpAuthProxyService;
 use mcp_auth_proxy::inbound::axum_router::mcp_router;
 use rmcp::transport::streamable_http_server::{
@@ -19,6 +20,10 @@ use tokio::time::Duration;
 use tool_service::AuthenticatedToolService;
 
 const AUTH_PROXY_CLEANUP_INTERVAL: Duration = Duration::from_secs(60);
+
+maybe_env_vars! {
+    struct Port;
+}
 
 #[tokio::main]
 #[tracing::instrument(err)]
@@ -64,7 +69,9 @@ async fn main() -> anyhow::Result<()> {
 
     let app = mcp_router(context.auth_proxy, context.jwt_args, mcp_service);
 
-    let port = std::env::var("PORT").unwrap_or_else(|_| "8090".to_string());
+    let port = Port::new()
+        .map(|port| port.to_string())
+        .unwrap_or_else(|| "8090".to_string());
     let addr = format!("0.0.0.0:{port}");
     let listener = tokio::net::TcpListener::bind(&addr)
         .await

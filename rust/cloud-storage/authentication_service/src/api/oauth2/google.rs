@@ -102,11 +102,26 @@ async fn link_user(
     {
         Ok(()) => {}
         Err(FusionAuthClientError::IdentityProviderLinkAlreadyExists) => {
-            tracing::info!(
-                fusion_user_id = %idp_link_owner,
-                linked_email = %user_info_email,
-                "idp link already exists, skipping creation"
-            );
+            // The link already exists but its stored refresh token may be dead (this
+            // is the reconnect path). A plain `link_user` no-ops and leaves the dead
+            // token in place, so swap in the freshly minted token. With no fresh token
+            // (Google withheld a refresh token) there is nothing to swap, so leave the
+            // existing grant untouched.
+            if token_response.refresh_token.is_empty() {
+                tracing::info!(
+                    fusion_user_id = %idp_link_owner,
+                    "idp link already exists and no fresh refresh token returned, leaving existing grant"
+                );
+            } else {
+                relink_with_fresh_token(
+                    ctx,
+                    identity_provider_id,
+                    &idp_link_owner,
+                    &user_info_email,
+                    &token_response.refresh_token,
+                )
+                .await?;
+            }
         }
         Err(e) => {
             return Err((
@@ -126,6 +141,103 @@ async fn link_user(
                 format!("unable to record linked email on in_progress_user_link {e}"),
             )
         })?;
+
+    Ok(())
+}
+
+/// Replaces a stale Google grant on an existing IdP link with a freshly minted
+/// refresh token. Used on reconnect, when the mailbox's FusionAuth link already
+/// exists but its stored token has gone dead — a plain `link_user` no-ops and
+/// leaves the dead token in place.
+///
+/// A Google identity binds to exactly one FusionAuth user, so the grant is swapped
+/// by unlinking the old link and re-linking with the new token, rolling back to the
+/// old token if the re-link fails. A shared mailbox's grant lives on a deactivated
+/// stub user; links are only created against active users, so the stub is
+/// reactivated for the swap and returned to its prior state afterward (a human's own
+/// active account is left active). Idempotent when the stored token already matches.
+async fn relink_with_fresh_token(
+    ctx: &ApiContext,
+    identity_provider_id: &str,
+    idp_link_owner: &str,
+    email: &str,
+    fresh_refresh_token: &str,
+) -> Result<(), (StatusCode, String)> {
+    let server_error = |message: String| (StatusCode::INTERNAL_SERVER_ERROR, message);
+    let auth = &ctx.auth_client;
+
+    let existing_links = auth
+        .get_links(idp_link_owner, Some(identity_provider_id.to_string()))
+        .await
+        .map_err(|e| server_error(format!("unable to read existing links {e}")))?;
+
+    let Some(existing) = existing_links.into_iter().find(|l| l.display_name == email) else {
+        // Owner resolution and the already-exists error disagree about where the
+        // link lives; there is nothing to relink on this user.
+        tracing::warn!(
+            fusion_user_id = %idp_link_owner,
+            "relink: no existing grant found for mailbox on resolved owner, skipping"
+        );
+        return Ok(());
+    };
+
+    if existing.token == fresh_refresh_token {
+        // Stored token already current; nothing to do.
+        return Ok(());
+    }
+
+    let sub = existing.identity_provider_user_id;
+    let stale_token = existing.token;
+
+    let was_active = auth
+        .get_user_active(idp_link_owner)
+        .await
+        .map_err(|e| server_error(format!("unable to read user active state {e}")))?;
+
+    if !was_active {
+        auth.reactivate_user(idp_link_owner)
+            .await
+            .map_err(|e| server_error(format!("unable to reactivate user for relink {e}")))?;
+    }
+
+    let link_with = |token: &str| LinkUserRequest {
+        identity_provider_link: IdentityProviderLink {
+            display_name: Cow::Owned(email.to_string()),
+            identity_provider_id: Cow::Borrowed(identity_provider_id),
+            identity_provider_user_id: Cow::Borrowed(&sub),
+            user_id: Cow::Borrowed(idp_link_owner),
+            token: Cow::Owned(token.to_string()),
+        },
+    };
+
+    // Swap the grant, capturing the outcome so the stub is re-deactivated below on
+    // every path — including an unlink failure — rather than leaking an active stub.
+    let swap_result: Result<(), (StatusCode, String)> = async {
+        auth.unlink_user(idp_link_owner, identity_provider_id, &sub)
+            .await
+            .map_err(|e| server_error(format!("unable to unlink stale grant {e}")))?;
+
+        let link_result = auth.link_user(link_with(fresh_refresh_token)).await;
+
+        if let Err(e) = &link_result {
+            tracing::error!(error=?e, "relink: failed to attach fresh grant, rolling back to stale token");
+            if let Err(rollback) = auth.link_user(link_with(&stale_token)).await {
+                tracing::error!(error=?rollback, "relink: rollback re-link also failed, grant is detached");
+            }
+        }
+
+        link_result.map_err(|e| server_error(format!("unable to attach fresh grant {e}")))
+    }
+    .await;
+
+    // Restore the stub's deactivated state on every path; a human's own account was
+    // active and is left as-is. Best-effort (logged) so a deactivation blip can't fail
+    // a reconnect whose grant swap already succeeded.
+    if !was_active && let Err(e) = auth.deactivate_user(idp_link_owner).await {
+        tracing::error!(error=?e, %idp_link_owner, "relink: failed to re-deactivate stub after relink");
+    }
+
+    swap_result?;
 
     Ok(())
 }

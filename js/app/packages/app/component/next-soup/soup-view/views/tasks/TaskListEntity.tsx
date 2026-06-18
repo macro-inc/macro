@@ -146,9 +146,9 @@ export function TaskListEntity(props: TaskListEntityProps) {
         {
           'min-h-10 mx-1': !isMobile(),
           'bg-accent/8': props.checked,
-          'ring ring-accent/16 ring-inset':
+          'bg-accent/16':
             props.checked && props.highlighted && !isTouchDevice(),
-          'ring ring-edge bg-active/60 ring-inset':
+          'bg-active/60':
             props.highlighted && !props.checked && !isTouchDevice(),
           'hover:bg-active/30':
             !props.highlighted && !props.checked && !isTouchDevice(),

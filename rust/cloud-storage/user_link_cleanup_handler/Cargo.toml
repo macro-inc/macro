@@ -12,9 +12,11 @@ futures = { workspace = true }
 lambda_runtime = { workspace = true }
 macro_db_client = { path = "../macro_db_client" }
 macro_entrypoint = { path = "../macro_entrypoint" }
+macro_env_var = { path = "../macro_env_var" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }
 tokio = { workspace = true }
+tracing = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 

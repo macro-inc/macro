@@ -14,6 +14,7 @@ import type {
   CreateChatRequest,
   DeleteMcpServerParams,
   DocumentTextPart,
+  ErrorBody,
   ErrorResponse,
   GetBatchPreviewRequest,
   GetBatchPreviewResponse,
@@ -29,6 +30,7 @@ import type {
   RejectToolCallRequest,
   SendChatMessageResponse,
   ServerResponse,
+  SetPricingRequest,
   StartAuthRequest,
   StartAuthResponse,
   StopChatStreamError,
@@ -41,7 +43,129 @@ import type {
   UpdateServerRequest,
   UpdateToolCallRequest,
   UpdateToolResponseRequest,
+  UsageRequest,
+  UsageSummary,
 } from './schemas';
+
+/**
+ * @summary Set the pricing for a model and recompute its recorded rows. Admin only.
+ */
+export type setPricingHandlerResponse200 = {
+  data: void;
+  status: 200;
+};
+
+export type setPricingHandlerResponse403 = {
+  data: ErrorBody;
+  status: 403;
+};
+
+export type setPricingHandlerResponse500 = {
+  data: ErrorBody;
+  status: 500;
+};
+
+export type setPricingHandlerResponseSuccess = setPricingHandlerResponse200 & {
+  headers: Headers;
+};
+export type setPricingHandlerResponseError = (
+  | setPricingHandlerResponse403
+  | setPricingHandlerResponse500
+) & {
+  headers: Headers;
+};
+
+export type setPricingHandlerResponse =
+  | setPricingHandlerResponseSuccess
+  | setPricingHandlerResponseError;
+
+export const getSetPricingHandlerUrl = () => {
+  return `/ai-cost/pricing`;
+};
+
+export const setPricingHandler = async (
+  setPricingRequest: SetPricingRequest,
+  options?: RequestInit
+): Promise<setPricingHandlerResponse> => {
+  const res = await fetch(getSetPricingHandlerUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(setPricingRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: setPricingHandlerResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as setPricingHandlerResponse;
+};
+
+/**
+ * @summary Query recorded AI usage. Admin only.
+ */
+export type getUsageHandlerResponse200 = {
+  data: UsageSummary;
+  status: 200;
+};
+
+export type getUsageHandlerResponse400 = {
+  data: ErrorBody;
+  status: 400;
+};
+
+export type getUsageHandlerResponse403 = {
+  data: ErrorBody;
+  status: 403;
+};
+
+export type getUsageHandlerResponse500 = {
+  data: ErrorBody;
+  status: 500;
+};
+
+export type getUsageHandlerResponseSuccess = getUsageHandlerResponse200 & {
+  headers: Headers;
+};
+export type getUsageHandlerResponseError = (
+  | getUsageHandlerResponse400
+  | getUsageHandlerResponse403
+  | getUsageHandlerResponse500
+) & {
+  headers: Headers;
+};
+
+export type getUsageHandlerResponse =
+  | getUsageHandlerResponseSuccess
+  | getUsageHandlerResponseError;
+
+export const getGetUsageHandlerUrl = () => {
+  return `/ai-cost/usage`;
+};
+
+export const getUsageHandler = async (
+  usageRequest: UsageRequest,
+  options?: RequestInit
+): Promise<getUsageHandlerResponse> => {
+  const res = await fetch(getGetUsageHandlerUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(usageRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getUsageHandlerResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getUsageHandlerResponse;
+};
 
 export type getChatsForAttachmentHandlerResponse200 = {
   data: GetChatsForAttachmentResponse;

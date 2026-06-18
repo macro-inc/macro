@@ -13,7 +13,13 @@ use macro_auth::{
     middleware::decode_jwt::{JwtToken, JwtValidationArgs},
 };
 
+use macro_env_var::maybe_env_vars;
 use model::{response::ErrorResponse, user::UserContext};
+
+maybe_env_vars! {
+    struct LocalUserId;
+    struct LocalFusionUserId;
+}
 
 /// Attempts to decode the JWT and attach user to the request context
 /// If there is no JWT to decode, the user context remains empty
@@ -25,8 +31,12 @@ pub async fn handler(
 ) -> Result<Response, Response> {
     if cfg!(feature = "local_auth") {
         req.extensions_mut().insert(UserContext {
-            user_id: std::env::var("LOCAL_USER_ID").unwrap_or("macro|orguser@org.com".to_string()),
-            fusion_user_id: std::env::var("LOCAL_FUSION_USER_ID").unwrap_or("set me!".to_string()),
+            user_id: LocalUserId::new()
+                .map(|user_id| user_id.to_string())
+                .unwrap_or_else(|| "macro|orguser@org.com".to_string()),
+            fusion_user_id: LocalFusionUserId::new()
+                .map(|fusion_user_id| fusion_user_id.to_string())
+                .unwrap_or_else(|| "set me!".to_string()),
             organization_id: Some(1),
             permissions: None,
         });

@@ -107,8 +107,15 @@ function CommandDisplay(props: { item: CommandMenuItem }) {
   return (
     <div class="flex items-center gap-2 flex-1 min-w-0">
       <div class="size-5 flex items-center justify-center text-ink-muted shrink-0">
-        <Show when={command()?.icon} fallback={<Terminal class="size-4" />}>
-          {(icon) => <Dynamic component={icon()} class="size-4" />}
+        <Show
+          when={command()?.commandPaletteIcon}
+          fallback={
+            <Show when={command()?.icon} fallback={<Terminal class="size-4" />}>
+              {(icon) => <Dynamic component={icon()} class="size-4" />}
+            </Show>
+          }
+        >
+          {(Icon) => <Dynamic component={Icon()} class="size-4" />}
         </Show>
       </div>
       <Show
@@ -192,7 +199,7 @@ export function CommandItem(props: CommandItemProps) {
       class={cn(
         'rounded-md group flex items-center h-10 px-2 text-sm font-semibold relative',
         {
-          'bg-active ring ring-edge': props.selected,
+          'bg-active': props.selected,
           'hover:bg-hover/50': !props.selected,
         }
       )}

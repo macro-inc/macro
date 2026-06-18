@@ -15,9 +15,10 @@ pub use metadata::{
     DocumentMentionMetadata, GithubPrCheckRun, GithubPrCheckRunState, GithubPrComment,
     GithubPrCommentKind, GithubPrEventAction, GithubPrEventStatus, GithubPrMention,
     GithubPrMentionLocation, GithubPrNotificationCommon, GithubPrReview, GithubPrReviewState,
-    GithubPrStatusChanged, GithubReviewRequested, InviteToTeamMetadata, ItemSharedMetadata,
-    MentionedInDocumentCommentMetadata, NewEmailMetadata, NotificationDocumentSubType,
-    NotificationTitle, RepliedToDocumentCommentThreadMetadata, TaskAssignedMetadata,
+    GithubPrStatusChanged, GithubReviewRequested, InboxReauthRequiredMetadata,
+    InviteToTeamMetadata, ItemSharedMetadata, MentionedInDocumentCommentMetadata, NewEmailMetadata,
+    NotificationDocumentSubType, NotificationTitle, RepliedToDocumentCommentThreadMetadata,
+    TaskAssignedMetadata,
 };
 pub use unsubscribe::UserUnsubscribe;
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -195,6 +196,9 @@ define_notif_event!(
         /// A new email has been sent to the user.
         NewEmail(NewEmailMetadata),
 
+        /// A linked inbox's grant died and must be reconnected.
+        InboxReauthRequired(InboxReauthRequiredMetadata),
+
         /// A user was invited to a team.
         InviteToTeam(InviteToTeamMetadata),
 
@@ -253,6 +257,7 @@ impl NotificationTitle for NotifEvent {
                 channel_reply_metadata.format_title(sender_id)
             }
             NotifEvent::NewEmail(new_email_metadata) => new_email_metadata.format_title(sender_id),
+            NotifEvent::InboxReauthRequired(m) => m.format_title(sender_id),
             NotifEvent::InviteToTeam(_) => Err(report!("not implemented")),
             NotifEvent::TaskAssigned(task_assigned_metadata) => {
                 task_assigned_metadata.format_title(sender_id)
@@ -305,6 +310,7 @@ impl NotificationTitle for NotifEvent {
                 channel_reply_metadata.format_body(sender_id)
             }
             NotifEvent::NewEmail(new_email_metadata) => new_email_metadata.format_body(sender_id),
+            NotifEvent::InboxReauthRequired(m) => m.format_body(sender_id),
             NotifEvent::InviteToTeam(_) => Err(report!("not implemented")),
             NotifEvent::TaskAssigned(task_assigned_metadata) => {
                 task_assigned_metadata.format_body(sender_id)

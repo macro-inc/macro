@@ -1,6 +1,6 @@
 use super::*;
 use crate::domain::models::{
-    AuthenticatedBot, Bot, BotId, BotKind, BotOwner, BotToken, CreateBotRequest,
+    AuthenticatedBot, Bot, BotChannel, BotId, BotKind, BotOwner, BotToken, CreateBotRequest,
     CreateBotTokenRequest, CreateBotTokenResponse, PatchBotRequest,
 };
 use axum::{
@@ -170,6 +170,14 @@ impl BotService for TestBotService {
         _channel_id: Uuid,
         _bot_id: BotId,
     ) -> Result<(), BotError> {
+        unimplemented!()
+    }
+
+    async fn list_bot_channels(
+        &self,
+        _caller: MacroUserIdStr<'static>,
+        _bot_id: BotId,
+    ) -> Result<Vec<BotChannel>, BotError> {
         unimplemented!()
     }
 

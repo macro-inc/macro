@@ -4,7 +4,9 @@ use crate::pubsub::inbox_sync::operations::shared::notify_search;
 use crate::pubsub::inbox_sync::process;
 use crate::pubsub::inbox_sync::process::check_gmail_rate_limit_inbox_sync;
 use crate::pubsub::util::cg_refresh_email;
-use crate::pubsub::util::{CrmContactRecipient, enqueue_populate_crm_contacts};
+use crate::pubsub::util::{
+    CrmContactRecipient, build_notification_recipients, enqueue_populate_crm_contacts,
+};
 use crate::util::process_pre_insert::{process_message_pre_insert, process_threads_pre_insert};
 use crate::util::upload_attachment::{UploadAttachmentContext, upload_attachment};
 use contacts::domain::ports::ContactsIngress;
@@ -609,30 +611,6 @@ async fn send_notifications(
     }
 
     Ok(())
-}
-
-fn build_notification_recipients(
-    owner: &MacroUserIdStr<'static>,
-    primaries: Vec<String>,
-) -> HashSet<MacroUserIdStr<'static>> {
-    let mut recipient_ids = HashSet::from([owner.clone()]);
-
-    for primary in primaries {
-        match MacroUserIdStr::try_from(primary) {
-            Ok(id) => {
-                recipient_ids.insert(id);
-            }
-            Err(e) => {
-                tracing::warn!(
-                    error=?e,
-                    inbox_owner=%owner,
-                    "skipping delegated primary that failed to parse as a macro user id"
-                );
-            }
-        }
-    }
-
-    recipient_ids
 }
 
 // filter out messages we don't want to send notifications for

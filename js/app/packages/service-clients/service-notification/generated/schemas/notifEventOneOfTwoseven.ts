@@ -4,14 +4,20 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { GithubPrCheckRun } from './githubPrCheckRun';
+import type { GithubPrStatusChanged } from './githubPrStatusChanged';
 import type { NotifEventOneOfTwosevenTag } from './notifEventOneOfTwosevenTag';
 
 /**
- * A GitHub pull request check run completed.
+ * A GitHub pull request changed lifecycle state.
+
+The `github_pr_event` alias keeps rows and queue messages persisted
+before the rename deserializable.
  */
 export type NotifEventOneOfTwoseven = {
-  /** A GitHub pull request check run completed. */
-  content: GithubPrCheckRun;
+  /** A GitHub pull request changed lifecycle state.
+
+The `github_pr_event` alias keeps rows and queue messages persisted
+before the rename deserializable. */
+  content: GithubPrStatusChanged;
   tag: NotifEventOneOfTwosevenTag;
 };

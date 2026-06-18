@@ -594,6 +594,132 @@
         }
       }
     },
+    "/bots/{bot_id}/channels": {
+      "get": {
+        "tags": ["bots"],
+        "summary": "Handler for `GET /bots/{bot_id}/channels`.",
+        "operationId": "list_bot_channels",
+        "parameters": [
+          {
+            "name": "bot_id",
+            "in": "path",
+            "description": "Bot ID",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/BotId"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/BotChannel"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/bots/{bot_id}/channels/{channel_id}": {
+      "delete": {
+        "tags": ["bots"],
+        "summary": "Handler for `DELETE /bots/{bot_id}/channels/{channel_id}`.",
+        "operationId": "remove_bot_from_channel_by_bot",
+        "parameters": [
+          {
+            "name": "bot_id",
+            "in": "path",
+            "description": "Bot ID",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/BotId"
+            }
+          },
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/call/record/preview": {
       "post": {
         "tags": ["call::inbound::axum_router"],
@@ -10149,6 +10275,36 @@
           }
         }
       },
+      "BotChannel": {
+        "type": "object",
+        "description": "Channel containing a bot.",
+        "required": ["channel_id", "channel_type", "joined_at"],
+        "properties": {
+          "channel_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Channel id."
+          },
+          "channel_type": {
+            "$ref": "#/components/schemas/BotChannelType",
+            "description": "Channel type."
+          },
+          "joined_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when the bot joined the channel."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "Channel display name."
+          }
+        }
+      },
+      "BotChannelType": {
+        "type": "string",
+        "description": "Channel type for a channel containing a bot.",
+        "enum": ["public", "private", "direct_message", "team"]
+      },
       "BotId": {
         "type": "string"
       },
@@ -10638,6 +10794,7 @@
       },
       "Channel": {
         "type": "object",
+        "description": "Channel metadata in soup payloads.",
         "required": [
           "id",
           "channel_type",
@@ -10647,34 +10804,42 @@
         ],
         "properties": {
           "channel_type": {
-            "$ref": "#/components/schemas/ChannelType"
+            "$ref": "#/components/schemas/ChannelType",
+            "description": "Channel type."
           },
           "created_at": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "description": "Creation timestamp."
           },
           "id": {
             "type": "string",
-            "format": "uuid"
+            "format": "uuid",
+            "description": "Channel id."
           },
           "name": {
-            "type": ["string", "null"]
+            "type": ["string", "null"],
+            "description": "Channel display name."
           },
           "org_id": {
             "type": ["integer", "null"],
             "format": "int32",
+            "description": "Organization id.",
             "minimum": 0
           },
           "owner_id": {
-            "type": "string"
+            "type": "string",
+            "description": "Channel owner."
           },
           "team_id": {
             "type": ["string", "null"],
-            "format": "uuid"
+            "format": "uuid",
+            "description": "Team id."
           },
           "updated_at": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "description": "Update timestamp."
           }
         }
       },
@@ -10738,6 +10903,7 @@
       },
       "ChannelMessage": {
         "type": "object",
+        "description": "Lightweight channel message for soup payloads.",
         "required": [
           "message_id",
           "sender_id",
@@ -10748,37 +10914,44 @@
         ],
         "properties": {
           "content": {
-            "type": "string"
+            "type": "string",
+            "description": "Message content."
           },
           "created_at": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "description": "Creation timestamp."
           },
           "deleted_at": {
             "type": ["string", "null"],
-            "format": "date-time"
+            "format": "date-time",
+            "description": "Deletion timestamp."
           },
           "mentions": {
             "type": "array",
             "items": {
               "type": "string"
             },
-            "description": "message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`"
+            "description": "Message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`."
           },
           "message_id": {
             "type": "string",
-            "format": "uuid"
+            "format": "uuid",
+            "description": "Message id."
           },
           "sender_id": {
-            "type": "string"
+            "type": "string",
+            "description": "Sender id."
           },
           "thread_id": {
             "type": ["string", "null"],
-            "format": "uuid"
+            "format": "uuid",
+            "description": "Thread parent id."
           },
           "updated_at": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "description": "Update timestamp."
           }
         }
       },
@@ -15024,6 +15197,7 @@
       },
       "LatestMessage": {
         "type": "object",
+        "description": "Latest-message bundle for soup payloads.",
         "properties": {
           "latest_message": {
             "oneOf": [
@@ -15031,7 +15205,8 @@
                 "type": "null"
               },
               {
-                "$ref": "#/components/schemas/ChannelMessage"
+                "$ref": "#/components/schemas/ChannelMessage",
+                "description": "Latest message including thread replies."
               }
             ]
           },
@@ -15041,7 +15216,8 @@
                 "type": "null"
               },
               {
-                "$ref": "#/components/schemas/ChannelMessage"
+                "$ref": "#/components/schemas/ChannelMessage",
+                "description": "Latest top-level non-thread message."
               }
             ]
           }

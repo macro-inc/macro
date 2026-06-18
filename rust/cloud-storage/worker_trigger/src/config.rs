@@ -1,4 +1,13 @@
+use anyhow::Context;
+
 pub use macro_env::Environment;
+use macro_env_var::env_vars;
+
+env_vars! {
+    pub struct TaskDefinition;
+    pub struct Cluster;
+    pub struct Subnets;
+}
 
 /// The configuration parameters for the application.
 ///
@@ -38,19 +47,18 @@ impl Config {
     }
 
     pub fn from_env() -> anyhow::Result<Self> {
-        let task_definition =
-            std::env::var("TASK_DEFINITION").expect("TASK_DEFINITION must be provided");
-        let cluster = std::env::var("CLUSTER").expect("CLUSTER must be provided");
-        let subnets: Vec<String> = std::env::var("SUBNETS")
-            .expect("SUBNETS must be provided")
+        let task_definition = TaskDefinition::new().context("TASK_DEFINITION must be provided")?;
+        let cluster = Cluster::new().context("CLUSTER must be provided")?;
+        let subnets: Vec<String> = Subnets::new()
+            .context("SUBNETS must be provided")?
             .split(",")
             .map(|s| s.to_string())
             .collect::<Vec<String>>();
         let environment = Environment::new_or_prod();
 
         Ok(Config::new(
-            task_definition.as_str(),
-            cluster.as_str(),
+            task_definition.as_ref(),
+            cluster.as_ref(),
             subnets,
             environment,
         ))

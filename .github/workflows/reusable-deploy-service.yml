@@ -131,9 +131,7 @@ jobs:
         if: ${{ steps.check-lambdas.outputs.has_lambdas == 'true' }}
         env:
           SERVICE: ${{ inputs.service-name }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID || secrets.AWS_ACCESS_KEY }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        run: .github/scripts/build-cloud-storage-lambdas.sh
+        run: .github/scripts/build-cloud-storage-lambdas-nix.sh
 
       - name: Upload Lambda artifacts
         if: ${{ steps.check-lambdas.outputs.has_lambdas == 'true' }}
