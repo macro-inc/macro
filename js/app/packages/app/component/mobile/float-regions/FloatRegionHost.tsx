@@ -41,7 +41,7 @@ export function FloatRegionHost() {
         class={cn(
           'pointer-events-none absolute inset-x-0 bottom-0 z-mobile-nav-bar flex flex-col gap-3 pb-3',
           isNativeMobilePlatform() && 'pb-7',
-          virtualKeyboardVisible() && 'pb-3',
+          virtualKeyboardVisible() && 'pb-3'
         )}
       >
         <For each={FLOAT_REGIONS}>

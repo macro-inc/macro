@@ -32,7 +32,7 @@ export function HeaderTitleMenu(
 ) {
   return (
     <Dropdown placement="bottom-start">
-      <Dropdown.Trigger class="ph-no-capture h-8 max-w-full min-w-0 gap-1.5 border-none bg-transparent px-1 text-ink">
+      <Dropdown.Trigger class="ph-no-capture h-8 max-w-full min-w-0 gap-1.5 border-none bg-transparent px-1 text-ink mobile:active:bg-transparent">
         {props.children}
         <CaretDownIcon class="size-3 shrink-0 text-ink-muted" />
       </Dropdown.Trigger>

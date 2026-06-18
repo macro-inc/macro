@@ -315,7 +315,8 @@ function MorePopover(props: {
                     }}
                   >
                     <span>Views</span>
-                    <CaretUpIcon class="size-6 rotate-180 text-ink" />
+                    {/* Center the caret over the dock's More trigger (this menu's opener) so it lines up with that button's caret. */}
+                    <CaretUpIcon class="mr-11 size-6 rotate-180 text-ink" />
                   </button>
                 </div>
               </div>

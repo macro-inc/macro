@@ -5,6 +5,7 @@ import type { BlockName } from '@core/block';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import type { EntityDragEvent } from '@entity';
 import CollapseIcon from '@phosphor/arrows-in.svg';
 import ExpandIcon from '@phosphor/arrows-out.svg';
@@ -63,7 +64,7 @@ function SplitBackButton() {
   if (!context) return null;
   return (
     <Button
-      class="p-1 rounded-lg"
+      class="p-1 rounded-lg mobile:active:bg-transparent"
       label="Go Back"
       hotkey={TOKENS.split.go.back}
       disabled={!context.handle.canGoBack()}
@@ -262,8 +263,11 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
         'isolate relative w-full h-full overflow-clip text-ink',
         // On mobile the header overlays the panel body as a transparent strip
         // of floating islands
-        'mobile:absolute mobile:inset-x-0 mobile:top-(--safe-top) mobile:z-mobile-nav-bar mobile:h-11.25 mobile:overflow-visible mobile:pointer-events-none',
+        'mobile:absolute mobile:inset-x-0 mobile:z-mobile-nav-bar mobile:h-11.25 mobile:overflow-visible mobile:pointer-events-none',
         isMobile() && isListViewID(panel.handle.content().id) && 'hidden',
+        isMobile() &&
+          !isNativeMobilePlatform() &&
+          'mobile:top-[calc(var(--safe-top)+6px)]',
         isEntityDraggingOver() && 'bg-active/50'
       )}
       data-split-header
