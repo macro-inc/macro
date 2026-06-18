@@ -111,6 +111,14 @@ async fn send_invite_notifications(
     Ok(())
 }
 
+fn secondary_channel_thread_entity(
+    thread_id: Option<Uuid>,
+) -> Option<model_entity::Entity<'static>> {
+    thread_id.map(|thread_id| {
+        model_entity::EntityType::ChannelMessage.with_entity_string(thread_id.to_string())
+    })
+}
+
 fn to_channel_mention_metadata(mention: ChannelMentionNotification) -> ChannelMentionMetadata {
     ChannelMentionMetadata {
         message_content: mention.message_content,
@@ -137,12 +145,14 @@ where
             } => {
                 let channel_id = mention.channel_id;
                 let sender_id = mention.sender.as_user().cloned();
+                let secondary_notification_entity =
+                    secondary_channel_thread_entity(mention.thread_id);
                 self.ingress
                     .send_notification(
                         SendNotificationRequestBuilder {
                             notification_entity: model_entity::EntityType::Channel
                                 .with_entity_string(channel_id.to_string()),
-                            secondary_notification_entity: None,
+                            secondary_notification_entity,
                             notification: to_channel_mention_metadata(mention),
                             sender_id,
                             recipient_ids,
@@ -161,12 +171,14 @@ where
             } => {
                 let channel_id = mention.channel_id;
                 let sender_id = mention.sender.as_user().cloned();
+                let secondary_notification_entity =
+                    secondary_channel_thread_entity(mention.thread_id);
                 self.ingress
                     .send_notification(
                         SendNotificationRequestBuilder {
                             notification_entity: model_entity::EntityType::Channel
                                 .with_entity_string(channel_id.to_string()),
-                            secondary_notification_entity: None,
+                            secondary_notification_entity,
                             notification: DocumentMentionMetadata {
                                 document_name: document.document_name,
                                 owner: document.owner,
@@ -205,7 +217,10 @@ where
                         SendNotificationRequestBuilder {
                             notification_entity: model_entity::EntityType::Channel
                                 .with_entity_string(channel_id.to_string()),
-                            secondary_notification_entity: None,
+                            secondary_notification_entity: Some(
+                                model_entity::EntityType::ChannelMessage
+                                    .with_entity_string(thread_id.to_string()),
+                            ),
                             notification: ChannelReplyMetadata {
                                 thread_id: thread_id.to_string(),
                                 message_id: message_id.to_string(),
