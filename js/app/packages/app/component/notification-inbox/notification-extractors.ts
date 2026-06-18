@@ -1,6 +1,6 @@
 import type { UnifiedNotification } from '@notifications';
 
-type CallStartedMetadata = {
+type LegacyCallStartedMetadata = {
   tag: 'call-started';
   content: {
     channel_name?: string | null;
@@ -9,7 +9,7 @@ type CallStartedMetadata = {
 
 type InboxNotificationMetadata =
   | UnifiedNotification['notification_metadata']
-  | CallStartedMetadata;
+  | LegacyCallStartedMetadata;
 
 const notificationMetadata = (
   notification: UnifiedNotification
@@ -34,6 +34,7 @@ export const notificationContent = (
       return metadata.content.snippet || undefined;
     case 'ai_response':
       return metadata.content.summary;
+    case 'call_started':
     case 'call-started':
       return metadata.content.channel_name ?? undefined;
     case 'github_pr_comment':
@@ -78,8 +79,9 @@ export const notificationTitle = (
       return metadata.content.title || metadata.content.displayName;
     case 'ai_response':
       return 'AI response';
+    case 'call_started':
     case 'call-started':
-      return metadata.content.channel_name ?? 'Call';
+      return metadata.content.channel_name ?? undefined;
     default:
       return undefined;
   }
@@ -123,6 +125,7 @@ export const notificationAction = (
       return 'mentioned you';
     case 'github_pr_review':
       return 'reviewed';
+    case 'call_started':
     case 'call-started':
       return 'started a call';
     default:

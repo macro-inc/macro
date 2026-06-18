@@ -50,6 +50,7 @@ export interface InboxItem {
   content?: string;
   properties?: PropertyT[];
   relatedDocuments?: InboxRelatedDocument[];
+  callStatuses?: string[];
   breadcrumb?: string[];
   subItems?: InboxItem[];
   timestamp?: string;

@@ -117,6 +117,7 @@ const devNotificationFilters: DevNotificationFilter[] = [
   },
   { id: 'tasks', label: 'Tasks', tags: ['task_assigned'] },
   { id: 'ai', label: 'AI', tags: ['ai_response'] },
+  { id: 'calls', label: 'Calls', tags: ['call_started'] },
   {
     id: 'github',
     label: 'GitHub',
@@ -165,7 +166,8 @@ const transformNotificationItem = (args: {
   notification: UnifiedNotification;
   entity?: EntityData;
   relatedDocuments?: InboxRelatedDocument[];
-  subItems?: UnifiedNotification[];
+  callStatuses?: string[];
+  subItems?: InboxItemData[];
 }): InboxItemData => {
   const metadata = args.notification.notification_metadata;
   const notificationTitleValue = notificationTitle(args.notification);
@@ -198,17 +200,10 @@ const transformNotificationItem = (args: {
         ? taskProperties(args.entity)
         : undefined,
     relatedDocuments: args.relatedDocuments,
+    callStatuses: args.callStatuses,
     timestamp: args.notification.created_at ?? args.notification.updated_at,
     unread: !args.notification.viewed_at && !args.notification.done,
-    subItems: showSubItems
-      ? args.subItems?.map((subItem) =>
-          transformNotificationItem({
-            id: `notification:${subItem.id}`,
-            notification: subItem,
-            entity: args.entity,
-          })
-        )
-      : undefined,
+    subItems: showSubItems ? args.subItems : undefined,
   };
 };
 
@@ -276,12 +271,21 @@ const getInboxItemGroupKey = (notification: UnifiedNotification) => {
   return undefined;
 };
 
+const getInboxSourceItemGroupKey = (item: InboxSourceItem) => {
+  if (item.entity.type === 'call') {
+    if (item.entity.isActive) return undefined;
+    return `call:${item.entity.channelId}`;
+  }
+
+  return getInboxItemGroupKey(item.notification);
+};
+
 const buildInboxItems = (items: InboxSourceItem[]): InboxItemData[] => {
   const groups: InboxSourceItem[][] = [];
   let currentKey: string | undefined;
 
   for (const item of items) {
-    const key = getInboxItemGroupKey(item.notification);
+    const key = getInboxSourceItemGroupKey(item);
     const current = groups.at(-1);
 
     if (key && key === currentKey && current) {
@@ -295,7 +299,7 @@ const buildInboxItems = (items: InboxSourceItem[]): InboxItemData[] => {
 
   return groups.map((group) => {
     const root = group[0];
-    const groupKey = getInboxItemGroupKey(root.notification);
+    const groupKey = getInboxSourceItemGroupKey(root);
     const groupDateKey = getDateGroupKey(
       getNotificationTime(root.notification)
     );
@@ -308,8 +312,22 @@ const buildInboxItems = (items: InboxSourceItem[]): InboxItemData[] => {
       notification: root.notification,
       entity: root.entity,
       relatedDocuments: group.flatMap((item) => item.relatedDocuments ?? []),
+      callStatuses:
+        root.entity.type === 'call'
+          ? group.flatMap((item) =>
+              item.entity.type === 'call' ? [item.entity.status] : []
+            )
+          : undefined,
       subItems:
-        group.length > 1 ? group.map((item) => item.notification) : undefined,
+        group.length > 1
+          ? group.map((item) =>
+              transformNotificationItem({
+                id: `notification:${item.notification.id}`,
+                notification: item.notification,
+                entity: item.entity,
+              })
+            )
+          : undefined,
     });
   });
 };
@@ -1101,21 +1119,35 @@ export function NotificationInbox2() {
         compositeEntity(toNotificationEntity(entity)),
         `${String(entity.type)}@${entity.id}` as CompositeEntity,
       ]);
+      if (entity.type === 'call') {
+        keys.add(compositeEntity({ type: 'channel', id: entity.channelId }));
+      }
       const entityNotifications: UnifiedNotification[] = [];
 
       for (const key of keys) {
         entityNotifications.push(...(notificationsByEntity[key] ?? []));
       }
 
-      const matchingNotifications =
-        entity.type === 'channel_message'
-          ? entityNotifications.filter((notification) => {
-              const content = notification.notification_metadata.content as
-                | { messageId?: string }
-                | undefined;
-              return content?.messageId === entity.messageId;
-            })
-          : entityNotifications;
+      const matchingNotifications = entityNotifications.filter(
+        (notification) => {
+          const tag = String(notification.notification_metadata.tag);
+
+          if (tag === 'call_started' || tag === 'call-started') {
+            return entity.type === 'call';
+          }
+
+          if (entity.type === 'call') return false;
+
+          if (entity.type === 'channel_message') {
+            const content = notification.notification_metadata.content as
+              | { messageId?: string }
+              | undefined;
+            return content?.messageId === entity.messageId;
+          }
+
+          return true;
+        }
+      );
 
       for (const notification of matchingNotifications) {
         if (notification.deleted_at || seen.has(notification.id)) continue;

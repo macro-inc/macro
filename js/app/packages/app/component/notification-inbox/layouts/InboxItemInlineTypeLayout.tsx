@@ -7,6 +7,7 @@ import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme'
 import { UserIcon } from '@core/component/UserIcon';
 import { MACRO_AGENT_BOT_ID } from '@core/constant/macroAgent';
 import { macroIdToEmail, tryMacroId, useDisplayName } from '@core/user';
+import { CallStatusBadge } from '@entity/components/Badges';
 import '@app/component/next-soup/soup-view/views/tasks/list-property-value.css';
 import MacroLogo from '@icon/macro-logo.svg';
 import GithubIcon from '@icon/mcp-github.svg';
@@ -103,11 +104,16 @@ function ActorIcon() {
     return [...participants.values()];
   };
 
+  const callGroupCount = () =>
+    type() === 'call_started' || type() === 'call-started'
+      ? (item().callStatuses?.length ?? 0)
+      : 0;
+
   return (
     <InboxItem.Icon class="size-9 self-center">
       <span class="relative size-9 shrink-0">
         <Show
-          when={channelGroupParticipants().length >= 2}
+          when={channelGroupParticipants().length >= 2 || callGroupCount() >= 2}
           fallback={
             <span class="grid size-full place-items-center overflow-hidden rounded-full bg-active text-ink-muted">
               <Show
@@ -138,33 +144,51 @@ function ActorIcon() {
           }
         >
           <div class="flex size-full items-center justify-center -space-x-3">
-            <For each={channelGroupParticipants().slice(0, 1)}>
-              {(participant) => (
-                <span class="grid size-6 shrink-0 place-items-center overflow-hidden rounded-full bg-active text-xs text-ink-muted ring ring-surface">
-                  <Show
-                    when={participant.id}
-                    fallback={<span>{initials(participant.name)}</span>}
-                  >
-                    {(id) => (
-                      <UserIcon
-                        id={id()}
-                        size="fill"
-                        suppressClick
-                        showTooltip={false}
-                      />
-                    )}
-                  </Show>
-                </span>
-              )}
-            </For>
-            <Show when={channelGroupParticipants().length > 2}>
+            <Show
+              when={callGroupCount() >= 2}
+              fallback={
+                <For each={channelGroupParticipants().slice(0, 1)}>
+                  {(participant) => (
+                    <span class="grid size-6 shrink-0 place-items-center overflow-hidden rounded-full bg-active text-xs text-ink-muted ring ring-surface">
+                      <Show
+                        when={participant.id}
+                        fallback={<span>{initials(participant.name)}</span>}
+                      >
+                        {(id) => (
+                          <UserIcon
+                            id={id()}
+                            size="fill"
+                            suppressClick
+                            showTooltip={false}
+                          />
+                        )}
+                      </Show>
+                    </span>
+                  )}
+                </For>
+              }
+            >
+              <span class="grid size-6 shrink-0 place-items-center overflow-hidden rounded-full bg-active text-ink-muted ring ring-surface">
+                <PhoneIcon class="size-3.5" />
+              </span>
+            </Show>
+            <Show
+              when={
+                channelGroupParticipants().length > 2 || callGroupCount() > 1
+              }
+            >
               <span class="z-10 grid aspect-square size-6 shrink-0 place-items-center rounded-full bg-ink-muted text-xs font-medium leading-none text-surface ring ring-surface">
-                +{channelGroupParticipants().length - 1}
+                +
+                {callGroupCount() >= 2
+                  ? callGroupCount() - 1
+                  : channelGroupParticipants().length - 1}
               </span>
             </Show>
           </div>
         </Show>
-        <Show when={channelGroupParticipants().length < 2}>
+        <Show
+          when={channelGroupParticipants().length < 2 && callGroupCount() < 2}
+        >
           <NotificationBadge />
         </Show>
       </span>
@@ -255,7 +279,7 @@ function EntityTypeIcon() {
       'github_pr_review',
       () => <GithubIcon class="size-3.5 shrink-0 text-ink-muted/60" />
     )
-    .with('call-started', () => (
+    .with('call_started', 'call-started', () => (
       <PhoneIcon class="size-3.5 shrink-0 text-ink-muted" />
     ))
     .otherwise(() =>
@@ -384,6 +408,10 @@ function groupedActionText() {
     const unreadCount =
       item().subItems?.filter((subItem) => subItem.unread).length ?? 0;
 
+    if (type() === 'call_started' || type() === 'call-started') {
+      return `${item().callStatuses?.length ?? count} calls`;
+    }
+
     if (type()?.startsWith('channel_')) {
       const metadata = item().notification?.notification_metadata;
       const content = metadata?.content as
@@ -410,6 +438,42 @@ function groupedActionText() {
   };
 }
 
+function callStatus() {
+  const { item } = useInboxItem();
+
+  return () => {
+    const entity = item().previewEntity;
+    return entity?.type === 'call' ? entity.status : undefined;
+  };
+}
+
+function callGroupStats() {
+  const { item } = useInboxItem();
+
+  return () => {
+    const statuses = item().callStatuses;
+    if (!statuses || statuses.length < 2) return undefined;
+
+    const counts = new Map<string, number>();
+    for (const status of statuses) {
+      counts.set(status, (counts.get(status) ?? 0) + 1);
+    }
+
+    const parts = [
+      ['MISSED', 'missed'],
+      ['UNATTENDED', 'unattended'],
+      ['ATTENDED', 'attended'],
+    ]
+      .map(([status, label]) => {
+        const count = counts.get(status);
+        return count ? `${count} ${label}` : undefined;
+      })
+      .filter(Boolean);
+
+    return parts.join(', ') || undefined;
+  };
+}
+
 function actionText() {
   const { item } = useInboxItem();
   const type = useNotificationType();
@@ -418,6 +482,7 @@ function actionText() {
   return () => {
     if (groupText()) return groupText();
     if (type() === 'document_mention') return 'shared a document with you';
+    if (type() === 'call_started' || type() === 'call-started') return 'called';
     if (type() === 'ai_response') return 'responded';
     if (type() === 'github_pr_comment') return undefined;
     if (type() === 'github_pr_mention') return undefined;
@@ -624,6 +689,8 @@ function Description(props: {
       return `${documentName} — ${messageContent}`;
     return documentName || messageContent || undefined;
   };
+  const status = callStatus();
+  const callStats = callGroupStats();
   const documentMentionFileType = () => {
     const previewEntity = item().previewEntity;
     return previewEntity?.type === 'document'
@@ -632,14 +699,22 @@ function Description(props: {
   };
   const groupText = groupedActionText();
   const description = () => {
-    if (groupText()) return undefined;
+    if (groupText()) return callStats();
     if (type() === 'document_mention') return documentMentionDescription();
+    if (type() === 'call_started' || type() === 'call-started') {
+      return status();
+    }
     return unreadGroupDescription() || groupedDescription();
   };
   const showTaskProperties = () =>
     type() === 'task_assigned' && Boolean(item().properties?.length);
   const showRelatedDocuments = () =>
     type()?.startsWith('channel_') && Boolean(item().relatedDocuments?.length);
+  const nonCallDescription = () => {
+    if (type() === 'call_started' || type() === 'call-started')
+      return undefined;
+    return description();
+  };
 
   return (
     <Show
@@ -654,7 +729,23 @@ function Description(props: {
         <Show when={showRelatedDocuments()}>
           <RelatedDocuments onSelectDocument={props.onSelectRelatedDocument} />
         </Show>
-        <Show when={description()}>
+        <Show when={type() === 'call_started' || type() === 'call-started'}>
+          <Show
+            when={callStats()}
+            fallback={
+              <Show when={status()}>
+                {(status) => <CallStatusBadge status={status()} />}
+              </Show>
+            }
+          >
+            {(stats) => (
+              <span class="min-w-0 truncate text-sm text-ink-muted/75">
+                {stats()}
+              </span>
+            )}
+          </Show>
+        </Show>
+        <Show when={nonCallDescription()}>
           {(content) => (
             <>
               <Show when={type() === 'document_mention'}>
