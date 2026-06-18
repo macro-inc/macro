@@ -59,8 +59,9 @@ impl SoupItem {
             SoupItem::Channel(channel) => {
                 EntityType::Channel.with_entity_string(channel.channel.channel.id.0.to_string())
             }
-            SoupItem::ChannelThread(thread) => EntityType::ChannelMessage
-                .with_entity_string(thread.root_message.message_id.to_string()),
+            SoupItem::ChannelThread(thread) => {
+                EntityType::ChannelMessage.with_entity_string(thread.id.to_string())
+            }
             SoupItem::Call(record) => {
                 EntityType::Call.with_entity_string(record.call_id.to_string())
             }
@@ -81,7 +82,7 @@ impl SoupItem {
             SoupItem::Project(soup_project) => soup_project.updated_at,
             SoupItem::EmailThread(soup_thread) => soup_thread.thread.updated_at,
             SoupItem::Channel(soup_channel) => soup_channel.channel.channel.updated_at,
-            SoupItem::ChannelThread(thread) => thread.updated_at(),
+            SoupItem::ChannelThread(thread) => thread.effective_updated_at(),
             SoupItem::Call(record) => record.ended_at.unwrap_or(record.started_at),
             SoupItem::CrmCompany(company) => company.updated_at,
             SoupItem::ForeignEntity(foreign_entity) => foreign_entity.updated_at,
@@ -142,10 +143,8 @@ impl SoupItem {
             (SoupItem::Channel(soup_channel), SimpleSortMethod::ViewedUpdated) => soup_channel
                 .viewed_at
                 .unwrap_or(soup_channel.channel.channel.updated_at),
-            (SoupItem::ChannelThread(thread), SimpleSortMethod::CreatedAt) => {
-                thread.root_message.created_at
-            }
-            (SoupItem::ChannelThread(thread), _) => thread.updated_at(),
+            (SoupItem::ChannelThread(thread), SimpleSortMethod::CreatedAt) => thread.created_at,
+            (SoupItem::ChannelThread(thread), _) => thread.effective_updated_at(),
             (SoupItem::Call(record), SimpleSortMethod::CreatedAt) => record.started_at,
             (SoupItem::Call(record), _) => record.ended_at.unwrap_or(record.started_at),
             (SoupItem::CrmCompany(company), SimpleSortMethod::CreatedAt) => company.created_at,
@@ -174,7 +173,7 @@ impl Identify for SoupItem {
             SoupItem::Project(soup_project) => soup_project.id,
             SoupItem::EmailThread(thread) => thread.thread.id,
             SoupItem::Channel(soup_channel) => soup_channel.channel.channel.id.0,
-            SoupItem::ChannelThread(thread) => thread.root_message.message_id,
+            SoupItem::ChannelThread(thread) => thread.id,
             SoupItem::Call(record) => record.call_id,
             SoupItem::CrmCompany(company) => company.id,
             SoupItem::ForeignEntity(foreign_entity) => foreign_entity.id,

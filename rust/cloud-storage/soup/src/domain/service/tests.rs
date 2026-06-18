@@ -2,8 +2,7 @@ use crate::domain::models::FrecencySoupItem;
 use crate::domain::ports::MockSoupRepo;
 use channels::domain::{
     models::{
-        ChannelThreadReplyRows, GetChannelsRequest, GetThreadReplyRowsRequest, ThreadReplyRow,
-        TopLevelMessageRow,
+        ChannelMessage, GetChannelsRequest, GetThreadReplyRowsRequest, ThreadInfo, ThreadReply,
     },
     ports::ChannelListService,
 };
@@ -74,10 +73,10 @@ impl ChannelListService for NoopCommsService {
         Ok(Vec::new())
     }
 
-    async fn get_thread_reply_rows(
+    async fn get_thread_messages(
         &self,
         _req: GetThreadReplyRowsRequest,
-    ) -> Result<Vec<ChannelThreadReplyRows>, Report> {
+    ) -> Result<Vec<ChannelMessage>, Report> {
         Ok(Vec::new())
     }
 
@@ -91,14 +90,14 @@ impl ChannelListService for NoopCommsService {
 
 #[derive(Clone)]
 struct RecordingCommsService {
-    rows: Vec<ChannelThreadReplyRows>,
+    rows: Vec<ChannelMessage>,
     channel_calls: Arc<Mutex<u32>>,
     channel_filters: Arc<Mutex<Vec<String>>>,
     thread_filters: Arc<Mutex<Vec<String>>>,
 }
 
 impl RecordingCommsService {
-    fn new(rows: Vec<ChannelThreadReplyRows>) -> Self {
+    fn new(rows: Vec<ChannelMessage>) -> Self {
         Self {
             rows,
             channel_calls: Arc::new(Mutex::new(0)),
@@ -140,10 +139,10 @@ impl ChannelListService for RecordingCommsService {
         Ok(Vec::new())
     }
 
-    async fn get_thread_reply_rows(
+    async fn get_thread_messages(
         &self,
         req: GetThreadReplyRowsRequest,
-    ) -> Result<Vec<ChannelThreadReplyRows>, Report> {
+    ) -> Result<Vec<ChannelMessage>, Report> {
         self.thread_filters
             .lock()
             .unwrap()
@@ -491,32 +490,39 @@ fn foreign_entity_for_source(
     }
 }
 
-fn channel_thread_rows(
+fn channel_thread_message(
     channel_id: Uuid,
     thread_id: Uuid,
     reply_id: Uuid,
     updated_at: DateTime<Utc>,
-) -> ChannelThreadReplyRows {
-    ChannelThreadReplyRows {
-        parent: TopLevelMessageRow {
-            id: thread_id,
-            channel_id,
-            sender_id: "macro|test@example.com".to_string(),
-            content: "thread parent".to_string(),
-            created_at: DateTime::default(),
-            updated_at,
-            edited_at: None,
-            deleted_at: None,
+) -> ChannelMessage {
+    ChannelMessage {
+        id: thread_id,
+        channel_id,
+        sender_id: "macro|test@example.com".to_string(),
+        bot_profile: None,
+        content: "thread parent".to_string(),
+        created_at: DateTime::default(),
+        updated_at,
+        edited_at: None,
+        deleted_at: None,
+        thread: ThreadInfo {
+            reply_count: 1,
+            latest_reply_at: Some(DateTime::default() + Days::new(1)),
+            preview: vec![ThreadReply {
+                id: reply_id,
+                sender_id: "macro|other@example.com".to_string(),
+                bot_profile: None,
+                content: "thread reply".to_string(),
+                created_at: DateTime::default() + Days::new(1),
+                updated_at: DateTime::default() + Days::new(1),
+                edited_at: None,
+                reactions: Vec::new(),
+                attachments: Vec::new(),
+            }],
         },
-        replies: vec![ThreadReplyRow {
-            id: reply_id,
-            thread_id,
-            sender_id: "macro|other@example.com".to_string(),
-            content: "thread reply".to_string(),
-            created_at: DateTime::default() + Days::new(1),
-            updated_at: DateTime::default() + Days::new(1),
-            edited_at: None,
-        }],
+        reactions: Vec::new(),
+        attachments: Vec::new(),
     }
 }
 
@@ -526,7 +532,7 @@ async fn simple_soup_includes_channel_threads() {
     let channel_id = Uuid::from_u128(0xaaaa);
     let thread_id = Uuid::from_u128(0xbbbb);
     let reply_id = Uuid::from_u128(0xcccc);
-    let comms_service = RecordingCommsService::new(vec![channel_thread_rows(
+    let comms_service = RecordingCommsService::new(vec![channel_thread_message(
         channel_id,
         thread_id,
         reply_id,
@@ -572,10 +578,11 @@ async fn simple_soup_includes_channel_threads() {
     assert_matches!(
         &page.items[0].item,
         SoupItem::ChannelThread(thread) => {
-            assert_eq!(thread.channel_id.0, channel_id);
-            assert_eq!(thread.root_message.message_id, thread_id);
-            assert_eq!(thread.messages.len(), 1);
-            assert_eq!(thread.messages[0].message_id, reply_id);
+            assert_eq!(thread.channel_id, channel_id);
+            assert_eq!(thread.id, thread_id);
+            assert_eq!(thread.thread.reply_count, 1);
+            assert_eq!(thread.thread.preview.len(), 1);
+            assert_eq!(thread.thread.preview[0].id, reply_id);
         }
     );
 }

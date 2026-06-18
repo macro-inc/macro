@@ -7671,72 +7671,185 @@ export const getItemsSoupResponse = zod
             .object({
               data: zod
                 .object({
-                  channel_id: zod
-                    .uuid()
-                    .describe('Channel that owns the thread.'),
-                  messages: zod
+                  attachments: zod
                     .array(
                       zod
                         .object({
-                          content: zod.string().describe('Message content.'),
                           created_at: zod.iso
                             .datetime({})
                             .describe('Creation timestamp.'),
-                          deleted_at: zod.iso
-                            .datetime({})
+                          entity_id: zod.string().describe('Entity id.'),
+                          entity_type: zod.string().describe('Type of entity.'),
+                          height: zod
+                            .number()
                             .nullish()
-                            .describe('Deletion timestamp.'),
-                          mentions: zod
-                            .array(zod.string())
-                            .describe(
-                              'Message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`.'
-                            ),
-                          message_id: zod.uuid().describe('Message id.'),
-                          sender_id: zod.string().describe('Sender id.'),
-                          thread_id: zod
-                            .uuid()
+                            .describe('Height for images.'),
+                          id: zod.uuid().describe('Attachment id.'),
+                          width: zod
+                            .number()
                             .nullish()
-                            .describe('Thread parent id.'),
-                          updated_at: zod.iso
-                            .datetime({})
-                            .describe('Update timestamp.'),
+                            .describe('Width for images.'),
                         })
-                        .describe(
-                          'Lightweight channel message for soup payloads.'
-                        )
+                        .describe('An attachment on a message.')
                     )
-                    .describe(
-                      'Thread replies, using the same lightweight channel message shape.'
-                    ),
-                  root_message: zod
+                    .describe('Attachments on this message.'),
+                  channel_id: zod.uuid().describe('Channel id.'),
+                  content: zod.string().describe('Message content.'),
+                  created_at: zod.iso
+                    .datetime({})
+                    .describe('Creation timestamp.'),
+                  deleted_at: zod.iso
+                    .datetime({})
+                    .nullish()
+                    .describe('Deletion timestamp.'),
+                  edited_at: zod.iso
+                    .datetime({})
+                    .nullish()
+                    .describe('Edit timestamp.'),
+                  id: zod.uuid().describe('Message id.'),
+                  reactions: zod
+                    .array(
+                      zod
+                        .object({
+                          emoji: zod.string().describe('Emoji string.'),
+                          users: zod
+                            .array(zod.string())
+                            .describe('User ids who added this reaction.'),
+                        })
+                        .describe('A reaction with emoji and user list.')
+                    )
+                    .describe('Reactions on this message.'),
+                  sender: zod
                     .object({
-                      content: zod.string().describe('Message content.'),
-                      created_at: zod.iso
-                        .datetime({})
-                        .describe('Creation timestamp.'),
-                      deleted_at: zod.iso
-                        .datetime({})
+                      avatar_url: zod
+                        .string()
                         .nullish()
-                        .describe('Deletion timestamp.'),
-                      mentions: zod
-                        .array(zod.string())
+                        .describe('Avatar URL for bot senders.'),
+                      id: zod
+                        .string()
                         .describe(
-                          'Message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`.'
+                          'Sender id without the storage namespace prefix.'
                         ),
-                      message_id: zod.uuid().describe('Message id.'),
-                      sender_id: zod.string().describe('Sender id.'),
-                      thread_id: zod
-                        .uuid()
+                      name: zod
+                        .string()
                         .nullish()
-                        .describe('Thread parent id.'),
-                      updated_at: zod.iso
-                        .datetime({})
-                        .describe('Update timestamp.'),
+                        .describe('Display name for bot senders.'),
+                      type: zod
+                        .enum(['user', 'bot'])
+                        .describe(
+                          'Public sender type for soup channel messages.'
+                        ),
                     })
-                    .describe('Lightweight channel message for soup payloads.'),
+                    .describe(
+                      'Public sender identity for soup channel messages.'
+                    ),
+                  sender_id: zod.string().describe('Sender id.'),
+                  thread: zod
+                    .object({
+                      latest_reply_at: zod.iso
+                        .datetime({})
+                        .nullish()
+                        .describe('Timestamp of the latest reply.'),
+                      preview: zod
+                        .array(
+                          zod
+                            .object({
+                              attachments: zod
+                                .array(
+                                  zod
+                                    .object({
+                                      created_at: zod.iso
+                                        .datetime({})
+                                        .describe('Creation timestamp.'),
+                                      entity_id: zod
+                                        .string()
+                                        .describe('Entity id.'),
+                                      entity_type: zod
+                                        .string()
+                                        .describe('Type of entity.'),
+                                      height: zod
+                                        .number()
+                                        .nullish()
+                                        .describe('Height for images.'),
+                                      id: zod.uuid().describe('Attachment id.'),
+                                      width: zod
+                                        .number()
+                                        .nullish()
+                                        .describe('Width for images.'),
+                                    })
+                                    .describe('An attachment on a message.')
+                                )
+                                .describe('Attachments on this reply.'),
+                              content: zod.string().describe('Reply content.'),
+                              created_at: zod.iso
+                                .datetime({})
+                                .describe('Creation timestamp.'),
+                              edited_at: zod.iso
+                                .datetime({})
+                                .nullish()
+                                .describe('Edit timestamp.'),
+                              id: zod.uuid().describe('Reply id.'),
+                              reactions: zod
+                                .array(
+                                  zod
+                                    .object({
+                                      emoji: zod
+                                        .string()
+                                        .describe('Emoji string.'),
+                                      users: zod
+                                        .array(zod.string())
+                                        .describe(
+                                          'User ids who added this reaction.'
+                                        ),
+                                    })
+                                    .describe(
+                                      'A reaction with emoji and user list.'
+                                    )
+                                )
+                                .describe('Reactions on this reply.'),
+                              sender: zod
+                                .object({
+                                  avatar_url: zod
+                                    .string()
+                                    .nullish()
+                                    .describe('Avatar URL for bot senders.'),
+                                  id: zod
+                                    .string()
+                                    .describe(
+                                      'Sender id without the storage namespace prefix.'
+                                    ),
+                                  name: zod
+                                    .string()
+                                    .nullish()
+                                    .describe('Display name for bot senders.'),
+                                  type: zod
+                                    .enum(['user', 'bot'])
+                                    .describe(
+                                      'Public sender type for soup channel messages.'
+                                    ),
+                                })
+                                .describe(
+                                  'Public sender identity for soup channel messages.'
+                                ),
+                              sender_id: zod.string().describe('Sender id.'),
+                              updated_at: zod.iso
+                                .datetime({})
+                                .describe('Update timestamp.'),
+                            })
+                            .describe('A thread reply shown in preview.')
+                        )
+                        .describe('Preview replies.'),
+                      reply_count: zod.number().describe('Total reply count.'),
+                    })
+                    .describe(
+                      'Thread metadata and preview replies for soup channel messages.'
+                    ),
+                  updated_at: zod.iso
+                    .datetime({})
+                    .describe('Update timestamp.'),
                 })
                 .describe(
-                  'A top-level channel message thread for soup payloads.\n\nThis reuses the existing lightweight [`ChannelMessage`] shape used by\n[`SoupChannel`] latest-message data.'
+                  'A top-level channel message thread for soup payloads.\n\nThis mirrors the public channel-message API shape so soup consumers can\nrender a thread root the same way they render a channel timeline message.'
                 ),
               tag: zod.enum(['channelThread']),
             })
@@ -9935,72 +10048,185 @@ export const postItemsSoupResponse = zod
             .object({
               data: zod
                 .object({
-                  channel_id: zod
-                    .uuid()
-                    .describe('Channel that owns the thread.'),
-                  messages: zod
+                  attachments: zod
                     .array(
                       zod
                         .object({
-                          content: zod.string().describe('Message content.'),
                           created_at: zod.iso
                             .datetime({})
                             .describe('Creation timestamp.'),
-                          deleted_at: zod.iso
-                            .datetime({})
+                          entity_id: zod.string().describe('Entity id.'),
+                          entity_type: zod.string().describe('Type of entity.'),
+                          height: zod
+                            .number()
                             .nullish()
-                            .describe('Deletion timestamp.'),
-                          mentions: zod
-                            .array(zod.string())
-                            .describe(
-                              'Message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`.'
-                            ),
-                          message_id: zod.uuid().describe('Message id.'),
-                          sender_id: zod.string().describe('Sender id.'),
-                          thread_id: zod
-                            .uuid()
+                            .describe('Height for images.'),
+                          id: zod.uuid().describe('Attachment id.'),
+                          width: zod
+                            .number()
                             .nullish()
-                            .describe('Thread parent id.'),
-                          updated_at: zod.iso
-                            .datetime({})
-                            .describe('Update timestamp.'),
+                            .describe('Width for images.'),
                         })
-                        .describe(
-                          'Lightweight channel message for soup payloads.'
-                        )
+                        .describe('An attachment on a message.')
                     )
-                    .describe(
-                      'Thread replies, using the same lightweight channel message shape.'
-                    ),
-                  root_message: zod
+                    .describe('Attachments on this message.'),
+                  channel_id: zod.uuid().describe('Channel id.'),
+                  content: zod.string().describe('Message content.'),
+                  created_at: zod.iso
+                    .datetime({})
+                    .describe('Creation timestamp.'),
+                  deleted_at: zod.iso
+                    .datetime({})
+                    .nullish()
+                    .describe('Deletion timestamp.'),
+                  edited_at: zod.iso
+                    .datetime({})
+                    .nullish()
+                    .describe('Edit timestamp.'),
+                  id: zod.uuid().describe('Message id.'),
+                  reactions: zod
+                    .array(
+                      zod
+                        .object({
+                          emoji: zod.string().describe('Emoji string.'),
+                          users: zod
+                            .array(zod.string())
+                            .describe('User ids who added this reaction.'),
+                        })
+                        .describe('A reaction with emoji and user list.')
+                    )
+                    .describe('Reactions on this message.'),
+                  sender: zod
                     .object({
-                      content: zod.string().describe('Message content.'),
-                      created_at: zod.iso
-                        .datetime({})
-                        .describe('Creation timestamp.'),
-                      deleted_at: zod.iso
-                        .datetime({})
+                      avatar_url: zod
+                        .string()
                         .nullish()
-                        .describe('Deletion timestamp.'),
-                      mentions: zod
-                        .array(zod.string())
+                        .describe('Avatar URL for bot senders.'),
+                      id: zod
+                        .string()
                         .describe(
-                          'Message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`.'
+                          'Sender id without the storage namespace prefix.'
                         ),
-                      message_id: zod.uuid().describe('Message id.'),
-                      sender_id: zod.string().describe('Sender id.'),
-                      thread_id: zod
-                        .uuid()
+                      name: zod
+                        .string()
                         .nullish()
-                        .describe('Thread parent id.'),
-                      updated_at: zod.iso
-                        .datetime({})
-                        .describe('Update timestamp.'),
+                        .describe('Display name for bot senders.'),
+                      type: zod
+                        .enum(['user', 'bot'])
+                        .describe(
+                          'Public sender type for soup channel messages.'
+                        ),
                     })
-                    .describe('Lightweight channel message for soup payloads.'),
+                    .describe(
+                      'Public sender identity for soup channel messages.'
+                    ),
+                  sender_id: zod.string().describe('Sender id.'),
+                  thread: zod
+                    .object({
+                      latest_reply_at: zod.iso
+                        .datetime({})
+                        .nullish()
+                        .describe('Timestamp of the latest reply.'),
+                      preview: zod
+                        .array(
+                          zod
+                            .object({
+                              attachments: zod
+                                .array(
+                                  zod
+                                    .object({
+                                      created_at: zod.iso
+                                        .datetime({})
+                                        .describe('Creation timestamp.'),
+                                      entity_id: zod
+                                        .string()
+                                        .describe('Entity id.'),
+                                      entity_type: zod
+                                        .string()
+                                        .describe('Type of entity.'),
+                                      height: zod
+                                        .number()
+                                        .nullish()
+                                        .describe('Height for images.'),
+                                      id: zod.uuid().describe('Attachment id.'),
+                                      width: zod
+                                        .number()
+                                        .nullish()
+                                        .describe('Width for images.'),
+                                    })
+                                    .describe('An attachment on a message.')
+                                )
+                                .describe('Attachments on this reply.'),
+                              content: zod.string().describe('Reply content.'),
+                              created_at: zod.iso
+                                .datetime({})
+                                .describe('Creation timestamp.'),
+                              edited_at: zod.iso
+                                .datetime({})
+                                .nullish()
+                                .describe('Edit timestamp.'),
+                              id: zod.uuid().describe('Reply id.'),
+                              reactions: zod
+                                .array(
+                                  zod
+                                    .object({
+                                      emoji: zod
+                                        .string()
+                                        .describe('Emoji string.'),
+                                      users: zod
+                                        .array(zod.string())
+                                        .describe(
+                                          'User ids who added this reaction.'
+                                        ),
+                                    })
+                                    .describe(
+                                      'A reaction with emoji and user list.'
+                                    )
+                                )
+                                .describe('Reactions on this reply.'),
+                              sender: zod
+                                .object({
+                                  avatar_url: zod
+                                    .string()
+                                    .nullish()
+                                    .describe('Avatar URL for bot senders.'),
+                                  id: zod
+                                    .string()
+                                    .describe(
+                                      'Sender id without the storage namespace prefix.'
+                                    ),
+                                  name: zod
+                                    .string()
+                                    .nullish()
+                                    .describe('Display name for bot senders.'),
+                                  type: zod
+                                    .enum(['user', 'bot'])
+                                    .describe(
+                                      'Public sender type for soup channel messages.'
+                                    ),
+                                })
+                                .describe(
+                                  'Public sender identity for soup channel messages.'
+                                ),
+                              sender_id: zod.string().describe('Sender id.'),
+                              updated_at: zod.iso
+                                .datetime({})
+                                .describe('Update timestamp.'),
+                            })
+                            .describe('A thread reply shown in preview.')
+                        )
+                        .describe('Preview replies.'),
+                      reply_count: zod.number().describe('Total reply count.'),
+                    })
+                    .describe(
+                      'Thread metadata and preview replies for soup channel messages.'
+                    ),
+                  updated_at: zod.iso
+                    .datetime({})
+                    .describe('Update timestamp.'),
                 })
                 .describe(
-                  'A top-level channel message thread for soup payloads.\n\nThis reuses the existing lightweight [`ChannelMessage`] shape used by\n[`SoupChannel`] latest-message data.'
+                  'A top-level channel message thread for soup payloads.\n\nThis mirrors the public channel-message API shape so soup consumers can\nrender a thread root the same way they render a channel timeline message.'
                 ),
               tag: zod.enum(['channelThread']),
             })
@@ -11743,72 +11969,185 @@ export const postItemsSoupAstResponse = zod
             .object({
               data: zod
                 .object({
-                  channel_id: zod
-                    .uuid()
-                    .describe('Channel that owns the thread.'),
-                  messages: zod
+                  attachments: zod
                     .array(
                       zod
                         .object({
-                          content: zod.string().describe('Message content.'),
                           created_at: zod.iso
                             .datetime({})
                             .describe('Creation timestamp.'),
-                          deleted_at: zod.iso
-                            .datetime({})
+                          entity_id: zod.string().describe('Entity id.'),
+                          entity_type: zod.string().describe('Type of entity.'),
+                          height: zod
+                            .number()
                             .nullish()
-                            .describe('Deletion timestamp.'),
-                          mentions: zod
-                            .array(zod.string())
-                            .describe(
-                              'Message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`.'
-                            ),
-                          message_id: zod.uuid().describe('Message id.'),
-                          sender_id: zod.string().describe('Sender id.'),
-                          thread_id: zod
-                            .uuid()
+                            .describe('Height for images.'),
+                          id: zod.uuid().describe('Attachment id.'),
+                          width: zod
+                            .number()
                             .nullish()
-                            .describe('Thread parent id.'),
-                          updated_at: zod.iso
-                            .datetime({})
-                            .describe('Update timestamp.'),
+                            .describe('Width for images.'),
                         })
-                        .describe(
-                          'Lightweight channel message for soup payloads.'
-                        )
+                        .describe('An attachment on a message.')
                     )
-                    .describe(
-                      'Thread replies, using the same lightweight channel message shape.'
-                    ),
-                  root_message: zod
+                    .describe('Attachments on this message.'),
+                  channel_id: zod.uuid().describe('Channel id.'),
+                  content: zod.string().describe('Message content.'),
+                  created_at: zod.iso
+                    .datetime({})
+                    .describe('Creation timestamp.'),
+                  deleted_at: zod.iso
+                    .datetime({})
+                    .nullish()
+                    .describe('Deletion timestamp.'),
+                  edited_at: zod.iso
+                    .datetime({})
+                    .nullish()
+                    .describe('Edit timestamp.'),
+                  id: zod.uuid().describe('Message id.'),
+                  reactions: zod
+                    .array(
+                      zod
+                        .object({
+                          emoji: zod.string().describe('Emoji string.'),
+                          users: zod
+                            .array(zod.string())
+                            .describe('User ids who added this reaction.'),
+                        })
+                        .describe('A reaction with emoji and user list.')
+                    )
+                    .describe('Reactions on this message.'),
+                  sender: zod
                     .object({
-                      content: zod.string().describe('Message content.'),
-                      created_at: zod.iso
-                        .datetime({})
-                        .describe('Creation timestamp.'),
-                      deleted_at: zod.iso
-                        .datetime({})
+                      avatar_url: zod
+                        .string()
                         .nullish()
-                        .describe('Deletion timestamp.'),
-                      mentions: zod
-                        .array(zod.string())
+                        .describe('Avatar URL for bot senders.'),
+                      id: zod
+                        .string()
                         .describe(
-                          'Message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`.'
+                          'Sender id without the storage namespace prefix.'
                         ),
-                      message_id: zod.uuid().describe('Message id.'),
-                      sender_id: zod.string().describe('Sender id.'),
-                      thread_id: zod
-                        .uuid()
+                      name: zod
+                        .string()
                         .nullish()
-                        .describe('Thread parent id.'),
-                      updated_at: zod.iso
-                        .datetime({})
-                        .describe('Update timestamp.'),
+                        .describe('Display name for bot senders.'),
+                      type: zod
+                        .enum(['user', 'bot'])
+                        .describe(
+                          'Public sender type for soup channel messages.'
+                        ),
                     })
-                    .describe('Lightweight channel message for soup payloads.'),
+                    .describe(
+                      'Public sender identity for soup channel messages.'
+                    ),
+                  sender_id: zod.string().describe('Sender id.'),
+                  thread: zod
+                    .object({
+                      latest_reply_at: zod.iso
+                        .datetime({})
+                        .nullish()
+                        .describe('Timestamp of the latest reply.'),
+                      preview: zod
+                        .array(
+                          zod
+                            .object({
+                              attachments: zod
+                                .array(
+                                  zod
+                                    .object({
+                                      created_at: zod.iso
+                                        .datetime({})
+                                        .describe('Creation timestamp.'),
+                                      entity_id: zod
+                                        .string()
+                                        .describe('Entity id.'),
+                                      entity_type: zod
+                                        .string()
+                                        .describe('Type of entity.'),
+                                      height: zod
+                                        .number()
+                                        .nullish()
+                                        .describe('Height for images.'),
+                                      id: zod.uuid().describe('Attachment id.'),
+                                      width: zod
+                                        .number()
+                                        .nullish()
+                                        .describe('Width for images.'),
+                                    })
+                                    .describe('An attachment on a message.')
+                                )
+                                .describe('Attachments on this reply.'),
+                              content: zod.string().describe('Reply content.'),
+                              created_at: zod.iso
+                                .datetime({})
+                                .describe('Creation timestamp.'),
+                              edited_at: zod.iso
+                                .datetime({})
+                                .nullish()
+                                .describe('Edit timestamp.'),
+                              id: zod.uuid().describe('Reply id.'),
+                              reactions: zod
+                                .array(
+                                  zod
+                                    .object({
+                                      emoji: zod
+                                        .string()
+                                        .describe('Emoji string.'),
+                                      users: zod
+                                        .array(zod.string())
+                                        .describe(
+                                          'User ids who added this reaction.'
+                                        ),
+                                    })
+                                    .describe(
+                                      'A reaction with emoji and user list.'
+                                    )
+                                )
+                                .describe('Reactions on this reply.'),
+                              sender: zod
+                                .object({
+                                  avatar_url: zod
+                                    .string()
+                                    .nullish()
+                                    .describe('Avatar URL for bot senders.'),
+                                  id: zod
+                                    .string()
+                                    .describe(
+                                      'Sender id without the storage namespace prefix.'
+                                    ),
+                                  name: zod
+                                    .string()
+                                    .nullish()
+                                    .describe('Display name for bot senders.'),
+                                  type: zod
+                                    .enum(['user', 'bot'])
+                                    .describe(
+                                      'Public sender type for soup channel messages.'
+                                    ),
+                                })
+                                .describe(
+                                  'Public sender identity for soup channel messages.'
+                                ),
+                              sender_id: zod.string().describe('Sender id.'),
+                              updated_at: zod.iso
+                                .datetime({})
+                                .describe('Update timestamp.'),
+                            })
+                            .describe('A thread reply shown in preview.')
+                        )
+                        .describe('Preview replies.'),
+                      reply_count: zod.number().describe('Total reply count.'),
+                    })
+                    .describe(
+                      'Thread metadata and preview replies for soup channel messages.'
+                    ),
+                  updated_at: zod.iso
+                    .datetime({})
+                    .describe('Update timestamp.'),
                 })
                 .describe(
-                  'A top-level channel message thread for soup payloads.\n\nThis reuses the existing lightweight [`ChannelMessage`] shape used by\n[`SoupChannel`] latest-message data.'
+                  'A top-level channel message thread for soup payloads.\n\nThis mirrors the public channel-message API shape so soup consumers can\nrender a thread root the same way they render a channel timeline message.'
                 ),
               tag: zod.enum(['channelThread']),
             })
@@ -13859,76 +14198,203 @@ export const postItemsSoupAstGroupedResponse = zod
                   .object({
                     data: zod
                       .object({
-                        channel_id: zod
-                          .uuid()
-                          .describe('Channel that owns the thread.'),
-                        messages: zod
+                        attachments: zod
                           .array(
                             zod
                               .object({
-                                content: zod
-                                  .string()
-                                  .describe('Message content.'),
                                 created_at: zod.iso
                                   .datetime({})
                                   .describe('Creation timestamp.'),
-                                deleted_at: zod.iso
-                                  .datetime({})
+                                entity_id: zod.string().describe('Entity id.'),
+                                entity_type: zod
+                                  .string()
+                                  .describe('Type of entity.'),
+                                height: zod
+                                  .number()
                                   .nullish()
-                                  .describe('Deletion timestamp.'),
-                                mentions: zod
+                                  .describe('Height for images.'),
+                                id: zod.uuid().describe('Attachment id.'),
+                                width: zod
+                                  .number()
+                                  .nullish()
+                                  .describe('Width for images.'),
+                              })
+                              .describe('An attachment on a message.')
+                          )
+                          .describe('Attachments on this message.'),
+                        channel_id: zod.uuid().describe('Channel id.'),
+                        content: zod.string().describe('Message content.'),
+                        created_at: zod.iso
+                          .datetime({})
+                          .describe('Creation timestamp.'),
+                        deleted_at: zod.iso
+                          .datetime({})
+                          .nullish()
+                          .describe('Deletion timestamp.'),
+                        edited_at: zod.iso
+                          .datetime({})
+                          .nullish()
+                          .describe('Edit timestamp.'),
+                        id: zod.uuid().describe('Message id.'),
+                        reactions: zod
+                          .array(
+                            zod
+                              .object({
+                                emoji: zod.string().describe('Emoji string.'),
+                                users: zod
                                   .array(zod.string())
                                   .describe(
-                                    'Message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`.'
+                                    'User ids who added this reaction.'
                                   ),
-                                message_id: zod.uuid().describe('Message id.'),
-                                sender_id: zod.string().describe('Sender id.'),
-                                thread_id: zod
-                                  .uuid()
-                                  .nullish()
-                                  .describe('Thread parent id.'),
-                                updated_at: zod.iso
-                                  .datetime({})
-                                  .describe('Update timestamp.'),
                               })
-                              .describe(
-                                'Lightweight channel message for soup payloads.'
-                              )
+                              .describe('A reaction with emoji and user list.')
                           )
-                          .describe(
-                            'Thread replies, using the same lightweight channel message shape.'
-                          ),
-                        root_message: zod
+                          .describe('Reactions on this message.'),
+                        sender: zod
                           .object({
-                            content: zod.string().describe('Message content.'),
-                            created_at: zod.iso
-                              .datetime({})
-                              .describe('Creation timestamp.'),
-                            deleted_at: zod.iso
-                              .datetime({})
+                            avatar_url: zod
+                              .string()
                               .nullish()
-                              .describe('Deletion timestamp.'),
-                            mentions: zod
-                              .array(zod.string())
+                              .describe('Avatar URL for bot senders.'),
+                            id: zod
+                              .string()
                               .describe(
-                                'Message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`.'
+                                'Sender id without the storage namespace prefix.'
                               ),
-                            message_id: zod.uuid().describe('Message id.'),
-                            sender_id: zod.string().describe('Sender id.'),
-                            thread_id: zod
-                              .uuid()
+                            name: zod
+                              .string()
                               .nullish()
-                              .describe('Thread parent id.'),
-                            updated_at: zod.iso
-                              .datetime({})
-                              .describe('Update timestamp.'),
+                              .describe('Display name for bot senders.'),
+                            type: zod
+                              .enum(['user', 'bot'])
+                              .describe(
+                                'Public sender type for soup channel messages.'
+                              ),
                           })
                           .describe(
-                            'Lightweight channel message for soup payloads.'
+                            'Public sender identity for soup channel messages.'
                           ),
+                        sender_id: zod.string().describe('Sender id.'),
+                        thread: zod
+                          .object({
+                            latest_reply_at: zod.iso
+                              .datetime({})
+                              .nullish()
+                              .describe('Timestamp of the latest reply.'),
+                            preview: zod
+                              .array(
+                                zod
+                                  .object({
+                                    attachments: zod
+                                      .array(
+                                        zod
+                                          .object({
+                                            created_at: zod.iso
+                                              .datetime({})
+                                              .describe('Creation timestamp.'),
+                                            entity_id: zod
+                                              .string()
+                                              .describe('Entity id.'),
+                                            entity_type: zod
+                                              .string()
+                                              .describe('Type of entity.'),
+                                            height: zod
+                                              .number()
+                                              .nullish()
+                                              .describe('Height for images.'),
+                                            id: zod
+                                              .uuid()
+                                              .describe('Attachment id.'),
+                                            width: zod
+                                              .number()
+                                              .nullish()
+                                              .describe('Width for images.'),
+                                          })
+                                          .describe(
+                                            'An attachment on a message.'
+                                          )
+                                      )
+                                      .describe('Attachments on this reply.'),
+                                    content: zod
+                                      .string()
+                                      .describe('Reply content.'),
+                                    created_at: zod.iso
+                                      .datetime({})
+                                      .describe('Creation timestamp.'),
+                                    edited_at: zod.iso
+                                      .datetime({})
+                                      .nullish()
+                                      .describe('Edit timestamp.'),
+                                    id: zod.uuid().describe('Reply id.'),
+                                    reactions: zod
+                                      .array(
+                                        zod
+                                          .object({
+                                            emoji: zod
+                                              .string()
+                                              .describe('Emoji string.'),
+                                            users: zod
+                                              .array(zod.string())
+                                              .describe(
+                                                'User ids who added this reaction.'
+                                              ),
+                                          })
+                                          .describe(
+                                            'A reaction with emoji and user list.'
+                                          )
+                                      )
+                                      .describe('Reactions on this reply.'),
+                                    sender: zod
+                                      .object({
+                                        avatar_url: zod
+                                          .string()
+                                          .nullish()
+                                          .describe(
+                                            'Avatar URL for bot senders.'
+                                          ),
+                                        id: zod
+                                          .string()
+                                          .describe(
+                                            'Sender id without the storage namespace prefix.'
+                                          ),
+                                        name: zod
+                                          .string()
+                                          .nullish()
+                                          .describe(
+                                            'Display name for bot senders.'
+                                          ),
+                                        type: zod
+                                          .enum(['user', 'bot'])
+                                          .describe(
+                                            'Public sender type for soup channel messages.'
+                                          ),
+                                      })
+                                      .describe(
+                                        'Public sender identity for soup channel messages.'
+                                      ),
+                                    sender_id: zod
+                                      .string()
+                                      .describe('Sender id.'),
+                                    updated_at: zod.iso
+                                      .datetime({})
+                                      .describe('Update timestamp.'),
+                                  })
+                                  .describe('A thread reply shown in preview.')
+                              )
+                              .describe('Preview replies.'),
+                            reply_count: zod
+                              .number()
+                              .describe('Total reply count.'),
+                          })
+                          .describe(
+                            'Thread metadata and preview replies for soup channel messages.'
+                          ),
+                        updated_at: zod.iso
+                          .datetime({})
+                          .describe('Update timestamp.'),
                       })
                       .describe(
-                        'A top-level channel message thread for soup payloads.\n\nThis reuses the existing lightweight [`ChannelMessage`] shape used by\n[`SoupChannel`] latest-message data.'
+                        'A top-level channel message thread for soup payloads.\n\nThis mirrors the public channel-message API shape so soup consumers can\nrender a thread root the same way they render a channel timeline message.'
                       ),
                     tag: zod.enum(['channelThread']),
                   })
@@ -15663,76 +16129,203 @@ export const postItemsSoupAstGroupedResponse = zod
                   .object({
                     data: zod
                       .object({
-                        channel_id: zod
-                          .uuid()
-                          .describe('Channel that owns the thread.'),
-                        messages: zod
+                        attachments: zod
                           .array(
                             zod
                               .object({
-                                content: zod
-                                  .string()
-                                  .describe('Message content.'),
                                 created_at: zod.iso
                                   .datetime({})
                                   .describe('Creation timestamp.'),
-                                deleted_at: zod.iso
-                                  .datetime({})
+                                entity_id: zod.string().describe('Entity id.'),
+                                entity_type: zod
+                                  .string()
+                                  .describe('Type of entity.'),
+                                height: zod
+                                  .number()
                                   .nullish()
-                                  .describe('Deletion timestamp.'),
-                                mentions: zod
+                                  .describe('Height for images.'),
+                                id: zod.uuid().describe('Attachment id.'),
+                                width: zod
+                                  .number()
+                                  .nullish()
+                                  .describe('Width for images.'),
+                              })
+                              .describe('An attachment on a message.')
+                          )
+                          .describe('Attachments on this message.'),
+                        channel_id: zod.uuid().describe('Channel id.'),
+                        content: zod.string().describe('Message content.'),
+                        created_at: zod.iso
+                          .datetime({})
+                          .describe('Creation timestamp.'),
+                        deleted_at: zod.iso
+                          .datetime({})
+                          .nullish()
+                          .describe('Deletion timestamp.'),
+                        edited_at: zod.iso
+                          .datetime({})
+                          .nullish()
+                          .describe('Edit timestamp.'),
+                        id: zod.uuid().describe('Message id.'),
+                        reactions: zod
+                          .array(
+                            zod
+                              .object({
+                                emoji: zod.string().describe('Emoji string.'),
+                                users: zod
                                   .array(zod.string())
                                   .describe(
-                                    'Message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`.'
+                                    'User ids who added this reaction.'
                                   ),
-                                message_id: zod.uuid().describe('Message id.'),
-                                sender_id: zod.string().describe('Sender id.'),
-                                thread_id: zod
-                                  .uuid()
-                                  .nullish()
-                                  .describe('Thread parent id.'),
-                                updated_at: zod.iso
-                                  .datetime({})
-                                  .describe('Update timestamp.'),
                               })
-                              .describe(
-                                'Lightweight channel message for soup payloads.'
-                              )
+                              .describe('A reaction with emoji and user list.')
                           )
-                          .describe(
-                            'Thread replies, using the same lightweight channel message shape.'
-                          ),
-                        root_message: zod
+                          .describe('Reactions on this message.'),
+                        sender: zod
                           .object({
-                            content: zod.string().describe('Message content.'),
-                            created_at: zod.iso
-                              .datetime({})
-                              .describe('Creation timestamp.'),
-                            deleted_at: zod.iso
-                              .datetime({})
+                            avatar_url: zod
+                              .string()
                               .nullish()
-                              .describe('Deletion timestamp.'),
-                            mentions: zod
-                              .array(zod.string())
+                              .describe('Avatar URL for bot senders.'),
+                            id: zod
+                              .string()
                               .describe(
-                                'Message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`.'
+                                'Sender id without the storage namespace prefix.'
                               ),
-                            message_id: zod.uuid().describe('Message id.'),
-                            sender_id: zod.string().describe('Sender id.'),
-                            thread_id: zod
-                              .uuid()
+                            name: zod
+                              .string()
                               .nullish()
-                              .describe('Thread parent id.'),
-                            updated_at: zod.iso
-                              .datetime({})
-                              .describe('Update timestamp.'),
+                              .describe('Display name for bot senders.'),
+                            type: zod
+                              .enum(['user', 'bot'])
+                              .describe(
+                                'Public sender type for soup channel messages.'
+                              ),
                           })
                           .describe(
-                            'Lightweight channel message for soup payloads.'
+                            'Public sender identity for soup channel messages.'
                           ),
+                        sender_id: zod.string().describe('Sender id.'),
+                        thread: zod
+                          .object({
+                            latest_reply_at: zod.iso
+                              .datetime({})
+                              .nullish()
+                              .describe('Timestamp of the latest reply.'),
+                            preview: zod
+                              .array(
+                                zod
+                                  .object({
+                                    attachments: zod
+                                      .array(
+                                        zod
+                                          .object({
+                                            created_at: zod.iso
+                                              .datetime({})
+                                              .describe('Creation timestamp.'),
+                                            entity_id: zod
+                                              .string()
+                                              .describe('Entity id.'),
+                                            entity_type: zod
+                                              .string()
+                                              .describe('Type of entity.'),
+                                            height: zod
+                                              .number()
+                                              .nullish()
+                                              .describe('Height for images.'),
+                                            id: zod
+                                              .uuid()
+                                              .describe('Attachment id.'),
+                                            width: zod
+                                              .number()
+                                              .nullish()
+                                              .describe('Width for images.'),
+                                          })
+                                          .describe(
+                                            'An attachment on a message.'
+                                          )
+                                      )
+                                      .describe('Attachments on this reply.'),
+                                    content: zod
+                                      .string()
+                                      .describe('Reply content.'),
+                                    created_at: zod.iso
+                                      .datetime({})
+                                      .describe('Creation timestamp.'),
+                                    edited_at: zod.iso
+                                      .datetime({})
+                                      .nullish()
+                                      .describe('Edit timestamp.'),
+                                    id: zod.uuid().describe('Reply id.'),
+                                    reactions: zod
+                                      .array(
+                                        zod
+                                          .object({
+                                            emoji: zod
+                                              .string()
+                                              .describe('Emoji string.'),
+                                            users: zod
+                                              .array(zod.string())
+                                              .describe(
+                                                'User ids who added this reaction.'
+                                              ),
+                                          })
+                                          .describe(
+                                            'A reaction with emoji and user list.'
+                                          )
+                                      )
+                                      .describe('Reactions on this reply.'),
+                                    sender: zod
+                                      .object({
+                                        avatar_url: zod
+                                          .string()
+                                          .nullish()
+                                          .describe(
+                                            'Avatar URL for bot senders.'
+                                          ),
+                                        id: zod
+                                          .string()
+                                          .describe(
+                                            'Sender id without the storage namespace prefix.'
+                                          ),
+                                        name: zod
+                                          .string()
+                                          .nullish()
+                                          .describe(
+                                            'Display name for bot senders.'
+                                          ),
+                                        type: zod
+                                          .enum(['user', 'bot'])
+                                          .describe(
+                                            'Public sender type for soup channel messages.'
+                                          ),
+                                      })
+                                      .describe(
+                                        'Public sender identity for soup channel messages.'
+                                      ),
+                                    sender_id: zod
+                                      .string()
+                                      .describe('Sender id.'),
+                                    updated_at: zod.iso
+                                      .datetime({})
+                                      .describe('Update timestamp.'),
+                                  })
+                                  .describe('A thread reply shown in preview.')
+                              )
+                              .describe('Preview replies.'),
+                            reply_count: zod
+                              .number()
+                              .describe('Total reply count.'),
+                          })
+                          .describe(
+                            'Thread metadata and preview replies for soup channel messages.'
+                          ),
+                        updated_at: zod.iso
+                          .datetime({})
+                          .describe('Update timestamp.'),
                       })
                       .describe(
-                        'A top-level channel message thread for soup payloads.\n\nThis reuses the existing lightweight [`ChannelMessage`] shape used by\n[`SoupChannel`] latest-message data.'
+                        'A top-level channel message thread for soup payloads.\n\nThis mirrors the public channel-message API shape so soup consumers can\nrender a thread root the same way they render a channel timeline message.'
                       ),
                     tag: zod.enum(['channelThread']),
                   })

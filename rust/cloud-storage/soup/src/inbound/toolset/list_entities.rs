@@ -198,8 +198,8 @@ impl From<SoupItem> for EntityItem {
                 name: channel.channel.channel.name.clone(),
             },
             SoupItem::ChannelThread(thread) => EntityItem::ChannelThread {
-                id: thread.root_message.message_id,
-                channel_id: thread.channel_id.0,
+                id: thread.id,
+                channel_id: thread.channel_id,
             },
             SoupItem::Call(record) => EntityItem::Call {
                 id: record.call_id,

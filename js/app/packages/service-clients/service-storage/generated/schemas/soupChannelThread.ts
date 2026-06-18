@@ -4,19 +4,43 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { ChannelMessage } from './channelMessage';
+
+import type { SoupChannelThreadDeletedAt } from './soupChannelThreadDeletedAt';
+import type { SoupChannelThreadEditedAt } from './soupChannelThreadEditedAt';
+import type { SoupCountedReaction } from './soupCountedReaction';
+import type { SoupMessageAttachment } from './soupMessageAttachment';
+import type { SoupMessageSender } from './soupMessageSender';
+import type { SoupThreadInfo } from './soupThreadInfo';
 
 /**
  * A top-level channel message thread for soup payloads.
 
-This reuses the existing lightweight [`ChannelMessage`] shape used by
-[`SoupChannel`] latest-message data.
+This mirrors the public channel-message API shape so soup consumers can
+render a thread root the same way they render a channel timeline message.
  */
 export interface SoupChannelThread {
-  /** Channel that owns the thread. */
+  /** Attachments on this message. */
+  attachments: SoupMessageAttachment[];
+  /** Channel id. */
   channel_id: string;
-  /** Thread replies, using the same lightweight channel message shape. */
-  messages: ChannelMessage[];
-  /** Top-level message that acts as the thread parent. */
-  root_message: ChannelMessage;
+  /** Message content. */
+  content: string;
+  /** Creation timestamp. */
+  created_at: string;
+  /** Deletion timestamp. */
+  deleted_at?: SoupChannelThreadDeletedAt;
+  /** Edit timestamp. */
+  edited_at?: SoupChannelThreadEditedAt;
+  /** Message id. */
+  id: string;
+  /** Reactions on this message. */
+  reactions: SoupCountedReaction[];
+  /** Structured sender identity. */
+  sender: SoupMessageSender;
+  /** Sender id. */
+  sender_id: string;
+  /** Thread metadata and preview replies. */
+  thread: SoupThreadInfo;
+  /** Update timestamp. */
+  updated_at: string;
 }

@@ -9,7 +9,7 @@ use uuid::Uuid;
 
 use crate::domain::{
     models::{
-        Activity, ChannelThreadReplyRows, ChannelType, ChannelWithLatest, GetChannelsRequest,
+        Activity, ChannelMessage, ChannelType, ChannelWithLatest, GetChannelsRequest,
         GetThreadReplyRowsRequest, NameLookup, UserName, fallback_user_name,
     },
     ports::{ChannelListRepo, ChannelListService, ChannelListUserRepo},
@@ -150,11 +150,11 @@ where
         self.channels.get_channel_list_activities(user)
     }
 
-    fn get_thread_reply_rows(
+    fn get_thread_messages(
         &self,
         req: GetThreadReplyRowsRequest,
-    ) -> impl Future<Output = Result<Vec<ChannelThreadReplyRows>, rootcause::Report>> + Send {
-        self.channels.get_thread_reply_rows(req.into_params())
+    ) -> impl Future<Output = Result<Vec<ChannelMessage>, rootcause::Report>> + Send {
+        self.channels.get_thread_messages(req.into_params())
     }
 
     fn get_names(

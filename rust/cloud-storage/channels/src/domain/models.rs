@@ -217,7 +217,7 @@ pub enum MessagePageDirection {
 }
 
 /// A top-level message with thread info, reactions, and attachments.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ChannelMessage {
     /// Message id.
     pub id: Uuid,
@@ -284,7 +284,7 @@ impl SortOn<CreatedAt> for ChannelMessage {
 }
 
 /// Thread metadata + preview replies for a top-level message.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ThreadInfo {
     /// Total number of replies in the thread.
     pub reply_count: i64,
@@ -1244,16 +1244,6 @@ impl GetThreadReplyRowsParams {
     pub fn query(&self) -> &Query<Uuid, SimpleSortMethod, LiteralTree<ChannelThreadLiteral>> {
         &self.query
     }
-}
-
-/// A top-level channel message plus all reply rows for Soup thread rendering.
-#[cfg(feature = "list")]
-#[derive(Debug, Clone)]
-pub struct ChannelThreadReplyRows {
-    /// Top-level parent message for the thread.
-    pub parent: TopLevelMessageRow,
-    /// Non-deleted replies in oldest-first order.
-    pub replies: Vec<ThreadReplyRow>,
 }
 
 #[cfg(feature = "list")]

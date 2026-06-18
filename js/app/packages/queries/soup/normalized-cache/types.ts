@@ -13,7 +13,6 @@ type SoupItemData<T extends SoupEntityTag> = Extract<
 
 // Channel's inner Channel object (for partial nested updates like { channel: { id, name } })
 type ChannelInner = SoupItemData<'channel'>['channel'];
-type ChannelThreadRootMessage = SoupItemData<'channelThread'>['root_message'];
 
 // Partial data: require the entity ID, all else optional.
 // Channel is special — ID lives at data.channel.id.
@@ -23,12 +22,7 @@ type SoupPartialData<T extends SoupEntityTag> = T extends 'channel'
     >
   : T extends 'call'
     ? Partial<SoupItemData<'call'>> & { callId: string }
-    : T extends 'channelThread'
-      ? {
-          root_message: Partial<ChannelThreadRootMessage> &
-            Pick<ChannelThreadRootMessage, 'message_id'>;
-        } & Partial<Omit<SoupItemData<'channelThread'>, 'root_message'>>
-      : Partial<SoupItemData<T>> & { id: string };
+    : Partial<SoupItemData<T>> & { id: string };
 
 // A partial soup entity for optimistic updates.
 export type SoupEntityPartial<T extends SoupEntityTag = SoupEntityTag> = {

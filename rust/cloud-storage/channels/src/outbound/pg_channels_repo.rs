@@ -9,14 +9,14 @@ use crate::domain::{
     models::{
         Activity, ActivityType, AttachmentChannelReference, AttachmentEntityReference,
         AttachmentGenericReference, BotId, BotSenderProfile, ChannelAttachment,
-        ChannelAttachmentType, ChannelContextMessage, ChannelInfo, ChannelListItem,
+        ChannelAttachmentType, ChannelContextMessage, ChannelInfo, ChannelListItem, ChannelMessage,
         ChannelMessageFilters, ChannelMessageKind, ChannelMetadata, ChannelParticipant,
-        ChannelPreviewRow, ChannelThreadReplyRows, ChannelType, ChannelWithParticipants,
-        CountedReaction, CreateChannelRequest, CreateEntityMentionOptions, EntityMention,
-        GetChannelsParams, GetThreadReplyRowsParams, LatestMessage, MessageAttachment,
-        MessagePageDirection, MutatedAttachment, MutatedMessage, NameLookup, NewChannelAttachment,
-        ParticipantRole, PatchChannelRequest, RecentChannelMessage, ResolvedChannelMessage, Sender,
-        SimpleMention, ThreadData, ThreadReplyRow, TopLevelMessageRow, UserName,
+        ChannelPreviewRow, ChannelType, ChannelWithParticipants, CountedReaction,
+        CreateChannelRequest, CreateEntityMentionOptions, EntityMention, GetChannelsParams,
+        GetThreadReplyRowsParams, LatestMessage, MessageAttachment, MessagePageDirection,
+        MutatedAttachment, MutatedMessage, NameLookup, NewChannelAttachment, ParticipantRole,
+        PatchChannelRequest, RecentChannelMessage, ResolvedChannelMessage, Sender, SimpleMention,
+        ThreadData, ThreadInfo, ThreadReply, ThreadReplyRow, TopLevelMessageRow, UserName,
         fallback_user_name,
     },
     ports::{ChannelRepo, TopLevelMessagesQueryResult},
@@ -51,6 +51,15 @@ impl PgChannelsRepo {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
+}
+
+#[cfg(feature = "list")]
+fn bot_profile_for_sender(
+    profiles: &HashMap<BotId, BotSenderProfile>,
+    sender_id: &str,
+) -> Option<BotSenderProfile> {
+    let bot_id = BotId::parse_storage_str(sender_id).ok()?;
+    profiles.get(&bot_id).cloned()
 }
 
 /// Intermediate row for the top-level messages query.
@@ -1235,10 +1244,10 @@ impl ChannelListRepo for PgChannelsRepo {
         .await?)
     }
 
-    async fn get_thread_reply_rows(
+    async fn get_thread_messages(
         &self,
         params: GetThreadReplyRowsParams,
-    ) -> Result<Vec<ChannelThreadReplyRows>, rootcause::Report> {
+    ) -> Result<Vec<ChannelMessage>, rootcause::Report> {
         let parents: Vec<TopLevelMessageRow> = build_channel_thread_rows_query(&params)
             .build()
             .try_map(|row: PgRow| {
@@ -1261,54 +1270,87 @@ impl ChannelListRepo for PgChannelsRepo {
             return Ok(Vec::new());
         }
 
-        // QueryBuilder keeps this batch fetch independent from SQLx's offline macro cache;
-        // all parent ids are still passed as a single bind parameter.
-        let mut reply_query = QueryBuilder::new(
-            r#"
-            SELECT
-                id,
-                thread_id,
-                sender_id,
-                content,
-                created_at,
-                updated_at,
-                edited_at::timestamptz AS edited_at
-            FROM comms_messages
-            WHERE thread_id = ANY("#,
-        );
-        reply_query.push_bind(parent_ids.clone());
-        reply_query.push(
-            r#")
-              AND deleted_at IS NULL
-            ORDER BY thread_id ASC, created_at ASC, id ASC
-            "#,
-        );
-        let reply_rows = reply_query
-            .build_query_as::<ThreadReplyOnlyRow>()
-            .fetch_all(&self.pool)
-            .await?;
+        let thread_data = self
+            .get_thread_data(&parent_ids, 3)
+            .await
+            .map_err(|error| rootcause::report!(error))?;
 
-        let mut replies_by_parent: HashMap<Uuid, Vec<ThreadReplyRow>> = HashMap::new();
-        for row in reply_rows {
-            replies_by_parent
-                .entry(row.thread_id)
-                .or_default()
-                .push(ThreadReplyRow {
-                    id: row.id,
-                    thread_id: row.thread_id,
-                    sender_id: row.sender_id,
-                    content: row.content,
-                    created_at: row.created_at,
-                    updated_at: row.updated_at,
-                    edited_at: row.edited_at,
-                });
+        let mut all_ids = parent_ids.clone();
+        let mut sender_ids: Vec<&str> = parents
+            .iter()
+            .map(|parent| parent.sender_id.as_str())
+            .collect();
+        for data in thread_data.values() {
+            for reply in &data.preview_replies {
+                all_ids.push(reply.id);
+                sender_ids.push(reply.sender_id.as_str());
+            }
         }
+
+        let bot_ids: Vec<BotId> = sender_ids
+            .into_iter()
+            .filter_map(|sender_id| BotId::parse_storage_str(sender_id).ok())
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .collect();
+
+        let (reactions, attachments, bot_profiles) = tokio::join!(
+            self.get_reactions_batch(&all_ids),
+            self.get_attachments_batch(&all_ids),
+            self.get_bot_profiles(&bot_ids),
+        );
+
+        let reactions = reactions.map_err(|error| rootcause::report!(error))?;
+        let attachments = attachments.map_err(|error| rootcause::report!(error))?;
+        let bot_profiles = bot_profiles.map_err(|error| rootcause::report!(error))?;
 
         Ok(parents
             .into_iter()
             .map(|parent| {
-                let replies = replies_by_parent.remove(&parent.id).unwrap_or_default();
-                ChannelThreadReplyRows { parent, replies }
+                let data = thread_data.get(&parent.id);
+                let preview = data
+                    .map(|data| {
+                        data.preview_replies
+                            .iter()
+                            .map(|reply| ThreadReply {
+                                id: reply.id,
+                                sender_id: reply.sender_id.clone(),
+                                bot_profile: bot_profile_for_sender(
+                                    &bot_profiles,
+                                    &reply.sender_id,
+                                ),
+                                content: reply.content.clone(),
+                                created_at: reply.created_at,
+                                updated_at: reply.updated_at,
+                                edited_at: reply.edited_at,
+                                reactions: reactions.get(&reply.id).cloned().unwrap_or_default(),
+                                attachments: attachments
+                                    .get(&reply.id)
+                                    .cloned()
+                                    .unwrap_or_default(),
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default();
+
+                ChannelMessage {
+                    id: parent.id,
+                    channel_id: parent.channel_id,
+                    sender_id: parent.sender_id.clone(),
+                    bot_profile: bot_profile_for_sender(&bot_profiles, &parent.sender_id),
+                    content: parent.content,
+                    created_at: parent.created_at,
+                    updated_at: parent.updated_at,
+                    edited_at: parent.edited_at,
+                    deleted_at: parent.deleted_at,
+                    thread: ThreadInfo {
+                        reply_count: data.map_or(0, |data| data.reply_count),
+                        latest_reply_at: data.and_then(|data| data.latest_reply_at),
+                        preview,
+                    },
+                    reactions: reactions.get(&parent.id).cloned().unwrap_or_default(),
+                    attachments: attachments.get(&parent.id).cloned().unwrap_or_default(),
+                }
             })
             .collect())
     }

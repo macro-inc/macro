@@ -150,7 +150,7 @@ export function getSoupItemId(item: SoupApiItem): string {
     case 'call':
       return item.data.callId;
     case 'channelThread':
-      return item.data.root_message.message_id;
+      return item.data.id;
     default:
       return item.data.id;
   }

@@ -15,7 +15,7 @@ use crate::domain::models::{
 };
 #[cfg(feature = "list")]
 use crate::domain::models::{
-    ChannelThreadReplyRows, ChannelWithLatest, ChannelWithParticipants, GetChannelsParams,
+    ChannelMessage, ChannelWithLatest, ChannelWithParticipants, GetChannelsParams,
     GetChannelsRequest, GetThreadReplyRowsParams, GetThreadReplyRowsRequest, LatestMessage,
     UserName,
 };
@@ -50,11 +50,11 @@ pub trait ChannelListRepo: Send + Sync + 'static {
         user_id: MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Vec<Activity>, rootcause::Report>> + Send;
 
-    /// Fetch top-level channel message rows and their reply rows for Soup thread rendering.
-    fn get_thread_reply_rows(
+    /// Fetch top-level channel messages for Soup thread rendering.
+    fn get_thread_messages(
         &self,
         req: GetThreadReplyRowsParams,
-    ) -> impl Future<Output = Result<Vec<ChannelThreadReplyRows>, rootcause::Report>> + Send;
+    ) -> impl Future<Output = Result<Vec<ChannelMessage>, rootcause::Report>> + Send;
 }
 
 /// Repository for user display names needed by channel list rendering.
@@ -82,11 +82,11 @@ pub trait ChannelListService: Send + Sync + 'static {
         user: MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Vec<Activity>, rootcause::Report>> + Send;
 
-    /// Fetch top-level channel message rows and their reply rows for Soup thread rendering.
-    fn get_thread_reply_rows(
+    /// Fetch top-level channel messages for Soup thread rendering.
+    fn get_thread_messages(
         &self,
         req: GetThreadReplyRowsRequest,
-    ) -> impl Future<Output = Result<Vec<ChannelThreadReplyRows>, rootcause::Report>> + Send;
+    ) -> impl Future<Output = Result<Vec<ChannelMessage>, rootcause::Report>> + Send;
 
     /// Fetch names for user ids.
     fn get_names(

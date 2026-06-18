@@ -414,13 +414,13 @@ where
 
         Ok(Either::Right(
             self.comms_service
-                .get_thread_reply_rows(req)
+                .get_thread_messages(req)
                 .await
                 .map_err(|_| SoupErr::CommsErr)?
                 .into_iter()
-                .map(|rows| FrecencySoupItem {
-                    item: SoupItem::ChannelThread(SoupChannelThread::new_from_thread_reply_rows(
-                        rows,
+                .map(|message| FrecencySoupItem {
+                    item: SoupItem::ChannelThread(SoupChannelThread::new_from_channel_message(
+                        message,
                     )),
                     frecency_score: None,
                 }),
