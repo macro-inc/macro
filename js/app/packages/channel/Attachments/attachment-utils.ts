@@ -2,15 +2,11 @@ import type { SplitContent } from '@app/component/split-layout/layoutManager';
 import { getChannelParams } from '@channel/Channel/link';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import type { EntityData } from '@entity';
-import { scopedEntityFilters } from '@queries/soup/filters';
-import { stringToItemType } from '@service-storage/client';
-import type { ApiChannelAttachment } from '@service-storage/generated/schemas/apiChannelAttachment';
-import type { EntityFilters } from '@service-storage/generated/schemas/entityFilters';
 import { match } from 'ts-pattern';
 
-/** size-25.5 = 102px. Keep in sync with the tile size in MediaGrid. */
+/** size-25.5 = 102px, matching the tile size in MediaGrid. */
 export const THUMB_SIZE = 102;
-/** gap-1.5 = 6px between tiles, matching MediaGrid's attachments variant. */
+/** gap-1.5 = 6px between tiles. */
 export const THUMB_GAP = 6;
 
 /** Number of square thumbnails that fit in a row of the given content width. */
@@ -20,61 +16,6 @@ export function itemsPerRow(containerWidth: number): number {
     1,
     Math.floor((containerWidth + THUMB_GAP) / (THUMB_SIZE + THUMB_GAP))
   );
-}
-
-/**
- * Build soup query filters that fetch only the given attachment entity IDs,
- * grouped by type. Starts from a baseline that excludes every entity type
- * (so the soup call never fans out to types attachments can't be, e.g. crm
- * companies or foreign entities) and opts in only the types present here.
- */
-export function buildAttachmentEntityFilters(
-  attachments: ApiChannelAttachment[]
-): EntityFilters {
-  const documentIds: string[] = [];
-  const emailIds: string[] = [];
-  const chatIds: string[] = [];
-  const channelIds: string[] = [];
-  const projectIds: string[] = [];
-  const callIds: string[] = [];
-
-  for (const a of attachments) {
-    const itemType = stringToItemType(a.entity_type);
-    switch (itemType) {
-      case 'document':
-        documentIds.push(a.entity_id);
-        break;
-      case 'email':
-        emailIds.push(a.entity_id);
-        break;
-      case 'chat':
-        chatIds.push(a.entity_id);
-        break;
-      case 'channel':
-        channelIds.push(a.entity_id);
-        break;
-      case 'project':
-        projectIds.push(a.entity_id);
-        break;
-      case 'call':
-        callIds.push(a.entity_id);
-        break;
-    }
-  }
-
-  const overrides: EntityFilters = {};
-  if (documentIds.length > 0)
-    overrides.document_filters = { document_ids: documentIds };
-  if (emailIds.length > 0)
-    overrides.email_filters = { email_thread_ids: emailIds };
-  if (chatIds.length > 0) overrides.chat_filters = { chat_ids: chatIds };
-  if (channelIds.length > 0)
-    overrides.channel_filters = { channel_ids: channelIds };
-  if (projectIds.length > 0)
-    overrides.project_filters = { project_ids: projectIds };
-  if (callIds.length > 0) overrides.call_filters = { call_ids: callIds };
-
-  return scopedEntityFilters(overrides);
 }
 
 export function getEntityClickContent(entity: EntityData): SplitContent {

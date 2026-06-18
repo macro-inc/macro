@@ -19,14 +19,9 @@ type ChannelAttachmentsQueryKey = ReturnType<
   typeof channelKeys.attachments
 >['queryKey'];
 
-/**
- * Page size for the media (static image/video) grid. Kept modest since the grid
- * is virtualized and pulls more pages on scroll, but large enough to comfortably
- * fill the viewport on the first load.
- */
+// Media grid is virtualized and pages in on scroll, so the page size only needs
+// to fill the first viewport.
 const MEDIA_PAGE_SIZE = 50;
-
-/** Page size for the documents list. */
 const DOCUMENT_PAGE_SIZE = 50;
 
 export function channelAttachmentsQueryOptions(

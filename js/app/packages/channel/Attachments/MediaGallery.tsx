@@ -7,8 +7,7 @@ import { type VirtualizerHandle, VList } from 'virtua/solid';
 import { itemsPerRow, THUMB_GAP, THUMB_SIZE } from './attachment-utils';
 import { AttachmentSection } from './SectionHeader';
 
-/** Estimated virtual row height (tile + vertical gap). virtua measures the
- * real size after mount, so this only needs to be a reasonable starting point. */
+// Initial row-height estimate; virtua measures the real size after mount.
 const ROW_SIZE = THUMB_SIZE + THUMB_GAP;
 
 export function MediaGallery(props: {
@@ -27,8 +26,7 @@ export function MediaGallery(props: {
   const hasMedia = () => props.items.length > 0;
   const columns = createMemo(() => itemsPerRow(containerSize.width ?? 0));
 
-  // Chunk the flat (newest-first) item list into rows of `columns` so the
-  // virtualizer renders — and the browser downloads — only on-screen tiles.
+  // Chunk into rows so the virtualizer renders (and downloads) only on-screen tiles.
   const rows = createMemo(() => {
     const cols = columns();
     const out: MediaItem[][] = [];
@@ -42,19 +40,15 @@ export function MediaGallery(props: {
     const h = handle();
     if (!h || !props.hasNextPage || props.isFetchingNextPage) return;
     const distanceFromBottom = h.scrollSize - h.viewportSize - h.scrollOffset;
-    // Prefetch the next page a few rows before the user reaches the bottom.
     if (distanceFromBottom <= ROW_SIZE * 4) props.onLoadMore();
   };
 
-  // Keep loading until the viewport is filled, so a short first page can't
-  // strand additional pages behind an un-scrollable list (e.g. wide layouts
-  // where one page is only a couple of rows tall).
+  // A short first page may not fill the viewport (e.g. wide layouts); keep
+  // pulling pages until it does. maybeLoadMore no-ops while a fetch is in
+  // flight or once there's no next page, so the loop terminates.
   createEffect(() => {
     rows();
-    void props.hasNextPage;
-    void props.isFetchingNextPage;
-    if (!handle()) return;
-    requestAnimationFrame(maybeLoadMore);
+    if (handle()) requestAnimationFrame(maybeLoadMore);
   });
 
   const openAt = (index: number) => {

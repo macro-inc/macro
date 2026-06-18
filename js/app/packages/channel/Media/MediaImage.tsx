@@ -16,8 +16,7 @@ const ATTACHMENT_TILE_SIZE = 92;
 function ImagePlaceholder(props: {
   dims?: { width: number; height: number };
   square?: boolean;
-  /** Fill the parent box. Use when the tile reserves a fixed size itself so
-   * the placeholder and the loaded image occupy the exact same box (no shift). */
+  /** Fill the parent's fixed box, so the placeholder matches the loaded image. */
   fill?: boolean;
 }) {
   return (

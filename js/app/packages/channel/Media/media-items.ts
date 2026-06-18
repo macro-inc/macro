@@ -12,11 +12,7 @@ export type MediaItem = {
   id: string;
   /** Sized variant for previews (1080/ for images, original for videos) */
   src: string;
-  /**
-   * Small (320/) variant for grid thumbnails. Only set for images; videos
-   * fall back to `src`. Used by the tiny attachment-grid tiles so we don't
-   * download the 1080/ preview for a ~100px box.
-   */
+  /** Small (320px) variant for the tiny grid thumbnails; images only. */
   thumbSrc?: string;
   /** Full-resolution original — used when expanding */
   fullSrc: string;

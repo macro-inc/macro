@@ -1,3 +1,9 @@
+import {
+  compileToAst,
+  defineQueryFilters,
+  type Query,
+  queryStateFrom,
+} from '@app/component/next-soup/filters/filter-store';
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import type { EntityData } from '@entity';
 import {
@@ -5,17 +11,62 @@ import {
   flattenAttachments,
   useChannelDocumentAttachmentsQuery,
 } from '@queries/channel/channel-attachments';
-import { useSoupItemsQuery } from '@queries/soup/items';
+import { useSoupAstItemsQuery } from '@queries/soup/items';
+import { stringToItemType } from '@service-storage/client';
 import type { ApiChannelAttachment } from '@service-storage/generated/schemas/apiChannelAttachment';
 import { createMemo } from 'solid-js';
 import {
   AttachmentEntityList,
   type AttachmentEntityListRow,
 } from './AttachmentEntityList';
-import {
-  buildAttachmentEntityFilters,
-  getEntityClickContent,
-} from './attachment-utils';
+import { getEntityClickContent } from './attachment-utils';
+
+/**
+ * Scope a soup query to exactly the attachment entities. `defineQueryFilters`
+ * NIL-fills every entity type we don't reference, so soup never fans out to
+ * crm companies or foreign entities (which it would otherwise fetch unfiltered).
+ */
+function attachmentSoupAst(attachments: ApiChannelAttachment[]) {
+  const documentId: string[] = [];
+  const threadId: string[] = [];
+  const chatId: string[] = [];
+  const channelId: string[] = [];
+  const folderId: string[] = [];
+  const callId: string[] = [];
+
+  for (const a of attachments) {
+    switch (stringToItemType(a.entity_type)) {
+      case 'document':
+        documentId.push(a.entity_id);
+        break;
+      case 'email':
+        threadId.push(a.entity_id);
+        break;
+      case 'chat':
+        chatId.push(a.entity_id);
+        break;
+      case 'channel':
+        channelId.push(a.entity_id);
+        break;
+      case 'project':
+        folderId.push(a.entity_id);
+        break;
+      case 'call':
+        callId.push(a.entity_id);
+        break;
+    }
+  }
+
+  const include: NonNullable<Query['include']> = {};
+  if (documentId.length) include.documentId = documentId;
+  if (threadId.length) include.threadId = threadId;
+  if (chatId.length) include.chatId = chatId;
+  if (channelId.length) include.channelId = channelId;
+  if (folderId.length) include.folderId = folderId;
+  if (callId.length) include.callId = callId;
+
+  return compileToAst(queryStateFrom(defineQueryFilters({ include })));
+}
 
 export function ChannelAttachmentEntitySection(props: { channelId: string }) {
   const attachmentsQuery = useChannelDocumentAttachmentsQuery(
@@ -28,10 +79,10 @@ export function ChannelAttachmentEntitySection(props: { channelId: string }) {
     )
   );
 
-  const soupQuery = useSoupItemsQuery(
+  const soupQuery = useSoupAstItemsQuery(
     () => ({
       params: { limit: 500 },
-      body: buildAttachmentEntityFilters(documentAttachments()),
+      body: attachmentSoupAst(documentAttachments()),
     }),
     () => ({ enabled: documentAttachments().length > 0 })
   );
@@ -49,7 +100,7 @@ export function ChannelAttachmentEntitySection(props: { channelId: string }) {
     replaceOrInsertSplit(getEntityClickContent(entity));
 
   const rows = createMemo<AttachmentEntityListRow[]>(() => {
-    const entities = soupQuery.data ?? [];
+    const entities = soupQuery.data?.entities ?? [];
     const lookup = attachmentByEntityId();
 
     return [...entities]

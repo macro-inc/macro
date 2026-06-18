@@ -8,11 +8,8 @@ export function AttachmentSection(props: {
   action?: JSX.Element;
   class?: string;
   label: string;
-  /**
-   * Render the body as a non-scrolling flex column that fills the panel
-   * height, letting a child (e.g. a virtualized list) own the scroll
-   * container instead of `Panel.Body`'s built-in scroll.
-   */
+  /** Fill the panel height without scrolling, so a child (e.g. a virtualized
+   * list) owns the scroll container instead of `Panel.Body`. */
   fillBody?: boolean;
 }) {
   return (

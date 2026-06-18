@@ -6,9 +6,7 @@ import { MediaImage } from './MediaImage';
 import { MediaVideo } from './MediaVideo';
 import type { MediaItem } from './media-items';
 
-// Pixel size of the square attachment-grid tiles. Must stay in sync with the
-// `size-25.5` class used below (25.5 * 4px = 102px) and `THUMB_SIZE` in
-// attachment-utils, which drives the virtualized grid's column math.
+// Square tile size in px; keep in sync with the `size-25.5` class and THUMB_SIZE.
 const ATTACHMENT_TILE_SIZE = 102;
 const SINGLE_IMAGE_MAX_WIDTH = 400;
 const SINGLE_IMAGE_MAX_HEIGHT = 400;
@@ -59,12 +57,10 @@ function MessageImageTile(props: {
 
 function AttachmentImageTile(props: { item: MediaItem; onOpen?: () => void }) {
   return (
-    // Root reserves the fixed square box; the image and the loading fallback
-    // both fill it, so the tile never resizes as the image loads.
+    // Root holds the fixed square; image and fallback both fill it (no reflow).
     <MediaImage.Root class="size-25.5">
       <MediaImage.Image
-        // Prefer the small (320/) thumbnail for these ~100px boxes; fall back
-        // to the medium preview for videos / optimistic items.
+        // Small thumbnail for these ~100px boxes; src is the fallback.
         src={props.item.thumbSrc ?? props.item.src}
         previewSrc={props.item.previewSrc}
         class={cn(
