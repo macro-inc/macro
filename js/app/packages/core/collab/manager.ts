@@ -17,7 +17,6 @@ import {
 } from 'loro-crdt';
 import { err, ok, type Result } from 'neverthrow';
 import { type Accessor, createEffect, createSignal, onCleanup } from 'solid-js';
-import { DocInitMachine } from './document-init-machine';
 import { logSyncService } from './logger';
 import type { GenericRootSchema, LoroRawUpdate, RawUpdate } from './shared';
 import type { LiveSyncSource } from './source';
@@ -240,13 +239,9 @@ export type SnapshotIngest =
   | { kind: 'dss'; snapshot: RawUpdate };
 
 export type LoroManagerOptions = {
-  /** Accessor returning the live sync source. Required because the init
-   *  state machine may need to call `requestUpdatesSince` on it. */
+  /** Accessor returning the live sync source. Required because ingest converges
+   *  to server truth via `requestUpdatesSince` after seeding. */
   liveSyncSource: () => LiveSyncSource;
-  /** True if the WAL had undelivered entries at the start of this session.
-   *  Read synchronously from `BrowserWALStore.isDirtyHint(documentId)` —
-   *  determines which path the init state machine takes. */
-  wasDirty: boolean;
   documentId: string;
 };
 
@@ -266,9 +261,12 @@ export function createLoroManager<S extends GenericRootSchema>(
   const [error, setError] = createSignal<LoroManagerError[]>([]);
   const [state, setState] = createSignal<StateUpdate<S>>();
 
-  const initMachine = DocInitMachine.create(options.wasDirty);
   const { documentId } = options;
-  /** Snapshot the current loro doc as JSON for debug logging. */
+  /**
+   * True once the doc has been seeded from any snapshot.
+   * We ignore any subsequent snapshots provided after.
+   */
+  let seeded = false;
   const docJson = (): unknown => {
     try {
       return loroDoc().toJSON();
@@ -279,8 +277,8 @@ export function createLoroManager<S extends GenericRootSchema>(
   logSyncService({
     documentId,
     level: 'debug',
-    context: { misc: { wasDirty: options.wasDirty } },
-    message: `manager: created (wasDirty=${options.wasDirty})`,
+    context: {},
+    message: 'manager: created',
   });
 
   /** Util for awaiting the sync of the mirror to finish */
@@ -432,7 +430,7 @@ export function createLoroManager<S extends GenericRootSchema>(
     logSyncService({
       documentId: documentId,
       level: 'info',
-      context: { initMachineState: initMachine.currentPhase(), misc: { doc: docJson() } },
+      context: { misc: { doc: docJson() } },
       message: 'initializeFromSnapshot: ok, manager initialized',
     });
     return ok(undefined);
@@ -696,7 +694,7 @@ export function createLoroManager<S extends GenericRootSchema>(
         logSyncService({
           documentId: documentId,
           level: 'error',
-          context: { initMachineState: initMachine.currentPhase() },
+          context: {},
           message: `applySnapshot(${context}): initializeFromSnapshot failed`,
         });
         return false;
@@ -708,7 +706,7 @@ export function createLoroManager<S extends GenericRootSchema>(
       logSyncService({
         documentId: documentId,
         level: 'error',
-        context: { initMachineState: initMachine.currentPhase() },
+        context: {},
         message: `applySnapshot(${context}): importUpdate failed`,
       });
       return false;
@@ -717,34 +715,80 @@ export function createLoroManager<S extends GenericRootSchema>(
   };
 
   /**
-   * Internal helper: drive the init state machine for a given snapshot kind
-   */
-  const ingest = async (input: SnapshotIngest): Promise<void> => {
-    const instruction = initMachine.receive(input.kind);
+   * Pull every server op since our current version and merge it in.
+   **/
+  const convergeFromServer = async (): Promise<void> => {
+    const deltaResult = await options
+      .liveSyncSource()
+      .requestUpdatesSince(loroDoc().version());
+    if (deltaResult.isErr()) {
+      logSyncService({
+        documentId,
+        level: 'warn',
+        context: {},
+        message: 'converge: requestUpdatesSince failed',
+      });
+      return;
+    }
+    const deltaImport = importUpdate(deltaResult.value);
+    if (deltaImport.isErr()) {
+      logSyncService({
+        documentId,
+        level: 'error',
+        context: {},
+        message: 'converge: failed to apply server delta',
+      });
+      return;
+    }
     logSyncService({
       documentId,
       level: 'info',
-      context: { initMachineState: initMachine.currentPhase() },
-      message: `init machine: ${input.kind} → ${instruction}`,
+      context: { misc: { doc: docJson() } },
+      message: 'converge: applied server delta',
     });
-    if (instruction === 'ignore') {
-      logSyncService({
-        documentId,
-        level: 'debug',
-        context: { initMachineState: initMachine.currentPhase() },
-        message: `init machine: ${input.kind} ignored (rank too low or already applied)`,
-      });
+  };
+
+  /**
+   * Feed a snapshot from any source. The first snapshot to arrive seeds the
+   * (empty) doc; later snapshots are ignored because loro can't merge a snapshot
+   * onto a non-empty doc. After seeding we converge to server truth via
+   * `requestUpdatesSince`. Offline edits carried as `walUpdates` are replayed as
+   * updates (those *do* merge), regardless of seed order.
+   */
+  const ingest = async (input: SnapshotIngest): Promise<void> => {
+    if (seeded) {
+      // Already seeded — a second snapshot can't merge. The only thing worth
+      // taking from a later `local` is its WAL updates (real ops → mergeable).
+      if (input.kind === 'local' && input.walUpdates?.length) {
+        const replayResult = importBatchUpdates(input.walUpdates);
+        if (replayResult.isErr()) {
+          logSyncService({
+            documentId,
+            level: 'error',
+            context: {},
+            message: `ingest(${input.kind}): WAL replay failed`,
+          });
+        }
+      } else {
+        logSyncService({
+          documentId,
+          level: 'debug',
+          context: {},
+          message: `ingest(${input.kind}): ignored (already seeded)`,
+        });
+      }
       return;
     }
 
     const applied = await applySnapshot(input.snapshot, input.kind);
+    if (!applied) return;
+    seeded = true;
     logSyncService({
       documentId,
-      level: 'debug',
-      context: { initMachineState: initMachine.currentPhase(), misc: { doc: docJson() } },
-      message: `ingest(${input.kind}): applied=${applied}, doc after apply`,
+      level: 'info',
+      context: { misc: { doc: docJson() } },
+      message: `ingest: seeded from ${input.kind}`,
     });
-    if (!applied) return;
 
     if (input.kind === 'local' && input.walUpdates?.length) {
       const replayResult = importBatchUpdates(input.walUpdates);
@@ -752,46 +796,13 @@ export function createLoroManager<S extends GenericRootSchema>(
         logSyncService({
           documentId,
           level: 'error',
-          context: { initMachineState: initMachine.currentPhase() },
+          context: {},
           message: `ingest(${input.kind}): WAL replay failed`,
         });
       }
     }
 
-    if (instruction !== 'applyThenRequestDelta') return;
-
-    // Local was dirty — fetch the precise delta from the live source.
-    const liveSource = options.liveSyncSource();
-    const deltaResult = await liveSource.requestUpdatesSince(
-      loroDoc().version()
-    );
-    if (deltaResult.isErr()) {
-      logSyncService({
-        documentId,
-        level: 'error',
-        context: { initMachineState: initMachine.currentPhase() },
-        message: `ingest(${input.kind}): requestUpdatesSince failed`,
-      });
-      return;
-    }
-    const requestedInstruction = initMachine.receive('requested');
-    logSyncService({
-      documentId,
-      level: 'info',
-      context: { initMachineState: initMachine.currentPhase() },
-      message: `init machine: requested → ${requestedInstruction}`,
-    });
-    if (requestedInstruction !== 'apply') return;
-
-    const deltaImport = importUpdate(deltaResult.value);
-    if (deltaImport.isErr()) {
-      logSyncService({
-        documentId,
-        level: 'error',
-        context: { initMachineState: initMachine.currentPhase() },
-        message: `ingest(${input.kind}): failed to apply requested delta`,
-      });
-    }
+    await convergeFromServer();
   };
 
   return {

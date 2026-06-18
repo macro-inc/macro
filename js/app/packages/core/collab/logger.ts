@@ -1,5 +1,3 @@
-import type { Phase } from './document-init-machine';
-
 export type WalContext = {
   count: number;
   dirty: number;
@@ -8,7 +6,6 @@ export type WalContext = {
 
 export type SyncLogContext = {
   wal?: WalContext;
-  initMachineState?: Phase;
   misc?: Record<string, unknown>;
 };
 
