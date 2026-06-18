@@ -8,6 +8,23 @@ const env = import.meta.env.MODE === 'production' ? 'prod' : 'dev';
 const service = 'web-app';
 const site = 'us5.datadoghq.com';
 
+// Route intake through the first-party analytics proxy (Cloudflare Worker) so
+// ad blockers / tracking protection don't drop logs the way they block
+// requests sent straight to *.datadoghq.com. The worker maps the `/i/dd`
+// prefix to the us5 browser intake origin; see js/analytics-proxy.
+const proxy = (options: { path: string; parameters: string }) =>
+  `https://macro-prox.macroverse.workers.dev/i/dd${options.path}?${options.parameters}`;
+
+interface User {
+  id: string;
+  email: string;
+  [key: string]: any;
+}
+
+// init() is deferred to an idle callback, so setUser() can run before the SDK
+// is ready. Buffer the latest user and apply it once initialized.
+let pendingUser: User | undefined;
+
 export function init(version = import.meta.env.__APP_VERSION__) {
   if (import.meta.hot || isInitialized()) return;
 
@@ -17,6 +34,7 @@ export function init(version = import.meta.env.__APP_VERSION__) {
     version,
     service,
     site,
+    proxy,
     // Catch exceptions without RUM: forwards uncaught exceptions, unhandled
     // promise rejections, and failed network requests (XHR/fetch) to Datadog
     // as error-level logs (with stack traces).
@@ -43,15 +61,13 @@ export function init(version = import.meta.env.__APP_VERSION__) {
   });
 
   setInitialized(true);
+
+  if (pendingUser) datadogLogs.setUser(pendingUser);
 }
 
-interface User {
-  id: string;
-  email: string;
-  [key: string]: any;
-}
 export function setUser(user: User) {
-  datadogLogs.setUser(user);
+  pendingUser = user;
+  if (isInitialized()) datadogLogs.setUser(user);
 }
 
 export { error, log, logger } from './logger';

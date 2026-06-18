@@ -44,6 +44,7 @@ import {
   usePlatformNotificationState,
 } from '@notifications';
 import { maybeHandlePlatformNotification } from '@notifications/notification-platform';
+import { setUser as setDatadogUser } from '@observability';
 import {
   invalidateUserInfo,
   prefetchUserInfo,
@@ -427,6 +428,11 @@ function UserInfoSideEffects() {
   createEffect(
     on(userInfo, (user) => {
       if (!user || !user.authenticated) return;
+
+      // Attach user context to all Datadog logs. Done on every authenticated
+      // load because the logs SDK does not persist the user across reloads,
+      // unlike the PostHog identify below which is guarded against repeats.
+      setDatadogUser({ id: user.id, email: user.email });
 
       if (posthog.instance._isIdentified() || identified) {
         return;
