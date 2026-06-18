@@ -168,7 +168,9 @@ function SidePanelLayoutInner(
       <Show when={showOverlay()}>
         <div class="absolute inset-0 z-10 flex flex-col bg-surface">
           <Scroll>
-            <div class="w-full max-w-2xl mx-auto min-w-0">
+            {/* Full-frame mobile: the overlay spans the whole panel, so the
+                content must clear the floating header islands + status bar. */}
+            <div class="w-full max-w-2xl mx-auto min-w-0 mobile:pt-(--mobile-content-inset-top)">
               <SidePanelOutlet
                 sections={props.sections}
                 openIds={props.openIds}

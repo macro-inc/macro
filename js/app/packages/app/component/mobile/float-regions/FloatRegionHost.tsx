@@ -3,6 +3,7 @@ import { createElementSize } from '@solid-primitives/resize-observer';
 import { cn, Layer } from '@ui';
 import { createEffect, createSignal, For, onCleanup } from 'solid-js';
 import { FLOAT_REGIONS, FloatRegions } from './float-region-state';
+import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 
 /**
  * The mobile bottom-chrome host: an ordered stack of floating regions
@@ -39,7 +40,8 @@ export function FloatRegionHost() {
         ref={setHostRef}
         class={cn(
           'pointer-events-none absolute inset-x-0 bottom-0 z-mobile-nav-bar flex flex-col gap-3 pb-3',
-          isNativeMobilePlatform() && 'pb-7'
+          isNativeMobilePlatform() && 'pb-7',
+          virtualKeyboardVisible() && 'pb-3',
         )}
       >
         <For each={FLOAT_REGIONS}>
