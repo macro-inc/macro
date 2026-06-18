@@ -93,6 +93,7 @@ const getInboxSignalFilters = () => {
       // Referencing `fef` also opts them into the signal query (otherwise
       // defineQueryFilters excludes unreferenced entity types). Rendering is
       // still gated on the supported-foreign-entities flag client-side.
+      foreignEntitySource: ['github_pull_request'],
       foreignEntityDone: false,
       foreignEntityIncludesMe: true,
       emailShared: 'exclude',
@@ -135,6 +136,9 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           // crm companies aren't surfaced outside the Companies view.
           include: {
             crmCompanyId: [NIL_UUID],
+            ...(ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE
+              ? { foreignEntitySource: ['github_pull_request'] }
+              : {}),
             foreignEntityIncludesMe: true,
           },
           exclude: {

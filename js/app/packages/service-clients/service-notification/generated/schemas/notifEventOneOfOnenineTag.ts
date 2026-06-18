@@ -10,5 +10,5 @@ export type NotifEventOneOfOnenineTag =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const NotifEventOneOfOnenineTag = {
-  inbox_reauth_required: 'inbox_reauth_required',
+  new_email: 'new_email',
 } as const;

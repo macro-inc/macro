@@ -17,7 +17,7 @@ setup:
     npm install && cd bebop/ && npx bebopc build
 
 worker_build_setup:
-    cargo install worker-build
+    cargo install worker-build@0.8.4
 
 # initialize the local D1 database used by wrangler dev
 migrate-d1-local:

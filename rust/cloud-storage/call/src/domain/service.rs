@@ -329,6 +329,11 @@ fn exclude_voip_recipients<'a>(
         .collect()
 }
 
+/// Producer-side payload for the "call started" notification.
+///
+/// Shares its wire shape and [`Notification::TYPE_NAME`] (`call_started`) with
+/// the read-side `model_notifications::CallStartedMetadata`, which
+/// `NotifEvent` uses to render the notification feed. Keep the two in sync.
 #[derive(Serialize, Deserialize, Clone)]
 struct CallStartedNotification {
     sender_profile_picture_url: Option<String>,
@@ -336,7 +341,7 @@ struct CallStartedNotification {
 }
 
 impl Notification for CallStartedNotification {
-    const TYPE_NAME: &'static str = "call-started";
+    const TYPE_NAME: &'static str = "call_started";
 }
 
 impl NotificationExtIos for CallStartedNotification {

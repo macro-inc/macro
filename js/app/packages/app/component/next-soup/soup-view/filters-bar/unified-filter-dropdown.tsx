@@ -1,5 +1,4 @@
 import { getViewPreset } from '@app/component/app-sidebar/soup-filter-presets';
-import type { FilterID } from '@app/component/next-soup/filters';
 import {
   type FilterContext,
   NO_ASSIGNEE,
@@ -30,6 +29,7 @@ import CircleDashedIcon from '@phosphor/circle-dashed.svg';
 import FilterIcon from '@phosphor/funnel-simple.svg';
 import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
+import { useGithubLinkStatusQuery } from '@queries/auth';
 import { useContacts } from '@queries/contacts/contacts';
 import { cn, Dropdown, Tooltip } from '@ui';
 import {
@@ -46,9 +46,15 @@ import {
   Switch,
 } from 'solid-js';
 import {
+  type FilterCategory,
+  filterInboxGithubPrOption,
+} from './filter-categories';
+import {
   SearchableMultiSelectInline,
   type SearchableOption,
 } from './searchable-multi-select';
+
+export type { FilterCategory, FilterOption } from './filter-categories';
 
 export const TypeIndicator = (props: { active: boolean }) => (
   <span
@@ -68,21 +74,6 @@ export const TypeIndicator = (props: { active: boolean }) => (
 // Sub-trigger rows differ from default Dropdown.Item only by
 // distributing label + caret to the row ends.
 // const FILTER_MENU_SUBTRIGGER_CLASS = 'justify-between gap-2';
-
-export type FilterOption = {
-  id: FilterID;
-  label: string;
-  icon?: () => JSX.Element;
-};
-
-type FilterCategory = {
-  id: string;
-  label: string;
-  /** Plural form for multi-value chip display (e.g., 'Types', 'Statuses') */
-  labelPlural?: string;
-  options: FilterOption[];
-  multiple?: boolean;
-};
 
 // Filter categories by view
 const INBOX_FILTER_CATEGORIES: FilterCategory[] = [
@@ -125,6 +116,11 @@ const INBOX_FILTER_CATEGORIES: FilterCategory[] = [
         id: 'file',
         label: 'Files',
         icon: () => <EntityIcon targetType="files" size="xs" />,
+      },
+      {
+        id: 'github-pr',
+        label: 'GitHub PRs',
+        icon: () => <EntityIcon targetType="githubPullRequest" size="xs" />,
       },
     ],
     multiple: true,
@@ -491,11 +487,21 @@ export const UnifiedFilterDropdown = (
       return undefined;
     return content.id;
   });
+  const githubLinkStatus = useGithubLinkStatusQuery({
+    enabled: () => currentView() === 'inbox',
+  });
 
   const categories = createMemo(() => {
     const view = currentView();
     if (!view) return [];
-    return VIEW_FILTER_CATEGORIES[view] ?? [];
+    const viewCategories = VIEW_FILTER_CATEGORIES[view] ?? [];
+
+    if (view !== 'inbox') return viewCategories;
+
+    return filterInboxGithubPrOption(
+      viewCategories,
+      githubLinkStatus.data?.status === 'linked'
+    );
   });
 
   const isOptionActive = (optionId: string) => {

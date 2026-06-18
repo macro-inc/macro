@@ -76,11 +76,22 @@ where
         let sync_service_client = self.sync_service_client.clone();
         let document_id = document_id.to_owned();
         tokio::spawn(async move {
-            if let Err(e) = sync_service_client
-                .initialize_from_snapshot(&document_id, loro_snapshot.as_slice())
-                .await
-            {
-                tracing::error!(error=?e, "failed to initialize sync service from snapshot");
+            const MAX_ATTEMPTS: u32 = 3;
+            const RETRY_DELAY: u64 = 1;
+            for attempt in 1..=MAX_ATTEMPTS {
+                match sync_service_client
+                    .initialize_from_snapshot(&document_id, loro_snapshot.as_slice())
+                    .await
+                {
+                    Ok(()) => return,
+                    Err(e) if attempt < MAX_ATTEMPTS => {
+                        tracing::warn!(error=?e, attempt, "failed to initialize sync service from snapshot, retrying in 1s");
+                        tokio::time::sleep(std::time::Duration::from_secs(RETRY_DELAY)).await;
+                    }
+                    Err(e) => {
+                        tracing::error!(error=?e, "failed to initialize sync service from snapshot after {MAX_ATTEMPTS} attempts");
+                    }
+                }
             }
         });
 

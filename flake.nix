@@ -623,6 +623,7 @@
             stripe-cli
             sccache
             rustToolchain
+            python3
           ]
           ++ pkgs.lib.optionals isLinux [ mold ];
 

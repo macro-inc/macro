@@ -1,3 +1,4 @@
+import { logSyncService } from '@core/collab/logger';
 import type { RawUpdate } from '@core/collab/shared';
 import {
   type InitialSync,
@@ -136,6 +137,13 @@ export const createSyncServiceSource = (
   // server's RemoteInitialSync message arrives (~50ms after WS opens).
   // `doInitialSync()` just returns the cached promise; if it's called late,
   // it still resolves because the listener captured the message.
+  logSyncService({
+    documentId,
+    level: 'debug',
+    context: {},
+    message: 'sync source: created, waiting for WS open',
+  });
+
   let initialSyncReceived = false;
   const initialSyncPromise = ResultAsync.fromPromise(
     raceTimeout(
@@ -146,6 +154,12 @@ export const createSyncServiceSource = (
     () => SyncError.timeout(TIMEOUTS.INITIAL_SYNC)
   ).map((message) => {
     initialSyncReceived = true;
+    logSyncService({
+      documentId,
+      level: 'debug',
+      context: {},
+      message: 'sync source: initial sync received',
+    });
     // Start heartbeat only after initial sync completes successfully
     // This prevents the heartbeat from closing the connection during slow initial syncs
     ws.startHeartbeat();
@@ -187,6 +201,12 @@ export const createSyncServiceSource = (
   });
 
   createReconnectEffect(ws, async () => {
+    logSyncService({
+      documentId,
+      level: 'debug',
+      context: {},
+      message: 'sync source: WS reconnected, waiting for initial sync',
+    });
     // Always restart heartbeat after reconnect, regardless of sync success/failure.
     // This ensures the connection is monitored even if sync fails.
     // startHeartbeat() is safe to call - it will no-op if connection closed.
@@ -203,15 +223,24 @@ export const createSyncServiceSource = (
       ).map((message) => message.value as InitialSync);
 
     if (reconnectSyncResult.isErr()) {
-      console.error(
-        'Failed to reconnect to sync service',
-        reconnectSyncResult.error
-      );
+      logSyncService({
+        documentId,
+        level: 'warn',
+        context: { misc: { error: reconnectSyncResult.error } },
+        message: 'sync source: reconnect initial sync timed out',
+      });
       // Heartbeat is already running from above, so connection remains monitored
       // even though sync failed. The connection will eventually timeout and retry.
       return;
     }
 
+    logSyncService({
+      documentId,
+      level: 'debug',
+      context: {},
+      message:
+        'sync source: reconnect initial sync received, emitting reconnect event',
+    });
     eventBus.emit({
       type: 'reconnect',
       snapshot: reconnectSyncResult.value.snapshot,
@@ -324,6 +353,12 @@ export const createSyncServiceSource = (
   }
 
   const cleanup = () => {
+    logSyncService({
+      documentId,
+      level: 'debug',
+      context: {},
+      message: 'sync source: cleanup called, closing WS',
+    });
     if (typeof window !== 'undefined') {
       window.removeEventListener('online', handleOnline);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
