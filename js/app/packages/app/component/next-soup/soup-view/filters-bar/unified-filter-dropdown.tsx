@@ -5,6 +5,11 @@ import {
   NO_ASSIGNEE,
 } from '@app/component/next-soup/filters/configs/';
 import {
+  buildDocumentTypeQuery,
+  getActiveDocumentTypeFilterIds,
+  isDocumentTypeFilterId,
+} from '@app/component/next-soup/filters/configs/document-type-query';
+import {
   defineQueryFilters,
   type PropertyFilter,
   queryStateFrom,
@@ -499,7 +504,22 @@ export const UnifiedFilterDropdown = (
 
   const toggleFilter = (optionId: string) => {
     const wasActive = soup.predicates.isActive(optionId);
+    const previousDocumentTypeIds =
+      currentView() === 'documents' && isDocumentTypeFilterId(optionId)
+        ? getActiveDocumentTypeFilterIds(soup.predicates.isActive)
+        : undefined;
+
     soup.predicates.toggle({ or: [optionId] });
+
+    if (previousDocumentTypeIds) {
+      const previousQuery = buildDocumentTypeQuery(previousDocumentTypeIds);
+      const nextQuery = buildDocumentTypeQuery(
+        getActiveDocumentTypeFilterIds(soup.predicates.isActive)
+      );
+      if (previousQuery) queryFilters.remove(previousQuery);
+      if (nextQuery) queryFilters.add(nextQuery);
+      return;
+    }
 
     const filter = soup.predicates.getConfig(optionId);
     if (!filter?.query) return;

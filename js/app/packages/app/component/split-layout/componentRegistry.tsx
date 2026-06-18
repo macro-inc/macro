@@ -444,6 +444,15 @@ if (LOCAL_ONLY) {
 }
 
 if (DEV_MODE_ENV) {
+  registerComponent(
+    'document-where-playground',
+    withAuth(
+      lazy(
+        () => import('@app/component/next-soup/debug/DocumentWherePlayground')
+      )
+    )
+  );
+
   // NOTE (seamus) : putting pixel icons on dev/staging for aidan
   registerComponent(
     'pixel-icon',
