@@ -101,6 +101,7 @@ export function EditInput(props: {
         }}
       >
         <MarkdownTextarea
+          autoLinkMatchMode="common-tlds"
           class="text-sm wrap-break-word text-ink"
           editable={() => true}
           onChange={(value) => {

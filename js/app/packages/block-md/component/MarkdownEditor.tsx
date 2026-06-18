@@ -1075,7 +1075,7 @@ export function MarkdownEditor(props: {
         <ActionMenu editor={editor} menu={actionsMenuOperations} />
 
         <FloatingMenuGroup>
-          <FloatingLinkMenu />
+          <FloatingLinkMenu autoLinkMatchMode="common-tlds" />
           <FloatingEquationMenu />
           <MarkdownPopup
             highlightLayerRef={highlightLayerRef() ?? editorContainerRef}

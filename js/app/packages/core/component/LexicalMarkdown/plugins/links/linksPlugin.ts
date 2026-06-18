@@ -36,9 +36,50 @@ const strictLinkifier = new linkify(undefined, {
   fuzzyLink: false,
 });
 
+const commonTldLinkifier = new linkify(undefined, {
+  fuzzyLink: true,
+}).tlds(
+  [
+    'app',
+    'biz',
+    'ca',
+    'co',
+    'com',
+    'dev',
+    'edu',
+    'gov',
+    'info',
+    'io',
+    'me',
+    'net',
+    'org',
+    'shop',
+    'site',
+    'store',
+    'tv',
+    'uk',
+    'us',
+    'xyz',
+  ],
+  false
+);
+
 const fuzzyLinkifier = new linkify(undefined, {
   fuzzyLink: true,
 });
+
+export type AutoLinkMatchMode = 'protocol' | 'common-tlds' | 'fuzzy';
+
+function getAutoLinkifier(mode: AutoLinkMatchMode) {
+  switch (mode) {
+    case 'common-tlds':
+      return commonTldLinkifier;
+    case 'fuzzy':
+      return fuzzyLinkifier;
+    case 'protocol':
+      return strictLinkifier;
+  }
+}
 
 /*
  * Basic URL cleaning.
@@ -123,14 +164,26 @@ function getLinkFromDom(
   };
 }
 
-function findNextMatch(text: string): Match | null {
-  if (!strictLinkifier.test(text)) return null;
-  const match = strictLinkifier.match(text);
+export function findNextAutoLinkMatch(
+  text: string,
+  mode: AutoLinkMatchMode = 'protocol'
+): Match | null {
+  const linkifier = getAutoLinkifier(mode);
+  if (!linkifier.test(text)) return null;
+  const match = linkifier.match(text);
   if (!match) return null;
-  return match[0];
+  const firstMatch = match[0];
+  if (firstMatch.schema === '') {
+    firstMatch.url = cleanURL(firstMatch.raw);
+  }
+  return firstMatch;
 }
 
-function $handleAppendToMatch(prevSibling: AutoLinkNode, textNode: TextNode) {
+function $handleAppendToMatch(
+  prevSibling: AutoLinkNode,
+  textNode: TextNode,
+  autoLinkMatchMode: AutoLinkMatchMode
+) {
   const prevText = prevSibling.getTextContent();
   const nodeText = textNode.getTextContent();
 
@@ -142,7 +195,7 @@ function $handleAppendToMatch(prevSibling: AutoLinkNode, textNode: TextNode) {
   }
 
   const combinedText = prevText + nodeText;
-  const rematch = findNextMatch(combinedText);
+  const rematch = findNextAutoLinkMatch(combinedText, autoLinkMatchMode);
 
   if (!rematch) {
     return;
@@ -165,9 +218,12 @@ function $handleAppendToMatch(prevSibling: AutoLinkNode, textNode: TextNode) {
   prevSibling.setURL(rematch.url);
 }
 
-function $matchAndCreateAutoLink(textNode: TextNode) {
+function $matchAndCreateAutoLink(
+  textNode: TextNode,
+  autoLinkMatchMode: AutoLinkMatchMode
+) {
   const nodeText = textNode.getTextContent();
-  const matchedLink = findNextMatch(nodeText);
+  const matchedLink = findNextAutoLinkMatch(nodeText, autoLinkMatchMode);
   let currentNode = textNode;
 
   if (!matchedLink) {
@@ -331,6 +387,7 @@ type LinkPluginProps = {
   onClickLink?: (link?: ILinkInfo) => void;
   onCreateLink?: (link?: ILinkInfo) => void;
   closePopup?: () => void;
+  autoLinkMatchMode?: AutoLinkMatchMode;
 };
 
 function registerLinksPlugin(editor: LexicalEditor, props: LinkPluginProps) {
@@ -340,6 +397,7 @@ function registerLinksPlugin(editor: LexicalEditor, props: LinkPluginProps) {
     onCreateLink: () => {},
     ...props,
   };
+  const autoLinkMatchMode = props.autoLinkMatchMode ?? 'protocol';
 
   let hoveredLink: ILinkInfo | undefined;
 
@@ -428,11 +486,11 @@ function registerLinksPlugin(editor: LexicalEditor, props: LinkPluginProps) {
       }
 
       if (prevSibling && $isAutoLinkNode(prevSibling)) {
-        $handleAppendToMatch(prevSibling, textNode);
+        $handleAppendToMatch(prevSibling, textNode, autoLinkMatchMode);
       }
 
       if (!insideAnyLink) {
-        $matchAndCreateAutoLink(textNode);
+        $matchAndCreateAutoLink(textNode, autoLinkMatchMode);
       }
     }),
 
