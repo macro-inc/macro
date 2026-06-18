@@ -802,7 +802,8 @@ export function createLoroManager<S extends GenericRootSchema>(
       }
     }
 
-    await convergeFromServer();
+    // dss is already server truth so no reason to request updates in that case
+    if (input.kind !== 'dss') await convergeFromServer();
   };
 
   return {
