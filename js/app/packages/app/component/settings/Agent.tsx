@@ -2,7 +2,7 @@ import { createEffect, createSignal, For, Show, Suspense } from 'solid-js';
 import { TabsInset } from '@core/component/TabsInset';
 import PlusIcon from '@phosphor-icons/core/regular/plus.svg?component-solid';
 import PlugIcon from '@phosphor-icons/core/regular/plug.svg?component-solid';
-import { Button, cn, Layer, Panel, ToggleSwitch } from '@ui';
+import { Button, Layer, Panel, ToggleSwitch } from '@ui';
 import CheckIcon from '@phosphor-icons/core/regular/check.svg?component-solid';
 import XIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
 import { McpSetupCards } from '@core/component/AI/component/McpSetupCards';
@@ -29,7 +29,6 @@ import {
   QUICK_CONNECT_ICON_MAP,
   type SvgIcon,
 } from '@core/component/AI/constant/mcpServers';
-import { SETTINGS_ROW_DIVIDERS } from './settingsRowDividers';
 
 type McpTab = AgentSettingsSubTab;
 
@@ -311,7 +310,7 @@ function ServerRow(props: { server: ServerResponse }) {
             <XIcon class="size-3 shrink-0 text-failure" />
           </Show>
         </div>
-        <div class="text-xs text-muted truncate">{props.server.url}</div>
+        <div class="text-xs text-ink-muted truncate">{props.server.url}</div>
       </div>
 
       <div class="flex items-center gap-2 shrink-0">
@@ -430,7 +429,7 @@ function Connectors() {
               </div>
             }
           >
-            <div class={cn('flex flex-col rounded-sm overflow-hidden border border-edge-muted @max-[480px]:[&>*:not(:last-child)]:after:inset-x-3', SETTINGS_ROW_DIVIDERS)}>
+            <div class="flex flex-col rounded-sm overflow-hidden border border-edge-muted settings-row-dividers @max-[480px]:[&>*:not(:last-child)]:after:inset-x-3">
               <For each={servers()}>
                 {(server) => <ServerRow server={server} />}
               </For>

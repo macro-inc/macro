@@ -58,7 +58,6 @@ import { usePaywallState } from '@core/constant/PaywallState';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { z } from 'zod';
 import { getTeamSlugError, normalizeTeamSlugInput } from './teamSlug';
-import { SETTINGS_ROW_DIVIDER } from './settingsRowDividers';
 
 function useRequiresPaidUpgrade() {
   const hasPaidAccess = useHasPaidAccess();
@@ -321,8 +320,8 @@ function MemberRow(props: {
   return (
     <div
       class={cn(
-        'relative flex items-center justify-between py-2 px-6 gap-2 bg-surface hover:bg-hover',
-        !props.isLast && SETTINGS_ROW_DIVIDER
+        'flex items-center justify-between py-2 px-6 gap-2 bg-surface hover:bg-hover',
+        !props.isLast && 'settings-row-divider'
       )}
     >
       <div class="flex items-center gap-3 min-w-0 flex-1">

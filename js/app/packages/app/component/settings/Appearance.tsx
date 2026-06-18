@@ -15,7 +15,6 @@ import { ThemeChipPill } from '@theme/components/ThemeChipPill';
 import type { ThemeV2 } from '@theme/types/themeTypes';
 import { DropdownMenu as KobalteDropdownMenu } from '@kobalte/core/dropdown-menu';
 import { Button, cn, Dropdown, InlineCheckbox, Panel, ToggleSwitch } from '@ui';
-import { SETTINGS_ROW_DIVIDERS } from './settingsRowDividers';
 
 type PanelA = 'basic' | 'advanced';
 type PanelB ='themes' | 'ui'
@@ -81,7 +80,7 @@ function UserInterface() {
   const darkThemes = () => themes().filter((theme) => isTokensDark(theme.tokens));
 
   return (
-    <div class={cn('flex flex-col', SETTINGS_ROW_DIVIDERS)}>
+    <div class="flex flex-col settings-row-dividers">
       <div class="bg-surface flex items-center justify-between h-15.25 px-6">
         <div class="text-sm">Monochrome Icons</div>
         <ToggleSwitch

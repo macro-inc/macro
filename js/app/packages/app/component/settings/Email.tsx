@@ -1,6 +1,6 @@
 import { toast } from '@core/component/Toast/Toast';
 import { match } from 'ts-pattern';
-import { Button, cn, Dialog, Panel, Tooltip } from '@ui';
+import { Button, Dialog, Panel, Tooltip } from '@ui';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
   ENABLE_INBOX_RESYNC,
@@ -33,7 +33,6 @@ import {
   IntegrationPanelShell,
   StatusPill,
 } from './integration-ui';
-import { SETTINGS_ROW_DIVIDERS } from './settingsRowDividers';
 
 export function Email() {
   const email = useEmail();
@@ -213,7 +212,7 @@ export function Email() {
             </div>
           </Show>
 
-          <div class={cn('grid', SETTINGS_ROW_DIVIDERS)}>
+          <div class="grid settings-row-dividers">
             <Show when={inboxes().primary}>
               {(primary) => (
                 <InboxRow

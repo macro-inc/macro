@@ -5,8 +5,8 @@ import { isMobile } from '@core/mobile/isMobile';
 import { toast } from '@core/component/Toast/Toast';
 import { staticFileIdEndpoint } from '@core/constant/servers';
 import { createStaticFile } from '@core/util/create';
-import { Dialog, Button, Panel, Tooltip, ToggleSwitch, Dropdown, cn } from '@ui';
-import { SETTINGS_ROW_DIVIDERS } from './settingsRowDividers';
+import { openFilePicker } from '@core/util/upload';
+import { Dialog, Button, Panel, Tooltip, ToggleSwitch, Dropdown } from '@ui';
 import {
   blockNameToFileExtensions,
   blockNameToMimeTypes,
@@ -19,7 +19,6 @@ import {
   ENABLE_NEW_PRICING_OVERRIDE,
 } from '@core/constant/featureFlags';
 import { useUserTeamsQuery } from '@queries/team';
-import { fileSelector } from '@core/directive/fileSelector';
 import {
   type ProfilePictureItem,
   useProfilePictureUrl,
@@ -58,9 +57,6 @@ import { useAnalytics } from '@app/component/analytics-context';
 import { useTauri, type BundleUpdateStatus } from '@macro/tauri';
 import { invoke } from '@tauri-apps/api/core';
 import { Transition } from 'solid-transition-group';
-
-// NOTE: solid directives
-false && fileSelector;
 
 // 16 megabytes
 const MAX_PROFILE_PICTURE_SIZE = 16 * 1000 * 1000;
@@ -115,6 +111,27 @@ function formatBundleUpdateStatus(status: BundleUpdateStatus): string {
   }
 }
 
+/**
+ * Save one name field with an optimistic update and rollback on failure.
+ * Returns whether the save succeeded, which drives NameInput's status icon.
+ */
+async function saveUserName(
+  value: string,
+  field: 'first_name' | 'last_name',
+  prev: string | undefined,
+  setValue: (next: string | undefined) => void
+): Promise<boolean> {
+  setValue(value); // optimistic
+  const res = await authServiceClient.putUserName(
+    field === 'first_name' ? { first_name: value } : { last_name: value }
+  );
+  if (res.isErr()) {
+    setValue(prev); // rollback
+    return false;
+  }
+  return true;
+}
+
 function useUserName() {
   const fetchUserName = async () => {
     const response = await authServiceClient.getUserName();
@@ -157,18 +174,14 @@ function ProfilePictureRow(props: { userId: string }) {
     mutateProfilePicture(response.url);
   };
 
-  // Hidden input drives the "Upload new picture" dropdown action — directives
-  // can't be attached to a Kobalte menu item, so we click() this from onSelect.
-  let fileInputRef: HTMLInputElement | undefined;
-  const acceptAttr = [
-    ...blockNameToMimeTypes.image,
-    ...blockNameToFileExtensions.image.map((ext) => `.${ext}`),
-  ].join(',');
-  const handleFileInput: JSX.EventHandler<HTMLInputElement, Event> = (e) => {
-    const files = Array.from(e.currentTarget.files ?? []);
-    e.currentTarget.value = '';
-    if (files.length) handleUpload(files);
-  };
+  const pickProfilePicture = () =>
+    openFilePicker(
+      {
+        acceptedMimeTypes: blockNameToMimeTypes.image,
+        acceptedFileExtensions: blockNameToFileExtensions.image,
+      },
+      handleUpload
+    );
 
   const handleRemove = async () => {
     setIsRemoving(true);
@@ -192,11 +205,7 @@ function ProfilePictureRow(props: { userId: string }) {
                 tabindex="0"
                 role="button"
                 aria-label="Upload profile picture"
-                use:fileSelector={{
-                  acceptedFileExtensions: blockNameToFileExtensions.image,
-                  acceptedMimeTypes: blockNameToMimeTypes.image,
-                  onSelect: handleUpload,
-                }}
+                onClick={pickProfilePicture}
                 class="flex size-full cursor-pointer items-center justify-center rounded-full bg-edge text-ink-muted transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               >
                 <IconUpload class="size-5" />
@@ -228,7 +237,7 @@ function ProfilePictureRow(props: { userId: string }) {
               </Dropdown.Trigger>
               <Dropdown.Content class="w-48">
                 <Dropdown.Group>
-                  <Dropdown.Item onSelect={() => fileInputRef?.click()}>
+                  <Dropdown.Item onSelect={pickProfilePicture}>
                     <IconUpload class="size-4" />
                     Upload new picture
                   </Dropdown.Item>
@@ -242,13 +251,6 @@ function ProfilePictureRow(props: { userId: string }) {
                 </Dropdown.Group>
               </Dropdown.Content>
             </Dropdown>
-            <input
-              ref={fileInputRef}
-              type="file"
-              class="hidden"
-              accept={acceptAttr}
-              onChange={handleFileInput}
-            />
           </Show>
         </div>
       </Row>
@@ -413,7 +415,7 @@ export function Account() {
           </Panel.Toolbar>
 
           <Panel.Body scroll class="text-ink">
-            <div class={cn('grid', SETTINGS_ROW_DIVIDERS)}>
+            <div class="grid settings-row-dividers">
               <Show when={ENABLE_PROFILE_PICTURES}>
                 <Show when={userId()} keyed>
                   {(id) => <ProfilePictureRow userId={id} />}
@@ -429,18 +431,14 @@ export function Account() {
               <Row label="First Name">
                 <NameInput
                   value={firstName()}
-                  onSave={async (newValue) => {
-                    const prev = updatedFirstName();
-                    setUpdatedFirstName(newValue); // optimistic
-                    const res = await authServiceClient.putUserName({
-                      first_name: newValue,
-                    });
-                    if (res.isErr()) {
-                      setUpdatedFirstName(prev); // rollback
-                      return false;
-                    }
-                    return true;
-                  }}
+                  onSave={(newValue) =>
+                    saveUserName(
+                      newValue,
+                      'first_name',
+                      updatedFirstName(),
+                      setUpdatedFirstName
+                    )
+                  }
                   placeholder="Enter First Name"
                 />
               </Row>
@@ -448,18 +446,14 @@ export function Account() {
               <Row label="Last Name">
                 <NameInput
                   value={lastName()}
-                  onSave={async (newValue) => {
-                    const prev = updatedLastName();
-                    setUpdatedLastName(newValue); // optimistic
-                    const res = await authServiceClient.putUserName({
-                      last_name: newValue,
-                    });
-                    if (res.isErr()) {
-                      setUpdatedLastName(prev); // rollback
-                      return false;
-                    }
-                    return true;
-                  }}
+                  onSave={(newValue) =>
+                    saveUserName(
+                      newValue,
+                      'last_name',
+                      updatedLastName(),
+                      setUpdatedLastName
+                    )
+                  }
                   placeholder="Enter Last Name"
                 />
               </Row>

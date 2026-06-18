@@ -384,6 +384,39 @@ a {
   }
 }
 
+/* Subtle, inset divider between settings rows (Account/Appearance/Email/Agent).
+   Apply to a list container whose direct children are full-width rows with px-6
+   padding; draws the line under every row except the last. */
+@utility settings-row-dividers {
+  & > *:not(:last-child) {
+    position: relative;
+    &::after {
+      content: "";
+      position: absolute;
+      inset-inline: calc(var(--spacing) * 6);
+      bottom: 0;
+      height: 1px;
+      background-color: color-mix(in oklab, var(--color-ink-muted) 5%, transparent);
+      pointer-events: none;
+    }
+  }
+}
+
+/* Row-level variant of `settings-row-dividers` for lists that render rows
+   individually (e.g. virtualized). Apply to the row; gate on "not the last row". */
+@utility settings-row-divider {
+  position: relative;
+  &::after {
+    content: "";
+    position: absolute;
+    inset-inline: calc(var(--spacing) * 6);
+    bottom: 0;
+    height: 1px;
+    background-color: color-mix(in oklab, var(--color-ink-muted) 5%, transparent);
+    pointer-events: none;
+  }
+}
+
 @utility no-select-children {
   * {
     user-select: none;
