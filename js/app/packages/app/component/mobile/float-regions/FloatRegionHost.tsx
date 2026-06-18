@@ -1,9 +1,9 @@
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { cn, Layer } from '@ui';
 import { createEffect, createSignal, For, onCleanup } from 'solid-js';
 import { FLOAT_REGIONS, FloatRegions } from './float-region-state';
-import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 
 /**
  * The mobile bottom-chrome host: an ordered stack of floating regions
