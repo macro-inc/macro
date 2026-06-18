@@ -14,7 +14,7 @@ use macro_entrypoint::MacroEntrypoint;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use opensearch_client::OpensearchClient;
 use rust_embed::RustEmbed;
-use secretsmanager_client::{LocalOrRemoteSecret, OptionalLocalOrRemoteSecret, SecretManager};
+use secretsmanager_client::{LocalOrRemoteSecret, OptionalLocalOrRemoteSecret};
 use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
 
@@ -74,36 +74,24 @@ async fn main() -> anyhow::Result<()> {
 
     // Parse our configuration from the environment.
     let config = Config::from_env().context("expected to be able to generate config")?;
-    tracing::trace!("initialized config");
 
     let aws_config = macro_aws_config::get_macro_aws_config().await;
-
-    let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(&aws_config))
-        .search_event_queue(&config.search_event_queue);
-
-    let s3_client = s3_client::S3::new(macro_aws_config::s3_client().await);
 
     let secretsmanager_client = secretsmanager_client::SecretsManager::new(
         aws_sdk_secretsmanager::Client::new(&aws_config),
     );
 
-    let database_url = match config.environment {
-        Environment::Local => config.database_url.clone(),
-        _ => secretsmanager_client
-            .get_secret_value(&config.database_url)
-            .await
-            .context("unable to get secret")?
-            .to_string(),
-    };
+    let environment = config.environment;
+    let config = config
+        .resolve_remote_secrets(environment, &secretsmanager_client)
+        .await
+        .context("expected to be able to resolve config secrets")?;
+    tracing::trace!("initialized config");
 
-    let opensearch_password = match config.environment {
-        Environment::Local => config.opensearch_password.clone(),
-        _ => secretsmanager_client
-            .get_secret_value(&config.opensearch_password)
-            .await
-            .context("unable to get secret")?
-            .to_string(),
-    };
+    let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(&aws_config))
+        .search_event_queue(&config.search_event_queue);
+
+    let s3_client = s3_client::S3::new(macro_aws_config::s3_client().await);
 
     let (min_connections, max_connections): (u32, u32) = match config.environment {
         Environment::Production => (5, 50),
@@ -114,7 +102,7 @@ async fn main() -> anyhow::Result<()> {
     let db = PgPoolOptions::new()
         .min_connections(min_connections)
         .max_connections(max_connections)
-        .connect(&database_url)
+        .connect(config.database_url.as_ref())
         .await
         .context("could not connect to db")?;
 
@@ -125,9 +113,9 @@ async fn main() -> anyhow::Result<()> {
     );
 
     let opensearch_client = OpensearchClient::new(
-        config.opensearch_url.clone(),
-        config.opensearch_username.clone(),
-        opensearch_password,
+        config.opensearch_url.to_string(),
+        config.opensearch_username.to_string(),
+        config.opensearch_password.as_ref().to_string(),
     )
     .context("unable to create opensearch client")?;
 
@@ -159,7 +147,7 @@ async fn main() -> anyhow::Result<()> {
     let sqs_client = Arc::new(sqs_client);
 
     let backfill_service = Arc::new(BackfillOrchestrator::new(
-        PgBackfillSource::new(backfill_db, config.backfill_page_sizes),
+        PgBackfillSource::new(backfill_db, config.backfill_page_sizes()),
         SqsSearchEventPublisher::new(sqs_client.clone()),
     ));
 
@@ -181,14 +169,14 @@ async fn main() -> anyhow::Result<()> {
 
         let worker = sqs_worker::SQSWorker::new(
             aws_sdk_sqs::Client::new(&aws_config),
-            config.search_event_queue.clone(),
+            config.search_event_queue.to_string(),
             config.queue_max_messages,
             config.queue_wait_time_seconds,
         );
         let ctx = SearchProcessingContext {
             db: db.clone(),
             worker: Arc::new(worker.clone()),
-            document_storage_bucket: config.document_storage_bucket.clone(),
+            document_storage_bucket: config.document_storage_bucket.to_string(),
             s3_client: Arc::new(s3_client),
             opensearch_client: Arc::new(opensearch_client.clone()),
             lexical_client: Arc::new(lexical_client),
@@ -199,7 +187,7 @@ async fn main() -> anyhow::Result<()> {
     let dynamodb_client = aws_sdk_dynamodb::Client::new(&aws_config);
     let backfill_jobs = BackfillJobs::new(
         dynamodb_client,
-        config.backfill_jobs_table.clone(),
+        config.backfill_jobs_table.to_string(),
         std::time::Duration::from_secs(config.backfill_job_ttl_seconds),
     );
     if matches!(config.environment, Environment::Local) {
