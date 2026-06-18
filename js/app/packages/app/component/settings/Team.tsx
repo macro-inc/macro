@@ -997,8 +997,13 @@ function TeamManagement(props: {
     const newName = editingTeamName()?.trim();
     if (!props.teamId || !newName) return;
 
+    // Validate against the same schema as the create flow (e.g. max length)
+    // so rename can't push a name the create path would reject.
+    const parsed = teamNameSchema.safeParse(newName);
+    if (!parsed.success) return;
+
     patchTeamMutation.mutate(
-      { teamId: props.teamId, request: { name: newName } },
+      { teamId: props.teamId, request: { name: parsed.data } },
       { onSuccess: () => setEditingTeamName(undefined) }
     );
   };
@@ -1023,8 +1028,13 @@ function TeamManagement(props: {
     if (!props.teamId || editedSlug === undefined) return;
     if (!validateTeamSlug(editedSlug) || !hasTeamSlugChanged()) return;
 
+    // Persist the normalized slug so the saved value matches the "Will save as"
+    // preview (and the backend's UPPERCASE_UNDERSCORE format).
     patchTeamMutation.mutate(
-      { teamId: props.teamId, request: { slug: editedSlug } },
+      {
+        teamId: props.teamId,
+        request: { slug: normalizeTeamSlugInput(editedSlug) },
+      },
       {
         onSuccess: () => {
           setEditingTeamSlug(undefined);

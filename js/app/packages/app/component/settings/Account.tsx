@@ -122,14 +122,19 @@ async function saveUserName(
   setValue: (next: string | undefined) => void
 ): Promise<boolean> {
   setValue(value); // optimistic
-  const res = await authServiceClient.putUserName(
-    field === 'first_name' ? { first_name: value } : { last_name: value }
-  );
-  if (res.isErr()) {
-    setValue(prev); // rollback
+  try {
+    const res = await authServiceClient.putUserName(
+      field === 'first_name' ? { first_name: value } : { last_name: value }
+    );
+    if (res.isErr()) {
+      setValue(prev); // rollback on a returned error
+      return false;
+    }
+    return true;
+  } catch {
+    setValue(prev); // rollback if the call throws before returning a Result
     return false;
   }
-  return true;
 }
 
 function useUserName() {
@@ -320,7 +325,9 @@ export function Account() {
     const teams = userTeamsQuery.data;
     const uid = userId();
     if (!teams || !uid) return false;
-    return teams.some((t) => t.owner_id !== uid);
+    // Only a "non-owner member" if they own no team at all but belong to one.
+    const ownsAnyTeam = teams.some((t) => t.owner_id === uid);
+    return !ownsAnyTeam && teams.some((t) => t.owner_id !== uid);
   });
 
   const newPricingFlag = useFeatureFlag('enable-new-pricing', {
