@@ -74,6 +74,7 @@ async fn send_invite_notifications(
             SendNotificationRequestBuilder {
                 notification_entity: model_entity::EntityType::Channel
                     .with_entity_string(channel_id.to_string()),
+                secondary_notification_entity: None,
                 notification: ChannelInviteMetadata {
                     invited_by: invited_by_user_id.clone(),
                     channel_name: common.channel_name.clone(),
@@ -91,6 +92,7 @@ async fn send_invite_notifications(
             SendNotificationRequestBuilder {
                 notification_entity: model_entity::EntityType::Channel
                     .with_entity_string(channel_id.to_string()),
+                secondary_notification_entity: None,
                 notification: ChannelInviteMetadata {
                     invited_by: invited_by_user_id.clone(),
                     channel_name: common.channel_name.clone(),
@@ -140,6 +142,7 @@ where
                         SendNotificationRequestBuilder {
                             notification_entity: model_entity::EntityType::Channel
                                 .with_entity_string(channel_id.to_string()),
+                            secondary_notification_entity: None,
                             notification: to_channel_mention_metadata(mention),
                             sender_id,
                             recipient_ids,
@@ -163,6 +166,7 @@ where
                         SendNotificationRequestBuilder {
                             notification_entity: model_entity::EntityType::Channel
                                 .with_entity_string(channel_id.to_string()),
+                            secondary_notification_entity: None,
                             notification: DocumentMentionMetadata {
                                 document_name: document.document_name,
                                 owner: document.owner,
@@ -201,6 +205,7 @@ where
                         SendNotificationRequestBuilder {
                             notification_entity: model_entity::EntityType::Channel
                                 .with_entity_string(channel_id.to_string()),
+                            secondary_notification_entity: None,
                             notification: ChannelReplyMetadata {
                                 thread_id: thread_id.to_string(),
                                 message_id: message_id.to_string(),
@@ -237,6 +242,7 @@ where
                         SendNotificationRequestBuilder {
                             notification_entity: model_entity::EntityType::Channel
                                 .with_entity_string(channel_id.to_string()),
+                            secondary_notification_entity: None,
                             notification: ChannelMessageSendMetadata {
                                 message_id: message_id.to_string(),
                                 sender: sender.as_user().cloned(),

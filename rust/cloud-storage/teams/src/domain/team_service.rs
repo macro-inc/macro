@@ -197,6 +197,7 @@ where
     ) -> anyhow::Result<()> {
         let request = SendNotificationRequestBuilder {
             notification_entity: EntityType::Team.with_entity_string(team_invite_id.to_string()),
+            secondary_notification_entity: None,
             sender_id: Some(notification.invited_by.clone()),
             notification,
             recipient_ids: HashSet::from([recipient_id]),

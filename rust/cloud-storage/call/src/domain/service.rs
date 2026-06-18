@@ -612,6 +612,7 @@ impl<
                                 let req = SendNotificationRequestBuilder {
                                     notification_entity: EntityType::Channel
                                         .with_entity_string(channel_id_str.clone()),
+                                    secondary_notification_entity: None,
                                     notification: CallStartedNotification {
                                         sender_profile_picture_url,
                                         channel_name: channel_name.clone(),

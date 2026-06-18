@@ -110,6 +110,7 @@ impl<
             EntityType::ForeignEntity.with_entity_string(foreign_entity_id.to_string());
         let request = SendNotificationRequestBuilder {
             notification_entity,
+            secondary_notification_entity: None,
             notification,
             sender_id,
             recipient_ids,
