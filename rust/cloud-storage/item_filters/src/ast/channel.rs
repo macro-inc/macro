@@ -150,6 +150,10 @@ pub enum ChannelThreadLiteral {
     ChannelId(Uuid),
     /// The sender of the root thread message must be the included user.
     RootSender(MacroUserIdStr<'static>),
+    /// this node value filters by notification done state for the thread notification.
+    NotificationDone(bool),
+    /// this node value filters by notification seen state for the thread notification.
+    NotificationSeen(bool),
 }
 
 impl ExpandFrame<ChannelThreadLiteral> for ChannelThreadFilters {

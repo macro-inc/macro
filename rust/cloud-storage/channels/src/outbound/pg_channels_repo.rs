@@ -837,6 +837,11 @@ fn push_channel_thread_filter_expr(
             builder.push("m.sender_id = ");
             builder.push_bind(sender.as_ref().to_string());
         }
+        Expr::Literal(
+            ChannelThreadLiteral::NotificationDone(_) | ChannelThreadLiteral::NotificationSeen(_),
+        ) => {
+            todo!();
+        }
     }
 }
 
