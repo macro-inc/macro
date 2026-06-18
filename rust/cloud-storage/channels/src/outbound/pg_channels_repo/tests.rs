@@ -81,7 +81,7 @@ async fn insert_channel_message_notification(
     seen: bool,
 ) -> anyhow::Result<()> {
     let notification_id = Uuid::new_v4();
-    sqlx::query(
+    sqlx::query!(
         r#"
         INSERT INTO notification (
             id,
@@ -100,14 +100,66 @@ async fn insert_channel_message_notification(
             jsonb_build_object('messageId', $3::text)
         )
         "#,
+        notification_id,
+        channel_id.to_string(),
+        message_id.to_string(),
     )
-    .bind(notification_id)
-    .bind(channel_id.to_string())
-    .bind(message_id.to_string())
     .execute(pool)
     .await?;
 
-    sqlx::query(
+    insert_user_notification(pool, user_id, notification_id, done, seen).await
+}
+
+async fn insert_channel_thread_notification(
+    pool: &Pool<Postgres>,
+    user_id: &str,
+    channel_id: Uuid,
+    thread_id: Uuid,
+    done: bool,
+    seen: bool,
+) -> anyhow::Result<()> {
+    let notification_id = Uuid::new_v4();
+    sqlx::query!(
+        r#"
+        INSERT INTO notification (
+            id,
+            notification_event_type,
+            event_item_id,
+            event_item_type,
+            service_sender,
+            metadata,
+            secondary_event_item_id,
+            secondary_event_item_type
+        )
+        VALUES (
+            $1,
+            'channel_reply',
+            $2,
+            'channel',
+            'channels-test',
+            '{}'::jsonb,
+            $3,
+            'channel_message'
+        )
+        "#,
+        notification_id,
+        channel_id.to_string(),
+        thread_id.to_string(),
+    )
+    .execute(pool)
+    .await?;
+
+    insert_user_notification(pool, user_id, notification_id, done, seen).await
+}
+
+async fn insert_user_notification(
+    pool: &Pool<Postgres>,
+    user_id: &str,
+    notification_id: Uuid,
+    done: bool,
+    seen: bool,
+) -> anyhow::Result<()> {
+    sqlx::query!(
         r#"
         INSERT INTO user_notification (user_id, notification_id, created_at, seen_at, done)
         VALUES (
@@ -118,11 +170,11 @@ async fn insert_channel_message_notification(
             $4
         )
         "#,
+        user_id,
+        notification_id,
+        seen,
+        done,
     )
-    .bind(user_id)
-    .bind(notification_id)
-    .bind(seen)
-    .bind(done)
     .execute(pool)
     .await?;
 
@@ -308,6 +360,65 @@ async fn channel_thread_rows_filter_by_root_sender(pool: Pool<Postgres>) -> anyh
 
     let parent_ids = rows.iter().map(|row| row.parent.id).collect::<Vec<_>>();
     assert_eq!(parent_ids, vec![MSG3, MSG1, MSG31]);
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn channel_thread_rows_filter_by_notification_done_secondary_entity(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    insert_channel_message_notification(&pool, USER_A, CH1, MSG3, true, false).await?;
+    insert_channel_thread_notification(&pool, USER_A, CH1, MSG1, true, false).await?;
+    insert_channel_thread_notification(&pool, USER_A, CH1, MSG31, false, false).await?;
+    insert_channel_thread_notification(&pool, USER_B, CH1, MSG3, true, false).await?;
+
+    let rows = repo(pool)
+        .get_thread_reply_rows(
+            thread_rows_request(
+                USER_A,
+                thread_filter(ChannelThreadLiteral::NotificationDone(true)),
+                SimpleSortMethod::UpdatedAt,
+                50,
+            )
+            .into_params(),
+        )
+        .await
+        .map_err(report_err)?;
+
+    let parent_ids = rows.iter().map(|row| row.parent.id).collect::<Vec<_>>();
+    assert_eq!(parent_ids, vec![MSG1]);
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn channel_thread_rows_filter_by_notification_seen_secondary_entity(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    insert_channel_thread_notification(&pool, USER_A, CH1, MSG3, false, false).await?;
+    insert_channel_thread_notification(&pool, USER_A, CH1, MSG1, false, true).await?;
+    insert_channel_thread_notification(&pool, USER_A, CH1, MSG31, false, false).await?;
+
+    let rows = repo(pool)
+        .get_thread_reply_rows(
+            thread_rows_request(
+                USER_A,
+                thread_filter(ChannelThreadLiteral::NotificationSeen(true)),
+                SimpleSortMethod::UpdatedAt,
+                50,
+            )
+            .into_params(),
+        )
+        .await
+        .map_err(report_err)?;
+
+    let parent_ids = rows.iter().map(|row| row.parent.id).collect::<Vec<_>>();
+    assert_eq!(parent_ids, vec![MSG1]);
     Ok(())
 }
 

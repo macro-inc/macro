@@ -804,25 +804,26 @@ fn push_channel_thread_sort_expr(
 fn push_channel_thread_filter_expr(
     builder: &mut QueryBuilder<'static, Postgres>,
     expr: &Expr<ChannelThreadLiteral>,
+    user_id: &MacroUserIdStr<'_>,
 ) {
     match expr {
         Expr::And(a, b) => {
             builder.push("(");
-            push_channel_thread_filter_expr(builder, a);
+            push_channel_thread_filter_expr(builder, a, user_id);
             builder.push(" AND ");
-            push_channel_thread_filter_expr(builder, b);
+            push_channel_thread_filter_expr(builder, b, user_id);
             builder.push(")");
         }
         Expr::Or(a, b) => {
             builder.push("(");
-            push_channel_thread_filter_expr(builder, a);
+            push_channel_thread_filter_expr(builder, a, user_id);
             builder.push(" OR ");
-            push_channel_thread_filter_expr(builder, b);
+            push_channel_thread_filter_expr(builder, b, user_id);
             builder.push(")");
         }
         Expr::Not(a) => {
             builder.push("(NOT ");
-            push_channel_thread_filter_expr(builder, a);
+            push_channel_thread_filter_expr(builder, a, user_id);
             builder.push(")");
         }
         Expr::Literal(ChannelThreadLiteral::ThreadId(id)) => {
@@ -837,12 +838,56 @@ fn push_channel_thread_filter_expr(
             builder.push("m.sender_id = ");
             builder.push_bind(sender.as_ref().to_string());
         }
-        Expr::Literal(
-            ChannelThreadLiteral::NotificationDone(_) | ChannelThreadLiteral::NotificationSeen(_),
-        ) => {
-            todo!();
+        Expr::Literal(ChannelThreadLiteral::NotificationDone(done)) => {
+            push_channel_thread_notification_filter_expr(
+                builder,
+                user_id,
+                if *done {
+                    "un.done = true"
+                } else {
+                    "un.done = false"
+                },
+            );
+        }
+        Expr::Literal(ChannelThreadLiteral::NotificationSeen(seen)) => {
+            push_channel_thread_notification_filter_expr(
+                builder,
+                user_id,
+                if *seen {
+                    "un.seen_at IS NOT NULL"
+                } else {
+                    "un.seen_at IS NULL"
+                },
+            );
         }
     }
+}
+
+#[cfg(feature = "list")]
+fn push_channel_thread_notification_filter_expr(
+    builder: &mut QueryBuilder<'static, Postgres>,
+    user_id: &MacroUserIdStr<'_>,
+    predicate_sql: &str,
+) {
+    builder.push(
+        r#"EXISTS (
+            SELECT 1
+            FROM notification n
+            JOIN user_notification un ON un.notification_id = n.id
+            WHERE un.user_id = "#,
+    );
+    builder.push_bind(user_id.as_ref().to_string());
+    builder.push(
+        r#"
+              AND un.deleted_at IS NULL
+              AND n.event_item_type = 'channel'
+              AND n.event_item_id = c.id::text
+              AND n.secondary_event_item_type = 'channel_message'
+              AND n.secondary_event_item_id = m.id::text
+              AND "#,
+    );
+    builder.push(predicate_sql);
+    builder.push(")");
 }
 
 #[cfg(feature = "list")]
@@ -894,7 +939,7 @@ fn build_channel_thread_rows_query(
 
     if let Some(expr) = cursor.filter().as_deref() {
         builder.push(" AND ");
-        push_channel_thread_filter_expr(&mut builder, expr);
+        push_channel_thread_filter_expr(&mut builder, expr, params.user());
     }
 
     builder.push(" AND (");
