@@ -17369,16 +17369,12 @@
       "SoupChannelThread": {
         "type": "object",
         "description": "A top-level channel message thread for soup payloads.\n\nThis reuses the existing lightweight [`ChannelMessage`] shape used by\n[`SoupChannel`] latest-message data.",
-        "required": ["channel_id", "message", "messages"],
+        "required": ["channel_id", "root_message", "messages"],
         "properties": {
           "channel_id": {
             "type": "string",
             "format": "uuid",
             "description": "Channel that owns the thread."
-          },
-          "message": {
-            "$ref": "#/components/schemas/ChannelMessage",
-            "description": "Top-level message that acts as the thread parent."
           },
           "messages": {
             "type": "array",
@@ -17386,6 +17382,10 @@
               "$ref": "#/components/schemas/ChannelMessage"
             },
             "description": "Thread replies, using the same lightweight channel message shape."
+          },
+          "root_message": {
+            "$ref": "#/components/schemas/ChannelMessage",
+            "description": "Top-level message that acts as the thread parent."
           }
         }
       },

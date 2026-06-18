@@ -1494,6 +1494,7 @@
           "user",
           "chat",
           "channel",
+          "channel_message",
           "document",
           "project",
           "email_thread",

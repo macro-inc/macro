@@ -15,8 +15,8 @@ This reuses the existing lightweight [`ChannelMessage`] shape used by
 export interface SoupChannelThread {
   /** Channel that owns the thread. */
   channel_id: string;
-  /** Top-level message that acts as the thread parent. */
-  message: ChannelMessage;
   /** Thread replies, using the same lightweight channel message shape. */
   messages: ChannelMessage[];
+  /** Top-level message that acts as the thread parent. */
+  root_message: ChannelMessage;
 }

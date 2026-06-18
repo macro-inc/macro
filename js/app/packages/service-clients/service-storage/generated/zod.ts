@@ -7674,32 +7674,6 @@ export const getItemsSoupResponse = zod
                   channel_id: zod
                     .uuid()
                     .describe('Channel that owns the thread.'),
-                  message: zod
-                    .object({
-                      content: zod.string().describe('Message content.'),
-                      created_at: zod.iso
-                        .datetime({})
-                        .describe('Creation timestamp.'),
-                      deleted_at: zod.iso
-                        .datetime({})
-                        .nullish()
-                        .describe('Deletion timestamp.'),
-                      mentions: zod
-                        .array(zod.string())
-                        .describe(
-                          'Message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`.'
-                        ),
-                      message_id: zod.uuid().describe('Message id.'),
-                      sender_id: zod.string().describe('Sender id.'),
-                      thread_id: zod
-                        .uuid()
-                        .nullish()
-                        .describe('Thread parent id.'),
-                      updated_at: zod.iso
-                        .datetime({})
-                        .describe('Update timestamp.'),
-                    })
-                    .describe('Lightweight channel message for soup payloads.'),
                   messages: zod
                     .array(
                       zod
@@ -7734,6 +7708,32 @@ export const getItemsSoupResponse = zod
                     .describe(
                       'Thread replies, using the same lightweight channel message shape.'
                     ),
+                  root_message: zod
+                    .object({
+                      content: zod.string().describe('Message content.'),
+                      created_at: zod.iso
+                        .datetime({})
+                        .describe('Creation timestamp.'),
+                      deleted_at: zod.iso
+                        .datetime({})
+                        .nullish()
+                        .describe('Deletion timestamp.'),
+                      mentions: zod
+                        .array(zod.string())
+                        .describe(
+                          'Message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`.'
+                        ),
+                      message_id: zod.uuid().describe('Message id.'),
+                      sender_id: zod.string().describe('Sender id.'),
+                      thread_id: zod
+                        .uuid()
+                        .nullish()
+                        .describe('Thread parent id.'),
+                      updated_at: zod.iso
+                        .datetime({})
+                        .describe('Update timestamp.'),
+                    })
+                    .describe('Lightweight channel message for soup payloads.'),
                 })
                 .describe(
                   'A top-level channel message thread for soup payloads.\n\nThis reuses the existing lightweight [`ChannelMessage`] shape used by\n[`SoupChannel`] latest-message data.'
@@ -9913,32 +9913,6 @@ export const postItemsSoupResponse = zod
                   channel_id: zod
                     .uuid()
                     .describe('Channel that owns the thread.'),
-                  message: zod
-                    .object({
-                      content: zod.string().describe('Message content.'),
-                      created_at: zod.iso
-                        .datetime({})
-                        .describe('Creation timestamp.'),
-                      deleted_at: zod.iso
-                        .datetime({})
-                        .nullish()
-                        .describe('Deletion timestamp.'),
-                      mentions: zod
-                        .array(zod.string())
-                        .describe(
-                          'Message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`.'
-                        ),
-                      message_id: zod.uuid().describe('Message id.'),
-                      sender_id: zod.string().describe('Sender id.'),
-                      thread_id: zod
-                        .uuid()
-                        .nullish()
-                        .describe('Thread parent id.'),
-                      updated_at: zod.iso
-                        .datetime({})
-                        .describe('Update timestamp.'),
-                    })
-                    .describe('Lightweight channel message for soup payloads.'),
                   messages: zod
                     .array(
                       zod
@@ -9973,6 +9947,32 @@ export const postItemsSoupResponse = zod
                     .describe(
                       'Thread replies, using the same lightweight channel message shape.'
                     ),
+                  root_message: zod
+                    .object({
+                      content: zod.string().describe('Message content.'),
+                      created_at: zod.iso
+                        .datetime({})
+                        .describe('Creation timestamp.'),
+                      deleted_at: zod.iso
+                        .datetime({})
+                        .nullish()
+                        .describe('Deletion timestamp.'),
+                      mentions: zod
+                        .array(zod.string())
+                        .describe(
+                          'Message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`.'
+                        ),
+                      message_id: zod.uuid().describe('Message id.'),
+                      sender_id: zod.string().describe('Sender id.'),
+                      thread_id: zod
+                        .uuid()
+                        .nullish()
+                        .describe('Thread parent id.'),
+                      updated_at: zod.iso
+                        .datetime({})
+                        .describe('Update timestamp.'),
+                    })
+                    .describe('Lightweight channel message for soup payloads.'),
                 })
                 .describe(
                   'A top-level channel message thread for soup payloads.\n\nThis reuses the existing lightweight [`ChannelMessage`] shape used by\n[`SoupChannel`] latest-message data.'
@@ -11715,32 +11715,6 @@ export const postItemsSoupAstResponse = zod
                   channel_id: zod
                     .uuid()
                     .describe('Channel that owns the thread.'),
-                  message: zod
-                    .object({
-                      content: zod.string().describe('Message content.'),
-                      created_at: zod.iso
-                        .datetime({})
-                        .describe('Creation timestamp.'),
-                      deleted_at: zod.iso
-                        .datetime({})
-                        .nullish()
-                        .describe('Deletion timestamp.'),
-                      mentions: zod
-                        .array(zod.string())
-                        .describe(
-                          'Message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`.'
-                        ),
-                      message_id: zod.uuid().describe('Message id.'),
-                      sender_id: zod.string().describe('Sender id.'),
-                      thread_id: zod
-                        .uuid()
-                        .nullish()
-                        .describe('Thread parent id.'),
-                      updated_at: zod.iso
-                        .datetime({})
-                        .describe('Update timestamp.'),
-                    })
-                    .describe('Lightweight channel message for soup payloads.'),
                   messages: zod
                     .array(
                       zod
@@ -11775,6 +11749,32 @@ export const postItemsSoupAstResponse = zod
                     .describe(
                       'Thread replies, using the same lightweight channel message shape.'
                     ),
+                  root_message: zod
+                    .object({
+                      content: zod.string().describe('Message content.'),
+                      created_at: zod.iso
+                        .datetime({})
+                        .describe('Creation timestamp.'),
+                      deleted_at: zod.iso
+                        .datetime({})
+                        .nullish()
+                        .describe('Deletion timestamp.'),
+                      mentions: zod
+                        .array(zod.string())
+                        .describe(
+                          'Message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`.'
+                        ),
+                      message_id: zod.uuid().describe('Message id.'),
+                      sender_id: zod.string().describe('Sender id.'),
+                      thread_id: zod
+                        .uuid()
+                        .nullish()
+                        .describe('Thread parent id.'),
+                      updated_at: zod.iso
+                        .datetime({})
+                        .describe('Update timestamp.'),
+                    })
+                    .describe('Lightweight channel message for soup payloads.'),
                 })
                 .describe(
                   'A top-level channel message thread for soup payloads.\n\nThis reuses the existing lightweight [`ChannelMessage`] shape used by\n[`SoupChannel`] latest-message data.'
@@ -13819,34 +13819,6 @@ export const postItemsSoupAstGroupedResponse = zod
                         channel_id: zod
                           .uuid()
                           .describe('Channel that owns the thread.'),
-                        message: zod
-                          .object({
-                            content: zod.string().describe('Message content.'),
-                            created_at: zod.iso
-                              .datetime({})
-                              .describe('Creation timestamp.'),
-                            deleted_at: zod.iso
-                              .datetime({})
-                              .nullish()
-                              .describe('Deletion timestamp.'),
-                            mentions: zod
-                              .array(zod.string())
-                              .describe(
-                                'Message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`.'
-                              ),
-                            message_id: zod.uuid().describe('Message id.'),
-                            sender_id: zod.string().describe('Sender id.'),
-                            thread_id: zod
-                              .uuid()
-                              .nullish()
-                              .describe('Thread parent id.'),
-                            updated_at: zod.iso
-                              .datetime({})
-                              .describe('Update timestamp.'),
-                          })
-                          .describe(
-                            'Lightweight channel message for soup payloads.'
-                          ),
                         messages: zod
                           .array(
                             zod
@@ -13882,6 +13854,34 @@ export const postItemsSoupAstGroupedResponse = zod
                           )
                           .describe(
                             'Thread replies, using the same lightweight channel message shape.'
+                          ),
+                        root_message: zod
+                          .object({
+                            content: zod.string().describe('Message content.'),
+                            created_at: zod.iso
+                              .datetime({})
+                              .describe('Creation timestamp.'),
+                            deleted_at: zod.iso
+                              .datetime({})
+                              .nullish()
+                              .describe('Deletion timestamp.'),
+                            mentions: zod
+                              .array(zod.string())
+                              .describe(
+                                'Message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`.'
+                              ),
+                            message_id: zod.uuid().describe('Message id.'),
+                            sender_id: zod.string().describe('Sender id.'),
+                            thread_id: zod
+                              .uuid()
+                              .nullish()
+                              .describe('Thread parent id.'),
+                            updated_at: zod.iso
+                              .datetime({})
+                              .describe('Update timestamp.'),
+                          })
+                          .describe(
+                            'Lightweight channel message for soup payloads.'
                           ),
                       })
                       .describe(
@@ -15623,34 +15623,6 @@ export const postItemsSoupAstGroupedResponse = zod
                         channel_id: zod
                           .uuid()
                           .describe('Channel that owns the thread.'),
-                        message: zod
-                          .object({
-                            content: zod.string().describe('Message content.'),
-                            created_at: zod.iso
-                              .datetime({})
-                              .describe('Creation timestamp.'),
-                            deleted_at: zod.iso
-                              .datetime({})
-                              .nullish()
-                              .describe('Deletion timestamp.'),
-                            mentions: zod
-                              .array(zod.string())
-                              .describe(
-                                'Message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`.'
-                              ),
-                            message_id: zod.uuid().describe('Message id.'),
-                            sender_id: zod.string().describe('Sender id.'),
-                            thread_id: zod
-                              .uuid()
-                              .nullish()
-                              .describe('Thread parent id.'),
-                            updated_at: zod.iso
-                              .datetime({})
-                              .describe('Update timestamp.'),
-                          })
-                          .describe(
-                            'Lightweight channel message for soup payloads.'
-                          ),
                         messages: zod
                           .array(
                             zod
@@ -15686,6 +15658,34 @@ export const postItemsSoupAstGroupedResponse = zod
                           )
                           .describe(
                             'Thread replies, using the same lightweight channel message shape.'
+                          ),
+                        root_message: zod
+                          .object({
+                            content: zod.string().describe('Message content.'),
+                            created_at: zod.iso
+                              .datetime({})
+                              .describe('Creation timestamp.'),
+                            deleted_at: zod.iso
+                              .datetime({})
+                              .nullish()
+                              .describe('Deletion timestamp.'),
+                            mentions: zod
+                              .array(zod.string())
+                              .describe(
+                                'Message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`.'
+                              ),
+                            message_id: zod.uuid().describe('Message id.'),
+                            sender_id: zod.string().describe('Sender id.'),
+                            thread_id: zod
+                              .uuid()
+                              .nullish()
+                              .describe('Thread parent id.'),
+                            updated_at: zod.iso
+                              .datetime({})
+                              .describe('Update timestamp.'),
+                          })
+                          .describe(
+                            'Lightweight channel message for soup payloads.'
                           ),
                       })
                       .describe(
