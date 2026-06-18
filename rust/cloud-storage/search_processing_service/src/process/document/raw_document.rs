@@ -75,34 +75,30 @@ fn properties_entity_type(sub_type: Option<&str>) -> EntityType {
     }
 }
 
-/// Fetch the entity's indexed properties once and attach them to every chunk
-/// upsert (parent metadata is denormalized identically across chunks). On a
-/// fetch error we log and index without properties rather than failing the
-/// whole document.
+/// Fetch the entity's indexed properties and attach them to every chunk upsert
+/// (parent metadata is denormalized identically across chunks).
+///
+/// A full index overwrites the parent doc, so an *empty* `properties` clears
+/// previously-indexed values — the deliberate "omit == remove" behavior used
+/// for `sub_type`. That is correct when the entity genuinely has no
+/// properties, but a fetch *failure* must not be mistaken for "empty": we
+/// propagate the error so the doc isn't overwritten and the message is retried
+/// (mirroring the partial-update path).
 async fn attach_indexed_properties(
     db: &sqlx::Pool<sqlx::Postgres>,
     document_id: &str,
     sub_type: Option<&str>,
     upserts: &mut [UpsertDocumentArgs],
-) {
+) -> anyhow::Result<()> {
     if upserts.is_empty() {
-        return;
+        return Ok(());
     }
-    let properties = match get_entity_properties_for_index(
-        db,
-        document_id,
-        properties_entity_type(sub_type),
-    )
-    .await
-    {
-        Ok(properties) => properties,
-        Err(e) => {
-            tracing::warn!(error=?e, document_id=%document_id, "failed to fetch properties for search index");
-            return;
-        }
-    };
+    let properties =
+        get_entity_properties_for_index(db, document_id, properties_entity_type(sub_type))
+            .await
+            .context("failed to fetch properties for search index")?;
     if properties.is_empty() {
-        return;
+        return Ok(());
     }
     let indexed: Vec<IndexedProperty> = properties
         .into_iter()
@@ -116,6 +112,7 @@ async fn attach_indexed_properties(
     for upsert in upserts.iter_mut() {
         upsert.properties = indexed.clone();
     }
+    Ok(())
 }
 
 /// Processes a message for a standard document and reads the updated contents from s3 and updates
@@ -308,7 +305,7 @@ pub async fn update_search_with_raw_document(
         sub_type.as_deref(),
         &mut upserts,
     )
-    .await;
+    .await?;
 
     upsert_document(opensearch_client, search_extractor_message, upserts).await?;
 
@@ -412,7 +409,7 @@ pub async fn update_search_with_sync_document(
     let mut upserts =
         generate_upserts(document_info, result).context("unable to generate upserts")?;
 
-    attach_indexed_properties(db, document_id, sub_type.as_deref(), &mut upserts).await;
+    attach_indexed_properties(db, document_id, sub_type.as_deref(), &mut upserts).await?;
 
     upsert_document(opensearch_client, search_extractor_message, upserts).await?;
 

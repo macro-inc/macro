@@ -399,14 +399,6 @@ pub(crate) async fn update_document_properties(
         tracing::trace!(document_id=%document_id, "document properties updated");
         return Ok(());
     }
-    if status_code.as_u16() == 404 {
-        tracing::debug!(
-            document_id=%document_id,
-            "document not indexed yet; skipping property update"
-        );
-        return Ok(());
-    }
-
     let body =
         response
             .text()
@@ -415,6 +407,24 @@ pub(crate) async fn update_document_properties(
                 details: err.to_string(),
                 method: Some("update_document_properties".to_string()),
             })?;
+
+    // A *missing document* 404 is a no-op: the doc isn't indexed yet, so the
+    // next full index will include its properties. A *missing index* 404
+    // (`index_not_found_exception`) is a real outage and must propagate. The
+    // type is read from the error body the same way `parse_bulk_response`
+    // reads `error.reason`.
+    if status_code.as_u16() == 404 {
+        let error_type = serde_json::from_str::<serde_json::Value>(&body)
+            .ok()
+            .and_then(|value| value["error"]["type"].as_str().map(str::to_owned));
+        if error_type.as_deref() == Some("document_missing_exception") {
+            tracing::debug!(
+                document_id=%document_id,
+                "document not indexed yet; skipping property update"
+            );
+            return Ok(());
+        }
+    }
 
     tracing::error!(
         status_code=?status_code,
