@@ -1,5 +1,5 @@
 import type { UnifiedNotification } from '@notifications';
-import { format, isSameDay, isSameYear, subDays } from 'date-fns';
+import { differenceInCalendarDays } from 'date-fns';
 
 export const getNotificationTime = (
   notification: UnifiedNotification
@@ -15,21 +15,22 @@ export const sortNotifications = (
     (a, b) => getNotificationTime(b) - getNotificationTime(a)
   );
 
-export const getDateGroupKey = (time: number): string =>
-  format(new Date(time), 'yyyy-M-d');
+const getRelativeDateBucket = (time: number) => {
+  const daysAgo = differenceInCalendarDays(new Date(), new Date(time));
 
-export const getDateGroupLabel = (time: number): string => {
-  const date = new Date(time);
-  const now = new Date();
-
-  if (isSameDay(date, now)) return 'Today';
-  if (isSameDay(date, subDays(now, 1))) return 'Yesterday';
-
-  return format(
-    date,
-    isSameYear(date, now) ? 'EEEE, MMMM d' : 'EEEE, MMMM d, yyyy'
-  );
+  if (daysAgo <= 0) return { key: 'today', label: 'Today' };
+  if (daysAgo === 1) return { key: 'yesterday', label: 'Yesterday' };
+  if (daysAgo < 7) return { key: 'past-week', label: 'Past week' };
+  if (daysAgo < 30) return { key: 'past-month', label: 'Past month' };
+  if (daysAgo < 365) return { key: 'past-year', label: 'Past year' };
+  return { key: 'older', label: 'Older' };
 };
+
+export const getDateGroupKey = (time: number): string =>
+  getRelativeDateBucket(time).key;
+
+export const getDateGroupLabel = (time: number): string =>
+  getRelativeDateBucket(time).label;
 
 const githubNotificationTags = new Set([
   'github_pr_status_changed',

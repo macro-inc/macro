@@ -318,7 +318,14 @@ const inboxQueryFilters = (mode: InboxMode, readFilter: ReadFilter): Query => {
 
   if (mode === 'all') {
     return defineQueryFilters({
-      include: seenFilter,
+      include: {
+        documentId: [],
+        threadId: [],
+        channelId: [],
+        chatId: [],
+        foreignEntityRecordId: [],
+        ...seenFilter,
+      },
       emailView: 'all',
     });
   }
@@ -1035,17 +1042,9 @@ export function NotificationInbox2() {
   });
   const groups = createMemo(() =>
     buildInboxGroups(
-      queryItems()
-        .filter(
-          (item) =>
-            !hiddenTags().has(item.notification.notification_metadata.tag)
-        )
-        .filter((item) => {
-          if (readFilter() === 'all') return true;
-          const unread =
-            !item.notification.viewed_at && !item.notification.done;
-          return readFilter() === 'unread' ? unread : !unread;
-        })
+      queryItems().filter(
+        (item) => !hiddenTags().has(item.notification.notification_metadata.tag)
+      )
     )
   );
   const toggleFilter = (filterId: string) => {
