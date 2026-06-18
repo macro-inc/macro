@@ -12,6 +12,7 @@ import {
 import { CommandState } from '@app/component/command';
 import { InteractiveOnboardingModal } from '@app/component/interactive-onboarding/InteractiveOnboardingModal';
 import { createMenuOpen, setCreateMenuOpen } from '@app/component/Launcher';
+import { buildDocumentTypeQuery } from '@app/component/next-soup/filters/configs/document-type-query';
 import { getDocumentsFilterSplit } from '@app/component/next-soup/soup-view/documents-filter-controllers';
 import {
   getInboxFilterSplit,
@@ -113,6 +114,8 @@ interface SidebarItem {
   hiddenFromSidebar?: boolean;
 }
 
+const markdownDocumentsQuery = buildDocumentTypeQuery(['doc-markdown']);
+
 const SIDEBAR_LINKS = [
   {
     id: 'inbox',
@@ -160,7 +163,7 @@ const SIDEBAR_LINKS = [
     label: 'Documents',
     href: LIST_VIEW_PATHS.documents,
     params: {
-      initialFilters: { include: { fileAssoc: ['assoc:md'] } },
+      initialFilters: markdownDocumentsQuery ?? {},
       initialClientFilters: {
         and: ['document-or-file'],
         or: ['doc-markdown'],

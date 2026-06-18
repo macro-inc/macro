@@ -1282,3 +1282,48 @@ impl NotificationExtIos for CommentedOnDocumentMetadata {
         alert_apns(self, sender_id, notification_id, profile_pic).ok()
     }
 }
+
+/// Metadata for a notification that a call has started in a channel.
+///
+/// Mirrors the producer-side `CallStartedNotification` in the `call` crate:
+/// both serialize the same wire shape (snake_case fields) under the same
+/// `call_started` [`Notification::TYPE_NAME`]. This type is the read-side
+/// model used by [`crate::NotifEvent`]; the producer keeps its own type
+/// because it additionally builds the incoming-call APNS/VoIP push.
+///
+/// Rows persisted before the type name was normalized used the kebab-case
+/// `call-started`; the [`crate::NotifEvent::CallStarted`] variant carries a
+/// `#[serde(alias = "call-started")]` so those rows still deserialize.
+#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
+pub struct CallStartedMetadata {
+    /// The name of the channel the call started in, when available.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub channel_name: Option<String>,
+    /// Profile picture URL of the user who started the call, when available.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sender_profile_picture_url: Option<String>,
+}
+
+impl Notification for CallStartedMetadata {
+    const TYPE_NAME: &'static str = "call_started";
+}
+
+impl NotificationTitle for CallStartedMetadata {
+    fn format_title(
+        &self,
+        sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        let title = match sender_id {
+            Some(sender) => format!("{} started a call", sender.email_part().local_part()),
+            None => "Call started".to_string(),
+        };
+        Ok(title)
+    }
+
+    fn format_body(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        Ok(self.channel_name.clone().unwrap_or_default())
+    }
+}

@@ -225,7 +225,7 @@ function getSupportedHandler(
     })
     .with('invite_to_team', () => null)
     .with(
-      'call-started',
+      'call_started',
       () =>
         async (lm: SplitManager, newSplit: boolean = false) =>
           openSplitIfNotOpen(lm, 'channel', notification.entity_id, {

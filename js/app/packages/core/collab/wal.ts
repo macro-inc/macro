@@ -1,4 +1,5 @@
 import { type DBSchema, type IDBPDatabase, openDB as idbOpen } from 'idb';
+import { logSyncService, type WalContext } from './logger';
 import type { RawUpdate } from './shared';
 import type { LiveSyncSource } from './source';
 
@@ -31,9 +32,6 @@ export interface WALStore<T> {
   pruneDelivered(): Promise<void>;
   /** Drop entries older than `ttlMs`. Returns the number deleted. */
   pruneExpired(ttlMs: number): Promise<number>;
-  /** Signal that all entries have been delivered and nothing new is queued.
-   *  Implementations may use this to clear a cached "dirty" hint. */
-  markClean(): void;
   count(): Promise<number>;
 }
 
@@ -45,13 +43,6 @@ export const WAL_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 1 week
 export const LORO_WAL_DB_NAME = 'macro-document-wal';
 
 const DB_VERSION = 1;
-
-// The "dirty hint" we keep in localStorage is just a best effort cache that
-// let's us more quickly send out a request to ask sync service for updates. We
-// could just use idb but it's simple and faster.
-const DIRTY_HINT_KEY_PREFIX = 'macro-wal-dirty-';
-const dirtyHintKey = (dbName: string, scopeId: string) =>
-  `${DIRTY_HINT_KEY_PREFIX}${dbName}-${scopeId}`;
 
 interface WALSchema<T> extends DBSchema {
   updates: {
@@ -76,7 +67,7 @@ export class BrowserWALStore<T> implements WALStore<T> {
   }
 
   constructor(
-    private readonly dbName: string,
+    dbName: string,
     private readonly scopeId: string
   ) {
     this._db = BrowserWALStore.openDb<T>(dbName);
@@ -96,10 +87,6 @@ export class BrowserWALStore<T> implements WALStore<T> {
     });
   }
 
-  static isDirtyHint(dbName: string, scopeId: string): boolean {
-    return localStorage.getItem(dirtyHintKey(dbName, scopeId)) === '1';
-  }
-
   /** List every scopeId that currently has at least one entry. Uses a
    *  unique-key cursor on the `scopeId` index, so it doesn't load entries. */
   static async listScopeIds(dbName: string): Promise<string[]> {
@@ -116,15 +103,7 @@ export class BrowserWALStore<T> implements WALStore<T> {
     return scopeIds;
   }
 
-  private setDirtyHint(): void {
-    localStorage.setItem(dirtyHintKey(this.dbName, this.scopeId), '1');
-  }
-
   public async append(update: T): Promise<void> {
-    // Set the localStorage hint BEFORE writing to IDB so a crash between
-    // the two leaves us in the "maybe dirty" state (safe) rather than
-    // "clean but actually has entries" (dangerous).
-    this.setDirtyHint();
     const db = await this.db();
     await db.add('updates', {
       scopeId: this.scopeId,
@@ -132,10 +111,6 @@ export class BrowserWALStore<T> implements WALStore<T> {
       delivered: false,
       createdAt: Date.now(),
     });
-  }
-
-  public markClean(): void {
-    localStorage.removeItem(dirtyHintKey(this.dbName, this.scopeId));
   }
 
   public async getAll(): Promise<WALEntry<T>[]> {
@@ -204,9 +179,9 @@ export class BrowserWALStore<T> implements WALStore<T> {
 
 /**
  * Append-only queue with retry semantics. Caller-supplied `push` does the
- * actual transport; the syncer handles persistence, batching, dedupe, and
- * markClean coordination. Triggering flushes on transport reconnect (or
- * other "try again" signals) is the caller's responsibility.
+ * actual transport; the syncer handles persistence, batching, and dedupe.
+ * Triggering flushes on transport reconnect (or other "try again" signals)
+ * is the caller's responsibility.
  */
 export class WALSyncer<T> {
   /** True while a flush is in progress — prevents concurrent flushes. */
@@ -225,7 +200,8 @@ export class WALSyncer<T> {
 
   constructor(
     private readonly store: WALStore<T>,
-    private readonly push: (items: T[]) => Promise<boolean>
+    private readonly push: (items: T[]) => Promise<boolean>,
+    private readonly label?: string
   ) {
     this.readyPromise = this.setup();
   }
@@ -233,8 +209,13 @@ export class WALSyncer<T> {
   /* Right now just drops expired entries. */
   private async setup(): Promise<void> {
     const deleted = await this.store.pruneExpired(WAL_TTL_MS);
-    if (deleted > 0) {
-      console.warn(`WAL: dropped expired entries (count: ${deleted})`);
+    if (deleted > 0 && this.label) {
+      logSyncService({
+        documentId: this.label,
+        level: 'warn',
+        context: { wal: await this.summary() },
+        message: `WAL: dropped ${deleted} expired entries`,
+      });
     }
   }
 
@@ -245,11 +226,25 @@ export class WALSyncer<T> {
   public async append(item: T): Promise<void> {
     await this.ready();
     await this.store.append(item);
+    if (this.label)
+      logSyncService({
+        documentId: this.label,
+        level: 'debug',
+        context: { wal: await this.summary() },
+        message: 'WAL: wrote to IDB',
+      });
     this.hasNewPending = true;
     void this.flush(); // unawaited
   }
 
   public flush(): Promise<void> {
+    if (this.label)
+      logSyncService({
+        documentId: this.label,
+        level: 'debug',
+        context: {},
+        message: `WAL flush: triggered (isFlushing=${this.isFlushing})`,
+      });
     if (this.isFlushing) return this.pendingFlush;
     this.pendingFlush = this.doFlush();
     return this.pendingFlush;
@@ -257,6 +252,16 @@ export class WALSyncer<T> {
 
   public pruneDelivered(): Promise<void> {
     return this.store.pruneDelivered();
+  }
+
+  public async summary(): Promise<WalContext> {
+    const entries = await this.store.getAll();
+    const undelivered = entries.filter((e) => !e.delivered);
+    return {
+      count: entries.length,
+      dirty: undelivered.length,
+      mostRecentEdit: undelivered.at(-1)?.createdAt,
+    };
   }
 
   public destroy(): void {
@@ -280,16 +285,33 @@ export class WALSyncer<T> {
       const undelivered = entries.filter((e) => !e.delivered);
       if (undelivered.length === 0) return; // nothing to do
 
+      if (this.label)
+        logSyncService({
+          documentId: this.label,
+          level: 'debug',
+          context: { wal: await this.summary() },
+          message: `WAL flush: pushing ${undelivered.length} entries`,
+        });
+
       const delivered = await this.push(undelivered.map((e) => e.update));
 
       if (delivered) {
         await this.store.markDelivered(undelivered.map((e) => e.id));
-        // Clear the dirty hint only if no new edits arrived during the flush.
-        if (!this.hasNewPending) this.store.markClean();
+        if (this.label)
+          logSyncService({
+            documentId: this.label,
+            level: 'debug',
+            context: { wal: await this.summary() },
+            message: `WAL flush: delivered ${undelivered.length} entries`,
+          });
       } else {
-        console.warn('WAL flush: push not acked', {
-          count: undelivered.length,
-        });
+        if (this.label)
+          logSyncService({
+            documentId: this.label,
+            level: 'warn',
+            context: { wal: await this.summary() },
+            message: `WAL flush: push not acked (${undelivered.length} entries)`,
+          });
         succeeded = false;
       }
     } finally {
@@ -313,8 +335,10 @@ export function createWALSyncSource(
     LORO_WAL_DB_NAME,
     live.documentId
   );
-  const syncer = new WALSyncer<RawUpdate>(store, (updates) =>
-    live.pushUpdate(updates)
+  const syncer = new WALSyncer<RawUpdate>(
+    store,
+    (updates) => live.pushUpdate(updates),
+    live.documentId
   );
   live.listen((event) => {
     if (event.type === 'reconnect') void syncer.flush();

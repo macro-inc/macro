@@ -8,12 +8,13 @@ use axum::middleware::Next;
 use context::InternalFlag;
 use github::inbound::github_sync_router::GithubSyncRouterState;
 use macro_axum_utils::compose_layers;
+use macro_tower_layers::MacroRequestIdAndTracingLayer;
 use model::version::{ServiceNameState, VersionedApiServiceName, validate_api_version};
 use properties_service::PropertiesHandlerState;
 use search_service::SearchHandlerState;
+use std::time::Duration;
 use tower::ServiceBuilder;
 use tower_http::compression::CompressionLayer;
-use tower_http::trace::TraceLayer;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
@@ -60,7 +61,7 @@ pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
         .merge(health::router())
         .layer(
             ServiceBuilder::new()
-                .layer(TraceLayer::new_for_http())
+                .layer(MacroRequestIdAndTracingLayer::new(Duration::from_millis(200)).into_inner())
                 .layer(axum::middleware::from_fn_with_state(
                     ServiceNameState {
                         service_name: VersionedApiServiceName::DocumentStorageService,

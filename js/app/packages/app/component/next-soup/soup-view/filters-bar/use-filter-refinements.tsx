@@ -9,6 +9,10 @@ import {
   NO_ASSIGNEE,
 } from '@app/component/next-soup/filters';
 import {
+  buildDocumentTypeQuery,
+  getActiveDocumentTypeFilterIds,
+} from '@app/component/next-soup/filters/configs/document-type-query';
+import {
   defineQueryFilters,
   type Query,
   queryStateFrom,
@@ -116,10 +120,14 @@ export function useFilterRefinements() {
 
     // Check if there are any external filters set (normalize undefined vs {} for comparison)
     const currentFilterData = filterData();
-    const presetFilters = preset.filters;
+    const presetFilters = queryStateFrom(preset.filters);
     const hasQueryFilterDiff =
-      !deepEqual(currentFilterData.include, presetFilters.include ?? {}) ||
-      !deepEqual(currentFilterData.exclude, presetFilters.exclude ?? {}) ||
+      !deepEqual(currentFilterData.include, presetFilters.include) ||
+      !deepEqual(currentFilterData.exclude, presetFilters.exclude) ||
+      !deepEqual(
+        currentFilterData.documentWhere,
+        presetFilters.documentWhere
+      ) ||
       currentFilterData.emailView !== presetFilters.emailView;
 
     const hasSubFilters = assigneeFilter().length > 0;
@@ -368,6 +376,12 @@ export function useFilterRefinements() {
           onToggleValue: (id) => {
             const isInboxTypeFilter =
               currentView() === 'inbox' && categoryId === 'type';
+            const isDocumentTypeFilter =
+              currentView() === 'documents' && categoryId === 'type';
+            const previousDocumentTypeIds = isDocumentTypeFilter
+              ? getActiveDocumentTypeFilterIds(soup.predicates.isActive)
+              : undefined;
+
             batch(() => {
               soup.predicates.toggle({ or: [id as FilterID] });
 
@@ -376,6 +390,18 @@ export function useFilterRefinements() {
                   .filter((option) => soup.predicates.isActive(option.id))
                   .map((option) => option.id);
                 queryFilters.replace(getInboxTypeQuery(activeTypeIds) ?? null);
+                return;
+              }
+
+              if (previousDocumentTypeIds) {
+                const previousQuery = buildDocumentTypeQuery(
+                  previousDocumentTypeIds
+                );
+                const nextQuery = buildDocumentTypeQuery(
+                  getActiveDocumentTypeFilterIds(soup.predicates.isActive)
+                );
+                if (previousQuery) queryFilters.remove(previousQuery);
+                if (nextQuery) queryFilters.add(nextQuery);
                 return;
               }
 
@@ -394,6 +420,12 @@ export function useFilterRefinements() {
             const currentValues = getActiveValues();
             const isInboxTypeFilter =
               currentView() === 'inbox' && categoryId === 'type';
+            const isDocumentTypeFilter =
+              currentView() === 'documents' && categoryId === 'type';
+            const previousDocumentTypeIds = isDocumentTypeFilter
+              ? getActiveDocumentTypeFilterIds(soup.predicates.isActive)
+              : undefined;
+
             batch(() => {
               for (const value of currentValues) {
                 soup.predicates.toggle({ or: [value.id as FilterID] });
@@ -401,6 +433,18 @@ export function useFilterRefinements() {
 
               if (isInboxTypeFilter) {
                 queryFilters.replace(getInboxTypeQuery([]) ?? null);
+                return;
+              }
+
+              if (previousDocumentTypeIds) {
+                const previousQuery = buildDocumentTypeQuery(
+                  previousDocumentTypeIds
+                );
+                const nextQuery = buildDocumentTypeQuery(
+                  getActiveDocumentTypeFilterIds(soup.predicates.isActive)
+                );
+                if (previousQuery) queryFilters.remove(previousQuery);
+                if (nextQuery) queryFilters.add(nextQuery);
                 return;
               }
 

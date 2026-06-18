@@ -349,25 +349,6 @@ export function Channel(props: ChannelProps) {
     targetMessageController.goToMessage(messageId, replyId);
   };
 
-  // Navigating to a message highlights it by selecting it. When the target
-  // isn't in the initially loaded page (e.g. opening an old message from
-  // search), that selection is auto-cleared by create-message-selection before
-  // the load-around resolves. Re-assert it once the target message has loaded.
-  // Tracked per-target so it applies only to the active navigation, not after
-  // the user selects something else.
-  let highlightedNavigationTarget: string | undefined;
-  createEffect(() => {
-    const targetId = targetMessageController.activeTargetMessageId();
-    if (!targetId || targetMessageController.activeTargetMessageReplyId()) {
-      highlightedNavigationTarget = undefined;
-      return;
-    }
-    if (highlightedNavigationTarget === targetId) return;
-    if (!messageIndex.keys.includes(targetId)) return;
-    highlightedNavigationTarget = targetId;
-    selectMessage(targetId);
-  });
-
   const findBar = createChannelFindBar({
     channelId: () => props.channelId,
     goToMessage,

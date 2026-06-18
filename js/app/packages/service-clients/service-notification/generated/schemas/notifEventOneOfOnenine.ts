@@ -4,14 +4,14 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { InboxReauthRequiredMetadata } from './inboxReauthRequiredMetadata';
+import type { NewEmailMetadata } from './newEmailMetadata';
 import type { NotifEventOneOfOnenineTag } from './notifEventOneOfOnenineTag';
 
 /**
- * A linked inbox's grant died and must be reconnected.
+ * A new email has been sent to the user.
  */
 export type NotifEventOneOfOnenine = {
-  /** A linked inbox's grant died and must be reconnected. */
-  content: InboxReauthRequiredMetadata;
+  /** A new email has been sent to the user. */
+  content: NewEmailMetadata;
   tag: NotifEventOneOfOnenineTag;
 };

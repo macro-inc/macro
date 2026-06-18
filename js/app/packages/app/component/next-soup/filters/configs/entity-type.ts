@@ -4,11 +4,12 @@ import {
   documentFilter as documentPredicate,
   emailFilter as emailPredicate,
   fileFilter as filePredicate,
+  githubPrFilter as githubPrPredicate,
   peopleFilter as peoplePredicate,
   taskFilter as taskPredicate,
   teamsFilter as teamsPredicate,
 } from '../predicates';
-import { config, isAgent, isEmail, isTask } from './base';
+import { config, isAgent, isEmail, isForeign, isTask } from './base';
 
 const documentFilter = config({
   id: 'document',
@@ -71,6 +72,18 @@ const fileFilter = config({
   },
 });
 
+const githubPrFilter = config({
+  id: 'github-pr',
+  group: 'entity-type',
+  predicate: githubPrPredicate,
+  query: {
+    ...isForeign,
+    include: {
+      foreignEntitySource: ['github_pull_request'],
+    },
+  },
+});
+
 export const ENTITY_TYPE_FILTERS = [
   documentFilter,
   agentFilter,
@@ -80,4 +93,5 @@ export const ENTITY_TYPE_FILTERS = [
   taskFilter,
   emailFilter,
   fileFilter,
+  githubPrFilter,
 ] as const;

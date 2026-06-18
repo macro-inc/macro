@@ -8,6 +8,11 @@ import {
   NO_ASSIGNEE,
 } from '@app/component/next-soup/filters';
 import {
+  buildDocumentTypeQuery,
+  getActiveDocumentTypeFilterIds,
+  isDocumentTypeFilterId,
+} from '@app/component/next-soup/filters/configs/document-type-query';
+import {
   CHANNEL_SORT_OPTIONS,
   DEFAULT_SORT_OPTIONS,
   DOCUMENT_SORT_OPTIONS,
@@ -156,7 +161,22 @@ export const MobileFilterDrawer = () => {
 
   const toggleFilter = (optionId: FilterOption['id']) => {
     const wasActive = soup.predicates.isActive(optionId);
+    const previousDocumentTypeIds =
+      currentView() === 'documents' && isDocumentTypeFilterId(optionId)
+        ? getActiveDocumentTypeFilterIds(soup.predicates.isActive)
+        : undefined;
+
     soup.predicates.toggle({ or: [optionId] });
+
+    if (previousDocumentTypeIds) {
+      const previousQuery = buildDocumentTypeQuery(previousDocumentTypeIds);
+      const nextQuery = buildDocumentTypeQuery(
+        getActiveDocumentTypeFilterIds(soup.predicates.isActive)
+      );
+      if (previousQuery) queryFilters.remove(previousQuery);
+      if (nextQuery) queryFilters.add(nextQuery);
+      return;
+    }
 
     const filter = soup.predicates.getConfig(optionId);
     if (!filter?.query) return;

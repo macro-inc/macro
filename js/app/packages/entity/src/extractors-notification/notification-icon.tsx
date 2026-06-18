@@ -51,7 +51,7 @@ function getNotificationIcon(
       ),
       () => GithubIcon
     )
-    .with('call-started', () => PhoneIcon)
+    .with('call_started', () => PhoneIcon)
     .with('inbox_reauth_required', () => EnvelopeIcon)
     .exhaustive();
 }

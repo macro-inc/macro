@@ -1,7 +1,12 @@
 import { toast } from '@core/component/Toast/Toast';
 import GithubIcon from '@icon/mcp-github.svg';
-import { authServiceClient } from '@service-auth/client';
-import { createResource, Show } from 'solid-js';
+import {
+  useDeleteGithubLinkMutation,
+  useGithubLinkStatusQuery,
+  useInitGithubLinkMutation,
+  useReauthenticateGithubMutation,
+} from '@queries/auth';
+import { Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import { Button } from '@ui';
 import {
@@ -11,68 +16,38 @@ import {
   StatusPill,
 } from './integration-ui';
 
-type GithubLinkStatus = 'linked' | 'unlinked' | 'reauthentication_required';
-
-type GithubLink = {
-  status: GithubLinkStatus;
-  // Populated once the auth service starts returning the linked account's
-  // handle on /link/github/status. Until then it stays undefined and the
-  // username line below simply doesn't render.
-  username?: string;
-};
-
 export function GitHub() {
-  const [githubLink, { refetch: refetchGithubLink }] = createResource(
-    async (): Promise<GithubLink> => {
-      const response = await authServiceClient.checkGithubLinkStatus();
+  const githubLink = useGithubLinkStatusQuery();
+  const initGithubLink = useInitGithubLinkMutation();
+  const deleteGithubLink = useDeleteGithubLinkMutation();
+  const reauthenticateGithub = useReauthenticateGithubMutation();
 
-      if (response.isOk()) {
-        // `github_username` is not yet part of the generated response schema;
-        // read it defensively so the UI lights up automatically once the
-        // backend includes it.
-        const username =
-          (response.value as { github_username?: string | null })
-            .github_username ?? undefined;
-        return {
-          status: response.value.reauthentication_required
-            ? 'reauthentication_required'
-            : 'linked',
-          username,
-        };
-      }
-
-      const needsReauthentication = response.error.some(
-        (error) => error.code === 'REAUTHENTICATION_REQUIRED'
-      );
-      return {
-        status: needsReauthentication
-          ? 'reauthentication_required'
-          : 'unlinked',
-      };
-    }
-  );
-
-  const status = () => githubLink()?.status;
+  const status = () => githubLink.data?.status;
 
   const handleGithubEnable = async () => {
-    const url = await authServiceClient.initGithubLink(window.location.href);
-    if (url.isOk()) {
-      window.location.href = url.value;
+    try {
+      window.location.href = await initGithubLink.mutateAsync(
+        window.location.href
+      );
+    } catch {
+      toast.failure('Failed to start GitHub connect flow');
     }
   };
 
   const handleGithubDisable = async () => {
-    await authServiceClient.deleteGithubLink();
-    refetchGithubLink();
+    try {
+      await deleteGithubLink.mutateAsync();
+    } catch {
+      toast.failure('Failed to disconnect GitHub');
+    }
   };
 
   const handleGithubReconnect = async () => {
-    const url = await authServiceClient.reauthenticateGithub(
-      window.location.href
-    );
-    if (url.isOk()) {
-      window.location.href = url.value;
-    } else {
+    try {
+      window.location.href = await reauthenticateGithub.mutateAsync(
+        window.location.href
+      );
+    } catch {
       toast.failure('Failed to start GitHub reconnect flow');
     }
   };
@@ -91,7 +66,7 @@ export function GitHub() {
   return (
     <IntegrationPanelShell title="GitHub">
       <Show
-        when={!githubLink.loading}
+        when={!githubLink.isLoading}
         fallback={
           <div class="flex items-center justify-center pt-24 text-sm text-ink-muted">
             Loading…
@@ -105,7 +80,7 @@ export function GitHub() {
           status={
             <div class="flex flex-col items-center gap-2">
               <StatusPill state={pill().state} label={pill().label} />
-              <Show when={status() === 'linked' && githubLink()?.username}>
+              <Show when={status() === 'linked' && githubLink.data?.username}>
                 {(username) => (
                   <span class="ph-no-capture text-sm text-ink">
                     @{username()}
@@ -121,6 +96,7 @@ export function GitHub() {
               size="md"
               depth={3}
               onClick={handleGithubReconnect}
+              disabled={reauthenticateGithub.isPending}
             >
               Reconnect
             </Button>
@@ -131,6 +107,7 @@ export function GitHub() {
               size="md"
               depth={3}
               onClick={handleGithubDisable}
+              disabled={deleteGithubLink.isPending}
             >
               Disconnect
             </Button>
@@ -145,6 +122,7 @@ export function GitHub() {
               size="md"
               depth={3}
               onClick={handleGithubEnable}
+              disabled={initGithubLink.isPending}
             >
               Connect GitHub
             </Button>
