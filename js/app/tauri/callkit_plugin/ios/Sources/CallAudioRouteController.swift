@@ -6,6 +6,7 @@ enum CallAudioOutputRoute: String {
     case speaker
     case bluetooth
     case headphones
+    case external
     case unknown
 }
 
@@ -16,7 +17,7 @@ enum CallAudioInputRoute: String {
     case unknown
 }
 
-struct CallAudioRouteSnapshot {
+struct CallAudioRouteSnapshot: Equatable {
     let input: CallAudioInputRoute
     let output: CallAudioOutputRoute
     let isSpeakerForced: Bool
@@ -86,7 +87,7 @@ final class CallAudioRouteController: NSObject, @unchecked Sendable {
 
     func setSpeakerEnabled(_ enabled: Bool) {
         onMain { [weak self] in
-            self?.setSpeakerEnabledOnMain(enabled, isUserSelection: true)
+            _ = self?.setSpeakerEnabledOnMain(enabled, isUserSelection: true)
         }
     }
 
@@ -98,25 +99,34 @@ final class CallAudioRouteController: NSObject, @unchecked Sendable {
         }
     }
 
-    func defaultToSpeakerIfBuiltInRoute(reason: String) {
-        onMain { [weak self] in
-            self?.defaultToSpeakerIfBuiltInRouteOnMain(reason: reason)
+    func defaultToSpeakerIfBuiltInRoute(reason: String) -> Bool {
+        onMainSync {
+            defaultToSpeakerIfBuiltInRouteOnMain(reason: reason)
         }
     }
 
-    private func defaultToSpeakerIfBuiltInRouteOnMain(reason: String) {
-        guard preferredBuiltInSpeakerEnabled != false else { return }
-        guard !isExternalRouteAvailable() else {
-            print("[CallKit] Skipping built-in speaker default because external route is available reason=\(reason) available=\(describeAvailableRoutes()) current=\(describeCurrentRoute())")
-            return
+    func canDefaultToSpeakerIfBuiltInRoute() -> Bool {
+        onMainSync {
+            shouldDefaultToSpeakerAfterRouteChange(reason: "sessionDefaultCheck")
+        }
+    }
+
+    private func defaultToSpeakerIfBuiltInRouteOnMain(reason: String) -> Bool {
+        guard preferredBuiltInSpeakerEnabled != false else { return false }
+        guard !isCurrentExternalOutputRoute() else {
+            print("[CallKit] Skipping built-in speaker default because external route is active reason=\(reason) available=\(describeAvailableRoutes()) current=\(describeCurrentRoute())")
+            return false
         }
         let snapshot = currentSnapshotOnMain()
-        guard snapshot.supportsSpeakerToggle, snapshot.output != .speaker else { return }
+        guard snapshot.supportsSpeakerToggle else { return false }
+        if snapshot.output == .speaker, isSpeakerForced {
+            return true
+        }
         print("[CallKit] Defaulting built-in audio route to speaker reason=\(reason) output=\(snapshot.output.rawValue)")
-        setSpeakerEnabledOnMain(true, isUserSelection: false)
+        return setSpeakerEnabledOnMain(true, isUserSelection: false)
     }
 
-    private func setSpeakerEnabledOnMain(_ enabled: Bool, isUserSelection: Bool) {
+    private func setSpeakerEnabledOnMain(_ enabled: Bool, isUserSelection: Bool) -> Bool {
         let session = AVAudioSession.sharedInstance()
         let snapshot = currentSnapshotOnMain()
         if snapshot.output == .unknown {
@@ -126,7 +136,7 @@ final class CallAudioRouteController: NSObject, @unchecked Sendable {
             isSpeakerForced = enabled
             print("[CallKit] Queued audio route speaker preference enabled=\(enabled) userSelection=\(isUserSelection); current route is not ready \(describeCurrentRoute())")
             emitCurrentRouteOnMain()
-            return
+            return false
         }
 
         do {
@@ -138,8 +148,10 @@ final class CallAudioRouteController: NSObject, @unchecked Sendable {
             print("[CallKit] Audio route speaker override enabled=\(enabled) userSelection=\(isUserSelection) \(describeCurrentRoute())")
             print("[CallKit] Audio route available after speaker override \(describeAvailableRoutes())")
             emitCurrentRouteOnMain()
+            return true
         } catch {
             print("[CallKit] Failed to set audio route speaker override enabled=\(enabled): \(error) \(describeCurrentRoute())")
+            return false
         }
     }
 
@@ -152,7 +164,7 @@ final class CallAudioRouteController: NSObject, @unchecked Sendable {
     private func resetSpeakerOverrideOnMain() {
         preferredBuiltInSpeakerEnabled = nil
         guard isSpeakerForced else { return }
-        setSpeakerEnabledOnMain(false, isUserSelection: false)
+        _ = setSpeakerEnabledOnMain(false, isUserSelection: false)
     }
 
     func emitCurrentRoute() {
@@ -178,10 +190,15 @@ final class CallAudioRouteController: NSObject, @unchecked Sendable {
     private func currentSnapshotOnMain() -> CallAudioRouteSnapshot {
         let route = AVAudioSession.sharedInstance().currentRoute
         let output = classifyOutput(route.outputs.first)
-        let supportsSpeakerToggle = output == .receiver || output == .speaker || (output == .unknown && !isExternalRouteAvailable())
+        let supportsSpeakerToggle = switch output {
+        case .receiver, .speaker, .unknown:
+            true
+        case .bluetooth, .headphones, .external:
+            false
+        }
         let snapshotSpeakerForced = isSpeakerForced
             && supportsSpeakerToggle
-            && (output == .speaker || output == .unknown)
+            && (output == .speaker || output == .receiver || output == .unknown)
 
         return CallAudioRouteSnapshot(
             input: classifyInput(route.inputs.first),
@@ -205,20 +222,31 @@ final class CallAudioRouteController: NSObject, @unchecked Sendable {
 
         if shouldReleaseSpeakerOverrideForExternalRoute(reason: reason) {
             print("[CallKit] Releasing speaker override for external audio route reason=\(reason)")
-            setSpeakerEnabledOnMain(false, isUserSelection: false)
+            _ = setSpeakerEnabledOnMain(false, isUserSelection: false)
+            return
+        }
+
+        if shouldApplyQueuedSpeakerOverride(reason: reason) {
+            print("[CallKit] Applying queued speaker override after route became available reason=\(reason)")
+            _ = setSpeakerEnabledOnMain(true, isUserSelection: false)
             return
         }
 
         if shouldDefaultToSpeakerAfterRouteChange(reason: reason) {
-            defaultToSpeakerIfBuiltInRouteOnMain(reason: "routeChange:\(reason)")
-            return
+            print("[CallKit] Built-in speaker default is eligible after route change reason=\(reason)")
         }
         emitCurrentRouteOnMain()
     }
 
+    private func shouldApplyQueuedSpeakerOverride(reason: String) -> Bool {
+        guard isSpeakerForced, reason != "override" else { return false }
+        guard !isCurrentExternalOutputRoute() else { return false }
+        return currentSnapshotOnMain().output == .receiver
+    }
+
     private func shouldDefaultToSpeakerAfterRouteChange(reason: String) -> Bool {
         guard preferredBuiltInSpeakerEnabled != false else { return false }
-        guard !isExternalRouteAvailable() else { return false }
+        guard !isCurrentExternalOutputRoute() else { return false }
         let snapshot = currentSnapshotOnMain()
         guard snapshot.supportsSpeakerToggle, snapshot.output != .unknown else { return false }
         return reason != "override"
@@ -226,14 +254,19 @@ final class CallAudioRouteController: NSObject, @unchecked Sendable {
 
     private func shouldReleaseSpeakerOverrideForExternalRoute(reason: String) -> Bool {
         guard isSpeakerForced, reason != "override" else { return false }
-        if preferredBuiltInSpeakerEnabled == true, !isExternalRouteAvailable() {
+        if preferredBuiltInSpeakerEnabled == true, !isCurrentExternalOutputRoute() {
             return false
         }
-        let output = currentSnapshotOnMain().output
-        if output != .speaker && output != .unknown {
+        return isCurrentExternalOutputRoute()
+    }
+
+    private func isCurrentExternalOutputRoute() -> Bool {
+        switch currentSnapshotOnMain().output {
+        case .bluetooth, .headphones, .external:
             return true
+        case .receiver, .speaker, .unknown:
+            return false
         }
-        return isExternalRouteAvailable()
     }
 
     private func isExternalRouteAvailable() -> Bool {
@@ -307,7 +340,7 @@ final class CallAudioRouteController: NSObject, @unchecked Sendable {
         case .headphones:
             return .headphones
         default:
-            return .unknown
+            return .external
         }
     }
 

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 use aws_sdk_sns::types::MessageAttributeValue;
@@ -152,6 +152,13 @@ impl NotificationRepository for MockRepo {
         &self,
         _: &[uuid::Uuid],
     ) -> Result<Vec<crate::domain::models::NotificationIdAndCollapseKey>, Report> {
+        unimplemented!()
+    }
+    async fn get_digest_eligible_notification_ids(
+        &self,
+        _: MacroUserIdStr<'_>,
+        _: &[uuid::Uuid],
+    ) -> Result<HashSet<uuid::Uuid>, Report> {
         unimplemented!()
     }
     async fn get_user_notifications<T: serde::de::DeserializeOwned + Send>(

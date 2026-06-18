@@ -4,14 +4,20 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { NewEmailMetadata } from './newEmailMetadata';
+import type { CallStartedMetadata } from './callStartedMetadata';
 import type { NotifEventOneOfOnesevenTag } from './notifEventOneOfOnesevenTag';
 
 /**
- * A new email has been sent to the user.
+ * A call has started in a channel the user is a member of.
+
+The `call-started` alias keeps rows persisted before the type name
+was normalized to snake_case (`call_started`) deserializable.
  */
 export type NotifEventOneOfOneseven = {
-  /** A new email has been sent to the user. */
-  content: NewEmailMetadata;
+  /** A call has started in a channel the user is a member of.
+
+The `call-started` alias keeps rows persisted before the type name
+was normalized to snake_case (`call_started`) deserializable. */
+  content: CallStartedMetadata;
   tag: NotifEventOneOfOnesevenTag;
 };

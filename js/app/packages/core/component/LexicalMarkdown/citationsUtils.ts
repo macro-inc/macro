@@ -3,17 +3,33 @@ import { URL_PARAMS as PDF_URL_PARAMS } from '@block-pdf/signal/location';
 import { itemToBlockName } from '@core/constant/allBlocks';
 import { useChannelsContext } from '@core/context/channels';
 
-import { getHistoryItems } from '@queries/history/history';
+import {
+  type AccessiblePreviewItem,
+  getItemPreview,
+  isAccessiblePreviewItem,
+} from '@queries/preview';
 import { cognitionApiServiceClient } from '@service-cognition/client';
+import type { ItemType } from '@service-storage/client';
 import { validate as uuidValidate } from 'uuid';
 
 export const jsonToXML = (tag: string, data: object) => {
   return `<${tag}>${JSON.stringify(data)}</${tag}>`;
 };
 
-const createDocumentMentionXML = (documentId: string) => {
-  const history = getHistoryItems();
-  const item = history.find((item) => item.id === documentId);
+const fetchMentionPreview = async (
+  id: string,
+  type: Exclude<ItemType, 'channel'>
+): Promise<AccessiblePreviewItem | undefined> => {
+  try {
+    const preview = await getItemPreview({ id, type });
+    return isAccessiblePreviewItem(preview) ? preview : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+const createDocumentMentionXML = async (documentId: string) => {
+  const item = await fetchMentionPreview(documentId, 'document');
   if (!item) {
     if (import.meta.env.DEV) {
       console.error('Could not find item', documentId);
@@ -34,9 +50,8 @@ const createDocumentMentionXML = (documentId: string) => {
   });
 };
 
-const createChatMentionXML = (chatId: string) => {
-  const chats = getHistoryItems();
-  const chat = chats.find((c) => c.id === chatId);
+const createChatMentionXML = async (chatId: string) => {
+  const chat = await fetchMentionPreview(chatId, 'chat');
   if (!chat) {
     if (import.meta.env.DEV) {
       console.error('Could not find chat', chatId);
@@ -78,9 +93,8 @@ const createChannelMentionXML = (channelId: string) => {
   });
 };
 
-const createProjectMentionXML = (projectId: string) => {
-  const projects = getHistoryItems();
-  const project = projects.find((p) => p.id === projectId);
+const createProjectMentionXML = async (projectId: string) => {
+  const project = await fetchMentionPreview(projectId, 'project');
   if (!project) {
     if (import.meta.env.DEV) {
       console.error('Could not find project', projectId);
@@ -148,12 +162,11 @@ const getPdfCitationInfo = async (citationId: string) => {
   return '';
 };
 
-const getMdNodeCitationInfo = (documentId: string, nodeId: string) => {
+const getMdNodeCitationInfo = async (documentId: string, nodeId: string) => {
   const blockParams = {
     [MD_URL_PARAMS.nodeId]: nodeId,
   };
-  const history = getHistoryItems();
-  const item = history.find((item) => item.id === documentId);
+  const item = await fetchMentionPreview(documentId, 'document');
   const blockName = item ? (itemToBlockName(item) ?? 'md') : 'md';
   return jsonToXML('m-document-mention', {
     documentId,
@@ -230,12 +243,16 @@ const splitMdCitation = (
 
 export const replaceCitations = async (input: string): Promise<string> => {
   const citationRegex = /\[\[(.*?)\]\]/g;
-  const pdfCitations = new Set<string>();
 
   const citationCache = new Map<string, string>();
+  // async lookups, started concurrently so the preview dataloader can batch them
+  const pendingCitations = new Map<string, Promise<string>>();
   const matches = [...input.matchAll(citationRegex)];
   for (const match of matches) {
     const citation = match[1];
+    if (citationCache.has(citation) || pendingCitations.has(citation)) {
+      continue;
+    }
     if (isMdCitation(citation)) {
       const splitCitation = splitMdCitation(citation);
       if (!splitCitation) {
@@ -255,26 +272,22 @@ export const replaceCitations = async (input: string): Promise<string> => {
         continue;
       }
 
-      const xml = getMdNodeCitationInfo(documentId, nodeId);
-      citationCache.set(citation, xml);
+      pendingCitations.set(citation, getMdNodeCitationInfo(documentId, nodeId));
     } else if (isDocumentMention(citation)) {
       const [, itemId] = citation.split(';', 2);
-      const xml = createDocumentMentionXML(itemId);
-      citationCache.set(citation, xml);
+      pendingCitations.set(citation, createDocumentMentionXML(itemId));
     } else if (isChannelMention(citation)) {
       const [, channelId] = citation.split(';', 2);
       const xml = createChannelMentionXML(channelId);
       citationCache.set(citation, xml);
     } else if (isChatMention(citation)) {
       const [, chatId] = citation.split(';', 2);
-      const xml = createChatMentionXML(chatId);
-      citationCache.set(citation, xml);
+      pendingCitations.set(citation, createChatMentionXML(chatId));
     } else if (isProjectMention(citation)) {
       const [, projectId] = citation.split(';', 2);
-      const xml = createProjectMentionXML(projectId);
-      citationCache.set(citation, xml);
+      pendingCitations.set(citation, createProjectMentionXML(projectId));
     } else if (isPdfCitation(citation)) {
-      pdfCitations.add(citation);
+      pendingCitations.set(citation, getPdfCitationInfo(citation));
     } else {
       if (import.meta.env.DEV) {
         console.error('Invalid citation', citation);
@@ -284,8 +297,8 @@ export const replaceCitations = async (input: string): Promise<string> => {
   }
 
   await Promise.all(
-    [...pdfCitations].map(async (citationId) => {
-      citationCache.set(citationId, await getPdfCitationInfo(citationId));
+    [...pendingCitations].map(async ([citation, xml]) => {
+      citationCache.set(citation, await xml);
     })
   );
 

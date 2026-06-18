@@ -1,8 +1,13 @@
 use cookie::{Cookie, SameSite};
 use macro_auth::constant::{MACRO_ACCESS_TOKEN_COOKIE, MACRO_REFRESH_TOKEN_COOKIE};
 use macro_env::Environment;
+use macro_env_var::maybe_env_vars;
 use rand::{Rng, seq::SliceRandom};
 use url::Url;
+
+maybe_env_vars! {
+    struct FrontendPort;
+}
 
 /// Generates a random 25 character session code
 pub fn generate_session_code() -> String {
@@ -43,7 +48,9 @@ pub fn generate_session_code() -> String {
 pub fn default_redirect_url() -> Url {
     match Environment::new_or_prod() {
         Environment::Local => {
-            let port = std::env::var("FRONTEND_PORT").unwrap_or_else(|_| "3000".to_string());
+            let port = FrontendPort::new()
+                .map(|port| port.to_string())
+                .unwrap_or_else(|| "3000".to_string());
             format!("http://localhost:{port}").parse().unwrap()
         }
         Environment::Develop => "https://dev.macro.com/app".parse().unwrap(),

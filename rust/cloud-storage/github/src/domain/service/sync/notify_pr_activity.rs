@@ -5,7 +5,8 @@
 //! one notification per installation-source upsert, errors logged rather
 //! than propagated, and targeted recipients intersected with the source's
 //! recipient set so users are only notified through installations they
-//! belong to.
+//! belong to. Broad comment fan-out is participant-scoped; review requests
+//! and mentions stay explicitly targeted.
 
 use std::collections::HashSet;
 
@@ -131,9 +132,9 @@ impl<
     ///
     /// Fires for `issue_comment` and `pull_request_review_comment` events with
     /// action `created`. Mentioned users receive only the more specific
-    /// `github_pr_mention` notification; everyone else in the source receives
-    /// `github_pr_comment`. Bot-authored comments (including the Macro app's
-    /// own task-link comments) are skipped entirely.
+    /// `github_pr_mention` notification; non-mentioned PR participants in the
+    /// source receive `github_pr_comment`. Bot-authored comments (including
+    /// the Macro app's own task-link comments) are skipped entirely.
     pub(super) async fn notify_pr_comment_and_mentions(
         &self,
         event: &ValidatedGithubWebhookEvent,
@@ -161,18 +162,24 @@ impl<
         };
 
         let mentioned_users = self.mentioned_macro_users(&body).await;
+        let participant_users = self
+            .pull_request_participant_macro_user_ids(pull_request, upserts)
+            .await;
         let snippet = GithubPrNotificationCommon::snippet(&body);
         let sender_id = self.notification_sender_id(event).await;
         for upsert in upserts {
-            let recipients = self.notification_recipient_ids(&upsert.source).await;
+            let source_recipients = self.notification_recipient_ids(&upsert.source).await;
 
             // Mention wins: mentioned users get only github_pr_mention.
-            let mention_recipients: HashSet<_> =
-                recipients.intersection(&mentioned_users).cloned().collect();
-            let comment_recipients: HashSet<_> = recipients
-                .difference(&mention_recipients)
+            let mention_recipients: HashSet<_> = source_recipients
+                .intersection(&mentioned_users)
                 .cloned()
                 .collect();
+            let mut comment_recipients: HashSet<_> = source_recipients
+                .intersection(&participant_users)
+                .cloned()
+                .collect();
+            comment_recipients.retain(|recipient| !mention_recipients.contains(recipient));
 
             if !mention_recipients.is_empty() {
                 let notification = GithubPrMention {

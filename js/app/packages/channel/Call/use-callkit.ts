@@ -76,6 +76,12 @@ type NativeParticipantDisplayNames =
       errors: unknown[];
     };
 
+function refreshActiveCallQueriesAfterLeave() {
+  void invalidateActiveCallQueries().catch((err) =>
+    console.error('[callkit] failed to refresh active call state', err)
+  );
+}
+
 function applyConnectionState(
   nativeCall: NativeCallState,
   payload: ConnectionStatePayload
@@ -89,6 +95,9 @@ function applyConnectionState(
     nativeCall.setBootstrapChannelId(null);
     nativeCall.setParticipantIdentities([]);
     nativeCall.setSnapshot(null);
+    if (payload.state === 'disconnected') {
+      refreshActiveCallQueriesAfterLeave();
+    }
     return;
   }
   const snapshot: NativeCallSnapshot = {
@@ -336,16 +345,14 @@ export function useCallKitSetup() {
       (payload) => {
         console.info('[callkit] call ended event', payload);
         lastHandledAnsweredCall = undefined;
+        refreshActiveCallQueriesAfterLeave();
         nativeCall.setBootstrapChannelId(null);
         nativeCall.setParticipantIdentities([]);
         const handler = getActiveCallEndedHandler();
         if (!handler) {
-          // No channel call UI is mounted to run the full leave flow; refetch
-          // active-call state so the channel still reflects the ongoing call.
           console.warn(
             '[callkit] no call-ended handler registered; invalidating active call queries'
           );
-          void invalidateActiveCallQueries();
           return;
         }
         Promise.resolve(handler(payload)).catch((err) =>

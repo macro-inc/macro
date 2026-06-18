@@ -115,6 +115,16 @@ impl NotificationRepository for SandboxNotificationRepository {
         self.inner.get_basic_notifications(notification_ids).await
     }
 
+    async fn get_digest_eligible_notification_ids(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        notification_ids: &[Uuid],
+    ) -> Result<HashSet<Uuid>, Report> {
+        self.inner
+            .get_digest_eligible_notification_ids(user_id, notification_ids)
+            .await
+    }
+
     async fn get_user_notifications<T: DeserializeOwned + Send>(
         &self,
         user_id: MacroUserIdStr<'_>,

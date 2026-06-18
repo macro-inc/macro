@@ -3,7 +3,7 @@ main = "build/worker/shim.mjs"
 compatibility_date = "2025-03-05"
 
 [build]
-command = "cargo install -q worker-build --locked && worker-build --release"
+command = "cargo install -q worker-build@0.8.4 --locked && worker-build --release"
 
 [observability.logs]
 enabled = true

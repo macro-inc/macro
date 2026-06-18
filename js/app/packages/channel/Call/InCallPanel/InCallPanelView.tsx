@@ -182,13 +182,10 @@ export const InCallPanel: Component<InCallPanelProps> = (props) => {
           </div>
 
           <div class="flex items-center gap-0.5 shrink-0">
-            <Show when={showExpandToFullCall()}>
+            <Show when={showExpandToFullCall() && !slim()}>
               <button
                 type="button"
-                class={cn(
-                  'inline-flex items-center justify-center size-6 rounded transition-colors text-ink-muted/70 hover:text-ink hover:bg-ink-muted/[0.06]',
-                  slim() && 'animate-pulse'
-                )}
+                class="inline-flex items-center justify-center size-6 rounded transition-colors text-ink-muted/70 hover:text-ink hover:bg-ink-muted/[0.06]"
                 title="Open full call view"
                 aria-label="Open full call view"
                 onClick={() => {

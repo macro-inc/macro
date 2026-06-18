@@ -130,14 +130,12 @@ function titleNavigationPlugin(
 
 export const TitlePlaceholderSignal = createBlockSignal<string | undefined>();
 
-export function TitleEditor(
-  props: { autoFocusOnMount?: boolean; mustBeConnected?: boolean } = {}
-) {
+export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
   const mdData = mdStore.get;
   const setMdData = mdStore.set;
   const blockData = blockDataSignal.get;
 
-  const canEdit = useCanEdit(props.mustBeConnected);
+  const canEdit = useCanEdit();
   const renameMarkdownDocument = useRenameMarkdownDocument();
   const {
     persistedName: persistedDocumentName,

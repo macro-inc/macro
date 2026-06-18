@@ -622,7 +622,11 @@ export function registerScopeSignalHotkey(
       displayPriority: args.displayPriority,
       hide: args.hide,
       icon: args.icon,
+      commandPaletteIcon: args.commandPaletteIcon,
+      displayComponent: args.displayComponent,
       tags: args.tags,
+      keywords: args.keywords,
+      surfaceNestedCommands: args.surfaceNestedCommands,
       proxiedHotkey: args.proxiedHotkey,
     });
 

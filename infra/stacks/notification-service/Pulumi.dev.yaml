@@ -11,6 +11,4 @@ config:
   notification-service:apns_private_key:
     secure: AAABABgzjPffyo4Dh/SryGRapUIuJ2WXRrv2O879SfFOTC6sAu2uIKnCtzDyZSgCJ1Or8opS7RBV648ysgMygoIPZnwGn0lkSxbz8L4GiDk0Wd9MHedXJpi7oDdcR7AHdf+GBievPO2Afi6Ta7LVmb4BM5ig8rMDG9B5U3FofsgQNDvVXu5r8dsRZjKKGqN76mXQ+eSCxlJLWHlRluy28Ns7Aay8AzJLRnD3h8+qrF9mc49lr45f003aOu0/YojWn6QlAcK0tb0O3B+PsM+LDrk99B6oAzOZpPkT1qfFfOy0Wk76jlvsm0zOIA==
   notification-service:fcm_secret_key: fcm-credential-dev
-  notification-service:macro_cache_secret_key: macro-cache-dev
   notification-service:authentication_service_internal_api_key: authentication-service-internal-api-key-dev
-  notification-service:macro_db_secret_key: macro-db-dev

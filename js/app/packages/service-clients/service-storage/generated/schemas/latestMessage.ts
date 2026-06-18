@@ -7,6 +7,9 @@
 import type { LatestMessageLatestMessage } from './latestMessageLatestMessage';
 import type { LatestMessageLatestNonThreadMessage } from './latestMessageLatestNonThreadMessage';
 
+/**
+ * Latest-message bundle for soup payloads.
+ */
 export interface LatestMessage {
   latest_message?: LatestMessageLatestMessage;
   latest_non_thread_message?: LatestMessageLatestNonThreadMessage;

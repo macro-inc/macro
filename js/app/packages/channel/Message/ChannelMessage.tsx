@@ -161,6 +161,7 @@ function GroupedMessageLayout(props: {
           <MessageContentSlot
             channelId={props.channelId}
             messageEditor={props.messageEditor}
+            class="min-w-0 flex-1"
           />
           {/* TODO (seamus): hiding the grouped meta for now */}
           {/*<GroupedMeta messageEditor={props.messageEditor} />*/}

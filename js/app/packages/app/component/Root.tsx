@@ -19,6 +19,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
 import { ChannelsContextProvider } from '@core/context/channels';
 import { QuickAccessProvider } from '@core/context/quickAccess';
+import { TeamContextProvider } from '@core/context/team';
 import {
   UserContextProvider,
   useUserId,
@@ -57,6 +58,7 @@ import { prefetchHistory } from '@queries/history/history';
 import { invalidateUserNotifications } from '@queries/notification/user-notifications';
 import { QuerySyncProvider } from '@queries/sync/SyncProvider';
 import { MutationUndoProvider } from '@queries/undo';
+import { useReopenTrackedEntitiesOnReconnect } from '@service-connection/client';
 import { ws as connectionGatewayWebsocket } from '@service-connection/websocket';
 import { MetaProvider, Title } from '@solidjs/meta';
 import {
@@ -386,6 +388,7 @@ function ConfiguredGlobalAppStateProvider(props: ParentProps) {
   // Initialize global notification helpers
   const notifInterface = usePlatformNotificationState();
   useChatRenameWebsocketSync();
+  useReopenTrackedEntitiesOnReconnect();
 
   const onNotification = (notification: UnifiedNotification) => {
     if (notifInterface === 'not-supported') return;
@@ -436,6 +439,9 @@ function UserInfoSideEffects() {
 
   // Set user info for observability and analytics
   const userInfo = useUserInfo();
+
+  // Keep the active theme following the OS color scheme when auto-detect is on.
+  systemThemeEffect();
 
   let identified = false;
   createEffect(
@@ -518,7 +524,6 @@ export function Root() {
   });
 
   onMount(() => {
-    systemThemeEffect();
     applyTheme(currentThemeId());
     ensureMinimalThemeContrast();
   });
@@ -538,39 +543,41 @@ export function Root() {
                 <GlobalShareInboxConflictDialog />
                 <QuerySyncProviderWithUserId />
                 <UserInfoSideEffects />
-                <ConfiguredGlobalAppStateProvider>
-                  <MutationUndoProvider>
-                    <ChannelsContextProvider>
-                      <CallProvider>
-                        <CallKitSync />
-                        <CallStartedNotifier />
-                        <QuickAccessProvider>
-                          <SearchProvider>
-                            <ChatAttachmentsInit />
-                            <ReactiveFavicon />
-                            <Title>{tabTitle()}</Title>
-                            <Suspense>
-                              <IsomorphicRouter
-                                transformUrl={transformShortIdInUrlPathname}
-                                root={Layout}
-                                rootPreload={rootPreload}
-                                base={ROUTER_BASE}
-                              >
-                                {{
-                                  path: '/',
-                                  component: TauriRouteListener,
-                                  children: ROUTES,
-                                }}
-                              </IsomorphicRouter>
-                            </Suspense>
-                            <InitialInteractiveOnboardingModal />
-                            <ToastRegion />
-                          </SearchProvider>
-                        </QuickAccessProvider>
-                      </CallProvider>
-                    </ChannelsContextProvider>
-                  </MutationUndoProvider>
-                </ConfiguredGlobalAppStateProvider>
+                <TeamContextProvider>
+                  <ConfiguredGlobalAppStateProvider>
+                    <MutationUndoProvider>
+                      <ChannelsContextProvider>
+                        <CallProvider>
+                          <CallKitSync />
+                          <CallStartedNotifier />
+                          <QuickAccessProvider>
+                            <SearchProvider>
+                              <ChatAttachmentsInit />
+                              <ReactiveFavicon />
+                              <Title>{tabTitle()}</Title>
+                              <Suspense>
+                                <IsomorphicRouter
+                                  transformUrl={transformShortIdInUrlPathname}
+                                  root={Layout}
+                                  rootPreload={rootPreload}
+                                  base={ROUTER_BASE}
+                                >
+                                  {{
+                                    path: '/',
+                                    component: TauriRouteListener,
+                                    children: ROUTES,
+                                  }}
+                                </IsomorphicRouter>
+                              </Suspense>
+                              <InitialInteractiveOnboardingModal />
+                              <ToastRegion />
+                            </SearchProvider>
+                          </QuickAccessProvider>
+                        </CallProvider>
+                      </ChannelsContextProvider>
+                    </MutationUndoProvider>
+                  </ConfiguredGlobalAppStateProvider>
+                </TeamContextProvider>
               </UserContextProvider>
             </EntityProvider>
           </PosthogProvider>

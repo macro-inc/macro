@@ -12,6 +12,8 @@ import {
 import { CommandState } from '@app/component/command';
 import { InteractiveOnboardingModal } from '@app/component/interactive-onboarding/InteractiveOnboardingModal';
 import { createMenuOpen, setCreateMenuOpen } from '@app/component/Launcher';
+import { buildDocumentTypeQuery } from '@app/component/next-soup/filters/configs/document-type-query';
+import { getDocumentsFilterSplit } from '@app/component/next-soup/soup-view/documents-filter-controllers';
 import {
   getInboxFilterSplit,
   INBOX_FILTER_ENTRY_KEY,
@@ -102,13 +104,17 @@ interface SidebarItem {
   id: ListView | (string & {});
   label: string;
   href: string;
+  params?: Record<string, unknown>;
   icon?: Component<
     JSX.SvgSVGAttributes<SVGSVGElement> | { triggerAnimation?: boolean }
   >;
   hotkey: ValidHotkey;
   hotkeyToken: HotkeyToken;
   standaloneHotkey?: boolean;
+  hiddenFromSidebar?: boolean;
 }
+
+const markdownDocumentsQuery = buildDocumentTypeQuery(['doc-markdown']);
 
 const SIDEBAR_LINKS = [
   {
@@ -159,6 +165,22 @@ const SIDEBAR_LINKS = [
     icon: AnimatedFileMdIcon,
     hotkey: 'f',
     hotkeyToken: TOKENS.sidebar.goTo.documents,
+  },
+  {
+    id: 'documents',
+    label: 'Documents',
+    href: LIST_VIEW_PATHS.documents,
+    params: {
+      initialFilters: markdownDocumentsQuery ?? {},
+      initialClientFilters: {
+        and: ['document-or-file'],
+        or: ['doc-markdown'],
+      },
+    },
+    icon: AnimatedFileMdIcon,
+    hotkey: 'd',
+    hotkeyToken: TOKENS.sidebar.goTo.markdownDocuments,
+    hiddenFromSidebar: true,
   },
   {
     id: 'tasks',
@@ -292,6 +314,16 @@ const isComponentEntry =
   (entry: SplitContent): boolean =>
     entry.type === 'component' && entry.id === id;
 
+const isMarkdownDocumentsParams = (
+  params: SidebarItem['params'] | undefined
+): boolean => {
+  const initialClientFilters = params?.initialClientFilters as
+    | { or?: readonly unknown[] }
+    | undefined;
+
+  return initialClientFilters?.or?.includes('doc-markdown') ?? false;
+};
+
 /**
  * Navigate to a sidebar view, preserving prior state when possible.
  *
@@ -302,19 +334,41 @@ const isComponentEntry =
  */
 function navigateToSidebarView(args: {
   viewId: SidebarItem['id'];
+  params?: SidebarItem['params'];
   shiftKey: boolean;
   activeSplit: SplitHandle | undefined;
   openWithSplit: OpenWithSplitFn;
   referredFrom?: ReferredFrom;
 }): SplitHandle | undefined {
-  const { viewId, shiftKey, activeSplit, openWithSplit, referredFrom } = args;
+  const { viewId, params, shiftKey, activeSplit, openWithSplit, referredFrom } =
+    args;
 
-  if (!shiftKey && activeSplit?.goToEntry(isComponentEntry(viewId))) {
+  const activeContent = activeSplit?.content();
+  if (
+    !shiftKey &&
+    isMarkdownDocumentsParams(params) &&
+    activeContent?.type === 'component' &&
+    activeContent.id === 'documents'
+  ) {
+    const controller = activeSplit
+      ? getDocumentsFilterSplit(activeSplit.id)
+      : undefined;
+    if (controller) {
+      controller.toggleMarkdownFilter();
+      return activeSplit;
+    }
+  }
+
+  if (
+    !params &&
+    !shiftKey &&
+    activeSplit?.goToEntry(isComponentEntry(viewId))
+  ) {
     return activeSplit;
   }
 
   return openWithSplit(
-    { type: 'component', id: viewId },
+    { type: 'component', id: viewId, params },
     {
       preferNewSplit: shiftKey,
       mergeHistory: false,
@@ -436,6 +490,7 @@ const registerSidebarHotkeys = ({
 
         const handle = navigateToSidebarView({
           viewId: link.id,
+          params: link.params,
           shiftKey: !!e?.shiftKey,
           activeSplit: globalSplitManager()?.activeSplit(),
           openWithSplit,
@@ -752,6 +807,21 @@ export const AppSidebar = (props: AppSidebarProps) => {
       links = [...links.slice(0, idx + 1), CALLS_LINK, ...links.slice(idx + 1)];
     }
 
+    return links.filter((link) => !link.hiddenFromSidebar);
+  });
+
+  const hotkeyLinks = createMemo((): SidebarItem[] => {
+    let links: SidebarItem[] = [...SIDEBAR_LINKS];
+
+    if (homeViewEnabled().enabled) {
+      links = [DASHBOARD_LINK, ...links];
+    }
+
+    if (ENABLE_CALLS()) {
+      const idx = links.findIndex((l) => l.id === 'channels');
+      links = [...links.slice(0, idx + 1), CALLS_LINK, ...links.slice(idx + 1)];
+    }
+
     return links;
   });
 
@@ -804,20 +874,6 @@ export const AppSidebar = (props: AppSidebarProps) => {
       setActiveTabId(tab);
       return;
     }
-    if (globalSplitManager()?.canAppendSplit() ?? true) {
-      setActiveTabId(tab);
-      analytics.track('split_created', { from: 'sidebar' });
-      layout.openWithSplit(
-        { type: 'component', id: 'settings' },
-        {
-          referredFrom: 'sidebar',
-          allowDuplicate: true,
-          preferNewSplit: true,
-          mergeHistory: false,
-        }
-      );
-      return;
-    }
     openSettings(tab);
   };
 
@@ -832,7 +888,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
   });
 
   registerSidebarHotkeys({
-    links: visibleLinks,
+    links: hotkeyLinks,
     hotkeyVisible,
     setHotkeyVisible,
     resetHotkeysState,
@@ -1095,6 +1151,7 @@ const SidebarLink = (props: SidebarLinkProps) => {
     ({
       type: 'component',
       id: props.id,
+      params: props.params,
     }) as const;
 
   const canOpenInNewSplit = () =>
@@ -1165,6 +1222,7 @@ const SidebarLink = (props: SidebarLinkProps) => {
             if (!isSameContent || e.shiftKey) {
               currentContentHandle = navigateToSidebarView({
                 viewId: props.id,
+                params: props.params,
                 shiftKey: e.shiftKey,
                 activeSplit: currentContentHandle,
                 openWithSplit: layout.openWithSplit,

@@ -90,6 +90,7 @@ pub async fn list_links_handler(
                 .map_err(ListLinksError::DatabaseError)?;
             let sync_status = api::link::SyncStatus::derive(
                 link.is_sync_active,
+                link.needs_reauth,
                 latest_job.map(|job| job.status),
             );
 

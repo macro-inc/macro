@@ -57,7 +57,7 @@ export function NotificationStackRow(props: {
   const notificationSource = useGlobalNotificationSource();
   const unread = () => isNotificationUnread(props.stack);
   const canMarkDone = () =>
-    props.showMarkDone !== false && props.stack.type !== 'call-started';
+    props.showMarkDone !== false && props.stack.type !== 'call_started';
 
   const { markStackAsDone, markStackAsRead } = useNotificationStackActions({
     stack: props.stack,

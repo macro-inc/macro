@@ -4,6 +4,9 @@ export {
   queryStateFrom,
 } from './compile';
 export type {
+  DocumentFieldFilters,
+  DocumentFilterClause,
+  DocumentFilterExpression,
   PropertyFilter,
   Query,
   QueryState,

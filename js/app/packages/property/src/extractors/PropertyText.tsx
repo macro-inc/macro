@@ -94,7 +94,9 @@ function UserPropertyText(props: {
   fallback?: JSX.Element;
   class?: string;
 }) {
-  const parts = useDisplayNameParts(tryMacroId(props.id));
+  const parts = useDisplayNameParts(tryMacroId(props.id), {
+    emailFallback: 'local-part',
+  });
   const text = () => parts.firstName() || parts.fullName();
 
   return (

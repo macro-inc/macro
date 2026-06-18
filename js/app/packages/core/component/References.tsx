@@ -1,7 +1,7 @@
 import { useGlobalBlockOrchestrator } from '@app/component/GlobalAppState';
 import { SidePanel } from '@app/component/side-panel';
 import { useSplitLayout } from '@app/component/split-layout/layout';
-import { getChannelParams } from '@block-channel/utils/link';
+import { navigateToChannelMessage } from '@block-channel/utils/link';
 import type { BlockAlias, BlockName } from '@core/block';
 import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
@@ -217,17 +217,6 @@ export function References(props: ReferenceProps) {
   const { openWithSplit } = useSplitLayout();
   const blockOrchestrator = useGlobalBlockOrchestrator();
 
-  const goToMessageLocation = async (
-    channelId: string,
-    messageId: string,
-    threadId?: string
-  ) => {
-    const blockHandle = await blockOrchestrator.getBlockHandle(channelId);
-    await blockHandle?.goToLocationFromParams(
-      getChannelParams(messageId, threadId)
-    );
-  };
-
   const navigateToItem = ({
     event,
     blockId,
@@ -254,12 +243,15 @@ export function References(props: ReferenceProps) {
     messageId: string;
     threadId?: string;
   }) => {
-    navigateToItem({
-      event,
-      blockName: 'channel',
-      blockId: channelId,
-    });
-    goToMessageLocation(channelId, messageId, threadId);
+    navigateToChannelMessage(
+      blockOrchestrator,
+      channelId,
+      messageId,
+      threadId,
+      {
+        preferNewSplit: event?.shiftKey !== true,
+      }
+    );
   };
 
   const navigateToGenericReference = (

@@ -20,7 +20,7 @@ pub async fn get_chat(
         .await
         .context("Failed to get messages")?;
 
-    let model = Some(FALLBACK_MODEL);
+    let model = Some(FALLBACK_MODEL.to_string());
 
     let web_citations = get_web_citations(&ctx.db, chat_id)
         .await
@@ -54,7 +54,7 @@ pub async fn get_chat(
         updated_at: chat.updated_at,
         attachments: vec![],
         token_count: chat.token_count,
-        available_models: CHAT_MODELS.to_vec(),
+        available_models: CHAT_MODELS.iter().map(|m| m.to_string()).collect(),
         web_citations,
         is_persistent: chat.is_persistent,
     })

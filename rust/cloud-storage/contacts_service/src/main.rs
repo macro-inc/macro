@@ -12,6 +12,7 @@ use contacts::outbound::gateway::ConnectionGatewayNotifier;
 use contacts::outbound::repository::DbContactsRepository;
 use macro_entrypoint::MacroEntrypoint;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
+use macro_service_urls::ConnectionGatewayUrl;
 use rate_limit::{RateLimitServiceImpl, RedisRateLimitAdapter};
 use secretsmanager_client::SecretManager;
 use sqlx::postgres::PgPoolOptions;
@@ -38,15 +39,23 @@ async fn connect_to_database(config: &Config) -> anyhow::Result<sqlx::PgPool> {
 }
 
 async fn create_sqs_worker(config: &Config) -> SQSWorker {
-    let queue_url = config.queue_url.clone();
+    let queue_url = config.contacts_queue.to_string().clone();
     let aws_config = macro_aws_config::get_macro_aws_config().await;
 
     let sqs_client = aws_sdk_sqs::Client::new(&aws_config);
     sqs_worker::SQSWorker::new(
         sqs_client,
         queue_url,
-        config.queue_max_messages,
-        config.queue_wait_time_seconds,
+        config
+            .contacts_queue_max_messages
+            .value()
+            .map(|p| p.parse::<i32>().expect("valid number"))
+            .unwrap_or(10),
+        config
+            .contacts_queue_wait_time_seconds
+            .value()
+            .map(|p| p.parse::<i32>().expect("valid number"))
+            .unwrap_or(10),
     )
 }
 
@@ -63,17 +72,17 @@ async fn main() -> anyhow::Result<()> {
         aws_sdk_secretsmanager::Client::new(&macro_aws_config::get_macro_aws_config().await),
     );
 
-    let notifier = if let Some(url) = config.connection_gateway_url.as_ref() {
-        let internal_api_secret = secretsmanager_client
-            .get_maybe_secret_value(config.environment, InternalApiSecretKey::new()?)
-            .await?;
-        Some(
-            ConnectionGatewayNotifier::new(internal_api_secret.as_ref().to_string(), url.clone())
-                .unwrap(),
+    let internal_api_secret = secretsmanager_client
+        .get_maybe_secret_value(config.environment, InternalApiSecretKey::new()?)
+        .await?;
+
+    let notifier = Some(
+        ConnectionGatewayNotifier::new(
+            internal_api_secret.as_ref().to_string(),
+            ConnectionGatewayUrl::new()?.to_string(),
         )
-    } else {
-        None
-    };
+        .unwrap(),
+    );
 
     let repository = DbContactsRepository::new(db.clone());
     let outbox_repo = DbContactsRepository::new(db.clone());
@@ -103,8 +112,8 @@ async fn main() -> anyhow::Result<()> {
     )
     .await?;
 
-    let redis_client =
-        redis::Client::open(config.redis_uri.as_str()).context("failed to create redis client")?;
+    let redis_client = redis::Client::open(config.redis_uri.to_string().as_str())
+        .context("failed to create redis client")?;
 
     let rate_limit_service = RateLimitServiceImpl {
         repo: RedisRateLimitAdapter {

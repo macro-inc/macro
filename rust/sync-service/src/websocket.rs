@@ -1,7 +1,7 @@
-use std::{fmt::Display, sync::Arc};
+use std::sync::Arc;
 
 use bebop::{Record, SliceWrapper};
-use loro::{Frontiers, awareness::EphemeralStore};
+use loro::{VersionVector, awareness::EphemeralStore};
 use tracing::trace;
 use worker::{Result, WebSocket};
 
@@ -66,19 +66,6 @@ pub fn broadcast_awareness(
     Ok(())
 }
 
-impl Display for FromPeer<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let m = match self {
-            FromPeer::Unknown => "Unknown",
-            FromPeer::PeerUpdate { .. } => "PeerUpdate",
-            FromPeer::PeerAwareness { .. } => "PeerAwareness",
-            FromPeer::PeerRequestSince { .. } => "PeerRequestSince",
-            FromPeer::PeerRequestSnapshot {} => "PeerRequestSnapshot",
-            FromPeer::PeerRegisterId { .. } => "PeerRegisterId",
-        };
-        write!(f, "{m}")
-    }
-}
 
 // Max receiving websocket message is 1Mb
 const MAX_MESSAGE_SIZE: usize = 1000 * 1000;
@@ -121,40 +108,34 @@ pub async fn process_message(
         // Handle an incoming update from a peer
         // Should extract binary update and broadcast it to all other connected peers
         // Should also store the update in the operation log to be applied to the remote doc
-        FromPeer::PeerUpdate { update } => {
+        FromPeer::PeerUpdate { updates, id } => {
             if !Wsm::new(dss, ws).can_edit().await? {
                 tracing::warn!("received update from peer without edit permission");
                 return Ok(());
             }
-            session_storage
-                .append_pending_operation(&update, document_state)
-                .await?;
 
-            {
-                // ACK the sender first: the update is durably stored at this
-                // point, and a failed send to some *other* peer must not block
-                // the ack, or the sender tears down a healthy connection. The
-                // reverse holds too — if the sender's socket is broken the
-                // peers below must still receive the update (the sender will
-                // re-send it after reconnecting, which is a harmless
-                // duplicate), so a failed ack is logged rather than returned.
-                let message = FromRemote::RemoteUpdateAck {
-                    update: SliceWrapper::Raw(&update),
-                };
-                let mut buf = buf.lock("serialize RemoteUpdateAck in PeerUpdate handler");
-                let serialized =
-                    serialize(message, &mut buf).context("Failed serializing update")?;
-                if let Err(e) = ws.send_with_bytes(serialized) {
-                    tracing::warn!(error = ?e, "failed to send ack to the update's sender");
-                }
+            for update in &updates {
+                session_storage
+                    .append_pending_operation(update, document_state)
+                    .await?;
             }
 
             {
-                // send update to peers
-                let message = FromRemote::RemoteUpdate {
-                    update: SliceWrapper::Raw(&update),
-                };
+                // ACK the sender before broadcasting: the batch is durably
+                // stored at this point, and a failed broadcast to some other
+                // peer must not block the ack.
+                let message = FromRemote::RemoteUpdateAck { id };
+                let mut buf = buf.lock("serialize RemoteUpdateAck in PeerUpdate handler");
+                let serialized =
+                    serialize(message, &mut buf).context("Failed serializing update")?;
+                ws.send_with_bytes(serialized).context("failed to send")?;
+            }
 
+            for update in &updates {
+                // broadcast each update to other peers
+                let message = FromRemote::RemoteUpdate {
+                    update: SliceWrapper::Raw(update),
+                };
                 let mut buf = buf.lock("serialize RemoteUpdate in PeerUpdate handler");
                 let serialized =
                     serialize(message, &mut buf).context("Failed serializing update")?;
@@ -180,19 +161,25 @@ pub async fn process_message(
             broadcast_awareness(ws, &dss.get_websockets(), &encodede, buf)
                 .context("failed to broadcast awareness")?;
         }
-        // Handle a peer requesting a specific set of updates from the document
-        FromPeer::PeerRequestSince { frontiers } => {
-            let frontiers = Frontiers::decode(*frontiers).context("failed to decode frontiers")?;
+        // Handle a peer requesting a specific set of updates from the document.
+        // The client sends a version vector (not frontiers) so unknown peers
+        // — e.g. a peer that made offline edits the server hasn't seen yet —
+        // don't cause a panic in `frontiersToVV` lookup.
+        FromPeer::PeerRequestSince { vv } => {
+            let decoded = VersionVector::decode(*vv).context("failed to decode version vector")?;
 
             let update = document_state
-                .export_updates_since(&frontiers)
+                .export_updates_since(&decoded)
                 .context("failed to export updates")?;
 
-            let encoded_frontiers = frontiers.encode();
-
+            // Echo the client's *original* vv bytes back, not a re-encoded copy.
+            // The client correlates the response by byte-exact match on the vv it
+            // sent; `decode(vv).encode()` is not guaranteed to reproduce the same
+            // bytes for a multi-peer version vector, which would make the client
+            // discard a perfectly good response and time out.
             let message = FromRemote::RemoteUpdateSince {
                 update: SliceWrapper::Raw(&update),
-                frontiers: SliceWrapper::Raw(&encoded_frontiers),
+                vv,
             };
 
             let mut buf = buf.lock("serialize RemoteUpdate in PeerRequestSince handler");

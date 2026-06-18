@@ -254,6 +254,7 @@ type RecipientSelectorProps<K extends CombinedRecipientKind> = {
   triedToSubmit?: Accessor<boolean>;
   placeholder?: string | JSX.Element;
   inputRef?: (ref: HTMLInputElement) => void;
+  inputId?: string;
   focusOnMount?: boolean;
   triggerMode?: ComboboxTriggerMode;
   hideBorder?: boolean;
@@ -671,6 +672,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                     }}
                   </For>
                   <Combobox.Input
+                    id={props.inputId}
                     disabled={disabled()}
                     ref={(el) => {
                       setInputRef(el);

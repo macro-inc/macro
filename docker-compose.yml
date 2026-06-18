@@ -134,6 +134,10 @@ services:
     ports:
       - "8086:8080"
     environment:
+      # - OVERRIDE_SYNC_SERVICE_URL=https://sync-service-playground.macroverse.workers.dev
+      # uncomment above, and comment out below, for when you want to use the playground sync service. also use
+      # VITE_SYNC_SERVICE_HOST=sync-service-playground.macroverse.workers.dev VITE_LOCAL_SERVERS=ALL bun run dev
+      # if you do so
       - OVERRIDE_SYNC_SERVICE_URL=http://sync-service:8787
     depends_on:
       - redis

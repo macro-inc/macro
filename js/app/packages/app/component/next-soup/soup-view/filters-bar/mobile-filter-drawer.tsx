@@ -1,3 +1,4 @@
+import { useAddInboxGate } from '@app/component/AddInboxDialog';
 import {
   MobileDrawer,
   scrollToFocusedInput,
@@ -6,6 +7,11 @@ import {
   type FilterContext,
   NO_ASSIGNEE,
 } from '@app/component/next-soup/filters';
+import {
+  buildDocumentTypeQuery,
+  getActiveDocumentTypeFilterIds,
+  isDocumentTypeFilterId,
+} from '@app/component/next-soup/filters/configs/document-type-query';
 import {
   CHANNEL_SORT_OPTIONS,
   DEFAULT_SORT_OPTIONS,
@@ -106,6 +112,7 @@ export const MobileFilterDrawer = () => {
     enabledOverride: ENABLE_MULTI_INBOX_OVERRIDE,
   });
   const addInbox = useAddInboxFlow();
+  const guardAddInbox = useAddInboxGate();
 
   // Mirrors the desktop InboxSelector's visibility rule so the "Add inbox"
   // action stays discoverable with zero or one inbox connected. Also stays
@@ -119,11 +126,10 @@ export const MobileFilterDrawer = () => {
 
   const toggleInbox = (id: string) => {
     const current = picker.activeIds();
-    picker.onChange(
-      current.includes(id)
-        ? current.filter((activeId) => activeId !== id)
-        : [...current, id]
-    );
+    const next = current.includes(id)
+      ? current.filter((activeId) => activeId !== id)
+      : [...current, id];
+    return next.length ? picker.onChange(next) : picker.reset();
   };
 
   const VIEW_SORT_OPTIONS: Partial<Record<ListView, SortOption[]>> = {
@@ -155,7 +161,22 @@ export const MobileFilterDrawer = () => {
 
   const toggleFilter = (optionId: FilterOption['id']) => {
     const wasActive = soup.predicates.isActive(optionId);
+    const previousDocumentTypeIds =
+      currentView() === 'documents' && isDocumentTypeFilterId(optionId)
+        ? getActiveDocumentTypeFilterIds(soup.predicates.isActive)
+        : undefined;
+
     soup.predicates.toggle({ or: [optionId] });
+
+    if (previousDocumentTypeIds) {
+      const previousQuery = buildDocumentTypeQuery(previousDocumentTypeIds);
+      const nextQuery = buildDocumentTypeQuery(
+        getActiveDocumentTypeFilterIds(soup.predicates.isActive)
+      );
+      if (previousQuery) queryFilters.remove(previousQuery);
+      if (nextQuery) queryFilters.add(nextQuery);
+      return;
+    }
 
     const filter = soup.predicates.getConfig(optionId);
     if (!filter?.query) return;
@@ -418,7 +439,7 @@ export const MobileFilterDrawer = () => {
                           <button
                             type="button"
                             class="w-full flex items-center gap-3 px-3 py-2.5 text-sm hover:bg-hover transition-colors text-left bg-surface not-last:mb-px"
-                            onClick={() => void addInbox()}
+                            onClick={() => guardAddInbox(() => void addInbox())}
                           >
                             <span class="size-4 flex items-center justify-center shrink-0">
                               <PlusIcon class="size-4 text-ink-muted" />

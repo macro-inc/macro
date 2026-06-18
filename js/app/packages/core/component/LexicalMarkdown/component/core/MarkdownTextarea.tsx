@@ -346,7 +346,9 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
         <NodeAccessoryRenderer editor={editor} store={accessoryStore} />
         <Show when={showPlaceholder()}>
           <div class="pointer-events-none text-ink-placeholder absolute top-0">
-            <p class="pointer-events-none">{props.placeholder ?? '...'}</p>
+            <p class="pointer-events-none my-1.5">
+              {props.placeholder ?? '...'}
+            </p>
           </div>
         </Show>
         <Show when={props.watermark}>

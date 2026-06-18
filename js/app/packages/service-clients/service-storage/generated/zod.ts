@@ -823,6 +823,35 @@ export const createCommentResponse = zod
   );
 
 /**
+ * @summary Handler for `GET /bots/{bot_id}/channels`.
+ */
+export const listBotChannelsParams = zod.object({
+  bot_id: zod.string().describe('Bot ID'),
+});
+
+export const listBotChannelsResponseItem = zod
+  .object({
+    channel_id: zod.uuid().describe('Channel id.'),
+    channel_type: zod
+      .enum(['public', 'private', 'direct_message', 'team'])
+      .describe('Channel type for a channel containing a bot.'),
+    joined_at: zod.iso
+      .datetime({})
+      .describe('Timestamp when the bot joined the channel.'),
+    name: zod.string().nullish().describe('Channel display name.'),
+  })
+  .describe('Channel containing a bot.');
+export const listBotChannelsResponse = zod.array(listBotChannelsResponseItem);
+
+/**
+ * @summary Handler for `DELETE /bots/{bot_id}/channels/{channel_id}`.
+ */
+export const removeBotFromChannelByBotParams = zod.object({
+  bot_id: zod.string().describe('Bot ID'),
+  channel_id: zod.uuid().describe('Channel ID'),
+});
+
+/**
  * Batch-fetches lightweight previews for a list of call ids. Mirrors the
 `POST /documents/preview` endpoint: no per-id access checks, duplicate
 ids are deduplicated server-side, and missing ids come back as
@@ -7323,21 +7352,31 @@ export const getItemsSoupResponse = zod.object({
         zod.object({
           data: zod
             .object({
-              channel: zod.object({
-                channel_type: zod
-                  .enum(['public', 'private', 'direct_message', 'team'])
-                  .describe('Type of channel.'),
-                created_at: zod.iso.datetime({}),
-                id: zod.uuid(),
-                name: zod.string().nullish(),
-                org_id: zod
-                  .number()
-                  .min(getItemsSoupResponseItemsItemDataChannelOrgIdMin)
-                  .nullish(),
-                owner_id: zod.string(),
-                team_id: zod.uuid().nullish(),
-                updated_at: zod.iso.datetime({}),
-              }),
+              channel: zod
+                .object({
+                  channel_type: zod
+                    .enum(['public', 'private', 'direct_message', 'team'])
+                    .describe('Type of channel.'),
+                  created_at: zod.iso
+                    .datetime({})
+                    .describe('Creation timestamp.'),
+                  id: zod.uuid().describe('Channel id.'),
+                  name: zod
+                    .string()
+                    .nullish()
+                    .describe('Channel display name.'),
+                  org_id: zod
+                    .number()
+                    .min(getItemsSoupResponseItemsItemDataChannelOrgIdMin)
+                    .nullish()
+                    .describe('Organization id.'),
+                  owner_id: zod.string().describe('Channel owner.'),
+                  team_id: zod.uuid().nullish().describe('Team id.'),
+                  updated_at: zod.iso
+                    .datetime({})
+                    .describe('Update timestamp.'),
+                })
+                .describe('Channel metadata in soup payloads.'),
               participants: zod.array(
                 zod.object({
                   channel_id: zod.uuid(),
@@ -7351,46 +7390,76 @@ export const getItemsSoupResponse = zod.object({
               ),
             })
             .and(
-              zod.object({
-                latest_message: zod
-                  .union([
-                    zod.null(),
-                    zod.object({
-                      content: zod.string(),
-                      created_at: zod.iso.datetime({}),
-                      deleted_at: zod.iso.datetime({}).nullish(),
-                      mentions: zod
-                        .array(zod.string())
+              zod
+                .object({
+                  latest_message: zod
+                    .union([
+                      zod.null(),
+                      zod
+                        .object({
+                          content: zod.string().describe('Message content.'),
+                          created_at: zod.iso
+                            .datetime({})
+                            .describe('Creation timestamp.'),
+                          deleted_at: zod.iso
+                            .datetime({})
+                            .nullish()
+                            .describe('Deletion timestamp.'),
+                          mentions: zod
+                            .array(zod.string())
+                            .describe(
+                              'Message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`.'
+                            ),
+                          message_id: zod.uuid().describe('Message id.'),
+                          sender_id: zod.string().describe('Sender id.'),
+                          thread_id: zod
+                            .uuid()
+                            .nullish()
+                            .describe('Thread parent id.'),
+                          updated_at: zod.iso
+                            .datetime({})
+                            .describe('Update timestamp.'),
+                        })
                         .describe(
-                          'message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`'
+                          'Lightweight channel message for soup payloads.'
                         ),
-                      message_id: zod.uuid(),
-                      sender_id: zod.string(),
-                      thread_id: zod.uuid().nullish(),
-                      updated_at: zod.iso.datetime({}),
-                    }),
-                  ])
-                  .optional(),
-                latest_non_thread_message: zod
-                  .union([
-                    zod.null(),
-                    zod.object({
-                      content: zod.string(),
-                      created_at: zod.iso.datetime({}),
-                      deleted_at: zod.iso.datetime({}).nullish(),
-                      mentions: zod
-                        .array(zod.string())
+                    ])
+                    .optional(),
+                  latest_non_thread_message: zod
+                    .union([
+                      zod.null(),
+                      zod
+                        .object({
+                          content: zod.string().describe('Message content.'),
+                          created_at: zod.iso
+                            .datetime({})
+                            .describe('Creation timestamp.'),
+                          deleted_at: zod.iso
+                            .datetime({})
+                            .nullish()
+                            .describe('Deletion timestamp.'),
+                          mentions: zod
+                            .array(zod.string())
+                            .describe(
+                              'Message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`.'
+                            ),
+                          message_id: zod.uuid().describe('Message id.'),
+                          sender_id: zod.string().describe('Sender id.'),
+                          thread_id: zod
+                            .uuid()
+                            .nullish()
+                            .describe('Thread parent id.'),
+                          updated_at: zod.iso
+                            .datetime({})
+                            .describe('Update timestamp.'),
+                        })
                         .describe(
-                          'message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`'
+                          'Lightweight channel message for soup payloads.'
                         ),
-                      message_id: zod.uuid(),
-                      sender_id: zod.string(),
-                      thread_id: zod.uuid().nullish(),
-                      updated_at: zod.iso.datetime({}),
-                    }),
-                  ])
-                  .optional(),
-              })
+                    ])
+                    .optional(),
+                })
+                .describe('Latest-message bundle for soup payloads.')
             )
             .and(
               zod.object({
@@ -7998,6 +8067,23 @@ export const postItemsSoupBody = zod
           .describe(
             'When true, only return foreign entities whose metadata lists the requesting user as a\nparticipant (GitHub `involves:me` semantics for `github_pull_request` records). False or\nabsent applies no filter. Serialized in filter ASTs as the `\"me\"` literal.'
           ),
+        notification_filters: zod
+          .object({
+            done: zod
+              .boolean()
+              .nullish()
+              .describe(
+                'Filter by notification done state. `Some(true)` selects done\nnotifications; `Some(false)` selects not-done notifications.'
+              ),
+            seen: zod
+              .boolean()
+              .nullish()
+              .describe(
+                'Filter by notification seen state. `Some(true)` selects seen\nnotifications; `Some(false)` selects not-seen notifications.'
+              ),
+          })
+          .optional()
+          .describe('Notification state filters for channel message queries.'),
       })
       .optional()
       .describe('Filters for foreign entity records.'),
@@ -9207,21 +9293,31 @@ export const postItemsSoupResponse = zod.object({
         zod.object({
           data: zod
             .object({
-              channel: zod.object({
-                channel_type: zod
-                  .enum(['public', 'private', 'direct_message', 'team'])
-                  .describe('Type of channel.'),
-                created_at: zod.iso.datetime({}),
-                id: zod.uuid(),
-                name: zod.string().nullish(),
-                org_id: zod
-                  .number()
-                  .min(postItemsSoupResponseItemsItemDataChannelOrgIdMin)
-                  .nullish(),
-                owner_id: zod.string(),
-                team_id: zod.uuid().nullish(),
-                updated_at: zod.iso.datetime({}),
-              }),
+              channel: zod
+                .object({
+                  channel_type: zod
+                    .enum(['public', 'private', 'direct_message', 'team'])
+                    .describe('Type of channel.'),
+                  created_at: zod.iso
+                    .datetime({})
+                    .describe('Creation timestamp.'),
+                  id: zod.uuid().describe('Channel id.'),
+                  name: zod
+                    .string()
+                    .nullish()
+                    .describe('Channel display name.'),
+                  org_id: zod
+                    .number()
+                    .min(postItemsSoupResponseItemsItemDataChannelOrgIdMin)
+                    .nullish()
+                    .describe('Organization id.'),
+                  owner_id: zod.string().describe('Channel owner.'),
+                  team_id: zod.uuid().nullish().describe('Team id.'),
+                  updated_at: zod.iso
+                    .datetime({})
+                    .describe('Update timestamp.'),
+                })
+                .describe('Channel metadata in soup payloads.'),
               participants: zod.array(
                 zod.object({
                   channel_id: zod.uuid(),
@@ -9235,46 +9331,76 @@ export const postItemsSoupResponse = zod.object({
               ),
             })
             .and(
-              zod.object({
-                latest_message: zod
-                  .union([
-                    zod.null(),
-                    zod.object({
-                      content: zod.string(),
-                      created_at: zod.iso.datetime({}),
-                      deleted_at: zod.iso.datetime({}).nullish(),
-                      mentions: zod
-                        .array(zod.string())
+              zod
+                .object({
+                  latest_message: zod
+                    .union([
+                      zod.null(),
+                      zod
+                        .object({
+                          content: zod.string().describe('Message content.'),
+                          created_at: zod.iso
+                            .datetime({})
+                            .describe('Creation timestamp.'),
+                          deleted_at: zod.iso
+                            .datetime({})
+                            .nullish()
+                            .describe('Deletion timestamp.'),
+                          mentions: zod
+                            .array(zod.string())
+                            .describe(
+                              'Message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`.'
+                            ),
+                          message_id: zod.uuid().describe('Message id.'),
+                          sender_id: zod.string().describe('Sender id.'),
+                          thread_id: zod
+                            .uuid()
+                            .nullish()
+                            .describe('Thread parent id.'),
+                          updated_at: zod.iso
+                            .datetime({})
+                            .describe('Update timestamp.'),
+                        })
                         .describe(
-                          'message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`'
+                          'Lightweight channel message for soup payloads.'
                         ),
-                      message_id: zod.uuid(),
-                      sender_id: zod.string(),
-                      thread_id: zod.uuid().nullish(),
-                      updated_at: zod.iso.datetime({}),
-                    }),
-                  ])
-                  .optional(),
-                latest_non_thread_message: zod
-                  .union([
-                    zod.null(),
-                    zod.object({
-                      content: zod.string(),
-                      created_at: zod.iso.datetime({}),
-                      deleted_at: zod.iso.datetime({}).nullish(),
-                      mentions: zod
-                        .array(zod.string())
+                    ])
+                    .optional(),
+                  latest_non_thread_message: zod
+                    .union([
+                      zod.null(),
+                      zod
+                        .object({
+                          content: zod.string().describe('Message content.'),
+                          created_at: zod.iso
+                            .datetime({})
+                            .describe('Creation timestamp.'),
+                          deleted_at: zod.iso
+                            .datetime({})
+                            .nullish()
+                            .describe('Deletion timestamp.'),
+                          mentions: zod
+                            .array(zod.string())
+                            .describe(
+                              'Message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`.'
+                            ),
+                          message_id: zod.uuid().describe('Message id.'),
+                          sender_id: zod.string().describe('Sender id.'),
+                          thread_id: zod
+                            .uuid()
+                            .nullish()
+                            .describe('Thread parent id.'),
+                          updated_at: zod.iso
+                            .datetime({})
+                            .describe('Update timestamp.'),
+                        })
                         .describe(
-                          'message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`'
+                          'Lightweight channel message for soup payloads.'
                         ),
-                      message_id: zod.uuid(),
-                      sender_id: zod.string(),
-                      thread_id: zod.uuid().nullish(),
-                      updated_at: zod.iso.datetime({}),
-                    }),
-                  ])
-                  .optional(),
-              })
+                    ])
+                    .optional(),
+                })
+                .describe('Latest-message bundle for soup payloads.')
             )
             .and(
               zod.object({
@@ -10668,21 +10794,31 @@ export const postItemsSoupAstResponse = zod.object({
         zod.object({
           data: zod
             .object({
-              channel: zod.object({
-                channel_type: zod
-                  .enum(['public', 'private', 'direct_message', 'team'])
-                  .describe('Type of channel.'),
-                created_at: zod.iso.datetime({}),
-                id: zod.uuid(),
-                name: zod.string().nullish(),
-                org_id: zod
-                  .number()
-                  .min(postItemsSoupAstResponseItemsItemDataChannelOrgIdMin)
-                  .nullish(),
-                owner_id: zod.string(),
-                team_id: zod.uuid().nullish(),
-                updated_at: zod.iso.datetime({}),
-              }),
+              channel: zod
+                .object({
+                  channel_type: zod
+                    .enum(['public', 'private', 'direct_message', 'team'])
+                    .describe('Type of channel.'),
+                  created_at: zod.iso
+                    .datetime({})
+                    .describe('Creation timestamp.'),
+                  id: zod.uuid().describe('Channel id.'),
+                  name: zod
+                    .string()
+                    .nullish()
+                    .describe('Channel display name.'),
+                  org_id: zod
+                    .number()
+                    .min(postItemsSoupAstResponseItemsItemDataChannelOrgIdMin)
+                    .nullish()
+                    .describe('Organization id.'),
+                  owner_id: zod.string().describe('Channel owner.'),
+                  team_id: zod.uuid().nullish().describe('Team id.'),
+                  updated_at: zod.iso
+                    .datetime({})
+                    .describe('Update timestamp.'),
+                })
+                .describe('Channel metadata in soup payloads.'),
               participants: zod.array(
                 zod.object({
                   channel_id: zod.uuid(),
@@ -10696,46 +10832,76 @@ export const postItemsSoupAstResponse = zod.object({
               ),
             })
             .and(
-              zod.object({
-                latest_message: zod
-                  .union([
-                    zod.null(),
-                    zod.object({
-                      content: zod.string(),
-                      created_at: zod.iso.datetime({}),
-                      deleted_at: zod.iso.datetime({}).nullish(),
-                      mentions: zod
-                        .array(zod.string())
+              zod
+                .object({
+                  latest_message: zod
+                    .union([
+                      zod.null(),
+                      zod
+                        .object({
+                          content: zod.string().describe('Message content.'),
+                          created_at: zod.iso
+                            .datetime({})
+                            .describe('Creation timestamp.'),
+                          deleted_at: zod.iso
+                            .datetime({})
+                            .nullish()
+                            .describe('Deletion timestamp.'),
+                          mentions: zod
+                            .array(zod.string())
+                            .describe(
+                              'Message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`.'
+                            ),
+                          message_id: zod.uuid().describe('Message id.'),
+                          sender_id: zod.string().describe('Sender id.'),
+                          thread_id: zod
+                            .uuid()
+                            .nullish()
+                            .describe('Thread parent id.'),
+                          updated_at: zod.iso
+                            .datetime({})
+                            .describe('Update timestamp.'),
+                        })
                         .describe(
-                          'message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`'
+                          'Lightweight channel message for soup payloads.'
                         ),
-                      message_id: zod.uuid(),
-                      sender_id: zod.string(),
-                      thread_id: zod.uuid().nullish(),
-                      updated_at: zod.iso.datetime({}),
-                    }),
-                  ])
-                  .optional(),
-                latest_non_thread_message: zod
-                  .union([
-                    zod.null(),
-                    zod.object({
-                      content: zod.string(),
-                      created_at: zod.iso.datetime({}),
-                      deleted_at: zod.iso.datetime({}).nullish(),
-                      mentions: zod
-                        .array(zod.string())
+                    ])
+                    .optional(),
+                  latest_non_thread_message: zod
+                    .union([
+                      zod.null(),
+                      zod
+                        .object({
+                          content: zod.string().describe('Message content.'),
+                          created_at: zod.iso
+                            .datetime({})
+                            .describe('Creation timestamp.'),
+                          deleted_at: zod.iso
+                            .datetime({})
+                            .nullish()
+                            .describe('Deletion timestamp.'),
+                          mentions: zod
+                            .array(zod.string())
+                            .describe(
+                              'Message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`.'
+                            ),
+                          message_id: zod.uuid().describe('Message id.'),
+                          sender_id: zod.string().describe('Sender id.'),
+                          thread_id: zod
+                            .uuid()
+                            .nullish()
+                            .describe('Thread parent id.'),
+                          updated_at: zod.iso
+                            .datetime({})
+                            .describe('Update timestamp.'),
+                        })
                         .describe(
-                          'message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`'
+                          'Lightweight channel message for soup payloads.'
                         ),
-                      message_id: zod.uuid(),
-                      sender_id: zod.string(),
-                      thread_id: zod.uuid().nullish(),
-                      updated_at: zod.iso.datetime({}),
-                    }),
-                  ])
-                  .optional(),
-              })
+                    ])
+                    .optional(),
+                })
+                .describe('Latest-message bundle for soup payloads.')
             )
             .and(
               zod.object({
@@ -12415,23 +12581,38 @@ export const postItemsSoupAstGroupedResponse = zod
                 zod.object({
                   data: zod
                     .object({
-                      channel: zod.object({
-                        channel_type: zod
-                          .enum(['public', 'private', 'direct_message', 'team'])
-                          .describe('Type of channel.'),
-                        created_at: zod.iso.datetime({}),
-                        id: zod.uuid(),
-                        name: zod.string().nullish(),
-                        org_id: zod
-                          .number()
-                          .min(
-                            postItemsSoupAstGroupedResponseItemsDataChannelOrgIdMin
-                          )
-                          .nullish(),
-                        owner_id: zod.string(),
-                        team_id: zod.uuid().nullish(),
-                        updated_at: zod.iso.datetime({}),
-                      }),
+                      channel: zod
+                        .object({
+                          channel_type: zod
+                            .enum([
+                              'public',
+                              'private',
+                              'direct_message',
+                              'team',
+                            ])
+                            .describe('Type of channel.'),
+                          created_at: zod.iso
+                            .datetime({})
+                            .describe('Creation timestamp.'),
+                          id: zod.uuid().describe('Channel id.'),
+                          name: zod
+                            .string()
+                            .nullish()
+                            .describe('Channel display name.'),
+                          org_id: zod
+                            .number()
+                            .min(
+                              postItemsSoupAstGroupedResponseItemsDataChannelOrgIdMin
+                            )
+                            .nullish()
+                            .describe('Organization id.'),
+                          owner_id: zod.string().describe('Channel owner.'),
+                          team_id: zod.uuid().nullish().describe('Team id.'),
+                          updated_at: zod.iso
+                            .datetime({})
+                            .describe('Update timestamp.'),
+                        })
+                        .describe('Channel metadata in soup payloads.'),
                       participants: zod.array(
                         zod.object({
                           channel_id: zod.uuid(),
@@ -12445,46 +12626,88 @@ export const postItemsSoupAstGroupedResponse = zod
                       ),
                     })
                     .and(
-                      zod.object({
-                        latest_message: zod
-                          .union([
-                            zod.null(),
-                            zod.object({
-                              content: zod.string(),
-                              created_at: zod.iso.datetime({}),
-                              deleted_at: zod.iso.datetime({}).nullish(),
-                              mentions: zod
-                                .array(zod.string())
+                      zod
+                        .object({
+                          latest_message: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  content: zod
+                                    .string()
+                                    .describe('Message content.'),
+                                  created_at: zod.iso
+                                    .datetime({})
+                                    .describe('Creation timestamp.'),
+                                  deleted_at: zod.iso
+                                    .datetime({})
+                                    .nullish()
+                                    .describe('Deletion timestamp.'),
+                                  mentions: zod
+                                    .array(zod.string())
+                                    .describe(
+                                      'Message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`.'
+                                    ),
+                                  message_id: zod
+                                    .uuid()
+                                    .describe('Message id.'),
+                                  sender_id: zod
+                                    .string()
+                                    .describe('Sender id.'),
+                                  thread_id: zod
+                                    .uuid()
+                                    .nullish()
+                                    .describe('Thread parent id.'),
+                                  updated_at: zod.iso
+                                    .datetime({})
+                                    .describe('Update timestamp.'),
+                                })
                                 .describe(
-                                  'message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`'
+                                  'Lightweight channel message for soup payloads.'
                                 ),
-                              message_id: zod.uuid(),
-                              sender_id: zod.string(),
-                              thread_id: zod.uuid().nullish(),
-                              updated_at: zod.iso.datetime({}),
-                            }),
-                          ])
-                          .optional(),
-                        latest_non_thread_message: zod
-                          .union([
-                            zod.null(),
-                            zod.object({
-                              content: zod.string(),
-                              created_at: zod.iso.datetime({}),
-                              deleted_at: zod.iso.datetime({}).nullish(),
-                              mentions: zod
-                                .array(zod.string())
+                            ])
+                            .optional(),
+                          latest_non_thread_message: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  content: zod
+                                    .string()
+                                    .describe('Message content.'),
+                                  created_at: zod.iso
+                                    .datetime({})
+                                    .describe('Creation timestamp.'),
+                                  deleted_at: zod.iso
+                                    .datetime({})
+                                    .nullish()
+                                    .describe('Deletion timestamp.'),
+                                  mentions: zod
+                                    .array(zod.string())
+                                    .describe(
+                                      'Message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`.'
+                                    ),
+                                  message_id: zod
+                                    .uuid()
+                                    .describe('Message id.'),
+                                  sender_id: zod
+                                    .string()
+                                    .describe('Sender id.'),
+                                  thread_id: zod
+                                    .uuid()
+                                    .nullish()
+                                    .describe('Thread parent id.'),
+                                  updated_at: zod.iso
+                                    .datetime({})
+                                    .describe('Update timestamp.'),
+                                })
                                 .describe(
-                                  'message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`'
+                                  'Lightweight channel message for soup payloads.'
                                 ),
-                              message_id: zod.uuid(),
-                              sender_id: zod.string(),
-                              thread_id: zod.uuid().nullish(),
-                              updated_at: zod.iso.datetime({}),
-                            }),
-                          ])
-                          .optional(),
-                      })
+                            ])
+                            .optional(),
+                        })
+                        .describe('Latest-message bundle for soup payloads.')
                     )
                     .and(
                       zod.object({
@@ -13870,23 +14093,38 @@ export const postItemsSoupAstGroupedResponse = zod
                 zod.object({
                   data: zod
                     .object({
-                      channel: zod.object({
-                        channel_type: zod
-                          .enum(['public', 'private', 'direct_message', 'team'])
-                          .describe('Type of channel.'),
-                        created_at: zod.iso.datetime({}),
-                        id: zod.uuid(),
-                        name: zod.string().nullish(),
-                        org_id: zod
-                          .number()
-                          .min(
-                            postItemsSoupAstGroupedResponseItemsDataChannelOrgIdMinOne
-                          )
-                          .nullish(),
-                        owner_id: zod.string(),
-                        team_id: zod.uuid().nullish(),
-                        updated_at: zod.iso.datetime({}),
-                      }),
+                      channel: zod
+                        .object({
+                          channel_type: zod
+                            .enum([
+                              'public',
+                              'private',
+                              'direct_message',
+                              'team',
+                            ])
+                            .describe('Type of channel.'),
+                          created_at: zod.iso
+                            .datetime({})
+                            .describe('Creation timestamp.'),
+                          id: zod.uuid().describe('Channel id.'),
+                          name: zod
+                            .string()
+                            .nullish()
+                            .describe('Channel display name.'),
+                          org_id: zod
+                            .number()
+                            .min(
+                              postItemsSoupAstGroupedResponseItemsDataChannelOrgIdMinOne
+                            )
+                            .nullish()
+                            .describe('Organization id.'),
+                          owner_id: zod.string().describe('Channel owner.'),
+                          team_id: zod.uuid().nullish().describe('Team id.'),
+                          updated_at: zod.iso
+                            .datetime({})
+                            .describe('Update timestamp.'),
+                        })
+                        .describe('Channel metadata in soup payloads.'),
                       participants: zod.array(
                         zod.object({
                           channel_id: zod.uuid(),
@@ -13900,46 +14138,88 @@ export const postItemsSoupAstGroupedResponse = zod
                       ),
                     })
                     .and(
-                      zod.object({
-                        latest_message: zod
-                          .union([
-                            zod.null(),
-                            zod.object({
-                              content: zod.string(),
-                              created_at: zod.iso.datetime({}),
-                              deleted_at: zod.iso.datetime({}).nullish(),
-                              mentions: zod
-                                .array(zod.string())
+                      zod
+                        .object({
+                          latest_message: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  content: zod
+                                    .string()
+                                    .describe('Message content.'),
+                                  created_at: zod.iso
+                                    .datetime({})
+                                    .describe('Creation timestamp.'),
+                                  deleted_at: zod.iso
+                                    .datetime({})
+                                    .nullish()
+                                    .describe('Deletion timestamp.'),
+                                  mentions: zod
+                                    .array(zod.string())
+                                    .describe(
+                                      'Message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`.'
+                                    ),
+                                  message_id: zod
+                                    .uuid()
+                                    .describe('Message id.'),
+                                  sender_id: zod
+                                    .string()
+                                    .describe('Sender id.'),
+                                  thread_id: zod
+                                    .uuid()
+                                    .nullish()
+                                    .describe('Thread parent id.'),
+                                  updated_at: zod.iso
+                                    .datetime({})
+                                    .describe('Update timestamp.'),
+                                })
                                 .describe(
-                                  'message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`'
+                                  'Lightweight channel message for soup payloads.'
                                 ),
-                              message_id: zod.uuid(),
-                              sender_id: zod.string(),
-                              thread_id: zod.uuid().nullish(),
-                              updated_at: zod.iso.datetime({}),
-                            }),
-                          ])
-                          .optional(),
-                        latest_non_thread_message: zod
-                          .union([
-                            zod.null(),
-                            zod.object({
-                              content: zod.string(),
-                              created_at: zod.iso.datetime({}),
-                              deleted_at: zod.iso.datetime({}).nullish(),
-                              mentions: zod
-                                .array(zod.string())
+                            ])
+                            .optional(),
+                          latest_non_thread_message: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  content: zod
+                                    .string()
+                                    .describe('Message content.'),
+                                  created_at: zod.iso
+                                    .datetime({})
+                                    .describe('Creation timestamp.'),
+                                  deleted_at: zod.iso
+                                    .datetime({})
+                                    .nullish()
+                                    .describe('Deletion timestamp.'),
+                                  mentions: zod
+                                    .array(zod.string())
+                                    .describe(
+                                      'Message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`.'
+                                    ),
+                                  message_id: zod
+                                    .uuid()
+                                    .describe('Message id.'),
+                                  sender_id: zod
+                                    .string()
+                                    .describe('Sender id.'),
+                                  thread_id: zod
+                                    .uuid()
+                                    .nullish()
+                                    .describe('Thread parent id.'),
+                                  updated_at: zod.iso
+                                    .datetime({})
+                                    .describe('Update timestamp.'),
+                                })
                                 .describe(
-                                  'message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`'
+                                  'Lightweight channel message for soup payloads.'
                                 ),
-                              message_id: zod.uuid(),
-                              sender_id: zod.string(),
-                              thread_id: zod.uuid().nullish(),
-                              updated_at: zod.iso.datetime({}),
-                            }),
-                          ])
-                          .optional(),
-                      })
+                            ])
+                            .optional(),
+                        })
+                        .describe('Latest-message bundle for soup payloads.')
                     )
                     .and(
                       zod.object({

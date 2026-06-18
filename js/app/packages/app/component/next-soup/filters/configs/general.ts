@@ -26,6 +26,8 @@ export const inboxFilter = config({
       channelDone: false,
       chatDone: false,
       folderDone: false,
+      foreignEntitySource: ['github_pull_request'],
+      foreignEntityDone: false,
     },
     emailView: 'inbox',
   },

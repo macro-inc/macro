@@ -16,4 +16,9 @@ pub enum AgentError {
     /// Catch-all.
     #[error(transparent)]
     Other(#[from] anyhow::Error),
+    /// Unknown completion model
+    #[error("unknown completion model [{0}]")]
+    UnknownModel(String),
 }
+
+pub type Result<T> = std::result::Result<T, AgentError>;

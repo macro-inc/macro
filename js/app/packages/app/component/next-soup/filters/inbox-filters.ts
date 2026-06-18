@@ -128,7 +128,9 @@ export function signalFilter(entity: EntityData): boolean {
       // Automations only show in the Agents > Scheduled tab, not Inbox.
       return false;
     case 'foreign':
-      return false;
+      // Foreign entities (e.g. GitHub PRs) are gated by the inbox query on the
+      // user's not-done notifications, so they're signal whenever returned.
+      return true;
   }
 }
 

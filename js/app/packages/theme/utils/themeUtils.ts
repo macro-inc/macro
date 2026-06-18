@@ -1,4 +1,4 @@
-import { currentThemeId, darkModeTheme, lightModeTheme, setCurrentThemeId, setHtmlColor, setIsThemeSaved, setThemeDepth, setUserThemes, systemMode, themeDepth, themeShouldMatchSystem, themes, userThemes} from '../signals/themeSignals';
+import { currentThemeId, darkModeTheme, lightModeTheme, setCurrentThemeId, setHtmlColor, setIsThemeSaved, setThemeDepth, setUserThemes, systemMode, themeDepth, themes, themeShouldMatchSystem, userThemes} from '../signals/themeSignals';
 import type { ThemeV2, ThemeV2Tokens } from '../types/themeTypes';
 import { themeReactive } from '../signals/themeReactive';
 import { toast } from '@core/component/Toast/Toast';
@@ -49,20 +49,6 @@ function isThemeV2(value: unknown): value is ThemeV2 {
   });
 }
 
-export function systemThemeEffect(){
-  createEffect(
-    on(
-      [themeShouldMatchSystem, systemMode, darkModeTheme, lightModeTheme],
-      () => {
-        if(themeShouldMatchSystem()){
-          applyTheme(systemMode() === 'dark' ? darkModeTheme() : lightModeTheme());
-        }
-      },
-      { defer: true }
-    )
-  );
-}
-
 export function applyTheme(id: string): void{
   let theme = themes().find((t) => t.id === id);
   if(!theme){
@@ -81,16 +67,46 @@ export function applyTheme(id: string): void{
     setThemeDepth(theme!.depth ?? 0.15);
     queueMicrotask(() => {/* scuffed af */
       setIsThemeSaved(true);
-      setHtmlColor({color: `oklch(${themeReactive.b0.l[0]()} ${themeReactive.b0.c[0]()} ${themeReactive.b0.h[0]()}deg)`});
+      syncHtmlColor();
     });
   });
 }
 
-export function invertTheme(): void{
+/** When auto-detect is on, keeps the active theme in sync with the OS color
+ *  scheme by applying the preferred light or dark theme as the system flips.
+ *  Call once from a reactive root (see Root.tsx). */
+export function systemThemeEffect(): void{
+  createEffect(
+    on(
+      // Only react to the OS color scheme flipping or auto-detect turning on —
+      // deliberately NOT to darkModeTheme/lightModeTheme. `on` runs its callback
+      // untracked, so reading the defaults below does not subscribe to them. This
+      // keeps "Set default light/dark theme" from re-applying the current mode's
+      // default and clobbering the active theme; a new default takes effect on the
+      // next mode change (or when auto-detect is toggled on).
+      [themeShouldMatchSystem, systemMode],
+      () => {
+        if(themeShouldMatchSystem()){
+          applyTheme(systemMode() === 'dark' ? darkModeTheme() : lightModeTheme());
+        }
+      },
+      { defer: true }
+    )
+  );
+}
+
+/** Persists the live background color, used for the pre-hydration first paint. */
+function syncHtmlColor(): void{
+  setHtmlColor({color: `oklch(${themeReactive.b0.l[0]()} ${themeReactive.b0.c[0]()} ${themeReactive.b0.h[0]()}deg)`});
+}
+
+/** Flips the lightness of every background (b*) and text (c*) token, leaving
+ *  chroma and hue untouched. The shared primitive behind light/dark mode. */
+function invertLightness(): void{
   batch(() => {
     themeReactive.b0.l[1](1 - themeReactive.b0.l[0]());
-    themeReactive.b2.l[1](1 - themeReactive.b2.l[0]());
     themeReactive.b1.l[1](1 - themeReactive.b1.l[0]());
+    themeReactive.b2.l[1](1 - themeReactive.b2.l[0]());
     themeReactive.b3.l[1](1 - themeReactive.b3.l[0]());
     themeReactive.b4.l[1](1 - themeReactive.b4.l[0]());
     themeReactive.c0.l[1](1 - themeReactive.c0.l[0]());
@@ -99,6 +115,32 @@ export function invertTheme(): void{
     themeReactive.c3.l[1](1 - themeReactive.c3.l[0]());
     themeReactive.c4.l[1](1 - themeReactive.c4.l[0]());
   });
+}
+
+/** Flips the theme between light and dark by inverting the background/text lightness
+ *  — the same axis as the contrast slider's sign. Treated as an edit: marks the theme
+ *  unsaved, unless the flip lands back on the stored theme (then it's saved again). */
+export function flipLightDark(): void{
+  invertLightness();
+  queueMicrotask(() => {
+    setIsThemeSaved(liveMatchesStoredTheme());
+    syncHtmlColor();
+  });
+}
+
+/** True when the live theme equals the currently-selected stored theme, within a
+ *  float tolerance (1 − (1 − l) from a double flip isn't bit-exact). */
+function liveMatchesStoredTheme(): boolean{
+  const stored = themes().find((t) => t.id === currentThemeId());
+  if(!stored){return false}
+  const live = getCurrentTokens();
+  const close = (a: number, b: number) => Math.abs(a - b) < 1e-6;
+  const tokensMatch = (Object.keys(stored.tokens) as Array<keyof ThemeV2Tokens>).every((k) =>
+    close(live[k].l, stored.tokens[k].l) &&
+    close(live[k].c, stored.tokens[k].c) &&
+    close(live[k].h, stored.tokens[k].h)
+  );
+  return tokensMatch && close(themeDepth(), stored.depth ?? 0.15);
 }
 
 function getCurrentTokens(): ThemeV2Tokens{
@@ -145,9 +187,9 @@ export function deleteTheme(id: string): void{
   }
 }
 
-/** Returns true when the current theme has a dark background (ink lightness > panel lightness). */
-function _isThemeDark(): boolean {
-  return themeReactive.c0.l[0]() > themeReactive.b0.l[0]();
+/** Intrinsic darkness of a stored theme: dark when text is lighter than background. */
+export function isTokensDark(tokens: ThemeV2Tokens): boolean {
+  return tokens.c0.l > tokens.b0.l;
 }
 
 /** Checks if the theme contrast is too low, and if so, applies a readable theme. This is to prevent malicious actors sending "Theme Viruses" which make a user's theme unusable. */

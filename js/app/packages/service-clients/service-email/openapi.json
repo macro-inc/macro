@@ -1595,6 +1595,46 @@
         }
       }
     },
+    "/email/links/health-check": {
+      "post": {
+        "tags": ["Links"],
+        "summary": "Probes the live auth state of each of the caller's inboxes (owned and delegated)\nagainst the auth service and records the result on each link. A grant that died\nwhile the caller was inactive is detected here within minutes instead of waiting on\nthe daily refresh sweep; the side effects (clearing or setting the reauth flag, and\nthe one-time reauth fan-out) are handled by `fetch_token_or_mark_reauth_no_cache`.",
+        "description": "Probes run in the background and the response returns immediately to stay off the\nload path; each persisted flag is picked up by the next links read. Probes are\nthrottled per link in Redis so frequent calls — and many sharers of a shared inbox —\ncollapse to one refresh per window.",
+        "operationId": "health_check_links",
+        "responses": {
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/email/links/{link_id}": {
       "delete": {
         "tags": ["Links"],
@@ -4157,6 +4197,7 @@
           "provider",
           "is_sync_active",
           "sync_status",
+          "needs_reauth",
           "settings",
           "is_primary",
           "created_at",
@@ -4185,6 +4226,10 @@
           },
           "macro_id": {
             "type": "string"
+          },
+          "needs_reauth": {
+            "type": "boolean",
+            "description": "Whether the link's Google grant needs to be reconnected. Drives the\nper-inbox reconnect prompt independently of the sync-status badge."
           },
           "photo_url": {
             "type": ["string", "null"],
@@ -4657,6 +4702,21 @@
                 "format": "uuid"
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "The self-contact photo for `link_id` finished uploading to static\nfile storage, so the inbox's derived `photo_url` is now available.",
+            "required": ["link_id", "event"],
+            "properties": {
+              "event": {
+                "type": "string",
+                "enum": ["photo_synced"]
+              },
+              "link_id": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
           }
         ],
         "description": "Payload for the `refresh_email` connection gateway event: identifies the\ninbox that changed and the kind of change."
@@ -4733,8 +4793,8 @@
       },
       "SyncStatus": {
         "type": "string",
-        "description": "Coarse sync state for an inbox, used to render a one-line hint in the\nmulti-inbox settings list. Derived from the link's `is_sync_active` flag and\nits most recent backfill job.",
-        "enum": ["SYNCING", "UP_TO_DATE", "ERROR", "INACTIVE"]
+        "description": "Coarse sync state for an inbox, used to render a one-line hint in the\nmulti-inbox settings list. Derived from the link's `is_sync_active` flag, its\nreauth health, and its most recent backfill job.",
+        "enum": ["SYNCING", "UP_TO_DATE", "ERROR", "NEEDS_REAUTH", "INACTIVE"]
       },
       "Thread": {
         "type": "object",

@@ -7,7 +7,7 @@ use crate::domain::{
     ports::{SoupOutput, SoupRepo, SoupService},
 };
 use call::domain::{models::GetCallRecordsRequest, ports::CallRecordQueryService};
-use comms::domain::{models::GetChannelsRequest, ports::ChannelsService};
+use channels::domain::{models::GetChannelsRequest, ports::ChannelListService};
 use cowlike::CowLike;
 use crm::domain::service::CrmService;
 use doppleganger::Mirror;
@@ -69,7 +69,7 @@ pub struct SoupImpl<T, U, V, C, K, Crm, F> {
     frecency: U,
     /// the interface for interacting with email
     email_service: V,
-    /// the interface for interacting with comms
+    /// the interface for interacting with channels
     comms_service: C,
     /// the interface for interacting with call records
     call_record_service: K,
@@ -85,7 +85,7 @@ where
     anyhow::Error: From<T::Err>,
     U: FrecencyQueryService,
     V: EmailPreviewServiceReadOnly,
-    C: ChannelsService,
+    C: ChannelListService,
     K: CallRecordQueryService,
     Crm: CrmService,
     F: ForeignEntityService,
@@ -389,7 +389,7 @@ where
                 .map(|r| {
                     r.into_iter().map(|mut c| {
                         let frecency_score = c.frecency_score.take();
-                        let soup_channel = SoupChannel::mirror(c);
+                        let soup_channel = SoupChannel::from(c);
                         FrecencySoupItem {
                             item: SoupItem::Channel(soup_channel),
                             frecency_score,
@@ -498,7 +498,7 @@ where
     anyhow::Error: From<T::Err>,
     U: FrecencyQueryService,
     V: EmailPreviewServiceReadOnly,
-    C: ChannelsService,
+    C: ChannelListService,
     K: CallRecordQueryService,
     Crm: CrmService,
     F: ForeignEntityService,

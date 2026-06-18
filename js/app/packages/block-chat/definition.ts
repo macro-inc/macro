@@ -1,6 +1,6 @@
 import { defineBlock, type ExtractLoadType, LoadErrors } from '@core/block';
+import { Model } from '@core/component/AI/constant/model';
 import { cognitionApiServiceClient } from '@service-cognition/client';
-import { AgentModel } from '@service-cognition/generated/schemas';
 import type { Entity } from '@service-cognition/generated/schemas/entity';
 import type { DocumentMetadata } from '@service-storage/generated/schemas/documentMetadata';
 import { ok } from 'neverthrow';
@@ -38,7 +38,7 @@ export const definition = defineBlock({
 
       return ok({
         ...chat,
-        allModels: Object.values(AgentModel),
+        allModels: Object.values(Model),
         documentMetadata: {
           documentId: chat.chat.id,
           documentName: chat.chat.name,

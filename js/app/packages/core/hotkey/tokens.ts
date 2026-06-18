@@ -93,6 +93,7 @@ export const TOKENS = {
       agents: 'sidebar.goTo.agents',
       mail: 'sidebar.goTo.mail',
       documents: 'sidebar.goTo.documents',
+      markdownDocuments: 'sidebar.goTo.markdownDocuments',
       tasks: 'sidebar.goTo.tasks',
       channels: 'sidebar.goTo.channels',
       calls: 'sidebar.goTo.calls',
@@ -202,6 +203,7 @@ export const TOKENS = {
 
   // markdown editor
   md: {
+    find: 'md.find',
     bold: 'md.bold',
     italic: 'md.italic',
     underline: 'md.underline',
@@ -225,6 +227,7 @@ export const TOKENS = {
     math: 'md.math',
     table: 'md.table',
     divider: 'md.divider',
+    toggleStateDebugger: 'md.toggleStateDebugger',
   },
 
   // create menu

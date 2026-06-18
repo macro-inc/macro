@@ -3,7 +3,7 @@ import type { BlockChannelProps } from '@block-channel/component/NewChannelBlock
 import type { BlockMarkdownProps } from '@block-md/component/Block';
 import type {
   InitialSync,
-  SyncSource,
+  LiveSyncSource,
   TimeoutError,
 } from '@core/collab/source';
 import type { IDocumentStorageServiceFile } from '@filesystem/file';
@@ -326,7 +326,7 @@ interface BlockComponentLoadData extends Record<BlockName, ObjectLike> {
   video: DocumentBlockData;
   md: DocumentBlockData &
     DssFileData & {
-      syncSource: SyncSource;
+      syncSource: LiveSyncSource;
       doInitialSync: () => ResultAsync<InitialSync, TimeoutError>;
     };
   code: DocumentBlockData;

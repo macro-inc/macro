@@ -58,15 +58,24 @@ impl<
             return;
         }
 
+        let participant_user_ids = self
+            .pull_request_participant_macro_user_ids(pull_request, upserts)
+            .await;
+        if participant_user_ids.is_empty() {
+            return;
+        }
+
         let sender_id = self.notification_sender_id(event).await;
         for (upsert, transition) in transitions {
-            let recipient_ids = self.notification_recipient_ids(&upsert.source).await;
+            let recipient_ids = self
+                .participant_scoped_recipient_ids(&upsert.source, &participant_user_ids)
+                .await;
             if recipient_ids.is_empty() {
                 tracing::trace!(
                     source_id=%upsert.source.source_id(),
                     source_type=%upsert.source.source_type(),
                     foreign_entity_id=%upsert.foreign_entity_id,
-                    "skipping GitHub PR notification without recipients"
+                    "skipping GitHub PR status notification without participant-scoped recipients"
                 );
                 continue;
             }
@@ -137,6 +146,115 @@ impl<
             previous_status: upsert.previous_status,
             status,
         })
+    }
+
+    pub(super) async fn pull_request_participant_macro_user_ids(
+        &self,
+        pull_request: &EnrichedGithubPullRequest,
+        upserts: &[PullRequestForeignEntityUpsert],
+    ) -> HashSet<MacroUserIdStr<'static>> {
+        let github_user_ids = Self::pull_request_participant_github_user_ids(pull_request, upserts);
+        if github_user_ids.is_empty() {
+            tracing::trace!("skipping GitHub PR notification without participant GitHub user IDs");
+            return HashSet::new();
+        }
+
+        let user_ids = self.macro_users_for_github_user_ids(&github_user_ids).await;
+        if user_ids.is_empty() {
+            tracing::trace!(
+                participant_github_user_count = github_user_ids.len(),
+                "skipping GitHub PR notification without mapped participant users"
+            );
+        }
+
+        user_ids
+    }
+
+    fn pull_request_participant_github_user_ids(
+        pull_request: &EnrichedGithubPullRequest,
+        upserts: &[PullRequestForeignEntityUpsert],
+    ) -> HashSet<String> {
+        let mut github_user_ids = HashSet::new();
+
+        if let Some(ids) = &pull_request.participant_github_user_ids {
+            github_user_ids.extend(ids.iter().filter(|id| !id.is_empty()).cloned());
+        }
+
+        for upsert in upserts {
+            github_user_ids.extend(
+                upsert
+                    .participant_github_user_ids
+                    .iter()
+                    .filter(|id| !id.is_empty())
+                    .cloned(),
+            );
+        }
+
+        github_user_ids
+    }
+
+    async fn macro_users_for_github_user_ids(
+        &self,
+        github_user_ids: &HashSet<String>,
+    ) -> HashSet<MacroUserIdStr<'static>> {
+        let mut user_ids = HashSet::new();
+
+        for github_user_id in github_user_ids {
+            let macro_id = match self
+                .repo
+                .get_macro_id_by_github_user_id(github_user_id)
+                .await
+            {
+                Ok(Some(macro_id)) => macro_id,
+                Ok(None) => {
+                    tracing::trace!(
+                        participant_github_user_id=%github_user_id,
+                        "GitHub PR participant has no Macro user mapping"
+                    );
+                    continue;
+                }
+                Err(error) => {
+                    tracing::warn!(
+                        error=?error,
+                        participant_github_user_id=%github_user_id,
+                        "failed to map GitHub PR participant"
+                    );
+                    continue;
+                }
+            };
+
+            match MacroUserIdStr::try_from(macro_id.clone()) {
+                Ok(user_id) => {
+                    user_ids.insert(user_id);
+                }
+                Err(error) => {
+                    tracing::warn!(
+                        error=?error,
+                        macro_id=%macro_id,
+                        participant_github_user_id=%github_user_id,
+                        "GitHub PR participant mapping is not a valid Macro user ID"
+                    );
+                }
+            }
+        }
+
+        user_ids
+    }
+
+    pub(super) async fn participant_scoped_recipient_ids(
+        &self,
+        source: &GithubAppInstallationSource,
+        participant_user_ids: &HashSet<MacroUserIdStr<'static>>,
+    ) -> HashSet<MacroUserIdStr<'static>> {
+        if participant_user_ids.is_empty() {
+            return HashSet::new();
+        }
+
+        self.notification_recipient_ids(source)
+            .await
+            .intersection(participant_user_ids)
+            .cloned()
+            .collect()
     }
 
     pub(super) async fn notification_recipient_ids(

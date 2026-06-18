@@ -59,7 +59,7 @@ export class EcsDeploymentFailureAlarm extends pulumi.ComponentResource {
       `${name}-alarm`,
       {
         name: `${args.serviceName}-deployment-failure-alarm-${stack}`,
-        alarmDescription: `Alarm when an ECS deployment fails for ${args.serviceName}.`,
+        alarmDescription: `[${stack.toUpperCase()}]: ECS deployment failed for ${args.serviceName}.`,
         comparisonOperator: 'GreaterThanThreshold',
         evaluationPeriods,
         metricName: 'TriggeredRules',

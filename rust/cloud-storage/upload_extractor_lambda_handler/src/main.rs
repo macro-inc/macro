@@ -13,6 +13,7 @@ use lambda_runtime::{
     tracing::{self},
 };
 use macro_entrypoint::MacroEntrypoint;
+use macro_env_var::env_vars;
 use macro_service_urls::ConnectionGatewayUrl;
 use model::{
     document::{FileType, FileTypeExt},
@@ -30,6 +31,14 @@ use tokio::fs::File;
 use tokio_stream::StreamExt;
 use tokio_util::io::ReaderStream;
 use zip::read::root_dir_common_filter;
+
+env_vars! {
+    struct LocalZipPath;
+    struct UploadBucketName;
+    struct InternalApiSecretKey;
+    struct DssUrl;
+    struct DynamodbTable;
+}
 
 fn get_upload_message_from_sqs_record(record: SqsMessage) -> Result<UploadExtractQueueMessage> {
     let body = record.body.as_deref().unwrap_or_default();
@@ -208,9 +217,9 @@ async fn process_zipped_s3_object(
     if cfg!(feature = "local") {
         tracing::info!("using local zip file, remove local feature to download s3 object");
         // Update this path to your zip file location
-        let file_path = std::env::var("LOCAL_ZIP_PATH").unwrap();
-        tracing::info!("Loading local zip file from: {}", file_path);
-        let file = File::open(file_path).await?;
+        let file_path = LocalZipPath::new().context("LOCAL_ZIP_PATH must be set")?;
+        tracing::info!("Loading local zip file from: {}", file_path.as_ref());
+        let file = File::open(file_path.as_ref()).await?;
         let mut body = tokio::io::BufReader::new(file);
 
         // Write the file to disk
@@ -574,14 +583,16 @@ async fn main() -> Result<(), Error> {
     MacroEntrypoint::default().init();
     tracing::trace!("initiating lambda");
 
-    let upload_staging_bucket =
-        std::env::var("UPLOAD_BUCKET_NAME").context("UPLOAD_STAGING_BUCKET must be set")?;
-    let internal_api_secret_key = std::env::var("INTERNAL_API_SECRET_KEY")
-        .context("INTERNAL_API_SECRET_KEY must be set")
-        .unwrap();
-    let dss_url = std::env::var("DSS_URL").context("DSS_URL must be set")?;
-    let dynamo_table_name =
-        std::env::var("DYNAMODB_TABLE").context("DYNAMODB_TABLE must be set")?;
+    let upload_staging_bucket = UploadBucketName::new()
+        .context("UPLOAD_BUCKET_NAME must be set")?
+        .to_string();
+    let internal_api_secret_key = InternalApiSecretKey::new()
+        .context("INTERNAL_API_SECRET_KEY must be set")?
+        .to_string();
+    let dss_url = DssUrl::new().context("DSS_URL must be set")?.to_string();
+    let dynamo_table_name = DynamodbTable::new()
+        .context("DYNAMODB_TABLE must be set")?
+        .to_string();
     let connection_gateway_url = ConnectionGatewayUrl::new()?.to_string();
 
     let config = macro_aws_config::get_macro_aws_config().await;
@@ -589,7 +600,7 @@ async fn main() -> Result<(), Error> {
 
     let dss_client = DocumentStorageServiceClient::new(internal_api_secret_key.clone(), dss_url);
 
-    let dynamodb_client = DynamodbClient::new(&config, Some(dynamo_table_name.clone()));
+    let dynamodb_client = DynamodbClient::new(&config, Some(dynamo_table_name));
 
     let conn_gateway_client =
         ConnectionGatewayClient::new(internal_api_secret_key, connection_gateway_url);

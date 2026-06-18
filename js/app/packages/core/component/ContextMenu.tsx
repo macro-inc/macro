@@ -3,7 +3,7 @@ import { isMobile } from '@core/mobile/isMobile';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import CaretRight from '@phosphor/caret-right.svg?component-solid';
 import CheckIcon from '@phosphor/check.svg?component-solid';
-import { cn, Layer } from '@ui';
+import { addCtrlJKMenuNavigation, cn, Layer } from '@ui';
 import {
   type Component,
   createEffect,
@@ -302,7 +302,7 @@ const menuWidths: Record<MenuWidth, string> = {
   screen: 'w-screen',
 };
 
-export const MENU_CONTENT_CLASS = `flex flex-col justify-start items-start bg-surface shadow-[0_8px_24px_-16px_rgba(0,0,0,0.24),0_2px_8px_-6px_rgba(0,0,0,0.18)] ring-1 ring-edge rounded-xl p-1.5 cursor-default select-none max-w-full max-h-[calc(100dvh-10rem)] overflow-y-auto z-modal`;
+export const MENU_CONTENT_CLASS = `flex flex-col justify-start items-start bg-surface shadow-menu ring-1 ring-edge rounded-xl p-1.5 cursor-default select-none max-w-full max-h-[calc(100dvh-10rem)] overflow-y-auto z-modal`;
 
 type MenuContentProps = ParentProps<{
   class?: string;
@@ -391,6 +391,13 @@ export function ContextMenuContent(props: ParentProps<MenuContentProps>) {
       observer?.disconnect();
     });
   });
+
+  createEffect(() => {
+    if (!contentRef) return;
+    const cleanup = addCtrlJKMenuNavigation(contentRef);
+    onCleanup(cleanup);
+  });
+
   return (
     <MobileConditionalOverlay mobileFullScreen={props.mobileFullScreen}>
       <Show

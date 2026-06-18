@@ -58,11 +58,23 @@ function queueItemsForFetch(items: string[]) {
   setDisplayNameFetchQueue((prev) => [...prev, ...items]);
 }
 
-function defaultNameTransform(item: UserNameItem): string {
+type DisplayNameOptions = {
+  emailFallback?: 'full' | 'local-part';
+};
+
+function formatEmailFallback(email: string, options?: DisplayNameOptions) {
+  if (options?.emailFallback !== 'local-part') return email;
+  return email.split('@')[0] || email;
+}
+
+function defaultNameTransform(
+  item: UserNameItem,
+  options?: DisplayNameOptions
+): string {
   // TODO: UserNameItem needs to be ported to use MacroId
   const email = macroIdToEmail(item.id as MacroId);
 
-  if (item.loading) return email;
+  if (item.loading) return formatEmailFallback(email, options);
 
   if (item.lastName || item.firstName) {
     let name: string[] = [];
@@ -77,13 +89,13 @@ function defaultNameTransform(item: UserNameItem): string {
       name.push(item.lastName);
     }
 
-    if (name.length === 0) return email;
+    if (name.length === 0) return formatEmailFallback(email, options);
 
     let nameStringified = name.join(' ');
     return nameStringified;
   }
 
-  return email;
+  return formatEmailFallback(email, options);
 }
 
 async function fetchDisplayNames(ids: string[]): Promise<UserNameItem[]> {
@@ -179,7 +191,8 @@ type DisplayNameParts = {
 };
 
 export function useDisplayNameParts(
-  id: MacroId | undefined | null
+  id: MacroId | undefined | null,
+  options?: DisplayNameOptions
 ): DisplayNameParts {
   if (!id) {
     return {
@@ -206,13 +219,14 @@ export function useDisplayNameParts(
     return name && name !== 'N/A' ? name : '';
   };
 
-  const fullName = () => defaultNameTransform(getItem());
+  const fullName = () => defaultNameTransform(getItem(), options);
 
   return { firstName, lastName, fullName, refetch };
 }
 
 export function useDisplayName(
-  id: MacroId | undefined | null
+  id: MacroId | undefined | null,
+  options?: DisplayNameOptions
 ): UserNamePreviewFetcher {
   if (!id) {
     return [
@@ -226,7 +240,7 @@ export function useDisplayName(
 
   const { getItem, refetch, mutate } = useUserNameItem(id);
 
-  const accessor = () => defaultNameTransform(getItem());
+  const accessor = () => defaultNameTransform(getItem(), options);
 
   return [accessor, { refetch, mutate }];
 }

@@ -13,6 +13,10 @@ use serde_json::Value;
 use std::fmt::Display;
 
 #[doc(hidden)]
+pub use macro_env as __macro_env;
+#[doc(hidden)]
+pub use remote_env_var as __remote_env_var;
+#[doc(hidden)]
 pub use serde as __serde;
 use std::str::FromStr;
 
@@ -99,6 +103,7 @@ where
 /// Reads the value from app secrets json env var.
 /// If `APP_SECRETS_JSON` is not present, tries to read from standard env var.
 fn read_config_value(key: &'static str) -> Option<String> {
+    #[expect(clippy::disallowed_methods, reason = "Needs to read APP_SECRETS_JSON")]
     match std::env::var("APP_SECRETS_JSON") {
         Ok(raw) => {
             let json = serde_json::from_str::<Value>(&raw)
@@ -115,12 +120,12 @@ fn read_config_value(key: &'static str) -> Option<String> {
 }
 
 /// Get a required value
-pub fn required_config_value(key: &'static str) -> MacroConfigResult<String> {
+fn required_config_value(key: &'static str) -> MacroConfigResult<String> {
     read_config_value(key).ok_or(MacroConfigError::MissingRequiredValue(key))
 }
 
 /// Get an optional value
-pub fn optional_config_value(key: &'static str) -> Option<String> {
+fn optional_config_value(key: &'static str) -> Option<String> {
     read_config_value(key)
 }
 

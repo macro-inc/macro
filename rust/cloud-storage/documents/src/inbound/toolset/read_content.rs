@@ -21,27 +21,43 @@ use uuid::Uuid;
 
 use super::DocumentToolContext;
 
-/// Markdown node
+/// A single node of a markdown document as seen by the AI.
 #[derive(Debug, Serialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct MarkdownNode {
-    /// The node id
-    pub node_id: String,
-    /// Human readable content
-    pub content: String,
-    /// Json respresentation
-    pub raw_content: String,
-    /// The style on the node, H1, em, code, etc.
-    pub r#type: String,
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum MarkdownNode {
+    /// A textual content node (paragraph, heading, list, code block, etc.).
+    #[serde(rename_all = "camelCase")]
+    Generic {
+        /// The node id
+        node_id: String,
+        /// Human readable content
+        content: String,
+        /// The style on the node, h1, paragraph, code, etc.
+        tag: String,
+    },
+    /// An image hosted at a publicly fetchable URL. Fetch the URL to view it.
+    StaticImage {
+        /// URL the image can be fetched from.
+        url: String,
+    },
+    /// An image stored in DSS. Pass this id to the read tool to view the image.
+    DssImage {
+        /// The DSS id of the image. Use the read tool with this id to read it.
+        id: String,
+    },
 }
 
-impl From<lexical_client::types::MarkdownNode> for MarkdownNode {
-    fn from(value: lexical_client::types::MarkdownNode) -> Self {
-        Self {
-            node_id: value.node_id,
-            content: value.content,
-            raw_content: value.raw_content,
-            r#type: value.r#type,
+impl From<lexical_client::types::NewMdNode> for MarkdownNode {
+    fn from(value: lexical_client::types::NewMdNode) -> Self {
+        use lexical_client::types::NewMdNode;
+        match value {
+            NewMdNode::Generic(node) => MarkdownNode::Generic {
+                node_id: node.node_id,
+                content: node.content,
+                tag: node.tag,
+            },
+            NewMdNode::StaticImage { url } => MarkdownNode::StaticImage { url },
+            NewMdNode::DssImage { id } => MarkdownNode::DssImage { id },
         }
     }
 }
@@ -142,7 +158,7 @@ where
             FileAssociation::Md(_) => Content::Markdown(
                 service_context
                     .lexical_client
-                    .parse_markdown_for_ai(&self.document_id.to_string())
+                    .parse_cognition_v2(&self.document_id.to_string())
                     .await
                     .map_err(|e| ToolCallError {
                         description: "unable to parse markdown".to_string(),

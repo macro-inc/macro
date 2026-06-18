@@ -132,7 +132,16 @@ fn push_notification_status_filters(
 /// SQL fragment matching every GitHub notification event type. Keep in sync with
 /// the `Notification::TYPE_NAME`s of the GitHub metadata types in `model_notifications`
 /// (this crate sits below `model_notifications`, so it cannot reference them directly).
-const GITHUB_EVENT_TYPES_SQL: &str = "n.notification_event_type IN ('github_pr_status_changed', 'github_review_requested', 'github_pr_comment', 'github_pr_mention', 'github_pr_review')";
+const GITHUB_EVENT_TYPES_SQL: &str = concat!(
+    "n.notification_event_type IN (",
+    "'github_pr_status_changed', ",
+    "'github_review_requested', ",
+    "'github_pr_comment', ",
+    "'github_pr_mention', ",
+    "'github_pr_review', ",
+    "'github_pr_check_run'",
+    ")",
+);
 
 fn push_include_types_filter(builder: &mut QueryBuilder<'_, Postgres>, include_types: &[String]) {
     if !include_types.is_empty() {
@@ -348,6 +357,15 @@ pub trait NotificationDbOps: DeviceRegistrationDbOps + Send + Sync + 'static {
         &self,
         notification_ids: &[Uuid],
     ) -> impl std::future::Future<Output = Result<Vec<NotificationIdAndCollapseKey>, Report>> + Send;
+
+    /// Return notification IDs that still exist for the user and are eligible for digest email.
+    ///
+    /// Excludes notifications that are missing, soft-deleted, or already seen.
+    fn get_digest_eligible_notification_ids(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        notification_ids: &[Uuid],
+    ) -> impl std::future::Future<Output = Result<HashSet<Uuid>, Report>> + Send;
 
     /// Get a user's non-deleted notifications with cursor-based pagination.
     ///
@@ -741,6 +759,32 @@ impl NotificationDbOps for PgPool {
                 apns_collapse_key: row.apns_collapse_key,
             })
             .collect())
+    }
+
+    async fn get_digest_eligible_notification_ids(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        notification_ids: &[Uuid],
+    ) -> Result<HashSet<Uuid>, Report> {
+        let user_id_str = user_id.to_string();
+
+        let rows = sqlx::query!(
+            r#"
+            SELECT un.notification_id
+            FROM user_notification un
+            JOIN notification n ON n.id = un.notification_id
+            WHERE un.user_id = $1
+              AND un.notification_id = ANY($2)
+              AND un.deleted_at IS NULL
+              AND un.seen_at IS NULL
+            "#,
+            user_id_str,
+            notification_ids
+        )
+        .fetch_all(self)
+        .await?;
+
+        Ok(rows.into_iter().map(|row| row.notification_id).collect())
     }
 
     async fn get_user_notifications<T: DeserializeOwned + Send>(
@@ -1236,6 +1280,16 @@ impl<D: NotificationDbOps + Send + Sync> NotificationRepository for DbNotificati
         notification_ids: &[Uuid],
     ) -> Result<Vec<NotificationIdAndCollapseKey>, Report> {
         self.db.get_basic_notifications(notification_ids).await
+    }
+
+    async fn get_digest_eligible_notification_ids(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        notification_ids: &[Uuid],
+    ) -> Result<HashSet<Uuid>, Report> {
+        self.db
+            .get_digest_eligible_notification_ids(&user_id, notification_ids)
+            .await
     }
 
     async fn get_user_notifications<T: DeserializeOwned + Send>(

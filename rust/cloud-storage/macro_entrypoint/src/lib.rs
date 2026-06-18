@@ -5,11 +5,17 @@
 mod datadog_fmt;
 
 use macro_env::Environment;
+use macro_env_var::env_vars;
 use opentelemetry::trace::TracerProvider as _;
 use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_sdk::trace::SdkTracerProvider;
 use tracing_subscriber::{EnvFilter, Registry, layer::SubscriberExt, util::SubscriberInitExt};
 use tracing_tree::HierarchicalLayer;
+
+env_vars! {
+    pub struct DdService;
+    pub struct DdEnv;
+}
 
 /// unit struct which defines the behaviour for instantiation
 #[derive(Debug)]
@@ -91,8 +97,9 @@ impl MacroEntrypoint {
                 let tracer_provider = init_opentelemetry();
 
                 // Get service name for the tracer
-                let service_name =
-                    std::env::var("DD_SERVICE").unwrap_or_else(|_| "unknown-service".to_string());
+                let service_name = DdService::new()
+                    .map(|e| e.to_string())
+                    .unwrap_or_else(|_| "unknown-service".to_string());
 
                 let tracer = tracer_provider.tracer(service_name);
                 let otel_layer = tracing_opentelemetry::layer().with_tracer(tracer);
@@ -147,11 +154,14 @@ fn init_opentelemetry() -> SdkTracerProvider {
         .expect("failed to create OTLP span exporter");
 
     // Get service name from DD_SERVICE or OTEL_SERVICE_NAME
-    let service_name =
-        std::env::var("DD_SERVICE").unwrap_or_else(|_| "unknown-service".to_string());
+    let service_name = DdService::new()
+        .map(|e| e.to_string())
+        .unwrap_or_else(|_| "unknown-service".to_string());
 
     // Get environment from DD_ENV
-    let env = std::env::var("DD_ENV").unwrap_or_else(|_| "unknown".to_string());
+    let env = DdEnv::new()
+        .map(|e| e.to_string())
+        .unwrap_or_else(|_| "unknown".to_string());
 
     let resource = opentelemetry_sdk::Resource::builder()
         .with_service_name(service_name)

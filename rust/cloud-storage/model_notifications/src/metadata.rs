@@ -1,5 +1,4 @@
 use chrono::{DateTime, Utc};
-use doppleganger::Doppleganger;
 pub use invite_email::{ChannelInviteMetadata, InviteToTeamMetadata};
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::{email::ReadEmailParts, user_id::MacroUserIdStr};
@@ -185,6 +184,81 @@ impl NotificationTitle for GithubPrStatusChanged {
         };
 
         Ok(title)
+    }
+
+    fn format_body(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        Ok(self.common.format_body())
+    }
+}
+
+/// The normalized result state for a GitHub pull request check-run notification.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ToSchema, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum GithubPrCheckRunState {
+    /// The check run completed successfully.
+    Completed,
+    /// The check run completed with a failure-like conclusion.
+    Failed,
+}
+
+/// Metadata for a notification that a GitHub pull request check run completed.
+#[derive(Debug, Clone, PartialEq, Eq, ToSchema, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GithubPrCheckRun {
+    /// Fields shared with the other GitHub pull request notifications.
+    #[serde(flatten)]
+    pub common: GithubPrNotificationCommon,
+    /// The GitHub numeric id of the check run.
+    pub check_run_github_id: u64,
+    /// The display name GitHub reported for the check run.
+    pub check_name: String,
+    /// The raw GitHub check run status.
+    pub check_status: String,
+    /// The raw GitHub check run conclusion.
+    pub conclusion: String,
+    /// The normalized notification state for this check run.
+    pub state: GithubPrCheckRunState,
+    /// The public GitHub URL for the check run.
+    pub check_url: String,
+    /// When GitHub marked the check run as complete.
+    pub completed_at: DateTime<Utc>,
+}
+
+impl GithubPrCheckRun {
+    fn state_verb(&self) -> &'static str {
+        match self.state {
+            GithubPrCheckRunState::Completed => "completed",
+            GithubPrCheckRunState::Failed => "failed",
+        }
+    }
+
+    fn display_check_name(&self) -> &str {
+        let check_name = self.check_name.trim();
+        if check_name.is_empty() {
+            return "Check";
+        }
+
+        check_name
+    }
+}
+
+impl Notification for GithubPrCheckRun {
+    const TYPE_NAME: &'static str = "github_pr_check_run";
+}
+
+impl NotificationTitle for GithubPrCheckRun {
+    fn format_title(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        Ok(format!(
+            "{} {} on a pull request",
+            self.display_check_name(),
+            self.state_verb()
+        ))
     }
 
     fn format_body(
@@ -410,8 +484,7 @@ impl NotificationTitle for GithubPrReview {
     }
 }
 
-#[derive(Debug, Clone, Copy, ToSchema, Doppleganger, Serialize, Deserialize)]
-#[dg(backward = models_comms::channel::ChannelType)]
+#[derive(Debug, Clone, Copy, ToSchema, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ChannelType {
     #[serde(alias = "Public", alias = "public")]
@@ -422,17 +495,6 @@ pub enum ChannelType {
     DirectMessage,
     #[serde(alias = "Team", alias = "team")]
     Team,
-}
-
-impl ChannelType {
-    pub fn to_model_comms(self) -> models_comms::channel::ChannelType {
-        match self {
-            ChannelType::Public => models_comms::channel::ChannelType::Public,
-            ChannelType::Private => models_comms::channel::ChannelType::Private,
-            ChannelType::DirectMessage => models_comms::channel::ChannelType::DirectMessage,
-            ChannelType::Team => models_comms::channel::ChannelType::Team,
-        }
-    }
 }
 
 /// Common metadata for notifications on channels
@@ -605,6 +667,40 @@ pub struct NewEmailMetadata {
     pub thread_id: String,
     pub subject: String,
     pub snippet: String,
+}
+
+/// Metadata for a notification that a linked inbox's grant has died and the
+/// inbox must be reconnected. Fanned out to the inbox owner and every delegate,
+/// since any of them holding the Google grant can restore sync.
+#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct InboxReauthRequiredMetadata {
+    /// The address of the inbox that needs to be reconnected.
+    #[serde(alias = "email_address")]
+    pub email_address: String,
+}
+
+impl notification::domain::models::Notification for InboxReauthRequiredMetadata {
+    const TYPE_NAME: &'static str = "inbox_reauth_required";
+}
+
+impl NotificationTitle for InboxReauthRequiredMetadata {
+    fn format_title(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        Ok(format!("Reconnect {}", self.email_address))
+    }
+
+    fn format_body(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        Ok(
+            "Sync stopped because the Google connection expired. Reconnect to restore it."
+                .to_string(),
+        )
+    }
 }
 
 impl notification::domain::models::Notification for NewEmailMetadata {
@@ -1184,5 +1280,50 @@ impl NotificationExtIos for CommentedOnDocumentMetadata {
     ) -> Option<APNSPushNotification<Self::NotifData>> {
         let profile_pic = self.sender_profile_picture_url.clone();
         alert_apns(self, sender_id, notification_id, profile_pic).ok()
+    }
+}
+
+/// Metadata for a notification that a call has started in a channel.
+///
+/// Mirrors the producer-side `CallStartedNotification` in the `call` crate:
+/// both serialize the same wire shape (snake_case fields) under the same
+/// `call_started` [`Notification::TYPE_NAME`]. This type is the read-side
+/// model used by [`crate::NotifEvent`]; the producer keeps its own type
+/// because it additionally builds the incoming-call APNS/VoIP push.
+///
+/// Rows persisted before the type name was normalized used the kebab-case
+/// `call-started`; the [`crate::NotifEvent::CallStarted`] variant carries a
+/// `#[serde(alias = "call-started")]` so those rows still deserialize.
+#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
+pub struct CallStartedMetadata {
+    /// The name of the channel the call started in, when available.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub channel_name: Option<String>,
+    /// Profile picture URL of the user who started the call, when available.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sender_profile_picture_url: Option<String>,
+}
+
+impl Notification for CallStartedMetadata {
+    const TYPE_NAME: &'static str = "call_started";
+}
+
+impl NotificationTitle for CallStartedMetadata {
+    fn format_title(
+        &self,
+        sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        let title = match sender_id {
+            Some(sender) => format!("{} started a call", sender.email_part().local_part()),
+            None => "Call started".to_string(),
+        };
+        Ok(title)
+    }
+
+    fn format_body(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        Ok(self.channel_name.clone().unwrap_or_default())
     }
 }

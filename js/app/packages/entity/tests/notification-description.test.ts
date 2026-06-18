@@ -116,6 +116,10 @@ describe('notification-description helpers', () => {
         'updated a pull request'
       );
     });
+
+    it('returns correct verb for github_pr_check_run', () => {
+      expect(getActionVerb('github_pr_check_run')).toBe('completed a check');
+    });
   });
 
   describe('getTypeNoun', () => {
@@ -222,6 +226,16 @@ describe('notification-description helpers', () => {
         expect(getTypeNoun('github_pr_status_changed', 2)).toBe(
           'pull requests'
         );
+      });
+    });
+
+    describe('github_pr_check_run', () => {
+      it('returns singular for count of 1', () => {
+        expect(getTypeNoun('github_pr_check_run', 1)).toBe('check');
+      });
+
+      it('returns plural for count greater than 1', () => {
+        expect(getTypeNoun('github_pr_check_run', 2)).toBe('checks');
       });
     });
 

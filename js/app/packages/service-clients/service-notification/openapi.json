@@ -1103,6 +1103,20 @@
           }
         }
       },
+      "CallStartedMetadata": {
+        "type": "object",
+        "description": "Metadata for a notification that a call has started in a channel.\n\nMirrors the producer-side `CallStartedNotification` in the `call` crate:\nboth serialize the same wire shape (snake_case fields) under the same\n`call_started` [`Notification::TYPE_NAME`]. This type is the read-side\nmodel used by [`crate::NotifEvent`]; the producer keeps its own type\nbecause it additionally builds the incoming-call APNS/VoIP push.\n\nRows persisted before the type name was normalized used the kebab-case\n`call-started`; the [`crate::NotifEvent::CallStarted`] variant carries a\n`#[serde(alias = \"call-started\")]` so those rows still deserialize.",
+        "properties": {
+          "channel_name": {
+            "type": ["string", "null"],
+            "description": "The name of the channel the call started in, when available."
+          },
+          "sender_profile_picture_url": {
+            "type": ["string", "null"],
+            "description": "Profile picture URL of the user who started the call, when available."
+          }
+        }
+      },
       "ChannelInviteMetadata": {
         "type": "object",
         "description": "Metadata for when a user is invited to a channel.",
@@ -1534,6 +1548,65 @@
           }
         }
       },
+      "GithubPrCheckRun": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/GithubPrNotificationCommon",
+            "description": "Fields shared with the other GitHub pull request notifications."
+          },
+          {
+            "type": "object",
+            "required": [
+              "checkRunGithubId",
+              "checkName",
+              "checkStatus",
+              "conclusion",
+              "state",
+              "checkUrl",
+              "completedAt"
+            ],
+            "properties": {
+              "checkName": {
+                "type": "string",
+                "description": "The display name GitHub reported for the check run."
+              },
+              "checkRunGithubId": {
+                "type": "integer",
+                "format": "int64",
+                "description": "The GitHub numeric id of the check run.",
+                "minimum": 0
+              },
+              "checkStatus": {
+                "type": "string",
+                "description": "The raw GitHub check run status."
+              },
+              "checkUrl": {
+                "type": "string",
+                "description": "The public GitHub URL for the check run."
+              },
+              "completedAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "When GitHub marked the check run as complete."
+              },
+              "conclusion": {
+                "type": "string",
+                "description": "The raw GitHub check run conclusion."
+              },
+              "state": {
+                "$ref": "#/components/schemas/GithubPrCheckRunState",
+                "description": "The normalized notification state for this check run."
+              }
+            }
+          }
+        ],
+        "description": "Metadata for a notification that a GitHub pull request check run completed."
+      },
+      "GithubPrCheckRunState": {
+        "type": "string",
+        "description": "The normalized result state for a GitHub pull request check-run notification.",
+        "enum": ["completed", "failed"]
+      },
       "GithubPrComment": {
         "allOf": [
           {
@@ -1789,6 +1862,17 @@
           }
         ],
         "description": "Metadata for a notification that the user's review was requested on a GitHub pull request."
+      },
+      "InboxReauthRequiredMetadata": {
+        "type": "object",
+        "description": "Metadata for a notification that a linked inbox's grant has died and the\ninbox must be reconnected. Fanned out to the inbox owner and every delegate,\nsince any of them holding the Google grant can restore sync.",
+        "required": ["emailAddress"],
+        "properties": {
+          "emailAddress": {
+            "type": "string",
+            "description": "The address of the inbox that needs to be reconnected."
+          }
+        }
       },
       "InviteToTeamMetadata": {
         "type": "object",
@@ -2062,6 +2146,21 @@
           },
           {
             "type": "object",
+            "description": "A call has started in a channel the user is a member of.\n\nThe `call-started` alias keeps rows persisted before the type name\nwas normalized to snake_case (`call_started`) deserializable.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/CallStartedMetadata",
+                "description": "A call has started in a channel the user is a member of.\n\nThe `call-started` alias keeps rows persisted before the type name\nwas normalized to snake_case (`call_started`) deserializable."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["call_started"]
+              }
+            }
+          },
+          {
+            "type": "object",
             "description": "A new email has been sent to the user.",
             "required": ["content", "tag"],
             "properties": {
@@ -2072,6 +2171,21 @@
               "tag": {
                 "type": "string",
                 "enum": ["new_email"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A linked inbox's grant died and must be reconnected.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/InboxReauthRequiredMetadata",
+                "description": "A linked inbox's grant died and must be reconnected."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["inbox_reauth_required"]
               }
             }
           },
@@ -2132,6 +2246,21 @@
               "tag": {
                 "type": "string",
                 "enum": ["github_pr_status_changed"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A GitHub pull request check run completed.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/GithubPrCheckRun",
+                "description": "A GitHub pull request check run completed."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["github_pr_check_run"]
               }
             }
           },

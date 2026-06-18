@@ -10,11 +10,12 @@ mod metadata;
 mod unsubscribe;
 pub use device::DeviceType;
 pub use metadata::{
-    AiResponseMetadata, ChannelInviteMetadata, ChannelMentionMetadata, ChannelMessageSendMetadata,
-    ChannelReplyMetadata, ChannelType, CommentedOnDocumentMetadata, CommonChannelMetadata,
-    DocumentMentionMetadata, GithubPrComment, GithubPrCommentKind, GithubPrEventAction,
-    GithubPrEventStatus, GithubPrMention, GithubPrMentionLocation, GithubPrNotificationCommon,
-    GithubPrReview, GithubPrReviewState, GithubPrStatusChanged, GithubReviewRequested,
+    AiResponseMetadata, CallStartedMetadata, ChannelInviteMetadata, ChannelMentionMetadata,
+    ChannelMessageSendMetadata, ChannelReplyMetadata, ChannelType, CommentedOnDocumentMetadata,
+    CommonChannelMetadata, DocumentMentionMetadata, GithubPrCheckRun, GithubPrCheckRunState,
+    GithubPrComment, GithubPrCommentKind, GithubPrEventAction, GithubPrEventStatus,
+    GithubPrMention, GithubPrMentionLocation, GithubPrNotificationCommon, GithubPrReview,
+    GithubPrReviewState, GithubPrStatusChanged, GithubReviewRequested, InboxReauthRequiredMetadata,
     InviteToTeamMetadata, ItemSharedMetadata, MentionedInDocumentCommentMetadata, NewEmailMetadata,
     NotificationDocumentSubType, NotificationTitle, RepliedToDocumentCommentThreadMetadata,
     TaskAssignedMetadata,
@@ -192,8 +193,18 @@ define_notif_event!(
         /// Someone replied to a thread in a channel that the user is part of.
         ChannelMessageReply(ChannelReplyMetadata),
 
+        /// A call has started in a channel the user is a member of.
+        ///
+        /// The `call-started` alias keeps rows persisted before the type name
+        /// was normalized to snake_case (`call_started`) deserializable.
+        #[serde(alias = "call-started")]
+        CallStarted(CallStartedMetadata),
+
         /// A new email has been sent to the user.
         NewEmail(NewEmailMetadata),
+
+        /// A linked inbox's grant died and must be reconnected.
+        InboxReauthRequired(InboxReauthRequiredMetadata),
 
         /// A user was invited to a team.
         InviteToTeam(InviteToTeamMetadata),
@@ -210,6 +221,9 @@ define_notif_event!(
         /// before the rename deserializable.
         #[serde(alias = "github_pr_event")]
         GithubPrStatusChanged(GithubPrStatusChanged),
+
+        /// A GitHub pull request check run completed.
+        GithubPrCheckRun(GithubPrCheckRun),
 
         /// The user's review was requested on a GitHub pull request.
         GithubReviewRequested(GithubReviewRequested),
@@ -249,7 +263,11 @@ impl NotificationTitle for NotifEvent {
             NotifEvent::ChannelMessageReply(channel_reply_metadata) => {
                 channel_reply_metadata.format_title(sender_id)
             }
+            NotifEvent::CallStarted(call_started_metadata) => {
+                call_started_metadata.format_title(sender_id)
+            }
             NotifEvent::NewEmail(new_email_metadata) => new_email_metadata.format_title(sender_id),
+            NotifEvent::InboxReauthRequired(m) => m.format_title(sender_id),
             NotifEvent::InviteToTeam(_) => Err(report!("not implemented")),
             NotifEvent::TaskAssigned(task_assigned_metadata) => {
                 task_assigned_metadata.format_title(sender_id)
@@ -259,6 +277,9 @@ impl NotificationTitle for NotifEvent {
             }
             NotifEvent::GithubPrStatusChanged(github_pr_status_changed) => {
                 github_pr_status_changed.format_title(sender_id)
+            }
+            NotifEvent::GithubPrCheckRun(github_pr_check_run) => {
+                github_pr_check_run.format_title(sender_id)
             }
             NotifEvent::GithubReviewRequested(github_review_requested) => {
                 github_review_requested.format_title(sender_id)
@@ -298,7 +319,11 @@ impl NotificationTitle for NotifEvent {
             NotifEvent::ChannelMessageReply(channel_reply_metadata) => {
                 channel_reply_metadata.format_body(sender_id)
             }
+            NotifEvent::CallStarted(call_started_metadata) => {
+                call_started_metadata.format_body(sender_id)
+            }
             NotifEvent::NewEmail(new_email_metadata) => new_email_metadata.format_body(sender_id),
+            NotifEvent::InboxReauthRequired(m) => m.format_body(sender_id),
             NotifEvent::InviteToTeam(_) => Err(report!("not implemented")),
             NotifEvent::TaskAssigned(task_assigned_metadata) => {
                 task_assigned_metadata.format_body(sender_id)
@@ -308,6 +333,9 @@ impl NotificationTitle for NotifEvent {
             }
             NotifEvent::GithubPrStatusChanged(github_pr_status_changed) => {
                 github_pr_status_changed.format_body(sender_id)
+            }
+            NotifEvent::GithubPrCheckRun(github_pr_check_run) => {
+                github_pr_check_run.format_body(sender_id)
             }
             NotifEvent::GithubReviewRequested(github_review_requested) => {
                 github_review_requested.format_body(sender_id)

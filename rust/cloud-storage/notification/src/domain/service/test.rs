@@ -103,6 +103,7 @@ struct MockRepository {
     created_notifications: Mutex<Vec<Uuid>>,
     stored_collapse_keys: Mutex<Vec<(Uuid, Option<String>)>>,
     basic_notifications: Vec<NotificationIdAndCollapseKey>,
+    digest_eligible_notification_ids: Option<HashSet<Uuid>>,
     mark_seen_calls: Mutex<Vec<(String, Vec<Uuid>)>>,
     mark_done_calls: Mutex<Vec<(String, Vec<Uuid>, bool)>>,
 }
@@ -117,6 +118,7 @@ impl MockRepository {
             created_notifications: Mutex::new(Vec::new()),
             stored_collapse_keys: Mutex::new(Vec::new()),
             basic_notifications: Vec::new(),
+            digest_eligible_notification_ids: None,
             mark_seen_calls: Mutex::new(Vec::new()),
             mark_done_calls: Mutex::new(Vec::new()),
         }
@@ -127,6 +129,14 @@ impl MockRepository {
             id,
             apns_collapse_key: collapse_key,
         });
+        self
+    }
+
+    fn with_digest_eligible_notification_ids(
+        mut self,
+        ids: impl IntoIterator<Item = Uuid>,
+    ) -> Self {
+        self.digest_eligible_notification_ids = Some(ids.into_iter().collect());
         self
     }
 
@@ -271,6 +281,17 @@ impl NotificationRepository for MockRepository {
         _notification_ids: &[Uuid],
     ) -> Result<Vec<NotificationIdAndCollapseKey>, Report> {
         Ok(self.basic_notifications.clone())
+    }
+
+    async fn get_digest_eligible_notification_ids(
+        &self,
+        _user_id: MacroUserIdStr<'_>,
+        notification_ids: &[Uuid],
+    ) -> Result<HashSet<Uuid>, Report> {
+        Ok(self
+            .digest_eligible_notification_ids
+            .clone()
+            .unwrap_or_else(|| notification_ids.iter().copied().collect()))
     }
 
     async fn get_user_notifications<T: DeserializeOwned + Send>(
@@ -452,6 +473,16 @@ impl NotificationRepository for std::sync::Arc<MockRepository> {
         notification_ids: &[Uuid],
     ) -> Result<Vec<NotificationIdAndCollapseKey>, Report> {
         (**self).get_basic_notifications(notification_ids).await
+    }
+
+    async fn get_digest_eligible_notification_ids(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        notification_ids: &[Uuid],
+    ) -> Result<HashSet<Uuid>, Report> {
+        (**self)
+            .get_digest_eligible_notification_ids(user_id, notification_ids)
+            .await
     }
 
     async fn get_user_notifications<T: DeserializeOwned + Send>(
@@ -1881,6 +1912,122 @@ async fn test_poll_email_digests_sends_email_for_ready_batch() {
     let published = queue.get_published();
     assert_eq!(published.len(), 1);
     assert!(published[0]["content"]["Email"].is_object());
+}
+
+#[tokio::test]
+async fn test_poll_email_digests_skips_when_all_notifications_ineligible() {
+    use std::sync::Arc;
+
+    let user = test_user_id("digest@macro.com");
+    let notif = UserNotificationRow {
+        owner_id: user.clone(),
+        notification_id: Uuid::nil(),
+        notification_event_type: "test_notification".to_string(),
+        entity: EntityType::Document.with_entity_str("doc-1"),
+        sent: false,
+        done: false,
+        created_at: Utc::now(),
+        viewed_at: None,
+        updated_at: Utc::now(),
+        deleted_at: None,
+        notification_metadata: serde_json::to_value(TestNotification {
+            message: "already read".to_string(),
+        })
+        .unwrap(),
+        sender_id: None,
+    };
+
+    let batcher = ReadyDigestBatcher {
+        batch: Mutex::new(Some(DigestBatch {
+            user_id: user,
+            notifications: vec![notif.into_tagged()],
+        })),
+    };
+
+    let queue = Arc::new(MockQueue::new());
+    let service = NotificationEgressService {
+        queue: queue.clone(),
+        repository: MockRepository::new().with_digest_eligible_notification_ids([]),
+        websocket: MockWebSocketSender,
+        mobile: MockMobileSender,
+        email: MockEmailSender,
+        rate_limiter: allowing_rate_limiter(),
+        state_machine: MockEgressStateMachine,
+        digest_batcher: batcher,
+    };
+
+    let digest_to_notif = |_batch: DigestBatch| -> Result<TestNotification, Report> {
+        panic!("digest should not be rendered when no notifications remain eligible")
+    };
+
+    let result = service.poll_email_digests(&digest_to_notif).await.unwrap();
+
+    assert!(matches!(result, ClaimResult::Ready(())));
+    assert!(queue.get_published().is_empty());
+}
+
+#[tokio::test]
+async fn test_poll_email_digests_filters_ineligible_notifications_before_rendering() {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    let user = test_user_id("digest@macro.com");
+    let eligible_id = Uuid::parse_str("0193b1ea-c742-7589-893b-2b4a509c1e77").unwrap();
+    let ineligible_id = Uuid::parse_str("0193b1ea-c742-7589-893b-2b4a509c1e78").unwrap();
+
+    let make_notif = |notification_id, message: &str| UserNotificationRow {
+        owner_id: user.clone(),
+        notification_id,
+        notification_event_type: "test_notification".to_string(),
+        entity: EntityType::Document.with_entity_str("doc-1"),
+        sent: false,
+        done: false,
+        created_at: Utc::now(),
+        viewed_at: None,
+        updated_at: Utc::now(),
+        deleted_at: None,
+        notification_metadata: serde_json::to_value(TestNotification {
+            message: message.to_string(),
+        })
+        .unwrap(),
+        sender_id: None,
+    };
+
+    let batcher = ReadyDigestBatcher {
+        batch: Mutex::new(Some(DigestBatch {
+            user_id: user.clone(),
+            notifications: vec![
+                make_notif(eligible_id, "keep").into_tagged(),
+                make_notif(ineligible_id, "drop").into_tagged(),
+            ],
+        })),
+    };
+
+    let rendered_count = Arc::new(AtomicUsize::new(0));
+    let rendered_count_for_closure = rendered_count.clone();
+    let digest_to_notif = move |batch: DigestBatch| -> Result<TestNotification, Report> {
+        rendered_count_for_closure.store(batch.notifications.len(), Ordering::SeqCst);
+        Ok(TestNotification {
+            message: format!("You have {} notification(s)", batch.notifications.len()),
+        })
+    };
+
+    let queue = Arc::new(MockQueue::new());
+    let service = NotificationEgressService {
+        queue: queue.clone(),
+        repository: MockRepository::new().with_digest_eligible_notification_ids([eligible_id]),
+        websocket: MockWebSocketSender,
+        mobile: MockMobileSender,
+        email: MockEmailSender,
+        rate_limiter: allowing_rate_limiter(),
+        state_machine: MockEgressStateMachine,
+        digest_batcher: batcher,
+    };
+
+    service.poll_email_digests(&digest_to_notif).await.unwrap();
+
+    assert_eq!(rendered_count.load(Ordering::SeqCst), 1);
+    assert_eq!(queue.get_published().len(), 1);
 }
 
 #[tokio::test]

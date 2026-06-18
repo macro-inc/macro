@@ -619,6 +619,8 @@ final class CallVideoOverlayController: NSObject, UIGestureRecognizerDelegate, U
             return UIImage(systemName: "bluetooth") ?? bluetoothTemplateImage()
         case .headphones:
             return UIImage(systemName: "headphones")
+        case .external:
+            return UIImage(systemName: "airplayaudio") ?? UIImage(systemName: "speaker.wave.2.fill")
         }
     }
 

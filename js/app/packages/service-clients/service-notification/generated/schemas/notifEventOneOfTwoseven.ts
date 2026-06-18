@@ -4,14 +4,14 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { GithubReviewRequested } from './githubReviewRequested';
+import type { AiResponseMetadata } from './aiResponseMetadata';
 import type { NotifEventOneOfTwosevenTag } from './notifEventOneOfTwosevenTag';
 
 /**
- * The user's review was requested on a GitHub pull request.
+ * An AI assistant responded to a chat.
  */
 export type NotifEventOneOfTwoseven = {
-  /** The user's review was requested on a GitHub pull request. */
-  content: GithubReviewRequested;
+  /** An AI assistant responded to a chat. */
+  content: AiResponseMetadata;
   tag: NotifEventOneOfTwosevenTag;
 };

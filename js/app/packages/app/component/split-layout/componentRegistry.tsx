@@ -1,7 +1,9 @@
 import { useAnalytics } from '@app/component/analytics-context';
 import { getViewPreset } from '@app/component/app-sidebar/soup-filter-presets';
 import { Home } from '@app/component/home';
+import { queryStateFrom } from '@app/component/next-soup/filters/filter-store';
 import type { SetPredicatesInput } from '@app/component/next-soup/filters/filter-store/predicates-store';
+import { mergeQuery } from '@app/component/next-soup/filters/filter-store/query-store';
 import type { Query } from '@app/component/next-soup/filters/filter-store/types';
 import { SoupView } from '@app/component/next-soup/soup-view/soup-view';
 import { NotificationInbox2 } from '@app/component/notification-inbox/NotificationInbox2';
@@ -46,6 +48,24 @@ const withAuth = <P extends object>(Comp: Component<P>): Component<P> => {
 };
 
 type ComponentFactory = (params?: Record<string, any>) => JSXElement;
+
+type DocumentsComponentParams = {
+  initialFilters?: Query;
+  initialClientFilters?: SetPredicatesInput<string>;
+};
+
+function mergeClientFilters(
+  base?: SetPredicatesInput<string>,
+  refinement?: SetPredicatesInput<string>
+): SetPredicatesInput<string> | undefined {
+  if (!base) return refinement;
+  if (!refinement) return base;
+
+  return {
+    and: [...new Set([...(base.and ?? []), ...(refinement.and ?? [])])],
+    or: [...new Set([...(base.or ?? []), ...(refinement.or ?? [])])],
+  };
+}
 
 export type UnifiedListMeta = {
   kind: 'unified-list';
@@ -181,7 +201,7 @@ registerComponent(
 
 registerComponent(
   'documents',
-  withAuth(() => {
+  withAuth((params: DocumentsComponentParams = {}) => {
     usePageViewTracking('documents');
     const user = useUserContext();
     const preset = getViewPreset('documents', undefined, {
@@ -189,11 +209,19 @@ registerComponent(
       email: user.email(),
       isTeamAdmin: false,
     });
+    const initialFilters =
+      preset?.filters && params.initialFilters
+        ? mergeQuery(queryStateFrom(preset.filters), params.initialFilters)
+        : (params.initialFilters ?? preset?.filters);
+    const initialClientFilters = mergeClientFilters(
+      preset?.clientFilters,
+      params.initialClientFilters
+    );
     return (
       <SoupView
         viewName="Files"
-        initialFilters={preset?.filters}
-        initialClientFilters={preset?.clientFilters}
+        initialFilters={initialFilters}
+        initialClientFilters={initialClientFilters}
         initialGroupBy={preset?.groupBy}
       />
     );
@@ -425,6 +453,15 @@ if (LOCAL_ONLY) {
 }
 
 if (DEV_MODE_ENV) {
+  registerComponent(
+    'document-where-playground',
+    withAuth(
+      lazy(
+        () => import('@app/component/next-soup/debug/DocumentWherePlayground')
+      )
+    )
+  );
+
   // NOTE (seamus) : putting pixel icons on dev/staging for aidan
   registerComponent(
     'pixel-icon',

@@ -4,10 +4,7 @@ import { invalidateUserInfo } from '@queries/auth/user-info';
 import { queryClient } from '@queries/client';
 import { invalidateAllSoup } from '@queries/soup/normalized-cache';
 import { emailClient } from '@service-email/client';
-import {
-  type ListLinksResponse,
-  SyncStatus,
-} from '@service-email/generated/schemas';
+import type { ListLinksResponse } from '@service-email/generated/schemas';
 import { useMutation, useQuery } from '@tanstack/solid-query';
 import { createMemo } from 'solid-js';
 import { type MutationCallbacks, withCallbacks } from '../utils';
@@ -15,15 +12,27 @@ import { emailKeys } from './keys';
 
 const LINK_STALE_TIME = 5 * 60 * 1000;
 
-// A newly-linked inbox's avatar (`photo_url`) is written async, so poll the links
-// list while any inbox is still syncing; polling stops on its own once none are,
-// leaving steady-state/single-inbox users with no extra fetches.
-const LINK_SYNC_POLL_INTERVAL = 2_000;
+const HEALTH_PROBE_STALE_TIME = 15 * 60 * 1000;
 
-function isAnyInboxSyncing(data: ListLinksResponse | undefined): boolean {
-  return (
-    data?.links.some((link) => link.sync_status === SyncStatus.SYNCING) ?? false
-  );
+/**
+ * Asks the server to probe each linked inbox's grant against Google and record its
+ * health, so a grant that died while the user was away surfaces soon after they return
+ * rather than waiting on the daily refresh. Runs on mount and on window focus, throttled
+ * to once per stale-time window (the server also throttles per inbox). Fire-and-forget:
+ * the refreshed `needs_reauth` is read by `useEmailLinksQuery`, which drives the reconnect
+ * prompt — nothing renders from this query.
+ */
+export function useInboxHealthProbeQuery() {
+  return useQuery(() => ({
+    queryKey: emailKeys.linksHealthProbe.queryKey,
+    queryFn: async () => {
+      await emailClient.healthCheckLinks();
+      return null;
+    },
+    staleTime: HEALTH_PROBE_STALE_TIME,
+    refetchOnWindowFocus: true,
+    retry: false,
+  }));
 }
 
 export function useEmailLinksQuery() {
@@ -32,8 +41,6 @@ export function useEmailLinksQuery() {
     queryFn: async () => throwOnErr(async () => await emailClient.getLinks()),
     staleTime: LINK_STALE_TIME,
     refetchOnWindowFocus: 'always',
-    refetchInterval: (query) =>
-      isAnyInboxSyncing(query.state.data) ? LINK_SYNC_POLL_INTERVAL : false,
   }));
 }
 

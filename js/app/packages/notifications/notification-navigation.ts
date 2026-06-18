@@ -204,7 +204,7 @@ function getSupportedHandler(
     })
     .with('invite_to_team', () => null)
     .with(
-      'call-started',
+      'call_started',
       () =>
         async (lm: SplitManager, newSplit: boolean = false) =>
           openSplitIfNotOpen(lm, 'channel', notification.entity_id, {
@@ -225,13 +225,19 @@ function getSupportedHandler(
         meta.tag !== 'github_review_requested' &&
         meta.tag !== 'github_pr_comment' &&
         meta.tag !== 'github_pr_mention' &&
-        meta.tag !== 'github_pr_review'
+        meta.tag !== 'github_pr_review' &&
+        meta.tag !== 'github_pr_check_run'
       ) {
         return null;
       }
       return async () => {
         // TODO(dev-rb/github): Route GitHub PR notifications to /pr.
-        openExternalUrl(meta.content.url);
+        let url = meta.content.url;
+        if (meta.tag === 'github_pr_check_run') {
+          url = meta.content.checkUrl || meta.content.url;
+        }
+
+        openExternalUrl(url);
       };
     })
     .with('mentioned_in_document_comment', () => {
@@ -288,6 +294,7 @@ function getSupportedHandler(
           params,
         });
     })
+    .with('inbox_reauth_required', () => null)
     .exhaustive();
 }
 

@@ -82,6 +82,32 @@ fn compute_next_cursor(
 
 use crate::api::search::terms::split_search_terms;
 
+/// Per-request cap on whitespace-delimited search terms. Each term expands
+/// into its own `has_child` clause and is embedded in every clause's highlight
+/// query, so query-build cost is quadratic in the term count across the
+/// join-shape indices — an unbounded paste can OOM the service.
+const MAX_SEARCH_TERMS: usize = 50;
+
+/// Per-term character cap. Body size also scales with summed term length; real
+/// tokens fall well under this, so longer ones are truncated rather than
+/// rejected.
+const MAX_TERM_CHARS: usize = 80;
+
+/// Enforce [`MAX_SEARCH_TERMS`] and [`MAX_TERM_CHARS`] on tokenized terms
+/// before they fan out into per-index OpenSearch queries.
+fn enforce_term_limits(terms: Vec<String>) -> Result<Vec<String>, SearchError> {
+    if terms.len() > MAX_SEARCH_TERMS {
+        return Err(SearchError::TooManyTerms);
+    }
+    Ok(terms
+        .into_iter()
+        .map(|term| match term.char_indices().nth(MAX_TERM_CHARS) {
+            Some((byte_idx, _)) => term[..byte_idx].to_string(),
+            None => term,
+        })
+        .collect())
+}
+
 /// Creates a unified search request and performs the search
 /// by calling individual simple search endpoints for each entity type
 #[tracing::instrument(skip(ctx, user_context, query_params), fields(user_id = %user_context.user_id), err)]
@@ -133,6 +159,7 @@ pub(in crate::api::search) async fn perform_unified_search(
         return Err(SearchError::InvalidQuerySize);
     }
     let terms: Vec<String> = vec![query];
+    let search_terms = enforce_term_limits(split_search_terms(&terms))?;
 
     let match_type = req.match_type;
 
@@ -156,7 +183,7 @@ pub(in crate::api::search) async fn perform_unified_search(
     let should_include_projects = search_filters.should_include_projects;
     let should_include_emails = search_filters.should_include_emails;
     let should_include_call_records = search_filters.should_include_call_records;
-    let email_terms = split_search_terms(&terms);
+    let email_terms = search_terms.clone();
 
     // Await all tasks in parallel
     let (
@@ -214,11 +241,11 @@ pub(in crate::api::search) async fn perform_unified_search(
     // appear in the same message via bool.must. Documents, chats, and
     // call records are join-shape, where each term becomes a separate
     // has_child clause ANDed via bool.must.
-    filter_document_response.terms = split_search_terms(&terms);
-    filter_channel_response.terms = split_search_terms(&terms);
-    filter_chat_response.terms = split_search_terms(&terms);
+    filter_document_response.terms = search_terms.clone();
+    filter_channel_response.terms = search_terms.clone();
+    filter_chat_response.terms = search_terms.clone();
     filter_email_response.terms = email_terms.clone();
-    filter_call_record_response.terms = split_search_terms(&terms);
+    filter_call_record_response.terms = search_terms.clone();
 
     // Widen the email access filter to every inbox the caller can reach (their
     // own plus delegated). Connected secondary inboxes share the owner's

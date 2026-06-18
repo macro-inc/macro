@@ -1,0 +1,79 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                feature,\n                user_id,\n                entity,\n                model,\n                input_tokens,\n                output_tokens,\n                price_per_million_in,\n                price_per_million_out,\n                total,\n                created_at\n            FROM ai_usage\n            WHERE ($1::timestamptz IS NULL OR created_at >= $1)\n              AND ($2::timestamptz IS NULL OR created_at < $2)\n              AND (cardinality($3::text[]) = 0 OR user_id = ANY($3))\n              AND (cardinality($4::text[]) = 0 OR feature = ANY($4))\n            ORDER BY created_at DESC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "feature",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "entity",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "model",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "input_tokens",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "output_tokens",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "price_per_million_in",
+        "type_info": "Float4"
+      },
+      {
+        "ordinal": 7,
+        "name": "price_per_million_out",
+        "type_info": "Float4"
+      },
+      {
+        "ordinal": 8,
+        "name": "total",
+        "type_info": "Float4"
+      },
+      {
+        "ordinal": 9,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Timestamptz",
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "cc6d835ae3a35891b84f625bc774d487f4907b7f4ac77a6b870113b7ea2581fb"
+}

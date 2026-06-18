@@ -55,7 +55,13 @@ async fn rename_initial_chat(
     stream_id: String,
     initial_question: String,
 ) -> anyhow::Result<()> {
-    let name = generate_chat_name(&initial_question).await?;
+    let name = generate_chat_name(
+        &initial_question,
+        user_id.clone(),
+        &chat_id,
+        ctx.tool_service_context.recorder.as_ref(),
+    )
+    .await?;
     if name.is_empty() {
         anyhow::bail!("generated chat name was empty");
     }
@@ -91,13 +97,26 @@ async fn rename_initial_chat(
     Ok(())
 }
 
-async fn generate_chat_name(initial_question: &str) -> anyhow::Result<String> {
+async fn generate_chat_name(
+    initial_question: &str,
+    user_id: MacroUserIdStr<'static>,
+    chat_id: &str,
+    recorder: &dyn ai_usage::UsageRecorder,
+) -> anyhow::Result<String> {
     let rename_request = format!(
         "<chat_first_message>\n{}\n</chat_first_message>\n\nGenerate the chat title now.",
         initial_question.trim()
     );
-    let response =
-        agent::complete(AgentModel::Fast, CHAT_RENAME_SYSTEM_PROMPT, &rename_request).await?;
+    let usage_ctx = ai_usage::UsageContext::new(ai_usage::AiFeature::ChatRename, user_id)
+        .with_entity(macro_uuid::string_to_uuid(chat_id).ok());
+    let response = agent::complete(
+        AgentModel::Fast,
+        CHAT_RENAME_SYSTEM_PROMPT,
+        &rename_request,
+        recorder,
+        usage_ctx,
+    )
+    .await?;
 
     Ok(clean_chat_name(&response))
 }

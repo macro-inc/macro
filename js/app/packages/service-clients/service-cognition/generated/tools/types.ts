@@ -66,6 +66,39 @@ export type Content =
   | {
       markdown: MarkdownNode[];
     };
+/**
+ * A single node of a markdown document as seen by the AI.
+ */
+export type MarkdownNode =
+  | {
+      /**
+       * Human readable content
+       */
+      content: string;
+      /**
+       * The node id
+       */
+      nodeId: string;
+      /**
+       * The style on the node, h1, paragraph, code, etc.
+       */
+      tag: string;
+      type: 'generic';
+    }
+  | {
+      type: 'staticImage';
+      /**
+       * URL the image can be fetched from.
+       */
+      url: string;
+    }
+  | {
+      /**
+       * The DSS id of the image. Use the read tool with this id to read it.
+       */
+      id: string;
+      type: 'dssImage';
+    };
 export type UnifiedSearchIndex =
   | 'documents'
   | 'chats'
@@ -741,27 +774,6 @@ export interface Thread {
    * When the thread was last updated.
    */
   updatedAt?: string | null;
-}
-/**
- * Markdown node
- */
-export interface MarkdownNode {
-  /**
-   * Human readable content
-   */
-  content: string;
-  /**
-   * The node id
-   */
-  nodeId: string;
-  /**
-   * Json respresentation
-   */
-  rawContent: string;
-  /**
-   * The style on the node, H1, em, code, etc.
-   */
-  type: string;
 }
 /**
  * Search items by their content: document body text; email subject/body/sender/recipient/cc/bcc and the display names on those addresses; chat messages; call transcripts. This is keyword search, not semantic search: queries only match literal words/tokens, prefixes, or exact quoted terms that appear in the indexed content. Use this for targeted keyword/content lookup, not for activity-summary questions like "what happened today", "what's going on", "catch me up", or "what happened in standup today"; those should start with ListEntities using time/type/channel filters. Whitespace-separated terms are ANDed. For documents and emails, every term must match somewhere in the document — different terms can appear in different chunks/pages or different fields. For documents and emails specifically, each single-word term is matched as a prefix (so `scri` matches `script`); for emails the prefix expansion also runs against the local-part of address fields. For chats, channels, and call transcripts the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the content, not the user's natural-language description; long phrases will not match. Wrap a term in double quotes (e.g. `"deal review"` or `"alice@example.com"`) to force exact-token / exact-phrase matching instead of prefix. If the user's request combines a person with a topic, run separate searches rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type.

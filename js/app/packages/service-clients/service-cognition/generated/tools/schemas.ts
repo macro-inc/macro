@@ -1677,11 +1677,33 @@ export const ReadContentResponse = z.object({
       z
         .object({
           markdown: z.array(
-            z.object({
-              content: z.string(),
-              nodeId: z.string(),
-              rawContent: z.string(),
-              type: z.string(),
+            z.any().superRefine((x, ctx) => {
+              const schemas = [
+                z.object({
+                  content: z.string(),
+                  nodeId: z.string(),
+                  tag: z.string(),
+                  type: z.literal('generic'),
+                }),
+                z.object({ type: z.literal('staticImage'), url: z.string() }),
+                z.object({ id: z.string(), type: z.literal('dssImage') }),
+              ];
+              const errors = schemas.reduce<z.ZodError[]>(
+                (errors, schema) =>
+                  ((result) =>
+                    result.error ? [...errors, result.error] : errors)(
+                    schema.safeParse(x)
+                  ),
+                []
+              );
+              if (schemas.length - errors.length !== 1) {
+                ctx.addIssue({
+                  path: ctx.path,
+                  code: 'invalid_union',
+                  unionErrors: errors,
+                  message: 'Invalid input: Should pass single schema',
+                });
+              }
             })
           ),
         })

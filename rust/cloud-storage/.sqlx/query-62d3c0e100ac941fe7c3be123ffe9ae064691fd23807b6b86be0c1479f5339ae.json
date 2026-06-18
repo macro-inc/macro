@@ -1,0 +1,33 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            id as \"link_id\"\n        FROM email_links\n        WHERE\n            is_sync_active = TRUE\n            AND provider = $1\n            AND (abs(hashtext(id::text)::bigint) % $2::int4) = $3::int4\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "link_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        {
+          "Custom": {
+            "name": "email_user_provider_enum",
+            "kind": {
+              "Enum": [
+                "GMAIL"
+              ]
+            }
+          }
+        },
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "62d3c0e100ac941fe7c3be123ffe9ae064691fd23807b6b86be0c1479f5339ae"
+}

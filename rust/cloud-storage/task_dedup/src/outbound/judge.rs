@@ -42,6 +42,7 @@ In the reason, briefly compare the concrete categories that matter most for the 
 /// can't fabricate matches.
 pub struct AgentDuplicateJudge {
     model: AgentModel,
+    recorder: std::sync::Arc<dyn ai_usage::UsageRecorder>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -52,15 +53,19 @@ struct DuplicateJudgeOutput {
 
 impl AgentDuplicateJudge {
     /// Creates a new judge using the fast agent model.
-    pub fn new() -> Self {
+    pub fn new(recorder: std::sync::Arc<dyn ai_usage::UsageRecorder>) -> Self {
         Self {
             model: AgentModel::Fast,
+            recorder,
         }
     }
 
     /// Creates a new judge with an explicit agent model.
-    pub fn with_model(model: AgentModel) -> Self {
-        Self { model }
+    pub fn with_model(
+        model: AgentModel,
+        recorder: std::sync::Arc<dyn ai_usage::UsageRecorder>,
+    ) -> Self {
+        Self { model, recorder }
     }
 
     fn unavailable(&self, reason: &str) -> JudgeResult {
@@ -69,12 +74,6 @@ impl AgentDuplicateJudge {
             model: Some(self.model.to_string()),
             reason: Some(reason.to_string()),
         }
-    }
-}
-
-impl Default for AgentDuplicateJudge {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -110,6 +109,8 @@ impl TaskDuplicateJudge for AgentDuplicateJudge {
             DUPLICATE_JUDGE_SYSTEM_PROMPT,
             vec![Message::user(prompt)],
             schema,
+            self.recorder.as_ref(),
+            ai_usage::UsageContext::system(ai_usage::AiFeature::Automation),
         )
         .await;
 

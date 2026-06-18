@@ -15,6 +15,11 @@ pub struct Link {
     pub provider: UserProvider,
     pub is_sync_active: bool,
     pub is_primary: bool,
+    /// Set when the link's Google grant stops yielding a token (revoked or
+    /// missing); cleared on the next successful token fetch.
+    pub needs_reauth: bool,
+    /// When the most recent token failure was observed, if any.
+    pub last_sync_error_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }

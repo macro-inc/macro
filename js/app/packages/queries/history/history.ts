@@ -195,20 +195,6 @@ export async function removeHistoryItem(
   return maybeRemoved.isOk() && !!maybeRemoved.value.success;
 }
 
-/** Hook to get the updated raw name (no transform) of a HistoryItem */
-export function useHistoryItemRawName(itemId: string) {
-  const historyQuery = useHistoryQuery();
-
-  return () => {
-    if (historyQuery.isLoading) return undefined;
-    const history = historyQuery.data;
-    if (!history) return undefined;
-
-    const item = history.find((item) => item.id === itemId);
-    return item?.rawName;
-  };
-}
-
 /**
  * Get history items from cache.
  * For use in standalone functions outside component context.

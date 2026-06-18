@@ -1,6 +1,7 @@
 //! Configuration for the find_used_sfs_ids binary.
 
 use anyhow::Context;
+use macro_env_var::{env_vars, maybe_env_vars};
 
 /// Holds all configuration loaded from environment variables.
 pub struct Config {
@@ -20,33 +21,70 @@ pub struct Config {
     pub prefetch_batches: usize,
 }
 
+env_vars! {
+    struct DatabaseUrl;
+}
+
+maybe_env_vars! {
+    struct FetchBatchSize;
+    struct BatchSize;
+    struct PrefetchBatches;
+    struct SfsDomain;
+    struct MessageIdsFile;
+    struct UsedUuidsFile;
+}
+
+fn parse_optional_env<T, V>(
+    value: Option<V>,
+    default: T,
+    context: &'static str,
+) -> anyhow::Result<T>
+where
+    T: std::str::FromStr,
+    T::Err: std::error::Error + Send + Sync + 'static,
+    V: AsRef<str>,
+{
+    value
+        .map(|value| value.as_ref().parse::<T>().context(context))
+        .transpose()
+        .map(|value| value.unwrap_or(default))
+}
+
 impl Config {
     /// Creates a new `Config` instance by reading from environment variables.
     /// Returns an error if any required variable is not set.
     pub fn from_env() -> anyhow::Result<Self> {
-        let fetch_batch_size = std::env::var("FETCH_BATCH_SIZE")
-            .unwrap_or_else(|_| "1000".to_string())
-            .parse::<usize>()
-            .context("FETCH_BATCH_SIZE is not a valid number")?;
+        let fetch_batch_size = parse_optional_env(
+            FetchBatchSize::new(),
+            1000usize,
+            "FETCH_BATCH_SIZE is not a valid number",
+        )?;
 
-        let batch_size = std::env::var("BATCH_SIZE")
-            .unwrap_or_else(|_| "1000".to_string())
-            .parse::<usize>()
-            .context("BATCH_SIZE is not a valid number")?;
+        let batch_size = parse_optional_env(
+            BatchSize::new(),
+            1000usize,
+            "BATCH_SIZE is not a valid number",
+        )?;
 
-        let prefetch_batches = std::env::var("PREFETCH_BATCHES")
-            .unwrap_or_else(|_| "2".to_string())
-            .parse::<usize>()
-            .context("PREFETCH_BATCHES is not a valid number")?;
+        let prefetch_batches = parse_optional_env(
+            PrefetchBatches::new(),
+            2usize,
+            "PREFETCH_BATCHES is not a valid number",
+        )?;
 
         Ok(Self {
-            database_url: std::env::var("DATABASE_URL").context("DATABASE_URL not set")?,
-            sfs_domain: std::env::var("SFS_DOMAIN")
-                .unwrap_or_else(|_| "static-file-service.macro.com".to_string()),
-            message_ids_file: std::env::var("MESSAGE_IDS_FILE")
-                .unwrap_or_else(|_| "message_ids.txt".to_string()),
-            used_uuids_file: std::env::var("USED_UUIDS_FILE")
-                .unwrap_or_else(|_| "used_sfs_uuids.txt".to_string()),
+            database_url: DatabaseUrl::new()
+                .context("DATABASE_URL not set")?
+                .to_string(),
+            sfs_domain: SfsDomain::new()
+                .map(|value| value.to_string())
+                .unwrap_or_else(|| "static-file-service.macro.com".to_string()),
+            message_ids_file: MessageIdsFile::new()
+                .map(|value| value.to_string())
+                .unwrap_or_else(|| "message_ids.txt".to_string()),
+            used_uuids_file: UsedUuidsFile::new()
+                .map(|value| value.to_string())
+                .unwrap_or_else(|| "used_sfs_uuids.txt".to_string()),
             fetch_batch_size,
             batch_size,
             prefetch_batches,

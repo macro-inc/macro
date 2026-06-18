@@ -14,9 +14,11 @@ export const NOTIFICATION_LABEL_BY_TYPE: Record<NotificationType, string> = {
   task_assigned: 'ASSIGNED',
   ai_response: 'AI',
   github_pr_status_changed: 'GITHUB',
+  github_pr_check_run: 'CHECK',
   github_review_requested: 'REVIEW',
   github_pr_comment: 'COMMENT',
   github_pr_mention: 'MENTION',
   github_pr_review: 'REVIEW',
-  'call-started': 'CALL',
+  call_started: 'CALL',
+  inbox_reauth_required: 'EMAIL',
 } as const;

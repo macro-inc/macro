@@ -1,8 +1,8 @@
 //! Bot ports.
 
 use super::models::{
-    AuthenticatedBot, Bot, BotId, BotOwner, BotToken, BotTokenCandidate, CreateBotRequest,
-    CreateBotTokenRequest, CreateBotTokenResponse, CreateChannelScopedBotRequest,
+    AuthenticatedBot, Bot, BotChannel, BotId, BotOwner, BotToken, BotTokenCandidate,
+    CreateBotRequest, CreateBotTokenRequest, CreateBotTokenResponse, CreateChannelScopedBotRequest,
     CreateChannelScopedBotResponse, PatchBotRequest,
 };
 use macro_user_id::user_id::MacroUserIdStr;
@@ -28,8 +28,7 @@ pub trait BotRepo: Clone + Send + Sync + 'static {
         owner: BotOwner,
         created_by: MacroUserIdStr<'static>,
         channel_id: Uuid,
-        token_hash: Vec<u8>,
-        token_prefix: String,
+        token: String,
         req: CreateChannelScopedBotRequest,
     ) -> impl Future<Output = Result<(Bot, BotToken), Self::Err>> + Send;
 
@@ -74,6 +73,12 @@ pub trait BotRepo: Clone + Send + Sync + 'static {
         bot_id: BotId,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
+    /// List active channels containing a bot.
+    fn list_bot_channels(
+        &self,
+        bot_id: BotId,
+    ) -> impl Future<Output = Result<Vec<BotChannel>, Self::Err>> + Send;
+
     /// List active bots in a channel.
     fn list_channel_bots(
         &self,
@@ -84,8 +89,7 @@ pub trait BotRepo: Clone + Send + Sync + 'static {
     fn create_token(
         &self,
         bot_id: BotId,
-        token_hash: Vec<u8>,
-        token_prefix: String,
+        token: String,
         req: CreateBotTokenRequest,
     ) -> impl Future<Output = Result<BotToken, Self::Err>> + Send;
 
@@ -102,18 +106,18 @@ pub trait BotRepo: Clone + Send + Sync + 'static {
         token_id: Uuid,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
-    /// Lookup token candidates by prefix.
-    fn token_candidates(
+    /// Lookup a token candidate by exact raw token value.
+    fn token_candidate(
         &self,
-        token_prefix: &str,
-    ) -> impl Future<Output = Result<Vec<BotTokenCandidate>, Self::Err>> + Send;
+        token: &str,
+    ) -> impl Future<Output = Result<Option<BotTokenCandidate>, Self::Err>> + Send;
 
-    /// Lookup token candidates by channel and prefix.
-    fn channel_token_candidates(
+    /// Lookup a channel-scoped token candidate by exact raw token value.
+    fn channel_token_candidate(
         &self,
         channel_id: Uuid,
-        token_prefix: &str,
-    ) -> impl Future<Output = Result<Vec<BotTokenCandidate>, Self::Err>> + Send;
+        token: &str,
+    ) -> impl Future<Output = Result<Option<BotTokenCandidate>, Self::Err>> + Send;
 
     /// Mark a token as used.
     fn mark_token_used(&self, token_id: Uuid)
@@ -180,6 +184,13 @@ pub trait BotService: Clone + Send + Sync + 'static {
         channel_id: Uuid,
         bot_id: BotId,
     ) -> impl Future<Output = Result<(), BotError>> + Send;
+
+    /// List active channels containing a manageable bot.
+    fn list_bot_channels(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        bot_id: BotId,
+    ) -> impl Future<Output = Result<Vec<BotChannel>, BotError>> + Send;
 
     /// List channel bots.
     fn list_channel_bots(

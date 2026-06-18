@@ -13,12 +13,11 @@ import type {
   GroupHeaderProps,
   SoupRow,
 } from '@app/component/next-soup/create-soup-state';
-import type {
-  Query,
-  QueryState,
-} from '@app/component/next-soup/filters/filter-store';
+import { buildDocumentTypeQuery } from '@app/component/next-soup/filters/configs/document-type-query';
+import type { Query } from '@app/component/next-soup/filters/filter-store';
 import type { SetPredicatesInput } from '@app/component/next-soup/filters/filter-store/predicates-store';
 import { useSoup } from '@app/component/next-soup/soup-context';
+import { registerDocumentsFilterSplit } from '@app/component/next-soup/soup-view/documents-filter-controllers';
 import { EmptyState } from '@app/component/next-soup/soup-view/empty-states';
 import { InboxSelector } from '@app/component/next-soup/soup-view/filters-bar/inbox-selector';
 import { SoupFiltersBar } from '@app/component/next-soup/soup-view/filters-bar/soup-filters-bar';
@@ -116,6 +115,7 @@ import {
   batch,
   createEffect,
   createMemo,
+  createRenderEffect,
   createSignal,
   type JSX,
   Match,
@@ -147,11 +147,11 @@ export const SoupSectionHeader = (props: {
         onClick={props.onClick}
         data-highlighted={props.highlighted || undefined}
         class={cn(
-          'group/header relative w-[calc(100%-0.5rem)] mx-1 my-0.5 rounded px-2 py-2 flex items-center gap-2.5 text-xs font-semibold tracking-tight',
+          'group/header relative w-[calc(100%-0.5rem)] mx-1 my-0.5 rounded-lg px-2 py-2 flex items-center gap-2.5 text-xs font-semibold tracking-tight',
           'text-text-muted bg-surface border border-edge-muted relative',
           props.onClick && 'hover:bg-active',
           props.class,
-          props.highlighted && 'ring ring-edge bg-active ring-inset'
+          props.highlighted && 'bg-active'
         )}
       >
         {props.children}
@@ -164,7 +164,9 @@ const AssigneeGroupContent = (props: {
   assigneeId: MacroId;
   fallbackLabel: string;
 }) => {
-  const [assigneeName] = useDisplayName(props.assigneeId);
+  const [assigneeName] = useDisplayName(props.assigneeId, {
+    emailFallback: 'local-part',
+  });
   return (
     <>
       <UserIcon
@@ -182,15 +184,15 @@ const AssigneeGroupContent = (props: {
 
 const STATUS_GROUP_HEADER_TINTS: Record<string, string> = {
   [PROPERTY_OPTION_IDS.STATUS.NOT_STARTED]:
-    'bg-task/5 border-task/10 data-highlighted:ring-task/10 data-highlighted:bg-task/10 hover:bg-task/10',
+    'bg-task/5 border-task/10 data-highlighted:bg-task/10 hover:bg-task/10',
   [PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS]:
-    'bg-alert/5 border-alert/10 data-highlighted:ring-alert/10 data-highlighted:bg-alert/10 hover:bg-alert/10',
+    'bg-alert/5 border-alert/10 data-highlighted:bg-alert/10 hover:bg-alert/10',
   [PROPERTY_OPTION_IDS.STATUS.IN_REVIEW]:
-    'bg-note/5 border-note/10 data-highlighted:ring-note/10 data-highlighted:bg-note/10 hover:bg-note/10',
+    'bg-note/5 border-note/10 data-highlighted:bg-note/10 hover:bg-note/10',
   [PROPERTY_OPTION_IDS.STATUS.COMPLETED]:
-    'bg-accent/5 border-accent/10 data-highlighted:ring-accent/10 data-highlighted:bg-accent/10 hover:bg-accent/10',
+    'bg-accent/5 border-accent/10 data-highlighted:bg-accent/10 hover:bg-accent/10',
   [PROPERTY_OPTION_IDS.STATUS.CANCELED]:
-    'bg-ink/5 border-ink/10 data-highlighted:ring-ink/10 data-highlighted:bg-ink/10 hover:bg-ink/10',
+    'bg-ink/5 border-ink/10 data-highlighted:bg-ink/10 hover:bg-ink/10',
 };
 
 const DefaultGroupHeader = (
@@ -363,7 +365,7 @@ const listStateCache = new Map<
 interface SoupViewProps {
   viewName: string;
   initialClientFilters?: SetPredicatesInput<string>;
-  initialFilters?: Partial<QueryState>;
+  initialFilters?: Query;
   initialSearchText?: string;
   /**
    * Initial group-by id (same format as `soup.grouping.setActiveGroupId`,
@@ -395,6 +397,8 @@ export const SoupView = (props: SoupViewProps) => {
     | SetPredicatesInput<string>
     | undefined;
 
+  const persistedSearchText = entryState?.['search.text'] as string | undefined;
+
   const persistedGroupBy = entryState?.['soup.groupBy'] as
     | string
     | null
@@ -418,12 +422,17 @@ export const SoupView = (props: SoupViewProps) => {
   // We only restore the following because they either live as state in the
   // context or are used within the context to produce the output (like the
   // client filters, local search state, and additionalEntities)
-  onMount(() => {
+  //
+  // We use `createRenderEffect` to initialize before the elements mount
+  let init = false;
+  createRenderEffect(() => {
+    if (init) return;
+    init = true;
     batch(() => {
       soupView.initialize({
         initialQuery: persistedFilters ?? props.initialFilters,
         initialClientFilters: persistedPredicates ?? props.initialClientFilters,
-        initialSearchText: props.initialSearchText,
+        initialSearchText: persistedSearchText ?? props.initialSearchText,
         disableLocalSearch: props.disableLocalSearch,
         additionalEntities: props.additionalEntities,
       });
@@ -450,6 +459,34 @@ export const SoupView = (props: SoupViewProps) => {
 
       soupView.setActiveTab(initialActiveTab);
     });
+  });
+
+  onMount(() => {
+    if (contentId !== 'documents') return;
+
+    const markdownQuery = buildDocumentTypeQuery(['doc-markdown']);
+    if (!markdownQuery) return;
+
+    const dispose = registerDocumentsFilterSplit(panel.handle.id, {
+      toggleMarkdownFilter: () => {
+        if (soup.predicates.isActive('doc-markdown')) {
+          soupView.queryFilters.remove(markdownQuery);
+          soup.predicates.set(({ andIds, orIds }) => ({
+            and: andIds,
+            or: orIds.filter((id) => id !== 'doc-markdown'),
+          }));
+          return;
+        }
+
+        soupView.queryFilters.add(markdownQuery);
+        soup.predicates.set(({ andIds, orIds }) => ({
+          and: andIds,
+          or: [...new Set([...orIds, 'doc-markdown'])],
+        }));
+      },
+    });
+
+    onCleanup(dispose);
   });
 
   createEffect(() => {
@@ -552,7 +589,14 @@ export const SoupView = (props: SoupViewProps) => {
       }}
     >
       <div class="size-full flex flex-col" data-list-view={activeListView()}>
-        <div class="flex flex-col w-full">
+        <div
+          class={cn('flex flex-col w-full', {
+            // In preview the separating border sits below this region, so it
+            // ends up under the active-filters bar when shown, otherwise right
+            // under the toolbar (the wrapper collapses to zero height).
+            'border-b border-edge-muted': !isMobile() && !!soup.previewEntity(),
+          })}
+        >
           <SplitHeaderLeft>
             <div
               class={cn('h-full flex gap-3 items-center', {
@@ -624,7 +668,7 @@ export const SoupView = (props: SoupViewProps) => {
                 when={!isComponentListView('search')}
                 fallback={
                   <Layer depth={2}>
-                    <div class="grow ml-2">
+                    <div class="grow ml-2 min-w-0 [contain:inline-size]">
                       <SoupSearchbar
                         variant="secondary"
                         placeholder="Search, @mention contacts"
@@ -1109,6 +1153,11 @@ export const SoupViewList = (props: SoupViewListProps) => {
     }
   });
 
+  // The preview flag lives on the panel, so clear it when the soup view
+  // unmounts (e.g. pressing enter replaces the split with the full entity);
+  // otherwise it stays stale-true and the entity's toolbar keeps the border.
+  onCleanup(() => panel.previewState[1](false));
+
   return (
     <MaybeSoupEntityActionDrawerManager>
       <div
@@ -1289,7 +1338,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                           class={cn(
                                             'my-1 rounded min-h-9 flex items-center justify-center',
                                             highlighted()
-                                              ? 'w-[calc(100%-0.5rem)] mx-1 ring ring-edge bg-active/60 ring-inset'
+                                              ? 'w-[calc(100%-0.5rem)] mx-1 bg-active/60'
                                               : 'mx-auto'
                                           )}
                                         >

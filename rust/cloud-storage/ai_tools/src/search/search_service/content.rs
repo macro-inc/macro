@@ -1,3 +1,4 @@
+use super::context::SearchToolContext;
 use super::types::{PAGE_SIZE, SearchToolResponse};
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use async_trait::async_trait;
@@ -7,9 +8,7 @@ use models_search::{
     unified::{UnifiedSearchIndex, UnifiedSearchRequest, entity_filters_from_include},
 };
 use schemars::JsonSchema;
-use search_service_client::SearchServiceClient;
 use serde::Deserialize;
-use std::sync::Arc;
 
 #[derive(Debug, JsonSchema, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -31,13 +30,13 @@ pub struct ContentSearch {
 }
 
 #[async_trait]
-impl AsyncTool<Arc<SearchServiceClient>> for ContentSearch {
+impl AsyncTool<SearchToolContext> for ContentSearch {
     type Output = SearchToolResponse;
 
     #[tracing::instrument(skip_all, fields(user_id=?(*request_context.user_id).as_ref()), err)]
     async fn call(
         &self,
-        search_client: ServiceContext<Arc<SearchServiceClient>>,
+        search_context: ServiceContext<SearchToolContext>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
         tracing::info!(self=?self, "Content search params");
@@ -62,10 +61,11 @@ impl AsyncTool<Arc<SearchServiceClient>> for ContentSearch {
             filters: entity_filters_from_include(self.entity_types.clone(), base_filters),
             search_on: models_search::SearchOn::Content,
             include_crm: false,
-            collapse: Some(true),
+            collapse: None,
         };
 
-        let response = search_client
+        let response = search_context
+            .search_client
             .search_unified(
                 (*request_context.user_id).as_ref(),
                 search_request,
@@ -78,32 +78,36 @@ impl AsyncTool<Arc<SearchServiceClient>> for ContentSearch {
                 internal_error: e,
             })?;
 
-        Ok(SearchToolResponse {
-            results: response.results,
-        })
+        // Drop the chat the agent is currently running inside so it never
+        // surfaces itself in its own search results.
+        let mut results = response.results;
+        if let Some(self_chat_id) = search_context.self_chat_id {
+            results.retain(|item| item.entity_id() != self_chat_id);
+        }
+
+        Ok(SearchToolResponse { results })
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ai_toolset::generate_tool_input_schema;
-    use ai_toolset::tool_object::validate_tool_schema;
+    use ai_toolset::schema::generate_validated_input_schema;
 
     #[test]
     fn test_content_search_schema_validation() {
-        let schema = generate_tool_input_schema!(ContentSearch);
-
-        let result = validate_tool_schema(&schema);
+        let result = generate_validated_input_schema::<ContentSearch>();
         assert!(result.is_ok(), "{:?}", result);
 
-        let (name, description) = result.unwrap();
+        let validated = result.unwrap();
         assert_eq!(
-            name, "ContentSearch",
+            validated.name, "ContentSearch",
             "Tool name should match the schemars title"
         );
         assert!(
-            description.contains("Search items by their content"),
+            validated
+                .description
+                .contains("Search items by their content"),
             "Description should contain expected text"
         );
     }

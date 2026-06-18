@@ -9,7 +9,15 @@ import {
 
 const docMarkdownFilter = config({
   id: 'doc-markdown',
-  predicate: (e) => isDocumentEntity(e) && e.fileType === 'md',
+  predicate: (e) => isDocumentEntity(e) && e.fileType === 'md' && !e.subType,
+  query: { include: { fileAssoc: ['assoc:md'] } },
+});
+
+const docSnippetFilter = config({
+  id: 'doc-snippet',
+  predicate: (e) => isDocumentEntity(e) && e.subType?.type === 'snippet',
+  // Snippets are markdown documents in storage; subtype is enforced client-side
+  // so this composes with other file-type OR filters.
   query: { include: { fileAssoc: ['assoc:md'] } },
 });
 
@@ -31,6 +39,7 @@ export const emailAttachmentsFilter = config({
 
 export const DOCUMENT_CONTEXTUAL_FILTERS = [
   docMarkdownFilter,
+  docSnippetFilter,
   docCanvasFilter,
   emailAttachmentsFilter,
 ] as const;

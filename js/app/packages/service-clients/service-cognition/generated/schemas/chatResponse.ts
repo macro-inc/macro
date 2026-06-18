@@ -21,6 +21,7 @@ export interface ChatResponse {
   id: string;
   /** The messages in the chat. */
   messages: ChatMessageWithAttachments[];
+  /** The model used to generate the chat (provider api id). */
   model?: ChatResponseModel;
   /** The name of the chat. */
   name: string;

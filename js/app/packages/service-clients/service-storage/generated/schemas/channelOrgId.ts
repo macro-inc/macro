@@ -6,6 +6,7 @@
  */
 
 /**
+ * Organization id.
  * @minimum 0
  */
 export type ChannelOrgId = number | null;

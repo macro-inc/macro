@@ -1,6 +1,8 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import BugIcon from '@phosphor/bug.svg';
 import DeviceMobileIcon from '@phosphor/device-mobile-speaker.svg';
+import EnvelopeIcon from '@phosphor/envelope.svg';
+import GithubLogoIcon from '@phosphor/github-logo.svg';
 import KeyboardIcon from '@phosphor/keyboard.svg';
 import PaintBucketIcon from '@phosphor/paint-bucket.svg';
 import PlugIcon from '@phosphor/plug.svg';
@@ -13,6 +15,7 @@ import { isTouchDevice } from '../mobile/isTouchDevice';
 import {
   DEV_MODE_ENV,
   ENABLE_APP_STORE_QR_CODE,
+  ENABLE_EMAIL,
   ENABLE_TEAMS_OVERRIDE,
 } from './featureFlags';
 import { PERMISSION_IDS } from './permissions';
@@ -41,8 +44,8 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
   {
     label: 'General',
     items: [
-      { tab: 'Appearance', label: 'Appearance', icon: PaintBucketIcon },
       { tab: 'Account', label: 'Account', icon: UserIconPhosphor },
+      { tab: 'Appearance', label: 'Appearance', icon: PaintBucketIcon },
       { tab: 'Mobile App', label: 'Mobile App', icon: DeviceMobileIcon },
       { tab: 'Shortcuts', label: 'Shortcuts', icon: KeyboardIcon },
     ],
@@ -51,6 +54,8 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
     label: 'Workspace',
     items: [
       { tab: 'Team', label: 'Team', icon: UsersThreeIcon },
+      { tab: 'Email', label: 'Email', icon: EnvelopeIcon },
+      { tab: 'GitHub', label: 'GitHub', icon: GithubLogoIcon },
       { tab: 'Agent', label: 'MCPs', icon: PlugIcon },
     ],
   },
@@ -92,6 +97,10 @@ export const useSettingsTabAvailable = () => {
         return true;
       case 'Team':
         return teamsFlag().enabled;
+      case 'Email':
+        return ENABLE_EMAIL;
+      case 'GitHub':
+        return true;
       case 'Shortcuts':
         return !isTouchDevice();
       case 'Mobile App':

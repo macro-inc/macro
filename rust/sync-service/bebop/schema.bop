@@ -1,12 +1,17 @@
 union FromPeer {
   1 -> struct PeerUpdate {
-    byte[] update;
+    byte[][] updates;
+    string id;
   }
   2 -> struct PeerAwareness {
     byte[] awareness;
   }
   3 -> struct PeerRequestSince {
-    byte[] frontiers;
+    // We send a version vector instead of a frontier from the client to
+    // request updates. This is because I could make updates while offline,
+    // and then when I request updates I want to request updates up to a
+    // point that doesn't exist on the server.
+    byte[] vv;
   }
   4 -> struct PeerRequestSnapshot {}
   5 -> struct PeerRegisterId {
@@ -29,11 +34,11 @@ union FromRemote {
     byte[] snapshot;
   }
   5 -> struct RemoteUpdateAck {
-    byte[] update;
+    string id;
   }
   6 -> struct RemoteUpdateSince {
     byte[] update;
-    byte[] frontiers;
+    byte[] vv;
   }
 }
 

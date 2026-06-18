@@ -36,7 +36,7 @@ impl From<AgentModel> for ModelSchema {
     fn from(m: AgentModel) -> Self {
         Self {
             name: m.api_id().to_owned(),
-            provider: m.provider(),
+            provider: m.provider().as_str(),
             metadata: ModelMetadata {
                 context_window: m.context_window(),
             },

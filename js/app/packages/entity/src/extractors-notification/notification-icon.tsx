@@ -43,6 +43,7 @@ function getNotificationIcon(
     .with(
       P.union(
         'github_pr_status_changed',
+        'github_pr_check_run',
         'github_review_requested',
         'github_pr_comment',
         'github_pr_mention',
@@ -50,7 +51,8 @@ function getNotificationIcon(
       ),
       () => GithubIcon
     )
-    .with('call-started', () => PhoneIcon)
+    .with('call_started', () => PhoneIcon)
+    .with('inbox_reauth_required', () => EnvelopeIcon)
     .exhaustive();
 }
 
