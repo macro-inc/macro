@@ -70,4 +70,11 @@ export function setUser(user: User) {
   if (isInitialized()) datadogLogs.setUser(user);
 }
 
+// Drop the user from log context on logout so logs aren't attributed to a
+// signed-out user. Mirrors the analytics.reset() in the logout flow.
+export function clearUser() {
+  pendingUser = undefined;
+  if (isInitialized()) datadogLogs.clearUser();
+}
+
 export { error, log, logger } from './logger';
