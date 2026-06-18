@@ -2,16 +2,16 @@ import type { SplitContent } from '@app/component/split-layout/layoutManager';
 import { getChannelParams } from '@channel/Channel/link';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import type { EntityData } from '@entity';
+import { scopedEntityFilters } from '@queries/soup/filters';
 import { stringToItemType } from '@service-storage/client';
 import type { ApiChannelAttachment } from '@service-storage/generated/schemas/apiChannelAttachment';
+import type { EntityFilters } from '@service-storage/generated/schemas/entityFilters';
 import { match } from 'ts-pattern';
 
 /** size-25.5 = 102px. Keep in sync with the tile size in MediaGrid. */
 export const THUMB_SIZE = 102;
 /** gap-1.5 = 6px between tiles, matching MediaGrid's attachments variant. */
 export const THUMB_GAP = 6;
-
-const NIL_ID = '00000000-0000-0000-0000-000000000000';
 
 /** Number of square thumbnails that fit in a row of the given content width. */
 export function itemsPerRow(containerWidth: number): number {
@@ -23,13 +23,14 @@ export function itemsPerRow(containerWidth: number): number {
 }
 
 /**
- * Build soup query filters that fetch only the given entity IDs,
- * grouped by type. Unused entity types are zeroed out with NIL_ID
- * so they return nothing instead of everything.
+ * Build soup query filters that fetch only the given attachment entity IDs,
+ * grouped by type. Starts from a baseline that excludes every entity type
+ * (so the soup call never fans out to types attachments can't be, e.g. crm
+ * companies or foreign entities) and opts in only the types present here.
  */
 export function buildAttachmentEntityFilters(
   attachments: ApiChannelAttachment[]
-) {
+): EntityFilters {
   const documentIds: string[] = [];
   const emailIds: string[] = [];
   const chatIds: string[] = [];
@@ -61,30 +62,19 @@ export function buildAttachmentEntityFilters(
     }
   }
 
-  return {
-    document_filters: {
-      document_ids: documentIds.length > 0 ? documentIds : [NIL_ID],
-    },
-    email_filters: {
-      email_thread_ids: emailIds.length > 0 ? emailIds : [NIL_ID],
-    },
-    chat_filters: { chat_ids: chatIds.length > 0 ? chatIds : [NIL_ID] },
-    channel_filters: {
-      channel_ids: channelIds.length > 0 ? channelIds : [NIL_ID],
-    },
-    project_filters: {
-      project_ids: projectIds.length > 0 ? projectIds : [NIL_ID],
-    },
-    call_filters: {
-      call_ids: callIds.length > 0 ? callIds : [NIL_ID],
-    },
-    // Attachments are never crm companies; exclude them.
-    crm_company_filters: { company_ids: [NIL_ID] },
-    // Attachments are never foreign entities; exclude them so soup doesn't
-    // fetch (and then discard) the user's foreign entities (e.g. GitHub PRs),
-    // which otherwise runs unfiltered and makes this call slow.
-    foreign_entity_filters: { ids: [NIL_ID] },
-  };
+  const overrides: EntityFilters = {};
+  if (documentIds.length > 0)
+    overrides.document_filters = { document_ids: documentIds };
+  if (emailIds.length > 0)
+    overrides.email_filters = { email_thread_ids: emailIds };
+  if (chatIds.length > 0) overrides.chat_filters = { chat_ids: chatIds };
+  if (channelIds.length > 0)
+    overrides.channel_filters = { channel_ids: channelIds };
+  if (projectIds.length > 0)
+    overrides.project_filters = { project_ids: projectIds };
+  if (callIds.length > 0) overrides.call_filters = { call_ids: callIds };
+
+  return scopedEntityFilters(overrides);
 }
 
 export function getEntityClickContent(entity: EntityData): SplitContent {
