@@ -19,10 +19,13 @@ use foreign_entity::domain::{
 use frecency::domain::models::{AggregateFrecency, FrecencyQueryErr};
 use item_filters::{
     EntityFilters,
-    ast::{EntityFilterAst, ExpandErr, crm_company::CrmCompanyLiteral},
+    ast::{
+        EntityFilterAst, ExpandErr, chat::ChatLiteral, crm_company::CrmCompanyLiteral,
+        document::DocumentLiteral, project::ProjectLiteral,
+    },
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::Entity;
+use model_entity::{Entity, EntityType};
 use models_grouping::GroupingConfig;
 use models_pagination::{
     Cursor, CursorVal, CursorWithValAndFilter, Frecency, FrecencyValue, Identify, Query,
@@ -577,6 +580,110 @@ fn or_is_ids_only(expr: &Expr<CrmCompanyLiteral>, out: &mut CrmCompanyFilterExtr
         Expr::Or(a, b) => or_is_ids_only(a, out) && or_is_ids_only(b, out),
         _ => false,
     }
+}
+
+/// Resolve the explicit document/chat entities a soup filter pins, so the
+/// caller can fetch them directly by id via `*_soup_by_ids` instead of
+/// post-filtering the recency-capped generic listing (which silently drops
+/// items outside the user's most-recent soup — e.g. older channel attachments).
+///
+/// Returns `Some(entities)` only when the document and chat sub-filters are a
+/// pure set of (non-nil) ids and no real project id is requested. Any other
+/// shape — non-id literals, `And`/`Not`, or a project-id filter (projects
+/// aren't resolvable by id) — returns `None` so the caller keeps the generic
+/// listing. Nil ids are placeholders used to suppress a type and are ignored.
+pub(crate) fn explicit_by_id_entities(
+    filter: Option<&EntityFilterAst>,
+) -> Option<Vec<Entity<'static>>> {
+    let filter = filter?;
+
+    // Projects can't be resolved through `*_soup_by_ids`; if any real project id
+    // is requested keep the generic listing rather than dropping them.
+    if project_filter_has_real_ids(filter.project_filter.as_deref()) {
+        return None;
+    }
+
+    let mut entities: Vec<Entity<'static>> = Vec::new();
+
+    if let Some(tree) = filter.document_filter.as_deref() {
+        let mut ids = Vec::new();
+        if !collect_literal_ids(tree, &mut ids, document_literal_id) {
+            return None;
+        }
+        entities.extend(
+            ids.into_iter()
+                .map(|id| EntityType::Document.with_entity_string(id.to_string())),
+        );
+    }
+
+    if let Some(tree) = filter.chat_filter.as_deref() {
+        let mut ids = Vec::new();
+        if !collect_literal_ids(tree, &mut ids, chat_literal_id) {
+            return None;
+        }
+        entities.extend(
+            ids.into_iter()
+                .map(|id| EntityType::Chat.with_entity_string(id.to_string())),
+        );
+    }
+
+    // No real ids resolved — let the generic listing handle it (the home feed,
+    // or a filter made up entirely of nil placeholders).
+    (!entities.is_empty()).then_some(entities)
+}
+
+fn document_literal_id(literal: &DocumentLiteral) -> Option<Uuid> {
+    match literal {
+        DocumentLiteral::Id(id) => Some(*id),
+        _ => None,
+    }
+}
+
+fn chat_literal_id(literal: &ChatLiteral) -> Option<Uuid> {
+    match literal {
+        ChatLiteral::ChatId(id) => Some(*id),
+        _ => None,
+    }
+}
+
+/// Walks a literal tree collecting non-nil ids via `extract`. Returns `false`
+/// (caller falls back to the generic listing) when the tree isn't a pure id
+/// set — a non-id literal, an `And`, or a `Not` would change set semantics.
+/// `Or` of ids is the shape produced from an id list.
+fn collect_literal_ids<L>(
+    expr: &Expr<L>,
+    out: &mut Vec<Uuid>,
+    extract: fn(&L) -> Option<Uuid>,
+) -> bool {
+    match expr {
+        Expr::Literal(literal) => match extract(literal) {
+            Some(id) => {
+                if !id.is_nil() {
+                    out.push(id);
+                }
+                true
+            }
+            None => false,
+        },
+        Expr::Or(a, b) => {
+            collect_literal_ids(a, out, extract) && collect_literal_ids(b, out, extract)
+        }
+        Expr::And(_, _) | Expr::Not(_) => false,
+    }
+}
+
+/// True when the project filter requests at least one real (non-nil) project id.
+fn project_filter_has_real_ids(tree: Option<&Expr<ProjectLiteral>>) -> bool {
+    fn walk(expr: &Expr<ProjectLiteral>) -> bool {
+        match expr {
+            Expr::Literal(ProjectLiteral::ProjectId(id))
+            | Expr::Literal(ProjectLiteral::ProjectIdSelf(id)) => !id.is_nil(),
+            Expr::Literal(_) => false,
+            Expr::And(a, b) | Expr::Or(a, b) => walk(a) || walk(b),
+            Expr::Not(inner) => walk(inner),
+        }
+    }
+    tree.is_some_and(walk)
 }
 
 /// a [SoupItem] with an associated frecency score

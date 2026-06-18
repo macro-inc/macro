@@ -1,11 +1,15 @@
+import type { DateValue } from '@core/util/date';
+import type { EntityData } from '@entity';
 import { For, Show } from 'solid-js';
-import {
-  AttachmentEntityRow,
-  type AttachmentEntityRowData,
-} from './AttachmentEntityRow';
+import { AttachmentEntityRow } from './AttachmentEntityRow';
 import { AttachmentSection, LoadMoreButton } from './SectionHeader';
 
-export type AttachmentEntityListRow = AttachmentEntityRowData;
+export type AttachmentEntityListRow = {
+  entity: EntityData;
+  timestamp?: DateValue | null;
+  senderId?: string;
+  onClick?: () => void;
+};
 
 export function AttachmentEntityList(props: {
   rows: AttachmentEntityListRow[];
@@ -19,14 +23,21 @@ export function AttachmentEntityList(props: {
     <AttachmentSection label="Documents">
       <div class="grid grid-cols-1">
         <Show when={!hasDocuments()}>
-          <div class="py-3 px-6 text-sm text-ink-faint">
+          <div class="py-3 text-sm text-ink-faint">
             No documents in this channel yet.
           </div>
         </Show>
 
         <Show when={hasDocuments()}>
           <For each={props.rows}>
-            {(row) => <AttachmentEntityRow {...row} />}
+            {(row) => (
+              <AttachmentEntityRow
+                entity={row.entity}
+                timestamp={row.timestamp}
+                senderId={row.senderId}
+                onClick={row.onClick}
+              />
+            )}
           </For>
 
           <Show when={props.hasNextPage}>

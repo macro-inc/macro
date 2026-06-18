@@ -2,7 +2,7 @@ use crate::domain::{
     models::{
         AdvancedSortParams, FrecencyQueryInner, FrecencySoupItem, GetCrmCompaniesRequest,
         GroupedSortRequest, GroupedSoupItem, IntoSoupReqAst, SimpleQueryInner, SimpleSortQuery,
-        SimpleSortRequest, SoupErr, SoupQuery, SoupRequest, SoupType,
+        SimpleSortRequest, SoupErr, SoupQuery, SoupRequest, SoupType, explicit_by_id_entities,
     },
     ports::{SoupOutput, SoupRepo, SoupService},
 };
@@ -27,6 +27,7 @@ use frecency::domain::{
 };
 use item_filters::ast::EntityFilterAst;
 use macro_user_id::user_id::MacroUserIdStr;
+use model_entity::Entity;
 use models_pagination::{
     Cursor, CursorVal, Frecency, FrecencyValue, PaginateOn, Query, SimpleSortMethod,
 };
@@ -133,6 +134,54 @@ where
             item,
             frecency_score: None,
         }))
+    }
+
+    /// Fetches the document/chat/project portion of a Simple-sorted soup page.
+    ///
+    /// When `by_id_entities` pins an explicit set of attachment entities, those
+    /// are resolved directly via `*_soup_by_ids` so items outside the user's
+    /// recent soup are still returned. Otherwise this falls back to the generic
+    /// recency-ordered listing.
+    #[tracing::instrument(err, skip(self, cursor, by_id_entities, user))]
+    async fn handle_simple_main_soup(
+        &self,
+        soup_type: SoupType,
+        limit: u16,
+        user: MacroUserIdStr<'_>,
+        cursor: Query<Uuid, SimpleSortMethod, Option<EntityFilterAst>>,
+        by_id_entities: Option<Vec<Entity<'static>>>,
+    ) -> Result<Vec<FrecencySoupItem>, SoupErr> {
+        if let Some(entities) = by_id_entities {
+            let items = self
+                .handle_soup_by_ids(
+                    soup_type,
+                    AdvancedSortParams {
+                        entities: &entities,
+                        user_id: user,
+                    },
+                )
+                .await
+                .map_err(anyhow::Error::from)?;
+            return Ok(items
+                .into_iter()
+                .map(|item| FrecencySoupItem {
+                    item,
+                    frecency_score: None,
+                })
+                .collect());
+        }
+
+        Ok(self
+            .handle_simple_request(
+                soup_type,
+                SimpleSortRequest {
+                    limit,
+                    cursor: SimpleSortQuery::from_entity_cursor(cursor),
+                    user_id: user,
+                },
+            )
+            .await?
+            .collect())
     }
 
     #[tracing::instrument(err, skip(self, req))]
@@ -517,6 +566,12 @@ where
         let req = req.into_ast()?;
         let limit = req.limit.clamp(20, 500);
 
+        // When the filter pins an explicit set of document/chat ids (e.g. the
+        // channel attachments view), resolve them directly by id rather than
+        // post-filtering the recency-capped listing. `None` keeps the generic
+        // listing for every other request shape.
+        let by_id_entities = explicit_by_id_entities(req.filters().as_ref());
+
         // Borrow before email's builder consumes team_receipt.
         let crm_company_request = req.build_crm_company_request(&team_receipt);
         let foreign_entity_source_ids = req.build_foreign_entity_source_ids(team_receipt.as_ref());
@@ -529,13 +584,20 @@ where
             SoupQuery::Simple(SimpleQueryInner(cursor)) => {
                 let sort_method = *cursor.sort_method();
 
-                let main_soup_fut = self.handle_simple_request(
+                // Only short-circuit to a by-id fetch on the initial page; a
+                // cursor continuation keeps the generic listing so pagination
+                // stays consistent.
+                let by_id_entities = match cursor {
+                    Query::Sort(..) => by_id_entities,
+                    Query::Cursor(..) => None,
+                };
+
+                let main_soup_fut = self.handle_simple_main_soup(
                     req.soup_type,
-                    SimpleSortRequest {
-                        limit,
-                        cursor: SimpleSortQuery::from_entity_cursor(cursor),
-                        user_id: req.user.copied(),
-                    },
+                    limit,
+                    req.user.copied(),
+                    cursor,
+                    by_id_entities,
                 );
 
                 let email_soup_fut = self.handle_email_request(email_request);
@@ -570,6 +632,7 @@ where
                 );
 
                 let page = main_soup?
+                    .into_iter()
                     .chain(email_soup?)
                     .chain(comms_soup?)
                     .chain(call_soup?)

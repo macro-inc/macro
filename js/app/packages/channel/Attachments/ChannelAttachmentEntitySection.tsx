@@ -1,42 +1,72 @@
+import { useSplitLayout } from '@app/component/split-layout/layout';
+import type { EntityData } from '@entity';
 import {
   type ChannelAttachmentsData,
   flattenAttachments,
   useChannelDocumentAttachmentsQuery,
 } from '@queries/channel/channel-attachments';
-import { DEFAULT_ITEM_TYPE, stringToItemType } from '@service-storage/client';
+import { useSoupItemsQuery } from '@queries/soup/items';
+import type { ApiChannelAttachment } from '@service-storage/generated/schemas/apiChannelAttachment';
 import { createMemo } from 'solid-js';
 import {
   AttachmentEntityList,
   type AttachmentEntityListRow,
 } from './AttachmentEntityList';
+import {
+  buildAttachmentEntityFilters,
+  getEntityClickContent,
+} from './attachment-utils';
 
 export function ChannelAttachmentEntitySection(props: { channelId: string }) {
   const attachmentsQuery = useChannelDocumentAttachmentsQuery(
     () => props.channelId
   );
 
-  // De-duplicate by referenced entity (the same document can be attached in
-  // many messages) keeping the newest occurrence. Each row resolves the entity
-  // by id in AttachmentEntityRow, so — unlike the previous soup-listing
-  // approach — documents outside the viewer's recent soup are still shown.
-  const rows = createMemo<AttachmentEntityListRow[]>(() => {
-    const attachments = flattenAttachments(
+  const documentAttachments = createMemo(() =>
+    flattenAttachments(
       attachmentsQuery.data as ChannelAttachmentsData | undefined
-    );
+    )
+  );
 
-    const seen = new Set<string>();
-    const out: AttachmentEntityListRow[] = [];
-    for (const a of attachments) {
-      if (seen.has(a.entity_id)) continue;
-      seen.add(a.entity_id);
-      out.push({
-        entityId: a.entity_id,
-        entityType: stringToItemType(a.entity_type) ?? DEFAULT_ITEM_TYPE,
-        senderId: a.sender_id,
-        timestamp: a.created_at,
-      });
+  const soupQuery = useSoupItemsQuery(
+    () => ({
+      params: { limit: 500 },
+      body: buildAttachmentEntityFilters(documentAttachments()),
+    }),
+    () => ({ enabled: documentAttachments().length > 0 })
+  );
+
+  const attachmentByEntityId = createMemo(() => {
+    const map = new Map<string, ApiChannelAttachment>();
+    for (const attachment of documentAttachments()) {
+      map.set(attachment.entity_id, attachment);
     }
-    return out;
+    return map;
+  });
+
+  const { replaceOrInsertSplit } = useSplitLayout();
+  const handleEntityClick = (entity: EntityData) =>
+    replaceOrInsertSplit(getEntityClickContent(entity));
+
+  const rows = createMemo<AttachmentEntityListRow[]>(() => {
+    const entities = soupQuery.data ?? [];
+    const lookup = attachmentByEntityId();
+
+    return [...entities]
+      .sort((a, b) => {
+        const aTime = lookup.get(a.id)?.created_at ?? '';
+        const bTime = lookup.get(b.id)?.created_at ?? '';
+        return bTime.localeCompare(aTime);
+      })
+      .map((entity) => {
+        const attachment = lookup.get(entity.id);
+        return {
+          entity,
+          timestamp: attachment?.created_at,
+          senderId: attachment?.sender_id,
+          onClick: () => handleEntityClick(entity),
+        };
+      });
   });
 
   return (
