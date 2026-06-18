@@ -8,6 +8,7 @@ import { Button, Layer } from '@ui';
 import { createSignal, For, Match, Show, Switch } from 'solid-js';
 import { DEFAULT_MODEL } from '../../constant';
 import { ChatMessageMarkdown } from './ChatMessageMarkdown';
+import { CollapsibleMessage } from './CollapsibleMessage';
 import { EditableChatMessage } from './EditableChatMessage';
 
 // Function to insert soft hyphens into long words / urls / etc so that they won't lock the width
@@ -120,10 +121,12 @@ export function UserMessage(props: {
             <Match when={!isEditing()}>
               <Layer depth={0}>
                 <div class="relative ml-auto max-w-[calc(100%-8rem)] whitespace-pre-line overflow-hidden rounded-lg border border-edge-muted bg-surface px-3 py-2 text-ink">
-                  <ChatMessageMarkdown
-                    generating={() => false}
-                    text={content()!}
-                  />
+                  <CollapsibleMessage>
+                    <ChatMessageMarkdown
+                      generating={() => false}
+                      text={content()!}
+                    />
+                  </CollapsibleMessage>
                   <Show when={props.edit}>
                     <div class="absolute top-1 right-1 opacity-0 transition-opacity group-hover:opacity-100">
                       <Button
