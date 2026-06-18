@@ -25,12 +25,25 @@ maybe_env_vars! {
     struct Port;
 }
 
+macro_env_var::env_var! {
+    /// Base URL of the Macro web app (e.g. `https://macro.com`), used to build
+    /// links to Macro items in MCP responses. Read from `APP_BASE_URL`.
+    pub struct AppBaseUrl;
+}
+
 #[tokio::main]
 #[tracing::instrument(err)]
 async fn main() -> anyhow::Result<()> {
     MacroEntrypoint::default().init();
 
     let context = build_context().await?;
+
+    // Base URL of the Macro web app, used to build links to Macro items in MCP
+    // responses. Loaded from the `APP_BASE_URL` environment variable via the
+    // macro_env_var infra.
+    let item_base_url = AppBaseUrl::new()
+        .context("failed to read APP_BASE_URL")?
+        .to_string();
 
     // Create the MCP service with authenticated tool handler
     let mcp_service = StreamableHttpService::new(
@@ -40,6 +53,7 @@ async fn main() -> anyhow::Result<()> {
                 tools.toolset,
                 context.tool_context.clone(),
                 context.db.clone(),
+                item_base_url.clone(),
             ))
         },
         Arc::new(LocalSessionManager::default()),
