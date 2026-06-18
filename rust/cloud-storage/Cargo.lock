@@ -10640,7 +10640,6 @@ dependencies = [
  "http-body-util",
  "lexical_client",
  "macro_aws_config",
- "macro_config",
  "macro_cors",
  "macro_db_client",
  "macro_entrypoint",
