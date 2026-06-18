@@ -440,7 +440,11 @@ export function useFilterRefinements() {
                 const previousQuery = buildDocumentTypeQuery(
                   previousDocumentTypeIds
                 );
+                const nextQuery = buildDocumentTypeQuery(
+                  getActiveDocumentTypeFilterIds(soup.predicates.isActive)
+                );
                 if (previousQuery) queryFilters.remove(previousQuery);
+                if (nextQuery) queryFilters.add(nextQuery);
                 return;
               }
 
