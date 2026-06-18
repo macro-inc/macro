@@ -58,7 +58,7 @@ const PROD_SERVICE_URLS: ServiceUrlMap = {
   [ServiceUrl.DOCUMENT_COGNITION_SERVICE_URL]:
     'https://document-cognition.macro.com',
   [ServiceUrl.LEXICAL_SERVICE_URL]:
-    'https://lexical-service.macroverse.workers.dev',
+    'https://lexical-service-prod.macroverse.workers.dev',
 };
 
 /**
