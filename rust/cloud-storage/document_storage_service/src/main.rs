@@ -282,8 +282,10 @@ async fn main() -> anyhow::Result<()> {
             Some(permission_checker),
             Some(notification_service),
         )
-        .with_search_reindex(Arc::new(
-            crate::service::search_reindex::SqsPropertyReindex::new(sqs_client.clone()),
+        .with_search_indexer(Arc::new(
+            crate::service::property_search_indexer::SqsPropertySearchIndexer::new(
+                sqs_client.clone(),
+            ),
         )),
     );
 

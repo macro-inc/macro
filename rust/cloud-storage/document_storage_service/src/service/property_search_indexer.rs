@@ -1,27 +1,26 @@
-//! Adapter that publishes property-reindex events to the search event queue.
+//! Adapter that publishes property search-index upserts to the search queue.
 
 use models_properties::EntityType;
-use properties::SearchReindexPort;
+use properties::PropertySearchIndexer;
 use sqs_client::SQS;
 use sqs_client::search::SearchQueueMessage;
 use sqs_client::search::document::DocumentPropertiesUpdate;
 
-/// Publishes a reindex of an entity's properties so the search index refreshes
-/// after a property mutation. Backed by the shared search event queue that the
-/// search-processing service consumes.
+/// Publishes an upsert of an entity's indexed properties to the shared search
+/// event queue so the search-processing service refreshes them after a write.
 #[derive(Debug)]
-pub struct SqsPropertyReindex {
+pub struct SqsPropertySearchIndexer {
     sqs: SQS,
 }
 
-impl SqsPropertyReindex {
+impl SqsPropertySearchIndexer {
     pub fn new(sqs: SQS) -> Self {
         Self { sqs }
     }
 }
 
-impl SearchReindexPort for SqsPropertyReindex {
-    fn enqueue_property_reindex(
+impl PropertySearchIndexer for SqsPropertySearchIndexer {
+    fn enqueue_upsert(
         &self,
         entity_id: String,
         entity_type: EntityType,

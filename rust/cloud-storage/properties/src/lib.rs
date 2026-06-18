@@ -17,7 +17,7 @@ pub mod outbound;
 pub use domain::error::PropertiesErr;
 pub use domain::model::{EntityPropertyInfo, PropertyOptionInfo};
 pub use domain::ports::{
-    NotificationService, PermissionService, PropertiesRepo, SearchReindexPort,
+    NotificationService, PermissionService, PropertiesRepo, PropertySearchIndexer,
 };
 pub use domain::service::PropertiesService;
 pub use domain::service_impl::PropertiesServiceImpl;
