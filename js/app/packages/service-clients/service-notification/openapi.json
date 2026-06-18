@@ -1103,6 +1103,20 @@
           }
         }
       },
+      "CallStartedMetadata": {
+        "type": "object",
+        "description": "Metadata for a notification that a call has started in a channel.\n\nMirrors the producer-side `CallStartedNotification` in the `call` crate:\nboth serialize the same wire shape (snake_case fields) under the same\n`call_started` [`Notification::TYPE_NAME`]. This type is the read-side\nmodel used by [`crate::NotifEvent`]; the producer keeps its own type\nbecause it additionally builds the incoming-call APNS/VoIP push.\n\nRows persisted before the type name was normalized used the kebab-case\n`call-started`; the [`crate::NotifEvent::CallStarted`] variant carries a\n`#[serde(alias = \"call-started\")]` so those rows still deserialize.",
+        "properties": {
+          "channel_name": {
+            "type": ["string", "null"],
+            "description": "The name of the channel the call started in, when available."
+          },
+          "sender_profile_picture_url": {
+            "type": ["string", "null"],
+            "description": "Profile picture URL of the user who started the call, when available."
+          }
+        }
+      },
       "ChannelInviteMetadata": {
         "type": "object",
         "description": "Metadata for when a user is invited to a channel.",
@@ -2127,6 +2141,21 @@
               "tag": {
                 "type": "string",
                 "enum": ["channel_message_reply"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A call has started in a channel the user is a member of.\n\nThe `call-started` alias keeps rows persisted before the type name\nwas normalized to snake_case (`call_started`) deserializable.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/CallStartedMetadata",
+                "description": "A call has started in a channel the user is a member of.\n\nThe `call-started` alias keeps rows persisted before the type name\nwas normalized to snake_case (`call_started`) deserializable."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["call_started"]
               }
             }
           },
