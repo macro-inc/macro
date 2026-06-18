@@ -13,10 +13,8 @@ import type {
   GroupHeaderProps,
   SoupRow,
 } from '@app/component/next-soup/create-soup-state';
-import type {
-  Query,
-  QueryState,
-} from '@app/component/next-soup/filters/filter-store';
+import { buildDocumentTypeQuery } from '@app/component/next-soup/filters/configs/document-type-query';
+import type { Query } from '@app/component/next-soup/filters/filter-store';
 import type { SetPredicatesInput } from '@app/component/next-soup/filters/filter-store/predicates-store';
 import { useSoup } from '@app/component/next-soup/soup-context';
 import { registerDocumentsFilterSplit } from '@app/component/next-soup/soup-view/documents-filter-controllers';
@@ -367,7 +365,7 @@ const listStateCache = new Map<
 interface SoupViewProps {
   viewName: string;
   initialClientFilters?: SetPredicatesInput<string>;
-  initialFilters?: Partial<QueryState>;
+  initialFilters?: Query;
   initialSearchText?: string;
   /**
    * Initial group-by id (same format as `soup.grouping.setActiveGroupId`,
@@ -466,7 +464,9 @@ export const SoupView = (props: SoupViewProps) => {
   onMount(() => {
     if (contentId !== 'documents') return;
 
-    const markdownQuery: Query = { include: { fileAssoc: ['assoc:md'] } };
+    const markdownQuery = buildDocumentTypeQuery(['doc-markdown']);
+    if (!markdownQuery) return;
+
     const dispose = registerDocumentsFilterSplit(panel.handle.id, {
       toggleMarkdownFilter: () => {
         if (soup.predicates.isActive('doc-markdown')) {

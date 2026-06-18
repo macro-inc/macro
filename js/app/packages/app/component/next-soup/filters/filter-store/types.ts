@@ -46,6 +46,7 @@ export type ArrayFieldFilters = {
   callChannelId?: string[];
   callSpeakerId?: string[];
   foreignEntityRecordId?: string[];
+  foreignEntitySource?: string[];
   crmCompanyId?: string[];
   properties?: PropertyFilter[];
 };
@@ -85,14 +86,42 @@ export type FieldFilters = ArrayFieldFilters & ScalarFieldFilters;
 
 export type FieldName = keyof FieldFilters;
 
+export type DocumentFieldName =
+  | 'documentId'
+  | 'fileType'
+  | 'fileAssoc'
+  | 'subType'
+  | 'projectId'
+  | 'documentOwnerId'
+  | 'documentSeen'
+  | 'documentDone'
+  | 'isEmailAttachment'
+  | 'documentCreatedAt'
+  | 'documentUpdatedAt';
+
+export type DocumentFieldFilters = Pick<FieldFilters, DocumentFieldName>;
+
+export type DocumentFilterClause = {
+  include?: DocumentFieldFilters;
+  exclude?: DocumentFieldFilters;
+};
+
+export type DocumentFilterExpression =
+  | DocumentFilterClause
+  | { op: 'and'; clauses: DocumentFilterExpression[] }
+  | { op: 'or'; clauses: DocumentFilterExpression[] }
+  | { op: 'not'; clause: DocumentFilterExpression };
+
 export type QueryState = {
   include: FieldFilters;
   exclude: FieldFilters;
+  documentWhere?: DocumentFilterExpression[];
   emailView?: EmailView;
 };
 
 export type Query = {
   include?: FieldFilters;
   exclude?: FieldFilters;
+  documentWhere?: DocumentFilterExpression | DocumentFilterExpression[];
   emailView?: EmailView;
 };

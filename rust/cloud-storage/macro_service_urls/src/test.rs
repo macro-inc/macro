@@ -441,7 +441,7 @@ fn exported_service_urls_match_prod_values() {
     );
     assert_eq!(
         service_urls.lexical_service_url.as_ref(),
-        "https://lexical-service.macroverse.workers.dev",
+        "https://lexical-service-prod.macroverse.workers.dev",
     );
     assert_eq!(
         service_urls.sync_service_url.as_ref(),

@@ -6,6 +6,6 @@
  */
 
 /**
- * string name of the channel
+ * Channel display name.
  */
 export type ChannelName = string | null;

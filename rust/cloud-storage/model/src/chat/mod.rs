@@ -8,7 +8,6 @@ use serde::{Deserialize, Serialize};
 use strum::Display;
 use utoipa::ToSchema;
 
-use crate::comms::ChannelType;
 use crate::document::FileType;
 
 #[derive(sqlx::FromRow, Serialize, Deserialize, Eq, PartialEq, Debug, Clone, ToSchema)]
@@ -72,6 +71,15 @@ pub struct ChatAttachment {
     pub chat_id: Option<String>,
     /// The id of the message if the attachment is a message
     pub message_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ChannelType {
+    Public,
+    Private,
+    DirectMessage,
+    Team,
 }
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone, ToSchema)]

@@ -115,10 +115,9 @@ function BlockMarkdownContent({ optimisticSnapshot }: BlockMarkdownProps) {
   const getSyncSource = blockSyncSourceSignal.get;
   const setBlockError = blockErrorSignal.set;
 
-  const wasDirty = BrowserWALStore.isDirtyHint(LORO_WAL_DB_NAME, blockId);
   const loroManager = createLoroManager(MARKDOWN_LORO_SCHEMA, {
     liveSyncSource: () => getSyncSource()!,
-    wasDirty,
+    documentId: blockId,
   });
 
   const snapshotStore = new IDBSnapshotStore<RawUpdate>(
@@ -136,8 +135,6 @@ function BlockMarkdownContent({ optimisticSnapshot }: BlockMarkdownProps) {
       }
       setBlockError(null);
 
-      // Fan out — the state machine in LoroManager handles precedence
-      // and rejects events that don't apply for the current `wasDirty` mode.
       if (optimisticSnapshot) {
         loroManager.ingest({
           kind: 'optimistic',
@@ -145,7 +142,7 @@ function BlockMarkdownContent({ optimisticSnapshot }: BlockMarkdownProps) {
         });
       }
 
-      // unawaited — state machine handles precedence
+      // First one wins automatically (loro manager takes care of ignoring the rest)
       ingestLocalSnapshot(loroManager, snapshotStore, walStore);
       ingestS3Snapshot(loroManager, blockId);
       ingestRemoteSnapshot(loroManager, data.doInitialSync);

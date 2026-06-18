@@ -1,20 +1,34 @@
 use anyhow::{Context, Result};
-use doppleganger::Doppleganger;
-use doppleganger::Mirror;
+use channels::domain::models::{ChannelParticipant, Sender};
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
-use model::comms::{ChannelId, ChannelParticipant};
 use sqlx::Transaction;
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
-#[derive(sqlx::Type, Doppleganger, Debug)]
-#[dg(forward = model::comms::ParticipantRole)]
+#[derive(sqlx::Type, Debug)]
 #[sqlx(rename_all = "lowercase")]
 pub enum DbParticipantRole {
     Admin,
     Member,
     Owner,
+}
+
+impl From<DbParticipantRole> for channels::domain::models::ParticipantRole {
+    fn from(role: DbParticipantRole) -> Self {
+        match role {
+            DbParticipantRole::Admin => Self::Admin,
+            DbParticipantRole::Member => Self::Member,
+            DbParticipantRole::Owner => Self::Owner,
+        }
+    }
+}
+
+// XXX: This is a shim until we correctly implement https://macro.com/app/task/019ed710-f261-7059-b890-5ade6e11f4cd
+fn validate_participant_user_id(user_id: &str) -> Result<(), sqlx::Error> {
+    Sender::parse_storage_str(user_id)
+        .map(|_| ())
+        .map_err(|err| sqlx::Error::Decode(Box::new(err)))
 }
 
 #[tracing::instrument(skip(tsx))]
@@ -37,12 +51,11 @@ pub async fn get_participants_tsx<'t>(
         channel_id
     )
     .try_map(|row| {
+        validate_participant_user_id(&row.user_id)?;
         Ok(ChannelParticipant {
-            channel_id: ChannelId(row.channel_id),
-            user_id: macro_user_id::user_id::MacroUserIdStr::parse_from_str(&row.user_id)
-                .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
-                .into_owned(),
-            role: DbParticipantRole::mirror(row.role),
+            channel_id: row.channel_id,
+            user_id: row.user_id,
+            role: row.role.into(),
             joined_at: row.joined_at,
             left_at: row.left_at,
         })
@@ -73,12 +86,11 @@ pub async fn get_participants(
         channel_id
     )
     .try_map(|row| {
+        validate_participant_user_id(&row.user_id)?;
         Ok(ChannelParticipant {
-            channel_id: ChannelId(row.channel_id),
-            user_id: macro_user_id::user_id::MacroUserIdStr::parse_from_str(&row.user_id)
-                .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
-                .into_owned(),
-            role: DbParticipantRole::mirror(row.role),
+            channel_id: row.channel_id,
+            user_id: row.user_id,
+            role: row.role.into(),
             joined_at: row.joined_at,
             left_at: row.left_at,
         })

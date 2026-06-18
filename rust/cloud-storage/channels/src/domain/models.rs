@@ -6,6 +6,7 @@ use models_pagination::{CreatedAt, CursorVal, Identify, SortOn};
 #[cfg(feature = "list")]
 use models_pagination::{Query, SimpleSortMethod};
 use serde::{Deserialize, Serialize, Serializer};
+use std::collections::HashMap;
 use uuid::Uuid;
 
 pub use bot_id::BotId;
@@ -250,7 +251,7 @@ impl Identify for ChannelMessage {
 }
 
 /// Lightweight channel message used when rendering a channel as an AI attachment.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RecentChannelMessage {
     /// Message id.
     pub message_id: Uuid,
@@ -566,6 +567,132 @@ pub enum ChannelType {
     DirectMessage,
     /// Team channel.
     Team,
+}
+
+impl std::fmt::Display for ChannelType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ChannelType::Public => f.write_str("public"),
+            ChannelType::Private => f.write_str("private"),
+            ChannelType::DirectMessage => f.write_str("direct_message"),
+            ChannelType::Team => f.write_str("team"),
+        }
+    }
+}
+
+/// Request to add a user to all organization channels.
+#[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct AddUserToOrgChannelsRequest {
+    /// User to add.
+    pub user_id: String,
+    /// Organization id.
+    pub org_id: i64,
+}
+
+/// Request to remove a user from all organization channels.
+#[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct RemoveUserFromOrgChannelsRequest {
+    /// User to remove.
+    pub user_id: String,
+    /// Organization id.
+    pub org_id: i64,
+}
+
+/// Request to check user membership in channels.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CheckChannelsForUserRequest {
+    /// User id to check.
+    pub user_id: String,
+    /// Channel ids to check.
+    pub channel_ids: Vec<Uuid>,
+}
+
+/// User activity data for a channel.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct UserActivityForChannel {
+    /// User id for the activity.
+    pub user_id: String,
+    /// Activity update timestamp.
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+/// Information about a channel used in search responses.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ChannelHistoryInfo {
+    /// Channel id.
+    pub item_id: Uuid,
+    /// Channel creation timestamp.
+    pub created_at: DateTime<Utc>,
+    /// Channel update timestamp.
+    pub updated_at: DateTime<Utc>,
+    /// Last viewed timestamp for requesting user.
+    pub viewed_at: Option<DateTime<Utc>>,
+    /// Last interaction timestamp for requesting user.
+    pub interacted_at: Option<DateTime<Utc>>,
+    /// Channel owner user id.
+    pub user_id: String,
+    /// Channel type string.
+    pub channel_type: String,
+}
+
+/// Request for channel history data.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GetChannelsHistoryRequest {
+    /// Requesting user id.
+    pub user_id: String,
+    /// Channel ids to fetch.
+    pub channel_ids: Vec<Uuid>,
+}
+
+/// Response for channel history data.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GetChannelsHistoryResponse {
+    /// History data keyed by channel id.
+    pub channels_history: HashMap<Uuid, ChannelHistoryInfo>,
+}
+
+/// Request to create a welcome message.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CreateWelcomeMessageRequest {
+    /// User id the welcome message is from/for.
+    pub welcome_user_id: MacroUserIdStr<'static>,
+    /// User id to send the welcome message to.
+    pub to_user_id: MacroUserIdStr<'static>,
+}
+
+/// Channel message response used by search indexing.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GetChannelMessageResponse {
+    /// Channel id.
+    pub channel_id: Uuid,
+    /// Channel name.
+    pub name: Option<String>,
+    /// Channel type.
+    pub channel_type: ChannelType,
+    /// Organization id.
+    pub org_id: Option<i64>,
+    /// Message data.
+    pub channel_message: RecentChannelMessage,
+}
+
+/// Request to fetch channel metadata.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ChannelMetadataRequest {
+    /// Channel id.
+    pub channel_id: Uuid,
+}
+
+/// Request to fetch channel attachment text.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ChannelAttachmentTextRequest {
+    /// Channel id.
+    pub channel_id: Uuid,
+    /// Optional lower bound.
+    pub since: Option<chrono::DateTime<chrono::Utc>>,
+    /// Optional row limit.
+    pub limit: Option<i64>,
 }
 
 /// A user's activity (view/interaction) within a channel.

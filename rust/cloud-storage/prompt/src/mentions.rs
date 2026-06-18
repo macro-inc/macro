@@ -22,7 +22,7 @@ When a tool returns both a channel id and a channel message id, link the specifi
 ### Example Response
 
 If no inline or node ids are present:
-“See the document for details<m-document-mention>{“documentId”:”6a2b138d-dfbe-439a-a78b-282471a1e165”,”documentName”:””,”blockName”:”md”,”blockParams”:{}}</m-document-mention>.”
+"See the document for details<m-document-mention>{"documentId":"6a2b138d-dfbe-439a-a78b-282471a1e165","documentName":"","blockName":"md","blockParams":{}}</m-document-mention>."
 "##;
 
 static INTENT: &str = "Entities and channel messages are referenced with correctly formatted \

@@ -1,8 +1,7 @@
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins/mentions/mentionsPlugin';
-import PaperPlaneRight from '@phosphor/paper-plane-right.svg';
 import XIcon from '@phosphor/x.svg';
-import { Button, cn } from '@ui';
+import { Button, cn, SendButton } from '@ui';
 import { batch, createEffect, createSignal, Show, useContext } from 'solid-js';
 import { CommentsContext, ThreadContext } from './Thread';
 
@@ -14,27 +13,26 @@ function EditBottomRow(props: {
   isSending?: boolean;
 }) {
   return (
-    <div class="absolute bottom-1 right-1 flex items-center">
+    <div class="absolute bottom-2 right-2 flex items-center gap-1">
       <Button
         tooltip="Delete Draft"
         size="icon-sm"
-        class="rounded-xs"
         variant="ghost"
         on:click={props.handleCancel}
       >
         <XIcon />
       </Button>
 
-      <Button
+      <SendButton
         tooltip="Send Comment"
-        size="icon-sm"
-        class="rounded-xs"
-        variant="ghost"
+        shortcut="enter"
         disabled={!props.hasContent || props.isSending}
-        on:click={props.handleSend}
-      >
-        <PaperPlaneRight class={cn({ 'text-accent': props.hasContent })} />
-      </Button>
+        pending={props.isSending}
+        onPointerDown={(event) => {
+          event.preventDefault();
+          props.handleSend();
+        }}
+      />
     </div>
   );
 }
@@ -92,44 +90,42 @@ export function EditInput(props: {
   };
 
   return (
-    <div class="relative">
-      <div
-        class="px-2 pt-1 pb-8 bg-surface rounded-sm relative border border-edge focus-within:ring-accent focus-within:ring"
-        on:click={(e) => {
-          e.stopPropagation();
-          focusEditor();
+    <div
+      class={cn('p-2 pb-8')}
+      on:click={(e) => {
+        e.stopPropagation();
+        focusEditor();
+      }}
+    >
+      <MarkdownTextarea
+        class="text-sm wrap-break-word text-ink"
+        editable={() => true}
+        onChange={(value) => {
+          setEditState(value);
         }}
-      >
-        <MarkdownTextarea
-          class="text-sm wrap-break-word text-ink"
-          editable={() => true}
-          onChange={(value) => {
-            setEditState(value);
-          }}
-          initialValue={props.textValue}
-          type="markdown"
-          onEnter={() => {
-            void handleSend();
-            return true;
-          }}
-          placeholder="Add a comment..."
-          focusOnMount
-          onUserMention={(mention) => {
-            setMentions((prev) => [...prev, mention]);
-          }}
-          onFocusReady={(focusFn) => {
-            focusEditor = focusFn;
-          }}
-          onRemoveMention={onRemoveMention}
-        />
-        <EditBottomRow
-          handleCancel={stopEditingAndCancel}
-          handleSend={handleSend}
-          hideHorizontalPadding={props.hidePadding}
-          hasContent={editState().trim().length > 0}
-          isSending={isSending()}
-        />
-      </div>
+        initialValue={props.textValue}
+        type="markdown"
+        onEnter={() => {
+          void handleSend();
+          return true;
+        }}
+        placeholder="Add a comment..."
+        focusOnMount
+        onUserMention={(mention) => {
+          setMentions((prev) => [...prev, mention]);
+        }}
+        onFocusReady={(focusFn) => {
+          focusEditor = focusFn;
+        }}
+        onRemoveMention={onRemoveMention}
+      />
+      <EditBottomRow
+        handleCancel={stopEditingAndCancel}
+        handleSend={handleSend}
+        hideHorizontalPadding={props.hidePadding}
+        hasContent={editState().trim().length > 0}
+        isSending={isSending()}
+      />
     </div>
   );
 }
@@ -142,22 +138,22 @@ export function NewReplyInput(props: {
   textValue: string;
 }) {
   return (
-    <div class="flex flex-col">
+    <div class="flex w-full flex-col mt-2">
+      <div class="h-px bg-edge-muted w-[calc(100%+1rem)] -mx-2"></div>
       <Show
         when={props.isEditing}
         fallback={
           <div
-            class="p-2 mt-2 cursor-default text-sm text-ink-extra-muted bg-surface border border-edge-muted rounded-sm"
+            class="cursor-default p-2 text-sm text-ink-placeholder"
             on:click={(e) => {
               e.stopPropagation();
               props.setEditing(true);
             }}
           >
-            Reply...
+            <p class="mt-1.5">Reply...</p>
           </div>
         }
       >
-        <div class="h-2"></div>
         <EditInput
           textValue={props.textValue}
           handleCancel={() => props.setTextValue('')}

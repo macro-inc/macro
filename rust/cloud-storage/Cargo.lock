@@ -2385,6 +2385,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "cached",
+ "channels",
  "chrono",
  "doppleganger",
  "futures",
@@ -3620,6 +3621,7 @@ dependencies = [
  "macro_project_utils",
  "macro_service_urls",
  "macro_sha_count_client",
+ "macro_tower_layers",
  "macro_user_id",
  "macro_uuid",
  "mockall",
@@ -7236,6 +7238,7 @@ dependencies = [
  "macro_user_id",
  "mcp_auth_proxy",
  "notification",
+ "prompt",
  "properties",
  "readonly_pool",
  "redis",
@@ -7722,6 +7725,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "call",
+ "channels",
  "chrono",
  "crm",
  "document_sub_type",
@@ -10636,6 +10640,7 @@ dependencies = [
  "http-body-util",
  "lexical_client",
  "macro_aws_config",
+ "macro_config",
  "macro_cors",
  "macro_db_client",
  "macro_entrypoint",
@@ -10824,6 +10829,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "aws-sdk-s3",
+ "channels",
  "chrono",
  "clap",
  "comms_db_client",

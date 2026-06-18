@@ -6,6 +6,6 @@
  */
 
 /**
- * id of the team this channel belongs to
+ * Team id.
  */
 export type ChannelTeamId = string | null;

@@ -80,13 +80,15 @@ function MessageRowUI(
         )}
         <div class="text-xs text-ink truncate grow">{displayName()}</div>
         <Show when={props.date}>
-          <div class="text-xs text-ink-muted">{formatDate(props.date)}</div>
+          <div class="text-xs text-ink-placeholder">
+            {formatDate(props.date)}
+          </div>
         </Show>
       </div>
       <Show when={props.children}>
         <div
           class={cn(
-            'items-center space-x-1 ml-2 flex group-hover:opacity-100',
+            'items-center flex group-hover:opacity-100',
             isMobileWidth() && props.isActive ? 'opacity-100' : 'opacity-0'
           )}
         >
@@ -121,13 +123,12 @@ export function MessageTopRow(props: {
       hideBottomMargin={props.hideBottomMargin}
       isActive={props.isActive}
     >
-      <div class="absolute top-0 right-0 flex flex-row bg-surface border border-edge-muted p-1 rounded-sm z-user-highlight">
+      <div class="absolute top-0 right-0 flex flex-row bg-surface border border-edge-muted p-1 rounded-lg z-user-highlight shadow shadow-drop-shadow">
         <Show when={props.copyLink}>
           <Button
             tooltip="Copy link to comment"
             size="icon-sm"
             variant="ghost"
-            class="rounded-xs"
             onClick={props.copyLink}
           >
             <Link />
@@ -140,7 +141,6 @@ export function MessageTopRow(props: {
                 tooltip="Resolve Comment"
                 size="icon-sm"
                 variant="ghost"
-                class="rounded-xs"
                 onClick={props.toggleResolve}
               >
                 <Check />
@@ -151,7 +151,6 @@ export function MessageTopRow(props: {
                 tooltip="Edit Comment"
                 size="icon-sm"
                 variant="ghost"
-                class="rounded-xs"
                 onClick={props.enableEditing}
               >
                 <NotePencil />
@@ -163,7 +162,6 @@ export function MessageTopRow(props: {
               tooltip="Delete Comment"
               size="icon-sm"
               variant="ghost"
-              class="rounded-xs"
               onClick={props.deleteMessage}
             >
               <Trash class="text-failure" />

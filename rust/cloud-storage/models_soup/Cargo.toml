@@ -11,6 +11,7 @@ schema = ["dep:utoipa", "item_filters/schema"]
 [dependencies]
 anyhow = { workspace = true }
 call = { path = "../call", default-features = false }
+channels = { path = "../channels", default-features = false, features = ["list"] }
 chrono = { workspace = true }
 crm = { path = "../crm", default-features = false }
 document_sub_type = { path = "../document_sub_type" }
