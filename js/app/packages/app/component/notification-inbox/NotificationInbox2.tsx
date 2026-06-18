@@ -2,7 +2,12 @@ import {
   useGlobalBlockOrchestrator,
   useGlobalNotificationSource,
 } from '@app/component/GlobalAppState';
-import { QUERY_FILTERS_BASE } from '@app/component/next-soup/filters/query-filters';
+import {
+  compileToAst,
+  defineQueryFilters,
+  type Query,
+  queryStateFrom,
+} from '@app/component/next-soup/filters/filter-store';
 import { PreviewPanel } from '@app/component/PreviewPanel';
 import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
@@ -13,20 +18,25 @@ import {
   registerHotkey,
   useHotkeyDOMScope,
 } from '@core/hotkey/hotkeys';
-import type { EntityData } from '@entity';
+import { type EntityData, toNotificationEntity } from '@entity';
 import {
   getSortedKeyProperties,
   soupPropertyToProperty,
 } from '@entity/extractors-property/property-helpers';
 import { AnimatedInboxIcon } from '@icon/wide-inbox';
 import { Popover } from '@kobalte/core/popover';
-import type { UnifiedNotification } from '@notifications';
+import {
+  type CompositeEntity,
+  compositeEntity,
+  type UnifiedNotification,
+} from '@notifications';
 import CalendarIcon from '@phosphor/calendar-blank.svg';
 import ArrowSquareOutIcon from '@phosphor-icons/core/regular/arrow-square-out.svg?component-solid';
 import SlidersHorizontalIcon from '@phosphor-icons/core/regular/sliders-horizontal.svg?component-solid';
-import { useSoupItemsQuery } from '@queries/soup/items';
+import { useSoupAstItemsQuery } from '@queries/soup/items';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
-import { Button, cn, Layer } from '@ui';
+import { Button, cn, Dropdown, Layer } from '@ui';
+import { startOfDay, subWeeks } from 'date-fns';
 import {
   createEffect,
   createMemo,
@@ -51,8 +61,12 @@ import {
   getNotificationGroupKey,
   getNotificationTime,
   isChannelNotification,
-  sortNotifications,
 } from './notification-utils';
+
+type InboxSourceItem = {
+  entity: SoupEntityRecord;
+  notification: UnifiedNotification;
+};
 
 type InboxDateGroup = {
   id: string;
@@ -67,6 +81,7 @@ type InboxListRow =
 type NotificationTag = UnifiedNotification['notification_metadata']['tag'];
 
 type ReadFilter = 'all' | 'unread' | 'read';
+type InboxMode = 'signal' | 'noise' | 'all';
 
 type DevNotificationFilter = {
   id: string;
@@ -243,50 +258,106 @@ const getInboxItemGroupKey = (notification: UnifiedNotification) => {
   return undefined;
 };
 
-const buildInboxItems = (
-  notifications: UnifiedNotification[],
-  entityById = new Map<string, SoupEntityRecord>()
-): InboxItemData[] => {
-  const groups: UnifiedNotification[][] = [];
+const buildInboxItems = (items: InboxSourceItem[]): InboxItemData[] => {
+  const groups: InboxSourceItem[][] = [];
   let currentKey: string | undefined;
 
-  for (const notification of sortNotifications(notifications)) {
-    const key = getInboxItemGroupKey(notification);
+  for (const item of items) {
+    const key = getInboxItemGroupKey(item.notification);
     const current = groups.at(-1);
 
     if (key && key === currentKey && current) {
-      current.push(notification);
+      current.push(item);
       continue;
     }
 
     currentKey = key;
-    groups.push([notification]);
+    groups.push([item]);
   }
 
   return groups.map((group) => {
-    const notifications = sortNotifications(group);
-    const root = notifications[0];
-    const groupKey = getInboxItemGroupKey(root);
-    const groupDateKey = getDateGroupKey(getNotificationTime(root));
+    const root = group[0];
+    const groupKey = getInboxItemGroupKey(root.notification);
+    const groupDateKey = getDateGroupKey(
+      getNotificationTime(root.notification)
+    );
 
     return transformNotificationItem({
       id:
         group.length > 1
-          ? `${groupDateKey}:${groupKey ?? `notification:${root.id}`}`
-          : `notification:${root.id}`,
-      notification: root,
-      entity: getNotificationEntity(entityById, root),
-      subItems: group.length > 1 ? notifications : undefined,
-      entityById,
+          ? `${groupDateKey}:${groupKey ?? `notification:${root.notification.id}`}`
+          : `notification:${root.notification.id}`,
+      notification: root.notification,
+      entity: root.entity,
+      subItems:
+        group.length > 1 ? group.map((item) => item.notification) : undefined,
     });
   });
 };
 
-const buildInboxGroups = (
-  notifications: UnifiedNotification[],
-  entityById?: Map<string, SoupEntityRecord>
-): InboxDateGroup[] =>
-  groupInboxItemsByDate(buildInboxItems(notifications, entityById));
+const buildInboxGroups = (items: InboxSourceItem[]): InboxDateGroup[] =>
+  groupInboxItemsByDate(buildInboxItems(items));
+
+const readFilterSeen = (readFilter: ReadFilter) => {
+  if (readFilter === 'all') return undefined;
+  return readFilter === 'read';
+};
+
+const inboxQueryFilters = (mode: InboxMode, readFilter: ReadFilter): Query => {
+  const seen = readFilterSeen(readFilter);
+  const seenFilter =
+    seen === undefined
+      ? {}
+      : {
+          documentSeen: seen,
+          emailSeen: seen,
+          channelSeen: seen,
+          chatSeen: seen,
+          folderSeen: seen,
+        };
+
+  if (mode === 'all') {
+    return defineQueryFilters({
+      include: seenFilter,
+      emailView: 'all',
+    });
+  }
+
+  if (mode === 'noise') {
+    return defineQueryFilters({
+      include: {
+        documentDone: false,
+        emailDone: false,
+        emailImportance: false,
+        channelDone: false,
+        chatDone: false,
+        folderDone: false,
+        emailShared: 'exclude',
+        ...seenFilter,
+      },
+      emailView: 'inbox',
+    });
+  }
+
+  const twoWeeksAgo = subWeeks(startOfDay(new Date()), 2).toISOString();
+  return defineQueryFilters({
+    include: {
+      documentDone: false,
+      documentUpdatedAt: { gte: twoWeeksAgo },
+      emailDone: false,
+      emailImportance: true,
+      emailUpdatedAt: { gte: twoWeeksAgo },
+      channelDone: false,
+      chatDone: false,
+      chatUpdatedAt: { gte: twoWeeksAgo },
+      folderDone: false,
+      folderUpdatedAt: { gte: twoWeeksAgo },
+      emailShared: 'exclude',
+      ...seenFilter,
+    },
+    emailView: 'inbox',
+  });
+};
 
 const getNotificationDateValue = (
   notification: UnifiedNotification
@@ -465,8 +536,11 @@ function NotificationInboxList(props: {
   groups: InboxDateGroup[];
   hiddenFilterIds: string[];
   readFilter: ReadFilter;
+  inboxMode: InboxMode;
   selectedItem: InboxItemData | undefined;
   onReadFilterChange: (filter: ReadFilter) => void;
+  onInboxModeChange: (mode: InboxMode) => void;
+  onLoadMore: () => void;
   onSelect: (item: InboxItemData) => void;
   onToggleFilter: (filterId: string) => void;
 }) {
@@ -512,6 +586,14 @@ function NotificationInboxList(props: {
   );
 
   const [scrollOffset, setScrollOffset] = createSignal(0);
+  const maybeLoadMore = () => {
+    const handle = virtualHandle();
+    if (!handle) return;
+    const distanceFromEnd =
+      handle.scrollSize - handle.viewportSize - handle.scrollOffset;
+    if (distanceFromEnd > 600) return;
+    props.onLoadMore();
+  };
 
   const currentHeader = () => {
     const handle = virtualHandle();
@@ -686,116 +768,157 @@ function NotificationInboxList(props: {
   onCleanup(() => group.dispose());
 
   return (
-    <div
-      ref={attachHotkeys}
-      class="flex size-full min-h-0 flex-col bg-surface p-2 outline-none"
-      tabIndex={0}
-    >
-      <div class="mb-2 flex shrink-0 items-center gap-2">
-        <TabsInset
-          class="h-auto w-fit"
-          list={[
-            { value: 'unread', label: 'Unread' },
-            { value: 'read', label: 'Read' },
-            { value: 'all', label: 'All' },
-          ]}
-          value={props.readFilter}
-          onChange={(value) => props.onReadFilterChange(value as ReadFilter)}
-        />
-        <Popover
-          gutter={4}
-          open={settingsOpen()}
-          placement="bottom-end"
-          onOpenChange={setSettingsOpen}
-        >
-          <Popover.Trigger
-            as={Button}
-            class="ml-auto h-7 bg-surface text-ink-muted"
-            depth={2}
-            size="icon-sm"
-            variant="base"
+    <>
+      <SplitHeaderLeft>
+        <div class="flex h-full shrink-0 items-center gap-2">
+          <AnimatedInboxIcon class="size-4 text-ink-muted" />
+          <span class="text-base font-bold">Inbox</span>
+          <Popover
+            gutter={4}
+            open={settingsOpen()}
+            placement="bottom-start"
+            onOpenChange={setSettingsOpen}
           >
-            <SlidersHorizontalIcon />
-          </Popover.Trigger>
-          <Popover.Portal>
-            <Popover.Content class="z-popover flex w-72 flex-col gap-2 rounded-lg border border-edge bg-surface p-2 text-sm shadow-lg">
-              <Button
-                class="h-7 w-full justify-start bg-surface text-ink-muted"
-                depth={2}
-                size="sm"
-                variant={layoutVariant() === 'inline-type' ? 'active' : 'base'}
-                onClick={() =>
-                  setLayoutVariant((value) =>
-                    value === 'inline-type' ? 'default' : 'inline-type'
-                  )
-                }
-              >
-                Inline type layout
-              </Button>
-              <Button
-                class="h-7 w-full justify-start bg-surface text-ink-muted"
-                depth={2}
-                size="sm"
-                variant={showDevFilters() ? 'active' : 'base'}
-                onClick={() => setShowDevFilters((value) => !value)}
-              >
-                Dev filters
-              </Button>
-              <Show when={showDevFilters()}>
-                <div class="flex flex-wrap gap-1 rounded-md border border-dashed border-edge-muted bg-ink-muted/2.5 p-1">
-                  <For each={devNotificationFilters}>
-                    {(filter) => {
-                      const hidden = () =>
-                        props.hiddenFilterIds.includes(filter.id);
+            <Popover.Trigger
+              as={Button}
+              class="h-7 bg-surface text-ink-muted"
+              depth={2}
+              size="icon-sm"
+              variant="base"
+            >
+              <SlidersHorizontalIcon />
+            </Popover.Trigger>
+            <Popover.Portal>
+              <Popover.Content class="z-popover flex w-72 flex-col gap-2 rounded-lg border border-edge bg-surface p-2 text-sm shadow-lg">
+                <Button
+                  class="h-7 w-full justify-start bg-surface text-ink-muted"
+                  depth={2}
+                  size="sm"
+                  variant={
+                    layoutVariant() === 'inline-type' ? 'active' : 'base'
+                  }
+                  onClick={() =>
+                    setLayoutVariant((value) =>
+                      value === 'inline-type' ? 'default' : 'inline-type'
+                    )
+                  }
+                >
+                  Inline type layout
+                </Button>
+                <Button
+                  class="h-7 w-full justify-start bg-surface text-ink-muted"
+                  depth={2}
+                  size="sm"
+                  variant={showDevFilters() ? 'active' : 'base'}
+                  onClick={() => setShowDevFilters((value) => !value)}
+                >
+                  Dev filters
+                </Button>
+                <Show when={showDevFilters()}>
+                  <div class="flex flex-wrap gap-1 rounded-md border border-dashed border-edge-muted bg-ink-muted/2.5 p-1">
+                    <For each={devNotificationFilters}>
+                      {(filter) => {
+                        const hidden = () =>
+                          props.hiddenFilterIds.includes(filter.id);
 
-                      return (
-                        <Button
-                          class="h-7 bg-surface"
-                          depth={2}
-                          size="sm"
-                          variant={hidden() ? 'active' : 'base'}
-                          onClick={() => props.onToggleFilter(filter.id)}
-                        >
-                          {hidden() ? 'Show' : 'Hide'} {filter.label}
-                        </Button>
-                      );
-                    }}
-                  </For>
+                        return (
+                          <Button
+                            class="h-7 bg-surface"
+                            depth={2}
+                            size="sm"
+                            variant={hidden() ? 'active' : 'base'}
+                            onClick={() => props.onToggleFilter(filter.id)}
+                          >
+                            {hidden() ? 'Show' : 'Hide'} {filter.label}
+                          </Button>
+                        );
+                      }}
+                    </For>
+                  </div>
+                </Show>
+              </Popover.Content>
+            </Popover.Portal>
+          </Popover>
+        </div>
+      </SplitHeaderLeft>
+      <div
+        ref={attachHotkeys}
+        class="flex size-full min-h-0 flex-col bg-surface p-2 outline-none"
+        tabIndex={0}
+      >
+        <div class="mb-2 flex shrink-0 items-center gap-2">
+          <Dropdown placement="bottom-start" gutter={4}>
+            <Dropdown.Trigger
+              class="h-7 bg-surface text-ink-muted capitalize"
+              depth={2}
+              size="sm"
+              variant="base"
+            >
+              {props.inboxMode}
+            </Dropdown.Trigger>
+            <Dropdown.Content>
+              <Dropdown.Group>
+                <For each={['signal', 'noise', 'all'] as const}>
+                  {(mode) => (
+                    <Dropdown.Item
+                      class="cursor-default px-2.5 py-1.5 text-sm capitalize text-ink-muted outline-none hover:bg-hover"
+                      onSelect={() => props.onInboxModeChange(mode)}
+                    >
+                      {mode}
+                    </Dropdown.Item>
+                  )}
+                </For>
+              </Dropdown.Group>
+            </Dropdown.Content>
+          </Dropdown>
+          <TabsInset
+            class="ml-auto h-auto w-fit"
+            list={[
+              { value: 'unread', label: 'Unread' },
+              { value: 'read', label: 'Read' },
+              { value: 'all', label: 'All' },
+            ]}
+            value={props.readFilter}
+            onChange={(value) => props.onReadFilterChange(value as ReadFilter)}
+          />
+        </div>
+        <div class="flex min-h-0 flex-1 flex-col">
+          <Show when={currentHeader()}>
+            {(label) => (
+              <Layer depth={2}>
+                <div class="flex items-center">
+                  <header class="border border-edge-muted rounded-full w-fit flex items-center gap-1 bg-surface whitespace-nowrap px-3 py-1.5 my-2 mx-auto">
+                    <CalendarIcon class="size-3 shrink-0 text-ink-extra-muted" />
+                    <h1 class="text-xs font-medium text-ink-extra-muted">
+                      {label()}
+                    </h1>
+                  </header>
+                  <div class="w-full h-px bg-edge-muted" />
                 </div>
-              </Show>
-            </Popover.Content>
-          </Popover.Portal>
-        </Popover>
-      </div>
-      <div class="flex min-h-0 flex-1 flex-col">
-        <Show when={currentHeader()}>
-          {(label) => (
-            <Layer depth={2}>
-              <div class="flex items-center">
-                <header class="border border-edge-muted rounded-full w-fit flex items-center gap-1 bg-surface whitespace-nowrap px-3 py-1.5 my-2 mx-auto">
-                  <CalendarIcon class="size-3 shrink-0 text-ink-extra-muted" />
-                  <h1 class="text-xs font-medium text-ink-extra-muted">
-                    {label()}
-                  </h1>
-                </header>
-                <div class="w-full h-px bg-edge-muted" />
-              </div>
-            </Layer>
-          )}
-        </Show>
-        <VList
-          ref={setVirtualHandle}
-          data={rows()}
-          class="min-h-0 flex-1 scrollbar-hidden"
-          style={{ height: '100%', width: '100%' }}
-          onScroll={setScrollOffset}
-        >
-          {(row) => {
-            if (row.type === 'header') {
-              return (
-                <Show when={row.label !== currentHeader()}>
+              </Layer>
+            )}
+          </Show>
+          <VList
+            ref={setVirtualHandle}
+            data={rows()}
+            class="min-h-0 flex-1 scrollbar-hidden"
+            style={{ height: '100%', width: '100%' }}
+            onScroll={(offset) => {
+              setScrollOffset(offset);
+              maybeLoadMore();
+            }}
+          >
+            {(row) => {
+              if (row.type === 'header') {
+                return (
                   <Layer depth={2}>
-                    <div class="flex items-center">
+                    <div
+                      class={cn(
+                        'flex items-center',
+                        row.label === currentHeader() &&
+                          'invisible pointer-events-none'
+                      )}
+                    >
                       <header class="border border-edge-muted rounded-full w-fit flex items-center gap-1 bg-surface whitespace-nowrap px-3 py-1.5 my-2 mx-auto">
                         <CalendarIcon class="size-3 shrink-0 text-ink-extra-muted" />
                         <h1 class="text-xs font-medium text-ink-extra-muted">
@@ -805,40 +928,40 @@ function NotificationInboxList(props: {
                       <div class="w-full h-px bg-edge-muted" />
                     </div>
                   </Layer>
-                </Show>
-              );
-            }
+                );
+              }
 
-            const onItemClick = () => {
-              selectItem(row.item);
-            };
+              const onItemClick = () => {
+                selectItem(row.item);
+              };
 
-            return (
-              <div
-                class={cn(
-                  'pb-1.5',
-                  row.depth > 0 && 'ml-2 border-l border-edge-muted pl-4'
-                )}
-              >
-                <InboxItem.Root
-                  expanded={isExpanded(row.item)}
-                  highlighted={focusedRow()?.item.id === row.item.id}
-                  item={row.item}
-                  selected={props.selectedItem?.id === row.item.id}
+              return (
+                <div
+                  class={cn(
+                    'pb-1.5',
+                    row.depth > 0 && 'ml-2 border-l border-edge-muted pl-4'
+                  )}
                 >
-                  <Show
-                    when={layoutVariant() === 'inline-type'}
-                    fallback={<InboxItemLayout onClick={onItemClick} />}
+                  <InboxItem.Root
+                    expanded={isExpanded(row.item)}
+                    highlighted={focusedRow()?.item.id === row.item.id}
+                    item={row.item}
+                    selected={props.selectedItem?.id === row.item.id}
                   >
-                    <InboxItemInlineTypeLayout onClick={onItemClick} />
-                  </Show>
-                </InboxItem.Root>
-              </div>
-            );
-          }}
-        </VList>
+                    <Show
+                      when={layoutVariant() === 'inline-type'}
+                      fallback={<InboxItemLayout onClick={onItemClick} />}
+                    >
+                      <InboxItemInlineTypeLayout onClick={onItemClick} />
+                    </Show>
+                  </InboxItem.Root>
+                </div>
+              );
+            }}
+          </VList>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -848,6 +971,7 @@ export function NotificationInbox2() {
   const notificationSource = useGlobalNotificationSource();
   const [hiddenFilterIds, setHiddenFilterIds] = createSignal<string[]>([]);
   const [readFilter, setReadFilter] = createSignal<ReadFilter>('unread');
+  const [inboxMode, setInboxMode] = createSignal<InboxMode>('signal');
   const hiddenTags = createMemo(() => {
     const ids = new Set(hiddenFilterIds());
     return new Set(
@@ -856,92 +980,72 @@ export function NotificationInbox2() {
         .flatMap((filter) => filter.tags)
     );
   });
-  const allNotifications = createMemo(() =>
-    notificationSource
-      .notifications()
-      .filter((notification) => !notification.deleted_at)
+  const activeSoupQuery = createMemo(() =>
+    inboxQueryFilters(inboxMode(), readFilter())
   );
-  const soupIds = createMemo(() => {
-    const values = {
-      channel: [] as string[],
-      chat: [] as string[],
-      document: [] as string[],
-      email: [] as string[],
-      foreign: [] as string[],
-    };
-
-    for (const notification of allNotifications()) {
-      const entityType = String(notification.entity_type);
-      if (entityType === 'channel') values.channel.push(notification.entity_id);
-      if (entityType === 'chat') values.chat.push(notification.entity_id);
-      if (entityType === 'document')
-        values.document.push(notification.entity_id);
-      if (entityType === 'email') values.email.push(notification.entity_id);
-      if (entityType === 'foreign') values.foreign.push(notification.entity_id);
-    }
-
-    return values;
-  });
-  const soupQuery = useSoupItemsQuery(
+  const soupQuery = useSoupAstItemsQuery(
     () => ({
       params: { limit: 100, sort_method: 'viewed_updated' },
-      body: {
-        ...QUERY_FILTERS_BASE,
-        channel_filters: {
-          channel_ids: soupIds().channel.length
-            ? soupIds().channel
-            : QUERY_FILTERS_BASE.channel_filters?.channel_ids,
-        },
-        chat_filters: {
-          chat_ids: soupIds().chat.length
-            ? soupIds().chat
-            : QUERY_FILTERS_BASE.chat_filters?.chat_ids,
-        },
-        document_filters: {
-          document_ids: soupIds().document.length
-            ? soupIds().document
-            : QUERY_FILTERS_BASE.document_filters?.document_ids,
-        },
-        email_filters: {
-          email_thread_ids: soupIds().email.length
-            ? soupIds().email
-            : QUERY_FILTERS_BASE.email_filters?.email_thread_ids,
-        },
-        foreign_entity_filters: {
-          ids: soupIds().foreign.length
-            ? soupIds().foreign
-            : QUERY_FILTERS_BASE.foreign_entity_filters?.ids,
-        },
-      },
+      body: compileToAst(queryStateFrom(activeSoupQuery())),
     }),
     () => ({
-      enabled: allNotifications().length > 0,
+      enabled: true,
       showSupportedForeignEntities: true,
     })
   );
-  const entityById = createMemo(() => {
-    const map = new Map<string, SoupEntityRecord>();
+  const queryItems = createMemo(() => {
+    const entities = soupQuery.data?.entities;
+    if (!entities) return [];
 
-    for (const entity of soupQuery.data ?? []) {
+    const seen = new Set<string>();
+    const items: InboxSourceItem[] = [];
+    const notificationsByEntity = notificationSource.notificationsByEntity();
+
+    for (const entity of entities) {
+      const keys = new Set([
+        compositeEntity(toNotificationEntity(entity)),
+        `${String(entity.type)}@${entity.id}` as CompositeEntity,
+      ]);
+      const entityNotifications: UnifiedNotification[] = [];
+
+      for (const key of keys) {
+        entityNotifications.push(...(notificationsByEntity[key] ?? []));
+      }
+
       const record = entity as SoupEntityRecord;
-      map.set(`${String(entity.type)}:${entity.id}`, record);
+      const messageId = record.messageId;
+      const matchingNotifications =
+        entity.type === 'channel_message' && typeof messageId === 'string'
+          ? entityNotifications.filter((notification) => {
+              const content = notification.notification_metadata.content as
+                | { messageId?: string }
+                | undefined;
+              return content?.messageId === messageId;
+            })
+          : entityNotifications;
+
+      for (const notification of matchingNotifications) {
+        if (notification.deleted_at || seen.has(notification.id)) continue;
+        seen.add(notification.id);
+        items.push({ entity: record, notification });
+      }
     }
 
-    return map;
+    return items;
   });
   const groups = createMemo(() =>
     buildInboxGroups(
-      allNotifications()
+      queryItems()
         .filter(
-          (notification) =>
-            !hiddenTags().has(notification.notification_metadata.tag)
+          (item) =>
+            !hiddenTags().has(item.notification.notification_metadata.tag)
         )
-        .filter((notification) => {
+        .filter((item) => {
           if (readFilter() === 'all') return true;
-          const unread = !notification.viewed_at && !notification.done;
+          const unread =
+            !item.notification.viewed_at && !item.notification.done;
           return readFilter() === 'unread' ? unread : !unread;
-        }),
-      entityById()
+        })
     )
   );
   const toggleFilter = (filterId: string) => {
@@ -973,12 +1077,6 @@ export function NotificationInbox2() {
 
   return (
     <div class="relative size-full min-h-0 bg-surface" data-list-view="inbox2">
-      <SplitHeaderLeft>
-        <div class="flex h-full shrink-0 items-center gap-2">
-          <AnimatedInboxIcon class="size-4 text-ink-muted" />
-          <span class="text-base font-bold">Inbox</span>
-        </div>
-      </SplitHeaderLeft>
       <Resize.Zone direction="horizontal" gutter={0}>
         <Resize.Panel
           id="notification-inbox-list"
@@ -994,7 +1092,15 @@ export function NotificationInbox2() {
             <NotificationInboxList
               groups={groups()}
               hiddenFilterIds={hiddenFilterIds()}
+              inboxMode={inboxMode()}
               readFilter={readFilter()}
+              onInboxModeChange={setInboxMode}
+              onLoadMore={() => {
+                if (!soupQuery.hasNextPage || soupQuery.isFetchingNextPage) {
+                  return;
+                }
+                void soupQuery.fetchNextPage();
+              }}
               onReadFilterChange={setReadFilter}
               onSelect={setSelectedItem}
               onToggleFilter={toggleFilter}
