@@ -1,3 +1,4 @@
+import { navigateToChannelMessage } from '@block-channel/utils/link';
 import { getEntityClickContent } from '@channel/Attachments/attachment-utils';
 import {
   type EntityData,
@@ -82,15 +83,20 @@ const UnifiedSearchToolResponse = (props: {
   );
 
   const openEntity = async (entity: SearchEntity) => {
-    const content = getEntityClickContent(entity);
-    insertSplit(content);
-
-    if (content.params) {
-      const blockHandle = await globalSplitManager()
-        ?.getOrchestrator()
-        .getBlockHandle(content.id);
-      await blockHandle?.goToLocationFromParams(content.params);
+    if (entity.type === 'channel_message') {
+      const orchestrator = globalSplitManager()?.getOrchestrator();
+      if (orchestrator) {
+        await navigateToChannelMessage(
+          orchestrator,
+          entity.channelId,
+          entity.messageId,
+          entity.threadId
+        );
+        return;
+      }
     }
+
+    insertSplit(getEntityClickContent(entity));
   };
 
   return (

@@ -114,7 +114,12 @@ const createBlock = async (spec: {
 
   if (split) {
     split.replace({
-      next: { type: blockName, id, params: createMdParams },
+      next: {
+        type: blockName,
+        id,
+        params: createMdParams,
+        preserveParams: true,
+      },
       mergeHistory: true,
       referredFrom: 'launcher',
     });

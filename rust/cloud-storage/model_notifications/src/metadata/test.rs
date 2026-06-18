@@ -598,3 +598,60 @@ fn channel_message_send_bot_json_serializes_explicit_null_sender_and_round_trips
         Some("Helper Bot")
     );
 }
+
+#[test]
+fn call_started_tagged_content_serializes_with_snake_case_type_name() {
+    let event = CallStartedMetadata {
+        channel_name: Some("general".to_string()),
+        sender_profile_picture_url: Some("https://example.com/pic.png".to_string()),
+    };
+
+    let value =
+        serde_json::to_value(notification::domain::models::TaggedContent::new(event)).unwrap();
+
+    assert_eq!(value["tag"], "call_started");
+    assert_eq!(value["content"]["channel_name"], "general");
+    assert_eq!(
+        value["content"]["sender_profile_picture_url"],
+        "https://example.com/pic.png"
+    );
+}
+
+#[test]
+fn call_started_notif_event_deserializes_and_renders_in_app() {
+    let value = serde_json::json!({
+        "tag": "call_started",
+        "content": { "channel_name": "general" },
+    });
+
+    let event: crate::NotifEvent = serde_json::from_value(value).unwrap();
+
+    assert_eq!(
+        event
+            .format_title(Some(uid("macro|caller@macro.com")))
+            .unwrap(),
+        "caller started a call"
+    );
+    assert_eq!(event.format_body(None).unwrap(), "general");
+
+    let crate::NotifEvent::CallStarted(actual) = event else {
+        panic!("expected call_started variant");
+    };
+    assert_eq!(actual.channel_name.as_deref(), Some("general"));
+}
+
+#[test]
+fn call_started_deserializes_from_legacy_kebab_case_tag() {
+    // Rows persisted before the rename used the kebab-case `call-started`.
+    let value = serde_json::json!({
+        "tag": "call-started",
+        "content": { "channel_name": "general" },
+    });
+
+    let event: crate::NotifEvent = serde_json::from_value(value).unwrap();
+
+    let crate::NotifEvent::CallStarted(actual) = event else {
+        panic!("expected call_started variant from legacy tag");
+    };
+    assert_eq!(actual.channel_name.as_deref(), Some("general"));
+}

@@ -617,12 +617,13 @@
             nodejs_24
             pulumi
             pulumiPackages.pulumi-nodejs
-            sops
+            doppler
             biome
             jq
             stripe-cli
             sccache
             rustToolchain
+            python3
           ]
           ++ pkgs.lib.optionals isLinux [ mold ];
 
@@ -800,7 +801,6 @@
               buildInputs = shellTools ++ libraries;
               PKG_CONFIG_PATH = "${pkgs.openssl.dev}/lib/pkgconfig";
               LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
-              SOPS_KMS_ARN = "arn:aws:kms:us-east-1:569036502058:key/mrk-cab29bf948044eb79005a81f48d40e93,arn:aws:kms:us-west-1:569036502058:key/mrk-cab29bf948044eb79005a81f48d40e93";
               RUSTC_WRAPPER = "${pkgs.sccache}/bin/sccache";
               # Keep local cargo-lambda builds on the same aws-lc-sys path as
               # the Nix lambda derivations. The default cc builder rejects

@@ -49,21 +49,19 @@ import {
 
 const NoteTargetWidth = 768;
 const CommentTargetWidth = 320;
-const GapTargetWidth = 36;
+const GapTargetWidth = 24;
+const MinimizedCommentTargetWidth = 48;
 
 enum CommentLayoutMode {
   lg = 'lg',
   md = 'md',
-  sm = 'sm',
   xs = 'xs',
   none = 'none',
 }
 
 const BreaksPoints: Record<CommentLayoutMode, number> = {
   lg: NoteTargetWidth + 2 * CommentTargetWidth + 3 * GapTargetWidth,
-  md: NoteTargetWidth + CommentTargetWidth + 3 * GapTargetWidth,
-  // hardcoded value below accounts for extra padding at sm size, keeps it from getting too squished
-  sm: NoteTargetWidth - 2 * GapTargetWidth + 260,
+  md: (3 / 4) * NoteTargetWidth + CommentTargetWidth + GapTargetWidth,
   xs: 0,
   none: 0,
 };
@@ -71,7 +69,6 @@ const BreaksPoints: Record<CommentLayoutMode, number> = {
 const widthToMode = (width: number): CommentLayoutMode => {
   if (width >= BreaksPoints.lg) return CommentLayoutMode.lg;
   if (width >= BreaksPoints.md) return CommentLayoutMode.md;
-  if (width >= BreaksPoints.sm) return CommentLayoutMode.sm;
   if (width >= BreaksPoints.xs) return CommentLayoutMode.xs;
   return CommentLayoutMode.none;
 };
@@ -229,11 +226,9 @@ export function Notebook(props: { loroManager: LoroManager }) {
       case CommentLayoutMode.lg:
         return shared;
       case CommentLayoutMode.md:
-        return `${shared} gap-9 justify-center`;
-      case CommentLayoutMode.sm:
-        return `${shared} px-36`;
+        return `${shared} px-8 gap-6 justify-center`;
       case CommentLayoutMode.xs:
-        return `${shared} px-6 gap-9 justify-center`;
+        return `${shared} px-6 gap-6 justify-center`;
       default:
         return `${shared} px-6`;
     }
@@ -247,8 +242,6 @@ export function Notebook(props: { loroManager: LoroManager }) {
         return `${shared} mx-auto`;
       case CommentLayoutMode.md:
         return `${shared} flex-3`;
-      case CommentLayoutMode.sm:
-        return `${shared} mx-auto`;
       case CommentLayoutMode.xs:
         return `${shared} flex-3`;
       default:
@@ -270,14 +263,9 @@ export function Notebook(props: { loroManager: LoroManager }) {
           classes: 'flex-2 max-w-xs min-w-0 pointer-events-none',
           style: {},
         };
-      case CommentLayoutMode.sm:
-        return {
-          classes: 'absolute top-0 h-full w-20 pointer-events-none',
-          style: { left: `${leftFloat}px` },
-        };
       case CommentLayoutMode.xs:
         return {
-          classes: 'flex-1 max-w-6.5 min-w-0 shrink-0 pointer-events-none',
+          classes: 'flex-1 min-w-0 shrink-0 pointer-events-none',
           style: { left: `${leftFloat}px` },
         };
       default:
@@ -315,7 +303,15 @@ export function Notebook(props: { loroManager: LoroManager }) {
       </div>
       <div
         class={commentPositioning().classes}
-        style={commentPositioning().style}
+        style={{
+          ...commentPositioning().style,
+          ...(layoutMode() === CommentLayoutMode.xs
+            ? {
+                width: `${MinimizedCommentTargetWidth}px`,
+                'max-width': `${MinimizedCommentTargetWidth}px`,
+              }
+            : {}),
+        }}
         ref={commentMarginRef}
         classList={{
           block: hasComment(),

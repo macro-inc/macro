@@ -116,9 +116,13 @@ function filterDataToQueryFilters(data: QueryState): EntityFilters {
   }
 
   // Foreign entity filters
-  if (include.foreignEntityRecordId?.length) {
+  if (
+    include.foreignEntityRecordId?.length ||
+    include.foreignEntitySource?.length
+  ) {
     filters.foreign_entity_filters = {
       ids: include.foreignEntityRecordId,
+      foreign_entity_sources: include.foreignEntitySource,
     };
   }
 

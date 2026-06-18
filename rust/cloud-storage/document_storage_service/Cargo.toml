@@ -92,6 +92,7 @@ macro_middleware = { path = "../macro_middleware", default-features = false, fea
 ] }
 macro_project_utils = { path = "../macro_project_utils" }
 macro_sha_count_client = { path = "../macro_sha_count_client" }
+macro_tower_layers = { path = "../macro_tower_layers" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 mockall = { workspace = true }

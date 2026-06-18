@@ -1,3 +1,9 @@
+import type { BlockAlias, BlockName } from '@core/block';
+import { PopupPreview } from '@core/component/DocumentPreview';
+import { HoverCard } from '@core/component/HoverCard';
+import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
+import { itemToBlockName } from '@core/constant/allBlocks';
+import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import Plus from '@phosphor/plus.svg';
 import DeleteIcon from '@phosphor/x.svg';
 import { Property as PropertyNS, useProperty } from '@property';
@@ -11,9 +17,10 @@ import {
 import { useEntityProperties, usePropertyEntityDisplay } from '@property/hooks';
 import type { Property, PropertyApiValues } from '@property/types';
 import { getEntityValues, hasValue } from '@property/utils';
+import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
-import { Button } from '@ui';
+import { Button, Layer } from '@ui';
 import { cn } from '@ui/utils/classname';
 import {
   createEffect,
@@ -378,19 +385,21 @@ function UserStackPill(props: { property: Property }) {
 
   return (
     <PropertyNS.Tooltip property={props.property}>
-      <PropertyNS.EditTrigger
-        class={cn(SidePanel.pillClass, 'w-fit', {
-          'hover:bg-hover': !isReadOnly(),
-        })}
-      >
-        <Show when={!empty()} fallback={<SidePanel.EmptyPill />}>
-          <PropertyNS.UserStack property={props.property} maxUsers={3} />
-          <span class="min-w-0 truncate">
-            <PropertyNS.Text property={props.property} />
-          </span>
-        </Show>
-        <PropertyNS.Caret />
-      </PropertyNS.EditTrigger>
+      <Layer depth={2}>
+        <PropertyNS.EditTrigger
+          class={cn(SidePanel.pillClass, 'w-fit bg-surface', {
+            'hover:bg-hover': !isReadOnly(),
+          })}
+        >
+          <Show when={!empty()} fallback={<SidePanel.EmptyPill />}>
+            <PropertyNS.UserStack property={props.property} maxUsers={3} />
+            <span class="min-w-0 truncate">
+              <PropertyNS.Text property={props.property} />
+            </span>
+          </Show>
+          <PropertyNS.Caret />
+        </PropertyNS.EditTrigger>
+      </Layer>
     </PropertyNS.Tooltip>
   );
 }
@@ -416,15 +425,20 @@ function MultiValue(props: { property: Property }) {
             <PropertyNS.Chips
               property={props.property}
               renderChip={(chip) => (
-                <span
-                  class={cn(SidePanel.pillClass, 'text-xs max-w-35 bg-hover')}
-                >
-                  <PropertyValueIcon
-                    optionId={chip.key}
-                    class="size-3 shrink-0"
-                  />
-                  <span class="truncate">{chip.label}</span>
-                </span>
+                <Layer depth={2}>
+                  <span
+                    class={cn(
+                      SidePanel.pillClass,
+                      'text-xs max-w-35 bg-surface'
+                    )}
+                  >
+                    <PropertyValueIcon
+                      optionId={chip.key}
+                      class="size-3 shrink-0"
+                    />
+                    <span class="truncate">{chip.label}</span>
+                  </span>
+                </Layer>
               )}
             />
             <Show when={!isReadOnly()}>
@@ -620,6 +634,10 @@ function NonUserEntityChip(props: {
       specificMessageId: () => props.specificMessageId,
     }
   );
+  const previewBlockType = () =>
+    getDocumentPreviewFallbackBlockType(props.entityType);
+  const isDocumentPreviewEntity = () =>
+    props.entityType === 'DOCUMENT' || props.entityType === 'TASK';
 
   const openEditor = (event: MouseEvent) => {
     if (!props.canEdit || !props.onEdit) return;
@@ -628,36 +646,110 @@ function NonUserEntityChip(props: {
   };
 
   return (
-    <div
-      ref={containerRef}
-      class="inline-flex min-w-0 max-w-full border h-7 items-stretch border-edge-muted rounded-md text-ink overflow-clip"
-    >
-      <button
-        type="button"
-        class="flex min-w-0 max-w-full items-center gap-1.5 px-2 text-left"
-        onClick={openEditor}
-        disabled={!props.canEdit}
+    <Layer depth={2}>
+      <div
+        ref={containerRef}
+        class="inline-flex min-w-0 max-w-full border h-7 items-stretch border-edge-muted rounded-md bg-surface text-ink overflow-clip"
       >
-        <span class="shrink-0 flex items-center">{icon()}</span>
-        <span class="min-w-0 truncate">{name()}</span>
-      </button>
-      <Show when={props.canEdit && props.onRemove}>
-        <div class="border-l border-edge-muted" />
-        <Button
-          type="button"
-          size="icon-sm"
-          class="flex w-6 p-1 h-full shrink-0 rounded-none text-ink-muted not-disabled:hover:text-failure-ink"
-          onClick={(event) => {
-            event.stopPropagation();
-            props.onRemove?.();
-          }}
-          aria-label={`Remove ${name()}`}
+        <Show
+          when={isDocumentPreviewEntity()}
+          fallback={
+            <button
+              type="button"
+              class="flex min-w-0 max-w-full items-center gap-1.5 px-2 text-left"
+              onClick={openEditor}
+              disabled={!props.canEdit}
+            >
+              <span class="shrink-0 flex items-center">{icon()}</span>
+              <span class="min-w-0 truncate">{name()}</span>
+            </button>
+          }
         >
-          <DeleteIcon />
-        </Button>
-      </Show>
-    </div>
+          <DocumentEntityChipButton
+            entityId={props.entityId}
+            fallbackBlockType={previewBlockType()}
+            icon={icon()}
+            name={name()}
+          />
+        </Show>
+        <Show when={props.canEdit && props.onRemove}>
+          <div class="border-l border-edge-muted" />
+          <Button
+            type="button"
+            size="icon-sm"
+            class="flex w-6 p-1 h-full shrink-0 rounded-none text-ink-muted not-disabled:hover:text-failure-ink"
+            onClick={(event) => {
+              event.stopPropagation();
+              props.onRemove?.();
+            }}
+            aria-label={`Remove ${name()}`}
+          >
+            <DeleteIcon />
+          </Button>
+        </Show>
+      </div>
+    </Layer>
   );
+}
+
+function DocumentEntityChipButton(props: {
+  entityId: string;
+  fallbackBlockType: BlockName | BlockAlias | undefined;
+  icon: JSX.Element;
+  name: string;
+}) {
+  const [item] = useItemPreview(() => ({
+    id: props.entityId,
+    type: 'document',
+  }));
+  const blockType = () => {
+    const preview = item();
+    if (isAccessiblePreviewItem(preview)) {
+      return itemToBlockName(preview);
+    }
+    return props.fallbackBlockType;
+  };
+  const navHandlers = useSplitNavigationHandler<HTMLButtonElement>((event) => {
+    const targetBlockType = blockType();
+    if (!targetBlockType) return;
+    event.stopPropagation();
+    openDocument(targetBlockType, props.entityId, {}, event.shiftKey);
+  });
+
+  return (
+    <button
+      type="button"
+      class="flex min-w-0 max-w-full items-center gap-1.5 px-2 text-left"
+      {...navHandlers}
+    >
+      <span class="shrink-0 flex items-center">{props.icon}</span>
+      <HoverCard
+        trigger={<span class="truncate">{props.name}</span>}
+        content={
+          <PopupPreview
+            mouseEnter={() => {}}
+            mouseLeave={() => {}}
+            documentInfo={{
+              id: props.entityId,
+              name: props.name,
+              type: blockType() ?? 'unknown',
+              params: {},
+              isOpenable: true,
+            }}
+          />
+        }
+        triggerClass="min-w-0 truncate"
+      />
+    </button>
+  );
+}
+
+function getDocumentPreviewFallbackBlockType(
+  entityType: EntityType
+): BlockName | BlockAlias | undefined {
+  if (entityType === 'TASK') return 'task';
+  if (entityType === 'DOCUMENT') return undefined;
+  return undefined;
 }
 
 function InputValue() {

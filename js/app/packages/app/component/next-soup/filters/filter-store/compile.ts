@@ -116,6 +116,7 @@ const FIELD_CONFIG: Record<
   callStatus: { target: 'callf', field: 'Status' },
   callAttended: { target: 'callf', field: 'Attended' },
   foreignEntityRecordId: { target: 'fef', field: 'id' },
+  foreignEntitySource: { target: 'fef', field: 'fes' },
   foreignEntitySeen: { target: 'fef', field: 'ns' },
   foreignEntityDone: { target: 'fef', field: 'nd' },
   foreignEntityIncludesMe: { target: 'fef', field: 'me', unit: true },

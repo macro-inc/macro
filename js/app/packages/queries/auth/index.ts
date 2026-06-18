@@ -4,6 +4,15 @@ export {
   useUserId,
   useUserInfo,
 } from '@core/context/user';
+export {
+  type GithubLink,
+  type GithubLinkStatus,
+  invalidateGithubLinkStatus,
+  useDeleteGithubLinkMutation,
+  useGithubLinkStatusQuery,
+  useInitGithubLinkMutation,
+  useReauthenticateGithubMutation,
+} from './github-link';
 export { useInitGmailLink } from './gmail-link';
 export { authKeys } from './keys';
 export { useSendMobileWelcomeEmail } from './mobile-welcome-email';

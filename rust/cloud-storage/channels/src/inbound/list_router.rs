@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use axum::{Json, Router, extract::State, http::StatusCode, response::IntoResponse, routing::get};
 use frecency::domain::models::AggregateFrecency;
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::user_id::MacroUserIdStr;
 use model_user::axum_extractor::MacroUserExtractor;
 use serde::Serialize;
 use thiserror::Error;
@@ -97,10 +97,11 @@ async fn get_channels_handler<S: ChannelListService>(
         .await
         .map_err(|_| ChannelListRouterErr::Internal)?;
 
-    res.into_iter()
-        .map(ApiChannelWithLatest::try_from)
-        .collect::<Result<Vec<_>, _>>()
-        .map(Json)
+    Ok(Json(
+        res.into_iter()
+            .map(ApiChannelWithLatest::new_from_domain)
+            .collect(),
+    ))
 }
 
 #[tracing::instrument(skip(service))]
@@ -124,7 +125,9 @@ pub async fn get_activity_handler<S: ChannelListService>(
         .await
         .map_err(|_| ChannelListRouterErr::Internal)?;
 
-    Ok(Json(res.into_iter().map(ApiActivity::from).collect()))
+    Ok(Json(
+        res.into_iter().map(ApiActivity::new_from_domain).collect(),
+    ))
 }
 
 /// Participant role in API responses.
@@ -139,8 +142,8 @@ pub enum ParticipantRole {
     Member,
 }
 
-impl From<DomainParticipantRole> for ParticipantRole {
-    fn from(value: DomainParticipantRole) -> Self {
+impl ParticipantRole {
+    fn new_from_domain(value: DomainParticipantRole) -> Self {
         match value {
             DomainParticipantRole::Owner => Self::Owner,
             DomainParticipantRole::Admin => Self::Admin,
@@ -155,8 +158,7 @@ pub struct ChannelParticipant {
     /// id of the channel
     pub channel_id: Uuid,
     /// id of the user
-    #[schema(value_type = String)]
-    pub user_id: MacroUserIdStr<'static>,
+    pub user_id: String,
     /// type of the participant
     pub role: ParticipantRole,
     /// timestamp of when the user joined the channel
@@ -165,19 +167,15 @@ pub struct ChannelParticipant {
     pub left_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-impl TryFrom<crate::domain::models::ChannelParticipant> for ChannelParticipant {
-    type Error = ChannelListRouterErr;
-
-    fn try_from(value: crate::domain::models::ChannelParticipant) -> Result<Self, Self::Error> {
-        Ok(Self {
+impl ChannelParticipant {
+    fn new_from_domain(value: crate::domain::models::ChannelParticipant) -> Self {
+        Self {
             channel_id: value.channel_id,
-            user_id: MacroUserIdStr::parse_from_str(&value.user_id)
-                .map_err(|_| ChannelListRouterErr::Internal)?
-                .into_owned(),
-            role: value.role.into(),
+            user_id: value.user_id,
+            role: ParticipantRole::new_from_domain(value.role),
             joined_at: value.joined_at,
             left_at: value.left_at,
-        })
+        }
     }
 }
 
@@ -208,25 +206,23 @@ pub struct ApiChannelWithLatest {
     pub frecency_score: Option<f64>,
 }
 
-impl TryFrom<ChannelWithLatest> for ApiChannelWithLatest {
-    type Error = ChannelListRouterErr;
-
-    fn try_from(value: ChannelWithLatest) -> Result<Self, Self::Error> {
-        Ok(Self {
+impl ApiChannelWithLatest {
+    fn new_from_domain(value: ChannelWithLatest) -> Self {
+        Self {
             channel: ChannelWithParticipants {
-                channel: value.channel.channel.into(),
+                channel: Channel::new_from_domain(value.channel.channel),
                 participants: value
                     .channel
                     .participants
                     .into_iter()
-                    .map(ChannelParticipant::try_from)
-                    .collect::<Result<Vec<_>, _>>()?,
+                    .map(ChannelParticipant::new_from_domain)
+                    .collect(),
             },
-            latest_message: value.latest_message.into(),
+            latest_message: LatestMessage::new_from_domain(value.latest_message),
             viewed_at: value.viewed_at,
             interacted_at: value.interacted_at,
             frecency_score: map_frecency(value.frecency_score),
-        })
+        }
     }
 }
 
@@ -257,12 +253,12 @@ pub struct Channel {
     pub owner_id: MacroUserIdStr<'static>,
 }
 
-impl From<ChannelListItem> for Channel {
-    fn from(value: ChannelListItem) -> Self {
+impl Channel {
+    fn new_from_domain(value: ChannelListItem) -> Self {
         Self {
             id: value.id,
             name: value.name,
-            channel_type: value.channel_type.into(),
+            channel_type: ChannelType::new_from_domain(value.channel_type),
             org_id: value.org_id.and_then(|org_id| u32::try_from(org_id).ok()),
             team_id: value.team_id,
             created_at: value.created_at,
@@ -281,11 +277,13 @@ pub struct LatestMessage {
     pub latest_non_thread_message: Option<ChannelMessage>,
 }
 
-impl From<crate::domain::models::LatestMessage> for LatestMessage {
-    fn from(value: crate::domain::models::LatestMessage) -> Self {
+impl LatestMessage {
+    fn new_from_domain(value: crate::domain::models::LatestMessage) -> Self {
         Self {
-            latest_message: value.latest_message.map(ChannelMessage::from),
-            latest_non_thread_message: value.latest_non_thread_message.map(ChannelMessage::from),
+            latest_message: value.latest_message.map(ChannelMessage::new_from_recent),
+            latest_non_thread_message: value
+                .latest_non_thread_message
+                .map(ChannelMessage::new_from_recent),
         }
     }
 }
@@ -304,8 +302,8 @@ pub enum ChannelType {
     Team,
 }
 
-impl From<DomainChannelType> for ChannelType {
-    fn from(value: DomainChannelType) -> Self {
+impl ChannelType {
+    fn new_from_domain(value: DomainChannelType) -> Self {
         match value {
             DomainChannelType::Public => Self::Public,
             DomainChannelType::Private => Self::Private,
@@ -336,8 +334,8 @@ pub struct ChannelMessage {
     pub mentions: Vec<String>,
 }
 
-impl From<RecentChannelMessage> for ChannelMessage {
-    fn from(value: RecentChannelMessage) -> Self {
+impl ChannelMessage {
+    fn new_from_recent(value: RecentChannelMessage) -> Self {
         Self {
             message_id: value.message_id,
             thread_id: value.thread_id,
@@ -371,8 +369,8 @@ pub struct ApiActivity {
     pub interacted_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-impl From<Activity> for ApiActivity {
-    fn from(value: Activity) -> Self {
+impl ApiActivity {
+    fn new_from_domain(value: Activity) -> Self {
         Self {
             id: value.id,
             user_id: value.user_id,
