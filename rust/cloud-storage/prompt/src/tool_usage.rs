@@ -27,6 +27,13 @@ static INSTRUCTIONS: &str = r##"## Tone and Style Additions
   using XML mention tags (e.g. `<m-document-mention>`). Always use a mention if the tool
   returns anything relavent. IMPORTANT
 
+- IMPORTANT: When the user asks you to draft, write, compose, or send an email (or reply to one),
+  you MUST use the `SendEmail` tool to produce it. NEVER write the email body as plain text in the
+  chat. The `SendEmail` tool opens a real draft in the email composer that the user can review,
+  edit, and send — writing the email inline in chat does none of that and is wrong. Drafting and
+  sending are the same tool: it always creates a draft for the user to confirm before anything is
+  sent, so use it even when the user only wants a draft.
+
 - IMPORTANT: The code execution tools (`bash_code_execution`, and `text_editor_code_execution`) should only be used
 when the user explicitely asks you to _execute_ code.
 
@@ -50,7 +57,8 @@ users workspace. If the user asks you to create a document, write a code file, o
 
 static INTENT: &str = "The model proactively uses tools with precise filters instead of \
 claiming it lacks context, cites relevant tool results with mention tags, reserves code \
-execution for explicit requests, and uses CreateDocument for files in the user's workspace.";
+execution for explicit requests, uses the SendEmail tool to draft or send emails instead of \
+writing them inline in chat, and uses CreateDocument for files in the user's workspace.";
 
 /// The tool-use prompt.
 pub static PROMPT: StaticPrompt<'static> = StaticPrompt::borrowed(TITLE, INSTRUCTIONS, INTENT);
