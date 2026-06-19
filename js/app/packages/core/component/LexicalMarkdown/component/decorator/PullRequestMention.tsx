@@ -7,10 +7,10 @@ import {
   $isPullRequestMentionNode,
   type PullRequestMentionDecoratorProps,
 } from '@lexical-core';
+import OpenIcon from '@phosphor/arrows-out.svg';
 import ChatCircle from '@phosphor/chat-circle.svg';
 import GitMerge from '@phosphor/git-merge.svg';
 import GitPullRequest from '@phosphor/git-pull-request.svg';
-import OpenIcon from '@phosphor/arrows-out.svg';
 import { storageServiceClient } from '@service-storage/client';
 import type {
   ForeignEntity,
@@ -368,7 +368,10 @@ function PullRequestPreviewCard(props: {
             </div>
           }
         >
-          <PullRequestPreviewBody id={props.id} fallbackProps={props.fallbackProps} />
+          <PullRequestPreviewBody
+            id={props.id}
+            fallbackProps={props.fallbackProps}
+          />
         </Suspense>
       </Surface>
     </div>
@@ -488,9 +491,7 @@ export function PullRequestMention(props: PullRequestMentionDecoratorProps) {
           <MentionTooltip show={isSelectedAsNode()} text="Open" />
         </span>
       }
-      content={
-        <PullRequestPreviewCard id={props.id} fallbackProps={props} />
-      }
+      content={<PullRequestPreviewCard id={props.id} fallbackProps={props} />}
     />
   );
 }
