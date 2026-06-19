@@ -124,12 +124,21 @@ jobs:
             exit 1
           fi
 
-          out="$(nix build --no-link --print-build-logs --print-out-paths .#dopplerConfigBins)"
+          cachix_pid=
+          if command -v cachix >/dev/null 2>&1 && [ -n "${CACHIX_CACHE_NAME:-}" ]; then
+            cachix watch-store "$CACHIX_CACHE_NAME" >/tmp/cachix-watch-store.log 2>&1 &
+            cachix_pid=$!
+            trap 'if [ -n "${cachix_pid:-}" ]; then kill "$cachix_pid" 2>/dev/null || true; wait "$cachix_pid" 2>/dev/null || true; fi' EXIT
+          fi
 
           while IFS= read -r bin; do
             if [ -z "$bin" ]; then
               continue
             fi
+
+            attr="doppler-config-bin-$bin"
+            echo "Building affected Doppler config binary: $attr"
+            out="$(nix build --no-link --print-build-logs --print-out-paths ".#$attr")"
 
             bin_path="$out/bin/$bin"
             if [ ! -x "$bin_path" ]; then

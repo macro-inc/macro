@@ -265,21 +265,33 @@
           in
           pkgs.lib.unique (pkgs.lib.concatMap matchingDopplerBins cloudStorageWorkspaceMembers);
 
-        dopplerConfigBins = craneLib.buildPackage (
-          commonArgs
-          // {
-            cargoArtifacts = workspaceArtifacts;
-            pname = "cloud-storage-doppler-config";
-            doCheck = false;
-            cargoExtraArgs = pkgs.lib.concatStringsSep " " (
-              [
-                "--locked"
-                "--all-features"
-              ]
-              ++ map (binName: "--bin ${binName}") dopplerConfigBinNames
-            );
-          }
+        dopplerConfigBinPackages = builtins.listToAttrs (
+          map (
+            binName:
+            pkgs.lib.nameValuePair "doppler-config-bin-${binName}" (
+              craneLib.buildPackage (
+                commonArgs
+                // {
+                  # Reuse the dependency-only layer, then compile only this
+                  # Doppler config binary and the local crates it actually uses.
+                  inherit cargoArtifacts;
+                  pname = "cloud-storage-doppler-config-${binName}";
+                  doCheck = false;
+                  cargoExtraArgs = pkgs.lib.concatStringsSep " " [
+                    "--locked"
+                    "--all-features"
+                    "--bin ${binName}"
+                  ];
+                }
+              )
+            )
+          ) dopplerConfigBinNames
         );
+
+        dopplerConfigBins = pkgs.symlinkJoin {
+          name = "cloud-storage-doppler-config";
+          paths = builtins.attrValues dopplerConfigBinPackages;
+        };
 
         openApiBins = craneLib.buildPackage (
           commonArgs
@@ -860,6 +872,7 @@
             ;
           default = cargoArtifacts;
         }
+        // dopplerConfigBinPackages
         // deployServiceBinaryPackages
         // deployLambdaPackages;
 
