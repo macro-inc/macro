@@ -537,7 +537,8 @@ async fn main() -> anyhow::Result<()> {
     let call_webhook_state = WebhookRouterState::new(call_service.clone());
     let call_internal_state = InternalCallRouterState::new(call_service.clone());
 
-    // Create the SQS worker for delete document processing before config is moved
+    // Create the SQS worker for delete document processing before config is moved.
+    #[cfg(feature = "delete_document_worker")]
     let delete_document_worker = sqs_worker::SQSWorker::new(
         aws_sdk_sqs::Client::new(&aws_config),
         document_delete_queue.to_string(),
@@ -691,18 +692,21 @@ async fn main() -> anyhow::Result<()> {
         },
     };
 
-    // Spawn the delete document worker
-    let delete_worker_ctx = service::delete_document_worker::DeleteDocumentWorkerContext {
-        worker: Arc::new(delete_document_worker),
-        db: db.clone(),
-        s3_client: api_context.s3_client.clone(),
-        redis_client: api_context.redis_client.clone(),
-        sync_service_client: api_context.sync_service_client.clone(),
-    };
+    #[cfg(feature = "delete_document_worker")]
+    {
+        // Spawn the delete document worker.
+        let delete_worker_ctx = service::delete_document_worker::DeleteDocumentWorkerContext {
+            worker: Arc::new(delete_document_worker),
+            db: db.clone(),
+            s3_client: api_context.s3_client.clone(),
+            redis_client: api_context.redis_client.clone(),
+            sync_service_client: api_context.sync_service_client.clone(),
+        };
 
-    tokio::spawn(async move {
-        service::delete_document_worker::run_worker(delete_worker_ctx).await;
-    });
+        tokio::spawn(async move {
+            service::delete_document_worker::run_worker(delete_worker_ctx).await;
+        });
+    }
 
     api::setup_and_serve(api_context).await?;
 
