@@ -112,11 +112,20 @@ jobs:
           cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
           dev-shell: 'true'
           sccache-bucket: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
+      - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6
+        with:
+          workspaces: rust/cloud-storage
+          shared-key: cloud-storage-check
+          cache-on-failure: true
+          cache-targets: false
       - name: validate Doppler configs
         if: needs.path-check.outputs.doppler_config_bins != ''
         env:
           DOPPLER_CONFIG_BINS: ${{ needs.path-check.outputs.doppler_config_bins }}
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID || secrets.AWS_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
         run: |
           set -euo pipefail
 
@@ -125,36 +134,37 @@ jobs:
             exit 1
           fi
 
-          cachix_pid=
-          if command -v cachix >/dev/null 2>&1 && [ -n "${CACHIX_CACHE_NAME:-}" ]; then
-            cachix watch-store "$CACHIX_CACHE_NAME" >/tmp/cachix-watch-store.log 2>&1 &
-            cachix_pid=$!
-            trap 'if [ -n "${cachix_pid:-}" ]; then kill "$cachix_pid" 2>/dev/null || true; wait "$cachix_pid" 2>/dev/null || true; fi' EXIT
+          if [ -z "${RUSTC_WRAPPER:-}" ]; then
+            echo "RUSTC_WRAPPER is required so Doppler config binaries build through sccache" >&2
+            exit 1
           fi
 
+          bins=()
+          cargo_args=(build --locked --all-features)
           while IFS= read -r bin; do
             if [ -z "$bin" ]; then
               continue
             fi
 
-            attr="doppler-config-bin-$bin"
-            echo "Building affected Doppler config binary: $attr"
-            out="$(nix build --no-link --print-build-logs --print-out-paths ".#$attr")"
-
-            bin_path="$out/bin/$bin"
-            if [ ! -x "$bin_path" ]; then
-              echo "Doppler config binary not found or not executable: $bin_path" >&2
-              exit 1
-            fi
-
-            "$bin_path"
+            bins+=("$bin")
+            cargo_args+=(--bin "$bin")
           done <<< "$DOPPLER_CONFIG_BINS"
-      - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6
-        with:
-          workspaces: rust/cloud-storage
-          shared-key: cloud-storage-check
-          cache-on-failure: true
-          cache-targets: false
+
+          if [ "${#bins[@]}" -eq 0 ]; then
+            echo "No Doppler config binaries to validate"
+            exit 0
+          fi
+
+          echo "Building affected Doppler config binaries with RUSTC_WRAPPER=$RUSTC_WRAPPER"
+          printf '  %s\n' "${bins[@]}"
+
+          (
+            cd rust/cloud-storage
+            cargo "${cargo_args[@]}"
+            for bin in "${bins[@]}"; do
+              "./target/debug/$bin"
+            done
+          )
       - name: fmt
         run: cd rust/cloud-storage && cargo fmt --check
       - name: clippy
