@@ -215,6 +215,58 @@
           }
         );
 
+        cloudStorageCargoToml = builtins.fromTOML (builtins.readFile ./rust/cloud-storage/Cargo.toml);
+        cloudStorageWorkspaceMembers =
+          cloudStorageCargoToml.workspace.members or (throw "rust/cloud-storage/Cargo.toml is missing workspace.members");
+
+        dopplerConfigBinNames =
+          let
+            dopplerConfigPath = "src/doppler_config.rs";
+            matchingDopplerBins =
+              member:
+              let
+                memberDir = ./rust/cloud-storage + "/${member}";
+                manifestFile = memberDir + "/Cargo.toml";
+                hasConfig = builtins.pathExists (memberDir + "/src/config.rs");
+                hasDopplerConfig = builtins.pathExists (memberDir + "/${dopplerConfigPath}");
+                manifest = builtins.fromTOML (builtins.readFile manifestFile);
+                matchingBins = builtins.filter (bin: (bin.path or null) == dopplerConfigPath) (manifest.bin or [ ]);
+                missingNameError =
+                  "cloud-storage workspace member '${member}' has a ${dopplerConfigPath} bin without a name";
+                matchingBinNames = map (bin: bin.name or (throw missingNameError)) matchingBins;
+              in
+              if !hasDopplerConfig then
+                [ ]
+              else if !(builtins.pathExists manifestFile) then
+                throw "cloud-storage workspace member '${member}' has ${dopplerConfigPath} but no Cargo.toml"
+              else if matchingBinNames == [ ] then
+                throw (
+                  "cloud-storage workspace member '${member}' has ${dopplerConfigPath} "
+                  + "but no [[bin]] with path = \"${dopplerConfigPath}\""
+                )
+              else if !hasConfig then
+                [ ]
+              else
+                matchingBinNames;
+          in
+          pkgs.lib.unique (pkgs.lib.concatMap matchingDopplerBins cloudStorageWorkspaceMembers);
+
+        dopplerConfigBins = craneLib.buildPackage (
+          commonArgs
+          // {
+            cargoArtifacts = workspaceArtifacts;
+            pname = "cloud-storage-doppler-config";
+            doCheck = false;
+            cargoExtraArgs = pkgs.lib.concatStringsSep " " (
+              [
+                "--locked"
+                "--all-features"
+              ]
+              ++ map (binName: "--bin ${binName}") dopplerConfigBinNames
+            );
+          }
+        );
+
         openApiBins = craneLib.buildPackage (
           commonArgs
           // {
@@ -741,6 +793,7 @@
               RUSTDOCFLAGS = "-Dwarnings";
             }
           );
+          doppler-config-bins = dopplerConfigBins;
           gen-api =
             let
               openApiFiles = pkgs.lib.cleanSourceWith {
@@ -788,6 +841,7 @@
             deployCargoArtifacts
             lambdaDeployCargoArtifacts
             openApiBins
+            dopplerConfigBins
             nextestArchive
             ;
           default = cargoArtifacts;
