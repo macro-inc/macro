@@ -265,7 +265,6 @@
       "name": "observability",
       "dependencies": {
         "@datadog/browser-logs": "^6.22.0",
-        "@datadog/browser-rum": "^6.22.0",
       },
     },
     "app/packages/tauri": {

@@ -469,6 +469,10 @@ export const CreateDocumentResponse = z.object({
   documentId: z.string().uuid(),
 });
 
+export const DisplayResults = z.object({ view: z.any() });
+
+export const DisplayResultsResponse = z.object({ message: z.string() });
+
 export const GetEntityProperties = z.object({
   entity_id: z.string(),
   entity_type: z.enum([

@@ -441,6 +441,11 @@ if (LOCAL_ONLY) {
     'user-icon',
     lazy(() => import('@core/internal/UserIconDemo'))
   );
+
+  registerComponent(
+    'dynamic-ui',
+    lazy(() => import('@app/component/dynamic-ui/Gallery'))
+  );
 }
 
 if (DEV_MODE_ENV) {

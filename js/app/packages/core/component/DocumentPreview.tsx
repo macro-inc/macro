@@ -452,9 +452,13 @@ function PreviewPropertyPill(props: {
   );
 }
 
-export function PopupPreview(props: {
-  mouseEnter: () => void;
-  mouseLeave: () => void;
+/**
+ * Props for the reusable document-preview body. These are everything
+ * {@link PopupPreview} needs EXCEPT the floating-hover-card concerns
+ * (`mouseEnter` / `mouseLeave`), which only matter while the preview lives
+ * inside a floating card.
+ */
+export type DocumentPreviewContentProps = {
   delete?: () => void;
   collapseInfo?: {
     isCollapsable: boolean;
@@ -478,7 +482,20 @@ export function PopupPreview(props: {
     characterCount?: number;
   };
   useFallbackData?: boolean;
-}) {
+};
+
+/**
+ * The inner preview body shared by every document/task preview: the header
+ * (icon + filename + action buttons), the task body
+ * ({@link TaskPropertiesPreview}), the image cover strip, the owner/updated
+ * footer, and the loading / no_access / does_not_exist states.
+ *
+ * It renders NO floating/highlighted chrome — no colored highlight border, no
+ * shadow, no rounded floating shell. Wrap it in your own container to control
+ * the surrounding appearance. {@link PopupPreview} wraps it in the floating
+ * hover-card shell; other callers can wrap it in a normal border.
+ */
+export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
   // Hooks
   const navigate = useNavigate();
 
@@ -752,196 +769,214 @@ export function PopupPreview(props: {
   };
 
   return (
+    <Switch>
+      {/* Loading state */}
+      <Match when={item().loading}>
+        <div class="p-3 flex items-center justify-center">
+          <Loading />
+        </div>
+      </Match>
+
+      {/* Accessible preview */}
+      <Match when={matches(item(), isAccessiblePreviewItem)}>
+        {(accessibleItem) => {
+          const accessories = () =>
+            mentionsAccessories(
+              props.documentInfo.type,
+              props.documentInfo.params
+            );
+          const messageContext = () => {
+            const item = accessibleItem();
+            return isChannelPreviewItem(item) ? item.messageContext : undefined;
+          };
+
+          return (
+            <div class="w-full flex flex-col">
+              {/* Header: icon + filename + action buttons */}
+              <div class="flex items-center justify-between gap-2 p-2">
+                <div class="flex items-center gap-2 min-w-0">
+                  <ItemEntityIcon size="sm" />
+                  <div class="text-sm font-semibold select-text min-w-0">
+                    <Show when={accessories()}>
+                      {(acc) => (
+                        <div class="text-[0.8em] text-ink-muted mt-1 select-none">
+                          {`${acc().note} `}
+                          {getMentionsIcon(acc().icon)}
+                        </div>
+                      )}
+                    </Show>
+                  </div>
+                </div>
+                <div class="flex shrink-0">{renderActionButtons()}</div>
+              </div>
+
+              <div class="line-clamp-2 wrap-break-word px-2 mb-2">
+                {props.documentInfo.name || accessibleItem().name}
+              </div>
+
+              {/* Task properties: status, priority, assignees */}
+              <Show when={props.documentInfo.type === 'task'}>
+                <Suspense fallback={<div class="w-full bg-active h-4 m-2" />}>
+                  <TaskPropertiesPreview taskId={props.documentInfo.id} />
+                </Suspense>
+              </Show>
+
+              {/* Visual preview for images */}
+              <Show when={props.documentInfo.type === 'image'}>
+                <ImageCoverStrip
+                  documentId={accessibleItem().id}
+                  fileType={accessibleItem().fileType}
+                  class="shrink-0 h-32"
+                />
+              </Show>
+
+              {/* Footer: message context + owner/timestamp */}
+              <Show
+                when={
+                  messageContext() ||
+                  accessibleItem().owner ||
+                  accessibleItem().updatedAt ||
+                  props.snapshotInfo
+                }
+              >
+                <div class="p-2 border-t border-edge-muted">
+                  <Show when={messageContext()}>
+                    {(context) => (
+                      <div class="mb-2 text-sm text-ink-muted border-l-2 border-edge pl-3 py-1">
+                        <div class="line-clamp-3 wrap-break-word">
+                          <StaticMarkdown
+                            markdown={context().content}
+                            theme={channelTheme}
+                            target="internal"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </Show>
+
+                  <div class="flex justify-between items-center text-sm font-medium">
+                    <Show
+                      when={messageContext()}
+                      fallback={
+                        <Show when={accessibleItem().owner}>
+                          {(owner) => <UserInfo userId={owner()} />}
+                        </Show>
+                      }
+                    >
+                      {(context) => <UserInfo userId={context().sender_id} />}
+                    </Show>
+
+                    <Show
+                      when={messageContext()}
+                      fallback={
+                        <Show when={accessibleItem().updatedAt}>
+                          {(time) => (
+                            <MetadataInfo icon={ClockIcon} align="right">
+                              <span class="text-xxs font-mono uppercase">
+                                {formatDate(time())}
+                              </span>
+                            </MetadataInfo>
+                          )}
+                        </Show>
+                      }
+                    >
+                      {(context) => (
+                        <MetadataInfo icon={ClockIcon} align="right">
+                          {formatDate(context().created_at)}
+                        </MetadataInfo>
+                      )}
+                    </Show>
+                  </div>
+
+                  <Show when={props.snapshotInfo}>
+                    {(snapshot) => (
+                      <div class="mt-2 pt-2 border-t border-edge">
+                        <div class="flex items-center gap-1.5 text-ink-muted">
+                          <ClockIcon class="size-3" />
+                          <span class="text-xxs font-medium font-mono uppercase">
+                            Snapshot from{' '}
+                            {formatDate(new Date(snapshot().date), {
+                              showTime: true,
+                            })}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </Show>
+                </div>
+              </Show>
+            </div>
+          );
+        }}
+      </Match>
+
+      {/* No access / does not exist errors */}
+      <Match when={matches(item(), isPreviewItemNoAccess)}>
+        {(noAccessItem) => (
+          <Show
+            when={
+              noAccessItem().access === 'does_not_exist' &&
+              props.useFallbackData &&
+              props.documentInfo.name
+            }
+            fallback={
+              <div class="text-sm p-4">
+                {noAccessItem().access === 'no_access' ? (
+                  <Unauthorized />
+                ) : (
+                  <NotFound />
+                )}
+              </div>
+            }
+          >
+            <div class="w-full flex flex-col">
+              <div class="flex items-center justify-between gap-2 px-3 pt-3 pb-2">
+                <div class="flex items-center gap-2 min-w-0">
+                  <EntityIcon targetType={props.documentInfo.type} size="sm" />
+                </div>
+                <div class="flex shrink-0">{renderActionButtons()}</div>
+              </div>
+              <div class="line-clamp-2 wrap-break-word px-2 mb-2">
+                {props.documentInfo.name}
+              </div>
+            </div>
+          </Show>
+        )}
+      </Match>
+    </Switch>
+  );
+}
+
+/**
+ * Floating hover-card preview for document references. This is the shell used by
+ * {@link import('./ItemPreview').ItemPreview} hover cards: a fixed-width,
+ * floating, rounded surface with a highlighted (colored) border and drop
+ * shadow, plus mouse-enter/leave handling to keep the card alive while hovered.
+ *
+ * The reusable body lives in {@link DocumentPreviewContent}; this component only
+ * adds the floating/highlight chrome around it.
+ */
+export function PopupPreview(
+  props: DocumentPreviewContentProps & {
+    mouseEnter: () => void;
+    mouseLeave: () => void;
+  }
+) {
+  return (
     <div
-      class="select-none overflow-hidden w-80 text-ink"
+      class="select-none w-80 text-ink"
       onMouseEnter={props.mouseEnter}
       onMouseLeave={props.mouseLeave}
     >
       <Surface active depth={3} class="rounded-xl shadow-lg shadow-drop-shadow">
-        <Switch>
-          {/* Loading state */}
-          <Match when={item().loading}>
-            <div class="p-3 flex items-center justify-center">
-              <Loading />
-            </div>
-          </Match>
-
-          {/* Accessible preview */}
-          <Match when={matches(item(), isAccessiblePreviewItem)}>
-            {(accessibleItem) => {
-              const accessories = () =>
-                mentionsAccessories(
-                  props.documentInfo.type,
-                  props.documentInfo.params
-                );
-              const messageContext = () => {
-                const item = accessibleItem();
-                return isChannelPreviewItem(item)
-                  ? item.messageContext
-                  : undefined;
-              };
-
-              return (
-                <div class="w-full flex flex-col">
-                  {/* Header: icon + filename + action buttons */}
-                  <div class="flex items-center justify-between gap-2 p-2">
-                    <div class="flex items-center gap-2 min-w-0">
-                      <ItemEntityIcon size="sm" />
-                      <div class="text-sm font-semibold select-text min-w-0">
-                        <Show when={accessories()}>
-                          {(acc) => (
-                            <div class="text-[0.8em] text-ink-muted mt-1 select-none">
-                              {`${acc().note} `}
-                              {getMentionsIcon(acc().icon)}
-                            </div>
-                          )}
-                        </Show>
-                      </div>
-                    </div>
-                    <div class="flex shrink-0">{renderActionButtons()}</div>
-                  </div>
-
-                  <div class="line-clamp-2 wrap-break-word px-2 mb-2">
-                    {props.documentInfo.name || accessibleItem().name}
-                  </div>
-
-                  {/* Task properties: status, priority, assignees */}
-                  <Show when={props.documentInfo.type === 'task'}>
-                    <Suspense
-                      fallback={<div class="w-full bg-active h-4 m-2" />}
-                    >
-                      <TaskPropertiesPreview taskId={props.documentInfo.id} />
-                    </Suspense>
-                  </Show>
-
-                  {/* Visual preview for images */}
-                  <Show when={props.documentInfo.type === 'image'}>
-                    <ImageCoverStrip
-                      documentId={accessibleItem().id}
-                      fileType={accessibleItem().fileType}
-                      class="shrink-0 h-32"
-                    />
-                  </Show>
-
-                  {/* Footer: message context + owner/timestamp */}
-                  <Show
-                    when={
-                      messageContext() ||
-                      accessibleItem().owner ||
-                      accessibleItem().updatedAt ||
-                      props.snapshotInfo
-                    }
-                  >
-                    <div class="p-2 border-t border-edge-muted">
-                      <Show when={messageContext()}>
-                        {(context) => (
-                          <div class="mb-2 text-sm text-ink-muted border-l-2 border-edge pl-3 py-1">
-                            <div class="line-clamp-3 wrap-break-word">
-                              <StaticMarkdown
-                                markdown={context().content}
-                                theme={channelTheme}
-                                target="internal"
-                              />
-                            </div>
-                          </div>
-                        )}
-                      </Show>
-
-                      <div class="flex justify-between items-center text-sm font-medium">
-                        <Show
-                          when={messageContext()}
-                          fallback={
-                            <Show when={accessibleItem().owner}>
-                              {(owner) => <UserInfo userId={owner()} />}
-                            </Show>
-                          }
-                        >
-                          {(context) => (
-                            <UserInfo userId={context().sender_id} />
-                          )}
-                        </Show>
-
-                        <Show
-                          when={messageContext()}
-                          fallback={
-                            <Show when={accessibleItem().updatedAt}>
-                              {(time) => (
-                                <MetadataInfo icon={ClockIcon} align="right">
-                                  <span class="text-xxs font-mono uppercase">
-                                    {formatDate(time())}
-                                  </span>
-                                </MetadataInfo>
-                              )}
-                            </Show>
-                          }
-                        >
-                          {(context) => (
-                            <MetadataInfo icon={ClockIcon} align="right">
-                              {formatDate(context().created_at)}
-                            </MetadataInfo>
-                          )}
-                        </Show>
-                      </div>
-
-                      <Show when={props.snapshotInfo}>
-                        {(snapshot) => (
-                          <div class="mt-2 pt-2 border-t border-edge">
-                            <div class="flex items-center gap-1.5 text-ink-muted">
-                              <ClockIcon class="size-3" />
-                              <span class="text-xxs font-medium font-mono uppercase">
-                                Snapshot from{' '}
-                                {formatDate(new Date(snapshot().date), {
-                                  showTime: true,
-                                })}
-                              </span>
-                            </div>
-                          </div>
-                        )}
-                      </Show>
-                    </div>
-                  </Show>
-                </div>
-              );
-            }}
-          </Match>
-
-          {/* No access / does not exist errors */}
-          <Match when={matches(item(), isPreviewItemNoAccess)}>
-            {(noAccessItem) => (
-              <Show
-                when={
-                  noAccessItem().access === 'does_not_exist' &&
-                  props.useFallbackData &&
-                  props.documentInfo.name
-                }
-                fallback={
-                  <div class="text-sm p-4">
-                    {noAccessItem().access === 'no_access' ? (
-                      <Unauthorized />
-                    ) : (
-                      <NotFound />
-                    )}
-                  </div>
-                }
-              >
-                <div class="w-full flex flex-col">
-                  <div class="flex items-center justify-between gap-2 px-3 pt-3 pb-2">
-                    <div class="flex items-center gap-2 min-w-0">
-                      <EntityIcon
-                        targetType={props.documentInfo.type}
-                        size="sm"
-                      />
-                    </div>
-                    <div class="flex shrink-0">{renderActionButtons()}</div>
-                  </div>
-                  <div class="line-clamp-2 wrap-break-word px-2 mb-2">
-                    {props.documentInfo.name}
-                  </div>
-                </div>
-              </Show>
-            )}
-          </Match>
-        </Switch>
+        <DocumentPreviewContent
+          delete={props.delete}
+          collapseInfo={props.collapseInfo}
+          documentInfo={props.documentInfo}
+          previewInfo={props.previewInfo}
+          snapshotInfo={props.snapshotInfo}
+          useFallbackData={props.useFallbackData}
+        />
       </Surface>
     </div>
   );

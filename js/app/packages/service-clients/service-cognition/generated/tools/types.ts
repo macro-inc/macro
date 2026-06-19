@@ -962,6 +962,20 @@ export interface CrmCompanySearchResponseItem {
   updatedAt: string;
 }
 /**
+ * Present results to the user as a rich view. The `view` argument is a dynamic-UI view object (a title plus an ordered list of widgets) following the dynamic-UI schema provided to you. The view is rendered immediately in the chat; this tool returns as soon as it is dispatched.
+ */
+export interface DisplayResults {
+  /**
+   * The dynamic-UI view to render: an object with an optional `title` and a `widgets` array, per the provided dynamic-UI schema.
+   */
+  view: {
+    [k: string]: unknown;
+  };
+}
+export interface DisplayResultsResponse {
+  message: string;
+}
+/**
  * API-visible content lifecycle and location metadata.
  */
 export interface DocumentContent {

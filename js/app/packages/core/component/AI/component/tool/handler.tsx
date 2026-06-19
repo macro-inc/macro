@@ -6,6 +6,7 @@ import {
 import { Dynamic } from 'solid-js/web';
 import { bashCodeExecutionHandler } from './BashCodeExecution';
 import { createDocumentHandler } from './CreateDocument';
+import { displayResultsHandler } from './DisplayResults';
 import { getThreadHandler } from './GetThread';
 import { listCallRecordsHandler } from './ListCallRecords';
 import { listEntitiesHandler } from './ListEntities';
@@ -55,6 +56,7 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   MarkNotificationsDone: markNotificationsDoneHandler,
   MarkNotificationsSeen: markNotificationsSeenHandler,
   BashCodeExecution: bashCodeExecutionHandler,
+  DisplayResults: displayResultsHandler,
   ContentSearch: contentSearchHandler,
   CreateDocument: createDocumentHandler,
   GetThread: getThreadHandler,
