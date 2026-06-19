@@ -1,0 +1,246 @@
+{
+  "root": {
+    "children": [
+      {
+        "children": [
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": "test",
+            "type": "text",
+            "version": 1,
+            "$": {
+              "id": "KBXqQYt2"
+            }
+          }
+        ],
+        "direction": "ltr",
+        "format": "",
+        "indent": 0,
+        "type": "paragraph",
+        "version": 1,
+        "$": {
+          "id": "n4GP5ChB",
+          "searchText": "test"
+        },
+        "textFormat": 0,
+        "textStyle": ""
+      },
+      {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "deeply",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "FbKotPHU"
+                }
+              }
+            ],
+            "direction": "ltr",
+            "format": "",
+            "indent": 0,
+            "type": "listitem",
+            "version": 1,
+            "$": {
+              "id": "Pp48nJ0z"
+            },
+            "value": 1
+          },
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "detail": 0,
+                        "format": 0,
+                        "mode": "normal",
+                        "style": "",
+                        "text": "nested",
+                        "type": "text",
+                        "version": 1,
+                        "$": {
+                          "id": "tWUo8J7u"
+                        }
+                      }
+                    ],
+                    "direction": "ltr",
+                    "format": "",
+                    "indent": 1,
+                    "type": "listitem",
+                    "version": 1,
+                    "$": {
+                      "id": "2Hczb2b3"
+                    },
+                    "value": 1
+                  },
+                  {
+                    "children": [
+                      {
+                        "children": [
+                          {
+                            "children": [
+                              {
+                                "detail": 0,
+                                "format": 0,
+                                "mode": "normal",
+                                "style": "",
+                                "text": "list",
+                                "type": "text",
+                                "version": 1,
+                                "$": {
+                                  "id": "ZoxMMTgN"
+                                }
+                              }
+                            ],
+                            "direction": "ltr",
+                            "format": "",
+                            "indent": 2,
+                            "type": "listitem",
+                            "version": 1,
+                            "$": {
+                              "id": "VKCt5bG6"
+                            },
+                            "value": 1
+                          }
+                        ],
+                        "direction": "ltr",
+                        "format": "",
+                        "indent": 0,
+                        "type": "list",
+                        "version": 1,
+                        "$": {
+                          "id": "8RRfQ6aS"
+                        },
+                        "listType": "bullet",
+                        "start": 1,
+                        "tag": "ul"
+                      }
+                    ],
+                    "direction": "ltr",
+                    "format": "",
+                    "indent": 1,
+                    "type": "listitem",
+                    "version": 1,
+                    "$": {
+                      "id": "pdqJ0uU2"
+                    },
+                    "value": 2
+                  }
+                ],
+                "direction": "ltr",
+                "format": "",
+                "indent": 0,
+                "type": "list",
+                "version": 1,
+                "$": {
+                  "id": "Vdi8ZRec"
+                },
+                "listType": "bullet",
+                "start": 1,
+                "tag": "ul"
+              }
+            ],
+            "direction": "ltr",
+            "format": "",
+            "indent": 0,
+            "type": "listitem",
+            "version": 1,
+            "$": {
+              "id": "vLydydqx"
+            },
+            "value": 2
+          }
+        ],
+        "direction": "ltr",
+        "format": "",
+        "indent": 0,
+        "type": "list",
+        "version": 1,
+        "$": {
+          "id": "paXwfroU",
+          "searchText": "deeply\n\nnested\n\nlist\n\nitems"
+        },
+        "listType": "bullet",
+        "start": 1,
+        "tag": "ul"
+      },
+      {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "items",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "5rnxuu1r"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "listitem",
+            "version": 1,
+            "$": {
+              "id": "gkLhqWWJ1jl"
+            },
+            "value": 1
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "list",
+        "version": 1,
+        "$": {
+          "id": "oaJo1Kz5i7X"
+        },
+        "listType": "number",
+        "start": 1,
+        "tag": "ol"
+      },
+      {
+        "children": [],
+        "direction": "ltr",
+        "format": "",
+        "indent": 0,
+        "type": "paragraph",
+        "version": 1,
+        "$": {
+          "id": "Ts1gplV5",
+          "searchText": ""
+        },
+        "textFormat": 0,
+        "textStyle": ""
+      }
+    ],
+    "direction": "ltr",
+    "format": "",
+    "indent": 0,
+    "type": "root",
+    "version": 1,
+    "$": {
+      "documentMetadata": {
+        "version": 1.4,
+        "environmentTags": null
+      },
+      "id": "root"
+    }
+  }
+}

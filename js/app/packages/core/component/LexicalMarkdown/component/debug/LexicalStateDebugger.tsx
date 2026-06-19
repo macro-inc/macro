@@ -20,10 +20,11 @@ import {
   ElementNode,
   type LexicalNode,
   RootNode,
+  type LexicalEditor,
   type TextFormatType,
   TextNode,
 } from 'lexical';
-import { createMemo, For, Match, Show, Switch } from 'solid-js';
+import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
 import { nodeType } from '../../plugins';
 import { markNodeKeysToIDs } from '../../plugins/comments/commentPlugin';
 
@@ -309,7 +310,7 @@ function Selection(props: { selection?: SelectionRenderable; class?: string }) {
   );
 }
 
-export function LexicalStateDebugger(props: { state: EditorState }) {
+export function LexicalStateDebugger(props: { state: EditorState; editor: LexicalEditor }) {
   const state = createMemo(() => {
     let nodes = EditorStateToNodeList(props.state);
     const selection = EditorStateToSelection(props.state);
@@ -317,8 +318,13 @@ export function LexicalStateDebugger(props: { state: EditorState }) {
     return { nodeList: selectableNodes, selection: selection };
   });
 
+  const [xmlInput, setXmlInput] = createSignal('');
+  const jsonState = createMemo(() =>
+    JSON.stringify(props.state.toJSON(), null, 2)
+  );
   return (
-    <div class="font-mono text-ink bg-surface text-xs size-full min-h-0 flex flex-col overflow-hidden">
+    <div class="font-mono text-ink bg-surface text-xs size-full min-h-0 flex flex-row overflow-hidden">
+      <div class="flex flex-col flex-1 min-w-0 overflow-hidden">
       <Layer depth={0}>
         <div class="bg-surface m-2 min-h-0 flex-1 overflow-y-auto select-children rounded-md p-1 border border-edge">
           <div class="px-1">
@@ -419,6 +425,41 @@ export function LexicalStateDebugger(props: { state: EditorState }) {
           />
         </div>
       </Layer>
+      </div>
+      <div class="flex flex-col w-1/2 border-l border-edge overflow-hidden">
+        <div class="flex items-center justify-between px-2 py-1 border-b border-edge shrink-0">
+          <span class="text-ink-extra-muted">JSON state</span>
+          <button
+            class="border border-edge rounded-sm px-2 py-0.5 hover:bg-edge active:brightness-75"
+            onClick={() => navigator.clipboard.writeText(jsonState())}
+          >
+            Copy
+          </button>
+        </div>
+        <pre class="flex-1 overflow-auto p-2 text-xs select-all">{jsonState()}</pre>
+        <div class="flex flex-col space-y-1 border-t border-edge p-2 shrink-0">
+          <span class="text-ink-extra-muted">Import JSON</span>
+          <textarea
+            class="bg-surface border border-edge rounded-sm p-1 text-xs h-16 resize-none"
+            placeholder='{"root":{"children":[...]}}'
+            value={xmlInput()}
+            onInput={(e) => setXmlInput(e.currentTarget.value)}
+          />
+          <button
+            class="border border-edge rounded-sm px-2 py-0.5 text-xs hover:bg-edge"
+            onClick={() => {
+              try {
+                const state = props.editor.parseEditorState(xmlInput());
+                props.editor.setEditorState(state);
+              } catch (e) {
+                console.error('Failed to parse editor state JSON:', e);
+              }
+            }}
+          >
+            Import
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

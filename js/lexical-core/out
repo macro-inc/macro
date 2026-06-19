@@ -1,0 +1,151 @@
+<doc>
+<p id="sVKWLZ2C">
+  <t id="hj-Bj6i5">Last month on May 4, I made </t>
+  <unknown type="document-mention" id="M4UVN-Tx" data="eyJ0eXBlIjoiZG9jdW1lbnQtbWVudGlvbiIsInZlcnNpb24iOjIsIiQiOnsiaWQiOiJNNFVWTi1UeCJ9LCJkb2N1bWVudElkIjoiMDE5ZGZkNWUtYjVmNC03NWMyLTk2MzctZjYwM2RjYmRjYzBjIiwiZG9jdW1lbnROYW1lIjoiRGVsZXRlZCIsImJsb2NrTmFtZSI6ImNhbnZhcyIsImJsb2NrUGFyYW1zIjp7fSwibWVudGlvblV1aWQiOiIwMTllZDI3MS0yZWQwLTcwZDAtOTFlNS1hNWMyOGIzMWU4ZjEiLCJjb2xsYXBzZWQiOmZhbHNlLCJjcmVhdGVkQXQiOjE3ODE2NDcwOTM0NzZ9"/>
+  <t id="CyvvI3Dh"> because our design was meh. Two weeks later things had barely moved. The app was taking shape but still looked pretty devy.</t>
+</p>
+<unknown type="image" id="eoaKcp33" data="eyJ0eXBlIjoiaW1hZ2UiLCJ2ZXJzaW9uIjoxLCIkIjp7ImlkIjoiZW9hS2NwMzMifSwic3JjVHlwZSI6InNmcyIsImlkIjoiNGJiYWIyNTgtZmJlYy00ZmY5LWJhNzMtZDFkNDRjNWI5MDU1IiwidXJsIjoiaHR0cHM6Ly9zdGF0aWMtZmlsZS1zZXJ2aWNlLm1hY3JvLmNvbS9maWxlLzRiYmFiMjU4LWZiZWMtNGZmOS1iYTczLWQxZDQ0YzViOTA1NSIsIndpZHRoIjoyOTk2LCJoZWlnaHQiOjE2NjYsInNjYWxlIjowLjExODAzNDcxMzg4NTU1NDIzLCJhbHQiOiIifQ=="/>
+<p id="jUWRSsw4">
+  <t id="NPg0xwUu">No group-by. Old task creation modal. Bad.</t>
+</p>
+<p id="mq4dWfZI">
+  <t id="F2CF_Fxn">Our website was a shell. Some nice graphics but no content.</t>
+</p>
+<p id="Q8HEKS-x">
+  <t id="f9ccgxMy">Our startup strategy was in flux: we were still deciding between narrowing on OS for startups and general AI workspace (we chose the latter). That wasn't until May 27th.</t>
+</p>
+<p id="W7q4-z1c"/>
+<p id="GLfURYyM"/>
+<table id="-EOVHSXg" colWidths="120,120,120,120,120">
+  <tr id="R8_f4l6y">
+    <td id="sUilB7HP">
+      <p id="Yvchphqc">
+        <t id="f5LjeyGp">jfeoia</t>
+      </p>
+      <p id="nq_Yh6_v"/>
+    </td>
+    <td id="Z8c3LymK">
+      <p id="AAUuTBDh">
+        <t id="T53OdOsy">jfoieajiofewjoi</t>
+      </p>
+    </td>
+    <td id="_ZGMY4ux">
+      <p id="QALyQCkp"/>
+    </td>
+    <td id="o0RTRzRe">
+      <p id="7oqWh8wB"/>
+    </td>
+    <td id="BEmk-1vi">
+      <p id="XLf7DOWj"/>
+    </td>
+  </tr>
+  <tr id="F5u6YEbe">
+    <td id="b62EZAxt">
+      <p id="Bs7kfj9_"/>
+    </td>
+    <td id="opEYfJ_U">
+      <p id="dXJtpA34"/>
+    </td>
+    <td id="n5cxu94C">
+      <p id="G-OZkF5v"/>
+    </td>
+    <td id="kWJLaqiF">
+      <p id="xpi0lHyK"/>
+    </td>
+    <td id="pfCM_w3s">
+      <p id="V5QlX_SR"/>
+    </td>
+  </tr>
+  <tr id="tIqRF9BB">
+    <td id="h0bo4NKw">
+      <p id="7UOG-5b5">
+        <t id="oWS9OGYd">jfioeajiofe</t>
+      </p>
+    </td>
+    <td id="mLmDDmD9">
+      <p id="aY08FJxI"/>
+    </td>
+    <td id="27y46wTK">
+      <p id="dikljG-4"/>
+    </td>
+    <td id="TU53AlPy">
+      <p id="W00Ygonb"/>
+    </td>
+    <td id="fBn1EZVR">
+      <p id="8ymuy_0f">
+        <t id="5ZSeZ6Po">jfieoa</t>
+      </p>
+    </td>
+  </tr>
+</table>
+<p id="07hIuWeU"/>
+<hr id="Qry3XN-c"/>
+<h1 id="vRih5n98">
+  <t id="tZmMlm1f">Now</t>
+</h1>
+<p id="jF3LNhFg">
+  <t id="o8LosM9N">Now, things are starting to move along nicely. Lots of stars, and our first paying users on our new $40 plan. It's really exciting.</t>
+</p>
+<unknown type="image" id="qOAp7sTc" data="eyJ0eXBlIjoiaW1hZ2UiLCJ2ZXJzaW9uIjoxLCIkIjp7ImlkIjoicU9BcDdzVGMifSwic3JjVHlwZSI6InNmcyIsImlkIjoiM2I3MDQ0MjAtOTk5NS00NzI4LWE4YTItOWZjNWNiNjcxYWU1IiwidXJsIjoiaHR0cHM6Ly9zdGF0aWMtZmlsZS1zZXJ2aWNlLm1hY3JvLmNvbS9maWxlLzNiNzA0NDIwLTk5OTUtNDcyOC1hOGEyLTlmYzVjYjY3MWFlNSIsIndpZHRoIjoxNTMyLCJoZWlnaHQiOjEwNTQsInNjYWxlIjowLjI0MDE3MTM3MDk2Nzc0MTk0LCJhbHQiOiIifQ=="/>
+<p id="ycbcYyJS">
+  <t id="T7mn2m3J">Our docs.macro.com is populated, looks nice on the surface but still needs work.</t>
+</p>
+<p id="27VDQFN7">
+  <t id="LHbN7Jku">Our website is getting there. As of </t>
+  <date-mention id="Fb3bmWbs" date="2026-06-16T04:00:00.000Z" displayFormat="june 16"/>
+  <t id="9y9qm2Ih"> we have some nice new landers for each feature. Before that we didn't really have anything explaining our features!</t>
+</p>
+<p id="8ushZRkc">
+  <t id="9CrZ_EM5" bold="true">We have a mini brand </t>
+  <t id="coyifX5j">thanks to our Insta ads</t>
+  <t id="HrOvHmhe" bold="true">! </t>
+  <t id="5hZhPL_C">I went to present at South Park Commons earlier this week and they were like "oh you're macro?" Everyone had heard of us.</t>
+  <t id="Kz8JEopJ"> That's step 1.</t>
+</p>
+<p id="tRDJSH3L"/>
+<h1 id="MRju-IU2">
+  <t id="lqN4HRJz">But...</t>
+</h1>
+<ul id="UCM-Aw5y">
+  <li id="9FVkh68t">
+    <t id="MvUTh6N5">Still some issues with onboarding</t>
+  </li>
+  <li id="5NpIzr4I" value="2">
+    <t id="FM6rqrF3">Mobile still heavily in flux, basically Peter is re-doing how it all works</t>
+  </li>
+  <li id="0-lBjktO" value="3">
+    <t id="eiL58aBH">Markdown still deleting docs</t>
+  </li>
+  <li id="GwrooK_7" value="4">
+    <t id="lDjjhEce">We need to make website and docs even better</t>
+    <t id="w268PNiB">, super professional, Linear-quality</t>
+  </li>
+  <li id="iUjUVhm1" value="5">
+    <t id="E6vTJEar">We still need to ship PR's, multi-inbox</t>
+    <t id="zYQjXMLN">, and CRM</t>
+  </li>
+</ul>
+<p id="JcLnWFij"/>
+<h1 id="GVA1jTWg">
+  <t id="7qJijAMs">Then...</t>
+</h1>
+<p id="6mgOOfcn">
+  <t id="pc2Jv0dz">Begin ads in full force like last year - sign up 10s of thousands of users... and organic in earnest. Iterate on product and keep making it better. Watch our efforts begin to compound! Compounding is fun.</t>
+</p>
+<p id="S5LuUEaj"/>
+<p id="KVgc-QV2">
+  <unknown type="equation" id="P8RCCkpe" data="eyJ0eXBlIjoiZXF1YXRpb24iLCJ2ZXJzaW9uIjoxLCIkIjp7ImlkIjoiUDhSQ0NrcGUifSwiZXF1YXRpb24iOiJ4XjJeMl4yIiwiaW5saW5lIjp0cnVlfQ=="/>
+</p>
+<p id="GFxonL8e">
+  <unknown type="equation" id="L_kWU6Q5" data="eyJ0eXBlIjoiZXF1YXRpb24iLCJ2ZXJzaW9uIjoxLCIkIjp7ImlkIjoiTF9rV1U2UTUifSwiZXF1YXRpb24iOiJ4KjIiLCJpbmxpbmUiOnRydWV9"/>
+</p>
+<p id="HVDIqV71"/>
+<p id="ORZDpEvZ">
+  <t id="8OfxB7J1">fioeajfeoji</t>
+  <t id="OC8jpo4I" bold="true">fjioafejo</t>
+  <t id="6PySvWrL" bold="true" italic="true">jfeoajfiowejfio</t>
+  <t id="J9vDVRuN" italic="true">ijofiejaio</t>
+</p>
+<p id="fA0nINYr"/>
+<p id="fujs6Ee5"/>
+</doc>
