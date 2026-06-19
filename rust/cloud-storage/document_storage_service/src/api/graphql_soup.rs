@@ -69,11 +69,15 @@ async fn handler(
         }
     };
 
-    let request = request.data(GraphqlSoupRequestContext {
-        macro_user_id,
-        link_ids,
-        team_receipt,
-    });
+    let request = request
+        .data(GraphqlSoupRequestContext {
+            macro_user_id,
+            link_ids,
+            team_receipt,
+        })
+        .data(graphql_soup::entity_properties_loader(
+            state.graphql_soup_property_reader.clone(),
+        ));
 
     state.graphql_soup_schema.execute(request).await.into()
 }

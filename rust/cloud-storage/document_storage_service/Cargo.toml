@@ -22,7 +22,13 @@ path = "src/doppler_config.rs"
 connection_gateway = []
 default = ["connection_gateway", "delete_document_worker", "location_check"]
 delete_document_worker = []
-graphql = ["dep:async-graphql", "dep:async-graphql-axum", "dep:graphql_soup"]
+graphql = [
+  "dep:async-graphql",
+  "dep:async-graphql-axum",
+  "dep:async-trait",
+  "dep:graphql_soup",
+  "dep:rootcause",
+]
 local = ["local_auth"]
 local_auth = ["macro_middleware/local_auth"]
 location_check = []
@@ -32,6 +38,7 @@ anyhow = { workspace = true }
 ai_tools = { path = "../ai_tools" }
 async-graphql = { version = "7.2.1", optional = true }
 async-graphql-axum = { version = "7.0.17", optional = true }
+async-trait = { workspace = true, optional = true }
 aws-sdk-dynamodb = { workspace = true }
 aws-sdk-s3 = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
@@ -132,6 +139,7 @@ redis = { workspace = true, features = [
 ] }
 regex = { workspace = true }
 reqwest = { workspace = true }
+rootcause = { workspace = true, optional = true }
 s3_key = { path = "../s3_key" }
 saved_views = { path = "../saved_views" }
 schemars = { workspace = true }

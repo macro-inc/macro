@@ -5,6 +5,7 @@
 
 use async_graphql::{
     Context, EmptyMutation, EmptySubscription, Enum, ID, Json, Object, Schema, SimpleObject, Union,
+    dataloader::{DataLoader, Loader},
 };
 use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
 use filter_ast::Expr;
@@ -32,7 +33,7 @@ use soup::domain::{
     models::{FrecencySoupItem, SoupQuery, SoupRequest, SoupType},
     ports::SoupService,
 };
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 use uuid::Uuid;
 
 /// Request-scoped data required to execute a Soup GraphQL query.
@@ -45,6 +46,55 @@ pub struct GraphqlSoupRequestContext {
     pub macro_user_id: MacroUserIdStr<'static>,
     pub link_ids: Vec<Uuid>,
     pub team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
+}
+
+/// Key for loading properties attached to an entity.
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub struct EntityPropertiesKey {
+    pub entity_type: String,
+    pub entity_id: String,
+}
+
+/// Object-safe reader used by GraphQL property edges.
+#[async_trait::async_trait]
+pub trait SoupPropertyEdgeReader: Send + Sync + 'static {
+    async fn get_properties(
+        &self,
+        keys: Vec<EntityPropertiesKey>,
+    ) -> Result<HashMap<EntityPropertiesKey, Vec<SoupProperty>>, rootcause::Report>;
+}
+
+/// DataLoader for entity property edges.
+pub struct EntityPropertiesLoader {
+    reader: Arc<dyn SoupPropertyEdgeReader>,
+}
+
+impl EntityPropertiesLoader {
+    pub fn new(reader: Arc<dyn SoupPropertyEdgeReader>) -> Self {
+        Self { reader }
+    }
+}
+
+impl Loader<EntityPropertiesKey> for EntityPropertiesLoader {
+    type Value = Vec<SoupProperty>;
+    type Error = Arc<rootcause::Report>;
+
+    async fn load(
+        &self,
+        keys: &[EntityPropertiesKey],
+    ) -> Result<HashMap<EntityPropertiesKey, Self::Value>, Self::Error> {
+        self.reader
+            .get_properties(keys.to_vec())
+            .await
+            .map_err(Arc::new)
+    }
+}
+
+/// Build a DataLoader for entity property edges.
+pub fn entity_properties_loader(
+    reader: Arc<dyn SoupPropertyEdgeReader>,
+) -> DataLoader<EntityPropertiesLoader> {
+    DataLoader::new(EntityPropertiesLoader::new(reader), tokio::spawn)
 }
 
 /// GraphQL Soup schema type.
@@ -356,13 +406,22 @@ impl GraphqlSoupDocument {
             .map(GraphqlSoupDocumentSubType::from)
     }
 
-    async fn properties(&self) -> Vec<GraphqlSoupProperty> {
-        self.0
-            .properties
-            .iter()
-            .cloned()
-            .map(GraphqlSoupProperty)
-            .collect()
+    async fn properties(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<Vec<GraphqlSoupProperty>> {
+        let loader = ctx.data::<DataLoader<EntityPropertiesLoader>>()?;
+        let key = EntityPropertiesKey {
+            entity_id: self.0.id.to_string(),
+            entity_type: self.0.entity_type().to_string(),
+        };
+
+        let properties = loader
+            .load_one(key)
+            .await
+            .map_err(|err| async_graphql::Error::new(err.to_string()))?
+            .unwrap_or_default();
+        Ok(properties.into_iter().map(GraphqlSoupProperty).collect())
     }
 }
 

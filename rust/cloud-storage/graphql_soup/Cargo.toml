@@ -4,7 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-async-graphql = "7.2.1"
+async-graphql = { version = "7.2.1", features = ["dataloader"] }
+async-trait = { workspace = true }
 either = { workspace = true }
 entity_access = { path = "../entity_access", default-features = false }
 filter_ast = { path = "../filter_ast" }
@@ -14,8 +15,10 @@ model-entity = { path = "../model-entity" }
 models_pagination = { path = "../models_pagination" }
 models_properties = { path = "../models_properties" }
 models_soup = { path = "../models_soup" }
+rootcause = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 soup = { path = "../soup", default-features = false, features = ["ports"] }
+tokio = { workspace = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
