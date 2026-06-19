@@ -617,21 +617,25 @@ async fn main() -> anyhow::Result<()> {
             (*entity_access_service).clone(),
         );
 
+    let soup_service = Arc::new(SoupImpl::new(
+        PgSoupRepo::new(readonly_pool::ReadOnlyPool(readonly_db.clone())),
+        frecency_service,
+        readonly_email_service,
+        channel_service_for_soup,
+        call_record_query_service,
+        crm_service.clone(),
+        foreign_entity_service_for_soup,
+    ));
+
     let api_context = ApiContext {
         contacts_ingress: contacts_ingress.clone(),
-        soup_router_state: SoupRouterState::new(
-            SoupImpl::new(
-                PgSoupRepo::new(readonly_pool::ReadOnlyPool(readonly_db.clone())),
-                frecency_service,
-                readonly_email_service,
-                channel_service_for_soup,
-                call_record_query_service,
-                crm_service.clone(),
-                foreign_entity_service_for_soup,
-            ),
+        soup_router_state: SoupRouterState::from_arc(
+            soup_service.clone(),
             email_service,
             entity_access_service.clone(),
         ),
+        #[cfg(feature = "graphql")]
+        graphql_soup_schema: graphql_soup::build_schema_from_arc(soup_service),
         github_sync_service: Arc::new(github_sync_service_impl),
         foreign_entity_state,
         db: db.clone(),

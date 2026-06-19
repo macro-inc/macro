@@ -593,6 +593,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-graphql-axum"
+version = "7.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a1e37c5532e4b686acf45e7162bc93da91fc2c702fb0d465efc2c20c8f973795"
+dependencies = [
+ "async-graphql",
+ "axum",
+ "bytes",
+ "futures-util",
+ "serde_json",
+ "tokio",
+ "tokio-stream",
+ "tokio-util",
+ "tower-service",
+]
+
+[[package]]
 name = "async-graphql-derive"
 version = "7.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3803,6 +3820,8 @@ dependencies = [
  "ai_usage",
  "analytics_client",
  "anyhow",
+ "async-graphql",
+ "async-graphql-axum",
  "aws-sdk-dynamodb",
  "aws-sdk-s3",
  "aws-sdk-secretsmanager",
@@ -3840,6 +3859,7 @@ dependencies = [
  "frecency",
  "futures",
  "github",
+ "graphql_soup",
  "hex",
  "http-body-util",
  "jsonwebtoken 10.3.0",
@@ -12900,6 +12920,7 @@ checksum = "9ae9cec805b01e8fc3fd2fe289f89149a9b66dd16786abd8b19cfa7b48cb0098"
 dependencies = [
  "bytes",
  "futures-core",
+ "futures-io",
  "futures-sink",
  "pin-project-lite",
  "tokio",

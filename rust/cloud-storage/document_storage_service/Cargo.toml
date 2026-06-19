@@ -21,6 +21,7 @@ path = "src/doppler_config.rs"
 [features]
 connection_gateway = []
 default = ["connection_gateway", "location_check"]
+graphql = ["dep:async-graphql", "dep:async-graphql-axum", "dep:graphql_soup"]
 local = ["local_auth"]
 local_auth = ["macro_middleware/local_auth"]
 location_check = []
@@ -28,6 +29,8 @@ location_check = []
 [dependencies]
 anyhow = { workspace = true }
 ai_tools = { path = "../ai_tools" }
+async-graphql = { version = "7.2.1", optional = true }
+async-graphql-axum = { version = "7.0.17", optional = true }
 aws-sdk-dynamodb = { workspace = true }
 aws-sdk-s3 = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
@@ -69,6 +72,7 @@ entity_access_management = { path = "../entity_access_management" }
 foreign_entity = { path = "../foreign_entity", features = ["inbound"] }
 frecency = { path = "../frecency", features = ["postgres"] }
 futures = { workspace = true }
+graphql_soup = { path = "../graphql_soup", optional = true }
 github = { path = "../github", default-features = false, features = [
   "axum",
   "inbound",

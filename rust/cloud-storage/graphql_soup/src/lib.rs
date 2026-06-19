@@ -19,6 +19,7 @@ use soup::domain::{
     models::{FrecencySoupItem, SoupQuery, SoupRequest, SoupType},
     ports::SoupService,
 };
+use std::sync::Arc;
 use uuid::Uuid;
 
 /// Request-scoped data required to execute a Soup GraphQL query.
@@ -33,6 +34,46 @@ pub struct GraphqlSoupRequestContext {
     pub team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
 }
 
+/// GraphQL Soup schema type.
+pub type SoupSchema<S> = Schema<SoupQueryRoot<S>, EmptyMutation, EmptySubscription>;
+
+/// GraphQL Soup schema type backed by a shared soup service.
+pub type SharedSoupSchema<S> = SoupSchema<SharedSoupService<S>>;
+
+/// Object-safe-ish wrapper for sharing a concrete Soup service with GraphQL.
+#[derive(Clone)]
+pub struct SharedSoupService<S>(Arc<S>);
+
+impl<S> SharedSoupService<S> {
+    pub fn new(service: Arc<S>) -> Self {
+        Self(service)
+    }
+}
+
+impl<S> SoupService for SharedSoupService<S>
+where
+    S: SoupService,
+{
+    async fn get_user_soup<T>(
+        &self,
+        req: SoupRequest<T>,
+        team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
+    ) -> Result<soup::domain::ports::SoupOutput<T>, soup::domain::models::SoupErr>
+    where
+        SoupRequest<T>: soup::domain::models::IntoSoupReqAst,
+        T: Clone + serde::Serialize + Send,
+    {
+        self.0.get_user_soup(req, team_receipt).await
+    }
+
+    async fn get_user_soup_grouped(
+        &self,
+        req: soup::domain::models::GroupedSortRequest<'_>,
+    ) -> Result<Vec<soup::domain::models::GroupedSoupItem>, soup::domain::models::SoupErr> {
+        self.0.get_user_soup_grouped(req).await
+    }
+}
+
 /// Root GraphQL query object for Soup.
 pub struct SoupQueryRoot<S> {
     service: S,
@@ -45,7 +86,7 @@ impl<S> SoupQueryRoot<S> {
 }
 
 /// Build a GraphQL schema for Soup backed by the provided service.
-pub fn build_schema<S>(service: S) -> Schema<SoupQueryRoot<S>, EmptyMutation, EmptySubscription>
+pub fn build_schema<S>(service: S) -> SoupSchema<S>
 where
     S: SoupService,
 {
@@ -55,6 +96,14 @@ where
         EmptySubscription,
     )
     .finish()
+}
+
+/// Build a GraphQL schema for Soup backed by an `Arc`-shared service.
+pub fn build_schema_from_arc<S>(service: Arc<S>) -> SharedSoupSchema<S>
+where
+    S: SoupService,
+{
+    build_schema(SharedSoupService::new(service))
 }
 
 #[Object]
