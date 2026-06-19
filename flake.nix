@@ -171,10 +171,24 @@
           version = "0.1.0";
           strictDeps = true;
           buildInputs = libraries;
-          nativeBuildInputs = with pkgs; [ pkg-config ] ++ pkgs.lib.optionals isLinux [ mold ];
+          # Cargo/crane need git in the sandbox to fetch git dependencies.
+          # Without this, CI can fall back to host /usr/lib/git-core helpers,
+          # which are not ABI-compatible with Nix-provided glibc.
+          nativeBuildInputs = with pkgs; [ git pkg-config ] ++ pkgs.lib.optionals isLinux [ mold ];
           LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
           OPENSSL_NO_VENDOR = "1";
           SQLX_OFFLINE = "true";
+          # Keep vendoring independent of the generated src derivation and pin
+          # git dependencies so Nix does not fall back to host git helpers in CI.
+          cargoVendorDir = craneLib.vendorCargoDeps {
+            src = ./rust/cloud-storage;
+            cargoLock = ./rust/cloud-storage/Cargo.lock;
+            outputHashes = {
+              "git+https://github.com/whutchinson98/jsonwebtoken#c8c0d19511a0e7ba9d456e21437a79d321e99f16" = "sha256-jllT52SAIiNpTPg7Vm3wmT79w/CIz9NnVKM81oQq8dM=";
+              "git+https://github.com/macro-inc/rig?branch=feat/responses-api-non-strict-tools#6deadfc6f9b432c849ea79733a549f46407530b7" = "sha256-EcmlwqAVXGtbuvozzCOrygoSVipU99mBZK/MrQAIoYg=";
+              "git+https://github.com/macro-inc/rs-libreoffice-bindings?rev=056a40ddfac1d9650be30b9f0b4b934e9266c7dc#056a40ddfac1d9650be30b9f0b4b934e9266c7dc" = "sha256-lx/AuxPpCarxdDzogkGudCbE4B2OEt5un4s4gIFt1ek=";
+            };
+          };
           RUSTFLAGS = pkgs.lib.optionalString isLinux "-C link-arg=-fuse-ld=mold";
           # Build deps + workspace + bins in dev profile so the test job (which runs
           # `cargo nextest` outside the sandbox using the test profile, inheriting dev)
