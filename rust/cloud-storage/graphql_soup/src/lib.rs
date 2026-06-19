@@ -4,7 +4,7 @@
 //! existing `soup` domain service without changing the existing REST API.
 
 use async_graphql::{
-    Context, EmptyMutation, EmptySubscription, Enum, Json, Object, Schema, SimpleObject,
+    Context, EmptyMutation, EmptySubscription, Enum, ID, Json, Object, Schema, SimpleObject, Union,
 };
 use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
 use filter_ast::Expr;
@@ -13,6 +13,17 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 use models_pagination::{
     Base64Str, CursorWithValAndFilter, PaginatedOpaqueCursor, SimpleSortMethod, TypeEraseCursor,
+};
+use models_soup::{
+    call_record::SoupCallRecord,
+    chat::SoupChat,
+    comms::{ChannelType, SoupChannel, SoupChannelThread},
+    crm_company::SoupCrmCompany,
+    document::SoupDocument,
+    email_thread::SoupEnrichedEmailThreadPreview,
+    foreign_entity::SoupForeignEntity,
+    item::SoupItem,
+    project::SoupProject,
 };
 use serde_json::Value;
 use soup::domain::{
@@ -220,16 +231,37 @@ impl From<PaginatedOpaqueCursor<FrecencySoupItem>> for SoupPage {
     }
 }
 
-/// Initial GraphQL Soup item representation.
-///
-/// `raw` preserves the current Soup JSON shape so the frontend can adopt this
-/// endpoint incrementally before we add a fully typed GraphQL union.
-#[derive(SimpleObject)]
+/// GraphQL Soup item envelope.
 pub struct GraphqlSoupItem {
-    pub id: String,
-    pub entity_type: String,
-    pub frecency_score: f64,
-    pub raw: Json<Value>,
+    id: String,
+    entity_type: String,
+    frecency_score: f64,
+    entity: GraphqlSoupEntity,
+    raw: Json<Value>,
+}
+
+#[Object]
+impl GraphqlSoupItem {
+    async fn id(&self) -> &str {
+        &self.id
+    }
+
+    async fn entity_type(&self) -> &str {
+        &self.entity_type
+    }
+
+    async fn frecency_score(&self) -> f64 {
+        self.frecency_score
+    }
+
+    async fn entity(&self) -> &GraphqlSoupEntity {
+        &self.entity
+    }
+
+    #[graphql(deprecation = "Use entity with GraphQL fragments instead")]
+    async fn raw(&self) -> &Json<Value> {
+        &self.raw
+    }
 }
 
 impl From<FrecencySoupItem> for GraphqlSoupItem {
@@ -239,17 +271,452 @@ impl From<FrecencySoupItem> for GraphqlSoupItem {
             frecency_score,
             ..
         } = item;
-        let entity = item.entity();
+        let entity_ref = item.entity();
         let raw = serde_json::to_value(&item).unwrap_or(Value::Null);
 
         Self {
-            id: entity.entity_id.into_owned(),
-            entity_type: entity_type_name(entity.entity_type).to_owned(),
+            id: entity_ref.entity_id.into_owned(),
+            entity_type: entity_type_name(entity_ref.entity_type).to_owned(),
             frecency_score: frecency_score
                 .map(|f| f.data.frecency_score)
                 .unwrap_or_default(),
+            entity: GraphqlSoupEntity::from(item),
             raw: Json(raw),
         }
+    }
+}
+
+#[derive(Union)]
+pub enum GraphqlSoupEntity {
+    Document(GraphqlSoupDocument),
+    Chat(GraphqlSoupChat),
+    Project(GraphqlSoupProject),
+    EmailThread(GraphqlSoupEmailThread),
+    Channel(GraphqlSoupChannel),
+    ChannelThread(GraphqlSoupChannelThread),
+    Call(GraphqlSoupCall),
+    CrmCompany(GraphqlSoupCrmCompany),
+    ForeignEntity(GraphqlSoupForeignEntity),
+}
+
+impl From<SoupItem> for GraphqlSoupEntity {
+    fn from(item: SoupItem) -> Self {
+        match item {
+            SoupItem::Document(item) => Self::Document(GraphqlSoupDocument(item)),
+            SoupItem::Chat(item) => Self::Chat(GraphqlSoupChat(item)),
+            SoupItem::Project(item) => Self::Project(GraphqlSoupProject(item)),
+            SoupItem::EmailThread(item) => Self::EmailThread(GraphqlSoupEmailThread(item)),
+            SoupItem::Channel(item) => Self::Channel(GraphqlSoupChannel(item)),
+            SoupItem::ChannelThread(item) => Self::ChannelThread(GraphqlSoupChannelThread(item)),
+            SoupItem::Call(item) => Self::Call(GraphqlSoupCall(item)),
+            SoupItem::CrmCompany(item) => Self::CrmCompany(GraphqlSoupCrmCompany(item)),
+            SoupItem::ForeignEntity(item) => Self::ForeignEntity(GraphqlSoupForeignEntity(item)),
+        }
+    }
+}
+
+pub struct GraphqlSoupDocument(SoupDocument);
+
+#[Object]
+impl GraphqlSoupDocument {
+    async fn id(&self) -> ID {
+        ID(self.0.id.to_string())
+    }
+
+    async fn name(&self) -> &str {
+        &self.0.name
+    }
+
+    async fn owner_id(&self) -> String {
+        self.0.owner_id.as_ref().to_owned()
+    }
+
+    async fn file_type(&self) -> Option<&str> {
+        self.0.file_type.as_deref()
+    }
+
+    async fn project_id(&self) -> Option<ID> {
+        self.0.project_id.map(|id| ID(id.to_string()))
+    }
+
+    async fn created_at(&self) -> String {
+        self.0.created_at.to_rfc3339()
+    }
+
+    async fn updated_at(&self) -> String {
+        self.0.updated_at.to_rfc3339()
+    }
+
+    async fn viewed_at(&self) -> Option<String> {
+        self.0.viewed_at.map(|ts| ts.to_rfc3339())
+    }
+
+    async fn deleted_at(&self) -> Option<String> {
+        self.0.deleted_at.map(|ts| ts.to_rfc3339())
+    }
+}
+
+pub struct GraphqlSoupChat(SoupChat);
+
+#[Object]
+impl GraphqlSoupChat {
+    async fn id(&self) -> ID {
+        ID(self.0.id.to_string())
+    }
+
+    async fn name(&self) -> &str {
+        &self.0.name
+    }
+
+    async fn owner_id(&self) -> String {
+        self.0.owner_id.as_ref().to_owned()
+    }
+
+    async fn project_id(&self) -> Option<ID> {
+        self.0.project_id.map(|id| ID(id.to_string()))
+    }
+
+    async fn is_persistent(&self) -> bool {
+        self.0.is_persistent
+    }
+
+    async fn created_at(&self) -> String {
+        self.0.created_at.to_rfc3339()
+    }
+
+    async fn updated_at(&self) -> String {
+        self.0.updated_at.to_rfc3339()
+    }
+
+    async fn viewed_at(&self) -> Option<String> {
+        self.0.viewed_at.map(|ts| ts.to_rfc3339())
+    }
+}
+
+pub struct GraphqlSoupProject(SoupProject);
+
+#[Object]
+impl GraphqlSoupProject {
+    async fn id(&self) -> ID {
+        ID(self.0.id.to_string())
+    }
+
+    async fn name(&self) -> &str {
+        &self.0.name
+    }
+
+    async fn owner_id(&self) -> String {
+        self.0.owner_id.as_ref().to_owned()
+    }
+
+    async fn parent_id(&self) -> Option<ID> {
+        self.0.parent_id.map(|id| ID(id.to_string()))
+    }
+
+    async fn created_at(&self) -> String {
+        self.0.created_at.to_rfc3339()
+    }
+
+    async fn updated_at(&self) -> String {
+        self.0.updated_at.to_rfc3339()
+    }
+
+    async fn viewed_at(&self) -> Option<String> {
+        self.0.viewed_at.map(|ts| ts.to_rfc3339())
+    }
+}
+
+pub struct GraphqlSoupEmailThread(SoupEnrichedEmailThreadPreview);
+
+#[Object]
+impl GraphqlSoupEmailThread {
+    async fn id(&self) -> ID {
+        ID(self.0.thread.id.to_string())
+    }
+
+    async fn owner_id(&self) -> String {
+        self.0.thread.owner_id.as_ref().to_owned()
+    }
+
+    async fn name(&self) -> Option<&str> {
+        self.0.thread.name.as_deref()
+    }
+
+    async fn snippet(&self) -> Option<&str> {
+        self.0.thread.snippet.as_deref()
+    }
+
+    async fn sender_email(&self) -> Option<&str> {
+        self.0.thread.sender_email.as_deref()
+    }
+
+    async fn sender_name(&self) -> Option<&str> {
+        self.0.thread.sender_name.as_deref()
+    }
+
+    async fn is_read(&self) -> bool {
+        self.0.thread.is_read
+    }
+
+    async fn is_draft(&self) -> bool {
+        self.0.thread.is_draft
+    }
+
+    async fn is_important(&self) -> bool {
+        self.0.thread.is_important
+    }
+
+    async fn project_id(&self) -> Option<ID> {
+        self.0.thread.project_id.as_ref().map(|id| ID(id.clone()))
+    }
+
+    async fn sort_ts(&self) -> String {
+        self.0.thread.sort_ts.to_rfc3339()
+    }
+
+    async fn created_at(&self) -> String {
+        self.0.thread.created_at.to_rfc3339()
+    }
+
+    async fn updated_at(&self) -> String {
+        self.0.thread.updated_at.to_rfc3339()
+    }
+
+    async fn viewed_at(&self) -> Option<String> {
+        self.0.thread.viewed_at.map(|ts| ts.to_rfc3339())
+    }
+
+    async fn attachment_count(&self) -> usize {
+        self.0.attachments.len()
+    }
+
+    async fn participant_count(&self) -> usize {
+        self.0.participants.len()
+    }
+}
+
+pub struct GraphqlSoupChannel(SoupChannel);
+
+#[Object]
+impl GraphqlSoupChannel {
+    async fn id(&self) -> ID {
+        ID(self.0.channel.channel.id.0.to_string())
+    }
+
+    async fn name(&self) -> Option<&str> {
+        self.0.channel.channel.name.as_deref()
+    }
+
+    async fn channel_type(&self) -> &'static str {
+        channel_type_name(self.0.channel.channel.channel_type)
+    }
+
+    async fn owner_id(&self) -> String {
+        self.0.channel.channel.owner_id.as_ref().to_owned()
+    }
+
+    async fn team_id(&self) -> Option<ID> {
+        self.0.channel.channel.team_id.map(|id| ID(id.to_string()))
+    }
+
+    async fn created_at(&self) -> String {
+        self.0.channel.channel.created_at.to_rfc3339()
+    }
+
+    async fn updated_at(&self) -> String {
+        self.0.channel.channel.updated_at.to_rfc3339()
+    }
+
+    async fn viewed_at(&self) -> Option<String> {
+        self.0.viewed_at.map(|ts| ts.to_rfc3339())
+    }
+
+    async fn participant_count(&self) -> usize {
+        self.0.channel.participants.len()
+    }
+}
+
+pub struct GraphqlSoupChannelThread(SoupChannelThread);
+
+#[Object]
+impl GraphqlSoupChannelThread {
+    async fn id(&self) -> ID {
+        ID(self.0.id.to_string())
+    }
+
+    async fn channel_id(&self) -> ID {
+        ID(self.0.channel_id.to_string())
+    }
+
+    async fn sender_id(&self) -> &str {
+        &self.0.sender_id
+    }
+
+    async fn content(&self) -> &str {
+        &self.0.content
+    }
+
+    async fn created_at(&self) -> String {
+        self.0.created_at.to_rfc3339()
+    }
+
+    async fn updated_at(&self) -> String {
+        self.0.updated_at.to_rfc3339()
+    }
+
+    async fn effective_updated_at(&self) -> String {
+        self.0.effective_updated_at().to_rfc3339()
+    }
+
+    async fn reply_count(&self) -> i64 {
+        self.0.thread.reply_count
+    }
+}
+
+pub struct GraphqlSoupCall(SoupCallRecord);
+
+#[Object]
+impl GraphqlSoupCall {
+    async fn id(&self) -> ID {
+        ID(self.0.call_id.to_string())
+    }
+
+    async fn channel_id(&self) -> ID {
+        ID(self.0.channel_id.to_string())
+    }
+
+    async fn created_by(&self) -> &str {
+        &self.0.created_by
+    }
+
+    async fn name(&self) -> Option<&str> {
+        self.0
+            .custom_name
+            .as_deref()
+            .or(self.0.channel_name.as_deref())
+    }
+
+    async fn summary(&self) -> Option<&str> {
+        self.0.summary.as_deref()
+    }
+
+    async fn started_at(&self) -> String {
+        self.0.started_at.to_rfc3339()
+    }
+
+    async fn ended_at(&self) -> Option<String> {
+        self.0.ended_at.map(|ts| ts.to_rfc3339())
+    }
+
+    async fn duration_ms(&self) -> Option<i64> {
+        self.0.duration_ms
+    }
+
+    async fn is_active(&self) -> bool {
+        self.0.is_active
+    }
+
+    async fn attended(&self) -> bool {
+        self.0.attended
+    }
+
+    async fn participant_count(&self) -> usize {
+        self.0.participants.len()
+    }
+}
+
+pub struct GraphqlSoupCrmCompany(SoupCrmCompany);
+
+#[Object]
+impl GraphqlSoupCrmCompany {
+    async fn id(&self) -> ID {
+        ID(self.0.id.to_string())
+    }
+
+    async fn team_id(&self) -> ID {
+        ID(self.0.team_id.to_string())
+    }
+
+    async fn name(&self) -> Option<&str> {
+        self.0.name.as_deref()
+    }
+
+    async fn description(&self) -> Option<&str> {
+        self.0.description.as_deref()
+    }
+
+    async fn email_sync(&self) -> bool {
+        self.0.email_sync
+    }
+
+    async fn hidden(&self) -> bool {
+        self.0.hidden
+    }
+
+    async fn created_at(&self) -> String {
+        self.0.created_at.to_rfc3339()
+    }
+
+    async fn updated_at(&self) -> String {
+        self.0.updated_at.to_rfc3339()
+    }
+
+    async fn viewed_at(&self) -> Option<String> {
+        self.0.viewed_at.map(|ts| ts.to_rfc3339())
+    }
+
+    async fn domains(&self) -> Vec<String> {
+        self.0
+            .domains
+            .iter()
+            .map(|domain| domain.domain.clone())
+            .collect()
+    }
+}
+
+pub struct GraphqlSoupForeignEntity(SoupForeignEntity);
+
+#[Object]
+impl GraphqlSoupForeignEntity {
+    async fn id(&self) -> ID {
+        ID(self.0.id.to_string())
+    }
+
+    async fn foreign_entity_id(&self) -> &str {
+        &self.0.foreign_entity_id
+    }
+
+    async fn foreign_entity_source(&self) -> &str {
+        &self.0.foreign_entity_source
+    }
+
+    async fn stored_for_id(&self) -> &str {
+        &self.0.stored_for_id
+    }
+
+    async fn stored_for_auth_entity(&self) -> &str {
+        &self.0.stored_for_auth_entity
+    }
+
+    async fn metadata(&self) -> Json<Value> {
+        Json(self.0.metadata.clone())
+    }
+
+    async fn created_at(&self) -> String {
+        self.0.created_at.to_rfc3339()
+    }
+
+    async fn updated_at(&self) -> String {
+        self.0.updated_at.to_rfc3339()
+    }
+}
+
+fn channel_type_name(channel_type: ChannelType) -> &'static str {
+    match channel_type {
+        ChannelType::Public => "public",
+        ChannelType::Private => "private",
+        ChannelType::DirectMessage => "direct_message",
+        ChannelType::Team => "team",
     }
 }
 
