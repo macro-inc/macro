@@ -8,11 +8,13 @@ import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHea
 import { StaticSplitLabel } from '@app/component/split-layout/components/SplitLabel';
 import { SplitToolbarLeft } from '@app/component/split-layout/components/SplitToolbar';
 import { useBlockId } from '@core/block';
+import { toast } from '@core/component/Toast/Toast';
 import { TOKENS } from '@core/hotkey/tokens';
-import { openExternalUrl } from '@core/util/url';
+import { buildSimpleEntityUrl, openExternalUrl } from '@core/util/url';
 import GithubIcon from '@icon/mcp-github.svg';
 import GitMerge from '@phosphor/git-merge.svg';
 import GitPullRequest from '@phosphor/git-pull-request.svg';
+import LinkIcon from '@phosphor/link.svg';
 import SidePanelIcon from '@phosphor/square-half.svg';
 import type { GithubPullRequest } from '@service-storage/generated/schemas';
 import { Button, cn, Layer } from '@ui';
@@ -91,6 +93,13 @@ export function PrSplitHeader(props: {
   const title = () => props.enrichment?.name ?? prDisplayName(props.prRef);
   const githubUrl = () => props.enrichment?.url ?? prHtmlUrl(props.prRef);
 
+  const copyLink = async () => {
+    await navigator.clipboard.writeText(
+      buildSimpleEntityUrl({ type: 'pr', id: blockId })
+    );
+    toast.success('Link copied to clipboard');
+  };
+
   const ops: FileOperation[] = [
     {
       label: 'Open on GitHub',
@@ -100,6 +109,11 @@ export function PrSplitHeader(props: {
   ];
 
   const tools: BlockTool[] = [
+    {
+      label: 'Copy link',
+      icon: LinkIcon,
+      action: copyLink,
+    },
     {
       label: () =>
         sidePanel?.isOpen() ? 'Hide Side Panel' : 'Show Side Panel',

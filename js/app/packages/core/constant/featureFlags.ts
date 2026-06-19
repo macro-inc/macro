@@ -339,7 +339,7 @@ export const ENABLE_PR_DISCUSSION_INPUT = resolveFeatureFlag(
 
 export const USE_MACRO_PR_SUMMARY_BLOCK = resolveFeatureFlag(
   'USE_MACRO_PR_SUMMARY_BLOCK',
-  false
+  true
 );
 
 // skips over posthog and sets the ENABLE_TEAMS feature to true if we are in dev mode
