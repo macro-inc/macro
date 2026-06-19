@@ -74,8 +74,6 @@ use soup::{
     outbound::pg_soup_repo::PgSoupRepo,
 };
 use sqlx::PgPool;
-#[cfg(feature = "graphql")]
-use std::{collections::HashMap, str::FromStr};
 use std::sync::Arc;
 use sync_service_client::SyncServiceClient;
 use system_properties::{
@@ -308,8 +306,6 @@ pub(crate) struct ApiContext {
     pub soup_router_state: DssSoupState,
     #[cfg(feature = "graphql")]
     pub graphql_soup_schema: graphql_soup::SharedSoupSchema<DssSoupService>,
-    #[cfg(feature = "graphql")]
-    pub graphql_soup_property_reader: Arc<dyn graphql_soup::SoupPropertyEdgeReader>,
     pub foreign_entity_state: DssForeignEntityState,
     pub sqs_client: Arc<sqs_client::SQS>,
     pub contacts_ingress: Arc<SqsContactsIngress<SqsContactsQueue>>,
@@ -337,75 +333,6 @@ pub(crate) struct ApiContext {
     pub cal_webhook_state: DssCalWebhookState,
     pub entity_access_management_service: EntityAccessManagementService,
     pub crm_state: DssCrmState,
-}
-
-#[cfg(feature = "graphql")]
-#[derive(Clone)]
-pub(crate) struct DssSoupPropertyEdgeReader {
-    db: PgPool,
-}
-
-#[cfg(feature = "graphql")]
-impl DssSoupPropertyEdgeReader {
-    pub(crate) fn new(db: PgPool) -> Self {
-        Self { db }
-    }
-}
-
-#[cfg(feature = "graphql")]
-#[async_trait::async_trait]
-impl graphql_soup::SoupPropertyEdgeReader for DssSoupPropertyEdgeReader {
-    async fn get_properties(
-        &self,
-        keys: Vec<graphql_soup::EntityPropertiesKey>,
-    ) -> Result<
-        HashMap<graphql_soup::EntityPropertiesKey, Vec<models_soup::SoupProperty>>,
-        rootcause::Report,
-    > {
-        let mut result = keys
-            .iter()
-            .cloned()
-            .map(|key| (key, Vec::new()))
-            .collect::<HashMap<_, _>>();
-
-        let entity_refs = keys
-            .iter()
-            .map(|key| {
-                let entity_type = models_properties::EntityType::from_str(&key.entity_type)
-                    .map_err(|err| {
-                        rootcause::report!(
-                            "invalid entity type {} for property edge: {err}",
-                            key.entity_type
-                        )
-                    })?;
-                Ok(models_properties::EntityReference::new(
-                    key.entity_id.clone(),
-                    entity_type,
-                ))
-            })
-            .collect::<Result<Vec<_>, rootcause::Report>>()?;
-
-        let properties_by_entity =
-            properties_db_client::entity_properties::get::get_bulk_entity_properties_values(
-                &self.db,
-                &entity_refs,
-            )
-            .await
-            .map_err(|err| rootcause::report!(err))?;
-
-        for property in properties_by_entity.into_values().flatten() {
-            let key = graphql_soup::EntityPropertiesKey {
-                entity_id: property.property.entity_id.clone(),
-                entity_type: property.property.entity_type.to_string(),
-            };
-            result
-                .entry(key)
-                .or_default()
-                .push(models_soup::SoupProperty::from(property));
-        }
-
-        Ok(result)
-    }
 }
 
 env_var! {

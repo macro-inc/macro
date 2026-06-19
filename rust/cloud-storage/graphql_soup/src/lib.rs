@@ -15,7 +15,7 @@ use model_entity::EntityType;
 use models_pagination::{
     Base64Str, CursorWithValAndFilter, PaginatedOpaqueCursor, SimpleSortMethod, TypeEraseCursor,
 };
-use models_properties::service::property_value::PropertyValue;
+use models_properties::{EntityReference, service::property_value::PropertyValue};
 use models_soup::{
     SoupProperty,
     call_record::SoupCallRecord,
@@ -33,7 +33,7 @@ use soup::domain::{
     models::{FrecencySoupItem, SoupQuery, SoupRequest, SoupType},
     ports::SoupService,
 };
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, str::FromStr, sync::Arc};
 use uuid::Uuid;
 
 /// Request-scoped data required to execute a Soup GraphQL query.
@@ -62,6 +62,54 @@ pub trait SoupPropertyEdgeReader: Send + Sync + 'static {
         &self,
         keys: Vec<EntityPropertiesKey>,
     ) -> Result<HashMap<EntityPropertiesKey, Vec<SoupProperty>>, rootcause::Report>;
+}
+
+#[async_trait::async_trait]
+impl<T> SoupPropertyEdgeReader for T
+where
+    T: properties::PropertiesService,
+{
+    async fn get_properties(
+        &self,
+        keys: Vec<EntityPropertiesKey>,
+    ) -> Result<HashMap<EntityPropertiesKey, Vec<SoupProperty>>, rootcause::Report> {
+        let mut result = keys
+            .iter()
+            .cloned()
+            .map(|key| (key, Vec::new()))
+            .collect::<HashMap<_, _>>();
+
+        let entity_refs = keys
+            .iter()
+            .map(|key| {
+                let entity_type = models_properties::EntityType::from_str(&key.entity_type)
+                    .map_err(|err| {
+                        rootcause::report!(
+                            "invalid entity type {} for property edge: {err}",
+                            key.entity_type
+                        )
+                    })?;
+                Ok(EntityReference::new(key.entity_id.clone(), entity_type))
+            })
+            .collect::<Result<Vec<_>, rootcause::Report>>()?;
+
+        let properties_by_entity = self
+            .get_entity_properties_batch(entity_refs)
+            .await
+            .map_err(|err| rootcause::report!(err))?;
+
+        for (key, properties) in properties_by_entity {
+            result.insert(
+                EntityPropertiesKey {
+                    entity_id: key.entity_id,
+                    entity_type: key.entity_type.to_string(),
+                },
+                properties.into_iter().map(SoupProperty::from).collect(),
+            );
+        }
+
+        Ok(result)
+    }
 }
 
 /// DataLoader for entity property edges.

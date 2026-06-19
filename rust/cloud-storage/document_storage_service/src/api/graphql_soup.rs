@@ -69,15 +69,15 @@ async fn handler(
         }
     };
 
+    let property_reader: std::sync::Arc<dyn graphql_soup::SoupPropertyEdgeReader> =
+        state.properties_service.clone();
     let request = request
         .data(GraphqlSoupRequestContext {
             macro_user_id,
             link_ids,
             team_receipt,
         })
-        .data(graphql_soup::entity_properties_loader(
-            state.graphql_soup_property_reader.clone(),
-        ));
+        .data(graphql_soup::entity_properties_loader(property_reader));
 
     state.graphql_soup_schema.execute(request).await.into()
 }

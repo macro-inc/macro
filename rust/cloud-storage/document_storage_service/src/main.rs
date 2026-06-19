@@ -1,6 +1,4 @@
 #![recursion_limit = "256"]
-#[cfg(feature = "graphql")]
-use crate::api::context::DssSoupPropertyEdgeReader;
 use crate::{
     api::context::{ApiContext, DocumentStorageServiceAuthKey, TaskPropertiesAdapter},
     config::{
@@ -639,8 +637,6 @@ async fn main() -> anyhow::Result<()> {
         ),
         #[cfg(feature = "graphql")]
         graphql_soup_schema: graphql_soup::build_schema_from_arc(soup_service),
-        #[cfg(feature = "graphql")]
-        graphql_soup_property_reader: Arc::new(DssSoupPropertyEdgeReader::new(db.clone())),
         github_sync_service: Arc::new(github_sync_service_impl),
         foreign_entity_state,
         db: db.clone(),

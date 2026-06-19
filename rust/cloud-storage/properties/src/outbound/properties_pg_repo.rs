@@ -1,15 +1,17 @@
 //! PostgreSQL implementation for properties repository.
 
-use models_properties::EntityType;
+use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
 use models_properties::service::property_value::PropertyValue;
+use models_properties::{EntityReference, EntityType};
 use sqlx::{Pool, Postgres};
+use std::collections::HashMap;
 use uuid::Uuid;
 
 use super::{
     entity_properties_get_query, entity_property_queries, property_definition_queries,
     task_property_queries,
 };
-use crate::domain::model::EntityPropertyInfo;
+use crate::domain::model::{EntityPropertiesKey, EntityPropertyInfo};
 use crate::domain::ports::PropertiesRepo;
 use models_properties::service::property_definition::PropertyDefinition;
 
@@ -109,6 +111,34 @@ impl PropertiesRepo for PropertiesPgRepo {
         entity_type: EntityType,
     ) -> Result<Vec<EntityPropertyInfo>, Self::Err> {
         entity_properties_get_query::get_entity_properties(&self.pool, entity_id, entity_type).await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_entity_properties_batch(
+        &self,
+        entity_refs: Vec<EntityReference>,
+    ) -> Result<HashMap<EntityPropertiesKey, Vec<EntityPropertyWithDefinition>>, Self::Err> {
+        let mut result = entity_refs
+            .iter()
+            .map(|entity_ref| (EntityPropertiesKey::from(entity_ref), Vec::new()))
+            .collect::<HashMap<_, _>>();
+
+        let properties_by_entity_id =
+            properties_db_client::entity_properties::get::get_bulk_entity_properties_values(
+                &self.pool,
+                &entity_refs,
+            )
+            .await?;
+
+        for property in properties_by_entity_id.into_values().flatten() {
+            let key = EntityPropertiesKey {
+                entity_id: property.property.entity_id.clone(),
+                entity_type: property.property.entity_type,
+            };
+            result.entry(key).or_default().push(property);
+        }
+
+        Ok(result)
     }
 
     #[tracing::instrument(skip(self))]
