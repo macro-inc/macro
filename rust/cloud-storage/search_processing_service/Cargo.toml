@@ -15,6 +15,10 @@ name = "search_processing_service"
 path = "src/main.rs"
 required-features = ["processing", "service"]
 
+[[bin]]
+name = "search_processing_service_doppler_config"
+path = "src/doppler_config.rs"
+
 [dependencies]
 anyhow = { workspace = true }
 aws-sdk-dynamodb = { workspace = true }
@@ -42,6 +46,7 @@ macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 mention_utils = { path = "../mention_utils" }
 document_sub_type = { path = "../document_sub_type" }
+doppler-config = { workspace = true }
 model = { path = "../model" }
 s3_key = { path = "../s3_key" }
 models_email = { path = "../models_email" }
