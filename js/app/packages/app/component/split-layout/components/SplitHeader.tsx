@@ -263,7 +263,7 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
         'isolate relative w-full h-full overflow-clip text-ink',
         // On mobile the header overlays the panel body as a transparent strip
         // of floating islands
-        'mobile:absolute mobile:inset-x-0 mobile:z-mobile-nav-bar mobile:h-11.25 mobile:overflow-visible mobile:pointer-events-none',
+        'mobile:absolute mobile:inset-x-0 mobile:top-(--safe-top) mobile:z-mobile-nav-bar mobile:h-11.25 mobile:overflow-visible mobile:pointer-events-none',
         isMobile() && isListViewID(panel.handle.content().id) && 'hidden',
         isMobile() &&
           !isNativeMobilePlatform() &&
