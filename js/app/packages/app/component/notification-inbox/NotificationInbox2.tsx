@@ -249,7 +249,9 @@ const getInboxItemGroupKey = (notification: UnifiedNotification) => {
   if (metadata.tag === 'new_email') return `email:${notification.entity_id}`;
 
   if (isChannelNotification(notification)) {
-    return `channel:${notification.entity_id}:${String(content.threadId ?? 'root')}`;
+    const threadId = content.threadId ? String(content.threadId) : undefined;
+    if (threadId) return `channel-thread:${notification.entity_id}:${threadId}`;
+    return `channel-root:${notification.entity_id}`;
   }
 
   if (metadata.tag.startsWith('github_')) {
@@ -287,10 +289,27 @@ const getInboxSourceItemGroupKey = (item: InboxSourceItem) => {
 
 const buildInboxItems = (items: InboxSourceItem[]): InboxItemData[] => {
   const groups: InboxSourceItem[][] = [];
+  const rootChannelGroups = new Map<string, InboxSourceItem[]>();
   let currentKey: string | undefined;
 
   for (const item of items) {
     const key = getInboxSourceItemGroupKey(item);
+
+    if (key?.startsWith('channel-root:')) {
+      const existing = rootChannelGroups.get(key);
+      if (existing) {
+        existing.push(item);
+        currentKey = undefined;
+        continue;
+      }
+
+      const group = [item];
+      rootChannelGroups.set(key, group);
+      groups.push(group);
+      currentKey = undefined;
+      continue;
+    }
+
     const current = groups.at(-1);
 
     if (key && key === currentKey && current) {
@@ -1040,7 +1059,7 @@ function NotificationInboxList(props: {
             {(label) => (
               <Layer depth={2}>
                 <div class="my-2 flex items-center px-2">
-                  <h1 class="text-base text-ink/50">{label()}</h1>
+                  <h1 class="text-sm font-medium text-ink/75">{label()}</h1>
                 </div>
               </Layer>
             )}
@@ -1066,7 +1085,9 @@ function NotificationInboxList(props: {
                           'invisible h-px overflow-hidden pointer-events-none'
                       )}
                     >
-                      <h1 class="text-base text-ink/50">{row.label}</h1>
+                      <h1 class="text-sm font-medium text-ink/75">
+                        {row.label}
+                      </h1>
                     </div>
                   </Layer>
                 );

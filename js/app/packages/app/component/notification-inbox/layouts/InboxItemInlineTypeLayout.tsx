@@ -62,7 +62,7 @@ function NotificationBadge() {
         () => <ChatIcon class={className} />
       )
       .with('github_pr_status_changed', () => (
-        <GithubIcon class="size-3 shrink-0 text-ink-muted/60" />
+        <GithubIcon class="size-3 shrink-0 text-ink/60" />
       ))
       .otherwise(() => undefined);
 
@@ -278,7 +278,7 @@ function EntityTypeIcon() {
       'github_pr_comment',
       'github_pr_mention',
       'github_pr_review',
-      () => <GithubIcon class="size-3.5 shrink-0 text-ink-muted/60" />
+      () => <GithubIcon class="size-3.5 shrink-0 text-ink/60" />
     )
     .with('call_started', 'call-started', () => (
       <PhoneIcon class="size-3.5 shrink-0 text-ink-muted" />
@@ -721,7 +721,7 @@ function Description(props: {
     <Show
       when={description() || showTaskProperties() || showRelatedDocuments()}
     >
-      <div class="flex min-w-0 items-center gap-1 truncate text-sm text-ink-muted/75">
+      <div class="flex min-w-0 items-center gap-1 truncate text-sm text-ink/75">
         <Show when={showTaskProperties()}>
           <For each={item().properties ?? []}>
             {(property) => <TaskListPropertyValue property={property} />}
@@ -740,7 +740,7 @@ function Description(props: {
             }
           >
             {(stats) => (
-              <span class="min-w-0 truncate text-sm text-ink-muted/75">
+              <span class="min-w-0 truncate text-sm text-ink/75">
                 {stats()}
               </span>
             )}

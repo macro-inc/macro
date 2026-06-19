@@ -9,6 +9,7 @@ import { MACRO_AGENT_BOT_ID } from '@core/constant/macroAgent';
 import { macroIdToEmail, tryMacroId, useDisplayName } from '@core/user';
 import MacroLogo from '@icon/macro-logo.svg';
 import GithubIcon from '@icon/mcp-github.svg';
+import ChatTextIcon from '@phosphor-icons/core/regular/chat-text.svg?component-solid';
 import { Avatar, cn, Layer } from '@ui';
 import {
   differenceInDays,
@@ -22,6 +23,7 @@ import {
 import { For, Show } from 'solid-js';
 import {
   InboxItem,
+  type InboxItem as InboxItemData,
   type InboxRelatedDocument,
   PropertyPill,
   useInboxItem,
@@ -32,23 +34,36 @@ function notificationTag() {
   return () => item().notification?.notification_metadata.tag;
 }
 
+function parsedSenderName(item: InboxItemData) {
+  const name = item.senderName || item.senderId || '?';
+  const emailMatch = name.match(/^"?([^"<]+)"?\s*</);
+  if (emailMatch?.[1]) return emailMatch[1].trim();
+  const parsedMacroId = tryMacroId(name);
+  if (parsedMacroId) return macroIdToEmail(parsedMacroId);
+  return name;
+}
+
 function useSenderName() {
   const { item } = useInboxItem();
   const macroId = () => {
     const sender = item().senderId ?? item().senderName;
     return sender ? tryMacroId(sender) : undefined;
   };
-  const fallback = () => {
-    const name = item().senderName || item().senderId || '?';
-    const emailMatch = name.match(/^"?([^"<]+)"?\s*</);
-    if (emailMatch?.[1]) return emailMatch[1].trim();
-    const parsedMacroId = tryMacroId(name);
-    if (parsedMacroId) return macroIdToEmail(parsedMacroId);
-    return name;
-  };
+  const fallback = () => parsedSenderName(item());
   const [displayName] = useDisplayName(macroId());
   return () =>
     displayName() || (macroId() ? macroIdToEmail(macroId()!) : fallback());
+}
+
+function isThreadGroupItem(item: InboxItemData) {
+  const content = item.notification?.notification_metadata.content as
+    | { threadId?: string | null }
+    | undefined;
+  return Boolean(
+    item.subItems?.length &&
+      item.notification?.notification_metadata.tag?.startsWith('channel_') &&
+      content?.threadId
+  );
 }
 
 function groupIconTarget(
@@ -81,9 +96,18 @@ function ActorIcon(props: { groupRoot?: boolean }) {
     <Show
       when={
         props.groupRoot &&
+        item().channelType !== 'direct_message' &&
         item().entityType !== 'email' &&
         item().notification?.notification_metadata.tag !== 'new_email' &&
-        !item().notification?.notification_metadata.tag?.startsWith('channel_')
+        !(
+          item().entitySubType === 'task' &&
+          (item().notification?.notification_metadata.tag ===
+            'mentioned_in_document_comment' ||
+            item().notification?.notification_metadata.tag ===
+              'replied_to_document_comment_thread' ||
+            item().notification?.notification_metadata.tag ===
+              'commented_on_document')
+        )
       }
       fallback={
         <div
@@ -104,13 +128,8 @@ function ActorIcon(props: { groupRoot?: boolean }) {
                     <Show
                       when={item().senderId === 'macro-agent'}
                       fallback={
-                        <Avatar
-                          class="bg-gradient-to-br from-active to-active-hover text-ink-extra-muted"
-                          size="fill"
-                        >
-                          <Avatar.Fallback class="p-2 !text-[min(40cqw,3rem)]">
-                            {initials()}
-                          </Avatar.Fallback>
+                        <Avatar size="fill">
+                          <Avatar.Fallback>{initials()}</Avatar.Fallback>
                         </Avatar>
                       }
                     >
@@ -120,7 +139,6 @@ function ActorIcon(props: { groupRoot?: boolean }) {
                 >
                   {(senderId) => (
                     <UserIcon
-                      class="bg-gradient-to-br from-active to-active-hover text-ink-extra-muted"
                       id={senderId()}
                       size="fill"
                       suppressClick
@@ -131,7 +149,6 @@ function ActorIcon(props: { groupRoot?: boolean }) {
               }
             >
               <UserIcon
-                class="bg-gradient-to-br from-active to-active-hover text-ink-extra-muted"
                 id={MACRO_AGENT_BOT_ID}
                 size="fill"
                 suppressClick
@@ -146,18 +163,25 @@ function ActorIcon(props: { groupRoot?: boolean }) {
         <Layer depth={3}>
           <div class="grid size-10 shrink-0 place-items-center rounded-full bg-gradient-to-br from-active to-active-hover p-2.5 text-ink-extra-muted">
             <Show
-              when={item().notification?.notification_metadata.tag?.startsWith(
-                'github_'
-              )}
+              when={isThreadGroupItem(item())}
               fallback={
-                <EntityIcon
-                  targetType={groupIconTarget(item)}
-                  size="fill"
-                  theme="monochrome"
-                />
+                <Show
+                  when={item().notification?.notification_metadata.tag?.startsWith(
+                    'github_'
+                  )}
+                  fallback={
+                    <EntityIcon
+                      targetType={groupIconTarget(item)}
+                      size="fill"
+                      theme="monochrome"
+                    />
+                  }
+                >
+                  <GithubIcon class="size-full" />
+                </Show>
               }
             >
-              <GithubIcon class="size-full" />
+              <ChatTextIcon class="size-full" />
             </Show>
           </div>
         </Layer>
@@ -328,9 +352,118 @@ function formatRelativeInboxTimestamp(value: string) {
   return `${Math.max(1, differenceInYears(now, date))}y`;
 }
 
+function MiniSenderAvatar(props: { item: InboxItemData; index?: number }) {
+  const fallbackName = () => parsedSenderName(props.item);
+  const macroId = () => {
+    const sender = props.item.senderId ?? props.item.senderName;
+    return sender ? tryMacroId(sender) : undefined;
+  };
+  const [displayName] = useDisplayName(macroId());
+  const name = () =>
+    displayName() || (macroId() ? macroIdToEmail(macroId()!) : fallbackName());
+  const initials = () =>
+    name()
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase())
+      .join('') || '?';
+
+  return (
+    <span
+      class="relative inline-flex size-4 shrink-0 overflow-hidden rounded-full text-[8px]"
+      style={{ 'z-index': String(10 - (props.index ?? 0)) }}
+    >
+      <Show
+        when={props.item.senderId && macroId()}
+        fallback={
+          <Avatar size="fill">
+            <Avatar.Fallback>{initials()}</Avatar.Fallback>
+          </Avatar>
+        }
+      >
+        {(senderId) => (
+          <UserIcon
+            id={senderId()}
+            size="fill"
+            suppressClick
+            showTooltip={false}
+          />
+        )}
+      </Show>
+    </span>
+  );
+}
+
+function uniqueSenderItems(items: InboxItemData[]) {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const key = item.senderId ?? parsedSenderName(item) ?? item.id;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function firstNameFromName(value: string) {
+  const name = value.includes('@') ? value.split('@')[0] : value;
+  return name.split(/[\s._-]+/).filter(Boolean)[0] ?? name;
+}
+
+function SenderFirstName(props: { item: InboxItemData }) {
+  const macroId = () => {
+    const sender = props.item.senderId ?? props.item.senderName;
+    return sender ? tryMacroId(sender) : undefined;
+  };
+  const [displayName] = useDisplayName(macroId());
+  const name = () =>
+    displayName() ||
+    (macroId() ? macroIdToEmail(macroId()!) : parsedSenderName(props.item));
+
+  return <>{firstNameFromName(name())}</>;
+}
+
+function SenderNamesSummary(props: { items: InboxItemData[] }) {
+  const senders = () => uniqueSenderItems(props.items);
+  const first = () => senders()[0];
+  const second = () => senders()[1];
+  const overflow = () => Math.max(0, senders().length - 1);
+
+  return (
+    <span class="shrink-0 font-medium text-ink/70">
+      <Show
+        when={senders().length > 2}
+        fallback={
+          <>
+            <Show when={first()}>
+              {(item) => <SenderFirstName item={item()} />}
+            </Show>
+            <Show when={second()}>
+              {(item) => (
+                <>
+                  {', '}
+                  <SenderFirstName item={item()} />
+                </>
+              )}
+            </Show>
+          </>
+        }
+      >
+        <Show when={first()}>
+          {(item) => (
+            <>
+              <SenderFirstName item={item()} /> and {overflow()} others
+            </>
+          )}
+        </Show>
+      </Show>
+    </span>
+  );
+}
+
 function MarkdownLine(props: { content: string }) {
   return (
-    <span class="block min-w-0 overflow-hidden truncate">
+    <span class="inline min-w-0">
       <StaticMarkdown
         markdown={props.content}
         singleLine
@@ -372,6 +505,13 @@ function RowLayout(props: {
     }
     return value;
   };
+  const isChannelGroup = () =>
+    Boolean(
+      props.groupRoot &&
+        item().notification?.notification_metadata.tag?.startsWith('channel_')
+    );
+  const isThreadGroup = () => isChannelGroup() && isThreadGroupItem(item());
+  const groupItems = () => item().subItems ?? [item()];
   const actionRowText = () =>
     [senderName(), action(), displayLocation()].filter(Boolean).join(' ');
 
@@ -386,27 +526,6 @@ function RowLayout(props: {
         onClick={props.onClick}
       >
         <ActorIcon groupRoot={props.groupRoot} />
-        <Show
-          when={badgeCount()}
-          fallback={
-            <Show when={!props.groupRoot && item().unread}>
-              <span class="absolute top-2 right-2 size-2 rounded-full bg-accent" />
-            </Show>
-          }
-        >
-          {(count) => (
-            <span
-              class={cn(
-                'absolute top-2 right-2 grid h-4 min-w-4 place-items-center rounded px-1 text-xs',
-                badgeUnread()
-                  ? 'bg-accent/10 text-accent'
-                  : 'bg-ink-muted/10 text-ink-muted'
-              )}
-            >
-              {count()}
-            </span>
-          )}
-        </Show>
         <InboxItem.Body>
           <div class="flex min-w-0 flex-col gap-1.5">
             <div class="flex min-w-0 flex-col gap-0.5">
@@ -417,27 +536,90 @@ function RowLayout(props: {
                 )}
               >
                 <Show
-                  when={item().notification?.notification_metadata.tag?.startsWith(
-                    'github_'
-                  )}
+                  when={isChannelGroup()}
+                  fallback={
+                    <>
+                      <Show
+                        when={item().notification?.notification_metadata.tag?.startsWith(
+                          'github_'
+                        )}
+                      >
+                        <GithubIcon class="size-3.5 shrink-0 text-ink-muted" />
+                      </Show>
+                      <span class="min-w-0 flex-1 truncate">
+                        {actionRowText()}
+                      </span>
+                    </>
+                  }
                 >
-                  <GithubIcon class="size-3.5 shrink-0 text-ink-muted" />
+                  <span class="min-w-0 flex-1 truncate font-medium">
+                    {displayLocation() ??
+                      item().targetName ??
+                      item().entityName}
+                  </span>
                 </Show>
-                <span class="min-w-0 truncate">{actionRowText()}</span>
+                <Show
+                  when={badgeCount() || (!props.groupRoot && item().unread)}
+                >
+                  <span class="ml-auto flex shrink-0 items-center">
+                    <Show
+                      when={badgeCount()}
+                      fallback={<span class="size-2 rounded-full bg-accent" />}
+                    >
+                      {(count) => (
+                        <span
+                          class={cn(
+                            'grid h-4 min-w-4 place-items-center rounded px-1 text-xs',
+                            badgeUnread()
+                              ? 'bg-accent/10 text-accent'
+                              : 'bg-ink-muted/10 text-ink-muted'
+                          )}
+                        >
+                          {count()}
+                        </span>
+                      )}
+                    </Show>
+                  </span>
+                </Show>
               </div>
               <div class="flex min-w-0 items-center gap-2">
                 <Show when={content()}>
                   {(value) => (
-                    <p
-                      class={cn(
-                        'min-w-0 truncate text-sm',
-                        item().notification?.notification_metadata.tag !==
-                          'task_assigned' && 'flex-1',
-                        secondaryTextClass()
-                      )}
+                    <Show
+                      when={isThreadGroup()}
+                      fallback={
+                        <p
+                          class={cn(
+                            'min-w-0 truncate text-sm',
+                            item().notification?.notification_metadata.tag !==
+                              'task_assigned' && 'flex-1',
+                            secondaryTextClass()
+                          )}
+                        >
+                          <Show when={isChannelGroup()}>
+                            <MiniSenderAvatar item={item()} />
+                            <span class="font-medium text-ink/70">
+                              {senderName()}:{' '}
+                            </span>
+                          </Show>
+                          <MarkdownLine content={value()} />
+                        </p>
+                      }
                     >
-                      <MarkdownLine content={value()} />
-                    </p>
+                      <div
+                        class={cn(
+                          'flex min-w-0 flex-1 items-center gap-1 text-sm',
+                          secondaryTextClass()
+                        )}
+                      >
+                        <MiniSenderAvatar item={item()} />
+                        <SenderNamesSummary items={groupItems()} />
+                        <span class="shrink-0">replied:</span>
+                        <span class="min-w-0 truncate">
+                          <MarkdownLine content={value()} />
+                        </span>
+                      </div>
+                    </Show>
                   )}
                 </Show>
                 <Show
