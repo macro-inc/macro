@@ -3593,6 +3593,7 @@ dependencies = [
  "crm",
  "document_sub_type",
  "documents",
+ "doppler-config",
  "dynamodb_client",
  "email",
  "embedding",
@@ -3904,9 +3905,9 @@ dependencies = [
 
 [[package]]
 name = "doppler-config"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a033f09243efd65cf904770c51a0a4c3d45fd6e4cfa71b915e2f948692fb831d"
+checksum = "0735f1faf2ddea06f87842ed94efb5355692d5966e9ad5a3fd10ac3cd7ddc027"
 dependencies = [
  "reqwest 0.13.4",
  "serde",
@@ -8245,7 +8246,7 @@ version = "5.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "51e219e79014df21a225b1860a479e2dcd7cbd9130f4defd4bd0e191ea31d67d"
 dependencies = [
- "base64 0.21.7",
+ "base64 0.22.1",
  "chrono",
  "getrandom 0.2.17",
  "http 1.4.0",
