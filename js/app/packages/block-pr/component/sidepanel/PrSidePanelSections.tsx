@@ -128,7 +128,7 @@ function PrChecksSectionContent(props: {
       when={checks().length > 0}
       fallback={<div class="text-ink-placeholder">No checks</div>}
     >
-      <div class="flex flex-col gap-1">
+      <div class="flex flex-col gap-1 text-xs">
         <div class="text-xs text-ink-muted">
           {checksPassedCount(checks())} passed
         </div>
@@ -172,7 +172,7 @@ export function PrSidePanelSections(props: {
         <PrDetailsSectionContent enrichment={props.enrichment} />
       </SidePanel.Section>
 
-      <SidePanel.Section id="pr-checks" title="Checks" defaultOpen order={20}>
+      <SidePanel.Section id="pr-checks" title="Checks" order={20}>
         <PrChecksSectionContent enrichment={props.enrichment} />
       </SidePanel.Section>
     </>

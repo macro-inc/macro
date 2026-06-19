@@ -2,8 +2,6 @@ import { defineBlock, type ExtractLoadType, LoadErrors } from '@core/block';
 import { ok } from 'neverthrow';
 import { lazy } from 'solid-js';
 
-import { decodePrKey } from './util/prKey';
-
 export const definition = defineBlock({
   name: 'pr',
   description: 'View a GitHub pull request',
@@ -12,9 +10,8 @@ export const definition = defineBlock({
   liveTrackingEnabled: false,
   async load(source, _intent) {
     if (source.type === 'dss') {
-      const ref = decodePrKey(source.id);
-      if (!ref) return LoadErrors.INVALID;
-      return ok({ id: source.id, ref });
+      if (!source.id) return LoadErrors.INVALID;
+      return ok({ id: source.id });
     }
     return LoadErrors.MISSING;
   },

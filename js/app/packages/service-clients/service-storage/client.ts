@@ -33,6 +33,7 @@ import type { ApiChannelWithLatest } from './channel-list-types';
 import type {
   AccessLevel,
   CallRecordPreview,
+  ForeignEntity,
   GithubPullRequestsResponse,
   GroupedSoupGroupPage,
   GroupedSoupInitialPage,
@@ -1322,6 +1323,16 @@ export const storageServiceClient = {
       `/documents/${documentId}/github_prs`,
       { method: 'GET' }
     );
+  },
+
+  async getForeignEntity({
+    id,
+  }: {
+    id: string;
+  }): Promise<Result<ForeignEntity, ResultError<FetchWithTokenErrorCode>[]>> {
+    return await dssFetch<ForeignEntity>(`/foreign_entity/${id}`, {
+      method: 'GET',
+    });
   },
 
   async exportDocument({ documentId }) {

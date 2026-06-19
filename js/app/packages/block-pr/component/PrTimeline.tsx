@@ -6,11 +6,11 @@ import {
   DiscussionThreadView,
 } from '@core/comments/discussion';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { ENABLE_PR_DISCUSSION_INPUT } from '@core/constant/featureFlags';
 import CaretDown from '@phosphor/caret-down.svg';
 import CaretRight from '@phosphor/caret-right.svg';
-import Robot from '@phosphor/robot.svg';
 import type { GithubPullRequestComment } from '@service-storage/generated/schemas';
-import { cn } from '@ui';
+import { ToggleSwitch } from '@ui';
 import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
 
 import { buildTimeline } from '../data/timeline';
@@ -71,18 +71,13 @@ export function PrTimeline(props: {
         </button>
         <div class="flex-1 border-t border-edge-muted" />
         <Show when={botCount() > 0}>
-          <button
-            type="button"
-            class={cn(
-              'flex items-center gap-1 px-2 py-0.5 rounded-full border border-edge-muted text-[10px] text-ink-muted hover:bg-hover hover-transition-bg shrink-0',
-              hideBots() && 'bg-active'
-            )}
-            onClick={() => setHideBots(!hideBots())}
-          >
-            <Robot class="size-3" />
-            {hideBots() ? `Show bots (${botCount()})` : 'Hide bots'}
-          </button>
-          <div class="w-6 border-t border-edge-muted" />
+          <ToggleSwitch
+            class="shrink-0"
+            checked={hideBots()}
+            onChange={setHideBots}
+            label={`Hide bots (${botCount()})`}
+            labelClass="text-xs text-ink-muted"
+          />
         </Show>
       </div>
 
@@ -107,7 +102,7 @@ export function PrTimeline(props: {
                 )}
               </For>
 
-              <Show when={props.source.canEdit()}>
+              <Show when={ENABLE_PR_DISCUSSION_INPUT && props.source.canEdit()}>
                 <div class="pt-2">
                   <DiscussionInput
                     input={{

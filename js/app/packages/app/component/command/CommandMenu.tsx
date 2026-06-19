@@ -5,7 +5,6 @@ import { getSearchSplit } from '@app/component/next-soup/soup-view/search-contro
 import { isListViewID } from '@app/constants/list-views';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { seedPrBlockData } from '@block-pr/data/queries';
-import { encodePrKey } from '@block-pr/util/prKey';
 import { TabsInset } from '@core/component/TabsInset';
 import { itemToBlockName } from '@core/constant/allBlocks';
 import { getActiveCommandsFromScope } from '@core/hotkey/getCommands';
@@ -246,9 +245,9 @@ export function CommandMenuInner(props: {
       if (isGithubPrEntity(item.data)) {
         // Seed the PR block with the entity's stored metadata so it renders
         // without needing a personal GitHub link.
-        const prRef = seedPrBlockData(item.data);
+        const prBlockId = seedPrBlockData(item.data);
         openWithSplit(
-          { type: 'pr', id: encodePrKey(prRef) },
+          { type: 'pr', id: prBlockId },
           { referredFrom: 'kommand-menu', preferNewSplit: openInNewSplit }
         );
         CommandState.close();

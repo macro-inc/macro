@@ -1,6 +1,6 @@
 import type { Transformer } from '@lexical/markdown';
 import { I_AWAIT_NODE } from './await';
-import { I_MACRO_QUOTE } from './classedBlock';
+import { HTML_BLOCKQUOTE, I_MACRO_QUOTE } from './classedBlock';
 import { CUSTOM_TRANSFORMERS } from './customTransformers';
 import { I_IMAGE_CONSTRAINED, IMAGE } from './image';
 import {
@@ -65,6 +65,7 @@ export const INTERNAL_TRANSFORMERS: Transformer[] = [
   I_DATE_MENTION,
   I_AWAIT_NODE,
   I_TABLE_NODE,
+  HTML_BLOCKQUOTE,
   I_MACRO_QUOTE,
   I_EQUATION_NODE,
   I_THEME_MENTION,
@@ -83,6 +84,7 @@ export const EXTERNAL_TRANSFORMERS: Transformer[] = [
   IMAGE,
   BR_TAG_TO_LINE_BREAK,
   E_TABLE_NODE,
+  HTML_BLOCKQUOTE,
   E_USER_MENTION,
   E_GROUP_MENTION,
   I_DOCUMENT_MENTION, // for chat attachments
@@ -118,6 +120,7 @@ export const ALL_TRANSFORMERS: Transformer[] = [
   BR_TAG_TO_LINE_BREAK,
   I_TABLE_NODE,
   E_TABLE_NODE,
+  HTML_BLOCKQUOTE,
   E_SNAPSHOT_NODE,
   I_USER_MENTION,
   E_USER_MENTION,

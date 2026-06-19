@@ -4,26 +4,32 @@ import {
   StaticMarkdown,
   StaticMarkdownContext,
 } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import { useUrlParams } from '@core/component/ParamsProvider';
-import { toast } from '@core/component/Toast/Toast';
-import {
-  type GithubPullRequestWithDetails,
-  useDocumentGithubPullRequestsQuery,
-} from '@queries/storage/github-pull-requests';
-import { authServiceClient } from '@service-auth/client';
+import { queryClient } from '@queries/client';
+import type { GithubPullRequestWithDetails } from '@queries/storage/github-pull-requests';
 import { cn, Layer, Scroll } from '@ui';
-import { type Accessor, createMemo, Show, Suspense } from 'solid-js';
+import {
+  type Accessor,
+  createEffect,
+  createMemo,
+  type JSX,
+  onMount,
+  Show,
+} from 'solid-js';
 
-import { URL_PARAMS } from '../constants';
 import { createPrDiscussionSource } from '../data/prDiscussionSource';
-import { isGithubLinkError, usePrEnrichmentQuery } from '../data/queries';
+import {
+  type PrForeignEntityData,
+  prForeignEntityQueryKey,
+  usePrForeignEntityQuery,
+} from '../data/queries';
 import {
   cleanGithubMarkdown,
   githubAvatarUrl,
   githubDisplayLogin,
 } from '../util/githubMarkdown';
 import type { PrRef } from '../util/prKey';
-import { decodePrKey, prDisplayName, toGithubKey } from '../util/prKey';
+import { prDisplayName } from '../util/prKey';
+import { logPrLoading } from '../util/prLoadingLog';
 import {
   PrDescriptionSkeleton,
   PrMetadataSkeleton,
@@ -36,64 +42,63 @@ import { PrSidePanelSections } from './sidepanel/PrSidePanelSections';
 
 export default function PrBlock() {
   const blockId = useBlockId();
-  const prRef = decodePrKey(blockId);
+
+  logPrLoading('PrBlock render', {
+    blockId,
+  });
 
   return (
-    <Show
-      when={prRef}
-      fallback={
-        <div class="flex h-full items-center justify-center text-ink-placeholder text-sm">
-          Invalid pull request reference
-        </div>
-      }
-    >
-      {(ref) => <PrBlockContent prRef={ref()} />}
+    <Show when={blockId}>
+      {(id) => <PrBlockContent foreignEntityId={id()} />}
     </Show>
   );
 }
 
-function PrBlockContent(props: { prRef: PrRef }) {
-  const params = useUrlParams(URL_PARAMS);
-  const taskId = () => params.task() ?? null;
+function PrBlockContent(props: { foreignEntityId: string }) {
+  onMount(() => {
+    logPrLoading('PrBlockContent mounted', {
+      foreignEntityId: props.foreignEntityId,
+    });
+  });
 
-  // Primary source: the linking task's stored GitHub data. Team-visible
-  // (populated by the GitHub App installation via webhooks) — no personal
-  // GitHub link required. The hook layers live enrichment on top when the
-  // user does have a link, and silently falls back to stored data otherwise.
-  const taskPullRequestsQuery = useDocumentGithubPullRequestsQuery(
-    taskId,
-    () => !!taskId()
+  const foreignEntityQuery = usePrForeignEntityQuery(
+    () => props.foreignEntityId
   );
-  const taskPullRequest = createMemo(() => {
-    const githubKey = toGithubKey(props.prRef);
-    return taskPullRequestsQuery.data?.pullRequests.find(
-      (pullRequest) => pullRequest.githubKey === githubKey
+  const foreignEntityData = createMemo(() => {
+    foreignEntityQuery.status;
+    foreignEntityQuery.dataUpdatedAt;
+    return queryClient.getQueryData<PrForeignEntityData>(
+      prForeignEntityQueryKey(props.foreignEntityId)
     );
   });
 
-  // Fallback when opened without a task (pasted URL, entity lists): live
-  // enrichment via the user's personal GitHub link.
-  const enrichmentQuery = usePrEnrichmentQuery(
-    () => props.prRef,
-    () => !taskId()
-  );
+  const prRef = createMemo(() => foreignEntityData()?.prRef);
+  const pullRequest = createMemo(() => foreignEntityData()?.pullRequest);
 
-  const pullRequest = createMemo(() =>
-    taskId() ? taskPullRequest() : enrichmentQuery.data
-  );
+  createEffect(() => {
+    logPrLoading('foreign entity query state', {
+      id: props.foreignEntityId,
+      status: foreignEntityQuery.status,
+      fetchStatus: foreignEntityQuery.fetchStatus,
+      isPending: foreignEntityQuery.isPending,
+      isFetching: foreignEntityQuery.isFetching,
+      isSuccess: foreignEntityQuery.isSuccess,
+      isError: foreignEntityQuery.isError,
+      error: describeError(foreignEntityQuery.error),
+      hasData: !!foreignEntityData(),
+      dataUpdatedAt: foreignEntityQuery.dataUpdatedAt,
+    });
+  });
 
-  // Only surface load problems when there's nothing to render — seeded or
-  // stored data with a failed background refresh still displays fine.
-  const needsGithubLink = createMemo(
-    () =>
-      !taskId() && !pullRequest() && isGithubLinkError(enrichmentQuery.error)
-  );
+  createEffect(() => {
+    logPrLoading('resolved PR data for render', {
+      source: 'foreign-entity',
+      fields: describePullRequest(pullRequest()),
+    });
+  });
+
   const loadFailed = createMemo(
-    () =>
-      !taskId() &&
-      !pullRequest() &&
-      !!enrichmentQuery.error &&
-      !needsGithubLink()
+    () => !pullRequest() && !!foreignEntityQuery.error
   );
 
   // Block-lifetime local Macro discussion (prototype-only, lost on reload).
@@ -104,50 +109,85 @@ function PrBlockContent(props: { prRef: PrRef }) {
       <SidePanel.Layout>
         <PrSidePanelSections enrichment={pullRequest} />
         <div class="flex flex-col size-full min-w-0">
-          {/* Reading query data suspends until the GitHub roundtrip resolves;
-              the fallback renders the same chrome from the URL ref alone. */}
-          <Suspense
-            fallback={
-              <PrSplitHeader prRef={props.prRef} enrichment={undefined} />
-            }
+          <Show
+            when={prRef()}
+            fallback={<LoggedFallback name="split-header" />}
           >
-            <PrSplitHeader prRef={props.prRef} enrichment={pullRequest()} />
-          </Suspense>
+            {(ref) => (
+              <PrSplitHeader prRef={ref()} enrichment={pullRequest()} />
+            )}
+          </Show>
 
           <Scroll class="flex-1 min-h-0">
             <div class="max-w-3xl mx-auto px-6 pt-12 pb-12 min-w-0">
-              <Suspense fallback={<PrTitleSkeleton />}>
-                <PrTitle prRef={props.prRef} pullRequest={pullRequest} />
-              </Suspense>
-
-              <div class="spacer h-3" />
-              <Suspense fallback={<PrMetadataSkeleton />}>
-                <PrMetadata prRef={props.prRef} pullRequest={pullRequest} />
-              </Suspense>
-
-              <Suspense fallback={<PrDescriptionSkeleton />}>
-                <PrDescription pullRequest={pullRequest} />
-              </Suspense>
-
-              <Suspense fallback={null}>
-                <PrStatusBanners
-                  loadFailed={loadFailed}
-                  needsGithubLink={needsGithubLink}
-                />
-              </Suspense>
-
-              <Suspense fallback={<PrTimelineSkeleton />}>
-                <PrTimeline
-                  githubItems={pullRequest()?.comments ?? []}
-                  source={discussionSource}
-                />
-              </Suspense>
+              <Show
+                when={prRef()}
+                fallback={
+                  <>
+                    <LoggedFallback name="content" />
+                    <PrTitleSkeleton />
+                    <div class="spacer h-3" />
+                    <PrMetadataSkeleton />
+                    <PrDescriptionSkeleton />
+                    <PrTimelineSkeleton />
+                  </>
+                }
+              >
+                {(ref) => (
+                  <>
+                    <PrTitle prRef={ref()} pullRequest={pullRequest} />
+                    <div class="spacer h-3" />
+                    <PrMetadata prRef={ref()} pullRequest={pullRequest} />
+                    <PrDescription pullRequest={pullRequest} />
+                    <PrLoadErrorBanner loadFailed={loadFailed} />
+                    <PrTimeline
+                      githubItems={pullRequest()?.comments ?? []}
+                      source={discussionSource}
+                    />
+                  </>
+                )}
+              </Show>
             </div>
           </Scroll>
         </div>
       </SidePanel.Layout>
     </div>
   );
+}
+
+function describeError(error: unknown) {
+  if (!error) return null;
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+    };
+  }
+  return String(error);
+}
+
+function describePullRequest(
+  pullRequest: GithubPullRequestWithDetails | undefined
+) {
+  if (!pullRequest) return null;
+  return {
+    githubKey: pullRequest.githubKey,
+    name: pullRequest.name,
+    status: pullRequest.status,
+    hasDescription: !!pullRequest.description,
+    authorLogin: pullRequest.authorLogin,
+    checks: pullRequest.checks?.length ?? null,
+    comments: pullRequest.comments?.length ?? null,
+    additions: pullRequest.additions,
+    deletions: pullRequest.deletions,
+  };
+}
+
+function LoggedFallback(props: { name: string; children?: JSX.Element }) {
+  onMount(() => {
+    logPrLoading('loading fallback mounted', { name: props.name });
+  });
+  return <>{props.children}</>;
 }
 
 function PrTitle(props: {
@@ -241,50 +281,12 @@ function PrDescription(props: {
   );
 }
 
-function PrStatusBanners(props: {
-  needsGithubLink: Accessor<boolean>;
-  loadFailed: Accessor<boolean>;
-}) {
+function PrLoadErrorBanner(props: { loadFailed: Accessor<boolean> }) {
   return (
-    <>
-      <Show when={props.needsGithubLink()}>
-        <ConnectGithubBanner />
-      </Show>
-      <Show when={props.loadFailed()}>
-        <div class="mt-6 px-3 py-2 rounded-lg border border-edge-muted text-xs text-ink-muted">
-          Couldn't load pull request details from GitHub. The discussion below
-          still works.
-        </div>
-      </Show>
-    </>
-  );
-}
-
-function ConnectGithubBanner() {
-  const handleConnect = async () => {
-    const result = await authServiceClient.reauthenticateGithub(
-      window.location.href
-    );
-    if (result.isErr()) {
-      toast.failure('Failed to start GitHub connect flow');
-      return;
-    }
-    window.location.href = result.value;
-  };
-
-  return (
-    <div class="mt-6 flex items-center gap-3 px-3 py-2 rounded-lg border border-edge-muted text-xs">
-      <span class="text-ink-muted min-w-0">
-        Connect your GitHub account to load this pull request's details and
-        comments.
-      </span>
-      <button
-        type="button"
-        class="ml-auto shrink-0 px-2 py-1 rounded-lg border border-edge-muted hover:bg-hover hover-transition-bg"
-        onClick={() => void handleConnect()}
-      >
-        Connect GitHub
-      </button>
-    </div>
+    <Show when={props.loadFailed()}>
+      <div class="mt-6 px-3 py-2 rounded-lg border border-edge-muted text-xs text-ink-muted">
+        Couldn't load this pull request from cached GitHub data.
+      </div>
+    </Show>
   );
 }

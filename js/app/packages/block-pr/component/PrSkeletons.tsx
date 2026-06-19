@@ -7,7 +7,7 @@ import { prDisplayName } from '../util/prKey';
 export function SkeletonBar(props: { class?: string }) {
   return (
     <div
-      class={cn('animate-pulse rounded-full bg-edge-muted/50', props.class)}
+      class={cn('skeleton-shimmer rounded-full bg-edge-muted/50', props.class)}
     />
   );
 }

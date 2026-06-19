@@ -1,15 +1,43 @@
 import { Message } from '@channel/Message/Message';
 import type { MessageData } from '@channel/Message/types';
-import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
+import { Thread } from '@channel/Thread/Thread';
+import MacroLogo from '@icon/macro-logo.svg';
 import type { GithubPullRequestComment } from '@service-storage/generated/schemas';
+import type { ApiChannelMessage } from '@service-storage/generated/schemas/apiChannelMessage';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
-import { cn } from '@ui';
+import { Button, cn } from '@ui';
 import { createSignal, onMount, Show } from 'solid-js';
 
 import { githubAvatarUrl, githubDisplayLogin } from '../util/githubMarkdown';
 
 /** Collapsed preview height for long comments (px). */
-const PREVIEW_MAX_HEIGHT = 240;
+const PREVIEW_MAX_HEIGHT = 180;
+
+function GithubAvatarFallback() {
+  return (
+    <div class="size-full rounded-full bg-surface flex items-center justify-center">
+      <MacroLogo class="size-6 text-edge" />
+    </div>
+  );
+}
+
+function GithubAvatar(props: { login: string }) {
+  const [failed, setFailed] = createSignal(false);
+
+  return (
+    <div class="shrink-0 size-(--user-icon-width)">
+      <Show when={!failed()} fallback={<GithubAvatarFallback />}>
+        <img
+          src={githubAvatarUrl(props.login)}
+          alt={githubDisplayLogin(props.login)}
+          class="size-full rounded-full bg-surface object-cover"
+          loading="lazy"
+          onError={() => setFailed(true)}
+        />
+      </Show>
+    </div>
+  );
+}
 
 function sourceLabel(source: string): string | null {
   switch (source) {
@@ -24,8 +52,8 @@ function sourceLabel(source: string): string | null {
 
 /**
  * Fudge a GitHub comment into the channel message shape: GitHub authors ride
- * the bot-sender path, which carries an explicit display name and avatar URL
- * through `Message.SenderIcon`/`Message.SenderName`.
+ * the bot-sender path, which carries an explicit display name through
+ * `Message.SenderName`.
  */
 function toMessageData(comment: GithubPullRequestComment): MessageData {
   const login = comment.authorLogin ?? 'github';
@@ -48,6 +76,28 @@ function toMessageData(comment: GithubPullRequestComment): MessageData {
   };
 }
 
+function toThreadRowMessage(
+  comment: GithubPullRequestComment
+): ApiChannelMessage {
+  const message = toMessageData(comment);
+  const login = comment.authorLogin ?? 'github';
+  return {
+    ...message,
+    channel_id: '',
+    sender: {
+      type: 'bot',
+      id: `github:${login}`,
+      name: githubDisplayLogin(login),
+      avatar_url: githubAvatarUrl(login),
+    },
+    thread: {
+      reply_count: 0,
+      latest_reply_at: null,
+      preview: [],
+    },
+  };
+}
+
 /**
  * A read-only GitHub comment rendered with the channel message components,
  * collapsed to a preview when long (bot comments tend to be walls of text).
@@ -56,9 +106,12 @@ export function GithubMessageView(props: {
   comment: GithubPullRequestComment;
 }) {
   const messageData = () => toMessageData(props.comment);
+  const threadRowMessage = () => toThreadRowMessage(props.comment);
+  const login = () => props.comment.authorLogin ?? 'github';
 
   const [expanded, setExpanded] = createSignal(false);
   const [overflowing, setOverflowing] = createSignal(false);
+  const truncated = () => !expanded() && overflowing();
   let contentRef: HTMLDivElement | undefined;
 
   onMount(() => {
@@ -73,66 +126,63 @@ export function GithubMessageView(props: {
   });
 
   return (
-    <Message.Root message={messageData()}>
-      <Message.Layout class="pt-(--regular-message-padding-t)">
-        <Message.Slot placement="icon">
-          <Message.SenderIcon />
-        </Message.Slot>
-        <Message.Slot
-          placement="header"
-          class="flex items-center gap-1 min-w-0 w-full"
-        >
-          <Message.SenderName />
-          <Show when={sourceLabel(props.comment.source)}>
-            {(label) => (
-              <span class="px-1.5 py-px rounded-full border border-edge-muted text-[10px] text-ink-placeholder shrink-0">
-                {label()}
-              </span>
-            )}
-          </Show>
-          <div class="grow shrink-0 min-w-0 flex items-center gap-1.5 justify-end">
-            <Message.Timestamp class="ml-auto shrink-0" format="dateAndTime" />
-            <Show when={props.comment.url}>
-              {(url) => (
-                <a
-                  href={url()}
-                  target="_blank"
-                  rel="noreferrer"
-                  aria-label="Open on GitHub"
-                  class="shrink-0 text-ink-placeholder hover:opacity-70 transition-opacity"
-                >
-                  <ArrowSquareOut class="size-3" />
-                </a>
+    <Thread.Row message={threadRowMessage()}>
+      <Message.Root message={messageData()}>
+        <Message.Layout class="pt-(--regular-message-padding-t)">
+          <Message.Slot placement="icon">
+            <GithubAvatar login={login()} />
+          </Message.Slot>
+          <Message.Slot
+            placement="header"
+            class="flex items-center gap-1 min-w-0 w-full"
+          >
+            <Message.SenderName />
+            <Show when={sourceLabel(props.comment.source)}>
+              {(label) => (
+                <span class="inline-flex shrink-0 items-center rounded-sm bg-hover px-2 py-0.5 text-xs font-medium leading-none text-ink-muted">
+                  {label()}
+                </span>
               )}
             </Show>
-          </div>
-        </Message.Slot>
-        <Message.Slot placement="content" class="ph-no-capture">
-          <div
-            ref={contentRef}
-            class={cn('relative', !expanded() && 'overflow-hidden')}
-            style={
-              !expanded() && overflowing()
-                ? { 'max-height': `${PREVIEW_MAX_HEIGHT}px` }
-                : undefined
-            }
-          >
-            <Message.Content class="overflow-x-auto" />
-            <Show when={!expanded() && overflowing()}>
-              <div class="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-panel to-transparent pointer-events-none" />
-            </Show>
-          </div>
-          <Show when={overflowing()}>
-            <button
-              type="button"
-              class="mt-1 text-xs text-accent hover:opacity-70 transition-opacity"
-              onClick={() => setExpanded(!expanded())}
+            <div class="grow shrink-0 min-w-0 flex items-center gap-1.5 justify-end">
+              <Message.Timestamp
+                class="ml-auto shrink-0"
+                format="dateAndTime"
+              />
+            </div>
+          </Message.Slot>
+          <Message.Slot placement="content" class="ph-no-capture">
+            <div
+              ref={contentRef}
+              class={cn('relative', truncated() && 'overflow-hidden')}
+              style={
+                truncated()
+                  ? {
+                      'max-height': `${PREVIEW_MAX_HEIGHT}px`,
+                      'mask-image':
+                        'linear-gradient(to bottom, black calc(100% - 32px), transparent 100%)',
+                      '-webkit-mask-image':
+                        'linear-gradient(to bottom, black calc(100% - 32px), transparent 100%)',
+                    }
+                  : undefined
+              }
             >
-              {expanded() ? 'Show less' : 'Show more'}
-            </button>
-          </Show>
-        </Message.Slot>
-      </Message.Layout>
-    </Message.Root>
+              <Message.Content class="overflow-x-auto" />
+            </div>
+            <Show when={overflowing()}>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                class="mt-2"
+                onClick={() => setExpanded(!expanded())}
+              >
+                {expanded() ? 'Show less' : 'Show more'}
+              </Button>
+            </Show>
+          </Message.Slot>
+        </Message.Layout>
+      </Message.Root>
+    </Thread.Row>
   );
 }

@@ -24,6 +24,13 @@ export function cleanGithubMarkdown(body: string): string {
       // Collapsible sections: promote the summary line, drop the wrappers.
       .replace(/<summary>([\s\S]*?)<\/summary>/gi, '**$1**\n\n')
       .replace(/<\/?details[^>]*>/gi, '')
+      // CodeRabbit's decorative SVG badges are inline image markdown. Our image
+      // transformer only handles image-only blocks, so render these as normal
+      // text links instead of a stray "!" plus a giant URL.
+      .replace(
+        /!\[([^\]]*)\]\((https?:\/\/storage\.googleapis\.com\/coderabbit_public_assets\/[^)\s]+)(?:\s"[^"]*")?\)/g,
+        '[$1]($2)'
+      )
       // Inline formatting tags whose content should stay.
       .replace(/<\/?(?:sub|sup|b|i|em|strong|kbd)>/gi, '')
       .replace(/<br\s*\/?>/gi, '\n')

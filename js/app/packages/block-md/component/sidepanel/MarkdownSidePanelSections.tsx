@@ -2,8 +2,6 @@ import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { SidePanel } from '@app/component/side-panel';
 import { EntityPropertiesSection } from '@app/component/side-panel/properties';
 import { useSplitLayout } from '@app/component/split-layout/layout';
-import { URL_PARAMS as PR_URL_PARAMS } from '@block-pr/constants';
-import { encodePrKey } from '@block-pr/util/prKey';
 import { useBlockAliasedName, useBlockId, useBlockName } from '@core/block';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
@@ -511,26 +509,27 @@ function GithubSectionConditional(props: {
                     </Show>
                     <button
                       type="button"
-                      class="inline-flex min-w-0 items-center gap-1 text-ink hover:text-ink"
+                      disabled={!pr.foreignEntityId}
+                      class={cn(
+                        'inline-flex min-w-0 items-center gap-1 text-ink hover:text-ink',
+                        !pr.foreignEntityId &&
+                          'cursor-not-allowed text-ink-placeholder hover:text-ink-placeholder'
+                      )}
                       title={
                         pr.name?.trim()
                           ? `${pr.name.trim()} ${pr.displayName}`
                           : pr.displayName
                       }
-                      onClick={() =>
+                      onClick={() => {
+                        if (!pr.foreignEntityId) return;
                         openWithSplit(
                           {
                             type: 'pr',
-                            id: encodePrKey({
-                              owner: pr.owner,
-                              repo: pr.repo,
-                              number: pr.number,
-                            }),
-                            params: { [PR_URL_PARAMS.task]: props.documentId },
+                            id: pr.foreignEntityId,
                           },
                           { referredFrom: null }
-                        )
-                      }
+                        );
+                      }}
                     >
                       <GithubIcon
                         class="size-3 shrink-0 text-ink-extra-muted"

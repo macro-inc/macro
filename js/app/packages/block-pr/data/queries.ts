@@ -1,18 +1,108 @@
+import { throwOnErr } from '@core/util/result';
 import type { GithubPullRequestEntity } from '@entity';
 import { queryClient } from '@queries/client';
 import type { GithubPullRequestWithDetails } from '@queries/storage/github-pull-requests';
-import { authServiceClient } from '@service-auth/client';
-import type { EnrichedGithubPullRequest } from '@service-auth/generated/schemas';
+import { storageServiceClient } from '@service-storage/client';
+import type { ForeignEntity } from '@service-storage/generated/schemas';
 import { useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 
 import type { PrRef } from '../util/prKey';
-import { prDisplayName, prHtmlUrl, toGithubKey } from '../util/prKey';
+import {
+  parseGithubKey,
+  prDisplayName,
+  prHtmlUrl,
+  toGithubKey,
+} from '../util/prKey';
+import { logPrLoading } from '../util/prLoadingLog';
 
 const PR_STALE_TIME = 60 * 1000;
+const GITHUB_PULL_REQUEST_SOURCE = 'github_pull_request';
 
-function prEnrichmentQueryKey(ref: PrRef): (string | number)[] {
-  return ['github-pr', ref.owner, ref.repo, ref.number, 'enrichment'];
+export type PrForeignEntityData = {
+  id: string;
+  prRef: PrRef;
+  pullRequest: GithubPullRequestWithDetails;
+};
+
+export function prForeignEntityQueryKey(id: string): string[] {
+  return ['github-pr', 'foreign-entity', id];
+}
+
+function metadataRecord(metadata: unknown): Record<string, unknown> {
+  if (metadata && typeof metadata === 'object' && !Array.isArray(metadata)) {
+    return metadata as Record<string, unknown>;
+  }
+  return {};
+}
+
+function optionalString(value: unknown): string | null | undefined {
+  return typeof value === 'string' ? value : undefined;
+}
+
+function optionalNumber(value: unknown): number | null | undefined {
+  return typeof value === 'number' ? value : undefined;
+}
+
+function optionalArray<T>(value: unknown): T[] | null | undefined {
+  return Array.isArray(value) ? (value as T[]) : undefined;
+}
+
+function prForeignEntityDataFromParts(args: {
+  id: string;
+  foreignId: string;
+  metadata: unknown;
+}): PrForeignEntityData {
+  const metadata = metadataRecord(args.metadata);
+  const owner = optionalString(metadata.owner);
+  const repo = optionalString(metadata.repo);
+  const number = optionalNumber(metadata.number);
+  const refFromMetadata =
+    owner && repo && number != null ? { owner, repo, number } : null;
+  const prRef = refFromMetadata ?? parseGithubKey(args.foreignId);
+
+  if (!prRef) {
+    throw new Error(`Invalid GitHub pull request metadata for ${args.id}`);
+  }
+
+  const githubKey =
+    optionalString(metadata.githubKey) ?? args.foreignId ?? toGithubKey(prRef);
+
+  return {
+    id: args.id,
+    prRef,
+    pullRequest: {
+      additions: optionalNumber(metadata.additions),
+      authorLogin: optionalString(metadata.authorLogin),
+      description: optionalString(metadata.description),
+      checks: optionalArray(metadata.checks),
+      comments: optionalArray(metadata.comments),
+      deletions: optionalNumber(metadata.deletions),
+      displayName: optionalString(metadata.displayName) ?? prDisplayName(prRef),
+      foreignEntityId: args.id,
+      githubKey,
+      name: optionalString(metadata.name),
+      number: prRef.number,
+      owner: prRef.owner,
+      repo: prRef.repo,
+      status: optionalString(metadata.status),
+      url: optionalString(metadata.url) ?? prHtmlUrl(prRef),
+    },
+  };
+}
+
+function prForeignEntityDataFromForeignEntity(
+  entity: ForeignEntity
+): PrForeignEntityData {
+  if (entity.foreignEntitySource !== GITHUB_PULL_REQUEST_SOURCE) {
+    throw new Error(`Foreign entity ${entity.id} is not a GitHub pull request`);
+  }
+
+  return prForeignEntityDataFromParts({
+    id: entity.id,
+    foreignId: entity.foreignEntityId,
+    metadata: entity.metadata,
+  });
 }
 
 /**
@@ -21,111 +111,69 @@ function prEnrichmentQueryKey(ref: PrRef): (string | number)[] {
  * data the block renders, so clicking through shows it immediately without
  * requiring a personal GitHub link.
  */
-export function seedPrBlockData(entity: GithubPullRequestEntity): PrRef {
+export function seedPrBlockData(entity: GithubPullRequestEntity): string {
   const { owner, repo, number } = entity.metadata;
   const ref: PrRef = { owner, repo, number };
-  // Synthetic entities (e.g. the pasted-URL command item) carry placeholder
-  // metadata and no backing row — don't seed those, let the block fetch.
-  if (!entity.storedForId) return ref;
-  queryClient.setQueryData<GithubPullRequestWithDetails>(
-    prEnrichmentQueryKey(ref),
-    {
-      additions: entity.metadata.additions,
-      checks: entity.metadata.checks,
-      comments: entity.metadata.comments,
-      deletions: entity.metadata.deletions,
-      displayName: prDisplayName(ref),
-      githubKey: toGithubKey(ref),
-      name: entity.metadata.name,
-      number,
-      owner,
-      repo,
-      status: entity.metadata.status,
-      url: entity.metadata.url,
-    }
+  logPrLoading('seedPrBlockData called', {
+    ref,
+    storedForId: entity.storedForId,
+    hasName: !!entity.metadata.name,
+    hasStatus: !!entity.metadata.status,
+    checks: entity.metadata.checks?.length ?? null,
+    comments: entity.metadata.comments?.length ?? null,
+  });
+  queryClient.setQueryData<PrForeignEntityData>(
+    prForeignEntityQueryKey(entity.id),
+    prForeignEntityDataFromParts({
+      id: entity.id,
+      foreignId: entity.foreignId,
+      metadata: {
+        additions: entity.metadata.additions,
+        checks: entity.metadata.checks,
+        comments: entity.metadata.comments,
+        deletions: entity.metadata.deletions,
+        displayName: prDisplayName(ref),
+        githubKey: toGithubKey(ref),
+        name: entity.metadata.name,
+        number,
+        owner,
+        repo,
+        status: entity.metadata.status,
+        url: entity.metadata.url,
+      },
+    })
   );
-  return ref;
+  logPrLoading('seedPrBlockData wrote foreign entity cache', {
+    id: entity.id,
+    ref,
+  });
+  return entity.id;
 }
 
-/** Enrichment failure carrying the service error codes for UI branching. */
-export class PrEnrichmentError extends Error {
-  constructor(public readonly codes: string[]) {
-    super(`Failed to enrich pull request: ${codes.join(', ')}`);
-    this.name = 'PrEnrichmentError';
-  }
-}
-
-export function isGithubLinkError(error: unknown): boolean {
-  return (
-    error instanceof PrEnrichmentError &&
-    (error.codes.includes('REAUTHENTICATION_REQUIRED') ||
-      error.codes.includes('NOT_FOUND'))
-  );
-}
-
-function toStorageShape(
-  pullRequest: EnrichedGithubPullRequest
-): GithubPullRequestWithDetails {
-  return {
-    additions: pullRequest.additions,
-    authorLogin: pullRequest.authorLogin,
-    description: pullRequest.description,
-    checks: pullRequest.checks,
-    comments: pullRequest.comments,
-    deletions: pullRequest.deletions,
-    displayName: pullRequest.displayName,
-    githubKey: pullRequest.githubKey,
-    name: pullRequest.name,
-    number: pullRequest.number,
-    owner: pullRequest.owner,
-    repo: pullRequest.repo,
-    status: pullRequest.status,
-    url: pullRequest.url,
-  };
-}
-
-/**
- * Live enrichment via the user's personal GitHub link
- * (`POST /github_pull_requests/enrich`). Used as a fallback when the block
- * wasn't opened from a task — opening from a task uses the task's stored,
- * team-visible GitHub data instead and doesn't need this.
- */
-export function usePrEnrichmentQuery(
-  ref: Accessor<PrRef>,
-  enabled: Accessor<boolean>
-) {
+export function usePrForeignEntityQuery(id: Accessor<string>) {
   return useQuery(() => {
-    const current = ref();
+    const currentId = id();
     return {
-      queryKey: prEnrichmentQueryKey(current),
-      queryFn: async (): Promise<GithubPullRequestWithDetails> => {
-        const response = await authServiceClient.enrichGithubPullRequests({
-          pullRequests: [
-            {
-              githubKey: toGithubKey(current),
-              owner: current.owner,
-              repo: current.repo,
-              number: current.number,
-              url: prHtmlUrl(current),
-              displayName: prDisplayName(current),
-            },
-          ],
+      queryKey: prForeignEntityQueryKey(currentId),
+      queryFn: async (): Promise<PrForeignEntityData> => {
+        logPrLoading('foreign entity queryFn start', { id: currentId });
+        const entity = await throwOnErr(() =>
+          storageServiceClient.getForeignEntity({ id: currentId })
+        );
+        const data = prForeignEntityDataFromForeignEntity(entity);
+        logPrLoading('foreign entity queryFn success', {
+          id: currentId,
+          githubKey: data.pullRequest.githubKey,
+          hasName: !!data.pullRequest.name,
+          hasDescription: !!data.pullRequest.description,
+          authorLogin: data.pullRequest.authorLogin,
+          checks: data.pullRequest.checks?.length ?? null,
+          comments: data.pullRequest.comments?.length ?? null,
         });
-        if (response.isErr()) {
-          throw new PrEnrichmentError(
-            response.error.map((error) => String(error.code))
-          );
-        }
-        const pullRequest = response.value.pullRequests[0];
-        if (!pullRequest) {
-          throw new PrEnrichmentError(['NOT_FOUND']);
-        }
-        return toStorageShape(pullRequest);
+        return data;
       },
       staleTime: PR_STALE_TIME,
-      enabled: enabled(),
-      retry: (failureCount: number, error: unknown) =>
-        !(error instanceof PrEnrichmentError) && failureCount < 2,
+      retry: 1,
     };
   });
 }
