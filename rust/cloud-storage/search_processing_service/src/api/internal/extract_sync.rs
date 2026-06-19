@@ -53,6 +53,12 @@ pub async fn handler(
     State(ctx): State<ApiContext>,
     extract::Json(req): extract::Json<ExtractSyncRequest>,
 ) -> Result<Response, Response> {
+    let document_ids: Vec<&str> = req
+        .documents
+        .iter()
+        .map(|d| d.document_id.as_str())
+        .collect();
+    tracing::info!(?document_ids, "extract_sync received");
     let messages: Vec<SearchQueueMessage> = documents_to_messages(req.documents);
     ctx.sqs_client
         .bulk_send_message_to_search_event_queue(messages)

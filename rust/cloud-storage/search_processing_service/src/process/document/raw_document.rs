@@ -340,7 +340,9 @@ pub async fn update_search_with_sync_document(
 
     let upserts = generate_upserts(document_info, result).context("unable to generate upserts")?;
 
+    let chunk_count = upserts.len();
     upsert_document(opensearch_client, search_extractor_message, upserts).await?;
+    tracing::info!(document_id = %document_id, chunk_count, "sync document indexed");
 
     Ok(())
 }
