@@ -3,6 +3,7 @@ import { EntityPropertiesSection } from '@app/component/side-panel/properties';
 import { References } from '@core/component/References';
 import type { Property } from '@property/types';
 import { useAttachmentReferencesQuery } from '@queries/storage/attachment-references';
+import type { ItemType } from '@service-storage/client';
 import { Show, Suspense } from 'solid-js';
 import { useEmailContext } from '../EmailContext';
 
@@ -52,10 +53,15 @@ export function EmailSidePanelSections(props: EmailSidePanelSectionsProps) {
   );
 }
 
+// Email threads are stored as the "thread" entity type in the references
+// system (ReferencedShareItemType::EmailThread -> "thread" and the mentions
+// plugin maps email -> thread), so query/render with "thread", not "email".
+const EMAIL_REFERENCE_ENTITY_TYPE = 'thread' as ItemType;
+
 function ReferencesSectionConditional(props: { threadId: string }) {
   const references = useAttachmentReferencesQuery(
     () => props.threadId,
-    () => 'email'
+    () => EMAIL_REFERENCE_ENTITY_TYPE
   );
 
   const count = () => references.data?.length ?? 0;
@@ -69,7 +75,10 @@ function ReferencesSectionConditional(props: { threadId: string }) {
       >
         <Suspense fallback={<SidePanel.Loading />}>
           <div class="text-xs">
-            <References documentId={props.threadId} entityType="email" />
+            <References
+              documentId={props.threadId}
+              entityType={EMAIL_REFERENCE_ENTITY_TYPE}
+            />
           </div>
         </Suspense>
       </SidePanel.Section>
