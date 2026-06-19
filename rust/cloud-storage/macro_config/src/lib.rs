@@ -100,6 +100,50 @@ where
     ConfigLoader::load()
 }
 
+#[doc(hidden)]
+pub fn __deserialize_missing_field<'de, T, E>(key: &'static str) -> Result<T, E>
+where
+    T: serde::Deserialize<'de>,
+    E: de::Error,
+{
+    T::deserialize(MissingConfigValueDeserializer {
+        key,
+        _error: std::marker::PhantomData,
+    })
+}
+
+struct MissingConfigValueDeserializer<E> {
+    key: &'static str,
+    _error: std::marker::PhantomData<E>,
+}
+
+impl<'de, E> de::Deserializer<'de> for MissingConfigValueDeserializer<E>
+where
+    E: de::Error,
+{
+    type Error = E;
+
+    fn deserialize_any<V>(self, _visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        Err(E::missing_field(self.key))
+    }
+
+    fn deserialize_option<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        visitor.visit_none()
+    }
+
+    serde::forward_to_deserialize_any! {
+        bool i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 f32 f64 char str string bytes
+        byte_buf unit unit_struct newtype_struct seq tuple tuple_struct map struct enum
+        identifier ignored_any
+    }
+}
+
 /// Reads the value from app secrets json env var.
 /// If `APP_SECRETS_JSON` is not present, tries to read from standard env var.
 fn read_config_value(key: &'static str) -> Option<String> {
