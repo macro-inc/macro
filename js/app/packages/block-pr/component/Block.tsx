@@ -4,17 +4,12 @@ import {
   StaticMarkdown,
   StaticMarkdownContext,
 } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import { queryClient } from '@queries/client';
 import type { GithubPullRequestWithDetails } from '@queries/storage/github-pull-requests';
 import { cn, Layer, Scroll } from '@ui';
 import { type Accessor, createMemo, Show } from 'solid-js';
 
 import { createPrDiscussionSource } from '../data/prDiscussionSource';
-import {
-  type PrForeignEntityData,
-  prForeignEntityQueryKey,
-  usePrForeignEntityQuery,
-} from '../data/queries';
+import { usePrForeignEntityQuery } from '../data/queries';
 import {
   cleanGithubMarkdown,
   githubAvatarUrl,
@@ -46,16 +41,9 @@ function PrBlockContent(props: { foreignEntityId: string }) {
   const foreignEntityQuery = usePrForeignEntityQuery(
     () => props.foreignEntityId
   );
-  const foreignEntityData = createMemo(() => {
-    foreignEntityQuery.status;
-    foreignEntityQuery.dataUpdatedAt;
-    return queryClient.getQueryData<PrForeignEntityData>(
-      prForeignEntityQueryKey(props.foreignEntityId)
-    );
-  });
 
-  const prRef = createMemo(() => foreignEntityData()?.prRef);
-  const pullRequest = createMemo(() => foreignEntityData()?.pullRequest);
+  const prRef = createMemo(() => foreignEntityQuery.data?.prRef);
+  const pullRequest = createMemo(() => foreignEntityQuery.data?.pullRequest);
 
   const loadFailed = createMemo(
     () => !pullRequest() && !!foreignEntityQuery.error

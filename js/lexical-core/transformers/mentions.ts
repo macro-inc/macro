@@ -238,6 +238,17 @@ function cleanHostname(rawHostname: string): string {
   return hostname;
 }
 
+function currentBrowserHostname(): string | null {
+  if (
+    typeof window === 'undefined' ||
+    !window.location ||
+    !window.location.hostname
+  ) {
+    return null;
+  }
+  return cleanHostname(window.location.hostname);
+}
+
 export const E_DOCUMENT_MENTION: ElementTransformer = {
   dependencies: [DocumentMentionNode],
   type: 'element',
@@ -314,7 +325,9 @@ export const E_PR_MENTION: ElementTransformer = {
     if (!id) return null;
 
     const label = node.getLabel() || 'Pull request';
-    const hostname = cleanHostname(window.location.hostname);
+    const hostname = currentBrowserHostname();
+    if (!hostname) return label;
+
     const prUrl = `https://${hostname}/app/pr/${id}`;
     return `[${label}](${prUrl})`;
   },

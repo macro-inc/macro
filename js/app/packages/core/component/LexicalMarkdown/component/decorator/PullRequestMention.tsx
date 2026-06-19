@@ -1,7 +1,6 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { HoverCard } from '@core/component/HoverCard';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
-import { throwOnErr } from '@core/util/result';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import {
   $isPullRequestMentionNode,
@@ -11,13 +10,12 @@ import OpenIcon from '@phosphor/arrows-out.svg';
 import ChatCircle from '@phosphor/chat-circle.svg';
 import GitMerge from '@phosphor/git-merge.svg';
 import GitPullRequest from '@phosphor/git-pull-request.svg';
-import { storageServiceClient } from '@service-storage/client';
+import { usePrMentionQuery } from '@queries/storage/pr-mention';
 import type {
   ForeignEntity,
   GithubPullRequestCheckRun,
   GithubPullRequestComment,
 } from '@service-storage/generated/schemas';
-import { useQuery } from '@tanstack/solid-query';
 import { cn, Surface } from '@ui';
 import {
   $getNodeByKey,
@@ -35,19 +33,6 @@ import {
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 import { autoRegister } from '../../plugins';
 import { MentionTooltip } from './MentionTooltip';
-
-const PR_MENTION_STALE_TIME = 60 * 1000;
-
-function prMentionQueryOptions(id: string, enabled: boolean) {
-  return {
-    queryKey: ['pr-mention', id],
-    queryFn: () =>
-      throwOnErr(() => storageServiceClient.getForeignEntity({ id })),
-    enabled,
-    staleTime: PR_MENTION_STALE_TIME,
-    retry: 1,
-  };
-}
 
 const GITHUB_PULL_REQUEST_SOURCE = 'github_pull_request';
 const STATUS_ICON_CLASS: Record<string, string> = {
@@ -249,7 +234,7 @@ function PullRequestPreviewBody(props: {
   id: string;
   fallbackProps: PullRequestMentionDecoratorProps;
 }) {
-  const query = useQuery(() => prMentionQueryOptions(props.id, true));
+  const query = usePrMentionQuery(() => props.id);
   const preview = createMemo(() =>
     pullRequestPreview(query.data, props.fallbackProps)
   );
@@ -382,8 +367,9 @@ function PullRequestMentionContent(props: PullRequestMentionDecoratorProps) {
   const lexicalWrapper = useContext(LexicalWrapperContext);
   const editor = lexicalWrapper?.editor;
 
-  const query = useQuery(() =>
-    prMentionQueryOptions(props.id, !lexicalWrapper?.skipPreviewFetch)
+  const query = usePrMentionQuery(
+    () => props.id,
+    () => !lexicalWrapper?.skipPreviewFetch
   );
 
   const label = createMemo(

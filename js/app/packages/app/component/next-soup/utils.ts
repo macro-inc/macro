@@ -10,7 +10,6 @@ import { getChannelParams } from '@block-channel/utils/link';
 import { URL_PARAMS as EMAIL_PARAMS } from '@block-email/constants';
 import { URL_PARAMS as MD_PARAMS } from '@block-md/constants';
 import { URL_PARAMS as PDF_PARAMS } from '@block-pdf/signal/location';
-import { seedPrBlockData } from '@block-pr/data/queries';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { USE_MACRO_PR_SUMMARY_BLOCK } from '@core/constant/featureFlags';
 import {
@@ -344,11 +343,8 @@ export const openEntityInSplitFromUnifiedList = async (
 
   if (isGithubPrEntity(entity)) {
     if (USE_MACRO_PR_SUMMARY_BLOCK) {
-      // Seed the PR block with the entity's stored metadata so it renders
-      // without needing a personal GitHub link.
-      const prBlockId = seedPrBlockData(entity);
       splitManager.openWithSplit(
-        { type: 'pr', id: prBlockId },
+        { type: 'pr', id: entity.id },
         {
           referredFrom: options.referredFrom,
           activate: true,

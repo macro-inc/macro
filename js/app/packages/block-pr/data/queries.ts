@@ -1,6 +1,4 @@
 import { throwOnErr } from '@core/util/result';
-import type { GithubPullRequestEntity } from '@entity';
-import { queryClient } from '@queries/client';
 import type { GithubPullRequestWithDetails } from '@queries/storage/github-pull-requests';
 import { storageServiceClient } from '@service-storage/client';
 import type { ForeignEntity } from '@service-storage/generated/schemas';
@@ -102,39 +100,6 @@ function prForeignEntityDataFromForeignEntity(
     foreignId: entity.foreignEntityId,
     metadata: entity.metadata,
   });
-}
-
-/**
- * Seed the PR block's query cache from a soup/entity-list
- * `GithubPullRequestEntity` — its metadata is the same stored, team-visible
- * data the block renders, so clicking through shows it immediately without
- * requiring a personal GitHub link.
- */
-export function seedPrBlockData(entity: GithubPullRequestEntity): string {
-  const { owner, repo, number } = entity.metadata;
-  const ref: PrRef = { owner, repo, number };
-  queryClient.setQueryData<PrForeignEntityData>(
-    prForeignEntityQueryKey(entity.id),
-    prForeignEntityDataFromParts({
-      id: entity.id,
-      foreignId: entity.foreignId,
-      metadata: {
-        additions: entity.metadata.additions,
-        checks: entity.metadata.checks,
-        comments: entity.metadata.comments,
-        deletions: entity.metadata.deletions,
-        displayName: prDisplayName(ref),
-        githubKey: toGithubKey(ref),
-        name: entity.metadata.name,
-        number,
-        owner,
-        repo,
-        status: entity.metadata.status,
-        url: entity.metadata.url,
-      },
-    })
-  );
-  return entity.id;
 }
 
 export function usePrForeignEntityQuery(id: Accessor<string>) {

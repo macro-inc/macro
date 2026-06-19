@@ -426,7 +426,7 @@ export const ENABLE_REFOCUS_HIGHLIGHT = resolveFeatureFlag(
 
 export const ENABLE_CREATE_PROPERTY = resolveFeatureFlag(
   'ENABLE_CREATE_PROPERTY',
-  true
+  false
 );
 
 export const ENABLE_HOME_OVERRIDE = DEV_MODE_ENV ? true : undefined;

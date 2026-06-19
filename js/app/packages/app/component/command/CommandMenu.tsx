@@ -4,9 +4,9 @@ import { openChatWithMessage } from '@app/component/ChatWithAgentButton';
 import { getSearchSplit } from '@app/component/next-soup/soup-view/search-controllers';
 import { isListViewID } from '@app/constants/list-views';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { seedPrBlockData } from '@block-pr/data/queries';
 import { TabsInset } from '@core/component/TabsInset';
 import { itemToBlockName } from '@core/constant/allBlocks';
+import { USE_MACRO_PR_SUMMARY_BLOCK } from '@core/constant/featureFlags';
 import { getActiveCommandsFromScope } from '@core/hotkey/getCommands';
 import {
   hotkeyScopeTree,
@@ -16,6 +16,7 @@ import {
 import type { RegisterHotkeyReturn } from '@core/hotkey/types';
 import { runCommand } from '@core/hotkey/utils';
 import { debouncedDependent } from '@core/util/debounce';
+import { openExternalUrl } from '@core/util/url';
 import { type EntityData, InlineEntity, isGithubPrEntity } from '@entity';
 import Macro from '@icon/macro-logo.svg';
 import ArrowLeft from '@phosphor/arrow-left.svg';
@@ -243,13 +244,14 @@ export function CommandMenuInner(props: {
     // Handle entity items (documents, channels, chats, etc.)
     if (isEntityItem(item)) {
       if (isGithubPrEntity(item.data)) {
-        // Seed the PR block with the entity's stored metadata so it renders
-        // without needing a personal GitHub link.
-        const prBlockId = seedPrBlockData(item.data);
-        openWithSplit(
-          { type: 'pr', id: prBlockId },
-          { referredFrom: 'kommand-menu', preferNewSplit: openInNewSplit }
-        );
+        if (USE_MACRO_PR_SUMMARY_BLOCK) {
+          openWithSplit(
+            { type: 'pr', id: item.data.id },
+            { referredFrom: 'kommand-menu', preferNewSplit: openInNewSplit }
+          );
+        } else {
+          openExternalUrl(item.data.metadata.url);
+        }
         CommandState.close();
         CommandState.setQuery('');
         return;
