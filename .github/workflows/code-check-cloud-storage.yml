@@ -22,6 +22,7 @@ jobs:
     outputs:
       should_run: ${{ steps.filter.outputs.should_run }}
       nextest_filter: ${{ steps.package-filter.outputs.nextest_filter }}
+      doppler_config_bins: ${{ steps.package-filter.outputs.doppler_config_bins }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
@@ -68,6 +69,15 @@ jobs:
           changed_files="$(git diff --name-only "$compare_rev" "$GITHUB_SHA")"
           printf '%s\n' "$changed_files" > /tmp/changed-files
 
+          doppler_config_bins="$("$GITHUB_WORKSPACE/.github/scripts/changed-cloud-storage-doppler-config-bins.sh" /tmp/changed-files "$GITHUB_WORKSPACE")"
+          {
+            echo 'doppler_config_bins<<__DOPPLER_CONFIG_BINS__'
+            if [ -n "$doppler_config_bins" ]; then
+              printf '%s\n' "$doppler_config_bins"
+            fi
+            echo '__DOPPLER_CONFIG_BINS__'
+          } >> "$GITHUB_OUTPUT"
+
           # Root cargo/toolchain/CI changes can affect the whole workspace, so run all tests.
           if printf '%s\n' "$changed_files" | grep -qE '^(rust/rust-toolchain\.toml|flake\.nix|flake\.lock|rust/cloud-storage/Cargo\.(toml|lock)|rust/cloud-storage/\.cargo/.*|\.github/actions/(setup-rust|setup-cachix|setup-sccache)/.*|\.github/workflows/code-check-cloud-storage\.yml)$'; then
             echo "Workspace-level change detected; running all tests"
@@ -101,6 +111,34 @@ jobs:
           cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
           dev-shell: 'true'
           sccache-bucket: ${{ vars.SCCACHE_BUCKET || secrets.SCCACHE_BUCKET }}
+      - name: validate Doppler configs
+        if: needs.path-check.outputs.doppler_config_bins != ''
+        env:
+          DOPPLER_CONFIG_BINS: ${{ needs.path-check.outputs.doppler_config_bins }}
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${DOPPLER_TOKEN:-}" ]; then
+            echo "DOPPLER_TOKEN secret is required to validate Doppler configs" >&2
+            exit 1
+          fi
+
+          out="$(nix build --no-link --print-build-logs --print-out-paths .#dopplerConfigBins)"
+
+          while IFS= read -r bin; do
+            if [ -z "$bin" ]; then
+              continue
+            fi
+
+            bin_path="$out/bin/$bin"
+            if [ ! -x "$bin_path" ]; then
+              echo "Doppler config binary not found or not executable: $bin_path" >&2
+              exit 1
+            fi
+
+            "$bin_path"
+          done <<< "$DOPPLER_CONFIG_BINS"
       - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6
         with:
           workspaces: rust/cloud-storage
