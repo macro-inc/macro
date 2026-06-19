@@ -52,10 +52,6 @@ export function EmailSidePanelSections(props: EmailSidePanelSectionsProps) {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// References Section (conditional)
-// ─────────────────────────────────────────────────────────────────────────────
-
 function ReferencesSectionConditional(props: { threadId: string }) {
   const references = useAttachmentReferencesQuery(
     () => props.threadId,
