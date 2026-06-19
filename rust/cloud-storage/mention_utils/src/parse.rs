@@ -7,7 +7,7 @@ use nom::{
     character::complete::anychar,
     combinator::{eof, peek, recognize, verify},
     multi::{many_till, many0},
-    sequence::delimited,
+    sequence::{delimited, preceded},
 };
 use serde::Deserialize;
 use std::{
@@ -164,11 +164,12 @@ fn is_recognized_tag_name(name: &str) -> bool {
     .any(|recognized| recognized.eq_ignore_ascii_case(name))
 }
 
-/// Consumes and discards an `<m-*>…</m-*>` tag whose name is not one of the
-/// recognized mention tags. Tags with a recognized name are rejected here so a
-/// recognized tag carrying malformed content still surfaces as a parse error.
+/// Consumes and discards an unrecognized `<m-*>` tag, either self-closing
+/// (`<m-*/>`) or a `<m-*>…</m-*>` pair. Tags with a recognized name are rejected
+/// here so a recognized tag carrying malformed content still surfaces as a parse
+/// error.
 fn parse_unknown_xml_tag(s: &str) -> IResult<&str, ()> {
-    let (after_open, name) = delimited(
+    let (after_name, name) = preceded(
         tag("<"),
         verify(
             recognize((
@@ -177,12 +178,18 @@ fn parse_unknown_xml_tag(s: &str) -> IResult<&str, ()> {
             )),
             |name: &str| !is_recognized_tag_name(name),
         ),
-        tag(">"),
     )
     .parse(s)?;
 
-    let (rest, _) =
-        many_till(anychar, (tag("</"), tag_no_case(name), tag(">"))).parse(after_open)?;
+    let (rest, _) = alt((
+        tag("/>").map(|_| ()),
+        (
+            tag(">"),
+            many_till(anychar, (tag("</"), tag_no_case(name), tag(">"))),
+        )
+            .map(|_| ()),
+    ))
+    .parse(after_name)?;
 
     Ok((rest, ()))
 }

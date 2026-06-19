@@ -710,6 +710,23 @@ fn parse_arbitrary_unknown_tag_is_skipped() {
 }
 
 #[test]
+fn parse_self_closing_unknown_tag_is_skipped() {
+    let input = r#"hello <m-foo/> world"#;
+    let out = ParsedXmlText::parse(input).unwrap();
+    assert_matches!(
+        out.0,
+        [TextSegment::Plain("hello "), TextSegment::Plain(" world"),]
+    );
+}
+
+#[test]
+fn parse_self_closing_unknown_tag_alone_is_skipped() {
+    let input = r#"<m-await/>"#;
+    let out = ParsedXmlText::parse(input).unwrap();
+    assert!(out.0.is_empty());
+}
+
+#[test]
 fn parse_unknown_tag_mixed_with_recognized() {
     let input = r#"<m-await>{"text":"thinking"}</m-await> Hi <m-user-mention>{"userId":"macro|a@b.com","email":"a@b.com"}</m-user-mention>"#;
     let out = ParsedXmlText::parse(input).unwrap();
