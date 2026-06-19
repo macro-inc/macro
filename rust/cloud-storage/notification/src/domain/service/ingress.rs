@@ -13,7 +13,8 @@ use crate::domain::models::queue_message::{
     QueueMessageNeedsStateMachine, UserApnsEndpoints,
 };
 use crate::domain::models::request::{
-    BuildApnsOutput, GetNotificationsByEventItemIdsRequest, NotificationListFilters,
+    BuildApnsOutput, GetNotificationsByEventItemIdsRequest, NotificationEntityRef,
+    NotificationListFilters,
     NotificationStatus, SendNotificationRequest, UpdateNotificationsRequest,
 };
 use crate::domain::models::{
@@ -78,6 +79,15 @@ pub trait NotificationReader: Send + Sync + 'static {
         &self,
         req: GetNotificationsByEventItemIdsRequest<'_>,
     ) -> impl Future<Output = Result<Paginated<UserNotificationRow<T>, String>, Report>> + Send;
+
+    /// Get a user's active notifications for multiple entities, grouped by requested entity.
+    fn get_entity_notifications_batch(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        entity_refs: Vec<NotificationEntityRef>,
+    ) -> impl Future<
+        Output = Result<HashMap<NotificationEntityRef, Vec<UserNotificationRow<serde_json::Value>>>, Report>,
+    > + Send;
 
     /// Get a single user notification by ID.
     fn get_user_notification_by_id<T: DeserializeOwned + Send>(
@@ -648,6 +658,18 @@ where
             .type_erase();
 
         Ok(paginated)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_entity_notifications_batch(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        entity_refs: Vec<NotificationEntityRef>,
+    ) -> Result<HashMap<NotificationEntityRef, Vec<UserNotificationRow<serde_json::Value>>>, Report>
+    {
+        self.repository
+            .get_entity_notifications_batch(user_id, entity_refs)
+            .await
     }
 
     #[tracing::instrument(err, skip(self))]

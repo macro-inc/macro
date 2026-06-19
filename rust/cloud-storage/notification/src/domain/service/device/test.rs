@@ -191,6 +191,19 @@ impl NotificationRepository for MockNotifRepo {
     ) -> Result<Vec<crate::domain::models::UserNotificationRow<T>>, Report> {
         unimplemented!()
     }
+    async fn get_entity_notifications_batch(
+        &self,
+        _: macro_user_id::user_id::MacroUserIdStr<'_>,
+        entity_refs: Vec<crate::domain::models::request::NotificationEntityRef>,
+    ) -> Result<
+        std::collections::HashMap<
+            crate::domain::models::request::NotificationEntityRef,
+            Vec<crate::domain::models::UserNotificationRow<serde_json::Value>>,
+        >,
+        Report,
+    > {
+        Ok(entity_refs.into_iter().map(|entity_ref| (entity_ref, Vec::new())).collect())
+    }
     async fn get_user_notification_by_id<T: serde::de::DeserializeOwned + Send>(
         &self,
         _: macro_user_id::user_id::MacroUserIdStr<'_>,

@@ -16,6 +16,10 @@ use models_pagination::{
     Base64Str, CursorWithValAndFilter, PaginatedOpaqueCursor, SimpleSortMethod, TypeEraseCursor,
 };
 use models_properties::{EntityReference, service::property_value::PropertyValue};
+use notification::domain::models::{
+    UserNotificationRow,
+    request::{NotificationEntityRef, NotificationItemType},
+};
 use models_soup::{
     SoupProperty,
     call_record::SoupCallRecord,
@@ -143,6 +147,115 @@ pub fn entity_properties_loader(
     reader: Arc<dyn SoupPropertyEdgeReader>,
 ) -> DataLoader<EntityPropertiesLoader> {
     DataLoader::new(EntityPropertiesLoader::new(reader), tokio::spawn)
+}
+
+/// Key for loading notifications attached to an entity.
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub struct EntityNotificationsKey {
+    pub entity_type: String,
+    pub entity_id: String,
+}
+
+/// Object-safe reader used by GraphQL notification edges.
+#[async_trait::async_trait]
+pub trait SoupNotificationEdgeReader: Send + Sync + 'static {
+    async fn get_notifications(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        keys: Vec<EntityNotificationsKey>,
+    ) -> Result<
+        HashMap<EntityNotificationsKey, Vec<UserNotificationRow<serde_json::Value>>>,
+        rootcause::Report,
+    >;
+}
+
+#[async_trait::async_trait]
+impl<T> SoupNotificationEdgeReader for T
+where
+    T: notification::domain::service::NotificationReader,
+{
+    async fn get_notifications(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        keys: Vec<EntityNotificationsKey>,
+    ) -> Result<
+        HashMap<EntityNotificationsKey, Vec<UserNotificationRow<serde_json::Value>>>,
+        rootcause::Report,
+    > {
+        let mut result = keys
+            .iter()
+            .cloned()
+            .map(|key| (key, Vec::new()))
+            .collect::<HashMap<_, _>>();
+
+        let entity_refs = keys
+            .iter()
+            .map(|key| {
+                Ok(NotificationEntityRef {
+                    entity_type: notification_item_type_from_key(&key.entity_type)?,
+                    id: key.entity_id.clone(),
+                })
+            })
+            .collect::<Result<Vec<_>, rootcause::Report>>()?;
+
+        let notifications_by_entity = self
+            .get_entity_notifications_batch(user_id, entity_refs)
+            .await
+            .map_err(|err| rootcause::report!(err))?;
+
+        for (key, notifications) in notifications_by_entity {
+            result.insert(
+                EntityNotificationsKey {
+                    entity_type: notification_item_type_key(key.entity_type).to_owned(),
+                    entity_id: key.id,
+                },
+                notifications,
+            );
+        }
+
+        Ok(result)
+    }
+}
+
+/// DataLoader for entity notification edges.
+pub struct EntityNotificationsLoader {
+    user_id: MacroUserIdStr<'static>,
+    reader: Arc<dyn SoupNotificationEdgeReader>,
+}
+
+impl EntityNotificationsLoader {
+    pub fn new(
+        user_id: MacroUserIdStr<'static>,
+        reader: Arc<dyn SoupNotificationEdgeReader>,
+    ) -> Self {
+        Self { user_id, reader }
+    }
+}
+
+impl Loader<EntityNotificationsKey> for EntityNotificationsLoader {
+    type Value = Vec<UserNotificationRow<serde_json::Value>>;
+    type Error = Arc<rootcause::Report>;
+
+    async fn load(
+        &self,
+        keys: &[EntityNotificationsKey],
+    ) -> Result<HashMap<EntityNotificationsKey, Self::Value>, Self::Error> {
+        self.reader
+            .get_notifications(self.user_id.clone(), keys.to_vec())
+            .await
+            .map_err(Arc::new)
+    }
+}
+
+/// Build a DataLoader for entity notification edges.
+pub fn entity_notifications_loader(
+    user_id: MacroUserIdStr<'static>,
+    reader: Arc<dyn SoupNotificationEdgeReader>,
+) -> DataLoader<EntityNotificationsLoader> {
+    DataLoader::new(
+        EntityNotificationsLoader::new(user_id, reader),
+        tokio::spawn,
+    )
 }
 
 /// GraphQL Soup schema type.
@@ -471,6 +584,20 @@ impl GraphqlSoupDocument {
             .unwrap_or_default();
         Ok(properties.into_iter().map(GraphqlSoupProperty).collect())
     }
+
+    async fn notifications(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<Vec<GraphqlSoupNotification>> {
+        load_entity_notifications(
+            ctx,
+            EntityNotificationsKey {
+                entity_id: self.0.id.to_string(),
+                entity_type: self.0.entity_type().to_string(),
+            },
+        )
+        .await
+    }
 }
 
 pub struct GraphqlSoupDocumentSubType {
@@ -502,6 +629,75 @@ impl GraphqlSoupDocumentSubType {
     async fn is_completed(&self) -> Option<bool> {
         self.is_completed
     }
+}
+
+pub struct GraphqlSoupNotification(UserNotificationRow<serde_json::Value>);
+
+#[Object]
+impl GraphqlSoupNotification {
+    async fn id(&self) -> ID {
+        ID(self.0.notification_id.to_string())
+    }
+
+    async fn event_type(&self) -> &str {
+        &self.0.notification_event_type
+    }
+
+    async fn entity_type(&self) -> String {
+        self.0.entity.entity_type.to_string()
+    }
+
+    async fn entity_id(&self) -> &str {
+        &self.0.entity.entity_id
+    }
+
+    async fn sent(&self) -> bool {
+        self.0.sent
+    }
+
+    async fn done(&self) -> bool {
+        self.0.done
+    }
+
+    async fn seen(&self) -> bool {
+        self.0.viewed_at.is_some()
+    }
+
+    async fn created_at(&self) -> String {
+        self.0.created_at.to_rfc3339()
+    }
+
+    async fn viewed_at(&self) -> Option<String> {
+        self.0.viewed_at.map(|ts| ts.to_rfc3339())
+    }
+
+    async fn updated_at(&self) -> String {
+        self.0.updated_at.to_rfc3339()
+    }
+
+    async fn sender_id(&self) -> Option<String> {
+        self.0.sender_id.as_ref().map(|sender| sender.to_string())
+    }
+
+    async fn metadata(&self) -> Json<Value> {
+        Json(self.0.notification_metadata.clone())
+    }
+}
+
+async fn load_entity_notifications(
+    ctx: &Context<'_>,
+    key: EntityNotificationsKey,
+) -> async_graphql::Result<Vec<GraphqlSoupNotification>> {
+    let loader = ctx.data::<DataLoader<EntityNotificationsLoader>>()?;
+    let notifications = loader
+        .load_one(key)
+        .await
+        .map_err(|err| async_graphql::Error::new(err.to_string()))?
+        .unwrap_or_default();
+    Ok(notifications
+        .into_iter()
+        .map(GraphqlSoupNotification)
+        .collect())
 }
 
 pub struct GraphqlSoupProperty(SoupProperty);
@@ -690,6 +886,20 @@ impl GraphqlSoupChat {
     async fn viewed_at(&self) -> Option<String> {
         self.0.viewed_at.map(|ts| ts.to_rfc3339())
     }
+
+    async fn notifications(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<Vec<GraphqlSoupNotification>> {
+        load_entity_notifications(
+            ctx,
+            EntityNotificationsKey {
+                entity_id: self.0.id.to_string(),
+                entity_type: "chat".to_owned(),
+            },
+        )
+        .await
+    }
 }
 
 pub struct GraphqlSoupProject(SoupProject);
@@ -722,6 +932,20 @@ impl GraphqlSoupProject {
 
     async fn viewed_at(&self) -> Option<String> {
         self.0.viewed_at.map(|ts| ts.to_rfc3339())
+    }
+
+    async fn notifications(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<Vec<GraphqlSoupNotification>> {
+        load_entity_notifications(
+            ctx,
+            EntityNotificationsKey {
+                entity_id: self.0.id.to_string(),
+                entity_type: "project".to_owned(),
+            },
+        )
+        .await
     }
 }
 
@@ -792,6 +1016,20 @@ impl GraphqlSoupEmailThread {
     async fn participant_count(&self) -> usize {
         self.0.participants.len()
     }
+
+    async fn notifications(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<Vec<GraphqlSoupNotification>> {
+        load_entity_notifications(
+            ctx,
+            EntityNotificationsKey {
+                entity_id: self.0.thread.id.to_string(),
+                entity_type: "email".to_owned(),
+            },
+        )
+        .await
+    }
 }
 
 pub struct GraphqlSoupChannel(SoupChannel);
@@ -833,6 +1071,20 @@ impl GraphqlSoupChannel {
     async fn participant_count(&self) -> usize {
         self.0.channel.participants.len()
     }
+
+    async fn notifications(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<Vec<GraphqlSoupNotification>> {
+        load_entity_notifications(
+            ctx,
+            EntityNotificationsKey {
+                entity_id: self.0.channel.channel.id.0.to_string(),
+                entity_type: "channel".to_owned(),
+            },
+        )
+        .await
+    }
 }
 
 pub struct GraphqlSoupChannelThread(SoupChannelThread);
@@ -869,6 +1121,20 @@ impl GraphqlSoupChannelThread {
 
     async fn reply_count(&self) -> i64 {
         self.0.thread.reply_count
+    }
+
+    async fn notifications(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<Vec<GraphqlSoupNotification>> {
+        load_entity_notifications(
+            ctx,
+            EntityNotificationsKey {
+                entity_id: self.0.id.to_string(),
+                entity_type: "message".to_owned(),
+            },
+        )
+        .await
     }
 }
 
@@ -922,6 +1188,20 @@ impl GraphqlSoupCall {
     async fn participant_count(&self) -> usize {
         self.0.participants.len()
     }
+
+    async fn notifications(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<Vec<GraphqlSoupNotification>> {
+        load_entity_notifications(
+            ctx,
+            EntityNotificationsKey {
+                entity_id: self.0.call_id.to_string(),
+                entity_type: "call".to_owned(),
+            },
+        )
+        .await
+    }
 }
 
 pub struct GraphqlSoupCrmCompany(SoupCrmCompany);
@@ -971,6 +1251,10 @@ impl GraphqlSoupCrmCompany {
             .map(|domain| domain.domain.clone())
             .collect()
     }
+
+    async fn notifications(&self) -> Vec<GraphqlSoupNotification> {
+        Vec::new()
+    }
 }
 
 pub struct GraphqlSoupForeignEntity(SoupForeignEntity);
@@ -1007,6 +1291,51 @@ impl GraphqlSoupForeignEntity {
 
     async fn updated_at(&self) -> String {
         self.0.updated_at.to_rfc3339()
+    }
+
+    async fn notifications(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<Vec<GraphqlSoupNotification>> {
+        load_entity_notifications(
+            ctx,
+            EntityNotificationsKey {
+                entity_id: self.0.foreign_entity_id.clone(),
+                entity_type: "github".to_owned(),
+            },
+        )
+        .await
+    }
+}
+
+fn notification_item_type_from_key(key: &str) -> Result<NotificationItemType, rootcause::Report> {
+    match key {
+        "email" | "email_thread" => Ok(NotificationItemType::Email),
+        "message" | "channel_message" => Ok(NotificationItemType::Message),
+        "channel" => Ok(NotificationItemType::Channel),
+        "document" => Ok(NotificationItemType::Document),
+        "project" => Ok(NotificationItemType::Project),
+        "chat" => Ok(NotificationItemType::Chat),
+        "call" => Ok(NotificationItemType::Call),
+        "task" => Ok(NotificationItemType::Task),
+        "github" | "foreign_entity" => Ok(NotificationItemType::Github),
+        other => Err(rootcause::report!(
+            "unsupported notification entity type {other}"
+        )),
+    }
+}
+
+fn notification_item_type_key(item_type: NotificationItemType) -> &'static str {
+    match item_type {
+        NotificationItemType::Email => "email",
+        NotificationItemType::Message => "message",
+        NotificationItemType::Channel => "channel",
+        NotificationItemType::Document => "document",
+        NotificationItemType::Project => "project",
+        NotificationItemType::Chat => "chat",
+        NotificationItemType::Call => "call",
+        NotificationItemType::Task => "task",
+        NotificationItemType::Github => "github",
     }
 }
 

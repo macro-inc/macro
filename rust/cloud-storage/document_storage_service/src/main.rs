@@ -69,6 +69,8 @@ use macro_entrypoint::MacroEntrypoint;
 use macro_env_var::maybe_env_vars;
 use macro_service_urls::{ConnectionGatewayUrl, LexicalServiceUrl, SyncServiceUrl};
 use macro_sha_count_client::Redis;
+#[cfg(feature = "graphql")]
+use notification::domain::service::{NotificationReaderService, PlatformArnConfig};
 use notification::domain::service::SqsNotificationIngress;
 use notification::outbound::queue::SqsQueue;
 use opensearch_client::OpensearchClient;
@@ -268,6 +270,21 @@ async fn main() -> anyhow::Result<()> {
     let notification_ingress_service = Arc::new(SqsNotificationIngress {
         queue: ingress_queue.clone(),
     });
+    #[cfg(feature = "graphql")]
+    let graphql_notification_reader: Arc<dyn graphql_soup::SoupNotificationEdgeReader> =
+        Arc::new(NotificationReaderService {
+            repository: notification::outbound::repository::DbNotificationRepository::new(
+                db.clone(),
+            ),
+            queue: ai_tools::ToolNotificationQueue::Sqs(ingress_queue.clone()),
+            sns_endpoint: ai_tools::NoOpSnsEndpointManager,
+            platform_config: PlatformArnConfig {
+                apns_platform_arn: String::new(),
+                fcm_platform_arn: String::new(),
+                apns_voip_platform_arn: String::new(),
+            },
+            realtime: notification::domain::ports::NoopNotificationRealtimePublisher,
+        });
     tracing::trace!("initialized notification ingress service");
 
     let entity_access_service = Arc::new(
@@ -637,6 +654,8 @@ async fn main() -> anyhow::Result<()> {
         ),
         #[cfg(feature = "graphql")]
         graphql_soup_schema: graphql_soup::build_schema_from_arc(soup_service),
+        #[cfg(feature = "graphql")]
+        graphql_notification_reader,
         github_sync_service: Arc::new(github_sync_service_impl),
         foreign_entity_state,
         db: db.clone(),

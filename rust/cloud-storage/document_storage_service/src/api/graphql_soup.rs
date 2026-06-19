@@ -73,11 +73,15 @@ async fn handler(
         state.properties_service.clone();
     let request = request
         .data(GraphqlSoupRequestContext {
-            macro_user_id,
+            macro_user_id: macro_user_id.clone(),
             link_ids,
             team_receipt,
         })
-        .data(graphql_soup::entity_properties_loader(property_reader));
+        .data(graphql_soup::entity_properties_loader(property_reader))
+        .data(graphql_soup::entity_notifications_loader(
+            macro_user_id,
+            state.graphql_notification_reader.clone(),
+        ));
 
     state.graphql_soup_schema.execute(request).await.into()
 }

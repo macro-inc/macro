@@ -315,6 +315,20 @@ impl NotificationRepository for MockRepository {
         Ok(vec![])
     }
 
+    async fn get_entity_notifications_batch(
+        &self,
+        _user_id: MacroUserIdStr<'_>,
+        entity_refs: Vec<crate::domain::models::request::NotificationEntityRef>,
+    ) -> Result<
+        std::collections::HashMap<
+            crate::domain::models::request::NotificationEntityRef,
+            Vec<UserNotificationRow<serde_json::Value>>,
+        >,
+        Report,
+    > {
+        Ok(entity_refs.into_iter().map(|entity_ref| (entity_ref, Vec::new())).collect())
+    }
+
     async fn get_user_notification_by_id<T: DeserializeOwned + Send>(
         &self,
         _user_id: MacroUserIdStr<'_>,
@@ -514,6 +528,20 @@ impl NotificationRepository for std::sync::Arc<MockRepository> {
                 filters,
             )
             .await
+    }
+
+    async fn get_entity_notifications_batch(
+        &self,
+        _user_id: MacroUserIdStr<'_>,
+        entity_refs: Vec<crate::domain::models::request::NotificationEntityRef>,
+    ) -> Result<
+        std::collections::HashMap<
+            crate::domain::models::request::NotificationEntityRef,
+            Vec<UserNotificationRow<serde_json::Value>>,
+        >,
+        Report,
+    > {
+        Ok(entity_refs.into_iter().map(|entity_ref| (entity_ref, Vec::new())).collect())
     }
 
     async fn get_user_notification_by_id<T: DeserializeOwned + Send>(

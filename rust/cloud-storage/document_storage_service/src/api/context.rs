@@ -306,6 +306,8 @@ pub(crate) struct ApiContext {
     pub soup_router_state: DssSoupState,
     #[cfg(feature = "graphql")]
     pub graphql_soup_schema: graphql_soup::SharedSoupSchema<DssSoupService>,
+    #[cfg(feature = "graphql")]
+    pub graphql_notification_reader: Arc<dyn graphql_soup::SoupNotificationEdgeReader>,
     pub foreign_entity_state: DssForeignEntityState,
     pub sqs_client: Arc<sqs_client::SQS>,
     pub contacts_ingress: Arc<SqsContactsIngress<SqsContactsQueue>>,

@@ -15,6 +15,7 @@ model-entity = { path = "../model-entity" }
 models_pagination = { path = "../models_pagination" }
 models_properties = { path = "../models_properties" }
 models_soup = { path = "../models_soup" }
+notification = { path = "../notification" }
 properties = { path = "../properties" }
 rootcause = { workspace = true }
 serde = { workspace = true }
