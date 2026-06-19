@@ -237,7 +237,6 @@ pub struct GraphqlSoupItem {
     entity_type: String,
     frecency_score: f64,
     entity: GraphqlSoupEntity,
-    raw: Json<Value>,
 }
 
 #[Object]
@@ -258,10 +257,6 @@ impl GraphqlSoupItem {
         &self.entity
     }
 
-    #[graphql(deprecation = "Use entity with GraphQL fragments instead")]
-    async fn raw(&self) -> &Json<Value> {
-        &self.raw
-    }
 }
 
 impl From<FrecencySoupItem> for GraphqlSoupItem {
@@ -272,7 +267,6 @@ impl From<FrecencySoupItem> for GraphqlSoupItem {
             ..
         } = item;
         let entity_ref = item.entity();
-        let raw = serde_json::to_value(&item).unwrap_or(Value::Null);
 
         Self {
             id: entity_ref.entity_id.into_owned(),
@@ -281,7 +275,6 @@ impl From<FrecencySoupItem> for GraphqlSoupItem {
                 .map(|f| f.data.frecency_score)
                 .unwrap_or_default(),
             entity: GraphqlSoupEntity::from(item),
-            raw: Json(raw),
         }
     }
 }
