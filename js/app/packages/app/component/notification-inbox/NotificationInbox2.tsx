@@ -31,8 +31,6 @@ import {
   type UnifiedNotification,
 } from '@notifications';
 import ArrowSquareOutIcon from '@phosphor-icons/core/regular/arrow-square-out.svg?component-solid';
-import CaretDownIcon from '@phosphor-icons/core/regular/caret-down.svg?component-solid';
-import CaretUpIcon from '@phosphor-icons/core/regular/caret-up.svg?component-solid';
 import SlidersHorizontalIcon from '@phosphor-icons/core/regular/sliders-horizontal.svg?component-solid';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
@@ -82,14 +80,7 @@ type InboxDateGroup = {
 
 type InboxListRow =
   | { type: 'header'; id: string; label: string }
-  | { type: 'item'; id: string; item: InboxItemData; depth: number }
-  | {
-      type: 'group-controls';
-      id: string;
-      item: InboxItemData;
-      visibleCount: number;
-      totalCount: number;
-    };
+  | { type: 'item'; id: string; item: InboxItemData; depth: number };
 
 type NotificationTag = UnifiedNotification['notification_metadata']['tag'];
 
@@ -656,6 +647,42 @@ function previewEntity(item: InboxItemData): EntityData | undefined {
   }
 }
 
+function NotificationInboxGroupItemsPanel(props: {
+  groupItem: InboxItemData;
+  selectedItem: InboxItemData | undefined;
+  onSelect: (item: InboxItemData) => void;
+}) {
+  return (
+    <div class="flex size-full min-h-0 flex-col bg-surface p-2">
+      <div class="mb-2 flex shrink-0 flex-col gap-0.5 px-2 py-1">
+        <h2 class="truncate text-sm font-medium text-ink">
+          {props.groupItem.entityName || props.groupItem.targetName || 'Group'}
+        </h2>
+        <span class="text-xs text-ink-extra-muted">
+          {props.groupItem.subItems?.length ?? 0} notifications
+        </span>
+      </div>
+      <div class="min-h-0 flex-1 overflow-y-auto scrollbar-hidden">
+        <For each={props.groupItem.subItems ?? []}>
+          {(item) => (
+            <div class="pb-1">
+              <InboxItem.Root
+                item={item}
+                selected={props.selectedItem?.id === item.id}
+              >
+                <InboxItemActionLocationLayout
+                  nested
+                  onClick={() => props.onSelect(item)}
+                />
+              </InboxItem.Root>
+            </div>
+          )}
+        </For>
+      </div>
+    </div>
+  );
+}
+
 function NotificationInboxList(props: {
   groups: InboxDateGroup[];
   hiddenFilterIds: string[];
@@ -676,12 +703,6 @@ function NotificationInboxList(props: {
   const [virtualHandle, setVirtualHandle] = createSignal<VirtualizerHandle>();
 
   const [expandedItemIds, setExpandedItemIds] = createSignal<string[]>([]);
-  const [visibleGroupItemCounts, setVisibleGroupItemCounts] = createSignal<
-    Record<string, number>
-  >({});
-
-  const visibleGroupItemCount = (item: InboxItemData) =>
-    visibleGroupItemCounts()[item.id] ?? 0;
 
   const isExpanded = (item: InboxItemData) =>
     expandedItemIds().includes(item.id);
@@ -700,34 +721,6 @@ function NotificationInboxList(props: {
     props.groups.flatMap((group) => [
       { type: 'header' as const, id: group.id, label: group.label },
       ...group.items.flatMap((item) => {
-        if (props.layoutMode === 'action-location' && item.subItems?.length) {
-          const subItems = item.subItems;
-          const visibleCount = Math.min(
-            visibleGroupItemCount(item),
-            subItems.length
-          );
-          return [
-            { type: 'item' as const, id: item.id, item, depth: 0 },
-            ...subItems.slice(0, visibleCount).map((subItem) => ({
-              type: 'item' as const,
-              id: `${item.id}:sub:${subItem.id}`,
-              item: subItem,
-              depth: 1,
-            })),
-            ...(visibleCount > 0
-              ? [
-                  {
-                    type: 'group-controls' as const,
-                    id: `${item.id}:controls`,
-                    item,
-                    visibleCount,
-                    totalCount: subItems.length,
-                  },
-                ]
-              : []),
-          ];
-        }
-
         return [
           { type: 'item' as const, id: item.id, item, depth: 0 },
           ...(isExpanded(item)
@@ -828,15 +821,8 @@ function NotificationInboxList(props: {
     if (nextIndex !== -1) setFocus(nextIndex);
   };
 
-  const oldestGroupItem = (item: InboxItemData) =>
-    (item.subItems ?? []).toSorted(
-      (a, b) =>
-        getNotificationTime(a.notification as UnifiedNotification) -
-        getNotificationTime(b.notification as UnifiedNotification)
-    )[0] ?? item;
-
   const selectItem = (item: InboxItemData) => {
-    props.onSelect(item.subItems?.length ? oldestGroupItem(item) : item);
+    props.onSelect(item);
   };
 
   const selectCurrent = () => {
@@ -1086,53 +1072,6 @@ function NotificationInboxList(props: {
                 );
               }
 
-              if (row.type === 'group-controls') {
-                const hasMore = row.visibleCount < row.totalCount;
-                const canCollapse = row.visibleCount > 0;
-                return (
-                  <div class="ml-8 flex gap-2 pl-2 py-2">
-                    <Show when={hasMore}>
-                      <Button
-                        class="rounded-full bg-surface py-1 text-xs text-ink-muted"
-                        depth={1}
-                        size="sm"
-                        variant="base"
-                        onClick={() =>
-                          setVisibleGroupItemCounts((counts) => ({
-                            ...counts,
-                            [row.item.id]: Math.min(
-                              row.visibleCount + 3,
-                              row.totalCount
-                            ),
-                          }))
-                        }
-                      >
-                        <CaretDownIcon class="size-3" />
-                        See {Math.min(3, row.totalCount - row.visibleCount)}{' '}
-                        more
-                      </Button>
-                    </Show>
-                    <Show when={canCollapse || !hasMore}>
-                      <Button
-                        class="rounded-full bg-surface py-1 text-xs text-ink-muted"
-                        depth={1}
-                        size="sm"
-                        variant="base"
-                        onClick={() =>
-                          setVisibleGroupItemCounts((counts) => ({
-                            ...counts,
-                            [row.item.id]: 0,
-                          }))
-                        }
-                      >
-                        <CaretUpIcon class="size-3" />
-                        {hasMore ? 'Collapse' : 'See less'}
-                      </Button>
-                    </Show>
-                  </div>
-                );
-              }
-
               const onItemClick = () => {
                 selectItem(row.item);
               };
@@ -1160,38 +1099,6 @@ function NotificationInboxList(props: {
                   entityName: document.name,
                 });
               };
-              const groupControls = () => {
-                if (
-                  props.layoutMode !== 'action-location' ||
-                  row.depth > 0 ||
-                  !row.item.subItems?.length
-                ) {
-                  return undefined;
-                }
-
-                const visibleCount = visibleGroupItemCount(row.item);
-                if (visibleCount > 0) return undefined;
-
-                return {
-                  hasMore: true,
-                  canCollapse: false,
-                  remainingCount: row.item.subItems.length,
-                  onSeeMore: () =>
-                    setVisibleGroupItemCounts((counts) => ({
-                      ...counts,
-                      [row.item.id]: Math.min(
-                        3,
-                        row.item.subItems?.length ?? 0
-                      ),
-                    })),
-                  onCollapse: () =>
-                    setVisibleGroupItemCounts((counts) => ({
-                      ...counts,
-                      [row.item.id]: 0,
-                    })),
-                };
-              };
-
               return (
                 <div
                   class={cn(
@@ -1220,7 +1127,6 @@ function NotificationInboxList(props: {
                       }
                     >
                       <InboxItemActionLocationLayout
-                        groupControls={groupControls()}
                         nested={row.depth > 0}
                         onClick={onItemClick}
                         onSelectRelatedDocument={onSelectRelatedDocument}
@@ -1338,6 +1244,9 @@ export function NotificationInbox2() {
   const [selectedItem, setSelectedItem] = createSignal<
     InboxItemData | undefined
   >();
+  const [selectedGroupItem, setSelectedGroupItem] = createSignal<
+    InboxItemData | undefined
+  >();
   const selectedEntity = () => {
     const item = selectedItem();
     if (!item) return undefined;
@@ -1347,6 +1256,17 @@ export function NotificationInbox2() {
     const item = selectedItem();
     if (!item) return undefined;
     return getGithubUrl(item);
+  };
+  const listSelectedItem = () => selectedGroupItem() ?? selectedItem();
+  const handleListSelect = (item: InboxItemData) => {
+    if (item.subItems?.length) {
+      setSelectedGroupItem(item);
+      setSelectedItem(undefined);
+      return;
+    }
+
+    setSelectedGroupItem(undefined);
+    setSelectedItem(item);
   };
   const previewVisible = () => true;
 
@@ -1360,6 +1280,7 @@ export function NotificationInbox2() {
       <Resize.Zone direction="horizontal" gutter={0}>
         <Resize.Panel
           id="notification-inbox-list"
+          index={0}
           maxSize={previewVisible() ? 840 : undefined}
           minSize={200}
         >
@@ -1384,14 +1305,33 @@ export function NotificationInbox2() {
                 void soupQuery.fetchNextPage();
               }}
               onReadFilterChange={setReadFilter}
-              onSelect={setSelectedItem}
+              onSelect={handleListSelect}
               onToggleFilter={toggleFilter}
-              selectedItem={selectedItem()}
+              selectedItem={listSelectedItem()}
             />
           </div>
         </Resize.Panel>
+        <Show when={selectedGroupItem()}>
+          {(groupItem) => (
+            <Resize.Panel
+              id="notification-inbox-group-items"
+              index={1}
+              minSize={240}
+              target={{ kind: 'px', px: 320 }}
+            >
+              <div class="size-full min-h-0 min-w-0 border-r border-edge-muted">
+                <NotificationInboxGroupItemsPanel
+                  groupItem={groupItem()}
+                  selectedItem={selectedItem()}
+                  onSelect={setSelectedItem}
+                />
+              </div>
+            </Resize.Panel>
+          )}
+        </Show>
         <Resize.Panel
           id="notification-inbox-preview"
+          index={2}
           minSize={300}
           target={{ kind: 'percent', percent: 70 }}
         >

@@ -9,9 +9,7 @@ import { MACRO_AGENT_BOT_ID } from '@core/constant/macroAgent';
 import { macroIdToEmail, tryMacroId, useDisplayName } from '@core/user';
 import MacroLogo from '@icon/macro-logo.svg';
 import GithubIcon from '@icon/mcp-github.svg';
-import CaretDownIcon from '@phosphor-icons/core/regular/caret-down.svg?component-solid';
-import CaretUpIcon from '@phosphor-icons/core/regular/caret-up.svg?component-solid';
-import { Avatar, Button, cn, Layer } from '@ui';
+import { Avatar, cn, Layer } from '@ui';
 import {
   differenceInDays,
   differenceInHours,
@@ -347,13 +345,6 @@ function RowLayout(props: {
   groupRoot?: boolean;
   nested?: boolean;
   onToggleExpanded?: () => void;
-  groupControls?: {
-    hasMore: boolean;
-    canCollapse: boolean;
-    remainingCount: number;
-    onSeeMore: () => void;
-    onCollapse: () => void;
-  };
 }) {
   const { item, unread, selected } = useInboxItem();
   const location = locationText(props.nested);
@@ -470,44 +461,6 @@ function RowLayout(props: {
                 </Show>
               </div>
             </div>
-            <Show when={props.groupControls}>
-              {(controls) => (
-                <div class="flex min-w-0 gap-2">
-                  <Show when={controls().hasMore}>
-                    <Button
-                      class="rounded-full bg-surface py-1 text-xs text-ink-muted"
-                      depth={1}
-                      size="sm"
-                      variant="base"
-                      onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        controls().onSeeMore();
-                      }}
-                    >
-                      <CaretDownIcon class="size-3" />
-                      See {Math.min(3, controls().remainingCount)} more
-                    </Button>
-                  </Show>
-                  <Show when={controls().canCollapse || !controls().hasMore}>
-                    <Button
-                      class="rounded-full bg-surface py-1 text-xs text-ink-muted"
-                      depth={1}
-                      size="sm"
-                      variant="base"
-                      onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        controls().onCollapse();
-                      }}
-                    >
-                      <CaretUpIcon class="size-3" />
-                      {controls().hasMore ? 'Collapse' : 'See less'}
-                    </Button>
-                  </Show>
-                </div>
-              )}
-            </Show>
           </div>
         </InboxItem.Body>
       </InboxItem.Content>
@@ -520,13 +473,6 @@ export function InboxItemActionLocationLayout(props: {
   onSelectRelatedDocument?: (document: InboxRelatedDocument) => void;
   onToggleExpanded?: () => void;
   nested?: boolean;
-  groupControls?: {
-    hasMore: boolean;
-    canCollapse: boolean;
-    remainingCount: number;
-    onSeeMore: () => void;
-    onCollapse: () => void;
-  };
 }) {
   const { item } = useInboxItem();
   const grouped = () => !props.nested && Boolean(item().subItems?.length);
@@ -535,7 +481,6 @@ export function InboxItemActionLocationLayout(props: {
     <RowLayout
       groupRoot={grouped()}
       nested={props.nested}
-      groupControls={props.groupControls}
       onClick={props.onClick}
       onToggleExpanded={props.onToggleExpanded}
     />
