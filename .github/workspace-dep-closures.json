@@ -1828,11 +1828,6 @@
       "models_permissions",
       "workspace-hack"
     ],
-    "entity_property_db_utils": [
-      "entity_property_db_utils",
-      "models_properties",
-      "workspace-hack"
-    ],
     "filter_ast": [
       "filter_ast",
       "workspace-hack"
@@ -2663,6 +2658,7 @@
       "workspace-hack"
     ],
     "models_properties": [
+      "document_sub_type",
       "models_properties",
       "workspace-hack"
     ],
@@ -3098,6 +3094,7 @@
       "workspace-hack"
     ],
     "properties_db_client": [
+      "document_sub_type",
       "macro_uuid",
       "models_properties",
       "properties_db_client",
@@ -3331,7 +3328,6 @@
       "ensure_exists",
       "entity_access",
       "entity_access_db_utils",
-      "entity_property_db_utils",
       "filter_ast",
       "frecency",
       "invite_email",
@@ -3373,6 +3369,7 @@
       "notification",
       "opensearch_client",
       "opensearch_query_builder",
+      "properties_db_client",
       "rate_limit",
       "remote_env_var",
       "s3_client",
@@ -3854,6 +3851,7 @@
     ],
     "system_properties": [
       "cowlike",
+      "document_sub_type",
       "macro_user_id",
       "macro_uuid",
       "models_properties",

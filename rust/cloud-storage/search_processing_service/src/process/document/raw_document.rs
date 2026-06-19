@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use anyhow::Context;
 use chrono::Utc;
-use entity_property_db_utils::get_entity_properties_for_index;
+use document_sub_type::DocumentSubType;
 use model::document::{DocumentMetadata, FileType};
 use models_properties::EntityType;
 use models_search::document::MarkdownParseResult;
@@ -12,6 +12,7 @@ use opensearch_client::{
     date_format::EpochSeconds,
     upsert::document::{IndexedProperty, UpsertDocumentArgs},
 };
+use properties_db_client::entity_properties::get::get_entity_properties_for_index;
 use s3_key::{
     CONVERTED_DOCUMENT_FILE_NAME, build_cloud_storage_bucket_document_key,
     build_docx_to_pdf_converted_document_key,
@@ -68,11 +69,10 @@ async fn upsert_document(
 /// Properties are keyed under the task entity type for tasks, otherwise the
 /// document entity type.
 fn properties_entity_type(sub_type: Option<&str>) -> EntityType {
-    if sub_type == Some("task") {
-        EntityType::Task
-    } else {
-        EntityType::Document
-    }
+    sub_type
+        .and_then(|s| s.parse::<DocumentSubType>().ok())
+        .map(EntityType::from)
+        .unwrap_or(EntityType::Document)
 }
 
 /// Fetch the entity's indexed properties and attach them to every chunk upsert
