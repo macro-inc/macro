@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use anyhow::Context;
 use chrono::Utc;
-use macro_db_client::entity_property::get_entity_properties_for_index;
+use entity_property_db_utils::get_entity_properties_for_index;
 use model::document::{DocumentMetadata, FileType};
 use models_properties::EntityType;
 use models_search::document::MarkdownParseResult;

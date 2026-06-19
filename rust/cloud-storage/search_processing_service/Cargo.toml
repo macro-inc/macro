@@ -8,7 +8,7 @@ version = "0.1.0"
 [features]
 default = ["processing", "service"]
 processing = []
-service = ["macro_db_client", "models_properties"]
+service = ["macro_db_client", "models_properties", "entity_property_db_utils"]
 
 [[bin]]
 name = "search_processing_service"
@@ -25,6 +25,7 @@ axum = { workspace = true }
 chrono = { workspace = true }
 comms_db_client = { path = "../comms_db_client" }
 email_db_client = { path = "../email_db_client" }
+entity_property_db_utils = { path = "../entity_property_db_utils", optional = true }
 futures = { workspace = true }
 http-body-util = { workspace = true }
 lexical_client = { path = "../lexical_client" }

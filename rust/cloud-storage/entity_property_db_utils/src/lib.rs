@@ -1,3 +1,5 @@
+#![deny(missing_docs)]
+
 //! Read an entity's properties flattened for search indexing.
 
 use models_properties::EntityType;

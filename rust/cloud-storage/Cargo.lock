@@ -4444,6 +4444,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "entity_property_db_utils"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "models_properties",
+ "serde_json",
+ "sqlx",
+ "tracing",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "equator"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6848,7 +6861,6 @@ dependencies = [
  "models_opensearch",
  "models_pagination",
  "models_permissions",
- "models_properties",
  "models_team",
  "non_empty",
  "rand 0.9.4",
@@ -10633,6 +10645,7 @@ dependencies = [
  "document_sub_type",
  "email_db_client",
  "ensure_exists",
+ "entity_property_db_utils",
  "futures",
  "http-body-util",
  "lexical_client",
