@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use crate::{
     api::context::ApiContext,
+    config::DatabaseUrlReadonly,
     domain::{jobs::BackfillJobs, service::BackfillOrchestrator},
     outbound::{publisher::SqsSearchEventPublisher, source::PgBackfillSource},
     process::{context::SearchProcessingContext, worker::run_search_processing_workers},
@@ -14,7 +15,7 @@ use macro_entrypoint::MacroEntrypoint;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use opensearch_client::OpensearchClient;
 use rust_embed::RustEmbed;
-use secretsmanager_client::{LocalOrRemoteSecret, OptionalLocalOrRemoteSecret};
+use secretsmanager_client::LocalOrRemoteSecret;
 use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
 
@@ -30,36 +31,28 @@ mod process;
 /// agnostic of which adapters back it.
 pub type BackfillServiceImpl = BackfillOrchestrator<PgBackfillSource, SqsSearchEventPublisher>;
 
-/// Resolve a read-replica macrodb URL via [`OptionalLocalOrRemoteSecret`] and
+/// Resolve a read-replica macrodb URL and
 /// connect a small pool. Returns `None` when the replica URL is missing,
-/// blank, fails to fetch from Secrets Manager, or is unreachable. Failures
+/// blank. Failures
 /// are intentionally warning-level rather than fatal: the readonly pool is a
 /// contention optimisation, not a correctness requirement (e.g. local laptop
 /// dev cannot reach the VPC-gated read replica).
-async fn resolve_readonly_pool(
-    raw: Option<String>,
-    secrets: &secretsmanager_client::SecretsManager,
-) -> Option<PgPool> {
-    let raw = raw.filter(|s| !s.is_empty());
-    let resolved = match OptionalLocalOrRemoteSecret::new_from_secret_manager(raw, secrets).await {
-        Ok(r) => r,
-        Err(e) => {
-            tracing::warn!(error=?e, "unable to fetch readonly db secret; backfills will use primary");
-            return None;
+async fn resolve_readonly_pool(read_only_db_url: DatabaseUrlReadonly) -> Option<PgPool> {
+    if let Some(url) = read_only_db_url.value() {
+        match PgPoolOptions::new()
+            .min_connections(1)
+            .max_connections(10)
+            .connect(url)
+            .await
+        {
+            Ok(pool) => Some(pool),
+            Err(e) => {
+                tracing::warn!(error=?e, "could not connect to readonly macrodb; backfills will use primary");
+                None
+            }
         }
-    };
-    let url = resolved.as_str()?;
-    match PgPoolOptions::new()
-        .min_connections(1)
-        .max_connections(10)
-        .connect(url)
-        .await
-    {
-        Ok(pool) => Some(pool),
-        Err(e) => {
-            tracing::warn!(error=?e, "could not connect to readonly macrodb; backfills will use primary");
-            None
-        }
+    } else {
+        None
     }
 }
 
@@ -74,19 +67,9 @@ async fn main() -> anyhow::Result<()> {
 
     // Parse our configuration from the environment.
     let config = Config::from_env().context("expected to be able to generate config")?;
+    tracing::trace!("initialized config");
 
     let aws_config = macro_aws_config::get_macro_aws_config().await;
-
-    let secretsmanager_client = secretsmanager_client::SecretsManager::new(
-        aws_sdk_secretsmanager::Client::new(&aws_config),
-    );
-
-    let environment = config.environment;
-    let config = config
-        .resolve_remote_secrets(environment, &secretsmanager_client)
-        .await
-        .context("expected to be able to resolve config secrets")?;
-    tracing::trace!("initialized config");
 
     let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(&aws_config))
         .search_event_queue(&config.search_event_queue);
@@ -130,19 +113,16 @@ async fn main() -> anyhow::Result<()> {
     // contend with writes on the primary. Queue workers always read from the
     // primary because replica lag would cause them to miss rows they are
     // meant to index.
-    let backfill_db =
-        match resolve_readonly_pool(config.database_url_readonly.clone(), &secretsmanager_client)
-            .await
-        {
-            Some(pool) => {
-                tracing::info!("using read-replica pool for backfill reads");
-                pool
-            }
-            None => {
-                tracing::info!("backfills will read from the primary pool");
-                db.clone()
-            }
-        };
+    let backfill_db = match resolve_readonly_pool(config.database_url_readonly.clone()).await {
+        Some(pool) => {
+            tracing::info!("using read-replica pool for backfill reads");
+            pool
+        }
+        None => {
+            tracing::info!("backfills will read from the primary pool");
+            db.clone()
+        }
+    };
 
     let sqs_client = Arc::new(sqs_client);
 
