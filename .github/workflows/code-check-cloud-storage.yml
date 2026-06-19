@@ -47,6 +47,7 @@ jobs:
               - '.github/services-config.json'
               - '.github/scripts/build-cloud-storage-lambdas.sh'
               - '.github/scripts/build-cloud-storage-lambdas-nix.sh'
+              - '.github/scripts/changed-cloud-storage-doppler-config-bins.sh'
               - .github/workflows/code-check-cloud-storage.yml
       - name: compute nextest package filter
         id: package-filter

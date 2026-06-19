@@ -31,12 +31,23 @@ while IFS= read -r changed_file || [[ -n "$changed_file" ]]; do
   changed_file=${changed_file%$'\r'}
   changed_file=${changed_file#./}
 
-  if [[ "$changed_file" != rust/cloud-storage/*/src/config.rs ]]; then
-    continue
-  fi
-
-  crate_path=${changed_file#rust/cloud-storage/}
-  crate_path=${crate_path%/src/config.rs}
+  case "$changed_file" in
+    rust/cloud-storage/*/src/config.rs)
+      crate_path=${changed_file#rust/cloud-storage/}
+      crate_path=${crate_path%/src/config.rs}
+      ;;
+    rust/cloud-storage/*/src/doppler_config.rs)
+      crate_path=${changed_file#rust/cloud-storage/}
+      crate_path=${crate_path%/src/doppler_config.rs}
+      ;;
+    rust/cloud-storage/*/Cargo.toml)
+      crate_path=${changed_file#rust/cloud-storage/}
+      crate_path=${crate_path%/Cargo.toml}
+      ;;
+    *)
+      continue
+      ;;
+  esac
   if [[ -n "$crate_path" ]]; then
     crate_paths["$crate_path"]=1
   fi
