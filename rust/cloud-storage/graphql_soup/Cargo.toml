@@ -1,0 +1,20 @@
+[package]
+name = "graphql_soup"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+async-graphql = "7.2.1"
+either = { workspace = true }
+entity_access = { path = "../entity_access", default-features = false }
+filter_ast = { path = "../filter_ast" }
+item_filters = { path = "../item_filters" }
+macro_user_id = { path = "../macro_user_id" }
+model-entity = { path = "../model-entity" }
+models_pagination = { path = "../models_pagination" }
+models_soup = { path = "../models_soup" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+soup = { path = "../soup", default-features = false, features = ["ports"] }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

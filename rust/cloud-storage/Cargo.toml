@@ -63,6 +63,7 @@ members = [
   "prompt",
   "workspace-hack",
   "tools/xtask",
+  "graphql_soup",
 ]
 
 [workspace.dependencies]
